@@ -120,3 +120,90 @@
                                                              :name 'coalton:False))))))))
       :location location
       :inline nil))))
+
+(defmethod tc:derive-methods ((class (eql 'classes:hash)) def env)
+  "Deriver implementation for class `Hash'."
+  (let ((location (source:location def)))
+    (alexandria:when-let
+        ((ctor
+          (find-if #'endp
+                   (parser:type-definition-ctors def)
+                   :key #'parser:type-definition-ctor-field-types)))
+      (tc:tc-error (format nil "Cannot derive class ~A for type ~A."
+                           class
+                           (parser:identifier-src-name (parser:type-definition-name def)))
+                   (source:note (parser:type-definition-derive def)
+                                "Constructor ~A has no fields"
+                                (parser:identifier-src-name (parser:type-definition-ctor-name ctor)))
+                   (source:note def
+                                "when deriving class ~A for type ~A."
+                                class
+                                (parser:identifier-src-name (parser:type-definition-name def))))) 
+    (list
+     (parser:make-instance-method-definition
+      :name (parser:make-node-variable
+             :location location
+             :name 'classes:hash)
+      :params (list (parser:make-pattern-var
+                     :location location
+                     :name 'x
+                     :orig-name 'x))
+      :body (parser:make-node-body
+             :nodes nil
+             :last-node (parser:make-node-match
+                         :location location
+                         :expr (parser:make-node-variable
+                                :location location
+                                :name 'x)
+                         :branches (mapcar
+                                    (lambda (ctor)
+                                      (let ((cfields
+                                              (mapcar (lambda (_)
+                                                        (declare (ignore _))
+                                                        (gensym "ctor-field"))
+                                                      (parser:type-definition-ctor-field-types ctor))))
+                                        (parser:make-node-match-branch
+                                         :location location
+                                         :pattern (parser:make-pattern-constructor
+                                                   :location location
+                                                   :name (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
+                                                   :patterns (mapcar
+                                                              (lambda (cfield)
+                                                                (parser:make-pattern-var
+                                                                 :location location
+                                                                 :name cfield
+                                                                 :orig-name cfield))
+                                                              cfields))
+                                         :body (parser:make-node-body
+                                                :nodes nil
+                                                :last-node (reduce
+                                                            (lambda (acc cfield)
+                                                              (parser:make-node-application
+                                                               :location location
+                                                               :rator (parser:make-node-variable
+                                                                       :location location
+                                                                       :name 'coalton-library/hash:combine-hashes)
+                                                               :rands (list
+                                                                       (parser:make-node-application
+                                                                        :location location
+                                                                        :rator (parser:make-node-variable
+                                                                                :location location
+                                                                                :name 'classes:hash)
+                                                                        :rands (list
+                                                                                (parser:make-node-variable
+                                                                                 :location location
+                                                                                 :name cfield)))
+                                                                       acc)))
+                                                            (rest cfields)
+                                                            :initial-value (parser:make-node-application
+                                                                            :location location
+                                                                            :rator (parser:make-node-variable
+                                                                                    :location location
+                                                                                    :name 'classes:hash)
+                                                                            :rands (list
+                                                                                    (parser:make-node-variable
+                                                                                     :location location
+                                                                                     :name (first cfields)))))))))
+                                    (parser:type-definition-ctors def))))
+      :location location
+      :inline nil))))

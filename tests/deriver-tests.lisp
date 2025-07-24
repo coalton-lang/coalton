@@ -31,6 +31,12 @@
     B0
     (Bn A)))
 
+(coalton-toplevel
+  (derive Eq Hash)
+  (define-struct HashablePerson
+    (age U8)
+    (name String)))
+
 (define-test derive-basic-test ()
   "Ensure `Eq' can be derived for structs and types."
   (is (== Nothing (The (DerivingThing U8) Nothing)))
@@ -55,6 +61,12 @@
   (is (== (Bn (An B0)) (Bn (An B0))))
   (is (/= B0 (Bn (An B0)))))
 
+(define-test derive-two-classes ()
+  "Ensure we can derive multiple classes at once."
+  (is (== (hash (HashablePerson 1 "a"))
+          (hash (HashablePerson 1 "a"))))
+  (is (/= (hash (HashablePerson 2 "a"))
+          (hash (HashablePerson 3 "a")))))
 
 (in-package #:coalton-tests)
 
