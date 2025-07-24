@@ -1054,6 +1054,26 @@ Coalton has a `do` macro that works similarly to do notation in Haskell.
    (define xs (f (make-list 1 2 3) (make-list 4 5 6))))
 ```
 
+## Deriving Typeclasses
+
+Some typeclasses can be derived so that their instances are defined automatically for user-defined types.
+
+```lisp
+(coalton-toplevel
+  (derive Eq Hash)
+  (define-struct Point
+    (x UFix)
+    (y UFix)))
+```
+
+Now you can use the `==` and `hash` methods on `Point` structures:
+
+```lisp
+(coalton (== (Point 1 2) (Point 3 3)))
+```
+
+Currently these are the only two derivable classes in the standard library. More may be added in the future, and it is possible for libraries to implement their own derivers. For guidance on making custom derivers, see [derivers.lisp](./../library/derivers.lisp).
+
 ## Inline Type Annotations
 
 Inline type annotations can be added to resolve ambiguities when using typeclasses.
