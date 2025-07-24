@@ -1,14 +1,14 @@
 (defpackage #:coalton-library/derivers
   (:use #:cl)
   (:local-nicknames
+   (#:tc #:coalton-impl/typechecker)
    (#:classes #:coalton-library/classes)
    (#:parser #:coalton-impl/parser)
-   (#:source #:coalton-impl/source)
-   (#:derive #:coalton-impl/typechecker/derive)))
+   (#:source #:coalton-impl/source)))
 
 (in-package #:coalton-library/derivers)
 
-(defmethod derive:derive-methods ((class (eql 'classes:eq)) def env)
+(defmethod tc:derive-methods ((class (eql 'classes:eq)) def env)
   "Deriver implementation for class `Eq'."
   (let ((location (source:location def)))
     (list

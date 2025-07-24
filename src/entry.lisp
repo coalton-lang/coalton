@@ -40,14 +40,20 @@
                                  (parser:program-type-aliases program)
                                  env)
 
-      (let ((all-instances (append instances (parser:program-instances program))))
+      (multiple-value-bind (class-definitions env)
+          (tc:toplevel-define-class (parser:program-classes program)
+                                    env)
 
-        (multiple-value-bind (class-definitions env)
-            (tc:toplevel-define-class (parser:program-classes program)
-                                      env)
+        (let ((all-instances
+                (append instances
+                        (parser:program-instances program)
+                        (tc:derive-class-instances (parser:program-types program)
+                                                   (parser:program-structs program)
+                                                   env)))) 
 
           (multiple-value-bind (ty-instances env)
               (tc:toplevel-define-instance all-instances env)
+
 
             (multiple-value-bind (toplevel-definitions env)
                 (tc:toplevel-define (parser:program-defines program)

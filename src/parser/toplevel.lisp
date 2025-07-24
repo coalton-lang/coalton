@@ -64,6 +64,7 @@
    #:toplevel-define-struct-derive               ; ACCESSOR
    #:toplevel-define-struct-head-location        ; ACCESSOR
    #:toplevel-define-struct-list                 ; TYPE
+   #:toplevel-define-type-or-struct              ; TYPE
    #:toplevel-declare                            ; STRUCT
    #:make-toplevel-declare                       ; CONSTRUCTOR
    #:toplevel-declare-name                       ; ACCESSOR
@@ -347,6 +348,9 @@
 
 (deftype toplevel-define-struct-list ()
   '(satisfies toplevel-define-struct-list-p))
+
+(deftype toplevel-define-type-or-struct ()
+  '(or toplevel-define-type toplevel-define-struct))
 
 (defstruct (toplevel-declare
             (:copier nil))

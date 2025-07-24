@@ -406,9 +406,6 @@
          :for repr-arg
            := (and repr (eq repr-type :native) (cst:raw (parser:attribute-repr-arg repr)))
 
-         :for derive := (parser:type-definition-derive type)
-         :for derive-classes := (and derive (parser:attribute-derive-classes derive))
-
 
          ;; Apply ksubs to find the type of each constructor
          :for constructor-types
@@ -512,12 +509,7 @@
 
               (runtime-repr-instance (maybe-runtime-repr-instance type-definition)))
            
-           (when derive-classes 
-             (loop :for class :in (cst:raw derive-classes)
-                   :for instance := (derive:derive-class-instance class type env)
-                   :when instance :do (push instance instances)))
-           
-           
+
            (when runtime-repr-instance
              (push runtime-repr-instance instances))
            

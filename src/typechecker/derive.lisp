@@ -7,17 +7,27 @@
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker/stage-1)
    (#:env #:coalton-impl/typechecker/environment)
-   (#:penv #:coalton-impl/typechecker/partial-type-env)
    (#:pred #:coalton-impl/typechecker/predicate))
   (:export
-   #:derive-class-instance             ;; FUNCTION
-   #:derive-methods                    ;; GENERIC FUNCTION
+   #:derive-class-instances              ;; FUNCTION
+   #:derive-methods                      ;; GENERIC FUNCTION
    ))
 
 (in-package #:coalton-impl/typechecker/derive)
 
+(defstruct toplevel-derivation
+  (type-definition (util:required 'type-definition) :type parser:toplevel-define-type-or-struct :read-only t)
+  (class           (util:required 'class)           :type symbol                                :read-only t))
+
+(defun toplevel-derivation-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'toplevel-derivation-p x)))
+
+(deftype toplevel-derivation-list ()
+  '(satisfies toplevel-derivation-list-p))
+
 (defun parser-definition-type-constraints (def class)
-  (declare (type (or parser:toplevel-define-struct parser:toplevel-define-type) def)
+  (declare (type parser:toplevel-define-type-or-struct def)
            (type symbol class)
            (values parser:ty-predicate-list &optional))
 
@@ -32,7 +42,7 @@
                               (parser:type-definition-ctors def))))
 
 (defun parser-definition-type-signature (def)
-  (declare (type (or parser:toplevel-define-struct parser:toplevel-define-type) def)
+  (declare (type parser:toplevel-define-type-or-struct def)
            (values parser:ty &optional))
 
   (labels ((apply-type-argument-list (ty args)
@@ -58,55 +68,83 @@
   (:documentation "User-defined methods for implementing derivers.
 EQL-specialize on symbol `class'."))
 
-(defun derive-class-instance (class def env)
-  "Entrypoint for deriver implementations.  Given symbol `class' and
-parser type definition `def', produce a derived instance definition."
-  (declare (type symbol class)
-           (type (or parser:toplevel-define-type parser:toplevel-define-struct) def)
-           (type penv:partial-type-env env)
+(defun collect-derivations (types structs)
+  "Extract and construct `derivation' structs from type definitions."
+  (declare (type parser:toplevel-define-type-list types)
+           (type parser:toplevel-define-struct-list structs)
+           (values toplevel-derivation-list &optional))
+
+  (loop :for type :in (append types structs)
+        :for derive := (parser:type-definition-derive type)
+        :for classes := (and derive (parser:attribute-derive-classes derive))
+        :unless (null classes)
+          :nconc (loop :for class :in (cst:raw classes)
+                       :collect (make-toplevel-derivation
+                                 :type-definition type
+                                 :class class))))
+
+(defun derive-class-instances (types structs env)
+  "Entrypoint for deriver implementations.  Given a list of types and
+structs, extract derive information and produce a list of instance
+definitions."
+  (declare (type parser:toplevel-define-type-list types)
+           (type parser:toplevel-define-struct-list structs)
+           (type tc:environment env)
+           (values parser:toplevel-define-instance-list &optional))
+
+  (mapcar (alexandria:rcurry #'derive-class-instance env)
+          (collect-derivations types structs)))
+
+(defun derive-class-instance (derivation env)
+  "Given symbol `class' and parser type definition `def', produce a
+derived instance definition."
+  (declare (type toplevel-derivation derivation)
+           (type tc:environment env)
            (values parser:toplevel-define-instance &optional))
 
-  (let ((type-name (parser:identifier-src-name (parser:type-definition-name def)))) 
-    (when (endp (parser:type-definition-ctors def))
-      (tc:tc-error (format nil "Cannot derive class ~A for type ~A." class type-name)
-                   (source:note (parser:type-definition-derive def)
-                                "Type ~A has no constructors"
-                                type-name)
-                   (source:note def
-                                "when deriving class ~A for type ~A."
-                                class
-                                type-name)))
+  (let ((class (toplevel-derivation-class derivation))
+        (def   (toplevel-derivation-type-definition derivation))) 
+    (let ((type-name (parser:identifier-src-name (parser:type-definition-name def)))) 
+      (when (null (tc:lookup-class env class :no-error t))
+        (tc:tc-error (format nil "Cannot derive class ~A for type ~A." class type-name)
+                     (source:note (parser:type-definition-derive def)
+                                  "Class ~A does not exist"
+                                  class)
+                     (source:note def
+                                  "when deriving class ~A for type ~A."
+                                  class
+                                  type-name)))
 
-    (when (null (tc:lookup-class (penv:partial-type-env-env env) class :no-error t))
-      (tc:tc-error (format nil "Cannot derive class ~A for type ~A." class type-name)
-                   (source:note (parser:type-definition-derive def)
-                                "Class ~A does not exist"
-                                class)
-                   (source:note def
-                                "when deriving class ~A for type ~A."
-                                class
-                                type-name)))
+      (when (endp (parser:type-definition-ctors def))
+        (tc:tc-error (format nil "Cannot derive class ~A for type ~A." class type-name)
+                     (source:note (parser:type-definition-derive def)
+                                  "Type ~A has no constructors"
+                                  type-name)
+                     (source:note def
+                                  "when deriving class ~A for type ~A."
+                                  class
+                                  type-name)))
 
-    (when (endp (compute-applicable-methods #'derive-methods (list class def env)))
-      (tc:tc-error (format nil "Cannot derive class ~A for type ~A." class type-name)
-                   (source:note (parser:type-definition-derive def)
-                                "Deriver for class ~A is not implemented"
-                                class)
-                   (source:note def
-                                "when deriving class ~A for type ~A."
-                                class
-                                type-name))))
+      (when (endp (compute-applicable-methods #'derive-methods (list class def env)))
+        (tc:tc-error (format nil "Cannot derive class ~A for type ~A." class type-name)
+                     (source:note (parser:type-definition-derive def)
+                                  "Deriver for class ~A is not implemented"
+                                  class)
+                     (source:note def
+                                  "when deriving class ~A for type ~A."
+                                  class
+                                  type-name))))
 
-  (parser:make-toplevel-define-instance
-   :location (source:location def)
-   :head-location (source:location def)
-   :context (parser-definition-type-constraints def class)
-   :pred (parser:make-ty-predicate
-          :location (source:location def)
-          :class (parser:make-identifier-src
-                  :location (source:location def)
-                  :name class)
-          :types (list (parser-definition-type-signature def)))
-   :docstring nil
-   :compiler-generated t
-   :methods (derive-methods class def env)))
+    (parser:make-toplevel-define-instance
+     :location (source:location def)
+     :head-location (source:location def)
+     :context (parser-definition-type-constraints def class)
+     :pred (parser:make-ty-predicate
+            :location (source:location def)
+            :class (parser:make-identifier-src
+                    :location (source:location def)
+                    :name class)
+            :types (list (parser-definition-type-signature def)))
+     :docstring nil
+     :compiler-generated t
+     :methods (derive-methods class def env))))

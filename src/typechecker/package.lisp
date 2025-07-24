@@ -11,6 +11,7 @@
    #:coalton-impl/typechecker/partial-type-env
    #:coalton-impl/typechecker/parse-type
    #:coalton-impl/typechecker/define-type
+   #:coalton-impl/typechecker/derive
    #:coalton-impl/typechecker/define-class
    #:coalton-impl/typechecker/tc-env
    #:coalton-impl/typechecker/define
