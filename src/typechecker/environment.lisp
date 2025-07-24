@@ -94,6 +94,7 @@
    #:ty-class-instance-codegen-sym          ; ACCESSOR
    #:ty-class-instance-method-codegen-syms  ; ACCESSOR
    #:ty-class-instance-method-codegen-inline-p ; ACCESSOR
+   #:ty-class-instance-constraints-expanded ; FUNCTION
    #:ty-class-instance-list                 ; TYPE
    #:instance-environment                   ; STRUCT
    #:instance-environment-instances         ; ACCESSOR
@@ -719,12 +720,43 @@
 ;;;
 
 (defstruct ty-class-instance
-  (constraints             (util:required 'constraints)             :type ty-predicate-list :read-only nil)
+  (constraints             (util:required 'constraints)             :type ty-predicate-list :read-only t)
   (predicate               (util:required 'predicate)               :type ty-predicate      :read-only t)
   (codegen-sym             (util:required 'codegen-sym)             :type symbol            :read-only t)
   (method-codegen-syms     (util:required 'method-codegen-syms)     :type util:symbol-list  :read-only t)
   (method-codegen-inline-p (util:required 'method-codegen-inline-p) :type list              :read-only t)
   (docstring               (util:required 'docstring)               :type (or null string)  :read-only t))
+
+(defun expand-context (context env)
+  "Traverse constraint predicates by looking up those entailed by
+the base constraint by instances in the environment.  Eliminate
+recursion by comparing these to the base constraint and return a list
+of constraint predicates."
+  (declare (type ty-predicate-list context)
+           (type environment env)
+           (values ty-predicate-list &optional))
+
+  ;; This was implemented as a hack to make `derive' work on recursive
+  ;; types.  Allows you to write an instance with signature
+  ;; `(Eq A => Eq A)'.
+  (flet ((expand-constraint (base-constraint)
+           (labels ((f (constraint)
+                      (multiple-value-bind (inst subs)
+                          (lookup-class-instance env constraint :no-error t)
+                        (if (null inst)
+                            (list constraint)
+                            (mapcan (lambda (pred) (f (apply-substitution subs pred)))
+                                    (remove base-constraint
+                                            (ty-class-instance-constraints inst)
+                                            :test #'type-predicate=))))))
+             (f base-constraint))))
+
+    (remove-duplicates
+     (alexandria:mappend #'expand-constraint context)
+     :test #'type-predicate=)))
+
+(defun ty-class-instance-constraints-expanded (inst env)
+  (expand-context (ty-class-instance-constraints inst) env))
 
 (defmethod source:docstring ((self ty-class-instance))
   (ty-class-instance-docstring self))
@@ -1637,7 +1669,7 @@
                    :do (let* ((fresh-instance-preds
                                 (fresh-preds
                                  (cons (ty-class-instance-predicate instance)
-                                       (ty-class-instance-constraints instance))))
+                                       (ty-class-instance-constraints-expanded instance env))))
                               (instance-head (car fresh-instance-preds))
                               (instance-context (cdr fresh-instance-preds))
 

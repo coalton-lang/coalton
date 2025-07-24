@@ -65,7 +65,7 @@ Returns (PREDS FOUNDP)"
     (handler-case
         (let* ((subs (predicate-match (ty-class-instance-predicate inst) pred))
                (resulting-preds (mapcar (lambda (p) (apply-substitution subs p))
-                                        (ty-class-instance-constraints inst))))
+                                        (ty-class-instance-constraints-expanded inst env))))
           (return-from by-inst (values resulting-preds t)))
       (predicate-unification-error () nil)))
   (values nil nil))

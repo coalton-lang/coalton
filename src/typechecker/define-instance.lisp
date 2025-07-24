@@ -29,57 +29,17 @@
 
 (in-package #:coalton-impl/typechecker/define-instance)
 
-(defun expand-constraint (base-constraint env)
-  "Traverse constraint predicates by looking up those entailed by
-the base constraint by instances in the environment.  Eliminate
-recursion by comparing these to the base constraint and return a list
-of constraint predicates."
-  (declare (type tc:ty-predicate base-constraint)
-           (type tc:environment env)
-           (values tc:ty-predicate-list &optional))
-
-  ;; This was implemented as a hack to make `derive' work on recursive
-  ;; types.  Allows you to write an instance with signature
-  ;; `(Eq A => Eq A)'.
-  (labels ((f (constraint env)
-             (multiple-value-bind (inst subs)
-                 (tc:lookup-class-instance env constraint :no-error t)
-               (if (null inst)
-                   (list constraint)
-                   (mapcan (lambda (pred) (f (tc:apply-substitution subs pred) env))
-                           (remove base-constraint
-                                   (tc:ty-class-instance-constraints inst)
-                                   :test #'tc:type-predicate=))))))
-    (f base-constraint env)))
-
-(defun expand-context (context env)
-  (declare (type tc:ty-predicate-list context)
-           (type tc:environment env)
-           (values tc:ty-predicate-list &optional))
-
-  (remove-duplicates
-   (a:mappend (a:rcurry #'expand-constraint env) context)
-   :test #'tc:type-predicate=))
-
 (defun toplevel-define-instance (instances env)
   (declare (type parser:toplevel-define-instance-list instances)
            (type tc:environment env)
            (values tc:ty-class-instance-list tc:environment))
 
-  (values
-   (loop :for instance :in 
-           (loop :for instance :in instances
-                 :collect (multiple-value-bind (instance env_)
-                              (define-instance-in-environment instance env)
-                            (setf env env_)
-                            instance))
-         :do
-            ;; Expand the constraints, perhaps it should be done in a
-            ;; different stage but this works.
-            (setf (tc:ty-class-instance-constraints instance)
-                  (expand-context (tc:ty-class-instance-constraints instance) env))
-         :collect instance)
-
+  (values 
+   (loop :for instance :in instances
+         :collect (multiple-value-bind (instance env_)
+                      (define-instance-in-environment instance env)
+                    (setf env env_)
+                    instance))
    env))
 
 (defun toplevel-typecheck-instance (instances unparsed-instances env)
@@ -211,7 +171,7 @@ of constraint predicates."
 
   (let* ((pred (tc:ty-class-instance-predicate instance))
 
-         (context (tc:ty-class-instance-constraints instance))
+         (context (tc:ty-class-instance-constraints-expanded instance env))
 
          (class-name (tc:ty-predicate-class pred))
 
@@ -251,7 +211,7 @@ of constraint predicates."
                             (tc:predicate-match
                              (tc:apply-substitution instance-subs (tc:ty-class-instance-predicate superclass-instance))
                              superclass)
-                            (tc:ty-class-instance-constraints superclass-instance))
+                            (tc:ty-class-instance-constraints-expanded superclass-instance env))
 
                       :do (loop :for pred :in additional-context
                                 :do (unless (tc:entail env context pred)
