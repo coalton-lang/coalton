@@ -427,7 +427,7 @@ speaking, the following kinds of transformations happen:
            (subs (tc:predicate-match (tc:ty-class-instance-predicate instance) pred))
 
            ;; Find the superclasses of PRED
-           (constraints (tc:apply-substitution subs (tc:ty-class-instance-constraints instance)))
+           (constraints (tc:apply-substitution subs (tc:ty-class-instance-constraints-expanded instance env)))
 
            (args
              (loop :for arg :in (node-rands node)
