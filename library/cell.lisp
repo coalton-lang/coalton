@@ -44,20 +44,21 @@
   (inline)
   (declare new (:a -> Cell :a))
   (define (new data)
-    "Create a new mutable cell"
+    "Create a new mutable cell containing `data`."
     (lisp (Cell :a) (data)
       (make-cell-internal :inner data)))
 
   (inline)
   (declare read (Cell :a -> :a))
   (define (read cel)
-    "Read the value of a mutable cell"
+    "Read the value of a mutable cell `cel`."
     (lisp :a (cel)
       (cell-internal-inner cel)))
 
   (declare swap! (Cell :a -> :a -> :a))
   (define (swap! cel data)
-    "Replace the value of a mutable cell with a new value, then return the old value"
+    "Replace the value of a mutable cell `cel` with a new value `data`,
+then return the old value."
     (lisp :a (data cel)
       (cl:let* ((old (cell-internal-inner cel)))
         (cl:setf (cell-internal-inner cel) data)
@@ -66,30 +67,32 @@
   (inline)
   (declare write! (Cell :a -> :a -> :a))
   (define (write! cel data)
-    "Set the value of a mutable cell, returning the new value"
+    "Set the value of a mutable cell `cel` to `data`, returning the new
+value."
     (lisp :a (data cel)
       (cl:setf (cell-internal-inner cel) data)))
 
   (inline)
   (declare update! ((:a -> :a) -> Cell :a -> :a))
   (define (update! f cel)
-    "Apply F to the contents of CEL, storing and returning the result"
+    "Apply `f` to the contents of `cel`, storing and returning the result."
     (write! cel (f (read cel))))
 
   (declare update-swap! ((:a -> :a) -> Cell :a -> :a))
   (define (update-swap! f cel)
-    "Apply F to the contents of CEL, swapping the result for the old value"
+    "Apply `f` to the contents of `cel`, swapping the result for the old
+value."
     (swap! cel (f (read cel))))
 
 ;;; operators on cells of lists
   (declare push! (Cell (List :elt) -> :elt -> List :elt))
   (define (push! cel new-elt)
-    "Push NEW-ELT onto the start of the list in CEL."
+    "Push `new-elt` onto the start of the list in `cel`."
     (update! (Cons new-elt) cel))
 
   (declare pop! (Cell (List :elt) -> Optional :elt))
   (define (pop! cel)
-    "Remove and return the first element of the list in CEL."
+    "Remove and return the first element of the list in `cel`."
     (match (read cel)
       ((Cons fst rst)
        (write! cel rst)
@@ -100,13 +103,14 @@
   (inline)
   (declare increment! (Num :counter => Cell :counter -> :counter))
   (define (increment! cel)
-    "Add one to the contents of CEL, storing and returning the new value"
+    "Add one to the contents of `cel`, storing and returning the new value."
     (update! (+ 1) cel))
 
   (inline)
   (declare decrement! (Num :counter => (Cell :counter) -> :counter))
   (define (decrement! cel)
-    "Subtract one from the contents of CEL, storing and returning the new value"
+    "Subtract one from the contents of `cel`, storing and returning the new
+value."
     (update! (+ -1) cel))
 
   ;; i am very skeptical of these instances
