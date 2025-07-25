@@ -1054,9 +1054,9 @@ Coalton has a `do` macro that works similarly to do notation in Haskell.
    (define xs (f (make-list 1 2 3) (make-list 4 5 6))))
 ```
 
-## Deriving Type Classes
+## Automatically Deriving Type Class Instances from Type Definitions
 
-Some type classes can be derived so that their instances are defined automatically for user-defined types.
+Instances of some type classes can be derived so that their instances are defined automatically for user-defined types.
 
 ```lisp
 (coalton-toplevel
@@ -1078,6 +1078,8 @@ Now you can use the `==` and `hash` methods on `Point` structures:
   (hashmap:insert map (Point 0 0) 1))
 ```
 
+The instance that is generated will be the "obvious" one in each case. For example, equality will test that every sub-field of each case is equal. This may not be desired for every type, and hence sometimes custom instances are still needed.
+
 ### Builtin `derive` Type Classes
 
 Instances of the following classes can be derived:
@@ -1085,7 +1087,9 @@ Instances of the following classes can be derived:
 - `Eq`
 - `Hash`
 
-Currently these are the only derivable classes in the standard library. More may be added in the future, and it is possible for libraries to implement their own derivers. For guidance on making custom derivers, see [derivers.lisp](./../library/derivers.lisp).
+Currently these are the only derivable classes in the standard library, but more may be added in the future.
+
+Writing custom derivers does not yet have an official API, but for the adventurous, it can be done relatively easily. For guidance, see [derivers.lisp](./../library/derivers.lisp).
 
 ## Inline Type Annotations
 
