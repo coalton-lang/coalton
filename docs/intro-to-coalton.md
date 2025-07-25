@@ -1037,26 +1037,9 @@ These type classes are inspired by traits of the same name in Rust:
 * `Into` - total conversions between one type and another
 * `TryInto` - non-total conversions between one type and another
 
-## Do Notation
-
-Coalton has a `do` macro that works similarly to do notation in Haskell.
-
-```lisp
-(coalton-toplevel
-  (define (f ax bx)
-    (do
-      (a <- ax)
-      (b <- bx)
-      (let c = (+ a b))
-      (pure c)))
-
-    ;; [6+3, 5+3, 5+3, 6+2, 5+2, 4+2, 6+1, 5+1, 4+1]
-   (define xs (f (make-list 1 2 3) (make-list 4 5 6))))
-```
-
 ## Automatically Deriving Type Class Instances from Type Definitions
 
-Instances of some type classes can be derived so that their instances are defined automatically for user-defined types.
+Instances of some type classes can be derived so that they are defined automatically for user-defined types.
 
 ```lisp
 (coalton-toplevel
@@ -1090,6 +1073,23 @@ Instances of the following classes can be derived:
 Currently these are the only derivable classes in the standard library, but more may be added in the future.
 
 Writing custom derivers does not yet have an official API, but for the adventurous, it can be done relatively easily. For guidance, see [derivers.lisp](./../library/derivers.lisp).
+
+## Do Notation
+
+Coalton has a `do` macro that works similarly to do notation in Haskell.
+
+```lisp
+(coalton-toplevel
+  (define (f ax bx)
+    (do
+      (a <- ax)
+      (b <- bx)
+      (let c = (+ a b))
+      (pure c)))
+
+    ;; [6+3, 5+3, 5+3, 6+2, 5+2, 4+2, 6+1, 5+1, 4+1]
+   (define xs (f (make-list 1 2 3) (make-list 4 5 6))))
+```
 
 ## Inline Type Annotations
 
