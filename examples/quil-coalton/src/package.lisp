@@ -4,7 +4,8 @@
   (:documentation "Public interface to QUIL-COALTON.")
   (:shadow #:take #:char)
   (:use #:coalton
-        #:coalton-prelude)
+        #:coalton-prelude
+        #:coalton-library/collections/immutable/list)
   (:local-nicknames
    (#:string #:coalton-library/string))
   (:import-from

@@ -40,9 +40,9 @@
   (is (unwrap (file:exists? (file:merge coalton-dir "coalton.asd"))))
   (is (unwrap (file:file-exists? (file:merge coalton-dir "coalton.asd"))))
   (res-succeeds (file:directory-files coalton-dir))
-  (is (math:positive? (length (unwrap (file:directory-files coalton-dir)))))
+  (is (math:positive? (cln:length (unwrap (file:directory-files coalton-dir)))))
   (res-succeeds (file:subdirectories coalton-dir))
-  (is (math:positive? (length (unwrap (file:subdirectories coalton-dir))))))
+  (is (math:positive? (cln:length (unwrap (file:subdirectories coalton-dir))))))
 
 (define-test test-temporary-file-char ()
   (is (== #\h
@@ -70,7 +70,7 @@
                       (file:read stream)))))))
 
 (define-test test-temporary-directory ()
-  (is (== 0 (list:length (unwrap (file:with-temp-directory (fn (dir)
+  (is (== 0 (cln:length (unwrap (file:with-temp-directory (fn (dir)
                                                              (file:directory-files dir)))))))
   (is (== "Hello World!" (unwrap (file:with-temp-directory (fn (dir)
                                                              (let file = (file:merge dir "test.txt"))
@@ -111,7 +111,7 @@
                 "wow and more"))
 
         ;; sorted because Allegro CL is not picky about file order
-        (is (== (list:sort (unwrap (file:directory-files testpath)))
+        (is (== (cln:sort (unwrap (file:directory-files testpath)))
                 (make-list filepath filepath2)))
 
         ;; clearing the file-test directory
