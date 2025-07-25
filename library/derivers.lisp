@@ -140,57 +140,53 @@
                          :expr (parser:make-node-variable
                                 :location location
                                 :name 'x)
-                         :branches (mapcar
-                                    (lambda (ctor index)
-                                      (let ((cfields
-                                              (mapcar (lambda (_)
-                                                        (declare (ignore _))
-                                                        (gensym "ctor-field"))
-                                                      (parser:type-definition-ctor-field-types ctor))))
-                                        (parser:make-node-match-branch
-                                         :location location
-                                         :pattern (parser:make-pattern-constructor
+                         :branches (loop :for index :from 0
+                                         :for ctor :in (parser:type-definition-ctors def)
+                                         :for cfields := (mapcar (lambda (_)
+                                                                   (declare (ignore _))
+                                                                   (gensym "ctor-field"))
+                                                                 (parser:type-definition-ctor-field-types ctor))
+                                         :collect (parser:make-node-match-branch
                                                    :location location
-                                                   :name (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
-                                                   :patterns (mapcar
-                                                              (lambda (cfield)
-                                                                (parser:make-pattern-var
-                                                                 :location location
-                                                                 :name cfield
-                                                                 :orig-name cfield))
-                                                              cfields))
-                                         :body (parser:make-node-body
-                                                :nodes nil
-                                                :last-node (reduce
-                                                            (lambda (acc cfield)
-                                                              (parser:make-node-application
-                                                               :location location
-                                                               :rator (parser:make-node-variable
-                                                                       :location location
-                                                                       :name 'coalton-library/hash:combine-hashes)
-                                                               :rands (list
-                                                                       (parser:make-node-application
-                                                                        :location location
-                                                                        :rator (parser:make-node-variable
-                                                                                :location location
-                                                                                :name 'classes:hash)
-                                                                        :rands (list
-                                                                                (parser:make-node-variable
+                                                   :pattern (parser:make-pattern-constructor
+                                                             :location location
+                                                             :name (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
+                                                             :patterns (mapcar
+                                                                        (lambda (cfield)
+                                                                          (parser:make-pattern-var
+                                                                           :location location
+                                                                           :name cfield
+                                                                           :orig-name cfield))
+                                                                        cfields))
+                                                   :body (parser:make-node-body
+                                                          :nodes nil
+                                                          :last-node (reduce
+                                                                      (lambda (acc cfield)
+                                                                        (parser:make-node-application
+                                                                         :location location
+                                                                         :rator (parser:make-node-variable
                                                                                  :location location
-                                                                                 :name cfield)))
-                                                                       acc)))
-                                                            cfields
-                                                            :initial-value (parser:make-node-application
-                                                                            :location location
-                                                                            :rator (parser:make-node-variable
-                                                                                    :location location
-                                                                                    :name 'classes:hash)
-                                                                            :rands (list
-                                                                                    (parser:make-node-integer-literal
+                                                                                 :name 'coalton-library/hash:combine-hashes)
+                                                                         :rands (list
+                                                                                 (parser:make-node-application
+                                                                                  :location location
+                                                                                  :rator (parser:make-node-variable
+                                                                                          :location location
+                                                                                          :name 'classes:hash)
+                                                                                  :rands (list
+                                                                                          (parser:make-node-variable
+                                                                                           :location location
+                                                                                           :name cfield)))
+                                                                                 acc)))
+                                                                      cfields
+                                                                      :initial-value (parser:make-node-application
+                                                                                      :location location
+                                                                                      :rator (parser:make-node-variable
+                                                                                              :location location
+                                                                                              :name 'classes:hash)
+                                                                                      :rands (list
+                                                                                              (parser:make-node-integer-literal
                                                                                      :location location
-                                                                                     :value index))))))))
-                                    (parser:type-definition-ctors def)
-                                    (loop :for i :from 0 :to (length (parser:type-definition-ctors def))
-                                          :collect i))))
+                                                                                     :value index)))))))))
       :location location
       :inline nil))))
