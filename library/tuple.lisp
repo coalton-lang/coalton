@@ -39,17 +39,20 @@
     "Get the second element of a tuple."
     b)
 
+  (derive Eq)
   (define-struct (Tuple3 :a :b :c)
     (first :a)
     (second :b)
     (third :c))
 
+  (derive Eq)
   (define-struct (Tuple4 :a :b :c :d)
     (first :a)
     (second :b)
     (third :c)
     (fourth :d))
 
+  (derive Eq)
   (define-struct (Tuple5 :a :b :c :d :e)
     (first :a)
     (second :b)
@@ -95,15 +98,6 @@
   ;; Larger Tuple Instances
   ;;
 
-  (define-instance ((Eq :a) (Eq :b) (Eq :c) => Eq (Tuple3 :a :b :c))
-    (define (== a b)
-      (and (== (.first a)
-               (.first b))
-           (== (.second a)
-               (.second b))
-           (== (.third a)
-               (.third b)))))
-
   (define-instance ((Hash :a) (Hash :b) (Hash :c) => Hash (Tuple3 :a :b :c))
     (define (hash item)
       (combine-hashes
@@ -111,17 +105,6 @@
        (combine-hashes
         (hash (.second item))
         (hash (.third item))))))
-
-  (define-instance ((Eq :a) (Eq :b) (Eq :c) (Eq :d) => Eq (Tuple4 :a :b :c :d))
-    (define (== a b)
-      (and (== (.first a)
-               (.first b))
-           (== (.second a)
-               (.second b))
-           (== (.third a)
-               (.third b))
-           (== (.fourth a)
-               (.fourth b)))))
 
   (define-instance ((Hash :a) (Hash :b) (Hash :c) (Hash :d) => Hash (Tuple4 :a :b :c :d))
     (define (hash item)
@@ -132,19 +115,6 @@
         (combine-hashes
          (hash (.third item))
          (hash (.fourth item)))))))
-
-  (define-instance ((Eq :a) (Eq :b) (Eq :c) (Eq :d) (Eq :e) => Eq (Tuple5 :a :b :c :d :e))
-    (define (== a b)
-      (and (== (.first a)
-               (.first b))
-           (== (.second a)
-               (.second b))
-           (== (.third a)
-               (.third b))
-           (== (.fourth a)
-               (.fourth b))
-           (== (.fifth a)
-               (.fifth b)))))
 
   (define-instance ((Hash :a)
                     (Hash :b)
