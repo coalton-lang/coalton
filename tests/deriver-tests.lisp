@@ -21,12 +21,12 @@
     (DeriveNode :t (DeriveTree :t) (DeriveTree :t))))
 
 (coalton-toplevel
-  (derive Eq)
+  (derive Eq Hash)
   (define-type A
     A0
     (An B))
 
-  (derive Eq)
+  (derive Eq Hash)
   (define-type B
     B0
     (Bn A)))
@@ -66,7 +66,15 @@
   (is (== (hash (HashablePerson 1 "a"))
           (hash (HashablePerson 1 "a"))))
   (is (/= (hash (HashablePerson 2 "a"))
-          (hash (HashablePerson 3 "a")))))
+          (hash (HashablePerson 3 "a"))))
+  (is (== (hash (Bn A0)) (hash (Bn A0))))
+  (is (/= (hash A0) (hash (An B0)))))
+
+(define-test derive-hash-usage ()
+  "A little demo of using derived Hash to make a table."
+  (let map = (the (hashmap:HashMap HashablePerson UFix) hashmap:empty))
+  (let map* = (hashmap:insert map (HashablePerson 1 "a") 1))
+  (is (== (Some 1) (hashmap:lookup map* (HashablePerson 1 "a")))))
 
 (in-package #:coalton-tests)
 
