@@ -50,7 +50,7 @@
   (define (code-char code)
     "Convert a number to its ASCII character, returning None on failure."
     (lisp (Optional Char) (code)
-      ;; It is not sufficient to compare against `cl:char-code-limit',
+      ;; It is not sufficient to compare against `cl:char-code-limit`,
       ;; because the char-code space may be sparse.
       (alexandria:if-let (char (cl:code-char code))
         (Some char)
