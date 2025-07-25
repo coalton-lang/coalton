@@ -50,14 +50,16 @@
   (define (code-char code)
     "Convert a number to its ASCII character, returning None on failure."
     (lisp (Optional Char) (code)
-      ;; not sufficient to compare against `cl:char-code-limit', because the char-code space may be sparse.
+      ;; It is not sufficient to compare against `cl:char-code-limit`,
+      ;; because the char-code space may be sparse.
       (alexandria:if-let (char (cl:code-char code))
         (Some char)
         None)))
 
   (define-instance (Eq Char)
     (define (== x y)
-      (lisp Boolean (x y) (to-boolean (cl:char= x y)))))
+      (lisp Boolean (x y)
+        (to-boolean (cl:char= x y)))))
 
   (define-instance (Ord Char)
     (define (<=> x y)
@@ -69,13 +71,13 @@
 
   (declare alpha? (Char -> Boolean))
   (define (alpha? c)
-    "Is C an alphabetic character?"
+    "Is `c` an alphabetic character?"
     (lisp Boolean (c)
       (cl:alpha-char-p c)))
 
   (declare ascii-alpha? (Char -> Boolean))
   (define (ascii-alpha? c)
-    "Is C an ASCII alphabetic character?"
+    "Is `c` an ASCII alphabetic character?"
     (lisp Boolean (c)
       (cl:or
        (cl:<= 65 (cl:char-code c) 90)
@@ -83,63 +85,63 @@
 
   (declare digit? (Char -> Boolean))
   (define (digit? c)
-    "Is C a digit character?"
+    "Is `c` a digit character?"
     (lisp Boolean (c)
       (to-boolean (cl:digit-char-p c))))
 
   (declare ascii-digit? (Char -> Boolean))
   (define (ascii-digit? c)
-    "Is C an ASCII digit character?"
+    "Is `c` an ASCII digit character?"
     (lisp Boolean (c)
       (cl:<= 48 (cl:char-code c) 57)))
 
   (declare ascii-alphanumeric? (Char -> Boolean))
   (define (ascii-alphanumeric? c)
-    "Is C an ASCII alphanumeric character?"
+    "Is `c` an ASCII alphanumeric character?"
     (or (ascii-alpha? c)
         (ascii-digit? c)))
 
   (declare uppercase? (Char -> Boolean))
   (define (uppercase? c)
-    "Is C an uppercase character?"
+    "Is `c` an uppercase character?"
     (lisp Boolean (c)
       (cl:upper-case-p c)))
 
   (declare ascii-uppercase? (Char -> Boolean))
   (define (ascii-uppercase? c)
-    "Is C an ASCII uppercase character?"
+    "Is `c` an ASCII uppercase character?"
     (lisp Boolean (c)
       (cl:or
        (cl:<= 65 (cl:char-code c) 90))))
 
   (declare lowercase? (Char -> Boolean))
   (define (lowercase? c)
-    "Is C a lowercase character?"
+    "Is `c` a lowercase character?"
     (lisp Boolean (c)
       (cl:lower-case-p c)))
 
   (declare ascii-lowercase? (Char -> Boolean))
   (define (ascii-lowercase? c)
-    "Is C an ASCII lowercase character?"
+    "Is `c` an ASCII lowercase character?"
     (lisp Boolean (c)
       (cl:or
        (cl:<= 97 (cl:char-code c) 122))))
 
   (declare upcase (Char -> Char))
   (define (upcase c)
-    "Returns the upcased version of C, returning C when there is none."
+    "Returns the upcased version of `c`, returning `c` when there is none."
     (lisp Char (c)
       (cl:char-upcase c)))
 
   (declare downcase (Char -> Char))
   (define (downcase c)
-    "Returns the downcased version of C, returning C when there is none."
+    "Returns the downcased version of `c`, returning `c` when there is none."
     (lisp Char (c)
       (cl:char-downcase c)))
   
   (declare range (Char -> Char -> iter:Iterator Char))
   (define (range start end)
-    "An inclusive range of characters from START to END by cl:char-code."
+    "An inclusive range of characters from `start` to `end` by `char-code`."
     (iter:filter-map!
      code-char
      (iter:range-increasing
