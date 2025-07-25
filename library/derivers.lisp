@@ -124,21 +124,6 @@
 (defmethod tc:derive-methods ((class (eql 'classes:hash)) def env)
   "Deriver implementation for class `Hash'."
   (let ((location (source:location def)))
-    (alexandria:when-let
-        ((ctor
-          (find-if #'endp
-                   (parser:type-definition-ctors def)
-                   :key #'parser:type-definition-ctor-field-types)))
-      (tc:tc-error (format nil "Cannot derive class ~A for type ~A."
-                           class
-                           (parser:identifier-src-name (parser:type-definition-name def)))
-                   (source:note (parser:type-definition-derive def)
-                                "Constructor ~A has no fields"
-                                (parser:identifier-src-name (parser:type-definition-ctor-name ctor)))
-                   (source:note def
-                                "when deriving class ~A for type ~A."
-                                class
-                                (parser:identifier-src-name (parser:type-definition-name def))))) 
     (list
      (parser:make-instance-method-definition
       :name (parser:make-node-variable
@@ -156,7 +141,7 @@
                                 :location location
                                 :name 'x)
                          :branches (mapcar
-                                    (lambda (ctor)
+                                    (lambda (ctor index)
                                       (let ((cfields
                                               (mapcar (lambda (_)
                                                         (declare (ignore _))
@@ -194,16 +179,18 @@
                                                                                  :location location
                                                                                  :name cfield)))
                                                                        acc)))
-                                                            (rest cfields)
+                                                            cfields
                                                             :initial-value (parser:make-node-application
                                                                             :location location
                                                                             :rator (parser:make-node-variable
                                                                                     :location location
                                                                                     :name 'classes:hash)
                                                                             :rands (list
-                                                                                    (parser:make-node-variable
+                                                                                    (parser:make-node-integer-literal
                                                                                      :location location
-                                                                                     :name (first cfields)))))))))
-                                    (parser:type-definition-ctors def))))
+                                                                                     :value index))))))))
+                                    (parser:type-definition-ctors def)
+                                    (loop :for i :from 0 :to (length (parser:type-definition-ctors def))
+                                          :collect i))))
       :location location
       :inline nil))))
