@@ -6,78 +6,44 @@
   ;; Preliminaries
   ;;
 
+  (derive Eq)
   (define-type Id
     (Id String))
 
   (define (id->string (Id str))
     str)
 
-  (define-instance (Eq Id)
-    (define (== (Id x) (Id y))
-      (== x y)))
-
   (declare enumId (Integer -> Id))
   (define (enumId n)
     (Id (<> "v" (into n))))
-
 
   ;;
   ;; Kinds
   ;;
 
+  (derive Eq)
   (define-type Kind
     Star
     (Kfun Kind Kind))
-
-  (define-instance (Eq Kind)
-    (define (== k1 k2)
-      (match (Tuple k1 k2)
-        ((Tuple (Star) (Star)) True)
-        ((Tuple (Kfun a1 a2)
-                (Kfun b1 b2))
-         (and (== a1 b1)
-              (== a2 b2)))
-        (_ False))))
 
   ;;
   ;; Types
   ;;
 
+  (derive Eq)
   (define-type Type
     (TVar Tyvar)
     (TCon Tycon)
     (TAp Type Type)
     (TGen UFix))
 
-  (define-instance (Eq Type)
-    (define (== t1 t2)
-      (match (Tuple t1 t2)
-        ((Tuple (TVar v1) (TVar v2)) (== v1 v2))
-        ((Tuple (TCon c1) (TCon c2)) (== c1 c2))
-        ((Tuple (TAp a1 a2) (TAp b1 b2))
-         (and (== a1 b1)
-              (== a2 b2)))
-        ((Tuple (TGen g1) (TGen g2)) (== g1 g2))
-        (_ False))))
-
-
+  (derive Eq)
   (define-type Tyvar
     (Tyvar Id Kind))
 
-  (define-instance (Eq Tyvar)
-    (define (== (Tyvar i1 k1) (Tyvar i2 k2))
-      (and (== i1 i2)
-           (== k1 k2))))
-
-
+  (derive Eq)
   (define-type Tycon
     (Tycon Id Kind))
-
-  (define-instance (Eq Tycon)
-    (define (== (Tycon i1 k1) (Tycon i2 k2))
-      (and (== i1 i2)
-           (== k1 k2))))
-
 
   (define tUnit (TCon (Tycon (Id "()") Star)))
   (define tChar (TCon (Tycon (Id "Char") Star)))
@@ -262,13 +228,9 @@
 
   ;; Basic Definitions
 
+  (derive Eq)
   (define-type (Qual :t)
     (Qual (List Pred) :t))
-
-  (define-instance (Eq :t => Eq (Qual :t))
-    (define (== (Qual xs t1) (Qual ys t2))
-      (and (== xs ys)
-           (== t1 t2))))
 
   (define-instance (Types :t => Types (Qual :t))
     (define (apply s (Qual ps t))
@@ -278,13 +240,9 @@
     (define (tv (Qual ps t))
       (list:union (tv ps) (tv t))))
 
+  (derive Eq)
   (define-type Pred
     (IsIn Id Type))
-
-  (define-instance (Eq Pred)
-    (define (== (IsIn id1 t1) (IsIn id2 t2))
-      (and (== id1 id2)
-           (== t1 t2))))
 
   (define-instance (Types Pred)
     (define (apply s (IsIn i t))
@@ -554,13 +512,9 @@
   ;; Type Schemes
   ;;
 
+  (derive Eq)
   (define-type Scheme
     (Forall (List Kind) (Qual Type)))
-
-  (define-instance (Eq Scheme)
-    (define (== (Forall ks1 q1) (Forall ks2 q2))
-      (and (== ks1 ks2)
-           (== q1 q2))))
 
   (define-instance (Types Scheme)
     (define (apply s (Forall ks qt))
@@ -588,13 +542,9 @@
   ;; Assumptions
   ;;
 
+  (derive Eq)
   (define-type Assump
     (Assump Id Scheme))
-
-  (define-instance (Eq Assump)
-    (define (== (Assump id-a scheme-a) (Assump id-b scheme-b))
-      (and (== id-a id-b)
-           (== scheme-a scheme-b))))
 
   (define-instance (Types Assump)
     (define (apply s (Assump i sc))
