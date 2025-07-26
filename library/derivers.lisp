@@ -199,14 +199,11 @@ The generated method will be shaped like this:
                                                                                            :name cfield)))
                                                                                  acc)))
                                                                       cfields
-                                                                      :initial-value (parser:make-node-application
+                                                                      :initial-value (parser:make-node-lisp
                                                                                       :location location
-                                                                                      :rator (parser:make-node-variable
-                                                                                              :location location
-                                                                                              :name 'classes:hash)
-                                                                                      :rands (list
-                                                                                              (parser:make-node-integer-literal
-                                                                                     :location location
-                                                                                     :value index)))))))))
+                                                                                      :type (parser:make-tycon :location location :name 'classes:hash)
+                                                                                      :vars '()
+                                                                                      :var-names '()
+                                                                                      :body (list (cl:sxhash (parser:type-definition-ctor-name ctor))))))))))
       :location location
       :inline nil))))
