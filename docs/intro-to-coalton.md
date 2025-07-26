@@ -529,7 +529,7 @@ signed types (`I32` and `I64`) and fixed-width unsigned types (`U8`,
 
 Lastly, there's a ratio type called `Fraction`, which is a ratio of two `Integer` values.
 
-Numbers implement the `Num` typeclass, which has methods `+`, `-`, `*`, and `fromInt`.
+Numbers implement the `Num` type class, which has methods `+`, `-`, `*`, and `fromInt`.
 
 ### Division, in short
 
@@ -557,7 +557,7 @@ Coalton does have a division operator `/`, but it's a separate, slightly more di
 
 To address the first concern, division may result in a run-time error. We don't use `Optional` because it is quite cumbersome to use in mathematical contexts. (One may use `safe/` for a variant that does a division-by-zero check and produces an `Optional`.)
 
-To address the second concern, we need to introduce a new typeclass called `Dividable`. The type expression
+To address the second concern, we need to introduce a new type class called `Dividable`. The type expression
 
 ```
 (Dividable :s :t)
@@ -967,15 +967,15 @@ Functions can be returned from early with `return`.
     (into n)))
 ```
 
-## Typeclasses
+## Type Classes
 
-Coalton supports typeclasses.
+Coalton supports type classes.
 
-Currently, *all* member functions must be defined for each typeclass instance.
+Currently, *all* member functions must be defined for each type class instance.
 
 ```lisp
 (coalton-toplevel
-  ;; Typeclasses are defined with the define-class keyword
+  ;; Type classes are defined with the define-class keyword
   (define-class (Eq :a)
     (== (:a -> :a -> Boolean)))
 
@@ -984,7 +984,7 @@ Currently, *all* member functions must be defined for each typeclass instance.
     Green
     Blue)
 
-  ;; Typeclass instances are defined with the define-instance keyword
+  ;; Type class instances are defined with the define-instance keyword
   (define-instance (Eq Color)
     (define (== a b)
       (match (Tuple a b)
@@ -1010,9 +1010,9 @@ Currently, *all* member functions must be defined for each typeclass instance.
 ```
 
 
-## Builtin Typeclasses
+## Builtin Type Classes
 
-The following are the main typeclasses defined in the standard library.
+The following are the main type classes defined in the standard library.
 
 * `Eq` - defined on types that are comparable
 * `Ord` - defined on types that are orderable
@@ -1022,7 +1022,7 @@ The following are the main typeclasses defined in the standard library.
 * `Monoid` - defined on types that are semigroups and have an identity element
 
 
-Each of the following typeclasses resembles the class of the same name in
+Each of the following type classes resembles the class of the same name in
 Haskell, aside from meager differences.
 
 * `Functor` - `fmap` is just `map` in Coalton
@@ -1032,10 +1032,47 @@ Haskell, aside from meager differences.
 * `Foldable`
 * `Traversable`
 
-These typeclasses are inspired by traits of the same name in Rust:
+These type classes are inspired by traits of the same name in Rust:
 
 * `Into` - total conversions between one type and another
 * `TryInto` - non-total conversions between one type and another
+
+## Automatically Deriving Type Class Instances from Type Definitions
+
+Instances of some type classes can be derived so that they are defined automatically for user-defined types.
+
+```lisp
+(coalton-toplevel
+  (derive Eq Hash)
+  (define-struct Point
+    (x UFix)
+    (y UFix)))
+```
+
+Now you can use the `==` and `hash` methods on `Point` structures:
+
+```lisp
+(coalton
+  ;; Test `Point' equality
+  (== (Point 1 2) (Point 3 3))
+
+  ;; Make a map using `Point' as a key
+  (let map = (the (hashmap:HashMap Point UFix) hashmap:empty))
+  (hashmap:insert map (Point 0 0) 1))
+```
+
+The instance that is generated will be the "obvious" one in each case. For example, equality will test that every sub-field of each case is equal. This may not be desired for every type, and hence sometimes custom instances are still needed.
+
+### Builtin `derive` Type Classes
+
+Instances of the following classes can be derived:
+
+- `Eq`
+- `Hash`
+
+Currently these are the only derivable classes in the standard library, but more may be added in the future.
+
+Writing custom derivers does not yet have an official API, but for the adventurous, it can be done relatively easily. For guidance, see [derivers.lisp](./../library/derivers.lisp).
 
 ## Do Notation
 
@@ -1056,7 +1093,7 @@ Coalton has a `do` macro that works similarly to do notation in Haskell.
 
 ## Inline Type Annotations
 
-Inline type annotations can be added to resolve ambiguities when using typeclasses.
+Inline type annotations can be added to resolve ambiguities when using type classes.
 
 ```lisp
 (coalton-toplevel
@@ -1329,9 +1366,9 @@ For the time being, the following caveats apply;
 3. `resumable` branches are even more restrictive. You cannot match
    against anything _other_ than a resumption constructor pattern.
 
-4. No typeclass is associated with exception-signaling forms. We are
+4. No type class is associated with exception-signaling forms. We are
    pursuing different approaches to static checking of forms that
-   might hop the call stack. In the end, a typeclass approach may win
+   might hop the call stack. In the end, a type class approach may win
    out. Whatever we do, we will endeavor to make it compatible with
    the existing syntax and semantics.
 
