@@ -121,6 +121,14 @@
       :location location
       :inline nil))))
 
+(defun hash-symbol (sym)
+  (let ((lhs (sxhash sym))
+        (rhs (sxhash (symbol-package sym))))
+      #+sbcl (sb-int:mix lhs rhs)
+      ;; https://stackoverflow.com/questions/5889238/why-is-xor-the-default-way-to-combine-hashes/27952689#27952689
+      #+allegro (cl:logxor lhs (cl:+ rhs #x9e3779b9 (cl:ash lhs 6) (cl:ash lhs -2)))
+      #+ccl (cl:logand (cl:logxor lhs (cl:+ rhs #x517cc1b727220a95 (cl:ash lhs 6) (cl:ash lhs -2))) cl:most-positive-fixnum)))
+
 (defmethod tc:derive-methods ((class (eql 'classes:hash)) def env)
   "Deriver implementation for class `Hash'.
 
@@ -204,6 +212,6 @@ The generated method will be shaped like this:
                                                                                       :type (parser:make-tycon :location location :name 'classes:hash)
                                                                                       :vars '()
                                                                                       :var-names '()
-                                                                                      :body (list (cl:sxhash (parser:type-definition-ctor-name ctor))))))))))
+                                                                                      :body (list (hash-symbol (parser:type-definition-ctor-name ctor))))))))))
       :location location
       :inline nil))))
