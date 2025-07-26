@@ -133,7 +133,7 @@
   "Deriver implementation for class `Hash'.
 
 The hashes generated are not guaranteed to be stable when the type is
-defined, since constructors are differentiated by their index in the
+redefined, since constructors are differentiated by their index in the
 `define-type'. If you only append constructors, things will stay the
 same, but if you insert, they will not.
 
@@ -143,13 +143,13 @@ The generated method will be shaped like this:
 (define (hash x)
   (match x
     ((Ctor1)
-     (hash 0))
+     ,(symbol-hash 'Ctor1))
     ((Ctor2 field1 field2)
      (combine-hashes
       field2
       (combine-hashes
        field1
-       (hash 1))))))
+       ,(symbol-hash 'Ctor2))))))
 '''"
   (let ((location (source:location def)))
     (list
