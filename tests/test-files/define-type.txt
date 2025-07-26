@@ -436,7 +436,7 @@ error: Malformed derive attribute
 
 
 ================================================================================
-119 Derive mutually recursive types
+120 Derive mutually recursive types
 ================================================================================
 
 (package test-package)
@@ -449,3 +449,18 @@ error: Malformed derive attribute
 (define-type BB
   BB0
   (BBn AA))
+
+================================================================================
+121 Derive types that are recursive below the toplevel
+================================================================================
+
+(package test-package)
+
+(derive coalton-library/classes:Eq)
+(define-type MyKind
+  MyStar
+  (MyKfun MyKind MyKind))
+
+(derive coalton-library/classes:Eq)
+(define-type MyTyCon
+  (MyTyCon String MyKind))
