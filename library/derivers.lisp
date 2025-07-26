@@ -212,6 +212,9 @@ The generated method will be shaped like this:
                                                                                       :type (parser:make-tycon :location location :name 'classes:hash)
                                                                                       :vars '()
                                                                                       :var-names '()
-                                                                                      :body (list (hash-symbol (parser:type-definition-ctor-name ctor))))))))))
+                                                                                      :body (list
+                                                                                             (hash-symbol
+                                                                                              (parser:identifier-src-name
+                                                                                               (parser:type-definition-ctor-name ctor)))))))))))
       :location location
       :inline nil))))
