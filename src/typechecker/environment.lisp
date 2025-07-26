@@ -740,16 +740,20 @@ of constraint predicates."
   ;; types.  Allows you to write an instance with signature
   ;; `(Eq A => Eq A)'.
   (flet ((expand-constraint (base-constraint)
-           (labels ((f (constraint)
+           (labels ((f (constraint stack)
                       (multiple-value-bind (inst subs)
                           (lookup-class-instance env constraint :no-error t)
                         (if (null inst)
                             (list constraint)
-                            (mapcan (lambda (pred) (f (apply-substitution subs pred)))
-                                    (remove base-constraint
-                                            (ty-class-instance-constraints inst)
-                                            :test #'type-predicate=))))))
-             (f base-constraint))))
+                            (mapcan
+                             (lambda (pred)
+                               (let ((pred (apply-substitution subs pred)))
+                                 (f pred (cons pred stack))))
+                             (remove-if
+                              (lambda (pred)
+                                (member pred stack :test #'type-predicate=))
+                              (ty-class-instance-constraints inst)))))))
+             (f base-constraint (list base-constraint)))))
 
     (remove-duplicates
      (alexandria:mappend #'expand-constraint context)
