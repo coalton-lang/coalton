@@ -749,10 +749,10 @@ of constraint predicates."
                              (lambda (pred)
                                (let ((pred (apply-substitution subs pred)))
                                  (f pred (cons pred stack))))
-                             (remove-if
-                              (lambda (pred)
-                                (member pred stack :test #'type-predicate=))
-                              (ty-class-instance-constraints inst)))))))
+                             (set-difference
+                              (ty-class-instance-constraints inst)
+                              stack
+                              :test #'type-predicate=))))))
              (f base-constraint (list base-constraint)))))
 
     (remove-duplicates
