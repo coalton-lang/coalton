@@ -120,3 +120,101 @@
                                                              :name 'coalton:False))))))))
       :location location
       :inline nil))))
+
+(defun hash-symbol (sym)
+  (let ((lhs (sxhash sym))
+        (rhs (sxhash (symbol-package sym))))
+      #+sbcl (sb-int:mix lhs rhs)
+      ;; https://stackoverflow.com/questions/5889238/why-is-xor-the-default-way-to-combine-hashes/27952689#27952689
+      #+allegro (cl:logxor lhs (cl:+ rhs #x9e3779b9 (cl:ash lhs 6) (cl:ash lhs -2)))
+      #+ccl (cl:logand (cl:logxor lhs (cl:+ rhs #x517cc1b727220a95 (cl:ash lhs 6) (cl:ash lhs -2))) cl:most-positive-fixnum)))
+
+(defmethod tc:derive-methods ((class (eql 'classes:hash)) def env)
+  "Deriver implementation for class `Hash'.
+
+The hashes generated are not guaranteed to be stable when the type is
+redefined, since constructors are differentiated by their index in the
+`define-type'. If you only append constructors, things will stay the
+same, but if you insert, they will not.
+
+The generated method will be shaped like this:
+
+```
+(define (hash x)
+  (match x
+    ((Ctor1)
+     ,(hash-symbol 'Ctor1))
+    ((Ctor2 field1 field2)
+     (combine-hashes
+      field2
+      (combine-hashes
+       field1
+       ,(hash-symbol 'Ctor2))))))
+'''"
+  (let ((location (source:location def)))
+    (list
+     (parser:make-instance-method-definition
+      :name (parser:make-node-variable
+             :location location
+             :name 'classes:hash)
+      :params (list (parser:make-pattern-var
+                     :location location
+                     :name 'x
+                     :orig-name 'x))
+      :body (parser:make-node-body
+             :nodes nil
+             :last-node (parser:make-node-match
+                         :location location
+                         :expr (parser:make-node-variable
+                                :location location
+                                :name 'x)
+                         :branches (loop :for index :from 0
+                                         :for ctor :in (parser:type-definition-ctors def)
+                                         :for cfields := (mapcar (lambda (_)
+                                                                   (declare (ignore _))
+                                                                   (gensym "ctor-field"))
+                                                                 (parser:type-definition-ctor-field-types ctor))
+                                         :collect (parser:make-node-match-branch
+                                                   :location location
+                                                   :pattern (parser:make-pattern-constructor
+                                                             :location location
+                                                             :name (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
+                                                             :patterns (mapcar
+                                                                        (lambda (cfield)
+                                                                          (parser:make-pattern-var
+                                                                           :location location
+                                                                           :name cfield
+                                                                           :orig-name cfield))
+                                                                        cfields))
+                                                   :body (parser:make-node-body
+                                                          :nodes nil
+                                                          :last-node (reduce
+                                                                      (lambda (acc cfield)
+                                                                        (parser:make-node-application
+                                                                         :location location
+                                                                         :rator (parser:make-node-variable
+                                                                                 :location location
+                                                                                 :name 'coalton-library/hash:combine-hashes)
+                                                                         :rands (list
+                                                                                 (parser:make-node-application
+                                                                                  :location location
+                                                                                  :rator (parser:make-node-variable
+                                                                                          :location location
+                                                                                          :name 'classes:hash)
+                                                                                  :rands (list
+                                                                                          (parser:make-node-variable
+                                                                                           :location location
+                                                                                           :name cfield)))
+                                                                                 acc)))
+                                                                      cfields
+                                                                      :initial-value (parser:make-node-lisp
+                                                                                      :location location
+                                                                                      :type (parser:make-tycon :location location :name 'classes:hash)
+                                                                                      :vars '()
+                                                                                      :var-names '()
+                                                                                      :body (list
+                                                                                             (hash-symbol
+                                                                                              (parser:identifier-src-name
+                                                                                               (parser:type-definition-ctor-name ctor)))))))))))
+      :location location
+      :inline nil))))
