@@ -41,6 +41,7 @@
 
   ;; unexported; a marker held by trees to enable self-balancing.
   (repr :enum)
+  (derive Eq)
   (define-type Color
     ;; has no red children
     Red
@@ -51,15 +52,6 @@
     ;; intermediate states during deletion; will never exist outside of a `remove' operation
     DoubleBlack
     NegativeBlack)
-
-  (define-instance (Eq Color)
-    (define (== a b)
-      (match (Tuple a b)
-        ((Tuple (Red) (Red)) True)
-        ((Tuple (Black) (Black)) True)
-        ((Tuple (DoubleBlack) (DoubleBlack)) True)
-        ((Tuple (NegativeBlack) (NegativeBlack)) True)
-        (_ False))))
 
   (declare color-plus-black (Color -> Color))
   (define (color-plus-black c)
