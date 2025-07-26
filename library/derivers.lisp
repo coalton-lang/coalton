@@ -143,13 +143,13 @@ The generated method will be shaped like this:
 (define (hash x)
   (match x
     ((Ctor1)
-     ,(symbol-hash 'Ctor1))
+     ,(hash-symbol 'Ctor1))
     ((Ctor2 field1 field2)
      (combine-hashes
       field2
       (combine-hashes
        field1
-       ,(symbol-hash 'Ctor2))))))
+       ,(hash-symbol 'Ctor2))))))
 '''"
   (let ((location (source:location def)))
     (list
