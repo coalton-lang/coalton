@@ -45,7 +45,7 @@
 
 (define-test derive-basic-test ()
   "Ensure `Eq' can be derived for structs and types."
-  (is (== Nothing (The (DerivingThing U8) Nothing)))
+  (is (== Nothing (the (DerivingThing U8) Nothing)))
   (is (/= Nothing (Something 12)))
   (is (== (Something "hi") (Something "hi")))
   (is (== (Something 12) (Something 12)))
@@ -60,7 +60,7 @@
   (is (== (the (DerivingPerson String) (DerivingPerson 0 "" (vector:make)))
           (default)))
   (is (== (DFoo 0) (default)))
-  (is (== DUnit (Default))))
+  (is (== DUnit (default))))
 
 (define-test derive-recursive-test ()
   "Ensure deriving works for single recursive types."
