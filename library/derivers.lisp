@@ -232,7 +232,7 @@ The generated method will be shaped like this:
                            class
                            type-name)
                    (source:note (parser:type-definition-derive def)
-                                "Class ~A can only be derived on a single constructor."
+                                "Class ~A can only be derived for types with a single constructor."
                                 class)
                    (source:note def
                                 "when deriving class ~A for type ~A."
