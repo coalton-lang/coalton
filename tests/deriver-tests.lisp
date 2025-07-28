@@ -8,7 +8,7 @@
     Nothing
     (Something :a))
 
-  (derive Eq)
+  (derive Eq Default)
   (define-struct (DerivingPerson :a)
     (age U8)
     (name String)
@@ -37,6 +37,12 @@
     (age U8)
     (name String)))
 
+(coalton-toplevel
+  (derive Eq Default)
+  (define-type DefaultableFoo (DFoo UFix))
+  (derive Eq Default)
+  (define-type DefaultableUnit DUnit))
+
 (define-test derive-basic-test ()
   "Ensure `Eq' can be derived for structs and types."
   (is (== Nothing (The (DerivingThing U8) Nothing)))
@@ -48,6 +54,13 @@
           (DerivingPerson 1 "a" (vector:make (Something "computer")))))
   (is (/= (DerivingPerson 1 "a" (vector:make (Something "computer")))
           (DerivingPerson 1 "a" (vector:make (Something "sardine"))))))
+
+(define-test derive-default-test ()
+  "Ensure `Default' is derived correctly for types with a single constructor."
+  (is (== (the (DerivingPerson String) (DerivingPerson 0 "" (vector:make)))
+          (default)))
+  (is (== (DFoo 0) (default)))
+  (is (== DUnit (Default))))
 
 (define-test derive-recursive-test ()
   "Ensure deriving works for single recursive types."

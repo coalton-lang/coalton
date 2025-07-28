@@ -239,8 +239,9 @@ The generated method will be shaped like this:
                                 class
                                 type-name))))
 
-  (let ((location (source:location (parser:type-definition-derive def)))
-        (ctor (first (parser:type-definition-ctors def))))
+  (let* ((location (source:location (parser:type-definition-derive def)))
+         (ctor (first (parser:type-definition-ctors def)))
+         (field-count (length (parser:type-definition-ctor-field-types ctor))))
     (list
      (parser:make-instance-method-definition
       :name (parser:make-node-variable
@@ -253,17 +254,22 @@ The generated method will be shaped like this:
                 :orig-name 'coalton:_))
       :body (parser:make-node-body
              :nodes nil
-             :last-node (parser:make-node-application
-                         :location location
-                         :rator (parser:make-node-variable
-                                 :location location
-                                 :name (parser:identifier-src-name (parser:type-definition-name def)))
-                         :rands (loop :repeat (length (parser:type-definition-ctor-field-types ctor))
-                                      :collect (parser:make-node-application
-                                                :location location
-                                                :rator (parser:make-node-variable
-                                                        :location location
-                                                        :name 'classes:default)
-                                                :rands '()))))
+             :last-node
+             (if (zerop field-count)
+                 (parser:make-node-variable
+                  :location location
+                  :name (parser:identifier-src-name (parser:type-definition-ctor-name ctor)))
+                 (parser:make-node-application
+                  :location location
+                  :rator (parser:make-node-variable
+                          :location location
+                          :name (parser:identifier-src-name (parser:type-definition-ctor-name ctor)))
+                  :rands (loop :repeat field-count
+                               :collect (parser:make-node-application
+                                         :location location
+                                         :rator (parser:make-node-variable
+                                                 :location location
+                                                 :name 'classes:default)
+                                         :rands '())))))
       :location location
       :inline nil))))
