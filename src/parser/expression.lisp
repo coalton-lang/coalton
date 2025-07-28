@@ -27,7 +27,7 @@
    #:make-node-literal                  ; CONSTRUCTOR
    #:node-literal-value                 ; ACCESSOR
    #:node-integer-literal               ; STRUCT
-   #:make-node-integerl-literal         ; CONSTRUCTOR
+   #:make-node-integer-literal          ; CONSTRUCTOR
    #:node-integer-literal-value         ; ACCESSOR
    #:node-bind                          ; STRUCT
    #:make-node-bind                     ; CONSTRUCTOR
