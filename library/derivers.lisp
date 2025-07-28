@@ -225,7 +225,8 @@ The generated method will be shaped like this:
       :inline nil))))
 
 (defmethod tc:derive-methods ((class (eql 'classes:default)) def env)
-  "Deriver implementation for class `Eq'."
+  "Deriver implementation for class `Default'.
+Requires field to only have a single constructor."
   (unless (= 1 (length (parser:type-definition-ctors def)))
     (let ((type-name (parser:identifier-src-name (parser:type-definition-name def))))
       (tc:tc-error (format nil "Cannot derive class ~A for type ~A."
