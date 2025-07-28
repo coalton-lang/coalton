@@ -258,14 +258,12 @@ The generated method will be shaped like this:
                          :rator (parser:make-node-variable
                                  :location location
                                  :name (parser:identifier-src-name (parser:type-definition-name def)))
-                         :rands (mapcar
-                                 (constantly 
-                                  (parser:make-node-application
-                                   :location location
-                                   :rator (parser:make-node-variable
-                                           :location location
-                                           :name 'classes:default)
-                                   :rands '()))
-                                 (parser:type-definition-ctor-field-types ctor))))
+                         :rands (loop :repeat (length (parser:type-definition-ctor-field-types ctor))
+                                      :collect (parser:make-node-application
+                                                :location location
+                                                :rator (parser:make-node-variable
+                                                        :location location
+                                                        :name 'classes:default)
+                                                :rands '()))))
       :location location
       :inline nil))))
