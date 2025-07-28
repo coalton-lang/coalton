@@ -17,6 +17,7 @@
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
+(cl:declaim (cl:inline lisp-combine-hashes))
 (cl:defun lisp-combine-hashes (lhs rhs)
   ;; SBCL has a hash combination function
   #+sbcl (sb-int:mix lhs rhs)
