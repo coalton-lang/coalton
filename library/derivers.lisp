@@ -223,3 +223,49 @@ The generated method will be shaped like this:
                                                                                                (parser:type-definition-ctor-name ctor)))))))))))
       :location location
       :inline nil))))
+
+(defmethod tc:derive-methods ((class (eql 'classes:default)) def env)
+  "Deriver implementation for class `Eq'."
+  (unless (= 1 (length (parser:type-definition-ctors def)))
+    (let ((type-name (parser:identifier-src-name (parser:type-definition-name def))))
+      (tc:tc-error (format nil "Cannot derive class ~A for type ~A."
+                           class
+                           type-name)
+                   (source:note (parser:type-definition-derive def)
+                                "Class ~A can only be derived on a single constructor."
+                                class)
+                   (source:note def
+                                "when deriving class ~A for type ~A."
+                                class
+                                type-name))))
+
+  (let ((location (source:location (parser:type-definition-derive def)))
+        (ctor (first (parser:type-definition-ctors def))))
+    (list
+     (parser:make-instance-method-definition
+      :name (parser:make-node-variable
+             :location location
+             :name 'classes:default)
+      :params (list
+               (parser:make-pattern-var
+                :location location
+                :name 'coalton:_
+                :orig-name 'coalton:_))
+      :body (parser:make-node-body
+             :nodes nil
+             :last-node (parser:make-node-application
+                         :location location
+                         :rator (parser:make-node-variable
+                                 :location location
+                                 :name (parser:identifier-src-name (parser:type-definition-name def)))
+                         :rands (mapcar
+                                 (constantly 
+                                  (parser:make-node-application
+                                   :location location
+                                   :rator (parser:make-node-variable
+                                           :location location
+                                           :name 'classes:default)
+                                   :rands '()))
+                                 (parser:type-definition-ctor-field-types ctor))))
+      :location location
+      :inline nil))))
