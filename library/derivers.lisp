@@ -2,9 +2,10 @@
   (:use #:cl)
   (:local-nicknames
    (#:tc #:coalton-impl/typechecker)
-   (#:classes #:coalton-library/classes)
    (#:parser #:coalton-impl/parser)
-   (#:source #:coalton-impl/source)))
+   (#:source #:coalton-impl/source)
+   (#:classes #:coalton-library/classes)
+   (#:hash #:coalton-library/hash)))
 
 (in-package #:coalton-library/derivers)
 
@@ -121,13 +122,15 @@
       :location location
       :inline nil))))
 
-(defun hash-symbol (sym)
-  (let ((lhs (sxhash sym))
-        (rhs (sxhash (symbol-package sym))))
-      #+sbcl (sb-int:mix lhs rhs)
-      ;; https://stackoverflow.com/questions/5889238/why-is-xor-the-default-way-to-combine-hashes/27952689#27952689
-      #+allegro (cl:logxor lhs (cl:+ rhs #x9e3779b9 (cl:ash lhs 6) (cl:ash lhs -2)))
-      #+ccl (cl:logand (cl:logxor lhs (cl:+ rhs #x517cc1b727220a95 (cl:ash lhs 6) (cl:ash lhs -2))) cl:most-positive-fixnum)))
+(defun hash-symbols (&rest symbols)
+  (flet ((hash-symbol (sym)
+           (hash:lisp-combine-hashes
+            (sxhash sym)
+            (sxhash (symbol-package sym))))) 
+    (reduce (lambda (acc sym)
+              (hash:lisp-combine-hashes acc (hash-symbol sym)))
+            (rest symbols)
+            :initial-value (hash-symbol (first symbols)))))
 
 (defmethod tc:derive-methods ((class (eql 'classes:hash)) def env)
   "Deriver implementation for class `Hash'.
@@ -143,13 +146,13 @@ The generated method will be shaped like this:
 (define (hash x)
   (match x
     ((Ctor1)
-     ,(hash-symbol 'Ctor1))
+     ,(hash-symbols 'TypeName 'Ctor1))
     ((Ctor2 field1 field2)
      (combine-hashes
       field2
       (combine-hashes
        field1
-       ,(hash-symbol 'Ctor2))))))
+       ,(hash-symbols 'TypeName 'Ctor2))))))
 '''"
   (let ((location (source:location def)))
     (list
@@ -174,18 +177,18 @@ The generated method will be shaped like this:
                                                                    (declare (ignore _))
                                                                    (gensym "ctor-field"))
                                                                  (parser:type-definition-ctor-field-types ctor))
+                                         :for patterns := (mapcar (lambda (cfield)
+                                                                    (parser:make-pattern-var
+                                                                     :location location
+                                                                     :name cfield
+                                                                     :orig-name cfield))
+                                                                  cfields)
                                          :collect (parser:make-node-match-branch
                                                    :location location
                                                    :pattern (parser:make-pattern-constructor
                                                              :location location
                                                              :name (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
-                                                             :patterns (mapcar
-                                                                        (lambda (cfield)
-                                                                          (parser:make-pattern-var
-                                                                           :location location
-                                                                           :name cfield
-                                                                           :orig-name cfield))
-                                                                        cfields))
+                                                             :patterns patterns)
                                                    :body (parser:make-node-body
                                                           :nodes nil
                                                           :last-node (reduce
@@ -213,7 +216,9 @@ The generated method will be shaped like this:
                                                                                       :vars '()
                                                                                       :var-names '()
                                                                                       :body (list
-                                                                                             (hash-symbol
+                                                                                             (hash-symbols
+                                                                                              (parser:identifier-src-name 
+                                                                                               (parser:type-definition-name def))
                                                                                               (parser:identifier-src-name
                                                                                                (parser:type-definition-ctor-name ctor)))))))))))
       :location location
