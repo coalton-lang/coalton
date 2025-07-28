@@ -451,7 +451,40 @@ error: Malformed derive attribute
   (BBn AA))
 
 ================================================================================
-121 Derive types that are recursive below the toplevel
+121 Derive Hash without Eq
+================================================================================
+
+(package test-package)
+
+(derive coalton-library/classes:Hash)
+(define-struct HashableStruct
+  (A String)
+  (B String))
+
+--------------------------------------------------------------------------------
+
+error: Instance missing context
+  --> test:4:0
+   |
+ 4 |   (define-struct HashableStruct
+   |  _^
+ 5 | |   (A String)
+ 6 | |   (B String))
+   | |_____________^ No instance for COALTON-LIBRARY/CLASSES:EQ HASHABLESTRUCT
+
+================================================================================
+122 Derive Hash with Eq
+================================================================================
+
+(package test-package)
+
+(derive coalton-library/classes:Hash coalton-library/classes:Eq)
+(define-struct HashableStruct2
+  (A String)
+  (B String))
+
+================================================================================
+123 Derive types that are recursive below the toplevel
 ================================================================================
 
 (package test-package)

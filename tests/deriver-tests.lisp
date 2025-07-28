@@ -21,15 +21,21 @@
     (DeriveNode :t (DeriveTree :t) (DeriveTree :t))))
 
 (coalton-toplevel
-  (derive Eq)
+  (derive Eq Hash)
   (define-type A
     A0
     (An B))
 
-  (derive Eq)
+  (derive Eq Hash)
   (define-type B
     B0
     (Bn A)))
+
+(coalton-toplevel
+  (derive Eq Hash)
+  (define-struct HashablePerson
+    (age U8)
+    (name String)))
 
 (define-test derive-basic-test ()
   "Ensure `Eq' can be derived for structs and types."
@@ -55,6 +61,20 @@
   (is (== (Bn (An B0)) (Bn (An B0))))
   (is (/= B0 (Bn (An B0)))))
 
+(define-test derive-two-classes ()
+  "Ensure we can derive multiple classes at once."
+  (is (== (hash (HashablePerson 1 "a"))
+          (hash (HashablePerson 1 "a"))))
+  (is (/= (hash (HashablePerson 2 "a"))
+          (hash (HashablePerson 3 "a"))))
+  (is (== (hash (Bn A0)) (hash (Bn A0))))
+  (is (/= (hash A0) (hash (An B0)))))
+
+(define-test derive-hash-usage ()
+  "A little demo of using derived Hash to make a table."
+  (let map = (the (hashmap:HashMap HashablePerson UFix) hashmap:empty))
+  (let map* = (hashmap:insert map (HashablePerson 1 "a") 1))
+  (is (== (Some 1) (hashmap:lookup map* (HashablePerson 1 "a")))))
 
 (in-package #:coalton-tests)
 
