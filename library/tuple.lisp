@@ -39,20 +39,20 @@
     "Get the second element of a tuple."
     b)
 
-  (derive Eq Hash)
+  (derive Eq Hash Default)
   (define-struct (Tuple3 :a :b :c)
     (first :a)
     (second :b)
     (third :c))
 
-  (derive Eq Hash)
+  (derive Eq Hash Default)
   (define-struct (Tuple4 :a :b :c :d)
     (first :a)
     (second :b)
     (third :c)
     (fourth :d))
 
-  (derive Eq Hash)
+  (derive Eq Hash Default)
   (define-struct (Tuple5 :a :b :c :d :e)
     (first :a)
     (second :b)
@@ -94,24 +94,8 @@
     (define (bimap f g (Tuple a b))
       (Tuple (f a) (g b))))
 
-  ;;
-  ;; Default instances
-  ;;
-
   (define-instance ((Default :a) (Default :b) => (Default (Tuple :a :b)))
-    (define (default) (Tuple (default) (default))))
-
-  (define-instance ((Default :a) (Default :b) (Default :c) =>
-                    (Default (Tuple3 :a :b :c)))
-    (define (default) (Tuple3 (default) (default) (default))))
-
-  (define-instance ((Default :a) (Default :b) (Default :c) (Default :d) =>
-                    (Default (Tuple4 :a :b :c :d)))
-    (define (default) (Tuple4 (default) (default) (default) (default))))
-
-  (define-instance ((Default :a) (Default :b) (Default :c) (Default :d) (Default :e) =>
-                    (Default (Tuple5 :a :b :c :d :e)))
-    (define (default) (Tuple5 (default) (default) (default) (default) (default)))))
+    (define (default) (Tuple (default) (default)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/TUPLE")
