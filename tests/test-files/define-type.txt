@@ -497,3 +497,27 @@ error: Instance missing context
 (derive coalton-library/classes:Eq)
 (define-type MyTyCon
   (MyTyCon String MyKind))
+
+================================================================================
+124 Derive Default with multiple constructors
+================================================================================
+
+(package test-package)
+
+(derive coalton-library/classes:Eq coalton-library/classes:Default)
+(define-type MyKind
+  MyStar
+  (MyKfun MyKind MyKind))
+
+--------------------------------------------------------------------------------
+
+error: Cannot derive class DEFAULT for type MYKIND.
+  --> test:3:0
+   |
+ 3 |   (derive coalton-library/classes:Eq coalton-library/classes:Default)
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Class DEFAULT can only be derived for types with a single constructor.
+ 4 |   (define-type MyKind
+   |  _^
+ 5 | |   MyStar
+ 6 | |   (MyKfun MyKind MyKind))
+   | |_________________________^ when deriving class DEFAULT for type MYKIND.
