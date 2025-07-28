@@ -127,9 +127,9 @@
            (hash:lisp-combine-hashes
             (sxhash sym)
             (sxhash (symbol-package sym))))) 
-    (reduce (lambda (acc sym)
-              (hash:lisp-combine-hashes acc (hash-symbol sym)))
+    (reduce #'hash:lisp-combine-hashes
             symbols
+            :key #'hash-symbol
             :initial-value (hash-symbol symbol))))
 
 (defmethod tc:derive-methods ((class (eql 'classes:hash)) def env)
