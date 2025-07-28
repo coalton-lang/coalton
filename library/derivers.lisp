@@ -122,15 +122,15 @@
       :location location
       :inline nil))))
 
-(defun hash-symbols (&rest symbols)
+(defun hash-symbols (symbol &rest symbols)
   (flet ((hash-symbol (sym)
            (hash:lisp-combine-hashes
             (sxhash sym)
             (sxhash (symbol-package sym))))) 
     (reduce (lambda (acc sym)
               (hash:lisp-combine-hashes acc (hash-symbol sym)))
-            (rest symbols)
-            :initial-value (hash-symbol (first symbols)))))
+            symbols
+            :initial-value (hash-symbol symbol))))
 
 (defmethod tc:derive-methods ((class (eql 'classes:hash)) def env)
   "Deriver implementation for class `Hash'.
