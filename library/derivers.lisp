@@ -126,7 +126,7 @@
   (flet ((hash-symbol (sym)
            (hash:lisp-combine-hashes
             (sxhash sym)
-            (sxhash (symbol-package sym))))) 
+            (sxhash (package-name (symbol-package sym)))))) 
     (reduce #'hash:lisp-combine-hashes
             symbols
             :key #'hash-symbol
