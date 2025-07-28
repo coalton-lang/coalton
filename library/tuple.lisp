@@ -39,20 +39,20 @@
     "Get the second element of a tuple."
     b)
 
-  (derive Eq)
+  (derive Eq Hash)
   (define-struct (Tuple3 :a :b :c)
     (first :a)
     (second :b)
     (third :c))
 
-  (derive Eq)
+  (derive Eq Hash)
   (define-struct (Tuple4 :a :b :c :d)
     (first :a)
     (second :b)
     (third :c)
     (fourth :d))
 
-  (derive Eq)
+  (derive Eq Hash)
   (define-struct (Tuple5 :a :b :c :d :e)
     (first :a)
     (second :b)
@@ -93,45 +93,6 @@
   (define-instance (Bifunctor Tuple)
     (define (bimap f g (Tuple a b))
       (Tuple (f a) (g b))))
-
-  ;;
-  ;; Larger Tuple Instances
-  ;;
-
-  (define-instance ((Hash :a) (Hash :b) (Hash :c) => Hash (Tuple3 :a :b :c))
-    (define (hash item)
-      (combine-hashes
-       (hash (.first item))
-       (combine-hashes
-        (hash (.second item))
-        (hash (.third item))))))
-
-  (define-instance ((Hash :a) (Hash :b) (Hash :c) (Hash :d) => Hash (Tuple4 :a :b :c :d))
-    (define (hash item)
-      (combine-hashes
-       (hash (.first item))
-       (combine-hashes
-        (hash (.second item))
-        (combine-hashes
-         (hash (.third item))
-         (hash (.fourth item)))))))
-
-  (define-instance ((Hash :a)
-                    (Hash :b)
-                    (Hash :c)
-                    (Hash :d)
-                    (Hash :e)
-                    => Hash (Tuple5 :a :b :c :d :e))
-    (define (hash item)
-      (combine-hashes
-       (hash (.first item))
-       (combine-hashes
-        (hash (.second item))
-        (Combine-hashes
-         (hash (.third item))
-         (combine-hashes
-          (hash (.fourth item))
-          (hash (.fifth item))))))))
 
   ;;
   ;; Default instances
