@@ -70,8 +70,9 @@ below.")
   (declare square-magnitude (Complex :a => Complex :a -> :a))
   (define (square-magnitude a)
     "The squared length of a complex number, i.e. re(a)^2 + im(a)^2."
-    (+ (* (real-part a) (real-part a))
-       (* (imag-part a) (imag-part a))))
+    (let ((r (real-part a))
+          (i (imag-part a)))
+       (+ (* r r) (* i i)))
 
   (declare ii ((Complex :a) => Complex :a))
   (define ii
