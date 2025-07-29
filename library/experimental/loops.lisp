@@ -6,7 +6,6 @@
    #:coalton-library/classes
    #:coalton-library/math/arith)
   (:export
-   #:named-let
    #:repeat
    #:dotimes
    #:everytimes
