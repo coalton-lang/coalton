@@ -72,7 +72,7 @@ below.")
     "The squared length of a complex number, i.e. re(a)^2 + im(a)^2."
     (let ((r (real-part a))
           (i (imag-part a)))
-       (+ (* r r) (* i i)))
+       (+ (* r r) (* i i))))
 
   (declare ii ((Complex :a) => Complex :a))
   (define ii
