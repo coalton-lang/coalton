@@ -1,0 +1,33 @@
+(package coalton-library/boolean
+  (import
+    coalton-library/classes
+    coalton-library/hash))
+
+;;
+;; Boolean instances
+;;
+
+(define-instance (Hash Boolean)
+  (define (hash item)
+    (lisp Hash (item)
+      (cl:sxhash item))))
+
+(define-instance (Eq Boolean)
+  (define (== x y)
+    (lisp Boolean (x y)
+      (cl:eq x y))))
+
+(define-instance (Ord Boolean)
+  (define (<=> x y)
+    (match x
+      ((True)
+        (match y
+          ((True) EQ)
+          ((False) GT)))
+      ((False)
+        (match y
+          ((True) LT)
+          ((False) EQ))))))
+
+(define-instance (Default Boolean)
+  (define (default) False))
