@@ -87,6 +87,8 @@ is true."
       (alexandria:when-let
           ((res (find (node-direct-application-rator node) new-subs :key #'ast-substitution-from)))
         (make-node-direct-application
+         :inlinep nil
+         :noinlinep nil
          :type (node-type node)
          :rator-type (node-direct-application-rator-type node)
          :rator (node-variable-value (ast-substitution-to res))

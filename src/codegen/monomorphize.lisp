@@ -274,6 +274,8 @@ recompilation, and also maintains a stack of uncompiled candidates."
                           new-type)
                    :vars (append new-vars remaining-names)
                    :subexpr (make-node-application
+                             :inlinep nil
+                             :noinlinep nil
                              :type (tc:make-function-type*
                                     (util:drop num-remaining (tc:function-type-arguments new-type))
                                     (tc:function-return-type new-type))
@@ -405,6 +407,8 @@ propagate dictionaries that have been moved by the hoister."
                         :type new-type
                         :value function-name)
                        (make-node-application
+                        :inlinep nil
+                        :noinlinep nil
                         :type (node-type node)
                         :rator (make-node-variable
                                 :type (tc:make-function-type*

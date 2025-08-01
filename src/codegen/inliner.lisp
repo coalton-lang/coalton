@@ -146,6 +146,24 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
   (= (length (ast:node-abstraction-vars abstraction))
      (length (ast:node-rands application))))
 
+(defun call-inline-p (application)
+  "Check if the the application is inlined at the callsite."
+  (declare (type (or ast:node-application ast:node-direct-application) application)
+           (values boolean &optional))
+
+  (etypecase application
+    (ast:node-application (ast:node-application-inlinep application))
+    (ast:node-direct-application (ast:node-direct-application-inlinep application))))
+
+(defun call-noinline-p (application)
+  "Check if the the application is prevented from being inlined at the callsite."
+  (declare (type (or ast:node-application ast:node-direct-application) application)
+           (values boolean &optional))
+
+  (etypecase application
+    (ast:node-application (ast:node-application-noinlinep application))
+    (ast:node-direct-application (ast:node-direct-application-noinlinep application))))
+
 ;;; Inlining
 
 (defun inline-code-from-application (application abstraction)
@@ -214,8 +232,10 @@ is appropriate."
       ((let ((abstraction (lookup-global-application-body application env)))
          (and *inline-globals-p*
               abstraction
+              (not (call-noinline-p application))
               (application-saturates-abstraction-p application abstraction)
               (or (heuristic-inline-p abstraction)
+                  (call-inline-p application)
                   (function-declared-inline-p name env))))
        (print-inline-success! ";; Inlining global function ~a" name)
        (push name *functions-inlined*)
@@ -232,8 +252,10 @@ is appropriate."
             (ast:node-application-p application)
             (let ((abstraction (lookup-anonymous-application-body application)))
               (and abstraction
-                   (heuristic-inline-p abstraction)
-                   (application-saturates-abstraction-p application abstraction))))
+                   (not (call-noinline-p application))
+                   (application-saturates-abstraction-p application abstraction)
+                   (or (heuristic-inline-p abstraction)
+                       (call-inline-p application)))))
        (print-inline-success! ";; Inlining anonymous function")
        (push name *functions-inlined*)
        (inline-applications*
@@ -299,6 +321,8 @@ is appropriate."
                (print-inline-success! ";; Inlining method to application ~a" method-name)
                (push method-name *functions-inlined*)
                (ast:make-node-application
+                :inlinep nil
+                :noinlinep nil
                 :type (ast:node-type node)
                 :rator (ast:make-node-variable
                         :type (tc:make-function-type*
@@ -336,6 +360,8 @@ is appropriate."
                (print-inline-success! ";; Inlining direct method to application ~a" method-name)
                (push method-name *functions-inlined*)
                (ast:make-node-application
+                :inlinep nil
+                :noinlinep nil
                 :type (ast:node-type node)
                 :rator (ast:make-node-variable
                         :type (tc:make-function-type*

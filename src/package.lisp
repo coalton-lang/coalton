@@ -37,6 +37,9 @@
    #:lisp-toplevel
    #:monomorphize
    #:inline
+   #:noinline
+   #:likely
+   #:unlikely
    #:specialize
    #:unable-to-codegen)
 

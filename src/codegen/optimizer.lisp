@@ -26,6 +26,9 @@
    #:monomorphize
    #:make-candidate-manager)
   (:import-from
+   #:coalton-impl/codegen/faux-applications
+   #:transform-faux-applications)
+  (:import-from
    #:coalton-impl/codegen/traverse
    #:action
    #:*traverse*
@@ -187,6 +190,8 @@ arity. TABLE will be mutated with additional entries."
                                (length (node-application-rands node))))
                    (return-from rewrite-direct-application
                      (make-node-direct-application
+                      :inlinep nil
+                      :noinlinep nil
                       :type (node-type node)
                       :rator-type (node-type (node-application-rator node))
                       :rator name
@@ -232,6 +237,7 @@ ENV. Return a new node which is optimized."
   (declare (type node node)
            (type tc:environment env)
            (values node &optional))
+
   (prog ((runs 0)
          (redo? nil))
    :REDO
@@ -245,12 +251,13 @@ ENV. Return a new node which is optimized."
      (setf node (propagate-constants node env))
      (setf node (apply-specializations node env))
      (setf node (resolve-static-superclass node env))
+     (setf node (transform-faux-applications node))
      (multiple-value-bind (new-node inlined?) (inline-applications node env)
        (setf redo? (or redo? inlined?))
        (setf node new-node))
 
      (when (and redo? (< runs *maximum-optimization-passes*))
-       (go :REDO)))
+       (go :REDO))) 
   ;; Return the node.
   node)
 
@@ -348,6 +355,9 @@ speaking, the following kinds of transformations happen:
        :type (node-type node)
        :vars param-names
        :subexpr (make-node-application
+                 ;; TODO IS THIS RIGHT?
+                 :inlinep nil
+                 :noinlinep nil
                  :type (tc:make-function-type*
                         (subseq (tc:function-type-arguments (node-type function)) (length new-args))
                         (tc:function-return-type (node-type node)))

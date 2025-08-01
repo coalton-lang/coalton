@@ -88,6 +88,8 @@
          (app-node
            (if (or unqualified-method-definitions superclass-preds)
                (make-node-application
+                :inlinep nil
+                :noinlinep nil
                 :type (pred-type pred env)
                 :rator var-node
                 :rands (append

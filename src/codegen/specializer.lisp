@@ -64,6 +64,8 @@
 
                      ((< num-preds (length (node-rands node)))
                       (make-node-application
+                       :inlinep nil
+                       :noinlinep nil
                        :type (node-type node)
                        :rator (make-node-variable
                                :type rator-type
