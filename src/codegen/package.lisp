@@ -27,4 +27,10 @@
    #:*codegen-hook*)
   (:export
    #:compile-translation-unit
-   #:*codegen-hook*))
+   #:*codegen-hook*)
+
+  (:import-from
+   #:coalton-impl/codegen/faux-applications
+   #:transform-faux-applications)
+  (:export
+   #:transform-faux-applications))

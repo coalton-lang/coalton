@@ -146,6 +146,8 @@ If not, returns NIL"
                       (ignore constant-bindings))
              ;; FIXME: Can we do something similar for non-direct APPLICATION?
              (make-node-direct-application
+              :inlinep (node-direct-application-inlinep node)
+              :noinlinep (node-direct-application-noinlinep node)
               :type (node-type node)
               :rator-type (tc:make-function-type*
                            (mapcar #'node-type (node-direct-application-rands node))

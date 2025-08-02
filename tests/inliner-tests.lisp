@@ -107,8 +107,39 @@
         222
         (test-inlinable-rec-1 (1- n)))))
 
+;; Callsite inlining
+
+(coalton-toplevel 
+  (declare callsite-inlined-foo (UFix -> UFix))
+  (define (callsite-inlined-foo x)
+    (- (* 23 (+ 2 (* 4 x))) 1)))
+
+(coalton-toplevel
+  (define (callsite-inlined-foo-caller)
+    (callsite-inlined-foo 1))
+  (define (callsite-inlined-foo-inline-caller)
+    (inline (callsite-inlined-foo 1))))
+
+(coalton-toplevel 
+  (declare callsite-noinlined-foo (UFix -> UFix))
+  (inline)
+  (define (callsite-noinlined-foo x)
+    (- (* 23 (+ 2 (* 4 x))) 1)))
+
+(coalton-toplevel
+  (define (callsite-noinlined-foo-caller)
+    (callsite-noinlined-foo 1))
+  (define (callsite-noinlined-foo-noinline-caller)
+    (noinline (callsite-noinlined-foo 1))))
+
 
 (in-package #:coalton-tests)
+
+(deftest callsite-inlining ()
+  (is (< (traverse:count-nodes (coalton:lookup-code 'coalton-native-tests::callsite-noinlined-foo-noinline-caller))
+         (traverse:count-nodes (coalton:lookup-code 'coalton-native-tests::callsite-noinlined-foo-caller))))
+  (is (< (traverse:count-nodes (coalton:lookup-code 'coalton-native-tests::callsite-inlined-foo-caller))
+         (traverse:count-nodes (coalton:lookup-code 'coalton-native-tests::callsite-inlined-foo-inline-caller)))))
 
 ;; See gh #1293
 (deftest test-inliner-rename-bound-variables ()

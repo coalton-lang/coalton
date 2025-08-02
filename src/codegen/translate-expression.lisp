@@ -162,6 +162,8 @@ Returns a `node'.")
              (ty (tc:qualified-ty-type qual-ty)))
         (flet ((make-full-call ()
                  (make-node-application
+                  :inlinep nil
+                  :noinlinep nil
                   :type (tc:qualified-ty-type qual-ty)
                   :rator (make-node-variable
                           :type (tc:make-function-type*
@@ -258,6 +260,8 @@ Returns a `node'.")
       (assert (null (tc:qualified-ty-predicates qual-ty)))
 
       (make-node-application
+       :inlinep nil
+       :noinlinep nil
        :type (tc:qualified-ty-type qual-ty)
        :rator (translate-expression (tc:node-application-rator expr) ctx env)
        :rands (mapcar
@@ -755,6 +759,8 @@ Returns a `node'.")
 
            (into-iter-node
              (make-node-application
+              :inlinep nil
+              :noinlinep nil
               :type iter-ty
               :rator (make-node-variable
                       :type (tc:make-function-type*
@@ -774,6 +780,8 @@ Returns a `node'.")
 
            (iter-next-node
              (make-node-application
+              :inlinep nil
+              :noinlinep nil
               :type optional-pat-arg-ty
               :rator (make-node-variable
                       :type (tc:make-function-type*
@@ -931,6 +939,8 @@ Returns a `node'.")
                                 (var-name (gensym)))
 
                            (make-node-application
+                            :inlinep nil
+                            :noinlinep nil
                             :type (node-type out-node)
                             :rator (make-node-variable
                                     :type (tc:make-function-type* ; (Monad :m => m :a -> (:a -> :m :b) -> :m :b)
@@ -967,6 +977,8 @@ Returns a `node'.")
                                 (var-name (gensym)))
 
                            (make-node-application
+                            :inlinep nil
+                            :noinlinep nil
                             :type (node-type out-node)
                             :rator (make-node-variable
                                     :type (tc:make-function-type* ; (Monad :m => m :a -> (:a -> :m :b) -> :m :b)
@@ -1063,6 +1075,8 @@ dictionaries applied."
        inner-node)
       (t
        (make-node-application
+        :inlinep nil
+        :noinlinep nil
         :type (tc:qualified-ty-type qual-ty)
         :rator inner-node
         :rands dicts)))))
