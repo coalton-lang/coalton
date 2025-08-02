@@ -270,11 +270,23 @@ unroll the node."
            (traverse:count-nodes caller-3)))))
 
 (deftest callsite-inlining-test ()
-  (is (< (traverse:count-nodes (coalton:lookup-code 'coalton-native-tests::callsite-noinlined-foo-noinline-caller))
-         (traverse:count-nodes (coalton:lookup-code 'coalton-native-tests::callsite-noinlined-foo-caller))))
-  (is (< (traverse:count-nodes (coalton:lookup-code 'coalton-native-tests::callsite-inlined-foo-caller))
-         (traverse:count-nodes (coalton:lookup-code 'coalton-native-tests::callsite-inlined-foo-inline-caller)))))
+  (is (< (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::callsite-noinlined-foo-noinline-caller))
+         (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::callsite-noinlined-foo-caller))))
+  (is (< (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::callsite-inlined-foo-caller))
+         (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::callsite-inlined-foo-inline-caller)))))
 
 (deftest callsite-method-inlining-test ()
-  (is (< (traverse:count-nodes (coalton:lookup-code 'coalton-native-tests::method-for-inline-test-caller-callsite-noinline))
-         (traverse:count-nodes (coalton:lookup-code 'coalton-native-tests::method-for-inline-test-caller)))))
+  (is (< (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::method-for-inline-test-caller-callsite-noinline))
+         (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::method-for-inline-test-caller)))))
