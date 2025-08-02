@@ -8,6 +8,11 @@
    #:transform-faux-applications))
 (in-package #:coalton-impl/codegen/faux-applications)
 
+(defgeneric transform-faux-application (rator node)
+  (:documentation "Methods for implementing faux-applications to transform codegen AST
+during optimization.
+EQL-specialize on symbol `rator'."))
+
 (defmethod transform-faux-application ((rator t) node) nil)
 
 (defmethod transform-faux-application ((rator (eql 'coalton:inline)) node)
@@ -53,6 +58,10 @@
        child))))
 
 (defun transform-faux-applications (node)
+  "Traverse node, transforming all faux-applications for optimization."
+  (declare (type ast:node node)
+           (values ast:node &optional))
+
   (traverse:traverse
    node
    (list

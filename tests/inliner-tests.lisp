@@ -38,7 +38,12 @@
   (declare method-for-inline-test-caller
     (Double-Float -> Double-Float -> Double-Float))
   (define (method-for-inline-test-caller x y)
-    (method-for-inline-test x y)))
+    (method-for-inline-test x y))
+
+  (declare method-for-inline-test-caller-callsite-noinline
+    (Double-Float -> Double-Float -> Double-Float))
+  (define (method-for-inline-test-caller-callsite-noinline x y)
+    (noinline (method-for-inline-test x y))))
 
 (define-test method-inline ()
   (is (== 5.0d0 (method-for-inline-test-caller 2.0d0 3.0d0))))
@@ -134,12 +139,6 @@
 
 
 (in-package #:coalton-tests)
-
-(deftest callsite-inlining ()
-  (is (< (traverse:count-nodes (coalton:lookup-code 'coalton-native-tests::callsite-noinlined-foo-noinline-caller))
-         (traverse:count-nodes (coalton:lookup-code 'coalton-native-tests::callsite-noinlined-foo-caller))))
-  (is (< (traverse:count-nodes (coalton:lookup-code 'coalton-native-tests::callsite-inlined-foo-caller))
-         (traverse:count-nodes (coalton:lookup-code 'coalton-native-tests::callsite-inlined-foo-inline-caller)))))
 
 ;; See gh #1293
 (deftest test-inliner-rename-bound-variables ()
@@ -269,3 +268,13 @@ unroll the node."
     (is (= (traverse:count-nodes caller-1)
            (traverse:count-nodes caller-2)
            (traverse:count-nodes caller-3)))))
+
+(deftest callsite-inlining-test ()
+  (is (< (traverse:count-nodes (coalton:lookup-code 'coalton-native-tests::callsite-noinlined-foo-noinline-caller))
+         (traverse:count-nodes (coalton:lookup-code 'coalton-native-tests::callsite-noinlined-foo-caller))))
+  (is (< (traverse:count-nodes (coalton:lookup-code 'coalton-native-tests::callsite-inlined-foo-caller))
+         (traverse:count-nodes (coalton:lookup-code 'coalton-native-tests::callsite-inlined-foo-inline-caller)))))
+
+(deftest callsite-method-inlining-test ()
+  (is (< (traverse:count-nodes (coalton:lookup-code 'coalton-native-tests::method-for-inline-test-caller-callsite-noinline))
+         (traverse:count-nodes (coalton:lookup-code 'coalton-native-tests::method-for-inline-test-caller)))))

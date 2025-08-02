@@ -5,7 +5,18 @@
 ;; optimizations.
 
 (coalton-toplevel
-  (define (inline   x) x)
-  (define (noinline x) x)
-  (define (likely   x) x)
-  (define (unlikely x) x))
+  (define (inline application)
+    "Try to inline `application'."
+    application)
+
+  (define (noinline application)
+    "Prevent `application' from being inlined."
+    application)
+
+  (define (likely branch)
+    "Not implemented."
+    branch)
+
+  (define (unlikely branch)
+    "Not implemented."
+    branch))

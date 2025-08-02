@@ -321,8 +321,8 @@ is appropriate."
                (print-inline-success! ";; Inlining method to application ~a" method-name)
                (push method-name *functions-inlined*)
                (ast:make-node-application
-                :inlinep nil
-                :noinlinep nil
+                :inlinep (ast:node-application-inlinep node)
+                :noinlinep (ast:node-application-noinlinep node)
                 :type (ast:node-type node)
                 :rator (ast:make-node-variable
                         :type (tc:make-function-type*
@@ -360,8 +360,8 @@ is appropriate."
                (print-inline-success! ";; Inlining direct method to application ~a" method-name)
                (push method-name *functions-inlined*)
                (ast:make-node-application
-                :inlinep nil
-                :noinlinep nil
+                :inlinep (ast:node-direct-application-inlinep node)
+                :noinlinep (ast:node-direct-application-noinlinep node)
                 :type (ast:node-type node)
                 :rator (ast:make-node-variable
                         :type (tc:make-function-type*
