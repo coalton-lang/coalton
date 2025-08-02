@@ -257,7 +257,7 @@ ENV. Return a new node which is optimized."
        (setf node new-node))
 
      (when (and redo? (< runs *maximum-optimization-passes*))
-       (go :REDO))) 
+       (go :REDO)))
   ;; Return the node.
   node)
 
@@ -355,7 +355,6 @@ speaking, the following kinds of transformations happen:
        :type (node-type node)
        :vars param-names
        :subexpr (make-node-application
-                 ;; TODO IS THIS RIGHT?
                  :inlinep nil
                  :noinlinep nil
                  :type (tc:make-function-type*
