@@ -171,7 +171,9 @@
 
 (defun coalton:type-of (symbol)
   "Lookup the type of value SYMBOL in the global environment"
-  (tc:lookup-value-type entry:*global-environment* symbol))
+  (if (macro-function symbol)
+      ':macro
+      (tc:lookup-value-type entry:*global-environment* symbol)))
 
 (defun coalton:describe-type-of (symbol)
   "Lookup the type of value SYMBOL in the global environment. Prints the type and type aliases."
