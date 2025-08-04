@@ -678,7 +678,7 @@ Coalton code is statically typechecked. Types are inferred.
 ```lisp
 (coalton-toplevel
   (define (fun x)
-    (map (+ 2) (string:parse-int x))))
+    (map (+ 2) (str:parse-int x))))
 ```
 
 The type of a variable or function can be checked with `coalton:type-of`.
@@ -694,7 +694,7 @@ Type declarations can always be added manually.
 (coalton-toplevel
   (declare fun (String -> (Optional Integer)))
   (define (fun x)
-    (map (+ 2) (string:parse-int x))))
+    (map (+ 2) (str:parse-int x))))
 ```
 
 Type declarations can also be added in let expressions
