@@ -177,7 +177,7 @@ This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general
 
 (coalton-toplevel
 
-  (define-instance (Complex CReal)
+  (define-instance (complex:ComplexComponent CReal)
     (define (complex a b)
       (complex::%Complex a b))
 
@@ -189,7 +189,7 @@ This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general
       (match z
         ((complex::%Complex _ b) b))))
 
-  (define-instance ((Complex :a) (Into :a CReal) => (Into (Complex :a) (Complex CReal)))
+  (define-instance ((complex:ComplexComponent :a) (Into :a CReal) => (Into (Complex :a) (Complex CReal)))
     (define (Into x)
       (Complex (Into (real-part x))
                (Into (imag-part x))))))
