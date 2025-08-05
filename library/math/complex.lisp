@@ -110,15 +110,15 @@ component types."
     (define (/ a b)
       (complex-divide a b)))
 
-  (define-instance (ComplexComponent :a => ComplexComponent (Complex :a))
-    (define (complex a b)
-      (%Complex a b))
-    (define (real-part a)
-      (match a
-        ((%Complex a _) a)))
-    (define (imag-part a)
-      (match a
-        ((%Complex _ b) b))))
+  ;; (define-instance (ComplexComponent :a => ComplexComponent (Complex :a))
+  ;;   (define (complex a b)
+  ;;     (%Complex a b))
+  ;;   (define (real-part a)
+  ;;     (match a
+  ;;       ((%Complex a _) a)))
+  ;;   (define (imag-part a)
+  ;;     (match a
+  ;;       ((%Complex _ b) b))))
 
   ;; Below are specializable functions, as class methods cannot be specialized
   ;; This allows us to call out to faster lisp functions for doing arithmetic.

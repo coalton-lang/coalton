@@ -90,7 +90,9 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
     (sqrt (:a -> :a)))
 
   (define-class ((ComplexComponent :a) (Num :a) => Polar :a)
-    "For a complex number `z = (complex x y)`, the following identities hold:
+    "This type class includes `ComplexComponent` types that admit a magnitude and phase.
+
+For a complex number `z = (complex x y)`, the following identities hold:
 
     z = (* (magnitude z) (exp (* ii (phase z))))
     (polar z) = (Tuple (magnitude z) (phase z))
@@ -100,7 +102,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
     (polar (Complex :a -> (Tuple :a :a))))
 
   (define (magnitude z)
-    "For `z = x + yi`,
+    "The magnitude of a complex number. For `z = x + yi`,
 
 
     (magnitude z) = (sqrt (+ (^ x 2) (^ y 2)))"
@@ -124,27 +126,27 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
 
   ;; See http://clhs.lisp.se/Body/f_sinh_.htm
 
-  (declare sinh ((Elementary :f) => :f -> :f))
+  (declare sinh (Elementary :f => :f -> :f))
   (define (sinh x)
     (/ (- (exp x) (exp (negate x))) 2))
 
-  (declare cosh ((Elementary :f) => :f -> :f))
+  (declare cosh (Elementary :f => :f -> :f))
   (define (cosh x)
     (/ (+ (exp x) (exp (negate x))) 2))
 
-  (declare tanh ((Elementary :f) => :f -> :f))
+  (declare tanh (Elementary :f => :f -> :f))
   (define (tanh x)
     (/ (sinh x) (cosh x)))
 
-  (declare asinh ((Elementary :f) => :f -> :f))
+  (declare asinh (Elementary :f => :f -> :f))
   (define (asinh x)
     (ln (+ x (sqrt (+ 1 (pow x 2))))))
 
-  (declare acosh ((Elementary :f) => :f -> :f))
+  (declare acosh (Elementary :f => :f -> :f))
   (define (acosh x)
     (* 2 (ln (+ (sqrt (/ (+ x 1) 2)) (sqrt (/ (- x 1) 2))))))
 
-  (declare atanh ((Elementary :f) => :f -> :f))
+  (declare atanh (Elementary :f => :f -> :f))
   (define (atanh x)
     (/ (- (ln (+ 1 x)) (ln (- 1 x))) (fromInt 2)))
 
@@ -452,21 +454,26 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
     (define pi (Complex pi 0)))
 
   ;; This doesn't have much mathematical meaning
-  (define-instance (Elementary :a => Polar (Complex :a))
-    (define (phase zz)
-      (match (polar zz)
-        ((Tuple _ p) p)))
-    (define (polar zz)
-      (let x = (real-part zz))
-      (let y = (imag-part zz))
-      (let r = (magnitude zz))
-      (let p =
-        (if (== zz 0)
-            0
-            (* 2 (atan (/ y (+ r x))))))
-      (Tuple r p)))
-
-  (define-instance (Elementary :a => Elementary (Complex :a))))
+  ;;
+  ;; We are going to comment this out for now. If downstream code
+  ;; breaks, we can re-enable it.
+  ;;
+  ;; (define-instance (Elementary :a => Polar (Complex :a))
+  ;;   (define (phase zz)
+  ;;     (match (polar zz)
+  ;;       ((Tuple _ p) p)))
+  ;;   (define (polar zz)
+  ;;     (let x = (real-part zz))
+  ;;     (let y = (imag-part zz))
+  ;;     (let r = (magnitude zz))
+  ;;     (let p =
+  ;;       (if (== zz 0)
+  ;;           0
+  ;;           (* 2 (atan (/ y (+ r x))))))
+  ;;     (Tuple r p)))
+  ;;
+  ;; (define-instance (Elementary :a => Elementary (Complex :a)))
+  )
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MATH/ELEMENTARY")
