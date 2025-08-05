@@ -156,7 +156,7 @@
       (write-link stream object)
       (cond
         ((source-available-p object)
-         (format stream " <sup><sub>[~A] (<a href=\"~a\">src</a>)</sub></sup>"
+         (format stream " <sup><sub>[~A] · <a href=\"~a\">src</a></sub></sup>"
                  (html-entities:encode-entities (object-type object))
                  (html-entities:encode-entities (source-location-link backend object))))
         (t
