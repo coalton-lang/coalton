@@ -58,8 +58,9 @@
 
   (declare atan2 ((Ord :f) (Trigonometric :f) (Reciprocable :f) => :f -> :f -> :f))
   (define (atan2 y x)
-    "Computes the two-argument arctangent of y and x, which is roughly the same
-as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
+    "Computes the two-argument arctangent of `y` and `x`, which is roughly the same
+as `(atan (/ y x))` when defined and accounting for the quadrant of
+the point $(\\mathtt{x},\\mathtt{y})$."
     (match (Tuple (<=> x 0) (<=> y 0))
       ((Tuple (GT) _)    (atan (/ y x)))
       ((Tuple (LT) (LT)) (- (atan (/ y x)) pi))

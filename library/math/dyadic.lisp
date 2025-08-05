@@ -30,12 +30,13 @@
 
 (coalton-toplevel
   (define-type Dyadic
-    "`(Dyadic n k)` represents the rational n*2^k."
+    "`(Dyadic n k)` represents the rational $\\mathtt{n}\\cdot 2^{\\mathtt{k}}$."
     (Dyadic Integer Integer))
 
   (declare exact-ilog (Integer -> Integer -> (Optional Integer)))
   (define (exact-ilog b x)
-    "Computes the logarithm with base B of X only if the result is an integer."
+    "Computes the logarithm with base `b` of `x` only if the result is an
+integer."
     (if (== 0 (mod b x))
         (Some (ilog b x))
         None))
@@ -43,7 +44,8 @@
   (declare dyadic-compare ((Integer -> Integer -> :a)
                            -> Dyadic -> Dyadic -> :a))
   (define (dyadic-compare f a b)
-    "Return the result of a comparision function F on two dyadics A and B."
+    "Return the result of a comparision function `f` on two dyadics `a` and
+`b`."
     (match (Tuple a b)
       ((Tuple (Dyadic n k)
               (Dyadic m j))
@@ -63,7 +65,7 @@
   (declare dyadic-group ((Integer -> Integer -> Integer)
                          -> Dyadic -> Dyadic -> Dyadic))
   (define (dyadic-group f a b)
-    "Apply an operation F on A and B with matching exponents"
+    "Apply an operation `f` on `a` and `b` with matching exponents."
     (match (Tuple a b)
       ((Tuple (Dyadic n k)
               (Dyadic m j))
@@ -84,7 +86,7 @@
     (define (fromInt x) (Dyadic x 0)))
 
   (define (simplify-integer n)
-    "Finds the simplest dyadic given an integer"
+    "Finds the simplest dyadic given an integer."
     (if (== n 0)
         (Dyadic 0 0)
         (match (divMod n 2)
@@ -95,7 +97,7 @@
                (Dyadic n 0))))))
 
   (define (simplify d)
-    "Simplifies a Dyadic by maximizing the absolute value of the exponent."
+    "Simplifies a dyadic by maximizing the absolute value of the exponent."
     (match d
       ((Dyadic m k)
        (* (Dyadic 1 k) (simplify-integer m)))))
@@ -128,7 +130,8 @@
 
   (specialize round dyadic-round (Dyadic -> Integer))
   (define (dyadic-round x)
-    "Rounds a dyadic to the nearest integer with ties going to even numbers."
+    "Rounds a dyadic to the nearest integer with ties going to even
+numbers."
     (let (Tuple n r) = (proper x))
     (let m = (if (< r 0)
                  (- n 1)
@@ -150,13 +153,13 @@
     (define into fromInt))
 
   (define (scale x j)
-    "Scales the exponent of a dyadic X by J."
+    "Scales a dyadic `x` by $2^{\\mathtt{k}}$."
     (match x
       ((Dyadic n k) (Dyadic n (+ k j)))))
 
   (declare shift (UFix -> Dyadic -> Dyadic))
   (define (shift k a)
-    "Shift dyadic A to its floor with K+1 bits of precision."
+    "Shift dyadic `a` to its floor with $\\mathtt{k}+1$ bits of precision."
     (let (Dyadic m e) = a)
     (let j = (ilog 2 (abs m)))
     (let delta = (- j (toInteger k)))
