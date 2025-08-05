@@ -27,7 +27,7 @@
                  (^ (math:reciprocal 2) (math:div (big-float:get-precision) 2)))
               (== a b) ))))
 
-  (define-instance ((LooseCompare :a) (Complex :a) => LooseCompare (Complex :a))
+  (define-instance ((LooseCompare :a) (math:ComplexComponent :a) => LooseCompare (Complex :a))
     (define (~ a b)
       (and (~ (real-part a) (real-part b))
            (~ (imag-part a) (imag-part b)))))

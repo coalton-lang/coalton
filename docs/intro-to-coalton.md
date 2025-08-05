@@ -1129,7 +1129,7 @@ The following functions all take an optional package parameter.
 
 ## Instance Defaulting
 
-Coalton has a similar [type defaulting system](https://www.haskell.org/onlinereport/decls.html#sect4.3.4) as Haskell. Type defaulting is invoked on implicitly typed definitions and code compiled with the `coalton` macro. Defaulting is applied to a set of ambiguous predicates, with the goal to resolve an ambiguous type variable to a valid type. Coalton will only default if one or more of the predicates is a numeric type class (Num, Quantizable, Reciprocable, Complex, Remainder, Integral). Coalton will default an ambiguous variable to either `Integer`, `F32`, or `F64`; taking the first type that is valid for all predicates referencing that type variable. Coalton will not default when one or more of the predicates containing an ambiguous variable is a multi-parameter type class.
+Coalton has a similar [type defaulting system](https://www.haskell.org/onlinereport/decls.html#sect4.3.4) as Haskell. Type defaulting is invoked on implicitly typed definitions and code compiled with the `coalton` macro. Defaulting is applied to a set of ambiguous predicates, with the goal to resolve an ambiguous type variable to a valid type. Coalton will only default if one or more of the predicates is a numeric type class (`Num`, `Quantizable`, `Reciprocable`, `ComplexComponent`, `Remainder`, `Integral`). Coalton will default an ambiguous variable to either `Integer`, `F32`, or `F64`; taking the first type that is valid for all predicates referencing that type variable. Coalton will not default when one or more of the predicates containing an ambiguous variable is a multi-parameter type class.
 
 
 Differences from Haskell 98. Haskell would consider `Num (List :a)` to be ambiguous, Coalton would default it to `Num Integer`. Haskell would consider (`Num :a` `CustomTypeClass :a`) to be ambiguous, Coalton would default to (`Num Integer` `CustomTypeClass Integer`) assuming `CustomTypeClass Integer` was a valid instance.
@@ -1205,6 +1205,8 @@ Specialization can be listed in the repl with `print-specializations`.
 * To denote anonymous functions, Coalton uses `fn` (*not* `lambda`).
 * Numerical operators like `+` only take 2 arguments.
 * Negation is done with `negate`.  The form `(- x)` is a curried function equivalent to `(fn (z) (- x z))`.
+
+For more details, see the [glossary](./glossary.md).
 
 # Incomplete Features
 
