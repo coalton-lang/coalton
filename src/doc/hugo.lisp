@@ -45,6 +45,7 @@ layout: two-pane
 
     ;; Main content
     (write-line "<div class=\"main-content\">" stream)
+    (terpri stream)
     (let ((backend (make-backend ':markdown stream)))
       (dolist (package packages)
         (write-object backend package)))
