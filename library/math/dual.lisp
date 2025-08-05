@@ -27,28 +27,28 @@ dual numbers is automatic differentiation; an example taken from [2]
 is as follows.
 
 Consider the function $f(x) = 3x+2$ and you want to calculate $f(4)$
-and $f'(4)$. By the usual rules of differentiation, we know $f'(x) =
-3$ and thus $(f(4), f'(4)) = (14, 3)$. We seek to recover this with
-dual numbers.
+and $f^{\\prime}(4)$. By the usual rules of differentiation, we know
+$f^{\\prime}(x) = 3$ and thus $(f(4), f^{\\prime}(4)) = (14, 3)$. We
+seek to recover this with dual numbers.
 
 With dual numbers, we can calculate
 
-$$f(a) + f'(a)\\varepsilon$$
+$$f(a) + f^{\\prime}(a)\\varepsilon$$
 
 by taking a real-valued function $f$ and evaluating as if it were a
 dual-valued function at the point $a + \\varepsilon$. Thus, for the
 defined $f$, we have:
 
 $$
-\\begin{align}
+\\begin{align*}
 f(4 + \\varepsilon) &= 3(4 + \\varepsilon) + 2 \\\\
                     &= 3\\cdot 4 + 3\\varepsilon + 2 \\\\
                     &= 14 + 3\\varepsilon.
-\\end{align}
+\\end{align*}
 $$
 
 In this result, the primal $14$ is the value of $f(4)$ and the dual is
-the value of of $f'(4)$.
+the value of of $f^{\\prime}(4)$.
 
 Haskell has an automatic differentiation library and you can find it
 here [3].
