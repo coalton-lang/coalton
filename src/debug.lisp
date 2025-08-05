@@ -8,8 +8,12 @@
 
 (in-package #:coalton-impl/debug)
 
+(deftype package-designator ()
+  '(or character package string symbol))
+
 (defun coalton:print-value-db (&optional package)
   "Print the global value environment"
+  (check-type package (or null package-designator) "package designator")
   (let ((env entry:*global-environment*)
         (sorted-by-package (make-hash-table)))
     ;; Sort the entires by package
@@ -35,6 +39,7 @@
 
 (defun coalton:print-type-db (&optional package)
   "Print the global type environment"
+  (check-type package (or null package-designator) "package designator")
   (let ((env entry:*global-environment*)
         (sorted-by-package (make-hash-table)))
     ;; Sort the entires by package
@@ -59,6 +64,7 @@
 
 (defun coalton:print-class-db (&optional package)
   "Print the global class environment"
+  (check-type package (or null package-designator) "package designator")
   (let ((env entry:*global-environment*)
         (sorted-by-package (make-hash-table)))
     ;; Sort the entires by package
@@ -92,6 +98,7 @@
 
 (defun coalton:print-instance-db (&optional package)
   "Print the global instance environment"
+  (check-type package (or null package-designator) "package designator")
   (let ((env entry:*global-environment*)
         (sorted-by-package (make-hash-table)))
     ;; Sort the entires by package
@@ -145,7 +152,8 @@
           (maphash #'print-package sorted-by-package)))))
 
 (defun coalton:print-specializations (&optional package)
-  "Print all specializations"
+  "Print all specializations."
+  (check-type package (or null package-designator) "package designator")
   (let ((env entry:*global-environment*)
         (sorted-by-package (make-hash-table)))
     (fset:do-map (sym entry (algo:immutable-listmap-data (tc:environment-specialization-environment env)))
@@ -170,23 +178,51 @@
           (maphash #'print-package sorted-by-package)))))
 
 (defun coalton:type-of (symbol)
-  "Lookup the type of value SYMBOL in the global environment"
-  (tc:lookup-value-type entry:*global-environment* symbol))
+  "Lookup the type of value SYMBOL in the global environment. Return either
+
+- a TY-SCHEME (which will pretty print as a Coalton type) representing the type of the symbol SYMBOL,
+
+- the symbol :MACRO if SYMBOL names a macro, or
+
+- NIL if the symbol isn't known to Coalton."
+  (check-type symbol symbol)
+  (if (macro-function symbol)
+      ':macro
+      (tc:lookup-value-type entry:*global-environment* symbol :no-error t)))
 
 (defun coalton:describe-type-of (symbol)
-  "Lookup the type of value SYMBOL in the global environment. Prints the type and type aliases."
-  (let ((tc:*coalton-type-printing-mode* :types-and-aliases)
-        (type (tc:lookup-value-type entry:*global-environment* symbol)))
-    (format t "~S~%" type)
-    type))
+  "Lookup the type of value SYMBOL in the global environment.
+
+- If the symbol names a Coalton value, print the type and type aliases.
+
+- If the symbol is a macro, print \"macro\".
+
+- If the symbol is not known to Coalton, print \"unknown\". "
+  (check-type symbol symbol)
+  (when (macro-function symbol)
+    (write-line "macro")
+    (return-from coalton:describe-type-of (values)))
+  (let ((tc:*coalton-type-printing-mode* ':types-and-aliases)
+        (type (tc:lookup-value-type entry:*global-environment* symbol :no-error t)))
+    (cond
+      ((null type)
+       (write-line "unknown"))
+      (t
+       (format t "~S~%" type)))
+    (values)))
 
 (defun coalton:describe-type-alias (symbol)
-  "Lookup the type aliased by SYMBOL in the global environment"
+  "Lookup the type aliased by SYMBOL in the global environment and print information about it. If SYMBOL does not name a type, then print \"unknown\"."
+  (check-type symbol symbol)
   (let ((tc::*coalton-type-printing-mode* :types-and-aliases)
-        (type (tc:type-alias-entry-type (tc:lookup-type-alias entry:*global-environment* symbol))))
-    (tc:with-pprint-variable-context ()
-        (format t "~S~%" type))
-    type))
+        (alias (tc:lookup-type-alias entry:*global-environment* symbol :no-error t)))
+    (cond
+      ((null alias)
+       (write-line "unknown"))
+      (t
+       (tc:with-pprint-variable-context ()
+         (format t "~S~%" (tc:type-alias-entry-type alias)))))
+    (values)))
 
 (defun coalton:set-type-printing-mode (mode)
   "Set the type printing mode for the display of types.
@@ -201,20 +237,29 @@ MODE must be one of
   (setf tc:*coalton-type-printing-mode* mode))
 
 (defun coalton:kind-of (symbol)
-  "Lookup the kind of type SYMBOL in the global environment"
-  (tc:kind-of (tc:type-entry-type (tc:lookup-type entry:*global-environment* symbol))))
+  "Lookup the kind of type SYMBOL in the global environment. If it's not
+known, return NIL."
+  (check-type symbol symbol)
+  (let ((type (tc:lookup-type entry:*global-environment* symbol :no-error t)))
+    (cond
+      ((null type)
+       nil)
+      (t
+       (tc:kind-of (tc:type-entry-type type))))))
 
 (defun coalton:lookup-code (name)
-  "Lookup the compiled code of a given definition"
+  "Lookup the compiled code of a given definition. Return NIL if the
+name is not known."
   (declare (type symbol name))
-  (tc:lookup-code entry:*global-environment* name))
+  (tc:lookup-code entry:*global-environment* name :no-error t))
 
 (defun coalton:lookup-class (name)
-  "Lookup a given class"
+  "Lookup a given class. Return NIL if the name is not known."
   (declare (type symbol name))
-  (tc:lookup-class entry:*global-environment* name))
+  (tc:lookup-class entry:*global-environment* name :no-error t))
 
 (defun coalton:lookup-fundeps (name)
-  "Lookup the fundep structure for a given class"
+  "Lookup the fundep structure for a given class. Return NIL if the name
+is not known."
   (declare (type symbol name))
-  (tc:lookup-fundep-environment entry:*global-environment* name))
+  (tc:lookup-fundep-environment entry:*global-environment* name :no-error t))
