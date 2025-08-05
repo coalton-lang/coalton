@@ -19,7 +19,6 @@
   (let ((stream (output-stream backend)))
     (write-string "---
 identifier: Reference
-description: 'The Coalton standard library reference.'
 summary: 'The Coalton standard library reference.'
 math: true
 layout: two-pane
