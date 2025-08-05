@@ -372,12 +372,39 @@
          (when (symbol-names-coalton-macro-p v)
            (push (make-instance 'coalton-macro :name v) macros)))))))
 
+(defun print-lambda-list (stream list)
+  ;; A special printer that doesn't print package prefixes, but prints
+  ;; most everything else as ~S.
+  (typecase list
+    (cons
+     (cond
+       ((alexandria:proper-list-p list)
+        (write-char #\( stream)
+        (let ((first t))
+          (dolist (x list)
+            (cond
+              (first (setf first nil))
+              (t (write-char #\Space stream)))
+            (print-lambda-list stream x)))
+        (write-char #\) stream))
+       (t
+        (write-char #\( stream)
+        (print-lambda-list stream (car list))
+        (write-string " . " stream)
+        (print-lambda-list stream (cdr list))
+        (write-char #\) stream))))
+    (symbol
+     (format stream "~A" list))
+    (t
+     (format stream "~S" list)))
+  nil)
+
 (defmethod object-name ((x coalton-macro))
   (let ((*print-pretty* nil)
         (*print-circle* nil))
-    (format nil "~A ~A"
-            (coalton-macro-name x)
-            (get (coalton-macro-name x) ':coalton-macro-lambda-list))))
+    (with-output-to-string (s)
+      (format s "~A " (coalton-macro-name x))
+      (print-lambda-list s (get (coalton-macro-name x) ':coalton-macro-lambda-list)))))
 
 (defmethod object-type ((x coalton-macro))
   "MACRO")
