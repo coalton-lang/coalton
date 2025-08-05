@@ -12,6 +12,8 @@
    #:in-package
    #:defpackage)
 
+  (:export #:defmacro)
+
   (:export #:call-coalton-function)
 
   (:export

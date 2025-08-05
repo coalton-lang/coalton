@@ -53,6 +53,9 @@
    #:coalton-type-constructors
    #:type-constructor-args
 
+   #:coalton-macro
+   #:coalton-macro-name
+
    #:coalton-package
    #:package-objects
    #:sort-objects
@@ -75,7 +78,7 @@
   (:documentation "The name of a thing."))
 
 (defgeneric object-type (self)
-  (:documentation "The type of a thing: class, function, value, struct"))
+  (:documentation "The type of a thing: class, function, value, struct, macro"))
 
 (defgeneric object-location (self)
   (:documentation "The location of an object's definition."))
@@ -341,6 +344,54 @@
     (or (string-equal name "COALTON")
         (eql 0 (search "COALTON-LIBRARY" name)))))
 
+;;; class coalton-macro
+
+(defclass coalton-macro (coalton-object)
+  ((name :initarg :name :reader coalton-macro-name)))
+
+(defun symbol-exported-p (s)
+  (let ((p (symbol-package s)))
+    (if (null p)
+        nil
+        (eq ':external (nth-value 1 (find-symbol (symbol-name s) p))))))
+
+(defun symbol-names-coalton-macro-p (s)
+  (and (macro-function s)
+       (get s ':coalton-macro)))
+
+(defun find-macros (&key (package nil package-provided-p))
+  (let ((macros nil))
+    (cond
+      ((not package-provided-p)
+       (do-all-symbols (v macros)
+         (when (and (symbol-exported-p v)
+                    (symbol-names-coalton-macro-p v))
+           (push (make-instance 'coalton-macro :name v) macros))))
+      (t
+       (do-external-symbols (v package macros)
+         (when (symbol-names-coalton-macro-p v)
+           (push (make-instance 'coalton-macro :name v) macros)))))))
+
+(defmethod object-name ((x coalton-macro))
+  (let ((*print-pretty* nil)
+        (*print-circle* nil))
+    (format nil "~A ~A"
+            (coalton-macro-name x)
+            (get (coalton-macro-name x) ':coalton-macro-lambda-list))))
+
+(defmethod object-type ((x coalton-macro))
+  "MACRO")
+
+(defmethod object-location ((x coalton-macro))
+  ;; TODO: Track source location of macro definitions.
+  nil)
+
+(defmethod object-docstring ((x coalton-macro))
+  (documentation (coalton-macro-name x) 'function))
+
+(defmethod object-aname ((x coalton-macro))
+  (format nil "~(~A-macro~)" (symbol-name (coalton-macro-name x))))
+
 ;;; Public API
 
 (defun has-values-p (package)
@@ -373,21 +424,28 @@
                                               (env:find-instances))))
           (env:find-types :package package)))
 
+(defun has-macros-p (package)
+  (do-external-symbols (v package nil)
+    (when (symbol-names-coalton-macro-p v)
+      (return-from has-macros-p t))))
+
 (defun has-objects-p (package)
   "Return T if PACKAGE defines any Coalton objects."
   (or (has-types-p package)
       (has-values-p package)
-      (has-classes-p package)))
+      (has-classes-p package)
+      (has-macros-p package)))
 
 (defun find-objects (&key package)
   "Find all Coalton OBJECTS, optionally retstricting to objects defined in PACKAGE."
   (append (find-types :package package)
           (find-values :package package)
-          (find-classes :package package)))
+          (find-classes :package package)
+          (find-macros :package package)))
 
 (defun find-packages ()
   "Return the list of packages in the standard library."
-  (let (packages)
+  (let ((packages nil))
     (do-all-symbols (symbol)
       (when (stdlib-p symbol)
         (pushnew (symbol-package symbol) packages)))
