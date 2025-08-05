@@ -41,9 +41,10 @@ defined $f$, we have:
 
 $$
 \\begin{align*}
-f(4 + \\varepsilon) &= 3(4 + \\varepsilon) + 2 \\\\
-                    &= 3\\cdot 4 + 3\\varepsilon + 2 \\\\
-                    &= 14 + 3\\varepsilon.
+f(4 + \\varepsilon)
+&= 3(4 + \\varepsilon) + 2 \\\\\\\\
+&= 3\\cdot 4 + 3\\varepsilon + 2 \\\\\\\\
+&= 14 + 3\\varepsilon.
 \\end{align*}
 $$
 
