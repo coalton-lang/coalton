@@ -35,7 +35,12 @@ below.")
   ;; The representation of (Complex :t) is specially dealt with by the
   ;; compiler in lisp-type.lisp.
   (define-type (Complex :a)
-    "Complex number that may either have a native or constructed
+    "A complex number with a real and imaginary component.
+
+This object does not have any public constructors. Instead, use the
+function `complex` of the `ComplexComponent` type class.
+
+A `Complex` object may either have a native or constructed
 representation. See the `ComplexComponent` type class for allowed
 component types."
     (%Complex :a :a))
@@ -54,7 +59,8 @@ component types."
 
 (coalton-toplevel
   (define-class (Num :a => ComplexComponent :a)
-    "A type class for describing complex component types."
+    "A type class for describing complex component types. This type class
+also encodes the construction and projection of `Complex` data types."
     (complex (:a -> :a -> Complex :a))
     (real-part (Complex :a -> :a))
     (imag-part (Complex :a -> :a)))
@@ -66,21 +72,22 @@ component types."
 
   (inline)
   (declare conjugate (ComplexComponent :a => Complex :a -> Complex :a))
-  (define (conjugate n)
-    "The complex conjugate."
-    (complex (real-part n) (negate (imag-part n))))
+  (define (conjugate z)
+    "The complex conjugate. If $z=a+bi$ then the conjugate $\bar z=a-bi$."
+    (complex (real-part z) (negate (imag-part z))))
 
   (inline)
   (declare square-magnitude (ComplexComponent :a => Complex :a -> :a))
-  (define (square-magnitude a)
-    "The squared length of a complex number, i.e. re(a)^2 + im(a)^2."
-    (let ((r (real-part a))
-          (i (imag-part a)))
+  (define (square-magnitude z)
+    "The squared length of a complex number:
+$$\\vert z\\vert^2=(\\operatorname{Re} z)^2+(\\operatorname{Im} z)^2.$$"
+    (let ((r (real-part z))
+          (i (imag-part z)))
        (+ (* r r) (* i i))))
 
   (declare ii (ComplexComponent :a => Complex :a))
   (define ii
-    "The complex unit i. (The double ii represents a blackboard-bold i.)"
+    "The complex unit $i=\\sqrt{-1}$. (The double `ii` represents a blackboard-bold 𝕚.)"
     (complex 0 1))
 
   (define-instance (ComplexComponent :a => Eq (Complex :a))
