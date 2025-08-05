@@ -163,7 +163,7 @@ below.")
     (complex (general/ (real-part dividend) divisor)
              (general/ (imag-part dividend) divisor))))
 
-(cl:defmacro %define-native-complex-instances (type repr)
+(cl:defmacro %define-native-complex-instances (type repr cl:&key (division cl:t))
 
   (cl:let
       ((conj (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-CONJUGATE")))
@@ -172,8 +172,8 @@ below.")
        (minus (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-MINUS")))
        (times (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-TIMES")))
        (cfromint (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-FROMINT")))
-       (divide (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-DIVIDE")))
-       (recip (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-RECIPROCAL"))))
+       (divide (cl:if (cl:not division) cl:nil (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-DIVIDE"))))
+       (recip (cl:if (cl:not division) cl:nil (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-RECIPROCAL")))))
 
     `(cl:progn
        (cl:pushnew ',repr *native-complex-types* :test 'cl:equal)
@@ -242,24 +242,30 @@ below.")
              (lisp (Complex ,type) (f)
                (cl:complex f ,(cl:coerce 0 repr)))))
 
-         (specialize complex-divide ,divide (Complex ,type -> Complex ,type -> Complex ,type))
-         (inline)
-         (declare ,divide (Complex ,type -> Complex ,type -> Complex ,type))
-         (define (,divide a b)
-           (lisp (Complex ,type) (a b)
-             (cl:declare (cl:type (cl:complex ,repr) a b))
-             (cl:/ a b)))
+         ,@(cl:if
+            (cl:not division)
+            cl:nil
+            `((specialize complex-divide ,divide (Complex ,type -> Complex ,type -> Complex ,type))
+              (inline)
+              (declare ,divide (Complex ,type -> Complex ,type -> Complex ,type))
+              (define (,divide a b)
+                (lisp (Complex ,type) (a b)
+                  (cl:declare (cl:type (cl:complex ,repr) a b))
+                  (cl:/ a b)))
 
-         (specialize complex-reciprocal ,recip (Complex ,type -> Complex ,type))
-         (inline)
-         (declare ,recip (Complex ,type -> Complex ,type))
-         (define (,recip a)
-           (lisp (Complex ,type) (a)
-             (cl:declare (cl:type (cl:complex ,repr) a))
-             (cl:/ a)))))))
+              (specialize complex-reciprocal ,recip (Complex ,type -> Complex ,type))
+              (inline)
+              (declare ,recip (Complex ,type -> Complex ,type))
+              (define (,recip a)
+                (lisp (Complex ,type) (a)
+                  (cl:declare (cl:type (cl:complex ,repr) a))
+                  (cl:/ a)))))))))
 
 (%define-native-complex-instances F32 cl:single-float)
 (%define-native-complex-instances F64 cl:double-float)
+(%define-native-complex-instances Fraction cl:rational)
+(%define-native-complex-instances Integer cl:integer :division cl:nil)
+
 
 (cl:defmacro %define-standard-complex-instances (type)
   `(coalton-toplevel
