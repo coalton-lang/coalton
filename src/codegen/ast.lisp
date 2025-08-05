@@ -24,10 +24,14 @@
    #:node-application                   ; STRUCT
    #:make-node-application              ; CONSTRUCTOR
    #:node-application-p                 ; FUNCTION
+   #:node-application-inlinep           ; READER
+   #:node-application-noinlinep         ; READER
    #:node-application-rator             ; READER
    #:node-application-rands             ; READER
    #:node-direct-application            ; STRUCT
    #:make-node-direct-application       ; CONSTRUCTOR
+   #:node-direct-application-inlinep    ; READER
+   #:node-direct-application-noinlinep  ; READER
    #:node-direct-application-rator-type ; READER
    #:node-direct-application-rator      ; READER
    #:node-direct-application-rands      ; READER
@@ -207,11 +211,15 @@ coalton symbols (`parser:identifier`)"
 
 (defstruct (node-application (:include node))
   "Function application (f x)"
-  (rator (util:required 'rator) :type node      :read-only t)
-  (rands (util:required 'rands) :type node-list :read-only t))
+  (inlinep   (util:required 'inlinep) :type boolean   :read-only t)
+  (noinlinep (util:required 'inlinep) :type boolean   :read-only t)
+  (rator     (util:required 'rator)   :type node      :read-only t)
+  (rands     (util:required 'rands)   :type node-list :read-only t))
 
 (defstruct (node-direct-application (:include node))
   "Fully saturated function application of a known function"
+  (inlinep    (util:required 'inlinep)    :type boolean           :read-only t)
+  (noinlinep  (util:required 'inlinep)    :type boolean           :read-only t)
   (rator-type (util:required 'rator-type) :type tc:ty             :read-only t)
   (rator      (util:required 'rator)      :type parser:identifier :read-only t)
   (rands      (util:required 'rands)      :type node-list         :read-only t))

@@ -38,7 +38,12 @@
   (declare method-for-inline-test-caller
     (Double-Float -> Double-Float -> Double-Float))
   (define (method-for-inline-test-caller x y)
-    (method-for-inline-test x y)))
+    (method-for-inline-test x y))
+
+  (declare method-for-inline-test-caller-callsite-noinline
+    (Double-Float -> Double-Float -> Double-Float))
+  (define (method-for-inline-test-caller-callsite-noinline x y)
+    (noinline (method-for-inline-test x y))))
 
 (define-test method-inline ()
   (is (== 5.0d0 (method-for-inline-test-caller 2.0d0 3.0d0))))
@@ -106,6 +111,31 @@
     (if (== n 0)
         222
         (test-inlinable-rec-1 (1- n)))))
+
+;; Callsite inlining
+
+(coalton-toplevel 
+  (declare callsite-inlined-foo (UFix -> UFix))
+  (define (callsite-inlined-foo x)
+    (- (* 23 (+ 2 (* 4 x))) 1)))
+
+(coalton-toplevel
+  (define (callsite-inlined-foo-caller)
+    (callsite-inlined-foo 1))
+  (define (callsite-inlined-foo-inline-caller)
+    (inline (callsite-inlined-foo 1))))
+
+(coalton-toplevel 
+  (declare callsite-noinlined-foo (UFix -> UFix))
+  (inline)
+  (define (callsite-noinlined-foo x)
+    (- (* 23 (+ 2 (* 4 x))) 1)))
+
+(coalton-toplevel
+  (define (callsite-noinlined-foo-caller)
+    (callsite-noinlined-foo 1))
+  (define (callsite-noinlined-foo-noinline-caller)
+    (noinline (callsite-noinlined-foo 1))))
 
 
 (in-package #:coalton-tests)
@@ -238,3 +268,25 @@ unroll the node."
     (is (= (traverse:count-nodes caller-1)
            (traverse:count-nodes caller-2)
            (traverse:count-nodes caller-3)))))
+
+(deftest callsite-inlining-test ()
+  (is (< (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::callsite-noinlined-foo-noinline-caller))
+         (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::callsite-noinlined-foo-caller))))
+  (is (< (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::callsite-inlined-foo-caller))
+         (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::callsite-inlined-foo-inline-caller)))))
+
+(deftest callsite-method-inlining-test ()
+  (is (< (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::method-for-inline-test-caller-callsite-noinline))
+         (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::method-for-inline-test-caller)))))
