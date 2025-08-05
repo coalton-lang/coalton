@@ -299,7 +299,7 @@ is no guarantee that the `CReal` will be accurate to any precision*."
 non-negative integer `k`, return an integer $a$ with
 
 $$
-\\vert a\\cdot 2^{-\\mathtt{k}} - \\mathtt{x}\\vert \leq 2^{-\\mathtt{k}}.
+\\vert a\\cdot 2^{-\\mathtt{k}} - \\mathtt{x}\\vert \\leq 2^{-\\mathtt{k}}.
 $$
 
 See `rational` or `rationalize` to produce a rational approximation of
