@@ -40,12 +40,12 @@ dual-valued function at the point $a + \\varepsilon$. Thus, for the
 defined $f$, we have:
 
 $$
-\\begin{align*}
+\\begin{aligned}
 f(4 + \\varepsilon)
 &= 3(4 + \\varepsilon) + 2 \\\\\\\\
 &= 3\\cdot 4 + 3\\varepsilon + 2 \\\\\\\\
 &= 14 + 3\\varepsilon.
-\\end{align*}
+\\end{aligned}
 $$
 
 In this result, the primal $14$ is the value of $f(4)$ and the dual is
