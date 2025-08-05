@@ -90,7 +90,7 @@ Note that this may copy the object or allocate memory."
 (defmacro nest (cl:&rest items)
   "A syntactic convenience for function application. Transform
 
-    (NEST f g h x)
+    (nest f g h x)
 
 to
 
@@ -105,7 +105,7 @@ to
 (defmacro pipe (cl:&rest items)
   "A syntactic convenience for function application, sometimes called a \"threading macro\". Transform
 
-    (PIPE x h g f)
+    (pipe x h g f)
 
 to
 
@@ -118,7 +118,7 @@ to
 functions right to left when applied. This is the same as the `nest` macro without supplying
 the value. The composition is thus the same order as `compose`.
 
-`(.< f g h)` creates the function `(fn (x) (f (g (h x))))"
+`(.< f g h)` creates the function `(fn (x) (f (g (h x))))`."
   (alexandria:with-gensyms (x)
     `(fn (,x)
        (nest ,@items ,x))))
@@ -128,13 +128,14 @@ the value. The composition is thus the same order as `compose`.
 functions left to right when applied. This is the same as the `pipe` macro without supplying
 the value. The composition is thus the reverse order of `compose`.
 
-`(.> f g h)` creates the function `(fn (x) (h (g (f x))))"
+`(.> f g h)` creates the function `(fn (x) (h (g (f x))))`."
   (alexandria:with-gensyms (x)
     `(fn (,x)
        (pipe ,x ,@items))))
 
 (defmacro make-list (cl:&rest forms)
-  "Create a heterogeneous Coalton `List` of objects."
+  "Create a heterogeneous Coalton `List` of objects. This macro is
+deprecated; use `coalton-library/list:make`."
   (cl:labels
       ((list-helper (forms)
          (cl:if (cl:endp forms)
@@ -148,10 +149,10 @@ Coalton boolean."
   `(cl:and ,expr cl:t))
 
 (defmacro assert (datum cl:&optional (format-string "") cl:&rest format-data)
-  "Signal an error unless DATUM is `True`.
+  "Signal an error unless `datum` is `True`.
 
-If the assertion fails, the signaled error will apply the FORMAT-DATA
-to the FORMAT-STRING via `cl:format` to produce an error message."
+If the assertion fails, the signaled error will apply the `format-data`
+to the `format-string` via `cl:format` to produce an error message."
   ;; OPTIMIZE: lazily evaluate the FORMAT-DATA only when the assertion fails
   (cl:check-type format-string cl:string)
   (cl:let* ((datum-temp (cl:gensym "ASSERT-DATUM-"))
