@@ -417,7 +417,11 @@
   (documentation (coalton-macro-name x) 'function))
 
 (defmethod object-aname ((x coalton-macro))
-  (format nil "~(~A-macro~)" (symbol-name (coalton-macro-name x))))
+  (substitute
+   #\- #\/
+   (format nil "~(~A-~A-macro~)"
+           (package-name (symbol-package (coalton-macro-name x)))
+           (symbol-name (coalton-macro-name x)))))
 
 ;;; Public API
 
