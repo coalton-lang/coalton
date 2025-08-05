@@ -127,5 +127,6 @@
                (:file "reader")
                (:file "debug")
                (:file "faux-macros")
+               (:file "define-coalton-macro")
                (:file "language-macros")
                (:file "lock-package" :if-feature :sb-package-locks)))

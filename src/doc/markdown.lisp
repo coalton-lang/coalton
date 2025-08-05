@@ -123,7 +123,8 @@
       (write-section 'coalton-type "Types")
       (write-section 'coalton-struct "Structs")
       (write-section 'coalton-class "Classes")
-      (write-section 'coalton-value "Values"))))
+      (write-section 'coalton-value "Values")
+      (write-section 'coalton-macro "Macros"))))
 
 (defun write-instances (backend object)
   (let ((instances (object-instances object)))
@@ -239,6 +240,11 @@
   (let ((stream (output-stream backend)))
     (format stream "<code>~A</code>~%" (to-markdown (value-type object)))
     (write-doc backend object)))
+
+;;; coalton-macro
+
+(defmethod write-object-body ((backend markdown-backend) (object coalton-macro))
+  (write-doc backend object))
 
 ;;; Methods for TO-MARKDOWN
 
