@@ -17,14 +17,17 @@
 
 (defmethod write-packages ((backend hugo-backend) packages)
   (let ((stream (output-stream backend)))
-    (write-string "---
+    ;; Header
+    (write-line "---
 identifier: Reference
 summary: 'The Coalton standard library reference.'
 math: true
 layout: two-pane
----
+---"
+                stream)
 
-<aside class=\"sidebar\">
+    ;; Title and side bar
+    (write-line "<aside class=\"sidebar\">
 
 ### Reference
 
@@ -32,16 +35,17 @@ layout: two-pane
   <input type=\"text\" id=\"symbol-search-input\" placeholder=\"Search symbols...\" autocomplete=\"off\">
   <div class=\"search-results\" id=\"search-results\"></div>
 </div>
-
-" stream)
+"
+                stream)
 
     ;; package menu
     (dolist (package packages)
       (format stream "- ~A~%" (object-link package)))
-    (format stream "</aside>~%<div class=\"main-content\">~%~%")
+    (write-line "</aside>" stream)
 
-    ;; markdown content
+    ;; Main content
+    (write-line "<div class=\"main-content\">" stream)
     (let ((backend (make-backend ':markdown stream)))
       (dolist (package packages)
         (write-object backend package)))
-    (format stream "</div>")))
+    (write-line "</div>" stream)))
