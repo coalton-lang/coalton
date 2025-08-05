@@ -73,7 +73,7 @@ also encodes the construction and projection of `Complex` data types."
   (inline)
   (declare conjugate (ComplexComponent :a => Complex :a -> Complex :a))
   (define (conjugate z)
-    "The complex conjugate. If $z=a+bi$ then the conjugate $\bar z=a-bi$."
+    "The complex conjugate. If $z=a+bi$ then the conjugate $\\bar z=a-bi$."
     (complex (real-part z) (negate (imag-part z))))
 
   (inline)
@@ -87,7 +87,8 @@ $$\\vert z\\vert^2=(\\operatorname{Re} z)^2+(\\operatorname{Im} z)^2.$$"
 
   (declare ii (ComplexComponent :a => Complex :a))
   (define ii
-    "The complex unit $i=\\sqrt{-1}$. (The double `ii` represents a blackboard-bold 𝕚.)"
+    "The complex unit $i=\\sqrt{-1}$. (The double `ii` represents a
+blackboard-bold 𝕚.)"
     (complex 0 1))
 
   (define-instance (ComplexComponent :a => Eq (Complex :a))
