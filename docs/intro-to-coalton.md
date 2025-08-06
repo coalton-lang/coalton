@@ -776,7 +776,7 @@ The into method is used only when a conversion can always be performed from one 
       (_ None)))
 
   ;; Submatches can be captured in a variable
-  (declare dedup-head (List :a -> List :a))
+  (declare dedup-head (Eq :a => List :a -> List :a))
   (define (dedup-head xs)
     "If the first and second member of list are equal, drop the first"
     (match xs
