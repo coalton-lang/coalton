@@ -1088,7 +1088,7 @@ Coalton has a `do` macro that works similarly to do notation in Haskell.
       (let c = (+ a b))
       (pure c)))
 
-    ;; [6+3, 5+3, 5+3, 6+2, 5+2, 4+2, 6+1, 5+1, 4+1]
+    ;; [6+3, 5+3, 4+3, 6+2, 5+2, 4+2, 6+1, 5+1, 4+1]
    (define xs (f (make-list 1 2 3) (make-list 4 5 6))))
 ```
 
