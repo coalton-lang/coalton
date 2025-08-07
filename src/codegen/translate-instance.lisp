@@ -50,6 +50,7 @@
 
          (superclass-preds (tc:apply-substitution subs (mapcar #'car (tc:ty-class-superclass-dict class))))
 
+         ;; These will be methods with the dict arguments
          (method-definitions
            (loop :for method :in (tc:ty-class-unqualified-methods class)
                  :for method-name := (tc:ty-class-method-name method)
@@ -58,6 +59,7 @@
 
                  :collect (cons codegen-sym (translate-toplevel binding env method-name))))
 
+         ;; These will be methods without the dict arguments
          (unqualified-method-definitions
            (loop :for method :in (tc:ty-class-unqualified-methods class)
                  :for method-name := (tc:ty-class-method-name method)
@@ -93,7 +95,29 @@
                 :rands (append
                         (loop :for pred :in superclass-preds
                               :collect (resolve-dict pred ctx env))
-                        unqualified-method-definitions))
+                        (cond
+                          ((null ctx)
+                           (loop :for sym :in method-codegen-syms
+                                 :for ty :in method-ty
+                                 :collect (make-node-variable
+                                           :type ty
+                                           :value sym)))
+                          (t
+                           (loop :for qual-sym :in method-codegen-syms
+                                 :for unqual-method :in unqualified-method-definitions
+                                 :for unqual-type :in method-ty
+                                 :for qual-method :in (mapcar #'cdr method-definitions)
+                                 :for qual-type := (node-type qual-method)
+                                 :collect (make-node-application
+                                           :type unqual-type
+                                           :rator (make-node-variable
+                                                   :type qual-type
+                                                   :value qual-sym)
+                                           :rands (loop :for (pred . ctx-var) :in ctx
+                                                        :for ctx-ty := (pred-type pred env)
+                                                        :collect (make-node-variable
+                                                                  :type ctx-ty
+                                                                  :value ctx-var))))))))
                var-node))
 
          (dict-node
@@ -107,7 +131,7 @@
                app-node))
 
          (bindings
-           (cons
+           (list*
             (cons
              (tc:ty-class-instance-codegen-sym instance-entry)
              dict-node)
