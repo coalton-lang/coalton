@@ -488,7 +488,7 @@ Now it works without any type declarations on use:
 
 Coalton supports infinite looping, conditional looping, and `for`-loop styled iteration. 
 
-### `loop`, `while`, `while-let`, and `for`
+#### `loop`, `while`, `while-let`, and `for`
 
 You can loop forever 
 
@@ -525,7 +525,7 @@ You can loop over instances of `IntoIterator`
 ```
 
 
-### `break` and `continue`
+#### `break` and `continue`
 
 Each of the above looping forms supports `break` and `continue`.
 
