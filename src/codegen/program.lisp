@@ -166,7 +166,6 @@ Example:
 
       (let ((sccs (node-binding-sccs definitions))
             (lisp-forms (tc:translation-unit-lisp-forms translation-unit)))
-
         (values
          `(progn
             ;; Muffle redefinition warnings in SBCL. A corresponding
@@ -212,9 +211,18 @@ Example:
   (declare (type symbol name)
            (type node-abstraction node)
            (type tc:environment env))
-  `(defun ,name ,(node-abstraction-vars node)
-     (declare (ignorable ,@(node-abstraction-vars node)))
-     ,(codegen-expression (node-abstraction-subexpr node) env)))
+  (cond
+    ((get name ':mv-call)
+     `(defun ,name ,(node-abstraction-vars node)
+        (declare (ignorable ,@(node-abstraction-vars node)))
+        (multiple-value-call
+            #',(find-symbol "TUPLE" "COALTON-LIBRARY/CLASSES")
+          (,(get name ':mv-call)
+           ,@(node-abstraction-vars node)))))
+    (t
+     `(defun ,name ,(node-abstraction-vars node)
+        (declare (ignorable ,@(node-abstraction-vars node)))
+        ,(codegen-expression (node-abstraction-subexpr node) env)))))
 
 (defun compile-scc (bindings env)
   "Compile SCC definitions in a translation unit."
@@ -230,14 +238,27 @@ Example:
    (loop :for (name . node) :in bindings
          :if (and (node-abstraction-p node)
                   settings:*emit-type-annotations*)
-         :collect
+           ;; XXX FIXME: make sure MV's are handled here
+           :collect
          `(declaim
            (ftype
             (function
              (,@(loop :for nil :in (node-abstraction-vars node)
                       :for ty :in (tc:function-type-arguments (node-type node))
                       :collect (tc:lisp-type ty env)))
-             (values ,(tc:lisp-type (node-type (node-abstraction-subexpr node)) env)
+             (values ,@(if (getf (%node-properties node) ':mv-return)
+                           (let ((ty (node-type (node-abstraction-subexpr node))))
+                             (assert (typep ty 'tc:tapp))
+                             (let* ((tcon ty)
+                                    (args (nreverse
+                                           (loop :while (typep tcon 'tc::tapp)
+                                                 :collect (tc::tapp-to tcon)
+                                                 :do (setf tcon (tc::tapp-from tcon))))))
+                               (assert (string-equal "TUPLE" (tc::tycon-name tcon)))
+                               (assert (= 2 (length args)))
+                               (list (tc:lisp-type (first args) env)
+                                     (tc:lisp-type (second args) env))))
+                           (list (tc:lisp-type (node-type (node-abstraction-subexpr node)) env)))
                      &optional))
             ,name)))
 
