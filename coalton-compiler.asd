@@ -129,5 +129,6 @@
                (:file "debug")
                (:file "faux-macros")
                (:file "intrinsic-applications")
+               (:file "define-coalton-macro")
                (:file "language-macros")
                (:file "lock-package" :if-feature :sb-package-locks)))

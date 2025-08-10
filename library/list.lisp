@@ -73,7 +73,8 @@
    #:split
    #:perms
    #:combs
-   #:combsOf))
+   #:combsOf
+   #:make))
 
 (in-package #:coalton-library/list)
 
@@ -793,6 +794,10 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
 
   (define-instance (Default (List :a))
     (define (default) Nil)))
+
+(defmacro make (cl:&rest elements)
+  "Make a homogeneous list of `elements`. Synonym for `coalton:make-list`."
+  `(coalton:make-list ,@elements))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/LIST")

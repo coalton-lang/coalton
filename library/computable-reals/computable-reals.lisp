@@ -45,11 +45,15 @@ See `comparison-threshold` for more details."
    Unit)
 
  (define (comparison-threshold)
-   "Returns the current `CReal` comparison threshold measured as a number of bits after the 'decimal' point.
+   "Returns the current `CReal` comparison threshold measured as a number
+of bits after the 'decimal' point.
 
-This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general computable real arithmetic is undecidable.) Note that if the production of a `CReal` depends on comparison, *there is no guarantee that the `CReal` will be accurate to any precision*."
+This threshold is used to ensure `Eq` and `Ord` instances
+terminate. (In general, computable real arithmetic is undecidable.)
+Note that if the production of a `CReal` depends on comparison, *there
+is no guarantee that the `CReal` will be accurate to any precision*."
    (lisp UFix ()
-         *creal-comparison-threshold*)))
+     *creal-comparison-threshold*)))
 
 ;;;
 ;;; Instances
@@ -177,7 +181,7 @@ This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general
 
 (coalton-toplevel
 
-  (define-instance (Complex CReal)
+  (define-instance (complex:ComplexComponent CReal)
     (define (complex a b)
       (complex::%Complex a b))
 
@@ -189,7 +193,7 @@ This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general
       (match z
         ((complex::%Complex _ b) b))))
 
-  (define-instance ((Complex :a) (Into :a CReal) => (Into (Complex :a) (Complex CReal)))
+  (define-instance ((complex:ComplexComponent :a) (Into :a CReal) => (Into (Complex :a) (Complex CReal)))
     (define (Into x)
       (Complex (Into (real-part x))
                (Into (imag-part x))))))
@@ -291,10 +295,12 @@ This threshold is used to ensure `Eq` and `Ord` instances terminate. (In general
   (declare approx (CReal -> UFix -> Integer))
   (define (approx x k)
     "Computes an approximation of the bits of a given
-`CReal`. Specifically, given an object of type `CReal` `X` and a
-non-negative integer `K`, return an integer `A` with
+`CReal`. Specifically, given an object of type `CReal` `x` and a
+non-negative integer `k`, return an integer $a$ with
 
-    |A*2^(-k) - X| <= 2^(-K).
+$$
+\\vert a\\cdot 2^{-\\mathtt{k}} - \\mathtt{x}\\vert \\leq 2^{-\\mathtt{k}}.
+$$
 
 See `rational` or `rationalize` to produce a rational approximation of
 `CReal`."
@@ -303,19 +309,23 @@ See `rational` or `rationalize` to produce a rational approximation of
 
   (declare rational-approx (CReal -> UFix -> Fraction))
   (define (rational-approx x k)
-    "Produce a rational approximation of `X` called `R` such that
+    "Produce a rational approximation of `x` called $r$ such that
 
-    |R - X| < 2^(-K)."
+$$
+\\vert r - \\mathtt{x} \\vert < 2^{-\\mathtt{k}}.
+$$"
     (lisp Fraction (x k)
       (cr:rational-approx-r x k)))
 
   (declare rationalize (CReal -> UFix -> Fraction))
   (define (rationalize x k)
-    "Produce a rational approximation of `X` called `R` such that
+    "Produce a rational approximation of `x` called $r$ such that
 
-    |R - X| < 2^(-K),
+$$
+\\vert r - \\mathtt{x} \\vert < 2^{-\\mathtt{k}},
+$$
 
-taking into account the maximum precision specified by `K` to return
+taking into account the maximum precision specified by `k` to return
 the simplest possible such approximation."
     (lisp Fraction (x k)
       (cr:rationalize-r x k)))
@@ -328,7 +338,7 @@ the simplest possible such approximation."
 
   (declare cr-print (CReal -> UFix -> Boolean))
   (define (cr-print x k)
-    "Prints a real `R` up to `K` bits of precision."
+    "Prints a real `x` up to `k` bits of precision."
     (lisp Boolean (x k)
       (cr:print-r x k))))
 

@@ -96,19 +96,33 @@ milliseconds it took."
       (let* ((lisp-time (time-it #'lisp-test repeat))
              (coalton-time (time-it #'coalton-test repeat))
              (hand-optimized-time (time-it #'hand-optimized-lisp-test repeat))
-             (delta (- lisp-time coalton-time)))
+             (delta (- lisp-time coalton-time))
+             (optimized-delta (- hand-optimized-time coalton-time)))
+        (format t "Coalton was compiled in ~:[DEVELOPMENT~;RELEASE~] mode.~%"
+                (coalton-impl/settings:coalton-release-p))
         (format t "Lisp took ~D ms~%" lisp-time)
         (format t "Coalton took ~D ms~%" coalton-time)
         (cond
           ((plusp delta)
-           (format t "Coalton was faster by ~D ms (~3,2F%)~%"
+           (format t "    => Coalton was faster by ~D ms (~3,2F%)~%"
                    delta
                    (* 100.0 (/ delta lisp-time))))
           ((minusp delta)
-           (format t "Lisp was faster by ~D ms (~3,2F%)~%"
+           (format t "    => Lisp was faster by ~D ms (~3,2F%)~%"
                    (abs delta)
                    (* 100.0 (/ (abs delta) coalton-time))))
           (t
-           (format t "Both Lisp and Coalton equal~%")))
+           (format t "    => Both Lisp and Coalton equal~%")))
         (format t "The hand-optimized function took ~D ms~%" hand-optimized-time)
+        (cond
+          ((plusp optimized-delta)
+           (format t "    => Coalton was faster by ~D ms (~3,2F%)~%"
+                   optimized-delta
+                   (* 100.0 (/ optimized-delta hand-optimized-time))))
+          ((minusp delta)
+           (format t "    => Lisp was faster by ~D ms (~3,2F%)~%"
+                   (abs optimized-delta)
+                   (* 100.0 (/ (abs optimized-delta) coalton-time))))
+          (t
+           (format t "    => Both Lisp and Coalton equal~%")))
         (finish-output)))))

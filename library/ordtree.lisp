@@ -518,8 +518,8 @@ B'. Which one is chosen for the result is undefined."
   ;;   previous point.
   )
 
-(cl:defmacro make (cl:&rest elements)
-  "Construct a tree containing the ELEMENTS.
+(defmacro make (cl:&rest elements)
+  "Construct a tree containing the `elements`.
 
-e.g. (tree:make 5 6 1 8 9) => tree containing 1, 5, 6, 8, 9."
+e.g. `(tree:make 5 6 1 8 9)` returns a tree containing 1, 5, 6, 8, 9."
   `(collect! (iter:into-iter (make-list ,@elements))))

@@ -517,8 +517,10 @@ when possible."
              ;; pattern, then it can escape the match branches scope,
              ;; and thus cannot be safely stack allocated.
              (loop :for branch :in (node-match-branches node)
-                   :when (typep (match-branch-pattern branch) 'pattern-var) :do
-                     (return-from apply-lift nil))
+                   :for pattern := (match-branch-pattern branch)
+                   :when (or (pattern-var-p pattern)
+                             (pattern-binding-p pattern))
+                     :do (return-from apply-lift nil))
 
              (let ((expr (node-match-expr node)))
                (unless (or (node-direct-application-p expr)

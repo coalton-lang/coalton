@@ -58,8 +58,9 @@
 
   (declare atan2 ((Ord :f) (Trigonometric :f) (Reciprocable :f) => :f -> :f -> :f))
   (define (atan2 y x)
-    "Computes the two-argument arctangent of y and x, which is roughly the same
-as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
+    "Computes the two-argument arctangent of `y` and `x`, which is roughly the same
+as `(atan (/ y x))` when defined and accounting for the quadrant of
+the point $(\\mathtt{x},\\mathtt{y})$."
     (match (Tuple (<=> x 0) (<=> y 0))
       ((Tuple (GT) _)    (atan (/ y x)))
       ((Tuple (LT) (LT)) (- (atan (/ y x)) pi))
@@ -89,24 +90,26 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
     (nth-root (Integer -> :a -> :a))
     (sqrt (:a -> :a)))
 
-  (define-class ((Complex :a) (Num :a) => Polar :a)
-    "For a complex number `z = (complex x y)`, the following identities hold:
+  (define-class ((ComplexComponent :a) (Num :a) => Polar :a)
+    "This type class includes `ComplexComponent` types that admit a magnitude and phase.
+
+For a complex number `z = (complex x y)`, the following identities hold:
 
     z = (* (magnitude z) (exp (* ii (phase z))))
     (polar z) = (Tuple (magnitude z) (phase z))
     (phase z) = (atan2 y x)
 "
-    (phase ((Complex :a) -> :a))
-    (polar ((Complex :a) -> (Tuple :a :a))))
+    (phase (Complex :a -> :a))
+    (polar (Complex :a -> (Tuple :a :a))))
 
   (define (magnitude z)
-    "For `z = x + yi`,
+    "The magnitude of a complex number. For `z = x + yi`,
 
 
     (magnitude z) = (sqrt (+ (^ x 2) (^ y 2)))"
     (sqrt (square-magnitude z)))
 
-  (declare cis ((Trigonometric :a) (Complex :a) => :a -> (Complex :a)))
+  (declare cis ((Trigonometric :a) (ComplexComponent :a) => :a -> Complex :a))
   (define (cis z)
     "A point on the complex unit circle:
 
@@ -124,27 +127,27 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
 
   ;; See http://clhs.lisp.se/Body/f_sinh_.htm
 
-  (declare sinh ((Elementary :f) => :f -> :f))
+  (declare sinh (Elementary :f => :f -> :f))
   (define (sinh x)
     (/ (- (exp x) (exp (negate x))) 2))
 
-  (declare cosh ((Elementary :f) => :f -> :f))
+  (declare cosh (Elementary :f => :f -> :f))
   (define (cosh x)
     (/ (+ (exp x) (exp (negate x))) 2))
 
-  (declare tanh ((Elementary :f) => :f -> :f))
+  (declare tanh (Elementary :f => :f -> :f))
   (define (tanh x)
     (/ (sinh x) (cosh x)))
 
-  (declare asinh ((Elementary :f) => :f -> :f))
+  (declare asinh (Elementary :f => :f -> :f))
   (define (asinh x)
     (ln (+ x (sqrt (+ 1 (pow x 2))))))
 
-  (declare acosh ((Elementary :f) => :f -> :f))
+  (declare acosh (Elementary :f => :f -> :f))
   (define (acosh x)
     (* 2 (ln (+ (sqrt (/ (+ x 1) 2)) (sqrt (/ (- x 1) 2))))))
 
-  (declare atanh ((Elementary :f) => :f -> :f))
+  (declare atanh (Elementary :f => :f -> :f))
   (define (atanh x)
     (/ (- (ln (+ 1 x)) (ln (- 1 x))) (fromInt 2)))
 
@@ -360,9 +363,10 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
 (%define-real-float-elementary F32 cl:single-float)
 (%define-real-float-elementary F64 cl:double-float)
 
+;;; FIXME: duplicate macro from complex.lisp
 (cl:defmacro %define-standard-complex-instances (type)
   `(coalton-toplevel
-     (define-instance (Complex ,type)
+     (define-instance (ComplexComponent ,type)
        (define (complex a b)
          (%Complex a b))
        (define (real-part a)
@@ -373,7 +377,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
            ((%Complex _ b) b))))))
 
 (coalton-toplevel
-  (define-instance ((Elementary :a) => Exponentiable (Complex :a))
+  (define-instance (Elementary :a => Exponentiable (Complex :a))
     (define (ln z)
       ;; The principal natural log of a complex number
       (match (polar z)
@@ -393,7 +397,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
       (/ (ln x) (ln b)))
     (define ee (Complex ee 0)))
 
-  (define-instance ((Elementary :a) => Radical (Complex :a))
+  (define-instance (Elementary :a => Radical (Complex :a))
     (define (sqrt z)
       (match (polar z)
         ((Tuple r theta)
@@ -410,7 +414,7 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
          ;; sqrt(z) = sqrt(r) (cos theta/2 + i sin theta/2)
          (complex (* nth-root-r (cos phi)) (* nth-root-r (sin phi)))))))
 
-  (define-instance ((Elementary :a) => Trigonometric (Complex :a))
+  (define-instance (Elementary :a => Trigonometric (Complex :a))
     (define (sin z)
       (let ((x (real-part z))
             (y (imag-part z))
@@ -451,21 +455,26 @@ as (atan (/ y x)) when defined and accounting for the quadrant of the (x,y)."
     (define pi (Complex pi 0)))
 
   ;; This doesn't have much mathematical meaning
-  (define-instance ((Elementary :a) => Polar (Complex :a))
-    (define (phase zz)
-      (match (polar zz)
-        ((Tuple _ p) p)))
-    (define (polar zz)
-      (let x = (real-part zz))
-      (let y = (imag-part zz))
-      (let r = (magnitude zz))
-      (let p =
-        (if (== zz 0)
-            0
-            (* 2 (atan (/ y (+ r x))))))
-      (Tuple r p)))
-
-  (define-instance ((Elementary :a) => Elementary (Complex :a))))
+  ;;
+  ;; We are going to comment this out for now. If downstream code
+  ;; breaks, we can re-enable it.
+  ;;
+  ;; (define-instance (Elementary :a => Polar (Complex :a))
+  ;;   (define (phase zz)
+  ;;     (match (polar zz)
+  ;;       ((Tuple _ p) p)))
+  ;;   (define (polar zz)
+  ;;     (let x = (real-part zz))
+  ;;     (let y = (imag-part zz))
+  ;;     (let r = (magnitude zz))
+  ;;     (let p =
+  ;;       (if (== zz 0)
+  ;;           0
+  ;;           (* 2 (atan (/ y (+ r x))))))
+  ;;     (Tuple r p)))
+  ;;
+  ;; (define-instance (Elementary :a => Elementary (Complex :a)))
+  )
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MATH/ELEMENTARY")
