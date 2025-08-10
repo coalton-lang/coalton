@@ -65,6 +65,13 @@ Returns a new `ast:node' when a transformation is applicable, otherwise `nil'.")
   (traverse:traverse
    node
    (list
+    (traverse:action (:traverse ast:node-direct-application node)
+      (alexandria:if-let
+          ((transformed (transform-intrinsic-application
+                         (ast:node-rator-name node)
+                         node)))
+        (funcall traverse:*traverse* transformed)
+        node))
     (traverse:action (:traverse ast:node-application node)
       (alexandria:if-let
           ((transformed (transform-intrinsic-application
