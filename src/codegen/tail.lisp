@@ -142,6 +142,25 @@
         (descend (node-abstraction-subexpr top-node) t nil)
         (descend top-node t nil))))
 
+(defun tuple-application-p (node)
+  (and (node-direct-application-p node)
+       (find-package "COALTON-LIBRARY/CLASSES")
+       (eq (find-symbol "TUPLE" "COALTON-LIBRARY/CLASSES")
+           (node-direct-application-rator node))))
+
+(defun tail-is-always-tuple? (node name)
+  (let ((tuple-nodes nil))
+    (flet ((check (node)
+             (cond
+               ((tuple-application-p node)
+                (push node tuple-nodes))
+               ((and (node-direct-application-p node)
+                     (eq name (node-direct-application-rator node)))
+                nil)
+               (t
+                (return-from tail-is-always-tuple? (values nil nil))))))
+      (map-tail-nodes #'check node)
+      (values t tuple-nodes))))
 
 
 ;; example
