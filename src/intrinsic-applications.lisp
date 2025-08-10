@@ -13,10 +13,10 @@
     "Prevent `application' from being inlined."
     application)
 
-  (define (likely branch)
-    "Not implemented."
-    branch)
+  (define (likely predicate)
+    "Hint to the compiler that `predicate' is likely `True'"
+    predicate)
 
-  (define (unlikely branch)
-    "Not implemented."
-    branch))
+  (define (unlikely predicate)
+    "Hint to the compiler that `predicate' is likely `False'"
+    predicate))
