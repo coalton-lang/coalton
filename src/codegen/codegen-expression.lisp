@@ -285,7 +285,14 @@
                                         (or (pattern-wildcard-p pat)
                                             (pattern-var-p pat)))
                                       (node-match-branches expr)
-                                      :key #'match-branch-pattern)))
+                                      :key #'match-branch-pattern))
+          (jump-table?
+            nil
+            ;; (let ((ty (node-type (node-match-expr expr))))
+            ;;              (and (tc:tycon-p ty)
+            ;;                   (tc:type-entry-enum-repr
+            ;;                    (tc:lookup-type env (tc:tycon-name ty)))))
+                       ))
       `(let ((,match-var ,subexpr))
          (declare ,@(list*
                      `(ignorable ,match-var)
@@ -302,7 +309,17 @@
                     :collect
                     (multiple-value-bind (pred bindings types)
                         (codegen-pattern pattern match-var match-expr-type env)
-                      `(,pred
+                      `(,(cond
+                           ((not jump-table?)
+                            pred)
+                           ((pattern-literal-p pattern)
+                            (pattern-literal-value pattern))
+                           ((pattern-constructor-p pattern)
+                            (let* ((name (pattern-constructor-name pattern))
+                                   (entry (tc:lookup-constructor env name)))
+                              (tc:constructor-entry-compressed-repr entry)))
+                           (t
+                            `otherwise ))
                         ,(cond
                            ((null bindings)
                             expr)
@@ -342,6 +359,13 @@
                                   (destructuring-bind ((cond-test cond-result)) cond-cases
                                     (declare (ignore cond-test))
                                     cond-result))
+
+                                 ;; TODO add fallback check
+                                 
+                                 ;; Use a jump table.
+                                 (jump-table?
+                                  `(case ,subexpr
+                                     ,@cond-cases))
 
                                  ;; Patterns have a var/wild, don't
                                  ;; emit fallback.
