@@ -8,7 +8,8 @@
    (#:substitutions #:coalton-impl/codegen/ast-substitutions)
    (#:settings #:coalton-impl/settings)
    (#:parser #:coalton-impl/parser)
-   (#:tc #:coalton-impl/typechecker))
+   (#:tc #:coalton-impl/typechecker)
+   (#:util #:coalton-impl/util))
   (:export
    #:*inliner-max-depth*                ; VARIABLE
    #:*inliner-max-unroll*               ; VARIABLE
@@ -146,23 +147,19 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
   (= (length (ast:node-abstraction-vars abstraction))
      (length (ast:node-rands application))))
 
-(defun call-inline-p (application)
+(defun call-marked-for-inline-p (application)
   "Check if the the application is inlined at the callsite."
   (declare (type (or ast:node-application ast:node-direct-application) application)
-           (values boolean &optional))
+           (values util:symbol-list &optional))
 
-  (etypecase application
-    (ast:node-application (ast:node-application-inlinep application))
-    (ast:node-direct-application (ast:node-direct-application-inlinep application))))
+  (member ':inline (ast:node-properties application)))
 
-(defun call-noinline-p (application)
+(defun call-marked-for-noinline-p (application)
   "Check if the the application is prevented from being inlined at the callsite."
   (declare (type (or ast:node-application ast:node-direct-application) application)
-           (values boolean &optional))
+           (values util:symbol-list &optional))
 
-  (etypecase application
-    (ast:node-application (ast:node-application-noinlinep application))
-    (ast:node-direct-application (ast:node-direct-application-noinlinep application))))
+  (member ':noinline (ast:node-properties application)))
 
 ;;; Inlining
 
@@ -232,10 +229,10 @@ is appropriate."
       ((let ((abstraction (lookup-global-application-body application env)))
          (and *inline-globals-p*
               abstraction
-              (not (call-noinline-p application))
+              (not (call-marked-for-noinline-p application))
               (application-saturates-abstraction-p application abstraction)
               (or (heuristic-inline-p abstraction)
-                  (call-inline-p application)
+                  (call-marked-for-inline-p application)
                   (function-declared-inline-p name env))))
        (print-inline-success! ";; Inlining global function ~a" name)
        (push name *functions-inlined*)
@@ -252,10 +249,10 @@ is appropriate."
             (ast:node-application-p application)
             (let ((abstraction (lookup-anonymous-application-body application)))
               (and abstraction
-                   (not (call-noinline-p application))
+                   (not (call-marked-for-noinline-p application))
                    (application-saturates-abstraction-p application abstraction)
                    (or (heuristic-inline-p abstraction)
-                       (call-inline-p application)))))
+                       (call-marked-for-inline-p application)))))
        (print-inline-success! ";; Inlining anonymous function")
        (push name *functions-inlined*)
        (inline-applications*
@@ -321,9 +318,8 @@ is appropriate."
                (print-inline-success! ";; Inlining method to application ~a" method-name)
                (push method-name *functions-inlined*)
                (ast:make-node-application
-                :inlinep (ast:node-application-inlinep node)
-                :noinlinep (ast:node-application-noinlinep node)
                 :type (ast:node-type node)
+                :properties (ast:node-application-properties node)
                 :rator (ast:make-node-variable
                         :type (tc:make-function-type*
                                (mapcar #'ast:node-type inner-rands)
@@ -360,9 +356,8 @@ is appropriate."
                (print-inline-success! ";; Inlining direct method to application ~a" method-name)
                (push method-name *functions-inlined*)
                (ast:make-node-application
-                :inlinep (ast:node-direct-application-inlinep node)
-                :noinlinep (ast:node-direct-application-noinlinep node)
                 :type (ast:node-type node)
+                :properties (ast:node-direct-application-properties node)
                 :rator (ast:make-node-variable
                         :type (tc:make-function-type*
                                (mapcar #'ast:node-type inner-rands)

@@ -190,9 +190,8 @@ arity. TABLE will be mutated with additional entries."
                                (length (node-application-rands node))))
                    (return-from rewrite-direct-application
                      (make-node-direct-application
-                      :inlinep nil
-                      :noinlinep nil
                       :type (node-type node)
+                      :properties (node-application-properties node)
                       :rator-type (node-type (node-application-rator node))
                       :rator name
                       :rands (node-application-rands node)))))))
@@ -355,11 +354,10 @@ speaking, the following kinds of transformations happen:
        :type (node-type node)
        :vars param-names
        :subexpr (make-node-application
-                 :inlinep nil
-                 :noinlinep nil
                  :type (tc:make-function-type*
                         (subseq (tc:function-type-arguments (node-type function)) (length new-args))
                         (tc:function-return-type (node-type node)))
+                 :properties '()
                  :rator function
                  :rands new-args)))))
 

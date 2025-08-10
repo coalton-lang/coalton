@@ -79,9 +79,8 @@
 
           ;; Otherwise create a new dict at runtime
           (make-node-application
-           :inlinep nil
-           :noinlinep nil
            :type (pred-type pred env) 
+           :properties '()
            :rator (make-node-variable
                    :type (tc:make-function-type* arg-types (pred-type pred env))
                    :value (tc:ty-class-instance-codegen-sym instance))

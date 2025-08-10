@@ -28,9 +28,8 @@ would be:
                    (rands (node-application-rands node)))
                (when (node-application-p rator)
                  (make-node-application
-                  :inlinep (node-application-inlinep node)
-                  :noinlinep (node-application-noinlinep node)
                   :type (node-type node)
+                  :properties (node-application-properties node)
                   :rator (node-application-rator rator)
                   :rands (append
                           (node-application-rands rator)

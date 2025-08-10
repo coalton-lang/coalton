@@ -21,15 +21,13 @@ EQL-specialize on symbol `rator'."))
       (ast:node-application
        (ast:make-node-application
         :type (ast:node-type child)
-        :inlinep t
-        :noinlinep nil
+        :properties '(:inline)
         :rator (ast:node-application-rator child)
         :rands (ast:node-application-rands child)))
       (ast:node-direct-application
        (ast:make-node-direct-application 
         :type (ast:node-type child)
-        :inlinep t
-        :noinlinep nil
+        :properties '(:inline)
         :rator-type (ast:node-direct-application-rator-type child)
         :rator (ast:node-direct-application-rator child)
         :rands (ast:node-direct-application-rands child)))
@@ -42,15 +40,13 @@ EQL-specialize on symbol `rator'."))
       (ast:node-application
        (ast:make-node-application
         :type (ast:node-type child)
-        :inlinep nil
-        :noinlinep t
+        :properties '(:noinline)
         :rator (ast:node-application-rator child)
         :rands (ast:node-application-rands child)))
       (ast:node-direct-application
        (ast:make-node-direct-application 
         :type (ast:node-type child)
-        :inlinep nil
-        :noinlinep t
+        :properties '(:noinline)
         :rator-type (ast:node-direct-application-rator-type child)
         :rator (ast:node-direct-application-rator child)
         :rands (ast:node-direct-application-rands child)))

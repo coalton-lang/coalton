@@ -95,9 +95,8 @@ nodes."
    (list
     (action (:traverse node-application node &rest args)
       (make-node-application
-       :inlinep (node-application-inlinep node)
-       :noinlinep (node-application-noinlinep node)
        :type (node-type node)
+       :properties (node-application-properties node)
        :rator (apply *traverse* (node-application-rator node) args)
        :rands (mapcar
                (lambda (node)
@@ -105,9 +104,8 @@ nodes."
                (node-application-rands node))))
     (action (:traverse node-direct-application node &rest args)
       (make-node-direct-application
-       :inlinep (node-direct-application-inlinep node)
-       :noinlinep (node-direct-application-noinlinep node)
        :type (node-type node)
+       :properties (node-direct-application-properties node)
        :rator-type (node-direct-application-rator-type node)
        :rator (node-direct-application-rator node)
        :rands (mapcar
@@ -537,9 +535,8 @@ with rator `'coalton:Cons`."
                                               (eq 'coalton:Cons (node-rator-name subnode))
                                               (= 2 (length (node-rands subnode))))
                                          (make-node-direct-application
-                                          :inlinep nil
-                                          :noinlinep nil
                                           :type (node-type subnode)
+                                          :properties '()
                                           :rator-type (node-rator-type subnode)
                                           :rator 'coalton:Cons
                                           :rands (mapcar

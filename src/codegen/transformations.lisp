@@ -28,9 +28,8 @@ specified in `subs`."
                  (tc:apply-substitution subs (node-type node))))
     (action (:after node-direct-application node)
       (make-node-direct-application
-       :inlinep (node-direct-application-inlinep node)
-       :noinlinep (node-direct-application-noinlinep node)
        :type (node-type node)
+       :properties (node-direct-application-properties node)
        :rator-type (tc:apply-substitution subs (node-direct-application-rator-type node))
        :rator (node-direct-application-rator node)
        :rands (node-direct-application-rands node)))
