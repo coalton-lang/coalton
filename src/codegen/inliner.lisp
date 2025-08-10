@@ -150,16 +150,16 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
 (defun call-marked-for-inline-p (application)
   "Check if the the application ought to be inlined at the callsite."
   (declare (type (or ast:node-application ast:node-direct-application) application)
-           (values util:symbol-list &optional))
+           (values t &optional))
 
-  (member ':inline (ast:node-properties application)))
+  (getf (ast:node-properties application) ':inline))
 
 (defun call-marked-for-noinline-p (application)
   "Check if the the application ought to be prevented from being inlined at the callsite."
   (declare (type (or ast:node-application ast:node-direct-application) application)
-           (values util:symbol-list &optional))
+           (values t &optional))
 
-  (member ':noinline (ast:node-properties application)))
+  (getf (ast:node-properties application) ':noinline))
 
 ;;; Inlining
 

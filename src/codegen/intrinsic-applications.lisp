@@ -9,10 +9,13 @@
 (in-package #:coalton-impl/codegen/intrinsic-applications)
 
 (defgeneric transform-intrinsic-application (rator-name node)
-  (:documentation "Methods for implementing intrinsic-applications to transform codegen AST
-during optimization.
+  (:documentation "Methods for implementing intrinsic-applications to transform
+codegen AST during optimization.
 
-EQL-specialize on symbol `rator-name'."))
+EQL-specialize on symbol `rator-name'.
+`node' will be of type `ast:node-application'.
+
+Returns a new `ast:node' when a transformation is applicable, otherwise `nil'."))
 
 (defmethod transform-intrinsic-application ((rator-name t) node) nil)
 
@@ -22,13 +25,13 @@ EQL-specialize on symbol `rator-name'."))
       (ast:node-application
        (ast:make-node-application
         :type (ast:node-type child)
-        :properties '(:inline)
+        :properties '(:inline t)
         :rator (ast:node-application-rator child)
         :rands (ast:node-application-rands child)))
       (ast:node-direct-application
        (ast:make-node-direct-application 
         :type (ast:node-type child)
-        :properties '(:inline)
+        :properties '(:inline t)
         :rator-type (ast:node-direct-application-rator-type child)
         :rator (ast:node-direct-application-rator child)
         :rands (ast:node-direct-application-rands child)))
@@ -41,13 +44,13 @@ EQL-specialize on symbol `rator-name'."))
       (ast:node-application
        (ast:make-node-application
         :type (ast:node-type child)
-        :properties '(:noinline)
+        :properties '(:noinline t)
         :rator (ast:node-application-rator child)
         :rands (ast:node-application-rands child)))
       (ast:node-direct-application
        (ast:make-node-direct-application 
         :type (ast:node-type child)
-        :properties '(:noinline)
+        :properties '(:noinline t)
         :rator-type (ast:node-direct-application-rator-type child)
         :rator (ast:node-direct-application-rator child)
         :rands (ast:node-direct-application-rands child)))
