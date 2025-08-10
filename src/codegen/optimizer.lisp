@@ -235,7 +235,9 @@ ENV. Return a new node which is optimized."
   (declare (type node node)
            (type tc:environment env)
            (values node &optional))
-
+  ;; TAIL TEST--------------------------
+  (coalton-impl/codegen/tail::map-tail-nodes #'print node)
+  ;; -----------------------------------
   (prog ((runs 0)
          (redo? nil))
    :REDO
