@@ -245,12 +245,12 @@ ENV. Return a new node which is optimized."
      (when (and settings:*print-optimization-passes*
                 (> runs 1))
        (format t "~&;; Optimizing again, attempt #~D~%" runs))
+     (setf node (transform-intrinsic-applications node))
      (setf node (canonicalize node))
      (setf node (match-dynamic-extent-lift node env))
      (setf node (propagate-constants node env))
      (setf node (apply-specializations node env))
      (setf node (resolve-static-superclass node env))
-     (setf node (transform-intrinsic-applications node))
      (multiple-value-bind (new-node inlined?) (inline-applications node env)
        (setf redo? (or redo? inlined?))
        (setf node new-node))
