@@ -24,10 +24,12 @@
    #:node-application                   ; STRUCT
    #:make-node-application              ; CONSTRUCTOR
    #:node-application-p                 ; FUNCTION
+   #:node-application-properties        ; READER
    #:node-application-rator             ; READER
    #:node-application-rands             ; READER
    #:node-direct-application            ; STRUCT
    #:make-node-direct-application       ; CONSTRUCTOR
+   #:node-direct-application-properties ; READER
    #:node-direct-application-rator-type ; READER
    #:node-direct-application-rator      ; READER
    #:node-direct-application-rands      ; READER
@@ -139,6 +141,7 @@
    #:node-rands                         ; FUNCTION
    #:node-rator-name                    ; FUNCTION
    #:node-rator-type                    ; FUNCTION
+   #:node-properties                    ; FUNCTION
    ))
 
 (in-package #:coalton-impl/codegen/ast)
@@ -207,11 +210,17 @@ coalton symbols (`parser:identifier`)"
 
 (defstruct (node-application (:include node))
   "Function application (f x)"
-  (rator (util:required 'rator) :type node      :read-only t)
-  (rands (util:required 'rands) :type node-list :read-only t))
+  ;; Extra information for use in optimizer can be stored here.
+  ;; Currently its only valid keys are `:inline' and `:noinline'
+  (properties (util:required 'properties) :type list      :read-only t)
+  (rator      (util:required 'rator)      :type node      :read-only t)
+  (rands      (util:required 'rands)      :type node-list :read-only t))
 
 (defstruct (node-direct-application (:include node))
   "Fully saturated function application of a known function"
+  ;; Extra information for use in optimizer can be stored here.
+  ;; Currently its only valid keys are `:inline' and `:noinline'
+  (properties (util:required 'properties) :type list              :read-only t)
   (rator-type (util:required 'rator-type) :type tc:ty             :read-only t)
   (rator      (util:required 'rator)      :type parser:identifier :read-only t)
   (rands      (util:required 'rands)      :type node-list         :read-only t))
@@ -371,6 +380,7 @@ call to (break)."
 (defun node-binding-sccs (bindings)
   "Returns a list of SCCs ordered from least to most depended on."
   (declare (type binding-list bindings))
+
   (let ((binding-names (mapcar #'car bindings)))
     (reverse
      (algo:tarjan-scc
@@ -379,7 +389,8 @@ call to (break)."
 
 (defun node-rands (node)
   (declare (type (or node-application node-direct-application))
-           (values node-list))
+           (values node-list &optional))
+
   (etypecase node
     (node-direct-application
      (node-direct-application-rands node))
@@ -390,7 +401,8 @@ call to (break)."
 (defun node-rator-name (node)
   "Returns the name of the function being called if it is known"
   (declare (type (or node-application node-direct-application))
-           (values (or null parser:identifier)))
+           (values (or null parser:identifier) &optional))
+
   (etypecase node
     (node-direct-application
      (node-direct-application-rator node))
@@ -401,10 +413,22 @@ call to (break)."
 
 (defun node-rator-type (node)
   (declare (type (or node-application node-direct-application))
-           (values tc:ty))
+           (values tc:ty &optional))
+
   (etypecase node
     (node-direct-application
      (node-direct-application-rator-type node))
 
     (node-application
      (node-type (node-application-rator node)))))
+
+(defun node-properties (node)
+  (declare (type (or node-application node-direct-application))
+           (values list &optional))
+
+  (etypecase node
+    (node-direct-application
+     (node-direct-application-properties node))
+
+    (node-application
+     (node-application-properties node))))

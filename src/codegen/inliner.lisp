@@ -8,7 +8,8 @@
    (#:substitutions #:coalton-impl/codegen/ast-substitutions)
    (#:settings #:coalton-impl/settings)
    (#:parser #:coalton-impl/parser)
-   (#:tc #:coalton-impl/typechecker))
+   (#:tc #:coalton-impl/typechecker)
+   (#:util #:coalton-impl/util))
   (:export
    #:*inliner-max-depth*                ; VARIABLE
    #:*inliner-max-unroll*               ; VARIABLE
@@ -146,6 +147,20 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
   (= (length (ast:node-abstraction-vars abstraction))
      (length (ast:node-rands application))))
 
+(defun call-marked-for-inline-p (application)
+  "Check if the the application ought to be inlined at the callsite."
+  (declare (type (or ast:node-application ast:node-direct-application) application)
+           (values t &optional))
+
+  (getf (ast:node-properties application) ':inline))
+
+(defun call-marked-for-noinline-p (application)
+  "Check if the the application ought to be prevented from being inlined at the callsite."
+  (declare (type (or ast:node-application ast:node-direct-application) application)
+           (values t &optional))
+
+  (getf (ast:node-properties application) ':noinline))
+
 ;;; Inlining
 
 (defun inline-code-from-application (application abstraction)
@@ -214,8 +229,10 @@ is appropriate."
       ((let ((abstraction (lookup-global-application-body application env)))
          (and *inline-globals-p*
               abstraction
+              (not (call-marked-for-noinline-p application))
               (application-saturates-abstraction-p application abstraction)
               (or (heuristic-inline-p abstraction)
+                  (call-marked-for-inline-p application)
                   (function-declared-inline-p name env))))
        (print-inline-success! ";; Inlining global function ~a" name)
        (push name *functions-inlined*)
@@ -232,8 +249,10 @@ is appropriate."
             (ast:node-application-p application)
             (let ((abstraction (lookup-anonymous-application-body application)))
               (and abstraction
-                   (heuristic-inline-p abstraction)
-                   (application-saturates-abstraction-p application abstraction))))
+                   (not (call-marked-for-noinline-p application))
+                   (application-saturates-abstraction-p application abstraction)
+                   (or (heuristic-inline-p abstraction)
+                       (call-marked-for-inline-p application)))))
        (print-inline-success! ";; Inlining anonymous function")
        (push name *functions-inlined*)
        (inline-applications*
@@ -300,6 +319,7 @@ is appropriate."
                (push method-name *functions-inlined*)
                (ast:make-node-application
                 :type (ast:node-type node)
+                :properties (ast:node-properties node)
                 :rator (ast:make-node-variable
                         :type (tc:make-function-type*
                                (mapcar #'ast:node-type inner-rands)
@@ -337,6 +357,7 @@ is appropriate."
                (push method-name *functions-inlined*)
                (ast:make-node-application
                 :type (ast:node-type node)
+                :properties (ast:node-properties node)
                 :rator (ast:make-node-variable
                         :type (tc:make-function-type*
                                (mapcar #'ast:node-type inner-rands)
