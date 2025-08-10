@@ -86,6 +86,14 @@ If not, returns NIL"
                             (push (cons var propagated-value-node)
                                   nonconstant-bindings))))
 
+               ;; Collect all of our constant bindings into a single
+               ;; list. We can mutate NEW-CONSTANT-BINDINGS because
+               ;; it's fresh, and CONSTANT-BINDINGS will remain
+               ;; unmodified. If there were no new bindings, then (EQ
+               ;; NEW-CONSTANT-BINDINGS CONSTANT-BINDINGS) will be
+               ;; true. (We use this fact below.)
+               (setf new-constant-bindings (nconc new-constant-bindings constant-bindings))
+               
                ;; Propagate new constant bindings into the values of
                ;; the remaining nonconstant bindings.
                ;;
@@ -97,24 +105,30 @@ If not, returns NIL"
                ;; effect on the result, but creates an exponential
                ;; compile-time cost in some cases (such as a
                ;; `make-list` with many elements).
-               (loop :with continue := (not (endp new-constant-bindings))
+               (loop :with continue := (not (eq constant-bindings new-constant-bindings))
                      :while continue
                      :do (setf continue nil)
+                         ;; Propagate constants into the bindings. If
+                         ;; it's detected a binding is/became
+                         ;; constant, then save it to our constants
+                         ;; list, remove it from the binding list, and
+                         ;; set up for another pass.
                          (loop :for binding :in nonconstant-bindings
                                :for (var . value) := binding
                                :for new-value := (funcall *traverse* value new-constant-bindings)
-                               :when (constant-node-p env new-value (append new-constant-bindings constant-bindings))
+                               :if (constant-node-p env new-value new-constant-bindings)
                                  :do (push (cons var new-value) new-constant-bindings)
-                                     (setf nonconstant-bindings (delete var nonconstant-bindings :test #'eq :key #'car))
-                                     (setf continue t)))
+                                     (setf continue t)
+                               :else
+                                 :collect (cons var new-value) :into remaining-nonconstant-bindings
+                               :finally (setf nonconstant-bindings remaining-nonconstant-bindings)))
 
-               (let ((inner-constant-bindings (append new-constant-bindings constant-bindings)))
-                 (if nonconstant-bindings
-                     (make-node-let
-                      :type (node-type node)
-                      :bindings nonconstant-bindings
-                      :subexpr (funcall *traverse* (node-let-subexpr node) inner-constant-bindings))
-                     (funcall *traverse* (node-let-subexpr node) inner-constant-bindings)))))
+               (if (endp nonconstant-bindings)
+                   (funcall *traverse* (node-let-subexpr node) new-constant-bindings)
+                   (make-node-let
+                    :type (node-type node)
+                    :bindings nonconstant-bindings
+                    :subexpr (funcall *traverse* (node-let-subexpr node) new-constant-bindings)))))
 
            (propagate-constants-node-lisp (node constant-bindings)
              (declare (type node-lisp node))

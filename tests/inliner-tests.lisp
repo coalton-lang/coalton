@@ -95,6 +95,16 @@
 (define-test monomorphize-inline ()
   (is (== 5 (monomorph-for-inline 3))))
 
+;; gh #1594, not really the inliner, but the constant propagation pass
+(coalton-toplevel
+  (define (f-gh1594)
+    (let ((x (the Integer 10))
+          (y (+ 1 x)))
+      y)))
+
+(define-test test-gh1594 ()
+  (is (== 11 (f-gh1594))))
+
 ;; Issue on redefining inlinable functions
 ;; https://github.com/coalton-lang/coalton/issues/1499
 ;; These functions are used by inliner-tests-1.lisp, which is
