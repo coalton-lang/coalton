@@ -1,21 +1,22 @@
-(defpackage #:coalton-impl/codegen/faux-applications
+(defpackage #:coalton-impl/codegen/intrinsic-applications
   (:use #:cl)
   (:local-nicknames
    (#:ast #:coalton-impl/codegen/ast)
    (#:traverse #:coalton-impl/codegen/traverse))
   (:export
-   #:transform-faux-application
-   #:transform-faux-applications))
-(in-package #:coalton-impl/codegen/faux-applications)
+   #:transform-intrinsic-application
+   #:transform-intrinsic-applications))
+(in-package #:coalton-impl/codegen/intrinsic-applications)
 
-(defgeneric transform-faux-application (rator node)
-  (:documentation "Methods for implementing faux-applications to transform codegen AST
+(defgeneric transform-intrinsic-application (rator-name node)
+  (:documentation "Methods for implementing intrinsic-applications to transform codegen AST
 during optimization.
-EQL-specialize on symbol `rator'."))
 
-(defmethod transform-faux-application ((rator t) node) nil)
+EQL-specialize on symbol `rator-name'."))
 
-(defmethod transform-faux-application ((rator (eql 'coalton:inline)) node)
+(defmethod transform-intrinsic-application ((rator-name t) node) nil)
+
+(defmethod transform-intrinsic-application ((rator-name (eql 'coalton:inline)) node)
   (let ((child (first (ast:node-application-rands node))))
     (etypecase child
       (ast:node-application
@@ -34,7 +35,7 @@ EQL-specialize on symbol `rator'."))
       (t
        child))))
 
-(defmethod transform-faux-application ((rator (eql 'coalton:noinline)) node)
+(defmethod transform-intrinsic-application ((rator-name (eql 'coalton:noinline)) node)
   (let ((child (first (ast:node-application-rands node))))
     (etypecase child
       (ast:node-application
@@ -53,8 +54,8 @@ EQL-specialize on symbol `rator'."))
       (t
        child))))
 
-(defun transform-faux-applications (node)
-  "Traverse node, transforming all faux-applications for optimization."
+(defun transform-intrinsic-applications (node)
+  "Traverse node, transforming all intrinsic-applications for optimization."
   (declare (type ast:node node)
            (values ast:node &optional))
 
@@ -63,7 +64,7 @@ EQL-specialize on symbol `rator'."))
    (list
     (traverse:action (:traverse ast:node-application node)
       (alexandria:if-let
-          ((transformed (transform-faux-application
+          ((transformed (transform-intrinsic-application
                          (ast:node-rator-name node)
                          node)))
         (funcall traverse:*traverse* transformed)

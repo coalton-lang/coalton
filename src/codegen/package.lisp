@@ -30,7 +30,7 @@
    #:*codegen-hook*)
 
   (:import-from
-   #:coalton-impl/codegen/faux-applications
-   #:transform-faux-applications)
+   #:coalton-impl/codegen/intrinsic-applications
+   #:transform-intrinsic-applications)
   (:export
-   #:transform-faux-applications))
+   #:transform-intrinsic-applications))

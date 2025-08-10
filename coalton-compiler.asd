@@ -110,7 +110,7 @@
                              (:file "codegen-type-definition")
                              (:file "codegen-expression")
                              (:file "codegen-class")
-                             (:file "faux-applications")
+                             (:file "intrinsic-applications")
 
                              ;; Optimizations
                              (:file "monomorphize")
@@ -128,6 +128,6 @@
                (:file "reader")
                (:file "debug")
                (:file "faux-macros")
-               (:file "faux-applications")
+               (:file "intrinsic-applications")
                (:file "language-macros")
                (:file "lock-package" :if-feature :sb-package-locks)))

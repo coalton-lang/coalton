@@ -26,8 +26,8 @@
    #:monomorphize
    #:make-candidate-manager)
   (:import-from
-   #:coalton-impl/codegen/faux-applications
-   #:transform-faux-applications)
+   #:coalton-impl/codegen/intrinsic-applications
+   #:transform-intrinsic-applications)
   (:import-from
    #:coalton-impl/codegen/traverse
    #:action
@@ -250,7 +250,7 @@ ENV. Return a new node which is optimized."
      (setf node (propagate-constants node env))
      (setf node (apply-specializations node env))
      (setf node (resolve-static-superclass node env))
-     (setf node (transform-faux-applications node))
+     (setf node (transform-intrinsic-applications node))
      (multiple-value-bind (new-node inlined?) (inline-applications node env)
        (setf redo? (or redo? inlined?))
        (setf node new-node))
