@@ -96,7 +96,7 @@ nodes."
     (action (:traverse node-application node &rest args)
       (make-node-application
        :type (node-type node)
-       :properties (node-application-properties node)
+       :properties (node-properties node)
        :rator (apply *traverse* (node-application-rator node) args)
        :rands (mapcar
                (lambda (node)
@@ -105,7 +105,7 @@ nodes."
     (action (:traverse node-direct-application node &rest args)
       (make-node-direct-application
        :type (node-type node)
-       :properties (node-direct-application-properties node)
+       :properties (node-properties node)
        :rator-type (node-direct-application-rator-type node)
        :rator (node-direct-application-rator node)
        :rands (mapcar

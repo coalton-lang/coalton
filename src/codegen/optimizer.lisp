@@ -191,7 +191,7 @@ arity. TABLE will be mutated with additional entries."
                    (return-from rewrite-direct-application
                      (make-node-direct-application
                       :type (node-type node)
-                      :properties (node-application-properties node)
+                      :properties (node-properties node)
                       :rator-type (node-type (node-application-rator node))
                       :rator name
                       :rands (node-application-rands node)))))))

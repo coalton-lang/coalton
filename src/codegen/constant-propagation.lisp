@@ -147,7 +147,7 @@ If not, returns NIL"
              ;; FIXME: Can we do something similar for non-direct APPLICATION?
              (make-node-direct-application
               :type (node-type node)
-              :properties (node-direct-application-properties node)
+              :properties (node-properties node)
               :rator-type (tc:make-function-type*
                            (mapcar #'node-type (node-direct-application-rands node))
                            (tc:function-return-type (node-type node)))

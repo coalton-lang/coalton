@@ -319,7 +319,7 @@ is appropriate."
                (push method-name *functions-inlined*)
                (ast:make-node-application
                 :type (ast:node-type node)
-                :properties (ast:node-application-properties node)
+                :properties (ast:node-properties node)
                 :rator (ast:make-node-variable
                         :type (tc:make-function-type*
                                (mapcar #'ast:node-type inner-rands)
@@ -357,7 +357,7 @@ is appropriate."
                (push method-name *functions-inlined*)
                (ast:make-node-application
                 :type (ast:node-type node)
-                :properties (ast:node-direct-application-properties node)
+                :properties (ast:node-properties node)
                 :rator (ast:make-node-variable
                         :type (tc:make-function-type*
                                (mapcar #'ast:node-type inner-rands)

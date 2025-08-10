@@ -210,13 +210,13 @@ coalton symbols (`parser:identifier`)"
 
 (defstruct (node-application (:include node))
   "Function application (f x)"
-  (properties (util:required 'properties) :type util:symbol-list :read-only t)
-  (rator      (util:required 'rator)      :type node             :read-only t)
-  (rands      (util:required 'rands)      :type node-list        :read-only t))
+  (properties (util:required 'properties) :type list      :read-only t)
+  (rator      (util:required 'rator)      :type node      :read-only t)
+  (rands      (util:required 'rands)      :type node-list :read-only t))
 
 (defstruct (node-direct-application (:include node))
   "Fully saturated function application of a known function"
-  (properties (util:required 'properties) :type util:symbol-list  :read-only t)
+  (properties (util:required 'properties) :type list              :read-only t)
   (rator-type (util:required 'rator-type) :type tc:ty             :read-only t)
   (rator      (util:required 'rator)      :type parser:identifier :read-only t)
   (rands      (util:required 'rands)      :type node-list         :read-only t))
@@ -385,7 +385,7 @@ call to (break)."
 
 (defun node-rands (node)
   (declare (type (or node-application node-direct-application))
-           (values node-list))
+           (values node-list &optional))
 
   (etypecase node
     (node-direct-application
@@ -397,7 +397,7 @@ call to (break)."
 (defun node-rator-name (node)
   "Returns the name of the function being called if it is known"
   (declare (type (or node-application node-direct-application))
-           (values (or null parser:identifier)))
+           (values (or null parser:identifier) &optional))
 
   (etypecase node
     (node-direct-application
@@ -409,7 +409,7 @@ call to (break)."
 
 (defun node-rator-type (node)
   (declare (type (or node-application node-direct-application))
-           (values tc:ty))
+           (values tc:ty &optional))
 
   (etypecase node
     (node-direct-application
@@ -420,7 +420,7 @@ call to (break)."
 
 (defun node-properties (node)
   (declare (type (or node-application node-direct-application))
-           (values util:symbol-list))
+           (values list &optional))
 
   (etypecase node
     (node-direct-application

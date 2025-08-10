@@ -13,7 +13,7 @@
 codegen AST during optimization.
 
 EQL-specialize on symbol `rator-name'.
-`node' will be of type `ast:node-application'.
+`node' will be of type `ast:node-application' or `ast:node-direct-application'.
 
 Returns a new `ast:node' when a transformation is applicable, otherwise `nil'."))
 
@@ -21,7 +21,7 @@ Returns a new `ast:node' when a transformation is applicable, otherwise `nil'.")
 
 (defmethod transform-intrinsic-application ((rator-name (eql 'coalton:inline)) node)
   (let ((child (first (ast:node-application-rands node))))
-    (etypecase child
+    (typecase child
       (ast:node-application
        (ast:make-node-application
         :type (ast:node-type child)
@@ -40,7 +40,7 @@ Returns a new `ast:node' when a transformation is applicable, otherwise `nil'.")
 
 (defmethod transform-intrinsic-application ((rator-name (eql 'coalton:noinline)) node)
   (let ((child (first (ast:node-application-rands node))))
-    (etypecase child
+    (typecase child
       (ast:node-application
        (ast:make-node-application
         :type (ast:node-type child)
