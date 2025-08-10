@@ -211,7 +211,7 @@ coalton symbols (`parser:identifier`)"
 (defstruct (node-application (:include node))
   "Function application (f x)"
   ;; Extra information for use in optimizer can be stored here.
-  ;; It is not well-specified and currently only used in intrinsic-applications.
+  ;; Currently its only valid keys are `:inline' and `:noinline'
   (properties (util:required 'properties) :type list      :read-only t)
   (rator      (util:required 'rator)      :type node      :read-only t)
   (rands      (util:required 'rands)      :type node-list :read-only t))
@@ -219,7 +219,7 @@ coalton symbols (`parser:identifier`)"
 (defstruct (node-direct-application (:include node))
   "Fully saturated function application of a known function"
   ;; Extra information for use in optimizer can be stored here.
-  ;; It is not well-specified and currently only used in intrinsic-applications.
+  ;; Currently its only valid keys are `:inline' and `:noinline'
   (properties (util:required 'properties) :type list              :read-only t)
   (rator-type (util:required 'rator-type) :type tc:ty             :read-only t)
   (rator      (util:required 'rator)      :type parser:identifier :read-only t)
