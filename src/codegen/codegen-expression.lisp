@@ -66,11 +66,16 @@
 
   (:method ((node node-direct-application) env)
     (declare (type tc:environment env))
-    `(,(node-direct-application-rator node)
-      ,@(mapcar
-         (lambda (node)
-           (codegen-expression node env))
-         (node-direct-application-rands node))))
+    (if (getf (%node-properties node) ':mv)
+        `(values ,@(mapcar
+                    (lambda (node)
+                      (codegen-expression node env))
+                    (node-direct-application-rands node)))
+        `(,(node-direct-application-rator node)
+          ,@(mapcar
+             (lambda (node)
+               (codegen-expression node env))
+             (node-direct-application-rands node)))))
 
   (:method ((expr node-abstraction) env)
     (declare (type tc:environment env))
