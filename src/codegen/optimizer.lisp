@@ -34,8 +34,7 @@
   (:import-from
    #:coalton-impl/codegen/transformations
    #:node-free-p
-   #:rename-type-variables
-   #:localize-returns)
+   #:rename-type-variables)
   (:import-from
    #:coalton-impl/codegen/ast-substitutions
    #:apply-ast-substitution
@@ -153,20 +152,60 @@ mapping known function names to their arity."
       (setf env (update-function-env bindings inline-p-table env))
 
 
+      ;; Convert what we can to DIRECT-APPLICATIONs
       (let ((function-table (make-function-table env)))
-
         (setf bindings
               (loop :for (name . node) :in bindings
-                    :collect (cons name (direct-application node function-table))))
+                    :collect (cons name (direct-application node function-table)))))
 
-        ;; Update code db
-        (loop :for (name . node) :in bindings
-              :do (setf env (tc:set-code env name node)))
+      ;; Compute function calling conventions
+      (let ((new-bindings nil))
+        (dolist (binding bindings)
+          (destructuring-bind (name . node) binding
+            (multiple-value-bind (tail-tuple? tuples)
+                (coalton-impl/codegen/tail::tail-is-always-tuple? node name)
+              (cond
+                (tail-tuple?
+                 (format t "~&tuple returner: ~A~%" name)
+                 ;; Mark the tuples for MV (Multple Value) processing.
+                 (dolist (ret-node tuples)
+                   (setf (getf (%node-properties ret-node) ':mv) t))
+                 (let* ((specialized-name (gentemp (symbol-name name) (symbol-package name)))
+                        (specialized-node node)
+                        (ordinary-name    name)
+                        (ordinary-node (make-node-abstraction
+                                        :properties `(:mv-call ,specialized-name)
+                                        :type (node-type node)
+                                        :vars (node-abstraction-vars node)
+                                        :subexpr (make-node-direct-application
+                                                  :type (tc:function-remove-arguments
+                                                         (node-type node)
+                                                         (length (node-abstraction-vars node)))
+                                                  :rator specialized-name
+                                                  :rator-type (node-type node)
+                                                  :rands (loop :for var :in (node-abstraction-vars node)
+                                                               :for ty :in (tc:function-type-arguments*
+                                                                            (node-type node)
+                                                                            (length (node-abstraction-vars node)))
+                                                               :collect (make-node-variable :type ty :value var))))))
+                   (push (cons ordinary-name ordinary-node) new-bindings)
+                   (push (cons specialized-name specialized-node) new-bindings)
+                   (format t "~&VARS ~A~%" (coalton-impl/codegen/transformations:node-variables ordinary-node))))
+                
+                (t
+                 (push binding new-bindings))))))
+        (setf bindings (nreverse new-bindings))
+        ;; XXX: is this needed?
+        (setf env (update-function-env bindings inline-p-table env)))
 
-        (loop :for (name . node) :in bindings
-              :do (typecheck-node node env))
+      ;; Update code db
+      (loop :for (name . node) :in bindings
+            :do (setf env (tc:set-code env name node)))
 
-        (values bindings env)))))
+      (loop :for (name . node) :in bindings
+            :do (typecheck-node node env))
+
+      (values bindings env))))
 
 (defun direct-application (node table)
   "Rewrite NODE to use DIRECT-APPLICATIONs when possible. A rewrite is
@@ -232,9 +271,6 @@ ENV. Return a new node which is optimized."
   (declare (type node node)
            (type tc:environment env)
            (values node &optional))
-  ;; TAIL TEST--------------------------
-  (coalton-impl/codegen/tail::map-tail-nodes #'print node)
-  ;; -----------------------------------
   (prog ((runs 0)
          (redo? nil))
    :REDO

@@ -161,15 +161,17 @@ Example:
     (multiple-value-bind (definitions env)
         (optimize-bindings definitions monomorphize-table inline-p-table *package* env)
 
+      (format t "~%DEFINITIONS TO COMPILE: ~A~%" (mapcar #'car definitions))
       (let ((sccs (node-binding-sccs definitions))
             (lisp-forms (tc:translation-unit-lisp-forms translation-unit)))
-
+        (format t "SCCS TO COMPILE: ~A~%" (mapcar #'car sccs))
         (values
          `(progn
             ;; Muffle redefinition warnings in SBCL. A corresponding
             ;; SB-EXT:UNMUFFLE-CONDITIONS appears at the bottom.
-            #+sbcl ,@(when settings:*emit-type-annotations*
-                       (list '(declaim (sb-ext:muffle-conditions sb-kernel:redefinition-warning))))
+            #+sbcl
+            ,@(when settings:*emit-type-annotations*
+                (list '(declaim (sb-ext:muffle-conditions sb-kernel:redefinition-warning))))
 
             ,@(when (tc:translation-unit-types translation-unit)
                 (list
@@ -197,8 +199,9 @@ Example:
                 (list
                  `(declaim (sb-ext:end-block))))
 
-            #+sbcl ,@(when settings:*emit-type-annotations*
-                       (list '(declaim (sb-ext:unmuffle-conditions sb-kernel:redefinition-warning))))
+            #+sbcl
+            ,@(when settings:*emit-type-annotations*
+                (list '(declaim (sb-ext:unmuffle-conditions sb-kernel:redefinition-warning))))
 
             (values))
          env)))))
@@ -207,9 +210,18 @@ Example:
   (declare (type symbol name)
            (type node-abstraction node)
            (type tc:environment env))
-  `(defun ,name ,(node-abstraction-vars node)
-     (declare (ignorable ,@(node-abstraction-vars node)))
-     ,(codegen-expression (node-abstraction-subexpr node) env)))
+  (cond
+    ((getf (%node-properties node) ':mv-call)
+     `(defun ,name ,(node-abstraction-vars node)
+        (declare (ignorable ,@(node-abstraction-vars node)))
+        (multiple-value-call
+            #',(find-symbol "TUPLE" "COALTON-LIBRARY/CLASSES")
+          (,(getf (%node-properties node) ':mv-call)
+           ,@(node-abstraction-vars node)))))
+    (t
+     `(defun ,name ,(node-abstraction-vars node)
+        (declare (ignorable ,@(node-abstraction-vars node)))
+        ,(codegen-expression (node-abstraction-subexpr node) env)))))
 
 (defun compile-scc (bindings env)
   "Compile SCC definitions in a translation unit."
@@ -225,14 +237,17 @@ Example:
    (loop :for (name . node) :in bindings
          :if (and (node-abstraction-p node)
                   settings:*emit-type-annotations*)
-         :collect
+           ;; XXX FIXME: make sure MV's are handled here
+           :collect
          `(declaim
            (ftype
             (function
              (,@(loop :for nil :in (node-abstraction-vars node)
                       :for ty :in (tc:function-type-arguments (node-type node))
                       :collect (tc:lisp-type ty env)))
-             (values ,(tc:lisp-type (node-type (node-abstraction-subexpr node)) env)
+             (values ,@(if (getf (%node-properties node) ':mv-call)
+                           (list t t)
+                           (list (tc:lisp-type (node-type (node-abstraction-subexpr node)) env)))
                      &optional))
             ,name)))
 

@@ -139,6 +139,10 @@
    #:node-rands                         ; FUNCTION
    #:node-rator-name                    ; FUNCTION
    #:node-rator-type                    ; FUNCTION
+
+
+   ;; XXX FIXME: HACK!
+   #:%node-properties
    ))
 
 (in-package #:coalton-impl/codegen/ast)
@@ -151,6 +155,8 @@
 (defstruct (node (:conc-name %node-)
                  (:constructor nil)
                  (:copier %copy-node))
+  ;; XXX FIXME: CURSED MUTABLE HACK!
+  (properties nil)
   ;; The `type` slot can be accessed by the exported function
   ;; `node-type`.
   (type (util:required 'type) :type tc:ty))
