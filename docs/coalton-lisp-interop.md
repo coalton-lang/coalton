@@ -113,7 +113,7 @@ The pragma `(repr :lisp)` helps achieve Lisp compatibility of structures regardl
 
 **PROMISE**: Nullary, unconstrained constructors (e.g., `CTOR2`) will be Lisp values that are of the return type specified in the previous promise.
 
-**HALF-HEARTED PROMISE**: For each non-nullary constructor (say `Ctor1`), a `setf`-able accessor function called `<class-name>/<ctor-name>-_<k>` will be defined for the `k`th member of that constructor. For the example above, suppose that `Ctor1` has two fields. Then the accessor functions `FOO/CTOR1-_0` and `FOO/CTOR1-_1` will be defined. (*Note*: The naming here is subject to change.)
+**HALF-HEARTED PROMISE**: For each non-nullary constructor (say `Ctor1`), a reader function called `<class-name>/<ctor-name>-_<k>` will be defined for the `k`th member of that constructor. For the example above, suppose that `Ctor1` has two fields. Then the reader functions `FOO/CTOR1-_0` and `FOO/CTOR1-_1` will be defined. (*Note*: The naming here is subject to change.)
 
 ### Simple enumerations with `(REPR :ENUM)`
 
