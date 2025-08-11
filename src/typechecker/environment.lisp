@@ -299,7 +299,7 @@
 (declaim (sb-ext:freeze-type type-environment))
 
 (defun make-default-type-environment ()
-  "Create a TYPE-ENVIRONMENT containing early types"
+  "Create a TYPE-ENVIRONMENT containing early types."
   (make-type-environment
    :data (fset:map
           ;; Early Types
@@ -313,7 +313,7 @@
             :explicit-repr '(:native cl:boolean)
             :enum-repr t
             :newtype nil
-            :docstring "Either true or false represented by `t` and `nil` respectively."))
+            :docstring "Either true or false, internally represented by `cl:t` and `cl:nil` respectively."))
 
           ('coalton:Unit
            (make-type-entry
@@ -337,7 +337,7 @@
             :explicit-repr '(:native cl:character)
             :enum-repr nil
             :newtype nil
-            :docstring "A character represented by a Common Lisp `character`."))
+            :docstring "A character represented by a Common Lisp `cl:character`."))
 
           ('coalton:Integer
            (make-type-entry
@@ -349,7 +349,7 @@
             :explicit-repr '(:native cl:integer)
             :enum-repr nil
             :newtype nil
-            :docstring "Unbound integer. Represented by a Common Lisp `integer`."))
+            :docstring "Integer of unbounded size. Represented by a Common Lisp `cl:integer`."))
 
           ('coalton:F32
            (make-type-entry
@@ -361,7 +361,7 @@
             :explicit-repr '(:native cl:single-float)
             :enum-repr nil
             :newtype nil
-            :docstring "Single-precision floating point number (32-bits in size). Represented by a Common Lisp `single-float`."))
+            :docstring "Single-precision floating point number (32 bits in size). Represented by a Common Lisp `cl:single-float`."))
 
           ('coalton:F64
            (make-type-entry
@@ -373,7 +373,7 @@
             :explicit-repr '(:native cl:double-float)
             :enum-repr nil
             :newtype nil
-            :docstring "Double-precision floating point number (64 bits in size). Represented by a Common Lisp `double-float`."))
+            :docstring "Double-precision floating point number (64 bits in size). Represented by a Common Lisp `cl:double-float`."))
 
           ('coalton:String
            (make-type-entry
@@ -385,7 +385,7 @@
             :explicit-repr '(:native cl:string)
             :enum-repr nil
             :newtype nil
-            :docstring "String of characters. Represented by Common Lisp `string`."))
+            :docstring "String of characters. Represented by Common Lisp `cl:string`."))
 
           ('coalton:Fraction
            (make-type-entry
@@ -397,7 +397,7 @@
             :explicit-repr '(:native cl:rational)
             :enum-repr nil
             :newtype nil
-            :docstring "A ratio of integers always in reduced form. Represented by a Common Lisp `rational`."))
+            :docstring "A ratio of integers always in reduced form. Represented by a Common Lisp `cl:rational`."))
 
           ('coalton:Arrow
            (make-type-entry
@@ -409,7 +409,7 @@
             :explicit-repr nil
             :enum-repr nil
             :newtype nil
-            :docstring "Type constructor for function types."))
+            :docstring "A named constructor for function types. `Arrow :a :b` is equivalent to `:a -> :b`."))
 
           ('coalton:List
            (make-type-entry
@@ -421,7 +421,7 @@
             :explicit-repr '(:native cl:list)
             :enum-repr nil
             :newtype nil
-            :docstring "Homogeneous list of objects. Represented as a typical Common Lisp chain of conses (or `nil`)."))
+            :docstring "Homogeneous list of objects. Represented as a typical Common Lisp chain of `cl:cons` (or `cl:nil`)."))
 
           ('coalton:Optional
            (make-type-entry
