@@ -91,7 +91,8 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
   (declare (type ast:node-abstraction abstraction)
            (values boolean &optional))
 
-  (funcall *inliner-heuristic* abstraction))
+  (and settings:*coalton-heuristic-inlining*
+       (funcall *inliner-heuristic* abstraction)))
 
 ;;; Utilities
 
