@@ -9,6 +9,9 @@
    #:coalton-impl/typechecker/scheme
    #:coalton-impl/typechecker/unify)
   (:import-from
+   #:coalton-impl/util
+   #:project-elements)
+  (:import-from
    #:coalton-impl/typechecker/substitutions
    #:apply-substitution
    #:substitution-list
@@ -19,6 +22,7 @@
    #:fundep-from
    #:fundep-to
    #:fundep-list
+   #:generic-closure
    #:+fundep-max-depth+)
   (:local-nicknames
    (#:util #:coalton-impl/util)
@@ -173,6 +177,8 @@
    #:lookup-specialization-by-type          ; FUNCTION
    #:lookup-fundep-environment              ; FUNCTION
    #:initialize-fundep-environment          ; FUNCTION
+   #:collect-fundeps                        ; FUNCTION
+   #:collect-fundep-vars                    ; FUNCTION
    #:update-instance-fundeps                ; FUNCTION
    #:solve-fundeps                          ; FUNCTION
    ))
@@ -1521,31 +1527,74 @@ of constraint predicates."
        entry)
       #'make-fundep-environment))))
 
-(define-env-updater update-instance-fundeps (env pred)
+(defun collect-fundeps (env preds)
+  "Collect the functional dependencies associated with PREDS as CONSes of
+LISTs of TYs, recursively expanding to the superclass predicates."
   (declare (type environment env)
-           (type ty-predicate pred))
+           (type ty-predicate-list preds))
+  (loop :for pred :in preds
+        :for pred-tys := (ty-predicate-types pred)
+        :for class := (lookup-class env (ty-predicate-class pred))
+        :for class-vars := (ty-class-class-variables class)
+        :for subs := (predicate-match (ty-class-predicate class) pred)
+        :for supers := (mapcar (alexandria:curry #'apply-substitution subs)
+                               (ty-class-superclasses class))
+        :nconc (collect-fundeps env supers)
+        :nconc (loop :for fundep :in (ty-class-fundeps class)
+                     :collect (cons (project-elements
+                                     (fundep-from fundep)
+                                     class-vars
+                                     pred-tys)
+                                    (project-elements
+                                     (fundep-to fundep)
+                                     class-vars
+                                     pred-tys)))))
+
+(defun collect-fundep-vars (env preds)
+  "Collect the type variable functional dependencies associated with
+PREDs as CONSes of LISTs of TYVARs, recursively expanding to the
+superclass predicates."
+  (declare (type environment env)
+           (type ty-predicate-list preds))
+  (loop :for (from . to) :in (collect-fundeps env preds)
+        :collect (cons (type-variables from) (type-variables to))))
+
+(define-env-updater update-instance-fundeps (env pred context)
+  (declare (type environment env)
+           (type ty-predicate pred)
+           (type ty-predicate-list context))
+
+  ;; Ensure dependent types do not contain type variables that
+  ;; are not present in the corresponding determinant types,
+  ;; unless they are otherwise determined by the context.
+  ;; See "Type Class with Functional Dependencies" §6.1 (Jones)
+  (loop :with superfundeps := (collect-fundep-vars env context)
+        :for (from-vars . to-vars) :in (collect-fundep-vars env (list pred))
+        :for known-to-vars
+          := (generic-closure from-vars superfundeps :test #'ty=)
+        :for unknown-to-vars
+          := (set-difference to-vars known-to-vars :test #'ty=)
+        :unless (subsetp unknown-to-vars from-vars :test #'ty=)
+          :do (error 'fundep-ambiguity))
 
   (let* ((class (lookup-class env (ty-predicate-class pred)))
-         (fundep-env (lookup-fundep-environment env (ty-predicate-class pred)))
-         (class-variables (ty-class-class-variables class)))
+         (fundep-env
+           (lookup-fundep-environment env (ty-predicate-class pred)))
+         (class-variables (ty-class-class-variables class))
+         (pred-tys (ty-predicate-types pred)))
 
     (loop :for fundep :in (ty-class-fundeps class)
           :for i :from 0
           ;; Lookup the state for the ith fundep
           :for state := (immutable-listmap-lookup fundep-env i :no-error t)
-
-          :for from-tys
-            := (mapcar
-                (lambda (var)
-                  (nth (position var class-variables) (ty-predicate-types pred)))
-                (fundep-from fundep))
-
-          :for to-tys
-            := (mapcar
-                (lambda (var)
-                  (nth (position var class-variables) (ty-predicate-types pred)))
-                (fundep-to fundep))
-
+          :for from-tys := (project-elements
+                            (fundep-from fundep)
+                            class-variables
+                            pred-tys)
+          :for to-tys := (project-elements
+                          (fundep-to fundep)
+                          class-variables
+                          pred-tys)
           :do (block update-block
                 ;; Try to find a matching relation for the current fundep
                 (fset:do-seq (s state)
