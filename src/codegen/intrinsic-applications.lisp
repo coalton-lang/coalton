@@ -15,9 +15,10 @@ codegen AST during optimization.
 EQL-specialize on symbol `rator-name'.
 `node' will be of type `ast:node-application' or `ast:node-direct-application'.
 
-Returns a new `ast:node' when a transformation is applicable, otherwise `nil'."))
+Returns a new `ast:node'."))
 
-(defmethod transform-intrinsic-application ((rator-name t) node) nil)
+(defmethod transform-intrinsic-application ((rator-name t) node)
+  node)
 
 (defmethod transform-intrinsic-application ((rator-name (eql 'coalton:inline)) node)
   (let ((child (first (ast:node-application-rands node))))
@@ -65,17 +66,11 @@ Returns a new `ast:node' when a transformation is applicable, otherwise `nil'.")
   (traverse:traverse
    node
    (list
-    (traverse:action (:traverse ast:node-direct-application node)
-      (alexandria:if-let
-          ((transformed (transform-intrinsic-application
-                         (ast:node-rator-name node)
-                         node)))
-        (funcall traverse:*traverse* transformed)
-        node))
-    (traverse:action (:traverse ast:node-application node)
-      (alexandria:if-let
-          ((transformed (transform-intrinsic-application
-                         (ast:node-rator-name node)
-                         node)))
-        (funcall traverse:*traverse* transformed)
-        node)))))
+    (traverse:action (:after ast:node-direct-application node)
+      (transform-intrinsic-application
+       (ast:node-rator-name node)
+       node))
+    (traverse:action (:after ast:node-application node)
+      (transform-intrinsic-application
+       (ast:node-rator-name node)
+       node)))))

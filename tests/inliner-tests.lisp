@@ -147,6 +147,13 @@
   (define (callsite-noinlined-foo-noinline-caller)
     (noinline (callsite-noinlined-foo 1))))
 
+(coalton-toplevel
+  (define (double-callsite-inlined-foo-caller)
+    (callsite-inlined-foo (+ 1 (inline (callsite-inlined-foo 1)))))
+
+  (define (double-callsite-noinlined-foo-caller)
+    (noinline (callsite-inlined-foo (+ 1 (inline (callsite-inlined-foo 1)))))))
+
 
 (in-package #:coalton-tests)
 
@@ -252,7 +259,7 @@ redefinition."
 
       ;; Inlining again doesn't add any more nodes to the AST.
       (is (= (traverse:count-nodes locally-node-1)
-             (traverse:count-nodes locally-node-2)))))
+             (traverse:count-nodes locally-node-2))))))
 
 (deftest limit-unroll-test ()
   "Ensure that we get to a locally node,
@@ -300,3 +307,11 @@ unroll the node."
          (traverse:count-nodes
           (coalton:lookup-code
            'coalton-native-tests::method-for-inline-test-caller)))))
+
+(deftest callsite-double-inlining-test ()
+  (is (= (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::double-callsite-noinlined-foo-caller))
+         (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::double-callsite-inlined-foo-caller)))))
