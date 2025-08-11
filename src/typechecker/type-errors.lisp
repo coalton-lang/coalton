@@ -21,6 +21,7 @@
    #:overlapping-instance-error-inst2          ; ACCESSOR
    #:ambiguous-constraint                      ; CONDITION
    #:ambiguous-constraint-pred                 ; ACCESSOR
+   #:fundep-ambiguity                          ; CONDITION
    #:fundep-conflict                           ; CONDITION
    #:overlapping-specialization-error          ; CONDITION
    #:overlapping-specialization-error-new      ; ACCESSOR
@@ -124,6 +125,17 @@
        (format s "Instance ~S overlaps with instance ~S"
                (overlapping-instance-error-inst1 c)
                (overlapping-instance-error-inst2 c))))))
+
+(define-condition fundep-ambiguity (coalton-internal-type-error)
+  ()
+  (:report
+   (lambda (c s)
+     (declare (ignore c))
+     (let ((*print-circle* nil)
+           (*print-readably* nil)
+           (*coalton-type-printing-mode* :types))
+       (format s "dependent types cannot contain types variables that are ~
+                  not present in the corresponding determinant types.")))))
 
 (define-condition fundep-conflict (coalton-internal-type-error)
   ((new-pred :initarg :new-pred

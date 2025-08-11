@@ -143,7 +143,13 @@
 
         (when (tc:ty-class-fundeps class)
           (handler-case
-              (setf env (tc:update-instance-fundeps env pred))
+              (setf env (tc:update-instance-fundeps env pred context))
+            (tc:fundep-ambiguity (e)
+              (tc-error "Instance fundep ambiguity"
+                        (tc-location (parser:toplevel-define-instance-head-location instance)
+                                     (let ((*print-escape* nil))
+                                       (with-output-to-string (s)
+                                         (print-object e s))))))
             (tc:fundep-conflict (e)
               (tc-error "Instance fundep conflict"
                         (tc-location (parser:toplevel-define-instance-head-location instance)

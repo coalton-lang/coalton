@@ -131,3 +131,20 @@ error: Ambiguous method
    |
  4 |    (m :a))
    |    ^^^^^^ the method is ambiguous
+
+================================================================================
+107 Instance fundep ambiguity
+================================================================================
+
+(package coalton-unit-test/fundeps)
+
+(define-class (C :a :b (:a -> :b)))
+(define-instance (C :a :b))
+
+--------------------------------------------------------------------------------
+
+error: Instance fundep ambiguity
+  --> test:4:17
+   |
+ 4 |  (define-instance (C :a :b))
+   |                   ^^^^^^^^^ dependent types cannot contain types variables that are not present in the corresponding determinant types.
