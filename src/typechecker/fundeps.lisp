@@ -17,6 +17,7 @@
    #:fundep-to                          ; ACCESSOR
    #:fundep-list                        ; TYPE
    #:closure                            ; FUNCTION
+   #:generic-closure                    ; FUNCTION
    #:+fundep-max-depth+                 ; CONSTANT
    ))
 
@@ -67,4 +68,30 @@
                     :if (subsetp w newdep :test #'equalp)
                       :do (setf newdep (union newdep z :test #'equalp))))
     newdep))
+
+(deftype generic-fundep ()
+  '(cons list list))
+
+(defun generic-fundep-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every (lambda (x) (typep x 'generic-fundep)) x)))
+
+(deftype generic-fundep-list ()
+  '(satisfies generic-fundep-list-p))
+
+(defun generic-closure (x f &key key (test #'eq))
+  (declare (type list x)
+           (type generic-fundep-list f)
+           (type (or null symbol function) key)
+           (type (or symbol function) test)
+           (values list &optional))
+  (loop :with old := nil
+        :with new := x
+        :until (null (set-exclusive-or new old :key key :test test))
+        :do (progn
+              (setf old new)
+              (loop :for (w . z) :in f
+                    :when (subsetp w new :key key :test test)
+                      :do (setf new (union new z :key key :test test))))
+        :finally (return new)))
 
