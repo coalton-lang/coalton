@@ -54,6 +54,7 @@
    #:Void
    #:Boolean #:True #:False
    #:Char
+   #:Bit
    #:U8
    #:U16
    #:U32

@@ -99,6 +99,7 @@
 (define-into-integer-fraction I32)
 (define-into-integer-fraction I64)
 (define-into-integer-fraction IFix)
+(define-into-integer-fraction Bit)
 (define-into-integer-fraction U8)
 (define-into-integer-fraction U16)
 (define-into-integer-fraction U32)
