@@ -23,6 +23,9 @@
    #:ambiguous-constraint-pred                 ; ACCESSOR
    #:fundep-ambiguity                          ; CONDITION
    #:fundep-conflict                           ; CONDITION
+   #:context-fundep-conflict                   ; CONDITION
+   #:context-fundep-conflict-first-pred        ; ACCESSOR
+   #:context-fundep-conflict-second-pred       ; ACCESSOR
    #:overlapping-specialization-error          ; CONDITION
    #:overlapping-specialization-error-new      ; ACCESSOR
    #:overlapping-specialization-error-existing ; ACCESSOR
@@ -133,9 +136,26 @@
      (declare (ignore c))
      (let ((*print-circle* nil)
            (*print-readably* nil)
-           (*coalton-type-printing-mode* :types))
+           (*coalton-type-printing-mode* ':types))
        (format s "dependent types cannot contain types variables that are ~
                   not present in the corresponding determinant types.")))))
+
+(define-condition context-fundep-conflict (coalton-internal-type-error)
+  ((first-pred :initarg :first-pred
+               :reader context-fundep-conflict-first-pred
+               :type ty-predicate)
+   (second-pred :initarg :second-pred
+                :reader context-fundep-conflict-second-pred
+                :type ty-predicate))
+  (:report
+   (lambda (c s)
+     (let ((*print-circle* nil)
+           (*print-readably* nil)
+           (*coalton-type-printing-mode* ':types))
+       (with-pprint-variable-context ()
+         (format s "predicates ~S and ~S conflict with functional dependencies"
+                 (context-fundep-conflict-first-pred c)
+                 (context-fundep-conflict-second-pred c)))))))
 
 (define-condition fundep-conflict (coalton-internal-type-error)
   ((new-pred :initarg :new-pred

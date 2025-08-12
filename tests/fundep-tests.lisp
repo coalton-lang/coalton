@@ -150,3 +150,19 @@
       (let ((filled?
               (fn (i) (coalton-library/optional:some? (moo-find moo i)))))
         (coalton-library/iterator:filter! filled? (coalton-library/iterator:up-to (moo-size moo)))))"))
+
+(deftest fundep-inherited ()
+  ;; see https://github.com/coalton-lang/coalton/issues/1050
+  (check-coalton-types
+   "(define-class (subcolable :a :b (:a -> :b))
+      (subcol (:a -> UFix -> UFix -> :a)))
+    (define-class (subcolable :a :b => sizable :a :b)
+      (size (:a -> UFix)))
+
+    (define (f1 xs)
+      (subcol xs 0 (coalton-library/math:1- (size xs))))
+
+    (declare f2 (sizable :a :b => :a -> :a))
+    (define (f2 xs)
+      (subcol xs 0 (coalton-library/math:1- (size xs))))"
+   '("f1" . "(sizable :a :b => :a -> :a)")))
