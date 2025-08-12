@@ -163,8 +163,10 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
         ((Tuple (GT) (GT)) EQ))))
 
   (define-class (Eq :a => Ord :a)
-    "Types whose values can be ordered."
-    (<=> (:a -> :a -> Ord)))
+    "Types whose values can be ordered. Requires `Eq`."
+    (<=>
+     "Given two objects, return their comparison (as an `Ord` object)."
+     (:a -> :a -> Ord)))
 
   (declare > (Ord :a => :a -> :a -> Boolean))
   (define (> x y)
