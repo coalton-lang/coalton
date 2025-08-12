@@ -123,17 +123,20 @@
    "(define-class (C :a :b :c (:a -> :b :c))
       (m (:a -> :b)))
 
-     (define (f x)
-       (m x))
+    (define (f x)
+      (m x))
 
-     (declare g (C :a :b :c => :a -> :b))
-     (define (g x)
-       (m x))
+    (declare g (C :a :b :c => :a -> :b))
+    (define (g x)
+      (m x))
 
-     (declare h (C :a :b :c => :a -> :b))
-     (define (h x)
-       (m x)
-       (m x))"))
+    (declare h (C :a :b :c => :a -> :b))
+    (define (h x)
+      (m x)
+      (m x))
+
+    (define-class (C :a :b :c => D :a :b :c)
+      (n :a))"))
 
 (deftest fundep-unambigous-local-bindings ()
   ;; See https://github.com/coalton-lang/coalton/issues/913
