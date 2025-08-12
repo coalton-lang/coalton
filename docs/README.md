@@ -3,6 +3,7 @@
 ## Tutorials
 * [Intro to Coalton](./intro-to-coalton.md)
 * [Glossary of Terms](./glossary.md)
+* [Using Common Lisp Libraries from Coalton](https://coalton-lang.github.io/20250812-lisp-libraries/) - external
 
 ## Reference
 * [Standard Library Reference](https://coalton-lang.github.io/reference/) - external
