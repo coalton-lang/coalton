@@ -1690,8 +1690,11 @@ superclass predicates."
            (type substitution-list subs)
            (values ty-predicate-list substitution-list &optional))
 
+  ;; We memoize this function to support the type-checking of
+  ;; constructors of collections, e.g., MAKE-LIST.
   (let ((fundepsp-cache (make-hash-table :test #'eq)))
     (labels ((fundepsp (preds)
+               "Are any of PREDS constrained by functional dependencies?"
                (when (endp preds)
                  (return-from fundepsp nil))
                (let* ((pred (first preds))
@@ -1714,7 +1717,8 @@ superclass predicates."
 
   ;; Expand PREDS into the superclasses
   (setf preds
-        (loop :for remaining-preds := (copy-list preds) :then (rest remaining-preds)
+        (loop :for remaining-preds := (copy-list preds)
+                :then (rest remaining-preds)
               :until (endp remaining-preds)
               :for pred := (first remaining-preds)
               :for class := (lookup-class env (ty-predicate-class pred))
@@ -1725,10 +1729,50 @@ superclass predicates."
                            (ty-class-superclasses class)))
               :collect pred))
 
-  ;; TODO: For a class defined as (C :a :b (:a -> :b)),
-  ;; we need to generate the substitution :a +-> :c for
-  ;; the predicate (C :a :b) (C :a :c). Currently, we
-  ;; are only generating substitutions 
+  ;; The purpose of this block is to create a substitution list that
+  ;; unifies the expanded predicates from the previous block based
+  ;; on the functional dependencies that constrain them.
+  (loop :for remaining-preds := preds :then (rest remaining-preds)
+        :until (endp remaining-preds)
+        :for pred := (first remaining-preds)
+        :for class-name := (ty-predicate-class pred)
+        :for class := (lookup-class env class-name)
+        :for fundeps := (ty-class-fundeps class)
+        :for other-pred := (find class-name (rest preds)
+                                 :key #'ty-predicate-class
+                                 :test #'eq)
+        :when (and (consp fundeps) (not (null other-pred)))
+          :do (handler-case
+                  (let ((class-vars (ty-class-class-variables class))
+                        (pred-tys (ty-predicate-types pred))
+                        (other-pred-tys (ty-predicate-types other-pred)))
+                    (dolist (fundep fundeps)
+                      (let* ((from (fundep-from fundep))
+                             (to (fundep-to fundep))
+                             (pred-from
+                               (project-elements from
+                                                 class-vars
+                                                 pred-tys))
+                             (other-pred-from
+                               (project-elements from
+                                                 class-vars
+                                                 other-pred-tys)))
+                        (when (every #'ty= pred-from other-pred-from)
+                          (let ((pred-to
+                                  (project-elements to
+                                                    class-vars
+                                                    pred-tys))
+                                (other-pred-to
+                                  (project-elements to
+                                                    class-vars
+                                                    other-pred-tys)))
+                            (setf subs (unify-list subs
+                                                   pred-to
+                                                   other-pred-to)))))))
+                (unification-error ()
+                  (error 'context-fundep-conflict
+                         :first-pred pred
+                         :second-pred other-pred))))
 
   (loop :with new-subs := nil
         :with preds-generated := nil

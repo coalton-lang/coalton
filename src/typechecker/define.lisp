@@ -1941,7 +1941,10 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
            (type source:location location)
            (type tc:substitution-list subs)
            (type tc-env env)
-           (values tc:ty-predicate-list (or toplevel-define node-let-binding instance-method-definition) tc:substitution-list &optional))
+           (values tc:ty-predicate-list
+                   (or toplevel-define node-let-binding instance-method-definition)
+                   tc:substitution-list
+                   &optional))
   
   ;; HACK: recursive scc checking on instances is too strict
   (unless (typep binding 'parser:instance-method-definition)
@@ -1975,6 +1978,12 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                     (tc-note (first accessors)
                              "accessor is ambiguous")))
 
+        ;; Generate additional substitutions from fundeps
+        (setf fresh-preds (tc:apply-substitution subs fresh-preds))
+        (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) fresh-preds subs)))
+        (setf preds (tc:apply-substitution subs preds))
+        (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
+
         (let* ((expr-type (tc:apply-substitution subs fresh-type))
                (expr-preds (tc:apply-substitution subs fresh-preds))
 
@@ -1982,15 +1991,12 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                (local-tvars (set-difference (remove-duplicates
                                              (append (tc:type-variables expr-type)
                                                      (tc:type-variables expr-preds))
-                                             :test #'eq)
+                                             :test #'tc:ty=)
                                             env-tvars
-                                            :test #'eq))
+                                            :test #'tc:ty=))
 
                (output-qual-type (tc:qualify expr-preds expr-type))
                (output-scheme (tc:quantify local-tvars output-qual-type)))
-
-          ;; Generate additional substitutions from fundeps
-          (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
 
           (let* ((expr-preds (tc:apply-substitution subs expr-preds))
 
@@ -2007,14 +2013,22 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
                  (expr-preds (tc:apply-substitution subs expr-preds))
 
-                 (preds (remove-if-not (lambda (p)
-                                         (not (tc:entail (tc-env-env env) expr-preds p)))
-                                       (tc:apply-substitution subs preds))))
+                 (preds (remove-if
+                         (lambda (p) (tc:entail (tc-env-env env) expr-preds p))
+                         (tc:apply-substitution subs preds))))
 
             (setf preds (tc:apply-substitution subs preds))
-            (setf local-tvars (expand-local-tvars env-tvars local-tvars preds (tc-env-env env)))
+
+            (setf local-tvars
+                  (expand-local-tvars env-tvars
+                                      local-tvars
+                                      preds
+                                      (tc-env-env env)))
             (setf env-tvars
-                  (expand-local-tvars local-tvars (tc:apply-substitution subs env-tvars) preds (tc-env-env env)))
+                  (expand-local-tvars local-tvars
+                                      (tc:apply-substitution subs env-tvars)
+                                      preds
+                                      (tc-env-env env)))
 
             ;; Split predicates into retained and deferred
             (multiple-value-bind (deferred-preds retained-preds)
@@ -2068,8 +2082,9 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                                          (first retained-preds))))
 
                 (values deferred-preds
-                        (attach-explicit-binding-type (tc:apply-substitution subs binding-node)
-                                                      (tc:apply-substitution subs fresh-qual-type))
+                        (attach-explicit-binding-type
+                         (tc:apply-substitution subs binding-node)
+                         (tc:apply-substitution subs fresh-qual-type))
                         subs)))))))))
 
 (defun check-for-invalid-recursive-scc (bindings env)
