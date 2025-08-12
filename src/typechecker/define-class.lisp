@@ -329,7 +329,11 @@
            (type tc:ksubstitution-list ksubs)
            (values partial-class tc:ksubstitution-list))
 
-  (let ((var-names (mapcar #'parser:keyword-src-name (parser:toplevel-define-class-vars class))))
+  (let* ((var-names (mapcar #'parser:keyword-src-name (parser:toplevel-define-class-vars class)))
+         (vars (loop :for var :in (parser:toplevel-define-class-vars class)
+                     :for name :in var-names
+                     :collect (handler-case (partial-type-env-lookup-var env name var)
+                                (error () (util:coalton-bug "missing type variable"))))))
 
     ;; Ensure fundeps don't have duplicate variables
     (labels ((check-duplicate-fundep-variables (vars)
@@ -355,9 +359,7 @@
             :do (check-fundep-variables (parser:fundep-left fundep))
             :do (check-fundep-variables (parser:fundep-right fundep))))
 
-    (let* (
-
-           (fundeps
+    (let* ((fundeps
              (loop :for fundep :in (parser:toplevel-define-class-fundeps class)
                    :collect (tc:make-fundep
                              :from (mapcar #'parser:keyword-src-name (parser:fundep-left fundep))
@@ -369,35 +371,57 @@
                    :collect (multiple-value-bind (pred ksubs_)
                                 (infer-predicate-kinds pred ksubs env)
                               (setf ksubs ksubs_)
-                              pred)))
+                              (tc:apply-ksubstitution ksubs pred))))
 
            ;; Parse each of the methods
            (method-tys
              (loop :for method :in (parser:toplevel-define-class-methods class)
 
-                   :for ty := (parser:method-definition-type method)
+                   :for method-ty := (parser:method-definition-type method)
 
                    ;; Type variables referenced in ty
-                   :for tyvars := (remove-duplicates
-                                   (mapcar #'parser:tyvar-name (parser:collect-type-variables ty))
-                                   :test #'eq)
+                   :for method-tyvars
+                     := (remove-duplicates
+                         (parser:collect-type-variables method-ty)
+                         :test #'eq
+                         :key #'parser:tyvar-name)
 
-                   ;; Type variables referenced in ty but not in the class predicate
-                   :for new-tyvars := (set-difference tyvars var-names :test #'eq)
+                   :for method-tyvar-names := (mapcar #'parser:tyvar-name method-tyvars)
+
+                   ;; Type variables referenced in ty as well as the class predicate
+                   :for known-method-tyvars
+                     := (loop :for tyvar :in method-tyvars
+                              :for name :in method-tyvar-names
+                              :when (member name var-names :test #'eq)
+                                :collect (handler-case (partial-type-env-lookup-var env name tyvar)
+                                           (error () (util:coalton-bug "missing type variable")))
+                                  :into known-method-tyvars
+                              :finally (return (mapcar (alexandria:curry #'tc:apply-ksubstitution ksubs)
+                                                       known-method-tyvars)))
 
                    ;; Ensure that methods are not ambiguous
-                   :unless (subsetp var-names (tc:closure tyvars fundeps) :test #'eq)
+                   :unless (or (subsetp var-names
+                                        (tc:closure method-tyvar-names fundeps)
+                                        :test #'eq)
+                               (subsetp (mapcar (alexandria:curry #'tc:apply-ksubstitution ksubs) vars)
+                                        (tc:generic-closure
+                                         known-method-tyvars
+                                         (tc:collect-fundeps (partial-type-env-env env) preds)
+                                         :test #'tc:ty=)
+                                        :test #'tc:ty=))
                      :do (tc-error "Ambiguous method"
                                    (tc-note method
                                             "the method is ambiguous"))
 
-                   :do (loop :for tyvar :in new-tyvars
-                             :do (partial-type-env-add-var env tyvar))
+                   ;; Add new type variables to the environment
+                   :do (loop :for new-method-tyvar-name
+                               :in (set-difference method-tyvar-names var-names :test #'eq)
+                             :do (partial-type-env-add-var env new-method-tyvar-name))
 
-                   :collect (multiple-value-bind (ty_ ksubs_)
-                                (infer-type-kinds ty tc:+kstar+ ksubs env)
+                   :collect (multiple-value-bind (method-ty_ ksubs_)
+                                (infer-type-kinds method-ty tc:+kstar+ ksubs env)
                               (setf ksubs ksubs_)
-                              (apply-type-alias-substitutions ty_ ty env)))))
+                              (apply-type-alias-substitutions method-ty_ method-ty env)))))
 
       (values (make-partial-class :superclasses preds
                                   :method-tys method-tys)

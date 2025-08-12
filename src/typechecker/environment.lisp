@@ -1689,13 +1689,46 @@ superclass predicates."
            (type ty-predicate-list preds)
            (type substitution-list subs)
            (values ty-predicate-list substitution-list &optional))
-  ;; If no predicates have fundeps, then exit early
-  (unless (loop :for pred :in preds
-                :for class-name := (ty-predicate-class pred)
-                :for class := (lookup-class env class-name)
-                :when (ty-class-fundeps class)
-                  :collect class)
-    (return-from solve-fundeps (values preds subs)))
+
+  (let ((fundepsp-cache (make-hash-table :test #'eq)))
+    (labels ((fundepsp (preds)
+               (when (endp preds)
+                 (return-from fundepsp nil))
+               (let* ((pred (first preds))
+                      (class-name (ty-predicate-class pred)))
+                 (multiple-value-bind (fundepsp foundp)
+                     (gethash class-name fundepsp-cache)
+                   (cond
+                     (foundp
+                      (or fundepsp (fundepsp (rest preds))))
+                     (t
+                      (let ((class (lookup-class env class-name)))
+                        (or (setf (gethash class-name fundepsp-cache)
+                                  (or (consp (ty-class-fundeps class))
+                                      (fundepsp (ty-class-superclasses class))))
+                            (fundepsp (rest preds))))))))))
+
+      ;; If no predicates have fundeps, then exit early
+      (unless (fundepsp preds)
+        (return-from solve-fundeps (values preds subs)))))
+
+  ;; Expand PREDS into the superclasses
+  (setf preds
+        (loop :for remaining-preds := (copy-list preds) :then (rest remaining-preds)
+              :until (endp remaining-preds)
+              :for pred := (first remaining-preds)
+              :for class := (lookup-class env (ty-predicate-class pred))
+              :for _subs := (predicate-match (ty-class-predicate class) pred subs)
+              :do (alexandria:nconcf
+                   remaining-preds
+                   (mapcar (alexandria:curry #'apply-substitution _subs)
+                           (ty-class-superclasses class)))
+              :collect pred))
+
+  ;; TODO: For a class defined as (C :a :b (:a -> :b)),
+  ;; we need to generate the substitution :a +-> :c for
+  ;; the predicate (C :a :b) (C :a :c). Currently, we
+  ;; are only generating substitutions 
 
   (loop :with new-subs := nil
         :with preds-generated := nil
@@ -1779,17 +1812,14 @@ superclass predicates."
            (type substitution-list subs)
            (values substitution-list &optional))
 
-  (let* ((from-tys
-           (mapcar
-            (lambda (var)
-              (nth (position var class-variables) (ty-predicate-types pred)))
-            (fundep-from fundep)))
-
-         (to-tys
-           (mapcar
-            (lambda (var)
-              (nth (position var class-variables) (ty-predicate-types pred)))
-            (fundep-to fundep))))
+  (let* ((from-tys (util:project-elements
+                    (fundep-from fundep)
+                    class-variables
+                    (ty-predicate-types pred)))
+         (to-tys (util:project-elements
+                    (fundep-to fundep)
+                    class-variables
+                    (ty-predicate-types pred))))
 
     (fset:do-seq (entry state)
       (handler-case

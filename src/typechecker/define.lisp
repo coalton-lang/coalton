@@ -2236,6 +2236,8 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
              (local-tvars
                (set-difference expr-tvars env-tvars :test #'eq)))
 
+        (setf preds (tc:apply-substitution subs preds))
+
         ;; Generate additional substitutions from fundeps
         (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
 

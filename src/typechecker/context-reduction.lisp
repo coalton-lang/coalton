@@ -263,9 +263,12 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
 ;;; "transitive `closure'" of the known types.
 
 (defun fundep-entail (env expr-preds preds known-tyvars)
-  (loop :with subs := nil
+  (loop :with _expr-preds
+          := (alexandria:mappend (alexandria:curry #'by-super env) expr-preds)
+        :with subs := nil
         :for pred :in preds
-        :do (setf subs (compose-substitution-lists subs (fundep-entail% env expr-preds pred known-tyvars)))
+        :for new-subs := (fundep-entail% env _expr-preds pred known-tyvars)
+        :do (setf subs (compose-substitution-lists subs new-subs))
         :finally (return subs)))
 
 (defun fundep-entail% (env expr-preds pred known-tyvars)
