@@ -417,8 +417,14 @@ speaking, the following kinds of transformations happen:
            (type tc:environment env))
 
   (when (node-variable-p node)
-    (let* ((instance (tc:lookup-instance-by-codegen-sym env (node-variable-value node))))
-      (return-from resolve-compount-superclass (tc:fresh-pred (tc:ty-class-instance-predicate instance)))))
+    (let ((instance (tc:lookup-instance-by-codegen-sym env (node-variable-value node) :no-error t)))
+      (cond
+        ((null instance)
+         (return-from resolve-compount-superclass
+           (resolve-compount-superclass (tc:lookup-code env (node-variable-value node)) env)))
+        (t
+         (return-from resolve-compount-superclass
+           (tc:fresh-pred (tc:ty-class-instance-predicate instance)))))))
 
   (let ((rator (node-rator-name node)))
     (unless rator
