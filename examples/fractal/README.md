@@ -18,7 +18,7 @@ Press the `Esc` key to quit.
 
 To run this on macOS, you will need to follow a few extra steps. Here's what works as of August 2025.
 
-1. `brew isntall sdl2`
+1. `brew install sdl2`
 2. Follow [these instructions](https://github.com/lispgames/cl-sdl2/issues/154#issuecomment-1280030566) to get a working Lisp SDL library.
 3. Run: `sbcl --eval '(ql:quickload "sdl2")' --quit`
 4. `cd path/to/coalton/examples/fractal/`
