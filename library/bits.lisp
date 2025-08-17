@@ -9,6 +9,9 @@
   (:import-from
    #:coalton-library/classes
    #:Num)
+  (:import-from
+   #:coalton-library/internal/rbit
+   #:rbit)
   (:export
    #:Bits
    #:and
@@ -17,7 +20,10 @@
    #:not
    #:shift
    #:dpb
-   #:ldb))
+   #:ldb
+   #:ReverseBits
+   #:reverse-bits
+   #:reverse-n-bits))
 
 (in-package #:coalton-library/bits)
 
@@ -51,6 +57,44 @@
     "Deposits a byte of size `size` into a bitstring at a position `position`."
     (lisp :a (bitstring size position)
       (cl:ldb (cl:byte size position) bitstring))))
+
+(coalton-toplevel
+
+  (define-class (ReverseBits :t)
+    "A type class for number types that support bit reversal."
+    (reverse-bits
+     "Reverse the bits of `x`."
+     (:t -> :t))
+    (reverse-n-bits
+     "Reverse the first `n` bits of `x` and set the rest to 0."
+     (UFix -> :t -> :t))))
+
+(cl:defmacro define-reverse-bits (type nbits)
+  "Define an instance of `ReverseBits` for the Coalton type `type` of size `nbits`."
+  (cl:let* ((shift (cl:- 64 (cl:the (cl:integer 0 64) (cl:eval nbits)))))
+    `(coalton-toplevel
+       (define-instance (ReverseBits ,type)
+         (inline)
+         (define (reverse-bits x)
+           (lisp ,type (x)
+             (cl:ash (cl:the (cl:unsigned-byte 64) (rbit x))
+                     ,(cl:- shift))))
+         (inline)
+         (define (reverse-n-bits n x)
+           (lisp ,type (n x)
+             (cl:ash (cl:the (cl:unsigned-byte 64) (rbit x))
+                     (cl:the (cl:integer -63 0) (cl:- n 64)))))))))
+
+(cl:eval-when (:compile-toplevel :load-toplevel :execute)
+  (cl:defconstant +n-ufix-bits+ (cl:integer-length cl:most-negative-fixnum)))
+
+(cl:declaim (cl:optimize (cl:speed 3) (cl:safety 0) (cl:compilation-speed 0)))
+
+(define-reverse-bits U8 8)
+(define-reverse-bits U16 16)
+(define-reverse-bits U32 32)
+(define-reverse-bits UFix +n-ufix-bits+)
+(define-reverse-bits U64 64)
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/BITS")

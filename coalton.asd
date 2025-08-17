@@ -46,6 +46,16 @@
                (:file "types")
                (:file "primitive-types")
                (:file "classes")
+               (:module "internal"
+                :serial t
+                :components ((:module "rbit"
+                              :serial t
+                              :components
+                              ((:file "package")
+                               (:file "portable"
+                                :if-feature (:not (:and :sbcl :arm64)))
+                               (:file "sbcl-arm64"
+                                :if-feature (:and :sbcl :arm64))))))
                (:file "hash-defining-macros")
                (:file "hash")
                (:file "derivers")
@@ -140,6 +150,20 @@
   :serial t
   :components ((:file "computable-reals")))
 
+(asdf:defsystem "coalton/library/algorithms"
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :version (:read-file-form "VERSION.txt")
+  :around-compile (lambda (compile)
+                    (let (#+sbcl (sb-ext:*derive-function-types* t)
+                          #+sbcl (sb-ext:*block-compile-default* ':specified))
+                      (funcall compile)))
+  :depends-on ("coalton"
+               "coalton/library")
+  :pathname "library/algorithms"
+  :serial t
+  :components ((:file "fft")))
+
 (asdf:defsystem "coalton/testing"
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
@@ -213,6 +237,7 @@
   :depends-on ("coalton"
                "coalton/library/big-float"
                "coalton/library/computable-reals"
+               "coalton/library/algorithms"
                "html-entities"
                "yason"
                "uiop")
@@ -235,6 +260,7 @@
   :license "MIT"
   :depends-on ("coalton"
                "coalton/library/big-float"
+               "coalton/library/algorithms"
                "coalton/testing"
                "fiasco"
                "quil-coalton/tests"
@@ -275,6 +301,7 @@
                (:file "hashmap-tests")
                (:file "iterator-tests")
                (:file "call-coalton-from-lisp")
+               (:file "bits-tests")
                (:file "vector-tests")
                (:file "string-tests")
                (:file "optional-tests")
@@ -299,5 +326,8 @@
                 :serial t
                 :components ((:file "optionalt")
                              (:file "resultt")
-                             (:file "environment")))))
+                             (:file "environment")))
+               (:module "algorithms-tests"
+                :serial t
+                :components ((:file "fft-tests")))))
 
