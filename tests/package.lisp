@@ -26,6 +26,7 @@
    (#:math #:coalton-library/math)
    (#:hyperdual #:coalton-library/math/hyperdual)
    (#:big-float #:coalton-library/big-float)
+   (#:bits #:coalton-library/bits)
    (#:char #:coalton-library/char)
    (#:string #:coalton-library/string)
    (#:vector #:coalton-library/vector)
@@ -45,7 +46,8 @@
    (#:st #:coalton-library/monad/state)
    (#:m-opt #:coalton-library/monad/optionalt)
    (#:m-res #:coalton-library/monad/resultt)
-   (#:m-env #:coalton-library/monad/environment)))
+   (#:m-env #:coalton-library/monad/environment)
+   (#:fft #:coalton-library/algorithms/fft)))
 
 (in-package #:coalton-native-tests)
 
