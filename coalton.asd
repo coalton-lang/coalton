@@ -103,6 +103,10 @@
                (:file "seq")
                (:file "system")
                (:file "file")
+               (:module "algorithms"
+                :serial t
+                :components (#+(and SBCL ARM64)
+                             (:file "rbit")))
                (:file "prelude")))
 
 (cl:when (cl:member (uiop:getenv "COALTON_PORTABLE_BIGFLOAT") '("1" "true" "t") :test #'cl:equalp)
