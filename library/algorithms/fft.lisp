@@ -173,7 +173,7 @@
           (a+b (add a b))
           (wa-wb (multiply w (add a (multiply (cyclic-nth-generator 2) b)))))
       (ram:unsafe-set! dst j a+b)
-      (ram:unsafe-set! dst j wa-wb))))
+      (ram:unsafe-set! dst k wa-wb))))
 
 (coalton-toplevel
 

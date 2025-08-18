@@ -304,5 +304,10 @@
                 :serial t
                 :components ((:file "optionalt")
                              (:file "resultt")
-                             (:file "environment")))))
+                             (:file "environment")))
+               (:module "algorithms-tests"
+                :serial t
+                :components (#+(and SBCL ARM64)
+                             (:file "rbit-tests")
+                             (:file "fft-tests")))))
 
