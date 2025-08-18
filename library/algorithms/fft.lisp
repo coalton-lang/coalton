@@ -124,9 +124,9 @@
           (dst (ram:make-uninitialized n)))
       (loops:dotimes (i n)
         (let ((j (inline (reverse-bits nbits i))))
-          (when (<= i j)
-            (ram:unsafe-set! dst i (ram:unsafe-aref storage j))
-            (ram:unsafe-set! dst j (ram:unsafe-aref storage i)))))
+          (if (< i j)
+              (ram:unsafe-set! dst i (ram:unsafe-aref storage j))
+              (ram:unsafe-set! dst j (ram:unsafe-aref storage i)))))
       dst)))
 
 ;;; Define the type classes that support a discrete Fourier transform.
@@ -184,9 +184,9 @@
   (define (dif-kernel n m m/2 wm w j k dst src)
     "A tail-recursive kernel for performing a decimation-in-frequency fourier transform for storage of length `n`, for butterfly clusters of size `m`, reading from `src` and writing to `dst`."
     (cond
-      ((< (mod j m) m/2)
+      ((zero? (bits:and j m/2)) ; Equivalent to (< (mod j m) m/2)
        ;; Perform a butterfly operation.
-       (inline (dif-butterfly j k w dst src))
+       (dif-butterfly j k w dst src)
        ;; Rotate the twiddle factor.
        (let w = (cyclic-add w wm))
        ;; Increment the indices.
@@ -234,7 +234,7 @@ Normalization: none"
     (let n    = (ram:length src))
     (let m    = n)
     (let m/2  = (bits:shift -1 m))
-    (let wm   = (cyclic-nth-generator m))
+    (let wm   = (cyclic-add-inverse (cyclic-nth-generator m)))
     (let w    = cyclic-add-identity)
     (let j    = 0)
     (let k    = m/2)
@@ -254,7 +254,7 @@ Normalization: none"
     (let n    = (ram:length src))
     (let m    = n)
     (let m/2  = (bits:shift -1 m))
-    (let wm   = (cyclic-add-inverse (cyclic-nth-generator m)))
+    (let wm   = (cyclic-nth-generator m))
     (let w    = cyclic-add-identity)
     (let j    = 0)
     (let k    = m/2)
@@ -287,9 +287,9 @@ Normalization: none"
   (define (dit-kernel inv? n m m/2 wm w j k dst src)
     "A tail-recursive kernel for performing a decimation-in-time fourier transform for storage of length `n`, for butterfly clusters of size `m`, reading from `src` and writing to `dst`."
     (cond
-      ((< (mod j m) m/2)
+      ((zero? (bits:and j m/2)) ; Equivalent to (< (mod j m) m/2)
        ;; Perform a butterfly operation.
-       (inline (dit-butterfly j k w dst src))
+       (dit-butterfly j k w dst src)
        ;; Rotate the twiddle factor.
        (let w = (cyclic-add w wm))
        ;; Increment the indices.
@@ -306,11 +306,11 @@ Normalization: none"
        ;; Iterate.
        (dit-kernel inv? n m m/2 wm w j k dst src))
       ((< m n)
-       ;; Update the parameters for the nexy layer of butterfly operations.
+       ;; Update the parameters for the next layer of butterfly operations.
        (let m   = (bits:shift 1 m))
        (let m/2 = (bits:shift 1 m/2))
-       (let wm = (cyclic-nth-generator m))
-       (let wm = (if inv? (cyclic-add-inverse wm) wm))
+       (let wm  = (cyclic-nth-generator m))
+       (let wm  = (if inv? wm (cyclic-add-inverse wm)))
        ;; Reset the twiddle factor.
        (let w   = cyclic-add-identity)
        ;; Reset the indices.
@@ -339,7 +339,7 @@ Normalization: none"
     (let n    = (ram:length src))
     (let m    = 2)
     (let m/2  = (bits:shift -1 m))
-    (let wm   = (cyclic-nth-generator m))
+    (let wm   = (cyclic-add-inverse (cyclic-nth-generator m)))
     (let w    = cyclic-add-identity)
     (let j    = 0)
     (let k    = m/2)
@@ -360,7 +360,7 @@ Normalization: none"
     (let n    = (ram:length src))
     (let m    = 2)
     (let m/2  = (bits:shift -1 m))
-    (let wm   = (cyclic-add-inverse (cyclic-nth-generator m)))
+    (let wm   = (cyclic-nth-generator m))
     (let w    = cyclic-add-identity)
     (let j    = 0)
     (let k    = m/2)
@@ -380,8 +380,8 @@ Normalization: none"
         ((zero? n)
          storage)
         ((power-of-2? n)
+         (dif-fft-raw storage storage)
          (bit-reversed-permutation! n storage)
-         (dit-fft-raw storage storage)
          storage)
         (True
          (error "Currently, only radix-2 ffts are supported.")))))
@@ -396,8 +396,8 @@ Normalization: none"
         ((zero? n)
          storage)
         ((power-of-2? n)
+         (dif-ifft-raw storage storage)
          (bit-reversed-permutation! n storage)
-         (dit-ifft-raw storage storage)
          (let ((norm (multiply-inverse (math:integral->num n))))
            (loops:dotimes (i n)
              (let ((x (multiply norm (ram:unsafe-aref storage i))))
@@ -454,8 +454,9 @@ Normalization: none"
         ((zero? n)
          (ram:make-uninitialized 0))
         ((power-of-2? n)
-         (let ((dst (copy-bit-reversed-permutation storage)))
-           (dit-fft-raw dst dst)
+         (let ((dst (ram:make-uninitialized n)))
+           (dif-fft-raw dst storage)
+           (bit-reversed-permutation! n dst)
            dst))
         (True
          (error "Currently, only radix-2 ffts are supported.")))))
@@ -470,12 +471,13 @@ Normalization: none"
         ((zero? n)
          (ram:make-uninitialized 0))
         ((power-of-2? n)
-         (let ((dst (copy-bit-reversed-permutation storage)))
-           (dit-ifft-raw dst dst)
+         (let ((dst (ram:make-uninitialized n)))
+           (dif-ifft-raw dst storage)
+           (bit-reversed-permutation! n dst)
            (let ((norm (multiply-inverse (math:integral->num n))))
-           (loops:dotimes (i n)
-             (let ((x (multiply norm (ram:unsafe-aref dst i))))
-               (ram:unsafe-set! dst i x))))
+             (loops:dotimes (i n)
+               (let ((x (multiply norm (ram:unsafe-aref dst i))))
+                 (ram:unsafe-set! dst i x))))
            dst))
         (True
          (error "Currently, only radix-2 ffts are supported."))))))
@@ -513,7 +515,7 @@ Normalization: none"
     (define (cyclic-add-inverse x) (/ cyclic-add-identity x))
     (inline)
     (define (cyclic-nth-generator n)
-      (inline (math:cis (/ (* -2f0 math:pi) (math:integral->num n))))))
+      (inline (math:cis (/ (* 2f0 math:pi) (math:integral->num n))))))
 
   (inline)
   (declare dif-butterfly/c64 (UFix -> UFix -> C64
@@ -563,7 +565,7 @@ Normalization: none"
     (define (cyclic-add-inverse x) (/ cyclic-add-identity x))
     (inline)
     (define (cyclic-nth-generator n)
-      (inline (math:cis (/ (* -2d0 math:pi) (math:integral->num n))))))
+      (inline (math:cis (/ (* 2d0 math:pi) (math:integral->num n))))))
 
   (inline)
   (declare dif-butterfly/c128 (UFix -> UFix -> C128
