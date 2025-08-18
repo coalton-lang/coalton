@@ -106,7 +106,8 @@
                (:module "algorithms"
                 :serial t
                 :components (#+(and SBCL ARM64)
-                             (:file "rbit")))
+                             (:file "rbit")
+                             (:file "fft")))
                (:file "prelude")))
 
 (cl:when (cl:member (uiop:getenv "COALTON_PORTABLE_BIGFLOAT") '("1" "true" "t") :test #'cl:equalp)
