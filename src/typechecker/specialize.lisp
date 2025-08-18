@@ -65,11 +65,11 @@
       ;; NB: There used to be a check if from-ty contains predicates, and raises an
       ;; error if not.  It doesn't seem necessary.
 
-      (unless (equalp to-ty scheme)
+      (unless (tc:ty-scheme= to-ty scheme)
         (tc-error "Invalid specialization"
                   (tc-note specialize "function ~S does not match declared type" to-name)))
 
-      (when (equalp from-ty to-ty)
+      (when (tc:ty-scheme= from-ty to-ty)
         (tc-error "Invalid specialization"
                   (tc-note specialize "specialize must result in a more specific type")))
 
