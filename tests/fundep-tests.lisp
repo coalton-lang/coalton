@@ -166,3 +166,17 @@
     (define (f2 xs)
       (subcol xs 0 (coalton-library/math:1- (size xs))))"
    '("f1" . "(sizable :a :b => :a -> :a)")))
+
+(deftest fundep-entail ()
+  (check-coalton-types
+   "(define-class (C :a :b (:a -> :b)))
+    (define-class (C :a :b => D :a :b)
+      (m :a))
+
+    (declare f (D :a :b => Unit -> :a))
+    (define (f) m)
+
+    (declare g (D (List :a) (List :b) => Unit -> List :a))
+    (define (g) m)"
+   '("f" . "(D :a :b => Unit -> :a)")
+   '("g" . "(D (List :a) (List :b) => Unit -> List :a)")))

@@ -400,15 +400,31 @@
                                                        known-method-tyvars)))
 
                    ;; Ensure that methods are not ambiguous
-                   :unless (or (subsetp var-names
-                                        (tc:closure method-tyvar-names fundeps)
-                                        :test #'eq)
-                               (subsetp (mapcar (alexandria:curry #'tc:apply-ksubstitution ksubs) vars)
-                                        (tc:generic-closure
-                                         known-method-tyvars
-                                         (tc:collect-fundeps (partial-type-env-env env) preds)
-                                         :test #'tc:ty=)
-                                        :test #'tc:ty=))
+                   :unless (or
+                            ;; First, we check if the class variables are fully determined
+                            ;; by the functional dependencies which are immediately provided
+                            ;; in this class definition, such as in the following example.
+                            ;; (define-class (C :a :b (:a -> :b))
+                            ;;   (m (Unit -> :a)) ; :B is determined by :A.
+                            ;;   )
+                            (subsetp var-names
+                                     (tc:closure method-tyvar-names fundeps)
+                                     :test #'eq)
+                            ;; Otherwise, we collect functional dependencies by recursing into
+                            ;; the superclass predicates and computing a generic closure on the
+                            ;; types themselves using TC:TY=. This allows for examples like the
+                            ;; following.
+                            ;; (define-class (C :a :b (:a -> :b)))
+                            ;; (define-class (D :a :b)
+                            ;;   (m (Unit -> :a)) ; :B is determined by the functional dependency
+                            ;;                    ; provided in the class definition of C.
+                            ;;   )
+                            (subsetp (mapcar (alexandria:curry #'tc:apply-ksubstitution ksubs) vars)
+                                     (tc:generic-closure
+                                      known-method-tyvars
+                                      (tc:collect-fundep-vars (partial-type-env-env env) preds)
+                                      :test #'tc:ty=)
+                                     :test #'tc:ty=))
                      :do (tc-error "Ambiguous method"
                                    (tc-note method
                                             "the method is ambiguous"))

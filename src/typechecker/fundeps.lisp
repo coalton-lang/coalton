@@ -54,21 +54,43 @@
 
 ;; Implementation of closure taken from "The Theory of Relational Databases" pg. 64
 (defun closure (x f)
-  "Computes the closure of x under f"
+  "Computes the closure of X under F.
+
+X is a LIST of SYMBOLs
+F is a LIST of FUNDEPs
+
+The closure of X under F is the set of SYMBOLs which are _determined_
+by X and F. For example, if X is the set (A B) and F contains the only
+the fundep (FUNDEP :FROM (A) :TO (C D)) then the closure of X under F
+will be the set (A B C D)."
   (declare (type util:symbol-list x)
            (type fundep-list f)
            (values util:symbol-list))
   (let ((olddep nil)
         (newdep x))
+    ;; The idea here is to add all determined SYMBOLs and then repeat
+    ;; until we arrive at a fixed point. This is important because
+    ;; when a new SYMBOL is is determined by a functional dependency,
+    ;; it may reveal that the set in question then satisfies another
+    ;; functional dependency. For example, with X as (A) and F as
+    ;; ((FUNDEP :FROM (A) :TO (B)) (FUNDEP :FROM (B) :TO (C))), the
+    ;; first pass will expand the closure to (A B), but then the
+    ;; second functional dependency will be satisfied, so the second
+    ;; pass will expand the closure to (A B C).
     (loop :until (null (set-exclusive-or newdep olddep :test #'equalp))
           :do (setf olddep newdep)
-          :do (loop :for fd :in f
+              (loop :for fd :in f
                     :for w := (fundep-from fd)
                     :for z := (fundep-to fd)
                     :if (subsetp w newdep :test #'equalp)
                       :do (setf newdep (union newdep z :test #'equalp))))
     newdep))
 
+;;; Generic functional dependencies
+
+;; We will represent generic functional dependencies as CONSes whose
+;; CARs are LISTs of determinants and whose CDRs are LISTs of
+;; dependents.
 (deftype generic-fundep ()
   '(cons list list))
 
@@ -80,6 +102,21 @@
   '(satisfies generic-fundep-list-p))
 
 (defun generic-closure (x f &key key (test #'eq))
+  "Compute the closure of X under F.
+
+X is a LIST of objects. 
+F is a LIST of GENERIC-FUNDEPs.
+
+The closure of X under F is the set of objects which are _determined_
+by X and F. For example, if X is the set (A B) and F contains the only
+the fundep ((A) . (C D)) then the closure of X under F will be the
+set (A B C D).
+
+For the purposes of this computation, two elements A and B are
+considered equal if-and-only-iff they satisfy the following.
+
+If KEY is supplied: (FUNCALL TEST (FUNCALL KEY A) (FUNCALL KEY B))
+If KEY is not supplied: (FUNCALL TEST A B)"
   (declare (type list x)
            (type generic-fundep-list f)
            (type (or null symbol function) key)
@@ -87,6 +124,8 @@
            (values list &optional))
   (loop :with old := nil
         :with new := x
+        ;; See the comment in the function definition for CLOSURE
+        ;; above for an explanation of this algorithm.
         :until (null (set-exclusive-or new old :key key :test test))
         :do (progn
               (setf old new)

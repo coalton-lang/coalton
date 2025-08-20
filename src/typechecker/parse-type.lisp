@@ -213,6 +213,26 @@
                 (tc:make-qualified-ty :predicates preds :type type))))))
 
 (defun check-for-reducible-by-fundeps (preds ty unparsed-ty env)
+  "This check is used to ensure that PREDs cannot be reduced by instance
+definitions in ENV or by each other. 
+
+For example, consider the following class definition.
+
+(define-class (C :a :b (:a -> :b)))
+
+Now, the following predicate list would fail this check, because the
+substitution :a +-> :b can be inferred.
+
+((C :a :b) (C :a :c))
+
+Consider the following instance definition.
+
+(define-instance (C :a T))
+
+Now, the following predicate list would also fail this check, because
+the substitution :b +-> T can be inferred.
+
+((C :a :b))."
   (declare (type tc:ty-predicate-list preds)
            (type tc:ty ty)
            (type parser:qualified-ty unparsed-ty)

@@ -1,4 +1,4 @@
-;;;;
+;;;
 ;;;; Type inference for toplevel definitions and expressions. The
 ;;;; implementation is based on the paper "Typing Haskell in Haskell"
 ;;;; by Jones.
@@ -1978,7 +1978,14 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                     (tc-note (first accessors)
                              "accessor is ambiguous")))
 
-        ;; Generate additional substitutions from fundeps
+        ;; Generate additional substitutions from fundeps.
+        ;; The purpose of this block is primarily to effect
+        ;; the inheritance of functional dependencies.
+        ;; For example, if we have
+        ;;   (define-class (C :a :b (:a -> :b)))
+        ;;   (define-class (C :a :b => D :a :b))
+        ;; and a list of predicates ((D #T1 #T2) (C #T1 #T3)), then
+        ;; the following lines will ensure that #T2 and #T3 are unified.
         (setf fresh-preds (tc:apply-substitution subs fresh-preds))
         (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) fresh-preds subs)))
         (setf preds (tc:apply-substitution subs preds))
@@ -2003,21 +2010,30 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                  (known-variables
                    (tc:apply-substitution
                     subs
-                    (append (remove-duplicates (tc:type-variables expr-type) :test #'eq) env-tvars)))
+                    (append
+                     (remove-duplicates (tc:type-variables expr-type) :test #'tc:ty=)
+                     env-tvars)))
 
                  (preds (tc:apply-substitution subs preds))
 
-                 (subs (tc:compose-substitution-lists
-                        subs
-                        (tc:fundep-entail (tc-env-env env) expr-preds preds known-variables)))
+                 ;; Whereas the lines above involving functional
+                 ;; dependencies relate to substitutions between the
+                 ;; predicates in a single list, the application here
+                 ;; of TC:FUNDEP-ENTAIL serves to create substitutions
+                 ;; for PREDS that reduces its generality with respect
+                 ;; to EXPR-PREDS where made possible by functional
+                 ;; dependencies.
+                 (subs (tc:compose-substitution-lists subs
+                        (tc:fundep-entail (tc-env-env env)
+                                          expr-preds
+                                          preds
+                                          known-variables)))
 
                  (expr-preds (tc:apply-substitution subs expr-preds))
 
                  (preds (remove-if
                          (lambda (p) (tc:entail (tc-env-env env) expr-preds p))
                          (tc:apply-substitution subs preds))))
-
-            (setf preds (tc:apply-substitution subs preds))
 
             (setf local-tvars
                   (expand-local-tvars env-tvars
@@ -2254,6 +2270,9 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
         (setf preds (tc:apply-substitution subs preds))
 
         ;; Generate additional substitutions from fundeps
+        ;; This effects the inheritance of functional dependencies
+        ;; from superclasses and reduces generality with respect to
+        ;; instances defined in the environment.
         (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
 
         (setf preds (tc:apply-substitution subs preds))
@@ -2628,32 +2647,9 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 ;;; binding's predicates.
 
 (defun expand-local-tvars (env-tvars local-tvars preds env)
-  (let ((old-local-tvars nil))
-    (loop :until (null (set-exclusive-or old-local-tvars local-tvars)) :do
-      (setf old-local-tvars local-tvars)
-      (loop :for pred :in preds
-            :for class := (tc:lookup-class env (tc:ty-predicate-class pred))
-            :when (tc:ty-class-fundeps class) :do
-              (let* ((idx (loop :for i :from 0
-                                :for ty :in (tc:ty-predicate-types pred)
-                                :when (subsetp (tc:type-variables ty) local-tvars :test #'eq)
-                                  :collect i))
-
-                     (fundep-vars (util:project-indices idx (tc:ty-class-class-variables class)))
-                     (closure-vars (tc:closure fundep-vars (tc:ty-class-fundeps class)))
-
-                     (new-vars (set-difference closure-vars fundep-vars :test #'eq))
-
-                     (new-tys (util:project-elements
-                               new-vars
-                               (tc:ty-class-class-variables class)
-                               (tc:ty-predicate-types pred))))
-
-                (loop :for var :in (set-difference
-                                    (remove-duplicates
-                                     (tc:type-variables new-tys)
-                                     :test #'eq)
-                                    env-tvars)
-                      :do (push var local-tvars)))))
-
-    (remove-duplicates local-tvars :test #'eq)))
+  "Expand LOCAL-TVARS over the functional dependencies taken from PREDS
+and return the set difference of the expansion and ENV-TVARS."
+  (let* ((fundeps (tc:collect-fundep-vars env preds))
+         (expansion (tc:generic-closure local-tvars fundeps :test #'tc:ty=))
+         (expansion (remove-duplicates expansion :test #'tc:ty=)))
+    (set-difference expansion env-tvars :test #'tc:ty=)))
