@@ -1529,7 +1529,20 @@ of constraint predicates."
 
 (defun collect-fundeps (env preds)
   "Collect the functional dependencies associated with PREDS as CONSes of
-LISTs of TYs, recursively expanding to the superclass predicates."
+LISTs of TYs, recursively expanding to the superclass predicates.
+
+For example, with the definitions
+
+  (define-class (C :a :b (:a -> :b)))
+  (define-class (C :a :b => D :a :b))
+
+and the single predicate 
+
+  D (List #T1) #T2
+
+This function will return the single functional dependency
+
+  (List #T1 . #T2)"
   (declare (type environment env)
            (type ty-predicate-list preds))
   (loop :for pred :in preds
@@ -1553,13 +1566,33 @@ LISTs of TYs, recursively expanding to the superclass predicates."
 (defun collect-fundep-vars (env preds)
   "Collect the type variable functional dependencies associated with
 PREDs as CONSes of LISTs of TYVARs, recursively expanding to the
-superclass predicates."
+superclass predicates.
+
+For example, with the definitions
+
+  (define-class (C :a :b (:a -> :b)))
+  (define-class (C :a :b => D :a :b))
+
+and the single predicate 
+
+  D (List #T1) #T2
+
+This function will return the single functional dependency
+
+  (#T1 . #T2)"
   (declare (type environment env)
            (type ty-predicate-list preds))
   (loop :for (from . to) :in (collect-fundeps env preds)
         :collect (cons (type-variables from) (type-variables to))))
 
 (define-env-updater update-instance-fundeps (env pred context)
+  ;; This function is essential for cases like the following.
+  ;;
+  ;;   (define-class (C :a :b (:a -> :b)))
+  ;;   (define-instance (C UFix Integer))
+  ;;
+  ;; This function ensures that when the compile encounters the
+  ;; predicate C UFix :t, it knows that :t must be the type Integer.
   (declare (type environment env)
            (type ty-predicate pred)
            (type ty-predicate-list context))
@@ -1685,6 +1718,12 @@ superclass predicates."
     (util:unreachable)))
 
 (defun solve-fundeps (env preds subs)
+  "First, this function creates and applies substitutions to preds based
+on functional dependencies that constrain them with respect to one
+another, and then this function creates and applies substitutions to
+preds based on functional dependencies that constrain them with
+respect to defined type class instances. The values returned are the
+predicates with all substitutions applied and the new substitutions."
   (declare (type environment env)
            (type ty-predicate-list preds)
            (type substitution-list subs)
@@ -1772,8 +1811,11 @@ superclass predicates."
                 (unification-error ()
                   (error 'context-fundep-conflict
                          :first-pred pred
-                         :second-pred other-pred))))
+                         :second-pred other-pred)))
+        :finally (setf preds (apply-substitution subs preds)))
 
+  ;; This block is meant to simplify PREDS if instances exist in the
+  ;; environment which constrain them by functional dependencies.
   (loop :with new-subs := nil
         :with preds-generated := nil
         :for i :below +fundep-max-depth+

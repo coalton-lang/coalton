@@ -141,16 +141,33 @@
               ((tc:lookup-function env instance-codegen-sym :no-error t)
                (setf env (tc:unset-function env instance-codegen-sym))))
 
-        (when (tc:ty-class-fundeps class)
+        (when (consp (tc:ty-class-fundeps class))
           (handler-case
               (setf env (tc:update-instance-fundeps env pred context))
             (tc:fundep-ambiguity (e)
+              ;; In this case, a instance definition is ambiguous
+              ;; because a dependent type is too general.
+              ;; For example,
+              ;;   (define-class (C :a :b (:a -> :b)))
+              ;;   (define-instance (C :c :d))
+              ;; Here, the dependent type (:d) contains a type variable
+              ;; that is not in the determinant type (:c), but the
+              ;; underlying principle of functional dependencies requires
+              ;; that if we know the determinant type, then we should also
+              ;; know the dependent type, as we would in the following case,
+              ;;   (define-instance (C :c (List :c))
               (tc-error "Instance fundep ambiguity"
                         (tc-location (parser:toplevel-define-instance-head-location instance)
                                      (let ((*print-escape* nil))
                                        (with-output-to-string (s)
                                          (print-object e s))))))
             (tc:fundep-conflict (e)
+              ;; In thid case, an instance simply conflicts with another on
+              ;; the basis of functional dependencies.
+              ;; For example,
+              ;;   (define-class (C :a :b (:a -> :b)))
+              ;;   (define-instance (C T U))
+              ;;   (define-instance (C T V)) ; Conflicts with the previous above.
               (tc-error "Instance fundep conflict"
                         (tc-location (parser:toplevel-define-instance-head-location instance)
                                      (let ((*print-escape* nil))
