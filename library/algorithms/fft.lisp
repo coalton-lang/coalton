@@ -79,8 +79,8 @@
 
 (coalton-toplevel
 
-  (declare log2 (UFix -> UFix))
-  (define (log2 x)
+  (declare ilog2 (UFix -> UFix))
+  (define (ilog2 x)
     "The base-2 logarithm of `x`. Assumes `(power-of-2? x)`."
     (1- (lisp UFix (x) (cl:integer-length x)))))
 
@@ -106,7 +106,7 @@
                                       => UFix -> :c -> Unit))
   (define (bit-reversed-permutation! n storage)
     "Sort the first `n` elements of `storage` into bit-reversed order. Assumes `(power-of-2? n)` and `(<= n (ram:length storage))`."
-    (let ((nbits (log2 n)))
+    (let ((nbits (ilog2 n)))
       (loops:dotimes (i n)
         (let ((j (inline (reverse-bits nbits i))))
           (when (< i j)
@@ -120,7 +120,7 @@
   (define (copy-bit-reversed-permutation storage)
     "Create a copy of `storage` in bit-reversed order. Assumes `(power-of-2? (ram:length storage))`."
     (let ((n (ram:length storage))
-          (nbits (log2 n))
+          (nbits (ilog2 n))
           (dst (ram:make-uninitialized n)))
       (loops:dotimes (i n)
         (let ((j (inline (reverse-bits nbits i))))
