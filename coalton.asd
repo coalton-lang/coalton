@@ -294,6 +294,7 @@
                (:file "inliner-tests")
                (:file "inliner-tests-1") ; must come after inliner-tests
                (:file "deriver-tests")
+               (:file "stream-tests")
                (:file "file-tests")
                (:file "experimental-tests")
                (:file "exceptions")
