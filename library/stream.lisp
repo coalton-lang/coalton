@@ -224,7 +224,7 @@
   (declare read-word ((Readable :stream :elt) (Whitespace :elt) => :stream :elt -> (Result (ReaderErr :elt) (vec:Vector :elt))))
   (define (read-word stream)
     "Read to the next whitespace token (Exclusive)."
-    (drop-to stream (Exclusive (fn (elt) (not (whitespace? elt)))))
+    (drop-to stream (Exclusive (complement whitespace?)))
     (read-to stream (Exclusive whitespace?)))
 
   (declare read-line ((Readable :stream :elt) (Newline :elt) => :stream :elt -> (Result (ReaderErr :elt) (vec:Vector :elt))))
@@ -238,7 +238,7 @@
   (declare read-all ((Readable :stream :elt) => :stream :elt -> (vec:Vector :elt)))
   (define (read-all stream)
     "Consume elements from a stream until EOF, collecting them into a vector."
-    (match (read-to stream (Inclusive (fn (_) False)))
+    (match (read-to stream (Inclusive (const False)))
       ((Ok result) result)
       ((Err (EOF result)) result))))
 
