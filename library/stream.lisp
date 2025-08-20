@@ -194,6 +194,7 @@
 
   (declare read-to ((Readable :stream :elt) => :stream :elt -> ReaderPredicate :elt -> (Result (ReaderErr :elt) (vec:Vector :elt))))
   (define (read-to stream pred)
+    "Consume elements from a stream, collecting them into a vector."
     (let vec = (vec:make))
     (while-let (Ok elt) = (read stream)
       (match pred
@@ -208,6 +209,7 @@
 
   (declare drop-to ((Readable :stream :elt) => :stream :elt -> ReaderPredicate :elt -> (Result (ReaderErr :elt) (:stream :elt))))
   (define (drop-to stream pred)
+    "Consume elements from a stream without collecting them."
     (while-let (Ok elt) = (read stream)
       (match pred
         ((Inclusive f)
@@ -221,11 +223,13 @@
 
   (declare read-word ((Readable :stream :elt) (Whitespace :elt) => :stream :elt -> (Result (ReaderErr :elt) (vec:Vector :elt))))
   (define (read-word stream)
+    "Read to the next whitespace token (Exclusive)."
     (drop-to stream (Exclusive (fn (elt) (not (whitespace? elt)))))
     (read-to stream (Exclusive whitespace?)))
 
   (declare read-line ((Readable :stream :elt) (Newline :elt) => :stream :elt -> (Result (ReaderErr :elt) (vec:Vector :elt))))
   (define (read-line stream)
+    "Read to the next newline token (Exclusive)."
     (match (peek stream)
       ((Ok elt) (when (newline? elt) (read stream) Unit))
       ((Err _) (return (Err (EOF mempty)))))
@@ -233,6 +237,7 @@
 
   (declare read-all ((Readable :stream :elt) => :stream :elt -> (vec:Vector :elt)))
   (define (read-all stream)
+    "Consume elements from a stream until EOF, collecting them into a vector."
     (match (read-to stream (Inclusive (fn (_) False)))
       ((Ok result) result)
       ((Err (EOF result)) result))))
@@ -244,18 +249,18 @@
 (coalton-toplevel
   (declare stdout (Unit -> OutputStream :elt))
   (define (stdout)
-    "Equivalent to `cl:*standard-output*'."
+    "Equivalent to `cl:*standard-output*`."
     (lisp (OutputStream :elt) ()
       (flex:make-flexi-stream cl:*standard-output*)))
 
   (declare stderr (Unit -> OutputStream :elt))
   (define (stderr)
-    "Equivalent to `cl:*error-output*'."
+    "Equivalent to `cl:*error-output*`."
     (lisp (OutputStream :elt) ()
       (flex:make-flexi-stream cl:*error-output*)))
 
   (declare stdin (Unit -> InputStream :elt))
   (define (stdin)
-    "Equivalent to `cl:*standard-input*'."
+    "Equivalent to `cl:*standard-input*`."
     (lisp (InputStream :elt) ()
       (flex:make-flexi-stream cl:*standard-input*))))
