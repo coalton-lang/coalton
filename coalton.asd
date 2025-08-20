@@ -103,11 +103,6 @@
                (:file "seq")
                (:file "system")
                (:file "file")
-               (:module "algorithms"
-                :serial t
-                :components (#+(and SBCL ARM64)
-                             (:file "rbit")
-                             (:file "fft")))
                (:file "prelude")))
 
 (cl:when (cl:member (uiop:getenv "COALTON_PORTABLE_BIGFLOAT") '("1" "true" "t") :test #'cl:equalp)
@@ -144,6 +139,23 @@
                #:computable-reals)
   :serial t
   :components ((:file "computable-reals")))
+
+(asdf:defsystem #:coalton/library/algorithms
+  :description ""
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :version (:read-file-form "VERSION.txt")
+  :around-compile (lambda (compile)
+                    (let (#+sbcl (sb-ext:*derive-function-types* t)
+                          #+sbcl (sb-ext:*block-compile-default* ':specified))
+                      (funcall compile)))
+  :depends-on (#:coalton
+               #:coalton/library)
+  :pathname "library/algorithms"
+  :serial tg
+  :components ((:file "rbit"
+                :if-feature (:and :sbcl :arm64))
+               (:file "fft")))
 
 (asdf:defsystem #:coalton/testing
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
@@ -240,6 +252,7 @@
   :license "MIT"
   :depends-on (#:coalton
                #:coalton/library/big-float
+               #:coalton/library/algorithms
                #:coalton/testing
                #:fiasco
                #:quil-coalton/tests
@@ -307,7 +320,7 @@
                              (:file "environment")))
                (:module "algorithms-tests"
                 :serial t
-                :components (#+(and SBCL ARM64)
-                             (:file "rbit-tests")
+                :components ((:file "rbit-tests"
+                              :if-feature (:and :sbcl :arm64))
                              (:file "fft-tests")))))
 
