@@ -38,7 +38,8 @@
   :depends-on (#:coalton-compiler
                #:coalton/hashtable-shim
                #:trivial-garbage
-               #:alexandria)
+               #:alexandria
+               #:flexi-streams)
   :pathname "library/"
   :serial t
   :components ((:file "set-float-traps")
@@ -102,6 +103,7 @@
                (:file "ordmap")
                (:file "seq")
                (:file "system")
+               (:file "stream")
                (:file "file")
                (:file "prelude")))
 
@@ -292,6 +294,7 @@
                (:file "inliner-tests")
                (:file "inliner-tests-1") ; must come after inliner-tests
                (:file "deriver-tests")
+               (:file "stream-tests")
                (:file "file-tests")
                (:file "experimental-tests")
                (:file "exceptions")

@@ -40,6 +40,7 @@
    (#:ordmap #:coalton-library/ordmap)
    (#:result #:coalton-library/result)
    (#:seq #:coalton-library/seq)
+   (#:stream #:coalton-library/stream)
    (#:file #:coalton-library/file)
    (#:experimental #:coalton-library/experimental)
    (#:st #:coalton-library/monad/state)
