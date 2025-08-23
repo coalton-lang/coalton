@@ -140,6 +140,23 @@
   :serial t
   :components ((:file "computable-reals")))
 
+(asdf:defsystem #:coalton/library/algorithms
+  :description ""
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :version (:read-file-form "VERSION.txt")
+  :around-compile (lambda (compile)
+                    (let (#+sbcl (sb-ext:*derive-function-types* t)
+                          #+sbcl (sb-ext:*block-compile-default* ':specified))
+                      (funcall compile)))
+  :depends-on (#:coalton
+               #:coalton/library)
+  :pathname "library/algorithms"
+  :serial tg
+  :components ((:file "rbit"
+                :if-feature (:and :sbcl :arm64))
+               (:file "fft")))
+
 (asdf:defsystem #:coalton/testing
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
@@ -235,6 +252,7 @@
   :license "MIT"
   :depends-on (#:coalton
                #:coalton/library/big-float
+               #:coalton/library/algorithms
                #:coalton/testing
                #:fiasco
                #:quil-coalton/tests
@@ -299,5 +317,10 @@
                 :serial t
                 :components ((:file "optionalt")
                              (:file "resultt")
-                             (:file "environment")))))
+                             (:file "environment")))
+               (:module "algorithms-tests"
+                :serial t
+                :components ((:file "rbit-tests"
+                              :if-feature (:and :sbcl :arm64))
+                             (:file "fft-tests")))))
 
