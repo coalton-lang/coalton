@@ -446,7 +446,17 @@
        (push! x vec)
        Unit)
      iter)
-    Unit)
+    Unit))
+
+(cl:defmacro make (cl:&rest elements)
+  "Construct a `Vector' containing the ELEMENTS, in the order listed."
+  (cl:let* ((length (cl:length elements))
+            (vec (cl:gensym "VEC-")))
+    `(progn
+       (let ,vec = (with-capacity ,length))
+       ,@(cl:loop :for elt :in elements
+            :collect `(push! ,elt ,vec))
+       ,vec)))
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;;;                                                                       ;;;
@@ -454,13 +464,19 @@
   ;;;                                                                       ;;;
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(coalton-toplevel
   (define-instance (Eq :a => Eq (Vector :a))
     (define (== v1 v2)
       (if (/= (length v1) (length v2))
           False
           (iter:every! id (iter:zip-with! == (iter:into-iter v1) (iter:into-iter v2))))))
 
+  (define-instance (Monoid (Vector :a))
+    (inline)
+    (define mempty (new)))
+
   (define-instance (Semigroup (Vector :a))
+    (inline)
     (define <> append))
 
   (define-instance (Functor Vector)
@@ -470,7 +486,7 @@
        (fn (x)
          (push! (f x) out)
          Unit)
-       (iter:into-iter v)) 
+       (iter:into-iter v))
       out))
 
   (define-instance (Foldable Vector)
@@ -491,16 +507,22 @@
          :from-end cl:t))))
 
   (define-instance (ram:RandomAccess (Vector :t) :t)
+    (inline)
     (define (ram:make n x)
       (with-initial-element n x))
+    (inline)
     (define (ram:length a)
       (length a))
+    (inline)
     (define (ram:readable? _)
       True)
+    (inline)
     (define (ram:writable? _)
       True)
+    (inline)
     (define (ram:unsafe-aref a n)
       (index-unsafe n a))
+    (inline)
     (define (ram:unsafe-set! a n x)
       (set! n x a)))
 
@@ -520,8 +542,9 @@
           out))))
 
   (define-instance (Into (Vector :a) (List :a))
+    (inline)
     (define (into v)
-        (iter:collect! (iter:into-iter v))))
+      (iter:collect! (iter:into-iter v))))
 
   (define-instance (Iso (Vector :a) (List :a)))
 
@@ -546,12 +569,14 @@
       vec))
 
   (define-instance (Default (Vector :a))
-    (define default new))
+    (inline)
+    (define default new)))
 
 ;;
 ;; Collections Instances
 ;;
 
+(coalton-toplevel
   (define-instance (cln:Collection (Vector :a) :a)
     (define cln:new-collection new)
     (define cln:new-repeat with-initial-element)
@@ -681,16 +706,6 @@
     (define cln:pop-end! pop-end!)
     (define cln:pop-end!# pop-end-unsafe!)
     (define cln:insert-at! insert-at!)))
-
-(cl:defmacro make (cl:&rest elements)
-  "Construct a `Vector' containing the ELEMENTS, in the order listed."
-  (cl:let* ((length (cl:length elements))
-            (vec (cl:gensym "VEC-")))
-    `(progn
-       (let ,vec = (with-capacity ,length))
-       ,@(cl:loop :for elt :in elements
-            :collect `(push! ,elt ,vec))
-       ,vec)))
 
 ; #+sb-package-locks
 ; (sb-ext:lock-package "COALTON-LIBRARY/COLLECTIONS/MUTABLE/VECTOR")
