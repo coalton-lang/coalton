@@ -328,7 +328,8 @@
       (let idx-safe = (max 0 (min (length v) idx)))
       (ensure-capacity! (m-ath:1+ (length v)) v)
       (push! (last-unsafe v) v)
-      (for i in (iter:range-decreasing 1 (length v) (m-ath:1+ idx-safe))
+      (for i
+ in (iter:range-decreasing 1 (length v) (m-ath:1+ idx-safe))
         (set! i (index-unsafe (m-ath:1- i) v) v))
       (set! idx-safe item v)
       v)))
@@ -446,17 +447,7 @@
        (push! x vec)
        Unit)
      iter)
-    Unit))
-
-(cl:defmacro make (cl:&rest elements)
-  "Construct a `Vector' containing the ELEMENTS, in the order listed."
-  (cl:let* ((length (cl:length elements))
-            (vec (cl:gensym "VEC-")))
-    `(progn
-       (let ,vec = (with-capacity ,length))
-       ,@(cl:loop :for elt :in elements
-            :collect `(push! ,elt ,vec))
-       ,vec)))
+    Unit)
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;;;                                                                       ;;;
@@ -464,7 +455,6 @@
   ;;;                                                                       ;;;
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(coalton-toplevel
   (define-instance (Eq :a => Eq (Vector :a))
     (define (== v1 v2)
       (if (/= (length v1) (length v2))
@@ -706,6 +696,16 @@
     (define cln:pop-end! pop-end!)
     (define cln:pop-end!# pop-end-unsafe!)
     (define cln:insert-at! insert-at!)))
+
+(cl:defmacro make (cl:&rest elements)
+  "Construct a `Vector' containing the ELEMENTS, in the order listed."
+  (cl:let* ((length (cl:length elements))
+            (vec (cl:gensym "VEC-")))
+    `(progn
+       (let ,vec = (with-capacity ,length))
+       ,@(cl:loop :for elt :in elements
+            :collect `(push! ,elt ,vec))
+       ,vec))
 
 ; #+sb-package-locks
 ; (sb-ext:lock-package "COALTON-LIBRARY/COLLECTIONS/MUTABLE/VECTOR")
