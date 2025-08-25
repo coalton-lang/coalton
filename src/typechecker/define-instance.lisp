@@ -16,6 +16,7 @@
    #:make-tc-env
    #:infer-expl-binding-type)
   (:local-nicknames
+   (#:a #:alexandria)
    (#:settings #:coalton-impl/settings)
    (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util)
@@ -33,13 +34,12 @@
            (type tc:environment env)
            (values tc:ty-class-instance-list tc:environment))
 
-  (values
+  (values 
    (loop :for instance :in instances
          :collect (multiple-value-bind (instance env_)
                       (define-instance-in-environment instance env)
                     (setf env env_)
                     instance))
-
    env))
 
 (defun toplevel-typecheck-instance (instances unparsed-instances env)
@@ -94,7 +94,7 @@
            (context (tc:apply-ksubstitution ksubs context)))
 
       (let* ((instance-codegen-sym
-               (alexandria:format-symbol
+               (a:format-symbol
                 *package*
                 "INSTANCE/~A"
                 (with-output-to-string (s)
@@ -106,23 +106,23 @@
                                    (tc:ty-class-unqualified-methods class)))
 
              (method-codegen-syms (mapcar (lambda (method-name)
-                                            (alexandria:format-symbol *package* "~A-~S"
-                                                                      instance-codegen-sym
-                                                                      method-name))
+                                            (a:format-symbol *package* "~A-~S"
+                                                             instance-codegen-sym
+                                                             method-name))
                                           method-names))
 
              (method-codegen-inline-p
-               (loop :with alist := ()
-                     :for method-name :in method-names
+               (loop :for method-name :in method-names
                      :for method-codegen-sym :in method-codegen-syms
                      :for method-def := (find method-name (parser:toplevel-define-instance-methods instance)
                                               :key (lambda (method-def)
                                                      (parser:node-variable-name
                                                       (parser:instance-method-definition-name method-def))))
-                     :for method-inline := (parser:instance-method-definition-inline method-def)
-                     ;; Convert from attribute inline to boolean
-                     :do (push (cons method-codegen-sym (if method-inline t nil)) alist)
-                     :finally (return alist)))
+                     :unless (null method-def)
+                       :collect (cons
+                                 method-codegen-sym
+                                 ;; Convert inline attribute to boolean.
+                                 (and (parser:instance-method-definition-inline method-def) t))))
 
              (instance-entry
                (tc:make-ty-class-instance
@@ -141,10 +141,33 @@
               ((tc:lookup-function env instance-codegen-sym :no-error t)
                (setf env (tc:unset-function env instance-codegen-sym))))
 
-        (when (tc:ty-class-fundeps class)
+        (when (consp (tc:ty-class-fundeps class))
           (handler-case
-              (setf env (tc:update-instance-fundeps env pred))
+              (setf env (tc:update-instance-fundeps env pred context))
+            (tc:fundep-ambiguity (e)
+              ;; In this case, a instance definition is ambiguous
+              ;; because a dependent type is too general.
+              ;; For example,
+              ;;   (define-class (C :a :b (:a -> :b)))
+              ;;   (define-instance (C :c :d))
+              ;; Here, the dependent type (:d) contains a type variable
+              ;; that is not in the determinant type (:c), but the
+              ;; underlying principle of functional dependencies requires
+              ;; that if we know the determinant type, then we should also
+              ;; know the dependent type, as we would in the following case,
+              ;;   (define-instance (C :c (List :c))
+              (tc-error "Instance fundep ambiguity"
+                        (tc-location (parser:toplevel-define-instance-head-location instance)
+                                     (let ((*print-escape* nil))
+                                       (with-output-to-string (s)
+                                         (print-object e s))))))
             (tc:fundep-conflict (e)
+              ;; In thid case, an instance simply conflicts with another on
+              ;; the basis of functional dependencies.
+              ;; For example,
+              ;;   (define-class (C :a :b (:a -> :b)))
+              ;;   (define-instance (C T U))
+              ;;   (define-instance (C T V)) ; Conflicts with the previous above.
               (tc-error "Instance fundep conflict"
                         (tc-location (parser:toplevel-define-instance-head-location instance)
                                      (let ((*print-escape* nil))
@@ -171,7 +194,7 @@
 
   (let* ((pred (tc:ty-class-instance-predicate instance))
 
-         (context (tc:ty-class-instance-constraints instance))
+         (context (tc:ty-class-instance-constraints-expanded instance env))
 
          (class-name (tc:ty-predicate-class pred))
 
@@ -211,7 +234,7 @@
                             (tc:predicate-match
                              (tc:apply-substitution instance-subs (tc:ty-class-instance-predicate superclass-instance))
                              superclass)
-                            (tc:ty-class-instance-constraints superclass-instance))
+                            (tc:ty-class-instance-constraints-expanded superclass-instance env))
 
                       :do (loop :for pred :in additional-context
                                 :do (unless (tc:entail env context pred)
@@ -223,7 +246,7 @@
 
     (check-duplicates
      (parser:toplevel-define-instance-methods unparsed-instance)
-     (alexandria:compose #'parser:node-variable-name #'parser:instance-method-definition-name)
+     (a:compose #'parser:node-variable-name #'parser:instance-method-definition-name)
      (lambda (first second)
        (tc-error "Duplicate method definition"
                  (tc-note first "first definition here")
@@ -244,8 +267,8 @@
     ;; Ensure each method is defined
     (loop :for name :being :the :hash-keys :of method-table
           :for method := (find name (parser:toplevel-define-instance-methods unparsed-instance)
-                               :key (alexandria:compose #'parser:node-variable-name
-                                                        #'parser:instance-method-definition-name))
+                               :key (a:compose #'parser:node-variable-name
+                                               #'parser:instance-method-definition-name))
           :unless method
             :do (tc-error "Missing method"
                           (tc-note unparsed-instance "The method ~S is not defined" name)))

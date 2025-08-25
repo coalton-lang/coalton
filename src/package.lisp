@@ -12,6 +12,8 @@
    #:in-package
    #:defpackage)
 
+  (:export #:defmacro)
+
   (:export #:call-coalton-function)
 
   (:export
@@ -37,6 +39,9 @@
    #:lisp-toplevel
    #:monomorphize
    #:inline
+   #:noinline
+   #:likely
+   #:unlikely
    #:specialize
    #:unable-to-codegen)
 
@@ -49,6 +54,7 @@
    #:Void
    #:Boolean #:True #:False
    #:Char
+   #:Bit
    #:U8
    #:U16
    #:U32

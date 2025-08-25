@@ -5,7 +5,9 @@
    #:coalton-library/classes
    #:coalton-library/functions)
   (:export
-   #:free
+   #:MonadFree
+   #:wrap
+   #:Free
    #:val
    #:liftF
    #:foldFree))
@@ -16,6 +18,21 @@
 
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+;;
+;; MonadFree Typeclass
+;;
+
+(coalton-toplevel
+  (define-class (Monad :m => MonadFree :f :m)
+    "A free monad is a monad, :m, which is capable of 'wrapping'
+around functors, and then 'unwrapping' them later using `>>=`."
+    (wrap (:f (:m :a) -> :m :a)))
+
+  (declare liftF ((Functor :f) (MonadFree :f :m) => :f :a -> :m :a))
+  (define (liftF f)
+    "Lift a Functor into the Free Monad."
+    (wrap (map pure f))))
 
 (coalton-toplevel
 
@@ -30,12 +47,6 @@ References: [here](https://serokell.io/blog/introduction-to-free-monads) and [he
     (Free (:f (Free :f :a)))
     (Val :a))
 
-  (declare liftF (Functor :f => :f :a -> Free :f :a))
-  (define (liftF f)
-    "Lift a Functor into the Free Monad."
-    (Free (map Val f)))
-
-  
   (declare foldFree (Monad :c =>
                            (:a (Free :a :b) -> :c (Free :a :b)) ->
                            (Free :a :b) ->
@@ -49,8 +60,8 @@ free monad to a target monad."
 
   ;;
   ;; Instances
-  ;; 
-  
+  ;;
+
   (define-instance (Functor :f => Functor (Free :f))
     (define (map f freef)
       (match freef
@@ -86,6 +97,8 @@ free monad to a target monad."
                 ((flip >>=) a->fb)
                 ga))))))
 
+  (define-instance (Functor :f => MonadFree :f (Free :f))
+    (define wrap Free))
 
   (define-instance (Traversable :t => Traversable (Free :t))
     ;; implementation taken from
@@ -114,3 +127,6 @@ free monad to a target monad."
                   ((Val a) (f r a))
                   ((Free fa) (fold g r fa))))))
         g))))  
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON-LIBRARY/MONAD/FREE")

@@ -365,7 +365,7 @@ help: remove additional docstring
   --> test:5:0
    |
  5 |   (derive Quuxableness)
-   |   ^^^^^^^^^^^^^^^^^^^^^ Class QUUXABLENESS does not exist
+   |   ^^^^^^^^^^^^^^^^^^^^^ Deriver for class QUUXABLENESS is not implemented
  6 |   (define-struct Point
    |  _^
  7 | |   (x UFix)
@@ -422,3 +422,102 @@ error: Malformed derive attribute
    |
  3 |  (derive coalton-library/classes:Eq 1)
    |  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected class arguments
+
+================================================================================
+119 Derive recursive type
+================================================================================
+
+(package test-package)
+
+(derive coalton-library/classes:Eq)
+(define-type (Tree%% :a)
+  Leaf%%
+  (Node :a (Tree%% :a) (Tree%% :a)))
+
+
+================================================================================
+120 Derive mutually recursive types
+================================================================================
+
+(package test-package)
+
+(derive coalton-library/classes:Eq)
+(define-type AA
+  AA0
+  (AAn BB))
+(derive coalton-library/classes:Eq)
+(define-type BB
+  BB0
+  (BBn AA))
+
+================================================================================
+121 Derive Hash without Eq
+================================================================================
+
+(package test-package)
+
+(derive coalton-library/classes:Hash)
+(define-struct HashableStruct
+  (A String)
+  (B String))
+
+--------------------------------------------------------------------------------
+
+error: Instance missing context
+  --> test:4:0
+   |
+ 4 |   (define-struct HashableStruct
+   |  _^
+ 5 | |   (A String)
+ 6 | |   (B String))
+   | |_____________^ No instance for COALTON-LIBRARY/CLASSES:EQ HASHABLESTRUCT
+
+================================================================================
+122 Derive Hash with Eq
+================================================================================
+
+(package test-package)
+
+(derive coalton-library/classes:Hash coalton-library/classes:Eq)
+(define-struct HashableStruct2
+  (A String)
+  (B String))
+
+================================================================================
+123 Derive types that are recursive below the toplevel
+================================================================================
+
+(package test-package)
+
+(derive coalton-library/classes:Eq)
+(define-type MyKind
+  MyStar
+  (MyKfun MyKind MyKind))
+
+(derive coalton-library/classes:Eq)
+(define-type MyTyCon
+  (MyTyCon String MyKind))
+
+================================================================================
+124 Derive Default with multiple constructors
+================================================================================
+
+(package test-package)
+
+(derive coalton-library/classes:Eq coalton-library/classes:Default)
+(define-type MyKind
+  MyStar
+  (MyKfun MyKind MyKind))
+
+--------------------------------------------------------------------------------
+
+error: Cannot derive class DEFAULT for type MYKIND.
+  --> test:3:0
+   |
+ 3 |   (derive coalton-library/classes:Eq coalton-library/classes:Default)
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Class DEFAULT can only be derived for types with a single constructor.
+ 4 |   (define-type MyKind
+   |  _^
+ 5 | |   MyStar
+ 6 | |   (MyKfun MyKind MyKind))
+   | |_________________________^ when deriving class DEFAULT for type MYKIND.

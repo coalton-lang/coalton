@@ -57,8 +57,7 @@
 (define-coalton-toplevel-editor-macro coalton:define-resumption (name constructor)
     "Create a new resumption with its single constructor. (Coalton top-level operator.)")
 
-;; the `&body` below is purely for the purpose editor indentation display.
-(define-coalton-toplevel-editor-macro coalton:declare (var &body type)
+(define-coalton-toplevel-editor-macro coalton:declare (var type)
     "Declare the type of a variable. (Coalton top-level operator.)")
 
 (define-coalton-toplevel-editor-macro coalton:define-class (class &body method-signatures)
@@ -70,7 +69,8 @@
 (define-coalton-toplevel-editor-macro coalton:lisp-toplevel (options &body lisp-toplevel-forms)
   "Include lisp forms. (Coalton top-level operator.)")
 
-(define-coalton-toplevel-editor-macro coalton:specialize (name from-ty to-ty)
+(define-coalton-toplevel-editor-macro coalton:specialize
+    (generic-fun specialized-fun specialized-ty)
   "Declare a specialization for a function. (Coalton top-level operator.)")
 
 ;;; Attributes

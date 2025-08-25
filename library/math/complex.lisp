@@ -11,7 +11,8 @@
    (#:arith #:coalton-library/math/arith)
    (#:types #:coalton-library/types))
   (:export
-   #:complex
+   #:Complex                            ; data type
+   #:ComplexComponent                   ; type class
    #:real-part
    #:imag-part
    #:conjugate
@@ -34,7 +35,14 @@ below.")
   ;; The representation of (Complex :t) is specially dealt with by the
   ;; compiler in lisp-type.lisp.
   (define-type (Complex :a)
-    "Complex number that may either have a native or constructed representation."
+    "A complex number with a real and imaginary component.
+
+This object does not have any public constructors. Instead, use the
+function `complex` of the `ComplexComponent` type class.
+
+A `Complex` object may either have a native or constructed
+representation. See the `ComplexComponent` type class for allowed
+component types."
     (%Complex :a :a))
 
   (define-instance (types:RuntimeRepr :t => types:RuntimeRepr (Complex :t))
@@ -50,39 +58,44 @@ below.")
 ;; as a Lisp type in codegen. SBCL and CCL tolerate it fine.
 
 (coalton-toplevel
-  (define-class (Num :a => Complex :a)
-    (complex (:a -> :a -> (Complex :a)))
+  (define-class (Num :a => ComplexComponent :a)
+    "A type class for describing complex component types. This type class
+also encodes the construction and projection of `Complex` data types."
+    (complex (:a -> :a -> Complex :a))
     (real-part (Complex :a -> :a))
     (imag-part (Complex :a -> :a)))
 
-  (define-instance ((Complex :a) => Into :a (Complex :a))
+  (define-instance (ComplexComponent :a => Into :a (Complex :a))
     (inline)
     (define (into a)
       (complex a 0)))
 
   (inline)
-  (declare conjugate ((Complex :a) => Complex :a -> Complex :a))
-  (define (conjugate n)
-    "The complex conjugate."
-    (complex (real-part n) (negate (imag-part n))))
+  (declare conjugate (ComplexComponent :a => Complex :a -> Complex :a))
+  (define (conjugate z)
+    "The complex conjugate. If $z=a+bi$ then the conjugate $\\bar z=a-bi$."
+    (complex (real-part z) (negate (imag-part z))))
 
   (inline)
-  (declare square-magnitude (Complex :a => Complex :a -> :a))
-  (define (square-magnitude a)
-    "The length of a complex number."
-    (+ (* (real-part a) (real-part a))
-       (* (imag-part a) (imag-part a))))
+  (declare square-magnitude (ComplexComponent :a => Complex :a -> :a))
+  (define (square-magnitude z)
+    "The squared length of a complex number:
+$$\\vert z\\vert^2=(\\operatorname{Re} z)^2+(\\operatorname{Im} z)^2.$$"
+    (let ((r (real-part z))
+          (i (imag-part z)))
+       (+ (* r r) (* i i))))
 
-  (declare ii ((Complex :a) => Complex :a))
+  (declare ii (ComplexComponent :a => Complex :a))
   (define ii
-    "The complex unit i. (The double ii represents a blackboard-bold i.)"
+    "The complex unit $i=\\sqrt{-1}$. (The double `ii` represents a
+blackboard-bold 𝕚.)"
     (complex 0 1))
 
-  (define-instance (Complex :a => Eq (Complex :a))
+  (define-instance (ComplexComponent :a => Eq (Complex :a))
     (inline)
     (define (== a b) (complex-equal a b)))
 
-  (define-instance (Complex :a => Num (Complex :a))
+  (define-instance (ComplexComponent :a => Num (Complex :a))
     (inline)
     (define (+ a b) (complex-plus a b))
     (inline)
@@ -97,7 +110,7 @@ below.")
   ;;                   => (Dividable (Complex :num) (Complex :frac)))
   ;;   (define (general/ a b) (complex-divide a b)))
 
-  (define-instance ((Complex :a) (Reciprocable :a) => Reciprocable (Complex :a))
+  (define-instance ((ComplexComponent :a) (Reciprocable :a) => Reciprocable (Complex :a))
     (inline)
     (define (reciprocal x)
       (complex-reciprocal x))
@@ -105,35 +118,35 @@ below.")
     (define (/ a b)
       (complex-divide a b)))
 
-  (define-instance (Complex :a => Complex (Complex :a))
-    (define (complex a b)
-      (%Complex a b))
-    (define (real-part a)
-      (match a
-        ((%Complex a _) a)))
-    (define (imag-part a)
-      (match a
-        ((%Complex _ b) b))))
+  ;; (define-instance (ComplexComponent :a => ComplexComponent (Complex :a))
+  ;;   (define (complex a b)
+  ;;     (%Complex a b))
+  ;;   (define (real-part a)
+  ;;     (match a
+  ;;       ((%Complex a _) a)))
+  ;;   (define (imag-part a)
+  ;;     (match a
+  ;;       ((%Complex _ b) b))))
 
   ;; Below are specializable functions, as class methods cannot be specialized
   ;; This allows us to call out to faster lisp functions for doing arithmetic.
   ;; These will only be called from monomorphized forms.
-  (declare complex-equal (Complex :a => Complex :a -> Complex :a -> Boolean))
+  (declare complex-equal (ComplexComponent :a => Complex :a -> Complex :a -> Boolean))
   (define (complex-equal a b)
     (and (== (real-part a) (real-part b))
          (== (imag-part a) (imag-part b))))
 
-  (declare complex-plus ((Complex :a) => Complex :a -> Complex :a -> Complex :a))
+  (declare complex-plus (ComplexComponent :a => Complex :a -> Complex :a -> Complex :a))
   (define (complex-plus a b)
     (complex (+ (real-part a) (real-part b))
              (+ (imag-part a) (imag-part b))))
 
-  (declare complex-minus ((Complex :a) => Complex :a -> Complex :a -> Complex :a))
+  (declare complex-minus (ComplexComponent :a => Complex :a -> Complex :a -> Complex :a))
   (define (complex-minus a b)
     (complex (- (real-part a) (real-part b))
              (- (imag-part a) (imag-part b))))
 
-  (declare complex-times ((Complex :a) => Complex :a -> Complex :a -> Complex :a))
+  (declare complex-times (ComplexComponent :a => Complex :a -> Complex :a -> Complex :a))
   (define (complex-times a b)
     (let ra = (real-part a))
     (let ia = (imag-part a))
@@ -142,11 +155,11 @@ below.")
     (complex (- (* ra rb) (* ia ib))
              (+ (* ra ib) (* ia rb))))
 
-  (declare complex-fromint ((Complex :a) => Integer -> Complex :a))
+  (declare complex-fromint (ComplexComponent :a => Integer -> Complex :a))
   (define (complex-fromint n)
     (complex (fromint n) 0))
 
-  (declare complex-reciprocal ((Complex :a) (Reciprocable :a) => Complex :a -> Complex :a))
+  (declare complex-reciprocal ((ComplexComponent :a) (Reciprocable :a) => Complex :a -> Complex :a))
   (define (complex-reciprocal x)
     (let a = (real-part x))
     (let b = (imag-part x))
@@ -154,7 +167,9 @@ below.")
     ;; z^-1 = z*/|z|^2
     (complex (* a divisor) (negate (* b divisor))))
 
-  (declare complex-divide ((Complex :a) (Complex :b) (Dividable :a :b)
+  (declare complex-divide ((ComplexComponent :a)
+                           (ComplexComponent :b)
+                           (Dividable :a :b)
                            => Complex :a -> Complex :a -> Complex :b))
   (define (complex-divide a b)
     (let dividend = (* a (conjugate b)))
@@ -162,7 +177,7 @@ below.")
     (complex (general/ (real-part dividend) divisor)
              (general/ (imag-part dividend) divisor))))
 
-(cl:defmacro %define-native-complex-instances (type repr)
+(cl:defmacro %define-native-complex-instances (type repr cl:&key (division cl:t))
 
   (cl:let
       ((conj (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-CONJUGATE")))
@@ -171,14 +186,14 @@ below.")
        (minus (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-MINUS")))
        (times (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-TIMES")))
        (cfromint (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-FROMINT")))
-       (divide (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-DIVIDE")))
-       (recip (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-RECIPROCAL"))))
+       (divide (cl:if (cl:not division) cl:nil (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-DIVIDE"))))
+       (recip (cl:if (cl:not division) cl:nil (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-COMPLEX-RECIPROCAL")))))
 
     `(cl:progn
        (cl:pushnew ',repr *native-complex-types* :test 'cl:equal)
 
        (coalton-toplevel
-         (define-instance (Complex ,type)
+         (define-instance (ComplexComponent ,type)
            (inline)
            (define (complex a b)
              (lisp (Complex ,type) (a b)
@@ -241,28 +256,34 @@ below.")
              (lisp (Complex ,type) (f)
                (cl:complex f ,(cl:coerce 0 repr)))))
 
-         (specialize complex-divide ,divide (Complex ,type -> Complex ,type -> Complex ,type))
-         (inline)
-         (declare ,divide (Complex ,type -> Complex ,type -> Complex ,type))
-         (define (,divide a b)
-           (lisp (Complex ,type) (a b)
-             (cl:declare (cl:type (cl:complex ,repr) a b))
-             (cl:/ a b)))
+         ,@(cl:if
+            (cl:not division)
+            cl:nil
+            `((specialize complex-divide ,divide (Complex ,type -> Complex ,type -> Complex ,type))
+              (inline)
+              (declare ,divide (Complex ,type -> Complex ,type -> Complex ,type))
+              (define (,divide a b)
+                (lisp (Complex ,type) (a b)
+                  (cl:declare (cl:type (cl:complex ,repr) a b))
+                  (cl:/ a b)))
 
-         (specialize complex-reciprocal ,recip (Complex ,type -> Complex ,type))
-         (inline)
-         (declare ,recip (Complex ,type -> Complex ,type))
-         (define (,recip a)
-           (lisp (Complex ,type) (a)
-             (cl:declare (cl:type (cl:complex ,repr) a))
-             (cl:/ a)))))))
+              (specialize complex-reciprocal ,recip (Complex ,type -> Complex ,type))
+              (inline)
+              (declare ,recip (Complex ,type -> Complex ,type))
+              (define (,recip a)
+                (lisp (Complex ,type) (a)
+                  (cl:declare (cl:type (cl:complex ,repr) a))
+                  (cl:/ a)))))))))
 
 (%define-native-complex-instances F32 cl:single-float)
 (%define-native-complex-instances F64 cl:double-float)
+(%define-native-complex-instances Fraction cl:rational)
+(%define-native-complex-instances Integer cl:integer :division cl:nil)
+
 
 (cl:defmacro %define-standard-complex-instances (type)
   `(coalton-toplevel
-     (define-instance (Complex ,type)
+     (define-instance (ComplexComponent ,type)
        (inline)
        (define (complex a b)
          (%Complex a b))

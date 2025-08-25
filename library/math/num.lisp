@@ -28,6 +28,7 @@
   (define-eq Integer)
   (define-eq IFix)
   (define-eq UFix)
+  (define-eq Bit)
   (define-eq I8)
   (define-eq U8)
   (define-eq I16)
@@ -47,6 +48,7 @@
   (define-ord Integer)
   (define-ord IFix)
   (define-ord UFix)
+  (define-ord Bit)
   (define-ord I8)
   (define-ord U8)
   (define-ord I16)
@@ -75,6 +77,29 @@
   (define-num-wrapping U16 16)
   (define-num-wrapping U32 32)
   (define-num-wrapping U64 64)
+
+  (define-instance (cls:Num Bit)
+    (inline)
+    (define (cls:+ a b)
+      (lisp Bit (a b)
+        (cl:logxor a b)))
+
+    (inline)
+    (define (cls:- a b)
+      (lisp Bit (a b)
+        (cl:logxor a b)))
+
+    (inline)
+    (define (cls:* a b)
+      (lisp Bit (a b)
+        (cl:logand a b)))
+
+    (inline)
+    (define (cls:fromInt x)
+      "The integer `x` is converted to a `Bit` by its zeroth bit (i.e.,
+whether it's even or odd)."
+      (lisp Bit (x)
+        (cl:ldb (cl:byte 1 0) x))))
 
   ;; UFixes are unsafe and depend on implementation.
   (define-instance (cls:Num UFix)
@@ -141,6 +166,7 @@
   (define-bits-checked I64 %handle-64bit-overflow)
   (define-bits-checked IFix %handle-fixnum-overflow)
 
+  (define-bits-wrapping Bit 1)
   (define-bits-wrapping U8 8)
   (define-bits-wrapping U16 16)
   (define-bits-wrapping U32 32)
@@ -157,6 +183,7 @@
   (define-sxhash-hasher I16)
   (define-sxhash-hasher I32)
   (define-sxhash-hasher I64)
+  (define-sxhash-hasher Bit)
   (define-sxhash-hasher U8)
   (define-sxhash-hasher U16)
   (define-sxhash-hasher U32)
@@ -171,6 +198,7 @@
 ;;; Default instances
 ;;;
 
+  (define-default-num Bit)
   (define-default-num I8)
   (define-default-num U8)
   (define-default-num I16)

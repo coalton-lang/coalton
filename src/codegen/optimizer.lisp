@@ -26,6 +26,9 @@
    #:monomorphize
    #:make-candidate-manager)
   (:import-from
+   #:coalton-impl/codegen/intrinsic-applications
+   #:transform-intrinsic-applications)
+  (:import-from
    #:coalton-impl/codegen/traverse
    #:action
    #:*traverse*
@@ -188,6 +191,7 @@ arity. TABLE will be mutated with additional entries."
                    (return-from rewrite-direct-application
                      (make-node-direct-application
                       :type (node-type node)
+                      :properties (node-properties node)
                       :rator-type (node-type (node-application-rator node))
                       :rator name
                       :rands (node-application-rands node)))))))
@@ -232,6 +236,7 @@ ENV. Return a new node which is optimized."
   (declare (type node node)
            (type tc:environment env)
            (values node &optional))
+
   (prog ((runs 0)
          (redo? nil))
    :REDO
@@ -240,6 +245,7 @@ ENV. Return a new node which is optimized."
      (when (and settings:*print-optimization-passes*
                 (> runs 1))
        (format t "~&;; Optimizing again, attempt #~D~%" runs))
+     (setf node (transform-intrinsic-applications node))
      (setf node (canonicalize node))
      (setf node (match-dynamic-extent-lift node env))
      (setf node (propagate-constants node env))
@@ -351,6 +357,7 @@ speaking, the following kinds of transformations happen:
                  :type (tc:make-function-type*
                         (subseq (tc:function-type-arguments (node-type function)) (length new-args))
                         (tc:function-return-type (node-type node)))
+                 :properties '()
                  :rator function
                  :rands new-args)))))
 
@@ -427,7 +434,7 @@ speaking, the following kinds of transformations happen:
            (subs (tc:predicate-match (tc:ty-class-instance-predicate instance) pred))
 
            ;; Find the superclasses of PRED
-           (constraints (tc:apply-substitution subs (tc:ty-class-instance-constraints instance)))
+           (constraints (tc:apply-substitution subs (tc:ty-class-instance-constraints-expanded instance env)))
 
            (args
              (loop :for arg :in (node-rands node)
@@ -510,8 +517,10 @@ when possible."
              ;; pattern, then it can escape the match branches scope,
              ;; and thus cannot be safely stack allocated.
              (loop :for branch :in (node-match-branches node)
-                   :when (typep (match-branch-pattern branch) 'pattern-var) :do
-                     (return-from apply-lift nil))
+                   :for pattern := (match-branch-pattern branch)
+                   :when (or (pattern-var-p pattern)
+                             (pattern-binding-p pattern))
+                     :do (return-from apply-lift nil))
 
              (let ((expr (node-match-expr node)))
                (unless (or (node-direct-application-p expr)

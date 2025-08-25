@@ -525,7 +525,7 @@ It attempts to rebalance with a minimum of array copying."
                       (map branch-rebalancer
                            (iter:up-through stop))))))))
 
-(cl:defmacro make (cl:&rest elems)
+(defmacro make (cl:&rest elems)
   "Create a new `Seq` containing `elems`."
   (cl:let* ((l
               (cl:length elems))

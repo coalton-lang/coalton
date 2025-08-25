@@ -19,37 +19,40 @@
    #:dual-part)
   (:documentation "
 Dual numbers are a hypercomplex number system [1]. A dual number has
-the form `a + bε` where `a` and `b` are real numbers and `ε` is a
-symbol that satisfies `ε^2 = 0` and `ε != 0`. The value `a` is often
-called the *primal part* and the value `b` is often called the *dual
-part*. One application of dual numbers is automatic differentiation;
-an example taken from [2] is as follows.
+the form $a + b\\varepsilon$ where $a$ and $b$ are real numbers and
+$\\varepsilon$ is a symbol that satisfies $\\varepsilon^2=0$ and
+$\\varepsilon\\neq 0$. The value $a$ is often called the *primal part*
+and the value $b$ is often called the *dual part*. One application of
+dual numbers is automatic differentiation; an example taken from [2]
+is as follows.
 
-Consider the function `f(x) = 3x+2` and you want to calculate `f(4)`
-and `f'(4)`. By the usual rules of differentiation, we know `f'(x) = 3`
- and thus `(f(4), f'(4)) = (14, 3)`. We seek to recover this with
-dual numbers.
+Consider the function $f(x) = 3x+2$ and you want to calculate $f(4)$
+and $f^{\\prime}(4)$. By the usual rules of differentiation, we know
+$f^{\\prime}(x) = 3$ and thus $(f(4), f^{\\prime}(4)) = (14, 3)$. We
+seek to recover this with dual numbers.
 
 With dual numbers, we can calculate
 
-```
-f(a) + f'(a)ε
-```
+$$f(a) + f^{\\prime}(a)\\varepsilon$$
 
-by taking a real-valued function `f` and evaluating as if it were a
-dual-valued function at the point `a + ε`. Thus, for the defined `f`,
-we have:
+by taking a real-valued function $f$ and evaluating as if it were a
+dual-valued function at the point $a + \\varepsilon$. Thus, for the
+defined $f$, we have:
 
-```
-f(4 + ε) = 3(4 + ε) + 2
-         = 3*4 + 3ε + 2
-         = 14 + 3ε.
-```
+$$
+\\begin{aligned}
+f(4 + \\varepsilon)
+&= 3(4 + \\varepsilon) + 2 \\\\\\\\
+&= 3\\cdot 4 + 3\\varepsilon + 2 \\\\\\\\
+&= 14 + 3\\varepsilon.
+\\end{aligned}
+$$
 
-In this result, the primal `14` is the value of `f(4)` and the dual is
-the value of of `f'(4)`.
+In this result, the primal $14$ is the value of $f(4)$ and the dual is
+the value of of $f^{\\prime}(4)$.
 
-Haskell has an automatic differentiation library and you can find it here [3].
+Haskell has an automatic differentiation library and you can find it
+here [3].
 
 Limitations:
 
@@ -76,9 +79,12 @@ References:
 (coalton-toplevel
 
   (define-struct (Dual :t)
-    "Representation of a dual number in the form `a + bε` where `a` and `b` are real numbers and `ε` satisfies `ε^2 = 0` and `ε != 0`.
+    "Representation of a dual number in the form $a + b\\varepsilon$ where
+$a$ and $b$ are real numbers and $\\varepsilon$ satisfies
+$\\varepsilon^2 = 0$ and $\\varepsilon \\neq 0$.
 
-Note: `Eq`, and `Ord` and `Hash` only make use of the primal component."
+Note: `Eq`, and `Ord` and `Hash` only make use of the primal
+component."
     (primal-part "The primal part." :t)
     (dual-part "The dual part." :t))
 

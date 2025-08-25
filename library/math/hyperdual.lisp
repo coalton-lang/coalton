@@ -186,7 +186,7 @@ Note: See identity (1) in the description of this package (`coalton-library/math
                  (+ (+ (* ax dy) (* dx ay)) (+ (* bx cy) (* cx by)))))
     (define (fromInt x) (Hyperdual (fromInt x) 0 0 0)))
 
-  (define-instance (Complex :t => Complex (Hyperdual :t))
+  (define-instance (ComplexComponent :t => ComplexComponent (Hyperdual :t))
     (define (complex a b)
       (complex::%Complex a b))
     (define (real-part a)
@@ -196,7 +196,7 @@ Note: See identity (1) in the description of this package (`coalton-library/math
       (match a
         ((complex::%Complex _ b) b))))
 
-  (define-instance ((Complex :t) (Into :t (Hyperdual :t)) => Into (Complex :t) (Complex (Hyperdual :t)))
+  (define-instance ((ComplexComponent :t) (Into :t (Hyperdual :t)) => Into (Complex :t) (Complex (Hyperdual :t)))
     (define (into z) (complex (into (real-part z)) (into (imag-part z)))))
 
   (define-instance (Reciprocable :t => Reciprocable (Hyperdual :t))

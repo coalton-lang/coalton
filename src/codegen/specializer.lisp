@@ -65,6 +65,7 @@
                      ((< num-preds (length (node-rands node)))
                       (make-node-application
                        :type (node-type node)
+                       :properties (node-properties node)
                        :rator (make-node-variable
                                :type rator-type
                                :value (tc:specialization-entry-to specialization))

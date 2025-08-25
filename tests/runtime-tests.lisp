@@ -206,3 +206,8 @@
   (is (none? (iter:next! (gh-974))))
   (is (none? (iter:next! (gh-975))))
   (is (none? (iter:next! (gh-976)))))
+
+(define-test test-nullary-or-and ()
+  (is (and))
+  (is (not (or))))
+

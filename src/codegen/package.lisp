@@ -27,4 +27,10 @@
    #:*codegen-hook*)
   (:export
    #:compile-translation-unit
-   #:*codegen-hook*))
+   #:*codegen-hook*)
+
+  (:import-from
+   #:coalton-impl/codegen/intrinsic-applications
+   #:transform-intrinsic-applications)
+  (:export
+   #:transform-intrinsic-applications))

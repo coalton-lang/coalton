@@ -27,7 +27,7 @@
    #:make-node-literal                  ; CONSTRUCTOR
    #:node-literal-value                 ; ACCESSOR
    #:node-integer-literal               ; STRUCT
-   #:make-node-integerl-literal         ; CONSTRUCTOR
+   #:make-node-integer-literal          ; CONSTRUCTOR
    #:node-integer-literal-value         ; ACCESSOR
    #:node-bind                          ; STRUCT
    #:make-node-bind                     ; CONSTRUCTOR
@@ -1041,10 +1041,6 @@ Rebound to NIL parsing an anonymous FN.")
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:or (cst:raw (cst:first form))))
-     (unless (cst:consp (cst:rest form))
-       (parse-error "Malformed or expression"
-                    (note-end source (cst:first form) "expected one or more arguments")))
-
      (make-node-or
       :nodes (loop :for args := (cst:rest form) :then (cst:rest args)
                    :while (cst:consp args)
@@ -1054,9 +1050,6 @@ Rebound to NIL parsing an anonymous FN.")
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:and (cst:raw (cst:first form))))
-     (unless (cst:consp (cst:rest form))
-       (parse-error "Malformed and expression"
-                    (note-end source (cst:first form) "expected one or more arguments")))
 
      (make-node-and
       :nodes (loop :for args := (cst:rest form) :then (cst:rest args)
@@ -1064,7 +1057,6 @@ Rebound to NIL parsing an anonymous FN.")
                    :for arg := (cst:first args)
                    :collect (parse-expression arg source))
       :location (form-location source form)))
-
     ((and (cst:atom (cst:first form))
           (eq 'coalton:if (cst:raw (cst:first form))))
      (unless (cst:consp (cst:rest form))

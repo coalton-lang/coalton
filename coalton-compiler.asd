@@ -110,6 +110,7 @@
                              (:file "codegen-type-definition")
                              (:file "codegen-expression")
                              (:file "codegen-class")
+                             (:file "intrinsic-applications")
 
                              ;; Optimizations
                              (:file "monomorphize")
@@ -127,5 +128,7 @@
                (:file "reader")
                (:file "debug")
                (:file "faux-macros")
+               (:file "intrinsic-applications")
+               (:file "define-coalton-macro")
                (:file "language-macros")
                (:file "lock-package" :if-feature :sb-package-locks)))

@@ -391,9 +391,104 @@ Structs can also be parametric:
 
 ## Looping & Iteration
 
+Coalton offers three main ways to do explicit loops:
+
+- Tail-recursion and `rec`,
+- Built-in iterator-based looping constructs, and
+- Experimental Lisp-like iteration macros (e.g., `dotimes`).
+
+### Tail-Recursion and `rec`
+
+Coalton strives to ensure tail calls are always eliminated. As such, tail recursion is idiomatic in Coalton.
+
+```lisp
+(coalton-toplevel
+  (define (find-integer predicate limit)
+    (cond
+      ((negative? limit) False)
+      ((predicate limit) True)
+      (True              (find-integer predicate (1- limit))))))
+```
+
+This function can be run for arbitrarily large `limit` without affecting the stack:
+
+```lisp
+> (coalton (find-integer (fn (x) (== 65536 (* x x))) 1000000))
+COMMON-LISP:T
+```
+
+Coalton has a special built-in operator `rec` for doing "named-let"-style iteration. It's general syntax is:
+
+```lisp
+(rec <name> (<binding>*)
+  <body>)
+
+;; <name> := <symbol>
+;;         | (<symbol> <type>)
+;;
+;; <binding> := (<symbol> <value>)
+```
+
+The `<name>` is in essence a local (tail-recursive) function in the `<body>`. Optionally, the type of this function can be declared, which is useful to avoid unwanted polymorphism. The `rec` operator does not require the invocation to be in tail position.
+
+It is idiomatic in Coalton to choose the name `%` when there is no other reasonable name.
+
+Here is a first example of `rec` to implement a list reversal.
+
+```lisp
+(coalton-toplevel
+  (define (rev l)
+    (rec % ((result Nil) (remaining l))
+      (match remaining
+        ((Nil) result)
+        ((Cons x xs) (% (Cons x result) xs))))))
+```
+
+Here is an example of a Fibonacci function that works for any numeric input and output:
+
+```lisp
+(coalton-toplevel
+  (define (fib-polymorphic n)
+    (rec % ((i n) (a 0) (b 1))
+      (cond
+        ((== 0 i) a)
+        ((== 1 i) b)
+        (True (% (- i 1) b (+ a b)))))))
+```
+
+The type is `∀ A B. (NUM B) (NUM A) ⇒ (A → B)` and thus can be used for whatever numeric types:
+
+```
+> (coalton (the F32 (fib-polymorphic (the Integer 10))))
+55.0
+```
+
+We can make a monomorphic variant for `Integer` by declaring the type of the recursion.
+
+```lisp
+(define (fib-monomorphic n)
+  (rec (% (Integer -> Integer -> Integer -> Integer))
+       ((i n)
+        (a 0)
+        (b 1))
+    (cond
+      ((== 0 i) a)
+      ((== 1 i) b)
+      (True (% (- i 1) b (+ a b))))))
+```
+
+Now it works without any type declarations on use:
+
+```
+> (coalton (fib-monomorphic 10))
+55
+```
+
+### Built-In Looping Constructs
+
 Coalton supports infinite looping, conditional looping, and `for`-loop styled iteration. 
 
-### `loop`, `while`, `while-let`, and `for`
+#### `loop`, `while`, `while-let`, and `for`
 
 You can loop forever 
 
@@ -430,7 +525,7 @@ You can loop over instances of `IntoIterator`
 ```
 
 
-### `break` and `continue`
+#### `break` and `continue`
 
 Each of the above looping forms supports `break` and `continue`.
 
@@ -458,7 +553,7 @@ on its next iteration. The following prints out `c`, `o`, `a`, `t`,
 ```
 
 
-### Loop Labels
+#### Loop Labels
 
 Each of the above looping forms takes an optional loop label
 keyword. These labels can be used in conjunction with `break` and
@@ -506,6 +601,33 @@ accumulator and the counter exceeds 500.  Without the `:outer` label,
     (cell:read acc)))
 ```
 
+### Experimental Lisp Iteration Macros
+
+> [!WARNING]
+> These constructs are experimental and may change.
+
+The standard library package [`coalton-library/experimental/loops`](https://coalton-lang.github.io/reference/#coalton-library/experimental/loops-package) contains a plethora of Lisp-style iteration macros, including `dotimes` and `dolist` which operate similar to their Common Lisp counterparts.
+
+The functions generally return `Unit` unless they're specifically collecting or accumulating a value. Counts (like in `dotimes`) and indices (like in `dolist-enumerated`) are generally `UFix`.
+
+Assuming we have `dotimes` accessible from our package, we might write a function to print out Pythagorean triples in the following way:
+
+```lisp
+(coalton-toplevel
+  (define (print-pythagorean-triples limit)
+    (dotimes (c limit)
+      (dotimes (b c)
+        (dotimes (a b)
+          (when (== (^ c 2) (+ (^ a 2) (^ b 2)))
+            (trace (Tuple3 a b c))))))))
+
+;; > (coalton (print-pythagorean-triples 20))
+;; #.(TUPLE3 3 4 5)
+;; #.(TUPLE3 6 8 10)
+;; #.(TUPLE3 5 12 13)
+;; #.(TUPLE3 9 12 15)
+;; #.(TUPLE3 8 15 17)
+```
 
 ## Numbers
 
@@ -529,7 +651,7 @@ signed types (`I32` and `I64`) and fixed-width unsigned types (`U8`,
 
 Lastly, there's a ratio type called `Fraction`, which is a ratio of two `Integer` values.
 
-Numbers implement the `Num` typeclass, which has methods `+`, `-`, `*`, and `fromInt`.
+Numbers implement the `Num` type class, which has methods `+`, `-`, `*`, and `fromInt`.
 
 ### Division, in short
 
@@ -557,7 +679,7 @@ Coalton does have a division operator `/`, but it's a separate, slightly more di
 
 To address the first concern, division may result in a run-time error. We don't use `Optional` because it is quite cumbersome to use in mathematical contexts. (One may use `safe/` for a variant that does a division-by-zero check and produces an `Optional`.)
 
-To address the second concern, we need to introduce a new typeclass called `Dividable`. The type expression
+To address the second concern, we need to introduce a new type class called `Dividable`. The type expression
 
 ```
 (Dividable :s :t)
@@ -678,7 +800,7 @@ Coalton code is statically typechecked. Types are inferred.
 ```lisp
 (coalton-toplevel
   (define (fun x)
-    (map (+ 2) (string:parse-int x))))
+    (map (+ 2) (str:parse-int x))))
 ```
 
 The type of a variable or function can be checked with `coalton:type-of`.
@@ -694,7 +816,7 @@ Type declarations can always be added manually.
 (coalton-toplevel
   (declare fun (String -> (Optional Integer)))
   (define (fun x)
-    (map (+ 2) (string:parse-int x))))
+    (map (+ 2) (str:parse-int x))))
 ```
 
 Type declarations can also be added in let expressions
@@ -776,7 +898,7 @@ The into method is used only when a conversion can always be performed from one 
       (_ None)))
 
   ;; Submatches can be captured in a variable
-  (declare dedup-head (List :a -> List :a))
+  (declare dedup-head (Eq :a => List :a -> List :a))
   (define (dedup-head xs)
     "If the first and second member of list are equal, drop the first"
     (match xs
@@ -967,15 +1089,15 @@ Functions can be returned from early with `return`.
     (into n)))
 ```
 
-## Typeclasses
+## Type Classes
 
-Coalton supports typeclasses.
+Coalton supports type classes.
 
-Currently, *all* member functions must be defined for each typeclass instance.
+Currently, *all* member functions must be defined for each type class instance.
 
 ```lisp
 (coalton-toplevel
-  ;; Typeclasses are defined with the define-class keyword
+  ;; Type classes are defined with the define-class keyword
   (define-class (Eq :a)
     (== (:a -> :a -> Boolean)))
 
@@ -984,7 +1106,7 @@ Currently, *all* member functions must be defined for each typeclass instance.
     Green
     Blue)
 
-  ;; Typeclass instances are defined with the define-instance keyword
+  ;; Type class instances are defined with the define-instance keyword
   (define-instance (Eq Color)
     (define (== a b)
       (match (Tuple a b)
@@ -1010,9 +1132,9 @@ Currently, *all* member functions must be defined for each typeclass instance.
 ```
 
 
-## Builtin Typeclasses
+## Builtin Type Classes
 
-The following are the main typeclasses defined in the standard library.
+The following are the main type classes defined in the standard library.
 
 * `Eq` - defined on types that are comparable
 * `Ord` - defined on types that are orderable
@@ -1022,7 +1144,7 @@ The following are the main typeclasses defined in the standard library.
 * `Monoid` - defined on types that are semigroups and have an identity element
 
 
-Each of the following typeclasses resembles the class of the same name in
+Each of the following type classes resembles the class of the same name in
 Haskell, aside from meager differences.
 
 * `Functor` - `fmap` is just `map` in Coalton
@@ -1032,10 +1154,48 @@ Haskell, aside from meager differences.
 * `Foldable`
 * `Traversable`
 
-These typeclasses are inspired by traits of the same name in Rust:
+These type classes are inspired by traits of the same name in Rust:
 
 * `Into` - total conversions between one type and another
 * `TryInto` - non-total conversions between one type and another
+
+## Automatically Deriving Type Class Instances from Type Definitions
+
+Instances of some type classes can be derived so that they are defined automatically for user-defined types.
+
+```lisp
+(coalton-toplevel
+  (derive Eq Hash)
+  (define-struct Point
+    (x UFix)
+    (y UFix)))
+```
+
+Now you can use the `==` and `hash` methods on `Point` structures:
+
+```lisp
+(coalton
+  ;; Test `Point' equality
+  (== (Point 1 2) (Point 3 3))
+
+  ;; Make a map using `Point' as a key
+  (let map = (the (hashmap:HashMap Point UFix) hashmap:empty))
+  (hashmap:insert map (Point 0 0) 1))
+```
+
+The instance that is generated will be the "obvious" one in each case. For example, equality will test that every sub-field of each case is equal. This may not be desired for every type, and hence sometimes custom instances are still needed.
+
+### Builtin `derive` Type Classes
+
+Instances of the following classes can be derived:
+
+- `Eq`
+- `Hash`
+- `Default`
+
+Currently these are the only derivable classes in the standard library, but more may be added in the future.
+
+Writing custom derivers does not yet have an official API, but for the adventurous, it can be done relatively easily. For guidance, see [derivers.lisp](./../library/derivers.lisp).
 
 ## Do Notation
 
@@ -1050,13 +1210,13 @@ Coalton has a `do` macro that works similarly to do notation in Haskell.
       (let c = (+ a b))
       (pure c)))
 
-    ;; [6+3, 5+3, 5+3, 6+2, 5+2, 4+2, 6+1, 5+1, 4+1]
+    ;; [6+3, 5+3, 4+3, 6+2, 5+2, 4+2, 6+1, 5+1, 4+1]
    (define xs (f (make-list 1 2 3) (make-list 4 5 6))))
 ```
 
 ## Inline Type Annotations
 
-Inline type annotations can be added to resolve ambiguities when using typeclasses.
+Inline type annotations can be added to resolve ambiguities when using type classes.
 
 ```lisp
 (coalton-toplevel
@@ -1091,7 +1251,7 @@ The following functions all take an optional package parameter.
 
 ## Instance Defaulting
 
-Coalton has a similar [type defaulting system](https://www.haskell.org/onlinereport/decls.html#sect4.3.4) as Haskell. Type defaulting is invoked on implicitly typed definitions and code compiled with the `coalton` macro. Defaulting is applied to a set of ambiguous predicates, with the goal to resolve an ambiguous type variable to a valid type. Coalton will only default if one or more of the predicates is a numeric type class (Num, Quantizable, Reciprocable, Complex, Remainder, Integral). Coalton will default an ambiguous variable to either `Integer`, `F32`, or `F64`; taking the first type that is valid for all predicates referencing that type variable. Coalton will not default when one or more of the predicates containing an ambiguous variable is a multi-parameter type class.
+Coalton has a similar [type defaulting system](https://www.haskell.org/onlinereport/decls.html#sect4.3.4) as Haskell. Type defaulting is invoked on implicitly typed definitions and code compiled with the `coalton` macro. Defaulting is applied to a set of ambiguous predicates, with the goal to resolve an ambiguous type variable to a valid type. Coalton will only default if one or more of the predicates is a numeric type class (`Num`, `Quantizable`, `Reciprocable`, `ComplexComponent`, `Remainder`, `Integral`). Coalton will default an ambiguous variable to either `Integer`, `F32`, or `F64`; taking the first type that is valid for all predicates referencing that type variable. Coalton will not default when one or more of the predicates containing an ambiguous variable is a multi-parameter type class.
 
 
 Differences from Haskell 98. Haskell would consider `Num (List :a)` to be ambiguous, Coalton would default it to `Num Integer`. Haskell would consider (`Num :a` `CustomTypeClass :a`) to be ambiguous, Coalton would default to (`Num Integer` `CustomTypeClass Integer`) assuming `CustomTypeClass Integer` was a valid instance.
@@ -1168,6 +1328,8 @@ Specialization can be listed in the repl with `print-specializations`.
 * Numerical operators like `+` only take 2 arguments.
 * Negation is done with `negate`.  The form `(- x)` is a curried function equivalent to `(fn (z) (- x z))`.
 
+For more details, see the [glossary](./glossary.md).
+
 # Incomplete Features
 
 Coalton presently supports these features, but more work remains to be
@@ -1194,7 +1356,6 @@ Coalton's exception handling system is incomplete and evolving. The design has b
 If you want to catch any exception, including Common Lisp error conditions, you can use a wildcard pattern:
 
 ```lisp
-
 (declare divide-by-random (Integer -> Integer -> Integer))
 (define (divide-by-random r m)
     "Divide `r` by a random integer between `0` and `m`. 
@@ -1208,33 +1369,31 @@ If you want to catch any exception, including Common Lisp error conditions, you 
 More generally
 
 ```lisp 
+(define-type Egg
+  ;;     cracked? cooked?
+  (Goose Boolean Boolean)
+  (Xenomorph))
 
-  (define-type Egg
-    ;;     cracked? cooked?
-    (Goose Boolean Boolean)
-    (Xenomorph))
+;; We define an exception type BadEgg with a few variants 
+(define-exception BadEgg
+  (UnCracked Egg)
+  (DeadlyEgg Egg))
 
-  ;; We define an exception type BadEgg with a few variants 
-  (define-exception BadEgg
-    (UnCracked Egg)
-    (DeadlyEgg Egg))
+;; If we try to crack open a Xenomorph egg, throw a DeadlyEgg error
+(declare crack (Egg -> Egg))
+(define (crack egg)
+  (match egg
+    ((Goose _ cooked?)
+     (Goose True cooked?))
+    ((Xenomorph)
+     (throw (DeadlyEgg egg)))))
 
-  ;; If we try to crack open a Xenomorph egg, throw a DeadlyEgg error
-  (declare crack (Egg -> Egg))
-  (define (crack egg)
-    (match egg
-      ((Goose _ cooked?)
-       (Goose True cooked?))
-      ((Xenomorph)
-       (throw (DeadlyEgg egg)))))
-
-  ;; crack an egg open safely. 
-  (declare crack-safely (Egg -> (Result BadEgg Egg)))
-  (define (crack-safely egg)
-    (catch (Ok (crack egg))
-      ((DeadlyEgg _) (Err (DeadlyEgg egg)))
-      ((UnCracked _) (Err (UnCracked egg)))))
-
+;; crack an egg open safely. 
+(declare crack-safely (Egg -> (Result BadEgg Egg)))
+(define (crack-safely egg)
+  (catch (Ok (crack egg))
+    ((DeadlyEgg _) (Err (DeadlyEgg egg)))
+    ((UnCracked _) (Err (UnCracked egg)))))
 ```
 
 ### Defining, Invoking, and Handling Resumptions 
@@ -1248,44 +1407,39 @@ of the constructor is also the name of the type of the resumption.
 The following example, building on the above, should elucidate
 
 ```lisp
+(define-resumption SkipEgg)
+(define-resumption (ServeRaw Egg) 
+  "Suggest the egg be served raw.")
 
-  (define-resumption SkipEgg)
-  (define-resumption (ServeRaw Egg) 
-    "Suggest the egg be served raw.")
+(declare cook (Egg -> Egg))
+(define (cook egg)
+  (let ((badegg (Uncracked egg)))     ; exceptions can be constructed outside throw
+    (match egg
+      ((Goose (True) _)  (Goose True True))
+      ((Goose (False) _) (throw badegg))
+      ((Xenomorph)       (throw (DeadlyEgg egg))))))
 
-  (declare cook (Egg -> Egg))
-  (define (cook egg)
-    (let ((badegg (Uncracked egg)))     ; exceptions can be constructed outside throw
-      (match egg
-        ((Goose (True) _)  (Goose True True))
-        ((Goose (False) _) (throw badegg))
-        ((Xenomorph)       (throw (DeadlyEgg egg))))))
-
-
-  ;; Return None if a SkipEgg resumption is received.
-  (declare make-breakfast-with (Egg -> (Optional Egg)))
-  (define (make-breakfast-with egg)
-    (resumable (Some (cook (crack egg)))
-      ((SkipEgg) None)))
-
+;; Return None if a SkipEgg resumption is received.
+(declare make-breakfast-with (Egg -> (Optional Egg)))
+(define (make-breakfast-with egg)
+  (resumable (Some (cook (crack egg)))
+    ((SkipEgg) None)))
 ```
 
 Now define a function that makes breakfast for `n` people.  It tries to cook each egg, but if it errors by encountering a deadly egg, it resumes `make-breakfast` by skipping that egg. 
 
 ```lisp 
-
-  (declare make-breakfast-for (UFix -> (Vector Egg)))
-  (define (make-breakfast-for n)
-    (let ((eggs (vector:make))
-          (skip  SkipEgg))              ; can construct outside of resume-to
-      (for i in (iter:up-to n)
-        (let egg = (if (== 0 (mod i 5)) Xenomorph (Goose False False)))
-        (do
-         (cooked <- (catch (make-breakfast-with egg)
-                      ((DeadlyEgg _)    (resume-to skip))))
-         (pure (vector:push! cooked eggs))))
-      eggs))
-
+(declare make-breakfast-for (UFix -> (Vector Egg)))
+(define (make-breakfast-for n)
+  (let ((eggs (vector:make))
+        (skip  SkipEgg))              ; can construct outside of resume-to
+    (for i in (iter:up-to n)
+      (let egg = (if (== 0 (mod i 5)) Xenomorph (Goose False False)))
+      (do
+       (cooked <- (catch (make-breakfast-with egg)
+                    ((DeadlyEgg _)    (resume-to skip))))
+       (pure (vector:push! cooked eggs))))
+    eggs))
 ```
 
 Every 5th egg is deadly, so making breakfast for 10 people will result in 8 cooked eggs.
@@ -1293,13 +1447,11 @@ Every 5th egg is deadly, so making breakfast for 10 people will result in 8 cook
 The Call stack looks like
 
 ```
-
 make-breakfast-for 
       │
       └─ make-breakfast-with 
                 │
                 └─ cook  
-
 ```
 
 But `cook` signals a `DeadlyEgg` error on `Xenomorph`
@@ -1329,9 +1481,9 @@ For the time being, the following caveats apply;
 3. `resumable` branches are even more restrictive. You cannot match
    against anything _other_ than a resumption constructor pattern.
 
-4. No typeclass is associated with exception-signaling forms. We are
+4. No type class is associated with exception-signaling forms. We are
    pursuing different approaches to static checking of forms that
-   might hop the call stack. In the end, a typeclass approach may win
+   might hop the call stack. In the end, a type class approach may win
    out. Whatever we do, we will endeavor to make it compatible with
    the existing syntax and semantics.
 

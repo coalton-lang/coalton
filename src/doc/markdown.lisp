@@ -123,7 +123,8 @@
       (write-section 'coalton-type "Types")
       (write-section 'coalton-struct "Structs")
       (write-section 'coalton-class "Classes")
-      (write-section 'coalton-value "Values"))))
+      (write-section 'coalton-value "Values")
+      (write-section 'coalton-macro "Macros"))))
 
 (defun write-instances (backend object)
   (let ((instances (object-instances object)))
@@ -151,11 +152,17 @@
 (defmethod write-object ((backend markdown-backend) (object coalton-object))
   (let ((stream (output-stream backend)))
     (tc:with-pprint-variable-context ()
-      (format stream "#### <code><a href=\"~a\">~a</a></code> <sup><sub>[~A]</sub></sup>~A~%"
-              (html-entities:encode-entities (source-location-link backend object))
-              (html-entities:encode-entities (object-name object))
-              (html-entities:encode-entities (object-type object))
-              (object-anchor object)))
+      (write-string "#### " stream)
+      (write-link stream object)
+      (cond
+        ((source-available-p object)
+         (format stream " <sup><sub>[~A] · <a href=\"~a\">src</a></sub></sup>"
+                 (html-entities:encode-entities (object-type object))
+                 (html-entities:encode-entities (source-location-link backend object))))
+        (t
+         (format stream " <sup><sub>[~A]</sub></sup>"
+                 (html-entities:encode-entities (object-type object)))))
+      (format stream "~A~%" (object-anchor object)))
     (write-object-body backend object)))
 
 (defun write-doc (backend object)
@@ -222,11 +229,10 @@
               (second ctx)
               (mapcar #'to-markdown ctx)
               (html-entities:encode-entities "⇒")
-              (to-markdown pred)))
-    (format stream "</code>~%~%")
-    (write-doc backend object)
-    (format stream "Methods:~%")
-    (tc:with-pprint-variable-context ()
+              (to-markdown pred))
+      (format stream "</code>~%~%")
+      (write-doc backend object)
+      (format stream "Methods:~%")
       (loop :for (name type docstring) :in (class-methods object)
             :do (format stream "- <code>~A :: ~A</code>~@[<br/>~A~]~%"
                         (html-entities:encode-entities name)
@@ -240,6 +246,11 @@
   (let ((stream (output-stream backend)))
     (format stream "<code>~A</code>~%" (to-markdown (value-type object)))
     (write-doc backend object)))
+
+;;; coalton-macro
+
+(defmethod write-object-body ((backend markdown-backend) (object coalton-macro))
+  (write-doc backend object))
 
 ;;; Methods for TO-MARKDOWN
 

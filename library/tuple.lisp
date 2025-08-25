@@ -39,17 +39,20 @@
     "Get the second element of a tuple."
     b)
 
+  (derive Eq Hash Default)
   (define-struct (Tuple3 :a :b :c)
     (first :a)
     (second :b)
     (third :c))
 
+  (derive Eq Hash Default)
   (define-struct (Tuple4 :a :b :c :d)
     (first :a)
     (second :b)
     (third :c)
     (fourth :d))
 
+  (derive Eq Hash Default)
   (define-struct (Tuple5 :a :b :c :d :e)
     (first :a)
     (second :b)
@@ -91,96 +94,8 @@
     (define (bimap f g (Tuple a b))
       (Tuple (f a) (g b))))
 
-  ;;
-  ;; Larger Tuple Instances
-  ;;
-
-  (define-instance ((Eq :a) (Eq :b) (Eq :c) => Eq (Tuple3 :a :b :c))
-    (define (== a b)
-      (and (== (.first a)
-               (.first b))
-           (== (.second a)
-               (.second b))
-           (== (.third a)
-               (.third b)))))
-
-  (define-instance ((Hash :a) (Hash :b) (Hash :c) => Hash (Tuple3 :a :b :c))
-    (define (hash item)
-      (combine-hashes
-       (hash (.first item))
-       (combine-hashes
-        (hash (.second item))
-        (hash (.third item))))))
-
-  (define-instance ((Eq :a) (Eq :b) (Eq :c) (Eq :d) => Eq (Tuple4 :a :b :c :d))
-    (define (== a b)
-      (and (== (.first a)
-               (.first b))
-           (== (.second a)
-               (.second b))
-           (== (.third a)
-               (.third b))
-           (== (.fourth a)
-               (.fourth b)))))
-
-  (define-instance ((Hash :a) (Hash :b) (Hash :c) (Hash :d) => Hash (Tuple4 :a :b :c :d))
-    (define (hash item)
-      (combine-hashes
-       (hash (.first item))
-       (combine-hashes
-        (hash (.second item))
-        (combine-hashes
-         (hash (.third item))
-         (hash (.fourth item)))))))
-
-  (define-instance ((Eq :a) (Eq :b) (Eq :c) (Eq :d) (Eq :e) => Eq (Tuple5 :a :b :c :d :e))
-    (define (== a b)
-      (and (== (.first a)
-               (.first b))
-           (== (.second a)
-               (.second b))
-           (== (.third a)
-               (.third b))
-           (== (.fourth a)
-               (.fourth b))
-           (== (.fifth a)
-               (.fifth b)))))
-
-  (define-instance ((Hash :a)
-                    (Hash :b)
-                    (Hash :c)
-                    (Hash :d)
-                    (Hash :e)
-                    => Hash (Tuple5 :a :b :c :d :e))
-    (define (hash item)
-      (combine-hashes
-       (hash (.first item))
-       (combine-hashes
-        (hash (.second item))
-        (Combine-hashes
-         (hash (.third item))
-         (combine-hashes
-          (hash (.fourth item))
-          (hash (.fifth item))))))))
-
-  ;;
-  ;; Default instances
-  ;;
-
   (define-instance ((Default :a) (Default :b) => (Default (Tuple :a :b)))
-    (define (default) (Tuple (default) (default))))
-
-  (define-instance ((Default :a) (Default :b) (Default :c) =>
-                    (Default (Tuple3 :a :b :c)))
-    (define (default) (Tuple3 (default) (default) (default))))
-
-  (define-instance ((Default :a) (Default :b) (Default :c) (Default :d) =>
-                    (Default (Tuple4 :a :b :c :d)))
-    (define (default) (Tuple4 (default) (default) (default) (default))))
-
-  (define-instance ((Default :a) (Default :b) (Default :c) (Default :d) (Default :e) =>
-                    (Default (Tuple5 :a :b :c :d :e)))
-    (define (default) (Tuple5 (default) (default) (default) (default) (default)))))
+    (define (default) (Tuple (default) (default)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/TUPLE")

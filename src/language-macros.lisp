@@ -2,7 +2,7 @@
 
 ;;;; Macros used to implement the Coalton language
 
-(cl:defmacro as (type cl:&optional (expr cl:nil expr-supplied-p))
+(defmacro as (type cl:&optional (expr cl:nil expr-supplied-p))
   "A syntactic convenience for type casting.
 
     (as <type> <expr>)
@@ -29,7 +29,7 @@ Note that this may copy the object or allocate memory."
              `(fn (,lexpr)
                 (the ,type (,into ,lexpr)))))))
 
-(cl:defmacro try-as (type cl:&optional (expr cl:nil expr-supplied-p))
+(defmacro try-as (type cl:&optional (expr cl:nil expr-supplied-p))
   "A syntactic convenience for type casting.
 
     (try-as <type> <expr>)
@@ -58,7 +58,7 @@ Note that this may copy the object or allocate memory."
              `(fn (,lexpr)
                 (the (,Result :_ ,type) (,try-into ,lexpr)))))))
 
-(cl:defmacro unwrap-as (type cl:&optional (expr cl:nil expr-supplied-p))
+(defmacro unwrap-as (type cl:&optional (expr cl:nil expr-supplied-p))
   "A syntactic convenience for type casting.
 
     (unwrap-as <type> <expr>)
@@ -87,10 +87,10 @@ Note that this may copy the object or allocate memory."
              `(fn (,lexpr)
                 (the ,type (,unwrap (,try-into ,lexpr))))))))
 
-(cl:defmacro nest (cl:&rest items)
+(defmacro nest (cl:&rest items)
   "A syntactic convenience for function application. Transform
 
-    (NEST f g h x)
+    (nest f g h x)
 
 to
 
@@ -102,10 +102,10 @@ to
                  (cl:list x acc))
                butlast :from-end cl:t :initial-value (cl:first last))))
 
-(cl:defmacro pipe (cl:&rest items)
+(defmacro pipe (cl:&rest items)
   "A syntactic convenience for function application, sometimes called a \"threading macro\". Transform
 
-    (PIPE x h g f)
+    (pipe x h g f)
 
 to
 
@@ -113,27 +113,29 @@ to
   (cl:assert (cl:<= 2 (cl:list-length items)))
   `(nest ,@(cl:reverse items)))
 
-(cl:defmacro .< (cl:&rest items)
+(defmacro .< (cl:&rest items)
   "Right associative compose operator. Creates a new functions that will run the
-functions right to left when applied. This is the same as the NEST macro without supplying
-the value. The composition is thus the same order as COMPOSE.
+functions right to left when applied. This is the same as the `nest` macro without supplying
+the value. The composition is thus the same order as `compose`.
 
-`(.< f g h)` creates the function `(fn (x) (f (g (h x))))"
+`(.< f g h)` creates the function `(fn (x) (f (g (h x))))`."
   (alexandria:with-gensyms (x)
     `(fn (,x)
        (nest ,@items ,x))))
 
-(cl:defmacro .> (cl:&rest items)
+(defmacro .> (cl:&rest items)
   "Left associative compose operator. Creates a new functions that will run the
-functions left to right when applied. This is the same as the PIPE macro without supplying
-the value. The composition is thus the reverse order of COMPOSE.
+functions left to right when applied. This is the same as the `pipe` macro without supplying
+the value. The composition is thus the reverse order of `compose`.
 
-`(.> f g h)` creates the function `(fn (x) (h (g (f x))))"
+`(.> f g h)` creates the function `(fn (x) (h (g (f x))))`."
   (alexandria:with-gensyms (x)
     `(fn (,x)
        (pipe ,x ,@items))))
 
-(cl:defmacro make-list (cl:&rest forms)
+(defmacro make-list (cl:&rest forms)
+  "Create a heterogeneous Coalton `List` of objects. This macro is
+deprecated; use `coalton-library/list:make`."
   (cl:labels
       ((list-helper (forms)
          (cl:if (cl:endp forms)
@@ -146,10 +148,11 @@ the value. The composition is thus the reverse order of COMPOSE.
 Coalton boolean."
   `(cl:and ,expr cl:t))
 
-(cl:defmacro assert (datum cl:&optional (format-string "") cl:&rest format-data)
-  "Signal an error unless DATUM is `True'.
-If the assertion fails, the signaled error will apply the FORMAT-DATA to the FORMAT-STRING via `cl:format' to
-produce an error message."
+(defmacro assert (datum cl:&optional (format-string "") cl:&rest format-data)
+  "Signal an error unless `datum` is `True`.
+
+If the assertion fails, the signaled error will apply the `format-data`
+to the `format-string` via `cl:format` to produce an error message."
   ;; OPTIMIZE: lazily evaluate the FORMAT-DATA only when the assertion fails
   (cl:check-type format-string cl:string)
   (cl:let* ((datum-temp (cl:gensym "ASSERT-DATUM-"))
