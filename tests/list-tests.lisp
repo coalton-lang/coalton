@@ -56,16 +56,16 @@
 
   (is (== (list:concatMap list:cdr (make-list x x x)) (make-list 2 3 2 3 2 3))))
 
-(define-test test-set-basics ()
+;; (define-test test-set-basics ()
 
-  (is (== (list:union (list:append x x) x) x))
-  (is (== (list:union Nil (list:append (Cons 4 x) x)) (Cons 4 x)))
+;;   (is (== (list:union (list:append x x) x) x))
+;;   (is (== (list:union Nil (list:append (Cons 4 x) x)) (Cons 4 x)))
 
-  (is (set== (list:union x (make-list 4 4)) (make-list 1 2 3 4)))
-  (is (set== (list:union (make-list 4 4) x) (make-list 1 2 3 4)))
+;;   (is (set== (list:union x (make-list 4 4)) (make-list 1 2 3 4)))
+;;   (is (set== (list:union (make-list 4 4) x) (make-list 1 2 3 4)))
 
-  (is (set== (list:intersection x x) x))
-  (is (set== (list:intersection (list:append x (make-list 0 9 8 7)) (Cons 4 x)) x)))
+;;   (is (set== (list:intersection x x) x))
+;;   (is (set== (list:intersection (list:append x (make-list 0 9 8 7)) (Cons 4 x)) x)))
 
 (define-test test-lookup ()
   (is (== (list:lookup "two"

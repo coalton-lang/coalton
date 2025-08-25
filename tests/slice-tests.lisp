@@ -53,7 +53,7 @@
 
     (iter:for-each!
      (fn (s)
-       (cln:push!
+       (cln:push-end!
         (make-list
          (slice:index-unsafe 0 s)
          (slice:index-unsafe 1 s)
@@ -83,7 +83,7 @@
 
     (iter:for-each!
      (fn (s)
-       (cln:push!
+       (cln:push-end!
         (iter:collect! (iter:into-iter s))
         out)
        Unit)
@@ -108,7 +108,7 @@
 
     (iter:for-each!
      (fn (s)
-       (cln:push!
+       (cln:push-end!
         (make-list
          (slice:index-unsafe 0 s)
          (slice:index-unsafe 1 s)

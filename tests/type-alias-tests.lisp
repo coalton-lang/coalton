@@ -103,17 +103,17 @@
   
   (check-coalton-types
    "(define-type-alias Index UFix)
-    (define-type-alias (Collection :a) (List :a))
+    (define-type-alias (ListCollection :a) (List :a))
 
-    (define l (the (Collection Index) (make-list 1 2 3 4)))"
+    (define l (the (ListCollection Index) (make-list 1 2 3 4)))"
 
    '("l" . "(List UFix)"))
 
   (check-coalton-types
    "(define-type-alias Index UFix)
-    (define-type-alias Collection List)
+    (define-type-alias ListCollection List)
 
-    (define l (the (Collection Index) (make-list 1 2 3 4)))"
+    (define l (the (ListCollection Index) (make-list 1 2 3 4)))"
 
    '("l" . "(List UFix)")))
 

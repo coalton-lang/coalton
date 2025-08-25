@@ -200,7 +200,7 @@
   (let ((populate-vector (fn ()
                            (let v = (vector:with-capacity 6))
                            (iter:for-each! (fn (x)
-                                             (cln:push! x v)
+                                             (cln:push-end! x v)
                                              Unit)
                                            (iter:up-to 5))
                            v)))
