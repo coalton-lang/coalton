@@ -45,7 +45,7 @@
 
   (let z = (the (List (Tuple String Integer))
                 (iter:collect! (iter:into-iter g))))
-  (is (== (into (list:length z)) (hashmap:count g)))
+  (is (== (into (cln:length z)) (hashmap:count g)))
   (is (iter:every! (fn ((Tuple k v))
                      (match (hashmap:lookup g k)
                        ((None) False)

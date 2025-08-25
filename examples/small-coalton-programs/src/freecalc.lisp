@@ -9,8 +9,9 @@
    #:describe
    #:disassemble)
   (:use #:coalton #:coalton-prelude)
+  (:shadow #:add)
   (:local-nicknames
-   (#:vector #:coalton-library/vector)
+   (#:vector #:coalton-library/collections/mutable/vector)
    (#:st #:coalton-library/monad/state)
    (#:free #:coalton-library/monad/free))
   (:export #:run-a-program))
@@ -78,7 +79,7 @@ we map over."
                  ((AddE x y next) (pure (next (+ x y))))
                  ((SubE x y next) (pure (next (- x y))))
                  ((InputE next)
-                  (map (compose next (fn (vec) (defaulting-unwrap (vector:pop! vec))))
+                  (map (compose next (fn (vec) (defaulting-unwrap (pop-end! (the (Vector :a) vec)))))
                        st:get))))))
 
 

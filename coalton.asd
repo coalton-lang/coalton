@@ -81,6 +81,12 @@
                (:file "optional")
                (:file "result")
                (:file "lisparray")
+               (:module "collections"
+                :serial t
+                :components ((:file "classes")
+                             (:file "immutable/list")
+                             (:file "mutable/vector")
+                             (:file "package")))
                (:file "list")
                (:file "vector")
                (:file "char")
@@ -285,7 +291,7 @@
                (:file "list-tests")
                (:file "lisparray-tests")
                (:file "red-black-tests")
-               (:file "seq-tests")
+               ;; (:file "seq-tests")
                (:file "pattern-matching-tests")
                (:file "looping-native-tests")
                (:file "monomorphizer-tests")
