@@ -142,10 +142,7 @@
 
   (declare contains-where? ((:a -> Boolean) -> Vector :a -> Boolean))
   (define (contains-where? f vec)
-    (for x in vec
-      (when (f x)
-        (return True)))
-    False)
+    (opt:some? (find-where f vec)))
 
   ;;;
   ;;; LinearCollection Vector
