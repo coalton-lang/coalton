@@ -8,22 +8,20 @@
    (#:types #:coalton-library/types))
   (:export
    #:Collection
-   #:EqCollection
    #:NestedCollection
    #:new-collection
    #:new-repeat
    #:new-from
    #:new-convert
-   #:flatten
    #:filter
    #:remove-duplicates
+   #:remove-elt
    #:empty?
    #:length
    #:contains-elt?
    #:contains-where?
    #:count-where
    #:add
-   #:remove-elt
 
    #:ImmutableCollection
 
@@ -78,30 +76,6 @@
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
-;;; NOTE:
-;;; We have to define `Collection` with functional dependencies
-;;; to allow `KeyedCollection`s to be collections of tuples.
-;;;
-;;; Because Coalton doesn't support typeclass functions that provide
-;;; extra constraints on the typeclass's type parameters, we need
-;;; to create separate typeclasses (`EqCollection`, etc) for each
-;;; constraint we need to add. In other words, we'd like to do
-;;; this but we can't:
-;;;
-;;; (define-class (Collection :m :a (:m -> :a))
-;;;   (new-collection
-;;;     (Unit -> :m))
-;;;   ...
-;;;   (contains-elt?
-;;;     (Eq :a => :a -> :m -> Boolean)))
-;;;
-;;; Finally, for the moment we're not able to actually constrain
-;;; the type parameters in EqCollection, etc. See:
-;;; https://github.com/coalton-lang/coalton/issues/1340
-;;;
-;;; When that is fixed, we should go back and cover them in the
-;;; appropriate constraints.
-
 (coalton-toplevel
   (define-class (Collection :m :a (:m -> :a))
     "Types that contain a collection of elements of another type.
@@ -129,6 +103,12 @@ collection typeclasses."
     (filter
      "Create a new collection with the elements satisfying the predicate."
      ((:a -> Boolean) -> :m -> :m))
+    (remove-duplicates
+     "Create a new collection with all distinct elements."
+     (Eq :a => :m -> :m))
+    (remove-elt
+     "Remove all occurrences of `elt` from the collection."
+     (Eq :a => :a -> :m -> :m))
     ;; Query the collection
     (empty?
      "Check if the collection contains no elements."
@@ -136,6 +116,9 @@ collection typeclasses."
     (length
      "The number of elements in the collection"
      (:m -> UFix))
+    (contains-elt?
+     "Check if the collection contains an element."
+     (Eq :a => :a -> :m -> Boolean))
     (contains-where?
      "Check if the collection contains an element satisfying the predicate."
      ((:a -> Boolean) -> :m -> Boolean))
@@ -147,24 +130,6 @@ collection typeclasses."
      "Add an element to the collection. For linear collections, should add to
 the front or back, depending on which is natural for the underlying data structure."
      (:a -> :m -> :m)))
-
-  (define-class ((Eq :a) (Collection :m :a) => EqCollection :m :a (:m -> :a))
-    (remove-duplicates
-     "Create a new collection with all distinct elements."
-     (:m -> :m))
-    (contains-elt?
-     "Check if the collection contains an element."
-     (:a -> :m -> Boolean))
-    (remove-elt
-     "Remove all occurrences of `elt` from the collection."
-     (:a -> :m -> :m)))
-
-  (define-class ((Collection :n :m)
-                 (Collection :m :a) =>
-                 NestedCollection :n :m :a (:n :m -> :a))
-    (flatten
-     "Flatten a collection of collections into a collection of their elements."
-     (:n -> :m)))
 
   (define-class (Collection :m :a => ImmutableCollection :m :a)
     "An immutable collection.")
@@ -178,11 +143,11 @@ the front or back, depending on which is natural for the underlying data structu
      "Add an element to the collection in place. See `add`."
      (:a -> :m -> :m))))
 
-(coalton-toplevel
-  (define-class (Collection :m (Tuple :k :v) => KeyedCollection :m :k :v (:m -> :k :v)))
-  )
+;; TODO: Will tackle KeyedCollection in another PR.
+;; (coalton-toplevel
+;;   (define-class (KeyedCollection :m :k :v (:m -> :k :v)))
+;;   )
 
-;; TODO: Make it so that these must all be the proper KeyedCollection types as well
 (coalton-toplevel
   ;; NOTE: In all cases, LinearCollection methods should return collections that don't
   ;; share mutable state with the original.

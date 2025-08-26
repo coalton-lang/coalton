@@ -860,24 +860,16 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
         (map f (range 0 (- n 1)))))
     (define (cln:new-convert coll)
       (iter:collect! (iter:into-iter coll)))
-    ;; (define (flatten lst)
-    ;;   (fold append (new-collection) lst))
     (define cln:filter filter)
+    (define cln:remove-duplicates remove-duplicates)
+    (define (cln:remove-elt elt lst)
+      (filter (/= elt) lst))
     (define cln:empty? empty?)
     (define cln:length length)
+    (define cln:contains-elt? member)
     (define cln:contains-where? contains-where?)
     (define cln:count-where countBy)
     (define cln:add Cons))
-
-  (define-instance (Eq :a => cln:EqCollection (List :a) :a)
-    (define cln:remove-duplicates remove-duplicates)
-    (define cln:contains-elt? member)
-    (define (cln:remove-elt elt lst)
-      (filter (/= elt) lst)))
-
-  (define-instance (cln:NestedCollection (List (List :a)) (List :a) :a)
-    (define (cln:flatten lst)
-      (fold append (cln:new-collection) lst)))
 
   (define-instance (cln:ImmutableCollection (List :a) :a))
 

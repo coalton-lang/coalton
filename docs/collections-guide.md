@@ -11,25 +11,14 @@ TODO: Document collections here
 | `new-from`          | UFix -> (UFix -> :a) -> :m                                      | Create a new collection by appling a function over the range [0, n).                                                                                                                                                                    |
 | `new-convert`       | (Collection :f :a) (itr:IntoIterator :f :a) => :f -> :m         | Convert a collection of another type. If converting a LinearCollection to a LinearCollection, should preserve order.                                                                                                                    |
 | `filter`            | (:a -> Boolean) -> :m -> :m                                     | Create a new collection with the elements satisfying the predicate.                                                                                                                                                                     |
+| `remove-duplicates` | :m -> :m                      | Create a new collection with all distinct elements.             |
+| `remove-elt`        | :a -> :m -> :m                | Remove all occurrences of `elt` from the collection.            |
 | `empty?`            | :m -> Boolean                                                   | Check if the collection contains no elements.                                                                                                                                                                                           |
 | `length`            | :m -> UFix                                                      | The number of elements in the collection.                                                                                                                                                                                               |
 | `contains-where?`   | (:a -> Boolean) -> :m -> Boolean                                | Check if the collection contains an element satisfying the predicate.                                                                                                                                                                   |
+| `contains-elt?`     | :a -> :m -> Boolean           | Check if the collection contains an element.                    |
 | `count-where`       | (:a -> Boolean) -> :m -> UFix                                   | The number of elements satisfying the predicate.                                                                                                                                                                                        |
 | `add`               | :a -> :m -> :m                                                  | Add an element to the collection. For linear collections, should add to the front or back, depending on which is natural for the underlying data structure.                                                                              |
-
-#### EqCollection
-
-| Function Name        | Type Signature                | Docstring                                                       |
-|----------------------|-------------------------------|-----------------------------------------------------------------|
-| `remove-duplicates` | :m -> :m                      | Create a new collection with all distinct elements.             |
-| `contains-elt?`     | :a -> :m -> Boolean           | Check if the collection contains an element.                    |
-| `remove-elt`        | :a -> :m -> :m                | Remove all occurrences of `elt` from the collection.            |
-
-#### NestedCollection
-
-| Function Name | Type Signature | Docstring                                                                                           |
-|--------------|----------------|-------------------------------------------------------------------------------------------------------|
-| `flatten`    | :n -> :m       | Flatten a collection of collections into a collection of their elements.                             |
 
 #### MutableCollection
 

@@ -53,7 +53,7 @@
           (legible-seq 1000))
         (seqseq
           (seq:conc seq seq)))
-    
+
     (is (== 2000 (seq:size seqseq)))
     (is (== 1000 (seq:size (seq:conc (seq:new) seq))))
     (is (== 1000 (seq:size (seq:conc seq (seq:new)))))
@@ -74,7 +74,7 @@
     (is (== (Some 0) (seq:get seq2 11234)))))
 
 
-(coalton-toplevel 
+(coalton-toplevel
   (define (branching-valid? seq)
     "Returns T if the branching invariants are respected.  Namely, that
 every non-leaf node in the tree other than nodes on the right-most

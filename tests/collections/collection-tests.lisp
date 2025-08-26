@@ -87,34 +87,6 @@ Example:
           (is (== (cln:length (,@the-ufix (cln:new-convert source))) 3))
           (is (cln:empty?
                 (cln:filter (/= 99) (,@the-ufix (cln:new-convert source)))))))
-        ;; TODO: Fix this test case
-      ;; (define-test ,(test-name type-symbol "flatten") ()
-      ;;   ;; Note: Can't assume the length of flattened collections - e.g. Set
-      ;;   ;; Flatten empty
-      ;;   ;; (let ((empty-collections
-      ;;   ;;         (the (,type-symbol (,type-symbol UFix))
-      ;;   ;;             (cln:new-collection)))
-      ;;   ;;       (flattened (,@the-ufix (cln:flatten empty-collections))))
-      ;;   ;;   (is (cln:empty? flattened)))
-      ;;   ;; Flatten single sub-collection
-      ;;   (let ((single
-      ;;           (the (,type-symbol (,type-symbol UFix))
-      ;;                (cln:new-convert (make-list (cln:new-convert (make-list 10)))))))
-      ;;     (is (cln:contains-elt? 10 (cln:flatten single))))
-      ;;   ;; Flatten multiple sub-collections
-      ;;   (let ((nested
-      ;;           (the (,type-symbol (,type-symbol UFix))
-      ;;               (cln:new-convert (make-list (cln:new-convert (make-list 10 10))
-      ;;                                           (cln:new-convert (make-list 20))))))
-      ;;         (flattened (cln:flatten nested)))
-      ;;     (is (cln:contains-elt? 10 flattened))
-      ;;     (is (cln:contains-elt? 20 flattened)))
-      ;;   ; ;; Ensure immutability
-      ;;   (let ((nested
-      ;;           (the (,type-symbol (,type-symbol UFix))
-      ;;               (cln:new-convert (make-list (cln:new-convert (make-list 10 20)))))))
-      ;;     (cln:flatten nested)
-      ;;     (is (== (cln:length nested) 1))))
       (define-test ,(test-name type-symbol "filter") ()
         ;; Filter empty => empty
         (let ((empty (,@the-type (cln:new-collection))))

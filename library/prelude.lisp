@@ -139,7 +139,6 @@
    #:new-repeat
    #:new-from
    #:new-convert
-   #:flatten
    #:filter
    #:remove-duplicates
    #:empty?
@@ -204,7 +203,6 @@
    #:new-repeat
    #:new-from
    #:new-convert
-   #:flatten
    #:filter
    #:remove-duplicates
    #:empty?
