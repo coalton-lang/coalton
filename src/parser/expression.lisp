@@ -182,6 +182,18 @@
    #:parse-variable                     ; FUNCTION
    ))
 
+;;;;
+;;;; Parser AST - Untyped Expression Nodes
+;;;;
+;;;; This module defines the Abstract Syntax Tree structures used during parsing,
+;;;; before type checking. These nodes represent the syntactic structure of Coalton
+;;;; code as parsed from source text.
+;;;;
+;;;; This is the first of two AST systems in the Coalton compiler:
+;;;; 1. Parser AST (this module): Untyped nodes used during parsing/syntax analysis
+;;;; 2. Codegen AST (codegen/ast.lisp): Typed nodes used during code generation
+;;;;
+
 (in-package #:coalton-impl/parser/expression)
 
 (defvar *macro-expansion-count* 0)
