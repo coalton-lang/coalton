@@ -76,3 +76,12 @@
   (let has-empty? = (string:substring? ""))
   (is (has-empty? ""))
   (is (has-empty? "foo")))
+
+(define-test string-case-conversion ()
+  (let down  = "hello world!")
+  (let up    = "HELLO WORLD!")
+  (let mixed = "Hello World!")
+  (is (== down (string:downcase up)))
+  (is (== down (string:downcase mixed)))
+  (is (== up (string:upcase down)))
+  (is (== up (string:upcase mixed))))
