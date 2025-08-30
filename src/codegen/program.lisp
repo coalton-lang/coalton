@@ -20,6 +20,9 @@
   (:import-from
    #:coalton-impl/codegen/optimizer
    #:optimize-bindings)
+  (:import-from
+   #:coalton-impl/codegen/inliner
+   #:function-declared-inline-p)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
@@ -235,6 +238,11 @@ Example:
              (values ,(tc:lisp-type (node-type (node-abstraction-subexpr node)) env)
                      &optional))
             ,name)))
+
+   ;; Emit inline declamations for functions declared inline at definition-site
+   (loop :for (name . node) :in bindings
+         :if (and (node-abstraction-p node) (function-declared-inline-p name env))
+         :collect `(declaim (inline ,name)))
 
    ;; Compile functions
    (loop :for (name . node) :in bindings
