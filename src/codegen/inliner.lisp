@@ -18,6 +18,7 @@
    #:gentle-heuristic                   ; FUNCTION
    #:aggresive-heuristic                ; FUNCTION
    #:inline-applications                ; FUNCTION
+   #:function-declared-inline-p         ; FUNCTION
    ))
 
 (in-package #:coalton-impl/codegen/inliner)
