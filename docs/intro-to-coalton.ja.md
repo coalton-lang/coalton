@@ -44,6 +44,7 @@ Coaltonを使うパッケージでは、必要に応じて標準ライブラリ�
 ```
 
 **`#:coalton` と `#:coalton-prelude` 以外の Coalton の組み込みパッケージを `:use` することは推奨しません。** Common Lisp では、パッケージが外部からシンボルをインポートすることで、歴史的に後方互換性の問題が発生してきました。さらに、Coalton は異なるパッケージで似た機能を持つ関数に対して同じシンボル名を使用しています。たとえば、stringパッケージとvectorパッケージの両方に `length` という名前のシンボルが存在し、つまり `str:length` と `vec:length` が両方存在します。これらを `:use` してしまうと `length` というシンボルが複数のパッケージ間で衝突してしまうことになります。
+
 ### REPLでCoaltonを使う
 
 CoaltonをREPLで使いたい場合、パッケージを`#:coalton-user`に変更してください。具体的には次のようにします：
@@ -91,11 +92,11 @@ Coaltonコードを記述するには2つのフォームを使います。
 ;; ...
 ```
 
-注意：`coalton` 形式では、新しい定義を作成することはできず、式を評価するのみです。
+注意：`coalton` では、新しい定義を作成することはできず、式を評価するのみです。
 
 `coalton-toplevel` では 1 つ以上のトップレベル定義または宣言を取りますが、`coalton` は単一の式を受け取って現在の環境に対して評価し、その Common Lisp (Coaltonではなく) での値を返します。これは、REPL から Coalton を使用する際などに便利です。
 
-Coalton パッケージ（`#:coalton-user` を含む）は、`#:common-lisp`/`#:cl` パッケージを `:use` していないことに注意してください。なので、Common Lisp のシンボルを使用する必要がある場合は、それらに `cl:` を接頭辞として付ける必要があります。
+Coalton パッケージ（`#:coalton-user` を含む）は、`#:common-lisp`/`#:cl` パッケージを `:use` していないことに注意してください。Common Lisp のシンボルを使用する場合は、`cl:` を接頭辞として付ける必要があります。
 
 ## 変数と関数
 
@@ -121,7 +122,7 @@ Coalton パッケージ（`#:coalton-user` を含む）は、`#:common-lisp`/`#:
 (coalton (fst p))
 ```
 
-**注意**: `coalton` を省略して、REPL で直接 `(fst p)` を評価したくなるかもしれませんが、そのような動作に依存しないでください！
+**注意**: `coalton` を省略してREPL で直接 `(fst p)` を評価したくなるかもしれませんが、この動作に依存しないでください！
 
 関数は変数と同様に定義します。Common Lispとは違い、Coaltonの関数は変数と同じ名前空間を使います。これにより、高階関数プログラミングがより容易になります。
 
@@ -229,7 +230,7 @@ help: prefix the variable with '_' to declare it unused
 
 提案されたように、`y` を `_y` に置き換えることで、Coalton コンパイラにその引数が意図的に使用されていないことを伝えることができます。
 
-**注**: `_` で始まる変数（例: `_y`）は通常の変数であり、読み取ることができます。以下のコードは有効な Coalton です:
+**注意**: `_` で始まる変数（例: `_y`）は通常の変数であり、読み取ることができます。以下のコードは有効な Coalton です:
 
 ```lisp
 (define (f _x) _x)
@@ -777,8 +778,6 @@ COALTON-USER> (type-of 'fun)
       (g a b))))
 ```
 
-### Type Casting, Coercing, and Conversion
-
 ### 完全な型変換と不完全な型変換
 
 Coaltonは、Common Lispの関数`cl:coerce`と同様の型変換を、`#:coalton-library/classes`パッケージの`Into`という型クラスとその唯一のメソッド`into`で実現しています。ただし、`into`メソッドは単一の引数のみを受け取ります。Coalton は、どのデータ型に変換すべきかをどのように判断するのでしょうか？これは、周囲の文脈による型推論（例えば、この例では `substring` が `String` を期待している場合）によって決定されます。
@@ -1014,8 +1013,6 @@ Coaltonの`progn`では、特殊な`let`構文を使用できます。
       (let y = 7)
       (traceObject "sum" (+ x y)))))
 ```
-
-## Early Returns
 
 ## 即時Return
 
@@ -1273,7 +1270,7 @@ standard call
 
 詳しくは [glossary](./glossary.md) を見てください。
 
-# 実装途中の機能
+# 実験的な機能
 
 Coaltonにはさらに以下の機能をありますが、さらに改善の余地があります。
 
