@@ -1,5 +1,8 @@
 # Intro to Coalton (日本語訳)
 
+翻訳日: 2025/09/01
+SHA1: [cac006fbecfdcbb2e90b73066f240dbecf2691d6](https://github.com/coalton-lang/coalton/commit/cac006fbecfdcbb2e90b73066f240dbecf2691d6)
+
 Coalton は、Common Lisp に埋め込まれ、Common Lisp にコンパイルされる静的型付け言語です。
 
 このドキュメントは、関数型プログラミング言語に既に精通している方を対象としています。Common Lispでの経験がありCoaltonとの違いを知りたい人は[用語集](./glossary.md)も参照してください。
