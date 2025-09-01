@@ -80,7 +80,7 @@ Coaltonコードを記述するには2つのフォームを使います。
 
 ```lisp
 (coalton-toplevel
-  ;; <Coalton definition forms>
+  ;; <Coaltonの定義や宣言フォーム>
   )
 ```
 
@@ -91,7 +91,7 @@ Coaltonコードを記述するには2つのフォームを使います。
 ```lisp
 ;; Lisp code
 ;; ...
-     (coalton #|coalton expression|#)
+     (coalton #|Coaltonの式|#)
 ;; ...
 ```
 
@@ -107,13 +107,13 @@ Coalton パッケージ（`#:coalton-user` を含む）は、`#:common-lisp`/`#:
 
 ```lisp
 (coalton-toplevel
-  ;; Variables are defined with the define keyword
+  ;; 変数はdefineで定義します
   (define x 5)
   (define y 6)
   (define z (+ x y))
   (define p (Tuple 1.0 2.0))
 
-  ;; Coalton supports integers, strings, booleans, and unit as primitive types
+  ;; Coaltonは整数、文字列、真偽値、Unitをプリミティブ型としてサポートします
   (define name "Alyssa P. Hacker")
   (define hungry True)
   (define data Unit))
@@ -131,16 +131,16 @@ Coalton パッケージ（`#:coalton-user` を含む）は、`#:common-lisp`/`#:
 
 ```lisp
 (coalton-toplevel
-  ;; Functions are also defined with the define keyword
+  ;; 関数もdefineで定義します
   (define (add2 x)
     (+ 2 x))
 
-  ;; Functions exist in the same namespace as variables
+  ;; 関数は変数と同じ名前空間を使います
   (define addTwo add2)
 
   (define x (addTwo 3))
 
-  ;; Anonymous functions can be defined with fn
+  ;; 無名関数はfnで定義できます
   (define z (map (fn (x) (+ 2 x)) (make-list 1 2 3 4))))
 ```
 
@@ -167,9 +167,9 @@ Coalton の _すべての_ 関数は、_1 つの入力_ を受け取り、_1 つ
 
 ```lisp
 (coalton-toplevel
-  (define fma1 (fma 2))      ; equiv: b -> (c -> (c + 2*b))
-  (define fma2 (fma 2 3))    ; equiv: c -> (c + 6)
-  (define fma3 (fma 2 3 4))) ; equiv: 10
+  (define fma1 (fma 2))      ; fma1: b -> (c -> (c + 2*b))
+  (define fma2 (fma 2 3))    ; fma2: c -> (c + 6)
+  (define fma3 (fma 2 3 4))) ; fma3: 10
 ```
 
 `fma`を3つの引数を持つ関数として呼び出すことができますが、これは単なる便利な構文に過ぎません。より少ない引数で呼び出すことも可能です。この性質は、_カリー化された関数_ と呼ばれることもあります。
@@ -180,11 +180,11 @@ Coaltonでは、この機能を最適化して、可能な限りクロージャ�
 
 ```lisp
 (coalton-toplevel
-  ;; Lists can be created with the make-list macro
+  ;; リストはmake-listマクロで作れます
   (define nums (make-list 2 3 4 5)))
 
 (coalton
-  ;; Functions in coalton are curried
+  ;; Coaltonでは関数はカリー化されます
   (map (+ 2) nums)) ;; 4 5 6 7
 ```
 
@@ -195,11 +195,11 @@ Coaltonでは、この機能を最適化して、可能な限りクロージャ�
 ```lisp
 (nest f g ... h x)
 
-;; is equivalent to
+;; これは以下と同等
 
 (f (g (... (h x))))
 
-;; is equivalent to
+;; さらに以下と同等
 
 (pipe x h ... g f)
 ```
@@ -247,18 +247,18 @@ Coaltonでは、型パラメータ付き代数的データ型を定義できま�
 
 ```lisp
 (coalton-toplevel
-  ;; New types are created with the DEFINE-TYPE operator
+  ;; 新しい型はdefine-type演算子で定義します
   (define-type Point3D (Point3D Integer Integer Integer))
 
-  ;; Coalton supports sum types
+  ;; Coaltonは直和型 (Sum Type) をサポートしています
   (define-type Color
     Red
     Blue
     Green)
 
-  ;; Coalton supports generic type variables
+  ;; Coaltonはジェネリック型変数をサポートしています
   ;;
-  ;; Type parameters are defined using keyword arguments
+  ;; 型パラメータはキーワードで定義します
   (define-type (Tree :a)
     (Branch (Tree :a) :a (Tree :a))
     (Leaf :a)))
@@ -281,7 +281,7 @@ Coaltonでは、パラメータ付き型エイリアスの定義が可能です�
 
 ```lisp
 (coalton-toplevel
-  ;; New type aliases are created with the DEFINE-TYPE-ALIAS operator
+  ;; 新しい型エイリアスはdefine-type-alias演算子で定義します
   (define-type-alias Coordinate Integer)
   (define-type-alias (Pair :a) (Tuple :a :a))
   (define-type-alias Translation (Pair Coordinate -> Pair Coordinate))
@@ -292,13 +292,13 @@ Coaltonでは、パラメータ付き型エイリアスの定義が可能です�
 
   (define shifted-coordinate (shift-right (Tuple 0 0))))
 
-  ;; Type aliases can have multiple parameters
+  ;; 型エイリアスは複数のパラメータを取れます
   (define-type-alias (MyTuple3 :a :b :c) (Tuple :a (Tuple :b :c)))
 
-  ;; Type aliases can have parameters that do not have a kind of *
+  ;; 型エイリアスは * になるパラメータは取れません
   (define-type-alias (IntegerCollection :col) (:col Integer))
 
-  ;; Type aliases can alias types that do not have a kind of *
+  ;; 型エイリアスは * にならない型のみエイリアスできます
   (define-type-alias MyCollection List)
 ```
 
@@ -312,11 +312,11 @@ Coaltonでは、パラメータ付き型エイリアスの定義が可能です�
   (define-type-alias (MyCollection1 :a) (List :a))
   (define-type-alias MyCollection2 List)
 
-  ;; This line will not compile, because MyCollection1 has a
-  ;; parameter :A which is not applied
+  ;; この行はコンパイルできません。
+  ;; MyCollection1の取るべきパラメータ:Aがないため
   (define-type-alias A (T MyCollection1))
 
-  ;; However, this line will compile
+  ;; この行はコンパイルできます
   (define-type-alias A (T MyCollection2)))
 ```
 
@@ -827,7 +827,7 @@ Coaltonは、Common Lispの関数`cl:coerce`と同様の型変換を、`#:coalto
     Blue
     Green)
 
-  ;; Constructors must be wrapped in parentheses
+  ;; コンストラクタはカッコで括らなければいけません
   (declare color-to-string (Color -> String))
   (define (color-to-string c)
     (match c
@@ -835,21 +835,21 @@ Coaltonは、Common Lispの関数`cl:coerce`と同様の型変換を、`#:coalto
       ((Blue) "Blue")
       ((Green) "Green")))
 
-  ;; Variables are not wrapped in parentheses
+  ;; 変数はカッコで括られません
   (declare map-optional ((:a -> :b) -> (Optional :a) -> (Optional :b)))
   (define (map-optional f x)
     (match x
       ((Some x_) (Some (f x_)))
       ((None) None)))
 
-  ;; Patterns can be nested, and wildcard "_" patterns are supported
+  ;; パターンは入れ子にできますし、ワイルドカードとして "_" をパターンとして使えます
   (declare flatten-optional ((Optional (Optional :a)) -> (Optional :a)))
   (define (flatten-optional x)
     (match x
       ((Some (Some x_)) (Some x_))
       (_ None)))
 
-  ;; Submatches can be captured in a variable
+  ;; 変数をパターンマッチして値を束縛できます
   (declare dedup-head (Eq :a => List :a))
   (define (dedup-head xs)
     "If the first and second member of list are equal, drop the first"
@@ -858,7 +858,7 @@ Coaltonは、Common Lispの関数`cl:coerce`と同様の型変換を、`#:coalto
        (if (== a b) tl1 xs))
       (_ xs)))
 
-  ;; Integers or Strings can also be matched on
+  ;; 整数や文字列もマッチできます
   (define (is-5-or-7 x)
     (match x
       (5 True)
@@ -882,7 +882,7 @@ Coaltonは、Common Lispの関数`cl:coerce`と同様の型変換を、`#:coalto
   (declare second (Tuple :a :b -> :b))
   (define second (fn ((Tuple _ b)) b))
 
-  ;; pattern capture works here too
+  ;; パターンによる束縛はここでも使えます
   (declare nest-right (Tuple :a :b -> (Tuple :a (Tuple :a :b))))
   (define (nest-right (= tpl (Tuple a _))) (Tuple a tpl)))
 ```
@@ -1044,7 +1044,7 @@ Coaltonは型クラスをサポートしています。
 
 ```lisp
 (coalton-toplevel
-  ;; Type classes are defined with the define-class keyword
+  ;; 型クラスはdefine-classで定義します
   (define-class (Eq :a)
     (== (:a -> :a -> Boolean)))
 
@@ -1053,7 +1053,7 @@ Coaltonは型クラスをサポートしています。
     Green
     Blue)
 
-  ;; Type class instances are defined with the define-instance keyword
+  ;; 型クラスインスタンスはdefine-instanceで定義します
   (define-instance (Eq Color)
     (define (== a b)
       (match (Tuple a b)
@@ -1063,14 +1063,14 @@ Coaltonは型クラスをサポートしています。
         (_ False)))
     (define (/= a b) (not (== a b))))
 
-  ;; Type declarations can have constraints
+  ;; 型定義には制約をつけられます
   (declare is-eql (Eq :a => (:a -> :a -> String)))
   (define (is-eql a b)
     (if (== a b)
       "They are equal"
       "They are not equal"))
 
-  ;; Multiple constraints must be wrapped in parentheses
+  ;; 複数の制約はカッコで括らなければいけません
   (declare double-is-eql ((Eq :a) (Eq :b) => (:a -> :a -> :b -> :b -> String)))
   (define (double-is-eql a b c d)
     (if (and (== a b) (== c d))
@@ -1118,10 +1118,10 @@ Coaltonは型クラスをサポートしています。
 
 ```lisp
 (coalton
-  ;; Test `Point' equality
+  ;; `Point' の等価性をチェック
   (== (Point 1 2) (Point 3 3))
 
-  ;; Make a map using `Point' as a key
+  ;; `Point` をキーにしたマップを作る
   (let map = (the (hashmap:HashMap Point UFix) hashmap:empty))
   (hashmap:insert map (Point 0 0) 1))
 ```
@@ -1299,9 +1299,8 @@ Common Lispのエラーを含むすべての例外をキャッチしたい場合
 ```lisp
 (declare divide-by-random (Integer -> Integer -> Integer))
 (define (divide-by-random r m)
-    "Divide `r` by a random integer between `0` and `m`. 
-     If the divisor is `0`, then print the divide by zero error
-     and then return `0.0`"
+    "`r`を `0` から `m` までのランダムな整数で徐算する。
+     もし除数が `0` のときはゼロ徐算エラーを表示して `0.0` を返す"
     (catch (lisp Integer (r m) (cl:/ r (cl:random m)))
         (_ (trace "An error was received")
            0)))
@@ -1311,16 +1310,16 @@ Common Lispのエラーを含むすべての例外をキャッチしたい場合
 
 ```lisp 
 (define-type Egg
-    ;;     cracked? cooked?
+    ;;     割った?  調理済み?
     (Goose Boolean Boolean)
     (Xenomorph))
 
-  ;; We define an exception type BadEgg with a few variants 
+  ;; いくつかの変種がある例外BadEggを定義します
   (define-exception BadEgg
     (UnCracked Egg)
     (DeadlyEgg Egg))
 
-  ;; If we try to crack open a Xenomorph egg, throw a DeadlyEgg error
+  ;; エイリアンの卵を割ろうとしたら、DeadlyEggエラーを投げる
   (declare crack (Egg -> Egg))
   (define (crack egg)
     (match egg
@@ -1329,7 +1328,7 @@ Common Lispのエラーを含むすべての例外をキャッチしたい場合
       ((Xenomorph)
        (throw (DeadlyEgg egg)))))
 
-  ;; crack an egg open safely. 
+  ;; 安全に卵を割る
   (declare crack-safely (Egg -> (Result BadEgg Egg)))
   (define (crack-safely egg)
     (catch (Ok (crack egg))
@@ -1352,13 +1351,13 @@ Common Lispのエラーを含むすべての例外をキャッチしたい場合
 
   (declare cook (Egg -> Egg))
   (define (cook egg)
-    (let ((badegg (Uncracked egg)))     ; exceptions can be constructed outside throw
+    (let ((badegg (Uncracked egg)))     ; 例外は外側で作られうる
       (match egg
         ((Goose (True) _)  (Goose True True))
         ((Goose (False) _) (throw badegg))
         ((Xenomorph)       (throw (DeadlyEgg egg))))))
 
-  ;; Return None if a SkipEgg resumption is received.
+  ;; SkipEggリスタートを受け取ったらNoneを返す
   (declare make-breakfast-with (Egg -> (Optional Egg)))
   (define (make-breakfast-with egg)
     (resumable (Some (cook (crack egg)))
@@ -1371,7 +1370,7 @@ Common Lispのエラーを含むすべての例外をキャッチしたい場合
 (declare make-breakfast-for (UFix -> (Vector Egg)))
   (define (make-breakfast-for n)
     (let ((eggs (vector:make))
-          (skip SkipEgg))              ; can construct outside of resume-to
+          (skip SkipEgg))              ; resume-toの外側で作られうる
       (for i in (iter:up-to n)
         (let egg = (if (== 0 (mod i 5)) Xenomorph (Goose False False)))
         (do
