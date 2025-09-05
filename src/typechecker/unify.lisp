@@ -12,6 +12,7 @@
    #:predicate-mgu                      ; FUNCTION
    #:predicate-match                    ; FUNCTION
    #:match-list                         ; FUNCTION
+   #:match-list-p                       ; PREDICATE
    #:unify-list                         ; FUNCTION
    ))
 
@@ -139,6 +140,10 @@ apply s type1 == type2")
                 :for t2 :in list2
 
                 :collect (match t2 t1))))
+
+(defun match-list-p (list1 list2)
+  (handler-case (progn (match-list list1 list2) t)
+    (coalton-internal-type-error () nil)))
 
 (defun unify-list (subs list1 list2)
   (declare (type substitution-list subs)

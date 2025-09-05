@@ -72,6 +72,40 @@
 
 (in-package #:coalton-impl/typechecker/types)
 
+;;;;
+;;;; Type System Core
+;;;;
+;;;; This module defines the type structures used by the Coalton
+;;;; type checker. The type system is based on Hindley-Milner type
+;;;; inference, with extensions for type classes and higher-kinded
+;;;; types.
+;;;;
+;;;; Types are represented as a hierarchy of structures, all inheriting from `ty`:
+;;;;
+;;;; - Tyvar: Type variables (e.g., :a, :b) with associated kinds
+;;;;   Used during type inference to represent unknown types that will be unified
+;;;;
+;;;; - Tycon: Type constructors (e.g., Integer, String, Maybe)
+;;;;   Concrete types that can be applied to arguments
+;;;;
+;;;; - Tapp: Type applications (e.g., Maybe Integer, List String)
+;;;;   Represents applying a type constructor to arguments
+;;;;
+;;;; - Tgen: Generic type variables (e.g., in polymorphic schemes)
+;;;;   Used in type schemes to represent universally quantified variables
+;;;;
+;;;; All type structures include an `alias` field that tracks the
+;;;; chain of type aliases used to reach the current type. This
+;;;; preserves user-written type names in error messages and
+;;;; documentation while working with the underlying representation.
+;;;;
+;;;; Every type has an associated kind that describes its "type of types":
+;;;;
+;;;; - * (star): Concrete types like Integer, String
+;;;; - * -> *: Type constructors taking one argument like Maybe, List
+;;;; - (* -> *) -> * -> *: Higher-order constructors like Monad
+;;;;
+
 ;;;
 ;;; Types
 ;;;
@@ -135,13 +169,47 @@
 #+sbcl
 (declaim (sb-ext:always-bound *next-variable-id*))
 
+(declaim (ftype (function (&optional kind) tyvar) make-variable))
 (declaim (inline make-variable))
 (defun make-variable (&optional (kind +kstar+))
+  "Create a fresh type variable with the specified kind.
+
+KIND defaults to +kstar+ (* kind) for concrete types. The returned type variable
+has a globally unique ID that distinguishes it from all other variables created
+during compilation.
+
+This function is the primary way to generate type variables during type inference.
+Each call returns a distinct variable, even if called with the same kind.
+
+Usage in type inference:
+- Generate unknowns to be unified with concrete types
+- Create placeholder types for function parameters
+- Represent polymorphic variables during scheme instantiation
+
+Examples:
+  (make-variable)          ; Creates :a with kind *
+  (make-variable +karrow+) ; Creates :b with kind * -> *"
   (prog1 (make-tyvar :id *next-variable-id* :kind kind)
     (incf *next-variable-id*)))
 
+(declaim (ftype (function (tyvar) tyvar) fresh-type-renamer))
 (defun fresh-type-renamer (tyvar)
-  "Create a new type variable with the same kind as `tyvar`."
+  "Create a fresh type variable with the same kind as the given type variable.
+
+TYVAR must be a type variable (tyvar-p must return true). This function is used
+during type scheme instantiation to create fresh copies of bound type variables,
+ensuring that each use of a polymorphic function gets distinct type variables.
+
+Without fresh renaming, different uses of the same polymorphic function would
+share type variables, leading to incorrect unification and overly restrictive types.
+
+Example usage in scheme instantiation:
+  Original scheme: ∀ a. a -> a
+  First instantiation: :b -> :b (where :b is fresh)
+  Second instantiation: :c -> :c (where :c is fresh, distinct from :b)
+
+The function preserves the kind of the original variable, so if TYVAR has kind
+* -> *, the returned variable will also have kind * -> *."
   (make-variable (kind-of tyvar)))
 
 ;;;
@@ -149,6 +217,21 @@
 ;;;
 
 (defgeneric instantiate (types type)
+  (:documentation "Instantiate a type scheme by replacing generic type variables (tgen) with concrete types.
+
+TYPES is a list of types to substitute for generic variables, where the position
+in the list corresponds to the tgen-id of the generic variable being replaced.
+
+TYPE is the type or type structure to instantiate. Generic variables (tgen instances)
+are replaced with the corresponding type from TYPES, while other type structures
+are recursively instantiated.
+
+This is used during type scheme instantiation to create concrete instances of
+polymorphic types. For example, when using a function with type ∀ a b. a -> b -> a,
+we instantiate it with fresh type variables to get something like :c -> :d -> :c.
+
+Returns a new type structure with all tgen instances replaced by their corresponding
+types from the TYPES list.")
   (:method (types (type tapp))
     (make-tapp
      :alias (mapcar (lambda (alias) (instantiate types alias)) (ty-alias type))
@@ -162,7 +245,27 @@
     (mapcar (lambda (type) (instantiate types type)) type)))
 
 (defgeneric kind-of (type)
-  (:documentation "Get the kind of TYPE.")
+  (:documentation "Get the kind of the given type.
+
+Kinds classify types in the same way that types classify values. The most common kinds are:
+- * (star): The kind of concrete types like Integer, String, Boolean
+- * -> *: The kind of type constructors taking one argument, like Maybe, List  
+- * -> * -> *: The kind of type constructors taking two arguments, like Either, Map
+- (* -> *) -> *: The kind of higher-order type constructors like Monad
+
+TYPE can be any type structure (tyvar, tycon, tapp, tgen). For type applications (tapp),
+the kind is computed by applying the kind function (treating kinds as types and following
+the same application rules).
+
+This function is used for kind checking during type definition
+processing and ensuring that type applications are well-kinded.
+
+Examples:
+  (kind-of *integer-type*)     => +kstar+
+  (kind-of *list-type*)        => +karrow+ (i.e., * -> *)
+  (kind-of (make-variable))    => +kstar+ (by default)
+
+Throws an error if applied to a malformed type application.")
   (:method ((type tyvar))
     (tyvar-kind type))
   (:method ((type tycon))
@@ -202,7 +305,23 @@
    (kind-variables-generic% (tapp-to type))
    (kind-variables-generic% (tapp-from type))))
 
+(declaim (ftype (function (t) util:symbol-list) type-constructors))
 (defun type-constructors (type)
+  "Extract all type constructor names from a type expression.
+
+TYPE can be any type structure (tyvar, tycon, tapp, or list of types).
+Returns a list of symbols representing all type constructors used in the type,
+with duplicates removed.
+
+This is used for dependency analysis during type checking - knowing which
+type constructors are referenced allows the compiler to determine processing
+order and check that all referenced types are defined.
+
+Examples:
+  (type-constructors *integer-type*)           => (Integer)
+  (type-constructors (make-tapp *maybe-type*   => (Maybe Integer)
+                               *integer-type*))
+  (type-constructors (make-tyvar 42 +kstar+)) => ()  ; variables have no constructors"
   (declare (values util:symbol-list &optional))
   (remove-duplicates (type-constructors-generic% type)))
 

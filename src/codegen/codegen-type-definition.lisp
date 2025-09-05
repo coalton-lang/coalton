@@ -5,7 +5,8 @@
    #:coalton-impl/codegen/struct-or-class
    #:struct-or-class
    #:make-struct-or-class-field
-   #:struct-or-class-field-name)
+   #:struct-or-class-field-name
+   #:struct-or-class-field-type)
   (:import-from
    #:coalton-impl/codegen/codegen-exception
    #:codegen-exception)
@@ -38,12 +39,20 @@
                 (quote (member ,(tc:constructor-entry-compressed-repr constructor)))))))
 
      ((tc:type-definition-newtype def)
-      (let ((constructor (first (tc:type-definition-constructors def))))
-        `((declaim (inline ,(tc:constructor-entry-name constructor)))
-          (defun ,(tc:constructor-entry-name constructor) (x) x)
-          (global-lexical:define-global-lexical ,(tc:constructor-entry-name constructor) rt:function-entry)
-          (setf ,(tc:constructor-entry-name constructor)
-                ,(rt:construct-function-entry `#',(tc:constructor-entry-name constructor) 1)))))
+      (let* ((constructor (first (tc:type-definition-constructors def)))
+             (constructor-name (tc:constructor-entry-name constructor))
+             (underlying-lisp-type
+               (tc:lisp-type (first (tc:constructor-arguments constructor-name env)) env)))
+        `(,@(when settings:*emit-type-annotations*
+              (list
+               `(declaim (ftype (function (,underlying-lisp-type)
+                                          (values ,underlying-lisp-type &optional))
+                                ,constructor-name))))
+          (declaim (inline ,constructor-name))
+          (defun ,constructor-name (x) x)
+          (global-lexical:define-global-lexical ,constructor-name rt:function-entry)
+          (setf ,constructor-name
+                ,(rt:construct-function-entry `#',constructor-name 1)))))
 
      (t
       `(,(cond
@@ -83,11 +92,6 @@
                                  :type runtime-type))
 
             :for field-names := (mapcar #'struct-or-class-field-name fields)
-
-            ;; Declare the constructor as inline in release mode
-            :append
-            (when (settings:coalton-release-p)
-              (list `(declaim (inline ,constructor-name))))
 
             :unless (tc:type-definition-exception-p def)
               :append (struct-or-class

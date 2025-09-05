@@ -391,9 +391,104 @@ Structs can also be parametric:
 
 ## Looping & Iteration
 
+Coalton offers three main ways to do explicit loops:
+
+- Tail-recursion and `rec`,
+- Built-in iterator-based looping constructs, and
+- Experimental Lisp-like iteration macros (e.g., `dotimes`).
+
+### Tail-Recursion and `rec`
+
+Coalton strives to ensure tail calls are always eliminated. As such, tail recursion is idiomatic in Coalton.
+
+```lisp
+(coalton-toplevel
+  (define (find-integer predicate limit)
+    (cond
+      ((negative? limit) False)
+      ((predicate limit) True)
+      (True              (find-integer predicate (1- limit))))))
+```
+
+This function can be run for arbitrarily large `limit` without affecting the stack:
+
+```lisp
+> (coalton (find-integer (fn (x) (== 65536 (* x x))) 1000000))
+COMMON-LISP:T
+```
+
+Coalton has a special built-in operator `rec` for doing "named-let"-style iteration. It's general syntax is:
+
+```lisp
+(rec <name> (<binding>*)
+  <body>)
+
+;; <name> := <symbol>
+;;         | (<symbol> <type>)
+;;
+;; <binding> := (<symbol> <value>)
+```
+
+The `<name>` is in essence a local (tail-recursive) function in the `<body>`. Optionally, the type of this function can be declared, which is useful to avoid unwanted polymorphism. The `rec` operator does not require the invocation to be in tail position.
+
+It is idiomatic in Coalton to choose the name `%` when there is no other reasonable name.
+
+Here is a first example of `rec` to implement a list reversal.
+
+```lisp
+(coalton-toplevel
+  (define (rev l)
+    (rec % ((result Nil) (remaining l))
+      (match remaining
+        ((Nil) result)
+        ((Cons x xs) (% (Cons x result) xs))))))
+```
+
+Here is an example of a Fibonacci function that works for any numeric input and output:
+
+```lisp
+(coalton-toplevel
+  (define (fib-polymorphic n)
+    (rec % ((i n) (a 0) (b 1))
+      (cond
+        ((== 0 i) a)
+        ((== 1 i) b)
+        (True (% (- i 1) b (+ a b)))))))
+```
+
+The type is `∀ A B. (NUM B) (NUM A) ⇒ (A → B)` and thus can be used for whatever numeric types:
+
+```
+> (coalton (the F32 (fib-polymorphic (the Integer 10))))
+55.0
+```
+
+We can make a monomorphic variant for `Integer` by declaring the type of the recursion.
+
+```lisp
+(define (fib-monomorphic n)
+  (rec (% (Integer -> Integer -> Integer -> Integer))
+       ((i n)
+        (a 0)
+        (b 1))
+    (cond
+      ((== 0 i) a)
+      ((== 1 i) b)
+      (True (% (- i 1) b (+ a b))))))
+```
+
+Now it works without any type declarations on use:
+
+```
+> (coalton (fib-monomorphic 10))
+55
+```
+
+### Built-In Looping Constructs
+
 Coalton supports infinite looping, conditional looping, and `for`-loop styled iteration. 
 
-### `loop`, `while`, `while-let`, and `for`
+#### `loop`, `while`, `while-let`, and `for`
 
 You can loop forever 
 
@@ -430,7 +525,7 @@ You can loop over instances of `IntoIterator`
 ```
 
 
-### `break` and `continue`
+#### `break` and `continue`
 
 Each of the above looping forms supports `break` and `continue`.
 
@@ -458,7 +553,7 @@ on its next iteration. The following prints out `c`, `o`, `a`, `t`,
 ```
 
 
-### Loop Labels
+#### Loop Labels
 
 Each of the above looping forms takes an optional loop label
 keyword. These labels can be used in conjunction with `break` and
@@ -506,6 +601,33 @@ accumulator and the counter exceeds 500.  Without the `:outer` label,
     (cell:read acc)))
 ```
 
+### Experimental Lisp Iteration Macros
+
+> [!WARNING]
+> These constructs are experimental and may change.
+
+The standard library package [`coalton-library/experimental/loops`](https://coalton-lang.github.io/reference/#coalton-library/experimental/loops-package) contains a plethora of Lisp-style iteration macros, including `dotimes` and `dolist` which operate similar to their Common Lisp counterparts.
+
+The functions generally return `Unit` unless they're specifically collecting or accumulating a value. Counts (like in `dotimes`) and indices (like in `dolist-enumerated`) are generally `UFix`.
+
+Assuming we have `dotimes` accessible from our package, we might write a function to print out Pythagorean triples in the following way:
+
+```lisp
+(coalton-toplevel
+  (define (print-pythagorean-triples limit)
+    (dotimes (c limit)
+      (dotimes (b c)
+        (dotimes (a b)
+          (when (== (^ c 2) (+ (^ a 2) (^ b 2)))
+            (trace (Tuple3 a b c))))))))
+
+;; > (coalton (print-pythagorean-triples 20))
+;; #.(TUPLE3 3 4 5)
+;; #.(TUPLE3 6 8 10)
+;; #.(TUPLE3 5 12 13)
+;; #.(TUPLE3 9 12 15)
+;; #.(TUPLE3 8 15 17)
+```
 
 ## Numbers
 
@@ -1234,7 +1356,6 @@ Coalton's exception handling system is incomplete and evolving. The design has b
 If you want to catch any exception, including Common Lisp error conditions, you can use a wildcard pattern:
 
 ```lisp
-
 (declare divide-by-random (Integer -> Integer -> Integer))
 (define (divide-by-random r m)
     "Divide `r` by a random integer between `0` and `m`. 
@@ -1248,33 +1369,31 @@ If you want to catch any exception, including Common Lisp error conditions, you 
 More generally
 
 ```lisp 
+(define-type Egg
+  ;;     cracked? cooked?
+  (Goose Boolean Boolean)
+  (Xenomorph))
 
-  (define-type Egg
-    ;;     cracked? cooked?
-    (Goose Boolean Boolean)
-    (Xenomorph))
+;; We define an exception type BadEgg with a few variants 
+(define-exception BadEgg
+  (UnCracked Egg)
+  (DeadlyEgg Egg))
 
-  ;; We define an exception type BadEgg with a few variants 
-  (define-exception BadEgg
-    (UnCracked Egg)
-    (DeadlyEgg Egg))
+;; If we try to crack open a Xenomorph egg, throw a DeadlyEgg error
+(declare crack (Egg -> Egg))
+(define (crack egg)
+  (match egg
+    ((Goose _ cooked?)
+     (Goose True cooked?))
+    ((Xenomorph)
+     (throw (DeadlyEgg egg)))))
 
-  ;; If we try to crack open a Xenomorph egg, throw a DeadlyEgg error
-  (declare crack (Egg -> Egg))
-  (define (crack egg)
-    (match egg
-      ((Goose _ cooked?)
-       (Goose True cooked?))
-      ((Xenomorph)
-       (throw (DeadlyEgg egg)))))
-
-  ;; crack an egg open safely. 
-  (declare crack-safely (Egg -> (Result BadEgg Egg)))
-  (define (crack-safely egg)
-    (catch (Ok (crack egg))
-      ((DeadlyEgg _) (Err (DeadlyEgg egg)))
-      ((UnCracked _) (Err (UnCracked egg)))))
-
+;; crack an egg open safely. 
+(declare crack-safely (Egg -> (Result BadEgg Egg)))
+(define (crack-safely egg)
+  (catch (Ok (crack egg))
+    ((DeadlyEgg _) (Err (DeadlyEgg egg)))
+    ((UnCracked _) (Err (UnCracked egg)))))
 ```
 
 ### Defining, Invoking, and Handling Resumptions 
@@ -1288,44 +1407,39 @@ of the constructor is also the name of the type of the resumption.
 The following example, building on the above, should elucidate
 
 ```lisp
+(define-resumption SkipEgg)
+(define-resumption (ServeRaw Egg) 
+  "Suggest the egg be served raw.")
 
-  (define-resumption SkipEgg)
-  (define-resumption (ServeRaw Egg) 
-    "Suggest the egg be served raw.")
+(declare cook (Egg -> Egg))
+(define (cook egg)
+  (let ((badegg (Uncracked egg)))     ; exceptions can be constructed outside throw
+    (match egg
+      ((Goose (True) _)  (Goose True True))
+      ((Goose (False) _) (throw badegg))
+      ((Xenomorph)       (throw (DeadlyEgg egg))))))
 
-  (declare cook (Egg -> Egg))
-  (define (cook egg)
-    (let ((badegg (Uncracked egg)))     ; exceptions can be constructed outside throw
-      (match egg
-        ((Goose (True) _)  (Goose True True))
-        ((Goose (False) _) (throw badegg))
-        ((Xenomorph)       (throw (DeadlyEgg egg))))))
-
-
-  ;; Return None if a SkipEgg resumption is received.
-  (declare make-breakfast-with (Egg -> (Optional Egg)))
-  (define (make-breakfast-with egg)
-    (resumable (Some (cook (crack egg)))
-      ((SkipEgg) None)))
-
+;; Return None if a SkipEgg resumption is received.
+(declare make-breakfast-with (Egg -> (Optional Egg)))
+(define (make-breakfast-with egg)
+  (resumable (Some (cook (crack egg)))
+    ((SkipEgg) None)))
 ```
 
 Now define a function that makes breakfast for `n` people.  It tries to cook each egg, but if it errors by encountering a deadly egg, it resumes `make-breakfast` by skipping that egg. 
 
 ```lisp 
-
-  (declare make-breakfast-for (UFix -> (Vector Egg)))
-  (define (make-breakfast-for n)
-    (let ((eggs (vector:make))
-          (skip  SkipEgg))              ; can construct outside of resume-to
-      (for i in (iter:up-to n)
-        (let egg = (if (== 0 (mod i 5)) Xenomorph (Goose False False)))
-        (do
-         (cooked <- (catch (make-breakfast-with egg)
-                      ((DeadlyEgg _)    (resume-to skip))))
-         (pure (vector:push! cooked eggs))))
-      eggs))
-
+(declare make-breakfast-for (UFix -> (Vector Egg)))
+(define (make-breakfast-for n)
+  (let ((eggs (vector:make))
+        (skip  SkipEgg))              ; can construct outside of resume-to
+    (for i in (iter:up-to n)
+      (let egg = (if (== 0 (mod i 5)) Xenomorph (Goose False False)))
+      (do
+       (cooked <- (catch (make-breakfast-with egg)
+                    ((DeadlyEgg _)    (resume-to skip))))
+       (pure (vector:push! cooked eggs))))
+    eggs))
 ```
 
 Every 5th egg is deadly, so making breakfast for 10 people will result in 8 cooked eggs.
@@ -1333,13 +1447,11 @@ Every 5th egg is deadly, so making breakfast for 10 people will result in 8 cook
 The Call stack looks like
 
 ```
-
 make-breakfast-for 
       │
       └─ make-breakfast-with 
                 │
                 └─ cook  
-
 ```
 
 But `cook` signals a `DeadlyEgg` error on `Xenomorph`

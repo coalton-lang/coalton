@@ -243,3 +243,7 @@ a polymorphic function and a type class method.
 This test is expected to fail with SBCL for versions below 2.5.7.38."
   (is (== 1000000000 (tail-call-elimination-tests::foo1 (the UFix 0))))
   (is (== 1000000000 (tail-call-elimination-tests::foo1 (the Integer 0)))))
+
+(define-test test-nullary-or-and ()
+  (is (and))
+  (is (not (or))))

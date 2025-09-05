@@ -78,6 +78,10 @@ matching, as in the following example.
     (lisp (Optional :a) ()
       coalton-impl/runtime:cl-none))
 
+  (repr :native cl:bit)
+  (define-type Bit
+    "A single bit, equal to 0 or 1. Uses `cl:bit`.")
+
   (repr :native (cl:unsigned-byte 8))
   (define-type U8
     "Unsigned 8-bit integer capable of storing values in `[0, 255]`. Uses `(unsigned-byte 8)`.")

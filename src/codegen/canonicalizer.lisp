@@ -29,6 +29,7 @@ would be:
                (when (node-application-p rator)
                  (make-node-application
                   :type (node-type node)
+                  :properties (node-properties node)
                   :rator (node-application-rator rator)
                   :rands (append
                           (node-application-rands rator)

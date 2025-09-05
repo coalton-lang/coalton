@@ -53,6 +53,7 @@
                (:file "functions")
                (:file "boolean")
                (:file "bits")
+               (:file "symbol")
                (:module "math"
                 :serial t
                 :components ((:file "arith")
