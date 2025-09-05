@@ -45,7 +45,10 @@
    (#:st #:coalton-library/monad/state)
    (#:m-opt #:coalton-library/monad/optionalt)
    (#:m-res #:coalton-library/monad/resultt)
-   (#:m-env #:coalton-library/monad/environment)))
+   (#:m-env #:coalton-library/monad/environment)
+   #+(and SBCL ARM64)
+   (#:rbit #:coalton-library/algorithms/rbit)
+   (#:fft #:coalton-library/algorithms/fft)))
 
 (in-package #:coalton-native-tests)
 
