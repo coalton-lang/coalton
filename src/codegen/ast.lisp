@@ -144,6 +144,18 @@
    #:node-properties                    ; FUNCTION
    ))
 
+;;;;
+;;;; Codegen AST - Typed Expression Nodes  
+;;;;
+;;;; This module defines the Abstract Syntax Tree structures used during code
+;;;; generation, after type checking. These nodes include complete type information
+;;;; and are optimized for translation to Common Lisp code.
+;;;;
+;;;; This is the SECOND of two AST systems in the Coalton compiler:
+;;;; 1. Parser AST (parser/expression.lisp): Untyped nodes from parsing
+;;;; 2. Codegen AST (this module): Typed nodes for code generation
+;;;;
+
 (in-package #:coalton-impl/codegen/ast)
 
 ;;;
@@ -382,10 +394,9 @@ call to (break)."
   (declare (type binding-list bindings))
 
   (let ((binding-names (mapcar #'car bindings)))
-    (reverse
-     (algo:tarjan-scc
-      (loop :for (name . node) :in bindings
-            :collect (cons name (intersection binding-names (node-variables node))))))))
+    (algo:tarjan-scc
+     (loop :for (name . node) :in bindings
+           :collect (cons name (intersection binding-names (node-variables node)))))))
 
 (defun node-rands (node)
   (declare (type (or node-application node-direct-application))

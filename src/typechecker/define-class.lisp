@@ -18,6 +18,14 @@
    #:toplevel-define-class              ; FUNCTION
    ))
 
+;;;;
+;;;; Type Class Definition Processing with SCC-Based Dependency Resolution
+;;;;
+;;;; This module handles toplevel define-class forms and ensures that type class
+;;;; hierarchies are processed in the correct dependency order using strongly
+;;;; connected components (SCCs).
+;;;;
+
 (in-package #:coalton-impl/typechecker/define-class)
 
 (defstruct partial-class
@@ -115,7 +123,7 @@
 
                  :collect (cons class-name deps)))
 
-         (sccs (reverse (algo:tarjan-scc class-dependencies)))
+         (sccs (algo:tarjan-scc class-dependencies))
 
          (classes-by-scc
            (loop :for scc :in sccs

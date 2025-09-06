@@ -20,6 +20,9 @@
   (:import-from
    #:coalton-impl/codegen/optimizer
    #:optimize-bindings)
+  (:import-from
+   #:coalton-impl/codegen/inliner
+   #:function-declared-inline-p)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
@@ -168,8 +171,9 @@ Example:
          `(progn
             ;; Muffle redefinition warnings in SBCL. A corresponding
             ;; SB-EXT:UNMUFFLE-CONDITIONS appears at the bottom.
-            #+sbcl ,@(when settings:*emit-type-annotations*
-                       (list '(declaim (sb-ext:muffle-conditions sb-kernel:redefinition-warning))))
+            #+sbcl
+            ,@(when settings:*emit-type-annotations*
+                (list '(declaim (sb-ext:muffle-conditions sb-kernel:redefinition-warning))))
 
             ,@(when (tc:translation-unit-types translation-unit)
                 (list
@@ -197,8 +201,9 @@ Example:
                 (list
                  `(declaim (sb-ext:end-block))))
 
-            #+sbcl ,@(when settings:*emit-type-annotations*
-                       (list '(declaim (sb-ext:unmuffle-conditions sb-kernel:redefinition-warning))))
+            #+sbcl
+            ,@(when settings:*emit-type-annotations*
+                (list '(declaim (sb-ext:unmuffle-conditions sb-kernel:redefinition-warning))))
 
             (values))
          env)))))
@@ -235,6 +240,11 @@ Example:
              (values ,(tc:lisp-type (node-type (node-abstraction-subexpr node)) env)
                      &optional))
             ,name)))
+
+   ;; Emit inline declamations for functions declared inline at definition-site
+   (loop :for (name . node) :in bindings
+         :if (and (node-abstraction-p node) (function-declared-inline-p name env))
+         :collect `(declaim (inline ,name)))
 
    ;; Compile functions
    (loop :for (name . node) :in bindings

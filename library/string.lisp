@@ -25,7 +25,9 @@
    #:ref-unchecked
    #:substring-index
    #:substring?
-   #:chars))
+   #:chars
+   #:upcase
+   #:downcase))
 
 
 (in-package #:coalton-library/string)
@@ -142,6 +144,18 @@ does not have that suffix."
   (define (chars str)
     "Returns an iterator over the characters in `str`."
     (iter:into-iter str))
+
+  (declare upcase (String -> String))
+  (define (upcase str)
+    "Returns a new string with uppercase characters."
+    (lisp String (str)
+      (cl:string-upcase str)))
+
+  (declare downcase (String -> String))
+  (define (downcase str)
+    "Returns a new string with lowercase characters."
+    (lisp String (str)
+      (cl:string-downcase str)))
 
   ;;
   ;; Instances

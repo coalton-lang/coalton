@@ -183,37 +183,47 @@
    #:solve-fundeps                          ; FUNCTION
    ))
 
-;;; Coalton environment management
-;;;
-;;; An environment contains all information about Coalton types,
-;;; functions, instances, specializations, and so on.
-;;;
-;;; Environments are immutable: all update functions defined below
-;;; return a new environment.
-;;;
-;;; The global environment root is:
-;;;
-;;;   coalton-impl/entry:*global-environment*
-;;;
-;;; An update hook mechanism is provided so that the compiler can
-;;; record updates that occur while compiling Coalton source. When
-;;; compilation is finished, an update log is prepended to generated
-;;; lisp code, to allow replaying the environment updates when the
-;;; compiled fasl is loaded.
+;;;;
+;;;; Coalton Type Checker Environment
+;;;;
+;;;; This module maintains the global type checking environment, which
+;;;; contains all information about types, functions, classes,
+;;;; instances, and other compiler state.
+;;;;
+;;;; Environment contents:
+;;;;
+;;;; - Value types: Type signatures for functions and variables
+;;;; - Type definitions: User-defined types (algebraic data types, type aliases)
+;;;; - Type classes: Class definitions with their methods and superclasses  
+;;;; - Type instances: Implementations of type classes for specific types
+;;;; - Constructor information: Data constructors and their types
+;;;; - Function metadata: Arity, inlining directives, specializations
+;;;;
+;;;; The global environment root is:
+;;;;
+;;;;   coalton-impl/entry:*global-environment*
+;;;;
+;;;; Environments are generally treated immutably, in that the various
+;;;; functions defined here return new environments.
+;;;;
+;;;; The *update-hook* variable allows recording environment modifications
+;;;; during compilation. When compilation finishes, the update log is used to
+;;;; generate code that will replay the same modifications at load time.
+;;;;
 
 (in-package #:coalton-impl/typechecker/environment)
 
-;; *update-hook* may be bound to a function that is called whenever
-;; an environment is updated.
-;;
-;; The bound function must accept 2 arguments:
-;;
-;; - the symbol naming the environment update function
-;; - that function's arg list
-;;
-;; The environment itself, which is always the first argument to an
-;; update function, is not provided in the arg list: just the update
-;; values.
+;;; *update-hook* may be bound to a function that is called whenever
+;;; an environment is updated.
+;;;
+;;; The bound function must accept 2 arguments:
+;;;
+;;; - the symbol naming the environment update function
+;;; - that function's arg list
+;;;
+;;; The environment itself, which is always the first argument to an
+;;; update function, is not provided in the arg list: just the update
+;;; values.
 
 (defvar *update-hook*)
 
@@ -1025,7 +1035,26 @@ of constraint predicates."
 ;;; Functions
 ;;;
 
+(declaim (ftype (function (environment symbol &key (:no-error t)) (or ty-scheme null)) lookup-value-type))
 (defun lookup-value-type (env symbol &key no-error)
+  "Look up the type scheme for a value binding (function or variable) in the environment.
+
+ENV is the type checking environment to search.
+SYMBOL is the name of the binding to look up.
+NO-ERROR, if true, returns NIL instead of signaling an error when the binding is not found.
+
+Returns the type scheme (ty-scheme) associated with the binding, or NIL if not found and NO-ERROR is true.
+Type schemes include quantification information (∀ variables) and constraints.
+
+This is the primary interface for retrieving function and variable types during type checking.
+The returned scheme can be instantiated with fresh type variables to get a concrete type for
+use in type inference.
+
+Examples:
+  (lookup-value-type env 'my-function)     ; Returns scheme like ∀ a. a -> a -> Boolean  
+  (lookup-value-type env 'undefined :no-error t) ; Returns NIL if 'undefined not defined
+
+Signals a coalton-bug error if the binding is not found and NO-ERROR is false (the default)."
   (declare (type environment env)
            (type symbol symbol))
   (or (immutable-map-lookup (environment-value-environment env) symbol)
@@ -1060,7 +1089,28 @@ of constraint predicates."
                        symbol
                        #'make-value-environment)))
 
+(declaim (ftype (function (environment symbol &key (:no-error t)) (or type-entry null)) lookup-type))
 (defun lookup-type (env symbol &key no-error)
+  "Look up a type definition (algebraic data type, struct, etc.) in the environment.
+
+ENV is the type checking environment to search.
+SYMBOL is the name of the type to look up.
+NO-ERROR, if true, returns NIL instead of signaling an error when the type is not found.
+
+Returns a type-entry containing:
+- The type constructor and its kind
+- Information about data constructors and their arities
+- Runtime representation details (structs, enums, newtypes)
+- Whether the type is an exception or resumption type
+
+This is used during type checking to resolve type constructor references and
+validate that types are properly defined before use.
+
+Examples:
+  (lookup-type env 'Maybe)     ; Returns type-entry for Maybe type constructor
+  (lookup-type env 'NoSuchType :no-error t) ; Returns NIL if not defined
+
+Signals a coalton-bug error if the type is not found and NO-ERROR is false (the default)."
   (declare (type environment env)
            (type symbol symbol))
   (or (immutable-map-lookup (environment-type-environment env) symbol)

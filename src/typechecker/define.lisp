@@ -1901,7 +1901,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
          (impl-binding-nodes
            ;; Infer the types of implicit bindings on scc at a time
-           (loop :for scc :in (reverse sccs)
+           (loop :for scc :in sccs
                  :for bindings
                    := (loop :for name :in scc
                             :collect (gethash name impl-bindings))
