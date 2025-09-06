@@ -118,7 +118,7 @@ Information about all of the discovered types and the like are defined in this f
 
 ## Code generation phase
 
-Code generation is responsible for both optimization and code generation. It contains:
+Code generation is responsible for both optimization and code generation. The steps for optimization are contained in:
 
 1. The monomorphizer (`src/codegen/monomorphize.lisp`)
 2. The specializer (`src/codegen/specializer.lisp`)
