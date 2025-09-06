@@ -60,6 +60,7 @@
    #:function-type-to                   ; FUNCTION
    #:function-type-arity                ; FUNCTION
    #:function-type-arguments            ; FUNCTION
+   #:function-type-arguments*           ; FUNCTION
    #:function-return-type               ; FUNCTION
    #:function-remove-arguments          ; FUNCTION
    #:type-variables                     ; FUNCTION
@@ -486,6 +487,18 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
               (function-type-arguments
                (function-type-to ty)))
         nil)))
+
+(defgeneric function-type-arguments* (ty n)
+  (:method ((ty ty) n)
+    (cond
+      ((zerop n) nil)
+      ((function-type-p ty)
+       (cons (function-type-from ty)
+             (function-type-arguments*
+              (function-type-to ty)
+              (1- n))))
+      (t
+       (error "Asked for ~D argument~:P but ran out" n)))))
 
 (defgeneric function-return-type (ty)
   (:method ((ty ty))
