@@ -11,16 +11,16 @@
 ;;; The asdf extension in turn requires access to the compiler. so
 ;;; coalton-asdf and coalton-compiler live in their own .asd files.
 
-(asdf:defsystem #:coalton
+(asdf:defsystem "coalton"
   :description "An efficient, statically typed functional programming language that supercharges Common Lisp. "
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
   :in-order-to ((asdf:test-op (asdf:test-op #:coalton/tests)))
-  :depends-on (#:coalton-compiler
-               #:coalton/library))
+  :depends-on ("coalton-compiler"
+               "coalton/library"))
 
-(asdf:defsystem #:coalton/library
+(asdf:defsystem "coalton/library"
   :description "The Coalton standard library."
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
@@ -34,11 +34,11 @@
                           ;; presence of this feature.
                           (*features* (cons ':coalton-lisp-toplevel *features*)))
                       (funcall compile)))
-  :defsystem-depends-on (#:coalton-asdf)
-  :depends-on (#:coalton-compiler
-               #:coalton/hashtable-shim
-               #:trivial-garbage
-               #:alexandria)
+  :defsystem-depends-on ("coalton-asdf")
+  :depends-on ("coalton-compiler"
+               "coalton/hashtable-shim"
+               "trivial-garbage"
+               "alexandria")
   :pathname "library/"
   :serial t
   :components ((:file "set-float-traps")
@@ -108,7 +108,7 @@
 (cl:when (cl:member (uiop:getenv "COALTON_PORTABLE_BIGFLOAT") '("1" "true" "t") :test #'cl:equalp)
   (cl:pushnew ':coalton-portable-bigfloat cl:*features*))
 
-(asdf:defsystem #:coalton/library/big-float
+(asdf:defsystem "coalton/library/big-float"
   :description "An arbitrary precision floating point library."
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
@@ -117,10 +117,10 @@
                     (let (#+sbcl (sb-ext:*derive-function-types* t)
                           #+sbcl (sb-ext:*block-compile-default* :specified))
                       (funcall compile)))
-  :depends-on (#:coalton
-               #:coalton/library
-               (:feature (:and (:not :coalton-portable-bigfloat) :sbcl) #:sb-mpfr)
-               (:feature (:and (:not :coalton-portable-bigfloat) :sbcl) #:sb-gmp))
+  :depends-on ("coalton"
+               "coalton/library"
+               (:feature (:and (:not :coalton-portable-bigfloat) :sbcl) "sb-mpfr")
+               (:feature (:and (:not :coalton-portable-bigfloat) :sbcl) "sb-gmp"))
   :pathname "library/big-float/"
   :serial t
   :components ((:file "package")
@@ -129,29 +129,29 @@
                (:file "impl-default"
                 :if-feature (:or :coalton-portable-bigfloat (:not :sbcl)))))
 
-(asdf:defsystem #:coalton/library/computable-reals
+(asdf:defsystem "coalton/library/computable-reals"
   :description "A Coalton interface for computable-reals (https://github.com/stylewarning/computable-reals)"
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
   :pathname "library/computable-reals"
-  :depends-on (#:coalton
-               #:computable-reals)
+  :depends-on ("coalton"
+               "computable-reals")
   :serial t
   :components ((:file "computable-reals")))
 
-(asdf:defsystem #:coalton/testing
+(asdf:defsystem "coalton/testing"
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
-  :depends-on (#:coalton
-               #:fiasco)
+  :depends-on ("coalton"
+               "fiasco")
   :pathname "src/testing/"
   :serial t
   :components ((:file "package")
                (:file "coalton-native-test-utils")))
 
-(asdf:defsystem #:coalton/benchmarks
+(asdf:defsystem "coalton/benchmarks"
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
@@ -160,10 +160,10 @@
                           #+sbcl (sb-ext:*block-compile-default* :specified))
                       (funcall compile)))
 
-  :depends-on (#:coalton
-               #:coalton/library/big-float
-               #:trivial-benchmark
-               #:yason)
+  :depends-on ("coalton"
+               "coalton/library/big-float"
+               "trivial-benchmark"
+               "yason")
   :pathname "benchmarks"
   :serial t
   :components ((:file "package")
@@ -193,7 +193,7 @@
     (declare (ignore c))
     (cl:pushnew ':sbcl-pre-2-2-2 cl:*features*)))
 
-(asdf:defsystem #:coalton/hashtable-shim
+(asdf:defsystem "coalton/hashtable-shim"
   :description "Shim over Common Lisp hash tables with custom hash functions, for use by the Coalton standard library."
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
@@ -205,17 +205,17 @@
                (:file "hash-table" :if-feature (:not :sbcl))
                (:file "impl-custom" :if-feature (:not :sbcl))))
 
-(asdf:defsystem #:coalton/doc
+(asdf:defsystem "coalton/doc"
   :description "Documentation generator for Coalton"
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
-  :depends-on (#:coalton
-               #:coalton/library/big-float
-               #:coalton/library/computable-reals
-               #:html-entities
-               #:yason
-               #:uiop)
+  :depends-on ("coalton"
+               "coalton/library/big-float"
+               "coalton/library/computable-reals"
+               "html-entities"
+               "yason"
+               "uiop")
   :around-compile (lambda (compile)
                     (let (#+sbcl (sb-ext:*derive-function-types* t))
                       (funcall compile)))
@@ -229,16 +229,16 @@
                (:file "hugo")
                (:file "main")))
 
-(asdf:defsystem #:coalton/tests
+(asdf:defsystem "coalton/tests"
   :description "Tests for COALTON."
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
-  :depends-on (#:coalton
-               #:coalton/library/big-float
-               #:coalton/testing
-               #:fiasco
-               #:quil-coalton/tests
-               #:thih-coalton/tests)
+  :depends-on ("coalton"
+               "coalton/library/big-float"
+               "coalton/testing"
+               "fiasco"
+               "quil-coalton/tests"
+               "thih-coalton/tests")
   :perform (asdf:test-op (o s)
                          (unless (symbol-call :coalton-tests :run-coalton-tests)
                            (error "Tests failed")))
