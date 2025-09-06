@@ -46,11 +46,11 @@
   (:use
    #:coalton
    #:coalton-prelude
-   #:coalton-library/result
-   #:coalton-library/monad/state
    #:coalton-library/monad/environment
    #:coalton-library/monad/resultt)
   (:local-nicknames
+   (#:mst #:coalton-library/monad/state)
+   (#:r #:coalton-library/result)
    (#:s #:coalton-library/string)
    (#:m #:coalton-library/ordmap))
   (:export
@@ -174,25 +174,25 @@
 
 (coalton-toplevel
   (define-type-alias BankM
-    (EnvT Configuration (ST BankState)))
+    (EnvT Configuration (mst:ST BankState)))
 
   (declare run-bankM (BankM :val -> Configuration -> BankState -> Tuple BankState :val))
   (define (run-bankM bankm conf initial-state)
     "Takes BANKM, a BankM computation to run, CONF, an initial configuration, and an initial
 state. Runs the computation, and returns a tuple of the final state and the return value of
 the computation."
-    (run (run-envT bankm conf) initial-state)))
+    (mst:run (run-envT bankm conf) initial-state)))
 
 ;;; Fifth, we define some helper functions.
 
 (coalton-toplevel
   (declare get-account (AccountName -> BankState -> BankResult Account))
   (define (get-account account-name accounts)
-    (opt->result (AccountNotFound account-name) (m:lookup accounts account-name)))
+    (r:opt->result (AccountNotFound account-name) (m:lookup accounts account-name)))
 
   (declare get-accountM (AccountName -> BankM (BankResult Account)))
   (define (get-accountM account-name)
-    (lift (map (get-account account-name) get)))
+    (lift (map (get-account account-name) mst:get)))
 
   (declare check-account-is-valid (Account -> BankM (BankResult Account)))
   (define (check-account-is-valid account)
@@ -210,8 +210,8 @@ the computation."
      ;; still performing a "side effect" by modifying the state in our BankM monad.
      ;; Here, it's changing the BankState (which is a Map from String -> Account)
      ;; by inserting an account with its name as the key.
-     (lift (modify (fn (mp)
-               (m:insert-or-replace mp (.name acc) acc))))
+     (lift (mst:modify (fn (mp)
+                         (m:insert-or-replace mp (.name acc) acc))))
      (pure (Ok acc)))))
 
 ;;; Finally, we'll create all of the functions that our "user" can use to
@@ -234,7 +234,7 @@ the computation."
     "Adds an account to the BankState and return the created account."
     (run-resultT
      (do
-      (accounts <- (lift (lift get)))
+      (accounts <- (lift (lift mst:get)))
       (ResultT
        (match (get-account name accounts)
          ((Err _) (pure (Ok Unit)))
@@ -255,7 +255,7 @@ the computation."
   (declare print-reportM (BankM (BankResult Unit)))
   (define print-reportM
     (do
-     (accounts <- (lift get))
+     (accounts <- (lift mst:get))
      (pure (Ok (print-report accounts)))))
 
   (declare withdraw (AccountName -> Amount -> BankM (BankResult Account)))
@@ -311,10 +311,10 @@ the computation."
       (ResultT (local-envT
                 without-overdraft-protection
                 (transfer acc-to-close-name deposit-acc-name (.balance acc-to-close))))
-      (lift (lift (modify (fn (mp)
-                            (with-default
-                              mp
-                              (m:remove mp acc-to-close-name))))))
+      (lift (lift (mst:modify (fn (mp)
+                                (with-default
+                                  mp
+                                  (m:remove mp acc-to-close-name))))))
       (pure Unit)))))
 
 ;;; Finally, we run our bank simulation! We use the `do-resultT` macro, which
@@ -367,4 +367,4 @@ the computation."
           (transfer "Steve" "Natasha" 10)
           print-reportM
           )))
-     (traceobject "Result" (map-err to-string res)))))
+     (traceobject "Result" (r:map-err to-string res)))))

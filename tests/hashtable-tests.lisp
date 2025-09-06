@@ -21,8 +21,8 @@
 
 (define-test hashtable-constructor-equivalencies ()
   (let ht-eq? = (fn (ht-a ht-b)
-                  (== (list:sort (iter:collect! (hashtable:entries ht-a)))
-                      (list:sort (iter:collect! (hashtable:entries ht-b))))))
+                  (== (cln:sort (the (List :a) (iter:collect! (hashtable:entries ht-a))))
+                      (cln:sort (the (List :a) (iter:collect! (hashtable:entries ht-b)))))))
   (let ht = (hashtable:new))
   (hashtable:set! ht "zero" 0)
   (hashtable:set! ht "one" 1)
