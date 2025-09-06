@@ -1,20 +1,21 @@
 # The Coalton Standard Library Style Guide
 
-Many parts of the Coalton Standard Library currently violate these guidelines. Please,
+Many parts of the Coalton standard library currently violate these guidelines. Please,
 submit PRs bringing them into line!
 
 ## Naming
 
 ### Functions and other terms
 
-Term-level variables, i.e. those bound by `define`, `let` and `fn`, should be named in
+Term-level variables (i.e., those bound by `define`, `let`, and `fn`) should be named in
 `kebab-case`. An exception is made for constructors, as bound by `define-type`.
 
 Prefer longer, more expressive names. For example, `push-front` rather than just
 `push`.
 
-Use full words instead of abbreviations or acronyms. For example, `string-length`, not
-`strlen`.
+Use full words instead of abbreviations or acronyms. For example, `tokenize-string`, not
+`strtok`. However, names don't need to recapitulate the package they're in if they're
+understandable (e.g., `str:length` vs. `string-length`).
 
 Exceptions are allowed for incredibly common and intuitive operators like `fn`.
 
@@ -25,8 +26,9 @@ cell or writing to a stream, should be named with a trailing `!`, like `write!`.
 
 #### Predicates
 
-Predicates, i.e. non-side-effecting functions which return a boolean, should be named with
-a trailing `?`, like `empty?` or `null?`.
+Predicates, i.e. non-side-effecting functions which return a `Boolean`, should be named with
+a trailing `?`, like `empty?` or `null?`. Boolean values themselves may also sometimes be
+named with a trailing `?`, such as `(let ((done? ...)) ...)`.
 
 #### Side-effecting predicates
 
@@ -39,29 +41,22 @@ code sound very funny.
 
 #### Conversion functions
 
-Many Common Lisp libraries obey the convention that a function which converts a value of
-type `foo` into `bar` should be named `foo-bar`, like `graph-list` or
-`string-rope`. Others replace the hyphen `-` with an arrow `->`, like `graph->list` or
-`string->rope`. Still others reverse the order and use a left arrow `<-`, like
-`graph<-list` or `rope<-string`.
+Explicit conversion routines should be rarely needed because of the `Into` and `TryInto`
+classes, however, if an explicit routine converting from `A` to `B` is needed, then the
+naming convention of the function is `a->b`.
 
-All of these conventions are symptoms of the fact that Common Lisp's facility for type
-conversions, `coerce`, is not extensible to user-defined types. Coalton code has no need
-to define conversion functions; it should instead define instances on `Into` or `TryInto`
-as appropriate.
+### Types, type classes and constructors
 
-### Types, classes and constructors
-
-Type names, class names, and constructor names, i.e. those defined by `define-type` and
-`define-class`, should be `UpperCamelCase`. There is ongoing discussion as to whether
-Coalton should be case-sensitive, but this is at least stylistically pleasant.
+Type names, type class names, and constructor names, i.e. those defined by `define-type` and
+`define-class`, should be `UpperCamelCase`. Coalton is not currently case sensitive, but this
+is a convention that should be followed nonetheless.
 
 Single-constructor types whose members may be considered public should use the same name
 for their type and their constructor.
 
 Single-constructor types whose members may be considered private (i.e. those which should
 not be directly constructed or destructured by user code) should name their constructor by
-prefixing their type name with a `%`.
+prefixing their name with a `%`.
 
 For example:
 
@@ -79,7 +74,7 @@ For example:
 
 ### Type variables
 
-Type variables should be `kebab-case` keywords. Whenever possible, a meaningful name
+Type variables should be `:kebab-case` keywords. Whenever possible, a meaningful name
 should be chosen based on the qualities or uses of the type, rather than using a
 single-letter name. Unlike for term variables, reasonable abbreviations are permitted. For
 example, the type parameter to `Iterator` is `:elt` (short for "element"), not `:a`.

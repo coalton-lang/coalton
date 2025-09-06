@@ -277,6 +277,7 @@ recompilation, and also maintains a stack of uncompiled candidates."
                              :type (tc:make-function-type*
                                     (util:drop num-remaining (tc:function-type-arguments new-type))
                                     (tc:function-return-type new-type))
+                             :properties '()
                              :rator subexpr
                              :rands (loop :for name :in remaining-names
                                           :for ty :in remaining-types
@@ -406,6 +407,7 @@ propagate dictionaries that have been moved by the hoister."
                         :value function-name)
                        (make-node-application
                         :type (node-type node)
+                        :properties '()
                         :rator (make-node-variable
                                 :type (tc:make-function-type*
                                        (reverse arg-tys)

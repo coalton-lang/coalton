@@ -31,7 +31,8 @@ supported 64-bit implementation."))))
 
 (cl:eval-when (:compile-toplevel :load-toplevel)
   (cl:defparameter *integer-types*
-    '((U8 . (cl:unsigned-byte 8))
+    '((Bit . cl:bit)
+      (U8 . (cl:unsigned-byte 8))
       (I8 . (cl:signed-byte 8))
       (U16 . (cl:unsigned-byte 16))
       (I16 . (cl:signed-byte 16))
@@ -135,6 +136,7 @@ cannot be represented in :TO. These fall into a few categories:
                                   ;; otherwise, generate a fallible `TryInto' instance
                                   (define-integer-try-into-instance from-type into-type))))))
 
+(define-integer-conversions Bit)
 (define-integer-conversions U8)
 (define-integer-conversions I8)
 (define-integer-conversions U16)
@@ -157,11 +159,13 @@ cannot be represented in :TO. These fall into a few categories:
 
 ;; Only exact conversions
 ;; F32: 24 bit mantissa (not including sign)
+(integer-into-float Bit F32 cl:single-float)
 (integer-into-float U8 F32 cl:single-float)
 (integer-into-float I8 F32 cl:single-float)
 (integer-into-float U16 F32 cl:single-float)
 (integer-into-float I16 F32 cl:single-float)
 ;; F64: 53 bit mantissa (not including sign)
+(integer-into-float Bit F64 cl:double-float)
 (integer-into-float U8 F64 cl:double-float)
 (integer-into-float I8 F64 cl:double-float)
 (integer-into-float U16 F64 cl:double-float)

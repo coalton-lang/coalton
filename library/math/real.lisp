@@ -156,6 +156,7 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
        (define (to-fraction x) (fromint (tointeger x)))
        (define (best-approx x) (fromint (tointeger x))))))
 
+(%define-integer-roundings Bit)
 (%define-integer-roundings U8)
 (%define-integer-roundings U32)
 (%define-integer-roundings U64)

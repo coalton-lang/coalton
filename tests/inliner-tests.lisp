@@ -38,7 +38,12 @@
   (declare method-for-inline-test-caller
     (Double-Float -> Double-Float -> Double-Float))
   (define (method-for-inline-test-caller x y)
-    (method-for-inline-test x y)))
+    (method-for-inline-test x y))
+
+  (declare method-for-inline-test-caller-callsite-noinline
+    (Double-Float -> Double-Float -> Double-Float))
+  (define (method-for-inline-test-caller-callsite-noinline x y)
+    (noinline (method-for-inline-test x y))))
 
 (define-test method-inline ()
   (is (== 5.0d0 (method-for-inline-test-caller 2.0d0 3.0d0))))
@@ -90,6 +95,16 @@
 (define-test monomorphize-inline ()
   (is (== 5 (monomorph-for-inline 3))))
 
+;; gh #1594, not really the inliner, but the constant propagation pass
+(coalton-toplevel
+  (define (f-gh1594)
+    (let ((x (the Integer 10))
+          (y (+ 1 x)))
+      y)))
+
+(define-test test-gh1594 ()
+  (is (== 11 (f-gh1594))))
+
 ;; Issue on redefining inlinable functions
 ;; https://github.com/coalton-lang/coalton/issues/1499
 ;; These functions are used by inliner-tests-1.lisp, which is
@@ -106,6 +121,38 @@
     (if (== n 0)
         222
         (test-inlinable-rec-1 (1- n)))))
+
+;; Callsite inlining
+
+(coalton-toplevel 
+  (declare callsite-inlined-foo (UFix -> UFix))
+  (define (callsite-inlined-foo x)
+    (- (* 23 (+ 2 (* 4 x))) 1)))
+
+(coalton-toplevel
+  (define (callsite-inlined-foo-caller)
+    (callsite-inlined-foo 1))
+  (define (callsite-inlined-foo-inline-caller)
+    (inline (callsite-inlined-foo 1))))
+
+(coalton-toplevel 
+  (declare callsite-noinlined-foo (UFix -> UFix))
+  (inline)
+  (define (callsite-noinlined-foo x)
+    (- (* 23 (+ 2 (* 4 x))) 1)))
+
+(coalton-toplevel
+  (define (callsite-noinlined-foo-caller)
+    (callsite-noinlined-foo 1))
+  (define (callsite-noinlined-foo-noinline-caller)
+    (noinline (callsite-noinlined-foo 1))))
+
+(coalton-toplevel
+  (define (double-callsite-inlined-foo-caller)
+    (callsite-inlined-foo (+ 1 (inline (callsite-inlined-foo 1)))))
+
+  (define (double-callsite-noinlined-foo-caller)
+    (noinline (callsite-inlined-foo (+ 1 (inline (callsite-inlined-foo 1)))))))
 
 
 (in-package #:coalton-tests)
@@ -212,7 +259,7 @@ redefinition."
 
       ;; Inlining again doesn't add any more nodes to the AST.
       (is (= (traverse:count-nodes locally-node-1)
-             (traverse:count-nodes locally-node-2)))))
+             (traverse:count-nodes locally-node-2))))))
 
 (deftest limit-unroll-test ()
   "Ensure that we get to a locally node,
@@ -238,3 +285,33 @@ unroll the node."
     (is (= (traverse:count-nodes caller-1)
            (traverse:count-nodes caller-2)
            (traverse:count-nodes caller-3)))))
+
+(deftest callsite-inlining-test ()
+  (is (< (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::callsite-noinlined-foo-noinline-caller))
+         (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::callsite-noinlined-foo-caller))))
+  (is (< (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::callsite-inlined-foo-caller))
+         (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::callsite-inlined-foo-inline-caller)))))
+
+(deftest callsite-method-inlining-test ()
+  (is (< (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::method-for-inline-test-caller-callsite-noinline))
+         (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::method-for-inline-test-caller)))))
+
+(deftest callsite-double-inlining-test ()
+  (is (= (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::double-callsite-noinlined-foo-caller))
+         (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::double-callsite-inlined-foo-caller)))))

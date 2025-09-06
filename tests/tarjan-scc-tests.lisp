@@ -7,9 +7,9 @@
   ;; Can we detect a basic scc
   (is (sccs-equalp
        (coalton-impl/algorithm::tarjan-scc
-        '((a b)
+        '((c a)
           (b c)
-          (c a)))
+          (a b)))
        '((a b c))))
 
   ;; Can we detect an isolated scc
@@ -18,8 +18,8 @@
         '((a a)
           (b c)
           (c b)))
-       '((b c)
-         (a))))
+       '((a)
+         (b c))))
 
   ;; Can we produce a topological sorting of sccs
   (is (sccs-equalp
@@ -29,8 +29,8 @@
           (c a d)
           (d e)
           (e d)))
-       '((a b c)
-         (d e))))
+       '((d e)
+         (a b c))))
 
   ;; Can we out wiki the pedia (https://commons.wikimedia.org/wiki/File:Scc-1.svg)
   (is (sccs-equalp
@@ -43,9 +43,9 @@
           (f g)
           (g f)
           (h d g)))
-       '((a b e)
+       '((f g)
          (c d h)
-         (f g))))
+         (a b e))))
 
   ;; Wikipedia example 2 (https://commons.wikimedia.org/wiki/File:Graph_Condensation.svg)
   (is (sccs-equalp
@@ -66,9 +66,9 @@
           (n o p)
           (o m)
           (p o k)))
-       '((a b c d e)
-         (m n o p)
-         (f)
-         (l k)
+       '((j)
          (g h i)
-         (j)))))
+         (l k)
+         (f)
+         (m n o p)
+         (a b c d e)))))

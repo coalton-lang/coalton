@@ -182,6 +182,18 @@
    #:parse-variable                     ; FUNCTION
    ))
 
+;;;;
+;;;; Parser AST - Untyped Expression Nodes
+;;;;
+;;;; This module defines the Abstract Syntax Tree structures used during parsing,
+;;;; before type checking. These nodes represent the syntactic structure of Coalton
+;;;; code as parsed from source text.
+;;;;
+;;;; This is the first of two AST systems in the Coalton compiler:
+;;;; 1. Parser AST (this module): Untyped nodes used during parsing/syntax analysis
+;;;; 2. Codegen AST (codegen/ast.lisp): Typed nodes used during code generation
+;;;;
+
 (in-package #:coalton-impl/parser/expression)
 
 (defvar *macro-expansion-count* 0)
@@ -1041,10 +1053,6 @@ Rebound to NIL parsing an anonymous FN.")
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:or (cst:raw (cst:first form))))
-     (unless (cst:consp (cst:rest form))
-       (parse-error "Malformed or expression"
-                    (note-end source (cst:first form) "expected one or more arguments")))
-
      (make-node-or
       :nodes (loop :for args := (cst:rest form) :then (cst:rest args)
                    :while (cst:consp args)
@@ -1054,9 +1062,6 @@ Rebound to NIL parsing an anonymous FN.")
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:and (cst:raw (cst:first form))))
-     (unless (cst:consp (cst:rest form))
-       (parse-error "Malformed and expression"
-                    (note-end source (cst:first form) "expected one or more arguments")))
 
      (make-node-and
       :nodes (loop :for args := (cst:rest form) :then (cst:rest args)
@@ -1064,7 +1069,6 @@ Rebound to NIL parsing an anonymous FN.")
                    :for arg := (cst:first args)
                    :collect (parse-expression arg source))
       :location (form-location source form)))
-
     ((and (cst:atom (cst:first form))
           (eq 'coalton:if (cst:raw (cst:first form))))
      (unless (cst:consp (cst:rest form))

@@ -22,7 +22,7 @@
 
 
 (defun list-if-release (&rest xs)
-  (if (not (coalton-impl/settings:coalton-release-p))
+  (if (not (settings:coalton-release-p))
       nil
       xs))
 
@@ -37,7 +37,7 @@
 The intention is that MODE, which is one of ':CLASS or ':STRUCT, is
 itself reflective of the Coalton release mode, where development mode
 strongly correlates to ':CLASS and release mode to
-':STRUCT. 
+':STRUCT.
 
 Ultimately, the caller may decide to force either ':CLASS or ':STRUCT
 regardless of Coalton's release mode."
@@ -46,66 +46,96 @@ regardless of Coalton's release mode."
            (type (member :class :struct) mode))
 
   (let ((field-names (mapcar #'struct-or-class-field-name fields))
-        (accessor-names (loop :for field :in fields
-                              :for package := (symbol-package classname)
-                              :collect (alexandria:format-symbol
-                                        package
-                                        "~A-~A"
-                                        classname
-                                        (struct-or-class-field-name field)))))
+        (reader-names (loop :for field :in fields
+                            :for package := (symbol-package classname)
+                            :collect (alexandria:format-symbol
+                                      package
+                                      "~A-~A"
+                                      classname
+                                      (struct-or-class-field-name field)))))
 
     (append
      (ecase mode
        (:struct
         (append
-         ;; Inline constructor and readers (release-only).
+         ;; Declare the types of the constructor and readers:
+         (when settings:*emit-type-annotations*
+           (list*
+            `(declaim (ftype (function
+                              ,(mapcar #'struct-or-class-field-type fields)
+                              (values ,classname &optional))
+                             ,constructor))
+            (loop :for field :in fields
+                  :for reader-name :in reader-names
+                  :for lisp-type := (struct-or-class-field-type field)
+                  :collect `(declaim (ftype (function (,classname)
+                                                      (values ,lisp-type &optional))
+                                            ,reader-name)))))
+
+         ;; Inline constructor and readers (release-only):
          (list-if-release
-          `(declaim (inline ,constructor ,@accessor-names)))
-         ;; Define the struct.
+          `(declaim (inline ,constructor ,@reader-names)))
+
+         ;; Define the struct:
          (list
           `(defstruct (,classname
                        (:copier nil)
                        (:predicate nil)
                        ,@(when superclass
                            (list `(:include ,superclass)))
-                       (:constructor ,constructor ,field-names)) 
+                       (:constructor ,constructor ,field-names))
              ,@(loop :for field :in fields
                      :for name := (struct-or-class-field-name field)
                      :for lisp-type := (struct-or-class-field-type field)
-                     :collect `(,name (error "") :type ,lisp-type))))
-         ;; Freeze the type (release-only).
+                     :collect `(,name nil :type ,lisp-type :read-only t))))
+
+         ;; Freeze the type (release-only):
          (list-if-release
           #+sbcl
           `(declaim (sb-ext:freeze-type ,classname)))))
 
        (:class
-        (append 
+        (append
          (list
-          `(defclass ,classname
-               ,(if superclass
-                    (list superclass)
-                    (list))
+          ;; Class (and slot) definitions:
+          `(defclass ,classname ,(if superclass
+                                     (list superclass)
+                                     (list))
              ,(loop :for field :in fields
                     :for field-name :in field-names
-                    :for accessor-name :in accessor-names
+                    :for reader-name :in reader-names
                     :for lisp-type := (struct-or-class-field-type field)
                     :collect `(,field-name
                                :type ,lisp-type
-                               :initarg ,field-name
-                               :accessor ,accessor-name))
-             (:default-initargs
-              ,@(loop :for field-name :in field-names
-                      :append `(,field-name (error ""))))))
+                               :initarg ,field-name))))
+
+         ;; Class reader definitions:
+         (loop :for field :in fields
+               :for field-name :in field-names
+               :for reader-name :in reader-names
+               :for lisp-type := (struct-or-class-field-type field)
+               :when settings:*emit-type-annotations*
+                 :collect `(declaim (ftype (function (,classname)
+                                                     (values ,lisp-type &optional))
+                                           ,reader-name))
+               :when (settings:coalton-release-p)
+                 :collect `(declaim (inline ,reader-name))
+               :collect `(defun ,reader-name (obj)
+                           (slot-value obj ',field-name)))
+
+         ;; Constructor function definition:
+         (when settings:*emit-type-annotations*
+           (list
+            `(declaim (ftype (function
+                              ,(mapcar #'struct-or-class-field-type fields)
+                              (values ,classname &optional))
+                             ,constructor))))
+
+         (list-if-release
+          `(declaim (inline ,constructor)))
 
          (list
-          ;; NOTE: We are omitting the inline call because this causes
-          ;; SBCL IR1 bugs for instance definitions.
-          ;;
-          ;; `(declaim (inline ,constructor))
           `(defun ,constructor ,field-names
-             ,@(when settings:*emit-type-annotations*
-                 `((declare ,@(loop :for field :in fields
-                                    :collect `(type ,(struct-or-class-field-type field) ,(struct-or-class-field-name field))))))
              (make-instance ',classname ,@(mapcan
                                            (lambda (field)
                                              `(',field ,field))
@@ -115,7 +145,7 @@ regardless of Coalton's release mode."
           (list
            `(global-lexical:define-global-lexical ,constructor rt:function-entry)
            `(setf ,constructor ,(rt:construct-function-entry `#',constructor (length fields))))
-          (loop :for reader :in accessor-names
+          (loop :for reader :in reader-names
                 :collect `(global-lexical:define-global-lexical ,reader rt:function-entry)
                 :collect `(setf ,reader ,(rt:construct-function-entry `#',reader 1))))
 

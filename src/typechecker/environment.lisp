@@ -9,6 +9,9 @@
    #:coalton-impl/typechecker/scheme
    #:coalton-impl/typechecker/unify)
   (:import-from
+   #:coalton-impl/util
+   #:project-elements)
+  (:import-from
    #:coalton-impl/typechecker/substitutions
    #:apply-substitution
    #:substitution-list
@@ -19,6 +22,7 @@
    #:fundep-from
    #:fundep-to
    #:fundep-list
+   #:generic-closure
    #:+fundep-max-depth+)
   (:local-nicknames
    (#:util #:coalton-impl/util)
@@ -173,41 +177,53 @@
    #:lookup-specialization-by-type          ; FUNCTION
    #:lookup-fundep-environment              ; FUNCTION
    #:initialize-fundep-environment          ; FUNCTION
+   #:collect-fundeps                        ; FUNCTION
+   #:collect-fundep-vars                    ; FUNCTION
    #:update-instance-fundeps                ; FUNCTION
    #:solve-fundeps                          ; FUNCTION
    ))
 
-;;; Coalton environment management
-;;;
-;;; An environment contains all information about Coalton types,
-;;; functions, instances, specializations, and so on.
-;;;
-;;; Environments are immutable: all update functions defined below
-;;; return a new environment.
-;;;
-;;; The global environment root is:
-;;;
-;;;   coalton-impl/entry:*global-environment*
-;;;
-;;; An update hook mechanism is provided so that the compiler can
-;;; record updates that occur while compiling Coalton source. When
-;;; compilation is finished, an update log is prepended to generated
-;;; lisp code, to allow replaying the environment updates when the
-;;; compiled fasl is loaded.
+;;;;
+;;;; Coalton Type Checker Environment
+;;;;
+;;;; This module maintains the global type checking environment, which
+;;;; contains all information about types, functions, classes,
+;;;; instances, and other compiler state.
+;;;;
+;;;; Environment contents:
+;;;;
+;;;; - Value types: Type signatures for functions and variables
+;;;; - Type definitions: User-defined types (algebraic data types, type aliases)
+;;;; - Type classes: Class definitions with their methods and superclasses  
+;;;; - Type instances: Implementations of type classes for specific types
+;;;; - Constructor information: Data constructors and their types
+;;;; - Function metadata: Arity, inlining directives, specializations
+;;;;
+;;;; The global environment root is:
+;;;;
+;;;;   coalton-impl/entry:*global-environment*
+;;;;
+;;;; Environments are generally treated immutably, in that the various
+;;;; functions defined here return new environments.
+;;;;
+;;;; The *update-hook* variable allows recording environment modifications
+;;;; during compilation. When compilation finishes, the update log is used to
+;;;; generate code that will replay the same modifications at load time.
+;;;;
 
 (in-package #:coalton-impl/typechecker/environment)
 
-;; *update-hook* may be bound to a function that is called whenever
-;; an environment is updated.
-;;
-;; The bound function must accept 2 arguments:
-;;
-;; - the symbol naming the environment update function
-;; - that function's arg list
-;;
-;; The environment itself, which is always the first argument to an
-;; update function, is not provided in the arg list: just the update
-;; values.
+;;; *update-hook* may be bound to a function that is called whenever
+;;; an environment is updated.
+;;;
+;;; The bound function must accept 2 arguments:
+;;;
+;;; - the symbol naming the environment update function
+;;; - that function's arg list
+;;;
+;;; The environment itself, which is always the first argument to an
+;;; update function, is not provided in the arg list: just the update
+;;; values.
 
 (defvar *update-hook*)
 
@@ -299,7 +315,7 @@
 (declaim (sb-ext:freeze-type type-environment))
 
 (defun make-default-type-environment ()
-  "Create a TYPE-ENVIRONMENT containing early types"
+  "Create a TYPE-ENVIRONMENT containing early types."
   (make-type-environment
    :data (fset:map
           ;; Early Types
@@ -313,7 +329,7 @@
             :explicit-repr '(:native cl:boolean)
             :enum-repr t
             :newtype nil
-            :docstring "Either true or false represented by `t` and `nil` respectively."))
+            :docstring "Either true or false, internally represented by `cl:t` and `cl:nil` respectively."))
 
           ('coalton:Unit
            (make-type-entry
@@ -337,7 +353,7 @@
             :explicit-repr '(:native cl:character)
             :enum-repr nil
             :newtype nil
-            :docstring "A character represented by a Common Lisp `character`."))
+            :docstring "A character represented by a Common Lisp `cl:character`."))
 
           ('coalton:Integer
            (make-type-entry
@@ -349,7 +365,7 @@
             :explicit-repr '(:native cl:integer)
             :enum-repr nil
             :newtype nil
-            :docstring "Unbound integer. Represented by a Common Lisp `integer`."))
+            :docstring "Integer of unbounded size. Represented by a Common Lisp `cl:integer`."))
 
           ('coalton:F32
            (make-type-entry
@@ -361,7 +377,7 @@
             :explicit-repr '(:native cl:single-float)
             :enum-repr nil
             :newtype nil
-            :docstring "Single-precision floating point number (32-bits in size). Represented by a Common Lisp `single-float`."))
+            :docstring "Single-precision floating point number (32 bits in size). Represented by a Common Lisp `cl:single-float`."))
 
           ('coalton:F64
            (make-type-entry
@@ -373,7 +389,7 @@
             :explicit-repr '(:native cl:double-float)
             :enum-repr nil
             :newtype nil
-            :docstring "Double-precision floating point number (64 bits in size). Represented by a Common Lisp `double-float`."))
+            :docstring "Double-precision floating point number (64 bits in size). Represented by a Common Lisp `cl:double-float`."))
 
           ('coalton:String
            (make-type-entry
@@ -385,7 +401,7 @@
             :explicit-repr '(:native cl:string)
             :enum-repr nil
             :newtype nil
-            :docstring "String of characters. Represented by Common Lisp `string`."))
+            :docstring "String of characters. Represented by Common Lisp `cl:string`."))
 
           ('coalton:Fraction
            (make-type-entry
@@ -397,7 +413,7 @@
             :explicit-repr '(:native cl:rational)
             :enum-repr nil
             :newtype nil
-            :docstring "A ratio of integers always in reduced form. Represented by a Common Lisp `rational`."))
+            :docstring "A ratio of integers always in reduced form. Represented by a Common Lisp `cl:rational`."))
 
           ('coalton:Arrow
            (make-type-entry
@@ -409,7 +425,7 @@
             :explicit-repr nil
             :enum-repr nil
             :newtype nil
-            :docstring "Type constructor for function types."))
+            :docstring "A named constructor for function types. `Arrow :a :b` is equivalent to `:a -> :b`."))
 
           ('coalton:List
            (make-type-entry
@@ -421,7 +437,7 @@
             :explicit-repr '(:native cl:list)
             :enum-repr nil
             :newtype nil
-            :docstring "Homogeneous list of objects. Represented as a typical Common Lisp chain of conses (or `nil`)."))
+            :docstring "Homogeneous list of objects. Represented as a typical Common Lisp chain of `cl:cons` (or `cl:nil`)."))
 
           ('coalton:Optional
            (make-type-entry
@@ -1019,7 +1035,26 @@ of constraint predicates."
 ;;; Functions
 ;;;
 
+(declaim (ftype (function (environment symbol &key (:no-error t)) (or ty-scheme null)) lookup-value-type))
 (defun lookup-value-type (env symbol &key no-error)
+  "Look up the type scheme for a value binding (function or variable) in the environment.
+
+ENV is the type checking environment to search.
+SYMBOL is the name of the binding to look up.
+NO-ERROR, if true, returns NIL instead of signaling an error when the binding is not found.
+
+Returns the type scheme (ty-scheme) associated with the binding, or NIL if not found and NO-ERROR is true.
+Type schemes include quantification information (∀ variables) and constraints.
+
+This is the primary interface for retrieving function and variable types during type checking.
+The returned scheme can be instantiated with fresh type variables to get a concrete type for
+use in type inference.
+
+Examples:
+  (lookup-value-type env 'my-function)     ; Returns scheme like ∀ a. a -> a -> Boolean  
+  (lookup-value-type env 'undefined :no-error t) ; Returns NIL if 'undefined not defined
+
+Signals a coalton-bug error if the binding is not found and NO-ERROR is false (the default)."
   (declare (type environment env)
            (type symbol symbol))
   (or (immutable-map-lookup (environment-value-environment env) symbol)
@@ -1054,7 +1089,28 @@ of constraint predicates."
                        symbol
                        #'make-value-environment)))
 
+(declaim (ftype (function (environment symbol &key (:no-error t)) (or type-entry null)) lookup-type))
 (defun lookup-type (env symbol &key no-error)
+  "Look up a type definition (algebraic data type, struct, etc.) in the environment.
+
+ENV is the type checking environment to search.
+SYMBOL is the name of the type to look up.
+NO-ERROR, if true, returns NIL instead of signaling an error when the type is not found.
+
+Returns a type-entry containing:
+- The type constructor and its kind
+- Information about data constructors and their arities
+- Runtime representation details (structs, enums, newtypes)
+- Whether the type is an exception or resumption type
+
+This is used during type checking to resolve type constructor references and
+validate that types are properly defined before use.
+
+Examples:
+  (lookup-type env 'Maybe)     ; Returns type-entry for Maybe type constructor
+  (lookup-type env 'NoSuchType :no-error t) ; Returns NIL if not defined
+
+Signals a coalton-bug error if the type is not found and NO-ERROR is false (the default)."
   (declare (type environment env)
            (type symbol symbol))
   (or (immutable-map-lookup (environment-type-environment env) symbol)
@@ -1521,31 +1577,107 @@ of constraint predicates."
        entry)
       #'make-fundep-environment))))
 
-(define-env-updater update-instance-fundeps (env pred)
+(defun collect-fundeps (env preds)
+  "Collect the functional dependencies associated with PREDS as CONSes of
+LISTs of TYs, recursively expanding to the superclass predicates.
+
+For example, with the definitions
+
+  (define-class (C :a :b (:a -> :b)))
+  (define-class (C :a :b => D :a :b))
+
+and the single predicate 
+
+  D (List #T1) #T2
+
+This function will return the single functional dependency
+
+  (List #T1 . #T2)"
   (declare (type environment env)
-           (type ty-predicate pred))
+           (type ty-predicate-list preds))
+  (loop :for pred :in preds
+        :for pred-tys := (ty-predicate-types pred)
+        :for class := (lookup-class env (ty-predicate-class pred))
+        :for class-vars := (ty-class-class-variables class)
+        :for subs := (predicate-match (ty-class-predicate class) pred)
+        :for supers := (mapcar (alexandria:curry #'apply-substitution subs)
+                               (ty-class-superclasses class))
+        :nconc (collect-fundeps env supers)
+        :nconc (loop :for fundep :in (ty-class-fundeps class)
+                     :collect (cons (project-elements
+                                     (fundep-from fundep)
+                                     class-vars
+                                     pred-tys)
+                                    (project-elements
+                                     (fundep-to fundep)
+                                     class-vars
+                                     pred-tys)))))
+
+(defun collect-fundep-vars (env preds)
+  "Collect the type variable functional dependencies associated with
+PREDs as CONSes of LISTs of TYVARs, recursively expanding to the
+superclass predicates.
+
+For example, with the definitions
+
+  (define-class (C :a :b (:a -> :b)))
+  (define-class (C :a :b => D :a :b))
+
+and the single predicate 
+
+  D (List #T1) #T2
+
+This function will return the single functional dependency
+
+  (#T1 . #T2)"
+  (declare (type environment env)
+           (type ty-predicate-list preds))
+  (loop :for (from . to) :in (collect-fundeps env preds)
+        :collect (cons (type-variables from) (type-variables to))))
+
+(define-env-updater update-instance-fundeps (env pred context)
+  ;; This function is essential for cases like the following.
+  ;;
+  ;;   (define-class (C :a :b (:a -> :b)))
+  ;;   (define-instance (C UFix Integer))
+  ;;
+  ;; This function ensures that when the compile encounters the
+  ;; predicate C UFix :t, it knows that :t must be the type Integer.
+  (declare (type environment env)
+           (type ty-predicate pred)
+           (type ty-predicate-list context))
+
+  ;; Ensure dependent types do not contain type variables that
+  ;; are not present in the corresponding determinant types,
+  ;; unless they are otherwise determined by the context.
+  ;; See "Type Class with Functional Dependencies" §6.1 (Jones)
+  (loop :with superfundeps := (collect-fundep-vars env context)
+        :for (from-vars . to-vars) :in (collect-fundep-vars env (list pred))
+        :for known-to-vars
+          := (generic-closure from-vars superfundeps :test #'ty=)
+        :for unknown-to-vars
+          := (set-difference to-vars known-to-vars :test #'ty=)
+        :unless (subsetp unknown-to-vars from-vars :test #'ty=)
+          :do (error 'fundep-ambiguity))
 
   (let* ((class (lookup-class env (ty-predicate-class pred)))
-         (fundep-env (lookup-fundep-environment env (ty-predicate-class pred)))
-         (class-variables (ty-class-class-variables class)))
+         (fundep-env
+           (lookup-fundep-environment env (ty-predicate-class pred)))
+         (class-variables (ty-class-class-variables class))
+         (pred-tys (ty-predicate-types pred)))
 
     (loop :for fundep :in (ty-class-fundeps class)
           :for i :from 0
           ;; Lookup the state for the ith fundep
           :for state := (immutable-listmap-lookup fundep-env i :no-error t)
-
-          :for from-tys
-            := (mapcar
-                (lambda (var)
-                  (nth (position var class-variables) (ty-predicate-types pred)))
-                (fundep-from fundep))
-
-          :for to-tys
-            := (mapcar
-                (lambda (var)
-                  (nth (position var class-variables) (ty-predicate-types pred)))
-                (fundep-to fundep))
-
+          :for from-tys := (project-elements
+                            (fundep-from fundep)
+                            class-variables
+                            pred-tys)
+          :for to-tys := (project-elements
+                          (fundep-to fundep)
+                          class-variables
+                          pred-tys)
           :do (block update-block
                 ;; Try to find a matching relation for the current fundep
                 (fset:do-seq (s state)
@@ -1636,18 +1768,104 @@ of constraint predicates."
     (util:unreachable)))
 
 (defun solve-fundeps (env preds subs)
+  "First, this function creates and applies substitutions to preds based
+on functional dependencies that constrain them with respect to one
+another, and then this function creates and applies substitutions to
+preds based on functional dependencies that constrain them with
+respect to defined type class instances. The values returned are the
+predicates with all substitutions applied and the new substitutions."
   (declare (type environment env)
            (type ty-predicate-list preds)
            (type substitution-list subs)
            (values ty-predicate-list substitution-list &optional))
-  ;; If no predicates have fundeps, then exit early
-  (unless (loop :for pred :in preds
-                :for class-name := (ty-predicate-class pred)
-                :for class := (lookup-class env class-name)
-                :when (ty-class-fundeps class)
-                  :collect class)
-    (return-from solve-fundeps (values preds subs)))
 
+  ;; We memoize this function to support the type-checking of
+  ;; constructors of collections, e.g., MAKE-LIST.
+  (let ((fundepsp-cache (make-hash-table :test #'eq)))
+    (labels ((fundepsp (preds)
+               "Are any of PREDS constrained by functional dependencies?"
+               (when (endp preds)
+                 (return-from fundepsp nil))
+               (let* ((pred (first preds))
+                      (class-name (ty-predicate-class pred)))
+                 (multiple-value-bind (fundepsp foundp)
+                     (gethash class-name fundepsp-cache)
+                   (cond
+                     (foundp
+                      (or fundepsp (fundepsp (rest preds))))
+                     (t
+                      (let ((class (lookup-class env class-name)))
+                        (or (setf (gethash class-name fundepsp-cache)
+                                  (or (consp (ty-class-fundeps class))
+                                      (fundepsp (ty-class-superclasses class))))
+                            (fundepsp (rest preds))))))))))
+
+      ;; If no predicates have fundeps, then exit early
+      (unless (fundepsp preds)
+        (return-from solve-fundeps (values preds subs)))))
+
+  ;; Expand PREDS into the superclasses
+  (setf preds
+        (loop :for remaining-preds := (copy-list preds)
+                :then (rest remaining-preds)
+              :until (endp remaining-preds)
+              :for pred := (first remaining-preds)
+              :for class := (lookup-class env (ty-predicate-class pred))
+              :for _subs := (predicate-match (ty-class-predicate class) pred subs)
+              :do (alexandria:nconcf
+                   remaining-preds
+                   (mapcar (alexandria:curry #'apply-substitution _subs)
+                           (ty-class-superclasses class)))
+              :collect pred))
+
+  ;; The purpose of this block is to create a substitution list that
+  ;; unifies the expanded predicates from the previous block based
+  ;; on the functional dependencies that constrain them.
+  (loop :for remaining-preds := preds :then (rest remaining-preds)
+        :until (endp remaining-preds)
+        :for pred := (first remaining-preds)
+        :for class-name := (ty-predicate-class pred)
+        :for class := (lookup-class env class-name)
+        :for fundeps := (ty-class-fundeps class)
+        :for other-pred := (find class-name (rest preds)
+                                 :key #'ty-predicate-class
+                                 :test #'eq)
+        :when (and (consp fundeps) (not (null other-pred)))
+          :do (handler-case
+                  (let ((class-vars (ty-class-class-variables class))
+                        (pred-tys (ty-predicate-types pred))
+                        (other-pred-tys (ty-predicate-types other-pred)))
+                    (dolist (fundep fundeps)
+                      (let* ((from (fundep-from fundep))
+                             (to (fundep-to fundep))
+                             (pred-from
+                               (project-elements from
+                                                 class-vars
+                                                 pred-tys))
+                             (other-pred-from
+                               (project-elements from
+                                                 class-vars
+                                                 other-pred-tys)))
+                        (when (every #'ty= pred-from other-pred-from)
+                          (let ((pred-to
+                                  (project-elements to
+                                                    class-vars
+                                                    pred-tys))
+                                (other-pred-to
+                                  (project-elements to
+                                                    class-vars
+                                                    other-pred-tys)))
+                            (setf subs (unify-list subs
+                                                   pred-to
+                                                   other-pred-to)))))))
+                (unification-error ()
+                  (error 'context-fundep-conflict
+                         :first-pred pred
+                         :second-pred other-pred)))
+        :finally (setf preds (apply-substitution subs preds)))
+
+  ;; This block is meant to simplify PREDS if instances exist in the
+  ;; environment which constrain them by functional dependencies.
   (loop :with new-subs := nil
         :with preds-generated := nil
         :for i :below +fundep-max-depth+
@@ -1730,17 +1948,14 @@ of constraint predicates."
            (type substitution-list subs)
            (values substitution-list &optional))
 
-  (let* ((from-tys
-           (mapcar
-            (lambda (var)
-              (nth (position var class-variables) (ty-predicate-types pred)))
-            (fundep-from fundep)))
-
-         (to-tys
-           (mapcar
-            (lambda (var)
-              (nth (position var class-variables) (ty-predicate-types pred)))
-            (fundep-to fundep))))
+  (let* ((from-tys (util:project-elements
+                    (fundep-from fundep)
+                    class-variables
+                    (ty-predicate-types pred)))
+         (to-tys (util:project-elements
+                    (fundep-to fundep)
+                    class-variables
+                    (ty-predicate-types pred))))
 
     (fset:do-seq (entry state)
       (handler-case

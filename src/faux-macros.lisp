@@ -69,7 +69,8 @@
 (define-coalton-toplevel-editor-macro coalton:lisp-toplevel (options &body lisp-toplevel-forms)
   "Include lisp forms. (Coalton top-level operator.)")
 
-(define-coalton-toplevel-editor-macro coalton:specialize (name from-ty to-ty)
+(define-coalton-toplevel-editor-macro coalton:specialize
+    (generic-fun specialized-fun specialized-ty)
   "Declare a specialization for a function. (Coalton top-level operator.)")
 
 ;;; Attributes

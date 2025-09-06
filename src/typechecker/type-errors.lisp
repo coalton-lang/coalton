@@ -21,7 +21,11 @@
    #:overlapping-instance-error-inst2          ; ACCESSOR
    #:ambiguous-constraint                      ; CONDITION
    #:ambiguous-constraint-pred                 ; ACCESSOR
+   #:fundep-ambiguity                          ; CONDITION
    #:fundep-conflict                           ; CONDITION
+   #:context-fundep-conflict                   ; CONDITION
+   #:context-fundep-conflict-first-pred        ; ACCESSOR
+   #:context-fundep-conflict-second-pred       ; ACCESSOR
    #:overlapping-specialization-error          ; CONDITION
    #:overlapping-specialization-error-new      ; ACCESSOR
    #:overlapping-specialization-error-existing ; ACCESSOR
@@ -125,6 +129,52 @@
                (overlapping-instance-error-inst1 c)
                (overlapping-instance-error-inst2 c))))))
 
+;; Here, functional dependency ambiguity is best explained by example.
+;; Consider the class defined as (C :a :b (:a -> :b)) and the instance
+;; definition (define-instance (C (T :a) (T :b))). Here the _dependent_
+;; type, (T :b), contains a type variable that is not contained in the
+;; _determinant_ type, (T :a), so both of the following instances are
+;; now defined, (C (T U) (T U)) and (C (T U) (T V)), which violates
+;; the principle of functional dependencies whereby we should be able to
+;; determine the second type argument of the class C by the first type
+;; argument.
+(define-condition fundep-ambiguity (coalton-internal-type-error)
+  ()
+  (:report
+   (lambda (c s)
+     (declare (ignore c))
+     (let ((*print-circle* nil)
+           (*print-readably* nil)
+           (*coalton-type-printing-mode* ':types))
+       (format s "dependent types cannot contain types variables that are ~
+                  not present in the corresponding determinant types.")))))
+
+;; This error is used to indicate that a functional dependency
+;; conflict arises between a pair of predicates that were taken from
+;; an expanded context, i.e., a set of predicates and their superclass
+;; predicates, recursively.
+(define-condition context-fundep-conflict (coalton-internal-type-error)
+  ((first-pred :initarg :first-pred
+               :reader context-fundep-conflict-first-pred
+               :type ty-predicate)
+   (second-pred :initarg :second-pred
+                :reader context-fundep-conflict-second-pred
+                :type ty-predicate))
+  (:report
+   (lambda (c s)
+     (let ((*print-circle* nil)
+           (*print-readably* nil)
+           (*coalton-type-printing-mode* ':types))
+       (with-pprint-variable-context ()
+         (format s "predicates ~S and ~S conflict with functional dependencies"
+                 (context-fundep-conflict-first-pred c)
+                 (context-fundep-conflict-second-pred c)))))))
+
+;; This error is used to indicate that an instance definition
+;; conflicts with a previous instance definition on the basis of
+;; functional dependencies.  For example, on the class defined as
+;; (C :a :b (:a -> :b)), this error is thrown if first an instance is
+;; defined (C T U) and then another instance is defined (C T V).
 (define-condition fundep-conflict (coalton-internal-type-error)
   ((new-pred :initarg :new-pred
              :reader fundep-conflict-new-pred

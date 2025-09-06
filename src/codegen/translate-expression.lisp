@@ -163,6 +163,7 @@ Returns a `node'.")
         (flet ((make-full-call ()
                  (make-node-application
                   :type (tc:qualified-ty-type qual-ty)
+                  :properties '()
                   :rator (make-node-variable
                           :type (tc:make-function-type*
                                  (list
@@ -259,6 +260,7 @@ Returns a `node'.")
 
       (make-node-application
        :type (tc:qualified-ty-type qual-ty)
+       :properties '()
        :rator (translate-expression (tc:node-application-rator expr) ctx env)
        :rands (mapcar
                (lambda (expr)
@@ -756,6 +758,7 @@ Returns a `node'.")
            (into-iter-node
              (make-node-application
               :type iter-ty
+              :properties '()
               :rator (make-node-variable
                       :type (tc:make-function-type*
                              (list (pred-type intoiterator-pred env)
@@ -775,6 +778,7 @@ Returns a `node'.")
            (iter-next-node
              (make-node-application
               :type optional-pat-arg-ty
+              :properties '()
               :rator (make-node-variable
                       :type (tc:make-function-type*
                              (list iter-ty)
@@ -932,6 +936,7 @@ Returns a `node'.")
 
                            (make-node-application
                             :type (node-type out-node)
+                            :properties '()
                             :rator (make-node-variable
                                     :type (tc:make-function-type* ; (Monad :m => m :a -> (:a -> :m :b) -> :m :b)
                                            (list (pred-type pred env)
@@ -968,6 +973,7 @@ Returns a `node'.")
 
                            (make-node-application
                             :type (node-type out-node)
+                            :properties '()
                             :rator (make-node-variable
                                     :type (tc:make-function-type* ; (Monad :m => m :a -> (:a -> :m :b) -> :m :b)
                                            (list (pred-type pred env)
@@ -1064,6 +1070,7 @@ dictionaries applied."
       (t
        (make-node-application
         :type (tc:qualified-ty-type qual-ty)
+        :properties '()
         :rator inner-node
         :rands dicts)))))
 

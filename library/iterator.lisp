@@ -147,10 +147,6 @@ STATE, using INIT as the first STATE."
   (define-instance (IntoIterator (Iterator :elt) :elt)
     (define into-iter id))
 
-  (define-instance (IntoIterator Unit :elt)
-    (define (into-iter _)
-      empty))
-
   (declare recursive-iter ((:elt -> :elt) -> (:elt -> Boolean) -> :elt -> Iterator :elt))
   (define (recursive-iter succ done? start)
     "An iterator which yields first START, then (SUCC START), then (SUCC (SUCC START)), and so on, stopping as soon as such a value is `done?`.

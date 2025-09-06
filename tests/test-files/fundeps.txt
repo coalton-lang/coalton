@@ -131,3 +131,86 @@ error: Ambiguous method
    |
  4 |    (m :a))
    |    ^^^^^^ the method is ambiguous
+
+================================================================================
+107 Instance fundep ambiguity
+================================================================================
+
+(package coalton-unit-test/fundeps)
+
+(define-class (C :a :b (:a -> :b)))
+(define-instance (C :a :b))
+
+--------------------------------------------------------------------------------
+
+error: Instance fundep ambiguity
+  --> test:4:17
+   |
+ 4 |  (define-instance (C :a :b))
+   |                   ^^^^^^^^^ dependent types cannot contain types variables that are not present in the corresponding determinant types.
+
+================================================================================
+108 Declared context is too general
+================================================================================
+
+(package coalton-unit-test/fundeps)
+
+(define-class (C :a :b (:a -> :b))
+  (cm :a))
+(define-class (C :a :b => D :a :b)
+  (dm (:a -> :a)))
+
+(declare f ((C :a :b) (D :a :c) => :a))
+(define f (dm cm))
+
+--------------------------------------------------------------------------------
+
+error: Declared context is too general
+  --> test:8:11
+   |
+ 8 |  (declare f ((C :a :b) (D :a :c) => :a))
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^ the substitution :A +-> :B is determined for (C :C :A) (D :C :B) => :C by functional dependencies.
+
+================================================================================
+109 Declared context can be reduced
+================================================================================
+
+(package coalton-unit-test/fundeps)
+
+(define-class (C :a :b (:a -> :b))
+  (cm :a))
+(define-class (C :a :b => D :a :b)
+  (dm (:a -> :a)))
+
+(declare f ((C :a :b) (D :a :b) => :a))
+(define f (dm cm))
+
+--------------------------------------------------------------------------------
+
+warn: Declared context can be reduced
+  --> test:8:11
+   |
+ 8 |  (declare f ((C :a :b) (D :a :b) => :a))
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^ qualified type can be reduced to D :A :B => :A
+
+================================================================================
+110 Context conflicts with functional dependencies
+================================================================================
+
+(package coalton-unit-test/fundeps)
+
+(define-class (C :a :b (:a -> :b))
+  (cm :a))
+(define-class (C :a :b => D :a :b)
+  (dm (:a -> :a)))
+
+(declare f ((C :a String) (D :a Integer) => :a))
+(define f (dm cm))
+
+--------------------------------------------------------------------------------
+
+error: Context conflicts with functional dependencies
+  --> test:8:11
+   |
+ 8 |  (declare f ((C :a String) (D :a Integer) => :a))
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the predicates C :A STRING and C :A INTEGER conflict with functional dependencies

@@ -3,11 +3,11 @@
 ;;;; Integral domains and operations on integers
 
 (coalton-library/utils::defstdlib-package #:coalton-library/math/integral
-    (:use
-     #:coalton
-     #:coalton-library/classes
-     #:coalton-library/builtin
-     #:coalton-library/math/arith)
+  (:use
+   #:coalton
+   #:coalton-library/classes
+   #:coalton-library/builtin
+   #:coalton-library/math/arith)
   (:import-from
    #:coalton-library/bits #:Bits)
   (:local-nicknames
@@ -289,6 +289,7 @@ are floored and truncated division, respectively."
 (%define-integral-native I32 cl:t)
 (%define-integral-native I64 cl:t)
 (%define-integral-native IFix cl:t)
+(%define-integral-native Bit cl:nil)
 (%define-integral-native U8 cl:nil)
 (%define-integral-native U16 cl:nil)
 (%define-integral-native U32 cl:nil)

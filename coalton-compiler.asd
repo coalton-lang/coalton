@@ -1,6 +1,6 @@
 ;;; The Coalton compiler. See coalton.asd for the toplevel Coalton package.
 
-(asdf:defsystem #:coalton-compiler
+(asdf:defsystem "coalton-compiler"
   :description "The Coalton compiler."
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
@@ -10,15 +10,15 @@
                     (let (#+sbcl (sb-ext:*derive-function-types* t)
                           #+sbcl (sb-ext:*block-compile-default* :specified))
                       (funcall compile)))
-  :depends-on (#:alexandria
-               #:concrete-syntax-tree
-               #:eclector
-               #:eclector-concrete-syntax-tree
-               #:float-features
-               #:fset
-               #:named-readtables
-               #:source-error
-               #:trivial-gray-streams)
+  :depends-on ("alexandria"
+               "concrete-syntax-tree"
+               "eclector"
+               "eclector-concrete-syntax-tree"
+               "float-features"
+               "fset"
+               "named-readtables"
+               "source-error"
+               "trivial-gray-streams")
   :pathname "src/"
   :serial t
   :components ((:file "package")
@@ -110,6 +110,7 @@
                              (:file "codegen-type-definition")
                              (:file "codegen-expression")
                              (:file "codegen-class")
+                             (:file "intrinsic-applications")
 
                              ;; Optimizations
                              (:file "monomorphize")
@@ -127,6 +128,7 @@
                (:file "reader")
                (:file "debug")
                (:file "faux-macros")
+               (:file "intrinsic-applications")
                (:file "define-coalton-macro")
                (:file "language-macros")
                (:file "lock-package" :if-feature :sb-package-locks)))

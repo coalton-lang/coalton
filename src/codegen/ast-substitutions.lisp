@@ -88,6 +88,7 @@ is true."
           ((res (find (node-direct-application-rator node) new-subs :key #'ast-substitution-from)))
         (make-node-direct-application
          :type (node-type node)
+         :properties (node-properties node)
          :rator-type (node-direct-application-rator-type node)
          :rator (node-variable-value (ast-substitution-to res))
          :rands (node-direct-application-rands node))))

@@ -1,9 +1,3 @@
-;;;;
-;;;; Handling of toplevel define-type forms. Types are split apart by
-;;;; SCC and then type usage in constructors is used to infer the
-;;;; kinds of all type variables.
-;;;;
-
 (defpackage #:coalton-impl/typechecker/define-type
   (:use
    #:cl
@@ -39,6 +33,15 @@
    #:type-definition-docstring          ; ACCESSOR
    #:type-definition-list               ; TYPE
    ))
+
+;;;;
+;;;; Type Definition Processing
+;;;;
+;;;; This module handles toplevel define-type forms and performs kind
+;;;; inference for user-defined algebraic data types. Mutually
+;;;; recursive types must be processed together as strongly connected
+;;;; components (SCCs) to correctly infer their kinds.
+;;;;
 
 (in-package #:coalton-impl/typechecker/define-type)
 
@@ -165,7 +168,7 @@
                  :finally (return table)))
 
          (types-by-scc
-           (loop :for scc :in (reverse sccs)
+           (loop :for scc :in sccs
                  :collect (loop :for name :in scc
                                 :collect (gethash name type-table))))
 

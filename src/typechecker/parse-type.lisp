@@ -17,7 +17,7 @@
    (#:source #:coalton-impl/source)
    (#:tc #:coalton-impl/typechecker/stage-1))
   (:export
-   #:apply-type-alias-substitutions          ; FUNCTION
+   #:apply-type-alias-substitutions     ; FUNCTION
    #:parse-type                         ; FUNCTION
    #:parse-qualified-type               ; FUNCTION
    #:parse-ty-scheme                    ; FUNCTION
@@ -176,7 +176,8 @@
              (ty (tc:qualified-ty-type qual-ty)))
 
         (check-for-ambiguous-variables preds ty unparsed-ty env)
-        (check-for-reducible-context preds unparsed-ty env)
+        (check-for-reducible-by-fundeps preds ty unparsed-ty env)
+        (check-for-reducible-context preds ty unparsed-ty env)
 
         (apply-type-alias-substitutions qual-ty unparsed-ty partial-env)))))
 
@@ -195,54 +196,88 @@
            (type parser:qualified-ty qual-ty)
            (type tc:environment env))
 
-  (let* ((old-unambiguous-vars (tc:type-variables type))
-         (unambiguous-vars old-unambiguous-vars)) 
+  (let* ((type-vars (tc:type-variables type))
+         (pred-vars (tc:type-variables preds))
+         (fundeps (tc:collect-fundep-vars env preds))
+         (closure (tc:generic-closure type-vars fundeps :test #'tc:ty=))
+         (ambiguous-vars (set-difference pred-vars closure :test #'tc:ty=)))
+    (when (consp ambiguous-vars)
+      (tc-error
+       "Invalid qualified type"
+       (tc-note qual-ty
+                "The type variable~p ~{~S~^ ~} ~[~;is~:;are~] ~
+                 ambiguous in the type ~S"
+                (length ambiguous-vars)
+                ambiguous-vars
+                (length ambiguous-vars)
+                (tc:make-qualified-ty :predicates preds :type type))))))
 
-    (block fundep-fixpoint
-      (loop :for i :below tc:+fundep-max-depth+
-            :do (setf old-unambiguous-vars unambiguous-vars)
-            :do (loop :for pred :in preds
-                      :for pred-tys := (tc:ty-predicate-types pred)
-                      :for class-name := (tc:ty-predicate-class pred)
-                      :for class := (tc:lookup-class env class-name)
-                      :for vars := (tc:ty-class-class-variables class)
-                      :when (tc:ty-class-fundeps class) :do
-                        (loop :for fundep :in (tc:ty-class-fundeps class)
-                              :for from-vars := (util:project-elements (tc:fundep-from fundep) vars pred-tys)
-                              :do (when (subsetp from-vars unambiguous-vars :test #'equalp)
-                                    (let ((to-vars (util:project-elements (tc:fundep-to fundep) vars pred-tys)))
-                                      (setf unambiguous-vars
-                                            (remove-duplicates (append to-vars unambiguous-vars) :test #'equalp))))))
+(defun check-for-reducible-by-fundeps (preds ty unparsed-ty env)
+  "This check is used to ensure that PREDs cannot be reduced by instance
+definitions in ENV or by each other. 
 
-            :when (equalp unambiguous-vars old-unambiguous-vars) ; Exit when progress stops
-              :do (return-from fundep-fixpoint)
+For example, consider the following class definition.
 
-            :finally (util:coalton-bug "Fundep solving failed to fixpoint")))
+(define-class (C :a :b (:a -> :b)))
 
-    (unless (subsetp (tc:type-variables preds) unambiguous-vars :test #'equalp)
-      (let* ((ambiguous-vars (set-difference (tc:type-variables preds) unambiguous-vars :test #'equalp))
-             (single-variable (= 1 (length ambiguous-vars))))
-        (tc-error "Invalid qualified type"
-                  (tc-note qual-ty "The type ~A ~{~S ~}ambiguous in the type ~S"
-                           (if single-variable
-                               "variable is"
-                               "variables are")
-                           ambiguous-vars
-                           (tc:make-qualified-ty :predicates preds
-                                                 :type type)))))))
+Now, the following predicate list would fail this check, because the
+substitution :a +-> :b can be inferred.
 
-(defun check-for-reducible-context (preds qual-ty env)
+((C :a :b) (C :a :c))
+
+Consider the following instance definition.
+
+(define-instance (C :a T))
+
+Now, the following predicate list would also fail this check, because
+the substitution :b +-> T can be inferred.
+
+((C :a :b))."
   (declare (type tc:ty-predicate-list preds)
+           (type tc:ty ty)
+           (type parser:qualified-ty unparsed-ty)
+           (type tc:environment env))
+  (handler-case
+      (let ((subs (nth-value 1 (tc:solve-fundeps env preds nil))))
+        (when (consp subs)
+          (tc-error
+           "Declared context is too general"
+           (tc-note
+            unparsed-ty
+            (with-pprint-variable-context ()
+              (format nil "the substitution~p ~{~S +-> ~S~^, ~} ~[~;is~:;are~] ~
+                           determined for ~S by functional dependencies."
+                      (length subs)
+                      (loop :for sub :in subs
+                            :collect (tc:substitution-from sub)
+                            :collect (tc:substitution-to sub))
+                      (length subs)
+                      (tc:make-qualified-ty :predicates preds :type ty)))))))
+    (tc:context-fundep-conflict (e)
+      (tc-error
+       "Context conflicts with functional dependencies"
+       (tc-note unparsed-ty
+                "the predicates ~S and ~S conflict with functional dependencies"
+                (tc:context-fundep-conflict-first-pred e)
+                (tc:context-fundep-conflict-second-pred e))))))
+
+(defun check-for-reducible-context (preds ty qual-ty env)
+  (declare (type tc:ty-predicate-list preds)
+           (type tc:ty ty)
            (type parser:qualified-ty qual-ty)
            (type tc:environment env))
+
   (let ((reduced-preds (tc:reduce-context env preds nil)))
     (unless (null (set-exclusive-or preds reduced-preds :test #'tc:type-predicate=))
-      (source:warn "Declared context can be reduced"
-                   (source:note (source:location qual-ty)
-                                (if (null reduced-preds)
-                                    "declared predicates are redundant"
-                                    (format nil "context can be reduced to ~{ ~S~}"
-                                            reduced-preds)))))))
+      (source:warn
+       "Declared context can be reduced"
+       (source:note
+        (source:location qual-ty)
+        (if (null reduced-preds)
+            "declared predicates are redundant"
+            (with-pprint-variable-context ()
+              (format nil "qualified type can be reduced to ~S"
+                      (tc:make-qualified-ty :predicates reduced-preds :type ty)))))))))
 
 ;;;
 ;;; Kind Inference

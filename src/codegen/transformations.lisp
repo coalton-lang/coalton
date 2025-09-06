@@ -10,8 +10,7 @@
   (:export
    #:rename-type-variables
    #:node-variables
-   #:node-free-p
-   #:localize-returns))
+   #:node-free-p))
 
 (in-package #:coalton-impl/codegen/transformations)
 
@@ -29,6 +28,7 @@ specified in `subs`."
     (action (:after node-direct-application node)
       (make-node-direct-application
        :type (node-type node)
+       :properties (node-properties node)
        :rator-type (tc:apply-substitution subs (node-direct-application-rator-type node))
        :rator (node-direct-application-rator node)
        :rands (node-direct-application-rands node)))

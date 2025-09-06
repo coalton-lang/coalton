@@ -16,6 +16,8 @@
    #:compose
    #:conjoin
    #:disjoin
+   #:conjoin*
+   #:disjoin*
    #:complement
    #:curry
    #:uncurry
@@ -101,44 +103,74 @@
   (declare compose ((:b -> :c) -> (:a -> :b) -> :a -> :c))
   (define (compose f g x)
     "Equivalent to `(f (g x))`."
-    (f (g x)))
+    (f (g x))))
 
-  (declare conjoin ((:a -> Boolean) -> (:a -> Boolean) -> :a -> Boolean))
-  (define (conjoin f g x)
-    "Compute the conjunction of two unary Boolean functions."
-    (and (f x) (g x)))
+(coalton-toplevel
+ 
+ (declare conjoin ((:a -> Boolean) -> (:a -> Boolean) -> :a -> Boolean))
+ (define (conjoin f g x)
+   "Compute the conjunction of two unary Boolean functions."
+   (and (f x) (g x)))
 
-  (declare disjoin ((:a -> Boolean) -> (:a -> Boolean) -> :a -> Boolean))
-  (define (disjoin f g x)
-    "Compute the disjunction of two unary Boolean functions."
-    (or (f x) (g x)))
+ (declare disjoin ((:a -> Boolean) -> (:a -> Boolean) -> :a -> Boolean))
+ (define (disjoin f g x)
+   "Compute the disjunction of two unary Boolean functions."
+   (or (f x) (g x))))
 
-  (inline)
-  (declare complement ((:a -> Boolean) -> :a -> Boolean))
-  (define (complement f x)
-    "Compute the complement of a unary Boolean function."
-    (not (f x)))
+(defmacro conjoin* (cl:&rest predicates)
+  "Compute the conjuction of `predicates`.
 
-  (declare curry ((Tuple :left :right -> :result) -> :left -> :right -> :result))
-  (define (curry func left right)
-    "Take a function whose input is a tuple and enable curried application of the left and right parameters, equivalent to `(func (Tuple left right))`."
-    (func (Tuple left right)))
+For example, the following expressions are equivalent.
 
-  (declare uncurry ((:left -> :right -> :result) -> Tuple :left :right -> :result))
-  (define (uncurry func tpl)
-    "Take a function with two currying parameters and enable their input as a single `Tuple`."
-    (match tpl
-      ((Tuple left right)
-       (func left right))))
+`(conjoin* f g h)`
 
-  (declare pair-with ((:left -> :right) -> :left -> Tuple :left :right))
-  (define (pair-with func left)
-    "Create a `Tuple` of the form `(Tuple left (func left))`."
-    (Tuple left (func left)))
+`(fn (x) (and (f x) (g x) (h x)))`"
+  (cl:let ((x (cl:gensym "X-")))
+    `(fn (,x) (and ,@(cl:loop :for predicate :in predicates
+                              :collect `(,predicate ,x))))))
 
-  ;;
-  ;; Monadic operators
-  ;;
+(defmacro disjoin* (cl:&rest predicates)
+  "Compute the disjunction of `predicates`.
+
+For example, the following expressions are equivalent.
+
+`(disjoin* f g h)`
+
+`(fn (x) (or (f x) (g x) (h x)))`"
+  (cl:let ((x (cl:gensym "X-")))
+    `(fn (,x) (or ,@(cl:loop :for predicate :in predicates
+                             :collect `(,predicate ,x))))))
+
+(coalton-toplevel
+
+ (inline)
+ (declare complement ((:a -> Boolean) -> :a -> Boolean))
+ (define (complement f x)
+   "Compute the complement of a unary Boolean function."
+   (not (f x)))
+
+ (declare curry ((Tuple :left :right -> :result) -> :left -> :right -> :result))
+ (define (curry func left right)
+   "Take a function whose input is a tuple and enable curried application of the left and right parameters, equivalent to `(func (Tuple left right))`."
+   (func (Tuple left right)))
+
+ (declare uncurry ((:left -> :right -> :result) -> Tuple :left :right -> :result))
+ (define (uncurry func tpl)
+   "Take a function with two currying parameters and enable their input as a single `Tuple`."
+   (match tpl
+          ((Tuple left right)
+           (func left right))))
+
+ (declare pair-with ((:left -> :right) -> :left -> Tuple :left :right))
+ (define (pair-with func left)
+   "Create a `Tuple` of the form `(Tuple left (func left))`."
+   (Tuple left (func left)))
+
+   ;;
+   ;; Monadic operators
+   ;;
+
+
 
   (declare msum ((Monoid :a) (Foldable :t) => :t :a -> :a))
   (define (msum xs)
@@ -156,9 +188,11 @@
     "Is `a` not equal to `b`?"
     (boolean-not (== a b)))
 
-  ;;
-  ;; Instances
-  ;;
+   ;;
+   ;; Instances
+   ;;
+
+
 
   (define-instance (Functor (Arrow :a))
     (define map compose))

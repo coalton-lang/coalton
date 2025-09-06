@@ -123,17 +123,20 @@
    "(define-class (C :a :b :c (:a -> :b :c))
       (m (:a -> :b)))
 
-     (define (f x)
-       (m x))
+    (define (f x)
+      (m x))
 
-     (declare g (C :a :b :c => :a -> :b))
-     (define (g x)
-       (m x))
+    (declare g (C :a :b :c => :a -> :b))
+    (define (g x)
+      (m x))
 
-     (declare h (C :a :b :c => :a -> :b))
-     (define (h x)
-       (m x)
-       (m x))"))
+    (declare h (C :a :b :c => :a -> :b))
+    (define (h x)
+      (m x)
+      (m x))
+
+    (define-class (C :a :b :c => D :a :b :c)
+      (n :a))"))
 
 (deftest fundep-unambigous-local-bindings ()
   ;; See https://github.com/coalton-lang/coalton/issues/913
@@ -147,3 +150,33 @@
       (let ((filled?
               (fn (i) (coalton-library/optional:some? (moo-find moo i)))))
         (coalton-library/iterator:filter! filled? (coalton-library/iterator:up-to (moo-size moo)))))"))
+
+(deftest fundep-inherited ()
+  ;; see https://github.com/coalton-lang/coalton/issues/1050
+  (check-coalton-types
+   "(define-class (subcolable :a :b (:a -> :b))
+      (subcol (:a -> UFix -> UFix -> :a)))
+    (define-class (subcolable :a :b => sizable :a :b)
+      (size (:a -> UFix)))
+
+    (define (f1 xs)
+      (subcol xs 0 (coalton-library/math:1- (size xs))))
+
+    (declare f2 (sizable :a :b => :a -> :a))
+    (define (f2 xs)
+      (subcol xs 0 (coalton-library/math:1- (size xs))))"
+   '("f1" . "(sizable :a :b => :a -> :a)")))
+
+(deftest fundep-entail ()
+  (check-coalton-types
+   "(define-class (C :a :b (:a -> :b)))
+    (define-class (C :a :b => D :a :b)
+      (m :a))
+
+    (declare f (D :a :b => Unit -> :a))
+    (define (f) m)
+
+    (declare g (D (List :a) (List :b) => Unit -> List :a))
+    (define (g) m)"
+   '("f" . "(D :a :b => Unit -> :a)")
+   '("g" . "(D (List :a) (List :b) => Unit -> List :a)")))

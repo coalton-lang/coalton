@@ -497,12 +497,12 @@
 
   (declare sort (Ord :a => ((List :a) -> (List :a))))
   (define (sort xs)
-    "Performs a sort of XS."
+    "Sort `xs`."
     (sortBy <=> xs))
 
   (declare sortBy ((:a -> :a -> Ord) -> (List :a) -> (List :a)))
   (define (sortBy cmp xs)
-    "Generic version of sort"
+    "Sort `xs` by a custom comparison function `cmp`."
     (lisp (List :a) (cmp xs)
       (cl:sort (cl:copy-list xs)
                (cl:lambda (a b)
@@ -510,22 +510,22 @@
 
   (declare intersperse (:a -> (List :a) -> (List :a)))
   (define (intersperse e xs)
-    "Returns a new list where every other element is E."
+    "Returns a new list by inserting `e` between every element of `xs`."
     (match xs
       ((Nil)       Nil)
       ((Cons x xs) (Cons x (concatMap (fn (y) (make-list e y)) xs)))))
 
   (declare intercalate ((List :a) -> (List (List :a)) -> (List :a)))
   (define (intercalate xs xss)
-    "Intersperses XS into XSS and then concatenates the result."
+    "Intersperse `xs` into `xss` and then concatenate the result."
     (concat (intersperse xs xss)))
 
   (declare insertions (:a -> List :a -> (List (List :a))))
   (define (insertions a l)
-    "Produce a list of copies of L, each with A inserted at a possible position.
+    "Produce a list of copies of `l`, each with A inserted at a possible position.
 
     (insertions 0 (make-list 1 2))
-    => ((0 1 2) (1 0 2) (1 2 0))
+    ;; => ((0 1 2) (1 0 2) (1 2 0))
 "
     (match l
       ((Nil)       (make-list (make-list a)))
@@ -597,46 +597,47 @@
 
   (declare maximum (Ord :a => ((List :a) -> (Optional :a))))
   (define (maximum l)
-    "Returns a greatest element of a list, or None."
+    "Returns a greatest element of a list, or `None`."
     (optimumBy > l))
 
   (declare minimum (Ord :a => ((List :a) -> (Optional :a))))
   (define (minimum l)
-    "Returns a least element of a list, or None."
+    "Returns a least element of a list, or `None`."
     (optimumBy < l))
 
   (declare sum (Num :a => ((List :a) -> :a)))
   (define (sum xs)
-    "Returns the sum of XS"
+    "Returns the sum of `xs`."
     (fold + (fromInt 0) xs))
 
   (declare product (Num :a => ((List :a) -> :a)))
   (define (product xs)
-    "Returns the product of XS"
+    "Returns the product of `xs`."
     (fold * (fromInt 1) xs))
 
   (declare all ((:a -> Boolean) -> (List :a) -> Boolean))
-  (define (all f xs)
-    "Returns TRUE if every element in XS matches F."
+  (define (all f? xs)
+    "Returns `True` if every element in `xs` matches `f?`."
     (match xs
       ((Cons x xs)
-       (if (f x)
-           (all f xs)
+       (if (f? x)
+           (all f? xs)
            False))
       ((Nil) True)))
 
   (declare any ((:a -> Boolean) -> (List :a) -> Boolean))
-  (define (any f l)
-    "Returns TRUE if at least one element in XS matches F."
+  (define (any f? l)
+    "Returns `True` if at least one element in `xs` matches `f?`."
     (match l
       ((Cons x xs)
-       (if (f x)
+       (if (f? x)
            True
-           (any f xs)))
+           (any f? xs)))
       ((Nil) False)))
 
   (declare split (Char -> String -> (List String)))
   (define (split c str)
+	"Split a string `str` into a list of substrings by the character `c`."
     (lisp (List String) (c str)
       (cl:let ((split-chars (cl:list c)))
         (cl:declare (cl:dynamic-extent split-chars))
@@ -649,9 +650,9 @@
 
   (declare combs (List :a -> (List (List :a))))
   (define (combs l)
-    "Compute a list of all combinations of elements of L. This function is sometimes goes by the name \"power set\" or \"subsets\".
+    "Compute a list of all combinations of elements of `l`. This function is sometimes goes by the name \"power set\" or \"subsets\".
 
-The ordering of elements of L is preserved in the ordering of elements in each list produced by `(COMBS L)`."
+The ordering of elements of `l` is preserved in the ordering of elements in each list produced by this function."
     (match l
       ((Nil)
        (make-list Nil))
@@ -660,11 +661,11 @@ The ordering of elements of L is preserved in the ordering of elements in each l
 
   (declare combsOf (UFix -> List :a -> (List (List :a))))
   (define (combsOf n l)
-    "Produce a list of size-N subsets of L.
+    "Produce a list of size-N subsets of `l`.
 
-The ordering of elements of L is preserved in the ordering of elements in each list produced by `(COMBSOF N L)`.
+The ordering of elements of `l` is preserved in the ordering of elements in each list produced by `(combsOf n l)`.
 
-This function is equivalent to all size-N elements of `(COMBS L)`."
+This function is equivalent to all size-`n` elements of `(combs l)`."
 
     (cond ((== 0 n) (make-list Nil))
           ((== 1 n) (map singleton l))

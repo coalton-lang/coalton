@@ -18,39 +18,28 @@ Coalton is an efficient, statically typed functional programming language that s
 Coalton integrates directly into Common Lisp:
 
 ```lisp
-(in-package #:coalton-user)
+(defpackage #:differentiation
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames (#:sym #:coalton-library/symbol))
+  (:export #:Expr #:EConst #:EVar #:E+ #:E*)
+  (:export #:diff #:t #:d/dt))
+
+(in-package #:differentiation)
 
 (named-readtables:in-readtable coalton:coalton)
 
 (coalton-toplevel
-  ;; Define Coalton `Symbol`s as Lisp `cl:keyword`s.
-  (repr :native cl:keyword)
-  (define-type Symbol)
-
-  ;; Bind a Lisp function into Coalton.
-  (declare sym (String -> Symbol))
-  (define (sym s)
-    "Create a new symbol named `s`."
-    (lisp Symbol (s)
-      (cl:intern s "KEYWORD")))
-
-  ;; Define equality of `Symbol` types using CL's `eq`.
-  (define-instance (Eq Symbol)
-    (define (== a b)
-      (lisp Boolean (a b)
-        (cl:eq a b))))
-
   ;; Define a new parametric algebraic data type for simple
   ;; mathematical expressions.
   (define-type (Expr :t)
     "A symbolic expression of basic arithmetic."
     (EConst :t)
-    (EVar   Symbol)
+    (EVar   sym:Symbol)
     (E+     (Expr :t) (Expr :t))
     (E*     (Expr :t) (Expr :t)))
 
   ;; The classic `diff` function, in Coalton.
-  (declare diff (Num :t => Symbol -> Expr :t -> Expr :t))
+  (declare diff (Num :t => sym:Symbol -> Expr :t -> Expr :t))
   (define (diff x f)
     "Compute the derivative of `f` with respect to `x`."
     (match f
@@ -65,10 +54,10 @@ Coalton integrates directly into Common Lisp:
            (E* a          (diff x b))))))
 
   ;; We can use `t` just fine since Coalton doesn't import `cl:t`.
-  (define t (sym "t"))
+  (define t (sym:make-symbol "t"))
 
-  (declare dt (Num :t => Expr :t -> Expr :t))
-  (define dt
+  (declare d/dt (Num :t => Expr :t -> Expr :t))
+  (define d/dt
     "The time derivative operator."
     (diff t)))
 ```
@@ -76,11 +65,12 @@ Coalton integrates directly into Common Lisp:
 It also works directly in the REPL:
 
 ```lisp
-CL-USER> (in-package #:coalton-user)
-COALTON-USER> (coalton-toplevel
-                (define (square x) (E* x x)))
-; No value
-COALTON-USER> (coalton (dt (E+ (square (EVar t)) (EConst 1))))
+CL-USER> (in-package #:differentiation)
+DIFFERENTIATION> (coalton-toplevel
+                   (define (square x) (E* x x)))
+;; SQUARE :: ∀ A. ((EXPR A) → (EXPR A))
+
+DIFFERENTIATION> (coalton (d/dt (E+ (square (EVar t)) (EConst 1))))
 #.(E+ #.(E+ #.(E* #.(ECONST 1) #.(EVAR |t|))
             #.(E* #.(EVAR |t|) #.(ECONST 1)))
       #.(ECONST 0))
@@ -89,21 +79,15 @@ COALTON-USER> (coalton (dt (E+ (square (EVar t)) (EConst 1))))
 Type errors are discovered at compile-time, and errors are printed beautifully without sacrificing Common Lisp's interactive debugging facilities.
 
 ```
-COALTON-USER> (coalton (dt (E+ (EConst 1/2) (EConst 0.5))))
+DIFFERENTIATION> (coalton (dt (E+ (EConst 1/2) (EConst 0.5))))
 error: Type mismatch
-  --> <unknown>:1:30
+  --> repl:1:32
    |
- 1 |  (coalton (dt (E+ (EConst 1/2) (EConst 0.5))))
-   |                                ^^^^^^^^^^^^ Expected type '(EXPR FRACTION)' but got type '(EXPR DOUBLE-FLOAT)'
-   [Condition of type COALTON-IMPL/TYPECHECKER/BASE:TC-ERROR]
-
-Restarts:
- 0: [RETRY] Retry REPL evaluation request.
- 1: [*ABORT] Return to top level.
- 2: [ABORT] abort thread (#<THREAD "repl-thread" RUNNING {10013A8003}>)
+ 1 |  (coalton (d/dt (E+ (EConst 1/2) (EConst 0.5))))
+   |                                  ^^^^^^^^^^^^ Expected type '(EXPR FRACTION)' but got '(EXPR F32)'
 ```
 
-Coalton is currently used in production to build [quantum computing software](https://coalton-lang.github.io/20220906-quantum-compiler/).
+Coalton is currently used in production to build defense and [quantum computing software](https://coalton-lang.github.io/20220906-quantum-compiler/).
 
 ## Getting Started
 
@@ -116,17 +100,12 @@ Coalton is currently used in production to build [quantum computing software](ht
 
 **Install**: Clone this repository into a place your Lisp can see (e.g., `~/quicklisp/local-projects/`).
 
-> [!NOTE]
-> While Quicklisp will automatically ensure almost all of Coalton's dependencies, you will need to manually clone the newest versions of [FSET](https://github.com/slburson/fset/) and [MISC-EXTENSIONS](https://github.com/slburson/misc-extensions/) and add them to your ASDF/Quicklisp path (e.g., `~/quicklisp/local-projects/`).
-
 **Use**: Either run `(ql:quickload :coalton)`, or add `#:coalton` to your ASD's `:depends-on` list.
 
 **Test**: Compile the tests with `(ql:quickload :coalton/tests)`, then run the tests with `(asdf:test-system :coalton)`. 
 
 > [!NOTE] 
-> Running the Coalton test suite on SBCL requires [GNU MPFR](https://www.mpfr.org/mpfr-current/mpfr.html#Installing-MPFR) in order to run `Big-Float` tests. 
->
-> If you would like to run tests without installing `gnu-mpfr`, you can use Coalton's portable `Big-Float` implementation by running `(pushnew :coalton-portable-bigfloat *features*)` before loading Coalton.
+> Running the Coalton test suite on SBCL requires [GNU MPFR](https://www.mpfr.org/mpfr-current/mpfr.html#Installing-MPFR) in order to run `Big-Float` tests. If you would like to run tests without installing `gnu-mpfr`, you can use Coalton's portable `Big-Float` implementation by running `(pushnew :coalton-portable-bigfloat *features*)` before loading Coalton.
 
 **Learn**: Start with [*Intro to Coalton*](docs/intro-to-coalton.md) and the [standard library reference](https://coalton-lang.github.io/reference/), and then take a peek at the [examples directory](examples/). It may also be helpful to check out the [introductory blog post](https://coalton-lang.github.io/20211010-introducing-coalton/).
 
