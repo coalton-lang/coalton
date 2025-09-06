@@ -28,6 +28,7 @@ layout: two-pane
 
     ;; Title and side bar
     (write-line "<aside class=\"sidebar\">
+<div class=\"sidebar-header\">
 
 ### Reference
 
@@ -35,13 +36,17 @@ layout: two-pane
   <input type=\"text\" id=\"symbol-search-input\" placeholder=\"Search symbols...\" autocomplete=\"off\">
   <div class=\"search-results\" id=\"search-results\"></div>
 </div>
+</div>
+<div class=\"sidebar-content\">
 "
                 stream)
 
     ;; package menu
     (dolist (package packages)
       (format stream "- ~A~%" (object-link package)))
-    (write-line "</aside>" stream)
+    (write-line "</div>
+</aside>" 
+                stream)
 
     ;; Main content
     (write-line "<div class=\"main-content\">" stream)
