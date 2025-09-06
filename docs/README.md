@@ -17,6 +17,7 @@
 * [Design Docs](./design-docs) - Initial design doc work for Coalton.
 
 ## Internals
+* [Internals](./internals/internals.md)
 * [How Typeclasses are compiled](./internals/how-typeclasses-are-compiled.md)
 
 ## Additional Resources
