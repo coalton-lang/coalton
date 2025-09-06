@@ -67,7 +67,7 @@
   (declare new (types:RuntimeRepr :a => Unit -> Seq :a))
   (define (new)
     "Create a new empty `Seq`."
-    (LeafArray (cln:new-collection)))
+    (LeafArray (vector:make)))
 
   (declare size (Seq :a -> UFix))
   (define (size seq)
@@ -208,12 +208,6 @@ a new `Seq` instance."
                    (rebalance-branches
                     (fold <> (butlast lsubts) (make-list nsubts (butfirst rsubts))))))))))))
 
-    (declare filter (types:RuntimeRepr :a => (:a -> Boolean) -> (Seq :a) -> (Seq :a)))
-    (define (filter pred seq)
-      "Filter elements of `seq` using predicate `pred`, returning a new `Seq`."
-      (iter:collect!
-        (iter:filter! pred (iter:into-iter seq))))
-
   ;;
   ;; Instances
   ;;
@@ -302,7 +296,7 @@ a new `Seq` instance."
       ((LeafArray v)
        (if (< (cln:length v) max-branching)
            (let ((newv (cln:copy v)))
-             (cln:push! a newv)
+             (cln:push-end! a newv)
              (Tuple (LeafArray newv) True))
            (Tuple (LeafArray (vector:make a)) False)))
 
@@ -327,8 +321,8 @@ a new `Seq` instance."
                   (cln:copy sts))
                 (newcst
                   (cln:copy cst)))
-            (cln:push! (+ 1 (size seq)) newcst)
-            (cln:push! new-node newsts)
+            (cln:push-end! (+ 1 (size seq)) newcst)
+            (cln:push-end! new-node newsts)
             (Tuple (RelaxedNode h fss newcst newsts) True)))
 
          ;; not in place, and no room here.
@@ -347,19 +341,19 @@ a new `Seq` instance."
 ecxept for the last one which has a nonzero length less than or equal
 to `len`."
     (let ((result
-            (cln:new-collection))
+            (vector:make))
           (acc
-            (cln:new-collection)))
+            (vector:make)))
       (iter:for-each!
        (fn (elem)
-         (cln:push! elem acc)
+         (cln:push-end! elem acc)
          (when (== len (cln:length acc))
-           (cln:push! (cln:copy acc) result)
+           (cln:push-end! (cln:copy acc) result)
            (vector:clear! acc)))
        (iter:into-iter vec))
       ;; push the last if non-empty
       (unless (== 0 (cln:length acc))
-        (cln:push! acc result)
+        (cln:push-end! acc result)
         Unit)
       result))
 
@@ -385,7 +379,7 @@ shifts the each member of `target` down by `n` positions.  Mutates both
             (min n0 source-len)))
       (iter:for-each!
        (fn (i)
-         (cln:push! (vector:index-unsafe i source) target)
+         (cln:push-end! (vector:index-unsafe i source) target)
          (iter:for-each!
           (fn (j)
             (do
@@ -545,7 +539,7 @@ It attempts to rebalance with a minimum of array copying."
        `(LeafArray (vector:make ,@(cl:car leaf-arrays))))
       ((cl:<= la-count 32)
        `(rebuild-size-table
-         (RelaxedNode 2 32 (cln:new-collection) (vector:make ,@(cl:loop :for a :in leaf-arrays
+         (RelaxedNode 2 32 (vector:make) (vector:make ,@(cl:loop :for a :in leaf-arrays
                                                                 :collect `(LeafArray (vector:make ,@a)))))))
       (cl:t
        (cl:reduce (cl:lambda (acc la) `(conc ,acc (LeafArray (vector:make ,@la))))

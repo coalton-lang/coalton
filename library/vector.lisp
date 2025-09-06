@@ -309,7 +309,7 @@
     `(progn
        (let ,vec = (with-capacity ,length))
        ,@(cl:loop :for elt :in elements
-            :collect `(push! ,elt ,vec))
+            :collect `(coalton-library/vector:push! ,elt ,vec))
        ,vec)))
 
 #+sb-package-locks
