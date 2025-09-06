@@ -1,6 +1,8 @@
 # Coalton Collections Library
 
-TODO: Document collections here
+## Functions Refrence
+
+All of these functions are in the `coalton-prelude` package, and don't need to be imported.
 
 #### Collection
 
@@ -70,3 +72,68 @@ TODO: Document collections here
 | `pop-end!`     | :m :a -> Optional :a                                   | Remove the last element of the collection and return it, if any.                                                                                            |
 | `pop-end!#`    | :m :a -> :a                                           | Remove the last element of the collection and return it, erroring if none is found.                                                                         |
 | `insert-at!`   | UFix -> :a -> :m :a -> :m :a                           | Insert an item at the given index of the collection, erroring if out of bounds. The collection is returned for convenience.                                 |
+
+## How to Write Generic Functions
+
+The `Collection` and `MutableCollection` typeclass use a special kind of generics that require setting up your generic functions a little differently. These example functions can take any kind of `Collection` or `MutableCollection`. Notice that they have to use `Collection :m UFix => :m -> ...` instead of the more typical `Collection :m => :m UFix -> ...` syntax.
+
+```lisp
+(in-package :cl-user)
+(defpackage :collections-demo
+  (:use
+    #:coalton
+    #:coalton-prelude)
+  (:local-nicknames
+   (#:vector #:coalton-library/collections/mutable/vector)
+   (#:cel #:coalton-library/cell)
+   (#:iter #:coalton-library/iterator)))
+(in-package :collections-demo)
+
+(coalton-toplevel
+  (declare add-zeros (Collection :m UFix => :m -> UFix -> :m))
+  (define (add-zeros coll n-zeros)
+    "Add N-ZEROS number of 0s to COLL."
+    (let result = (cel:new coll))
+    (for _ in (iter:range-increasing 1 0 n-zeros)
+      (cel:write! result (add 0 (cel:read result))))
+    (cel:read result))
+
+  (declare add-zeros! (MutableCollection :m UFix => :m -> UFix -> :m))
+  (define (add-zeros! mut-coll n-zeros)
+    "Add N-ZEROS number of 0s to MUT-COLL."
+    (for _ in (iter:range-increasing 1 0 n-zeros)
+      (add! 0 mut-coll))
+    mut-coll))
+
+(coalton
+ (traceobject "List" (add-zeros (make-list 1 2 3) 3))
+ (traceobject "Vector" (add-zeros (vector:make 1 2 3) 3))
+ (traceobject "Vector!" (add-zeros! (vector:make 1 2 3) 3)))
+```
+
+The `LinearCollection` and `MutableLinearCollection` typeclasses, however, use the traditional generic syntax.
+
+```lisp
+(coalton-toplevel
+  (declare pad-zeros (LinearCollection :m => :m UFix -> UFix -> :m UFix))
+  (define (pad-zeros coll n-zeros)
+    "Pad the start and end of COLL with N-ZEROS number of 0s."
+    (let result = (cel:new coll))
+    (for _ in (iter:range-increasing 1 0 n-zeros)
+      (cel:write! result (push 0 (cel:read result)))
+      (cel:write! result (push-end 0 (cel:read result))))
+    (cel:read result))
+
+  (declare pad-zeros! (MutableLinearCollection :m => :m UFix -> Ufix -> :m UFix))
+  (define (pad-zeros! mut-coll n-zeros)
+    "Pad the stand and end of MUT-COLL with N-ZEROS number of 0s."
+    (for _ in (iter:range-increasing 1 0 n-zeros)
+      (push! 0 mut-coll)
+      (push-end! 0 mut-coll))
+    mut-coll))
+
+(coalton
+ (traceobject "List" (pad-zeros (make-list 1 2 3) 3))
+ (traceobject "Vector" (pad-zeros (vector:make 1 2 3) 3))
+ (traceobject "Vector!" (pad-zeros! (vector:make 1 2 3) 3)))
+```
