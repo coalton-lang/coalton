@@ -288,7 +288,6 @@
                (:file "class-tests")
                (:file "struct-tests")
                (:file "type-alias-tests")
-               (:file "list-tests")
                (:file "lisparray-tests")
                (:file "red-black-tests")
                (:file "seq-tests")

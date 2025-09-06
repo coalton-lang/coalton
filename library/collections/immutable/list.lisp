@@ -441,16 +441,18 @@
   (declare union (Eq :a => ((List :a) -> (List :a) -> (List :a))))
   (define (union xs ys)
     "Returns a new list with the elements from both XS and YS and without duplicates."
-    (let ((f-rec
-            (fn (xs acc)
-              (match xs
-                ((Nil) acc)
-                ((Cons x xs)
-                 (if (or (member x ys)
-                         (member x ys))
-                     (f-rec xs acc)
-                     (f-rec xs (Cons x acc))))))))
-      (%reverse! (remove-duplicates-rev ys (f-rec xs Nil)))))
+    (%reverse!
+     (remove-duplicates-rev
+      ys
+      (rec f ((xs xs)
+              (acc Nil))
+        (match xs
+          ((Nil) acc)
+          ((Cons x xs)
+           (if (or (member x ys)
+                   (member x acc))
+               (f xs acc)
+               (f xs (Cons x acc)))))))))
 
   (declare intersection (Eq :a => ((List :a) -> (List :a) -> (List :a))))
   (define (intersection xs ys)
