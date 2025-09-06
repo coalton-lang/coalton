@@ -17,7 +17,7 @@
 * [Design Docs](./design-docs) - Initial design doc work for Coalton.
 
 ## Internals
-* [How Typeclasses are compiled](./how-typeclasses-are-compiled.md)
+* [How Typeclasses are compiled](./internals/how-typeclasses-are-compiled.md)
 
 ## Additional Resources
 * [Introducing Coalton](https://coalton-lang.github.io/20211010-introducing-coalton/) - external
