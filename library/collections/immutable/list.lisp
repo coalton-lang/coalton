@@ -173,20 +173,13 @@
   ;;; LinearCollection List
   ;;;
 
-  (declare head (List :a -> Optional :a))
-  (define (head l)
-    "Returns the first element of a list."
-    (match l
-      ((Cons x _) (Some x))
-      ((Nil) None)))
-  
-  (declare last (List :a -> Optional :a))
-  (define (last l)
+  (declare last# (List :a -> :a))
+  (define (last# l)
     "Returns the last element of a list."
     (match l
-      ((Cons x (Nil)) (Some x))
-      ((Cons _ xs) (last xs))
-      ((Nil) None)))
+      ((Cons x (Nil)) x)
+      ((Cons _ xs) (last# xs))
+      ((Nil) (error "Tried to retrieve the last element of an empty list."))))
   
   (declare tail (List :a -> List :a))
   (define (tail l)
@@ -867,30 +860,23 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
     (define (cln:remove-elt elt lst)
       (filter (/= elt) lst))
     (define cln:empty? empty?)
-    (define cln:length length)
-    (define cln:contains-elt? member)
+    (define cln:size length)
     (define cln:contains-where? contains-where?)
     (define cln:count-where countBy)
     (define cln:add Cons))
 
   (define-instance (cln:ImmutableCollection (List :a) :a))
 
-  (define-instance (cln:LinearCollection List)
-    (define cln:head head)
+  (define-instance (cln:LinearCollection (List :a) :a)
     (define (cln:head# lst)
-      (o:from-some "Attempted to retrieve head of empty list." (head lst)))
-    (define cln:last last)
-    (define (cln:last# lst)
-      (o:from-some "Attempted to retrieve last element of empty list." (last lst)))
+      (match lst
+        ((Nil) (error "Attempted to retrieve head of empty list."))
+        ((Cons a _) a)))
+    (define cln:last# last#)
     (define cln:tail tail)
     (define cln:take take)
     (define cln:drop drop)
-    (define cln:index-elt elemIndex)
-    (define (cln:index-elt# elt lst)
-      (o:from-some "Cannot find element in list." (elemIndex elt lst)))
     (define cln:index-where findIndex)
-    (define (cln:index-where# pred lst)
-      (o:from-some "Cannot find matching element in list." (findIndex pred lst)))
     (define cln:find-where find)
     (define (cln:indices-elt elt lst)
       (indices-where (== elt) lst))
@@ -904,11 +890,13 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
     (define cln:reverse reverse)
     (define cln:sort sort)
     (define cln:sort-with sortBy)
-    (define cln:zip zip-itr)
-    (define cln:zip-with zip-with-itr)
+    ;; (define cln:zip zip-itr)
+    ;; (define cln:zip-with zip-with-itr)
     (define cln:push Cons)
     (define cln:push-end push-end)
-    (define cln:insert-at insert-at)))
+    (define cln:insert-at insert-at))
+
+  (define-instance (cln:ImmutableLinearCollection (List :a) :a)))
 
 ;; #+sb-package-locks
 ;; (sb-ext:lock-package "COALTON-LIBRARY/COLLECTIONS/IMMUTABLE/LIST")

@@ -4,6 +4,7 @@
    #:coalton-library/functions
    #:coalton-library/classes)
   (:local-nicknames
+   (#:opt #:coalton-library/optional)
    (#:itr #:coalton-library/iterator)
    (#:types #:coalton-library/types))
   (:export
@@ -17,7 +18,7 @@
    #:remove-duplicates
    #:remove-elt
    #:empty?
-   #:length
+   #:size
    #:contains-elt?
    #:contains-where?
    #:count-where
@@ -37,6 +38,7 @@
    #:tail
    #:take
    #:drop
+   #:length
    #:index-elt
    #:index-elt#
    #:index-where
@@ -56,6 +58,11 @@
    #:push
    #:push-end
    #:insert-at
+
+   #:zip
+   #:zip-with
+
+   #:ImmutableLinearCollection
    
    #:MutableLinearCollection
    #:reverse!
@@ -113,12 +120,9 @@ collection typeclasses."
     (empty?
      "Check if the collection contains no elements."
      (:m -> Boolean))
-    (length
+    (size
      "The number of elements in the collection"
      (:m -> UFix))
-    (contains-elt?
-     "Check if the collection contains an element."
-     (Eq :a => :a -> :m -> Boolean))
     (contains-where?
      "Check if the collection contains an element satisfying the predicate."
      ((:a -> Boolean) -> :m -> Boolean))
@@ -151,124 +155,165 @@ the front or back, depending on which is natural for the underlying data structu
 (coalton-toplevel
   ;; NOTE: In all cases, LinearCollection methods should return collections that don't
   ;; share mutable state with the original.
-  (define-class (LinearCollection :m)
+  (define-class (Collection :m :a => LinearCollection :m :a (:m -> :a))
     ;; Get elements from the collection
-    (head
-     "Return the first element of the collection."
-     (:m :a -> Optional :a))
     (head#
      "Return the first element of the collection, erroring if it does not exist."
-     (:m :a -> :a))
-    (last
-     "Return the last element of the collection."
-     (:m :a -> Optional :a))
+     (:m -> :a))
     (last#
      "Return the last element of the collection, erroring if it does not exist."
-     (:m :a -> :a))
+     (:m -> :a))
     (tail
      "Return all except the first element of the collection."
-     (:m :a -> :m :a))
+     (:m -> :m))
     (take
      "Return the first `n` elements of the collection."
-     (UFix -> :m :a -> :m :a))
+     (UFix -> :m -> :m))
     (drop
      "Return all except the first `n` elements of the collection."
-     (UFix -> :m :a -> :m :a))
+     (UFix -> :m -> :m))
     ;; Query the collection
-    (index-elt
-     "Return the index of the first occurence of `elt`, if it can be found."
-     (Eq :a => :a -> :m :a -> Optional UFix))
-    (index-elt#
-     "Return the index of the first occurence of `elt`, erroring if it cannot be found."
-     (Eq :a => :a -> :m :a -> UFix))
     (index-where
      "Return the index of the first element matching a predicate function."
-     ((:a -> Boolean) -> :m :a -> Optional UFIx))
-    (index-where#
-     "Return the index of the first element matching a predicate function, erroring if none can be found."
-     ((:a -> Boolean) -> :m :a -> UFix))
+     ((:a -> Boolean) -> :m -> Optional UFIx))
     (find-where
      "Return the first element matching a predicate function."
-     ((:a -> Boolean) -> :m :a -> Optional :a))
+     ((:a -> Boolean) -> :m -> Optional :a))
     (indices-elt
      "Return the indices of every occurence of `elt` in the collection."
-     (Eq :a => :a -> :m :a -> List UFix))
+     (Eq :a => :a -> :m -> List UFix))
     (indices-where
      "Return the indices of every element satisfying `pred` in the collection."
-     ((:a -> Boolean) -> :m :a -> List UFix))
+     ((:a -> Boolean) -> :m -> List UFix))
     ;; Retrieve subsets of the collection.
     (subseq
      "Extract the collection from `start` (inclusive) to `end` (exclusive)."
-     (UFix -> UFix -> :m :a -> :m :a))
+     (UFix -> UFix -> :m -> :m))
     (split-at
      "Split into two collections at `i`. The first collection ends at `i`-1, the second collection begins at `i`+1."
-     (UFix -> :m :a -> Tuple (:m :a) (:m :a)))
+     (UFix -> :m -> Tuple :m :m))
     (split-elt
      "Split into collections on the each occurrence of `elt`. `elt` will be excluded from the resulting collections."
-     (Eq :a => :a -> :m :a -> List (:m :a)))
+     (Eq :a => :a -> :m -> List :m))
     (split-where
      "Split into collections on each element satisfying `pred`. Elements satisfying `pred` will be excluded from the resulting collections."
-     ((:a -> Boolean) -> :m :a -> List (:m :a)))
+     ((:a -> Boolean) -> :m -> List :m))
     ;; Manipulate at the collection level
     (reverse
      "Return the collection with elements reversed."
-     (:m :a -> :m :a))
+     (:m -> :m))
     (sort
      "Return a sorted collection of orderable elements."
-     (Ord :a => :m :a -> :m :a))
+     (Ord :a => :m -> :m))
     (sort-with
      "Return the sorted collection under the given ordering."
-     ((:a -> :a -> Ord) -> :m :a -> :m :a))
-    (zip
-     "Return a collection of this collection's elements combined with elements from an iterable object."
-     (itr:IntoIterator :n :b => :m :a -> :n -> :m (Tuple :a :b)))
-    (zip-with
-     "Return a collection of this collection's elements and an iterable object's elements applied to `f`."
-     (itr:IntoIterator :n :b => (:a -> :b -> :c) -> :m :a -> :n -> :m :c))
+     ((:a -> :a -> Ord) -> :m -> :m))
     ;; Manipulate at the element level
     (push
      "Return the collection with an element added to the front."
-     (:a -> :m :a -> :m :a))
+     (:a -> :m -> :m))
     (push-end
      "Return the collection with an element added to the end."
-     (:a -> :m :a -> :m :a))
+     (:a -> :m -> :m))
     (insert-at
      "Return the collection with an element inserted at an index."
-     (UFix -> :a -> :m :a -> :m :a)))
+     (UFix -> :a -> :m -> :m)))
 
-  (define-class (LinearCollection :m => ImmutableLinearCollection :m))
+  (define-class (LinearCollection :m :a => ImmutableLinearCollection :m :a))
 
-  (define-class (LinearCollection :m => MutableLinearCollection :m)
+  (define-class (LinearCollection :m :a => MutableLinearCollection :m :a)
     (reverse!
      "Reverse the collection in place. The collection is returned for convenience."
-     (:m :a -> :m :a))
+     (:m -> :m))
     (sort!
      "Sort a collection of orderable elements in place. The collection is returned for convenience."
-     (Ord :a => :m :a -> :m :a))
+     (Ord :a => :m -> :m))
     (sort-with!
      "Sort the collection in place under the given ordering. The collection is returned for convenience."
-     ((:a -> :a -> Ord) -> :m :a -> :m :a))
+     ((:a -> :a -> Ord) -> :m -> :m))
     (push!
      "Add an element to the front of the collection. The collection is returned for convenience."
-     (:a -> :m :a -> :m :a))
+     (:a -> :m -> :m))
     (push-end!
      "Add an element to the end of the collection. The collection is returned for convenience."
-     (:a -> :m :a -> :m :a))
-    (pop!
-     "Remove the first element of the collection and return it, if any."
-     (:m :a -> Optional :a))
+     (:a -> :m -> :m))
     (pop!#
      "Remove the first element of the collection and return it, erroring if none is found."
-     (:m :a -> :a))
-    (pop-end!
-     "Remove the last element of the collection and return it, if any."
-     (:m :a -> Optional :a))
+     (:m -> :a))
     (pop-end!#
      "Remove the last element of the collection and return it, erroring if none is found."
-     (:m :a -> :a))
+     (:m -> :a))
     (insert-at!
      "Insert an item at the given index of the collection, erroring if out of bounds. The collection is returned for convenience."
-     (UFix -> :a -> :m :a -> :m :a))))
+     (UFix -> :a -> :m -> :m))))
+
+(coalton-toplevel
+  (declare contains-elt? ((Collection :m :a) (Eq :a) => :a -> :m -> Boolean))
+  (define (contains-elt? elt coll)
+     "Check if the collection contains an element."
+    (inline (contains-where? (== elt) coll)))
+
+  (declare head (LinearCollection :m :a => :m -> Optional :a))
+  (define (head coll)
+    "Return the first element of the collection."
+    (if (empty? coll)
+        None
+        (Some (inline (head# coll)))))
+
+  (declare last (LinearCollection :m :a => :m -> Optional :a))
+  (define (last coll)
+    "Return the last element of the collection."
+    (if (empty? coll)
+        None
+        (Some (inline (last# coll)))))
+
+  (declare index-elt ((LinearCollection :m :a) (Eq :a) => :a -> :m -> Optional UFix))
+  (define (index-elt elt coll)
+     "Return the index of the first occurence of `elt`, if it can be found."
+    (inline (index-where (== elt) coll)))
+
+  (declare index-elt# ((LinearCollection :m :a) (Eq :a) => :a -> :m -> UFix))
+  (define (index-elt# elt coll)
+     "Return the index of the first occurence of `elt`, erroring if it cannot be found."
+    (opt:from-some "Cannot find element in collection." (inline (index-elt elt coll))))
+
+  (declare index-where# (LinearCollection :m :a => (:a -> Boolean) -> :m -> UFix))
+  (define (index-where# f coll)
+     "Return the index of the first element matching a predicate function, erroring if none can be found."
+    (opt:from-some "Cannot find matching element in collection." (inline (index-where f coll))))
+
+  (declare length (LinearCollection :m :a => :m -> UFix))
+  (define length size)
+
+  ;; (declare zip ((itr:IntoIterator :m :a) (itr:IntoIterator :n :b) ; (LinearCollection :c (Tuple :a :b))
+  ;;               (itr:FromIterator :c (Tuple :a :b))
+  ;;               => :m -> :n -> :c))
+  ;; (declare zip
+  ;;          ((ITR:FROMITERATOR :E (TUPLE :A :B)) (ITR:INTOITERATOR :C :A) (ITR:INTOITERATOR :D :B) => :C -> :D -> :E))
+  (define (zip as bs)
+    "Return a collection of two iterable object's items zipped together."
+    (itr:collect! (itr:zip! (itr:into-iter as) (itr:into-iter bs))))
+
+  (declare zip-with ((itr:IntoIterator :m :a) (itr:IntoIterator :n :b) (LinearCollection :t :c)
+                     (itr:FromIterator :t :c) => (:a -> :b -> :c) -> :m -> :n -> :t))
+  (define (zip-with f a b)
+    "Return a collection of two iterable objects' elements applied to `f`."
+    (itr:collect! (itr:zip-with! f (itr:into-iter a) (itr:into-iter b))))
+
+  (declare pop! (MutableLinearCollection :m :a => :m -> Optional :a))
+  (define (pop! coll)
+    "Remove the first element of the collection and return it, if any."
+    (if (empty? coll)
+        None
+        (Some (inline (pop!# coll)))))
+
+  (declare pop-end! (MutableLinearCollection :m :a => :m -> Optional :a))
+  (define (pop-end! coll)
+    "Remove the last element of the collection and return it, if any."
+    (if (empty? coll)
+        None
+        (Some (inline (pop-end!# coll)))))
+  )
 
 ;; #+sb-package-locks
 ;; (sb-ext:lock-package "COALTON-LIBRARY/COLLECTIONS/CLASSES")

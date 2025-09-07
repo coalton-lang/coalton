@@ -151,22 +151,10 @@
   ;;; LinearCollection Vector
   ;;;
 
-  (declare head (Vector :a -> Optional :a))
-  (define (head v)
-    "Return the first item of `v`."
-    (index 0 v))
-
   (declare head-unsafe (Vector :a -> :a))
   (define (head-unsafe v)
     "Return the first item of `v` without first checking if `v` is empty."
     (index-unsafe 0 v))
-
-  (declare last (Vector :a -> Optional :a))
-  (define (last v)
-    "Return the last element of `v`."
-    (if (== (length v) 0)
-      None
-      (index (- (length v) 1) v)))
 
   (declare last-unsafe (Vector :a -> :a))
   (define (last-unsafe v)
@@ -295,23 +283,11 @@
     "Append `item` to `v` and resize `v` if necessary, returning the index of the new item."
     (lisp UFix (item v)
       (cl:vector-push-extend item v)))
-  
-  (declare pop! (Vector :a -> Optional :a))
-  (define (pop! v)
-    "Remove and return the first item of `v`."
-    (remove-at! 0 v))
-  
+
   (declare pop-unsafe! (Vector :a -> :a))
   (define (pop-unsafe! v)
     "Remove and return the first item of `v` without checking if the vector is empty."
     (remove-at-unsafe! 0 v))
-
-  (declare pop-end! (Vector :a -> Optional :a))
-  (define (pop-end! v)
-    "Remove and return the last item of `v`."
-    (if (empty? v)
-        None
-        (Some (pop-end-unsafe! v))))
 
   (declare pop-end-unsafe! (Vector :a -> :a))
   (define (pop-end-unsafe! v)
@@ -594,8 +570,7 @@
     (define (cln:remove-elt elt vec)
       (iter:collect! (iter:filter! (/= elt) (iter:into-iter vec))))
     (define cln:empty? empty?)
-    (define cln:length length)
-    (define cln:contains-elt? contains-elt?)
+    (define cln:size length)
     (define cln:contains-where? contains-where?)
     (define (cln:count-where f vec)
       (fold (fn (sum elt)
@@ -615,10 +590,8 @@
       (push! elt vec)
       vec))
   
-  (define-instance (cln:LinearCollection Vector)
-    (define cln:head head)
+  (define-instance (cln:LinearCollection (Vector :a) :a)
     (define cln:head# head-unsafe)
-    (define cln:last last)
     (define cln:last# last-unsafe)
     (define (cln:tail vec)
       (subseq-vec 1 (length vec) vec))
@@ -626,12 +599,7 @@
       (subseq-vec n (length vec) vec))
     (define (cln:take n vec)
       (subseq-vec 0 n vec))
-    (define cln:index-elt find-elem)
-    (define (cln:index-elt# elt vec)
-      (opt:from-some "Cannot find element in vector." (find-elem elt vec)))
     (define cln:index-where find-where)
-    (define (cln:index-where# pred vec)
-      (opt:from-some "Cannot find matching element in vector." (find-where pred vec)))
     (define cln:find-where find)
     (define (cln:indices-elt elt vec)
       (indices-where (== elt) vec))
@@ -651,8 +619,8 @@
         (sort-by! (fn (a b) (== LT (ord-func a b)))
                   result)
         result))
-    (define cln:zip zip-itr)
-    (define cln:zip-with zip-with-itr)
+    ;; (define cln:zip zip-itr)
+    ;; (define cln:zip-with zip-with-itr)
     (define (cln:push elt vec)
       (cond
         ((empty? vec)
@@ -667,7 +635,7 @@
     (define (cln:insert-at i elt vec)
       (insert-at! i elt (copy vec))))
 
-  (define-instance (cln:MutableLinearCollection Vector)
+  (define-instance (cln:MutableLinearCollection (Vector :a) :a)
     (define cln:reverse! reverse!)
     (define (cln:sort! vec)
       (sort! vec)
@@ -681,9 +649,7 @@
     (define (cln:push-end! elt vec)
       (push! elt vec)
       vec)
-    (define cln:pop! pop!)
     (define cln:pop!# pop-unsafe!)
-    (define cln:pop-end! pop-end!)
     (define cln:pop-end!# pop-end-unsafe!)
     (define cln:insert-at! insert-at!)))
 
