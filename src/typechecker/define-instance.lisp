@@ -423,8 +423,11 @@
     (return-from check-instance-valid))
 
   (let* ((types-package (util:find-package "COALTON/TYPES"))
+         (show-package (find-package "COALTON/SHOW"))
 
-         (runtime-repr (util:find-symbol "RUNTIMEREPR" types-package)))
+         (runtime-repr (util:find-symbol "RUNTIMEREPR" types-package))
+         (show-type (and show-package
+                         (util:find-symbol "SHOWTYPE" show-package))))
 
     ;; Instance validation is disabled in the types package
     (when (eq *package* types-package)
@@ -444,7 +447,15 @@
     (when (eq (parser:identifier-src-name (parser:ty-predicate-class (parser:toplevel-define-instance-pred instance))) runtime-repr)
       (tc-error "Invalid instance"
                 (tc-location (parser:toplevel-define-instance-head-location instance)
-                             "RuntimeRepr instances cannot be written manually")))))
+                             "RuntimeRepr instances cannot be written manually")))
+
+    (when (and show-type
+               (eq (parser:identifier-src-name (parser:ty-predicate-class (parser:toplevel-define-instance-pred instance)))
+                   show-type)
+               (not (eq *package* show-package)))
+      (tc-error "Invalid instance"
+                (tc-location (parser:toplevel-define-instance-head-location instance)
+                             "ShowType instances cannot be written manually")))))
 
 (defun check-for-orphan-instance (instance)
   (declare (type parser:toplevel-define-instance instance)

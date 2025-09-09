@@ -46,6 +46,8 @@
                (:file "types")
                (:file "primitive-types")
                (:file "classes")
+               (:file "builtin")
+               (:file "show")
                (:module "internal"
                 :serial t
                 :components ((:module "rbit"
@@ -59,7 +61,6 @@
                (:file "hash-defining-macros")
                (:file "hash")
                (:file "derivers")
-               (:file "builtin")
                (:file "functions")
                (:file "boolean")
                (:file "bits")
@@ -121,6 +122,7 @@
                (:file "seq")
                (:file "system")
                (:file "file")
+
                (:file "prelude")))
 
 (cl:when (cl:member (uiop:getenv "COALTON_PORTABLE_BIGFLOAT") '("1" "true" "t") :test #'cl:equalp)
