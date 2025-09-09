@@ -9,7 +9,8 @@
           #:coalton-library/math/arith)
   (:local-nicknames
    (#:arith #:coalton-library/math/arith)
-   (#:types #:coalton-library/types))
+   (#:types #:coalton-library/types)
+   (#:utils #:coalton-library/utils))
   (:export
    #:Complex                            ; data type
    #:ComplexComponent                   ; type class
@@ -51,7 +52,13 @@ component types."
         (lisp types:LispType (inner-type)
           (cl:if (cl:member inner-type *native-complex-types*)
                  `(cl:complex ,inner-type)
-                 'Complex))))))
+                 'Complex))))
+    (define (types:coalton-type-string p)
+      (utils:concat-string
+       "(Complex "
+       (utils:concat-string
+        (types:coalton-type-string (types:proxy-inner p))
+        ")")))))
 
 ;; Quirk: We had to split the above COALTON-TOPLEVEL from the bottom
 ;; one because Allegro needs to know about Complex before it gets used
