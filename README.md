@@ -79,7 +79,7 @@ DIFFERENTIATION> (coalton (d/dt (E+ (square (EVar t)) (EConst 1))))
 Type errors are discovered at compile-time, and errors are printed beautifully without sacrificing Common Lisp's interactive debugging facilities.
 
 ```
-DIFFERENTIATION> (coalton (dt (E+ (EConst 1/2) (EConst 0.5))))
+DIFFERENTIATION> (coalton (d/dt (E+ (EConst 1/2) (EConst 0.5))))
 error: Type mismatch
   --> repl:1:32
    |
