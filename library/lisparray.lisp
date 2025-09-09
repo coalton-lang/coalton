@@ -9,7 +9,9 @@
   (:local-nicknames
    (#:types #:coalton/types)
    (#:complex #:coalton/math/complex)
-   (#:ram #:coalton/randomaccess))
+   (#:ram #:coalton/randomaccess)
+   (#:show #:coalton/show)
+   (#:utils #:coalton/utils))
   (:export
    #:LispArray
    #:make
@@ -179,6 +181,22 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
     (inline)
     (define (ram:unsafe-set! v i x)
       (set! v i x)))
+
+  (define-instance (show:Show :a => show:Show (LispArray :a))
+    (define (show:show-to f x)
+      (let l = (length x))
+      (f "(lisparray [")
+      (rec % ((i 0))
+        (cond
+          ((== i l)
+           (values))
+          ((== i (- l 1))
+           (show:show-to f (aref x i)))
+          (True
+           (show:show-to f (aref x i))
+           (f " ")
+           (% (+ i 1)))))
+      (f "])")))
 
   (lisp-toplevel ()
     (cl:eval-when (:compile-toplevel :load-toplevel)
