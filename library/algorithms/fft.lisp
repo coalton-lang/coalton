@@ -33,18 +33,18 @@
    (#:math #:coalton-library/math)
    (#:ram #:coalton-library/randomaccess))
   (:export
-   #:Group
+   #:FFTGroup
    #:add-identity
    #:add
    #:add-inverse
    #:subtract
-   #:Ring
+   #:FFTRing
    #:multiply-identity
    #:multiply
-   #:Field
+   #:FFTField
    #:multiply-inverse
    #:divide
-   #:CyclicGroup
+   #:FFTCyclicGroup
    #:cyclic-add-identity
    #:cyclic-add
    #:cyclic-add-inverse
@@ -115,38 +115,52 @@
 
 (coalton-toplevel
 
-  (define-class (Group :t)
+  (define-class (FFTGroup :t)
+    "A class of types, each of which is a mathematical group.
+
+These are types which are valid elements for a collection which may undergo a discrete Fourier transform. Examples include complex floating-point numbers and finite (modular) integers."  
     (add-identity :t)
     (add (:t -> :t -> :t))
     (add-inverse (:t -> :t)))
 
-  (declare subtract (Group :t => :t -> :t -> :t))
+  (declare subtract (FFTGroup :t => :t -> :t -> :t))
   (define (subtract x y)
     (add x (add-inverse y)))
 
-  (define-class (Group :t => Ring :t)
+  (define-class (FFTGroup :t => FFTRing :t)
+    "A class of types, each of which is a mathematical ring.
+
+These are types which are valid elements for a collection which may undergo a discrete Fourier transform. Examples include complex floating-point numbers and finite (modular) integers."  
     (multiply-identity :t)
     (multiply (:t -> :t -> :t)))
 
-  (define-class (Ring :t => Field :t)
+  (define-class (FFTRing :t => FFTField :t)
+    "A class of types, each of which is a mathematical field.
+
+These are types which are valid elements for a collection which may undergo a discrete Fourier transform. Examples include complex floating-point numbers and finite (modular) integers."  
     (multiply-inverse (:t -> :t)))
 
-  (declare divide (Field :t => :t -> :t -> :t))
+  (declare divide (FFTField :t => :t -> :t -> :t))
   (define (divide x y)
     (multiply x (multiply-inverse y)))
 
-  (define-class (CyclicGroup :t)
+  (define-class (FFTCyclicGroup :t)
+    "A class of types, each of which is a mathematical cyclic group.
+
+These are types which are valid elements for a collection which may undergo a discrete Fourier transform. Examples include complex floating-point numbers and finite (modular) integers."
     (cyclic-add-identity :t)
     (cyclic-add (:t -> :t -> :t))
     (cyclic-add-inverse (:t -> :t))
-    (cyclic-nth-generator (UFix -> :t))))
+    (cyclic-nth-generator
+     "A function which returns a primitive `n`th root of unity."
+     (UFix -> :t))))
 
 ;;; Define the decimation-in-frequency raw FFT and inverse FFT.
 
 (coalton-toplevel
 
   (declare dif-butterfly ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
-                          (Ring :t) (CyclicGroup :t)
+                          (FFTRing :t) (FFTCyclicGroup :t)
                           => UFix -> UFix -> :t -> :c -> :d -> Unit))
   (define (dif-butterfly j k w dst src)
     "Perform a single decimation-in-frequency butterfly operation for indices `j` and `k` with the twiddle factor `w`, reading from `src` and writing to `dst`."
@@ -160,7 +174,7 @@
 (coalton-toplevel
 
   (declare dif-kernel ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
-                       (Ring :t) (CyclicGroup :t)
+                       (FFTRing :t) (FFTCyclicGroup :t)
                        => UFix -> UFix -> UFix -> :t -> :t
                        -> UFix -> UFix -> :c -> :d -> Unit))
   (define (dif-kernel n m m/2 wm w j k dst src)
@@ -205,7 +219,7 @@
 (coalton-toplevel
 
   (declare dif-fft-raw ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
-                        (Ring :t) (CyclicGroup :t)
+                        (FFTRing :t) (FFTCyclicGroup :t)
                         => :c -> :d -> Unit))
   (define (dif-fft-raw dst src)
     "A decimation-in-frequency fast fourier transform, reading from `src` and writing to `dst`.
@@ -225,7 +239,7 @@ Normalization: none"
 (coalton-toplevel
 
   (declare dif-ifft-raw ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
-                         (Ring :t) (CyclicGroup :t)
+                         (FFTRing :t) (FFTCyclicGroup :t)
                          => :c -> :d -> Unit))
   (define (dif-ifft-raw dst src)
     "A decimation-in-frequency inverse fast fourier transform, reading from `src` and writing to `dst`.
@@ -247,7 +261,7 @@ Normalization: none"
 (coalton-toplevel
 
   (declare dit-butterfly ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
-                          (Ring :t) (CyclicGroup :t)
+                          (FFTRing :t) (FFTCyclicGroup :t)
                           => UFix -> UFix -> :t -> :c -> :d -> Unit))
   (define (dit-butterfly j k w dst src)
     "Perform a single decimation-in-time butterfly operation for indices `j` and `k` with the twiddle factor `w`, reading from `src` and writing to `dst`."
@@ -263,7 +277,7 @@ Normalization: none"
 
   (declare dit-kernel
            ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
-            (Ring :t) (CyclicGroup :t)
+            (FFTRing :t) (FFTCyclicGroup :t)
             => Boolean -> UFix -> UFix -> UFix -> :t -> :t
             -> UFix -> UFix -> :c -> :d -> Unit))
   (define (dit-kernel inv? n m m/2 wm w j k dst src)
@@ -309,7 +323,7 @@ Normalization: none"
 (coalton-toplevel
 
   (declare dit-fft-raw ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
-                        (Ring :t) (CyclicGroup :t)
+                        (FFTRing :t) (FFTCyclicGroup :t)
                         => :c -> :d -> Unit))
   (define (dit-fft-raw dst src)
     "A decimation-in-time fast fourier transform, reading from `src` and writing to `dst`.
@@ -330,7 +344,7 @@ Normalization: none"
 (coalton-toplevel
 
   (declare dit-ifft-raw ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
-                         (Ring :t) (CyclicGroup :t)
+                         (FFTRing :t) (FFTCyclicGroup :t)
                          => :c -> :d -> Unit))
   (define (dit-ifft-raw dst src)
     "A decimation-in-time inverse fast fourier transform, reading from `src` and writing to `dst`.
@@ -353,7 +367,7 @@ Normalization: none"
 (coalton-toplevel
 
   (declare fft! ((ram:RandomAccess :c :t)
-                 (Ring :t) (CyclicGroup :t)
+                 (FFTRing :t) (FFTCyclicGroup :t)
                  => :c -> :c))
   (define (fft! storage)
     "Perform an in-place fast Fourier transform on `storage`."
@@ -369,7 +383,7 @@ Normalization: none"
          (error "Currently, only radix-2 ffts are supported.")))))
 
   (declare ifft! ((ram:RandomAccess :c :t)
-                  (Field :t) (CyclicGroup :t) (Num :t)
+                  (FFTField :t) (FFTCyclicGroup :t) (Num :t)
                   => :c -> :c))
   (define (ifft! storage)
     "Perform an in-place inverse fast Fourier transform on `storage`."
@@ -389,7 +403,7 @@ Normalization: none"
          (error "Currently, only radix-2 ffts are supported.")))))
 
   (declare fft-into! ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
-                      (Ring :t) (CyclicGroup :t)
+                      (FFTRing :t) (FFTCyclicGroup :t)
                       => :d -> :c -> :d))
   (define (fft-into! dst src)
     "Perform a fast Fourier transform of `src`, writing the result to `dst`. If `dst` is longer than `src`, then remaining elements of `dst` are left unmutated."
@@ -406,7 +420,7 @@ Normalization: none"
          (error "Currently, only radix-2 ffts are supported.")))))
 
   (declare ifft-into! ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
-                      (Field :t) (CyclicGroup :t) (Num :t)
+                      (FFTField :t) (FFTCyclicGroup :t) (Num :t)
                       => :d -> :c -> :d))
   (define (ifft-into! dst src)
     "Perform an inverse fast Fourier transform of `src`, writing the result to `dst`. If `dst` is longer than `src`, then remaining elements of `dst` are left unmutated."
@@ -427,7 +441,7 @@ Normalization: none"
          (error "Currently, only radix-2 ffts are supported.")))))
 
   (declare fft ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
-                (Ring :t) (CyclicGroup :t)
+                (FFTRing :t) (FFTCyclicGroup :t)
                 => :c -> :d))
   (define (fft storage)
     "Perform a fast Fourier transform on the data in `storage`."
@@ -444,7 +458,7 @@ Normalization: none"
          (error "Currently, only radix-2 ffts are supported.")))))
 
   (declare ifft ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
-                (Field :t) (CyclicGroup :t) (Num :t)
+                (FFTField :t) (FFTCyclicGroup :t) (Num :t)
                 => :c -> :d))
   (define (ifft storage)
     "Perform an inverse fast Fourier transform on the data in `storage`."
@@ -473,23 +487,23 @@ Normalization: none"
   (define-type-alias C64 (Complex F32))
   (define-type-alias C128 (Complex F64))
 
-  (define-instance (Group C64)
+  (define-instance (FFTGroup C64)
     (define add-identity (lisp C64 () #C(0f0 0f0)))
     (inline)
     (define (add x y) (+ x y))
     (inline)
     (define (add-inverse x) (- add-identity x)))
 
-  (define-instance (Ring C64)
+  (define-instance (FFTRing C64)
     (define multiply-identity (lisp C64 () #C(1f0 0f0)))
     (inline)
     (define (multiply x y) (* x y)))
 
-  (define-instance (Field C64)
+  (define-instance (FFTField C64)
     (inline)
     (define (multiply-inverse x) (/ multiply-identity x)))
 
-  (define-instance (CyclicGroup C64)
+  (define-instance (FFTCyclicGroup C64)
     (define cyclic-add-identity (lisp C64 () #C(1f0 0f0)))
     (inline)
     (define (cyclic-add x y) (* x y))
@@ -501,7 +515,7 @@ Normalization: none"
 
   (inline)
   (declare dif-butterfly/c64 (UFix -> UFix -> C64
-                                      -> Array C64 -> Array C64 -> Unit))
+                                   -> Array C64 -> Array C64 -> Unit))
   (define (dif-butterfly/c64 j k w dst src)
     (let ((a (ram:unsafe-aref src j))
           (b (ram:unsafe-aref src k)))
@@ -523,23 +537,23 @@ Normalization: none"
   (specialize dit-butterfly dit-butterfly/c64
               (UFix -> UFix -> C64 -> Array C64 -> Array C64 -> Unit))
 
-  (define-instance (Group C128)
+  (define-instance (FFTGroup C128)
     (define add-identity (lisp C128 () #C(0d0 0d0)))
     (inline)
     (define (add x y) (+ x y))
     (inline)
     (define (add-inverse x) (- add-identity x)))
 
-  (define-instance (Ring C128)
+  (define-instance (FFTRing C128)
     (define multiply-identity (lisp C128 () #C(1d0 0d0)))
     (inline)
     (define (multiply x y) (* x y)))
 
-  (define-instance (Field C128)
+  (define-instance (FFTField C128)
     (inline)
     (define (multiply-inverse x) (/ multiply-identity x)))
 
-  (define-instance (CyclicGroup C128)
+  (define-instance (FFTCyclicGroup C128)
     (define cyclic-add-identity (lisp C128 () #C(1d0 0d0)))
     (inline)
     (define (cyclic-add x y) (* x y))
