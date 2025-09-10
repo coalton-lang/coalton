@@ -32,6 +32,13 @@ specified in `subs`."
        :rator-type (tc:apply-substitution subs (node-direct-application-rator-type node))
        :rator (node-direct-application-rator node)
        :rands (node-direct-application-rands node)))
+    (action (:after node-multiple-values-application node)
+      (make-node-multiple-values-application
+       :type (node-type node)
+       :properties (node-properties node)
+       :rator-type (tc:apply-substitution subs (node-multiple-values-application-rator-type node))
+       :rator (node-multiple-values-application-rator node)
+       :rands (node-multiple-values-application-rands node)))
     (action (:after node-match node)
       (make-node-match
        :type (node-type node)
@@ -64,6 +71,10 @@ specified in `subs`."
       (action (:after node-direct-application node)
         (alexandria:unionf tyvars
                            (tc:type-variables (node-direct-application-rator-type node)))
+        (values))
+      (action (:after node-multiple-values-application node)
+        (alexandria:unionf tyvars
+                           (tc:type-variables (node-multiple-values-application-rator-type node)))
         (values))
       (action (:after node-match node)
         (dolist (branch (node-match-branches node))
@@ -110,6 +121,11 @@ both CL namespaces appearing in `node`"
         (unless variable-namespace-only
           (setf node-vars
                 (adjoin (node-direct-application-rator node) node-vars)))
+        (values))
+      (action (:after node-multiple-values-application node)
+        (unless variable-namespace-only
+          (setf node-vars
+                (adjoin (node-multiple-values-application-rator node) node-vars)))
         (values))
       (action (:after node-lisp node)
         (alexandria:unionf node-vars

@@ -34,6 +34,17 @@
    #:node-direct-application-rator      ; READER
    #:node-direct-application-rands      ; READER
    #:node-direct-application-p          ; FUNCTION
+   #:node-multiple-values-application   ; STRUCT
+   #:make-node-multiple-values-application
+                                        ; CONSTRUCTOR
+   #:node-multiple-values-application-properties ; READER
+   #:node-multiple-values-application-rator-type ; READER
+   #:node-multiple-values-application-rator      ; READER
+   #:node-multiple-values-application-rands      ; READER
+   #:node-multiple-values-application-p          ; FUNCTION
+   #:node-multiple-values               ; STRUCT
+   #:make-node-multiple-values          ; CONSTRUCTOR
+   #:node-multiple-values-exprs         ; READER
    #:node-abstraction                   ; STRUCT
    #:make-node-abstraction              ; CONSTRUCTOR
    #:node-abstraction-vars              ; READER
@@ -237,6 +248,17 @@ coalton symbols (`parser:identifier`)"
   (rator      (util:required 'rator)      :type parser:identifier :read-only t)
   (rands      (util:required 'rands)      :type node-list         :read-only t))
 
+(defstruct (node-multiple-values-application (:include node))
+  "A direct application where the rator should receive its values from the multiple values of its rands."
+  (properties (util:required 'properties) :type list              :read-only t)
+  (rator-type (util:required 'rator-type) :type tc:ty             :read-only t)
+  (rator      (util:required 'rator)      :type parser:identifier :read-only t)
+  (rands      (util:required 'rands)      :type node-list         :read-only t))
+
+(defstruct (node-multiple-values (:include node))
+  "A node that represents returning multiple values. The type of this node should be (Tuple * *)."
+  (exprs     (util:required 'exprs)       :type node-list         :read-only t))
+
 (defstruct (node-abstraction (:include node))
   "Lambda literals (fn (x) x)"
   (vars    (util:required 'vars)    :type parser:identifier-list :read-only t)
@@ -406,6 +428,9 @@ call to (break)."
     (node-direct-application
      (node-direct-application-rands node))
 
+    (node-multiple-values-application
+     (node-multiple-values-application-rands node))
+
     (node-application
      (node-application-rands node))))
 
@@ -417,6 +442,9 @@ call to (break)."
   (etypecase node
     (node-direct-application
      (node-direct-application-rator node))
+
+    (node-multiple-values-application
+     (node-multiple-values-application-rator node))
 
     (node-application
      (when (node-variable-p (node-application-rator node))
@@ -430,6 +458,9 @@ call to (break)."
     (node-direct-application
      (node-direct-application-rator-type node))
 
+    (node-multiple-values-application
+     (node-multiple-values-application-rator-type node))
+
     (node-application
      (node-type (node-application-rator node)))))
 
@@ -440,6 +471,9 @@ call to (break)."
   (etypecase node
     (node-direct-application
      (node-direct-application-properties node))
+
+    (node-multiple-values-application
+     (node-multiple-values-application-properties node))
 
     (node-application
      (node-application-properties node))))

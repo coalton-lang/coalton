@@ -103,6 +103,42 @@ mapping known function names to their arity."
       (setf (gethash name table) (tc:function-env-entry-arity entry)))
     table))
 
+(defun analyze-return-values (bindings env)
+  (labels ((collect-tails (node)
+             (let ((tail nil))
+               (flet ((collect (x)
+                        (when (node-direct-application-p x)
+                          (push (node-direct-application-rator x) tail))))
+                 (coalton-impl/codegen/tail-analysis::map-tail-nodes #'collect node))
+               tail))
+           (tuple ()
+             (and (find-package "COALTON-LIBRARY/CLASSES")
+                  (find-symbol "TUPLE" "COALTON-LIBRARY/CLASSES"))))
+    (let* ((names (mapcar #'car bindings))
+           (nonlocalp (lambda (x) (not (member x names))))
+           (tails (loop :for (name . node) :in bindings
+                        :collect (cons name (collect-tails node))))
+           (local-tails (coalton-impl/algorithm/tarjan-scc:tarjan-scc
+                         (loop :for (name . tail) :in tails
+                               :collect (cons name (remove-if nonlocalp tail)))))
+           (nonlocal-tails (loop :for (name . tail) :in tails
+                                 :collect (cons name (remove-if-not nonlocalp tail))))
+           (tuple-returners (loop :with tuple-ok := (if (tuple) (list (tuple)) nil)
+                                  :with ok? := (lambda (name)
+                                                 (or (member name tuple-ok)
+                                                     (let ((entry (tc:lookup-function env name :no-error t)))
+                                                       (cond
+                                                         ((null entry)
+                                                          nil)
+                                                         (t
+                                                          (tc:function-env-entry-returns-values-p entry))))))
+                                  :for scc :in local-tails
+                                  :when (and (some (lambda (name) (let ((tail (cdr (assoc name nonlocal-tails)))) (and (not (endp tail)) (every ok? tail)))) scc)
+                                             (notany (lambda (name) (some (complement ok?) (cdr (assoc name nonlocal-tails)))) scc))
+                                    :do (loop :for name :in scc :do (push name tuple-ok))
+                                  :finally (return tuple-ok))))
+      tuple-returners)))
+
 (defun optimize-bindings (bindings monomorphize-table inline-p-table package env)
   (declare (type binding-list bindings)
            (type hash-table monomorphize-table)
@@ -161,6 +197,70 @@ mapping known function names to their arity."
               (loop :for (name . node) :in bindings
                     :collect (cons name (direct-application node function-table))))
 
+        ;; Analyze for multiple values
+        ;;
+        ;; Step 1: Identify the MV-returning functions.
+        (let* ((tuple-returners (analyze-return-values bindings env))
+               (unboxed-names   (loop :for name :in tuple-returners
+                                      :collect (alexandria:format-symbol (symbol-package name) "~A[mv]" name))))
+          (format t "analysis: ~A~&--------------------------------------~%" tuple-returners)
+          (loop :for name :in tuple-returners
+                :for name-mv :in unboxed-names
+                :for entry := (tc:lookup-function env name :no-error t) ; no-error needed for now because TUPLE isn't defined early enough
+                :unless (null entry)
+                  :do (setf env
+                            (tc:set-function
+                             env
+                             name
+                             (tc:make-function-env-entry
+                              :name (tc:function-env-entry-name entry)
+                              :arity (tc:function-env-entry-arity entry)
+                              :inline-p (tc:function-env-entry-inline-p entry)
+                              :returns-values-p (tc:make-multiple-values-info
+                                                 :boxed-name name
+                                                 :unboxed-name name-mv))))))
+        ;; Step 2: Define new names
+        (loop :with new-bindings := nil
+              :for (binding-name . binding-node) :in bindings
+              :for entry := (tc:lookup-function env binding-name :no-error t)
+              :do (let ((mv (if (null entry)
+                                nil
+                                (tc:function-env-entry-returns-values-p entry))))
+                    (cond
+                      ((or (null mv)
+                           (eq binding-name (tc:multiple-values-info-unboxed-name mv)))
+                       (push (cons binding-name binding-node) new-bindings))
+                      ;; BINDING-NAME needs an unboxed variant
+                      (t
+                       (let* ((unboxed-name (tc:multiple-values-info-unboxed-name mv))
+                              (unboxed-node binding-node) ; xxx do rewrites?
+                              (boxed-name (tc:multiple-values-info-boxed-name mv))
+                              (boxed-node (make-node-abstraction
+                                           :type (node-type binding-node)
+                                           :vars (node-abstraction-vars binding-node)
+                                           :subexpr (make-node-multiple-values-application
+                                                     :type (tc:function-remove-arguments
+                                                            (node-type binding-node)
+                                                            (length (node-abstraction-vars binding-node)))
+                                                     :properties nil
+                                                     :rator unboxed-name
+                                                     :rator-type (node-type binding-node)
+                                                     :rands (loop :for var :in (node-abstraction-vars binding-node)
+                                                                  :for ty :in (tc:function-type-arguments (node-type binding-node))
+                                                                  :collect (make-node-variable :type ty :value var))))))
+                         (push (cons unboxed-name unboxed-node) new-bindings)
+                         (push (cons boxed-name boxed-node) new-bindings)
+                         (setf env
+                               (tc:set-function
+                                env
+                                unboxed-name
+                                (tc:make-function-env-entry
+                                 :name unboxed-name
+                                 :arity (tc:function-env-entry-arity entry)
+                                 :inline-p (tc:function-env-entry-inline-p entry)
+                                 :returns-values-p mv)))))))
+              :finally (setf bindings (nreverse new-bindings)))
+        
         ;; Update code db
         (loop :for (name . node) :in bindings
               :do (setf env (tc:set-code env name node)))

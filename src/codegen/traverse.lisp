@@ -112,6 +112,16 @@ nodes."
                (lambda (node)
                  (apply *traverse* node args))
                (node-direct-application-rands node))))
+    (action (:traverse node-multiple-values-application node &rest args)
+      (make-node-multiple-values-application
+       :type (node-type node)
+       :properties (node-properties node)
+       :rator-type (node-multiple-values-application-rator-type node)
+       :rator (node-multiple-values-application-rator node)
+       :rands (mapcar
+               (lambda (node)
+                 (apply *traverse* node args))
+               (node-multiple-values-application-rands node))))
     (action (:traverse node-abstraction node &rest args)
       (make-node-abstraction
        :type (node-type node)
@@ -472,6 +482,10 @@ corresponding to `node`."
       (action (:after node-direct-application _node)
         (declare (ignore _node))
         (incf counter)
+        (values))
+      (action (:after node-multiple-values-application _node)
+        (declare (ignore _node))
+        (incf counter)
         (values))))
     counter))
 
@@ -531,7 +545,8 @@ with rator `'coalton:Cons`."
       :bindings (loop :for (name . subnode) :in (node-let-bindings node)
                       :collect (cons name
                                      (if (and (typep subnode '(or node-application
-                                                               node-direct-application))
+                                                                  node-direct-application
+                                                                  node-multiple-values-application)) ; XXX IS THIS RIGHT?
                                               (eq 'coalton:Cons (node-rator-name subnode))
                                               (= 2 (length (node-rands subnode))))
                                          (make-node-direct-application
