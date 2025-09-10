@@ -182,6 +182,7 @@
    #:push
    #:push-end
    #:insert-at
+   #:set-at
 
    #:ImmutableLinearCollection
 
@@ -195,7 +196,8 @@
    #:pop!#
    #:pop-end!
    #:pop-end!#
-   #:insert-at!)
+   #:insert-at!
+   #:set-at!)
 
   (:export
    #:Collection
@@ -244,6 +246,7 @@
    #:push
    #:push-end
    #:insert-at
+   #:set-at
 
    #:ImmutableLinearCollection
     
@@ -257,7 +260,8 @@
    #:pop!#
    #:pop-end!
    #:pop-end!#
-   #:insert-at!)
+   #:insert-at!
+   #:set-at!)
 
   (:import-from
    #:coalton-library/cell

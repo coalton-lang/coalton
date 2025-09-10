@@ -121,18 +121,20 @@
     "Increments the value for the current bf-cell."
     (do
      (bfs <- state:get)
-     (pure (vec:set! (cell:read (.pointer bfs))
+     (pure (set-at! (cell:read (.pointer bfs))
                      (1+ (value-at-pointer bfs))
-                     (.memory bfs)))))
+                     (.memory bfs)))
+     (pure Unit)))
 
   (declare decr (Unit -> (state:ST BF-State Unit)))
   (define (decr)
     "Decrements the value for the current bf-cell."
     (do
      (bfs <- state:get)
-     (pure (vec:set! (cell:read (.pointer bfs))
+     (pure (set-at! (cell:read (.pointer bfs))
                      (1- (value-at-pointer bfs))
-                     (.memory bfs)))))
+                     (.memory bfs)))
+     (pure Unit)))
 
   ;;
   ;; Printing Cells (.)
@@ -172,7 +174,7 @@
     "Takes and stores a character as an ascii code at the pointer."
     (do
      (bfs <- state:get)
-     (pure (vec:set! (cell:read (.pointer bfs))
+     (pure (set-at! (cell:read (.pointer bfs))
                      (into (char:char-code (prompt-char)))
                      (.memory bfs)))
       (state:put bfs))))
@@ -196,7 +198,7 @@
   (define (parse input-string)
     "Parses a Brainfold instruction string, returns a Vector of Brainfold Commands."
     (let cmds = (new-collection))
-    (let vecs = (vec:make))
+    (let vecs = (the (Vector (Vector Cmd)) (vec:make)))
     (let ((parser (fn (input-string v)
                     (let ((head-tail (str:split 1 input-string)))
                       (match (fst head-tail)
