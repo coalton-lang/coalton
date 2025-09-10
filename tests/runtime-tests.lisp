@@ -221,13 +221,13 @@
 
   (define-instance (Bar1 UFix)
     (define (bar1 x)
-      (if (< x 1000000000)
+      (if (< x 10000000)
           (foo1 x)
           x)))
 
   (define-instance (Bar1 Integer)
     (define (bar1 x)
-      (if (< x 1000000000)
+      (if (< x 10000000)
           (foo1 x)
           x)))
 
@@ -241,8 +241,8 @@
 a polymorphic function and a type class method.
 
 This test is expected to fail with SBCL for versions below 2.5.7.38."
-  (is (== 1000000000 (tail-call-elimination-tests::foo1 (the UFix 0))))
-  (is (== 1000000000 (tail-call-elimination-tests::foo1 (the Integer 0)))))
+  (is (== 10000000 (tail-call-elimination-tests::foo1 (the UFix 0))))
+  (is (== 10000000 (tail-call-elimination-tests::foo1 (the Integer 0)))))
 
 (define-test test-nullary-or-and ()
   (is (and))

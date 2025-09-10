@@ -141,6 +141,10 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
       (make n x))
 
     (inline)
+    (define (ram:make-uninitialized n)
+      (make-uninitialized n))
+
+    (inline)
     (define (ram:length v)
       (length v))
 
