@@ -103,7 +103,7 @@ contains `a`."
        (if (<= (cln:length leaves) idx)
            None
            (let ((newleaves (cln:copy leaves)))
-             (vector:set! idx a newleaves)
+             (cln:set-at! idx a newleaves)
              (Some (LeafArray newleaves)))))
 
       ((RelaxedNode h fss cst sts)
@@ -113,7 +113,7 @@ contains `a`."
          (subtree <- (vector:index subtree-idx sts))
          (new-subtree <- (put subtree (- idx offset) a))
          (let ((newsts (cln:copy sts)))
-           (vector:set! subtree-idx new-subtree newsts)
+           (cln:set-at! subtree-idx new-subtree newsts)
            (pure (RelaxedNode h fss cst newsts)))))))
 
   (define (push seq a)
@@ -161,8 +161,8 @@ a new `Seq` instance."
              (Tuple leaf (RelaxedNode h fss newcst newsts)))
 
             (True
-             (vector:set! last-idx (- (cln:last# newcst) 1) newcst)
-             (vector:set! last-idx newsub newsts)
+             (cln:set-at! last-idx (- (cln:last# newcst) 1) newcst)
+             (cln:set-at! last-idx newsub newsts)
              (Tuple leaf (RelaxedNode h fss newcst newsts)))))))))
 
     (define (conc left right)
@@ -311,8 +311,8 @@ a new `Seq` instance."
                   (cln:copy cst))
                 (last-idx
                   (- (cln:length sts) 1)))
-            (vector:set! last-idx (+ 1 (cln:last# newcst)) newcst)
-            (vector:set! last-idx new-node newsts)
+            (cln:set-at! last-idx (+ 1 (cln:last# newcst)) newcst)
+            (cln:set-at! last-idx new-node newsts)
             (Tuple (RelaxedNode h fss newcst newsts) True)))
 
          ;; wasn't in place, but there's room here
@@ -384,7 +384,7 @@ shifts the each member of `target` down by `n` positions.  Mutates both
           (fn (j)
             (do
              (x <- (vector:index (+ j n) source))
-             (pure (vector:set! j x source)))
+             (pure (cln:set-at! j x source)))
             Unit)
           (iter:range-increasing n i source-len))
          Unit)
@@ -393,12 +393,12 @@ shifts the each member of `target` down by `n` positions.  Mutates both
 
   (define (replace-first v a)
     (let ((cv (cln:copy v)))
-      (vector:set! 0 a cv)
+      (cln:set-at! 0 a cv)
       cv))
 
   (define (replace-last v a)
     (let ((cv  (cln:copy v)))
-      (vector:set! (- (cln:length v) 1) a cv)
+      (cln:set-at! (- (cln:length v) 1) a cv)
       cv))
 
   (declare butfirst (vector:Vector :a -> vector:Vector :a))

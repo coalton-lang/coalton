@@ -27,7 +27,6 @@
    #:clear!
    #:index
    #:index-unsafe
-   #:set!
    #:remove-at!
    #:remove-at-unsafe!
    #:extend!
@@ -242,7 +241,7 @@
                                             (list:nth i indices)
                                             vec)))
           (cln:reverse (cell:read results))))))
-  
+
   (declare zip-itr (iter:IntoIterator :m :b => Vector :a -> :m -> Vector (Tuple :a :b)))
   (define (zip-itr vec col)
     (zip-with-itr Tuple vec col))
@@ -633,7 +632,11 @@
         (push! elt result)
         result))
     (define (cln:insert-at i elt vec)
-      (insert-at! i elt (copy vec))))
+      (insert-at! i elt (copy vec)))
+    (define (cln:set-at i elt vec)
+      (let ((result (copy vec)))
+        (set! i elt result)
+        result)))
 
   (define-instance (cln:MutableLinearCollection (Vector :a) :a)
     (define cln:reverse! reverse!)
@@ -651,7 +654,10 @@
       vec)
     (define cln:pop!# pop-unsafe!)
     (define cln:pop-end!# pop-end-unsafe!)
-    (define cln:insert-at! insert-at!)))
+    (define cln:insert-at! insert-at!)
+    (define (cln:set-at! i elt vec)
+      (set! i elt vec)
+      vec)))
 
 (cl:defmacro make (cl:&rest elements)
   "Construct a `Vector' containing the ELEMENTS, in the order listed."

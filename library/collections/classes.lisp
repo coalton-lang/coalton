@@ -58,6 +58,7 @@
    #:push
    #:push-end
    #:insert-at
+   #:set-at
 
    #:zip
    #:zip-with
@@ -74,7 +75,8 @@
    #:pop!#
    #:pop-end!
    #:pop-end!#
-   #:insert-at!))
+   #:insert-at!
+   #:set-at!))
 
 (in-package #:coalton-library/collections/classes)
 
@@ -216,7 +218,10 @@ the front or back, depending on which is natural for the underlying data structu
      "Return the collection with an element added to the end."
      (:a -> :m -> :m))
     (insert-at
-     "Return the collection with an element inserted at an index."
+     "Return the collection with an element inserted at an index, erroring if out of bounds."
+     (UFix -> :a -> :m -> :m))
+    (set-at
+     "Return the collection with the element set at at an index, erroring if out of bounds."
      (UFix -> :a -> :m -> :m)))
 
   (define-class (LinearCollection :m :a => ImmutableLinearCollection :m :a))
@@ -245,6 +250,9 @@ the front or back, depending on which is natural for the underlying data structu
      (:m -> :a))
     (insert-at!
      "Insert an item at the given index of the collection, erroring if out of bounds. The collection is returned for convenience."
+     (UFix -> :a -> :m -> :m))
+    (set-at!
+     "Set the item at the given index of the collection, erroring if out of bounds. The collection is returned for convenience."
      (UFix -> :a -> :m -> :m))))
 
 (coalton-toplevel

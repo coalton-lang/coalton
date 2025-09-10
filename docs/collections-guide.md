@@ -61,7 +61,8 @@ For example, the signature for `contains-elt?` is `:a -> :m -> Boolean`. If you 
 | `sort-with`       | (:a -> :a -> Ord) -> :m -> :m                   | Return the sorted collection under the given ordering.                                                                                                  |
 | `push`            | :a -> :m -> :m                                  | Return the collection with an element added to the front.                                                                                                |
 | `push-end`        | :a -> :m -> :m                                  | Return the collection with an element added to the end.                                                                                                  |
-| `insert-at`       | UFix -> :a -> :m -> :m                           | Return the collection with an element inserted at an index.                                                                                             |
+| `insert-at`       | UFix -> :a -> :m -> :m                           | Return the collection with an element inserted at an index, erroring if out of bounds.                                                                                             |
+| `set-at`       | UFix -> :a -> :m -> :m                           | Return the collection with the element set at at an index, erroring if out of bounds.  |
 
 #### MutableLinearCollection
 
@@ -77,6 +78,7 @@ For example, the signature for `contains-elt?` is `:a -> :m -> Boolean`. If you 
 | `pop-end!`     | :m -> Optional :a                                   | Remove the last element of the collection and return it, if any.                                                                                            |
 | `pop-end!#`    | :m -> :a                                           | Remove the last element of the collection and return it, erroring if none is found.                                                                         |
 | `insert-at!`   | UFix -> :a -> :m -> :m                           | Insert an item at the given index of the collection, erroring if out of bounds. The collection is returned for convenience.                                 |
+| `set-at!`   | UFix -> :a -> :m -> :m                           | Set the item at the given index of the collection, erroring if out of bounds. The collection is returned for convenience.                                 |
 
 ## How to Write Generic Functions
 

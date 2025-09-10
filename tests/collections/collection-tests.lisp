@@ -588,7 +588,21 @@ Example:
           ;; Ensure immutability
           (let ((orig ,(make-ufix-cln 1 2 3)))
             (cln:insert-at 1 99 orig)
-            (is (== ,(make-ufix-cln 1 2 3) orig))))))))
+            (is (== ,(make-ufix-cln 1 2 3) orig))))
+        (define-test ,(test-name type-symbol "set-at") ()
+          ;; Set at 0 in a singleton collection
+          (let ((c ,(make-ufix-cln 0)))
+            (is (== ,(make-ufix-cln 100) (cln:set-at 0 100 c))))
+          ;; Set at 0 in a multi-element collection
+          (let ((c ,(make-ufix-cln 0 1 2 3 4)))
+            (is (== ,(make-ufix-cln 100 1 2 3 4) (cln:set-at 0 100 c))))
+          ;; Set at end of a multi-element collection
+          (let ((c ,(make-ufix-cln 0 1 2 3 4)))
+            (is (== ,(make-ufix-cln 0 1 2 3 100) (cln:set-at 4 100 c))))
+          ;; Ensure immutability
+          (let ((c ,(make-ufix-cln 0 1 2 3 4)))
+            (cln:set-at 0 100 c)
+            (is (== ,(make-ufix-cln 0 1 2 3 4) c))))))))
 
 (cl:defmacro mutable-linear-collection-tests (type-symbol)
   "Run a standard test suite to verify correct behavior for a MutableLinearCollection typeclass instance.
@@ -726,4 +740,17 @@ Example:
           ;; insert-at! index > length => appended
           (let ((c ,(make-ufix-cln 1 2 3)))
             (cln:insert-at! 99 99 c)
-            (is (== ,(make-ufix-cln 1 2 3 99) c))))))))
+            (is (== ,(make-ufix-cln 1 2 3 99) c))))
+        (define-test ,(test-name type-symbol "set-at!") ()
+          ;; Set at 0 in a singleton collection
+          (let ((c ,(make-ufix-cln 0)))
+            (cln:set-at! 0 100 c)
+            (is (== ,(make-ufix-cln 100) c)))
+          ;; Set at 0 in a multi-element collection
+          (let ((c ,(make-ufix-cln 0 1 2 3 4)))
+            (cln:set-at! 0 100 c)
+            (is (== ,(make-ufix-cln 100 1 2 3 4) c)))
+          ;; Set at end of a multi-element collection
+          (let ((c ,(make-ufix-cln 0 1 2 3 4)))
+            (cln:set-at! 4 100 c)
+            (is (== ,(make-ufix-cln 0 1 2 3 100) c))))))))

@@ -323,6 +323,13 @@
   (define (insert-at i elt lst)
     (append (take i lst) (Cons elt (drop i lst))))
 
+  ;; TODO: Make this more effecient. Walk the original front to back in Common Lisp,
+  ;; mutating the CDR of new Cons cells as we go until we get to `i+1`, then mutate
+  ;; a new Cons cell with the new element at the end.
+  (declare set-at (UFix -> :a -> List :a -> List :a))
+  (define (set-at i elt lst)
+    (append (take i lst) (Cons elt (drop (+ 1 i) lst))))
+
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;;;                                                                       ;;;
   ;;; Extra Public Functions                                                ;;;
@@ -890,11 +897,10 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
     (define cln:reverse reverse)
     (define cln:sort sort)
     (define cln:sort-with sortBy)
-    ;; (define cln:zip zip-itr)
-    ;; (define cln:zip-with zip-with-itr)
     (define cln:push Cons)
     (define cln:push-end push-end)
-    (define cln:insert-at insert-at))
+    (define cln:insert-at insert-at)
+    (define cln:set-at set-at))
 
   (define-instance (cln:ImmutableLinearCollection (List :a) :a)))
 

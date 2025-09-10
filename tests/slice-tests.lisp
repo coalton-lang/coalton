@@ -19,7 +19,7 @@
     (is (== 3 (slice:index-unsafe 2 s)))
 
     ;; Writes to the backing array should be visible in the slice
-    (vector:set! 0 25 v)
+    (cln:set-at! 0 25 v)
     (is (== 25 (slice:index-unsafe 0 s)))
 
     ;; Writes to the slice should be visible in the backing array
