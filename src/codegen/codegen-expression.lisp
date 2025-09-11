@@ -12,6 +12,14 @@
   (:import-from
    #:coalton-impl/codegen/transformations
    #:node-variables)
+  (:import-from
+   #:coalton-impl/codegen/codegen-match
+   #:codegen-cond-case
+   #:codegen-case-case
+   #:codegen-cond-fallback
+   #:codegen-case-fallback
+   #:codegen-cond-match
+   #:codegen-case-match)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
@@ -272,26 +280,39 @@
     ;;
     ;; XXX: A further optimization we could do is only emit 1 type
     ;; test if there are multiple branches for a one-case ADT.
-    (let ((subexpr (codegen-expression (node-match-expr expr) env))
-          (match-expr-type (node-type (node-match-expr expr)))
-          (match-var (gensym "MATCH"))
-          ;; We use the following variables for various optimizations below:
-          (one-pattern? (= 1 (length (node-match-branches expr))))
-          (exhaustive? (patterns-exhaustive-p
-                        (mapcar #'match-branch-pattern (node-match-branches expr))
-                        (node-type (node-match-expr expr))
-                        env))
-          (have-catch-all? (member-if (lambda (pat)
-                                        (or (pattern-wildcard-p pat)
-                                            (pattern-var-p pat)))
-                                      (node-match-branches expr)
-                                      :key #'match-branch-pattern)))
+    (let* ((subexpr (codegen-expression (node-match-expr expr) env))
+           (match-expr-type (node-type (node-match-expr expr)))
+           (match-var (gensym "MATCH"))
+           ;; We use the following variables for various optimizations below:
+           (one-pattern? (= 1 (length (node-match-branches expr))))
+           (exhaustive? (patterns-exhaustive-p
+                         (mapcar #'match-branch-pattern (node-match-branches expr))
+                         (node-type (node-match-expr expr))
+                         env))
+           (have-catch-all? (member-if (lambda (pat)
+                                         (or (pattern-wildcard-p pat)
+                                             (pattern-var-p pat)))
+                                       (node-match-branches expr)
+                                       :key #'match-branch-pattern))
+           ;; Use a `case' instead of a `cond' when matching on an
+           ;; enum type.
+           (jumptable? (and (tc:tycon-p match-expr-type)
+                            (tc:type-entry-enum-repr
+                             (tc:lookup-type env (tc:tycon-name match-expr-type)))))
+           ;; Emit a fallback when there is no catch-all branch or if
+           ;; the settings demand it.
+           (fallback? (not
+                       (or have-catch-all?
+                           (and (settings:coalton-release-p)
+                                exhaustive?)
+                           (and jumptable?
+                                exhaustive?)))))
       `(let ((,match-var ,subexpr))
          (declare ,@(list*
                      `(ignorable ,match-var)
                      (if settings:*emit-type-annotations*
                          (list `(type ,(tc:lisp-type match-expr-type env) ,match-var))
-                         nil)))
+                         Nil)))
          (locally
              #+sbcl (declare (sb-ext:muffle-conditions sb-ext:code-deletion-note))
              ;; Here we will collect all of the COND cases first, then
@@ -299,25 +320,17 @@
              ,(loop :for branch :in (node-match-branches expr)
                     :for pattern := (match-branch-pattern branch)
                     :for expr := (codegen-expression (match-branch-body branch) env)
-                    :collect
-                    (multiple-value-bind (pred bindings types)
-                        (codegen-pattern pattern match-var match-expr-type env)
-                      `(,pred
-                        ,(cond
-                           ((null bindings)
-                            expr)
-                           (t
-                            `(let ,bindings
-                               (declare (ignorable ,@(mapcar #'car bindings))
-                                        ,@(cond
-                                            (settings:*emit-type-annotations*
-                                             (loop :for binding :in bindings
-                                                   :for var := (car binding)
-                                                   :for type :in types
-                                                   :collect `(type ,type ,var)))
-                                            (t
-                                             nil)))
-                               ,expr)))))
+                    :collect (if jumptable?
+                                 (codegen-case-case expr
+                                                    pattern
+                                                    match-var
+                                                    match-expr-type
+                                                    env)
+                                 (codegen-cond-case expr
+                                                    pattern
+                                                    match-var
+                                                    match-expr-type
+                                                    env))
                       :into cond-cases
                     :finally (return
                                (cond
@@ -341,22 +354,26 @@
                                     (util:coalton-bug "Expected to codegen one match branch, but several were codegened."))
                                   (destructuring-bind ((cond-test cond-result)) cond-cases
                                     (declare (ignore cond-test))
+                                    (print cond-result)
                                     cond-result))
 
+                                 (t
+                                  (if jumptable? 
+                                      (codegen-case-match
+                                       subexpr 
+                                       cond-cases
+                                       (and fallback? (codegen-cond-fallback)))
+                                      (codegen-cond-match
+                                       cond-cases
+                                       (and fallback? (codegen-cond-fallback)))))
                                  ;; Patterns have a var/wild, don't
                                  ;; emit fallback.
-                                 ((or have-catch-all?
-                                      (and (settings:coalton-release-p)
-                                           exhaustive?))
-                                  `(cond
-                                     ,@cond-cases))
+                                 ;; (
+                                 ;;  `(cond
+                                 ;;     ,@cond-cases))
 
                                  ;; Ordinary cond with fallback.
-                                 (t
-                                  `(cond
-                                     ,@cond-cases
-                                     (t
-                                      (error "Pattern match not exhaustive error.")))))))))))
+                                 )))))))
 
   (:method ((expr node-seq) env)
     (declare (type tc:environment env))
