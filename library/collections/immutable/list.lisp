@@ -315,9 +315,20 @@
   (define (push-end elt lst)
     "Add an element to the end of the list."
     (reverse (Cons elt (reverse lst))))
-  
+
   ;; TODO: Make this more effecient. Walk the original front to back in Common Lisp,
-  ;; mutating the CDR of new Cons cells as we go until we get to `i`, then mutate
+  ;; mutating the CDR of new Cons cells as we go until we get to `i+1`, then mutate
+  ;; a new Cons cell with the new element at the end.
+  (declare remove-at (UFix -> List :a -> Optional (Tuple :a (List :a))))
+  (define (remove-at i lst)
+    (match (drop i lst)
+      ((Cons elt rst)
+       (Some (Tuple elt (append (take i lst) rst))))
+      ((Nil)
+       None)))
+
+  ;; TODO: Make this more effecient. Walk the original front to back in Common Lisp,
+  ;; mutating the CDR of new Cons cells as we go until we get to `i+1`, then mutate
   ;; a new Cons cell with the new element at the end.
   (declare insert-at (UFix -> :a -> List :a -> List :a))
   (define (insert-at i elt lst)
@@ -900,6 +911,7 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
     (define cln:push Cons)
     (define cln:push-end push-end)
     (define cln:insert-at insert-at)
+    (define cln:remove-at remove-at)
     (define cln:set-at set-at))
 
   (define-instance (cln:ImmutableLinearCollection (List :a) :a)))

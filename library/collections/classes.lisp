@@ -58,6 +58,8 @@
    #:push
    #:push-end
    #:insert-at
+   #:remove-at
+   #:remove-at#
    #:set-at
 
    #:zip
@@ -76,6 +78,8 @@
    #:pop-end!
    #:pop-end!#
    #:insert-at!
+   #:remove-at!
+   #:remove-at!#
    #:set-at!))
 
 (in-package #:coalton-library/collections/classes)
@@ -220,6 +224,9 @@ the front or back, depending on which is natural for the underlying data structu
     (insert-at
      "Return the collection with an element inserted at an index, erroring if out of bounds."
      (UFix -> :a -> :m -> :m))
+    (remove-at
+     "Return the collection with the element at an index removed and the element."
+     (UFix -> :m -> Optional (Tuple :a :m)))
     (set-at
      "Return the collection with the element set at at an index, erroring if out of bounds."
      (UFix -> :a -> :m -> :m)))
@@ -251,6 +258,9 @@ the front or back, depending on which is natural for the underlying data structu
     (insert-at!
      "Insert an item at the given index of the collection, erroring if out of bounds. The collection is returned for convenience."
      (UFix -> :a -> :m -> :m))
+    (remove-at!
+     "Remove an item at the given index of the collection and return it."
+     (UFix -> :m -> Optional :a))
     (set-at!
      "Set the item at the given index of the collection, erroring if out of bounds. The collection is returned for convenience."
      (UFix -> :a -> :m -> :m))))
@@ -309,6 +319,11 @@ the front or back, depending on which is natural for the underlying data structu
     "Return a collection of two iterable objects' elements applied to `f`."
     (itr:collect! (itr:zip-with! f (itr:into-iter a) (itr:into-iter b))))
 
+  (declare remove-at# (LinearCollection :m :a => UFix -> :m -> Tuple :a :m))
+  (define (remove-at# i coll)
+    "Return the collection with the element at an index removed and the element."
+    (opt:from-some "Collection index out of bounds." (inline (remove-at i coll))))
+
   (declare pop! (MutableLinearCollection :m :a => :m -> Optional :a))
   (define (pop! coll)
     "Remove the first element of the collection and return it, if any."
@@ -322,6 +337,11 @@ the front or back, depending on which is natural for the underlying data structu
     (if (empty? coll)
         None
         (Some (inline (pop-end!# coll)))))
+
+  (declare remove-at!# (MutableLinearCollection :m :a => UFix -> :m -> :a))
+  (define (remove-at!# i coll)
+    "Remove an item at the given index of the collection and return it."
+    (opt:from-some "Collection index out of bounds." (inline (remove-at! i coll))))
   )
 
 ;; #+sb-package-locks

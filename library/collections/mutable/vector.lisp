@@ -27,8 +27,6 @@
    #:clear!
    #:index
    #:index-unsafe
-   #:remove-at!
-   #:remove-at-unsafe!
    #:extend!
    #:append
    #:swap-remove!
@@ -372,6 +370,14 @@
     (pop-end-unsafe! v)
     result)
 
+  (declare remove-at (UFix -> Vector :a -> Optional (Tuple :a (Vector :a))))
+  (define (remove-at idx v)
+    (if (>= idx (length v))
+        None
+        (let ((result (copy v))
+              (elt (remove-at-unsafe! idx result)))
+          (Some (Tuple elt result)))))
+
   (declare append (Vector :a -> Vector :a -> Vector :a))
   (define (append v1 v2)
     "Create a new vector containing the elements of `v1` followed by the elements of `v2`."
@@ -636,6 +642,7 @@
         result))
     (define (cln:insert-at i elt vec)
       (insert-at! i elt (copy vec)))
+    (define cln:remove-at remove-at)
     (define (cln:set-at i elt vec)
       (let ((result (copy vec)))
         (set! i elt result)
@@ -658,6 +665,7 @@
     (define cln:pop!# pop-unsafe!)
     (define cln:pop-end!# pop-end-unsafe!)
     (define cln:insert-at! insert-at!)
+    (define cln:remove-at! remove-at!)
     (define (cln:set-at! i elt vec)
       (set! i elt vec)
       vec)))

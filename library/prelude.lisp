@@ -182,6 +182,8 @@
    #:push
    #:push-end
    #:insert-at
+   #:remove-at
+   #:remove-at#
    #:set-at
 
    #:ImmutableLinearCollection
@@ -197,6 +199,8 @@
    #:pop-end!
    #:pop-end!#
    #:insert-at!
+   #:remove-at!
+   #:remove-at!#
    #:set-at!)
 
   (:export
@@ -246,6 +250,8 @@
    #:push
    #:push-end
    #:insert-at
+   #:remove-at
+   #:remove-at#
    #:set-at
 
    #:ImmutableLinearCollection
@@ -261,6 +267,8 @@
    #:pop-end!
    #:pop-end!#
    #:insert-at!
+   #:remove-at!
+   #:remove-at!#
    #:set-at!)
 
   (:import-from
