@@ -413,6 +413,14 @@
          (call-coalton-function f a b))))
     Unit)
 
+  (declare filter! ((:a -> Boolean) -> Vector :a -> Vector :a))
+  (define (filter! f vec)
+    "Remove elements not satisfying the predicate function."
+    (lisp (Vector :a) (f vec)
+      (cl:delete-if-not (cl:lambda (x)
+                          (call-coalton-function f x))
+                        vec)))
+
   (declare extend! (iter:IntoIterator :container :elt => Vector :elt -> :container -> Unit))
   (define (extend! vec iter)
     "Push every element in `iter` to the end of `vec`."
@@ -575,8 +583,6 @@
               (push! elt res)
               Unit))
           res)))
-    (define (cln:remove-elt elt vec)
-      (iter:collect! (iter:filter! (/= elt) (iter:into-iter vec))))
     (define cln:empty? empty?)
     (define cln:size length)
     (define cln:contains-where? contains-where?)
@@ -594,6 +600,7 @@
 
   (define-instance (cln:MutableCollection (Vector :a) :a)
     (define cln:copy copy)
+    (define cln:filter! filter!)
     (define (cln:add! elt vec)
       (push! elt vec)
       vec))

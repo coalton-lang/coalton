@@ -153,6 +153,7 @@
 
    #:MutableCollection
    #:copy
+   #:filter!
    #:add!
 
    #:LinearCollection
@@ -223,6 +224,7 @@
 
    #:MutableCollection
    #:copy
+   #:filter!
    #:add!
    
    #:LinearCollection

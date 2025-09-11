@@ -28,6 +28,7 @@
 
    #:MutableCollection
    #:copy
+   #:filter!
    #:add!
    
    #:LinearCollection
@@ -119,9 +120,6 @@ collection typeclasses."
     (remove-duplicates
      "Create a new collection with all distinct elements."
      (Eq :a => :m -> :m))
-    (remove-elt
-     "Remove all occurrences of `elt` from the collection."
-     (Eq :a => :a -> :m -> :m))
     ;; Query the collection
     (empty?
      "Check if the collection contains no elements."
@@ -149,6 +147,9 @@ the front or back, depending on which is natural for the underlying data structu
     (copy
      "Create a shallow copy of the collection."
      (:m -> :m))
+    (filter!
+     "Remove elements from the collection that do not satisfy the predicate. Returns the collection for convenience."
+     ((:a -> Boolean) -> :m -> :m))
     (add!
      "Add an element to the collection in place. See `add`."
      (:a -> :m -> :m))))
@@ -270,6 +271,11 @@ the front or back, depending on which is natural for the underlying data structu
   (define (contains-elt? elt coll)
      "Check if the collection contains an element."
     (inline (contains-where? (== elt) coll)))
+
+  (declare remove-elt ((Collection :m :a) (Eq :a) => :a -> :m -> :m))
+  (define (remove-elt elt coll)
+    "Remove all occurrences of `elt` from the collection."
+    (filter (/= elt) coll))
 
   (declare head (LinearCollection :m :a => :m -> Optional :a))
   (define (head coll)

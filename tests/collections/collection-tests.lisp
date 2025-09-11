@@ -243,6 +243,15 @@ Example:
                  (the-copy (cln:copy orig)))
              (add! 20 the-copy)
              (is (not (cln:contains-elt? 20 orig)))))
+         (define-test ,(test-name type-symbol "filter!") ()
+           ;; Filter an empty collection
+           (let ((c ,(make-the-cln)))
+             (filter! (== 10) c)
+             (is (empty? c)))
+           ;; Filter a full collection
+           (let ((c ,(make-the-cln 1 2 3 4 5 6)))
+             (filter! even? c)
+             (is (== ,(make-the-cln 2 4 6) c))))
          (define-test ,(test-name type-symbol "add!") ()
            ;; Add to empty collection
            (let ((c ,(make-the-cln)))

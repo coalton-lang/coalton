@@ -875,8 +875,6 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
       (iter:collect! (iter:into-iter coll)))
     (define cln:filter filter)
     (define cln:remove-duplicates remove-duplicates)
-    (define (cln:remove-elt elt lst)
-      (filter (/= elt) lst))
     (define cln:empty? empty?)
     (define cln:size length)
     (define cln:contains-where? contains-where?)
