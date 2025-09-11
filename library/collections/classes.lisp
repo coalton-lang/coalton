@@ -298,6 +298,7 @@ the front or back, depending on which is natural for the underlying data structu
   ;;               => :m -> :n -> :c))
   ;; (declare zip
   ;;          ((ITR:FROMITERATOR :E (TUPLE :A :B)) (ITR:INTOITERATOR :C :A) (ITR:INTOITERATOR :D :B) => :C -> :D -> :E))
+  ;; See: https://github.com/coalton-lang/coalton/issues/1643
   (define (zip as bs)
     "Return a collection of two iterable object's items zipped together."
     (itr:collect! (itr:zip! (itr:into-iter as) (itr:into-iter bs))))
