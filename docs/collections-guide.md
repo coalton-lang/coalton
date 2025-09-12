@@ -35,6 +35,7 @@ For example, the signature for `contains-elt?` is `:a -> :m -> Boolean`. If you 
 | `copy`                | :m -> :m                   | Create a shallow copy of the collection.                                  |
 | `filter!`             | (:a -> Boolean) -> :m -> :m | Remove elements not satisfying predicate. Returns collection for convenience. |
 | `remove-duplicates!`  | Eq :a => :m -> :m          | Remove duplicate elements. Returns collection for convenience.            |
+| `remove-elt!`         | Eq :a => :a -> :m -> :m    | Remove all occurrences of `elt` from the collection. The collection is returned for convenience. |
 | `add!`                | :a -> :m -> :m             | Add an element to the collection in place. See `add`.                     |
 
 #### LinearCollection

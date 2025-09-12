@@ -30,6 +30,7 @@
    #:copy
    #:filter!
    #:remove-duplicates!
+   #:remove-elt!
    #:add!
    
    #:LinearCollection
@@ -285,6 +286,11 @@ the front or back, depending on which is natural for the underlying data structu
   (define (remove-elt elt coll)
     "Remove all occurrences of `elt` from the collection."
     (filter (/= elt) coll))
+
+  (declare remove-elt! ((MutableCollection :m :a) (Eq :a) => :a -> :m -> :m))
+  (define (remove-elt! elt coll)
+    "Remove all occurrences of `elt` from the collection. The collection is returned for convenience."
+    (filter! (/= elt) coll))
 
   (declare head (LinearCollection :m :a => :m -> Optional :a))
   (define (head coll)

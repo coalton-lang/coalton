@@ -155,6 +155,7 @@
    #:copy
    #:filter!
    #:remove-duplicates!
+   #:remove-elt!
    #:add!
 
    #:LinearCollection
@@ -229,6 +230,7 @@
    #:copy
    #:filter!
    #:remove-duplicates!
+   #:remove-elt!
    #:add!
    
    #:LinearCollection

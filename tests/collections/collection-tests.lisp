@@ -268,6 +268,30 @@ Example:
            (let ((c ,(make-the-cln 0 1 2 0 3 1 4 1 2 5 2)))
              (remove-duplicates! c)
              (is (== ,(make-the-cln 0 1 2 3 4 5) c))))
+         (define-test ,(test-name type-symbol "remove-elt!") ()
+           ;; Remove from Empty Collection
+           (let ((c ,(make-ufix-cln)))
+             (remove-elt! 1 c)
+             (is (empty? c)))
+           ;; Remove Single Occurrence
+           (let ((c ,(make-the-cln 10)))
+             (remove-elt! 10 c)
+             (is (empty? c)))
+           ;; Remove Multiple Occurrences
+           (let ((c ,(make-the-cln 20 20 20)))
+             (remove-elt! 20 c)
+             (is (empty? c)))
+           ;; Remove From Heterogeneous Collection
+           (let ((c ,(make-the-cln 10 20)))
+             (remove-elt! 10 c)
+             (is (== ,(make-the-cln 20) c)))
+           ;; Remove Missing Element (no change)
+           (let ((c ,(make-the-cln 99)))
+             (remove-elt! 10 c)
+             (is (== ,(make-the-cln 99) c)))
+           ;; Returns the collection (for convenience) and mutates in place
+           (let ((c ,(make-the-cln 1 2 1)))
+             (is (== ,(make-the-cln 2) (remove-elt! 1 c)))))
          (define-test ,(test-name type-symbol "add!") ()
            ;; Add to empty collection
            (let ((c ,(make-the-cln)))
