@@ -154,6 +154,7 @@
    #:MutableCollection
    #:copy
    #:filter!
+   #:remove-duplicates!
    #:add!
 
    #:LinearCollection
@@ -225,6 +226,7 @@
    #:MutableCollection
    #:copy
    #:filter!
+   #:remove-duplicates!
    #:add!
    
    #:LinearCollection

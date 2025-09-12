@@ -421,6 +421,26 @@
                           (call-coalton-function f x))
                         vec)))
 
+  ;; TODO: Replace with a call to cl:remove-duplicates if possible
+  (declare remove-duplicates (Eq :a => Vector :a -> Vector :a))
+  (define (remove-duplicates vec)
+    (if (empty? vec) vec
+        (let ((res (with-capacity (length vec))))
+          (for i in (list:range 0 (- (length vec) 1))
+            (let elt = (index-unsafe i vec))
+            (unless (contains-elt? elt res)
+              (push! elt res)
+              Unit))
+          res)))
+
+  ;; TODO: Replace with a call to cl:delete-duplicates if possible
+  (declare remove-duplicates! (Eq :a => Vector :a -> Vector :a))
+  (define (remove-duplicates! vec)
+    (let cleared = (remove-duplicates vec))
+    (clear! vec)
+    (extend! vec cleared)
+    vec)
+
   (declare extend! (iter:IntoIterator :container :elt => Vector :elt -> :container -> Unit))
   (define (extend! vec iter)
     "Push every element in `iter` to the end of `vec`."
@@ -573,16 +593,7 @@
       (iter:collect! (iter:into-iter coll)))
     (define (cln:filter f vec)
       (iter:collect! (iter:filter! f (iter:into-iter vec))))
-    (define (cln:remove-duplicates vec)
-      (if (cln:empty? vec)
-        vec
-        (let ((res (with-capacity (length vec))))
-          (for i in (list:range 0 (- (length vec) 1))
-            (let elt = (index-unsafe i vec))
-            (unless (contains-elt? elt res)
-              (push! elt res)
-              Unit))
-          res)))
+    (define cln:remove-duplicates remove-duplicates)
     (define cln:empty? empty?)
     (define cln:size length)
     (define cln:contains-where? contains-where?)
@@ -601,6 +612,7 @@
   (define-instance (cln:MutableCollection (Vector :a) :a)
     (define cln:copy copy)
     (define cln:filter! filter!)
+    (define cln:remove-duplicates! remove-duplicates!)
     (define (cln:add! elt vec)
       (push! elt vec)
       vec))

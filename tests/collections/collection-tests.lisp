@@ -23,7 +23,7 @@
 ;;;
 ;;; Therefore, whenever a new collection is added to the library that violates a previous
 ;;; assumption, the test suite should be weakened to allow for the new collection. Also,
-;;; it might be reasonable for individual collections to provide additional tests on
+;;; it is reasonable for individual collections to provide additional tests on
 ;;; the standard functions to verify the guarantees they make above the generic contract.
 
 (cl:defun test-name (type-symbol test-name)
@@ -228,9 +228,12 @@ Example:
 
 Example:
   (mutable-collection-tests Vector)"
-  (cl:let ((the-type `(the (,type-symbol :a))))
+  (cl:let ((the-type `(the (,type-symbol :a)))
+           (the-ufix `(the (,type-symbol UFix))))
     (cl:labels ((make-the-cln (cl:&rest args)
-                  `(,@the-type (cln:new-convert (make-list ,@args)))))
+                  `(,@the-type (cln:new-convert (make-list ,@args))))
+                (make-ufix-cln (cl:&rest args)
+                  `(,@the-ufix (cln:new-convert (make-list ,@args)))))
       `(cl:progn
          (define-test ,(test-name type-symbol "copy") ()
            ;; Contains the same elements
@@ -252,6 +255,19 @@ Example:
            (let ((c ,(make-the-cln 1 2 3 4 5 6)))
              (filter! even? c)
              (is (== ,(make-the-cln 2 4 6) c))))
+         (define-test ,(test-name type-symbol "remove-duplicates!") ()
+           ;; Test an empty collection
+           (let ((c ,(make-ufix-cln)))
+             (remove-duplicates! c)
+             (is (== ,(make-ufix-cln) c)))
+           ;; Test a collection with no duplicates
+           (let ((c ,(make-the-cln 1 2 3 4)))
+             (remove-duplicates! c)
+             (is (== ,(make-the-cln 1 2 3 4) c)))
+           ;; Test a colleciton with duplicates
+           (let ((c ,(make-the-cln 0 1 2 0 3 1 4 1 2 5 2)))
+             (remove-duplicates! c)
+             (is (== ,(make-the-cln 0 1 2 3 4 5) c))))
          (define-test ,(test-name type-symbol "add!") ()
            ;; Add to empty collection
            (let ((c ,(make-the-cln)))

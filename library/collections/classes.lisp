@@ -29,6 +29,7 @@
    #:MutableCollection
    #:copy
    #:filter!
+   #:remove-duplicates!
    #:add!
    
    #:LinearCollection
@@ -150,6 +151,9 @@ the front or back, depending on which is natural for the underlying data structu
     (filter!
      "Remove elements from the collection that do not satisfy the predicate. Returns the collection for convenience."
      ((:a -> Boolean) -> :m -> :m))
+    (remove-duplicates!
+     "Remove duplicate elements from the collection. Returns the collection for convenience."
+     (Eq :a => :m -> :m))
     (add!
      "Add an element to the collection in place. See `add`."
      (:a -> :m -> :m))))
