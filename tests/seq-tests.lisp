@@ -93,7 +93,7 @@ edge all have between MIN-BRANCHING and MAX-BRANCHING subnodes."
                  (and (or right-most-edge? (satisfied? (cln:length subs)))
                       (iter:every!
                        (valid? False)
-                       (map (flip vector:index-unsafe subs)
+                       (map (flip cln:at# subs)
                             (iter:range-increasing 1 0 (- (cln:length subs) 1))))
                       (valid? True (cln:last# subs))))))))
       (valid? True seq))))

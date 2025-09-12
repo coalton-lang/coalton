@@ -77,8 +77,8 @@
   (declare value-at-pointer (BF-State -> Integer))
   (define (value-at-pointer bfs)
     "Returns the value at the current pointer."
-    (vec:index-unsafe (cell:read (.pointer bfs))
-		      (.memory bfs))))
+    (at# (cell:read (.pointer bfs))
+         (.memory bfs))))
 
 ;;;
 ;;; Commands (Functions called by Brainfold Cmds)

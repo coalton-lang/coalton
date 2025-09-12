@@ -30,10 +30,12 @@ For example, the signature for `contains-elt?` is `:a -> :m -> Boolean`. If you 
 
 #### MutableCollection
 
-| Function Name | Type Signature  | Docstring                                                       |
-|--------------|------------------|-----------------------------------------------------------------|
-| `copy`       | :m -> :m        | Create a shallow copy of the collection.                        |
-| `add!`       | :a -> :m -> :m  | Add an element to the collection in place. See `add`.           |
+| Function Name         | Type Signature              | Docstring                                                                 |
+|-----------------------|-----------------------------|---------------------------------------------------------------------------|
+| `copy`                | :m -> :m                   | Create a shallow copy of the collection.                                  |
+| `filter!`             | (:a -> Boolean) -> :m -> :m | Remove elements not satisfying predicate. Returns collection for convenience. |
+| `remove-duplicates!`  | Eq :a => :m -> :m          | Remove duplicate elements. Returns collection for convenience.            |
+| `add!`                | :a -> :m -> :m             | Add an element to the collection in place. See `add`.                     |
 
 #### LinearCollection
 
@@ -44,6 +46,8 @@ For example, the signature for `contains-elt?` is `:a -> :m -> Boolean`. If you 
 | `last`             | :m -> Optional :a                                      | Return the last element of the collection.                                                                                                              |
 | `last#`            | :m -> :a                                               | Return the last element of the collection, erroring if it does not exist.                                                                               |
 | `tail`             | :m -> :m                                               | Return all except the first element of the collection.                                                                                                  |
+| `at`               | UFix -> :m -> Optional :a                              | Return the element at the given index of the collection.                                                                                                |
+| `at#`              | UFix -> :m -> :a                                       | Return the element at the given index, erroring if it does not exist.                                                                                   |
 | `take`             | UFix -> :m -> :m                                       | Return the first `n` elements of the collection.                                                                                                        |
 | `drop`             | UFix -> :m -> :m                                       | Return all except the first `n` elements of the collection.                                                                                             |
 | `length`           | :m -> UFix                                             | The number of elements in the linear collection. (Alias for `size`)                                                                                      |
@@ -124,4 +128,3 @@ The collection typeclasses use a special kind of generics that require setting u
  (traceobject "List" (add-zeros (make-list 1 2 3) 3))
  (traceobject "Vector" (add-zeros (vector:make 1 2 3) 3))
  (traceobject "Vector!" (add-zeros! (vector:make 1 2 3) 3)))
-```

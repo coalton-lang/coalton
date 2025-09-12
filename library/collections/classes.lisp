@@ -38,6 +38,8 @@
    #:last
    #:last#
    #:tail
+   #:at
+   #:at#
    #:take
    #:drop
    #:length
@@ -177,6 +179,9 @@ the front or back, depending on which is natural for the underlying data structu
     (tail
      "Return all except the first element of the collection."
      (:m -> :m))
+    (at
+     "Return the element at the given index of the collection."
+     (UFix -> :m -> Optional :a))
     (take
      "Return the first `n` elements of the collection."
      (UFix -> :m -> :m))
@@ -186,7 +191,7 @@ the front or back, depending on which is natural for the underlying data structu
     ;; Query the collection
     (index-where
      "Return the index of the first element matching a predicate function."
-     ((:a -> Boolean) -> :m -> Optional UFIx))
+     ((:a -> Boolean) -> :m -> Optional UFix))
     (find-where
      "Return the first element matching a predicate function."
      ((:a -> Boolean) -> :m -> Optional :a))
@@ -294,6 +299,11 @@ the front or back, depending on which is natural for the underlying data structu
     (if (empty? coll)
         None
         (Some (inline (last# coll)))))
+
+  (declare at# (LinearCollection :m :a => UFix -> :m -> :a))
+  (define (at# i coll)
+    "Return the element at the given index of the collection, erroring if it does not exist.."
+    (opt:from-some "Index out of bounds." (inline (at i coll))))
 
   (declare index-elt ((LinearCollection :m :a) (Eq :a) => :a -> :m -> Optional UFix))
   (define (index-elt elt coll)

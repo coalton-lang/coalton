@@ -24,7 +24,7 @@
 
     ;; Writes to the slice should be visible in the backing array
     (slice:set! 0 26 s)
-    (is (== 26 (vector:index-unsafe 0 v)))))
+    (is (== 26 (cln:at# 0 v)))))
 
 (define-test test-slice-offset ()
   (let ((v (the

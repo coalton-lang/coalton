@@ -20,8 +20,6 @@
    #:null?
    #:singleton
    #:singleton?
-   #:index
-   #:nth
    #:nth-cdr
    #:range
    #:append
@@ -890,6 +888,7 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
         ((Cons a _) a)))
     (define cln:last# last#)
     (define cln:tail tail)
+    (define cln:at index)
     (define cln:take take)
     (define cln:drop drop)
     (define cln:index-where findIndex)

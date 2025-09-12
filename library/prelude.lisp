@@ -163,6 +163,8 @@
    #:last
    #:last#
    #:tail
+   #:at
+   #:at#
    #:take
    #:drop
    #:index-elt
@@ -235,6 +237,8 @@
    #:last
    #:last#
    #:tail
+   #:at
+   #:at#
    #:take
    #:drop
    #:index-elt

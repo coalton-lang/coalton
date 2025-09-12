@@ -85,13 +85,13 @@
 than `(size seq)`"
     (match seq
       ((LeafArray leaves)
-       (vector:index idx leaves))
+       (cln:at idx leaves))
 
       ((RelaxedNode _ fss cst sts)
        (do
         (let guess = (math:div idx fss))
         ((Tuple subtree-idx offset) <- (cst-search guess cst idx))
-         (subtree <- (vector:index subtree-idx sts))
+         (subtree <- (cln:at subtree-idx sts))
          (get subtree (- idx offset))))))
 
   (declare put (Seq :a -> Ufix -> :a -> Optional (Seq :a)))
@@ -110,7 +110,7 @@ contains `a`."
        (do
         (let guess = (math:div idx fss))
         ((Tuple subtree-idx offset) <- (cst-search guess cst idx))
-         (subtree <- (vector:index subtree-idx sts))
+         (subtree <- (cln:at subtree-idx sts))
          (new-subtree <- (put subtree (- idx offset) a))
          (let ((newsts (cln:copy sts)))
            (cln:set-at! subtree-idx new-subtree newsts)
@@ -152,7 +152,7 @@ a new `Seq` instance."
             ;; the seq was exactly one larger than the subtree size
             ;; for the current height, this means we can reduce the tree height
             ((== (+ 1 fss) seq-size)
-             (Tuple leaf (vector:index-unsafe 0 sts)))
+             (Tuple leaf (cln:at# 0 sts)))
 
             ;; it wasn't, but newsub is empty
             ((== 0 (size newsub))
@@ -280,13 +280,13 @@ a new `Seq` instance."
   (define (cst-search guess cst idx)
     (let ((search-forward
             (fn (gs last-cumulative)
-              (do (cumulative <- (vector:index gs cst))
+              (do (cumulative <- (cln:at gs cst))
                   (if (< idx cumulative)
                       (pure (Tuple gs last-cumulative))
                       (search-forward (+ 1 gs) cumulative))))))
       (>>= (alt (if (math:zero? guess)  ; avoid UFix underflow
                     None
-                    (vector:index (- guess 1) cst)) ; Note, 0 < guess <= 31
+                    (cln:at (- guess 1) cst)) ; Note, 0 < guess <= 31
                 (pure 0))
            (search-forward guess))))
 
@@ -379,11 +379,11 @@ shifts the each member of `target` down by `n` positions.  Mutates both
             (min n0 source-len)))
       (iter:for-each!
        (fn (i)
-         (cln:push-end! (vector:index-unsafe i source) target)
+         (cln:push-end! (cln:at# i source) target)
          (iter:for-each!
           (fn (j)
             (do
-             (x <- (vector:index (+ j n) source))
+             (x <- (cln:at (+ j n) source))
              (pure (cln:set-at! j x source)))
             Unit)
           (iter:range-increasing n i source-len))
@@ -404,7 +404,7 @@ shifts the each member of `target` down by `n` positions.  Mutates both
   (declare butfirst (vector:Vector :a -> vector:Vector :a))
   (define (butfirst v)
     (iter:collect!
-     (map (flip vector:index-unsafe v)
+     (map (flip cln:at# v)
           (iter:range-increasing 1 1 (cln:length v)))))
 
   (define (butlast v)
@@ -485,7 +485,7 @@ It attempts to rebalance with a minimum of array copying."
              (fn (i)
                (let branch =
                  (match (cell:read cached-branch)
-                   ((None) (vector:index-unsafe i branches))
+                   ((None) (cln:at# i branches))
                    ((Some cached) cached)))
                (let subbranch-count = (branch-count branch))
                (cond
@@ -499,7 +499,7 @@ It attempts to rebalance with a minimum of array copying."
                         (copy branch)))
                   ;; need to mutate the next branch so we copy it
                   (let next-branch =
-                    (copy (vector:index-unsafe (+ i 1) branches)))
+                    (copy (cln:at# (+ i 1) branches)))
                   ;; Do the subbranch shifting. NOTE: the choice of
                   ;; branch capacity comes with trade-offs: using
                   ;; MAX-BRANCHING tends to keep trees short over

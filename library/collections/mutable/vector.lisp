@@ -25,8 +25,6 @@
    #:set-capacity!
    #:ensure-capacity!
    #:clear!
-   #:index
-   #:index-unsafe
    #:extend!
    #:append
    #:swap-remove!
@@ -233,10 +231,10 @@
       (if (== 1 (cln:length indices))
         (make-list (copy vec))
         (progn
-          (cell:push! results (subseq-vec 0 (list:nth 0 indices) vec))
+          (cell:push! results (subseq-vec 0 (cln:at# 0 indices) vec))
           (for i in (iter:range-increasing 1 1 (cln:length indices))
-            (cell:push! results (subseq-vec (+ 1 (list:nth (- i 1) indices))
-                                            (list:nth i indices)
+            (cell:push! results (subseq-vec (+ 1 (cln:at# (- i 1) indices))
+                                            (cln:at# i indices)
                                             vec)))
           (cln:reverse (cell:read results))))))
 
@@ -622,6 +620,7 @@
     (define cln:last# last-unsafe)
     (define (cln:tail vec)
       (subseq-vec 1 (length vec) vec))
+    (define cln:at index)
     (define (cln:drop n vec)
       (subseq-vec n (length vec) vec))
     (define (cln:take n vec)

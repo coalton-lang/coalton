@@ -5,6 +5,8 @@
   (:use #:coalton
         #:coalton-prelude
         #:coalton-library/collections/immutable/list)
+  (:local-nicknames
+   (#:cln #:coalton-library/collections))
   (:shadow #:id #:find #:const
            #:type #:compose #:alt
            #:split #:reduce #:lift)

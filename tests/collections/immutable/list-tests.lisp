@@ -39,11 +39,6 @@
   (is (== (list:singleton 3) (make-list 3))))
 
 (define-test test-search ()
-  (is (== (list:index 0 x) (Some 1)))
-  (is (== (list:index 3 x) None))
-
-  (is (== (list:nth 0 x) 1))
-
   (is (== (list:nth-cdr 3 (make-list 1 2 3 4 5 6 7)) (make-list 4 5 6 7)))
   (is (== (list:nth-cdr 4 (make-list 1 2 3)) nil)))
 

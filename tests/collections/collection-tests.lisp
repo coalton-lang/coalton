@@ -340,6 +340,28 @@ Example:
            (let ((many ,(make-ufix-cln 1 2 3 4))
                  (t3 (cln:tail many)))
              (is (== ,(make-ufix-cln 2 3 4) t3))))
+         (define-test ,(test-name type-symbol "at") ()
+           ;; at on empty => NONE
+           (let ((empty (,@the-ufix (cln:new-collection))))
+             (is (== None (cln:at 0 empty))))
+           ;; at within bounds => SOME(element)
+           (let ((c ,(make-ufix-cln 10 20 30 40)))
+             (is (== (Some 10) (cln:at 0 c)))
+             (is (== (Some 30) (cln:at 2 c)))
+             (is (== (Some 40) (cln:at 3 c))))
+           ;; at out of bounds => NONE
+           (let ((c ,(make-ufix-cln 1 2 3)))
+             (is (== None (cln:at 3 c)))
+             (is (== None (cln:at 99 c)))))
+         (define-test ,(test-name type-symbol "at#") ()
+           ;; Single => returns element at 0
+           (let ((one ,(make-ufix-cln 10)))
+             (is (== 10 (cln:at# 0 one))))
+           ;; Multiple => returns element at given index
+           (let ((many ,(make-ufix-cln 1 2 3 4 5)))
+             (is (== 1 (cln:at# 0 many)))
+             (is (== 3 (cln:at# 2 many)))
+             (is (== 5 (cln:at# 4 many)))))
          (define-test ,(test-name type-symbol "take") ()
            ;; take 0 => empty
            (let ((c ,(make-ufix-cln 1 2 3 4 5)))
