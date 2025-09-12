@@ -34,11 +34,6 @@
 ;;
 
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
-  (cl:defmacro lisp-result (type capture cl:&body body)
-    "Lisp FFI call that catches errors and returns a Result."
-    `(lisp (Result LispCondition ,type) ,capture
-       (cl:handler-case (Ok (cl:progn ,@body)) (cl:error (c) (Err c)))))
-
   (cl:defmacro define-instances ((class cl:&rest types) cl:&body methods)
     "Define instances in batches."
     `(progn ,@(cl:mapcar
@@ -102,28 +97,53 @@
 
   (define-class (Closable :stream :elt)
     "A stream that can be closed."
-    (close                  (:stream :elt -> Unit))
-    (abort                  (:stream :elt -> Unit)))
+    (close
+     (:stream :elt -> Unit))
+    (abort
+     (:stream :elt -> Unit)))
 
   (define-class (Readable :stream :elt)
     "An input or IO stream."
-    (read-unchecked         (:stream :elt -> :elt))
-    (read-vector-unchecked  (:stream :elt -> UFix -> (vec:Vector :elt))))
+    (read-unchecked
+     "Consume 1 element from a stream.
+
+Signals a condition on error."
+     (:stream :elt -> :elt))
+    (read-vector-unchecked
+     "Consume `n` elements from a stream.
+
+Signals a condition on error."
+     (:stream :elt -> UFix -> (vec:Vector :elt))))
 
   (define-class (Writable :stream :elt)
     "An output or IO stream."
-    (write                  (:stream :elt -> :elt -> (Result LispCondition Unit)))
-    (write-unchecked        (:stream :elt -> :elt -> Unit))
-    (write-vector           (:stream :elt -> vec:Vector :elt -> (Result LispCondition Unit)))
-    (write-vector-unchecked (:stream :elt -> vec:Vector :elt -> Unit))
-    (flush                  (:stream :elt -> Unit)))
+    (write-unchecked
+     "Write 1 element to a stream.
+
+Signals a condition on error."
+     (:stream :elt -> :elt -> Unit))
+    (write-vector-unchecked
+     "Write `n` elements to a stream.
+
+Signals a condition on error."
+     (:stream :elt -> vec:Vector :elt -> Unit))
+    (flush
+     "Flush buffered output."
+     (:stream :elt -> Unit)))
 
   (define-class (Readable :stream :elt => Peekable :stream :elt)
-    (unread                 (:stream :elt -> :elt -> Unit))
-    (peek-unchecked         (:stream :elt -> :elt)))
+    (unread
+     "Push an element back onto a stream."
+     (:stream :elt -> :elt -> Unit))
+    (peek-unchecked
+     "Get the next element in the stream without consuming it.
+
+Signals a condition on error."
+     (:stream :elt -> :elt)))
 
   (define-class (IntoPeekable :stream :elt :peekablestream (:stream -> :peekablestream))
-    (make-peekable          (:stream :elt -> :peekablestream :elt))))
+    (make-peekable
+     (:stream :elt -> :peekablestream :elt))))
 
 ;;
 ;; Class Instances
@@ -150,18 +170,11 @@
         (cl:let ((vec (cl:make-array n :adjustable cl:t)))
           (cl:read-sequence vec stream)
           vec))))
+
   (define-instances (Writable (OutputStream Char) (IOStream Char))
-    (define (write stream elt)
-      (lisp-result Unit (stream elt)
-        (cl:write-char elt stream)
-        Unit))
     (define (write-unchecked stream elt)
       (lisp Unit (stream elt)
         (cl:write-char elt stream)
-        Unit))
-    (define (write-vector stream vec)
-      (lisp-result Unit (stream vec)
-        (cl:write-sequence vec stream)
         Unit))
     (define (write-vector-unchecked stream vec)
       (lisp Unit (stream vec)
@@ -181,18 +194,11 @@
         (cl:let ((vec (cl:make-array n :adjustable cl:t)))
           (cl:read-sequence vec stream)
           vec))))
+
   (define-instances (Writable (OutputStream U8) (IOStream U8))
-    (define (write stream elt)
-      (lisp-result Unit (stream elt)
-        (cl:write-byte elt stream)
-        Unit))
     (define (write-unchecked stream elt)
       (lisp Unit (stream elt)
         (cl:write-byte elt stream)
-        Unit))
-    (define (write-vector stream vec)
-      (lisp-result Unit (stream vec)
-        (cl:write-sequence vec stream)
         Unit))
     (define (write-vector-unchecked stream vec)
       (lisp Unit (stream vec)
@@ -222,6 +228,7 @@
           (let ((elt (read-unchecked (.stream stream))))
             (vec:push! elt (.buffer stream))
             elt))))
+
   (define-instances (Readable (PeekableInputStream U8) (PeekableIOStream U8))
     (define (read-unchecked stream)
       (match (vec:pop! (.buffer stream))
@@ -234,24 +241,23 @@
          (vec:kill! (.buffer stream) 0 n)
          result)
         ((False)
-         (let result = (vec:append
-                        (.buffer stream)
-                        (read-vector-unchecked
-                         (.stream stream)
-                         (- n (vec:length (.buffer stream))))))
+         (let result =
+           (vec:append
+            (.buffer stream)
+            (read-vector-unchecked
+             (.stream stream)
+             (- n (vec:length (.buffer stream))))))
          (vec:clear! (.buffer stream))
          result))))
+
   (define-instance (Writable PeekableIOStream U8)
-    (define (write stream elt)
-      (write (.stream stream) elt))
     (define (write-unchecked stream elt)
       (write-unchecked (.stream stream) elt))
-    (define (write-vector stream vec)
-      (write-vector (.stream stream) vec))
     (define (write-vector-unchecked stream vec)
       (write-vector-unchecked (.stream stream) vec))
     (define (flush stream)
       (flush (.stream stream))))
+
   (define-instance (Closable PeekableIOStream U8)
     (define (close stream)
       (close (.stream stream)))
@@ -263,24 +269,43 @@
       (PeekableInputStream stream (vec:new)))))
 
 ;;
-;; Safe Reader Functions
+;; Safe Stream Operations
 ;;
 
 (coalton-toplevel
   (declare read (Readable :stream :elt => :stream :elt -> Optional :elt))
   (define (read stream)
+    "Consume 1 element from a stream."
     (catch (Some (read-unchecked stream))
       (_ None)))
 
   (declare read-vector (Readable :stream :elt => :stream :elt -> UFix -> Optional (vec:Vector :elt)))
   (define (read-vector stream n)
+    "Consume `n` elements from a stream."
     (catch (Some (read-vector-unchecked stream n))
       (_ None)))
 
   (declare peek (Peekable :stream :elt => :stream :elt -> Optional :elt))
   (define (peek stream)
+    "Get the next element in the stream without consuming it."
     (catch (Some (peek-unchecked stream))
-      (_ None))))
+      (_ None)))
+
+  (declare write (Writable :stream :elt => :stream :elt -> :elt -> Boolean))
+  (define (write stream elt)
+    "Write an element to a `Writable` stream.
+
+Returns `True` on success, `False` on error."
+    (catch (progn (write-unchecked stream elt) True)
+      (_ False)))
+
+  (declare write-vector (Writable :stream :elt => :stream :elt -> (vec:Vector :elt) -> Boolean))
+  (define (write-vector stream vec)
+    "Write a vector of elements to a `Writable` stream.
+
+Returns `True` on success, `False` on error."
+    (catch (progn (write-vector-unchecked stream vec) True)
+      (_ False))))
 
 
 ;;
