@@ -1,9 +1,9 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/stream
-  (:use
-   #:coalton
-   #:coalton-library/classes
-   #:coalton-library/builtin
-   #:coalton-library/functions)
+    (:use
+     #:coalton
+     #:coalton-library/classes
+     #:coalton-library/builtin
+     #:coalton-library/functions)
   (:import-from #:coalton-library/system #:LispCondition)
   (:local-nicknames
    (#:vec #:coalton-library/vector)
@@ -12,9 +12,12 @@
   (:export
    #:InputStream #:OutputStream #:IOStream
    #:Readable #:Writable #:Closable
-   #:read #:read-vector #:unread #:peek
-   #:write #:write-vector #:flush
-   #:close #:abort
+   #:read #:read-vector
+   #:read-unchecked #:read-vector-unchecked
+   #:unread #:peek
+   #:write #:write-vector
+   #:write-unchecked #:write-vector-unchecked
+   #:flush #:close #:abort
    #:ReaderErr #:EOF
    #:ReaderPredicate #:Inclusive #:Exclusive
    #:drop-to #:read-to
@@ -46,6 +49,7 @@
 ;; Tokens
 ;;
 
+#+#:
 (coalton-toplevel
   (define whitespaces
     (lisp (List UFix) ()
@@ -74,35 +78,47 @@
 ;;
 
 (coalton-toplevel
-  (repr :native (cl:or flex:flexi-input-stream flex::vector-input-stream))
+  (repr :native cl:stream)
   (define-type (InputStream :elt)
     "A stream that can be read from.")
 
-  (repr :native (cl:or flex:flexi-output-stream flex::vector-output-stream))
+  (repr :native cl:stream)
   (define-type (OutputStream :elt)
     "A stream that can be written to.")
 
-  (repr :native flex:flexi-io-stream)
+  (repr :native cl:stream)
   (define-type (IOStream :elt)
     "A stream that can be read from or written to.")
 
+  (define-struct (PeekableInputStream :elt)
+    (stream (InputStream :elt))
+    (buffer (vec:Vector  :elt)))
+
+  (define-struct (PeekableIOStream :elt)
+    (stream (IOStream   :elt))
+    (buffer (vec:Vector :elt)))
+
   (define-class (Closable :stream :elt)
     "A stream that can be closed."
-    (close        (:stream :elt -> Unit))
-    (abort        (:stream :elt -> Unit)))
+    (close                  (:stream :elt -> Unit))
+    (abort                  (:stream :elt -> Unit)))
 
   (define-class (Readable :stream :elt)
     "An input or IO stream."
-    (read         (:stream :elt -> (Result LispCondition :elt)))
-    (read-vector  (:stream :elt -> UFix -> (Result LispCondition (vec:Vector :elt))))
-    (unread       (:stream :elt -> :elt -> :stream :elt))
-    (peek         (:stream :elt -> (Result LispCondition :elt))))
+    (read-unchecked         (:stream :elt -> :elt))
+    (read-vector-unchecked  (:stream :elt -> UFix -> (vec:Vector :elt))))
+
+  (define-class (Peekable :stream :elt)
+    (unread                 (:stream :elt -> :elt -> Unit))
+    (peek                   (:stream :elt -> :elt)))
 
   (define-class (Writable :stream :elt)
     "An output or IO stream."
-    (write        (:stream :elt -> :elt -> (Result LispCondition Unit)))
-    (write-vector (:stream :elt -> vec:Vector :elt -> (Result LispCondition Unit)))
-    (flush        (:stream :elt -> Unit))))
+    (write                  (:stream :elt -> :elt -> (Result LispCondition Unit)))
+    (write-unchecked        (:stream :elt -> :elt -> Unit))
+    (write-vector           (:stream :elt -> vec:Vector :elt -> (Result LispCondition Unit)))
+    (write-vector-unchecked (:stream :elt -> vec:Vector :elt -> Unit))
+    (flush                  (:stream :elt -> Unit))))
 
 ;;
 ;; Class Instances
@@ -121,28 +137,29 @@
         Unit)))
 
   (define-instances (Readable (InputStream Char) (IOStream Char))
-    (define (read stream)
-      (lisp-result Char (stream)
+    (define (read-unchecked stream)
+      (lisp Char (stream)
         (cl:read-char stream)))
-    (define (read-vector stream n)
-      (lisp-result (vec:Vector Char) (stream n)
+    (define (read-vector-unchecked stream n)
+      (lisp (vec:Vector Char) (stream n)
         (cl:let ((vec (cl:make-array n :adjustable cl:t)))
           (cl:read-sequence vec stream)
-          vec)))
-    (define (unread stream elt)
-      (lisp :a (stream elt)
-        (cl:unread-char elt stream)
-        stream))
-    (define (peek stream)
-      (lisp-result Char (stream)
-        (cl:peek-char nil stream))))
+          vec))))
   (define-instances (Writable (OutputStream Char) (IOStream Char))
     (define (write stream elt)
       (lisp-result Unit (stream elt)
         (cl:write-char elt stream)
         Unit))
+    (define (write-unchecked stream elt)
+      (lisp Unit (stream elt)
+        (cl:write-char elt stream)
+        Unit))
     (define (write-vector stream vec)
       (lisp-result Unit (stream vec)
+        (cl:write-sequence vec stream)
+        Unit))
+    (define (write-vector-unchecked stream vec)
+      (lisp Unit (stream vec)
         (cl:write-sequence vec stream)
         Unit))
     (define (flush stream)
@@ -151,39 +168,110 @@
         Unit)))
 
   (define-instances (Readable (InputStream U8) (IOStream U8))
-    (define (read stream)
-      (lisp-result U8 (stream)
+    (define (read-unchecked stream)
+      (lisp U8 (stream)
         (cl:read-byte stream)))
-    (define (read-vector stream n)
-      (lisp-result (vec:Vector U8) (stream n)
+    (define (read-vector-unchecked stream n)
+      (lisp (vec:Vector U8) (stream n)
         (cl:let ((vec (cl:make-array n :adjustable cl:t)))
           (cl:read-sequence vec stream)
-          vec)))
-    (define (unread stream elt)
-      (lisp :a (stream elt)
-        (flex:unread-byte elt stream)
-        stream))
-    (define (peek stream)
-      (lisp-result U8 (stream)
-        (flex:peek-byte stream))))
+          vec))))
   (define-instances (Writable (OutputStream U8) (IOStream U8))
     (define (write stream elt)
       (lisp-result Unit (stream elt)
+        (cl:write-byte elt stream)
+        Unit))
+    (define (write-unchecked stream elt)
+      (lisp Unit (stream elt)
         (cl:write-byte elt stream)
         Unit))
     (define (write-vector stream vec)
       (lisp-result Unit (stream vec)
         (cl:write-sequence vec stream)
         Unit))
+    (define (write-vector-unchecked stream vec)
+      (lisp Unit (stream vec)
+        (cl:write-sequence vec stream)
+        Unit))
     (define (flush stream)
       (lisp Unit (stream)
         (cl:finish-output stream)
-        Unit))))
+        Unit)))
+
+  (define-instances (Peekable (InputStream Char) (IOStream Char))
+    (define (unread stream elt)
+      (lisp Unit (stream elt)
+        (cl:unread-char elt stream)
+        Unit))
+    (define (peek stream)
+      (lisp Char (stream)
+        (cl:peek-char nil stream))))
+
+  (define-instances (Peekable (PeekableInputStream U8) (PeekableIOStream U8))
+    (define (unread stream elt)
+      (vec:push! elt (.buffer stream))
+      Unit)
+    (define (peek stream)
+      (if (not (vec:empty? (.buffer stream)))
+          (vec:last-unsafe (.buffer stream))
+          (let ((elt (read-unchecked (.stream stream))))
+            (vec:push! elt (.buffer stream))
+            elt))))
+
+  (define-instances (Readable (PeekableInputStream U8) (PeekableIOStream U8))
+    (define (read-unchecked stream)
+      (match (vec:pop! (.buffer stream))
+        ((None) (read-unchecked (.stream stream)))
+        ((Some elt) elt)))
+    (define (read-vector-unchecked stream n)
+      (match (<= n (vec:length (.buffer stream)))
+        ((True)
+         (let result = (vec:subseq (.buffer stream) 0 n))
+         (vec:kill! (.buffer stream) 0 n)
+         result)
+        ((False)
+         (let result = (vec:append
+                        (.buffer stream)
+                        (read-vector-unchecked
+                         (.stream stream)
+                         (- n (vec:length (.buffer stream))))))
+         (vec:clear! (.buffer stream))
+         result)))))
+
+;;
+;; Safe Reader Functions
+;;
+
+(coalton-toplevel
+  (declare read (Readable :stream :elt => :stream :elt -> Optional :elt))
+  (define (read stream)
+    (catch (Some (read-unchecked stream))
+      (_ None)))
+
+  (declare read-vector (Readable :stream :elt => :stream :elt -> UFix -> Optional (vec:Vector :elt)))
+  (define (read-vector stream n)
+    (catch (Some (read-vector-unchecked stream n))
+      (_ None))))
+
+;; TODO
+;; (coalton-toplevel
+;;   (declare unread (BufferedInputStream :elt -> :elt -> Unit))
+;;   (define (unread stream elt)
+;;     (vec:push! elt (.buffer stream))
+;;     Unit))
+
+;; (coalton-toplevel
+;;   (declare buffered-read-unchecked (Readable InputStream :elt => BufferedInputStream :elt -> :elt))
+;;   (define (buffered-read-unchecked stream)
+;;     (match (vec:pop! (.buffer stream))
+;;       ((None) (read-unchecked (.stream stream)))
+;;       ((Some elt) elt))))
 
 ;;
 ;; High Level Functions
 ;;
 
+#+#:
 (coalton-toplevel
   (define-type (ReaderErr :elt)
     (EOF (vec:Vector :elt)))
@@ -251,16 +339,16 @@
   (define (stdout)
     "Equivalent to `cl:*standard-output*`."
     (lisp (OutputStream :elt) ()
-      (flex:make-flexi-stream cl:*standard-output*)))
+      cl:*standard-output*))
 
   (declare stderr (Unit -> OutputStream :elt))
   (define (stderr)
     "Equivalent to `cl:*error-output*`."
     (lisp (OutputStream :elt) ()
-      (flex:make-flexi-stream cl:*error-output*)))
+      cl:*error-output*))
 
   (declare stdin (Unit -> InputStream :elt))
   (define (stdin)
     "Equivalent to `cl:*standard-input*`."
     (lisp (InputStream :elt) ()
-      (flex:make-flexi-stream cl:*standard-input*))))
+      cl:*standard-input*)))
