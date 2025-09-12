@@ -144,7 +144,8 @@ the front or back, depending on which is natural for the underlying data structu
      (:a -> :m -> :m)))
 
   (define-class (Collection :m :a => ImmutableCollection :m :a)
-    "An immutable collection.")
+    "An immutable collection. Any type that implements ImmutableCollection should also not implement MutableCollection,
+or have any other exposed mutation. You are guaranteed that in instance of ImmutableCollection will not change.")
 
   (define-class (Collection :m :a => MutableCollection :m :a (:m -> :a))
     "A mutable collection."
@@ -242,7 +243,10 @@ the front or back, depending on which is natural for the underlying data structu
      "Return the collection with the element set at at an index, erroring if out of bounds."
      (UFix -> :a -> :m -> :m)))
 
-  (define-class (LinearCollection :m :a => ImmutableLinearCollection :m :a))
+  (define-class (LinearCollection :m :a => ImmutableLinearCollection :m :a)
+    "An immutable linear collection. Any type that implements ImmutableLinearCollection should also not implement MutableCollection
+or MutableLinearCollection, or have any other exposed mutation. You are guaranteed that in instance of ImmutableLinearCollection
+will not change.")
 
   (define-class (LinearCollection :m :a => MutableLinearCollection :m :a)
     (reverse!
