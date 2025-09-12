@@ -2023,11 +2023,12 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                  ;; for PREDS that reduces its generality with respect
                  ;; to EXPR-PREDS where made possible by functional
                  ;; dependencies.
-                 (subs (tc:compose-substitution-lists subs
+                 (subs (tc:compose-substitution-lists
                         (tc:fundep-entail (tc-env-env env)
                                           expr-preds
                                           preds
-                                          known-variables)))
+                                          known-variables)
+                        subs))
 
                  (expr-preds (tc:apply-substitution subs expr-preds))
 
