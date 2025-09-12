@@ -91,10 +91,12 @@
     "A stream that can be read from or written to.")
 
   (define-struct (PeekableInputStream :elt)
+    "A peekable stream with an unread buffer that can be read from."
     (stream (InputStream :elt))
     (buffer (vec:Vector  :elt)))
 
   (define-struct (PeekableIOStream :elt)
+    "A peekable stream with an unread buffer that can be read from or written to."
     (stream (IOStream   :elt))
     (buffer (vec:Vector :elt)))
 
@@ -278,8 +280,7 @@
   (declare peek (Peekable :stream :elt => :stream :elt -> Optional :elt))
   (define (peek stream)
     (catch (Some (peek-unchecked stream))
-      (_ None)))
-  )
+      (_ None))))
 
 
 ;;
