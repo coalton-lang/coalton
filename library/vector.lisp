@@ -18,11 +18,13 @@
    #:with-initial-element
    #:singleton
    #:length
+   #:subseq
    #:capacity
    #:empty?
    #:singleton?
    #:copy
    #:set-capacity!
+   #:kill!
    #:clear!
    #:push!
    #:pop!
@@ -95,6 +97,16 @@
       (cl:length v)))
 
   (inline)
+  (declare subseq (Vector :a -> UFix -> UFix -> Vector :a))
+  (define (subseq v start end)
+    "Compute a subseq of a vector bounded by given indices."
+    (let ((real-start (max 0 (min start end)))
+          (real-end (min (length v) (max start end))))
+      (lisp (Vector :a) (real-start real-end v)
+        (cl:let ((result (cl:make-array (cl:- real-end real-start) :adjustable cl:t))) 
+          (cl:replace result v :start2 real-start)))))
+
+  (inline)
   (declare capacity (Vector :a -> UFix))
   (define (capacity v)
     "Returns the number of elements that `v` can store without resizing."
@@ -131,6 +143,18 @@
       ;; fill pointer
       (cl:adjust-array v new-capacity :fill-pointer shrinking)
       Unit))
+
+  (inline)
+  (declare kill! (Vector :a -> UFix -> UFix -> Vector :a))
+  (define (kill! v start end)
+    "Destructively kills subsequence in a vector bounded by given indices."
+    (let ((real-start (max 0 (min start end)))
+          (real-end (min (length v) (max start end)))
+          (new-size (- (length v) (- real-end real-start))))
+      (lisp (Vector :a) (real-start real-end v)
+        (cl:replace v v :start1 real-start :start2 real-end))
+      (set-capacity! new-size v)
+      v))
 
   (inline)
   (declare clear! (Vector :a -> Unit))
