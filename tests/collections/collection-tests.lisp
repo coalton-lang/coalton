@@ -599,20 +599,20 @@ Example:
            (let ((orig ,(make-ufix-cln 4 3 2)))
              (cln:sort orig)
              (is (== ,(make-ufix-cln 4 3 2) orig))))
-         (define-test ,(test-name type-symbol "sort-with") ()
-           ;; Sort-with on empty => empty
+         (define-test ,(test-name type-symbol "sort-by") ()
+           ;; sort-by on empty => empty
            (let ((empty (,@the-ufix (cln:new-collection))))
-             (is (cln:empty? (cln:sort-with <=> empty))))
-           ;; Sort-with on single => same collection
+             (is (cln:empty? (cln:sort-by <=> empty))))
+           ;; sort-by on single => same collection
            (let ((one ,(make-ufix-cln 10)))
-             (is (== one (cln:sort-with <=> one))))
-           ;; Sort-with a custom comparator => sorted accordingly
+             (is (== one (cln:sort-by <=> one))))
+           ;; sort-by a custom comparator => sorted accordingly
            (let ((many ,(make-ufix-cln 3 1 2 5 4))
-                 (descending (cln:sort-with (fn (a b) (<=> b a)) many)))
+                 (descending (cln:sort-by (fn (a b) (<=> b a)) many)))
              (is (== ,(make-ufix-cln 5 4 3 2 1) descending)))
            ;; Ensure immutability
            (let ((orig ,(make-ufix-cln 4 3 2)))
-             (cln:sort-with <=> orig)
+             (cln:sort-by <=> orig)
              (is (== ,(make-ufix-cln 4 3 2) orig))))
          (define-test ,(test-name type-symbol "push") ()
            ;; push onto empty => single element
@@ -739,18 +739,18 @@ Example:
            (let ((sorted ,(make-ufix-cln 1 2 3 4 5)))
              (cln:sort! sorted)
              (is (== ,(make-ufix-cln 1 2 3 4 5) sorted))))
-         (define-test ,(test-name type-symbol "sort-with!") ()
-           ;; sort-with! empty => still empty
+         (define-test ,(test-name type-symbol "sort-by!") ()
+           ;; sort-by! empty => still empty
            (let ((empty (,@the-ufix (cln:new-collection))))
-             (cln:sort-with! <=> empty)
+             (cln:sort-by! <=> empty)
              (is (cln:empty? empty)))
-           ;; sort-with! single => same
+           ;; sort-by! single => same
            (let ((one ,(make-ufix-cln 10)))
-             (cln:sort-with! <=> one)
+             (cln:sort-by! <=> one)
              (is (== ,(make-ufix-cln 10) one)))
-           ;; sort-with! multiple => sorted by custom comparator (descending)
+           ;; sort-by! multiple => sorted by custom comparator (descending)
            (let ((many ,(make-ufix-cln 3 1 2 5 4)))
-             (cln:sort-with! (fn (a b) (<=> b a)) many)
+             (cln:sort-by! (fn (a b) (<=> b a)) many)
              (is (== ,(make-ufix-cln 5 4 3 2 1) many))))
          (define-test ,(test-name type-symbol "push!") ()
            ;; push! on empty => single element

@@ -181,7 +181,7 @@
    #:split-where
    #:reverse
    #:sort
-   #:sort-with
+   #:sort-by
    #:zip
    #:zip-with
    #:push
@@ -196,7 +196,7 @@
    #:MutableLinearCollection
    #:reverse!
    #:sort!
-   #:sort-with!
+   #:sort-by!
    #:push!
    #:push-end!
    #:pop!
@@ -254,7 +254,7 @@
    #:split-where
    #:reverse
    #:sort
-   #:sort-with
+   #:sort-by
    #:zip
    #:zip-with
    #:push
@@ -269,7 +269,7 @@
    #:MutableLinearCollection
    #:reverse!
    #:sort!
-   #:sort-with!
+   #:sort-by!
    #:push!
    #:push-end!
    #:pop!

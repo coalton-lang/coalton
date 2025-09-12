@@ -904,7 +904,7 @@ This function is equivalent to all size-N elements of `(COMBS L)`."
     (define cln:split-where split-where)
     (define cln:reverse reverse)
     (define cln:sort sort)
-    (define cln:sort-with sortBy)
+    (define cln:sort-by sortBy)
     (define cln:push Cons)
     (define cln:push-end push-end)
     (define cln:insert-at insert-at)

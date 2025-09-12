@@ -57,7 +57,7 @@
    #:split-where
    #:reverse
    #:sort
-   #:sort-with
+   #:sort-by
    #:zip
    #:zip-with
    #:push
@@ -75,7 +75,7 @@
    #:MutableLinearCollection
    #:reverse!
    #:sort!
-   #:sort-with!
+   #:sort-by!
    #:push!
    #:push-end!
    #:pop!
@@ -222,7 +222,7 @@ the front or back, depending on which is natural for the underlying data structu
     (sort
      "Return a sorted collection of orderable elements."
      (Ord :a => :m -> :m))
-    (sort-with
+    (sort-by
      "Return the sorted collection under the given ordering."
      ((:a -> :a -> Ord) -> :m -> :m))
     ;; Manipulate at the element level
@@ -251,7 +251,7 @@ the front or back, depending on which is natural for the underlying data structu
     (sort!
      "Sort a collection of orderable elements in place. The collection is returned for convenience."
      (Ord :a => :m -> :m))
-    (sort-with!
+    (sort-by!
      "Sort the collection in place under the given ordering. The collection is returned for convenience."
      ((:a -> :a -> Ord) -> :m -> :m))
     (push!
