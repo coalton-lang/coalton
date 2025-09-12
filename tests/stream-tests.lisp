@@ -16,11 +16,12 @@
 (define-test test-read-u8-stream ()
   (let ((declare s (stream:InputStream U8))
         (s (make-test-stream "Hello")))
+    (let s = (stream:make-peekable s))
     (is (== 72 (unwrap (stream:read s))))
     (is (== (vector:make 101 108) (unwrap (stream:read-vector s 2))))
     (is (== 108 (unwrap (stream:peek s))))
     (is (== (vector:make 108 111) (unwrap (stream:read-vector s 2))))
-    (is (result:err? (stream:read s)))))
+    (is (none? (stream:read s)))))
 
 (define-test test-read-char-stream ()
   (let ((declare s (stream:InputStream Char))
@@ -29,7 +30,7 @@
     (is (== (vector:make #\e #\l) (unwrap (stream:read-vector s 2))))
     (is (== #\l (unwrap (stream:peek s))))
     (is (== (vector:make #\l #\o) (unwrap (stream:read-vector s 2))))
-    (is (result:err? (stream:read s)))))
+    (is (none? (stream:read s)))))
 
 (define-test test-read-token-stream ()
   (let ((declare s (stream:InputStream Char))
