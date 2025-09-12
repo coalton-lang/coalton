@@ -14,7 +14,8 @@
    #:Readable #:Writable #:Closable
    #:read #:read-vector
    #:read-unchecked #:read-vector-unchecked
-   #:unread #:peek
+   #:unread #:peek-unchecked #:peek
+   #:make-peekable
    #:write #:write-vector
    #:write-unchecked #:write-vector-unchecked
    #:flush #:close #:abort
@@ -49,7 +50,6 @@
 ;; Tokens
 ;;
 
-#+#:
 (coalton-toplevel
   (define whitespaces
     (lisp (List UFix) ()
@@ -108,17 +108,20 @@
     (read-unchecked         (:stream :elt -> :elt))
     (read-vector-unchecked  (:stream :elt -> UFix -> (vec:Vector :elt))))
 
-  (define-class (Peekable :stream :elt)
-    (unread                 (:stream :elt -> :elt -> Unit))
-    (peek                   (:stream :elt -> :elt)))
-
   (define-class (Writable :stream :elt)
     "An output or IO stream."
     (write                  (:stream :elt -> :elt -> (Result LispCondition Unit)))
     (write-unchecked        (:stream :elt -> :elt -> Unit))
     (write-vector           (:stream :elt -> vec:Vector :elt -> (Result LispCondition Unit)))
     (write-vector-unchecked (:stream :elt -> vec:Vector :elt -> Unit))
-    (flush                  (:stream :elt -> Unit))))
+    (flush                  (:stream :elt -> Unit)))
+
+  (define-class (Readable :stream :elt => Peekable :stream :elt)
+    (unread                 (:stream :elt -> :elt -> Unit))
+    (peek-unchecked         (:stream :elt -> :elt)))
+
+  (define-class (IntoPeekable :stream :elt :peekablestream (:stream -> :peekablestream))
+    (make-peekable          (:stream :elt -> :peekablestream :elt))))
 
 ;;
 ;; Class Instances
@@ -203,7 +206,7 @@
       (lisp Unit (stream elt)
         (cl:unread-char elt stream)
         Unit))
-    (define (peek stream)
+    (define (peek-unchecked stream)
       (lisp Char (stream)
         (cl:peek-char nil stream))))
 
@@ -211,13 +214,12 @@
     (define (unread stream elt)
       (vec:push! elt (.buffer stream))
       Unit)
-    (define (peek stream)
+    (define (peek-unchecked stream)
       (if (not (vec:empty? (.buffer stream)))
           (vec:last-unsafe (.buffer stream))
           (let ((elt (read-unchecked (.stream stream))))
             (vec:push! elt (.buffer stream))
             elt))))
-
   (define-instances (Readable (PeekableInputStream U8) (PeekableIOStream U8))
     (define (read-unchecked stream)
       (match (vec:pop! (.buffer stream))
@@ -236,7 +238,27 @@
                          (.stream stream)
                          (- n (vec:length (.buffer stream))))))
          (vec:clear! (.buffer stream))
-         result)))))
+         result))))
+  (define-instance (Writable PeekableIOStream U8)
+    (define (write stream elt)
+      (write (.stream stream) elt))
+    (define (write-unchecked stream elt)
+      (write-unchecked (.stream stream) elt))
+    (define (write-vector stream vec)
+      (write-vector (.stream stream) vec))
+    (define (write-vector-unchecked stream vec)
+      (write-vector-unchecked (.stream stream) vec))
+    (define (flush stream)
+      (flush (.stream stream))))
+  (define-instance (Closable PeekableIOStream U8)
+    (define (close stream)
+      (close (.stream stream)))
+    (define (abort stream)
+      (abort (.stream stream))))
+
+  (define-instance (IntoPeekable InputStream U8 PeekableInputStream)
+    (define (make-peekable stream)
+      (PeekableInputStream stream (vec:new)))))
 
 ;;
 ;; Safe Reader Functions
@@ -251,27 +273,19 @@
   (declare read-vector (Readable :stream :elt => :stream :elt -> UFix -> Optional (vec:Vector :elt)))
   (define (read-vector stream n)
     (catch (Some (read-vector-unchecked stream n))
-      (_ None))))
+      (_ None)))
 
-;; TODO
-;; (coalton-toplevel
-;;   (declare unread (BufferedInputStream :elt -> :elt -> Unit))
-;;   (define (unread stream elt)
-;;     (vec:push! elt (.buffer stream))
-;;     Unit))
+  (declare peek (Peekable :stream :elt => :stream :elt -> Optional :elt))
+  (define (peek stream)
+    (catch (Some (peek-unchecked stream))
+      (_ None)))
+  )
 
-;; (coalton-toplevel
-;;   (declare buffered-read-unchecked (Readable InputStream :elt => BufferedInputStream :elt -> :elt))
-;;   (define (buffered-read-unchecked stream)
-;;     (match (vec:pop! (.buffer stream))
-;;       ((None) (read-unchecked (.stream stream)))
-;;       ((Some elt) elt))))
 
 ;;
 ;; High Level Functions
 ;;
 
-#+#:
 (coalton-toplevel
   (define-type (ReaderErr :elt)
     (EOF (vec:Vector :elt)))
@@ -280,11 +294,11 @@
     (Inclusive (:elt -> Boolean))
     (Exclusive (:elt -> Boolean)))
 
-  (declare read-to ((Readable :stream :elt) => :stream :elt -> ReaderPredicate :elt -> (Result (ReaderErr :elt) (vec:Vector :elt))))
+  (declare read-to ((Peekable :stream :elt) => :stream :elt -> ReaderPredicate :elt -> (Result (ReaderErr :elt) (vec:Vector :elt))))
   (define (read-to stream pred)
     "Consume elements from a stream, collecting them into a vector."
     (let vec = (vec:make))
-    (while-let (Ok elt) = (read stream)
+    (while-let (Some elt) = (read stream)
       (match pred
         ((Inclusive f)
          (progn (vec:push! elt vec) Unit)
@@ -295,10 +309,10 @@
              (progn (vec:push! elt vec) Unit)))))
     (Err (EOF vec)))
 
-  (declare drop-to ((Readable :stream :elt) => :stream :elt -> ReaderPredicate :elt -> (Result (ReaderErr :elt) (:stream :elt))))
+  (declare drop-to ((Peekable :stream :elt) => :stream :elt -> ReaderPredicate :elt -> (Result (ReaderErr :elt) (:stream :elt))))
   (define (drop-to stream pred)
     "Consume elements from a stream without collecting them."
-    (while-let (Ok elt) = (read stream)
+    (while-let (Some elt) = (read stream)
       (match pred
         ((Inclusive f)
          (when (f elt)
@@ -309,21 +323,21 @@
            (return (Ok stream))))))
     (Err (EOF (vec:make))))
 
-  (declare read-word ((Readable :stream :elt) (Whitespace :elt) => :stream :elt -> (Result (ReaderErr :elt) (vec:Vector :elt))))
+  (declare read-word ((Peekable :stream :elt) (Whitespace :elt) => :stream :elt -> (Result (ReaderErr :elt) (vec:Vector :elt))))
   (define (read-word stream)
     "Read to the next whitespace token (Exclusive)."
     (drop-to stream (Exclusive (complement whitespace?)))
     (read-to stream (Exclusive whitespace?)))
 
-  (declare read-line ((Readable :stream :elt) (Newline :elt) => :stream :elt -> (Result (ReaderErr :elt) (vec:Vector :elt))))
+  (declare read-line ((Peekable :stream :elt) (Newline :elt) => :stream :elt -> (Result (ReaderErr :elt) (vec:Vector :elt))))
   (define (read-line stream)
     "Read to the next newline token (Exclusive)."
     (match (peek stream)
-      ((Ok elt) (when (newline? elt) (read stream) Unit))
-      ((Err _) (return (Err (EOF mempty)))))
+      ((Some elt) (when (newline? elt) (read stream) Unit))
+      ((None) (return (Err (EOF mempty)))))
     (read-to stream (Exclusive newline?)))
 
-  (declare read-all ((Readable :stream :elt) => :stream :elt -> (vec:Vector :elt)))
+  (declare read-all ((Peekable :stream :elt) => :stream :elt -> (vec:Vector :elt)))
   (define (read-all stream)
     "Consume elements from a stream until EOF, collecting them into a vector."
     (match (read-to stream (Inclusive (const False)))
