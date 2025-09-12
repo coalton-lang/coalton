@@ -147,7 +147,7 @@
   (inline)
   (declare kill! (Vector :a -> UFix -> UFix -> Vector :a))
   (define (kill! v start end)
-    "Destructively kills subsequence in a vector bounded by given indices."
+    "Destructively kills a subsequence in a vector bounded by given indices."
     (let ((real-start (max 0 (min start end)))
           (real-end (min (length v) (max start end)))
           (new-size (- (length v) (- real-end real-start))))
