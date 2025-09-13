@@ -330,8 +330,9 @@ Returns `True` on success, `False` on error."
     (while-let (Some elt) = (read stream)
       (match pred
         ((Inclusive f)
-         (progn (vec:push! elt vec) Unit)
-         (when (f elt) (return (Ok vec))))
+         (vec:push! elt vec)
+         (when (f elt)
+           (return (Ok vec))))
         ((Exclusive f)
          (if (f elt)
              (progn (unread stream elt) (return (Ok vec)))
