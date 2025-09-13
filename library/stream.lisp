@@ -98,8 +98,10 @@
   (define-class (Closable :stream :elt)
     "A stream that can be closed."
     (close
+     "Mark the end of the stream's use as a source or sink of data."
      (:stream :elt -> Unit))
     (abort
+     "Closes a stream and aborts all operations."
      (:stream :elt -> Unit)))
 
   (define-class (Readable :stream :elt)
@@ -143,6 +145,7 @@ Signals a condition on error."
 
   (define-class (IntoPeekable :stream :elt :peekablestream (:stream -> :peekablestream))
     (make-peekable
+     "Turn a stream into one impementing `Peekable`."
      (:stream :elt -> :peekablestream :elt))))
 
 ;;
