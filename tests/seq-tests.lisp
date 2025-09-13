@@ -53,7 +53,7 @@
           (legible-seq 1000))
         (seqseq
           (seq:conc seq seq)))
-    
+
     (is (== 2000 (seq:size seqseq)))
     (is (== 1000 (seq:size (seq:conc (seq:new) seq))))
     (is (== 1000 (seq:size (seq:conc seq (seq:new)))))
@@ -74,7 +74,7 @@
     (is (== (Some 0) (seq:get seq2 11234)))))
 
 
-(coalton-toplevel 
+(coalton-toplevel
   (define (branching-valid? seq)
     "Returns T if the branching invariants are respected.  Namely, that
 every non-leaf node in the tree other than nodes on the right-most
@@ -87,15 +87,15 @@ edge all have between MIN-BRANCHING and MAX-BRANCHING subnodes."
             (fn (right-most-edge? node)
               (match node
                 ((seq::LeafArray leaves)
-                 (or right-most-edge? (satisfied? (vector:length leaves))))
+                 (or right-most-edge? (satisfied? (cln:length leaves))))
 
                 ((seq::RelaxedNode _ _ _ subs)
-                 (and (or right-most-edge? (satisfied? (vector:length subs)))
+                 (and (or right-most-edge? (satisfied? (cln:length subs)))
                       (iter:every!
                        (valid? False)
-                       (map (flip vector:index-unsafe subs)
-                            (iter:range-increasing 1 0 (- (vector:length subs) 1))))
-                      (valid? True (vector:last-unsafe subs))))))))
+                       (map (flip cln:at# subs)
+                            (iter:range-increasing 1 0 (- (cln:length subs) 1))))
+                      (valid? True (cln:last# subs))))))))
       (valid? True seq))))
 
 (define-test seq-branch-invariants ()

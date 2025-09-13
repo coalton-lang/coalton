@@ -131,58 +131,155 @@
    #:from-some
    #:some?
    #:none?)
-
+  
   (:import-from
-   #:coalton-library/list
-   #:head
-   #:tail
-   #:singleton
-   #:repeat
-   #:reverse
-   #:drop
-   #:take
-   #:find
-   #:fold
-   #:foldr
+   #:coalton-library/collections
+   #:Collection
+   #:new-collection
+   #:new-repeat
+   #:new-from
+   #:new-convert
    #:filter
-   #:length
-   #:range
-   #:append
-   #:concat
-   #:concatMap
    #:remove-duplicates
+   #:empty?
+   #:length
+   #:contains-elt?
+   #:contains-where?
+   #:count-where
+   #:add
+   #:remove-elt
+
+   #:ImmutableCollection
+
+   #:MutableCollection
+   #:copy
+   #:filter!
+   #:remove-duplicates!
+   #:remove-elt!
+   #:add!
+
+   #:LinearCollection
+   #:head
+   #:head#
+   #:last
+   #:last#
+   #:tail
+   #:at
+   #:at#
+   #:take
+   #:drop
+   #:index-elt
+   #:index-elt#
+   #:index-where
+   #:index-where#
+   #:find-where
+   #:indices-elt
+   #:indices-where
+   #:subseq
+   #:split-at
+   #:split-elt
+   #:split-where
+   #:reverse
+   #:sort
+   #:sort-by
    #:zip
-   #:zipWith
-   #:sum
-   #:product
-   #:all
-   #:any
-   #:split)
+   #:zip-with
+   #:push
+   #:push-end
+   #:insert-at
+   #:remove-at
+   #:remove-at#
+   #:set-at
+
+   #:ImmutableLinearCollection
+
+   #:MutableLinearCollection
+   #:reverse!
+   #:sort!
+   #:sort-by!
+   #:push!
+   #:push-end!
+   #:pop!
+   #:pop!#
+   #:pop-end!
+   #:pop-end!#
+   #:insert-at!
+   #:remove-at!
+   #:remove-at!#
+   #:set-at!)
+
   (:export
-   #:head
-   #:tail
-   #:singleton
-   #:repeat
-   #:reverse
-   #:drop
-   #:take
-   #:find
-   #:fold
-   #:foldr
+   #:Collection
+   #:new-collection
+   #:new-repeat
+   #:new-from
+   #:new-convert
    #:filter
-   #:length
-   #:range
-   #:append
-   #:concat
-   #:concatMap
    #:remove-duplicates
+   #:empty?
+   #:length
+   #:contains-elt?
+   #:contains-where?
+   #:count-where
+   #:add
+   #:remove-elt
+
+   #:ImmutableCollection
+
+   #:MutableCollection
+   #:copy
+   #:filter!
+   #:remove-duplicates!
+   #:remove-elt!
+   #:add!
+   
+   #:LinearCollection
+   #:head
+   #:head#
+   #:last
+   #:last#
+   #:tail
+   #:at
+   #:at#
+   #:take
+   #:drop
+   #:index-elt
+   #:index-elt#
+   #:index-where
+   #:index-where#
+   #:find-where
+   #:subseq
+   #:split-at
+   #:split-elt
+   #:split-where
+   #:reverse
+   #:sort
+   #:sort-by
    #:zip
-   #:zipWith
-   #:sum
-   #:product
-   #:all
-   #:any
-   #:split)
+   #:zip-with
+   #:push
+   #:push-end
+   #:insert-at
+   #:remove-at
+   #:remove-at#
+   #:set-at
+
+   #:ImmutableLinearCollection
+    
+   #:MutableLinearCollection
+   #:reverse!
+   #:sort!
+   #:sort-by!
+   #:push!
+   #:push-end!
+   #:pop!
+   #:pop!#
+   #:pop-end!
+   #:pop-end!#
+   #:insert-at!
+   #:remove-at!
+   #:remove-at!#
+   #:set-at!)
 
   (:import-from
    #:coalton-library/cell
@@ -191,7 +288,19 @@
    #:Cell)
 
   (:import-from
-   #:coalton-library/vector
+   #:coalton-library/collections/immutable/list
+   #:range
+   #:all
+   #:append
+   #:singleton)
+  (:export
+   #:range
+   #:all
+   #:append
+   #:singleton)
+
+  (:import-from
+   #:coalton-library/collections/mutable/vector
    #:Vector)
   (:export
    #:Vector)
@@ -234,10 +343,10 @@
    (#:string #:coalton-library/string)
    (#:tuple #:coalton-library/tuple)
    (#:optional #:coalton-library/optional)
-   (#:list #:coalton-library/list)
+   (#:list #:coalton-library/collections/immutable/list)
    (#:result #:coalton-library/result)
    (#:cell #:coalton-library/cell)
-   (#:vector #:coalton-library/vector)
+   (#:vector #:coalton-library/collections/mutable/vector)
    (#:slice #:coalton-library/slice)
    (#:hashtable #:coalton-library/hashtable)
    (#:id #:coalton-library/monad/identity)

@@ -1,3 +1,9 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; DEPRECATED ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; This package is deprecated, replaced by:
+;;; coalton-library/collections/immutable/list
+;;; Please edit that file instead!
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; DEPRECATED ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (coalton-library/utils::defstdlib-package #:coalton-library/list
   (:use
    #:coalton
@@ -10,7 +16,8 @@
   (:local-nicknames
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
-   (#:math #:coalton-library/math))
+   (#:math #:coalton-library/math)
+   (#:cln-lst #:coalton-library/collections/immutable/list))
   (:export
    #:head
    #:tail
@@ -673,128 +680,7 @@ This function is equivalent to all size-`n` elements of `(combs l)`."
                   ((Nil) Nil)
                   ((Cons x xs) (append
                                 (map (Cons x) (combsOf (- n 1) xs)) ; combs with X
-                                (combsOf n xs))))))) ; and without x
-
-  ;;
-  ;; Instances
-  ;;
-
-  (define-instance (Eq :a => Eq (List :a))
-    (define (== a b)
-      (match a
-        ((Cons x xs)
-         (match b
-           ((Cons y ys)
-            (and (== x y)
-                 (== xs ys)))
-           (_ False)))
-        ((Nil)
-         (match b
-           ((Nil) True)
-           (_ False))))))
-
-  ;; <=> on lists uses lexicographic order, like strings.
-  ;; Nil is the smallest list, and is LT any non-nil list.
-  ;; Two Conses with non-EQ cars are ordered based on the ordering of the cars, so (0 ...) is less than (1
-  ;; ...) no matter the ...s.
-  ;; Two Conses with EQ cars recurse into the tails for their ordering, so (0 0 ...) is less than (0 1 ...) no
-  ;; matter the ...s.
-  (define-instance (Ord :elt => Ord (List :elt))
-    (define (<=> left right)
-      (match (Tuple left right)
-        ((Tuple (Nil) (Nil)) Eq)
-        ((Tuple (Nil) _) LT)
-        ((Tuple _ (Nil)) GT)
-        ((Tuple (Cons left-head left-tail) (Cons right-head right-tail))
-         (if (== left-head right-head)
-             (<=> left-tail right-tail)
-             (<=> left-head right-head))))))
-
-  (define-instance (Hash :a => Hash (List :a))
-    (define (hash lst)
-      (fold (fn (so-far elt)
-              (combine-hashes so-far (hash elt)))
-            mempty
-            lst)))
-
-  (define-instance (Semigroup (List :a))
-    (define (<> a b) (append a b)))
-
-  (define-instance (Monoid (List :a))
-    (define mempty Nil))
-
-  (define-instance (Functor List)
-    (define (map f l)
-      (%reverse! (fold (fn (a x) (Cons (f x) a)) Nil l))))
-
-  (define-instance (Applicative List)
-    (define (pure x) (Cons x Nil))
-    (define (liftA2 f as bs)
-      (concatMap (fn (a)
-                   (map (f a) bs))
-                 as)))
-
-  (define-instance (Alternative List)
-    (define (alt a b)
-      (append a b))
-    (define empty Nil))
-
-  (define-instance (Monad List)
-    (define (>>= m f)
-      (concatMap f m)))
-
-  (define-instance (Foldable List)
-    (define (fold f y xs)
-      (match xs
-        ((Cons x xs) (fold f (f y x) xs))
-        ((Nil) y)))
-
-    (define (foldr f y xs)
-      (match xs
-        ((Cons x xs) (f x (foldr f y xs)))
-        ((Nil) y))))
-
-  (define-instance (Traversable List)
-    (define (traverse f xs)
-      (match xs
-        ((Cons x xs) (liftA2 Cons (f x) (traverse f xs)))
-        ((Nil) (pure Nil)))))
-
-  (define-instance (iter:IntoIterator (List :elt) :elt)
-    (define (iter:into-iter list)
-      (let remaining = (cell:new list))
-      (iter:with-size
-          (fn ()
-            (cell:pop! remaining))
-        (length list))))
-
-  (define-instance (iter:FromIterator (List :elt) :elt)
-    (define (iter:collect! iter)
-      ;; Dropping into lisp is necessary because building a list from
-      ;; front to back requires mutability.
-      (lisp (List :elt) (iter)
-        (cl:loop
-           :with top := cl:nil
-           :with current := cl:nil
-           :for res := (iter:next! iter)
-           :while (some? res)
-           :do (cl:if current
-                      (cl:progn
-                        (cl:setf (cl:cdr current) (cl:cons (from-some "" res) cl:nil))
-                        (cl:setf current (cl:cdr current)))
-                      (cl:progn
-                        (cl:setf top (cl:cons (from-some "" res) cl:nil))
-                        (cl:setf current top)))
-           :finally (cl:return top)))))
-
-  (define-instance (Into (Optional :a) (List :a))
-    (define (into opt)
-      (match opt
-        ((None) Nil)
-        ((Some a) (Cons a Nil)))))
-
-  (define-instance (Default (List :a))
-    (define (default) Nil)))
+                                (combsOf n xs)))))))) ; and without x
 
 (defmacro make (cl:&rest elements)
   "Make a homogeneous list of `elements`. Synonym for `coalton:make-list`."

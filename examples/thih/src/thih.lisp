@@ -122,7 +122,7 @@
     (define (apply s t)
       (match t
         ((TVar u)
-         (match (list:lookup u (get-subst s))
+         (match (lookup u (get-subst s))
            ((Some t) t)
            ((None) (Tvar u))))
         ((TAp l r)
@@ -131,7 +131,7 @@
     (define (tv t)
       (match t
         ((TVar u) (make-list u))
-        ((TAp l r) (list:union (tv l) (tv r)))
+        ((TAp l r) (union (tv l) (tv r)))
         (_ Nil))))
 
 
@@ -139,12 +139,12 @@
     (define (apply s t)
       (map (apply s) t))
     (define (tv t)
-      (remove-duplicates (fold append Nil (map tv t)))))
+      (remove-duplicates (fold <> Nil (map tv t)))))
 
 
   (declare @@ (Subst -> Subst -> Subst))
   (define (@@ s1 s2)
-    (Subst (append
+    (Subst (<>
             (map
              (fn (s)
                (match s
@@ -158,11 +158,11 @@
     (let ((agree (all (fn (v)
                         (== (apply s1 (TVar v))
                             (apply s2 (TVar v))))
-                      (list:intersection
+                      (intersection
                        (map fst (get-subst s1))
                        (map fst (get-subst s2))))))
       (if agree
-          (pure (Subst (append (get-subst s1)
+          (pure (Subst (<> (get-subst s1)
                                (get-subst s2))))
           (fail "Failed to merge substitution lists"))))
 
@@ -194,7 +194,7 @@
   (define (varBind u t_)
     (if (== t_ (TVar u))
         (pure nullSubst)
-        (if (list:member u (tv t_))
+        (if (contains-elt? u (tv t_))
             (fail "Occurs check fails")
             (if (/= (kind u) (kind t_))
                 (fail "Kinds do not match")
@@ -236,9 +236,9 @@
     (define (apply s (Qual ps t))
       (Qual (apply s ps)
             (apply s t)))
-    
+
     (define (tv (Qual ps t))
-      (list:union (tv ps) (tv t))))
+      (union (tv ps) (tv t))))
 
   (derive Eq)
   (define-type Pred
@@ -247,7 +247,7 @@
   (define-instance (Types Pred)
     (define (apply s (IsIn i t))
       (IsIn i (apply s t)))
-    
+
     (define (tv (IsIn _ t))
       (tv t)))
 
@@ -428,7 +428,7 @@
   (define (bySuper ce p)
     (match p
       ((IsIn i t)
-       (Cons p (fold append Nil
+       (Cons p (fold <> Nil
                      (map (fn (i_)
                             (bySuper ce (IsIn i_ t)))
                           (super ce i)))))))
@@ -449,7 +449,7 @@
   (declare entail (ClassEnv -> (List Pred) -> Pred -> Boolean))
   (define (entail ce ps p)
     (or (any
-         (list:member p)
+         (contains-elt? p)
          (map (bySuper ce) ps))
         (match (byInst ce p)
           ((None)
@@ -472,7 +472,7 @@
   (define (toHnfs ce ps)
     (>>= (traverse (toHnf ce) ps)
          (fn (pss)
-           (pure (foldr append Nil pss)))))
+           (pure (foldr <> Nil pss)))))
 
   (declare toHnf (MonadFail :m => (ClassEnv -> Pred -> (:m (List Pred)))))
   (define (toHnf ce p)
@@ -504,7 +504,7 @@
 
   (declare scEntail (ClassEnv -> (List Pred) -> Pred -> Boolean))
   (define (scEntail ce ps p)
-    (any (list:member p)
+    (any (contains-elt? p)
          (map (bySuper ce) ps)))
 
 
@@ -526,7 +526,7 @@
   (define (quantify vs qt)
     (let ((vs_ (filter
                 (fn (e)
-                  (list:member e vs))
+                  (contains-elt? e vs))
                 (tv qt)))
           (ks (map kind vs_))
           (gens (map TGen (range 0 (- (length vs_) 1))))
@@ -644,7 +644,7 @@
     (define (inst ts t)
       (match t
         ((TAp l r) (TAp (inst ts l) (inst ts r)))
-        ((TGen n)  (from-some "Failed to find TGen type" (list:index n ts)))
+        ((TGen n)  (from-some "Failed to find TGen type" (cln:at n ts)))
         (_ t))))
 
   (define-instance (Instantiate :a => Instantiate (List :a))
@@ -733,7 +733,7 @@
            ((Tuple (Tuple3 ps as ts)
                    (Qual qs t))
             (do (unify t (foldr mkFn t_ ts))
-                (pure (Tuple3 (append ps qs)
+                (pure (Tuple3 (<> ps qs)
                               as
                               t_)))))))))
 
@@ -745,8 +745,8 @@
                  (match (Tuple acc xyz)
                    ((Tuple (Tuple3 ps as ts)
                            (Tuple3 ps_ as_ t))
-                    (Tuple3 (append ps_ ps)
-                            (append as_ as)
+                    (Tuple3 (<> ps_ ps)
+                            (<> as_ as)
                             (Cons t ts)))))
                (Tuple3 Nil Nil Nil)
                psasts))))
@@ -784,15 +784,15 @@
                    (Tuple qs tf))
             (do (t <- (newTVar Star))
                 (unify (mkFn tf t) te)
-              (pure (Tuple (append ps qs) t)))))))
+              (pure (Tuple (<> ps qs) t)))))))
       ((ELet bg e)
        (do (tiBg <- (tiBindGroup ce as bg))
            (match tiBg
              ((Tuple ps as_)
-              (do (tiEx <- (tiExpr ce (append as_ as) e))
+              (do (tiEx <- (tiExpr ce (<> as_ as) e))
                   (match tiEx
                     ((Tuple qs t)
-                     (pure (Tuple (append ps qs) t)))))))))))
+                     (pure (Tuple (<> ps qs) t)))))))))))
 
   ;; Alternatives
 
@@ -806,10 +806,10 @@
        (do (pats_ <- (tiPats pats))
            (match pats_
              ((Tuple3 ps as_ ts)
-              (do (expr <- (tiExpr ce (append as_ as) e))
+              (do (expr <- (tiExpr ce (<> as_ as) e))
                   (match expr
                     ((Tuple qs t)
-                     (pure (Tuple (append ps qs) (foldr mkFn t ts))))))))))))
+                     (pure (Tuple (<> ps qs) (foldr mkFn t ts))))))))))))
 
   (declare tiAlts (ClassEnv -> (List Assump) -> (List Alt) -> Type -> (TI (List Pred))))
   (define (tiAlts ce as alts t)
@@ -822,11 +822,11 @@
   (declare split (MonadFail :m => (ClassEnv -> (List Tyvar) -> (List Tyvar) -> (List Pred) -> (:m (Tuple (List Pred) (List Pred))))))
   (define (split ce fs gs ps)
     (do (ps_ <- (reduce ce ps))
-        (match (list:partition (fn (x) (all (flip list:member fs) (tv x)))
+        (match (partition (fn (x) (all (flip contains-elt? fs) (tv x)))
                                ps_)
           ((Tuple ds rs)
-           (do (rs_ <- (defaultedPreds ce (append fs gs) rs))
-               (pure (Tuple ds (list:difference rs rs_))))))))
+           (do (rs_ <- (defaultedPreds ce (<> fs gs) rs))
+               (pure (Tuple ds (difference rs rs_))))))))
 
   (define-type Ambiguity
     (Ambiguity Tyvar (List Pred)))
@@ -836,9 +836,9 @@
     (map (fn (v)
            (Ambiguity v (filter
                          (fn (x)
-                           (list:member v (tv x)))
+                           (contains-elt? v (tv x)))
                          ps)))
-         (list:difference (tv ps) vs)))
+         (difference (tv ps) vs)))
 
   (declare numClasses (List Id))
   (define numClasses
@@ -847,7 +847,7 @@
 
   (declare stdClasses (List Id))
   (define stdClasses
-    (append
+    (<>
      (map Id
           (make-list "Eq" "Ord" "Show" "Read" "Bounded" "Enum" "Ix" "Functor" "Monad" "MonadPlus"))
      numClasses))
@@ -869,8 +869,8 @@
                        t)))
                   qs)))
          (if (and (all (== (TVar v)) ts)
-                  (and (any (flip list:member numClasses) is)
-                       (all (flip list:member stdClasses) is)))
+                  (and (any (flip contains-elt? numClasses) is)
+                       (all (flip contains-elt? stdClasses) is)))
              (let ((ts_ (defaults ce)))
                (if (all (fn (t_)
                           (all (entail ce Nil)
@@ -885,7 +885,7 @@
   (define (withDefaults f ce vs ps)
     (let ((vps (ambiguities ce vs ps))
           (tss (map (candidates ce) vps)))
-      (if (any list:null? tss)
+      (if (any null? tss)
           (fail "Cannot resolve ambiguity")
           (pure (f vps (map (fn (l) (from-some "" (head l))) tss))))))
 
@@ -922,7 +922,7 @@
                 (let qs_ = (apply s qs))
                 (let t_  = (apply s t))
                 (let fs  = (tv (apply s as)))
-                (let gs  = (list:difference (tv t_) fs))
+                (let gs  = (difference (tv t_) fs))
                 (let sc_ = (quantify gs (Qual qs_ t_)))
                 (let ps_ = (filter (fn (p) (not (entail ce qs_ p)))
                                    (apply s ps)))
@@ -932,7 +932,7 @@
                    (cond
                      ((/= sc sc_)
                       (fail "Signature too general"))
-                     ((not (list:null? rs))
+                     ((not (null? rs))
                       (fail "Context too weak"))
                      (True
                       (pure ds))))))))))))
@@ -949,7 +949,7 @@
                        (any (fn (x)
                               (match x
                                 ((Alt pats _)
-                                 (list:null? pats))))
+                                 (null? pats))))
                             alts))))))
       (any simple bs)))
 
@@ -961,43 +961,43 @@
                               ((Impl i _) i)))
                           bs))
       (let scs   = (map toScheme ts))
-      (let as_   = (append (zipWith Assump is scs) as))
+      (let as_   = (<> (zip-with Assump is scs) as))
       (let altss = (map (fn (b)
                           (match b
                             ((Impl _ a) a)))
                         bs))
-      (pss <- (sequence (zipWith (tiAlts ce as_) altss ts)))
+      (pss <- (sequence (zip-with (tiAlts ce as_) altss ts)))
       (s <- getSubst)
       (let ps_ = (apply s (concat pss)))
       (let ts_ = (apply s ts))
       (let fs  = (tv (apply s as)))
       (let vss = (map tv ts_))
-      (let gs  = (list:difference
+      (let gs  = (difference
                   (match vss
                     ((Cons vs vss)
-                     (foldr list:union vs vss))
+                     (foldr union vs vss))
                     (_ (error "unreachable")))
                   fs))
       (ps <- (split ce fs
                     (match vss
                       ((Cons vs vss)
-                       (foldr list:intersection vs vss))
+                       (foldr intersection vs vss))
                       (_ (error "unreachable")))
                     ps_))
       (match ps
         ((Tuple ds rs)
          (if (restricted bs)
-             (let ((gs_ (list:difference gs (tv rs)))
+             (let ((gs_ (difference gs (tv rs)))
                    (scs_ (map (fn (x)
                                 (quantify gs_ (Qual Nil x)))
                               ts_)))
-               (pure (Tuple (append ds rs)
-                            (zipWith Assump is scs_))))
+               (pure (Tuple (<> ds rs)
+                            (zip-with Assump is scs_))))
              (let ((scs_ (map (fn (x)
                                 (quantify gs (Qual rs x)))
                               ts_)))
                (pure (Tuple ds
-                            (zipWith Assump is scs_)))))))))
+                            (zip-with Assump is scs_)))))))))
 
   (define-type BindGroup
     (BindGroup (List Expl) (List (List Impl))))
@@ -1011,12 +1011,12 @@
                                ((Expl v sc _)
                                 (Assump v sc))))
                            es))
-           (tiI <- (tiSeq tiImpls ce (append as_ as) iss))
+           (tiI <- (tiSeq tiImpls ce (<> as_ as) iss))
          (match tiI
            ((Tuple ps as__)
-            (do (qss <- (traverse (tiExpl ce (append as__ (append as_ as))) es))
-                (pure (Tuple (append ps (concat qss))
-                             (append as__ as_))))))))))
+            (do (qss <- (traverse (tiExpl ce (<> as__ (<> as_ as))) es))
+                (pure (Tuple (<> ps (concat qss))
+                             (<> as__ as_))))))))))
 
   (declare tiSeq ((ClassEnv -> (List Assump) -> :bg -> (TI (Tuple (List Pred) (List Assump)))) ->
                   (ClassEnv -> (List Assump) -> (List :bg) -> (TI (Tuple (List Pred) (List Assump))))))
@@ -1028,11 +1028,11 @@
        (do (x <- (ti ce as bs))
            (match x
              ((Tuple ps as_)
-              (do (x <- (tiSeq ti ce (append as_ as) bss))
+              (do (x <- (tiSeq ti ce (<> as_ as) bss))
                   (match x
                     ((Tuple qs as__)
-                     (pure (Tuple (append ps qs)
-                                  (append as__ as_))))))))))))
+                     (pure (Tuple (<> ps qs)
+                                  (<> as__ as_))))))))))))
 
 
   (define-type Program

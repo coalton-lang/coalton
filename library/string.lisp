@@ -7,7 +7,7 @@
    #:coalton-library/hash
    #:define-sxhash-hasher)
   (:import-from
-   #:coalton-library/vector
+   #:coalton-library/collections/mutable/vector
    #:Vector)
   (:local-nicknames
    (#:cell #:coalton-library/cell)

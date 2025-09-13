@@ -206,7 +206,7 @@ CL-USER> (format t "~R" (coalton:coalton (coalton-prelude:length (coalton:the co
 ; error: Type mismatch
 ;   --> repl input:1:46
 ;    |
-;  1 |  (COALTON:COALTON (COALTON-LIBRARY/LIST:LENGTH (COALTON:THE COALTON:UFIX 1)))
+;  1 |  (COALTON:COALTON (COALTON-LIBRARY/COLLECTIONS:LENGTH (COALTON:THE COALTON:UFIX 1)))
 ;    |                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Expected type '(COALTON:LIST #T53400)' but got 'COALTON:UFIX'
 ;    [Condition of type COALTON-IMPL/TYPECHECKER/BASE:TC-ERROR]
 ```

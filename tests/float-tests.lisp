@@ -34,7 +34,7 @@
 
   (define (test-identity l f g)
     "Check the identity (F x) = (G x) for all x in L"
-    (fold (fn (x y) (and x y)) True (zipWith ~ (map f l) (map g l))))
+    (fold (fn (x y) (and x y)) True (the (List :a) (cln:zip-with ~ (map f l) (map g l)))))
 
   (declare test-list-single (List F32))
   (define test-list-single
@@ -48,11 +48,11 @@
 
   (declare test-list-complex-single (List (Complex F32)))
   (define test-list-complex-single
-    (zipWith complex test-list-single (reverse test-list-single)))
+    (cln:zip-with complex test-list-single (reverse test-list-single)))
 
   (declare test-list-complex-double (List (Complex F64)))
   (define test-list-complex-double
-    (zipWith complex test-list-double (reverse test-list-double)))
+    (cln:zip-with complex test-list-double (reverse test-list-double)))
 
   (define (test-identities l)
     ;; Basic Trig
@@ -98,7 +98,7 @@
 (coalton-toplevel
   (declare float-checklist ((math:Dividable Integer :a) => (List :a)))
   (define float-checklist
-    (coalton-prelude:zipWith
+    (cln:zip-with
      math:general/ (coalton:the (coalton:List coalton:Integer) (coalton-prelude:range -100 99)) (coalton-prelude:range 200 1))))
 
 (coalton-toplevel
@@ -114,7 +114,7 @@
   (cl:defmacro double-check (f)
     "Syntatic sugar for defining big-float  checks against double-floats"
     `(map (fn (x) (check-against-double (,f (fst x)) (fn () (,f (snd x)))))
-          (zipWith Tuple float-checklist float-checklist))))
+          (the (List :a) (cln:zip-with Tuple float-checklist float-checklist)))))
 
 (define-test float-double-to-big ()
   (double-check (fn (x) x))

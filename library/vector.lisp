@@ -1,3 +1,9 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; DEPRECATED ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; This package is deprecated, replaced by:
+;;; coalton-library/collections/mutable/vector
+;;; Please edit that file instead!
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; DEPRECATED ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (coalton-library/utils:defstdlib-package #:coalton-library/vector
   (:use
    #:coalton
@@ -5,9 +11,12 @@
    #:coalton-library/functions
    #:coalton-library/classes
    #:coalton-library/experimental/loops)
+  (:import-from
+   #:coalton-library/collections/mutable/vector
+   #:Vector)
   (:local-nicknames
    (#:types #:coalton-library/types)
-   (#:list #:coalton-library/list)
+   (#:list #:coalton-library/collections/immutable/list)
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
    (#:ram #:coalton-library/randomaccess))
@@ -58,8 +67,12 @@
   ;; Vector
   ;;
 
-  (repr :native (cl:and (cl:vector cl:t) (cl:not cl:simple-vector)))
-  (define-type (Vector :a))
+  ;; Not defining Vector here. Using the Vector definition from
+  ;; coalton-library/collections/mutable/Vector so that deprecated imports
+  ;; from this package are working on the same concrete type.
+
+  ; (repr :native (cl:and (cl:vector cl:t) (cl:not cl:simple-vector)))
+  ; (define-type (Vector :a))
 
   (inline)
   (declare new (Unit -> Vector :a))
@@ -293,130 +306,16 @@
        (push! x vec)
        Unit)
      iter)
-    Unit)
+    Unit))
 
-  ;;
-  ;; Instances
-  ;;
-
-  (define-instance (Eq :a => Eq (Vector :a))
-    (define (== v1 v2)
-      (if (/= (length v1) (length v2))
-          False
-          (iter:every! id (iter:zip-with! == (iter:into-iter v1) (iter:into-iter v2))))))
-
-  (define-instance (Monoid (Vector :a))
-    (inline)
-    (define mempty (new)))
-
-  (define-instance (Semigroup (Vector :a))
-    (inline)
-    (define <> append))
-
-  (define-instance (Functor Vector)
-    (define (map f v)
-      (let out = (with-capacity (length v)))
-      (iter:for-each!
-       (fn (x)
-         (push! (f x) out)
-         Unit)
-       (iter:into-iter v))
-      out))
-
-  (define-instance (Foldable Vector)
-    (define (fold f init vec)
-      (lisp :a (f init vec)
-        (cl:reduce
-         (cl:lambda (b a)
-           (call-coalton-function f b a))
-         vec
-         :initial-value init)))
-    (define (foldr f init vec)
-      (lisp :a (f init vec)
-        (cl:reduce
-         (cl:lambda (a b)
-           (call-coalton-function f a b))
-         vec
-         :initial-value init
-         :from-end cl:t))))
-
-  (define-instance (ram:RandomAccess (Vector :t) :t)
-    (inline)
-    (define (ram:make n x)
-      (with-initial-element n x))
-    (inline)
-    (define (ram:make-uninitialized n)
-      (with-capacity n))
-    (inline)
-    (define (ram:length a)
-      (length a))
-    (inline)
-    (define (ram:readable? _)
-      True)
-    (inline)
-    (define (ram:writable? _)
-      True)
-    (inline)
-    (define (ram:unsafe-aref a n)
-      (index-unsafe n a))
-    (inline)
-    (define (ram:unsafe-set! a n x)
-      (set! n x a)))
-
-  (define-instance (Into (List :a) (Vector :a))
-    (define (into lst)
-      (let ((out (with-capacity (list:length lst)))
-            (inner
-              (fn (lst)
-                (match lst
-                  ((Cons x xs)
-                   (progn
-                     (push! x out)
-                     (inner xs)))
-                  ((Nil) Unit)))))
-        (progn
-          (inner lst)
-          out))))
-
-  (define-instance (Into (Vector :a) (List :a))
-    (inline)
-    (define (into v)
-      (iter:collect! (iter:into-iter v))))
-
-  (define-instance (Iso (Vector :a) (List :a)))
-
-  (define-instance (iter:IntoIterator (Vector :a) :a)
-    (define (iter:into-iter vec)
-      (let idx = (cell:new 0))
-      (iter:with-size
-          (fn ()
-            (let res = (index (cell:read idx) vec))
-            (cell:increment! idx)
-            res)
-        (length vec))))
-
-  (define-instance (iter:FromIterator (Vector :a) :a)
-    (define (iter:collect! iter)
-      (let size = (with-default 0 (iter:size-hint iter)))
-      (let vec = (with-capacity size))
-      (iter:for-each! (fn (x)
-                        (push! x vec)
-                        Unit)
-                      iter)
-      vec))
-
-  (define-instance (Default (Vector :a))
-    (inline)
-    (define default new)))
-
-(defmacro make (cl:&rest elements)
+(cl:defmacro make (cl:&rest elements)
   "Construct a `Vector' containing the ELEMENTS, in the order listed."
   (cl:let* ((length (cl:length elements))
             (vec (cl:gensym "VEC-")))
     `(progn
        (let ,vec = (with-capacity ,length))
        ,@(cl:loop :for elt :in elements
-            :collect `(push! ,elt ,vec))
+            :collect `(coalton-library/vector:push! ,elt ,vec))
        ,vec)))
 
 #+sb-package-locks

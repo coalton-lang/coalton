@@ -91,6 +91,12 @@
                (:file "optional")
                (:file "result")
                (:file "lisparray")
+               (:module "collections"
+                :serial t
+                :components ((:file "classes")
+                             (:file "immutable/list")
+                             (:file "mutable/vector")
+                             (:file "package")))
                (:file "list")
                (:file "vector")
                (:file "char")
@@ -302,14 +308,12 @@
                (:file "iterator-tests")
                (:file "call-coalton-from-lisp")
                (:file "bits-tests")
-               (:file "vector-tests")
                (:file "string-tests")
                (:file "optional-tests")
                (:file "recursive-let-tests")
                (:file "class-tests")
                (:file "struct-tests")
                (:file "type-alias-tests")
-               (:file "list-tests")
                (:file "lisparray-tests")
                (:file "red-black-tests")
                (:file "seq-tests")
@@ -322,6 +326,13 @@
                (:file "file-tests")
                (:file "experimental-tests")
                (:file "exceptions")
+               (:module "collections"
+                :serial t
+                :components ((:file "collection-tests")
+                             (:module "immutable"
+                              :components ((:file "list-tests")))
+                             (:module "mutable"
+                              :components ((:file "vector-tests")))))
                (:module "monad"
                 :serial t
                 :components ((:file "optionalt")

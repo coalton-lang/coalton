@@ -15,7 +15,7 @@
     coalton-library/classes
     (coalton-library/hash as hash))
   (import-from
-    coalton-library/list
+    coalton-library/collections
     filter)
   (export
     first

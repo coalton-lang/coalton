@@ -59,7 +59,7 @@
          (cooked <- (catch (make-breakfast-with moocow)
                       ((DeadlyEgg _)    (resume-to skip))
                       ((UnCracked egg-y)  (resume-to (ServeRaw egg-y)))))
-         (pure (vector:push! cooked eggs))))
+         (pure (cln:push! cooked eggs))))
       eggs))
 
   (declare th (MadEgg -> :a))
@@ -86,7 +86,7 @@
 
 (define-test test-resume ()
   ;; every 5th egg will be deadly and therefore skipped
-  (is (== 8 (vector:length (make-breakfast-for 10))))
+  (is (== 8 (cln:length (make-breakfast-for 10))))
   
   ;; test that non-nullary resumptions work ex expected.
   (let ((egg1 (Goose False False))
@@ -112,15 +112,13 @@
     (let n = 
       (catch (lisp integer () (cl:/ 10 (cl:random 2)))
         (_ 0)))
-    (vector:push! n v))
-  (is (== 1000 (vector:length v)))
+    (cln:push! n v))
+  (is (== 1000 (cln:length v)))
   
   (for _ in (iter:up-to 1000) 
     (let n = 
       (catch (lisp integer () (cl:/ 10 (cl:random 2)))
         (_ 0)))
-    (vector:push! n v))
+    (cln:push! n v))
 
-  (is (== 2000 (vector:length v))))
-
-
+  (is (== 2000 (cln:length v))))

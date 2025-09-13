@@ -382,7 +382,7 @@
                               (find-package "COALTON-LIBRARY/STRING")
                               (find-package "COALTON-LIBRARY/TUPLE")
                               (find-package "COALTON-LIBRARY/OPTIONAL")
-                              (find-package "COALTON-LIBRARY/LIST")
+                              (find-package "COALTON-LIBRARY/COLLECTIONS/IMMUTABLE/LIST")
                               (find-package "COALTON-LIBRARY/RESULT")))
     (return-from check-for-orphan-instance))
 
