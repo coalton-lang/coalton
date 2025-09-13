@@ -24,7 +24,7 @@
    #:singleton?
    #:copy
    #:set-capacity!
-   #:kill!
+   #:resect!
    #:clear!
    #:push!
    #:pop!
@@ -99,7 +99,9 @@
   (inline)
   (declare subseq (Vector :a -> UFix -> UFix -> Vector :a))
   (define (subseq v start end)
-    "Compute a subseq of a vector bounded by given indices."
+    "Compute a subseq of a vector bounded by given indices.
+
+`start` index is inclusive and `end` index is exclusive."
     (let ((real-start (min start end))
           (real-end (min (length v) (max start end))))
       (lisp (Vector :a) (real-start real-end v)
@@ -145,16 +147,17 @@
       Unit))
 
   (inline)
-  (declare kill! (Vector :a -> UFix -> UFix -> Vector :a))
-  (define (kill! v start end)
-    "Destructively kills a subsequence in a vector bounded by given indices."
+  (declare resect! (Vector :a -> UFix -> UFix -> Unit))
+  (define (resect! v start end)
+    "Destructively kills a subsequence in a vector bounded by given indices.
+
+`start` index is inclusive and `end` index is exclusive."
     (let ((real-start (min start end))
           (real-end (min (length v) (max start end)))
           (new-size (- (length v) (- real-end real-start))))
       (lisp (Vector :a) (real-start real-end v)
         (cl:replace v v :start1 real-start :start2 real-end))
-      (set-capacity! new-size v)
-      v))
+      (set-capacity! new-size v)))
 
   (inline)
   (declare clear! (Vector :a -> Unit))

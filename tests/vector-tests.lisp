@@ -70,16 +70,15 @@
 
   (is (== False (vector:singleton? vec2)))
   (is (== False (vector:singleton? (vector:new))))
-  (is (== True (vector:singleton? (vector:make 1))))
-  )
+  (is (== True (vector:singleton? (vector:make 1)))))
 
-(define-test test-vector-kill ()
+(define-test test-vector-resect ()
   (let v = (vector:make 0 1 2 3 4 5 6))
-  (vector:kill! v 2 4)
+  (vector:resect! v 2 4)
   (is (== v (vector:make 0 1 4 5 6)))
 
   (let v = (vector:make 0 1 2 3 4 5 6))
-  (vector:kill! v 0 400)
+  (vector:resect! v 0 400)
   (is (== v (vector:make))))
 
 (define-test test-vector-subseq ()
