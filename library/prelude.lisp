@@ -247,6 +247,7 @@
    (#:optionalt #:coalton-library/monad/optionalt)
    (#:iter #:coalton-library/iterator)
    (#:sys #:coalton-library/system)
+   (#:stream #:coalton-library/stream)
    (#:file #:coalton-library/file)
    (#:experimental #:coalton-library/experimental)
    (#:loops #:coalton-library/experimental/loops)))
