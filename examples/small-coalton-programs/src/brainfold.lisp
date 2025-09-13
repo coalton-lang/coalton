@@ -198,7 +198,7 @@
   (define (parse input-string)
     "Parses a Brainfold instruction string, returns a Vector of Brainfold Commands."
     (let cmds = (new-collection))
-    (let vecs = (the (Vector (Vector Cmd)) (vec:make)))
+    (let vecs = (vec:make))
     (let ((parser (fn (input-string v)
                     (let ((head-tail (str:split 1 input-string)))
                       (match (fst head-tail)

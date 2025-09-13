@@ -9,7 +9,6 @@
    (#:types #:coalton-library/types))
   (:export
    #:Collection
-   #:NestedCollection
    #:new-collection
    #:new-repeat
    #:new-from
@@ -66,9 +65,6 @@
    #:remove-at
    #:remove-at#
    #:set-at
-
-   #:zip
-   #:zip-with
 
    #:ImmutableLinearCollection
    
@@ -333,12 +329,9 @@ will not change.")
   (declare length (LinearCollection :m :a => :m -> UFix))
   (define length size)
 
-  ;; (declare zip ((itr:IntoIterator :m :a) (itr:IntoIterator :n :b) ; (LinearCollection :c (Tuple :a :b))
-  ;;               (itr:FromIterator :c (Tuple :a :b))
-  ;;               => :m -> :n -> :c))
-  ;; (declare zip
-  ;;          ((ITR:FROMITERATOR :E (TUPLE :A :B)) (ITR:INTOITERATOR :C :A) (ITR:INTOITERATOR :D :B) => :C -> :D -> :E))
-  ;; See: https://github.com/coalton-lang/coalton/issues/1643
+  (declare zip ((itr:IntoIterator :m :a) (itr:IntoIterator :n :b)
+                (LinearCollection :c (Tuple :a :b)) (itr:FromIterator :c (Tuple :a :b))
+                => :m -> :n -> :c))
   (define (zip as bs)
     "Return a collection of two iterable object's items zipped together."
     (itr:collect! (itr:zip! (itr:into-iter as) (itr:into-iter bs))))
