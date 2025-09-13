@@ -131,20 +131,20 @@
   ;; Check that functions defined as a lambda are not subject to the
   ;; monomorphism restriction
   (check-coalton-types
-   "(define-class (Show :a))
+   "(define-class (Disp :a))
 
-    (declare show (Show :a => :a -> String))
-    (define (show _x) \"not impl\")
+    (declare disp (Disp :a => :a -> String))
+    (define (disp _x) \"not impl\")
 
     (define (f a)
-      (show a))
+      (disp a))
 
     (define g
       (fn (b)
-        (show b)))"
+        (disp b)))"
 
-   '("f" . "(Show :a => :a -> String)")
-   '("g" . "(Show :a => :a -> String)")))
+   '("f" . "(Disp :a => :a -> String)")
+   '("g" . "(Disp :a => :a -> String)")))
 
 (deftest test-type-classes ()
   ;; Check that type constraints are propagated

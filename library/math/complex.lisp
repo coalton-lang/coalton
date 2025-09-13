@@ -51,7 +51,10 @@ component types."
         (lisp types:LispType (inner-type)
           (cl:if (cl:member inner-type *native-complex-types*)
                  `(cl:complex ,inner-type)
-                 'Complex))))))
+                 'Complex))))
+    (define (types:coalton-type-string _)
+      ;; FIXME!!
+      "Complex")))
 
 ;; Quirk: We had to split the above COALTON-TOPLEVEL from the bottom
 ;; one because Allegro needs to know about Complex before it gets used
