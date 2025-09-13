@@ -100,7 +100,7 @@
   (declare subseq (Vector :a -> UFix -> UFix -> Vector :a))
   (define (subseq v start end)
     "Compute a subseq of a vector bounded by given indices."
-    (let ((real-start (max 0 (min start end)))
+    (let ((real-start (min start end))
           (real-end (min (length v) (max start end))))
       (lisp (Vector :a) (real-start real-end v)
         (cl:let ((result (cl:make-array (cl:- real-end real-start) :adjustable cl:t))) 
