@@ -29,10 +29,13 @@ Common Lisp makes a distinction between file and directory paths. Directory path
    (#:types #:coalton-library/types)
    (#:char #:coalton-library/char))
   (:export
-   
+
    #:Pathname
 
    #:FileError
+   #:PathError
+   #:LispError
+   #:EOF
 
    #:directory-pathname?
    #:file-pathname?
@@ -54,7 +57,7 @@ Common Lisp makes a distinction between file and directory paths. Directory path
    #:delete-file!
 
    #:FileStream
-   
+
    #:IfExists
    #:EError
    #:Overwrite
@@ -71,7 +74,7 @@ Common Lisp makes a distinction between file and directory paths. Directory path
 
    #:read-char
    #:write-char
-  
+
    #:flush
    #:file-position
    #:set-file-position
@@ -124,7 +127,7 @@ Common Lisp makes a distinction between file and directory paths. Directory path
     (define (into p)
       (lisp String (p)
         (cl:namestring p))))
-  
+
   (define-instance (Eq Pathname)
     (define (== a b)
       (lisp Boolean (a b)
@@ -211,7 +214,7 @@ Automatically returns the lisp condition if one is thrown."
     (if dir
         (action p)
         (Err (PathError "Invalid directory path." p))))
-  
+
   (declare directory-exists? ((Into :a Pathname) => :a -> (Result FileError Boolean)))
   (define (directory-exists? path)
     "Returns True if a pathname names a directory that exists."
@@ -258,7 +261,7 @@ Automatically returns the lisp condition if one is thrown."
 ;;;
 
 (coalton-toplevel
-  
+
   (declare create-directory! ((Into :a Pathname) => :a -> (Result FileError Pathname)))
   (define (create-directory! path)
     "This is equivalent to `mkdir -p`. Creates a directory and its parents. The pathname must be a valid directory pathname."
@@ -288,7 +291,7 @@ Automatically returns the lisp condition if one is thrown."
   ;;
   ;; Handling directory behavior that depends on emptiness
   ;;
-  
+
   (declare empty? ((Into :a Pathname) => :a -> (Result FileError Boolean)))
   (define (empty? path)
     "Checks whether a directory is empty."
@@ -303,7 +306,7 @@ Automatically returns the lisp condition if one is thrown."
     (let p = (the Pathname (into path)))
     (lisp (Result FileError :a) (p)
       (%handle-file-function (uiop:delete-empty-directory p))))
-  
+
   (declare remove-directory-recursive! ((Into :a Pathname) => :a -> (Result FileError Unit)))
   (define (remove-directory-recursive! path)
     "Deletes a target directory recursively. Equivalent to `rm -r`. Errors if the path is not a directory."
@@ -311,7 +314,7 @@ Automatically returns the lisp condition if one is thrown."
                           (lisp (Result FileError Unit) (p)
                             (%handle-file-function (uiop:delete-directory-tree p :validate cl:t))))
                         path))
-  
+
   (declare system-relative-pathname ((Into :a String) => :a -> String -> (Result FileError Pathname)))
   (define (system-relative-pathname system-name name)
     "Generates a system-relative-pathname for a given filename or path. This is a wrapper for `asdf:system-relative-pathname`. `Name` will likely be an empty string unless a subdirectory or filename is specified."
