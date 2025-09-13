@@ -2043,7 +2043,8 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                                       (tc-env-env env)))
             (setf env-tvars
                   (expand-local-tvars local-tvars
-                                      (tc:apply-substitution subs env-tvars)
+                                      (tc:type-variables
+                                       (tc:apply-substitution subs env-tvars))
                                       preds
                                       (tc-env-env env)))
 
@@ -2277,8 +2278,18 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
         (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
 
         (setf preds (tc:apply-substitution subs preds))
-        (setf local-tvars (expand-local-tvars env-tvars local-tvars preds (tc-env-env env)))
-        (setf env-tvars (expand-local-tvars local-tvars (tc:apply-substitution subs env-tvars) preds (tc-env-env env)))
+        (setf local-tvars
+              (expand-local-tvars env-tvars
+                                  local-tvars
+                                  preds
+                                  (tc-env-env env)))
+
+        (setf env-tvars
+              (expand-local-tvars local-tvars
+                                  (tc:type-variables
+                                   (tc:apply-substitution subs env-tvars))
+                                  preds
+                                  (tc-env-env env)))
 
         (multiple-value-bind (deferred-preds retained-preds)
             (tc:split-context (tc-env-env env) env-tvars preds subs)
@@ -2654,3 +2665,4 @@ and return the set difference of the expansion and ENV-TVARS."
          (expansion (tc:generic-closure local-tvars fundeps :test #'tc:ty=))
          (expansion (remove-duplicates expansion :test #'tc:ty=)))
     (set-difference expansion env-tvars :test #'tc:ty=)))
+
