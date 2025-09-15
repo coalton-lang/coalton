@@ -58,6 +58,25 @@
                 (setf type (tc:function-type-to type))))
       (node-type expr)))
 
+  (:method ((expr node-multiple-values-application) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (assert (not (null (node-multiple-values-application-rands expr))))
+
+    (let ((type (node-multiple-values-application-rator-type expr))
+
+          (subs nil))
+      (loop :for arg :in (node-multiple-values-application-rands expr)
+            :for arg-ty := (typecheck-node arg env) :do
+              (progn
+                (setf subs (tc:unify subs (tc:function-type-from type) arg-ty))
+                (setf subs (tc:unify subs arg-ty (tc:function-type-from type)))
+                (setf type (tc:function-type-to type))))
+      (node-type expr)))
+
+  (:method ((expr node-multiple-values) env)
+    (error "todo"))
+
   (:method ((expr node-abstraction) env)
     (declare (type tc:environment env)
              (values tc:ty))
