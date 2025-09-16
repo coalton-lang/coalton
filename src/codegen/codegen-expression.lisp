@@ -14,8 +14,8 @@
    #:node-variables)
   (:import-from
    #:coalton-impl/codegen/codegen-match
-   #:codegen-cond-case
-   #:codegen-case-case
+   #:codegen-cond-branch
+   #:codegen-case-branch
    #:codegen-cond-fallback
    #:codegen-case-fallback
    #:codegen-cond-match
@@ -297,7 +297,6 @@
            ;; Use a `case' instead of a `cond' when matching on an
            ;; enum type.
            (jumptable? (and (tc:tycon-p match-expr-type)
-                            (not (equalp match-expr-type tc:*boolean-type*))
                             (tc:type-entry-enum-repr
                              (tc:lookup-type env (tc:tycon-name match-expr-type)))))
            ;; Emit a fallback when there is no catch-all branch or if
@@ -322,16 +321,16 @@
                     :for pattern := (match-branch-pattern branch)
                     :for expr := (codegen-expression (match-branch-body branch) env)
                     :collect (if jumptable?
-                                 (codegen-case-case expr
-                                                    pattern
-                                                    match-var
-                                                    match-expr-type
-                                                    env)
-                                 (codegen-cond-case expr
-                                                    pattern
-                                                    match-var
-                                                    match-expr-type
-                                                    env))
+                                 (codegen-case-branch expr
+                                                      pattern
+                                                      match-var
+                                                      match-expr-type
+                                                      env)
+                                 (codegen-cond-branch expr
+                                                      pattern
+                                                      match-var
+                                                      match-expr-type
+                                                      env))
                       :into cases
                     :finally (return
                                (cond
@@ -360,20 +359,12 @@
                                  (t
                                   (if jumptable? 
                                       (codegen-case-match
-                                       subexpr 
+                                       match-var 
                                        cases
                                        (and fallback? (codegen-cond-fallback)))
                                       (codegen-cond-match
                                        cases
-                                       (and fallback? (codegen-cond-fallback)))))
-                                 ;; Patterns have a var/wild, don't
-                                 ;; emit fallback.
-                                 ;; (
-                                 ;;  `(cond
-                                 ;;     ,@cond-cases))
-
-                                 ;; Ordinary cond with fallback.
-                                 )))))))
+                                       (and fallback? (codegen-cond-fallback))))))))))))
 
   (:method ((expr node-seq) env)
     (declare (type tc:environment env))

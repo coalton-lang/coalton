@@ -7,8 +7,8 @@
    (#:pattern #:coalton-impl/codegen/pattern)
    (#:codegen-pattern #:coalton-impl/codegen/codegen-pattern))
   (:export
-   #:codegen-cond-case
-   #:codegen-case-case
+   #:codegen-cond-branch
+   #:codegen-case-branch
    #:codegen-cond-fallback
    #:codegen-case-fallback
    #:codegen-cond-match
@@ -16,7 +16,7 @@
 
 (in-package #:coalton-impl/codegen/codegen-match)
 
-(defun codegen-cond-case (expr pattern match-var match-expr-type env)
+(defun codegen-cond-branch (expr pattern match-var match-expr-type env)
   (declare (type t expr)
            (type pattern:pattern pattern)
            (type symbol match-var)
@@ -44,7 +44,7 @@
                            nil)))
              ,expr))))))
 
-(defun codegen-case-case (expr pattern match-var match-expr-type env)
+(defun codegen-case-branch (expr pattern match-var match-expr-type env)
   (declare (type t expr)
            (type pattern:pattern pattern)
            (type symbol match-var)
@@ -58,12 +58,12 @@
 
     (cond
       ((pattern:pattern-literal-p pattern)
-       `(,(pattern:pattern-literal-value pattern)
+       `((,(pattern:pattern-literal-value pattern))
          ,expr))
       ((pattern:pattern-constructor-p pattern)
        (let* ((name (pattern:pattern-constructor-name pattern))
               (entry (tc:lookup-constructor env name)))
-         `(,(tc:constructor-entry-compressed-repr entry)
+         `((,(tc:constructor-entry-compressed-repr entry))
            ,expr)))
       (t
        `(otherwise
