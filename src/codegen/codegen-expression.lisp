@@ -297,6 +297,7 @@
            ;; Use a `case' instead of a `cond' when matching on an
            ;; enum type.
            (jumptable? (and (tc:tycon-p match-expr-type)
+                            (not (equalp match-expr-type tc:*boolean-type*))
                             (tc:type-entry-enum-repr
                              (tc:lookup-type env (tc:tycon-name match-expr-type)))))
            ;; Emit a fallback when there is no catch-all branch or if
@@ -331,7 +332,7 @@
                                                     match-var
                                                     match-expr-type
                                                     env))
-                      :into cond-cases
+                      :into cases
                     :finally (return
                                (cond
                                  ;; A couple trivial one-branch cases.
@@ -350,21 +351,20 @@
                                    (and (settings:coalton-release-p)
                                         exhaustive?
                                         one-pattern?))
-                                  (unless (= 1 (length cond-cases))
+                                  (unless (= 1 (length cases))
                                     (util:coalton-bug "Expected to codegen one match branch, but several were codegened."))
-                                  (destructuring-bind ((cond-test cond-result)) cond-cases
+                                  (destructuring-bind ((cond-test cond-result)) cases
                                     (declare (ignore cond-test))
-                                    (print cond-result)
                                     cond-result))
 
                                  (t
                                   (if jumptable? 
                                       (codegen-case-match
                                        subexpr 
-                                       cond-cases
+                                       cases
                                        (and fallback? (codegen-cond-fallback)))
                                       (codegen-cond-match
-                                       cond-cases
+                                       cases
                                        (and fallback? (codegen-cond-fallback)))))
                                  ;; Patterns have a var/wild, don't
                                  ;; emit fallback.
