@@ -90,6 +90,16 @@ for control flow."
 ;;; Codegen Functions
 ;;;
 
+(defun codegen-binding-types (bindings types)
+  `(declare
+    (ignorable ,@(mapcar #'car bindings))
+    ,@(if (not settings:*emit-type-annotations*)
+          nil
+          (loop :for binding :in bindings
+                :for var := (car binding)
+                :for type :in types
+                :collect `(type ,type ,var)))))
+
 (defun codegen-cond-branch (expr pattern match-var match-expr-type env)
   "Generate code for a `cond' branch."
   (declare (type t expr)
@@ -103,21 +113,11 @@ for control flow."
       (codegen-pattern:codegen-pattern pattern match-var match-expr-type env)
 
     `(,pred
-      ,(cond
-         ((null bindings)
-          expr)
-         (t
-          `(let ,bindings
-             (declare (ignorable ,@(mapcar #'car bindings))
-                      ,@(cond
-                          (settings:*emit-type-annotations*
-                           (loop :for binding :in bindings
-                                 :for var := (car binding)
-                                 :for type :in types
-                                 :collect `(type ,type ,var)))
-                          (t
-                           nil)))
-             ,expr))))))
+      ,(if (null bindings)
+           expr 
+           `(let ,bindings
+              ,(codegen-binding-types bindings types)
+              ,expr)))))
 
 (defun codegen-case-branch (expr pattern match-var match-expr-type env)
   "Generate code for a `case' branch."
@@ -144,15 +144,7 @@ for control flow."
       (t
        `(otherwise
          (let ,bindings
-           (declare (ignorable ,@(mapcar #'car bindings))
-                    ,@(cond
-                        (settings:*emit-type-annotations*
-                         (loop :for binding :in bindings
-                               :for var := (car binding)
-                               :for type :in types
-                               :collect `(type ,type ,var)))
-                        (t
-                         nil)))
+           ,(codegen-binding-types bindings types)
            ,expr))))))
 
 (defun codegen-branch (expr pattern match-var match-expr-type env jumptablep)
