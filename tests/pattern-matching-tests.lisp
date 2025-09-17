@@ -1,5 +1,53 @@
 (in-package #:coalton-native-tests)
 
+(coalton-toplevel 
+  (repr :enum)
+  (derive Eq)
+  (define-type MyEnum
+    Jalapeno
+    Onion
+    Lime))
+
+(define-test test-match-on-enum ()
+  (let ((declare f (MyEnum -> String))
+        (f (fn (x)
+             (match x
+               ((Jalapeno) "jalapeno")
+               ((Onion) "onion")
+               (_ "lime?")))))
+    (is (== (f Jalapeno)
+            "jalapeno"))
+    (is (== (f Onion)
+            "onion"))
+    (is (== (f Lime)
+            "lime?")))
+
+  (let ((declare f (MyEnum -> (Optional MyEnum)))
+        (f (fn (x)
+             (match x
+               ((Jalapeno) None)
+               ((Onion) None)
+               (x (Some x))))))
+    (is (== (f Jalapeno)
+            None))
+    (is (== (f Onion)
+            None))
+    (is (== (f Lime)
+            (Some Lime))))
+
+  (let ((declare f (Ord -> String))
+        (f (fn (x)
+             (match x
+               ((LT) "lt")
+               ((EQ) "eq")
+               ((GT) "gt")))))
+    (is (== (f LT)
+            "lt"))
+    (is (== (f EQ)
+            "eq"))
+    (is (== (f GT)
+            "gt"))))
+
 (define-test test-match-on-ints ()
   (let ((f (fn (x)
              (match x

@@ -273,6 +273,7 @@ When true, returns two `ast:node' objects representing then/else branches."
             ;;
             ;; When matching on a type we can use `cl:eql' on can be
             ;; simplified to a jumptable using `cl:case'.
+            ;; Currently this is only applied to types declared as enum.
             (jumptablep
              (codegen-case-match
               match-var
