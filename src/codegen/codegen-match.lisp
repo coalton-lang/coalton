@@ -17,6 +17,7 @@
 (in-package #:coalton-impl/codegen/codegen-match)
 
 (defun codegen-cond-branch (expr pattern match-var match-expr-type env)
+  "Generate code for a `cond' branch."
   (declare (type t expr)
            (type pattern:pattern pattern)
            (type symbol match-var)
@@ -45,6 +46,7 @@
              ,expr))))))
 
 (defun codegen-case-branch (expr pattern match-var match-expr-type env)
+  "Generate code for a `case' branch."
   (declare (type t expr)
            (type pattern:pattern pattern)
            (type symbol match-var)
@@ -80,18 +82,22 @@
            ,expr))))))
 
 (defun codegen-cond-fallback ()
+  "Generate code for a `cond' fallback."
   (declare (values t &optional))
 
   `(t
     (error "Pattern match not exhaustive error.")))
 
 (defun codegen-case-fallback ()
+  "Generate code for a `case' fallback."
   (declare (values t &optional))
 
   `(otherwise
     (error "Pattern match not exhaustive error.")))
 
 (defun codegen-cond-match (cases &optional fallback)
+  (declare (values t &optional))
+
   `(cond
      ,@cases
      ,@(if fallback
@@ -99,6 +105,8 @@
            '())))
 
 (defun codegen-case-match (match-expr cases &optional fallback)
+  (declare (values t &optional))
+
   `(case ,match-expr
      ,@cases
      ,@(if fallback
