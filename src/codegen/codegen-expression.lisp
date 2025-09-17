@@ -248,16 +248,16 @@
   (:method ((expr node-match) env)
     (declare (type tc:environment env))
       
-    (flet ((codegen-branches (subexpr-var subexpr-type jumptable?)
+    (flet ((codegen-branches (subexpr-var subexpr-type jumptablep)
              (loop :for branch :in (node-match-branches expr)
                    :for pattern := (match-branch-pattern branch)
                    :for code := (codegen-expression (match-branch-body branch) env)
-                   :collect (codegen-branch code
-                                            pattern
-                                            subexpr-var
-                                            subexpr-type
-                                            env
-                                            jumptable?))))
+                   :collect (codegen-match-branch code
+                                                  pattern
+                                                  subexpr-var
+                                                  subexpr-type
+                                                  env
+                                                  jumptablep))))
 
       (let ((subexpr (codegen-expression (node-match-expr expr) env))
             (subexpr-type (node-type (node-match-expr expr)))

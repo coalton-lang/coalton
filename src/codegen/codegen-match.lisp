@@ -11,7 +11,7 @@
    #:match-emit-fallback-p
    #:match-emit-branchless-p
    #:match-emit-if-p
-   #:codegen-branch
+   #:codegen-match-branch
    #:codegen-match))
 
 (in-package #:coalton-impl/codegen/codegen-match)
@@ -181,7 +181,7 @@ When true, returns two `ast:node' objects representing then/else branches."
            ,(codegen-binding-types bindings types)
            ,code))))))
 
-(defun codegen-branch (code pattern match-var match-expr-type env jumptablep)
+(defun codegen-match-branch (code pattern match-var match-expr-type env jumptablep)
   "Generate code for a match branch."
   (declare (type t code)
            (type pattern:pattern pattern)
@@ -240,8 +240,8 @@ When true, returns two `ast:node' objects representing then/else branches."
   (declare (type symbol match-var)
            (type t subexpr-code)
            (type tc:ty subexpr-type)
-           (type tc:environment env)
            (type list branches)
+           (type tc:environment env)
            (type t jumptablep)
            (type t fallbackp)
            (type t branchlessp)
