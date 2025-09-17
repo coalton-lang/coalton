@@ -312,7 +312,7 @@
                      `(ignorable ,match-var)
                      (if settings:*emit-type-annotations*
                          (list `(type ,(tc:lisp-type match-expr-type env) ,match-var))
-                         Nil)))
+                         nil)))
          (locally
              #+sbcl (declare (sb-ext:muffle-conditions sb-ext:code-deletion-note))
              ;; Here we will collect all of the COND cases first, then
