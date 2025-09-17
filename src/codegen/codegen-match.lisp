@@ -21,6 +21,8 @@
 ;;;
 
 (defun match-exhaustive-p (match env)
+  "Check if match branches cover all cases of the type of the match
+subexpression."
   (declare (type ast:node-match match)
            (type tc:environment env)
            (values t &optional))
@@ -31,6 +33,8 @@
    env))
 
 (defun match-has-catch-all-p (match)
+  "Check if match expression has a branch with a wildcard or variable
+pattern to catch all inputs."
   (declare (type ast:node-match match)
            (values t &optional))
 
