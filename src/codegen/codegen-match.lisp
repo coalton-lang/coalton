@@ -10,9 +10,9 @@
    #:match-emit-jumptable-p
    #:match-emit-fallback-p
    #:match-emit-branchless-p
+   #:match-emit-if-p
    #:codegen-branch
-   #:codegen-cond-match
-   #:codegen-case-match))
+   #:codegen-match))
 
 (in-package #:coalton-impl/codegen/codegen-match)
 
@@ -20,77 +20,111 @@
 ;;; Optimization Predicates
 ;;;
 
-(defun match-exhaustive-p (expr env)
-  (declare (type ast:node-match expr)
+(defun match-exhaustive-p (match env)
+  (declare (type ast:node-match match)
            (type tc:environment env)
            (values t &optional))
 
   (pattern:patterns-exhaustive-p
-   (mapcar #'ast:match-branch-pattern (ast:node-match-branches expr))
-   (ast:node-type (ast:node-match-expr expr))
+   (mapcar #'ast:match-branch-pattern (ast:node-match-branches match))
+   (ast:node-type (ast:node-match-expr match))
    env))
 
-(defun match-has-catch-all-p (expr)
-  (declare (type ast:node-match expr)
+(defun match-has-catch-all-p (match)
+  (declare (type ast:node-match match)
            (values t &optional))
 
   (member-if (lambda (pat)
                (or (pattern:pattern-wildcard-p pat)
                    (pattern:pattern-var-p pat)))
-             (ast:node-match-branches expr)
+             (ast:node-match-branches match)
              :key #'ast:match-branch-pattern))
 
-;; TODO: emit `case' on numbers, symbols, and characters
-(defun match-emit-jumptable-p (expr env)
-  "Emit a `case' instead of a `cond' when matching on an enum type."
-  (declare (type ast:node-match expr)
+;; TODO: emit `cl:case' on numbers, symbols, and characters
+(defun match-emit-jumptable-p (match env)
+  "Emit a `cl:case' instead of a `cl:cond' when matching on an enum type."
+  (declare (type ast:node-match match)
            (type tc:environment env)
            (values t &optional))
 
-  (let ((ty (ast:node-type (ast:node-match-expr expr)))) 
+  (let ((ty (ast:node-type (ast:node-match-expr match))))
     (and (tc:tycon-p ty)
          (tc:type-entry-enum-repr
           (tc:lookup-type env (tc:tycon-name ty))))))
 
-(defun match-emit-fallback-p (expr env)
+(defun match-emit-fallback-p (match env)
   "Emit a fallback branch when there is no catch-all branch or if
 the settings demand it."
-  (declare (type ast:node-match expr)
+  (declare (type ast:node-match match)
            (type tc:environment env)
            (values t &optional))
 
-  (let ((exhaustivep (match-exhaustive-p expr env))) 
+  (let ((exhaustivep (match-exhaustive-p match env)))
     (not
-     (or (match-has-catch-all-p expr)
+     (or (match-has-catch-all-p match)
          (and (settings:coalton-release-p)
               exhaustivep)
-         (and (match-emit-jumptable-p expr env)
+         (and (match-emit-jumptable-p match env)
               exhaustivep)))))
 
-(defun match-emit-branchless-p (expr env)
+(defun match-emit-branchless-p (match env)
   "Emit no conditional branching in cases where match is not used
 for control flow."
-  (declare (type ast:node-match expr)
+  (declare (type ast:node-match match)
            (type tc:environment env)
            (values t &optional))
 
-  (let ((one-branch-p (= 1 (length (ast:node-match-branches expr)))))
-    (and one-branch-p 
+  (let ((one-branch-p (= 1 (length (ast:node-match-branches match)))))
+    (and one-branch-p
          (or
           ;; Case #1: Trivial cases of
           ;;  (match x (_ y))
           ;;  (match x (var y))
-          (match-has-catch-all-p expr)
+          (match-has-catch-all-p match)
           ;; Case #2: An exhaustive one-branch case.
           ;;  (match x (PAT y))
           (and (settings:coalton-release-p)
-               (match-exhaustive-p expr env))))))
+               (match-exhaustive-p match env))))))
+
+(defun match-emit-if-p (match)
+  "Emit match as `cl:if' in cases where the subexpression is a `Boolean'.
+
+When true, returns two `ast:node' objects representing then/else branches."
+  (declare (type ast:node-match match)
+           (values boolean (or null ast:node) (or null ast:node) &optional))
+  
+  (let* ((branches (ast:node-match-branches match))
+         (true-pattern (pattern:make-pattern-constructor :type tc:*boolean-type* :name 'coalton:True :patterns nil))
+         (false-pattern (pattern:make-pattern-constructor :type tc:*boolean-type* :name 'coalton:False :patterns nil))) 
+
+    (cond
+      ((not (and
+             (equalp (ast:node-type (ast:node-match-expr match)) tc:*boolean-type*)
+             (= 2 (length branches))))
+       (values nil nil nil))
+
+      ((and (equalp true-pattern (ast:match-branch-pattern (first branches)))
+            (equalp false-pattern (ast:match-branch-pattern (second branches))))
+       (values t
+               (ast:match-branch-body (first branches))
+               (ast:match-branch-body (second branches))))
+
+      ((and (equalp true-pattern (ast:match-branch-pattern (second branches)))
+            (equalp false-pattern (ast:match-branch-pattern (first branches))))
+       (values t
+               (ast:match-branch-body (second branches))
+               (ast:match-branch-body (first branches)))))))
 
 ;;;
 ;;; Codegen Functions
 ;;;
 
 (defun codegen-binding-types (bindings types)
+  "Generate type declarations for match bindings."
+  (declare (type list bindings)
+           (type t types)
+           (values t &optional))
+
   `(declare
     (ignorable ,@(mapcar #'car bindings))
     ,@(if (not settings:*emit-type-annotations*)
@@ -100,9 +134,9 @@ for control flow."
                 :for type :in types
                 :collect `(type ,type ,var)))))
 
-(defun codegen-cond-branch (expr pattern match-var match-expr-type env)
-  "Generate code for a `cond' branch."
-  (declare (type t expr)
+(defun codegen-cond-branch (code pattern match-var match-expr-type env)
+  "Generate code for a `cl:cond' branch."
+  (declare (type t code)
            (type pattern:pattern pattern)
            (type symbol match-var)
            (type tc:ty match-expr-type)
@@ -114,14 +148,14 @@ for control flow."
 
     `(,pred
       ,(if (null bindings)
-           expr 
+           code
            `(let ,bindings
               ,(codegen-binding-types bindings types)
-              ,expr)))))
+              ,code)))))
 
-(defun codegen-case-branch (expr pattern match-var match-expr-type env)
-  "Generate code for a `case' branch."
-  (declare (type t expr)
+(defun codegen-case-branch (code pattern match-var match-expr-type env)
+  "Generate code for a `cl:case' branch."
+  (declare (type t code)
            (type pattern:pattern pattern)
            (type symbol match-var)
            (type tc:ty match-expr-type)
@@ -135,20 +169,21 @@ for control flow."
     (cond
       ((pattern:pattern-literal-p pattern)
        `((,(pattern:pattern-literal-value pattern))
-         ,expr))
+         ,code))
       ((pattern:pattern-constructor-p pattern)
        (let* ((name (pattern:pattern-constructor-name pattern))
               (entry (tc:lookup-constructor env name)))
          `((,(tc:constructor-entry-compressed-repr entry))
-           ,expr)))
+           ,code)))
       (t
        `(otherwise
          (let ,bindings
            ,(codegen-binding-types bindings types)
-           ,expr))))))
+           ,code))))))
 
-(defun codegen-branch (expr pattern match-var match-expr-type env jumptablep)
-  (declare (type t expr)
+(defun codegen-branch (code pattern match-var match-expr-type env jumptablep)
+  "Generate code for a match branch."
+  (declare (type t code)
            (type pattern:pattern pattern)
            (type symbol match-var)
            (type tc:ty match-expr-type)
@@ -157,28 +192,30 @@ for control flow."
            (values t &optional))
 
   (funcall (if jumptablep #'codegen-case-branch #'codegen-cond-branch)
-           expr
+           code
            pattern
            match-var
            match-expr-type
            env))
 
 (defun codegen-cond-fallback ()
-  "Generate code for a `cond' fallback."
+  "Generate code for a `cl:cond' fallback."
   (declare (values t &optional))
 
   `(t
     (error "Pattern match not exhaustive error.")))
 
 (defun codegen-case-fallback ()
-  "Generate code for a `case' fallback."
+  "Generate code for a `cl:case' fallback."
   (declare (values t &optional))
 
   `(otherwise
     (error "Pattern match not exhaustive error.")))
 
 (defun codegen-cond-match (branches fallbackp)
-  (declare (values t &optional))
+  "Generate code to switch branches with `cl:cond'."
+  (declare (type list branches)
+           (values t &optional))
 
   `(cond
      ,@branches
@@ -187,10 +224,61 @@ for control flow."
            '())))
 
 (defun codegen-case-match (match-var branches fallbackp)
-  (declare (values t &optional))
+  "Generate code to switch branches with `cl:case'."
+  (declare (type symbol match-var)
+           (type list branches)
+           (values t &optional))
 
   `(case ,match-var
      ,@branches
      ,@(if fallbackp
            (list (codegen-case-fallback))
            '())))
+
+(defun codegen-match (match-var subexpr-code subexpr-type branches env jumptablep fallbackp branchlessp)
+  "Generate code for a match expression."
+  (declare (type symbol match-var)
+           (type t subexpr-code)
+           (type tc:ty subexpr-type)
+           (type tc:environment env)
+           (type list branches)
+           (type t jumptablep)
+           (type t fallbackp)
+           (type t branchlessp)
+           (values t &optional))
+
+  `(let ((,match-var ,subexpr-code))
+     (declare ,@(list*
+                 `(ignorable ,match-var)
+                 (if settings:*emit-type-annotations*
+                     (list `(type ,(tc:lisp-type subexpr-type env) ,match-var))
+                     '())))
+     (locally
+         #+sbcl (declare (sb-ext:muffle-conditions sb-ext:code-deletion-note))
+         ,(cond
+            ;; Case #1:
+            ;;
+            ;; When match is not being used for control flow, don't
+            ;; codgen `cond' or `case'.
+            (branchlessp
+             (destructuring-bind ((cond-test cond-result)) branches
+               (declare (ignore cond-test))
+               cond-result))
+
+            ;; Case #2:
+            ;;
+            ;; When matching on a type we can use `cl:eql' on can be
+            ;; simplified to a jumptable using `cl:case'.
+            (jumptablep
+             (codegen-case-match
+              match-var
+              branches
+              fallbackp))
+
+            ;; Case #3:
+            ;;
+            ;; Default to generating a `cl:cond' expression.
+            (t
+             (codegen-cond-match
+              branches
+              fallbackp))))))

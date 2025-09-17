@@ -247,75 +247,41 @@
 
   (:method ((expr node-match) env)
     (declare (type tc:environment env))
+      
+    (flet ((codegen-branches (subexpr-var subexpr-type jumptable?)
+             (loop :for branch :in (node-match-branches expr)
+                   :for pattern := (match-branch-pattern branch)
+                   :for code := (codegen-expression (match-branch-body branch) env)
+                   :collect (codegen-branch code
+                                            pattern
+                                            subexpr-var
+                                            subexpr-type
+                                            env
+                                            jumptable?))))
 
-    ;; If possible codegen a cl:if instead of a cl:cond for Boolean
-    ;; matches.
-    (when (and (equalp (node-type (node-match-expr expr)) tc:*boolean-type*)
-               (= 2 (length (node-match-branches expr)))
-               (equalp (match-branch-pattern (first (node-match-branches expr)))
-                       (make-pattern-constructor :type tc:*boolean-type* :name 'coalton:True :patterns nil))
-               (equalp (match-branch-pattern (second (node-match-branches expr)))
-                       (make-pattern-constructor :type tc:*boolean-type* :name 'coalton:False :patterns nil)))
-      (return-from codegen-expression
-        `(if ,(codegen-expression (node-match-expr expr) env)
-             ,(codegen-expression (match-branch-body (first (node-match-branches expr))) env)
-             ,(codegen-expression (match-branch-body (second (node-match-branches expr))) env))))
+      (let ((subexpr (codegen-expression (node-match-expr expr) env))
+            (subexpr-type (node-type (node-match-expr expr)))
+            (match-var (gensym "MATCH"))
+            (jumptablep (match-emit-jumptable-p expr env))
+            (fallbackp (match-emit-fallback-p expr env))
+            (branchlessp (match-emit-branchless-p expr env)))
 
-    ;; Otherwise do the thing. We perform the following two
-    ;; optimizations if applicable:
-    ;;
-    ;;     - We don't emit an error case if it is definitely not
-    ;;       needed because of a wildcard match, or because the
-    ;;       patterns are exhaustive in release mode.
-    ;;
-    ;;     - We don't emit a type test if we only have one exhaustive
-    ;;       branch.
-    ;;
-    ;; XXX: A further optimization we could do is only emit 1 type
-    ;; test if there are multiple branches for a one-case ADT.
-    (let ((subexpr (codegen-expression (node-match-expr expr) env))
-          (match-expr-type (node-type (node-match-expr expr)))
-          (match-var (gensym "MATCH"))
-          ;; We use the following variables for various optimizations below:
-          (jumptable? (match-emit-jumptable-p expr env))
-          (fallback? (match-emit-fallback-p expr env)))
-      `(let ((,match-var ,subexpr))
-         (declare ,@(list*
-                     `(ignorable ,match-var)
-                     (if settings:*emit-type-annotations*
-                         (list `(type ,(tc:lisp-type match-expr-type env) ,match-var))
-                         nil)))
-         (locally
-             #+sbcl (declare (sb-ext:muffle-conditions sb-ext:code-deletion-note))
-             ;; Here we will collect all of the COND cases first, then
-             ;; we will generate the COND if needed.
-             ,(loop :for branch :in (node-match-branches expr)
-                    :for pattern := (match-branch-pattern branch)
-                    :for code := (codegen-expression (match-branch-body branch) env)
-                    :collect (codegen-branch code
-                                             pattern
-                                             match-var
-                                             match-expr-type
-                                             env
-                                             jumptable?)
-                      :into branches
-                    :finally (return
-                               (cond
-                                 ((match-emit-branchless-p expr env)
-                                  (destructuring-bind ((cond-test cond-result)) branches
-                                    (declare (ignore cond-test))
-                                    cond-result))
+        (multiple-value-bind (emit-if-p then else)
+            (match-emit-if-p expr)
 
-                                 (jumptable?
-                                  (codegen-case-match
-                                   match-var 
-                                   branches
-                                   fallback?))
-
-                                 (t
-                                  (codegen-cond-match
-                                   branches
-                                   fallback?)))))))))
+          (if emit-if-p
+              `(if ,(codegen-expression (node-match-expr expr) env)
+                   ,(codegen-expression then env)
+                   ,(codegen-expression else env)) 
+              (codegen-match
+               match-var
+               subexpr
+               subexpr-type
+               (codegen-branches match-var subexpr-type jumptablep)
+               env
+               jumptablep
+               fallbackp
+               branchlessp))))))
 
   (:method ((expr node-seq) env)
     (declare (type tc:environment env))
