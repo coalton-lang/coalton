@@ -105,15 +105,15 @@ When true, returns two `ast:node' objects representing then/else branches."
   (declare (type ast:node-match match)
            (values boolean (or null ast:node) (or null ast:node) &optional))
 
-  (let* ((branches (ast:node-match-branches match))
-         (true-pattern
-           (pattern:make-pattern-constructor :type tc:*boolean-type*
-                                             :name 'coalton:True
-                                             :patterns nil))
-         (false-pattern
-           (pattern:make-pattern-constructor :type tc:*boolean-type*
-                                             :name 'coalton:False
-                                             :patterns nil)))
+  (let ((branches (ast:node-match-branches match))
+        (true-pattern
+          (pattern:make-pattern-constructor :type tc:*boolean-type*
+                                            :name 'coalton:True
+                                            :patterns nil))
+        (false-pattern
+          (pattern:make-pattern-constructor :type tc:*boolean-type*
+                                            :name 'coalton:False
+                                            :patterns nil)))
 
     (cond
       ;; Case #1:
@@ -293,7 +293,7 @@ When true, returns two `ast:node' objects representing then/else branches."
             ;; Case #1:
             ;;
             ;; When match is not being used for control flow, don't
-            ;; codegen `cond' or `case'.
+            ;; codegen `cl:cond' or `cl:case'.
             (branchlessp
              (destructuring-bind ((cond-test cond-result)) branches
                (declare (ignore cond-test))
