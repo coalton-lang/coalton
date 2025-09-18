@@ -60,18 +60,24 @@ pattern to catch all inputs."
 
 (defun match-emit-fallback-p (match env)
   "Emit a fallback branch when there is no catch-all branch or if
-the settings demand it."
+the match is exhaustive and settings demand it."
   (declare (type ast:node-match match)
            (type tc:environment env)
            (values t &optional))
 
-  (let ((exhaustivep (match-exhaustive-p match env)))
-    (not
-     (or (match-has-catch-all-p match)
-         (and (settings:coalton-release-p)
-              exhaustivep)
-         (and (match-emit-jumptable-p match env)
-              exhaustivep)))))
+  (not (or
+        ;; Case #1:
+        ;;
+        ;; Don't emit a fallback branch if match has a wildcard or
+        ;; variable pattern because we would never reach it anyway.
+        (match-has-catch-all-p match)
+
+        ;; Case #2:
+        ;;
+        ;; Don't emit a fallback branch if match is exhaustive and
+        ;; Coalton is in release mode.
+        (and (settings:coalton-release-p)
+             (match-exhaustive-p match env)))))
 
 (defun match-emit-branchless-p (match env)
   "Emit no conditional branching in cases where match is not used
