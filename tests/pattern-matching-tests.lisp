@@ -48,6 +48,34 @@
     (is (== (f GT)
             "gt"))))
 
+(define-test test-match-on-boolean ()
+  (let ((f (fn (x)
+             (match x
+               ((True) 1)
+               ((False) 2)))))
+    (is (== (f True)
+            1))
+    (is (== (f False)
+            2)))
+
+  (let ((f (fn (x)
+             (match x
+               ((True) True)
+               (x x)))))
+    (is (== (f True)
+            True))
+    (is (== (f False)
+            False)))
+
+  (let ((f (fn (x)
+             (match x
+               ((True) 1)
+               (_ 2)))))
+    (is (== (f True)
+            1))
+    (is (== (f False)
+            2))))
+
 (define-test test-match-on-ints ()
   (let ((f (fn (x)
              (match x

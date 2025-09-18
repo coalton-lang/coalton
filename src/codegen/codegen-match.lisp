@@ -1,5 +1,6 @@
 (defpackage #:coalton-impl/codegen/codegen-match
-  (:use #:cl)
+  (:use
+   #:cl)
   (:local-nicknames
    (#:tc #:coalton-impl/typechecker)
    (#:settings #:coalton-impl/settings)
@@ -82,17 +83,20 @@ for control flow."
     (and one-branch-p
          (or
           ;; Case #1: Trivial cases of
+          ;;
           ;;  (match x (_ y))
           ;;  (match x (var y))
           (match-has-catch-all-p match)
 
           ;; Case #2: An exhaustive one-branch case.
+          ;;
           ;;  (match x (PAT y))
           (and (settings:coalton-release-p)
                (match-exhaustive-p match env))))))
 
 (defun match-emit-if-p (match)
-  "Emit match as `cl:if' in cases where the subexpression is a `Boolean'.
+  "Emit match as `cl:if' in cases where the subexpression is a `Boolean'
+and branches exhaustively pattern match with constructor branches.
 
 When true, returns two `ast:node' objects representing then/else branches."
   (declare (type ast:node-match match)
@@ -109,22 +113,38 @@ When true, returns two `ast:node' objects representing then/else branches."
                                              :patterns nil)))
 
     (cond
+      ;; Case #1:
+      ;;
+      ;; Do not emit `cl:if' unless matching on a boolean with two branches.
       ((not (and
              (equalp (ast:node-type (ast:node-match-expr match)) tc:*boolean-type*)
              (= 2 (length branches))))
        (values nil nil nil))
 
+      ;; Case #2:
+      ;;
+      ;; Emit `cl:if' when first branch is `True' and second branch is `False'
       ((and (equalp true-pattern (ast:match-branch-pattern (first branches)))
             (equalp false-pattern (ast:match-branch-pattern (second branches))))
        (values t
                (ast:match-branch-body (first branches))
                (ast:match-branch-body (second branches))))
 
+      ;; Case #3:
+      ;;
+      ;; Emit `cl:if' when second branch is `True' and first branch is `False'
       ((and (equalp true-pattern (ast:match-branch-pattern (second branches)))
             (equalp false-pattern (ast:match-branch-pattern (first branches))))
        (values t
                (ast:match-branch-body (second branches))
-               (ast:match-branch-body (first branches)))))))
+               (ast:match-branch-body (first branches))))
+
+      ;; Case #4:
+      ;;
+      ;; Do not emit `cl:if' unless exhaustively matching boolean with
+      ;; constructor pattern branches.
+      (t
+       (values nil nil nil)))))
 
 ;;;
 ;;; Codegen Functions
