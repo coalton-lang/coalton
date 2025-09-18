@@ -82,14 +82,16 @@ for control flow."
   (let ((one-branch-p (= 1 (length (ast:node-match-branches match)))))
     (and one-branch-p
          (or
-          ;; Case #1: Trivial cases of
+          ;; Case #1:
           ;;
+          ;; Trivial cases of
           ;;  (match x (_ y))
           ;;  (match x (var y))
           (match-has-catch-all-p match)
 
-          ;; Case #2: An exhaustive one-branch case.
+          ;; Case #2:
           ;;
+          ;; An exhaustive one-branch case
           ;;  (match x (PAT y))
           (and (settings:coalton-release-p)
                (match-exhaustive-p match env))))))
