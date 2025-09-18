@@ -8,12 +8,13 @@
    (#:pattern #:coalton-impl/codegen/pattern)
    (#:codegen-pattern #:coalton-impl/codegen/codegen-pattern))
   (:export
-   #:match-emit-jumptable-p
-   #:match-emit-fallback-p
-   #:match-emit-branchless-p
-   #:match-emit-if-p
-   #:codegen-match-branch
-   #:codegen-match))
+   #:match-emit-jumptable-p             ; FUNCTION
+   #:match-emit-fallback-p              ; FUNCTION
+   #:match-emit-branchless-p            ; FUNCTION
+   #:match-emit-if-p                    ; FUNCTION
+   #:codegen-match-branch               ; FUNCTION
+   #:codegen-match                      ; FUNCTION
+   ))
 
 (in-package #:coalton-impl/codegen/codegen-match)
 
