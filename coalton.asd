@@ -38,8 +38,7 @@
   :depends-on (#:coalton-compiler
                #:coalton/hashtable-shim
                #:trivial-garbage
-               #:alexandria
-               #:flexi-streams)
+               #:alexandria)
   :pathname "library/"
   :serial t
   :components ((:file "set-float-traps")
@@ -240,7 +239,8 @@
                #:coalton/testing
                #:fiasco
                #:quil-coalton/tests
-               #:thih-coalton/tests)
+               #:thih-coalton/tests
+               #:flexi-streams)
   :perform (asdf:test-op (o s)
                          (unless (symbol-call :coalton-tests :run-coalton-tests)
                            (error "Tests failed")))

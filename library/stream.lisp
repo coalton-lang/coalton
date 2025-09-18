@@ -7,22 +7,20 @@
   (:import-from #:coalton-library/system #:LispCondition)
   (:local-nicknames
    (#:vec #:coalton-library/vector)
+   (#:array #:coalton-library/lisparray)
    (#:char #:coalton-library/char)
    (#:list #:coalton-library/list))
   (:export
    #:InputStream #:OutputStream #:IOStream
    #:Readable #:Writable #:Closable
-   #:read #:read-vector
-   #:read-unchecked #:read-vector-unchecked
+   #:read #:read-unchecked #:read-array
+   #:write #:write-array #:write-unchecked #:write-array-unchecked
    #:unread #:peek-unchecked #:peek
    #:make-peekable
-   #:write #:write-vector
-   #:write-unchecked #:write-vector-unchecked
    #:flush #:close #:abort
    #:ReaderErr #:EOF
    #:ReaderPredicate #:Inclusive #:Exclusive
    #:drop-to #:read-to
-   #:read-word #:read-line #:read-all
    #:stdout #:stderr #:stdin))
 
 (in-package #:coalton-library/stream)
@@ -111,11 +109,9 @@
 
 Signals a condition on error."
      (:stream :elt -> :elt))
-    (read-vector-unchecked
-     "Consume `n` elements from a stream.
-
-Signals a condition on error."
-     (:stream :elt -> UFix -> (vec:Vector :elt))))
+    (read-array
+     "Consume `n` elements from a stream and destructively fill array."
+     (:stream :elt -> array:LispArray :elt -> UFix)))
 
   (define-class (Writable :stream :elt)
     "An output or IO stream."
@@ -124,11 +120,11 @@ Signals a condition on error."
 
 Signals a condition on error."
      (:stream :elt -> :elt -> Unit))
-    (write-vector-unchecked
+    (write-array-unchecked
      "Write `n` elements to a stream.
 
 Signals a condition on error."
-     (:stream :elt -> vec:Vector :elt -> Unit))
+     (:stream :elt -> array:LispArray :elt -> Unit))
     (flush
      "Flush buffered output."
      (:stream :elt -> Unit)))
@@ -168,20 +164,18 @@ Signals a condition on error."
     (define (read-unchecked stream)
       (lisp Char (stream)
         (cl:read-char stream)))
-    (define (read-vector-unchecked stream n)
-      (lisp (vec:Vector Char) (stream n)
-        (cl:let ((vec (cl:make-array n :adjustable cl:t)))
-          (cl:read-sequence vec stream)
-          vec))))
+    (define (read-array stream arr)
+      (lisp UFix (stream arr)
+        (cl:read-sequence arr stream))))
 
   (define-instances (Writable (OutputStream Char) (IOStream Char))
     (define (write-unchecked stream elt)
       (lisp Unit (stream elt)
         (cl:write-char elt stream)
         Unit))
-    (define (write-vector-unchecked stream vec)
-      (lisp Unit (stream vec)
-        (cl:write-sequence vec stream)
+    (define (write-array-unchecked stream arr)
+      (lisp Unit (stream arr)
+        (cl:write-sequence arr stream)
         Unit))
     (define (flush stream)
       (lisp Unit (stream)
@@ -192,20 +186,18 @@ Signals a condition on error."
     (define (read-unchecked stream)
       (lisp U8 (stream)
         (cl:read-byte stream)))
-    (define (read-vector-unchecked stream n)
-      (lisp (vec:Vector U8) (stream n)
-        (cl:let ((vec (cl:make-array n :adjustable cl:t)))
-          (cl:read-sequence vec stream)
-          vec))))
+    (define (read-array stream arr)
+      (lisp UFix (stream arr)
+        (cl:read-sequence arr stream))))
 
   (define-instances (Writable (OutputStream U8) (IOStream U8))
     (define (write-unchecked stream elt)
       (lisp Unit (stream elt)
         (cl:write-byte elt stream)
         Unit))
-    (define (write-vector-unchecked stream vec)
-      (lisp Unit (stream vec)
-        (cl:write-sequence vec stream)
+    (define (write-array-unchecked stream arr)
+      (lisp Unit (stream arr)
+        (cl:write-sequence arr stream)
         Unit))
     (define (flush stream)
       (lisp Unit (stream)
@@ -237,27 +229,29 @@ Signals a condition on error."
       (match (vec:pop! (.buffer stream))
         ((None) (read-unchecked (.stream stream)))
         ((Some elt) elt)))
-    (define (read-vector-unchecked stream n)
-      (match (<= n (vec:length (.buffer stream)))
+    (define (read-array stream arr)
+      (let length = (vec:length (.buffer stream)))
+      (match (<= (array:length arr) (vec:length (.buffer stream)))
         ((True)
-         (let result = (vec:subseq (.buffer stream) 0 n))
-         (vec:kill! (.buffer stream) 0 n)
-         result)
+         (let b = (.buffer stream))
+         (lisp Unit (arr b) (cl:replace arr b) Unit)
+         (vec:kill! b 0 length)
+         length)
         ((False)
-         (let result =
-           (vec:append
-            (.buffer stream)
-            (read-vector-unchecked
-             (.stream stream)
-             (- n (vec:length (.buffer stream))))))
+         (let s = (.stream stream))
+         (let b = (.buffer stream))
+         (lisp Unit (arr b) (cl:replace arr b) Unit)
+         (let result = 
+           (lisp UFix (arr s length)
+             (cl:read-sequence arr s :start length)))
          (vec:clear! (.buffer stream))
          result))))
 
   (define-instance (Writable PeekableIOStream U8)
     (define (write-unchecked stream elt)
       (write-unchecked (.stream stream) elt))
-    (define (write-vector-unchecked stream vec)
-      (write-vector-unchecked (.stream stream) vec))
+    (define (write-array-unchecked stream arr)
+      (write-array-unchecked (.stream stream) arr))
     (define (flush stream)
       (flush (.stream stream))))
 
@@ -282,12 +276,6 @@ Signals a condition on error."
     (catch (Some (read-unchecked stream))
       (_ None)))
 
-  (declare read-vector (Readable :stream :elt => :stream :elt -> UFix -> Optional (vec:Vector :elt)))
-  (define (read-vector stream n)
-    "Consume `n` elements from a stream."
-    (catch (Some (read-vector-unchecked stream n))
-      (_ None)))
-
   (declare peek (Peekable :stream :elt => :stream :elt -> Optional :elt))
   (define (peek stream)
     "Get the next element in the stream without consuming it."
@@ -302,12 +290,12 @@ Returns `True` on success, `False` on error."
     (catch (progn (write-unchecked stream elt) True)
       (_ False)))
 
-  (declare write-vector (Writable :stream :elt => :stream :elt -> (vec:Vector :elt) -> Boolean))
-  (define (write-vector stream vec)
+  (declare write-array (Writable :stream :elt => :stream :elt -> array:LispArray :elt -> Boolean))
+  (define (write-array stream vec)
     "Write a vector of elements to a `Writable` stream.
 
 Returns `True` on success, `False` on error."
-    (catch (progn (write-vector-unchecked stream vec) True)
+    (catch (progn (write-array-unchecked stream vec) True)
       (_ False))))
 
 
@@ -351,28 +339,7 @@ Returns `True` on success, `False` on error."
          (when (f elt)
            (unread stream elt)
            (return (Ok stream))))))
-    (Err (EOF (vec:make))))
-
-  (declare read-word ((Peekable :stream :elt) (Whitespace :elt) => :stream :elt -> (Result (ReaderErr :elt) (vec:Vector :elt))))
-  (define (read-word stream)
-    "Read to the next whitespace token (Exclusive)."
-    (drop-to stream (Exclusive (complement whitespace?)))
-    (read-to stream (Exclusive whitespace?)))
-
-  (declare read-line ((Peekable :stream :elt) (Newline :elt) => :stream :elt -> (Result (ReaderErr :elt) (vec:Vector :elt))))
-  (define (read-line stream)
-    "Read to the next newline token (Exclusive)."
-    (match (peek stream)
-      ((Some elt) (when (newline? elt) (read stream) Unit))
-      ((None) (return (Err (EOF mempty)))))
-    (read-to stream (Exclusive newline?)))
-
-  (declare read-all ((Peekable :stream :elt) => :stream :elt -> (vec:Vector :elt)))
-  (define (read-all stream)
-    "Consume elements from a stream until EOF, collecting them into a vector."
-    (match (read-to stream (Inclusive (const False)))
-      ((Ok result) result)
-      ((Err (EOF result)) result))))
+    (Err (EOF (vec:make)))))
 
 ;;
 ;; System Streams
