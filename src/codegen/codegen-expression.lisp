@@ -191,7 +191,7 @@
                ;; wildcard and variable patterns catch all 'error cases
                :for exception-name
                  := (etypecase pattern
-                      (pattern-constructor 
+                      (pattern-constructor
                        (let* ((ctor-name              (pattern-constructor-name pattern))
                               (ctor                   (tc::lookup-constructor env ctor-name)))
                          (tc:constructor-entry-classname ctor)))
@@ -247,7 +247,7 @@
 
   (:method ((expr node-match) env)
     (declare (type tc:environment env))
-      
+
     (flet ((codegen-branches (subexpr-var subexpr-type jumptablep)
              (loop :for branch :in (node-match-branches expr)
                    :for pattern := (match-branch-pattern branch)
@@ -269,19 +269,30 @@
         (multiple-value-bind (emit-if-p then else)
             (match-emit-if-p expr)
 
-          (if emit-if-p
-              `(if ,(codegen-expression (node-match-expr expr) env)
-                   ,(codegen-expression then env)
-                   ,(codegen-expression else env)) 
-              (codegen-match
-               match-var
-               subexpr
-               subexpr-type
-               (codegen-branches match-var subexpr-type jumptablep)
-               env
-               jumptablep
-               fallbackp
-               branchlessp))))))
+          (cond
+            ;; Case #1:
+            ;;
+            ;; Emit a `cl:if' expression on boolean matches
+            ;; with exhaustive constructor pattern branches.
+            (emit-if-p
+             `(if ,(codegen-expression (node-match-expr expr) env)
+                  ,(codegen-expression then env)
+                  ,(codegen-expression else env)))
+
+            ;; Case #2:
+            ;;
+            ;; All other situations are handled by `codegen-match',
+            ;; including jumptables and branchless matches.
+            (t
+             (codegen-match
+              match-var
+              subexpr
+              subexpr-type
+              (codegen-branches match-var subexpr-type jumptablep)
+              env
+              jumptablep
+              fallbackp
+              branchlessp)))))))
 
   (:method ((expr node-seq) env)
     (declare (type tc:environment env))

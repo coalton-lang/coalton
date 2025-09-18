@@ -85,6 +85,7 @@ for control flow."
           ;;  (match x (_ y))
           ;;  (match x (var y))
           (match-has-catch-all-p match)
+
           ;; Case #2: An exhaustive one-branch case.
           ;;  (match x (PAT y))
           (and (settings:coalton-release-p)
@@ -96,10 +97,16 @@ for control flow."
 When true, returns two `ast:node' objects representing then/else branches."
   (declare (type ast:node-match match)
            (values boolean (or null ast:node) (or null ast:node) &optional))
-  
+
   (let* ((branches (ast:node-match-branches match))
-         (true-pattern (pattern:make-pattern-constructor :type tc:*boolean-type* :name 'coalton:True :patterns nil))
-         (false-pattern (pattern:make-pattern-constructor :type tc:*boolean-type* :name 'coalton:False :patterns nil))) 
+         (true-pattern
+           (pattern:make-pattern-constructor :type tc:*boolean-type*
+                                             :name 'coalton:True
+                                             :patterns nil))
+         (false-pattern
+           (pattern:make-pattern-constructor :type tc:*boolean-type*
+                                             :name 'coalton:False
+                                             :patterns nil)))
 
     (cond
       ((not (and
@@ -138,7 +145,7 @@ When true, returns two `ast:node' objects representing then/else branches."
                 :for type :in types
                 :collect `(type ,type ,var)))))
 
-(defun codegen-cond-branch (code pattern match-var match-expr-type env)
+(defun codegen-cond-match-branch (code pattern match-var match-expr-type env)
   "Generate code for a `cl:cond' branch."
   (declare (type t code)
            (type pattern:pattern pattern)
@@ -157,7 +164,7 @@ When true, returns two `ast:node' objects representing then/else branches."
               ,(codegen-binding-types bindings types)
               ,code)))))
 
-(defun codegen-case-branch (code pattern match-var match-expr-type env)
+(defun codegen-case-match-branch (code pattern match-var match-expr-type env)
   "Generate code for a `cl:case' branch."
   (declare (type t code)
            (type pattern:pattern pattern)
@@ -171,14 +178,25 @@ When true, returns two `ast:node' objects representing then/else branches."
     (declare (ignore pred))
 
     (cond
+      ;; Case #1:
+      ;;
+      ;; Emit a list of a single literal pattern to match on.
       ((pattern:pattern-literal-p pattern)
        `((,(pattern:pattern-literal-value pattern))
          ,code))
+
+      ;; Case #2:
+      ;;
+      ;; Emit a list of a single enum symbol to match on.
       ((pattern:pattern-constructor-p pattern)
        (let* ((name (pattern:pattern-constructor-name pattern))
               (entry (tc:lookup-constructor env name)))
          `((,(tc:constructor-entry-compressed-repr entry))
            ,code)))
+
+      ;; Case #3:
+      ;;
+      ;; Emit a variable or wildcard binding in a catch-all branch.
       (t
        `(otherwise
          (let ,bindings
@@ -195,26 +213,14 @@ When true, returns two `ast:node' objects representing then/else branches."
            (type boolean jumptablep)
            (values t &optional))
 
-  (funcall (if jumptablep #'codegen-case-branch #'codegen-cond-branch)
+  (funcall (if jumptablep
+               #'codegen-case-match-branch
+               #'codegen-cond-match-branch)
            code
            pattern
            match-var
            match-expr-type
            env))
-
-(defun codegen-cond-fallback ()
-  "Generate code for a `cl:cond' fallback."
-  (declare (values t &optional))
-
-  `(t
-    (error "Pattern match not exhaustive error.")))
-
-(defun codegen-case-fallback ()
-  "Generate code for a `cl:case' fallback."
-  (declare (values t &optional))
-
-  `(otherwise
-    (error "Pattern match not exhaustive error.")))
 
 (defun codegen-cond-match (branches fallbackp)
   "Generate code to switch branches with `cl:cond'."
@@ -223,9 +229,9 @@ When true, returns two `ast:node' objects representing then/else branches."
 
   `(cond
      ,@branches
-     ,@(if fallbackp
-           (list (codegen-cond-fallback))
-           '())))
+     ,@(if (not fallbackp)
+           '()
+           (list '(t (error "Pattern match not exhaustive error."))))))
 
 (defun codegen-case-match (match-var branches fallbackp)
   "Generate code to switch branches with `cl:case'."
@@ -235,9 +241,9 @@ When true, returns two `ast:node' objects representing then/else branches."
 
   `(case ,match-var
      ,@branches
-     ,@(if fallbackp
-           (list (codegen-case-fallback))
-           '())))
+     ,@(if (not fallbackp)
+           '()
+           (list '(otherwise (error "Pattern match not exhaustive error."))))))
 
 (defun codegen-match (match-var subexpr-code subexpr-type branches env jumptablep fallbackp branchlessp)
   "Generate code for a match expression."
@@ -254,16 +260,17 @@ When true, returns two `ast:node' objects representing then/else branches."
   `(let ((,match-var ,subexpr-code))
      (declare ,@(list*
                  `(ignorable ,match-var)
-                 (if settings:*emit-type-annotations*
-                     (list `(type ,(tc:lisp-type subexpr-type env) ,match-var))
-                     '())))
+                 (if (not settings:*emit-type-annotations*)
+                     '()
+                     (list `(type ,(tc:lisp-type subexpr-type env) ,match-var)))))
+
      (locally
          #+sbcl (declare (sb-ext:muffle-conditions sb-ext:code-deletion-note))
          ,(cond
             ;; Case #1:
             ;;
             ;; When match is not being used for control flow, don't
-            ;; codgen `cond' or `case'.
+            ;; codegen `cond' or `case'.
             (branchlessp
              (destructuring-bind ((cond-test cond-result)) branches
                (declare (ignore cond-test))
@@ -275,15 +282,10 @@ When true, returns two `ast:node' objects representing then/else branches."
             ;; simplified to a jumptable using `cl:case'.
             ;; Currently this is only applied to types declared as enum.
             (jumptablep
-             (codegen-case-match
-              match-var
-              branches
-              fallbackp))
+             (codegen-case-match match-var branches fallbackp))
 
             ;; Case #3:
             ;;
             ;; Default to generating a `cl:cond' expression.
             (t
-             (codegen-cond-match
-              branches
-              fallbackp))))))
+             (codegen-cond-match branches fallbackp))))))
