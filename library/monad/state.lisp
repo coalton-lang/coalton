@@ -34,7 +34,7 @@ Represented as a closure from initial state to updated state and value."
   (inline)
   (declare put (:state -> ST :state Unit))
   (define (put state)
-    "A StatefulComputation with state set to be given state. The returned value is Unit."
+    "A StatefulComputation with state set to be the given state. The returned value is Unit."
     (ST (fn (_) (Tuple state Unit))))
 
   (inline)
@@ -69,7 +69,7 @@ Represented as a closure from initial state to updated state and value."
   (inline)
   (declare swap (:state -> ST :state :state))
   (define (swap state)
-    "A StatefulComputation with state set to be given state. The old state is returned."
+    "A StatefulComputation with state set to be the given state. The old state is returned."
     (ST (fn (old-state) (Tuple state old-state))))
 
   (inline)
