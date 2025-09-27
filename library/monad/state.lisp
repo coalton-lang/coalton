@@ -8,6 +8,9 @@
    #:put
    #:get
    #:modify
+   #:modify-get
+   #:swap
+   #:modify-swap
    #:run))
 
 (in-package #:coalton-library/monad/state)
@@ -54,6 +57,27 @@ Represented as a closure from initial state to updated state and value."
     "Modify the state in a StatefulComputation, discarding the old state."
     (ST (fn (state)
           (Tuple (fs->s state) Unit))))
+
+  (inline)
+  (declare modify-get ((:state -> :state) -> ST :state :state))
+  (define (modify-get fs->s)
+    "Modify the state in a StatefulComputation, discarding the old state. Return the new state."
+    (ST (fn (state)
+          (let ((new-state (fs->s state)))
+            (Tuple new-state new-state)))))
+
+  (inline)
+  (declare swap (:state -> ST :state :state))
+  (define (swap state)
+    "A StatefulComputation with state set to be given state. The old state is returned."
+    (ST (fn (old-state) (Tuple state old-state))))
+
+  (inline)
+  (declare modify-swap ((:state -> :state) -> ST :state :state))
+  (define (modify-swap fs->s)
+    "Modify the state in a StatefulComputation, returning the old state."
+    (ST (fn (old-state)
+          (Tuple (fs->s old-state) old-state))))
 
   ;;
   ;; State Monad instances
