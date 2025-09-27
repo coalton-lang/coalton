@@ -50,11 +50,10 @@ Represented as a closure from initial state to updated state and value."
 
   (inline)
   (declare modify ((:state -> :state) -> ST :state Unit))
-  (define (modify statef)
+  (define (modify fs->s)
     "Modify the state in a StatefulComputation, discarding the old state."
-    (do
-     (state <- get)
-     (put (statef state))))
+    (ST (fn (state)
+          (Tuple (fs->s state) Unit))))
 
   ;;
   ;; State Monad instances
