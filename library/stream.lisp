@@ -1,9 +1,9 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/stream
-    (:use
-     #:coalton
-     #:coalton-library/classes
-     #:coalton-library/builtin
-     #:coalton-library/functions)
+  (:use
+   #:coalton
+   #:coalton-library/classes
+   #:coalton-library/builtin
+   #:coalton-library/functions)
   (:import-from #:coalton-library/system #:LispCondition)
   (:local-nicknames
    (#:vec #:coalton-library/vector)
@@ -232,7 +232,7 @@ Signals a condition on error."
          (let s = (.stream stream))
          (let b = (.buffer stream))
          (lisp Unit (arr b) (cl:replace arr b) Unit)
-         (let result = 
+         (let result =
            (lisp UFix (arr s length)
              (cl:read-sequence arr s :start length)))
          (vec:clear! (.buffer stream))
@@ -305,6 +305,7 @@ Returns `True` on success, `False` on error."
     (EOF (vec:Vector :elt)))
 
   (define-type (ReaderPredicate :elt)
+    "Predicate for `read-to` and `drop-to`."
     (Inclusive (:elt -> Boolean))
     (Exclusive (:elt -> Boolean)))
 
@@ -312,13 +313,14 @@ Returns `True` on success, `False` on error."
   (define (read-to stream pred)
     "Consume elements from a stream, collecting them into a vector."
     (let vec = (vec:make))
-    (while-let (Some elt) = (read stream)
-      (match pred
-        ((Inclusive f)
+    (match pred
+      ((Inclusive f)
+       (while-let (Some elt) = (read stream)
          (vec:push! elt vec)
          (when (f elt)
-           (return (Ok vec))))
-        ((Exclusive f)
+           (return (Ok vec)))))
+      ((Exclusive f)
+       (while-let (Some elt) = (read stream)
          (if (f elt)
              (progn (unread stream elt) (return (Ok vec)))
              (progn (vec:push! elt vec) Unit)))))
@@ -327,12 +329,13 @@ Returns `True` on success, `False` on error."
   (declare drop-to ((Peekable :stream :elt) => :stream :elt -> ReaderPredicate :elt -> (Result (ReaderErr :elt) (:stream :elt))))
   (define (drop-to stream pred)
     "Consume elements from a stream without collecting them."
-    (while-let (Some elt) = (read stream)
-      (match pred
-        ((Inclusive f)
+    (match pred
+      ((Inclusive f)
+       (while-let (Some elt) = (read stream)
          (when (f elt)
-           (return (Ok stream))))
-        ((Exclusive f)
+           (return (Ok stream)))))
+      ((Exclusive f)
+       (while-let (Some elt) = (read stream)
          (when (f elt)
            (unread stream elt)
            (return (Ok stream))))))
@@ -343,19 +346,19 @@ Returns `True` on success, `False` on error."
 ;;
 
 (coalton-toplevel
-  (declare stdout (Unit -> OutputStream :elt))
+  (declare stdout (Unit -> OutputStream Char))
   (define (stdout)
     "Equivalent to `cl:*standard-output*`."
     (lisp (OutputStream :elt) ()
       cl:*standard-output*))
 
-  (declare stderr (Unit -> OutputStream :elt))
+  (declare stderr (Unit -> OutputStream Char))
   (define (stderr)
     "Equivalent to `cl:*error-output*`."
     (lisp (OutputStream :elt) ()
       cl:*error-output*))
 
-  (declare stdin (Unit -> InputStream :elt))
+  (declare stdin (Unit -> InputStream Char))
   (define (stdin)
     "Equivalent to `cl:*standard-input*`."
     (lisp (InputStream :elt) ()
