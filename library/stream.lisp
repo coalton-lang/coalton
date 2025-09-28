@@ -346,18 +346,21 @@ Returns `True` on success, `False` on error."
 ;;
 
 (coalton-toplevel
+  (inline)
   (declare stdout (Unit -> OutputStream Char))
   (define (stdout)
     "Equivalent to `cl:*standard-output*`."
     (lisp (OutputStream :elt) ()
       cl:*standard-output*))
 
+  (inline)
   (declare stderr (Unit -> OutputStream Char))
   (define (stderr)
     "Equivalent to `cl:*error-output*`."
     (lisp (OutputStream :elt) ()
       cl:*error-output*))
 
+  (inline)
   (declare stdin (Unit -> InputStream Char))
   (define (stdin)
     "Equivalent to `cl:*standard-input*`."
