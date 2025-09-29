@@ -69,8 +69,10 @@
 
   (declare substring (String -> UFix -> UFix -> String))
   (define (substring str start end)
-    "Compute a substring of a string bounded by given indices."
-    (let ((real-start (max 0 (min start end)))
+    "Compute a substring of a string bounded by given indices.
+
+`start` index is inclusive and `end` index is exclusive."
+    (let ((real-start (min start end))
           (real-end (min (length str) (max start end))))
       (lisp String (real-start real-end str)
         (cl:subseq str real-start real-end))))
