@@ -108,6 +108,12 @@
         ((Some _) x)
         (_ y))))
 
+  (define-instance (Traversable Optional)
+    (define (traverse fa->mb opt)
+      (match opt
+        ((Some a) (map Some (fa->mb a)))
+        ((None) (pure None)))))
+
   (define-instance (Unwrappable Optional)
     (define (unwrap-or-else succeed fail opt)
       (match opt
