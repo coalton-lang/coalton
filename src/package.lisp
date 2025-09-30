@@ -40,6 +40,7 @@
    #:monomorphize
    #:inline
    #:noinline
+   #:debug-type
    #:likely
    #:unlikely
    #:specialize

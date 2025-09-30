@@ -58,6 +58,11 @@ Returns a new `ast:node'."))
       (t
        child))))
 
+(defmethod transform-intrinsic-application ((rator-name (eql 'coalton:debug-type)) node)
+  (let ((child (first (ast:node-application-rands node))))
+    (format t "~&;; ~A~%" (ast:node-type child))
+    child))
+
 (defun transform-intrinsic-applications (node)
   "Traverse node, transforming all intrinsic-applications for optimization."
   (declare (type ast:node node)
