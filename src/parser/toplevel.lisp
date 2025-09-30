@@ -115,6 +115,11 @@
    #:toplevel-define-instance-head-location      ; ACCESSOR
    #:toplevel-define-instance-compiler-generated ; ACCESSOR
    #:toplevel-define-instance-list               ; TYPE
+   #:toplevel-define-deriver                     ; STRUCT
+   #:make-toplevel-define-deriver                ; CONSTRUCTOR
+   #:toplevel-define-deriver-class               ; ACCESSOR
+   #:toplevel-define-deriver-methods             ; ACCESSOR
+   #:toplevel-define-deriver-list                ; TYPE
    #:toplevel-package-name                       ; ACCESSOR
    #:toplevel-lisp-form                          ; STRUCT
    #:make-toplevel-lisp-form                     ; CONSTRUCTOR
@@ -477,6 +482,22 @@
 (deftype toplevel-define-instance-list ()
   '(satisfies toplevel-define-instance-list-p))
 
+(defstruct (toplevel-define-deriver
+            (:include toplevel-definition)
+            (:copier nil))
+  (class                  (util:required 'class)                  :type symbol :read-only t)
+  (type-or-struct-binding (util:required 'type-or-struct-binding) :type symbol :read-only t)
+  (env-binding            (util:required 'env-binding)            :type symbol :read-only t)
+  (methods                (util:required 'methods)                :type list   :read-only t))
+
+(eval-when (:load-toplevel :compile-toplevel :execute)
+  (defun toplevel-define-deriver-list-p (x)
+    (and (alexandria:proper-list-p x)
+         (every #'toplevel-define-deriver-p x))))
+
+(deftype toplevel-define-deriver-list ()
+  '(satisfies toplevel-define-deriver-list-p))
+
 (defstruct (toplevel-lisp-form
             (:copier nil))
   (body   (util:required 'body)       :type cons            :read-only t)
@@ -531,8 +552,12 @@
   (defines         nil :type toplevel-define-list            :read-only nil)
   (classes         nil :type toplevel-define-class-list      :read-only nil)
   (instances       nil :type toplevel-define-instance-list   :read-only nil)
+  (derivers        nil :type toplevel-define-deriver-list    :read-only nil)
   (lisp-forms      nil :type toplevel-lisp-form-list         :read-only nil)
   (specializations nil :type toplevel-specialize-list        :read-only nil))
+
+;;DEBUG
+(defparameter cl-user::*program* nil)
 
 (defun read-program (stream source &optional mode)
   "Read a PROGRAM from SOURCE (an instance of source-error:source).
@@ -589,6 +614,8 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
     (setf (program-lisp-forms program) (nreverse (program-lisp-forms program)))
     (setf (program-specializations program) (nreverse (program-specializations program)))
 
+    ;;DEBUG
+    (setf cl-user::*program* program)
     program))
 
 (defun read-expression (stream source)
@@ -1040,6 +1067,12 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
      (forbid-attributes attributes form source)
      (let ((instance (parse-define-instance form source)))
        (push instance (program-instances program))
+       t))
+
+    ((coalton:define-deriver)
+     (forbid-attributes attributes form source)
+     (let ((deriver (parse-define-deriver form source)))
+       (push deriver (program-derivers program))
        t))
 
     ((coalton:lisp-toplevel)
@@ -1755,6 +1788,62 @@ consume all attributes")))
          :location (form-location source form)
          :head-location (form-location source (cst:second form))
          :compiler-generated nil)))))
+
+(defun parse-define-deriver (form source)
+  (declare (type cst:cst form)
+           (values toplevel-define-deriver &optional))
+
+  (assert (cst:consp form))
+
+  ;; (define-deriver)
+  (unless (cst:consp (cst:rest form))
+    (parse-error "Malformed deriver definition"
+                 (source:note (source:end-location (form-location source form))
+                              "missing class name")))
+
+  ;; (define-deriver "foo")
+  (unless (and (cst:atom (cst:second form))
+               (symbolp (cst:raw (cst:second form))))
+    (parse-error "Malformed deriver definition"
+                 (source:note (source:end-location (form-location source form))
+                              "invalid class name")))
+
+  ;; (define-deriver Eq)
+  (unless (cst:consp (cst:rest (cst:rest form)))
+    (parse-error "Malformed specialize declaration"
+                 (note-end source form "missing binding list")))
+
+  ;; (define-deriver Eq foo)
+  (unless (and (cst:consp (cst:third form))
+               (= 2 (length (cst:raw (cst:third form)))))
+    (parse-error "Malformed deriver definition"
+                 (source:note (source:end-location (form-location source form))
+                              "invalid binding list")))
+
+  (let* ((class
+           (cst:raw (cst:second form)))
+         (type-or-struct-binding
+           (cst:raw (cst:first (cst:third form))))
+         (env-binding
+           (cst:raw (cst:second (cst:third form))))
+         (docstring
+           (if (not (and (cst:consp (cst:rest (cst:rest (cst:rest form))))
+                         (cst:atom (cst:fourth form))
+                         (stringp (cst:raw (cst:fourth form)))))
+               nil
+               (cst:raw (cst:fourth form))))
+         (methods
+           (loop :for forms := (cst:nthrest (if docstring 4 3) form) :then (cst:rest forms)
+                 :while (cst:consp forms)
+                 :collect (cst:first forms)))) 
+
+    (make-toplevel-define-deriver
+     :class class
+     :type-or-struct-binding type-or-struct-binding
+     :env-binding env-binding
+     :docstring docstring
+     :methods methods
+     :location (form-location source form))))
 
 (defun parse-specialize (form source)
   (declare (type cst:cst form)

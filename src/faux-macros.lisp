@@ -66,6 +66,9 @@
 (define-coalton-toplevel-editor-macro coalton:define-instance (instance &body method-definitions)
   "Define an instance of a type class. (Coalton top-level operator.)")
 
+(define-coalton-toplevel-editor-macro coalton:define-deriver (type class &body method-definitions)
+  "Define a deriver for a type class. (Coalton top-level operator.)")
+
 (define-coalton-toplevel-editor-macro coalton:lisp-toplevel (options &body lisp-toplevel-forms)
   "Include lisp forms. (Coalton top-level operator.)")
 

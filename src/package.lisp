@@ -34,6 +34,7 @@
    #:define-struct
    #:define-class
    #:define-instance
+   #:define-deriver
    #:repr
    #:derive
    #:lisp-toplevel
