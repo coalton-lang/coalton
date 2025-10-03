@@ -182,3 +182,22 @@
     (declare s S)
     (define s \"Hello, world!\")
     (define x (the Integer (m s)))"))
+
+(deftest test-type-aliases-as-predicates ()
+
+  ;; See https://github.com/coalton-lang/coalton/issues/1662
+  (check-coalton-types
+   "(define-class (C :t :u))
+    (define-type T)
+
+    (define-type-alias A T)
+    (declare f (C :t A => :t -> String))
+    (define f (const \"\"))
+
+    (define-type-alias B (List T))
+    (declare g (C :t B => :t -> String))
+    (define g (const \"\"))"
+
+   '("f" . "((C :t T) => (:t -> String))")
+   '("g" . "((C :t (List T)) => (:t -> String))")))
+
