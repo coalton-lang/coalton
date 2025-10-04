@@ -3,6 +3,7 @@
    #:coalton
    #:coalton-library/functions
    #:coalton-library/classes
+   #:coalton-library/monad/classes
    #:coalton-library/monad/identity)
   (:export
    #:EnvT
@@ -17,7 +18,13 @@
    #:ask
    #:asks
    #:map-envT
-   #:lift-envT))
+   #:lift-envT
+
+   ;; Re-export MonadEnvironment
+   #:MonadEnvironment
+   #:ask
+   #:local
+   #:asks))
 
 (in-package #:coalton-library/monad/environment)
 
@@ -69,23 +76,7 @@ Equivalent to Haskell's ReaderT monad https://hackage.haskell.org/package/transf
   (declare run-env (Env :env :value -> :env -> :value))
   (define (run-env env-computation env)
     "Run a Env inside an environment."
-    (run-identity (run-envT env-computation env)))
-
-  ;;
-  ;; MonadEnvironment Typeclass
-  ;;
-
-  (define-class (Monad :m => MonadEnvironment :env :m (:m -> :env))
-    "A monad capable of a function in a computation environment."
-    (ask
-     "Retrieves the computation environment."
-     (:m :env))
-    (local
-     "Run a computation in a modified environment."
-     ((:env -> :env) -> :m :env -> :m :env))
-    (asks
-     "Retrieve an aspect of the computation environment."
-     ((:env -> :a) -> :m :a))))
+    (run-identity (run-envT env-computation env))))
 
 ;;
 ;; Environment Monad Instances
@@ -137,6 +128,16 @@ Equivalent to Haskell's ReaderT monad https://hackage.haskell.org/package/transf
     (define ask ask-envT)
     (define local local-envT)
     (define asks asks-envT)))
+
+;;;
+;;; EnvT Instances for other Transformers
+;;;
+
+(coalton-toplevel
+  (define-instance (MonadState :s :m => (MonadState :s (EnvT :e :m)))
+    (define get (lift get))
+    (define put (compose lift put))
+    (define modify (compose lift modify))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MONAD/ENVIRONMENT")

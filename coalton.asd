@@ -101,8 +101,10 @@
                (:file "queue")
                (:module "monad"
                 :serial t
-                :components ((:file "identity")
+                :components ((:file "classes")
+                             (:file "identity")
                              (:file "state")
+                             (:file "statet")
                              (:file "environment")
                              (:file "resultt")
                              (:file "optionalt")
@@ -326,7 +328,8 @@
                 :serial t
                 :components ((:file "optionalt")
                              (:file "resultt")
-                             (:file "environment")))
+                             (:file "environment")
+                             (:file "statet")))
                (:module "algorithms-tests"
                 :serial t
                 :components ((:file "fft-tests")))))

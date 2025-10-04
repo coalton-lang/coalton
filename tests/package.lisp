@@ -44,9 +44,11 @@
    (#:file #:coalton-library/file)
    (#:experimental #:coalton-library/experimental)
    (#:st #:coalton-library/monad/state)
+   (#:m-id #:coalton-library/monad/identity)
    (#:m-opt #:coalton-library/monad/optionalt)
    (#:m-res #:coalton-library/monad/resultt)
    (#:m-env #:coalton-library/monad/environment)
+   (#:m-stt #:coalton-library/monad/statet)
    (#:fft #:coalton-library/algorithms/fft)))
 
 (in-package #:coalton-native-tests)
