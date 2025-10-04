@@ -17,6 +17,11 @@
 inlining when the argument is syntactically a function application."
     application)
 
+  (declare debug-type (:a -> :a))
+  (define (debug-type node)
+    "Print the type of the child node at compile time."
+    node)
+
   (declare likely (Boolean -> Boolean))
   (define (likely predicate)
     "Hint to the compiler that `predicate` is likely `True`."

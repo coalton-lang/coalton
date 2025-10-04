@@ -2,6 +2,7 @@
   (:use #:cl)
   (:local-nicknames
    (#:ast #:coalton-impl/codegen/ast)
+   (#:tc #:coalton-impl/typechecker)
    (#:traverse #:coalton-impl/codegen/traverse))
   (:export
    #:transform-intrinsic-application
@@ -57,6 +58,19 @@ Returns a new `ast:node'."))
         :rands (ast:node-direct-application-rands child)))
       (t
        child))))
+
+(defmethod transform-intrinsic-application ((rator-name (eql 'coalton:debug-type)) node)
+  (let* ((child (first (ast:node-application-rands node)))
+         (ty (ast:node-type child)))
+    (tc:with-pprint-variable-context ()
+      (format t "~&;; ~A~%" 
+              (with-output-to-string (capture) 
+                (tc:pprint-ty
+                 capture 
+                 (typecase ty
+                   (tc:tyvar (tc:pprint-tvar ty))
+                   (t ty))))))
+    child))
 
 (defun transform-intrinsic-applications (node)
   "Traverse node, transforming all intrinsic-applications for optimization."
