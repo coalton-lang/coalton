@@ -3,7 +3,8 @@
    #:coalton
    #:coalton-library/functions
    #:coalton-library/classes
-   #:coalton-library/result)
+   #:coalton-library/result
+   #:coalton-library/monad/classes)
   (:export
    #:ResultT
    #:run-resultT
@@ -173,6 +174,21 @@ with these function definitions:
             (cl:t
              `(ResultT ,form))))
         body))))
+
+;;;
+;;; ResultT Instances for other Transformers
+;;;
+
+(coalton-toplevel
+  (define-instance (MonadEnvironment :env :m => MonadEnvironment :env (ResultT :err :m))
+    (define ask (lift ask))
+    (define asks (compose lift asks))
+    (define local (compose map-resultT local)))
+
+  (define-instance (MonadState :s :m => (MonadState :s (ResultT :err :m)))
+    (define get (lift get))
+    (define put (compose lift put))
+    (define modify (compose lift modify))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MONAD/RESULTT")

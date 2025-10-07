@@ -2,7 +2,8 @@
   (:use
    #:coalton
    #:coalton-library/functions
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-library/monad/classes)
   (:export
    #:OptionalT
    #:run-optionalT
@@ -92,6 +93,21 @@
     (inline)
     (define (lift m)
       (OptionalT (map Some m)))))
+
+;;;
+;;; OptionalT Instances for other Transformers
+;;;
+
+(coalton-toplevel
+  (define-instance (MonadEnvironment :env :m => MonadEnvironment :env (OptionalT :m))
+    (define ask (lift ask))
+    (define asks (compose lift asks))
+    (define local (compose map-optionalT local)))
+
+  (define-instance (MonadState :s :m => (MonadState :s (OptionalT :m)))
+    (define get (lift get))
+    (define put (compose lift put))
+    (define modify (compose lift modify))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MONAD/OPTIONALT")
