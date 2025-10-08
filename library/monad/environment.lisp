@@ -11,14 +11,14 @@
    #:ask-envT
    #:asks-envT
    #:run-envT
-   #:Env
-   #:run-env
-   #:MonadEnvironment
-   #:local
-   #:ask
-   #:asks
    #:map-envT
    #:lift-envT
+
+   #:Env
+   #:run-env
+   #:ask-env
+   #:asks-env
+   #:local-env
 
    ;; Re-export MonadEnvironment
    #:MonadEnvironment
@@ -38,13 +38,86 @@
   ;; Environment Monad
   ;;
 
+  ;; NOTE: In Haskell, the base Reader monad is just defined as
+  ;; (ReaderT :env Identity). GHC does a lot of work behind the
+  ;; scenes to fuse lambdas together at compile time to prevent
+  ;; needless thunk allocation, so they can get away with this.
+  ;; In Coalton, which lacks these optimizations, a concrete
+  ;; base Env implementation will be more efficient than just
+  ;; using (EnvT :env Identity).
+  (repr :transparent)
+  (define-type (Env :env :value)
+    "A computation that runs inside an :env environment."
+    (Env (:env -> :value)))
+
+  (inline)
+  (declare run-env (Env :env :value -> :env -> :value))
+  (define (run-env (Env env-computation) env)
+    "Run a Env inside an environment."
+    (env-computation env))
+
+  (inline)
+  (declare local-env ((:env -> :env) -> Env :env :value -> Env :env :value))
+  (define (local-env fenv menv)
+    (Env (fn (env)
+           (run-env menv (fenv env)))))
+
+  (inline)
+  (declare ask-env (Env :env :env))
+  (define ask-env
+    "Retrieve the computation environment."
+    (Env id))
+
+  (inline)
+  (declare asks-env ((:env -> :a) -> Env :env :a))
+  (define (asks-env fenv->a)
+    "Retrieve an aspect of the computation environment."
+    (Env (fn (env)
+           (fenv->a env))))
+
+  ;;
+  ;; Enviornment Monad Instances
+  ;;
+
+  (define-instance (Functor (Env :env))
+    (inline)
+    (define (map fa->b menv)
+      (Env (compose fa->b (run-env menv)))))
+
+  (define-instance (Applicative (Env :env))
+    (inline)
+    (define (pure a)
+      (Env (const a)))
+    (inline)
+    (define (liftA2 fa->b->c menv-a menv-b)
+      (Env (fn (env)
+             (fa->b->c (run-env menv-a env) (run-env menv-b env))))))
+
+  (define-instance (Monad (Env :env))
+    (inline)
+    (define (>>= menv-a fa->env-b)
+      (Env (fn (env)
+             (run-env
+              (fa->env-b (run-env menv-a env))
+              env)))))
+
+  (define-instance (MonadEnvironment :env (Env :env))
+    (define ask ask-env)
+    (define local local-env)
+    (define asks asks-env)))
+
+
+;;
+;; EnvironmentT Monad
+;;
+
+(coalton-toplevel
+
   (repr :transparent)
   (define-type (EnvT :env :m :value)
     "A monadic computation that runs inside an :env environment.
 Equivalent to Haskell's ReaderT monad https://hackage.haskell.org/package/transformers-0.6.1.2/docs/Control-Monad-Trans-Reader.html"
     (EnvT (:env -> :m :value)))
-
-  (define-type-alias (Env :env :value) (EnvT :env Identity :value))
 
   (inline)
   (declare local-envT ((:env -> :env) -> EnvT :env :m :value -> EnvT :env :m :value))
@@ -70,13 +143,7 @@ Equivalent to Haskell's ReaderT monad https://hackage.haskell.org/package/transf
   (declare run-envT (EnvT :env :m :value -> :env -> :m :value))
   (define (run-envT (EnvT fenv->val) env)
     "Run a EnvT inside an environment."
-    (fenv->val env))
-
-  (inline)
-  (declare run-env (Env :env :value -> :env -> :value))
-  (define (run-env env-computation env)
-    "Run a Env inside an environment."
-    (run-identity (run-envT env-computation env))))
+    (fenv->val env)))
 
 ;;
 ;; Environment Monad Instances

@@ -59,3 +59,35 @@
       2)
      0))
   (is (== 8 result)))
+
+(define-test test-ask-env ()
+  (let result =
+    (m-env:run-env
+     (do
+      (x <- m-env:ask)
+      (pure (+ 10 x)))
+     15))
+  (is (== 25 result)))
+
+(define-test test-asks-env ()
+  (let result =
+    (m-env:run-env
+     (do
+      (x? <- (m-env:asks head))
+      (pure
+       (match x?
+         ((None) 0)
+         ((Some x) (+ 10 x)))))
+     (make-list 10 20 30 40)))
+  (is (== 20 result)))
+
+(define-test test-local-env ()
+  (let result =
+    (m-env:run-env
+     (m-env:local
+      (+ 100)
+      (do
+       (x <- m-env:ask)
+       (pure (+ x 10))))
+     15))
+  (is (== 125 result)))
