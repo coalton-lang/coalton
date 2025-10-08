@@ -237,7 +237,7 @@ Signals a condition on error."
          (vec:clear! (.buffer stream))
          result))))
 
-  (define-instance (Writable PeekableIOStream U8)
+  (define-instances (Writable (PeekableIOStream U8) (PeekableIOStream Char))
     (inline)
     (define (write-unchecked stream elt)
       (write-unchecked (.stream stream) elt))
