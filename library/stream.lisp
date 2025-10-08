@@ -122,13 +122,13 @@ Signals a condition on error."
 ;;
 
 (coalton-toplevel
-  (define-instances (Closable (InputStream Char) (OutputStream Char) (IOStream Char)
-                              (InputStream U8) (OutputStream U8) (IOStream U8))
+  (define-instances (Closable (InputStream :elt) (OutputStream :elt) (IOStream :elt))
     (inline)
     (define (close stream)
       (lisp Unit (stream)
         (cl:close stream)
         Unit))
+
     (inline)
     (define (abort stream)
       (lisp Unit (stream)
@@ -140,6 +140,7 @@ Signals a condition on error."
     (define (read-unchecked stream)
       (lisp Char (stream)
         (cl:read-char stream)))
+
     (inline)
     (define (read-array stream arr)
       (lisp UFix (stream arr)
@@ -151,11 +152,13 @@ Signals a condition on error."
       (lisp Unit (stream elt)
         (cl:write-char elt stream)
         Unit))
+
     (inline)
     (define (write-array-unchecked stream arr)
       (lisp Unit (stream arr)
         (cl:write-sequence arr stream)
         Unit))
+
     (inline)
     (define (flush stream)
       (lisp Unit (stream)
@@ -167,6 +170,7 @@ Signals a condition on error."
     (define (read-unchecked stream)
       (lisp U8 (stream)
         (cl:read-byte stream)))
+
     (inline)
     (define (read-array stream arr)
       (lisp UFix (stream arr)
@@ -178,33 +182,26 @@ Signals a condition on error."
       (lisp Unit (stream elt)
         (cl:write-byte elt stream)
         Unit))
+
     (inline)
     (define (write-array-unchecked stream arr)
       (lisp Unit (stream arr)
         (cl:write-sequence arr stream)
         Unit))
+
     (inline)
     (define (flush stream)
       (lisp Unit (stream)
         (cl:finish-output stream)
         Unit)))
 
-  (define-instances (Peekable (InputStream Char) (IOStream Char))
-    (inline)
-    (define (unread stream elt)
-      (lisp Unit (stream elt)
-        (cl:unread-char elt stream)
-        Unit))
-    (inline)
-    (define (peek-unchecked stream)
-      (lisp Char (stream)
-        (cl:peek-char nil stream))))
-
-  (define-instances (Peekable (PeekableInputStream U8) (PeekableIOStream U8))
+  (define-instances (Peekable (PeekableInputStream U8) (PeekableIOStream U8)
+                              (PeekableInputStream Char) (PeekableIOStream Char))
     (inline)
     (define (unread stream elt)
       (vec:push! elt (.buffer stream))
       Unit)
+
     (inline)
     (define (peek-unchecked stream)
       (if (not (vec:empty? (.buffer stream)))
@@ -213,12 +210,14 @@ Signals a condition on error."
             (vec:push! elt (.buffer stream))
             elt))))
 
-  (define-instances (Readable (PeekableInputStream U8) (PeekableIOStream U8))
+  (define-instances (Readable (PeekableInputStream U8) (PeekableIOStream U8)
+                              (PeekableInputStream Char) (PeekableIOStream Char))
     (inline)
     (define (read-unchecked stream)
       (match (vec:pop! (.buffer stream))
         ((None) (read-unchecked (.stream stream)))
         ((Some elt) elt)))
+
     (inline)
     (define (read-array stream arr)
       (let length = (vec:length (.buffer stream)))
@@ -242,25 +241,35 @@ Signals a condition on error."
     (inline)
     (define (write-unchecked stream elt)
       (write-unchecked (.stream stream) elt))
+
     (inline)
     (define (write-array-unchecked stream arr)
       (write-array-unchecked (.stream stream) arr))
+
     (inline)
     (define (flush stream)
       (flush (.stream stream))))
 
-  (define-instance (Closable PeekableIOStream U8)
+  (define-instance (Closable PeekableIOStream :elt)
     (inline)
     (define (close stream)
       (close (.stream stream)))
+
     (inline)
     (define (abort stream)
       (abort (.stream stream))))
 
-  (define-instance (IntoPeekable InputStream U8 PeekableInputStream)
+  (define-instances (IntoPeekable (InputStream U8 PeekableInputStream)
+                                  (InputStream Char PeekableInputStream))
     (inline)
     (define (make-peekable stream)
-      (PeekableInputStream stream (vec:new)))))
+      (PeekableInputStream stream (vec:new))))
+
+  (define-instances (IntoPeekable (IOStream U8 PeekableIOStream)
+                                  (IOStream Char PeekableIOStream))
+    (inline)
+    (define (make-peekable stream)
+      (PeekableIOStream stream (vec:new)))))
 
 ;;
 ;; Safe Stream Operations
@@ -350,19 +359,19 @@ Returns `True` on success, `False` on error."
   (declare stdout (Unit -> OutputStream Char))
   (define (stdout)
     "Equivalent to `cl:*standard-output*`."
-    (lisp (OutputStream :elt) ()
+    (lisp (OutputStream Char) ()
       cl:*standard-output*))
 
   (inline)
   (declare stderr (Unit -> OutputStream Char))
   (define (stderr)
     "Equivalent to `cl:*error-output*`."
-    (lisp (OutputStream :elt) ()
+    (lisp (OutputStream Char) ()
       cl:*error-output*))
 
   (inline)
   (declare stdin (Unit -> InputStream Char))
   (define (stdin)
     "Equivalent to `cl:*standard-input*`."
-    (lisp (InputStream :elt) ()
+    (lisp (InputStream Char) ()
       cl:*standard-input*)))

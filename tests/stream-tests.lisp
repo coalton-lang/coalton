@@ -29,6 +29,7 @@
 (define-test test-read-char-stream ()
   (let ((declare s (stream:InputStream Char))
         (s (make-test-stream "Hello")))
+    (let s = (stream:make-peekable s))
     (is (== #\H (unwrap (stream:read s))))
     (let ((arr (array:make 2 #\a))) 
       (stream:read-array s arr)
