@@ -103,6 +103,7 @@ for control flow."
           (and (settings:coalton-release-p)
                (match-exhaustive-p match env))))))
 
+;; TODO: Deal with one branch + fallback.
 (defun match-emit-if-p (match)
   "Emit match as `cl:if' in cases where the subexpression is a `Boolean'
 and branches exhaustively pattern match with constructor branches.
@@ -187,7 +188,7 @@ When true, returns two `ast:node' objects representing then/else branches."
       (codegen-pattern:codegen-pattern pattern match-var match-expr-type env)
 
     `(,pred
-      ,(if (null bindings)
+      ,(if (endp bindings)
            code
            `(let ,bindings
               ,(codegen-binding-types bindings types)
@@ -232,17 +233,17 @@ When true, returns two `ast:node' objects representing then/else branches."
            ,(codegen-binding-types bindings types)
            ,code))))))
 
-(defun codegen-match-branch (code pattern match-var match-expr-type env jumptablep)
+(defun codegen-match-branch (code pattern match-var match-expr-type env emit-jumptable-p)
   "Generate code for a match branch."
   (declare (type t code)
            (type pattern:pattern pattern)
            (type symbol match-var)
            (type tc:ty match-expr-type)
            (type tc:environment env)
-           (type boolean jumptablep)
+           (type boolean emit-jumptable-p)
            (values t &optional))
 
-  (funcall (if jumptablep
+  (funcall (if emit-jumptable-p
                #'codegen-case-match-branch
                #'codegen-cond-match-branch)
            code
@@ -251,18 +252,18 @@ When true, returns two `ast:node' objects representing then/else branches."
            match-expr-type
            env))
 
-(defun codegen-cond-match (branches fallbackp)
+(defun codegen-cond-match (branches emit-fallback-p)
   "Generate code to switch branches with `cl:cond'."
   (declare (type list branches)
            (values t &optional))
 
   `(cond
      ,@branches
-     ,@(if (not fallbackp)
+     ,@(if (not emit-fallback-p)
            '()
            (list '(t (error "Pattern match not exhaustive error."))))))
 
-(defun codegen-case-match (match-var branches fallbackp)
+(defun codegen-case-match (match-var branches emit-fallback-p)
   "Generate code to switch branches with `cl:case'."
   (declare (type symbol match-var)
            (type list branches)
@@ -270,20 +271,20 @@ When true, returns two `ast:node' objects representing then/else branches."
 
   `(case ,match-var
      ,@branches
-     ,@(if (not fallbackp)
+     ,@(if (not emit-fallback-p)
            '()
            (list '(otherwise (error "Pattern match not exhaustive error."))))))
 
-(defun codegen-match (match-var subexpr-code subexpr-type branches env jumptablep fallbackp branchlessp)
+(defun codegen-match (match-var subexpr-code subexpr-type branches env emit-jumptable-p emit-fallback-p emit-branchless-p)
   "Generate code for a match expression."
   (declare (type symbol match-var)
            (type t subexpr-code)
            (type tc:ty subexpr-type)
            (type list branches)
            (type tc:environment env)
-           (type t jumptablep)
-           (type t fallbackp)
-           (type t branchlessp)
+           (type t emit-jumptable-p)
+           (type t emit-fallback-p)
+           (type t emit-branchless-p)
            (values t &optional))
 
   `(let ((,match-var ,subexpr-code))
@@ -300,7 +301,7 @@ When true, returns two `ast:node' objects representing then/else branches."
             ;;
             ;; When match is not being used for control flow, don't
             ;; codegen `cl:cond' or `cl:case'.
-            (branchlessp
+            (emit-branchless-p
              (destructuring-bind ((cond-test cond-result)) branches
                (declare (ignore cond-test))
                cond-result))
@@ -310,11 +311,11 @@ When true, returns two `ast:node' objects representing then/else branches."
             ;; When matching on a type we can use `cl:eql' on can be
             ;; simplified to a jumptable using `cl:case'.
             ;; Currently this is only applied to types declared as enum.
-            (jumptablep
-             (codegen-case-match match-var branches fallbackp))
+            (emit-jumptable-p
+             (codegen-case-match match-var branches emit-fallback-p))
 
             ;; Case #3:
             ;;
             ;; Default to generating a `cl:cond' expression.
             (t
-             (codegen-cond-match branches fallbackp))))))
+             (codegen-cond-match branches emit-fallback-p))))))
