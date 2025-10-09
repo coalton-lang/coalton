@@ -7,7 +7,7 @@
    #:as-proxy-of
    #:proxy-inner
    #:LispType
-   #:RuntimeRepr #:runtime-repr
+   #:RuntimeRepr #:runtime-repr #:coalton-type-string
    #:runtime-repr-of))
 
 (in-package #:coalton-library/types)
@@ -42,15 +42,18 @@
 
   (repr :native (cl:or cl:symbol cl:list))
   (define-type LispType
-    "The runtime representation of a Coalton type as a lisp type.")
+    "The runtime representation of a Coalton type as a Lisp type.")
 
   (define-class (RuntimeRepr :a)
     "Types which have a runtime LispType representation.
 
-`runtime-repr` corresponds to the type emitted by the Coalton compiler for the type parameter to the given Proxy.
-
 The compiler will auto-generate instances of `RuntimeRepr` for all defined types."
-    (runtime-repr (Proxy :a -> LispType)))
+    (runtime-repr
+     "The type emitted by the Coalton compiler for the type parameter to the given Proxy."
+     (Proxy :a -> LispType))
+    (coalton-type-string
+     "Write the type `:a` as a string for debugging purposes."
+     (Proxy :a -> String)))
 
   (inline)
   (declare runtime-repr-of (RuntimeRepr :a => :a -> LispType))
@@ -63,54 +66,77 @@ The compiler will auto-generate instances of `RuntimeRepr` for all defined types
   (define-instance (RuntimeRepr Boolean)
     (inline)
     (define (runtime-repr _)
-      (lisp LispType () 'cl:boolean)))
+      (lisp LispType () 'cl:boolean))
+    (define (coalton-type-string _)
+      "Boolean"))
 
   (define-instance (RuntimeRepr Char)
     (inline)
     (define (runtime-repr _)
-      (lisp LispType () 'cl:character)))
+      (lisp LispType () 'cl:character))
+    (define (coalton-type-string _)
+      "Char"))
 
   (define-instance (RuntimeRepr Integer)
     (inline)
     (define (runtime-repr _)
-      (lisp LispType () 'cl:integer)))
+      (lisp LispType () 'cl:integer))
+    (define (coalton-type-string _)
+      "Integer"))
 
   (define-instance (RuntimeRepr F32)
     (inline)
     (define (runtime-repr _)
-      (lisp LispType () 'cl:single-float)))
+      (lisp LispType () 'cl:single-float))
+    (define (coalton-type-string _)
+      "F32"))
 
   (define-instance (RuntimeRepr F64)
     (inline)
     (define (runtime-repr _)
-      (lisp LispType () 'cl:double-float)))
+      (lisp LispType () 'cl:double-float))
+    (define (coalton-type-string _)
+      "F64"))
 
   (define-instance (RuntimeRepr String)
     (inline)
     (define (runtime-repr _)
-      (lisp LispType () 'cl:string)))
+      (lisp LispType () 'cl:string))
+    (define (coalton-type-string _)
+      "String"))
 
   (define-instance (RuntimeRepr Fraction)
     (inline)
     (define (runtime-repr _)
-      (lisp LispType () 'cl:rational)))
+      (lisp LispType () 'cl:rational))
+    (define (coalton-type-string _)
+      "Fraction"))
 
   (define-instance (RuntimeRepr (:a -> :b))
     (inline)
     (define (runtime-repr _)
-      (lisp LispType () 'coalton-impl/runtime/function-entry:function-entry)))
+      (lisp LispType () 'coalton-impl/runtime/function-entry:function-entry))
+    (define (coalton-type-string _)
+      ;; FIXME
+      ":a -> :b"))
 
   (define-instance (RuntimeRepr (List :a))
     (inline)
     (define (runtime-repr _)
-      (lisp LispType () 'cl:list)))
+      (lisp LispType () 'cl:list))
+    (define (coalton-type-string _)
+      ;; FIXME
+      "List :a"))
 
   (define-instance (RuntimeRepr (Optional :a))
     (inline)
     (define (runtime-repr _)
       ;; If using `cl:t` proves to be inefficient we could try to
       ;; improve this, perhaps using proxy-inner.
-      (lisp LispType () 'cl:t)))
+      (lisp LispType () 'cl:t))
+    (define (coalton-type-string _)
+      ;; FIXME
+      "Optional :a"))
 
   ;; The compiler will not auto-generate RuntimeRepr instances for
   ;; types defined in this file to avoid circular dependencies.
@@ -118,12 +144,16 @@ The compiler will auto-generate instances of `RuntimeRepr` for all defined types
   (define-instance (RuntimeRepr LispType)
     (inline)
     (define (runtime-repr _)
-      (lisp LispType () '(cl:or cl:symbol cl:list))))
+      (lisp LispType () '(cl:or cl:symbol cl:list)))
+    (define (coalton-type-string _)
+      "LispType"))
 
   (define-instance (RuntimeRepr (Proxy :a))
     (inline)
     (define (runtime-repr _)
-      (lisp LispType () '(cl:member 'proxy/proxy)))))
+      (lisp LispType () '(cl:member 'proxy/proxy)))
+    (define (coalton-type-string _)
+      "Proxy")))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/TYPES")
