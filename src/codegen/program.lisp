@@ -171,8 +171,9 @@ Example:
          `(progn
             ;; Muffle redefinition warnings in SBCL. A corresponding
             ;; SB-EXT:UNMUFFLE-CONDITIONS appears at the bottom.
-            #+sbcl ,@(when settings:*emit-type-annotations*
-                       (list '(declaim (sb-ext:muffle-conditions sb-kernel:redefinition-warning))))
+            #+sbcl
+            ,@(when settings:*emit-type-annotations*
+                (list '(declaim (sb-ext:muffle-conditions sb-kernel:redefinition-warning))))
 
             ,@(when (tc:translation-unit-types translation-unit)
                 (list
@@ -200,8 +201,9 @@ Example:
                 (list
                  `(declaim (sb-ext:end-block))))
 
-            #+sbcl ,@(when settings:*emit-type-annotations*
-                       (list '(declaim (sb-ext:unmuffle-conditions sb-kernel:redefinition-warning))))
+            #+sbcl
+            ,@(when settings:*emit-type-annotations*
+                (list '(declaim (sb-ext:unmuffle-conditions sb-kernel:redefinition-warning))))
 
             (values))
          env)))))

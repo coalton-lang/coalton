@@ -101,14 +101,8 @@
              (type partial-type-env env)
              (values tc:qualified-ty))
     (tc:make-qualified-ty
-     :predicates (loop :for pred :in (tc:qualified-ty-predicates type)
-                       :for parser-pred :in (parser:qualified-ty-predicates parser-type)
-                       :collect (tc:make-ty-predicate
-                                 :class (tc:ty-predicate-class pred)
-                                 :types (loop :for _ty :in (tc:ty-predicate-types pred)
-                                              :for _parser-ty :in (parser:ty-predicate-types parser-pred)
-                                              :collect (apply-type-alias-substitutions _ty _parser-ty env))
-                                 :location (source:location pred)))
+     ;; Predicates will have already had their aliases substituted.
+     :predicates (tc:qualified-ty-predicates type)
      :type (apply-type-alias-substitutions (tc:qualified-ty-type type)
                                            (parser:qualified-ty-type parser-type)
                                            env)))

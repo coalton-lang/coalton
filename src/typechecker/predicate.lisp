@@ -60,7 +60,7 @@
 
 (defun type-predicate= (pred1 pred2)
   (and (eq (ty-predicate-class pred1) (ty-predicate-class pred2))
-       (equalp (ty-predicate-types pred1) (ty-predicate-types pred2))))
+       (every #'ty= (ty-predicate-types pred1) (ty-predicate-types pred2))))
 
 ;;;
 ;;; Qualified types
@@ -71,8 +71,9 @@
   (type       (util:required 'type)       :type ty                :read-only t))
 
 (defun qualified-ty= (qualified-ty1 qualified-ty2)
-  (and (equalp (qualified-ty-predicates qualified-ty1)
-               (qualified-ty-predicates qualified-ty2))
+  (and (every #'type-predicate=
+              (qualified-ty-predicates qualified-ty1)
+              (qualified-ty-predicates qualified-ty2))
        (ty= (qualified-ty-type qualified-ty1)
             (qualified-ty-type qualified-ty2))))
 

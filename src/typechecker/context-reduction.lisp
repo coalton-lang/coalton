@@ -306,70 +306,77 @@ predicates were expanded into their superclasses prior to the
 applications of this function such that any relevant superclass
 functional dependencies will be considered directly when the
 respective superclass predicate is passed to this function."
-  (let ((class (lookup-class env (ty-predicate-class pred))))
+  (let* ((class-name (ty-predicate-class pred))
+         (class (lookup-class env class-name))
+         (class-vars (ty-class-class-variables class))
+         (fundeps (ty-class-fundeps class))
+         (pred-tys (ty-predicate-types pred)))
 
-    (unless (ty-class-fundeps class)
+    ;; If there are no fundeps, then there is no entailment to be had.
+    (when (endp fundeps)
       (return-from fundep-entail% nil))
 
-    (let* ((partitioned-indices
+    (flet ((known-indices (pred)
+             ;; This function collects the type indices that are considered
+             ;; "known" given KNOWN-TYVARS.
              (loop :for ty :in (ty-predicate-types pred)
                    :for tyvars := (type-variables ty)
                    :for i :from 0
-                   :if (consp (intersection tyvars known-tyvars :test #'ty=))
-                     :collect i :into known-indices
-                   :else
-                     :collect i :into unknown-indices
-                   :finally (return (cons known-indices unknown-indices))))
-           
-           (known-indices (car partitioned-indices))
-           (unknown-indices (cdr partitioned-indices))
+                   :when (consp (intersection tyvars known-tyvars :test #'ty=))
+                     :collect i)))
 
-           (class-vars (ty-class-class-variables class))
+      (let* ((known-indices (known-indices pred))
+             (known-class-vars (util:project-indices known-indices class-vars))
 
-           (known-class-vars
-             (util:project-indices known-indices class-vars))
-           (unknown-class-vars
-             (util:project-indices unknown-indices class-vars))
+             ;; We expand the list of known variables by computing the
+             ;; closure of the known class variables over the class's
+             ;; functional dependencies. See the docstring for CLOSURE
+             ;; for more details.
+             (closure (closure known-class-vars fundeps))
 
-           ;; We expand the list of known variables by computing the
-           ;; closure of the known class variables over the class's
-           ;; functional dependencies. See the docstring for CLOSURE
-           ;; for more details.
-           (closure (closure known-class-vars (ty-class-fundeps class))))
+             ;; We collect the newly-determined vars and determine
+             ;; their indices.
+             (determined-class-vars
+               (set-difference closure known-class-vars :test #'eq))
+             (determined-indices
+               (mapcar
+                #'(lambda (determined-class-var)
+                    (position determined-class-var class-vars :test #'eq))
+                determined-class-vars)))
 
-      ;; If the unknown class variables are not a subset of the
-      ;; closure of the known class variables, then the predicate is
-      ;; not fully determined by the known class variables and the
-      ;; class functional dependencies. In this case, we ignore any
-      ;; substitutions that can be made, since they would only be
-      ;; relevant in the case that we allow ambiguous methods to be
-      ;; determined by the functional dependencies of another type
-      ;; class.
-      (unless (subsetp unknown-class-vars closure :test #'eq)
-        (return-from fundep-entail% nil))
+        ;; If there are no determined vars, then there is no
+        ;; entailment to be had.
+        (when (endp determined-class-vars)
+          (return-from fundep-entail% nil))
 
-      (loop :for expr-pred
-              ;; We only consider expression predicates for the same
-              ;; class as that of PRED.
-              :in (remove (ty-predicate-class pred) expr-preds :key #'ty-predicate-class
-                                                               :test (complement #'eq))
+        (flet ((known (tys)
+                 (util:project-indices known-indices tys))
+               (determined (tys)
+                 (util:project-indices determined-indices tys)))
+          (let* ((expr-pred
+                   (find-if
+                    #'(lambda (expr-pred)
+                        ;; We find the expression predicate that is
+                        ;; associated with PRED based on KNOWN-TYVARS.
+                        (and (eq class-name (ty-predicate-class expr-pred))
+                             (equalp known-indices (known-indices expr-pred))
+                             (every #'ty=
+                                    (known pred-tys)
+                                    (known (ty-predicate-types expr-pred)))))
+                    expr-preds)))
+            ;; There should always be an associated expression
+            ;; predicate.
+            (when (null expr-pred)
+              (util:coalton-bug "There is no matching expression predicate."))
+            ;; So, we create substitutions based on the
+            ;; newly-determined types.
+            (loop :with expr-pred-tys := (ty-predicate-types expr-pred)
+                  :with new-subs := nil
+                  :for from-ty :in (determined pred-tys)
+                  :for to-ty :in (determined expr-pred-tys)
+                  :do (setf new-subs
+                            (compose-substitution-lists
+                             (match from-ty to-ty)
+                             new-subs))
+                  :finally (return new-subs))))))))
 
-            :for expr-pred-known-indices
-              := (loop :for ty :in (ty-predicate-types expr-pred)
-                       :for tyvars := (type-variables ty)
-                       :for i :from 0
-                       :when (consp (intersection tyvars known-tyvars :test #'ty=))
-                         :collect i)
-
-            :when (every #'= known-indices expr-pred-known-indices)
-              ;; Create and return substitutions for the unknown - but now
-              ;; determined by functional dependencies - types.
-              :do (flet ((project (pred)
-                           (let ((types (ty-predicate-types pred)))
-                             (util:project-indices unknown-indices types))))
-                    (loop :for from-ty :in (project pred)                          
-                          :for to-ty   :in (project expr-pred)
-                          :append (match from-ty to-ty) :into new-subs
-                          :finally (return-from fundep-entail% new-subs)))
-
-            :finally (return nil)))))

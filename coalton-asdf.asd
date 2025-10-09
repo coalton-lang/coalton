@@ -2,9 +2,9 @@
 ;;;
 ;;; Add a defsystem-depends-on clause to your .asd file:
 ;;;
-;;;     (asdf:defsystem #:xyzzy
+;;;     (asdf:defsystem "xyzzy"
 ;;;       ...
-;;;       :defsystem-depends-on (#:coalton-asdf)
+;;;       :defsystem-depends-on ("coalton-asdf")
 ;;;       ...)
 ;;;
 ;;; and coalton source files using the :coalton-file keyword:
@@ -14,10 +14,10 @@
 ;;;                    (:coalton-file "array")
 ;;;                    ...))
 
-(asdf:defsystem #:coalton-asdf
+(asdf:defsystem "coalton-asdf"
   :description "Coalton ASDF extensions"
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
-  :depends-on (#:coalton-compiler)
+  :depends-on ("coalton-compiler")
   :components ((:file "coalton-asdf")))

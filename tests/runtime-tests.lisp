@@ -207,7 +207,43 @@
   (is (none? (iter:next! (gh-975))))
   (is (none? (iter:next! (gh-976)))))
 
+(cl:defpackage #:tail-call-elimination-tests
+  (:use #:coalton #:coalton-prelude)
+  (:export
+   #:foo1))
+
+(cl:in-package #:tail-call-elimination-tests)
+
+(coalton-toplevel
+
+  (define-class (Bar1 :t)
+    (bar1 (:t -> :t)))
+
+  (define-instance (Bar1 UFix)
+    (define (bar1 x)
+      (if (< x 10000000)
+          (foo1 x)
+          x)))
+
+  (define-instance (Bar1 Integer)
+    (define (bar1 x)
+      (if (< x 10000000)
+          (foo1 x)
+          x)))
+
+  (define (foo1 x)
+    (bar1 (1+ x))))
+
+(cl:in-package #:coalton-native-tests)
+
+(define-test tail-call-elimination-test1 ()
+  "A test for tail-call-elimination in the case of mutual recursion with
+a polymorphic function and a type class method.
+
+This test is expected to fail with SBCL for versions below 2.5.7.38."
+  (is (== 10000000 (tail-call-elimination-tests::foo1 (the UFix 0))))
+  (is (== 10000000 (tail-call-elimination-tests::foo1 (the Integer 0)))))
+
 (define-test test-nullary-or-and ()
   (is (and))
   (is (not (or))))
-
