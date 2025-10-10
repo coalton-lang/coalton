@@ -210,13 +210,6 @@ When true, returns two `ast:node' objects representing then/else branches."
     (cond
       ;; Case #1:
       ;;
-      ;; Emit a list of a single literal pattern to match on.
-      ((pattern:pattern-literal-p pattern)
-       `((,(pattern:pattern-literal-value pattern))
-         ,code))
-
-      ;; Case #2:
-      ;;
       ;; Emit a list of a single enum symbol to match on.
       ((pattern:pattern-constructor-p pattern)
        (let* ((name (pattern:pattern-constructor-name pattern))
@@ -224,7 +217,7 @@ When true, returns two `ast:node' objects representing then/else branches."
          `((,(tc:constructor-entry-compressed-repr entry))
            ,code)))
 
-      ;; Case #3:
+      ;; Case #2:
       ;;
       ;; Emit a variable or wildcard binding in a catch-all branch.
       (t
