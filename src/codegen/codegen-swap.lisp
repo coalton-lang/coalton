@@ -33,7 +33,7 @@
     (let ((fields '())
           (subpatterns '()))
  
-      (loop :for pattern :in (pattern:pattern-constructor-patterns pattern)
+      (loop :for pattern :in (reverse (pattern:pattern-constructor-patterns pattern))
             :do (multiple-value-bind (pattern field)
                     (normalize-pattern pattern)
                   (push field fields)
@@ -43,4 +43,4 @@
        (pattern:make-pattern-constructor :type tc:*unit-type*
                                          :name (pattern:pattern-constructor-name pattern)
                                          :patterns subpatterns)
-       `(,(pattern:pattern-constructor-name pattern) ,@(nreverse fields))))))
+       `(,(pattern:pattern-constructor-name pattern) ,@fields)))))
