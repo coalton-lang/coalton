@@ -284,6 +284,7 @@
           :type (type-definition-type type)
           :tyvars tyvars
           :constructors (mapcar #'tc:constructor-entry-name (type-definition-constructors type))
+          :field-index (build-field-index (type-definition-constructors type))
           :explicit-repr (type-definition-explicit-repr type)
           :enum-repr (type-definition-enum-repr type)
           :newtype (type-definition-newtype type)
@@ -332,6 +333,24 @@
                  (setf env (tc:unset-function env ctor-name)))))
 
   env)
+
+(defun build-field-index (constructors)
+  "Build a hash table mapping field names to lists of (cons ctor-name field-index)."
+  (declare (type tc:constructor-entry-list constructors)
+           (values (or null hash-table)))
+  (let ((has-fields nil)
+        (index-table (make-hash-table :test #'equal)))
+    (loop :for ctor :in constructors
+          :for ctor-name := (tc:constructor-entry-name ctor)
+          :for field-names := (tc:constructor-entry-field-names ctor)
+          :when field-names
+            :do (setf has-fields t)
+                (loop :for field-name :in field-names
+                      :for idx :from 0
+                      :do (push (cons ctor-name idx)
+                                (gethash field-name index-table))))
+    (when has-fields
+      index-table)))
 
 (defun infer-define-type-scc-kinds (types env)
   (declare (type parser:type-definition-list types)

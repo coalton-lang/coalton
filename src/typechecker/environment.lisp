@@ -39,6 +39,7 @@
    #:type-entry-type                        ; ACCESSOR
    #:type-entry-tyvars                      ; ACCESSOR
    #:type-entry-constructors                ; ACCESSOR
+   #:type-entry-field-index                 ; ACCESSOR
    #:type-entry-explicit-repr               ; ACCESSOR
    #:type-entry-enum-repr                   ; ACCESSOR
    #:type-entry-newtype                     ; ACCESSOR
@@ -272,6 +273,10 @@
   (type          (util:required 'type)          :type ty                        :read-only t)
   (tyvars        (util:required 'tyvars)        :type tyvar-list                :read-only t)
   (constructors  (util:required 'constructors)  :type util:symbol-list          :read-only t)
+
+  ;; Maps field-name to list of (cons ctor-name field-index)
+  (field-index   nil                             :type (or null hash-table)      :read-only t)
+
   ;; An explicit repr defined in the source, or nil if none was
   ;; supplied. Computed repr will be reflected in ENUM-REPR, NEWTYPE,
   ;; and/or RUNTIME-TYPE.
