@@ -1877,13 +1877,13 @@ consume all attributes")))
 
 (defun parse-constructor-fields (unparsed-fields source enclosing-form)
   "Parse constructor fields, detecting dot-prefix named fields.
-Returns (list parsed-types field-names) where field-names is NIL for positional
+Returns (values parsed-types field-names) where field-names is NIL for positional
 or a list of strings for named fields."
   (declare (type list unparsed-fields)
-           (values list &optional))
+           (values list (or null util:string-list) &optional))
 
   (when (null unparsed-fields)
-    (return-from parse-constructor-fields (list nil nil)))
+    (return-from parse-constructor-fields (values nil nil)))
 
   ;; Check if any field has dot-prefix syntax
   (let ((has-named-field nil)
@@ -1933,11 +1933,11 @@ or a list of strings for named fields."
                                           "expected (.fieldname Type)")
                                     (secondary-note source (cst:second enclosing-form)
                                                     "in this type definition")))))
-          (list (nreverse field-types) (nreverse field-names)))
+          (values (nreverse field-types) (nreverse field-names)))
         ;; Positional fields: just parse types
-        (list (loop :for field :in unparsed-fields
-                    :collect (parse-type field source))
-              nil))))
+        (values (loop :for field :in unparsed-fields
+                      :collect (parse-type field source))
+                nil))))
 
 (defun parse-constructor (form enclosing-form docstring source)
   (declare (type cst:cst form enclosing-form)
@@ -1966,13 +1966,14 @@ or a list of strings for named fields."
                    (secondary-note source (cst:second enclosing-form)
                                    "in this type definition")))
 
-    (let ((field-info (parse-constructor-fields unparsed-fields source enclosing-form)))
+    (multiple-value-bind (field-types field-names)
+        (parse-constructor-fields unparsed-fields source enclosing-form)
       (make-constructor
        :name (make-identifier-src
               :name (cst:raw unparsed-name)
               :location (form-location source unparsed-name))
-       :fields (first field-info)
-       :field-names (second field-info)
+       :fields field-types
+       :field-names field-names
        :location (form-location source form)
        :docstring docstring))))
 
