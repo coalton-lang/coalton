@@ -550,6 +550,7 @@
      (make-pattern-constructor
       :name (pattern-constructor-name pattern)
       :patterns (rename-variables-generic% (pattern-constructor-patterns pattern) ctx)
+      :field-names (pattern-constructor-field-names pattern)
       :location (source:location pattern))
      ctx))
 

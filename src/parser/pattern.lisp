@@ -30,6 +30,7 @@
    #:make-pattern-constructor           ; CONSTRUCTOR
    #:pattern-constructor-name           ; ACCESSOR
    #:pattern-constructor-patterns       ; ACCESSOR
+   #:pattern-constructor-field-names    ; ACCESSOR
    #:parse-pattern                      ; FUNCTION
    #:pattern-variables                  ; FUNCTION
    ))
@@ -101,8 +102,77 @@ runtime value and binds it to a variable."
 (defstruct (pattern-constructor
             (:include pattern)
             (:copier nil))
-  (name     (util:required 'name)     :type identifier           :read-only t)
-  (patterns (util:required 'patterns) :type pattern-list         :read-only t))
+  (name        (util:required 'name)     :type identifier                     :read-only t)
+  (patterns    (util:required 'patterns) :type pattern-list                   :read-only t)
+  (field-names nil                       :type (or null (cons string list))   :read-only t))
+
+(defun parse-constructor-pattern-fields (fields-cst source)
+  "Parse constructor pattern fields. Returns (VALUES patterns field-names).
+FIELD-NAMES is NIL for positional patterns, or a list of strings for named fields."
+  (declare (type (or cst:cst null) fields-cst))
+
+  (when (null fields-cst)
+    ;; No fields
+    (return-from parse-constructor-pattern-fields
+      (values nil nil)))
+
+  (let* ((has-named nil)
+         (has-positional nil)
+         (field-list
+           (loop :for field-cst := fields-cst :then (cst:rest field-cst)
+                 :while (cst:consp field-cst)
+                 :for field := (cst:first field-cst)
+                 :collect (cond
+                            ;; Named field: dot-prefix identifier
+                            ((and (cst:atom field)
+                                  (identifierp (cst:raw field))
+                                  (let ((name (symbol-name (cst:raw field))))
+                                    (and (> (length name) 1)
+                                         (char= #\. (char name 0)))))
+                             (setf has-named t)
+                             (let* ((symbol (cst:raw field))
+                                    (name (symbol-name symbol))
+                                    (field-name (subseq name 1))) ; Remove leading dot
+                               (list :named field-name field)))
+
+                            ;; Regular pattern (positional or other pattern form)
+                            (t
+                             (setf has-positional t)
+                             (list :positional field))))))
+
+    ;; Validate: cannot mix named and positional fields
+    (when (and has-named has-positional)
+      (parse-error "Mixed positional and named fields in pattern"
+                   (note source fields-cst
+                         "constructor patterns must use either all positional or all named fields, not both")))
+
+    (cond
+      ;; All named fields
+      (has-named
+       (let ((field-names nil)
+             (patterns nil))
+         ;; Check for duplicate field names
+         (loop :for (type field-name field-cst) :in field-list
+               :do (when (member field-name field-names :test #'string=)
+                     (parse-error "Duplicate field name in pattern"
+                                  (note source field-cst
+                                        "field ~S appears multiple times in pattern" field-name)))
+                   (push field-name field-names)
+                   ;; For named fields, create a pattern variable with the field name (without dot)
+                   (let ((var-symbol (intern field-name (symbol-package (cst:raw field-cst)))))
+                     (push (make-pattern-var
+                            :name var-symbol
+                            :orig-name var-symbol
+                            :location (form-location source field-cst))
+                           patterns)))
+         (values (nreverse patterns) (nreverse field-names))))
+
+      ;; All positional fields
+      (t
+       (values
+        (loop :for (type field-cst) :in field-list
+              :collect (parse-pattern field-cst source))
+        nil)))))
 
 (defun parse-pattern (form source)
   (declare (type cst:cst form))
@@ -176,12 +246,13 @@ runtime value and binds it to a variable."
                   (note source (cst:first form) "invalid constructor in pattern")))
 
     (t
-     (make-pattern-constructor
-      :name (cst:raw (cst:first form))
-      :patterns (loop :for patterns := (cst:rest form) :then (cst:rest patterns)
-                      :while (cst:consp patterns)
-                      :collect (parse-pattern (cst:first patterns) source))
-      :location (form-location source form)))))
+     (multiple-value-bind (patterns field-names)
+         (parse-constructor-pattern-fields (cst:rest form) source)
+       (make-pattern-constructor
+        :name (cst:raw (cst:first form))
+        :patterns patterns
+        :field-names field-names
+        :location (form-location source form))))))
 
 (defun pattern-variables (pattern)
   (declare (type t pattern)

@@ -277,7 +277,8 @@ CLAUSE is a list representing a row-vector of patterns."
       :type (tc:pattern-type pat)
       :location (tc:pattern-location pat)
       :name (tc:pattern-constructor-name pat)
-      :patterns (mapcar #'collapse-binding-patterns (tc:pattern-constructor-patterns pat))))
+      :patterns (mapcar #'collapse-binding-patterns (tc:pattern-constructor-patterns pat))
+      :field-names (tc:pattern-constructor-field-names pat)))
     (tc:pattern-binding
      (collapse-binding-patterns
       (tc:pattern-binding-pattern pat)))))
@@ -319,7 +320,8 @@ CLAUSE is a list representing a row-vector of patterns."
                   :do (return (cons (tc:make-pattern-constructor
                                      :type (tc:pattern-type ctor)
                                      :name (tc:pattern-constructor-name ctor)
-                                     :patterns (subseq val 0 ctor-arity))
+                                     :patterns (subseq val 0 ctor-arity)
+                                     :field-names (tc:pattern-constructor-field-names ctor))
                                     (subseq val ctor-arity (+ ctor-arity n -1))))
                 :finally (return t)))
          ;; Otherwise, check the defaulted matrix.

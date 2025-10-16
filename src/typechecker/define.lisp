@@ -1738,11 +1738,29 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
         (tc-error "Unknown constructor"
                   (tc-note pat "constructor is not known")))
 
-      (let ((arity
-              (tc:constructor-entry-arity ctor))
-            (num-args
-              (length (parser:pattern-constructor-patterns pat))))
-        (unless (= arity num-args)
+      (let* ((arity (tc:constructor-entry-arity ctor))
+             (pat-field-names (parser:pattern-constructor-field-names pat))
+             (ctor-field-names (tc:constructor-entry-field-names ctor))
+             (num-args (length (parser:pattern-constructor-patterns pat))))
+
+        ;; Handle named field patterns
+        (when pat-field-names
+          ;; Validate: constructor must have named fields
+          (unless ctor-field-names
+            (tc-error "Named field pattern on positional constructor"
+                      (tc-note pat "constructor ~A uses positional fields, not named fields"
+                               (parser:pattern-constructor-name pat))))
+
+          ;; Validate: all pattern field names must exist in constructor
+          (loop :for field-name :in pat-field-names
+                :unless (member field-name ctor-field-names :test #'string=)
+                  :do (tc-error "Unknown field name in pattern"
+                                (tc-note pat "constructor ~A does not have a field named ~S"
+                                         (parser:pattern-constructor-name pat)
+                                         field-name))))
+
+        ;; For positional patterns, check arity
+        (when (and (not pat-field-names) (not (= arity num-args)))
           (tc-error "Argument mismatch"
                     (tc-note pat "Constructor ~A takes ~D arguments but is given ~D"
                              (parser:pattern-constructor-name pat)
@@ -1754,10 +1772,25 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                           (tc:lookup-value-type (tc-env-env env) (parser:pattern-constructor-name pat)))))
 
                (pat-ty (tc:function-return-type ctor-ty))
+               (arg-types (tc:function-type-arguments ctor-ty))
+
+               ;; Reorder patterns to match positional order for named field patterns
+               (ordered-patterns
+                 (if pat-field-names
+                     ;; Named field pattern: reorder and fill missing fields
+                     (loop :for i :from 0 :below arity
+                           :for ctor-field-name := (nth i ctor-field-names)
+                           :for pat-index := (position ctor-field-name pat-field-names :test #'string=)
+                           :collect (if pat-index
+                                        (nth pat-index (parser:pattern-constructor-patterns pat))
+                                        ;; Missing field: create wildcard
+                                        (parser:make-pattern-wildcard :location (source:location pat))))
+                     ;; Positional pattern: use as-is
+                     (parser:pattern-constructor-patterns pat)))
 
                (pattern-nodes
-                 (loop :for arg :in (parser:pattern-constructor-patterns pat)
-                       :for arg-ty :in (tc:function-type-arguments ctor-ty)
+                 (loop :for arg :in ordered-patterns
+                       :for arg-ty :in arg-types
                        :collect (multiple-value-bind (ty_ node_ subs_)
                                     (infer-pattern-type arg arg-ty subs env)
                                   (declare (ignore ty_))
@@ -1774,7 +1807,8 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                     :type (tc:qualify nil pat-ty)
                     :location (source:location pat)
                     :name (parser:pattern-constructor-name pat)
-                    :patterns pattern-nodes)
+                    :patterns pattern-nodes
+                    :field-names nil) ; Always NIL after reordering to positional
                    subs)))
             (tc:coalton-internal-type-error ()
               (tc-error "Type mismatch"
