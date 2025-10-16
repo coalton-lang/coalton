@@ -1928,8 +1928,16 @@ or a list of strings for named fields."
                                               "expected field name with dot prefix (e.g., .fieldname)")
                                         (secondary-note source (cst:second enclosing-form)
                                                         "in this type definition")))
-                         (push (subseq field-symbol-name 1) field-names)
-                         (push (parse-type (cst:second field-cst) source) field-types)))
+                         (let ((field-name (subseq field-symbol-name 1)))
+                           ;; Check for duplicate field names
+                           (when (member field-name field-names :test #'string=)
+                             (parse-error "Duplicate field name in constructor"
+                                          (note source (cst:first field-cst)
+                                                "field ~S appears multiple times in constructor" field-name)
+                                          (secondary-note source (cst:second enclosing-form)
+                                                          "in this type definition")))
+                           (push field-name field-names)
+                           (push (parse-type (cst:second field-cst) source) field-types))))
                       (t
                        (parse-error "Malformed named field"
                                     (note source field-cst
