@@ -40,7 +40,10 @@ Whether or not the arrays are specialized depends on the underlying Lisp impleme
     (define (types:runtime-repr v)
       (let ((element-type (types:runtime-repr (types:proxy-inner v))))
         (lisp types:LispType (element-type)
-          `(cl:simple-array ,element-type (cl:*))))))
+          `(cl:simple-array ,element-type (cl:*)))))
+    (define (types:coalton-type-string _)
+      ;; FIXME!!
+      "LispArray"))
 
   (declare make (types:RuntimeRepr :t => UFix -> :t -> LispArray :t))
   (define (make n x)
