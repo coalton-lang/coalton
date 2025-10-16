@@ -227,28 +227,50 @@ Returns a `node'.")
           (util:coalton-bug "Invalid accessor type '~S'" ty))
 
         (let* ((type-entry (tc:lookup-type env (tc:tycon-name from-ty)))
+               (struct-entry (tc:lookup-struct env (tc:tycon-name from-ty) :no-error t)))
 
-               (struct-entry (tc:lookup-struct env (tc:tycon-name from-ty)))
+          ;; Try struct accessor first
+          (if struct-entry
+              (let ((idx (tc:struct-field-index (tc:get-field struct-entry
+                                                              (tc:node-accessor-name expr)))))
+                (assert idx)
 
-               (idx (tc:struct-field-index (tc:get-field struct-entry
-                                                         (tc:node-accessor-name expr)))))
+                (if (tc:type-entry-newtype type-entry)
+                    ;; If the struct is a newtype, then return 'id' as the accessor
+                    (make-node-variable
+                     :type ty
+                     :value (util:find-symbol "ID" "COALTON-LIBRARY/FUNCTIONS"))
 
-          (assert idx)
+                    (make-node-variable
+                     :type ty
+                     :value (alexandria:format-symbol
+                             (symbol-package (tc:tycon-name from-ty))
+                             "~A/~A-_~D"
+                             (tc:tycon-name from-ty)
+                             (tc:tycon-name from-ty)
+                             idx))))
 
-          (if (tc:type-entry-newtype type-entry)
-              ;; If the struct is a newtype, then return 'id' as the accessor
-              (make-node-variable
-               :type ty
-               :value (util:find-symbol "ID" "COALTON-LIBRARY/FUNCTIONS"))
-
-              (make-node-variable
-               :type ty
-               :value (alexandria:format-symbol
-                       (symbol-package (tc:tycon-name from-ty))
-                       "~A/~A-_~D"
-                       (tc:tycon-name from-ty)
-                       (tc:tycon-name from-ty)
-                       idx)))))))
+              ;; Try ADT constructor accessor
+              (let ((constructors (tc:type-entry-constructors type-entry))
+                    (field-name (tc:node-accessor-name expr)))
+                (loop :for ctor-name :in constructors
+                      :for ctor-entry := (tc:lookup-constructor env ctor-name)
+                      :for field-names := (tc:constructor-entry-field-names ctor-entry)
+                      :when field-names
+                        :do (let ((idx (position field-name field-names :test #'string-equal)))
+                              (when idx
+                                ;; Found the field in this constructor
+                                (return-from translate-expression
+                                  (make-node-variable
+                                   :type ty
+                                   :value (alexandria:format-symbol
+                                           (symbol-package (tc:constructor-entry-classname ctor-entry))
+                                           "~A-_~D"
+                                           (tc:constructor-entry-classname ctor-entry)
+                                           idx))))))
+                (util:coalton-bug "Accessor field '~A' on type '~S' passed typechecker but not found in codegen. This should not happen."
+                                  field-name
+                                  (tc:tycon-name from-ty))))))))
 
   (:method ((expr tc:node-application) ctx env)
     (declare (type pred-context ctx)
