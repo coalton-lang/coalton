@@ -31,6 +31,7 @@
    #:make-constructor                            ; CONSTRUCTOR
    #:constructor-name                            ; ACCESSOR
    #:constructor-fields                          ; ACCESSOR
+   #:constructor-field-names                     ; ACCESSOR
    #:constructor-list                            ; TYPE
    #:toplevel-define-type                        ; STRUCT
    #:make-toplevel-define-type                   ; CONSTRUCTOR
@@ -252,10 +253,11 @@
 
 (defstruct (constructor
             (:copier nil))
-  (name      (util:required 'name)      :type identifier-src   :read-only t)
-  (fields    (util:required 'fields)    :type ty-list          :read-only t)
-  (docstring (util:required 'docstring) :type (or null string) :read-only t)
-  (location  (util:required 'location)  :type source:location  :read-only t))
+  (name        (util:required 'name)        :type identifier-src           :read-only t)
+  (fields      (util:required 'fields)      :type ty-list                  :read-only t)
+  (field-names (util:required 'field-names) :type (or null (cons string list)) :read-only t)
+  (docstring   (util:required 'docstring)   :type (or null string)         :read-only t)
+  (location    (util:required 'location)    :type source:location          :read-only t))
 
 (defmethod source:location ((self constructor))
   (constructor-location self))
@@ -1873,6 +1875,70 @@ consume all attributes")))
    :name (cst:raw form)
    :location (form-location source form)))
 
+(defun parse-constructor-fields (unparsed-fields source enclosing-form)
+  "Parse constructor fields, detecting dot-prefix named fields.
+Returns (list parsed-types field-names) where field-names is NIL for positional
+or a list of strings for named fields."
+  (declare (type list unparsed-fields)
+           (values list &optional))
+
+  (when (null unparsed-fields)
+    (return-from parse-constructor-fields (list nil nil)))
+
+  ;; Check if any field has dot-prefix syntax
+  (let ((has-named-field nil)
+        (has-positional-field nil))
+
+    (loop :for field-cst :in unparsed-fields
+          :do (if (and (cst:consp field-cst)
+                       (cst:atom (cst:first field-cst))
+                       (symbolp (cst:raw (cst:first field-cst))))
+                  (let ((field-symbol-name (symbol-name (cst:raw (cst:first field-cst)))))
+                    (if (and (> (length field-symbol-name) 0)
+                             (char= (char field-symbol-name 0) #\.))
+                        (setf has-named-field t)
+                        (setf has-positional-field t)))
+                  (setf has-positional-field t)))
+
+    (when (and has-named-field has-positional-field)
+      (parse-error "Mixed positional and named fields in constructor"
+                   (note source (first unparsed-fields)
+                         "constructor cannot mix positional and named fields")
+                   (secondary-note source (cst:second enclosing-form)
+                                   "in this type definition")))
+
+    (if has-named-field
+        ;; Named fields: extract names and types
+        (let ((field-names nil)
+              (field-types nil))
+          (loop :for field-cst :in unparsed-fields
+                :do (cond
+                      ((and (cst:consp field-cst)
+                            (cst:atom (cst:first field-cst))
+                            (symbolp (cst:raw (cst:first field-cst))))
+                       (let* ((field-symbol (cst:raw (cst:first field-cst)))
+                              (field-symbol-name (symbol-name field-symbol)))
+                         (unless (and (> (length field-symbol-name) 0)
+                                      (char= (char field-symbol-name 0) #\.))
+                           (parse-error "Field missing dot prefix"
+                                        (note source field-cst
+                                              "expected field name with dot prefix (e.g., .fieldname)")
+                                        (secondary-note source (cst:second enclosing-form)
+                                                        "in this type definition")))
+                         (push (subseq field-symbol-name 1) field-names)
+                         (push (parse-type (cst:second field-cst) source) field-types)))
+                      (t
+                       (parse-error "Malformed named field"
+                                    (note source field-cst
+                                          "expected (.fieldname Type)")
+                                    (secondary-note source (cst:second enclosing-form)
+                                                    "in this type definition")))))
+          (list (nreverse field-types) (nreverse field-names)))
+        ;; Positional fields: just parse types
+        (list (loop :for field :in unparsed-fields
+                    :collect (parse-type field source))
+              nil))))
+
 (defun parse-constructor (form enclosing-form docstring source)
   (declare (type cst:cst form enclosing-form)
            (values constructor))
@@ -1900,14 +1966,15 @@ consume all attributes")))
                    (secondary-note source (cst:second enclosing-form)
                                    "in this type definition")))
 
-    (make-constructor
-     :name (make-identifier-src
-            :name (cst:raw unparsed-name)
-            :location (form-location source unparsed-name))
-     :fields (loop :for field :in unparsed-fields
-                   :collect (parse-type field source))
-     :location (form-location source form)
-     :docstring docstring)))
+    (let ((field-info (parse-constructor-fields unparsed-fields source enclosing-form)))
+      (make-constructor
+       :name (make-identifier-src
+              :name (cst:raw unparsed-name)
+              :location (form-location source unparsed-name))
+       :fields (first field-info)
+       :field-names (second field-info)
+       :location (form-location source form)
+       :docstring docstring))))
 
 
 (defun parse-argument-list (form source)

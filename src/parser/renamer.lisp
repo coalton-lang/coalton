@@ -697,6 +697,7 @@
     (make-constructor
      :name (constructor-name ctor)
      :fields (rename-type-variables-generic% (constructor-fields ctor) ctx)
+     :field-names (constructor-field-names ctor)
      :docstring (source:docstring ctor)
      :location (source:location ctor)))
 
