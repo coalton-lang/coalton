@@ -80,6 +80,7 @@
   (:export
    #:fn #:λ
    #:match
+   #:swap
    #:throw
    #:resume-to
    #:resumable

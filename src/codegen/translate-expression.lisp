@@ -416,6 +416,19 @@ Returns a `node'.")
                      :body (translate-expression (tc:node-match-branch-body branch) ctx env)))
                   (tc:node-match-branches expr)))))
 
+  (:method ((expr tc:node-swap) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+
+    (let ((qual-ty (tc:node-type expr)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      (make-node-swap
+       :type (tc:qualified-ty-type qual-ty)
+       :expr (translate-expression (tc:node-swap-expr expr) ctx env)
+       :patterns (mapcar #'translate-pattern (tc:node-swap-patterns expr)))))
+
   (:method ((expr tc:node-catch) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)
