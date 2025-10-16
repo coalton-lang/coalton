@@ -193,6 +193,17 @@
       :location (source:location node))
      ctx))
 
+  (:method ((node node-swap) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+
+    (values
+     (make-node-swap
+      :expr (rename-variables-generic% (node-swap-expr node) ctx)
+      :patterns (rename-variables-generic% (node-swap-patterns node) ctx)
+      :location (source:location node))
+     ctx))
+
   (:method ((node node-resumable-branch) ctx)
     (declare (type algo:immutable-map ctx))
 
