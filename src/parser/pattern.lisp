@@ -133,12 +133,12 @@ FIELD-NAMES is NIL for positional patterns, or a list of strings for named field
                              (let* ((symbol (cst:raw field))
                                     (name (symbol-name symbol))
                                     (field-name (subseq name 1))) ; Remove leading dot
-                               (list :named field-name field)))
+                               (list ':named field-name field)))
 
                             ;; Regular pattern (positional or other pattern form)
                             (t
                              (setf has-positional t)
-                             (list :positional field))))))
+                             (list ':positional field))))))
 
     ;; Validate: cannot mix named and positional fields
     (when (and has-named has-positional)
