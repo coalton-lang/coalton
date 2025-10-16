@@ -207,3 +207,15 @@
     (define test (get-contents (SimpleContainer 42)))"
    '("get-contents" . "(Container -> Integer)")
    '("test" . "Integer")))
+
+(deftest test-reject-duplicate-field-names-in-pattern ()
+  "Test that duplicate field names in pattern are rejected"
+  (let ((error (collect-compiler-error
+                "(define-type Point
+                   (Pt (.x Integer) (.y Integer)))
+
+                 (define (f p)
+                   (match p
+                     ((Pt .x .x) x)))")))
+    (is (not (null error))
+        "Should reject pattern with duplicate field names")))

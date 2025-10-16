@@ -51,3 +51,11 @@
    "(define-type Data
       (Data (.items (List Integer))
             (.count Integer)))"))
+
+(deftest test-reject-duplicate-field-names-in-constructor ()
+  "Test parser rejects duplicate field names in constructor definition"
+  (let ((error (collect-compiler-error
+                "(define-type Bad
+                   (Constructor (.x Integer) (.x String)))")))
+    (is (not (null error))
+        "Should reject constructor with duplicate field names")))
