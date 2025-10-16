@@ -1890,15 +1890,18 @@ or a list of strings for named fields."
         (has-positional-field nil))
 
     (loop :for field-cst :in unparsed-fields
-          :do (if (and (cst:consp field-cst)
-                       (cst:atom (cst:first field-cst))
-                       (symbolp (cst:raw (cst:first field-cst))))
-                  (let ((field-symbol-name (symbol-name (cst:raw (cst:first field-cst)))))
-                    (if (and (> (length field-symbol-name) 0)
-                             (char= (char field-symbol-name 0) #\.))
-                        (setf has-named-field t)
-                        (setf has-positional-field t)))
-                  (setf has-positional-field t)))
+          :if (and (cst:consp field-cst)
+                   (cst:atom (cst:first field-cst))
+                   (symbolp (cst:raw (cst:first field-cst))))
+            :do (let ((field-symbol-name (symbol-name (cst:raw (cst:first field-cst)))))
+                  (cond
+                    ((and (plusp (length field-symbol-name))
+                          (char= #\. (char field-symbol-name 0)))
+                     (setf has-named-field t))
+                    (t
+                     (setf has-positional-field t))))
+          :else
+            :do (setf has-positional-field t))
 
     (when (and has-named-field has-positional-field)
       (parse-error "Mixed positional and named fields in constructor"
@@ -1918,8 +1921,8 @@ or a list of strings for named fields."
                             (symbolp (cst:raw (cst:first field-cst))))
                        (let* ((field-symbol (cst:raw (cst:first field-cst)))
                               (field-symbol-name (symbol-name field-symbol)))
-                         (unless (and (> (length field-symbol-name) 0)
-                                      (char= (char field-symbol-name 0) #\.))
+                         (unless (and (plusp (length field-symbol-name))
+                                      (char= #\. (char field-symbol-name 0)))
                            (parse-error "Field missing dot prefix"
                                         (note source field-cst
                                               "expected field name with dot prefix (e.g., .fieldname)")

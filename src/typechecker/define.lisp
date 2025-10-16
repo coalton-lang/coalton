@@ -1778,8 +1778,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                (ordered-patterns
                  (if pat-field-names
                      ;; Named field pattern: reorder and fill missing fields
-                     (loop :for i :from 0 :below arity
-                           :for ctor-field-name := (nth i ctor-field-names)
+                     (loop :for ctor-field-name :in ctor-field-names
                            :for pat-index := (position ctor-field-name pat-field-names :test #'string=)
                            :collect (if pat-index
                                         (nth pat-index (parser:pattern-constructor-patterns pat))
