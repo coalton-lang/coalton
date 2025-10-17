@@ -59,6 +59,16 @@ regardless of Coalton's release mode."
        (:struct
         (append
          ;; Declare the types of the constructor and readers:
+         ;;
+         ;; XXX: These seem to cause bugs because they overwrite or
+         ;; disagree with SBCL's own conception of the types of these
+         ;; functions. Maybe we can re-enable or revise later, hence
+         ;; we'll keep the code.
+         ;;
+         ;; As a specific example, readers are inferred to be
+         ;; (FUNCTION (T) ...) as opposed to (FUNCTION (STRUCT-TYPE)
+         ;; ...).
+         #+#:broken-on-sbcl
          (when settings:*emit-type-annotations*
            (list*
             `(declaim (ftype (function
