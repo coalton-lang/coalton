@@ -466,7 +466,7 @@
 
   ;; Field names for constructors with named fields (using dot-prefix syntax)
   ;; NIL for positional constructors, (cons string list) for named field constructors
-  (field-names     nil                              :type (or null (cons string list))   :read-only t)
+  (field-names     nil                              :type (or null util:string-list)     :read-only t)
 
   ;; If this constructor constructs a compressed-repr type then
   ;; compressed-repr is the runtime value of this nullary constructor
