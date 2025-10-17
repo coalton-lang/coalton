@@ -157,3 +157,23 @@ error: Unknown field name in pattern
    |
  8 |      ((Pt .z) z)))
    |       ^^^^^^^ constructor PT does not have a field named "Z"
+
+================================================================================
+10 Conflicting field types across constructors
+================================================================================
+
+(package test-package)
+
+(define-type MyResult
+  (MyOk (.value Integer))
+  (MyErr (.value String)))
+
+--------------------------------------------------------------------------------
+
+error: Conflicting field types
+  --> test:4:2
+   |
+ 4 |    (MyOk (.value Integer))
+   |    ^^^^^^^^^^^^^^^^^^^^^^^ constructor MYOK has field '.VALUE' with type INTEGER
+ 5 |    (MyErr (.value String)))
+   |    ^^^^^^^^^^^^^^^^^^^^^^^ but constructor MYERR has field '.VALUE' with incompatible type STRING
