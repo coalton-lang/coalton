@@ -35,3 +35,12 @@
    "(define-type Data
       (Data (.items (List Integer))
             (.count Integer)))"))
+
+(deftest test-parse-nested-named-field-types ()
+  "Test parser handles nested types in named fields"
+  (check-coalton-types
+   "(define-type (Tree :a)
+      (Leaf)
+      (Node (.value :a)
+            (.left (Tree :a))
+            (.right (Tree :a))))"))

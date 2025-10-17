@@ -144,3 +144,34 @@
 
    '("c" . "Shape")
    '("w" . "Integer")))
+
+(deftest test-adt-accessor-multiple-constructors-same-field-same-type ()
+  "Test accessors when multiple constructors have same field name with same type"
+  (check-coalton-types
+   "(define-type MyResult
+      (MyOk (.value Integer))
+      (MyErr (.value Integer)))
+
+    (define ok-val (.value (MyOk 42)))
+    (define err-val (.value (MyErr 100)))"
+
+   '("ok-val" . "Integer")
+   '("err-val" . "Integer")))
+
+(deftest test-adt-accessor-in-composition ()
+  "Test accessor composition with chained accessors"
+  (check-coalton-types
+   "(define-type (Inner :a)
+      (Inner (.val :a)))
+
+    (define-type (Outer :a)
+      (Outer (.inner (Inner :a))))
+
+    (declare get-val ((Outer :a) -> :a))
+    (define (get-val outer)
+      (.val (.inner outer)))
+
+    (define x (get-val (Outer (Inner 42))))"
+
+   '("get-val" . "((Outer :a) -> :a)")
+   '("x" . "Integer")))
