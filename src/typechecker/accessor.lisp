@@ -121,27 +121,34 @@
           (return-from solve-accessor (values t subs))))
 
       ;; Try ADT constructor accessor
-      (let ((field-index (tc:type-entry-field-index type-entry))
-            (field-name (accessor-field accessor)))
+      (multiple-value-bind (field-entries has-any-named-fields)
+          (let ((field-name (accessor-field accessor))
+                (constructors (tc:type-entry-constructors type-entry)))
+            (loop :with has-any-named-fields := nil
+                  :for ctor-name :in constructors
+                  :for ctor-entry := (tc:lookup-constructor env ctor-name)
+                  :for ctor-field-names := (tc:constructor-entry-field-names ctor-entry)
+                  :for field-pos := (when ctor-field-names
+                                      (position field-name ctor-field-names :test #'string-equal))
+                  :when ctor-field-names
+                    :do (setf has-any-named-fields t)
+                  :when field-pos
+                    :collect (cons ctor-name field-pos) :into field-entries
+                  :finally (return (values field-entries has-any-named-fields))))
 
-        (unless field-index
-          (tc-error "Invalid accessor"
-                    (tc-note accessor "struct accessor cannot be applied to a value of type '~S'"
-                             (accessor-from accessor))))
+        (unless field-entries
+          ;; If the type has no named fields at all, give a different error message
+          (if has-any-named-fields
+              (tc-error "Invalid accessor"
+                        (tc-note accessor "type '~S' does not have a field '~A'"
+                                 ty-name
+                                 (accessor-field accessor)))
+              (tc-error "Invalid accessor"
+                        (tc-note accessor "struct accessor cannot be applied to a value of type '~S'"
+                                 ty-name))))
 
-        (let ((field-entries (gethash field-name field-index))
-              (constructors (tc:type-entry-constructors type-entry)))
-
-          (unless field-entries
-            (tc-error "Invalid accessor"
-                      (tc-note accessor "type '~S' does not have a field '~A'"
-                               ty-name
-                               (accessor-field accessor))))
-
-          (let ((constructors-with-field
-                  (loop :for ctor-name :in constructors
-                        :when (assoc ctor-name field-entries :test #'eq)
-                          :collect ctor-name)))
+        (let ((constructors-with-field
+                (mapcar #'car field-entries)))
 
             (loop :for ctor-name :in constructors-with-field
                   :for field-pos := (cdr (assoc ctor-name field-entries :test #'eq))
@@ -164,7 +171,7 @@
             (tc-error "Invalid accessor"
                       (tc-note accessor "unable to resolve accessor for field '~A' on type '~S'"
                                (accessor-field accessor)
-                               ty-name))))))))
+                               ty-name)))))))
 
 (defmethod tc:apply-substitution (subs (accessor accessor))
   (declare (type tc:substitution-list subs)
