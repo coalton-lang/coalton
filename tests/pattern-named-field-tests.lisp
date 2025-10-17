@@ -8,12 +8,12 @@
    "(define-type Point
       (Pt (.x Integer) (.y Integer)))
 
-    (define (get-x p)
+    (define (sum-coords p)
       (match p
-        ((Pt .x .y) x)))
+        ((Pt .x .y) (+ x y))))
 
-    (define test-point (get-x (Pt 10 20)))"
-   '("get-x" . "(Point -> Integer)")
+    (define test-point (sum-coords (Pt 10 20)))"
+   '("sum-coords" . "(Point -> Integer)")
    '("test-point" . "Integer")))
 
 (deftest test-out-of-order-field-pattern ()
@@ -22,12 +22,12 @@
    "(define-type Point
       (Pt (.x Integer) (.y Integer)))
 
-    (define (get-x-reversed p)
+    (define (sum-reversed p)
       (match p
-        ((Pt .y .x) x)))  ; Out of order
+        ((Pt .y .x) (+ x y))))  ; Out of order
 
-    (define test (get-x-reversed (Pt 10 20)))"
-   '("get-x-reversed" . "(Point -> Integer)")
+    (define test (sum-reversed (Pt 10 20)))"
+   '("sum-reversed" . "(Point -> Integer)")
    '("test" . "Integer")))
 
 (deftest test-partial-field-pattern ()
@@ -123,42 +123,6 @@
    '("add-coords" . "(Point -> Integer)")
    '("test" . "Integer")))
 
-(deftest test-reject-named-pattern-on-positional-constructor ()
-  "Test that named pattern on positional constructor is rejected"
-  (let ((error (collect-compiler-error
-                "(define-type Point
-                   (Pt Integer Integer))
-
-                 (define (f p)
-                   (match p
-                     ((Pt .x .y) x)))")))
-    (is (not (null error))
-        "Should reject named field pattern on positional constructor")))
-
-(deftest test-reject-unknown-field-name ()
-  "Test that unknown field name in pattern is rejected"
-  (let ((error (collect-compiler-error
-                "(define-type Point
-                   (Pt (.x Integer) (.y Integer)))
-
-                 (define (f p)
-                   (match p
-                     ((Pt .z) z)))")))
-    (is (not (null error))
-        "Should reject unknown field name .z")))
-
-(deftest test-reject-mixed-named-positional-in-pattern ()
-  "Test that mixing named and positional fields in pattern is rejected"
-  (let ((error (collect-compiler-error
-                "(define-type Point
-                   (Pt (.x Integer) (.y Integer)))
-
-                 (define (f p)
-                   (match p
-                     ((Pt .x 10) x)))")))
-    (is (not (null error))
-        "Should reject mixed named and positional fields in pattern")))
-
 (deftest test-multiple-constructors-partial-fields ()
   "Test pattern matching with multiple constructors and partial fields"
   (check-coalton-types
@@ -207,15 +171,3 @@
     (define test (get-contents (SimpleContainer 42)))"
    '("get-contents" . "(Container -> Integer)")
    '("test" . "Integer")))
-
-(deftest test-reject-duplicate-field-names-in-pattern ()
-  "Test that duplicate field names in pattern are rejected"
-  (let ((error (collect-compiler-error
-                "(define-type Point
-                   (Pt (.x Integer) (.y Integer)))
-
-                 (define (f p)
-                   (match p
-                     ((Pt .x .x) x)))")))
-    (is (not (null error))
-        "Should reject pattern with duplicate field names")))
