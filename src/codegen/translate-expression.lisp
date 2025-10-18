@@ -266,27 +266,51 @@ Returns a `node'.")
                                     field-name
                                     (tc:tycon-name from-ty)))
 
-                ;; Generate a lambda that does runtime dispatch using etypecase
-                (let ((obj-var (gensym "OBJ"))
-                      (lisp-var (gensym "OBJ")))
-                  (return-from translate-expression
-                    (make-node-abstraction
-                     :type ty
-                     :vars (list obj-var)
-                     :subexpr (make-node-lisp
-                               :type (tc:function-return-type ty)
-                               :vars (list (cons lisp-var obj-var))
-                               :form `((etypecase ,lisp-var
-                                         ,@(loop :for (ctor-entry . idx) :in ctors-with-field
-                                                 :for classname := (tc:constructor-entry-classname
-                                                                    ctor-entry)
-                                                 :for accessor-name := (alexandria:format-symbol
-                                                                        (symbol-package classname)
-                                                                        "~A-_~D"
-                                                                        classname
-                                                                        idx)
-                                                 :collect `(,classname (,accessor-name
-                                                                        ,lisp-var)))))))))))))))
+                (cond
+                  ;; If field is unique to one constructor, generate direct accessor call
+                  ((null (cdr ctors-with-field))
+                   (destructuring-bind ((ctor-entry . idx)) ctors-with-field
+                     (let ((classname (tc:constructor-entry-classname ctor-entry))
+                           (obj-var (gensym "OBJ")))
+                       (make-node-abstraction
+                        :type ty
+                        :vars (list obj-var)
+                        :subexpr (make-node-direct-application
+                                  :type (tc:function-return-type ty)
+                                  :properties '()
+                                  :rator-type (tc:make-function-type
+                                               (tc:function-type-from ty)
+                                               (tc:function-return-type ty))
+                                  :rator (alexandria:format-symbol
+                                          (symbol-package classname)
+                                          "~A-_~D"
+                                          classname
+                                          idx)
+                                  :rands (list (make-node-variable
+                                                :type (tc:function-type-from ty)
+                                                :value obj-var)))))))
+
+                  ;; Multiple constructors have this field, need runtime dispatch
+                  (t
+                   (let ((obj-var (gensym "OBJ"))
+                         (lisp-var (gensym "OBJ")))
+                     (make-node-abstraction
+                      :type ty
+                      :vars (list obj-var)
+                      :subexpr (make-node-lisp
+                                :type (tc:function-return-type ty)
+                                :vars `((,lisp-var . ,obj-var))
+                                :form `((etypecase ,lisp-var
+                                          ,@(loop :for (ctor-entry . idx) :in ctors-with-field
+                                                  :for classname := (tc:constructor-entry-classname
+                                                                     ctor-entry)
+                                                  :for accessor-name := (alexandria:format-symbol
+                                                                         (symbol-package classname)
+                                                                         "~A-_~D"
+                                                                         classname
+                                                                         idx)
+                                                  :collect `(,classname (,accessor-name
+                                                                         ,lisp-var))))))))))))))))
 
   (:method ((expr tc:node-application) ctx env)
     (declare (type pred-context ctx)
