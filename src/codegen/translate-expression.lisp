@@ -266,43 +266,27 @@ Returns a `node'.")
                                     field-name
                                     (tc:tycon-name from-ty)))
 
-                ;; Generate a lambda that does runtime dispatch using pattern matching
+                ;; Generate a lambda that does runtime dispatch using etypecase
                 (let ((obj-var (gensym "OBJ"))
-                      (arg-type (tc:function-type-from ty)))
+                      (lisp-var (gensym "OBJ")))
                   (return-from translate-expression
                     (make-node-abstraction
                      :type ty
                      :vars (list obj-var)
-                     :subexpr (make-node-match
+                     :subexpr (make-node-lisp
                                :type (tc:function-return-type ty)
-                               :expr (make-node-variable
-                                      :type arg-type
-                                      :value obj-var)
-                               :branches (loop :for (ctor-entry . idx) :in ctors-with-field
-                                               :for ctor-name := (tc:constructor-entry-name ctor-entry)
-                                               :for classname := (tc:constructor-entry-classname ctor-entry)
-                                               :for arity := (tc:constructor-entry-arity ctor-entry)
-                                               :for accessor-name := (alexandria:format-symbol
-                                                                      (symbol-package classname)
-                                                                      "~A-_~D"
-                                                                      classname
-                                                                      idx)
-                                               ;; Create a fresh variable for each field in the pattern
-                                               :for field-vars := (loop :repeat arity
-                                                                        :collect (gensym "FIELD"))
-                                               :collect (make-match-branch
-                                                          :pattern (make-pattern-constructor
-                                                                    :type arg-type
-                                                                    :name ctor-name
-                                                                    :patterns (loop :for var :in field-vars
-                                                                                    :for i :from 0
-                                                                                    :collect (make-pattern-var
-                                                                                              :type (nth i (tc:constructor-arguments ctor-name env))
-                                                                                              :name var)))
-                                                          ;; Return the field at position idx
-                                                          :body (make-node-variable
-                                                                 :type (tc:function-return-type ty)
-                                                                 :value (nth idx field-vars))))))))))))))
+                               :vars (list (cons lisp-var obj-var))
+                               :form `((etypecase ,lisp-var
+                                         ,@(loop :for (ctor-entry . idx) :in ctors-with-field
+                                                 :for classname := (tc:constructor-entry-classname
+                                                                    ctor-entry)
+                                                 :for accessor-name := (alexandria:format-symbol
+                                                                        (symbol-package classname)
+                                                                        "~A-_~D"
+                                                                        classname
+                                                                        idx)
+                                                 :collect `(,classname (,accessor-name
+                                                                        ,lisp-var)))))))))))))))
 
   (:method ((expr tc:node-application) ctx env)
     (declare (type pred-context ctx)
