@@ -227,28 +227,90 @@ Returns a `node'.")
           (util:coalton-bug "Invalid accessor type '~S'" ty))
 
         (let* ((type-entry (tc:lookup-type env (tc:tycon-name from-ty)))
+               (struct-entry (tc:lookup-struct env (tc:tycon-name from-ty) :no-error t)))
 
-               (struct-entry (tc:lookup-struct env (tc:tycon-name from-ty)))
+          ;; Try struct accessor first
+          (if struct-entry
+              (let ((idx (tc:struct-field-index (tc:get-field struct-entry
+                                                              (tc:node-accessor-name expr)))))
+                (assert idx)
 
-               (idx (tc:struct-field-index (tc:get-field struct-entry
-                                                         (tc:node-accessor-name expr)))))
+                (if (tc:type-entry-newtype type-entry)
+                    ;; If the struct is a newtype, then return 'id' as the accessor
+                    (make-node-variable
+                     :type ty
+                     :value (util:find-symbol "ID" "COALTON-LIBRARY/FUNCTIONS"))
 
-          (assert idx)
+                    (make-node-variable
+                     :type ty
+                     :value (alexandria:format-symbol
+                             (symbol-package (tc:tycon-name from-ty))
+                             "~A/~A-_~D"
+                             (tc:tycon-name from-ty)
+                             (tc:tycon-name from-ty)
+                             idx))))
 
-          (if (tc:type-entry-newtype type-entry)
-              ;; If the struct is a newtype, then return 'id' as the accessor
-              (make-node-variable
-               :type ty
-               :value (util:find-symbol "ID" "COALTON-LIBRARY/FUNCTIONS"))
+              ;; Try ADT constructor accessor
+              (let* ((constructors (tc:type-entry-constructors type-entry))
+                     (field-name (tc:node-accessor-name expr))
+                     (ctors-with-field
+                       (loop :for ctor-name :in constructors
+                             :for ctor-entry := (tc:lookup-constructor env ctor-name)
+                             :for field-names := (tc:constructor-entry-field-names ctor-entry)
+                             :for idx := (position field-name field-names :test #'string-equal)
+                             :when idx
+                               :collect (cons ctor-entry idx))))
 
-              (make-node-variable
-               :type ty
-               :value (alexandria:format-symbol
-                       (symbol-package (tc:tycon-name from-ty))
-                       "~A/~A-_~D"
-                       (tc:tycon-name from-ty)
-                       (tc:tycon-name from-ty)
-                       idx)))))))
+                (unless ctors-with-field
+                  (util:coalton-bug "Accessor field '~A' on type '~S' passed typechecker but not found in codegen. This should not happen."
+                                    field-name
+                                    (tc:tycon-name from-ty)))
+
+                (cond
+                  ;; If field is unique to one constructor, generate direct accessor call
+                  ((null (cdr ctors-with-field))
+                   (destructuring-bind ((ctor-entry . idx)) ctors-with-field
+                     (let ((classname (tc:constructor-entry-classname ctor-entry))
+                           (obj-var (gensym "OBJ")))
+                       (make-node-abstraction
+                        :type ty
+                        :vars (list obj-var)
+                        :subexpr (make-node-direct-application
+                                  :type (tc:function-return-type ty)
+                                  :properties '()
+                                  :rator-type (tc:make-function-type
+                                               (tc:function-type-from ty)
+                                               (tc:function-return-type ty))
+                                  :rator (alexandria:format-symbol
+                                          (symbol-package classname)
+                                          "~A-_~D"
+                                          classname
+                                          idx)
+                                  :rands (list (make-node-variable
+                                                :type (tc:function-type-from ty)
+                                                :value obj-var)))))))
+
+                  ;; Multiple constructors have this field, need runtime dispatch
+                  (t
+                   (let ((obj-var (gensym "OBJ"))
+                         (lisp-var (gensym "OBJ")))
+                     (make-node-abstraction
+                      :type ty
+                      :vars (list obj-var)
+                      :subexpr (make-node-lisp
+                                :type (tc:function-return-type ty)
+                                :vars `((,lisp-var . ,obj-var))
+                                :form `((etypecase ,lisp-var
+                                          ,@(loop :for (ctor-entry . idx) :in ctors-with-field
+                                                  :for classname := (tc:constructor-entry-classname
+                                                                     ctor-entry)
+                                                  :for accessor-name := (alexandria:format-symbol
+                                                                         (symbol-package classname)
+                                                                         "~A-_~D"
+                                                                         classname
+                                                                         idx)
+                                                  :collect `(,classname (,accessor-name
+                                                                         ,lisp-var))))))))))))))))
 
   (:method ((expr tc:node-application) ctx env)
     (declare (type pred-context ctx)

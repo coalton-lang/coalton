@@ -310,6 +310,8 @@
                (:file "recursive-let-tests")
                (:file "class-tests")
                (:file "struct-tests")
+               (:file "named-field-tests")
+               (:file "pattern-named-field-tests")
                (:file "type-alias-tests")
                (:file "list-tests")
                (:file "lisparray-tests")
@@ -324,6 +326,7 @@
                (:file "file-tests")
                (:file "experimental-tests")
                (:file "exceptions")
+               (:file "adt-accessor-tests")
                (:module "monad"
                 :serial t
                 :components ((:file "optionalt")
