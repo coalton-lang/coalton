@@ -175,3 +175,35 @@
 
    '("get-val" . "((Outer :a) -> :a)")
    '("x" . "Integer")))
+
+(deftest test-adt-accessor-runtime-multiple-constructors ()
+  "Test that accessors work at runtime when field exists in multiple constructors.
+This is a RUNTIME test that actually executes the accessor code."
+
+  (with-coalton-compilation (:package #:coalton-user)
+    (coalton:coalton-toplevel
+      (coalton:define-type (Point :num)
+        (P2D (.x :num) (.y :num))
+        (P3D (.x :num) (.y :num) (.z :num)))
+
+      ;; Test accessor in polymorphic function
+      (coalton:declare get-x ((Point :num) -> :num))
+      (coalton:define (get-x p) (.x p))
+
+      (coalton:declare get-y ((Point :num) -> :num))
+      (coalton:define (get-y p) (.y p))
+
+      (coalton:declare get-z ((Point :num) -> :num))
+      (coalton:define (get-z p) (.z p))))
+
+  ;; Test polymorphic accessor functions work on different constructors
+  (is (= 10 (funcall 'coalton-user::get-x (funcall 'coalton-user::p2d 10 20)))
+      "polymorphic get-x should work on P2D")
+  (is (= 1 (funcall 'coalton-user::get-x (funcall 'coalton-user::p3d 1 2 3)))
+      "polymorphic get-x should work on P3D")
+  (is (= 20 (funcall 'coalton-user::get-y (funcall 'coalton-user::p2d 10 20)))
+      "polymorphic get-y should work on P2D")
+  (is (= 2 (funcall 'coalton-user::get-y (funcall 'coalton-user::p3d 1 2 3)))
+      "polymorphic get-y should work on P3D")
+  (is (= 3 (funcall 'coalton-user::get-z (funcall 'coalton-user::p3d 1 2 3)))
+      "polymorphic get-z should work on P3D"))

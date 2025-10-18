@@ -251,26 +251,42 @@ Returns a `node'.")
                              idx))))
 
               ;; Try ADT constructor accessor
-              (let ((constructors (tc:type-entry-constructors type-entry))
-                    (field-name (tc:node-accessor-name expr)))
-                (loop :for ctor-name :in constructors
-                      :for ctor-entry := (tc:lookup-constructor env ctor-name)
-                      :for field-names := (tc:constructor-entry-field-names ctor-entry)
-                      :when field-names
-                        :do (let ((idx (position field-name field-names :test #'string-equal)))
-                              (when idx
-                                ;; Found the field in this constructor
-                                (return-from translate-expression
-                                  (make-node-variable
-                                   :type ty
-                                   :value (alexandria:format-symbol
-                                           (symbol-package (tc:constructor-entry-classname ctor-entry))
-                                           "~A-_~D"
-                                           (tc:constructor-entry-classname ctor-entry)
-                                           idx))))))
-                (util:coalton-bug "Accessor field '~A' on type '~S' passed typechecker but not found in codegen. This should not happen."
-                                  field-name
-                                  (tc:tycon-name from-ty))))))))
+              (let* ((constructors (tc:type-entry-constructors type-entry))
+                     (field-name (tc:node-accessor-name expr))
+                     (ctors-with-field
+                       (loop :for ctor-name :in constructors
+                             :for ctor-entry := (tc:lookup-constructor env ctor-name)
+                             :for field-names := (tc:constructor-entry-field-names ctor-entry)
+                             :for idx := (position field-name field-names :test #'string-equal)
+                             :when idx
+                               :collect (cons ctor-entry idx))))
+
+                (unless ctors-with-field
+                  (util:coalton-bug "Accessor field '~A' on type '~S' passed typechecker but not found in codegen. This should not happen."
+                                    field-name
+                                    (tc:tycon-name from-ty)))
+
+                ;; Generate a lambda that does runtime dispatch using etypecase
+                (let ((obj-var (gensym "OBJ"))
+                      (lisp-var (gensym "OBJ")))
+                  (return-from translate-expression
+                    (make-node-abstraction
+                     :type ty
+                     :vars (list obj-var)
+                     :subexpr (make-node-lisp
+                               :type (tc:function-return-type ty)
+                               :vars (list (cons lisp-var obj-var))
+                               :form `((etypecase ,lisp-var
+                                         ,@(loop :for (ctor-entry . idx) :in ctors-with-field
+                                                 :for classname := (tc:constructor-entry-classname
+                                                                    ctor-entry)
+                                                 :for accessor-name := (alexandria:format-symbol
+                                                                        (symbol-package classname)
+                                                                        "~A-_~D"
+                                                                        classname
+                                                                        idx)
+                                                 :collect `(,classname (,accessor-name
+                                                                        ,lisp-var)))))))))))))))
 
   (:method ((expr tc:node-application) ctx env)
     (declare (type pred-context ctx)
