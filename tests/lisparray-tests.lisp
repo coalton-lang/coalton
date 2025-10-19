@@ -127,3 +127,12 @@
     (is (== "(((((0)1)2)3)4)" sl))
     (is (== "(0(1(2(3(4)))))" sr))))
 
+(define-test array-eq ()
+  (let ((v1 (as (array:LispArray Integer) (make-list 0 1 2 3 4)))
+        (v2 (as (array:LispArray Integer) (make-list 0 1 2 3 4 5)))
+        (v3 (as (array:LispArray Integer) (make-list 1 2 3 4 5)))
+        (v4 (as (array:LispArray Integer) (make-list 0 1 2 3 4))))
+    (is (== v1 v1))
+    (is (== v1 v4))
+    (is (/= v1 v2))
+    (is (/= v1 v3))))

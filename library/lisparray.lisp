@@ -135,6 +135,21 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
                (f (aref v 0) acc)
                (% (- i 1) (f (aref v i) acc))))))))
 
+  (define-instance (Eq :t => Eq (LispArray :t))
+    (inline)
+    (define (== a b)
+      (let len = (length a))
+      (and
+       (== len (length b)) 
+       (rec % ((i 0))
+         (cond
+           ((== i len)
+            True)
+           ((== (aref a i) (aref b i))
+            (% (+ 1 i)))
+           (True
+            False))))))
+
   (define-instance (types:RuntimeRepr :t => ram:RandomAccess (LispArray :t) :t)
     (inline)
     (define (ram:make n x)
