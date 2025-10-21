@@ -253,11 +253,11 @@
 
 (defstruct (constructor
             (:copier nil))
-  (name        (util:required 'name)        :type identifier-src             :read-only t)
-  (fields      (util:required 'fields)      :type ty-list                    :read-only t)
-  (field-names (util:required 'field-names) :type (or null util:string-list) :read-only t)
-  (docstring   (util:required 'docstring)   :type (or null string)           :read-only t)
-  (location    (util:required 'location)    :type source:location            :read-only t))
+  (name        (util:required 'name)        :type identifier-src   :read-only t)
+  (fields      (util:required 'fields)      :type ty-list          :read-only t)
+  (field-names (util:required 'field-names) :type util:string-list :read-only t)
+  (docstring   (util:required 'docstring)   :type (or null string) :read-only t)
+  (location    (util:required 'location)    :type source:location  :read-only t))
 
 (defmethod source:location ((self constructor))
   (constructor-location self))
@@ -1880,7 +1880,7 @@ consume all attributes")))
 Returns (values parsed-types field-names) where field-names is NIL for positional
 or a list of strings for named fields."
   (declare (type list unparsed-fields)
-           (values list (or null util:string-list) &optional))
+           (values list util:string-list &optional))
 
   (when (null unparsed-fields)
     (return-from parse-constructor-fields (values nil nil)))

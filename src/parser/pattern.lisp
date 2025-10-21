@@ -102,9 +102,9 @@ runtime value and binds it to a variable."
 (defstruct (pattern-constructor
             (:include pattern)
             (:copier nil))
-  (name        (util:required 'name)     :type identifier                 :read-only t)
-  (patterns    (util:required 'patterns) :type pattern-list               :read-only t)
-  (field-names nil                       :type (or null util:string-list) :read-only t))
+  (name        (util:required 'name)     :type identifier       :read-only t)
+  (patterns    (util:required 'patterns) :type pattern-list     :read-only t)
+  (field-names nil                       :type util:string-list :read-only t))
 
 (defun parse-constructor-pattern-fields (fields-cst source)
   "Parse constructor pattern fields. Returns (VALUES patterns field-names).

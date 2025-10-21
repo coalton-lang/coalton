@@ -91,9 +91,9 @@
 (defstruct (pattern-constructor
             (:include pattern)
             (:copier nil))
-  (name        (util:required 'name)     :type parser:identifier          :read-only t)
-  (patterns    (util:required 'patterns) :type pattern-list               :read-only t)
-  (field-names nil                       :type (or null util:string-list) :read-only t))
+  (name        (util:required 'name)     :type parser:identifier :read-only t)
+  (patterns    (util:required 'patterns) :type pattern-list      :read-only t)
+  (field-names nil                       :type util:string-list  :read-only t))
 
 ;;;
 ;;; Methods
