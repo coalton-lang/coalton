@@ -95,21 +95,6 @@
    '("test-int" . "Integer")
    '("test-str" . "String")))
 
-; NOTE: Let patterns are not supported yet in this implementation
-; (deftest test-named-pattern-in-let ()
-;   "Test named field patterns in let bindings"
-;   (check-coalton-types
-;    "(define-type Point
-;       (Pt (.x Integer) (.y Integer)))
-;
-;     (define (process-point p)
-;       (let ((Pt .x .y) p)
-;         (+ x y)))
-;
-;     (define test (process-point (Pt 10 20)))"
-;    '("process-point" . "(Point -> Integer)")
-;    '("test" . "Integer")))
-
 (deftest test-named-pattern-as-function-param ()
   "Test named field patterns in function parameters"
   (check-coalton-types
