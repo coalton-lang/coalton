@@ -20,8 +20,7 @@
   (:local-nicknames
    (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util)
-   (#:tc #:coalton-impl/typechecker)
-   (#:a #:alexandria))
+   (#:tc #:coalton-impl/typechecker))
   (:export
    #:translate-toplevel                   ; FUNCTION
    #:translate-expression                 ; FUNCTION
@@ -126,6 +125,7 @@ TRANSLATE-EXPRESSION when an abstraction is being translated.")
       (t
        (translate-expression (tc:binding-value binding) full-ctx env)))))
 
+
 (defgeneric translate-expression (expr ctx env)
   (:documentation "Translate typechecker AST node EXPR to the codegen AST.
 
@@ -212,8 +212,7 @@ Returns a `node'.")
   (:method ((expr tc:node-accessor) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)
-             (values node)
-             (ignore ctx))
+             (values node))
 
     (let* ((qual-ty (tc:node-type expr))
            (ty (tc:qualified-ty-type qual-ty)))
@@ -244,7 +243,7 @@ Returns a `node'.")
 
               (make-node-variable
                :type ty
-               :value (a:format-symbol
+               :value (alexandria:format-symbol
                        (symbol-package (tc:tycon-name from-ty))
                        "~A/~A-_~D"
                        (tc:tycon-name from-ty)
