@@ -326,7 +326,6 @@
                (:file "file-tests")
                (:file "experimental-tests")
                (:file "exceptions")
-               (:file "adt-accessor-tests")
                (:module "monad"
                 :serial t
                 :components ((:file "optionalt")

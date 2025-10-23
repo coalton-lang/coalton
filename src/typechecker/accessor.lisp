@@ -103,75 +103,24 @@
 
            (struct-entry (tc:lookup-struct env ty-name :no-error t)))
 
-      ;; Try struct accessor first
-      (when struct-entry
-        (let ((subs (tc:match struct-ty (accessor-from accessor)))
-              (field (tc:get-field struct-entry (accessor-field accessor) :no-error t)))
+      (unless struct-entry
+        (tc-error "Invalid accessor"
+                  (tc-note accessor "struct accessor cannot be applied to a value of type '~S'" (accessor-from accessor))))
 
-          (unless field
-            (tc-error "Invalid accessor"
-                      (tc-note accessor "struct '~S' does not have the field '~A'"
-                               ty-name
-                               (accessor-field accessor))))
+      (let ((subs (tc:match struct-ty (accessor-from accessor)))
+            (field (tc:get-field struct-entry (accessor-field accessor) :no-error t)))
 
-          ;; the order of unification matters here
-          (setf subs (tc:unify subs (accessor-to accessor)
-                               (tc:struct-field-type field)))
+        (unless field
+          (tc-error "Invalid accessor"
+                    (tc-note accessor "struct '~S' does not have the field '~A'"
+                             ty-name
+                             (accessor-field accessor))))
 
-          (return-from solve-accessor (values t subs))))
+        ;; the order of unification matters here
+        (setf subs (tc:unify subs (accessor-to accessor)
+                             (tc:struct-field-type field)))
 
-      ;; Try ADT constructor accessor
-      (multiple-value-bind (field-entries has-any-named-fields)
-          (let ((field-name (accessor-field accessor))
-                (constructors (tc:type-entry-constructors type-entry)))
-            (loop :with has-any-named-fields := nil
-                  :for ctor-name :in constructors
-                  :for ctor-entry := (tc:lookup-constructor env ctor-name)
-                  :for ctor-field-names := (tc:constructor-entry-field-names ctor-entry)
-                  :for field-pos := (when ctor-field-names
-                                      (position field-name ctor-field-names :test #'string-equal))
-                  :when ctor-field-names
-                    :do (setf has-any-named-fields t)
-                  :when field-pos
-                    :collect (cons ctor-name field-pos) :into field-entries
-                  :finally (return (values field-entries has-any-named-fields))))
-
-        (unless field-entries
-          ;; If the type has no named fields at all, give a different error message
-          (if has-any-named-fields
-              (tc-error "Invalid accessor"
-                        (tc-note accessor "type '~S' does not have a field '~A'"
-                                 ty-name
-                                 (accessor-field accessor)))
-              (tc-error "Invalid accessor"
-                        (tc-note accessor "struct accessor cannot be applied to a value of type '~S'"
-                                 ty-name))))
-
-        (let ((constructors-with-field
-                (mapcar #'car field-entries)))
-
-            (loop :for ctor-name :in constructors-with-field
-                  :for field-pos := (cdr (assoc ctor-name field-entries :test #'eq))
-                  :do (let* ((ctor-scheme (tc:lookup-value-type env ctor-name))
-                             (ctor-qualified-ty (tc:fresh-inst ctor-scheme))
-                             (ctor-ty (tc:qualified-ty-type ctor-qualified-ty))
-                             (field-types (tc:function-type-arguments ctor-ty))
-                             (ctor-return-ty (tc:function-return-type ctor-ty))
-                             (subs (tc:match ctor-return-ty (accessor-from accessor)))
-                             (field-ty (nth field-pos field-types))
-                             (field-ty-subst (tc:apply-substitution subs field-ty)))
-
-                        (handler-case
-                            (progn
-                              (setf subs (tc:unify subs (accessor-to accessor) field-ty-subst))
-                              (return-from solve-accessor (values t subs)))
-                          (tc:coalton-internal-type-error ()
-                            nil))))
-
-            (tc-error "Invalid accessor"
-                      (tc-note accessor "unable to resolve accessor for field '~A' on type '~S'"
-                               (accessor-field accessor)
-                               ty-name)))))))
+        (values t subs)))))
 
 (defmethod tc:apply-substitution (subs (accessor accessor))
   (declare (type tc:substitution-list subs)

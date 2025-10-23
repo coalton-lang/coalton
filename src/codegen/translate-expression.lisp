@@ -126,76 +126,6 @@ TRANSLATE-EXPRESSION when an abstraction is being translated.")
       (t
        (translate-expression (tc:binding-value binding) full-ctx env)))))
 
-(defun make-field-accessor-name (classname field-index)
-  "Generate the accessor symbol name for a constructor field."
-  (declare (type symbol classname)
-           (type fixnum field-index)
-           (values symbol))
-  (a:format-symbol
-   (symbol-package classname)
-   "~A-_~D"
-   classname
-   field-index))
-
-(defun translate-adt-accessor (expr ty type-entry env)
-  "Translate an ADT field accessor into either a direct call or runtime dispatch."
-  (declare (type tc:node-accessor expr)
-           (type tc:ty ty)
-           (type tc:type-entry type-entry)
-           (type tc:environment env)
-           (values node))
-
-  (let* ((constructors (tc:type-entry-constructors type-entry))
-         (field-name (tc:node-accessor-name expr))
-         (ctors-with-field
-           (loop :for ctor-name :in constructors
-                 :for ctor-entry := (tc:lookup-constructor env ctor-name)
-                 :for field-names := (tc:constructor-entry-field-names ctor-entry)
-                 :for idx := (position field-name field-names :test #'string-equal)
-                 :when idx
-                   :collect (cons ctor-entry idx))))
-
-    (unless ctors-with-field
-      (util:coalton-bug "Accessor field '~A' on type '~S' passed typechecker but not found in codegen. This should not happen."
-                        field-name
-                        (tc:tycon-name (tc:base-type (tc:function-type-from ty)))))
-
-    (cond
-      ;; Unique field - generate direct accessor call
-      ((null (cdr ctors-with-field))
-       (destructuring-bind ((ctor-entry . idx)) ctors-with-field
-         (let ((classname (tc:constructor-entry-classname ctor-entry))
-               (obj-var (gensym "OBJ")))
-           (make-node-abstraction
-            :type ty
-            :vars (list obj-var)
-            :subexpr (make-node-direct-application
-                      :type (tc:function-return-type ty)
-                      :properties '()
-                      :rator-type (tc:make-function-type
-                                   (tc:function-type-from ty)
-                                   (tc:function-return-type ty))
-                      :rator (make-field-accessor-name classname idx)
-                      :rands (list (make-node-variable
-                                    :type (tc:function-type-from ty)
-                                    :value obj-var)))))))
-
-      ;; Multiple constructors - generate runtime dispatch
-      (t
-       (let ((obj-var (gensym "OBJ"))
-             (lisp-var (gensym "OBJ")))
-         (make-node-abstraction
-          :type ty
-          :vars (list obj-var)
-          :subexpr (make-node-lisp
-                    :type (tc:function-return-type ty)
-                    :vars `((,lisp-var . ,obj-var))
-                    :form `((etypecase ,lisp-var
-                              ,@(loop :for (ctor-entry . idx) :in ctors-with-field
-                                      :for classname := (tc:constructor-entry-classname ctor-entry)
-                                      :collect `(,classname (,(make-field-accessor-name classname idx)
-                                                             ,lisp-var))))))))))))
-
 (defgeneric translate-expression (expr ctx env)
   (:documentation "Translate typechecker AST node EXPR to the codegen AST.
 
@@ -298,31 +228,28 @@ Returns a `node'.")
           (util:coalton-bug "Invalid accessor type '~S'" ty))
 
         (let* ((type-entry (tc:lookup-type env (tc:tycon-name from-ty)))
-               (struct-entry (tc:lookup-struct env (tc:tycon-name from-ty) :no-error t)))
 
-          ;; Try struct accessor first
-          (if struct-entry
-              (let ((idx (tc:struct-field-index (tc:get-field struct-entry
-                                                              (tc:node-accessor-name expr)))))
-                (assert idx)
+               (struct-entry (tc:lookup-struct env (tc:tycon-name from-ty)))
 
-                (if (tc:type-entry-newtype type-entry)
-                    ;; If the struct is a newtype, then return 'id' as the accessor
-                    (make-node-variable
-                     :type ty
-                     :value (util:find-symbol "ID" "COALTON-LIBRARY/FUNCTIONS"))
+               (idx (tc:struct-field-index (tc:get-field struct-entry
+                                                         (tc:node-accessor-name expr)))))
 
-                    (make-node-variable
-                     :type ty
-                     :value (a:format-symbol
-                             (symbol-package (tc:tycon-name from-ty))
-                             "~A/~A-_~D"
-                             (tc:tycon-name from-ty)
-                             (tc:tycon-name from-ty)
-                             idx))))
+          (assert idx)
 
-              ;; ADT accessor
-              (translate-adt-accessor expr ty type-entry env))))))
+          (if (tc:type-entry-newtype type-entry)
+              ;; If the struct is a newtype, then return 'id' as the accessor
+              (make-node-variable
+               :type ty
+               :value (util:find-symbol "ID" "COALTON-LIBRARY/FUNCTIONS"))
+
+              (make-node-variable
+               :type ty
+               :value (a:format-symbol
+                       (symbol-package (tc:tycon-name from-ty))
+                       "~A/~A-_~D"
+                       (tc:tycon-name from-ty)
+                       (tc:tycon-name from-ty)
+                       idx)))))))
 
   (:method ((expr tc:node-application) ctx env)
     (declare (type pred-context ctx)
