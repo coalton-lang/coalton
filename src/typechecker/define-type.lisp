@@ -502,7 +502,7 @@
                     := (typecase ctor
                          (parser:constructor (parser:constructor-field-names ctor))
                          (parser:toplevel-define-struct nil)
-                         (t nil))
+                         (otherwise nil))
                   :collect (tc:make-constructor-entry
                             :name ctor-name
                             :arity (length (parser:type-definition-ctor-field-types ctor))
