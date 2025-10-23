@@ -258,6 +258,19 @@ name is not known."
   (declare (type symbol name))
   (tc:lookup-class entry:*global-environment* name :no-error t))
 
+(defun coalton:lookup-type (name)
+  "Lookup a given type. Return NIL if the name is not known."
+  (declare (type symbol name))
+  (tc:lookup-type entry:*global-environment* name :no-error t))
+
+(defun coalton:lookup-runtime-type (name)
+  "Lookup the runtime type of the given type. Return NIL if the name is not known."
+  (declare (type symbol name))
+  (let ((type (coalton:lookup-type name)))
+    (typecase type
+      (tc:type-entry (tc:type-entry-runtime-type type))
+      (t             null))))
+
 (defun coalton:lookup-fundeps (name)
   "Lookup the fundep structure for a given class. Return NIL if the name
 is not known."
