@@ -272,7 +272,6 @@
   (type          (util:required 'type)          :type ty                        :read-only t)
   (tyvars        (util:required 'tyvars)        :type tyvar-list                :read-only t)
   (constructors  (util:required 'constructors)  :type util:symbol-list          :read-only t)
-
   ;; An explicit repr defined in the source, or nil if none was
   ;; supplied. Computed repr will be reflected in ENUM-REPR, NEWTYPE,
   ;; and/or RUNTIME-TYPE.

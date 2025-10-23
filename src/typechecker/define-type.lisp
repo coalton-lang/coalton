@@ -462,8 +462,8 @@
                (loop :for ctor :in (parser:type-definition-ctors type)
                      :for ctor-name := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
                      :for field-names := (typecase ctor
-                                          (parser:constructor (parser:constructor-field-names ctor))
-                                          (otherwise nil))
+                                           (parser:constructor (parser:constructor-field-names ctor))
+                                           (otherwise nil))
                      :when field-names
                        :do (let ((field-types (tc:apply-ksubstitution ksubs (gethash ctor-name ctor-table))))
                              (loop :for field-name :in field-names
