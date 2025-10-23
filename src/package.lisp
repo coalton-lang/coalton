@@ -130,6 +130,8 @@
    #:print-specializations
    #:lookup-code
    #:lookup-class
+   #:lookup-type
+   #:lookup-runtime-type
    #:lookup-fundeps
    #:type-of
    #:describe-type-of
