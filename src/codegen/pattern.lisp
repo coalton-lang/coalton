@@ -76,7 +76,7 @@
             (:copier nil))
   (name        (util:required 'name)     :type symbol           :read-only t)
   (patterns    (util:required 'patterns) :type pattern-list     :read-only t)
-  (field-names nil                       :type util:symbol-list :read-only t))
+  (field-names nil                       :type util:string-list :read-only t))
 
 (defun pattern-variables (pattern)
   (delete-duplicates (pattern-variables-generic% pattern) :test #'eq))
