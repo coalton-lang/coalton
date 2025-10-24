@@ -1,11 +1,18 @@
 (defpackage #:coalton-impl/interactive/dependencies
-  (:use
-   #:cl)
+  (:use #:cl)
   (:local-nicknames
    (#:parser #:coalton-impl/parser)
-   (#:tc #:coalton-impl/typechecker))
+   (#:tc-env #:coalton-impl/typechecker/environment))
   (:export
-   #:extract-function-dependencies))
+   #:extract-function-dependencies
+   #:dependency-registry
+   #:dependency-registry-forward-deps
+   #:dependency-registry-reverse-deps
+   #:make-dependency-registry
+   #:*dependency-registry*
+   #:record-dependencies
+   #:get-function-callers
+   #:find-affected-functions))
 (in-package #:coalton-impl/interactive/dependencies)
 
 ;;;
@@ -16,8 +23,7 @@
   "Extract global function calls from NODE.
    Returns a list of symbols that are verified to be functions in ENV.
    Filters out locally-bound variables by tracking lexical scope."
-  (declare (type parser:node node)
-           (type tc:environment env)
+  (declare (type tc-env:environment env)
            (values list))
 
   (let ((deps nil)
@@ -26,14 +32,13 @@
     (labels ((add-dependency (name)
                "Add NAME to dependencies if it's a function in ENV."
                (when (and (not (gethash name seen))
-                         (tc:lookup-value-type env name :no-error t))
+                          (tc-env:lookup-value-type env name :no-error t))
                  (setf (gethash name seen) t)
                  (push name deps)))
 
              (traverse (node local-bindings)
                "Traverse NODE with LOCAL-BINDINGS hash-set tracking local variables."
-               (declare (type parser:node node)
-                        (type hash-table local-bindings))
+               (declare (type hash-table local-bindings))
 
                (etypecase node
                  ;; Variable reference - check if local or global
@@ -240,3 +245,78 @@
 
       ;; Return dependencies in order found (reversed due to push)
       (nreverse deps))))
+
+;;;
+;;; Dependency Registry
+;;;
+
+(defstruct dependency-registry
+  "Tracks function call relationships."
+  ;; Map: function-name (symbol) -> list of function names it calls
+  (forward-deps (make-hash-table :test 'eq) :type hash-table :read-only t)
+  ;; Map: function-name (symbol) -> list of function names that call it
+  (reverse-deps (make-hash-table :test 'eq) :type hash-table :read-only t))
+
+(defvar *dependency-registry* (make-dependency-registry)
+  "Global registry of function dependencies.")
+
+(defun record-dependencies (function-name code env registry)
+  "Record that FUNCTION-NAME depends on functions called in CODE."
+  (declare (type symbol function-name)
+           (type tc-env:environment env)
+           (type dependency-registry registry))
+
+  (let* ((forward-deps (dependency-registry-forward-deps registry))
+         (reverse-deps (dependency-registry-reverse-deps registry))
+         (called-functions (extract-function-dependencies code env)))
+
+    ;; Remove duplicates
+    (setf called-functions (remove-duplicates called-functions :test #'eq))
+
+    ;; Remove self-reference (recursive calls)
+    (setf called-functions (remove function-name called-functions :test #'eq))
+
+    ;; Store forward dependencies
+    (setf (gethash function-name forward-deps) called-functions)
+
+    ;; Update reverse dependencies
+    ;; First, clear old reverse dependencies for this function
+    (maphash
+     (lambda (callee callers)
+       (setf (gethash callee reverse-deps)
+             (remove function-name callers :test #'eq)))
+     reverse-deps)
+
+    ;; Add new reverse dependencies
+    (dolist (callee called-functions)
+      (push function-name (gethash callee reverse-deps nil)))
+
+    nil))
+
+(defun get-function-callers (function-name registry)
+  "Get list of functions that directly call FUNCTION-NAME."
+  (declare (type symbol function-name)
+           (type dependency-registry registry)
+           (values list))
+  (gethash function-name (dependency-registry-reverse-deps registry) nil))
+
+(defun find-affected-functions (function-name registry &optional (visited (make-hash-table :test 'eq)))
+  "Find all functions transitively affected by changes to FUNCTION-NAME.
+Handles circular dependencies by tracking VISITED functions."
+  (declare (type symbol function-name)
+           (type dependency-registry registry)
+           (type hash-table visited)
+           (values list))
+
+  (let ((result nil))
+    (labels ((visit (fname)
+               (unless (gethash fname visited)
+                 (setf (gethash fname visited) t)
+                 (let ((callers (get-function-callers fname registry)))
+                   (dolist (caller callers)
+                     (push caller result)
+                     (visit caller))))))
+      (visit function-name))
+
+    ;; Return unique, sorted list
+    (sort (remove-duplicates result :test #'eq) #'string< :key #'symbol-name)))

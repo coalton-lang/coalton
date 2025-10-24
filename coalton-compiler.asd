@@ -65,6 +65,15 @@
                              (:file "unify")
                              (:file "fundeps")
                              (:file "environment")
+
+                             (:module "redef-detection"
+                              :pathname "../redef-detection/"
+                              :serial t
+                              :components ((:file "dependencies")
+                                           (:file "compatibility")
+                                           (:file "conditions")
+                                           (:file "package")))
+
                              (:file "lisp-type")
                              (:file "context-reduction")
                              (:file "stage-1")
@@ -84,6 +93,11 @@
                              (:file "define-instance")
                              (:file "specialize")
                              (:file "translation-unit")
+                             (:file "package")))
+
+               (:module "interactive"
+                :serial t
+                :components ((:file "detector")
                              (:file "package")))
                (:module "analysis"
                 :serial t
@@ -124,6 +138,7 @@
                              ;; Entry points
                              (:file "program")
                              (:file "package")))
+
                (:file "unlock-package" :if-feature :sb-package-locks)
                (:file "entry")
                (:file "reader")
