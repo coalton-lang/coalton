@@ -1,3 +1,4 @@
 (uiop:define-package #:coalton-impl/interactive
   (:mix-reexport
-   #:coalton-impl/interactive/dependencies))
+   #:coalton-impl/redef-detection
+   #:coalton-impl/interactive/detector))

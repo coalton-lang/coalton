@@ -342,4 +342,8 @@
                              (:file "statet")))
                (:module "algorithms-tests"
                 :serial t
-                :components ((:file "fft-tests")))))
+                :components ((:file "fft-tests")))
+               (:module "interactive"
+                :serial t
+                :components ((:file "dependencies-tests")
+                             (:file "interactive-tests")))))

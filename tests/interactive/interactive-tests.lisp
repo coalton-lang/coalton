@@ -1,0 +1,228 @@
+(defpackage #:coalton-tests/interactive
+  (:use #:cl
+        #:fiasco)
+  (:local-nicknames
+   (#:interactive #:coalton-impl/interactive)
+   (#:tc #:coalton-impl/typechecker)
+   (#:entry #:coalton-impl/entry))
+  (:export
+   #:interactive-tests))
+(in-package #:coalton-tests/interactive)
+
+(deftest test-dependency-tracking ()
+  "Test that dependencies are correctly tracked"
+  (let ((interactive:*dependency-registry*
+          (interactive:make-dependency-registry)))
+
+    ;; Define a helper function
+    (eval '(coalton:coalton-toplevel
+            (coalton:define (test-helper x) (coalton-prelude:+ x 1))))
+
+    ;; Define a user function that calls helper
+    (eval '(coalton:coalton-toplevel
+            (coalton:define (test-user y) (test-helper y))))
+
+    ;; Check dependencies were recorded
+    (let ((callers (interactive:get-function-callers
+                    'test-helper
+                    interactive:*dependency-registry*)))
+      (is (member 'test-user callers)
+          "test-user should be recorded as calling test-helper"))))
+
+(deftest test-type-compatibility ()
+  "Test type compatibility checking"
+  ;; Define two functions with the same type signature
+  (eval '(coalton:coalton-toplevel
+          (coalton:declare test-compat-foo (coalton:Integer coalton:-> coalton:Integer))
+          (coalton:define (test-compat-foo x) x)))
+  (eval '(coalton:coalton-toplevel
+          (coalton:declare test-compat-bar (coalton:Integer coalton:-> coalton:Integer))
+          (coalton:define (test-compat-bar x) x)))
+
+  (let* ((env entry:*global-environment*)
+         (foo-type (tc:lookup-value-type env 'test-compat-foo))
+         (bar-type (tc:lookup-value-type env 'test-compat-bar)))
+
+    ;; Same concrete type (Integer -> Integer) should be compatible
+    (is (interactive:types-compatible-p foo-type bar-type env)
+        "Same concrete type should be compatible"))
+
+  ;; Define a function with a different type signature
+  (eval '(coalton:coalton-toplevel
+          (coalton:declare test-compat-str (coalton:String coalton:-> coalton:String))
+          (coalton:define (test-compat-str x) x)))
+
+  (let* ((env entry:*global-environment*)
+         (foo-type (tc:lookup-value-type env 'test-compat-foo))
+         (str-type (tc:lookup-value-type env 'test-compat-str)))
+
+    ;; Different types (Integer -> Integer vs String -> String) should not be compatible
+    (is (not (interactive:types-compatible-p foo-type str-type env))
+        "Different types should not be compatible")))
+
+(deftest test-redefinition-error ()
+  "Test that incompatible redefinition raises an error"
+  (let ((interactive:*dependency-registry*
+          (interactive:make-dependency-registry)))
+
+    ;; Define a function with Integer -> Integer type
+    (eval '(coalton:coalton-toplevel
+            (coalton:declare test-redef-foo (coalton:Integer coalton:-> coalton:Integer))
+            (coalton:define (test-redef-foo x) (coalton-prelude:+ x 1))))
+
+    ;; Try to redefine with String -> String type (should error)
+    (signals interactive:incompatible-redefinition
+             (eval '(coalton:coalton-toplevel
+                     (coalton:declare test-redef-foo (coalton:String coalton:-> coalton:String))
+                     (coalton:define (test-redef-foo x) x))))))
+
+(deftest test-affected-functions ()
+  "Test finding transitively affected functions"
+  (let ((interactive:*dependency-registry*
+          (interactive:make-dependency-registry)))
+
+    ;; Define: a calls b, b calls c
+    (eval '(coalton:coalton-toplevel
+            (coalton:define (test-c x) (coalton-prelude:+ x 1))))
+
+    (eval '(coalton:coalton-toplevel
+            (coalton:define (test-b y) (test-c y))))
+
+    (eval '(coalton:coalton-toplevel
+            (coalton:define (test-a z) (test-b z))))
+
+    ;; Changing c should affect both b and a
+    (let ((affected (interactive:find-affected-functions
+                     'test-c
+                     interactive:*dependency-registry*)))
+      (is (member 'test-b affected)
+          "test-b should be affected by changes to test-c")
+      (is (member 'test-a affected)
+          "test-a should be transitively affected by changes to test-c"))))
+
+(deftest test-same-type-redefinition ()
+  "Test that redefining with same type is allowed"
+  (let ((interactive:*dependency-registry*
+          (interactive:make-dependency-registry)))
+
+    ;; Define a function
+    (eval '(coalton:coalton-toplevel
+            (coalton:define (test-same-type x) (coalton-prelude:+ x 1))))
+
+    ;; Redefine with same type (should succeed)
+    (finishes
+     (eval '(coalton:coalton-toplevel
+             (coalton:define (test-same-type x) (coalton-prelude:+ x 2)))))))
+
+(deftest test-mutual-recursion-deps ()
+  "Test dependency tracking for mutually recursive functions"
+  (let ((interactive:*dependency-registry*
+          (interactive:make-dependency-registry)))
+
+    ;; Define mutually recursive even? and odd?
+    (eval '(coalton:coalton-toplevel
+            (coalton:declare test-even? (coalton:Integer coalton:-> coalton:Boolean))
+            (coalton:define (test-even? n)
+              (coalton:if (coalton-prelude:== n 0)
+                          coalton:True
+                          (test-odd? (coalton-prelude:- n 1))))
+
+            (coalton:declare test-odd? (coalton:Integer coalton:-> coalton:Boolean))
+            (coalton:define (test-odd? n)
+              (coalton:if (coalton-prelude:== n 0)
+                          coalton:False
+                          (test-even? (coalton-prelude:- n 1))))))
+
+    ;; Check that dependencies were recorded correctly
+    (let ((even-calls (gethash 'test-even?
+                               (interactive:dependency-registry-forward-deps
+                                interactive:*dependency-registry*)))
+          (odd-calls (gethash 'test-odd?
+                              (interactive:dependency-registry-forward-deps
+                               interactive:*dependency-registry*))))
+      (is (member 'test-odd? even-calls)
+          "test-even? should call test-odd?")
+      (is (member 'test-even? odd-calls)
+          "test-odd? should call test-even?"))))
+
+(deftest test-no-self-reference ()
+  "Test that recursive calls don't create self-references in dependency tracking"
+  (let ((interactive:*dependency-registry*
+          (interactive:make-dependency-registry)))
+
+    ;; Define a recursive factorial function
+    (eval '(coalton:coalton-toplevel
+            (coalton:declare test-factorial (coalton:Integer coalton:-> coalton:Integer))
+            (coalton:define (test-factorial n)
+              (coalton:if (coalton-prelude:<= n 1)
+                          1
+                          (coalton-prelude:* n (test-factorial (coalton-prelude:- n 1)))))))
+
+    ;; Check that factorial doesn't list itself as a dependency
+    (let ((deps (gethash 'test-factorial
+                         (interactive:dependency-registry-forward-deps
+                          interactive:*dependency-registry*))))
+      (is (not (member 'test-factorial deps))
+          "test-factorial should not list itself as a dependency"))))
+
+(deftest test-cross-package-deps ()
+  "Test dependency tracking across package boundaries"
+  ;; Note: This test would require setting up a second package
+  (skip "Cross-package dependency tracking test"))
+
+(deftest test-abort-redefinition ()
+  "Test that abort-redefinition restart works"
+  (let ((interactive:*dependency-registry*
+          (interactive:make-dependency-registry)))
+
+    ;; Define initial function
+    (eval '(coalton:coalton-toplevel
+            (coalton:declare test-abort-foo (coalton:Integer coalton:-> coalton:Integer))
+            (coalton:define (test-abort-foo x) (coalton-prelude:+ x 1))))
+
+    ;; Try to redefine with incompatible type and invoke abort restart
+    (handler-bind
+        ((interactive:incompatible-redefinition
+           (lambda (c)
+             (declare (ignore c))
+             (let ((restart (find-restart 'abort-redefinition)))
+               (when restart
+                 (invoke-restart restart))))))
+      (signals error
+               (eval '(coalton:coalton-toplevel
+                       (coalton:declare test-abort-foo (coalton:String coalton:-> coalton:String))
+                       (coalton:define (test-abort-foo x) x)))))))
+
+(deftest test-circular-deps ()
+  "Test that circular dependencies are handled correctly"
+  (let ((interactive:*dependency-registry*
+          (interactive:make-dependency-registry)))
+
+    ;; Create circular dependency: a -> b -> c -> a
+    (eval '(coalton:coalton-toplevel
+            (coalton:declare test-circ-a (coalton:Integer coalton:-> coalton:Integer))
+            (coalton:define (test-circ-a x)
+              (coalton:if (coalton-prelude:== x 0)
+                          0
+                          (test-circ-b (coalton-prelude:- x 1))))
+
+            (coalton:declare test-circ-b (coalton:Integer coalton:-> coalton:Integer))
+            (coalton:define (test-circ-b x)
+              (coalton:if (coalton-prelude:== x 0)
+                          0
+                          (test-circ-c (coalton-prelude:- x 1))))
+
+            (coalton:declare test-circ-c (coalton:Integer coalton:-> coalton:Integer))
+            (coalton:define (test-circ-c x)
+              (coalton:if (coalton-prelude:== x 0)
+                          0
+                          (test-circ-a (coalton-prelude:- x 1))))))
+
+    ;; Check that find-affected-functions doesn't infinite loop
+    (let ((affected (interactive:find-affected-functions
+                     'test-circ-a
+                     interactive:*dependency-registry*)))
+      (is (member 'test-circ-b affected)
+          "Circular deps: test-circ-b should be affected")
+      (is (member 'test-circ-c affected)
+          "Circular deps: test-circ-c should be affected"))))
