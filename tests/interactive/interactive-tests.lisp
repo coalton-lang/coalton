@@ -23,9 +23,7 @@
             (coalton:define (test-user y) (test-helper y))))
 
     ;; Check dependencies were recorded
-    (let ((callers (interactive:get-function-callers
-                    'test-helper
-                    interactive:*dependency-registry*)))
+    (let ((callers (interactive:get-function-callers 'test-helper)))
       (is (member 'test-user callers)
           "test-user should be recorded as calling test-helper"))))
 
@@ -92,9 +90,7 @@
             (coalton:define (test-a z) (test-b z))))
 
     ;; Changing c should affect both b and a
-    (let ((affected (interactive:find-affected-functions
-                     'test-c
-                     interactive:*dependency-registry*)))
+    (let ((affected (interactive:find-affected-functions 'test-c)))
       (is (member 'test-b affected)
           "test-b should be affected by changes to test-c")
       (is (member 'test-a affected)
@@ -219,9 +215,7 @@
                           (test-circ-a (coalton-prelude:- x 1))))))
 
     ;; Check that find-affected-functions doesn't infinite loop
-    (let ((affected (interactive:find-affected-functions
-                     'test-circ-a
-                     interactive:*dependency-registry*)))
+    (let ((affected (interactive:find-affected-functions 'test-circ-a)))
       (is (member 'test-circ-b affected)
           "Circular deps: test-circ-b should be affected")
       (is (member 'test-circ-c affected)

@@ -183,9 +183,7 @@
                             ;; This is a redefinition - check compatibility
                             (unless (redef:types-compatible-p old-type scheme env)
                               ;; Types differ - find affected functions
-                              (let ((affected (redef:find-affected-functions
-                                              name
-                                              redef:*dependency-registry*)))
+                              (let ((affected (redef:find-affected-functions name)))
                                 ;; Only prompt if there are affected functions
                                 (when affected
                                   (let ((condition (make-condition 'redef:incompatible-redefinition
@@ -221,8 +219,7 @@
         (loop :for define :in defines
               :for name := (parser:node-variable-name (parser:binding-name define))
               :for code := (parser:binding-value define)
-              :do (redef:record-dependencies
-                   name code env redef:*dependency-registry*))
+              :do (redef:record-dependencies name code env))
 
         (values
          (tc:apply-substitution subs binding-nodes)

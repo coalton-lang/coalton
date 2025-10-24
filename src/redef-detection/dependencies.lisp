@@ -260,14 +260,13 @@
 (defvar *dependency-registry* (make-dependency-registry)
   "Global registry of function dependencies.")
 
-(defun record-dependencies (function-name code env registry)
+(defun record-dependencies (function-name code env)
   "Record that FUNCTION-NAME depends on functions called in CODE."
   (declare (type symbol function-name)
-           (type tc-env:environment env)
-           (type dependency-registry registry))
+           (type tc-env:environment env))
 
-  (let* ((forward-deps (dependency-registry-forward-deps registry))
-         (reverse-deps (dependency-registry-reverse-deps registry))
+  (let* ((forward-deps (dependency-registry-forward-deps *dependency-registry*))
+         (reverse-deps (dependency-registry-reverse-deps *dependency-registry*))
          (called-functions (extract-function-dependencies code env)))
 
     ;; Remove duplicates
@@ -291,20 +290,18 @@
     (dolist (callee called-functions)
       (push function-name (gethash callee reverse-deps nil)))
 
-    nil))
+    (values)))
 
-(defun get-function-callers (function-name registry)
+(defun get-function-callers (function-name)
   "Get list of functions that directly call FUNCTION-NAME."
   (declare (type symbol function-name)
-           (type dependency-registry registry)
            (values list))
-  (gethash function-name (dependency-registry-reverse-deps registry) nil))
+  (gethash function-name (dependency-registry-reverse-deps *dependency-registry*) nil))
 
-(defun find-affected-functions (function-name registry &optional (visited (make-hash-table :test 'eq)))
+(defun find-affected-functions (function-name &optional (visited (make-hash-table :test 'eq)))
   "Find all functions transitively affected by changes to FUNCTION-NAME.
 Handles circular dependencies by tracking VISITED functions."
   (declare (type symbol function-name)
-           (type dependency-registry registry)
            (type hash-table visited)
            (values list))
 
@@ -312,7 +309,7 @@ Handles circular dependencies by tracking VISITED functions."
     (labels ((visit (fname)
                (unless (gethash fname visited)
                  (setf (gethash fname visited) t)
-                 (let ((callers (get-function-callers fname registry)))
+                 (let ((callers (get-function-callers fname)))
                    (dolist (caller callers)
                      (push caller result)
                      (visit caller))))))
