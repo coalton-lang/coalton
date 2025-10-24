@@ -550,6 +550,7 @@
      (make-pattern-constructor
       :name (pattern-constructor-name pattern)
       :patterns (rename-variables-generic% (pattern-constructor-patterns pattern) ctx)
+      :field-names (pattern-constructor-field-names pattern)
       :location (source:location pattern))
      ctx))
 
@@ -697,6 +698,7 @@
     (make-constructor
      :name (constructor-name ctor)
      :fields (rename-type-variables-generic% (constructor-fields ctor) ctx)
+     :field-names (constructor-field-names ctor)
      :docstring (source:docstring ctor)
      :location (source:location ctor)))
 

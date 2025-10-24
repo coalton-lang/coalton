@@ -1,0 +1,179 @@
+================================================================================
+1 Named fields in constructor definition
+================================================================================
+
+(package test-package)
+
+(define-type Point
+  (Pt (.x Integer) (.y Integer)))
+
+================================================================================
+2 Named fields in pattern matching
+================================================================================
+
+(package coalton-unit-tests/prelude
+  (import coalton-prelude))
+
+(define-type Point
+  (Pt (.x Integer) (.y Integer)))
+
+(define (get-xy p)
+  (match p
+    ((Pt .x .y) (Tuple x y))))
+
+================================================================================
+3 Positional syntax works with named field constructor
+================================================================================
+
+(package test-package)
+
+(define-type Point
+  (Pt (.x Integer) (.y Integer)))
+
+(define p (Pt 10 20))
+
+(define (get-x pt)
+  (match pt
+    ((Pt x _) x)))
+
+================================================================================
+4 Mixed positional and named fields in constructor
+================================================================================
+
+(package test-package)
+
+(define-type Bad
+  (Constructor (.named Integer) Integer))
+
+--------------------------------------------------------------------------------
+
+error: Mixed positional and named fields in constructor
+  --> test:4:15
+   |
+ 3 |  (define-type Bad
+   |               --- in this type definition
+ 4 |    (Constructor (.named Integer) Integer))
+   |                 ^^^^^^^^^^^^^^^^ constructor cannot mix positional and named fields
+
+================================================================================
+5 Duplicate field names in constructor
+================================================================================
+
+(package test-package)
+
+(define-type Bad
+  (Constructor (.x Integer) (.x String)))
+
+--------------------------------------------------------------------------------
+
+error: Duplicate field name in constructor
+  --> test:4:29
+   |
+ 3 |  (define-type Bad
+   |               --- in this type definition
+ 4 |    (Constructor (.x Integer) (.x String)))
+   |                               ^^ field "X" appears multiple times in constructor
+
+================================================================================
+6 Mixed positional and named fields in pattern
+================================================================================
+
+(package test-package)
+
+(define-type Point
+  (Pt (.x Integer) (.y Integer)))
+
+(define (f p)
+  (match p
+    ((Pt .x 0) x)))
+
+--------------------------------------------------------------------------------
+
+error: Mixed positional and named fields in pattern
+  --> test:8:5
+   |
+ 8 |      ((Pt .x 0) x)))
+   |       ^^^^^^^^^ constructor patterns must use either all positional or all named fields, not both
+
+================================================================================
+7 Duplicate field names in pattern
+================================================================================
+
+(package test-package)
+
+(define-type Point
+  (Pt (.x Integer) (.y Integer)))
+
+(define (f p)
+  (match p
+    ((Pt .x .x) x)))
+
+--------------------------------------------------------------------------------
+
+error: Duplicate field name in pattern
+  --> test:8:9
+   |
+ 8 |      ((Pt .x .x) x)))
+   |           ^^ field "X" appears multiple times in pattern
+
+================================================================================
+8 Named pattern on positional constructor
+================================================================================
+
+(package test-package)
+
+(define-type Point
+  (Pt Integer Integer))
+
+(define (f p)
+  (match p
+    ((Pt .x .y) x)))
+
+--------------------------------------------------------------------------------
+
+error: Named field pattern on positional constructor
+  --> test:8:5
+   |
+ 8 |      ((Pt .x .y) x)))
+   |       ^^^^^^^^^^ constructor PT uses positional fields, not named fields
+
+================================================================================
+9 Unknown field name in pattern
+================================================================================
+
+(package test-package)
+
+(define-type Point
+  (Pt (.x Integer) (.y Integer)))
+
+(define (f p)
+  (match p
+    ((Pt .z) z)))
+
+--------------------------------------------------------------------------------
+
+error: Unknown field name in pattern
+  --> test:8:5
+   |
+ 8 |      ((Pt .z) z)))
+   |       ^^^^^^^ constructor PT does not have a field named "Z"
+
+================================================================================
+10 Conflicting field types across constructors
+================================================================================
+
+(package test-package)
+
+(define-type MyResult
+  (MyOk (.value Integer))
+  (MyErr (.value String)))
+
+--------------------------------------------------------------------------------
+
+error: Conflicting field types
+  --> test:4:2
+   |
+ 4 |    (MyOk (.value Integer))
+   |    ^^^^^^^^^^^^^^^^^^^^^^^ constructor MYOK has field '.VALUE' with type INTEGER
+ 5 |    (MyErr (.value String)))
+   |    ^^^^^^^^^^^^^^^^^^^^^^^ but constructor MYERR has field '.VALUE' with incompatible type STRING
