@@ -32,7 +32,7 @@
    (#:source #:coalton-impl/source)
    (#:tc #:coalton-impl/typechecker/stage-1)
    (#:types #:coalton-impl/typechecker/types)
-   (#:interactive #:coalton-impl/redef-detection))
+   (#:redef #:coalton-impl/redef-detection))
   (:export
    #:infer-expression-type              ; FUNCTION
    #:infer-expl-binging-type            ; FUNCTION
@@ -168,52 +168,59 @@
                       :collect node)))
 
         ;; Check types and update environment
-        (loop :for define :in defines
-              :for name := (parser:node-variable-name (parser:binding-name define))
-              :for scheme := (tc:remove-source-info (gethash name (tc-env-ty-table tc-env)))
+        (multiple-value-bind (abort-status aborted-name)
+            (catch 'redef:abort-redefinition
+              (loop :for define :in defines
+                    :for name := (parser:node-variable-name (parser:binding-name define))
+                    :for scheme := (tc:remove-source-info (gethash name (tc-env-ty-table tc-env)))
 
-              :when (tc:type-variables scheme)
-                :do (util:coalton-bug "Scheme ~S should not have any free type variables." scheme)
+                    :when (tc:type-variables scheme)
+                      :do (util:coalton-bug "Scheme ~S should not have any free type variables." scheme)
 
-              ;; Check for incompatible redefinition before updating environment
-              :do (let ((old-type (tc:lookup-value-type env name :no-error t)))
-                    (when old-type
-                      ;; This is a redefinition - check compatibility
-                      (unless (interactive:types-compatible-p old-type scheme env)
-                        ;; Types differ - find affected functions and prompt user
-                        (let* ((affected (interactive:find-affected-functions
-                                          name
-                                          interactive:*dependency-registry*))
-                               (condition (make-condition 'interactive:incompatible-redefinition
-                                                          :function-name name
-                                                          :old-type old-type
-                                                          :new-type scheme
-                                                          :affected-functions affected)))
-                          (interactive:prompt-for-redefinition-action condition)))))
+                    ;; Check for incompatible redefinition before updating environment
+                    :do (let ((old-type (tc:lookup-value-type env name :no-error t)))
+                          (when old-type
+                            ;; This is a redefinition - check compatibility
+                            (unless (redef:types-compatible-p old-type scheme env)
+                              ;; Types differ - find affected functions and prompt user
+                              (let* ((affected (redef:find-affected-functions
+                                                name
+                                                redef:*dependency-registry*))
+                                     (condition (make-condition 'redef:incompatible-redefinition
+                                                                :function-name name
+                                                                :old-type old-type
+                                                                :new-type scheme
+                                                                :affected-functions affected)))
+                                (redef:prompt-for-redefinition-action condition)))))
 
-              :do (setf env (tc:set-value-type env name scheme))
+                        (setf env (tc:set-value-type env name scheme))
 
-              :do (setf env (tc:set-name env name (tc:make-name-entry
-                                                   :name name
-                                                   :type :value
-                                                   :docstring (source:docstring define)
-                                                   :location (source:location define))))
+                        (setf env (tc:set-name env name (tc:make-name-entry
+                                                         :name name
+                                                         :type :value
+                                                         :docstring (source:docstring define)
+                                                         :location (source:location define))))
 
-              :if (parser:toplevel-define-orig-params define)
-                :do (setf env (tc:set-function-source-parameter-names
-                               env
-                               name
-                               (parser:toplevel-define-orig-params define)))
-              :else
-                :when (tc:lookup-function-source-parameter-names env name)
-                  :do (setf env (tc:unset-function-source-parameter-names env name)))
+                    :if (parser:toplevel-define-orig-params define)
+                      :do (setf env (tc:set-function-source-parameter-names
+                                     env
+                                     name
+                                     (parser:toplevel-define-orig-params define)))
+                    :else
+                      :if (tc:lookup-function-source-parameter-names env name)
+                        :do (setf env (tc:unset-function-source-parameter-names env name))))
+
+          ;; If redefinition was aborted, warn and return with unchanged environment
+          (when (eq abort-status :aborted)
+            (warn "Redefinition of ~A aborted" aborted-name)
+            (return-from toplevel-define (values nil env))))
 
         ;; Record dependencies
         (loop :for define :in defines
               :for name := (parser:node-variable-name (parser:binding-name define))
               :for code := (parser:binding-value define)
-              :do (interactive:record-dependencies
-                   name code env interactive:*dependency-registry*))
+              :do (redef:record-dependencies
+                   name code env redef:*dependency-registry*))
 
         (values
          (tc:apply-substitution subs binding-nodes)
