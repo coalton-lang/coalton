@@ -1,4 +1,4 @@
-(defpackage #:coalton-impl/interactive/compatibility
+(defpackage #:coalton-impl/redef-detection/compatibility
   (:use #:cl)
   (:local-nicknames
    (#:tc-scheme #:coalton-impl/typechecker/scheme)
@@ -7,7 +7,7 @@
   (:export
    #:types-compatible-p
    #:format-type-for-user))
-(in-package #:coalton-impl/interactive/compatibility)
+(in-package #:coalton-impl/redef-detection/compatibility)
 
 ;;;
 ;;; Type Compatibility

@@ -1,4 +1,4 @@
-(defpackage #:coalton-impl/interactive/dependencies
+(defpackage #:coalton-impl/redef-detection/dependencies
   (:use #:cl)
   (:local-nicknames
    (#:parser #:coalton-impl/parser)
@@ -13,7 +13,7 @@
    #:record-dependencies
    #:get-function-callers
    #:find-affected-functions))
-(in-package #:coalton-impl/interactive/dependencies)
+(in-package #:coalton-impl/redef-detection/dependencies)
 
 ;;;
 ;;; Dependency Extraction with Lexical Scope Tracking

@@ -1,5 +1,5 @@
 (uiop:define-package #:coalton-impl/redef-detection
   (:mix-reexport
-   #:coalton-impl/interactive/dependencies
-   #:coalton-impl/interactive/compatibility
-   #:coalton-impl/interactive/conditions))
+   #:coalton-impl/redef-detection/dependencies
+   #:coalton-impl/redef-detection/compatibility
+   #:coalton-impl/redef-detection/conditions))

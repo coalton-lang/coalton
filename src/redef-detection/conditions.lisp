@@ -1,16 +1,17 @@
-(defpackage #:coalton-impl/interactive/conditions
+(defpackage #:coalton-impl/redef-detection/conditions
   (:use #:cl)
   (:local-nicknames
    (#:tc-scheme #:coalton-impl/typechecker/scheme)
-   (#:compat #:coalton-impl/interactive/compatibility))
+   (#:compat #:coalton-impl/redef-detection/compatibility))
   (:export
    #:incompatible-redefinition
    #:redefinition-function-name
    #:redefinition-old-type
    #:redefinition-new-type
    #:redefinition-affected-functions
-   #:prompt-for-redefinition-action))
-(in-package #:coalton-impl/interactive/conditions)
+   #:prompt-for-redefinition-action
+   #:abort-redefinition))
+(in-package #:coalton-impl/redef-detection/conditions)
 
 ;;;
 ;;; Conditions
@@ -50,12 +51,12 @@
 
 (defun prompt-for-redefinition-action (condition)
   "Prompt user for action when incompatible redefinition detected.
-Provides abort-redefinition restart."
+Provides abort-redefinition restart that throws to 'abort-redefinition tag."
   (declare (type incompatible-redefinition condition))
 
   (restart-case
       (error condition)
     (abort-redefinition ()
       :report "Abort redefinition"
-      (error "Redefinition of ~A aborted by user"
-             (redefinition-function-name condition)))))
+      (throw 'abort-redefinition
+             (values :aborted (redefinition-function-name condition))))))
