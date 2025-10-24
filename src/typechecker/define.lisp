@@ -182,16 +182,18 @@
                           (when old-type
                             ;; This is a redefinition - check compatibility
                             (unless (redef:types-compatible-p old-type scheme env)
-                              ;; Types differ - find affected functions and prompt user
-                              (let* ((affected (redef:find-affected-functions
-                                                name
-                                                redef:*dependency-registry*))
-                                     (condition (make-condition 'redef:incompatible-redefinition
-                                                                :function-name name
-                                                                :old-type old-type
-                                                                :new-type scheme
-                                                                :affected-functions affected)))
-                                (redef:prompt-for-redefinition-action condition)))))
+                              ;; Types differ - find affected functions
+                              (let ((affected (redef:find-affected-functions
+                                              name
+                                              redef:*dependency-registry*)))
+                                ;; Only prompt if there are affected functions
+                                (when affected
+                                  (let ((condition (make-condition 'redef:incompatible-redefinition
+                                                                   :function-name name
+                                                                   :old-type old-type
+                                                                   :new-type scheme
+                                                                   :affected-functions affected)))
+                                    (redef:prompt-for-redefinition-action condition)))))))
 
                         (setf env (tc:set-value-type env name scheme))
 
