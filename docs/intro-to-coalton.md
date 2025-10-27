@@ -16,7 +16,7 @@ For simple projects, you can use the `package-inferred-system` utility to automa
 
 ```lisp
 ;; In your ASDF system definition; e.g., my-project.asd
-(register-system-packages :coalton '(:coalton-prelude))
+(register-system-packages '#:coalton '(#:coalton-prelude))
 ```
 
 ## Packages
