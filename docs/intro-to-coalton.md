@@ -4,9 +4,22 @@ Coalton is a statically typed language that is embedded in, and compiles to, Com
 
 This document is aimed toward people who are already familiar with functional programming languages. If you are already familiar with Common Lisp, the [glossary](./glossary.md) may be useful.
 
-## Systems and Packages
+## Systems
+
+### Explicit Component Definition
 
 Coalton uses ordinary Common Lisp packages (and ASDF systems) to organize code. If you're starting a new project, add `#:coalton` to your ASD's `:depends-on` list. For improved error messages, also depend on `#:named-readtables`.
+
+### Package Inferred System
+
+For simple projects, you can use the `package-inferred-system` utility to automatically create an ASDF system based on your package structure. However, this project, coalton, does not use this utilities. By this incompatibility, the ASDF loader skips loading `#:coalton-prelude` when using this utility on your own project. Hence, you must explicitly register `coalton-prelude` in your own ASDF system definition before specifying `#:coalton` in your `:depends-on` list.
+
+```lisp
+;; In your ASDF system definition; e.g., my-project.asd
+(register-system-packages :coalton '(:coalton-prelude))
+```
+
+## Packages
 
 Unlike Common Lisp, Coalton's standard library is organized as a large collection of packages. For example, string-related functions are in the `#:coalton-library/string` package. Refer to the [Coalton Reference](https://coalton-lang.github.io/reference) for a complete list of standard library packages.
 
