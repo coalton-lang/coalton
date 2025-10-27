@@ -13,7 +13,7 @@ Coalton は、Common Lisp に埋め込まれ、Common Lisp にコンパイルさ
 
 CoaltonのコードはCommon Lispと同じくパッケージ（およびASDFシステム）を使います。Coaltonを使うプロジェクトでは、ASDの `:depends-on` に`#:coalton` と `#:named-readtables` を追加してください。named-readtablesはエラーメッセージをわかりやすくするために必要です。
 
-### Package Inferred System ()
+### Package Inferred System
 
 シンプルなプロジェクトでは、package-inferred-systemユーティリティを使用して、プロジェクトの構造に基づいたASDFシステムを自動的に作成できます。しかし、coalton自身は、このユーティリティを使用していません。この非互換性により、あなた自身のプロジェクトでこのユーティリティを使用すると、ASDFローダーが `#:coalton-prelude` の読み込みをスキップしてしまいます。
 
