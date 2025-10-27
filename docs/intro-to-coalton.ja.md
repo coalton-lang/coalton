@@ -1,15 +1,30 @@
 # Intro to Coalton (日本語訳)
 
 翻訳日: 2025/09/01
-SHA1: [cac006fbecfdcbb2e90b73066f240dbecf2691d6](https://github.com/coalton-lang/coalton/commit/cac006fbecfdcbb2e90b73066f240dbecf2691d6)
+SHA1: [1000e6b0dba57a1aa242ad5d0a898ce9421f3b28](https://github.com/coalton-lang/coalton/commit/1000e6b0dba57a1aa242ad5d0a898ce9421f3b28)
 
 Coalton は、Common Lisp に埋め込まれ、Common Lisp にコンパイルされる静的型付け言語です。
 
 このドキュメントは、関数型プログラミング言語に既に精通している方を対象としています。Common Lispでの経験がありCoaltonとの違いを知りたい人は[用語集](./glossary.md)も参照してください。
 
-## システムとパッケージ
+## システム
 
-CoaltonのコードはCommon Lispと同じくパッケージ（およびASDFシステム）を使います。Coaltonを使うプロジェクトでは、ASDの`:depends-on`に`"coalton"`と`"named-readtables"`を追加してください。named-readtablesはエラーメッセージをわかりやすくするために必要です。
+### 明示的なコンポーネント定義
+
+CoaltonのコードはCommon Lispと同じくパッケージ（およびASDFシステム）を使います。Coaltonを使うプロジェクトでは、ASDの `:depends-on` に`#:coalton` と `#:named-readtables` を追加してください。named-readtablesはエラーメッセージをわかりやすくするために必要です。
+
+### Package Inferred System ()
+
+シンプルなプロジェクトでは、package-inferred-systemユーティリティを使用して、プロジェctの構造に基づいたASDFシステムを自動的に作成できます。しかし、coaltonプロジェクト自身は、このユーティリティを使用していません。この非互換性により、あなた自身のプロジェクトでこのユーティリティを使用すると、ASDFローダーが `#:coalton-prelude` の読み込みをスキップしてしまいます。
+
+したがって、`:depends-on` リストで `#:coalton` を指定する前に、あなた自身のASDFシステム定義で `#:coalton-prelude` を明示的に登録する必要があります。
+
+```lisp
+;; ASDFシステム定義内で; 例: my-project.asd
+(register-system-packages '#:coalton '(#:coalton-prelude))
+```
+
+## パッケージ
 
 Coaltonの標準ライブラリは、一連のパッケージ群として提供されています。たとえば、文字列に関するものは`#:coalton-library/string`パッケージにあります。すべての標準ライブラリパッケージの一覧は[Coalton Reference](https://coalton-lang.github.io/reference)を参照してください。
 
