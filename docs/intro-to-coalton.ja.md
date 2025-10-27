@@ -15,7 +15,7 @@ CoaltonのコードはCommon Lispと同じくパッケージ（およびASDFシ�
 
 ### Package Inferred System ()
 
-シンプルなプロジェクトでは、package-inferred-systemユーティリティを使用して、プロジェctの構造に基づいたASDFシステムを自動的に作成できます。しかし、coaltonプロジェクト自身は、このユーティリティを使用していません。この非互換性により、あなた自身のプロジェクトでこのユーティリティを使用すると、ASDFローダーが `#:coalton-prelude` の読み込みをスキップしてしまいます。
+シンプルなプロジェクトでは、package-inferred-systemユーティリティを使用して、プロジェクトの構造に基づいたASDFシステムを自動的に作成できます。しかし、coalton自身は、このユーティリティを使用していません。この非互換性により、あなた自身のプロジェクトでこのユーティリティを使用すると、ASDFローダーが `#:coalton-prelude` の読み込みをスキップしてしまいます。
 
 したがって、`:depends-on` リストで `#:coalton` を指定する前に、あなた自身のASDFシステム定義で `#:coalton-prelude` を明示的に登録する必要があります。
 
