@@ -93,7 +93,7 @@ let
   };
   outputs = inputs:
     let
-      system = "aarch64-darwin";  # or "aarch64-darwin"
+      system = "x86_64-linux";  # or "aarch64-darwin"
       pkgs = import inputs.nixpkgs {
         inherit system;
         overlays = [
