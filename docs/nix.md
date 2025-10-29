@@ -47,7 +47,7 @@ inputs = {
     url = "github:coalton-lang/coalton";
     inputs.nixpkgs.follows = "nixpkgs";
   };
-}
+};
 ```
 
 ## Adding an Overlay
@@ -95,19 +95,19 @@ Here’s a simple example showing how to use Coalton in SBCL:
 ```nix
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/release-25.05";
     coalton = {
       url = "github:coalton-lang/coalton";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
-  outputs = { self, nixpkgs, coalton, ... }:
+  outputs = inputs:
     let
       system = "x86_64-linux";  # or "aarch64-darwin"
-      pkgs = import nixpkgs {
+      pkgs = import inputs.nixpkgs {
         inherit system;
         overlays = [
-          coalton.overlays.default
+          inputs.coalton.overlays.default
         ];
       };
       sbcl-with-coalton = pkgs.sbcl.withPackages (ps: with ps; [
