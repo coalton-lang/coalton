@@ -166,11 +166,6 @@
       (is (not (member 'test-factorial deps))
           "test-factorial should not list itself as a dependency"))))
 
-(deftest test-cross-package-deps ()
-  "Test dependency tracking across package boundaries"
-  ;; Note: This test would require setting up a second package
-  (skip "Cross-package dependency tracking test"))
-
 (deftest test-abort-redefinition ()
   "Test that abort-redefinition restart works"
   (let ((redef-detection:*dependency-registry*

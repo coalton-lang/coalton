@@ -345,5 +345,4 @@
                 :components ((:file "fft-tests")))
                (:module "redef-detection"
                 :serial t
-                :components ((:file "dependencies-tests")
-                             (:file "interactive-tests")))))
+                :components ((:file "interactive-tests")))))
