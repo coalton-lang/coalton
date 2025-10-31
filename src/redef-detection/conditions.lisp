@@ -4,9 +4,7 @@
    (#:tc-scheme #:coalton-impl/typechecker/scheme)
    (#:tc-env #:coalton-impl/typechecker/environment)
    (#:source #:coalton-impl/source)
-   (#:deps #:coalton-impl/redef-detection/dependencies)
-   (#:compat #:coalton-impl/redef-detection/compatibility)
-   (#:settings #:coalton-impl/settings))
+   (#:deps #:coalton-impl/redef-detection/dependencies))
   (:export
    #:incompatible-redefinition
    #:redefinition-function-name
