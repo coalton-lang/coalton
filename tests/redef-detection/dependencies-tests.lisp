@@ -1,11 +1,11 @@
-(defpackage #:coalton-tests/interactive/dependencies
+(defpackage #:coalton-tests/redef-detection/dependencies
   (:use #:cl #:fiasco)
   (:local-nicknames
    (#:parser #:coalton-impl/parser)
    (#:source #:coalton-impl/source))
   (:export
    #:test-collect-variables-problem))
-(in-package #:coalton-tests/interactive/dependencies)
+(in-package #:coalton-tests/redef-detection/dependencies)
 
 (deftest test-collect-variables-problem ()
   "Demonstrate that collect-variables returns local bindings (the problem we need to fix)."

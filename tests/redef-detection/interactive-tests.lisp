@@ -1,19 +1,19 @@
-(defpackage #:coalton-tests/interactive
+(defpackage #:coalton-tests/redef-detection
   (:use #:cl
         #:fiasco)
   (:local-nicknames
-   (#:interactive #:coalton-impl/interactive)
+   (#:redef-detection #:coalton-impl/redef-detection)
    (#:tc #:coalton-impl/typechecker)
    (#:entry #:coalton-impl/entry)
    (#:source #:coalton-impl/source))
   (:export
-   #:interactive-tests))
-(in-package #:coalton-tests/interactive)
+   #:redef-detection-tests))
+(in-package #:coalton-tests/redef-detection)
 
 (deftest test-dependency-tracking ()
   "Test that dependencies are correctly tracked"
-  (let ((interactive:*dependency-registry*
-          (interactive:make-dependency-registry)))
+  (let ((redef-detection:*dependency-registry*
+          (redef-detection:make-dependency-registry)))
 
     ;; Define a helper function
     (eval '(coalton:coalton-toplevel
@@ -24,7 +24,7 @@
             (coalton:define (test-user y) (test-helper y))))
 
     ;; Check dependencies were recorded
-    (let ((callers (interactive:get-function-callers 'test-helper)))
+    (let ((callers (redef-detection:get-function-callers 'test-helper)))
       (is (member 'test-user callers)
           "test-user should be recorded as calling test-helper"))))
 
@@ -43,7 +43,7 @@
          (bar-type (tc:lookup-value-type env 'test-compat-bar)))
 
     ;; Same concrete type (Integer -> Integer) should be compatible
-    (is (interactive:types-compatible-p foo-type bar-type env)
+    (is (redef-detection:types-compatible-p foo-type bar-type env)
         "Same concrete type should be compatible"))
 
   ;; Define a function with a different type signature
@@ -56,13 +56,13 @@
          (str-type (tc:lookup-value-type env 'test-compat-str)))
 
     ;; Different types (Integer -> Integer vs String -> String) should not be compatible
-    (is (not (interactive:types-compatible-p foo-type str-type env))
+    (is (not (redef-detection:types-compatible-p foo-type str-type env))
         "Different types should not be compatible")))
 
 (deftest test-redefinition-error ()
   "Test that incompatible redefinition raises an error"
-  (let ((interactive:*dependency-registry*
-          (interactive:make-dependency-registry)))
+  (let ((redef-detection:*dependency-registry*
+          (redef-detection:make-dependency-registry)))
 
     ;; Define a function with Integer -> Integer type
     (eval '(coalton:coalton-toplevel
@@ -74,15 +74,15 @@
             (coalton:define (test-redef-caller y) (test-redef-foo y))))
 
     ;; Try to redefine with String -> String type (should error)
-    (signals interactive:incompatible-redefinition
+    (signals redef-detection:incompatible-redefinition
              (eval '(coalton:coalton-toplevel
                      (coalton:declare test-redef-foo (coalton:String coalton:-> coalton:String))
                      (coalton:define (test-redef-foo x) x))))))
 
 (deftest test-affected-functions ()
   "Test finding transitively affected functions"
-  (let ((interactive:*dependency-registry*
-          (interactive:make-dependency-registry)))
+  (let ((redef-detection:*dependency-registry*
+          (redef-detection:make-dependency-registry)))
 
     ;; Define: a calls b, b calls c
     (eval '(coalton:coalton-toplevel
@@ -95,7 +95,7 @@
             (coalton:define (test-a z) (test-b z))))
 
     ;; Changing c should affect both b and a
-    (let ((affected (interactive:find-affected-functions 'test-c)))
+    (let ((affected (redef-detection:find-affected-functions 'test-c)))
       (is (member 'test-b affected)
           "test-b should be affected by changes to test-c")
       (is (member 'test-a affected)
@@ -103,8 +103,8 @@
 
 (deftest test-same-type-redefinition ()
   "Test that redefining with same type is allowed"
-  (let ((interactive:*dependency-registry*
-          (interactive:make-dependency-registry)))
+  (let ((redef-detection:*dependency-registry*
+          (redef-detection:make-dependency-registry)))
 
     ;; Define a function
     (eval '(coalton:coalton-toplevel
@@ -117,8 +117,8 @@
 
 (deftest test-mutual-recursion-deps ()
   "Test dependency tracking for mutually recursive functions"
-  (let ((interactive:*dependency-registry*
-          (interactive:make-dependency-registry)))
+  (let ((redef-detection:*dependency-registry*
+          (redef-detection:make-dependency-registry)))
 
     ;; Define mutually recursive even? and odd?
     (eval '(coalton:coalton-toplevel
@@ -136,11 +136,11 @@
 
     ;; Check that dependencies were recorded correctly
     (let ((even-calls (gethash 'test-even?
-                               (interactive:dependency-registry-forward-deps
-                                interactive:*dependency-registry*)))
+                               (redef-detection:dependency-registry-forward-deps
+                                redef-detection:*dependency-registry*)))
           (odd-calls (gethash 'test-odd?
-                              (interactive:dependency-registry-forward-deps
-                               interactive:*dependency-registry*))))
+                              (redef-detection:dependency-registry-forward-deps
+                               redef-detection:*dependency-registry*))))
       (is (member 'test-odd? even-calls)
           "test-even? should call test-odd?")
       (is (member 'test-even? odd-calls)
@@ -148,8 +148,8 @@
 
 (deftest test-no-self-reference ()
   "Test that recursive calls don't create self-references in dependency tracking"
-  (let ((interactive:*dependency-registry*
-          (interactive:make-dependency-registry)))
+  (let ((redef-detection:*dependency-registry*
+          (redef-detection:make-dependency-registry)))
 
     ;; Define a recursive factorial function
     (eval '(coalton:coalton-toplevel
@@ -161,8 +161,8 @@
 
     ;; Check that factorial doesn't list itself as a dependency
     (let ((deps (gethash 'test-factorial
-                         (interactive:dependency-registry-forward-deps
-                          interactive:*dependency-registry*))))
+                         (redef-detection:dependency-registry-forward-deps
+                          redef-detection:*dependency-registry*))))
       (is (not (member 'test-factorial deps))
           "test-factorial should not list itself as a dependency"))))
 
@@ -173,8 +173,8 @@
 
 (deftest test-abort-redefinition ()
   "Test that abort-redefinition restart works"
-  (let ((interactive:*dependency-registry*
-          (interactive:make-dependency-registry)))
+  (let ((redef-detection:*dependency-registry*
+          (redef-detection:make-dependency-registry)))
 
     ;; Define initial function
     (eval '(coalton:coalton-toplevel
@@ -187,7 +187,7 @@
 
     ;; Try to redefine with incompatible type and invoke abort restart
     (handler-bind
-        ((interactive:incompatible-redefinition
+        ((redef-detection:incompatible-redefinition
            (lambda (c)
              (declare (ignore c))
              (let ((restart (find-restart 'abort-redefinition)))
@@ -200,8 +200,8 @@
 
 (deftest test-circular-deps ()
   "Test that circular dependencies are handled correctly"
-  (let ((interactive:*dependency-registry*
-          (interactive:make-dependency-registry)))
+  (let ((redef-detection:*dependency-registry*
+          (redef-detection:make-dependency-registry)))
 
     ;; Create circular dependency: a -> b -> c -> a
     (eval '(coalton:coalton-toplevel
@@ -224,7 +224,7 @@
                           (test-circ-a (coalton-prelude:- x 1))))))
 
     ;; Check that find-affected-functions doesn't infinite loop
-    (let ((affected (interactive:find-affected-functions 'test-circ-a)))
+    (let ((affected (redef-detection:find-affected-functions 'test-circ-a)))
       (is (member 'test-circ-b affected)
           "Circular deps: test-circ-b should be affected")
       (is (member 'test-circ-c affected)
@@ -235,7 +235,7 @@
   (eval '(coalton:coalton-toplevel
           (coalton:define (test-loc-func x) (coalton-prelude:+ x 1))))
 
-  (let ((location (interactive:get-function-location 'test-loc-func entry:*global-environment*)))
+  (let ((location (redef-detection:get-function-location 'test-loc-func entry:*global-environment*)))
     (is (not (null location))
         "Location should be available for test-loc-func")
 
