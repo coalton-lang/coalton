@@ -13,7 +13,9 @@
    #:redefinition-new-type
    #:redefinition-affected-functions
    #:raise-redefinition-error
-   #:abort-redefinition))
+   #:abort-redefinition
+   #:continue-anyway
+   #:redef-restart))
 (in-package #:coalton-impl/redef-detection/conditions)
 
 ;;;
@@ -94,11 +96,17 @@
 
 (defun raise-redefinition-error (&rest initargs)
   "Signal an incompatible-redefinition error with the given initargs.
-Provides abort-redefinition restart that throws to 'abort-redefinition tag."
+Provides two restarts:
+  - abort-redefinition: Abort the redefinition
+  - continue-anyway: Continue with redefinition"
 
   (restart-case
       (apply #'error 'incompatible-redefinition initargs)
     (abort-redefinition ()
       :report "Abort redefinition"
-      (throw 'abort-redefinition
-             (values :aborted (getf initargs :function-name))))))
+      (throw 'redef-restart
+             (values :aborted (getf initargs :function-name))))
+    (continue-anyway ()
+      :report "Continue anyway"
+      (throw 'redef-restart
+             (values :continued (getf initargs :function-name))))))

@@ -238,3 +238,70 @@
       (is (typep location 'source:location))
       (is (string= (source:source-name source) "<macroexpansion>")
           "REPL function source name should be '<macroexpansion>'"))))
+
+(deftest test-continue-anyway ()
+  "Test that continue-anyway restart allows incompatible redefinition"
+  (let ((redef-detection:*dependency-registry*
+          (redef-detection:make-dependency-registry)))
+
+    ;; Define initial function
+    (eval '(coalton:coalton-toplevel
+            (coalton:declare test-continue-foo (coalton:Integer coalton:-> coalton:Integer))
+            (coalton:define (test-continue-foo x) (coalton-prelude:+ x 1))))
+
+    ;; Define a caller to ensure there are affected functions
+    (eval '(coalton:coalton-toplevel
+            (coalton:define (test-continue-caller y) (test-continue-foo y))))
+
+    ;; Try to redefine with incompatible type and invoke continue-anyway restart
+    (handler-bind
+        ((redef-detection:incompatible-redefinition
+           (lambda (c)
+             (declare (ignore c))
+             (let ((restart (find-restart 'continue-anyway)))
+               (when restart
+                 (invoke-restart restart))))))
+      (eval '(coalton:coalton-toplevel
+              (coalton:declare test-continue-foo (coalton:String coalton:-> coalton:String))
+              (coalton:define (test-continue-foo x) x))))
+
+    ;; Verify the new definition is active
+    (let ((new-type (tc:lookup-value-type entry:*global-environment* 'test-continue-foo)))
+      (is (not (null new-type))
+          "New type should be in environment")
+      (is (string= (format nil "~A" new-type) "(STRING -> STRING)")
+          "Type should be updated to String -> String"))))
+
+(deftest test-continue-anyway-updates-env ()
+  "Test that continue-anyway actually updates the environment with new type"
+  (let ((redef-detection:*dependency-registry*
+          (redef-detection:make-dependency-registry)))
+
+    ;; Define initial function with Integer type
+    (eval '(coalton:coalton-toplevel
+            (coalton:declare test-env-update (coalton:Integer coalton:-> coalton:Integer))
+            (coalton:define (test-env-update x) x)))
+
+    ;; Define caller
+    (eval '(coalton:coalton-toplevel
+            (coalton:define (test-env-caller z) (test-env-update z))))
+
+    ;; Check initial type
+    (let ((old-type (tc:lookup-value-type entry:*global-environment* 'test-env-update)))
+      (is (string= (format nil "~A" old-type) "(INTEGER -> INTEGER)")
+          "Initial type should be Integer -> Integer"))
+
+    ;; Force redefinition with continue-anyway
+    (handler-bind
+        ((redef-detection:incompatible-redefinition
+           (lambda (c)
+             (declare (ignore c))
+             (invoke-restart 'continue-anyway))))
+      (eval '(coalton:coalton-toplevel
+              (coalton:declare test-env-update (coalton:Boolean coalton:-> coalton:Boolean))
+              (coalton:define (test-env-update x) x))))
+
+    ;; Verify type was updated
+    (let ((new-type (tc:lookup-value-type entry:*global-environment* 'test-env-update)))
+      (is (string= (format nil "~A" new-type) "(BOOLEAN -> BOOLEAN)")
+          "Type should be updated to Boolean -> Boolean"))))

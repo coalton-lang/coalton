@@ -168,8 +168,8 @@
                       :collect node)))
 
         ;; Check types and update environment
-        (multiple-value-bind (abort-status aborted-name)
-            (catch 'redef:abort-redefinition
+        (multiple-value-bind (restart-status restart-name)
+            (catch 'redef:redef-restart
               (loop :for define :in defines
                     :for name := (parser:node-variable-name (parser:binding-name define))
                     :for scheme := (tc:remove-source-info (gethash name (tc-env-ty-table tc-env)))
@@ -180,11 +180,8 @@
                     ;; Check for incompatible redefinition before updating environment
                     :do (let ((old-type (tc:lookup-value-type env name :no-error t)))
                           (when old-type
-                            ;; This is a redefinition - check compatibility
                             (unless (redef:types-compatible-p old-type scheme)
-                              ;; Types differ - find affected functions
                               (let ((affected (redef:find-affected-functions name)))
-                                ;; Only raise error if there are affected functions
                                 (when affected
                                   (redef:raise-redefinition-error
                                    :function-name name
@@ -210,10 +207,17 @@
                       :if (tc:lookup-function-source-parameter-names env name)
                         :do (setf env (tc:unset-function-source-parameter-names env name))))
 
-          ;; If redefinition was aborted, warn and return with unchanged environment
-          (when (eq abort-status :aborted)
-            (warn "Redefinition of ~A aborted" aborted-name)
-            (return-from toplevel-define (values nil env))))
+          ;; Handle restart outcomes
+          (cond
+            ((eq restart-status :aborted)
+             (warn "Redefinition of ~A aborted" restart-name)
+             (return-from toplevel-define (values nil env)))
+
+            ((eq restart-status :continued)
+             (let ((affected (redef:find-affected-functions restart-name)))
+               (warn "Continuing with incompatible redefinition of ~A (~D affected function~:P)"
+                     restart-name
+                     (length affected))))))
 
         ;; Record dependencies
         (loop :for define :in defines
