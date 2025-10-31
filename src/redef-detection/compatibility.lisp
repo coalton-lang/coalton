@@ -1,8 +1,7 @@
 (defpackage #:coalton-impl/redef-detection/compatibility
   (:use #:cl)
   (:local-nicknames
-   (#:tc-scheme #:coalton-impl/typechecker/scheme)
-   (#:tc-env #:coalton-impl/typechecker/environment))
+   (#:tc-scheme #:coalton-impl/typechecker/scheme))
   (:export
    #:types-compatible-p))
 (in-package #:coalton-impl/redef-detection/compatibility)
