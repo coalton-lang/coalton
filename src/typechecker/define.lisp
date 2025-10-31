@@ -181,7 +181,7 @@
                     :do (let ((old-type (tc:lookup-value-type env name :no-error t)))
                           (when old-type
                             ;; This is a redefinition - check compatibility
-                            (unless (redef:types-compatible-p old-type scheme env)
+                            (unless (redef:types-compatible-p old-type scheme)
                               ;; Types differ - find affected functions
                               (let ((affected (redef:find-affected-functions name)))
                                 ;; Only raise error if there are affected functions
