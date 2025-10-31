@@ -94,11 +94,6 @@
                              (:file "specialize")
                              (:file "translation-unit")
                              (:file "package")))
-
-               (:module "interactive"
-                :serial t
-                :components ((:file "detector")
-                             (:file "package")))
                (:module "analysis"
                 :serial t
                 :components ((:file "pattern-exhaustiveness")
@@ -138,7 +133,6 @@
                              ;; Entry points
                              (:file "program")
                              (:file "package")))
-
                (:file "unlock-package" :if-feature :sb-package-locks)
                (:file "entry")
                (:file "reader")

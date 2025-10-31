@@ -333,7 +333,7 @@
                (:module "algorithms-tests"
                 :serial t
                 :components ((:file "fft-tests")))
-               (:module "interactive"
+               (:module "redef-detection"
                 :serial t
                 :components ((:file "dependencies-tests")
                              (:file "interactive-tests")))))
