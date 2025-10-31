@@ -43,7 +43,7 @@
          (bar-type (tc:lookup-value-type env 'test-compat-bar)))
 
     ;; Same concrete type (Integer -> Integer) should be compatible
-    (is (redef-detection:types-compatible-p foo-type bar-type env)
+    (is (redef-detection:types-compatible-p foo-type bar-type)
         "Same concrete type should be compatible"))
 
   ;; Define a function with a different type signature
@@ -56,7 +56,7 @@
          (str-type (tc:lookup-value-type env 'test-compat-str)))
 
     ;; Different types (Integer -> Integer vs String -> String) should not be compatible
-    (is (not (redef-detection:types-compatible-p foo-type str-type env))
+    (is (not (redef-detection:types-compatible-p foo-type str-type))
         "Different types should not be compatible")))
 
 (deftest test-redefinition-error ()

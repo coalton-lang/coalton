@@ -11,12 +11,10 @@
 ;;; Type Compatibility
 ;;;
 
-(defun types-compatible-p (old-scheme new-scheme env)
+(defun types-compatible-p (old-scheme new-scheme)
   "Check if NEW-SCHEME is compatible with OLD-SCHEME."
   (declare (type tc-scheme:ty-scheme old-scheme)
            (type tc-scheme:ty-scheme new-scheme)
-           (type tc-env:environment env)
-           (values boolean)
-           (ignore env))
+           (values boolean))
 
   (tc-scheme:ty-scheme= old-scheme new-scheme))
