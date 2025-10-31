@@ -5,7 +5,8 @@
    (#:redef-detection #:coalton-impl/redef-detection)
    (#:tc #:coalton-impl/typechecker)
    (#:entry #:coalton-impl/entry)
-   (#:source #:coalton-impl/source))
+   (#:source #:coalton-impl/source)
+   (#:settings #:coalton-impl/settings))
   (:export
    #:redef-detection-tests))
 (in-package #:coalton-tests/redef-detection)
@@ -305,3 +306,30 @@
     (let ((new-type (tc:lookup-value-type entry:*global-environment* 'test-env-update)))
       (is (string= (format nil "~A" new-type) "(BOOLEAN -> BOOLEAN)")
           "Type should be updated to Boolean -> Boolean"))))
+
+(deftest test-auto-continue-redefinition ()
+  "Test that *auto-continue-redefinition* automatically continues without debugger"
+  (let ((redef-detection:*dependency-registry*
+          (redef-detection:make-dependency-registry))
+        (settings:*auto-continue-redefinition* t))
+
+    ;; Define initial function
+    (eval '(coalton:coalton-toplevel
+            (coalton:declare test-auto-foo (coalton:Integer coalton:-> coalton:Integer))
+            (coalton:define (test-auto-foo x) (coalton-prelude:+ x 1))))
+
+    ;; Define a caller
+    (eval '(coalton:coalton-toplevel
+            (coalton:define (test-auto-caller y) (test-auto-foo y))))
+
+    ;; Redefine with incompatible type - should auto-continue without error
+    (eval '(coalton:coalton-toplevel
+            (coalton:declare test-auto-foo (coalton:String coalton:-> coalton:String))
+            (coalton:define (test-auto-foo x) x)))
+
+    ;; Verify the new definition is active
+    (let ((new-type (tc:lookup-value-type entry:*global-environment* 'test-auto-foo)))
+      (is (not (null new-type))
+          "New type should be in environment")
+      (is (string= (format nil "~A" new-type) "(STRING → STRING)")
+          "Type should be updated to STRING → STRING"))))
