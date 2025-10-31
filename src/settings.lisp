@@ -18,6 +18,7 @@
    #:*print-specialization-occurrences* ; VARIABLE
    #:*print-inlining-occurrences*       ; VARIABLE
    #:*print-optimization-passes*        ; VARIABLE
+   #:*auto-continue-redefinition*       ; VARIABLE
    ))
 
 (in-package #:coalton-impl/settings)
@@ -142,6 +143,10 @@ or by pushing `:coalton-release' into `*features*'. Any of these must be done be
 (defvar *print-optimization-passes* (config ':print-rewrites :default nil)
   "Indicate when a node optimization pass is being performed.")
 
+(declaim (type boolean *auto-continue-redefinition*))
+(defvar *auto-continue-redefinition* nil
+  "When non-NIL, automatically continue with incompatible redefinitions instead of raising an error.
+A warning will still be issued showing the affected functions.")
 
 (defvar *coalton-optimize* '(optimize (speed 3) (safety 0)))
 
