@@ -49,27 +49,20 @@
                     (unless (gethash name local-bindings)
                       (add-dependency name))))
 
-                 ;; Let binding - add bindings to scope
+                 ;; Let binding - add bindings to scope sequentially
                  (parser:node-let
                   (let ((new-locals (alexandria:copy-hash-table local-bindings)))
-                    ;; First traverse values with current scope
-                    ;; (bindings can't reference each other in same let)
                     (dolist (binding (parser:node-let-bindings node))
                       (traverse (parser:node-let-binding-value binding)
-                                local-bindings))
-                    ;; Add let-bound names to scope
-                    (dolist (binding (parser:node-let-bindings node))
+                                new-locals)
                       (let* ((name-node (parser:node-let-binding-name binding))
                              (name (parser:node-variable-name name-node)))
                         (setf (gethash name new-locals) t)))
-                    ;; Traverse body with new scope
                     (traverse (parser:node-let-body node) new-locals)))
 
                  ;; Lambda - parameters shadow
                  (parser:node-abstraction
                   (let ((new-locals (alexandria:copy-hash-table local-bindings)))
-                    ;; Add parameters to local scope
-                    ;; node-abstraction-params returns pattern-list
                     (dolist (pattern (parser:node-abstraction-params node))
                       (dolist (pvar (parser:pattern-variables pattern))
                         (setf (gethash (parser:pattern-var-name pvar) new-locals) t)))
@@ -142,7 +135,6 @@
 
                  ;; Do notation - bind shadows sequentially
                  (parser:node-do
-                  ;; Process do elements sequentially with accumulating scope
                   (let ((current-locals local-bindings))
                     (dolist (elem (parser:node-do-nodes node))
                       (etypecase elem
@@ -242,10 +234,8 @@
                  (parser:node-accessor
                   nil))))
 
-      ;; Start traversal with empty local bindings
       (traverse node (make-hash-table :test #'eq))
 
-      ;; Return dependencies in order found (reversed due to push)
       (nreverse deps))))
 
 ;;;
