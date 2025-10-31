@@ -35,9 +35,7 @@ Returns:
 
       ;; Type changed - check for affected functions
       (t
-       (let ((affected (redef:find-affected-functions
-                        function-name
-                        redef:*dependency-registry*)))
+       (let ((affected (redef:find-affected-functions function-name)))
          (make-condition 'redef:incompatible-redefinition
                          :function-name function-name
                          :old-type old-type

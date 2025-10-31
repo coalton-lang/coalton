@@ -190,7 +190,8 @@
                                                                    :function-name name
                                                                    :old-type old-type
                                                                    :new-type scheme
-                                                                   :affected-functions affected)))
+                                                                   :affected-functions affected
+                                                                   :environment env)))
                                     (redef:prompt-for-redefinition-action condition)))))))
 
                         (setf env (tc:set-value-type env name scheme))
