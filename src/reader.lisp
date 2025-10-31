@@ -159,14 +159,19 @@ It ensures the presence of source metadata for STREAM and then calls MAYBE-READ-
         (*print-circle* t))
     (prin1-to-string form)))
 
+(defparameter *ZZZZ* nil)
+
 (defun compile-forms (mode forms)
   "Compile FORMS as Coalton using the indicated MODE."
   (let* ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton))
          (string (print-form (cons mode forms)))
          (*source* (coalton-impl/source:make-source-string string
                                                            :name "<macroexpansion>")))
-    (with-input-from-string (stream string)
-      (cl:read stream))))
+    (let ((r (with-input-from-string (stream string)
+               (cl:read stream))))
+      (when *ZZZZ*
+        (format t ">>>>> ~S~%" r))
+      r)))
 
 (defmacro coalton:coalton-toplevel (&body forms)
   "Compile Coalton FORMS."
