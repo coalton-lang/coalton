@@ -184,15 +184,14 @@
                             (unless (redef:types-compatible-p old-type scheme env)
                               ;; Types differ - find affected functions
                               (let ((affected (redef:find-affected-functions name)))
-                                ;; Only prompt if there are affected functions
+                                ;; Only raise error if there are affected functions
                                 (when affected
-                                  (let ((condition (make-condition 'redef:incompatible-redefinition
-                                                                   :function-name name
-                                                                   :old-type old-type
-                                                                   :new-type scheme
-                                                                   :affected-functions affected
-                                                                   :environment env)))
-                                    (redef:prompt-for-redefinition-action condition)))))))
+                                  (redef:raise-redefinition-error
+                                   :function-name name
+                                   :old-type old-type
+                                   :new-type scheme
+                                   :affected-functions affected
+                                   :environment env))))))
 
                         (setf env (tc:set-value-type env name scheme))
 

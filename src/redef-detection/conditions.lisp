@@ -12,7 +12,7 @@
    #:redefinition-old-type
    #:redefinition-new-type
    #:redefinition-affected-functions
-   #:prompt-for-redefinition-action
+   #:raise-redefinition-error
    #:abort-redefinition))
 (in-package #:coalton-impl/redef-detection/conditions)
 
@@ -32,7 +32,7 @@
         ;; Uninterned symbol
         (symbol-name function-name))))
 
-(defun format-location-compact (location)
+(defun format-location (location)
   "Format a source location compactly for error messages."
   (declare (type source:location location)
            (values string))
@@ -89,17 +89,16 @@
              (if location
                  (format stream "    - ~A (~A)~%"
                          (format-function-name fn)
-                         (format-location-compact location))
+                         (format-location location))
                  (format stream "    - ~A~%" (format-function-name fn))))))))))
 
-(defun prompt-for-redefinition-action (condition)
-  "Prompt user for action when incompatible redefinition detected.
+(defun raise-redefinition-error (&rest initargs)
+  "Signal an incompatible-redefinition error with the given initargs.
 Provides abort-redefinition restart that throws to 'abort-redefinition tag."
-  (declare (type incompatible-redefinition condition))
 
   (restart-case
-      (error condition)
+      (apply #'error 'incompatible-redefinition initargs)
     (abort-redefinition ()
       :report "Abort redefinition"
       (throw 'abort-redefinition
-             (values :aborted (redefinition-function-name condition))))))
+             (values :aborted (getf initargs :function-name))))))
