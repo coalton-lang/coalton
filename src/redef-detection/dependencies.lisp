@@ -2,6 +2,7 @@
   (:use #:cl)
   (:local-nicknames
    (#:parser #:coalton-impl/parser)
+   (#:source #:coalton-impl/source)
    (#:tc-env #:coalton-impl/typechecker/environment))
   (:export
    #:extract-function-dependencies
@@ -12,6 +13,7 @@
    #:*dependency-registry*
    #:record-dependencies
    #:get-function-callers
+   #:get-function-location
    #:find-affected-functions))
 (in-package #:coalton-impl/redef-detection/dependencies)
 
@@ -297,6 +299,15 @@
   (declare (type symbol function-name)
            (values list))
   (gethash function-name (dependency-registry-reverse-deps *dependency-registry*) nil))
+
+(defun get-function-location (function-name env)
+  "Get source location for FUNCTION-NAME from environment, or NIL if not available."
+  (declare (type symbol function-name)
+           (type tc-env:environment env)
+           (values (or null source:location)))
+  (let ((name-entry (tc-env:lookup-name env function-name :no-error t)))
+    (when name-entry
+      (source:location name-entry))))
 
 (defun find-affected-functions (function-name &optional (visited (make-hash-table :test 'eq)))
   "Find all functions transitively affected by changes to FUNCTION-NAME.

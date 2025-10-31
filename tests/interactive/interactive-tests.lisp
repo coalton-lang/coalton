@@ -4,7 +4,8 @@
   (:local-nicknames
    (#:interactive #:coalton-impl/interactive)
    (#:tc #:coalton-impl/typechecker)
-   (#:entry #:coalton-impl/entry))
+   (#:entry #:coalton-impl/entry)
+   (#:source #:coalton-impl/source))
   (:export
    #:interactive-tests))
 (in-package #:coalton-tests/interactive)
@@ -67,6 +68,10 @@
     (eval '(coalton:coalton-toplevel
             (coalton:declare test-redef-foo (coalton:Integer coalton:-> coalton:Integer))
             (coalton:define (test-redef-foo x) (coalton-prelude:+ x 1))))
+
+    ;; Define a caller to ensure there are affected functions
+    (eval '(coalton:coalton-toplevel
+            (coalton:define (test-redef-caller y) (test-redef-foo y))))
 
     ;; Try to redefine with String -> String type (should error)
     (signals interactive:incompatible-redefinition
@@ -176,6 +181,10 @@
             (coalton:declare test-abort-foo (coalton:Integer coalton:-> coalton:Integer))
             (coalton:define (test-abort-foo x) (coalton-prelude:+ x 1))))
 
+    ;; Define a caller to ensure there are affected functions
+    (eval '(coalton:coalton-toplevel
+            (coalton:define (test-abort-caller y) (test-abort-foo y))))
+
     ;; Try to redefine with incompatible type and invoke abort restart
     (handler-bind
         ((interactive:incompatible-redefinition
@@ -220,3 +229,17 @@
           "Circular deps: test-circ-b should be affected")
       (is (member 'test-circ-c affected)
           "Circular deps: test-circ-c should be affected"))))
+
+(deftest test-location-tracking ()
+  "Test that source locations are tracked for functions"
+  (eval '(coalton:coalton-toplevel
+          (coalton:define (test-loc-func x) (coalton-prelude:+ x 1))))
+
+  (let ((location (interactive:get-function-location 'test-loc-func entry:*global-environment*)))
+    (is (not (null location))
+        "Location should be available for test-loc-func")
+
+    (let ((source (source:location-source location)))
+      (is (typep location 'source:location))
+      (is (string= (source:source-name source) "<macroexpansion>")
+          "REPL function source name should be '<macroexpansion>'"))))
