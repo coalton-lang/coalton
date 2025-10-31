@@ -19,26 +19,26 @@ BODY within a `coalton' expression."
   ()
   (:documentation "Signaled when an assertion such as IS is encountered from coalton"))
 
-(cl:define-condition coalton-failure (fiasco::failure)
+(cl:define-condition coalton-failure (fiasco::failed-assertion)
   ()
   (:documentation "Signaled when an assertion such as IS fails from coalton"))
 
 (coalton-toplevel
   (declare %register-assertion (Unit -> Unit))
   (define (%register-assertion _)
-    (progn 
+    (progn
       (lisp :any ()
         (cl:warn 'coalton-test-assertion))
       Unit))
 
   (declare %register-success (Unit -> Unit))
   (define (%register-success _)
-    (progn 
+    (progn
       (lisp :any ()
         (fiasco::register-assertion-was-successful))
       Unit)))
 
-(cl:defmacro is (check cl:&optional (message "")) 
+(cl:defmacro is (check cl:&optional (message ""))
   ;; What I'm doing here is a simplified version of what fiasco does,
   ;; which is check if try to expand one layer of function application
   (cl:check-type message cl:string)
@@ -52,7 +52,7 @@ BODY within a `coalton' expression."
                (name-els (cl:loop :for rand :in (cl:cons rator rands) :collect (cl:list (cl:gensym) rand)))
                (names (cl:mapcar #'cl:first name-els)))
        `(progn
-          (%register-assertion) 
+          (%register-assertion)
           ,@(cl:loop :for (name value) :in name-els
                :collect `(let ,name = ,value))
           (if ,names
