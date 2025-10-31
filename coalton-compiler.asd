@@ -114,6 +114,7 @@
                              (:file "intrinsic-applications")
 
                              ;; Optimizations
+                             (:file "tail")
                              (:file "monomorphize")
                              (:file "constant-propagation")
                              (:file "canonicalizer")
