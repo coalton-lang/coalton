@@ -5,7 +5,8 @@
    (#:tc-env #:coalton-impl/typechecker/environment)
    (#:source #:coalton-impl/source)
    (#:deps #:coalton-impl/redef-detection/dependencies)
-   (#:compat #:coalton-impl/redef-detection/compatibility))
+   (#:compat #:coalton-impl/redef-detection/compatibility)
+   (#:settings #:coalton-impl/settings))
   (:export
    #:incompatible-redefinition
    #:redefinition-function-name
@@ -15,7 +16,7 @@
    #:raise-redefinition-error
    #:abort-redefinition
    #:continue-anyway
-   #:redef-restart))
+   #:abort-redef))
 (in-package #:coalton-impl/redef-detection/conditions)
 
 ;;;
@@ -95,18 +96,19 @@
                  (format stream "    - ~A~%" (format-function-name fn))))))))))
 
 (defun raise-redefinition-error (&rest initargs)
-  "Signal an incompatible-redefinition error with the given initargs.
-Provides two restarts:
-  - abort-redefinition: Abort the redefinition
-  - continue-anyway: Continue with redefinition"
+  "Signal an incompatible-redefinition error with the given initargs."
 
   (restart-case
       (apply #'error 'incompatible-redefinition initargs)
     (abort-redefinition ()
       :report "Abort redefinition"
-      (throw 'redef-restart
-             (values :aborted (getf initargs :function-name))))
+      (warn "Redefinition of ~A aborted"
+            (format-function-name (getf initargs :function-name)))
+      (throw 'abort-redef :abort))
     (continue-anyway ()
       :report "Continue anyway"
-      (throw 'redef-restart
-             (values :continued (getf initargs :function-name))))))
+      (let ((name (getf initargs :function-name))
+            (affected (getf initargs :affected-functions)))
+        (warn "Continuing with incompatible redefinition of ~A (~D affected function~:P)"
+              (format-function-name name)
+              (length affected))))))
