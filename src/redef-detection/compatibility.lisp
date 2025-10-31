@@ -2,11 +2,9 @@
   (:use #:cl)
   (:local-nicknames
    (#:tc-scheme #:coalton-impl/typechecker/scheme)
-   (#:tc-env #:coalton-impl/typechecker/environment)
-   (#:settings #:coalton-impl/settings))
+   (#:tc-env #:coalton-impl/typechecker/environment))
   (:export
-   #:types-compatible-p
-   #:format-type-for-user))
+   #:types-compatible-p))
 (in-package #:coalton-impl/redef-detection/compatibility)
 
 ;;;
@@ -22,11 +20,3 @@
            (ignore env))
 
   (tc-scheme:ty-scheme= old-scheme new-scheme))
-
-(defun format-type-for-user (ty-scheme)
-  "Format a type scheme for display to the user."
-  (declare (type tc-scheme:ty-scheme ty-scheme)
-           (values string))
-
-  (let ((settings:*coalton-print-unicode* nil))  ; ASCII output for terminals
-    (format nil "~A" ty-scheme)))

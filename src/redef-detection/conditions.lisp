@@ -76,9 +76,9 @@
      (format stream "Redefining ~A with incompatible type~%"
              (format-function-name (redefinition-function-name condition)))
      (format stream "  Old: ~A~%"
-             (compat:format-type-for-user (redefinition-old-type condition)))
+             (redefinition-old-type condition))
      (format stream "  New: ~A~%"
-             (compat:format-type-for-user (redefinition-new-type condition)))
+             (redefinition-new-type condition))
      (let ((affected (redefinition-affected-functions condition))
            (env (redefinition-environment condition)))
        (when affected
