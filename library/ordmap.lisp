@@ -13,6 +13,9 @@
    #:OrdMap
    #:empty
    #:lookup
+   #:lookup-neighbors
+   #:max-key-entry
+   #:min-key-entry
    #:insert
    #:replace
    #:replace-or-insert #:insert-or-replace
@@ -75,15 +78,45 @@
   (declare lookup ((Ord :key) => ((OrdMap :key :value) -> :key -> (Optional :value))))
   (define (lookup mp k)
     "Retrieve the value associated with K in MP, or None if MP does not contain K."
-    (match mp
-      ((%Map tre) (coalton-library/classes:map value (tree:lookup tre (JustKey k))))))
+    (let (%Map tre) = mp)
+    (map value (tree:lookup tre (JustKey k))))
+
+  (declare max-key-entry ((Ord :key) => OrdMap :key :value -> (Optional (Tuple :key :value))))
+  (define (max-key-entry mp)
+    "Returns the entry (Tuple :key :value) with the maximum key in the map `mp`. If the map is empty, None is returned."
+    (let (%Map tre) = mp)
+    (map into (tree:max-element tre)))
+
+  (declare min-key-entry ((Ord :key) => OrdMap :key :value -> (Optional (Tuple :key :value))))
+  (define (min-key-entry mp)
+    "Returns the entry (Tuple :key :value) with the minimum key in the map `mp`. If the map is empty, None is returned."
+    (let (%Map tre) = mp)
+    (map into (tree:min-element tre)))
+
+  (declare lookup-neighbors ((Ord :key) => OrdMap :key :value -> :key
+                             -> (Tuple3 (Optional (Tuple :key :value))
+                                        (Optional (Tuple :key :value))
+                                        (Optional (Tuple :key :value)))))
+  (define (lookup-neighbors mp k)
+    "Returns elements LO, ON, and HI, such that LO has the closest
+key that is strictly less than `k`, ON is the entry with `k`,
+and HI has the closest key that is strictly greater than 'k'.
+Any of these values can be None if there's no such entry."
+    (let (%Map tre) = mp)
+    (let ((declare convert ((Optional (MapPair :key :value))
+                            -> Optional (Tuple :key :value)))
+          (convert (fn (p)
+                     (do (x <- p)
+                         (Some (into x))))))
+      (match (tree:lookup-neighbors tre (JustKey k))
+        ((Tuple3 lo on hi)
+         (Tuple3 (convert lo) (convert on) (convert hi))))))
 
   (declare insert ((Ord :key) => ((OrdMap :key :value) -> :key -> :value -> (Optional (OrdMap :key :value)))))
   (define (insert mp k v)
     "Associate K with V in MP. If MP already contains a mapping for K, return None."
-    (coalton-library/classes:map %Map
-                                 (match mp
-                                   ((%Map tre) (tree:insert tre (MapPair k v))))))
+    (let (%Map tre) = mp)
+    (map %Map (tree:insert tre (MapPair k v))))
 
   (declare replace ((Ord :key) => ((OrdMap :key :value) -> :key -> :value -> (Optional (Tuple (OrdMap :key :value)
                                                                                            :value)))))
@@ -104,8 +137,7 @@
 If MP already contains a mapping for K, replace it and return the old value."
     (let (%Map tre) = mp)
     (let (Tuple new-tre removed-pair) = (tree:replace-or-insert tre (MapPair k v)))
-    (Tuple (%Map new-tre)
-           (coalton-library/classes:map value removed-pair)))
+    (Tuple (%Map new-tre) (map value removed-pair)))
 
   (declare insert-or-replace ((Ord :key) => ((OrdMap :key :value) -> :key -> :value -> (OrdMap :key :value))))
   (define (insert-or-replace mp k v)
@@ -120,15 +152,14 @@ Like `replace-or-insert', but prioritizing insertion as a use case."
   (declare remove ((Ord :key) => ((OrdMap :key :value) -> :key -> (Optional (OrdMap :key :value)))))
   (define (remove mp k)
     "Remove the mapping associated with K in MP. If K does not have a value in MP, return None."
-    (coalton-library/classes:map %Map
-                                 (match mp
-                                   ((%Map tre) (tree:remove tre (JustKey k))))))
+    (let (%Map tre) = mp)
+    (map %Map (tree:remove tre (JustKey k))))
 
   (declare entries ((OrdMap :key :value) -> (iter:Iterator (Tuple :key :value))))
   (define (entries mp)
     "Iterate over the (key value) pairs in MP, sorted by the keys in least-to-greatest order."
     (match mp
-      ((%Map tre) (coalton-library/classes:map into (tree:increasing-order tre)))))
+      ((%Map tre) (map into (tree:increasing-order tre)))))
 
   (define-instance (iter:IntoIterator (OrdMap :key :value) (Tuple :key :value))
     (define iter:into-iter entries))
@@ -137,13 +168,13 @@ Like `replace-or-insert', but prioritizing insertion as a use case."
   (define (keys mp)
     "Iterate over the keys in MP, sorted least-to-greatest."
     (match mp
-      ((%Map tre) (coalton-library/classes:map key (tree:increasing-order tre)))))
+      ((%Map tre) (map key (tree:increasing-order tre)))))
 
   (declare values ((OrdMap :key :value) -> (iter:Iterator :value)))
   (define (values mp)
     "Iterate over the values in MP, sorted by their corresponding keys in least-to-greatest order."
     (match mp
-      ((%Map tre) (coalton-library/classes:map value (tree:increasing-order tre)))))
+      ((%Map tre) (map value (tree:increasing-order tre)))))
 
   (define-instance ((Eq :key) (Eq :value) => Eq (OrdMap :key :value))
     (define (== left right)
@@ -188,16 +219,15 @@ If `coll` contains duplicate keys, later values will overwrite earlier values."
                 ;; operation does tree search but is meaningless on trees that aren't maps.
                 ((tree::Branch clr less (MapPair pivot val) more)
                  (match (<=> key pivot)
-                   ((LT) (coalton-library/classes:map (fn (new-less)
-                                                        (tree::Branch clr new-less (MapPair pivot val) more))
-                                                      (helper less)))
+                   ((LT) (map (fn (new-less)
+                                (tree::Branch clr new-less (MapPair pivot val) more))
+                              (helper less)))
                    ((Eq) (Some (tree::Branch clr less (MapPair pivot (func val)) more)))
-                   ((GT) (coalton-library/classes:map (tree::Branch clr less (MapPair pivot val))
-                                                      (helper more)))))
+                   ((GT) (map (tree::Branch clr less (MapPair pivot val))
+                              (helper more)))))
                 ((tree::Branch _ _ (JustKey _) _) (error "OrdMap contains `JustKey` rather than `MapPair`"))
                 ((tree::DoubleBlackEmpty) (error "Encountered double-black node in ordered map outside of removal operation"))))))
-      (coalton-library/classes:map %Map
-                                   (helper tre))))
+      (map %Map (helper tre))))
 
   (declare merge (Ord :key => OrdMap :key :value -> OrdMap :key :value -> OrdMap :key :value))
   (define (merge a b)
@@ -215,7 +245,7 @@ operation, and therefore OrdMap cannot implement Monoid."
     (define <> merge))
 
   (define-instance (Functor (OrdMap :key))
-    (define (coalton-library/classes:map func mp)
+    (define (map func mp)
       (let (%Map tre) = mp)
       (let ((helper (fn (subtree)
                       (match subtree

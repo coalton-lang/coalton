@@ -307,6 +307,8 @@
                (:file "vector-tests")
                (:file "string-tests")
                (:file "optional-tests")
+               (:file "ordtree-tests")
+               (:file "ordmap-tests")
                (:file "recursive-let-tests")
                (:file "class-tests")
                (:file "struct-tests")
@@ -333,4 +335,3 @@
                (:module "algorithms-tests"
                 :serial t
                 :components ((:file "fft-tests")))))
-

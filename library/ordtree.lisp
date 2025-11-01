@@ -12,6 +12,9 @@
   (:export
    #:Tree #:Empty
    #:lookup
+   #:lookup-neighbors
+   #:max-element
+   #:min-element
    #:insert
    #:replace
    #:replace-or-insert
@@ -124,6 +127,52 @@
          ((EQ) (Some elt))
          ((GT) (lookup right needle))))
       ((DoubleBlackEmpty) (error "Found double-black node outside of removal process"))))
+
+  (declare max-element (Ord :elt => Tree :elt -> Optional :elt))
+  (define (max-element tree)
+    (match tree
+      ((Empty) None)
+      ((Branch _ _ elt right) (match (max-element right)
+                                ((None) (Some elt))
+                                ((Some e) (Some e))))
+      ((DoubleBlackEmpty) (error "Found double-black node outside of removal process"))))
+
+  (declare min-element (Ord :elt => Tree :elt -> Optional :elt))
+  (define (min-element tree)
+    (match tree
+      ((Empty) None)
+      ((Branch _ left elt _) (match (min-element left)
+                               ((None) (Some elt))
+                               ((Some e) (Some e))))
+      ((DoubleBlackEmpty) (error "Found double-black node outside of removal process"))))
+
+  (declare lookup-neighbors ((Ord :elt) => (Tree :elt) -> :elt
+                                                       -> (Tuple3 (Optional :elt)
+                                                                  (Optional :elt)
+                                                                  (Optional :elt))))
+  (define (lookup-neighbors haystack needle)
+    "Returns elements LO, ON, and HI, such that LO is the closest
+element that is strictly less than `needle`, ON is the element
+that is `==` to `needle`, and HI is the closest element that is
+strictly greater than `needle`.  Any of these values can be None
+if there's no such element."
+    (rec % ((tree haystack)
+            (lo None)
+            (hi None))
+      (match tree
+        ((Empty) (Tuple3 lo None hi))
+        ((Branch _ left elt right)
+         (match (<=> needle elt)
+           ((LT) (% left lo (Some elt)))
+           ((EQ) (let ((lo1 (match (max-element left)
+                              ((None) lo)
+                              ((Some x) (Some x))))
+                       (hi1 (match (min-element right)
+                              ((None) hi)
+                              ((Some x) (Some x)))))
+                   (Tuple3 lo1 (Some elt) hi1)))
+           ((GT) (% right (Some elt) hi))))
+        ((DoubleBlackEmpty) (error "Found double-black node outside of removal process")))))
 
   ;;; inserting into and replacing elements of trees
 
