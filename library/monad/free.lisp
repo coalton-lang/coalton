@@ -10,7 +10,8 @@
    #:Free
    #:val
    #:liftF
-   #:foldFree))
+   #:foldFree
+   #:run-free))
 
 (in-package #:coalton-library/monad/free)
 
@@ -57,6 +58,18 @@ free monad to a target monad."
     (match fr
       ((Val a) (pure a))
       ((Free fa) (>>= (nat fa) (foldFree nat)))))
+
+  (declare run-free (Functor :f => (:f (Free :f :a) -> Free :f :a) -> Free :f :a -> :a))
+  (define (run-free transf op)
+    "Run a free monad with a function that unwraps a single layer of the functor
+`f` at a time.
+
+References: [here](https://github.com/purescript/purescript-free/blob/v5.1.0/src/Control/Monad/Free.purs#L167)"
+    (match op
+      ((Val a)
+       a)
+      ((Free f-freea)
+       (run-free transf (transf f-freea)))))
 
   ;;
   ;; Instances
