@@ -172,6 +172,8 @@ NOTE: There is no FUNCTION-ENTRY for arity 1 and the function will be returned"
                 call-coalton-function))
 (defun coalton:call-coalton-function (function &rest args)
   "Apply a Coalton function object FUNCTION to ARGS from Common Lisp."
+  (when (endp args)
+    (push coalton:Unit args))
   (let ((arg-count (length args)))
     (if (>= arg-count function-arity-limit)
         (error 'too-many-arguments-to-coalton-function
@@ -183,6 +185,8 @@ NOTE: There is no FUNCTION-ENTRY for arity 1 and the function will be returned"
                args))))
 
 (define-compiler-macro coalton:call-coalton-function (function &rest args)
+  (when (endp args)
+    (push 'coalton:Unit args))
   (let ((arg-count (length args)))
     (if (>= arg-count function-arity-limit)
         (error 'too-many-arguments-to-coalton-function
