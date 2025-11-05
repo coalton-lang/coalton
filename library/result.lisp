@@ -10,6 +10,7 @@
   (:export
    #:ok?
    #:err?
+   #:okM
    #:map-err
    #:flatten
    #:opt->result
@@ -55,6 +56,12 @@
     (match x
       ((Err _) True)
       ((Ok _) False)))
+
+  (inline)
+  (declare okM (Functor :f => :f :a -> :f (Result :e :a)))
+  (define (okM f-a)
+    "Wrap a value inside F-A inside of 'Ok'."
+    (map Ok f-a))
 
   (declare map-err ((:a -> :b) -> Result :a :c -> Result :b :c))
   (define (map-err f x)

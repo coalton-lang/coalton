@@ -9,7 +9,9 @@
    #:ResultT
    #:run-resultT
    #:map-resultT
+   #:map-errM
    #:map-errT
+   #:err-ifM
    #:err-ifT
    #:do-resultT))
 
@@ -42,13 +44,28 @@
     (ResultT (f m)))
 
   (inline)
+  (declare map-errM (Monad :m => (:a -> :b) -> :m (Result :a :c) -> :m (Result :b :c)))
+  (define (map-errM ferr m)
+    "Map FERR over the error value of a Result contained in M."
+    (map
+     (map-err ferr)
+     m))
+
+  (inline)
   (declare map-errT (Functor :m => (:a -> :b) -> ResultT :a :m :c -> ResultT :b :m :c))
   (define (map-errT ferr) (map-resultT (map (map-err ferr))))
 
   (inline)
   (declare err-ifT (Monad :m => Boolean -> :err -> ResultT :err :m Unit))
-  (define (err-ifT passed failure)
-    (ResultT (pure (err-if passed failure)))))
+  (define (err-ifT failed? failure)
+    "Fail with FAILURE if FAILED? is True."
+    (ResultT (pure (err-if failed? failure))))
+
+  (inline)
+  (declare err-ifM (Monad :m => Boolean -> :err -> :m (Result :err Unit)))
+  (define (err-ifM failed? failure)
+    "Fail with FAILURE inside :m if FAILED? is True."
+    (pure (err-if failed? failure))))
 
 ;;;
 ;;; Instances
