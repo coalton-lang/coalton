@@ -4,9 +4,12 @@
    #:coalton-library/functions
    #:coalton-library/classes
    #:coalton-library/monad/classes)
+  (:local-nicknames
+   (:tp #:coalton-library/tuple))
   (:export
    #:StateT
    #:run-stateT
+   #:run-stateT_
    #:map-stateT
 
    #:lift-stateT
@@ -56,6 +59,12 @@
   (declare run-stateT (Applicative :m => StateT :s :m :a -> :s -> :m (Tuple :s :a)))
   (define (run-stateT (StateT fs->msa) s)
     (fs->msa s))
+
+  (inline)
+  (declare run-stateT_ (Applicative :m => StateT :s :m :a -> :s -> :m :a))
+  (define (run-stateT_ st-op s)
+    "Run ST-OP, discarding the state and returning the result."
+    (map tp:snd (run-stateT st-op s)))
 
   (inline)
   (declare modify-stateT (Applicative :m => (:s -> :s) -> StateT :s :m Unit))

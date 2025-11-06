@@ -12,6 +12,7 @@
    #:err?
    #:okM
    #:map-err
+   #:ok-or-def
    #:flatten
    #:opt->result
    #:err-if
@@ -69,6 +70,13 @@
     (match x
       ((Err x) (Err (f x)))
       ((Ok x) (Ok x))))
+
+  (declare ok-or-def (:a -> Result :err :a -> :a))
+  (define (ok-or-def def res)
+    "Take value in RES if it is OK, or DEF if it is ERR."
+    (match res
+      ((Err _) def)
+      ((Ok x) x)))
 
   (declare flatten (Result :a :a -> :a))
   (define (flatten x)
