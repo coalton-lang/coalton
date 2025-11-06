@@ -7,13 +7,14 @@ Coalton allows a bit of configuration. **For ordinary development, it is not nec
 The `:coalton-config` keyword's symbol-plist is inspected just before the Coalton system is compiled. Therefore, the easiest is to add configure Coalton is to add configuration options to your Lisp system's init file (such as SBCL's `.sbclrc`). Here is an example configuration that one might use for day-to-day development:
 
 ```
-(let ((config '((:compiler-mode          "development")
-                (:print-unicode          t)
-                (:perform-specialization nil)
-                (:perform-inlining       nil)
-                (:emit-type-annotations  nil)
-                (:print-types            t)
-                (:print-rewrites         nil))))
+(let ((config '((:compiler-mode              "development")
+                (:print-unicode              t)
+                (:perform-specialization     nil)
+                (:perform-inlining           nil)
+                (:emit-type-annotations      nil)
+                (:print-types                t)
+                (:print-rewrites             nil)
+                (:auto-continue-redefinition t))))
   (setf (symbol-plist ':coalton-config) nil)
   (loop :for (key value) :in config
         :do (setf (get ':coalton-config key) value)))
@@ -141,6 +142,35 @@ The precise format of the output is not guaranteed.
 Allowed options:
 - `t`: Print rewriting information.
 - `nil`: Don't.
+
+### `:auto-continue-redefinition`
+
+This controls whether to automatically continue with incompatible function redefinitions at the REPL instead of raising an error. This is useful for interactive development when you're experimenting with changing function signatures and don't want to be blocked by redefinition errors.
+
+When an incompatible redefinition is detected (e.g., changing a function's type signature), Coalton will:
+- With `nil` (default): Raise an error showing the detailed list of affected functions and provide restart options
+- With `t`: Automatically continue with the redefinition and issue a concise warning showing only the count of affected functions
+
+The warning message when auto-continuing shows only the count rather than listing all affected functions to keep the output concise, as the list could be quite long in a large codebase.
+
+Example scenario where this is useful:
+```lisp
+;; Original definition
+(coalton-toplevel
+  (define (add x y)
+    (+ x y)))
+
+;; Later, changing the signature
+(coalton-toplevel
+  (define (add x y z)  ; Adding a third parameter
+    (+ (+ x y) z)))
+```
+
+With `:auto-continue-redefinition` set to `t`, the second definition will succeed with a warning. With it set to `nil`, you'll get an error with restart options.
+
+Allowed options:
+- `t`: Automatically continue with incompatible redefinitions.
+- `nil`: Raise an error and provide restart options (default).
 
 ## Further Reading
 

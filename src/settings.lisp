@@ -54,6 +54,7 @@
       :emit-type-annotations            ; [boolean] emit type annotations?
       :print-types                      ; [boolean] print types when compiling?
       :print-rewrites                   ; [boolean] print rewriting that occurs (specialization/inlining)?
+      :auto-continue-redefinition       ; [boolean] auto continue incompatible redefinitions?
       )
     "Valid configuration keys that can be (SETF GET) on the user configuration variable :COALTON-CONFIG.")
 
@@ -144,7 +145,7 @@ or by pushing `:coalton-release' into `*features*'. Any of these must be done be
   "Indicate when a node optimization pass is being performed.")
 
 (declaim (type boolean *auto-continue-redefinition*))
-(defvar *auto-continue-redefinition* nil
+(defvar *auto-continue-redefinition* (config ':auto-continue-redefinition :default nil)
   "When non-NIL, automatically continue with incompatible redefinitions instead of raising an error.
 A warning will still be issued showing the affected functions.")
 
