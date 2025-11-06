@@ -73,6 +73,7 @@ Common Lisp makes a distinction between file and directory paths. Directory path
    #:abort
 
    #:read-char
+   #:read-line
    #:write-char
 
    #:flush
@@ -447,6 +448,14 @@ Automatically returns the lisp condition if one is thrown."
     (lisp (Result FileError Char) (stream)
       (cl:handler-case (Ok (cl:read-char stream))
         (cl:end-of-file () (Err (EOF)))
+        (cl:error (c) (Err (LispError c))))))
+
+  (declare read-line (FileStream Char -> Result FileError String))
+  (define (read-line stream)
+    "Reads a line of characters from a FileStream."
+    (lisp (Result FileError String) (stream)
+      (cl:handler-case (Ok (cl:read-line stream))
+        (cl:end-of-file () (err (EOF)))
         (cl:error (c) (Err (LispError c))))))
 
   (declare write-char ((FileStream Char) -> Char -> (Result FileError Unit)))

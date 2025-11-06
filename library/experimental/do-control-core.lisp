@@ -213,48 +213,7 @@ Otherwise evaluate M-NONE."
 over the value."
     (do
      (val? <- mval?)
-     (flatmap-success val? f->mval?b)))
-
-  ;;
-  ;; Loops
-  ;;
-
-  (declare loop-while ((Monad :m) (Terminator :t) => :m :t -> :m Unit))
-  (define (loop-while m-operation)
-    "Repeat M-OPERATION until it returns a terminator for which (ended? ...) is true. Returns Unit."
-    (do
-     (res <- m-operation)
-     (if (ended? res)
-         (pure Unit)
-         (loop-while m-operation))))
-
-  (inline)
-  (declare collect-val ((Monad :m) (Yielder :y) => :m (:y :a) -> :m (List :a)))
-  (define (collect-val m-operation)
-    "Repeatedly run M-OPERATION, collecting each yielded value into a list until no value is yielded."
-    (rec % ((result mempty))
-      (do
-       (val? <- m-operation)
-       (match (yield val?)
-         ((Some x)
-          (% (Cons x result)))
-         ((None)
-          (pure (l:reverse result)))))))
-
-  (inline)
-  (declare foreach (Monad :m => List :a -> (:a -> :m :z) -> :m Unit))
-  (define (foreach lst fa->m)
-    "Apply FA->M and run the result to each element in LST. Discards the return values and returns Unit."
-    (match lst
-      ((Nil) (pure Unit))
-      ((Cons h rem)
-       (do
-        (fold
-         (fn (mz a)
-           (>>= mz (const (fa->m a))))
-         (fa->m h)
-         rem)
-        (pure Unit))))))
+     (flatmap-success val? f->mval?b))))
 
 (cl:defmacro do-when (b cl:&body body)
   "Run BODY (as a 'do' block) only when B indicates completion per Terminator semantics."

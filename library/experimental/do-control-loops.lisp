@@ -12,11 +12,13 @@
    #:yield)
   (:export
    #:loop-while
+   #:loop-while-valM
    #:loop-times
    #:collect-val
    #:foreach
 
    #:do-loop-while
+   #:do-loop-while-valM
    #:do-loop-times
    #:do-collect-val
    #:do-foreach))
@@ -37,6 +39,20 @@
      (if (ended? res)
          (pure Unit)
          (loop-while m-operation))))
+
+  (declare loop-while-valM ((Monad :m) (Yielder :y) => :m (:y :a) -> (:a -> :m :b) -> :m Unit))
+  (define (loop-while-valM m-operation f)
+    "Repeat M-OPERATION while it yields a value, running the yielded value applied to F.
+Returns Unit."
+    (do
+     (res <- m-operation)
+     (match (yield res)
+       ((Some x)
+        (do
+         (f x)
+         (loop-while-valM m-operation f)))
+       ((None)
+        (pure Unit)))))
 
   (declare loop-times (Monad :m => UFix -> (UFix -> :m :a) -> :m Unit))
   (define (loop-times n m-operation)
@@ -84,6 +100,14 @@ Discards the return values and returns Unit."
   `(loop-while
     (do
      ,@body)))
+
+(cl:defmacro do-loop-while-valM ((sym m-operation) cl:&body body)
+    "Run M-OPERATION, bind its result to SYM, and run BODY in a 'do' block. Repeats while
+M-OPERATION yields a value. Returns Unit."
+  `(loop-while-valM ,m-operation
+    (fn (,sym)
+      (do
+       ,@body))))
 
 (cl:defmacro do-loop-times ((sym n) cl:&body body)
     "Run BODY (in a 'do' block) N times. Binds the current index (starting at 0) to SYM.
