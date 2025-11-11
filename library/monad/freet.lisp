@@ -12,6 +12,7 @@
    #:FreeF
    #:Val
    #:FreeT
+   #:unwrap-freeT
    #:run-freeT
    #:fold-freeT))
 
@@ -76,8 +77,28 @@
     "`Free :f :m :a` gives you a Monad Transformer instance for any `Functor :f` and `Monad :m`."
     (FreeT (:m (FreeF :f :a (FreeT :f :m :a)))))
 
-  (declare run-freeT (FreeT :f :m :a -> :m (FreeF :f :a (FreeT :f :m :a))))
-  (define (run-freeT (FreeT m)) m)
+  (inline)
+  (declare unwrap-freeT (FreeT :f :m :a -> :m (FreeF :f :a (FreeT :f :m :a))))
+  (define (unwrap-freeT (FreeT m))
+    "Unwrap one layer of the the free monad transformer, returning a value of the base
+monad containing a FreeF (which can either contain VAL, a pure value, or FREEF, another
+wrapped layer of the free monad transformer)."
+    m)
+
+  (declare run-freeT (Monad :m
+                      => (:f (FreeT :f :m :a) -> FreeT :f :m :a)
+                      -> FreeT :f :m :a
+                      -> :m :a))
+  (define (run-freeT transf op)
+    "Run a free monad transformer with a function that unwraps a single layer of the
+functor `f` at a time."
+    (do
+     (step <- (unwrap-freeT op))
+     (match step
+       ((Val a)
+        (pure a))
+       ((FreeF next)
+        (run-freeT transf (transf next))))))
 
   (define-instance ((Functor :f) (Monad :m) => MonadFree :f (FreeT :f :m))
     (define (wrap fm)
@@ -105,7 +126,7 @@
      (>>= ma (fn (v)
                (match v
                  ((Val a)
-                  (run-freeT (a->freet-mb a)))
+                  (unwrap-freeT (a->freet-mb a)))
                  ((FreeF funct-a)
                   (pure (FreeF (map ((flip bind) a->freet-mb) funct-a)))))))))
 
