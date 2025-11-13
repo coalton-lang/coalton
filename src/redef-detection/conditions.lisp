@@ -21,17 +21,21 @@
 ;;; Helper Functions
 ;;;
 
-(defun format-function-name (function-name)
+(defun format-function-name (function-symbol)
   "Format a function name with its package for error messages."
-  (declare (type symbol function-name)
+  (declare (type symbol function-symbol)
            (values string))
-  (let ((pkg (symbol-package function-name)))
+  (let ((pkg (symbol-package function-symbol))
+        (fn-name (symbol-name function-symbol)))
     (if pkg
-        (format nil "~A:~A"
+        (format nil "~A:~@[:~*~]~A"
                 (package-name pkg)
-                (symbol-name function-name))
+                (eq :internal
+                    (nth-value 1
+                               (find-symbol fn-name pkg)))
+                fn-name)
         ;; Uninterned symbol
-        (symbol-name function-name))))
+        fn-name)))
 
 (defun format-location (location)
   "Format a source location compactly for error messages."
