@@ -12,7 +12,7 @@ Coalton uses ordinary Common Lisp packages (and ASDF systems) to organize code. 
 
 ### Package Inferred System
 
-For simple projects, you can use the `package-inferred-system` utility to automatically create an ASDF system based on your package structure. However, this project, coalton, does not use this utilities. By this incompatibility, the ASDF loader skips loading `#:coalton-prelude` when using this utility on your own project. Hence, you must explicitly register `coalton-prelude` in your own ASDF system definition before specifying `#:coalton` in your `:depends-on` list.
+For simple projects, you can use the `package-inferred-system` utility to automatically create an ASDF system based on your package structure. However, this project, coalton, does not use these utilities. By this incompatibility, the ASDF loader skips loading `#:coalton-prelude` when using this utility on your own project. Hence, you must explicitly register `coalton-prelude` in your own ASDF system definition before specifying `#:coalton` in your `:depends-on` list.
 
 ```lisp
 ;; In your ASDF system definition; e.g., my-project.asd
@@ -389,7 +389,7 @@ Field accessors can be used to read individual fields:
 
 Field accessors can be passed by value:
 
-```
+```lisp
 (coalton (map .x (make-list (Point 1 2) (Point 2 3))))
 ```
 
@@ -808,7 +808,7 @@ Lists can also be deconstructed with `match`.
 
 ## Static Typing
 
-Coalton code is statically typechecked. Types are inferred.
+Coalton code is statically type checked. Types are inferred.
 
 ```lisp
 (coalton-toplevel
@@ -832,7 +832,7 @@ Type declarations can always be added manually.
     (map (+ 2) (str:parse-int x))))
 ```
 
-Type declarations can also be added in let expressions
+Type declarations can also be added in `let` expressions
 
 ```lisp
 (coalton-toplevel
@@ -873,7 +873,7 @@ The `the`-`into` pattern is so common that Coalton provides a shorthand called `
 ;; ==> (#\m #\s #\p #\i)
 ```
 
-The into method is used only when a conversion can always be performed from one type to another. If not values of a type can be converted, then another type class `TryInto` with a method `tryInto` is used. The `tryinto` method returns a `Result` type which indicates whether the conversion was successful or not. 
+The `into` method is used only when a conversion can always be performed from one type to another. If not values of a type can be converted, then another type class `TryInto` with a method `tryInto` is used. The `tryinto` method returns a `Result` type which indicates whether the conversion was successful or not. 
 
 **Note that `as` only works for conversions via `into`, i.e., conversions that are total.** There is no corresponding syntax for `tryInto`.
 
@@ -1017,7 +1017,7 @@ Coalton's `progn` can have flattened `let` syntax.
      (<> x_ y_))))
 ```
 
-Flattened let expressions support pattern matching:
+Flattened `let` expressions support pattern matching:
 
 ```lisp
 (coalton-toplevel
@@ -1028,7 +1028,7 @@ Flattened let expressions support pattern matching:
 
 ```
 
-Flattened let expression are non recursive, and do not support let polymorphism. Thus the following is invalid:
+Flattened `let` expression are non recursive, and do not support `let` polymorphism. Thus the following is invalid:
 
 ```
 (coalton
@@ -1038,7 +1038,7 @@ Flattened let expression are non recursive, and do not support let polymorphism.
     (id "hello")))
 ```
 
-It does however work with standard let expressions:
+It does however work with standard `let` expressions:
 
 ```
 (coalton
