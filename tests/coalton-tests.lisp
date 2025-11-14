@@ -21,6 +21,7 @@
   (%run-tests "lisp-toplevel-forbid.txt")
   (let ((*features* (cons ':coalton-lisp-toplevel *features*)))
     (%run-tests "lisp-toplevel.txt"))
+  (%run-tests "named-fields.txt")
   (%run-tests "package.txt")
   (%run-tests "parse-attribute.txt")
   (%run-tests "parse-body.txt")
