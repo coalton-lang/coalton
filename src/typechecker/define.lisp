@@ -31,7 +31,9 @@
    (#:parser #:coalton-impl/parser)
    (#:source #:coalton-impl/source)
    (#:tc #:coalton-impl/typechecker/stage-1)
-   (#:types #:coalton-impl/typechecker/types))
+   (#:types #:coalton-impl/typechecker/types)
+   (#:redef #:coalton-impl/redef-detection)
+   (#:settings #:coalton-impl/settings))
   (:export
    #:infer-expression-type              ; FUNCTION
    #:infer-expl-binging-type            ; FUNCTION
@@ -166,30 +168,60 @@
                     :else
                       :collect node)))
 
+        ;; Check types and update environment
+        (when (catch 'redef:abort-redef
+                (handler-bind
+                    ((redef:incompatible-redefinition
+                       (lambda (c)
+                         (declare (ignore c))
+                         (when settings:*auto-continue-redefinition*
+                           (let ((restart (find-restart 'redef:continue-anyway)))
+                             (when restart
+                               (invoke-restart restart)))))))
+                  (loop :for define :in defines
+                        :for name := (parser:node-variable-name (parser:binding-name define))
+                        :for scheme := (tc:remove-source-info (gethash name (tc-env-ty-table tc-env)))
+
+                        :when (tc:type-variables scheme)
+                          :do (util:coalton-bug "Scheme ~S should not have any free type variables." scheme)
+
+                        ;; Check for incompatible redefinition before updating environment
+                        :do (let ((old-type (tc:lookup-value-type env name :no-error t)))
+                              (when old-type
+                                (unless (redef:types-compatible-p old-type scheme)
+                                  (let ((affected (redef:find-affected-functions name)))
+                                    (when affected
+                                      (redef:raise-redefinition-error
+                                       :function-name name
+                                       :old-type old-type
+                                       :new-type scheme
+                                       :affected-functions affected
+                                       :environment env))))))
+
+                            (setf env (tc:set-value-type env name scheme))
+
+                            (setf env (tc:set-name env name (tc:make-name-entry
+                                                             :name name
+                                                             :type :value
+                                                             :docstring (source:docstring define)
+                                                             :location (source:location define))))
+
+                        :if (parser:toplevel-define-orig-params define)
+                          :do (setf env (tc:set-function-source-parameter-names
+                                         env
+                                         name
+                                         (parser:toplevel-define-orig-params define)))
+                        :else
+                          :if (tc:lookup-function-source-parameter-names env name)
+                            :do (setf env (tc:unset-function-source-parameter-names env name))))
+                nil)
+          (return-from toplevel-define (values nil env)))
+
+        ;; Record dependencies
         (loop :for define :in defines
               :for name := (parser:node-variable-name (parser:binding-name define))
-              :for scheme := (tc:remove-source-info (gethash name (tc-env-ty-table tc-env)))
-
-              :when (tc:type-variables scheme)
-                :do (util:coalton-bug "Scheme ~S should not have any free type variables." scheme)
-
-              :do (setf env (tc:set-value-type env name scheme))
-
-              :do (setf env (tc:set-name env name (tc:make-name-entry
-                                                   :name name
-                                                   :type :value
-                                                   :docstring (source:docstring define)
-                                                   :location (source:location define))))
-
-              :if (parser:toplevel-define-orig-params define)
-                :do (setf env (tc:set-function-source-parameter-names
-                               env
-                               name
-                               (parser:toplevel-define-orig-params define)))
-              :else
-                :when (tc:lookup-function-source-parameter-names env name)
-                  :do (setf env (tc:unset-function-source-parameter-names env name)))
-
+              :for code := (parser:binding-value define)
+              :do (redef:record-dependencies name code env))
 
         (values
          (tc:apply-substitution subs binding-nodes)

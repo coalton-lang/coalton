@@ -342,4 +342,7 @@
                              (:file "statet")))
                (:module "algorithms-tests"
                 :serial t
-                :components ((:file "fft-tests")))))
+                :components ((:file "fft-tests")))
+               (:module "redef-detection"
+                :serial t
+                :components ((:file "interactive-tests")))))

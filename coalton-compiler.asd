@@ -65,6 +65,15 @@
                              (:file "unify")
                              (:file "fundeps")
                              (:file "environment")
+
+                             (:module "redef-detection"
+                              :pathname "../redef-detection/"
+                              :serial t
+                              :components ((:file "dependencies")
+                                           (:file "compatibility")
+                                           (:file "conditions")
+                                           (:file "package")))
+
                              (:file "lisp-type")
                              (:file "context-reduction")
                              (:file "stage-1")
