@@ -1,7 +1,7 @@
 # Введення в Coalton
 
 Дата перекладу: 2025/11/13
-SHA1: [f05c44356a1392577d8818a97dd1e585c5dd85ec](https://github.com/coalton-lang/coalton/commit/f05c44356a1392577d8818a97dd1e585c5dd85ec)
+SHA1: [https://github.com/coalton-lang/coalton/commit/d5e6f2217b51113ed43afcf8daa48ff6c92b2321](https://github.com/coalton-lang/coalton/commit/https://github.com/coalton-lang/coalton/commit/d5e6f2217b51113ed43afcf8daa48ff6c92b2321)
 
 Coalton це статично типізована мова, вбудована та компільована в Common Lisp.
 
@@ -15,10 +15,10 @@ Coalton використовує стандартні пакети Common Lisp (
 
 ### Package Inferred System (Система створена на основі структури пакетів)
 
-Для простих проектів ви можете використовувати утиліту `package-inferred-system` для автоматичного створення системи ASDF на основі структури ваших пакетів. Однак цей проект, coalton, не використовує ці утиліти. Через цю несумісність завантажувач ASDF пропускає завантаження `#:coalton-prelude` при використанні цієї утиліти у вашому власному проекті. Отже, ви повинні явно зареєструвати `coalton-prelude` у вашому власному визначенні системи ASDF перед вказанням `#:coalton` у вашому списку `:depends-on`.
+Для простих проєктів ви можете використовувати утиліту `package-inferred-system` для автоматичного створення системи ASDF на основі структури ваших пакетів. Однак цей проект, coalton, не використовує ці утиліти. Через цю несумісність завантажувач ASDF пропускає завантаження `#:coalton-prelude` при використанні цієї утиліти у вашому власному проекті. Отже, ви повинні явно зареєструвати `coalton-prelude` у вашому власному визначенні системи ASDF перед вказанням `#:coalton` у вашому списку `:depends-on`.
 
 ```lisp
-;; In your ASDF system definition; e.g., my-project.asd
+;; У вашому визначенні системи ASDF; наприклад, my-project.asd
 (register-system-packages '#:coalton '(#:coalton-prelude))
 ```
 
@@ -26,7 +26,7 @@ Coalton використовує стандартні пакети Common Lisp (
 
 На відміну від Common Lisp, стандартна бібліотека Coalton організована як велика колекція пакетів. Наприклад, функції, пов'язані з рядками, знаходяться в пакеті `#:coalton-library/string`. Повний список пакетів стандартної бібліотеки можна знайти в [довіднику по Coalton](https://coalton-lang.github.io/reference).
 
-Ствоюючи новий проєкт, вам потрібно визначити новий пакет і встановити імпорти зі стандартної бібліотеки. *Не використовуйте `:use` пакети `#:cl` або `#:common-lisp`!* Замість цього вам, як мінімум, потрібно `:use` обидва пакети: `#:coalton` (для основних функцій мови) і `#:coalton-prelude` (для найпоширеніших функцій зі стандартної бібліотеки):
+Створюючи новий проєкт, вам потрібно визначити новий пакет і встановити імпорти зі стандартної бібліотеки. *Не використовуйте `:use` пакети `#:cl` або `#:common-lisp`!* Замість цього вам, як мінімум, потрібно `:use` обидва пакети: `#:coalton` (для основних функцій мови) і `#:coalton-prelude` (для найпоширеніших функцій зі стандартної бібліотеки):
 
 ```lisp
 (defpackage #:my-package
@@ -91,7 +91,7 @@ Coalton використовує стандартні пакети Common Lisp (
 
 ```lisp
 (coalton-toplevel
-  ;; <Coalton definition forms>
+  ;; <Форми визначення Coalton>
   )
 ```
 
@@ -100,7 +100,7 @@ Coalton використовує стандартні пакети Common Lisp (
 Другий основний вхідний пункт - це виклик Coalton з Lisp. У цьому випадку використовується оператор `coalton`:
 
 ```lisp
-;; Lisp code
+;; Lisp код
 ;; ...
      (coalton #|coalton expression|#)
 ;; ...
@@ -119,13 +119,13 @@ Coalton використовує стандартні пакети Common Lisp (
 
 ```lisp
 (coalton-toplevel
-  ;; Variables are defined with the define keyword
+  ;; Змінні визначаються за допомогою ключового слова define
   (define x 5)
   (define y 6)
   (define z (+ x y))
   (define p (Tuple 1.0 2.0))
 
-  ;; Coalton supports integers, strings, booleans, and unit as primitive types
+  ;; Coalton підтримує цілі числа, рядки, булеві значення та unit як примітивні типи
   (define name "Alyssa P. Hacker")
   (define hungry True)
   (define data Unit))
@@ -142,16 +142,16 @@ Coalton використовує стандартні пакети Common Lisp (
 
 ```lisp
 (coalton-toplevel
-  ;; Functions are also defined with the define keyword
+  ;; Функції також визначаються за допомогою ключового слова define
   (define (add2 x)
     (+ 2 x))
 
-  ;; Functions exist in the same namespace as variables
+  ;; Функції існують в тому ж просторі імен, що й змінні
   (define addTwo add2)
 
   (define x (addTwo 3))
 
-  ;; Anonymous functions can be defined with fn
+  ;; Анонімні функції можна визначити за допомогою fn
   (define z (map (fn (x) (+ 2 x)) (make-list 1 2 3 4))))
 ```
 
@@ -192,11 +192,11 @@ Coalton працює над оптимізацією цих функцій, що
 
 ```lisp
 (coalton-toplevel
-  ;; Lists can be created with the make-list macro
+  ;; Списки можна створювати за допомогою макросу make-list
   (define nums (make-list 2 3 4 5)))
 
 (coalton
-  ;; Functions in coalton are curried
+  ;; Функції в Coalton є каррованими
   (map (+ 2) nums)) ;; 4 5 6 7
 ```
 
@@ -207,11 +207,11 @@ Coalton працює над оптимізацією цих функцій, що
 ```lisp
 (nest f g ... h x)
 
-;; is equivalent to
+;; еквівалентно
 
 (f (g (... (h x))))
 
-;; is equivalent to
+;; еквівалентно
 
 (pipe x h ... g f)
 ```
@@ -259,18 +259,18 @@ Coalton дозволяє визначати параметричні алгеб�
 
 ```lisp
 (coalton-toplevel
-  ;; New types are created with the DEFINE-TYPE operator
+  ;; Нові типи створюються за допомогою оператора DEFINE-TYPE
   (define-type Point3D (Point3D Integer Integer Integer))
 
-  ;; Coalton supports sum types
+  ;; Coalton підтримує сумарні типи
   (define-type Color
     Red
     Blue
     Green)
 
-  ;; Coalton supports generic type variables
+  ;; Coalton підтримує узагальнені змінні типів
   ;;
-  ;; Type parameters are defined using keyword arguments
+  ;; Типові параметри визначаються за допомогою аргументів ключового слова
   (define-type (Tree :a)
     (Branch (Tree :a) :a (Tree :a))
     (Leaf :a)))
@@ -293,7 +293,7 @@ Coalton дозволяє визначати параметричні псевд�
 
 ```lisp
 (coalton-toplevel
-  ;; New type aliases are created with the DEFINE-TYPE-ALIAS operator
+  ;; Нові псевдоніми типів створюються за допомогою оператора DEFINE-TYPE-ALIAS
   (define-type-alias Coordinate Integer)
   (define-type-alias (Pair :a) (Tuple :a :a))
   (define-type-alias Translation (Pair Coordinate -> Pair Coordinate))
@@ -304,13 +304,13 @@ Coalton дозволяє визначати параметричні псевд�
     
   (define shifted-coordinate (shift-right (Tuple 0 0))))
 
-  ;; Type aliases can have multiple parameters
+  ;; Типові псевдоніми можуть мати кілька параметрів
   (define-type-alias (MyTuple3 :a :b :c) (Tuple :a (Tuple :b :c)))
 
-  ;; Type aliases can have parameters that do not have a kind of *
+  ;; Типові псевдоніми можуть мати параметри, які не мають виду *
   (define-type-alias (IntegerCollection :col) (:col Integer))
 
-  ;; Type aliases can alias types that do not have a kind of *
+  ;; Типові псевдоніми можуть посилатися на типи, які не мають виду *
   (define-type-alias MyCollection List)
 ```
 
@@ -323,11 +323,11 @@ Coalton дозволяє визначати параметричні псевд�
   (define-type-alias (MyCollection1 :a) (List :a))
   (define-type-alias MyCollection2 List)
 
-  ;; This line will not compile, because MyCollection1 has a
-  ;; parameter :A which is not applied
+  ;; Ця лінія не скомпілюється, оскільки MyCollection1 має
+  ;; параметр :A, який не застосований
   (define-type-alias A (T MyCollection1))
 
-  ;; However, this line will compile
+  ;; Проте ця лінія скомпілюється
   (define-type-alias A (T MyCollection2)))
 ```
 
@@ -354,7 +354,7 @@ COALTON-USER> (type-of 'x)
 COALTON-USER> (set-type-printing-mode :types)
 :TYPES
 
-COALTON-USER> shifted-coordinate ;; from the example above
+COALTON-USER> shifted-coordinate ;; із попереднього прикладу
 #.(TUPLE 1 0)
 
 COALTON-USER> (type-of 'shifted-coordinate)
@@ -875,7 +875,7 @@ Coalton керує перетворенням типів, аналогічно �
     Blue
     Green)
 
-  ;; Constructors must be wrapped in parentheses
+  ;; Конструктори повинні бути обгорнуті в дужки
   (declare color-to-string (Color -> String))
   (define (color-to-string c)
     (match c
@@ -883,21 +883,21 @@ Coalton керує перетворенням типів, аналогічно �
       ((Blue) "Blue")
       ((Green) "Green")))
 
-  ;; Variables are not wrapped in parentheses
+  ;; Змінні не повинні бути обгорнуті в дужки
   (declare map-optional ((:a -> :b) -> (Optional :a) -> (Optional :b)))
   (define (map-optional f x)
     (match x
       ((Some x_) (Some (f x_)))
       ((None) None)))
 
-  ;; Patterns can be nested, and wildcard "_" patterns are supported
+  ;; Патерни можуть бути вкладеними, і підтримуються шаблони підстановки "_"
   (declare flatten-optional ((Optional (Optional :a)) -> (Optional :a)))
   (define (flatten-optional x)
     (match x
       ((Some (Some x_)) (Some x_))
       (_ None)))
 
-  ;; Submatches can be captured in a variable
+  ;; Підшаблони можуть бути захоплені в змінну
   (declare dedup-head (Eq :a => List :a -> List :a))
   (define (dedup-head xs)
     "If the first and second member of list are equal, drop the first"
@@ -906,7 +906,7 @@ Coalton керує перетворенням типів, аналогічно �
        (if (== a b) tl1 xs))
       (_ xs)))
 
-  ;; Integers or Strings can also be matched on
+  ;; Числа або рядки також можна зіставляти
   (define (is-5-or-7 x)
     (match x
       (5 True)
@@ -931,7 +931,7 @@ Coalton керує перетворенням типів, аналогічно �
   (declare second (Tuple :a :b -> :b))
   (define second (fn ((Tuple _ b)) b))
 
-  ;; pattern capture works here too
+  ;; паттерни підхоплення також працюють 
   (declare nest-right (Tuple :a :b -> (Tuple :a (Tuple :a :b))))
   (define (nest-right (= tpl (Tuple a _))) (Tuple a tpl)))
 
@@ -1095,7 +1095,7 @@ Coalton підтримує класи типів.
 
 ```lisp
 (coalton-toplevel
-  ;; Type classes are defined with the define-class keyword
+  ;; Типи класів визначаються за допомогою ключового слова define-class
   (define-class (Eq :a)
     (== (:a -> :a -> Boolean)))
 
@@ -1104,7 +1104,7 @@ Coalton підтримує класи типів.
     Green
     Blue)
 
-  ;; Type class instances are defined with the define-instance keyword
+  ;; Типи екземплярів класів визначаються за допомогою ключового слова define-instance
   (define-instance (Eq Color)
     (define (== a b)
       (match (Tuple a b)
@@ -1114,14 +1114,14 @@ Coalton підтримує класи типів.
         (_ False)))
     (define (/= a b) (not (== a b))))
 
-  ;; Type declarations can have constraints
+  ;; Типи оголошень можуть мати обмеження
   (declare is-eql (Eq :a => (:a -> :a -> String)))
   (define (is-eql a b)
     (if (== a b)
       "They are equal"
       "They are not equal"))
 
-  ;; Multiple constraints must be wrapped in parentheses
+  ;; Кілька обмежень повинні бути укладені в дужки
   (declare double-is-eql ((Eq :a) (Eq :b) => (:a -> :a -> :b -> :b -> String)))
   (define (double-is-eql a b c d)
     (if (and (== a b) (== c d))
@@ -1172,10 +1172,10 @@ Coalton підтримує класи типів.
 
 ```lisp
 (coalton
-  ;; Test `Point' equality
+  ;; Тестує рівність `Point'
   (== (Point 1 2) (Point 3 3))
 
-  ;; Make a map using `Point' as a key
+  ;; Викристовує `Point` як ключ у хеш-мапі
   (let map = (the (hashmap:HashMap Point UFix) hashmap:empty))
   (hashmap:insert map (Point 0 0) 1))
 ```
@@ -1365,16 +1365,16 @@ standard call
 
 ```lisp 
 (define-type Egg
-  ;;     cracked? cooked?
+  ;;     розбите?  приготоване?
   (Goose Boolean Boolean)
   (Xenomorph))
 
-;; We define an exception type BadEgg with a few variants 
+;; Ми визначаємо тип винятка BadEgg з кількома варіантами
 (define-exception BadEgg
   (UnCracked Egg)
   (DeadlyEgg Egg))
 
-;; If we try to crack open a Xenomorph egg, throw a DeadlyEgg error
+;; Якщо ми намагаємося розбити яйце Ксеноморфа, то виникне помилка DeadlyEgg
 (declare crack (Egg -> Egg))
 (define (crack egg)
   (match egg
@@ -1383,7 +1383,7 @@ standard call
     ((Xenomorph)
      (throw (DeadlyEgg egg)))))
 
-;; crack an egg open safely. 
+;; розбиваємо яйце безпечно. 
 (declare crack-safely (Egg -> (Result BadEgg Egg)))
 (define (crack-safely egg)
   (catch (Ok (crack egg))
@@ -1412,7 +1412,7 @@ standard call
       ((Goose (False) _) (throw badegg))
       ((Xenomorph)       (throw (DeadlyEgg egg))))))
 
-;; Return None if a SkipEgg resumption is received.
+;; Повертаємо None якщо отримано відновлення SkipEgg.
 (declare make-breakfast-with (Egg -> (Optional Egg)))
 (define (make-breakfast-with egg)
   (resumable (Some (cook (crack egg)))

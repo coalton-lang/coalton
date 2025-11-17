@@ -193,7 +193,7 @@ Here is an example of using a curried function to transform a list.
   (define nums (make-list 2 3 4 5)))
 
 (coalton
-  ;; Functions in coalton are curried
+  ;; Functions in Coalton are curried
   (map (+ 2) nums)) ;; 4 5 6 7
 ```
 
