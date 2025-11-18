@@ -6,6 +6,18 @@
 
 (in-package :asdf)
 
+;; .ct is a special extension for Coalton files that are written as
+;; .lisp files.
+
+(defclass ct-file (cl-source-file)
+  ((type :initform "ct")))
+
+
+;; .coal is a special extension for Coalton files written in native
+;; Coalton syntax.
+;;
+;; XXX: Should we just make this "coalton" instead of "coalton-file"?
+
 (defclass coalton-file (cl-source-file)
   ((type :initform "coal")))
 
