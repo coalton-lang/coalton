@@ -320,6 +320,8 @@
                (:file "recursive-let-tests")
                (:file "class-tests")
                (:file "struct-tests")
+               (:file "named-field-tests")
+               (:file "pattern-named-field-tests")
                (:file "type-alias-tests")
                (:file "list-tests")
                (:file "lisparray-tests")

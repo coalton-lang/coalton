@@ -28,6 +28,7 @@
    #:make-pattern-constructor           ; CONSTRUCTOR
    #:pattern-constructor-name           ; ACCESSOR
    #:pattern-constructor-patterns       ; ACCESSOR
+   #:pattern-constructor-field-names    ; ACCESSOR
    #:pattern-constructor-p              ; FUNCTION
    #:pattern-variables                  ; FUNCTION
    #:patterns-exhaustive-p              ; FUNCTION
@@ -73,8 +74,9 @@
 (defstruct (pattern-constructor
             (:include pattern)
             (:copier nil))
-  (name     (util:required 'name)     :type symbol       :read-only t)
-  (patterns (util:required 'patterns) :type pattern-list :read-only t))
+  (name        (util:required 'name)     :type symbol           :read-only t)
+  (patterns    (util:required 'patterns) :type pattern-list     :read-only t)
+  (field-names nil                       :type util:string-list :read-only t))
 
 (defun pattern-variables (pattern)
   (delete-duplicates (pattern-variables-generic% pattern) :test #'eq))
@@ -144,7 +146,8 @@
   (make-pattern-constructor
    :type (tc:apply-substitution subs (pattern-type pattern))
    :name (pattern-constructor-name pattern)
-   :patterns (tc:apply-substitution subs (pattern-constructor-patterns pattern))))
+   :patterns (tc:apply-substitution subs (pattern-constructor-patterns pattern))
+   :field-names (pattern-constructor-field-names pattern)))
 
 (defmethod tc:type-variables ((pattern pattern-var))
   (tc:type-variables (pattern-type pattern)))
