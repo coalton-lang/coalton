@@ -7,6 +7,7 @@
   (:export
    #:fst
    #:snd
+   #:sequence-tuple
    #:Tuple3
    #:.first
    #:.second
@@ -38,6 +39,15 @@
   (define (snd (Tuple _ b))
     "Get the second element of a tuple."
     b)
+
+  (declare sequence-tuple (Monad :m => Tuple (:m :a) (:m :b) -> :m (Tuple :a :b)))
+  (define (sequence-tuple (Tuple a? b?))
+    "Flatten a Tuple of wrapped-values. Particularly useful for types like
+(Tuple (Optional :a) (Optional :b)), etc."
+    (do
+     (a <- a?)
+     (b <- b?)
+     (pure (Tuple a b))))
 
   (derive Eq Hash Default)
   (define-struct (Tuple3 :a :b :c)
@@ -93,6 +103,11 @@
   (define-instance (Bifunctor Tuple)
     (define (bimap f g (Tuple a b))
       (Tuple (f a) (g b))))
+
+  (define-instance (Traversable (Tuple :a))
+    (define (traverse f (Tuple a b))
+      (map (Tuple a)
+           (f b))))
 
   (define-instance ((Default :a) (Default :b) => (Default (Tuple :a :b)))
     (define (default) (Tuple (default) (default)))))
