@@ -334,7 +334,7 @@
           ('coalton:Unit
            (make-type-entry
             :name 'coalton:Unit
-            :runtime-type '(member coalton::Unit/Unit)
+            :runtime-type 'coalton-impl/constants:lisp-type-of-unit
             :type *unit-type*
             :tyvars nil
             :constructors '(coalton:Unit)
@@ -514,7 +514,7 @@
             :constructs 'coalton:Unit
             :classname 'coalton::Unit/Unit
             :docstring "`Unit` represents nullary parameters and return types."
-            :compressed-repr 'coalton::Unit/Unit))
+            :compressed-repr coalton-impl/constants:+value-of-unit+))
 
           ('coalton:Cons
            (make-constructor-entry
