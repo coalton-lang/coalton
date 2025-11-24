@@ -269,7 +269,7 @@ name is not known."
   (let ((type (coalton:lookup-type name)))
     (typecase type
       (tc:type-entry (tc:type-entry-runtime-type type))
-      (t             null))))
+      (t             nil))))
 
 (defun coalton:lookup-fundeps (name)
   "Lookup the fundep structure for a given class. Return NIL if the name
