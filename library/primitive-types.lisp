@@ -26,7 +26,7 @@
 
   ;; Unit is an early type
   (declare Unit Unit)
-  (define Unit (lisp Unit () 'coalton::Unit/Unit))
+  (define Unit (lisp Unit () coalton-impl/constants:+value-of-unit+))
 
   ;; List is an early type
   (inline)
