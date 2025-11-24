@@ -185,6 +185,10 @@ in expressions. May not include all bound variables."
      (collect-variables-generic% (node-match-expr node))
      (mapcan #'collect-variables-generic% (node-match-branches node))))
 
+  (:method ((node node-swap))
+    (declare (values node-variable-list))
+    (collect-variables-generic% (node-swap-expr node)))
+
   (:method ((node node-catch-branch))
     (declare (values node-variable-list &optional))
     (collect-variables-generic% (node-catch-branch-body node)))
