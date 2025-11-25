@@ -173,6 +173,14 @@ cannot be represented in :TO. These fall into a few categories:
 (integer-into-float U32 F64 cl:double-float)
 (integer-into-float I32 F64 cl:double-float)
 
+;; All F32s can be represented exactly by an F64.
+(coalton-toplevel
+  (define-instance (Into F32 F64)
+    (inline)
+    (define (into x)
+      (lisp F64 (x)
+        (cl:coerce x 'cl:double-float)))))
+
 ;; Allow Integer -> {Single,Double}-Float conversions
 (coalton-toplevel
   (define-instance (TryInto Integer F32 String)
