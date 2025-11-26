@@ -1,3 +1,7 @@
+#|
+   Goal of this file is to collect all non-portable code, so as to
+   clean up the rest of the code, and hopefully make porting easier.
+|#
 (cl:defpackage #:coalton-compat
   (:use #:cl)
   (:export
