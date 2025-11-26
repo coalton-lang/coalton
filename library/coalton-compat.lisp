@@ -105,13 +105,13 @@
             ,round3)))
 
 (defmacro combine-32bit (lhs rhs)
-  `(declare ((integer 0 #xFFFFFFFF) ,lhs ,rhs))
+  `(declare ((unsigned-byte 32) ,lhs ,rhs))
   `(mix-formula (mod-pos (+ ,lhs #x9e3779b9 ,rhs) #xFFFFFFFF)
                 16 15 15 #x21f0aaad #x735a2d97
                 #xFFFFFFFF))
 
 (defmacro combine-64bit (lhs rhs)
-  `(declare ((integer 0 #xFFFFFFFFFFFFFFFF) ,lhs ,rhs))
+  `(declare ((unsigned-byte 64) ,lhs ,rhs))
   ;; boost::hash_combine uses #x9e3779b9 for this version too.
   ;;
   ;; see definition of has_combine in lines 469-473 of
@@ -122,9 +122,9 @@
 
 (defun hash-combine (lhs rhs)
   #+(or |COALTON:32-BIT-FIXNUM| |COALTON:16-BIT-FIXNUM| |COALTON:8-BIT-FIXNUM|)
-  (declare ((integer 0 #xFFFFFFFF) lhs rhs)) ; may not be fixnums!
+  (declare ((unsigned-byte 32) lhs rhs)) ; may not be fixnums!
   #-(or |COALTON:32-BIT-FIXNUM| |COALTON:16-BIT-FIXNUM| |COALTON:8-BIT-FIXNUM|)
-  (declare ((integer 0 #xFFFFFFFFFFFFFFFF) lhs rhs)) ; may not be fixnums!
+  (declare ((unsigned-byte 64) lhs rhs)) ; may not be fixnums!
   "Uses either the 32bit or the 64bit implementation of boost::hash_combine, as these were described on 2025, Oct 11, with constant #x9e3779b9 changed to #xe9846af9b1a615d in the 64bit case"
   ;; https://web.archive.org/web/20251011141945/https://www.boost.org/doc/libs/latest/libs/container_hash/doc/html/hash.html#notes_hash_combine
   ;;
@@ -139,6 +139,6 @@
    cl:most-positive-fixnum))
 
 (defun hash-combine64 (lhs rhs)
-  (declare ((integer 0 #xFFFFFFFFFFFFFFFF) lhs rhs)) ; may not be fixnums!
+  (declare ((unsigned-byte 64) lhs rhs)) ; may not be fixnums!
   (mod-pos (combine-64bit lhs rhs)
            cl:most-positive-fixnum))
