@@ -37,6 +37,7 @@
    #:make-pattern-constructor           ; CONSTRUCTOR
    #:pattern-constructor-name           ; ACCESSOR
    #:pattern-constructor-patterns       ; ACCESSOR
+   #:pattern-constructor-field-names    ; ACCESSOR
    #:pattern-constructor-p              ; FUNCTION
    #:pattern-variables                  ; FUNCTION
    ))
@@ -90,8 +91,9 @@
 (defstruct (pattern-constructor
             (:include pattern)
             (:copier nil))
-  (name     (util:required 'name)     :type parser:identifier :read-only t)
-  (patterns (util:required 'patterns) :type pattern-list      :read-only t))
+  (name        (util:required 'name)     :type parser:identifier :read-only t)
+  (patterns    (util:required 'patterns) :type pattern-list      :read-only t)
+  (field-names nil                       :type util:string-list  :read-only t))
 
 ;;;
 ;;; Methods
@@ -169,4 +171,5 @@
    :type (tc:apply-substitution subs (pattern-type node))
    :location (pattern-location node)
    :name (pattern-constructor-name node)
-   :patterns (tc:apply-substitution subs (pattern-constructor-patterns node))))
+   :patterns (tc:apply-substitution subs (pattern-constructor-patterns node))
+   :field-names (pattern-constructor-field-names node)))

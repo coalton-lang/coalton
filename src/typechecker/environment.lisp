@@ -51,6 +51,7 @@
    #:constructor-entry-arity                ; ACCESSOR
    #:constructor-entry-constructs           ; ACCESSOR
    #:constructor-entry-classname            ; ACCESSOR
+   #:constructor-entry-field-names          ; ACCESSOR
    #:constructor-entry-compressed-repr      ; ACCESSOR
    #:constructor-entry-list                 ; TYPE
    #:constructor-environment                ; STRUCT
@@ -461,6 +462,10 @@
   (constructs      (util:required 'constructs)      :type symbol                         :read-only t)
   (classname       (util:required 'classname)       :type symbol                         :read-only t)
   (docstring       (util:required 'docstring)       :type (or string null)               :read-only t)
+
+  ;; Field names for constructors with named fields (using dot-prefix syntax)
+  ;; NIL for positional constructors, (cons string list) for named field constructors
+  (field-names     nil                              :type util:string-list               :read-only t)
 
   ;; If this constructor constructs a compressed-repr type then
   ;; compressed-repr is the runtime value of this nullary constructor

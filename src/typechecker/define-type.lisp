@@ -456,6 +456,37 @@
                  (tc-error "Invalid repr :transparent attribute"
                            (tc-note (first (parser:type-definition-ctors type))
                                     "constructors of repr :transparent types must have a single field")))
+
+         ;; Check that fields with the same name have the same type across all constructors
+         :do (let ((field-type-map (make-hash-table :test 'equal)))
+               (loop :for ctor :in (parser:type-definition-ctors type)
+                     :for ctor-name := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
+                     :for field-names := (typecase ctor
+                                           (parser:constructor (parser:constructor-field-names ctor))
+                                           (otherwise nil))
+                     :when field-names
+                       :do (let ((field-types (tc:apply-ksubstitution ksubs (gethash ctor-name ctor-table))))
+                             (loop :for field-name :in field-names
+                                   :for field-type :in field-types
+                                   :for existing-entry := (gethash field-name field-type-map)
+                                   :if existing-entry
+                                     :do (destructuring-bind (existing-type . existing-ctor-name) existing-entry
+                                           (unless (equalp existing-type field-type)
+                                             (let ((existing-ctor (find existing-ctor-name
+                                                                        (parser:type-definition-ctors type)
+                                                                        :key (lambda (c)
+                                                                               (parser:identifier-src-name
+                                                                                (parser:type-definition-ctor-name c))))))
+                                               (tc-error "Conflicting field types"
+                                                         (tc-note ctor
+                                                                  "constructor ~S has field '.~A' with type ~A"
+                                                                  ctor-name field-name field-type)
+                                                         (tc-note existing-ctor
+                                                                  "but constructor ~S has field '.~A' with incompatible type ~A"
+                                                                  existing-ctor-name field-name existing-type)))))
+                                   :else
+                                     :do (setf (gethash field-name field-type-map) (cons field-type ctor-name))))))
+
          :collect
          (let*
              ((ctors
@@ -467,12 +498,18 @@
                     := (alexandria:format-symbol *package* "~A/~A" name ctor-name)
                   :for ctor-docstring
                     := (source:docstring ctor)
+                  :for field-names
+                    := (typecase ctor
+                         (parser:constructor (parser:constructor-field-names ctor))
+                         (parser:toplevel-define-struct nil)
+                         (otherwise nil))
                   :collect (tc:make-constructor-entry
                             :name ctor-name
                             :arity (length (parser:type-definition-ctor-field-types ctor))
                             :constructs name
                             :classname classname
                             :docstring ctor-docstring
+                            :field-names field-names
                             :compressed-repr (if (eq repr-type :enum)
                                                  classname
                                                  nil))))
