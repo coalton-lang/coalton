@@ -20,6 +20,7 @@
 (defmacro try-lock-package (the-package)
   #+sb-package-locks
   `(sb-ext:lock-package ,the-package))
+
 (defmacro try-unlock-package (the-package)
   #+sb-package-locks
   `(sb-ext:unlock-package ,the-package))
