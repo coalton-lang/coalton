@@ -1,12 +1,12 @@
 (cl:defpackage #:coalton-compat
   (:use #:cl)
   (:export
-;;;; try-* are macros/functions that most probably will never be
-;;;; implemented by all Lisps.
-;;;;
-;;;; For the rest (not starting with try-), while an implementation
-;;;; may not exist at the moment for some Lisp, it might exist in the
-;;;; future.
+;;; try-* are macros/functions that most probably will never be
+;;; implemented by all Lisps.
+;;;
+;;; For the rest (not starting with try-), while an implementation may
+;;; not exist at the moment for some Lisp, it might exist in the
+;;; future.
    #:try-lock-package
    #:try-freeze-type
    ;; #:hash-combine64
