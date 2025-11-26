@@ -142,18 +142,3 @@
   (declare ((integer 0 #xFFFFFFFFFFFFFFFF) lhs rhs)) ; may not be fixnums!
   (mod-pos (combine-64bit lhs rhs)
            cl:most-positive-fixnum))
-
-;; For testing
-#|
-(load "coalton-compat.lisp")
-(progn
-  (in-package :cl-user)
-  (format t "~A~%" (macroexpand '(coalton-compat:try-lock-package #:coalton-compat)))
-  (format t "~A~%" (macroexpand '(coalton-compat:try-freeze-type cl:fixnum)))
-  (format t "~A~%" (coalton-compat:hash-combine 0 0))
-  (format t "~A~%" (coalton-compat:hash-combine #xFFFFFFFFFFFFFFFF #xFFFFFFFFFFFFFFFF))
-  (format t "~A~%" (coalton-compat:hash-combine #x7FFFFFFFFFFFFFFF #x7FFFFFFFFFFFFFFF))
-  (format t "~A~%" (coalton-compat:hash-combine #xFFFFFFFF #xFFFFFFFF))
-  (format t "~A~%" (coalton-compat:hash-combine #x7FFFFFFF #x7FFFFFFF))
-  (format t "~A~%" cl:*features*))
-|#
