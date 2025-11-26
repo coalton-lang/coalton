@@ -31,13 +31,13 @@
 
 (pushnew
  (cond ((>= #x7F cl:most-positive-fixnum)
-        (intern "COALTON:8-BIT-FIXNUM" "KEYWORD"))
+        ':|COALTON:8-BIT-FIXNUM|)
        ((>= #x7FFF cl:most-positive-fixnum)
-        (intern "COALTON:16-BIT-FIXNUM" "KEYWORD"))
+        ':|COALTON:16-BIT-FIXNUM|)
        ((>= #x7FFFFFFF cl:most-positive-fixnum)
-        (intern "COALTON:32-BIT-FIXNUM" "KEYWORD"))
+        ':|COALTON:32-BIT-FIXNUM|)
        ((>= #x7FFFFFFFFFFFFFFF cl:most-positive-fixnum)
-        (intern "COALTON:64-BIT-FIXNUM" "KEYWORD"))
+        ':|COALTON:64-BIT-FIXNUM|)
        (t (error "Unknown fixnum size")))
  cl:*features*)
 
