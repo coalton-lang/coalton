@@ -101,21 +101,23 @@
                              max)))
             round3))
 
-(defmacro combine-32bit (lhs rhs)
-  `(declare ((unsigned-byte 32) ,lhs ,rhs))
-  `(mix-formula (mod-pos (+ ,lhs #x9e3779b9 ,rhs) #xFFFFFFFF)
-                16 15 15 #x21f0aaad #x735a2d97
-                #xFFFFFFFF))
+(declaim (inline combine-32bit))
+(defun combine-32bit (lhs rhs)
+  (declare ((unsigned-byte 32) lhs rhs))
+  (mix-formula (mod-pos (+ lhs #x9e3779b9 rhs) #xFFFFFFFF)
+               16 15 15 #x21f0aaad #x735a2d97
+               #xFFFFFFFF))
 
-(defmacro combine-64bit (lhs rhs)
-  `(declare ((unsigned-byte 64) ,lhs ,rhs))
+(declaim (inline combine-64bit))
+(defun combine-64bit (lhs rhs)
+  (declare ((unsigned-byte 64) lhs rhs))
   ;; boost::hash_combine uses #x9e3779b9 for this version too.
   ;;
   ;; see definition of has_combine in lines 469-473 of
   ;; https://github.com/boostorg/container_hash/blob/060d4aea6b5b59d2c9146b7d8e994735b2c0a582/include/boost/container_hash/hash.hpp
-  `(mix-formula (mod-pos (+ ,lhs #x517cc1b727220a95 ,rhs) #xFFFFFFFFFFFFFFFF)
-                32 32 28 #xe9846af9b1a615d #xe9846af9b1a615d
-                #xFFFFFFFFFFFFFFFF))
+  (mix-formula (mod-pos (+ lhs #x517cc1b727220a95 rhs) #xFFFFFFFFFFFFFFFF)
+               32 32 28 #xe9846af9b1a615d #xe9846af9b1a615d
+               #xFFFFFFFFFFFFFFFF))
 
 (defun hash-combine (lhs rhs)
   #+(or |COALTON:32-BIT-FIXNUM| |COALTON:16-BIT-FIXNUM| |COALTON:8-BIT-FIXNUM|)
