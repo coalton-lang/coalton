@@ -9,7 +9,6 @@
 ;;; future.
    #:try-lock-package
    #:try-freeze-type
-   ;; #:hash-combine64
    #:hash-combine))
 
 (in-package #:coalton-compat)
