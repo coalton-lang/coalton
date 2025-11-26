@@ -30,13 +30,11 @@
   `(declaim (sb-ext:freeze-type ,the-type)))
 
 (pushnew
- (cond ((>= #x7F cl:most-positive-fixnum)
-        ':|COALTON:8-BIT-FIXNUM|)
-       ((>= #x7FFF cl:most-positive-fixnum)
+ (cond ((= 16 (integer-length cl:most-positive-fixnum))
         ':|COALTON:16-BIT-FIXNUM|)
-       ((>= #x7FFFFFFF cl:most-positive-fixnum)
+       ((>= 32 (integer-length cl:most-positive-fixnum))
         ':|COALTON:32-BIT-FIXNUM|)
-       ((>= #x7FFFFFFFFFFFFFFF cl:most-positive-fixnum)
+       ((>= 64 (integer-length cl:most-positive-fixnum))
         ':|COALTON:64-BIT-FIXNUM|)
        (t (error "Unknown fixnum size")))
  cl:*features*)
