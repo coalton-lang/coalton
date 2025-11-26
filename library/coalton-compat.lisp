@@ -78,9 +78,10 @@
 ;; So, we'll implement the two (32/64bit) boost::hash_combine
 ;; versions, and then choose the one that's closer to the fixnum size
 ;; of the current Lisp.
-(defmacro mod-pos (x max)
-  `(declare ((integer) ,x ,max))
-  `(mod (if (> 0 ,x) (- ,x) ,x) ( + 1 ,max)))
+(declaim (inline mod-pos))
+(defun mod-pos (x max)
+  (declare ((integer) x max))
+  (mod (if (> 0 x) (- x) x) ( + 1 max)))
 
 (defmacro mix-formula (x k1 k2 k3 m1 m2 max)
   `(declare (fixnum ,k1 ,k2 ,k3 ,m1 ,m2) ((integer 0 ,max) ,max))
