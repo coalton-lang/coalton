@@ -83,8 +83,9 @@
   (declare ((integer) x max))
   (mod (if (> 0 x) (- x) x) ( + 1 max)))
 
-(defmacro mix-formula (x k1 k2 k3 m1 m2 max)
-  `(declare (fixnum ,k1 ,k2 ,k3 ,m1 ,m2) ((integer 0 ,max) ,max))
+(declaim (inline mix-formula))
+(defun mix-formula (x k1 k2 k3 m1 m2 max)
+  (declare (fixnum k1 k2 k3 m1 m2) ((integer 0 max) max))
   "The original C++ code assumes that it operates on an N-bit unsigned integer - thus mod-pos"
   ;; See https://www.boost.org/doc/libs/latest/libs/container_hash/doc/html/hash.html#notes_hash_combine
   ;; x ^= x >> k1;
@@ -92,16 +93,13 @@
   ;; x ^= x >> k2;
   ;; x *= m2;
   ;; x ^= x >> k3;
-  (let ((round1 (gensym))
-        (round2 (gensym))
-        (round3 (gensym)))
-    `(let* ((,round1 (mod-pos (* (cl:logxor ,x      (cl:ash ,x      ,k1)) ,m1)
-                              ,max))
-            (,round2 (mod-pos (* (cl:logxor ,round1 (cl:ash ,round1 ,k2)) ,m2)
-                              ,max))
-            (,round3 (mod-pos    (cl:logxor ,round2 (cl:ash ,round2 ,k3))
-                                 ,max)))
-            ,round3)))
+  (let* ((round1 (mod-pos (* (cl:logxor x      (cl:ash x      k1)) m1)
+                          max))
+         (round2 (mod-pos (* (cl:logxor round1 (cl:ash round1 k2)) m2)
+                          max))
+         (round3 (mod-pos    (cl:logxor round2 (cl:ash round2 k3))
+                             max)))
+            round3))
 
 (defmacro combine-32bit (lhs rhs)
   `(declare ((unsigned-byte 32) ,lhs ,rhs))
