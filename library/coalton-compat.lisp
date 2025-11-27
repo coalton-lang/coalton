@@ -120,9 +120,9 @@
                #xFFFFFFFFFFFFFFFF))
 
 (defun hash-combine (lhs rhs)
-  #+(or |COALTON:32-BIT-FIXNUM| |COALTON:16-BIT-FIXNUM| |COALTON:8-BIT-FIXNUM|)
+  #+(or |COALTON:32-BIT-FIXNUM| |COALTON:16-BIT-FIXNUM|)
   (declare ((unsigned-byte 32) lhs rhs)) ; may not be fixnums!
-  #-(or |COALTON:32-BIT-FIXNUM| |COALTON:16-BIT-FIXNUM| |COALTON:8-BIT-FIXNUM|)
+  #-(or |COALTON:32-BIT-FIXNUM| |COALTON:16-BIT-FIXNUM|)
   (declare ((unsigned-byte 64) lhs rhs)) ; may not be fixnums!
   "Uses either the 32bit or the 64bit implementation of boost::hash_combine, as these were described on 2025, Oct 11, with constant #x9E3779B9 changed to #xE9846AF9B1A615D in the 64bit case"
   ;; https://web.archive.org/web/20251011141945/https://www.boost.org/doc/libs/latest/libs/container_hash/doc/html/hash.html#notes_hash_combine
@@ -131,13 +131,8 @@
   ;;
   ;; https://github.com/boostorg/container_hash/blob/060d4aea6b5b59d2c9146b7d8e994735b2c0a582/include/boost/container_hash/detail/hash_mix.hpp
   (mod-pos                              ; ensure it's <= most-positive-fixnum
-   #+(or |COALTON:32-BIT-FIXNUM| |COALTON:16-BIT-FIXNUM| |COALTON:8-BIT-FIXNUM|)
+   #+(or |COALTON:32-BIT-FIXNUM| |COALTON:16-BIT-FIXNUM|)
    (combine-32bit lhs rhs)
-   #-(or |COALTON:32-BIT-FIXNUM| |COALTON:16-BIT-FIXNUM| |COALTON:8-BIT-FIXNUM|)
+   #-(or |COALTON:32-BIT-FIXNUM| |COALTON:16-BIT-FIXNUM|)
    (combine-64bit lhs rhs)
    cl:most-positive-fixnum))
-
-(defun hash-combine64 (lhs rhs)
-  (declare ((unsigned-byte 64) lhs rhs)) ; may not be fixnums!
-  (mod-pos (combine-64bit lhs rhs)
-           cl:most-positive-fixnum))
