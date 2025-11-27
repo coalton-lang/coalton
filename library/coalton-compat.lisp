@@ -13,6 +13,7 @@
 ;;; future.
    #:try-lock-package
    #:try-freeze-type
+   #:unset-float-traps
    #:hash-combine))
 
 (in-package #:coalton-library/coalton-compat)
@@ -28,6 +29,14 @@
 (defmacro try-freeze-type (the-type)
   #+sbcl
   `(declaim (sb-ext:freeze-type ,the-type)))
+
+(defmacro unset-all-float-traps ()
+  (cl:eval-when (:compile-toplevel :load-toplevel :execute)
+  #+ccl (ccl:set-fpu-mode :overflow nil :underflow nil :division-by-zero nil :invalid nil :inexact nil)
+  #+sbcl (sb-int:set-floating-point-modes :traps nil)
+  #+abcl (extensions:set-floating-point-modes :traps nil)
+  #+ecl  (ext:trap-fpe 'cl:t nil)
+  ))
 
 (pushnew
  (cond ((= 16 (integer-length cl:most-positive-fixnum))
