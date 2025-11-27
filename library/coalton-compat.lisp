@@ -50,13 +50,13 @@
 ;;;   ;;
 ;;;   ;; 32bit hash combination
 ;;;   ;; #+(or allegro abcl)
-;;;   (cl:logxor lhs (cl:+ rhs #x9e3779b9 (cl:ash lhs 6) (cl:ash lhs -2))))
+;;;   (cl:logxor lhs (cl:+ rhs #x9E3779B9 (cl:ash lhs 6) (cl:ash lhs -2))))
 ;;;
 ;;; #+(and |COALTON:64-BIT-FIXNUM| (not sbcl))
 ;;;   ;; #+(or ccl ecl)
 ;;;   ;; 64bit hash combination
 ;;;   ;; logand required on ccl to force the output to be a fixnum
-;;;   (cl:logand (cl:logxor lhs (cl:+ rhs #x517cc1b727220a95 (cl:ash lhs 6) (cl:ash lhs -2))) cl:most-positive-fixnum))
+;;;   (cl:logand (cl:logxor lhs (cl:+ rhs #x517CC1B727220A95 (cl:ash lhs 6) (cl:ash lhs -2))) cl:most-positive-fixnum))
 
 ;; Notes:
 ;;
@@ -104,19 +104,19 @@
 (declaim (inline combine-32bit))
 (defun combine-32bit (lhs rhs)
   (declare ((unsigned-byte 32) lhs rhs))
-  (mix-formula (mod-pos (+ lhs #x9e3779b9 rhs) #xFFFFFFFF)
-               16 15 15 #x21f0aaad #x735a2d97
+  (mix-formula (mod-pos (+ lhs #x9E3779B9 rhs) #xFFFFFFFF)
+               16 15 15 #x21F0AAAD #x735A2D97
                #xFFFFFFFF))
 
 (declaim (inline combine-64bit))
 (defun combine-64bit (lhs rhs)
   (declare ((unsigned-byte 64) lhs rhs))
-  ;; boost::hash_combine uses #x9e3779b9 for this version too.
+  ;; boost::hash_combine uses #x9E3779B9 for this version too.
   ;;
   ;; see definition of has_combine in lines 469-473 of
   ;; https://github.com/boostorg/container_hash/blob/060d4aea6b5b59d2c9146b7d8e994735b2c0a582/include/boost/container_hash/hash.hpp
-  (mix-formula (mod-pos (+ lhs #x517cc1b727220a95 rhs) #xFFFFFFFFFFFFFFFF)
-               32 32 28 #xe9846af9b1a615d #xe9846af9b1a615d
+  (mix-formula (mod-pos (+ lhs #x517CC1B727220A95 rhs) #xFFFFFFFFFFFFFFFF)
+               32 32 28 #xE9846AF9B1A615D #xE9846AF9B1A615D
                #xFFFFFFFFFFFFFFFF))
 
 (defun hash-combine (lhs rhs)
@@ -124,7 +124,7 @@
   (declare ((unsigned-byte 32) lhs rhs)) ; may not be fixnums!
   #-(or |COALTON:32-BIT-FIXNUM| |COALTON:16-BIT-FIXNUM| |COALTON:8-BIT-FIXNUM|)
   (declare ((unsigned-byte 64) lhs rhs)) ; may not be fixnums!
-  "Uses either the 32bit or the 64bit implementation of boost::hash_combine, as these were described on 2025, Oct 11, with constant #x9e3779b9 changed to #xe9846af9b1a615d in the 64bit case"
+  "Uses either the 32bit or the 64bit implementation of boost::hash_combine, as these were described on 2025, Oct 11, with constant #x9E3779B9 changed to #xE9846AF9B1A615D in the 64bit case"
   ;; https://web.archive.org/web/20251011141945/https://www.boost.org/doc/libs/latest/libs/container_hash/doc/html/hash.html#notes_hash_combine
   ;;
   ;; https://web.archive.org/web/20251011141945/https://www.boost.org/doc/libs/latest/libs/container_hash/doc/html/hash.html#ref_hash_combine#ref_hash_combine
