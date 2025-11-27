@@ -85,7 +85,7 @@
 
 (declaim (inline mix-formula))
 (defun mix-formula (x k1 k2 k3 m1 m2 max)
-  (declare (fixnum k1 k2 k3 m1 m2) ((integer 0 max) max))
+  (declare (fixnum k1 k2 k3 m1 m2) ((integer) max))
   "The original C++ code assumes that it operates on an N-bit unsigned integer - thus mod-pos"
   ;; See https://www.boost.org/doc/libs/latest/libs/container_hash/doc/html/hash.html#notes_hash_combine
   ;; x ^= x >> k1;
