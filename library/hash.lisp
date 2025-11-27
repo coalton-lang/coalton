@@ -2,11 +2,11 @@
   (:use
    #:coalton
    #:coalton-library/classes
-   #:coalton-compat)
+   #:coalton-library/coalton-compat)
   (:import-from #:coalton-library/math/hash-defining-macros
                 #:define-sxhash-hasher)
   (:local-nicknames
-   (#:compat #:coalton-compat))
+   (#:compat #:coalton-library/coalton-compat))
   (:export
    #:lisp-combine-hashes
    #:combine-hashes

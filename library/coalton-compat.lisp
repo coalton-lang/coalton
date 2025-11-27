@@ -2,7 +2,7 @@
    Goal of this file is to collect all non-portable code, so as to
    clean up the rest of the code, and hopefully make porting easier.
 |#
-(cl:defpackage #:coalton-compat
+(cl:defpackage #:coalton-library/coalton-compat
   (:use #:cl)
   (:export
 ;;; try-* are macros/functions that most probably will never be
@@ -15,7 +15,7 @@
    #:try-freeze-type
    #:hash-combine))
 
-(in-package #:coalton-compat)
+(in-package #:coalton-library/coalton-compat)
 
 (defmacro try-lock-package (the-package)
   #+sb-package-locks

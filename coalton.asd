@@ -41,7 +41,8 @@
                "alexandria")
   :pathname "library/"
   :serial t
-  :components ((:file "set-float-traps")
+  :components ((:file "coalton-compat")
+               (:file "set-float-traps")
                (:file "utils")
                (:file "types")
                (:file "primitive-types")
