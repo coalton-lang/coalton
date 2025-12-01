@@ -100,7 +100,7 @@
    #:append
    #:swap-remove!
    #:swap-remove-unsafe!
-   #:sort-by!
+   #:resect
    #:make))
 
 (in-package #:coalton-library/collections/mutable/vector)
@@ -432,17 +432,17 @@
           Unit))
       (list:reverse (cell:read indices))))
 
+  (inline)
   (declare subseq (UFix -> UFix -> Vector :a -> Vector :a))
-  (define (subseq start end vec)
-    (if (or (>= start end)
-            (>= start (length vec)))
-      (new-collection)
-      (let ((end-point (min end (length vec)))
-            (new-length (- end-point start))
-            (new-vec (with-capacity new-length)))
-        (for i in (iter:range-increasing 1 start end-point)
-          (%push-vector! (at# i vec) new-vec))
-        new-vec)))
+  (define (subseq start end v)
+    "Compute a subseq of a vector bounded by given indices.
+
+`start` index is inclusive and `end` index is exclusive."
+    (let ((real-start (min start end))
+          (real-end (min (length v) (max start end))))
+      (lisp (Vector :a) (real-start real-end v)
+        (cl:let ((result (cl:make-array (cl:- real-end real-start) :adjustable cl:t)))
+          (cl:replace result v :start2 real-start)))))
 
   (inline)
   (declare split-at (UFix -> Vector :a -> Tuple (Vector :a) (Vector :a)))
@@ -769,6 +769,19 @@
      iter)
     Unit)
 
+  (inline)
+  (declare resect! (Vector :a -> UFix -> UFix -> Unit))
+  (define (resect! v start end)
+    "Destructively kills a subsequence in a vector bounded by given indices.
+
+`start` index is inclusive and `end` index is exclusive."
+    (let ((real-start (min start end))
+          (real-end (min (length v) (max start end)))
+          (new-size (- (length v) (- real-end real-start))))
+      (lisp (Vector :a) (real-start real-end v)
+        (cl:replace v v :start1 real-start :start2 real-end))
+      (set-capacity! new-size v)))
+
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;;;                                                                       ;;;
   ;;; Instances                                                             ;;;
@@ -887,7 +900,7 @@
   )
 
 (cl:defmacro make (cl:&rest elements)
-  "Construct a `Vector' containing the ELEMENTS, in the order listed."
+  "Construct a `Vector` containing the ELEMENTS, in the order listed."
   (cl:let* ((length (cl:length elements))
             (vec (cl:gensym "VEC-")))
     `(progn
