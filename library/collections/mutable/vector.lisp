@@ -19,6 +19,75 @@
    #:1+
    #:1-)
   (:export
+   ;; Standard Collections Functions
+   #:new-collection
+   #:new-repeat
+   #:new-from
+   #:new-convert
+   #:filter
+   #:remove-duplicates
+   #:remove-elt
+   #:empty?
+   #:size
+   #:contains-elt?
+   #:contains-where?
+   #:count-where
+   #:add
+
+   #:copy
+   #:filter!
+   #:remove-duplicates!
+   #:remove-elt!
+   #:add!
+
+   #:head
+   #:head#
+   #:last
+   #:last#
+   #:tail
+   #:at
+   #:at#
+   #:take
+   #:drop
+   #:length
+   #:index-elt
+   #:index-elt#
+   #:index-where
+   #:index-where#
+   #:find-where
+   #:indices-elt
+   #:indices-where
+   #:subseq
+   #:split-at
+   #:split-elt
+   #:split-where
+   #:reverse
+   #:sort
+   #:sort-by
+   #:zip
+   #:zip-with
+   #:push
+   #:push-end
+   #:insert-at
+   #:remove-at
+   #:remove-at#
+   #:set-at
+
+   #:reverse!
+   #:sort!
+   #:sort-by!
+   #:push!
+   #:push-end!
+   #:pop!
+   #:pop!#
+   #:pop-end!
+   #:pop-end!#
+   #:insert-at!
+   #:remove-at!
+   #:remove-at!#
+   #:set-at!
+
+   ;; Vector Specific
    #:Vector
    #:with-capacity
    #:singleton
@@ -92,6 +161,12 @@
                 new-capacity)
               v))))
 
+  (declare %push-vector! (:a -> Vector :a -> UFix))
+  (define (%push-vector! item v)
+    "Append `item` to `v` and resize `v` if necessary, returning the index of the new item."
+    (lisp UFix (item v)
+      (cl:vector-push-extend item v)))
+
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;;;                                                                       ;;;
   ;;; Collections API Methods                                               ;;;
@@ -118,7 +193,7 @@
   (define (new-from n f)
     (let ((vec (with-capacity n)))
       (for i in (iter:range-increasing 1 0 n)
-        (push! (f i) vec))
+        (%push-vector! (f i) vec))
       vec))
 
   (declare new-convert (iter:IntoIterator :m :a => :m -> Vector :a))
@@ -136,22 +211,31 @@
     (if (empty? vec) vec
         (let ((res (with-capacity (length vec))))
           (for i in (list:range 0 (- (length vec) 1))
-            (let elt = (index-unsafe i vec))
+            (let elt = (at# i vec))
             (unless (contains-elt? elt res)
-              (push! elt res)
+              (%push-vector! elt res)
               Unit))
           res)))
+
+  (declare remove-elt (Eq :a => :a -> Vector :a -> Vector :a))
+  (define (remove-elt elt vec)
+    "Return a copy of `vec` with all instances of `elt` removed."
+    (filter (/= elt) vec))
 
   (declare empty? (Vector :a -> Boolean))
   (define (empty? v)
     "Is `v` empty?"
-    (== 0 (length v)))
+    (== 0 (size v)))
   
   (declare size (Vector :a -> UFix))
   (define (size v)
     "Returns the length of `v`."
     (lisp UFix (v)
       (cl:length v)))
+
+  (declare contains-elt? (Eq :a => :a -> Vector :a -> Boolean))
+  (define (contains-elt? elt vec)
+    (contains-where? (== elt) vec))
 
   (declare contains-where? ((:a -> Boolean) -> Vector :a -> Boolean))
   (define (contains-where? f vec)
@@ -169,19 +253,15 @@
           0
           vec))
 
-  (declare contains-elt? (Eq :a => :a -> Vector :a -> Boolean))
-  (define (contains-elt? elt vec)
-    (opt:some? (find-elem elt vec)))
-
   (declare add (:a -> Vector :a -> Vector :a))
   (define (add elt vec)
     "Return a new copy of `vec` with `elt` added to it."
     (let ((res (copy vec)))
-      (push! elt res)
+      (%push-vector! elt res)
       res))
 
   ;;;
-  ;;; MutableCollectino Vector
+  ;;; MutableCollection Vector
   ;;;
 
   (declare copy (Vector :a -> Vector :a))
@@ -208,25 +288,38 @@
     (extend! vec cleared)
     vec)
 
+  (declare remove-elt! (Eq :a => :a -> Vector :a -> Vector :a))
+  (define (remove-elt! elt vec)
+    "Remove all copies of `elt` from `vec`. Returns `vec` for convenience."
+    (filter! (/= elt) vec))
+
   (declare add! (:a -> Vector :a -> Vector :a))
   (define (add! elt vec)
     "Add `elt` to `vec`. Returns `vec` for convenience."
-    (push! elt vec)
+    (%push-vector! elt vec)
     vec)
 
   ;;;
   ;;; LinearCollection Vector
   ;;;
 
+  (declare head (Vector :a -> Optional :a))
+  (define (head v)
+    (at 0 v))
+
   (declare head# (Vector :a -> :a))
   (define (head# v)
     "Return the first item of `v` without first checking if `v` is empty."
-    (index-unsafe 0 v))
+    (at# 0 v))
+
+  (declare last (Vector :a -> Optional :a))
+  (define (last v)
+    (at (1- (length v)) v))
 
   (declare last# (Vector :a -> :a))
   (define (last# v)
     "Return the last element of `v` without first checking if `v` is empty."
-    (index-unsafe (- (length v) 1) v))
+    (at# (- (length v) 1) v))
 
   (declare tail (Vector :a -> Vector :a))
   (define (tail vec)
@@ -238,7 +331,18 @@
     "Return the `index`th element of `v`."
     (if (>= index (length v))
         None
-        (Some (index-unsafe index v))))
+        (Some (at# index v))))
+
+  (declare at# (UFix -> Vector :a -> :a))
+  (define (at# idx v)
+    "Return the `idx`th element of `v` without checking if the element exists."
+    (lisp :a (idx v)
+      (cl:aref v idx)))
+
+  (declare take (UFix -> Vector :a -> Vector :a))
+  (define (take n vec)
+    "Return a copy of `vec` with only the first `n` elements."
+    (subseq 0 n vec))
 
   (declare drop (UFix -> Vector :a -> Vector :a))
   (define (drop n vec)
@@ -248,10 +352,15 @@
   (declare length (Vector :a -> UFix))
   (define length size)
 
-  (declare take (UFix -> Vector :a -> Vector :a))
-  (define (take n vec)
-    "Return a copy of `vec` with only the first `n` elements."
-    (subseq 0 n vec))
+  (declare index-elt (Eq :a => :a -> Vector :a -> Optional UFix))
+  (define (index-elt elt coll)
+     "Return the index of the first occurence of `elt`, if it can be found."
+    (index-where (== elt) coll))
+
+  (declare index-elt# (Eq :a => :a -> Vector :a -> UFix))
+  (define (index-elt# elt coll)
+     "Return the index of the first occurence of `elt`, erroring if it cannot be found."
+    (opt:from-some "Cannot find element in collection." (index-elt elt coll)))
 
   (declare index-where ((:a -> Boolean) -> Vector :a -> Optional UFix))
   (define (index-where pred vec)
@@ -265,6 +374,11 @@
                (Some pos)
                None))))
 
+  (declare index-where# ((:a -> Boolean) -> Vector :a -> UFix))
+  (define (index-where# f coll)
+     "Return the index of the first element matching a predicate function, erroring if none can be found."
+    (opt:from-some "Cannot find matching element in collection." (inline (index-where f coll))))
+
   (declare find-where ((:a -> Boolean) -> Vector :a -> Optional :a))
   (define (find-where pred vec)
     "Find the first element matching `pred` in `vec`."
@@ -273,11 +387,15 @@
         (return (Some x))))
     None)
 
+  (declare indices-elt (Eq :a => :a -> Vector :a -> List UFix))
+  (define (indices-elt elt vec)
+    (indices-where (== elt) vec))
+
   (declare indices-where ((:a -> Boolean) -> Vector :a -> List UFix))
   (define (indices-where f vec)
     (let ((indices (cell:new Nil)))
       (for i in (iter:range-increasing 1 0 (length vec))
-        (when (f (index-unsafe i vec))
+        (when (f (at# i vec))
           (cell:push! indices i)
           Unit))
       (list:reverse (cell:read indices))))
@@ -291,7 +409,7 @@
             (new-length (- end-point start))
             (new-vec (with-capacity new-length)))
         (for i in (iter:range-increasing 1 start end-point)
-          (push! (index-unsafe i vec) new-vec))
+          (%push-vector! (at# i vec) new-vec))
         new-vec)))
 
   (declare split-at (UFix -> Vector :a -> Tuple (Vector :a) (Vector :a)))
@@ -303,8 +421,6 @@
   (define (split-elt elt vec)
     (split-where (== elt) vec))
 
-  ;; TODO: Someday when the List API has a more efficient way of building the result
-  ;; list up, so that we don't have to call reverse, use that.
   (declare split-where ((:a -> Boolean) -> Vector :a -> List (Vector :a)))
   (define (split-where pred vec)
     (let ((results (cell:new Nil))
@@ -339,8 +455,23 @@
                 result)
       result))
 
-  ;; TODO: Might want to reconsider capacity increase strategy here?
-  ;; Because it's not in place, 1+ at a time might be fine.
+  (declare zip (iter:IntoIterator :m :b => Vector :a -> :m -> Vector (Tuple :a :b)))
+  (define (zip vec col)
+    (zip-with Tuple vec col))
+
+  (declare zip-with (iter:IntoIterator :m :b => (:a -> :b -> :c) -> Vector :a -> :m -> Vector :c))
+  (define (zip-with f vec col)
+    (let ((it (iter:into-iter col))
+          (size-guess (min (length vec)
+                           (with-default (length vec) (iter:size-hint it))))
+          (ret (with-capacity size-guess))
+          (i (cell:new 0)))
+      (while-let (Tuple (Some a) (Some b)) =
+          (Tuple (at (cell:read i) vec) (iter:next! it))
+        (%push-vector! (f a b) ret)
+        (cell:increment! i))
+      ret))
+
   (declare push (:a -> Vector :a -> Vector :a))
   (define (push elt vec)
     "Return a copy of `vec` with `elt` inserted at the front."
@@ -351,8 +482,6 @@
         (set! i (at (1- i) vec) result))
       result))
 
-  ;; TODO: Might want to reconsider capacity increase strategy here?
-  ;; Because it's not in place, 1+ at a time might be fine.
   (declare push-end (:a -> Vector :a -> Vector :a))
   (define (push-end elt vec)
     "Return a copy of `vec` with `elt` inserted at the end."
@@ -375,15 +504,22 @@
         (set! j (at (1- j) vec) result))
       result))
 
-  (declare remove-at (UFix -> Vector :a -> Vector :a))
+  (declare remove-at (UFix -> Vector :a -> Optional (Tuple :a (Vector :a))))
   (define (remove-at i vec)
     "Return a copy of `vec` with the element at `i` removed."
-    (let ((result (with-capacity (capacity vec))))
-      (for j in (iter:range-increasing 1 0 i)
-        (set! j (at j vec) result))
-      (for j in (iter:range-increasing 1 (1+ i) (1+ (length vec)))
-        (set! j (at (1- j) vec) result))
-      result))
+    (if (>= i (length vec))
+        None
+        (let ((result (with-capacity (capacity vec))))
+          (for j in (iter:range-increasing 1 0 i)
+               (set! j (at j vec) result))
+          (for j in (iter:range-increasing 1 (1+ i) (1+ (length vec)))
+               (set! j (at (1- j) vec) result))
+          (Some (Tuple (at# i vec) result)))))
+
+  (declare remove-at# (UFix -> Vector :a -> Tuple :a (Vector :a)))
+  (define (remove-at# i vec)
+    "Return a copy of `vec` with the element at `i` removed."
+    (opt:from-some "Vector index out of bounds." (remove-at i vec)))
 
   (declare set-at (UFix -> :a -> Vector :a -> Vector :a))
   (define (set-at i elt vec)
@@ -392,44 +528,8 @@
       (set! i elt result)
       result))
 
-  (declare indices-elt (Eq :a => :a -> Vector :a -> List UFix))
-  (define (indices-elt elt vec)
-    (indices-where (== elt) vec))
-
-  (declare find-elem (Eq :a => :a -> Vector :a -> Optional UFix))
-  (define (find-elem e v)
-    "Find the index of element `e` in `v`."
-    (let ((test (fn (elem)
-                  (== elem e))))
-
-      (lisp (Optional UFix) (v test)
-        (cl:let ((pos (cl:position-if
-                       (cl:lambda (x)
-                         (cl:eq cl:t (call-coalton-function test x)))
-                       v)))
-          (cl:if pos
-                 (Some pos)
-                 None)))))
-
-  (declare zip-itr (iter:IntoIterator :m :b => Vector :a -> :m -> Vector (Tuple :a :b)))
-  (define (zip-itr vec col)
-    (zip-with-itr Tuple vec col))
-
-  (declare zip-with-itr (iter:IntoIterator :m :b => (:a -> :b -> :c) -> Vector :a -> :m -> Vector :c))
-  (define (zip-with-itr f vec col)
-    (let ((it (iter:into-iter col))
-          (size-guess (min (length vec)
-                           (with-default (length vec) (iter:size-hint it))))
-          (ret (with-capacity size-guess))
-          (i (cell:new 0)))
-      (while-let (Tuple (Some a) (Some b)) = 
-          (Tuple (at (cell:read i) vec) (iter:next! it))
-        (push! (f a b) ret)
-        (cell:increment! i))
-      ret))
-
   ;;;
-  ;;; MutableCollection Vector
+  ;;; MutableLinearCollection Vector
   ;;;
   
   (declare reverse! (Vector :a -> Vector :a))
@@ -445,20 +545,51 @@
   (define (sort! v)
     "Sort a vector in-place in ascending order."
     (sort-by! < v))
-  
-  (declare push! (:a -> Vector :a -> UFix))
-  (define (push! item v)
-    "Append `item` to `v` and resize `v` if necessary, returning the index of the new item."
-    (lisp UFix (item v)
-      (cl:vector-push-extend item v)))
 
-  (declare pop-unsafe! (Vector :a -> :a))
-  (define (pop-unsafe! v)
+  (declare sort-by! ((:a -> :a -> Boolean) -> Vector :a -> Unit))
+  (define (sort-by! f v)
+    "Sort a vector in-place with predicate function `f`."
+    (lisp Void (v f)
+      (cl:sort
+       v
+       (cl:lambda (a b)
+         (call-coalton-function f a b))))
+    Unit)
+
+  (declare push! (:a -> Vector :a -> Vector :a))
+  (define (push! elt vec)
+    "Push `elt` onto the beginning of `vec`. Return `vec` for convenienc."
+      (cond
+        ((empty? vec)
+         (%push-vector! elt vec)
+         vec)
+        (True
+         (insert-at! 0 elt (copy vec)))))
+
+  (declare push-end! (:a -> Vector :a -> Vector :a))
+  (define (push-end! elt vec)
+    (%push-vector! elt vec)
+    vec)
+
+  (declare pop! (Vector :a -> Optional :a))
+  (define (pop! vec)
+    (if (empty? vec)
+        None
+        (Some (pop!# vec))))
+
+  (declare pop!# (Vector :a -> :a))
+  (define (pop!# v)
     "Remove and return the first item of `v` without checking if the vector is empty."
-    (remove-at-unsafe! 0 v))
+    (remove-at!# 0 v))
 
-  (declare pop-end-unsafe! (Vector :a -> :a))
-  (define (pop-end-unsafe! v)
+  (declare pop-end! (Vector :a -> Optional :a))
+  (define (pop-end! vec)
+    (if (empty? vec)
+        None
+        (Some (pop-end!# vec))))
+
+  (declare pop-end!# (Vector :a -> :a))
+  (define (pop-end!# v)
     "Remove and return the last item of `v` without checking if the vector is empty."
     (lisp :a (v)
       (cl:vector-pop v)))
@@ -468,16 +599,42 @@
     "Insert `item` into `v` at index `idx`, shifting the existing elements starting at `idx` right by 1."
     (cond
      ((empty? v)
-      (push! item v)
+      (%push-vector! item v)
       v)
      (True
       (let idx-safe = (max 0 (min (length v) idx)))
       (ensure-capacity! (m-ath:1+ (length v)) v)
-      (push! (last# v) v)
+      (%push-vector! (last# v) v)
       (for i in (iter:range-decreasing 1 (length v) (m-ath:1+ idx-safe))
-        (set! i (index-unsafe (m-ath:1- i) v) v))
+        (set! i (at# (m-ath:1- i) v) v))
       (set! idx-safe item v)
       v)))
+
+  (declare remove-at! (UFix -> Vector :a -> Optional :a))
+  (define (remove-at! idx v)
+    "Remove and return item at index `idx` in `v`, shifting the existing elements after `idx` left by 1."
+    (match (at idx v)
+      ((None) None)
+      ((Some result)
+       (for i in (iter:range-increasing 1 idx (m-ath:1- (length v)))
+         (set! i (at# (m-ath:1+ i) v) v))
+       (pop-end!# v)
+       (Some result))))
+
+  (declare remove-at!# (UFix -> Vector :a -> :a))
+  (define (remove-at!# idx v)
+    "Remove and return item at index `idx` in `v`, shifting the existing elements after `idx` left by 1. Error if vector is empty."
+    (let result = (at# idx v))
+    (for i in (iter:range-increasing 1 idx (m-ath:1- (length v)))
+      (set! i (at# (m-ath:1+ i) v) v))
+    (pop-end!# v)
+    result)
+
+  (declare set-at! (UFix -> :a -> Vector :a -> Vector :a))
+  (define (set-at! i elt v)
+    "Set element at `i` in `v` to `elt`. Return `v` for convenience."
+    (set! i elt v)
+    v)
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;;;                                                                       ;;;
@@ -500,12 +657,6 @@
     "Set the capacity of `v` to `0`."
     (set-capacity! 0 v))
 
-  (declare index-unsafe (UFix -> Vector :a -> :a))
-  (define (index-unsafe idx v)
-    "Return the `idx`th element of `v` without checking if the element exists."
-    (lisp :a (idx v)
-      (cl:aref v idx)))
-
   (declare set! (UFix -> :a -> Vector :a -> Unit))
   (define (set! idx item v)
     "Set the `idx`th element of `v` to `item`. This function left intentionally unsafe because it does not have a return value to check."
@@ -513,32 +664,12 @@
       (cl:setf (cl:aref v idx) item))
     Unit)
   
-  (declare remove-at! (UFix -> Vector :a -> Optional :a))
-  (define (remove-at! idx v)
-    "Remove and return item at index `idx` in `v`, shifting the existing elements after `idx` left by 1."
-    (match (at idx v)
-      ((None) None)
-      ((Some result)
-       (for i in (iter:range-increasing 1 idx (m-ath:1- (length v)))
-         (set! i (index-unsafe (m-ath:1+ i) v) v))
-       (pop-end-unsafe! v)
-       (Some result))))
-  
-  (declare remove-at-unsafe! (UFix -> Vector :a -> :a))
-  (define (remove-at-unsafe! idx v)
-    "Remove and return item at index `idx` in `v`, shifting the existing elements after `idx` left by 1. Error if vector is empty."
-    (let result = (index-unsafe idx v))
-    (for i in (iter:range-increasing 1 idx (m-ath:1- (length v)))
-      (set! i (index-unsafe (m-ath:1+ i) v) v))
-    (pop-end-unsafe! v)
-    result)
-
   (declare remove-and-get-at (UFix -> Vector :a -> Optional (Tuple :a (Vector :a))))
   (define (remove-and-get-at idx v)
     (if (>= idx (length v))
         None
         (let ((result (copy v))
-              (elt (remove-at-unsafe! idx result)))
+              (elt (remove-at!# idx result)))
           (Some (Tuple elt result)))))
 
   (declare append (Vector :a -> Vector :a -> Vector :a))
@@ -560,21 +691,11 @@
   (define (swap-remove-unsafe! idx vec)
     "Remove the element `idx` from `vec` and replace it with the last element in `vec` without bounds checking. Then return the removed element."
     (if (== (+ 1 idx) (length vec))
-        (pop-end-unsafe! vec)
+        (pop-end!# vec)
         (progn
-          (let out = (index-unsafe idx vec))
-          (set! idx (pop-end-unsafe! vec) vec)
+          (let out = (at# idx vec))
+          (set! idx (pop-end!# vec) vec)
           out)))
-
-  (declare sort-by! ((:a -> :a -> Boolean) -> Vector :a -> Unit))
-  (define (sort-by! f v)
-    "Sort a vector in-place with predicate function `f`."
-    (lisp Void (v f)
-      (cl:sort
-       v
-       (cl:lambda (a b)
-         (call-coalton-function f a b))))
-    Unit)
 
   (declare extend! (iter:IntoIterator :container :elt => Vector :elt -> :container -> Unit))
   (define (extend! vec iter)
@@ -590,7 +711,7 @@
 
     (iter:for-each!
      (fn (x)
-       (push! x vec)
+       (%push-vector! x vec)
        Unit)
      iter)
     Unit)
@@ -620,7 +741,7 @@
       (let out = (with-capacity (length v)))
       (iter:for-each!
        (fn (x)
-         (push! (f x) out)
+         (%push-vector! (f x) out)
          Unit)
        (iter:into-iter v))
       out))
@@ -660,7 +781,7 @@
       True)
     (inline)
     (define (ram:unsafe-aref a n)
-      (index-unsafe n a))
+      (at# n a))
     (inline)
     (define (ram:unsafe-set! a n x)
       (set! n x a)))
@@ -673,7 +794,7 @@
                 (match lst
                   ((Cons x xs)
                    (progn
-                     (push! x out)
+                     (%push-vector! x out)
                      (inner xs)))
                   ((Nil) Unit)))))
         (progn
@@ -702,7 +823,7 @@
       (let size = (with-default 0 (iter:size-hint iter)))
       (let vec = (with-capacity size))
       (iter:for-each! (fn (x)
-                        (push! x vec)
+                        (%push-vector! x vec)
                         Unit)
                       iter)
       vec))
@@ -723,7 +844,7 @@
   ;;   (define (new-from n f)
   ;;     (let ((vec (with-capacity n)))
   ;;       (for i in (iter:range-increasing 1 0 n)
-  ;;         (push! (f i) vec))
+  ;;         (%push-vector! (f i) vec))
   ;;       vec))
   ;;   (define (new-convert coll)
   ;;     (iter:collect! (iter:into-iter coll)))
@@ -742,7 +863,7 @@
   ;;           vec))
   ;;   (define (add elt vec)
   ;;     (let ((res (copy vec)))
-  ;;       (push! elt res)
+  ;;       (%push-vector! elt res)
   ;;       res)))
 
   ;; (define-instance (MutableCollection (Vector :a) :a)
@@ -750,7 +871,7 @@
   ;;   (define filter! filter!)
   ;;   (define remove-duplicates! remove-duplicates!)
   ;;   (define (add! elt vec)
-  ;;     (push! elt vec)
+  ;;     (%push-vector! elt vec)
   ;;     vec))
 
   ;; (define-instance (LinearCollection (Vector :a) :a)
@@ -786,13 +907,13 @@
   ;;   (define (push elt vec)
   ;;     (cond
   ;;       ((empty? vec)
-  ;;        (push! elt vec)
+  ;;        (%push-vector! elt vec)
   ;;        vec)
   ;;       (True
   ;;        (insert-at! 0 elt (copy vec)))))
   ;;   (define (push-end elt vec)
   ;;     (let ((result (copy vec)))
-  ;;       (push! elt result)
+  ;;       (%push-vector! elt result)
   ;;       result))
   ;;   (define (insert-at i elt vec)
   ;;     (insert-at! i elt (copy vec)))
@@ -811,13 +932,13 @@
   ;;     (sort-by! (fn (a b) (== LT (ord-func a b)))
   ;;               vec)
   ;;     vec)
-  ;;   (define (push! elt vec)
+  ;;   (define (%push-vector! elt vec)
   ;;     (insert-at! 0 elt vec))
   ;;   (define (push-end! elt vec)
-  ;;     (push! elt vec)
+  ;;     (%push-vector! elt vec)
   ;;     vec)
-  ;;   (define pop!# pop-unsafe!)
-  ;;   (define pop-end!# pop-end-unsafe!)
+  ;;   (define pop!# pop!#)
+  ;;   (define pop-end!# pop-end!#)
   ;;   (define insert-at! insert-at!)
   ;;   (define remove-at! remove-at!)
   ;;   (define (set-at! i elt vec)
@@ -833,7 +954,7 @@
     `(progn
        (let ,vec = (with-capacity ,length))
        ,@(cl:loop :for elt :in elements
-            :collect `(push! ,elt ,vec))
+            :collect `(%push-vector! ,elt ,vec))
        ,vec)))
 
 ; #+sb-package-locks
