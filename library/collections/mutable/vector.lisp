@@ -909,5 +909,5 @@
             :collect `(%push-vector! ,elt ,vec))
        ,vec)))
 
-; #+sb-package-locks
-; (sb-ext:lock-package "COALTON-LIBRARY/COLLECTIONS/MUTABLE/VECTOR")
+#+sb-package-locks
+(sb-ext:lock-package "COALTON-LIBRARY/COLLECTIONS/MUTABLE/VECTOR")
