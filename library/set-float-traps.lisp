@@ -1,1 +1,1 @@
-(coalton-library/coalton-compat:unset-all-float-traps)
+(coalton/compatibility-layer:unset-all-float-traps)
