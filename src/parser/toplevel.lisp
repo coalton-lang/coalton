@@ -1148,6 +1148,7 @@ consume all attributes")))
   (make-toplevel-declare
    :name (make-identifier-src
           :name (cst:raw (cst:second form))
+          :source-name (source:extract-source-text source (cst:source (cst:second form)))
           :location (form-location source (cst:second form)))
    :type (parse-qualified-type (cst:third form) source)
    :monomorphize nil
@@ -1178,6 +1179,7 @@ consume all attributes")))
                       (note source (cst:second form) "expected symbol")))
 
        (setf name (make-identifier-src :name (cst:raw (cst:second form))
+                                       :source-name (source:extract-source-text source (cst:source (cst:second form)))
                                        :location (form-location source form))))
 
       (t                                ; (define-type (T ...) ...)
@@ -1198,6 +1200,7 @@ consume all attributes")))
                             "expected symbol")))
 
        (setf name (make-identifier-src :name (cst:raw (cst:first (cst:second form)))
+                                       :source-name (source:extract-source-text source (cst:source (cst:first (cst:second form))))
                                        :location (form-location source
                                                                 (cst:first (cst:second form)))))
 
@@ -1299,6 +1302,7 @@ consume all attributes")))
 
        ;; (define-type-alias name ...)
        (setf name (make-identifier-src :name (cst:raw (cst:second form))
+                                       :source-name (source:extract-source-text source (cst:source (cst:second form)))
                                        :location (form-location source form))))
 
       ;; (define-type-alias (_ ...) ...)
@@ -1321,6 +1325,7 @@ consume all attributes")))
 
        ;; (define-type-alias (name ...) ...)
        (setf name (make-identifier-src :name (cst:raw (cst:first (cst:second form)))
+                                       :source-name (source:extract-source-text source (cst:source (cst:first (cst:second form))))
                                        :location (form-location source
                                                                 (cst:first (cst:second form)))))
 
@@ -1621,6 +1626,7 @@ consume all attributes")))
       (make-toplevel-define-class
        :name (make-identifier-src
               :name name
+              :source-name (source:extract-source-text source (cst:source unparsed-name))
               :location (form-location source unparsed-name))
        :vars variables
        :preds predicates
@@ -1845,6 +1851,7 @@ consume all attributes")))
       (make-method-definition
        :name (make-identifier-src
               :name (node-variable-name (parse-variable (cst:first method-form) source))
+              :source-name (source:extract-source-text source (cst:source (cst:first method-form)))
               :location (form-location source (cst:first method-form)))
        :docstring docstring
        :type (parse-qualified-type (if docstring
@@ -1903,6 +1910,7 @@ consume all attributes")))
     (make-constructor
      :name (make-identifier-src
             :name (cst:raw unparsed-name)
+            :source-name (source:extract-source-text source (cst:source unparsed-name))
             :location (form-location source unparsed-name))
      :fields (loop :for field :in unparsed-fields
                    :collect (parse-type field source))
@@ -1955,6 +1963,7 @@ consume all attributes")))
 
   (make-identifier-src
    :name (cst:raw form)
+   :source-name (source:extract-source-text source (cst:source form))
    :location (form-location source form)))
 
 (defun parse-definition-body (form enclosing-form source)

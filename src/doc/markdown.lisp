@@ -182,17 +182,18 @@
     (tc:with-pprint-variable-context ()
       (loop :for ctor :in (coalton-type-constructors object)
             :for ctor-name := (tc:constructor-entry-name ctor)
+            :for ctor-source-name := (lookup-constructor-source-name ctor-name)
             :for ctor-type := (tc:lookup-value-type entry:*global-environment* ctor-name)
             :for ctor-docstring := (source:docstring ctor)
             :do (let ((args (type-constructor-args object ctor-type)))
                   (cond (args
                          (format stream "- <code>(~A~{ ~A~})</code>~A~%"
-                                 (html-entities:encode-entities (symbol-name ctor-name))
+                                 (html-entities:encode-entities ctor-source-name)
                                  (mapcar #'to-markdown args)
                                  (if (null ctor-docstring) "" (format nil "~%  - ~A" ctor-docstring))))
                         (t
                          (format stream "- <code>~A</code> ~A~%"
-                                 (html-entities:encode-entities (symbol-name ctor-name))
+                                 (html-entities:encode-entities ctor-source-name)
                                  (if (null ctor-docstring) "" (format nil "~%  - ~A" ctor-docstring))))))))
     (write-doc backend object)
     (write-instances backend object)))
@@ -336,9 +337,10 @@
                  (to-markdown new-type)))))))
 
 (defmethod to-markdown ((object tc:ty-predicate))
-  (format nil "<a href=\"#~(~A-class~)\">~:*~A</a>~{ ~A~}"
-          (html-entities:encode-entities (symbol-name (tc:ty-predicate-class object)))
-          (mapcar #'to-markdown (tc:ty-predicate-types object))))
+  (let ((class-source-name (lookup-class-source-name (tc:ty-predicate-class object))))
+    (format nil "<a href=\"#~(~A-class~)\">~:*~A</a>~{ ~A~}"
+            (html-entities:encode-entities class-source-name)
+            (mapcar #'to-markdown (tc:ty-predicate-types object)))))
 
 (defmethod to-markdown ((object tc:ty-class-instance))
   (let ((ctx (tc:ty-class-instance-constraints object))

@@ -248,6 +248,7 @@
            :for class-entry
              :=  (tc:make-ty-class
                   :name class-name
+                  :source-name (parser:identifier-src-source-name (parser:toplevel-define-class-name class))
                   :predicate pred
                   :superclasses (partial-class-superclasses partial)
                   :class-variables class-vars

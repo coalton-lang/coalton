@@ -35,6 +35,7 @@
    #:type-entry                             ; STRUCT
    #:make-type-entry                        ; CONSTRUCTOR
    #:type-entry-name                        ; ACCESSOR
+   #:type-entry-source-name                 ; ACCESSOR
    #:type-entry-runtime-type                ; ACCESSOR
    #:type-entry-type                        ; ACCESSOR
    #:type-entry-tyvars                      ; ACCESSOR
@@ -48,6 +49,7 @@
    #:constructor-entry                      ; STRUCT
    #:make-constructor-entry                 ; ACCESSOR
    #:constructor-entry-name                 ; ACCESSOR
+   #:constructor-entry-source-name          ; ACCESSOR
    #:constructor-entry-arity                ; ACCESSOR
    #:constructor-entry-constructs           ; ACCESSOR
    #:constructor-entry-classname            ; ACCESSOR
@@ -57,6 +59,7 @@
    #:type-alias-entry                       ; STRUCT
    #:make-type-alias-entry                  ; CONSTRUCTOR
    #:type-alias-entry-name                  ; ACCESSOR
+   #:type-alias-entry-source-name           ; ACCESSOR
    #:type-alias-entry-tyvars                ; ACCESSOR
    #:type-alias-entry-type                  ; ACCESSOR
    #:type-alias-entry-list                  ; ACCESSOR
@@ -70,6 +73,7 @@
    #:struct-entry                           ; STRUCT
    #:make-struct-entry                      ; CONSTRUCTOR
    #:struct-entry-name                      ; ACCESSOR
+   #:struct-entry-source-name               ; ACCESSOR
    #:struct-entry-fields                    ; ACCESSOR
    #:struct-entry-list                      ; TYPE
    #:struct-environment                     ; STRUCT
@@ -81,6 +85,7 @@
    #:ty-class                               ; STRUCT
    #:make-ty-class                          ; CONSTRUCTOR
    #:ty-class-name                          ; ACCESSOR
+   #:ty-class-source-name                   ; ACCESSOR
    #:ty-class-predicate                     ; ACCESSOR
    #:ty-class-superclasses                  ; ACCESSOR
    #:ty-class-class-variables               ; ACCESSOR
@@ -267,6 +272,7 @@
 
 (defstruct type-entry
   (name          (util:required 'name)          :type symbol                    :read-only t)
+  (source-name   nil                            :type (or null string)          :read-only t)
   (runtime-type  (util:required 'runtime-type)  :type t                         :read-only t)
   (type          (util:required 'type)          :type ty                        :read-only t)
   (tyvars        (util:required 'tyvars)        :type tyvar-list                :read-only t)
@@ -322,6 +328,7 @@
           ('coalton:Boolean
            (make-type-entry
             :name 'coalton:Boolean
+            :source-name "Boolean"
             :runtime-type 'cl:boolean
             :type *boolean-type*
             :tyvars nil
@@ -334,6 +341,7 @@
           ('coalton:Unit
            (make-type-entry
             :name 'coalton:Unit
+            :source-name "Unit"
             :runtime-type 'coalton-impl/constants:lisp-type-of-unit
             :type *unit-type*
             :tyvars nil
@@ -346,6 +354,7 @@
           ('coalton:Char
            (make-type-entry
             :name 'coalton:Char
+            :source-name "Char"
             :runtime-type 'cl:character
             :type *char-type*
             :tyvars nil
@@ -358,6 +367,7 @@
           ('coalton:Integer
            (make-type-entry
             :name 'coalton:Integer
+            :source-name "Integer"
             :runtime-type 'cl:integer
             :type *integer-type*
             :tyvars nil
@@ -370,6 +380,7 @@
           ('coalton:F32
            (make-type-entry
             :name 'coalton:F32
+            :source-name "F32"
             :runtime-type 'cl:single-float
             :type *single-float-type*
             :tyvars nil
@@ -382,6 +393,7 @@
           ('coalton:F64
            (make-type-entry
             :name 'coalton:F64
+            :source-name "F64"
             :runtime-type 'cl:double-float
             :type *double-float-type*
             :tyvars nil
@@ -394,6 +406,7 @@
           ('coalton:String
            (make-type-entry
             :name 'coalton:String
+            :source-name "String"
             :runtime-type 'cl:string
             :type *string-type*
             :tyvars nil
@@ -406,6 +419,7 @@
           ('coalton:Fraction
            (make-type-entry
             :name 'coalton:Fraction
+            :source-name "Fraction"
             :runtime-type 'cl:rational
             :type *fraction-type*
             :tyvars nil
@@ -418,6 +432,7 @@
           ('coalton:Arrow
            (make-type-entry
             :name 'coalton:Arrow
+            :source-name "Arrow"
             :runtime-type nil
             :type *arrow-type*
             :tyvars nil
@@ -430,6 +445,7 @@
           ('coalton:List
            (make-type-entry
             :name 'coalton:List
+            :source-name "List"
             :runtime-type 'cl:list
             :type *list-type*
             :tyvars (list (make-variable))
@@ -442,6 +458,7 @@
           ('coalton:Optional
            (make-type-entry
             :name 'coalton:Optional
+            :source-name "Optional"
             :runtime-type 'cl:t
             :type *optional-type*
             :tyvars (list (make-variable))
@@ -457,6 +474,7 @@
 
 (defstruct constructor-entry
   (name            (util:required 'name)            :type symbol                         :read-only t)
+  (source-name     nil                              :type (or null string)               :read-only t)
   (arity           (util:required 'arity)           :type alexandria:non-negative-fixnum :read-only t)
   (constructs      (util:required 'constructs)      :type symbol                         :read-only t)
   (classname       (util:required 'classname)       :type symbol                         :read-only t)
@@ -492,6 +510,7 @@
           ('coalton:True
            (make-constructor-entry
             :name 'coalton:True
+            :source-name "True"
             :arity 0
             :constructs 'coalton:Boolean
             :classname 'coalton::Boolean/True
@@ -501,6 +520,7 @@
           ('coalton:False
            (make-constructor-entry
             :name 'coalton:False
+            :source-name "False"
             :arity 0
             :constructs 'coalton:Boolean
             :classname 'coalton::Boolean/False
@@ -510,6 +530,7 @@
           ('coalton:Unit
            (make-constructor-entry
             :name 'coalton:Unit
+            :source-name "Unit"
             :arity 0
             :constructs 'coalton:Unit
             :classname 'coalton::Unit/Unit
@@ -519,6 +540,7 @@
           ('coalton:Cons
            (make-constructor-entry
             :name 'coalton:Cons
+            :source-name "Cons"
             :arity 2
             :constructs 'coalton:List
             :classname nil
@@ -528,6 +550,7 @@
           ('coalton:Nil
            (make-constructor-entry
             :name 'coalton:Nil
+            :source-name "Nil"
             :arity 0
             :constructs 'coalton:List
             :classname nil
@@ -537,6 +560,7 @@
           ('coalton:Some
            (make-constructor-entry
             :name 'coalton:Some
+            :source-name "Some"
             :arity 1
             :constructs 'coalton:Optional
             :classname nil
@@ -546,6 +570,7 @@
           ('coalton:None
            (make-constructor-entry
             :name 'coalton:None
+            :source-name "None"
             :arity 0
             :constructs 'coalton:Optional
             :classname nil
@@ -561,6 +586,7 @@
 
 (defstruct type-alias-entry
   (name      (util:required 'name)      :type symbol           :read-only t)
+  (source-name nil                      :type (or null string) :read-only t)
   (tyvars    (util:required 'tyvars)    :type tyvar-list       :read-only t)
   (type      (util:required 'type)      :type ty               :read-only t)
   (docstring (util:required 'docstring) :type (or null string) :read-only t))
@@ -611,6 +637,7 @@
 
 (defstruct struct-entry
   (name      (util:required 'name)      :type symbol            :read-only t)
+  (source-name nil                      :type (or null string)  :read-only t)
   (fields    (util:required 'fields)    :type struct-field-list :read-only t)
   (docstring (util:required 'docstring) :type (or null string)  :read-only t))
 
@@ -661,6 +688,7 @@
 
 (defstruct ty-class
   (name                (util:required 'name)                :type symbol              :read-only t)
+  (source-name         nil                                  :type (or null string)    :read-only t)
   (predicate           (util:required 'predicate)           :type ty-predicate        :read-only t)
   (superclasses        (util:required 'superclasses)        :type ty-predicate-list   :read-only t)
   (class-variables     (util:required 'class-variables)     :type util:symbol-list    :read-only t)
@@ -699,6 +727,7 @@
            (values ty-class &optional))
   (make-ty-class
    :name (ty-class-name class)
+   :source-name (ty-class-source-name class)
    :predicate (apply-substitution subst-list (ty-class-predicate class))
    :superclasses (apply-substitution subst-list (ty-class-superclasses class))
    :class-variables (ty-class-class-variables class)
