@@ -228,7 +228,7 @@ the computation."
      ;; Here, it's changing the BankState (which is a Map from String -> Account)
      ;; by inserting an account with its name as the key.
      (modify (fn (mp)
-               (m:insert-or-replace mp (.name acc) acc)))
+               (m:insert mp (.name acc) acc)))
      (pure (Ok acc)))))
 
 ;;; Finally, we'll create all of the functions that our "user" can use to
@@ -324,10 +324,7 @@ the computation."
       (local
        without-overdraft-protection
        (transfer acc-to-close-name deposit-acc-name (.balance acc-to-close)))
-      (okM (modify (fn (mp)
-                (with-default
-                  mp
-                  (m:remove mp acc-to-close-name))))))))
+      (okM (modify (fn (mp) (m:remove mp acc-to-close-name)))))))
 
 ;;; Finally, we run our bank simulation! We use the `do-resultT` macro, which
 ;;; wraps a sequence of `ResultT` computations in a single do block and runs them.
