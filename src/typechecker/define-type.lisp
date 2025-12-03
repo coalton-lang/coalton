@@ -247,6 +247,7 @@
                       (type-definition-name type)
                       (tc:make-type-alias-entry
                        :name (type-definition-name type)
+                       :source-name (parser:identifier-src-source-name (parser:type-definition-name parsed-type))
                        :tyvars tyvars
                        :type aliased-type
                        :docstring nil)))))
@@ -268,6 +269,7 @@
                       (type-definition-name type)
                       (tc:make-struct-entry
                        :name (type-definition-name type)
+                       :source-name (parser:identifier-src-source-name (parser:type-definition-name parsed-type))
                        :fields fields
                        :docstring nil)))))
         ((tc:lookup-struct env (type-definition-name type) :no-error t)
@@ -280,6 +282,7 @@
          (type-definition-name type)
          (tc:make-type-entry
           :name (type-definition-name type)
+          :source-name (parser:identifier-src-source-name (parser:type-definition-name parsed-type))
           :runtime-type (type-definition-runtime-type type)
           :type (type-definition-type type)
           :tyvars tyvars
@@ -469,6 +472,7 @@
                     := (source:docstring ctor)
                   :collect (tc:make-constructor-entry
                             :name ctor-name
+                            :source-name (parser:identifier-src-source-name (parser:type-definition-ctor-name ctor))
                             :arity (length (parser:type-definition-ctor-field-types ctor))
                             :constructs name
                             :classname classname

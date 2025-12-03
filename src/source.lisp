@@ -18,6 +18,7 @@
    #:location<
    #:make-location
    #:make-source-error
+   #:extract-source-text
    #:make-source-file
    #:make-source-string
    #:message
@@ -247,6 +248,42 @@ If locations appear in different sources, compare the sources by name."
   (declare (type cons span))
   (%make-location :source source
                   :span span))
+
+(defgeneric extract-source-text (source span)
+  (:documentation "Extract text from SOURCE at SPAN. Returns NIL if SOURCE is unavailable or unreadable."))
+
+(defmethod extract-source-text ((source source-string) span)
+  "Extract text from a string source."
+  (when (and (source-available-p source) span)
+    (handler-case
+        (let* ((string (source-string source))
+               (start (span-start span))
+               (end (min (span-end span) (length string))))
+          (when (< start end)
+            (subseq string start end)))
+      (cl:error () nil))))
+
+(defmethod extract-source-text ((source source-file) span)
+  "Extract text from a file source."
+  (when (and (source-available-p source) span)
+    (handler-case
+        (let* ((start (span-start span))
+               (end (span-end span))
+               (length (- end start)))
+          (when (plusp length)
+            (with-open-stream (stream (source-stream source))
+              (file-position stream start)
+              (let* ((buffer (make-string length))
+                     (read-count (read-sequence buffer stream)))
+                (if (= read-count length)
+                    buffer
+                    (subseq buffer 0 read-count))))))
+      (cl:error () nil))))
+
+(defmethod extract-source-text (source span)
+  "Fallback method for unknown source types."
+  (declare (ignore source span))
+  nil)
 
 ;;; Notes
 
