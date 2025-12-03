@@ -18,6 +18,7 @@
    #:identifier-src                     ; STRUCT
    #:make-identifier-src                ; CONSTRUCTOR
    #:identifier-src-name                ; ACCESSOR
+   #:identifier-src-source-name         ; ACCESSOR
    #:identifier-src-list                ; TYPE
    #:parse-list                         ; FUNCTION
    #:parse-error
@@ -64,6 +65,7 @@
 (defstruct (identifier-src
             (:copier nil))
   (name     (util:required 'name)     :type identifier :read-only t)
+  (source-name nil                    :type (or null string) :read-only t)
   (location (util:required 'location) :type source:location :read-only t))
 
 (defmethod source:location ((self identifier-src))

@@ -284,6 +284,7 @@
                (:file "loader")
                (:file "utilities")
                (:file "source-tests")
+               (:file "preserve-case-tests")
                (:file "tarjan-scc-tests")
                (:file "reader-tests")
                (:file "error-tests")
