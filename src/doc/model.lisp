@@ -70,7 +70,12 @@
    #:write-link
    #:object-link
    #:source-available-p
-   #:source-location-href))
+   #:source-location-href
+
+   ;; source-name lookup utilities
+   #:lookup-type-source-name
+   #:lookup-class-source-name
+   #:lookup-constructor-source-name))
 
 (in-package #:coalton/doc/model)
 
@@ -170,7 +175,8 @@
            :instances (sort-objects applicable-instances)))))
 
 (defmethod object-name ((object coalton-type))
-  (symbol-name (tc:type-entry-name (type-entry object))))
+  (or (tc:type-entry-source-name (type-entry object))
+      (symbol-name (tc:type-entry-name (type-entry object)))))
 
 (defmethod object-type ((object coalton-type))
   "TYPE")
@@ -203,9 +209,11 @@
 
 (defmethod object-name ((self coalton-struct))
   (let* ((entry (type-entry self))
-         (name (tc:type-entry-name entry)))
+         (name (tc:type-entry-name entry))
+         (source-name (or (tc:type-entry-source-name entry)
+                          (symbol-name name))))
     (format nil "~A~{ ~S~}"
-            (symbol-name name)
+            source-name
             (tc:type-entry-tyvars entry))))
 
 (defmethod object-type ((self coalton-struct))
@@ -255,7 +263,8 @@
   (env:class-instances (class-entry self)))
 
 (defmethod object-name ((self coalton-class))
-  (symbol-name (tc:ty-class-name (class-entry self))))
+  (or (tc:ty-class-source-name (class-entry self))
+      (symbol-name (tc:ty-class-name (class-entry self)))))
 
 (defmethod object-type ((object coalton-class))
   "CLASS")
@@ -483,6 +492,29 @@
     (sort-objects
      (mapcar #'make-coalton-package
              (remove-if-not #'has-objects-p packages)))))
+
+;;; Source-name lookup utilities
+
+(defun lookup-type-source-name (symbol)
+  "Look up the source-name for a type symbol, falling back to symbol-name."
+  (let ((entry (tc:lookup-type entry:*global-environment* symbol :no-error t)))
+    (if entry
+        (tc:type-entry-source-name entry)
+        (symbol-name symbol))))
+
+(defun lookup-class-source-name (symbol)
+  "Look up the source-name for a class symbol, falling back to symbol-name."
+  (let ((entry (tc:lookup-class entry:*global-environment* symbol :no-error t)))
+    (if entry
+        (tc:ty-class-source-name entry)
+        (symbol-name symbol))))
+
+(defun lookup-constructor-source-name (symbol)
+  "Look up the source-name for a constructor symbol, falling back to symbol-name."
+  (let ((entry (tc:lookup-constructor entry:*global-environment* symbol :no-error t)))
+    (if entry
+        (tc:constructor-entry-source-name entry)
+        (symbol-name symbol))))
 
 ;;; Output utilities
 
