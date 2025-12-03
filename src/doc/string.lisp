@@ -12,7 +12,8 @@
    #:coalton/doc/base
    #:coalton/doc/model)
   (:local-nicknames
-   (#:tc #:coalton-impl/typechecker)))
+   (#:tc #:coalton-impl/typechecker)
+   (#:entry #:coalton-impl/entry)))
 
 (in-package #:coalton/doc/string)
 
@@ -25,7 +26,7 @@
     (let ((tcon-name (tc:tycon-name ty)))
       (if (string= "KEYWORD" (package-name (symbol-package tcon-name)))
           (format stream "~S" tcon-name)
-          (format stream "~A" (symbol-name tcon-name))))))
+          (format stream "~A" (lookup-type-source-name tcon-name))))))
 
 (defmethod object-aname ((ty tc:tycon))
   (format nil "~(~A-type~)" (html-entities:encode-entities (object-name ty))))
@@ -77,7 +78,7 @@
 
 (defmethod object-name ((object tc:ty-predicate))
   (with-output-to-string (stream)
-    (write-string (symbol-name (tc:ty-predicate-class object)) stream)
+    (write-string (lookup-class-source-name (tc:ty-predicate-class object)) stream)
     (dolist (type (tc:ty-predicate-types object))
       (write-char #\Space stream)
       (write-string (object-name type) stream)))) 
