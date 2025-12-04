@@ -35,6 +35,8 @@
           lispImpls = [
             "sbcl"
             "ccl"
+            "ecl"
+            "abcl"
           ];
           ##################################
           systems = [
@@ -77,6 +79,12 @@
             };
             ccl = bundledPackage {
               lisp = pkgs.ccl;
+            };
+            ecl = bundledPackage {
+              lisp = pkgs.ecl;
+            };
+            abcl = bundledPackage {
+              lisp = pkgs.abcl;
             };
           };
           packages = impl: [
