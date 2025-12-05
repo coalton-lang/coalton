@@ -300,7 +300,7 @@
                 (symbol-name name)
                 (tc:lookup-function-source-parameter-names ; todo -> env
                  entry:*global-environment* name))
-        (symbol-name name))))
+        (lookup-constructor-source-name name))))
 
 (defmethod object-type ((object coalton-value))
   (if (%function-p object)
