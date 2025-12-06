@@ -70,7 +70,7 @@
    #:product
    #:all
    #:any
-   #:split
+   #:split-at
    #:perms
    #:combs
    #:combsOf
@@ -208,6 +208,12 @@
            (match in
              ((Cons x xs) (f (- n 1) xs (Cons x out)))
              ((Nil) out))))))
+
+  (declare split-at (UFix -> List :a -> (Tuple (List :a) (List :a))))
+  (define (split-at n xs)
+    "Splits a list at index N. This function is equivalent to `(Tuple (take n xs) (drop n xs)`."
+    (Tuple (take n xs)
+           (drop n xs)))
 
   (declare find ((:a -> Boolean) -> List :a -> Optional :a))
   (define (find f xs)
@@ -634,14 +640,6 @@
            True
            (any f? xs)))
       ((Nil) False)))
-
-  (declare split (Char -> String -> (List String)))
-  (define (split c str)
-	"Split a string `str` into a list of substrings by the character `c`."
-    (lisp (List String) (c str)
-      (cl:let ((split-chars (cl:list c)))
-        (cl:declare (cl:dynamic-extent split-chars))
-        (uiop:split-string str :separator split-chars))))
 
   (declare perms (List :a -> (List (List :a))))
   (define (perms l)

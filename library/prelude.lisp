@@ -104,9 +104,11 @@
 
   (:import-from
    #:coalton-library/string
-   #:substring)
+   #:substring
+   #:split)
   (:export
-   #:substring)
+   #:substring
+   #:split)
 
   (:import-from
    #:coalton-library/tuple
@@ -157,7 +159,7 @@
    #:product
    #:all
    #:any
-   #:split)
+   #:split-at)
   (:export
    #:head
    #:tail
@@ -182,7 +184,7 @@
    #:product
    #:all
    #:any
-   #:split)
+   #:split-at)
 
   (:import-from
    #:coalton-library/cell

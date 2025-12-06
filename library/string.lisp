@@ -18,6 +18,7 @@
    #:length
    #:substring
    #:split
+   #:split-at
    #:strip-prefix
    #:strip-suffix
    #:parse-int
@@ -75,11 +76,19 @@
       (lisp String (real-start real-end str)
         (cl:subseq str real-start real-end))))
 
-  (declare split (UFix -> String -> (Tuple String String)))
-  (define (split n str)
+  (declare split-at (UFix -> String -> (Tuple String String)))
+  (define (split-at n str)
     "Splits a string into a head and tail at the nth index."
     (Tuple (substring str 0 n)
            (substring str n (length str))))
+
+  (declare split (Char -> String -> (List String)))
+  (define (split c str)
+    "Split a string `str` into a list of substrings by the character `c`."
+    (lisp (List String) (c str)
+      (cl:let ((split-chars (cl:list c)))
+        (cl:declare (cl:dynamic-extent split-chars))
+        (uiop:split-string str :separator split-chars))))
 
   (declare strip-prefix (String -> String -> (Optional String)))
   (define (strip-prefix prefix str)
