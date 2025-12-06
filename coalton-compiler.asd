@@ -117,6 +117,7 @@
                              (:file "codegen-exception")
                              (:file "codegen-pattern")
                              (:file "codegen-type-definition")
+                             (:file "codegen-swap")
                              (:file "codegen-match")
                              (:file "codegen-expression")
                              (:file "codegen-class")
