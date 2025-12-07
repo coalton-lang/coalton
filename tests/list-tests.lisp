@@ -45,7 +45,9 @@
   (is (== (list:split-at 1 x) (Tuple (make-list 1)
                                      (make-list 2 3))))
   (is (== (list:split-at 0 x) (Tuple (make-list)
-                                     (make-list 1 2 3)))))
+                                     (make-list 1 2 3))))
+  (is (== (list:split-at 4 x) (Tuple (make-list 1 2 3)
+                                     (make-list)))))
 
 (define-test test-search ()
   (is (== (list:find even? x) (Some (the Integer 2))))

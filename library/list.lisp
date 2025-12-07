@@ -212,8 +212,14 @@
   (declare split-at (UFix -> List :a -> (Tuple (List :a) (List :a))))
   (define (split-at n xs)
     "Splits a list at index N. This function is equivalent to `(Tuple (take n xs) (drop n xs)`."
-    (Tuple (take n xs)
-           (drop n xs)))
+    (rec % ((n n)
+            (tail xs)
+            (acc-head Nil))
+      (if (== n 0)
+          (Tuple (%reverse! acc-head) tail)
+          (match tail
+            ((Cons x xs) (% (- n 1) xs (Cons x acc-head)))
+            ((Nil) (Tuple (%reverse! acc-head) Nil))))))
 
   (declare find ((:a -> Boolean) -> List :a -> Optional :a))
   (define (find f xs)
