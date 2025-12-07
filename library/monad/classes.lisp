@@ -3,6 +3,9 @@
    #:coalton
    #:coalton-library/classes)
   (:export
+   #:LiftTo
+   #:lift-to
+
    #:MonadEnvironment
    #:ask
    #:local
@@ -22,6 +25,18 @@
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
+
+  (define-class ((Monad :m) (Monad :r) => LiftTo :m :r)
+     "A monad, :m, which can be lifted to :r. Typically because :m is a MonadTransformer or :m and :r are the same."
+    (lift-to (:m :a -> :r :a)))
+
+  (define-instance (Monad :m => LiftTo :m :m)
+    (inline)
+    (define (lift-to x) x))
+
+  (define-instance ((Monad :m) (Monad (:t :m)) (MonadTransformer :t) => LiftTo :m (:t :m))
+    (inline)
+    (define lift-to lift))
 
   (define-class (Monad :m => MonadEnvironment :env :m (:m -> :env))
     "A monad capable of a function in a computation environment."

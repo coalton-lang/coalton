@@ -266,7 +266,9 @@
   (let ((tcon-name (tc:tycon-name ty)))
     (if (string= "KEYWORD" (package-name (symbol-package tcon-name)))
         (html-entities:encode-entities (format nil "~S" tcon-name))
-        (object-link ty))))
+        (format nil "<a href=\"#~A\">~A</a>"
+                (object-aname ty)
+                (html-entities:encode-entities (object-name ty))))))
 
 (defmethod to-markdown ((ty tc:tapp))
   (with-output-to-string (stream)

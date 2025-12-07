@@ -272,7 +272,7 @@ If locations appear in different sources, compare the sources by name."
                (length (- end start)))
           (when (plusp length)
             (with-open-stream (stream (source-stream source))
-              (file-position stream start)
+              (file-position (inner-stream stream) start)
               (let* ((buffer (make-string length))
                      (read-count (read-sequence buffer stream)))
                 (if (= read-count length)
