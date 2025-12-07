@@ -41,12 +41,12 @@
 (defgeneric codegen-expression (node env)
   (:method ((node node-literal) env)
     (declare (type tc:environment env)
-             (ignore env))
+      (ignore env))
     (node-literal-value node))
 
   (:method ((node node-variable) env)
     (declare (type tc:environment env)
-             (ignore env))
+      (ignore env))
     (let ((value (node-variable-value node)))
       (case value
         ;; HACK: generate efficient code for known constants.
@@ -67,11 +67,45 @@
 
   (:method ((node node-direct-application) env)
     (declare (type tc:environment env))
-    `(,(node-direct-application-rator node)
-      ,@(mapcar
-         (lambda (node)
-           (codegen-expression node env))
-         (node-direct-application-rands node))))
+    (cond
+      ((search "[mv entrypoint]" (symbol-name (node-direct-application-rator node)))
+       (error "Shouldn't be codegening [mv entrypoint]: ~s" node))
+      ;; XXXX HACK:
+      ;;
+      ;; FST => NTH-VALUE 0
+      ;; SND => NTH-VALUE 1
+      ((getf (%node-properties node) ':mv)
+       `(values ,@(mapcar
+                   (lambda (node)
+                     (codegen-expression node env))
+                   (node-direct-application-rands node))))
+
+      ((and (string-equal "FST" (node-direct-application-rator node))
+            (node-direct-application-p (first (node-direct-application-rands node)))
+            (get (node-direct-application-rator (first (node-direct-application-rands node)))  ':mv-call))
+       ;;(break "FST")
+       (let ((mv-fun (get (node-direct-application-rator (first (node-direct-application-rands node)))  ':mv-call)))
+         `(nth-value 0 (,mv-fun ,@(mapcar
+                                   (lambda (node)
+                                     (codegen-expression node env))
+                                   (node-direct-application-rands (first (node-direct-application-rands node))))))))
+      
+      ((and (string-equal "SND" (node-direct-application-rator node))
+            (node-direct-application-p (first (node-direct-application-rands node)))
+            (get (node-direct-application-rator (first (node-direct-application-rands node)))  ':mv-call))
+       ;;(break "SND")
+       (let ((mv-fun (get (node-direct-application-rator (first (node-direct-application-rands node)))  ':mv-call)))
+         `(nth-value 1 (,mv-fun ,@(mapcar
+                                   (lambda (node)
+                                     (codegen-expression node env))
+                                   (node-direct-application-rands (first (node-direct-application-rands node))))))))
+      
+      (t
+       `(,(node-direct-application-rator node)
+         ,@(mapcar
+            (lambda (node)
+              (codegen-expression node env))
+            (node-direct-application-rands node))))))
 
   (:method ((expr node-abstraction) env)
     (declare (type tc:environment env))

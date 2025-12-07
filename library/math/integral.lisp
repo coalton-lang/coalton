@@ -189,7 +189,7 @@ are floored and truncated division, respectively."
        (inline)
        (define (rem a n)
          (lisp ,type (a n) (cl:rem a n)))
-       (inline)
+       ;;(inline) ;; XXX HACK FIXME: Inlining doesn't work with MV stuff!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
        (define (quotRem a n)
          (match (lisp (Tuple Integer ,type) (a n)
                   (cl:multiple-value-call 'Tuple (cl:truncate a n)))
@@ -201,7 +201,7 @@ are floored and truncated division, respectively."
        (inline)
        (define (mod a n)
          (lisp ,type (a n) (cl:mod a n)))
-       (inline)
+       ;;(inline) ;; XXX HACK FIXME: Inlining doesn't work with MV stuff!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
        (define (divMod a n)
          (match (lisp (Tuple Integer ,type) (a n)
                   (cl:multiple-value-call 'Tuple (cl:floor a n)))
