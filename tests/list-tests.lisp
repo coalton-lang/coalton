@@ -41,7 +41,11 @@
 
 (define-test test-droptake ()
   (is (== (list:drop 2 x) (make-list 3)))
-  (is (== (list:take 2 x) (make-list 1 2))))
+  (is (== (list:take 2 x) (make-list 1 2)))
+  (is (== (list:split-at 1 x) (Tuple (make-list 1)
+                                     (make-list 2 3))))
+  (is (== (list:split-at 0 x) (Tuple (make-list)
+                                     (make-list 1 2 3)))))
 
 (define-test test-search ()
   (is (== (list:find even? x) (Some (the Integer 2))))
@@ -212,9 +216,6 @@
   Unit)
 
 (define-test test-combinatorics ()
-  (is (== (list:split #\, "one,two,three") (make-list "one" "two" "three")))
-  (is (== (list:split #\, "one,,three") (make-list "one" "" "three")))
-
   (is (set== (list:perms x)
              (make-list
               (make-list 1 2 3)
