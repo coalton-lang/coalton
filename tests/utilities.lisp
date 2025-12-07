@@ -121,7 +121,8 @@ Returns (values SOURCE-PATHNAME COMPILED-PATHNAME)."
   "Run the test file at PATHNAME."
   (format t "~&;; --- Running test file: ~A~%" pathname)
   (let ((file (test-file pathname))
-        (coalton-impl/settings:*coalton-print-unicode* nil))
+        (coalton-impl/settings:*coalton-print-unicode* nil)
+        (*readtable* (copy-readtable nil)))
     (loop :for (line number flags description program expected-error)
             :in (coalton-tests/loader:load-test-file file)
           :unless (position :disable flags)
