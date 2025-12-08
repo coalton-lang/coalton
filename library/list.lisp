@@ -71,6 +71,7 @@
    #:all
    #:any
    #:split-at
+   #:split-around
    #:perms
    #:combs
    #:combsOf
@@ -220,6 +221,13 @@
           (match tail
             ((Cons x xs) (% (- n 1) xs (Cons x acc-head)))
             ((Nil) (Tuple (%reverse! acc-head) Nil))))))
+
+  (declare split-around (UFix -> List :a -> (Tuple3 (List :a) (Optional :a) (List :a))))
+  (define (split-around n xs)
+    "Splits a list around N into a Tuple of the first N elements, the element at index N, and a tail of all remaining elements. N must be a valid index."
+    (match (split-at n xs)
+      ((Tuple head (Cons x xs)) (Tuple3 head (Some x) xs))
+      ((Tuple head (Nil)) (Tuple3 head None Nil))))
 
   (declare find ((:a -> Boolean) -> List :a -> Optional :a))
   (define (find f xs)
