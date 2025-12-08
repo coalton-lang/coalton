@@ -3,7 +3,9 @@
    clean up the rest of the code, and hopefully make porting easier.
 |#
 (cl:in-package #:cl-user)
-(cl:defpackage #:coalton/compatibility-layer
+(cl:defpackage
+    #:coalton-compatibility-layer
+    ;; #:coalton/compatibility-layer
   (:use #:cl)
   (:export
 ;;; try-* are macros/functions that most probably will never be
@@ -13,16 +15,35 @@
 ;;; not exist at the moment for some Lisp, it might exist in the
 ;;; future.
    #:try-muffle-code-deletion-note-condition
+   #:try-muffle-redefinition-warning-condition
+   #:try-unmuffle-redefinition-warning-condition
+   #:try-muffle-compiler-note-condition
    #:try-lock-package
+   #:try-unlock-package
    #:try-freeze-type
+   #:try-optimize-type-check
    #:unset-all-float-traps
+   #:get-fixnum-bits
    #:hash-combine))
 
-(in-package #:coalton/compatibility-layer)
+;; (in-package #:coalton/compatibility-layer)
+(in-package #:coalton-compatibility-layer)
 
 (defmacro try-muffle-code-deletion-note-condition ()
   #+sbcl
   `(sb-ext:muffle-conditions sb-ext:code-deletion-note))
+
+(defmacro try-muffle-redefinition-warning-condition ()
+  #+sbcl
+  `(sb-ext:muffle-conditions sb-kernel:redefinition-warning))
+
+(defmacro try-unmuffle-redefinition-warning-condition ()
+  #+sbcl
+  `(sb-ext:unmuffle-conditions sb-kernel:redefinition-warning))
+
+(defmacro try-muffle-compiler-note-condition ()
+  #+sbcl
+  `(sb-ext:muffle-conditions sb-ext:compiler-note))
 
 (defmacro try-lock-package (the-package)
   #+sb-package-locks
@@ -36,6 +57,10 @@
   #+sbcl
   `(declaim (sb-ext:freeze-type ,the-type)))
 
+(defmacro try-optimize-type-check (the-level)
+  #+sbcl
+  `(optimize (sb-c::type-check ,the-level)))
+
 ;; (defun unset-all-float-traps ()
 (defmacro unset-all-float-traps ()
   (cl:eval-when (:compile-toplevel :load-toplevel :execute)
@@ -44,6 +69,11 @@
     #+abcl (extensions:set-floating-point-modes :traps nil)
     #+ecl  (ext:trap-fpe 'cl:t nil)
     ))
+
+(declaim (inline get-fixnum-bits))
+(defun get-fixnum-bits ()
+  #+sbcl sb-vm:n-fixnum-bits
+  #-sbcl (cl:1+ (cl:floor (cl:log cl:most-positive-fixnum 2))))
 
 (pushnew
  (cond ((= 16 (integer-length cl:most-positive-fixnum))
