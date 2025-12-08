@@ -29,6 +29,8 @@
    #:replace
    #:remove
    #:update
+   #:modify
+   #:modify_
    #:keys
    #:values
    #:entries
@@ -523,7 +525,12 @@ removed.  If HM does not contain an entry with KEY, HM is returned as is."
                         -> (Optional :v -> (Tuple (Optional :v) :a))
                         -> Tuple (HashMap :k :v) :a))
   (define (update hm key f)
-    ""
+    "Generic update/filter function. Takes a KEY and a F. F is passed
+NONE if KEY is not found, (Some KEY) if it is found. F returns a tuple,
+(Optional :v, :a). If the first term is NONE, then the KEY entry is cleared
+from the hashmap. If it is (SOME v), then the KEY entry is updated to V.
+The second term, :a, of the tuple is returned from `update` along with the
+modified `HashMap`."
     (let ((hb (hbits key))
           ;; walk may return (Chain Nil) to indicate the sole node is
           ;; deleted.
@@ -599,6 +606,25 @@ removed.  If HM does not contain an entry with KEY, HM is returned as is."
           )
       (let (Tuple newnode aux) = (walk (the UFix 0) (root hm)))
       (Tuple (HashMap newnode) aux)))
+
+  (inline)
+  (declare modify (Hash :k => HashMap :k :v -> :k -> (:v -> :v) -> Tuple (HashMap :k :v) (Optional :v)))
+  (define (modify hm key f)
+    "Modify the value at KEY with F. Returns the modified `HashMap` and the
+new value, if the key was found."
+    (update hm key (fn (key?)
+                     (match key?
+                       ((None)
+                        (Tuple None None))
+                       ((Some v)
+                        (let ((result (f v)))
+                          (Tuple (Some result) (Some result))))))))
+
+  (inline)
+  (declare modify_ (Hash :k => HashMap :k :v -> :k -> (:v -> :v) -> HashMap :k :v))
+  (define (modify_ hm key f)
+    "Modify the value at KEY with F. Returns the modified `HashMap`."
+    (fst (modify hm key f)))
 
   ;; Auxiliary functions for functor
   (declare %fmap-entry ((:v -> :w) ->  HmEntry :k :v ->  HmEntry :k :w))
@@ -761,6 +787,21 @@ but not in both."
 
   (define-instance (Hash :k => Monoid (HashMap :k :v))
     (define mempty Empty))
+
+  (define-instance ((Hash :k) (Into :k String) (Into :v String) => Into (HashMap :k :v) String)
+    (define (into hm)
+      (let the-entries = (entries hm))
+      (match (iter:next! the-entries)
+        ((None) "()")
+        ((Some (Tuple k1 v1))
+         (<> "("
+             (<>
+              (iter:fold!
+               (fn (accum (Tuple k v))
+                 (<> accum (<> ", " (<> (into k) (<> " -> " (into v))))))
+               (<> (into k1) (<> " -> " (into v1)))
+               the-entries)
+              ")"))))))
   )
 
 ;;
