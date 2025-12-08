@@ -18,17 +18,10 @@
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
   :in-order-to ((asdf:test-op (asdf:test-op #:coalton/tests)))
-  :depends-on ("coalton/compatibility-layer"
+  :depends-on ("coalton-empty"
+               ;; "coalton-compatibility"
                "coalton-compiler"
                "coalton/library"))
-
-(asdf:defsystem "coalton/compatibility-layer"
-  :description "The Coalton compatibility layer."
-  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
-  :license "MIT"
-  :version (:read-file-form "VERSION.txt")
-  :pathname "compat/"
-  :components ((:file "compatibility-layer")))
 
 (asdf:defsystem "coalton/library"
   :description "The Coalton standard library."
@@ -45,7 +38,8 @@
                           (*features* (cons ':coalton-lisp-toplevel *features*)))
                       (funcall compile)))
   :defsystem-depends-on ("coalton-asdf")
-  :depends-on ("coalton/compatibility-layer"
+  :depends-on ("coalton-empty"
+               ;; "coalton-compatibility"
                "coalton-compiler"
                "coalton/hashtable-shim"
                "trivial-garbage"

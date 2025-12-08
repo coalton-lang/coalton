@@ -10,20 +10,8 @@
                     (let (#+sbcl (sb-ext:*derive-function-types* t)
                           #+sbcl (sb-ext:*block-compile-default* :specified))
                       (funcall compile)))
-  :depends-on (
-                                        ; This causes a circular def
-                                        ; for some reason.
-               ;; "coalton/compatibility-layer"
-                                        ; But this one works - go
-                                        ; figure...
-                                        ;
-                                        ; Strangely enough, it doesn't
-                                        ; seem to appear anywhere in
-                                        ; the loading chain (maybe
-                                        ; that one is showing the
-                                        ; packages instead of the
-                                        ; systems).
-               "coalton-compatibility-layer"
+  :depends-on ("coalton-empty"
+               ;; "coalton-compatibility"
                "alexandria"
                "concrete-syntax-tree"
                "eclector"
@@ -156,18 +144,3 @@
                (:file "define-coalton-macro")
                (:file "language-macros")
                (:file "lock-package" :if-feature :sb-package-locks)))
-
-;; Two systems for the same package (aka Dr Jekyll & Mr Hyde).
-;;
-;; Because we can.
-;;
-;; And we want to because ASDF doesn't like the original
-;; (coalton/compatibility-layer) system - it's
-;; ``circular''. (huh?!?!?)
-(asdf:defsystem "coalton-compatibility-layer"
-  :description "The Coalton compatibility layer."
-  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
-  :license "MIT"
-  :version (:read-file-form "VERSION.txt")
-  :pathname "compat/"
-  :components ((:file "compatibility-layer")))
