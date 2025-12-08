@@ -37,7 +37,8 @@
    #:union
    #:intersection
    #:difference
-   #:xor))
+   #:xor
+   #:show))
 
 (in-package #:coalton-library/hashmap)
 
@@ -788,20 +789,21 @@ but not in both."
   (define-instance (Hash :k => Monoid (HashMap :k :v))
     (define mempty Empty))
 
-  (define-instance ((Hash :k) (Into :k String) (Into :v String) => Into (HashMap :k :v) String)
-    (define (into hm)
-      (let the-entries = (entries hm))
-      (match (iter:next! the-entries)
-        ((None) "()")
-        ((Some (Tuple k1 v1))
-         (<> "("
-             (<>
-              (iter:fold!
-               (fn (accum (Tuple k v))
+  (declare show ((Hash :k) (Into :k String) (Into :v String) => HashMap :k :v -> String))
+  (define (show hm)
+    "Return a human-readable representation of HM."
+    (let the-entries = (entries hm))
+    (match (iter:next! the-entries)
+      ((None) "()")
+      ((Some (Tuple k1 v1))
+       (<> "("
+           (<>
+            (iter:fold!
+             (fn (accum (Tuple k v))
                  (<> accum (<> ", " (<> (into k) (<> " -> " (into v))))))
-               (<> (into k1) (<> " -> " (into v1)))
-               the-entries)
-              ")"))))))
+             (<> (into k1) (<> " -> " (into v1)))
+             the-entries)
+            ")")))))
   )
 
 ;;

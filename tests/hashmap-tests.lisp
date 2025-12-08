@@ -497,3 +497,11 @@
   (is (== (list->hashmap (make-list (Tuple 0 1)
                                     (Tuple 1 1)))
           result)))
+
+(define-test hashmap-show ()
+  (let hm = (the (hashmap:HashMap Integer Integer)
+                 (list->hashmap
+                  (make-list (Tuple 0 0)
+                             (Tuple 1 10)))))
+  (is (== "(0 -> 0, 1 -> 10)"
+          (hashmap:show hm))))
