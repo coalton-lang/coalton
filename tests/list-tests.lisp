@@ -41,13 +41,17 @@
 
 (define-test test-droptake ()
   (is (== (list:drop 2 x) (make-list 3)))
-  (is (== (list:take 2 x) (make-list 1 2)))
+  (is (== (list:take 2 x) (make-list 1 2))))
+
+(define-test test-split-at ()
   (is (== (list:split-at 1 x) (Tuple (make-list 1)
                                      (make-list 2 3))))
   (is (== (list:split-at 0 x) (Tuple (make-list)
                                      (make-list 1 2 3))))
   (is (== (list:split-at 4 x) (Tuple (make-list 1 2 3)
-                                     (make-list))))
+                                     (make-list)))))
+
+(define-test test-split-around ()
   (is (== (list:split-around 1 x) (Tuple3 (make-list 1)
                                           (Some 2)
                                           (make-list 3))))
