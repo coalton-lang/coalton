@@ -258,6 +258,7 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
          (make-ty-predicate
           :class (make-identifier-src
                   :name name
+                  :source-name (source:extract-source-text source (cst:source (first forms)))
                   :location (form-location source (first forms)))
           :types (loop :for form :in (cdr forms)
                        :collect (parse-type form source))

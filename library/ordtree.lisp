@@ -4,27 +4,32 @@
    #:coalton-library/classes
    #:coalton-library/hash
    #:coalton-library/tuple
-   #:coalton-library/functions)
+   #:coalton-library/functions
+   #:coalton-library/math)
   (:local-nicknames
    (#:iter #:coalton-library/iterator)
-   (#:cell #:coalton-library/cell))
+   (#:cell #:coalton-library/cell)
+   (#:util #:coalton-impl/util))
   (:shadow #:empty)
   (:export
-   #:Tree #:Empty
+   #:OrdTree #:empty
+   #:empty?
    #:lookup
-   #:lookup-neighbors
+   #:insert
+   #:adjoin
+   #:replace
+   #:remove
+   #:update
    #:max-element
    #:min-element
-   #:insert
-   #:replace
-   #:replace-or-insert
-   #:insert-or-replace
-   #:remove
+   #:lookup-neighbors
+   #:transform-elements
    #:increasing-order
    #:decreasing-order
-   #:collect!
-   #:merge
-   #:make))
+   #:union
+   #:intersection
+   #:difference
+   #:xor))
 
 (in-package :coalton-library/ordtree)
 
@@ -33,542 +38,515 @@
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
-;; adapted from https://matt.might.net/articles/red-black-delete/
+;; Based on Ralf Hinze, Purely Functional 1-2 Brother Trees
+;; https://www.researchgate.net/publication/220676591_Purely_Functional_1-2_Brother_Trees
 
 (coalton-toplevel
-  ;; the red-black tree invariants:
-  ;; - the left child of a node is less than the node, and the right child is greater
-  ;; - a red node has no red children
-  ;; - a leaf is black
-  ;; - every path from the root to a leaf passes through the same number of black nodes
 
-  ;; unexported; a marker held by trees to enable self-balancing.
-  (repr :enum)
-  (derive Eq)
-  (define-type Color
-    ;; has no red children
-    Red
-
-    ;; may have either red or black children
-    Black
-
-    ;; intermediate states during deletion; will never exist outside of a `remove' operation
-    DoubleBlack
-    NegativeBlack)
-
-  (declare color-plus-black (Color -> Color))
-  (define (color-plus-black c)
-    (match c
-      ((DoubleBlack) (error "cannot add black to double-black"))
-      ((Black) DoubleBlack)
-      ((Red) Black)
-      ((NegativeBlack) Red)))
-
-  (declare color-minus-black (Color -> Color))
-  (define (color-minus-black c)
-    (match c
-      ((DoubleBlack) Black)
-      ((Black) Red)
-      ((Red) NegativeBlack)
-      ((NegativeBlack) (error "cannot subtract black from negative-black"))))
-
-  (define-type (Tree :elt)
-    "A red-black balanced binary tree, sorted by `<=>` and unique by `==`."
+  (define-type (OrdTree :elt)
+    "A 1-2 brother tree, sorted by `<=>` and unique by `==`."
 
     Empty
-    "exported; an empty tree. considered black for the purpose of the invariants."
+    "exported; an empty tree."
 
-    (Branch Color (Tree :elt) :elt (Tree :elt))
-    "unexported; a tree with at least one element, and possibly children. (Branch clr less elt right). Every element of LESS is less than ELT, and every element of RIGHT is greater than ELT."
+    (N1 (OrdTree :elt))
+    "unexported; unary node"
 
-    DoubleBlackEmpty
-    "unexported: a double-black leaf node. Intermediate stage during deletion; will never exist outside of a `remove` operation.")
+    (N2 (OrdTree :elt) :elt (OrdTree :elt))
+    "unexported; binary node"
 
-  ;;; color operations
+    (N3 (OrdTree :elt) :elt (OrdTree :elt) :elt (OrdTree :elt))
+    "unexported; ternary node - only appear intermediately during balancing"
 
-  (declare tree-plus-black ((Tree :elt) -> (Tree :elt)))
-  (define (tree-plus-black tre)
-    (match tre
-      ((Empty) DoubleBlackEmpty)
-      ((Branch c left pivot right) (Branch (color-plus-black c) left pivot right))
-      ((DoubleBlackEmpty) (error "cannot add black to double-black empty tree"))))
+    (L2 :elt)
+    "unexported; leaf node - only appear intermediately during balancing"
+    )
 
-  (declare tree-minus-black ((Tree :elt) -> (Tree :elt)))
-  (define (tree-minus-black tre)
-    (match tre
-      ((Empty) (error "cannot subtract black from empty tree"))
-      ((Branch c left pivot right) (Branch (color-minus-black c) left pivot right))
-      ((DoubleBlackEmpty) Empty)))
+  (declare empty? (OrdTree :elt -> Boolean))
+  (define (empty? t)
+    (match t
+      ((Empty) True)
+      (_ False)))
 
-  (declare as-black ((Tree :elt) -> (Tree :elt)))
-  (define (as-black tre)
-    (match tre
-      ((Empty) Empty)
-      ((DoubleBlackEmpty) Empty)
-      ((Branch _ left elt right) (Branch Black left elt right))))
+  ;;; aux
+  (declare stray-node (Unit -> :a))
+  (define (stray-node)
+    (lisp :a ()
+      (util:coalton-bug "Encountered ephemeral node during traversal")))
 
-  (declare tree-double-black? ((Tree :elt) -> Boolean))
-  (define (tree-double-black? tre)
-    (match tre
-      ((Branch clr _ _ _) (== clr DoubleBlack))
-      ((Empty) False)
-      ((DoubleBlackEmpty) True)))
+  (declare consistent? (OrdTree :elt -> Boolean))
+  (define (consistent? t)
+    "Check invariance condition of the tree `t`.  If the condition is broken,
+an error is thrown."
+    (let ((dep (fn (t)
+                 "Returns the depth of nullary tree, while checking other conditions."
+                 (match t
+                   ((Empty) 0)
+                   ((N1 (N1 _)) (error "Unary node has unary child"))
+                   ((N1 t) (1+ (dep t)))
+                   ((N2 l _ r) (let ((dl (dep l))
+                                     (dr (dep r)))
+                                 (if (== dl dr)
+                                     (1+ dl)
+                                     (error "Depth inbalance"))))
+                   (_ (error "Ephemeral node"))))))
+      (dep t)
+      True))
 
-  ;;; searching trees
+  ;;; searching
 
-  (declare lookup ((Ord :elt) => ((Tree :elt) -> :elt -> (Optional :elt))))
+  ;; API
+  (declare lookup (Ord :elt => OrdTree :elt -> :elt -> Optional :elt))
+  (inline)
   (define (lookup haystack needle)
     "If HAYSTACK contains an element `==` to NEEDLE, return it."
-    (match haystack
-      ((Empty) None)
-      ((Branch _ left elt right)
-       (match (<=> needle elt)
-         ((LT) (lookup left needle))
-         ((EQ) (Some elt))
-         ((GT) (lookup right needle))))
-      ((DoubleBlackEmpty) (error "Found double-black node outside of removal process"))))
+    (let ((lup (fn (t)
+                 (match t
+                   ((Empty) None)
+                   ((N1 t) (lup t))
+                   ((N2 left elt right)
+                    (match (<=> needle elt)
+                      ((LT) (lup left))
+                      ((EQ) (Some elt))
+                      ((GT) (lup right))))
+                   (_ (stray-node))))))
+      (lup haystack)))
 
-  (declare max-element (Ord :elt => Tree :elt -> Optional :elt))
-  (define (max-element tree)
-    (match tree
-      ((Empty) None)
-      ((Branch _ _ elt right) (match (max-element right)
-                                ((None) (Some elt))
-                                ((Some e) (Some e))))
-      ((DoubleBlackEmpty) (error "Found double-black node outside of removal process"))))
+  ;; Smart constructors; eliminating intermediate node and balancing the
+  ;; subtree.  See the paper for the details.
+  (declare make-root (OrdTree :elt -> OrdTree :elt))
+  (inline)
+  (define (make-root t)
+    (match t
+      ((L2 a) (N2 Empty a Empty))
+      ((N3 t1 a1 t2 a2 t3) (N2 (N2 t1 a1 t2) a2 (N1 t3)))
+      ((N1 t) t)
+      (_ t)))
 
-  (declare min-element (Ord :elt => Tree :elt -> Optional :elt))
-  (define (min-element tree)
-    (match tree
-      ((Empty) None)
-      ((Branch _ left elt _) (match (min-element left)
-                               ((None) (Some elt))
-                               ((Some e) (Some e))))
-      ((DoubleBlackEmpty) (error "Found double-black node outside of removal process"))))
+  (declare make-n1 (OrdTree :elt -> OrdTree :elt))
+  (inline)
+  (define (make-n1 t)
+    (match t
+      ((L2 a) (N2 Empty a Empty))
+      ((N3 t1 a1 t2 a2 t3) (N2 (N2 t1 a1 t2) a2 (N1 t3)))
+      (_ (N1 t))))
 
-  (declare lookup-neighbors ((Ord :elt) => (Tree :elt) -> :elt
-                                                       -> (Tuple3 (Optional :elt)
-                                                                  (Optional :elt)
-                                                                  (Optional :elt))))
+  (declare make-n2i (OrdTree :elt -> :elt -> OrdTree :elt -> OrdTree :elt))
+  (inline)
+  (define (make-n2i tl a tr)
+    "Smart N2 constructor for insertion/replace only"
+    (match tl
+      ((L2 a1) (N3 Empty a1 Empty a tr))
+      ((N3 t1 a1 t2 a2 t3)
+       (match tr
+         ((N1 t4) (N2 (N2 t1 a1 t2) a2 (N2 t3 a t4)))
+         (_       (N3 (N2 t1 a1 t2) a2 (N1 t3) a tr))))
+      ((N1 t1)
+       (match tr
+         ((N3 t2 a2 t3 a3 t4) (N2 (N2 t1 a t2) a2 (N2 t3 a3 t4)))
+         ((L2 a2)             (N3 tl a Empty a2 Empty))
+         ((N1 t2)             (N1 (N2 t1 a t2)))
+         (_                   (N2 tl a tr))))
+      ((N2 _ _ _)
+       (match tr
+         ((N3 t2 a2 t3 a3 t4) (N3 tl a (N1 t2) a2 (N2 t3 a3 t4)))
+         ((L2 a2)             (N3 tl a Empty a2 Empty))
+         (_                   (N2 tl a tr))))
+      (_
+       (match tr
+         ((L2 a2)             (N3 tl a Empty a2 Empty))
+         (_                   (N2 tl a tr))))))
+
+  (declare make-n2 (OrdTree :elt -> :elt -> OrdTree :elt -> OrdTree :elt))
+  (inline)
+  (define (make-n2 tl a tr)
+    "Generic N2 constructor.  This handles both deletion and insertion,
+so that it can be directly used for update procedure."
+    (match tl
+      ((L2 a1) (N3 Empty a1 Empty a tr))
+      ((N3 t1 a1 t2 a2 t3)
+       (match tr
+         ((N1 t4) (N2 (N2 t1 a1 t2) a2 (N2 t3 a t4)))
+         (_       (N3 (N2 t1 a1 t2) a2 (N1 t3) a tr))))
+      ((N1 (N1 t1))
+       (match tr
+         ((N2 (N1 t2) a2 (= t3 (N2 _ _ _))) (N1 (N2 (N2 t1 a t2) a2 t3)))
+         ((N2 (N2 t2 a2 t3) a3 (N1 t4))     (N1 (N2 (N2 t1 a t2) a2
+                                                    (N2 t3 a3 t4))))
+         ((N2 (= t2 (N2 _ _ _)) a2 (= t3 (N2 _ _ _)))
+                                            (N2 (N2 (N1 t1) a t2) a2
+                                                (N1 t3)))
+         ((N1 t2)                           (N1 (N2 (N1 t1) a t2)))
+         (_                                 (N2 tl a tr))))
+      ((N1 t1)
+       (match tr
+         ((N3 t2 a2 t3 a3 t4) (N2 (N2 t1 a t2) a2 (N2 t3 a3 t4)))
+         ((L2 a2)             (N3 tl a Empty a2 Empty))
+         ((N1 t2)             (N1 (N2 t1 a t2)))
+         (_                   (N2 tl a tr))))
+      ((N2 (N1 t1) a1 (N2 t2 a2 t3))
+       (match tr
+         ((N1 (N1 t4))        (N1 (N2 (N2 t1 a1 t2) a2
+                                      (N2 t3 a t4))))
+         ((N3 t2 a2 t3 a3 t4) (N3 tl a (N1 t2) a2 (N2 t3 a3 t4)))
+         ((L2 a2)             (N3 tl a Empty a2 Empty))
+         (_                   (N2 tl a tr))))
+      ((N2 (= t1 (N2 _ _ _)) a1 (N1 t2))
+       (match tr
+         ((N1 (N1 t3))        (N1 (N2 t1 a1 (N2 t2 a t3))))
+         ((N3 t2 a2 t3 a3 t4) (N3 tl a (N1 t2) a2 (N2 t3 a3 t4)))
+         ((L2 a2)             (N3 tl a Empty a2 Empty))
+         (_                   (N2 tl a tr))))
+      ((N2 (= t1 (N2 _ _ _)) a1 (= t2 (N2 _ _ _)))
+       (match tr
+         ((N1 (= t3 (N1 _)))  (N2 (N1 t1) a1 (N2 t2 a t3)))
+         ((N3 t2 a2 t3 a3 t4) (N3 tl a (N1 t2) a2 (N2 t3 a3 t4)))
+         ((L2 a2)             (N3 tl a Empty a2 Empty))
+         (_                   (N2 tl a tr))))
+      ((N2 _ _ _)
+       (match tr
+         ((N3 t2 a2 t3 a3 t4) (N3 tl a (N1 t2) a2 (N2 t3 a3 t4)))
+         ((L2 a2)             (N3 tl a Empty a2 Empty))
+         (_                   (N2 tl a tr))))
+      (_
+       (match tr
+         ((L2 a2)             (N3 tl a Empty a2 Empty))
+         (_                   (N2 tl a tr))))))
+
+  ;; API
+  (declare insert (Ord :elt => OrdTree :elt -> :elt -> OrdTree :elt))
+  (define (insert t a)
+    "Returns an ordtree that has an new entry `a` added to `t`.  If `t` already
+has an entry which is `==` to `a`,  The new ordtree has `a` in place of the
+existing entry."
+    (let ((ins (fn (n)
+                 (match n
+                   ((Empty)    (L2 a))
+                   ((N1 t1)    (make-n1 (ins t1)))
+                   ((N2 l b r)
+                    (match (<=> a b)
+                      ((LT)    (make-n2i (ins l) b r))
+                      ((EQ)    (N2 l a r))
+                      ((GT)    (make-n2i l b (ins r)))))
+                   (_ (stray-node))))))
+      (make-root (ins t))))
+
+  ;; API
+  (declare adjoin (Ord :elt => OrdTree :elt -> :elt -> OrdTree :elt))
+  (define (adjoin t a)
+    "Returns an ordtree that has a new entry `a`.  If `t` already has an entry
+which is `==` to `a`, however, the original `t` is returned as is."
+    (let ((rep (fn (n)
+                 (match n
+                   ((Empty)    (L2 a))
+                   ((N1 t1)    (make-n1 (rep t1)))
+                   ((N2 l b r)
+                    (match (<=> a b)
+                      ((LT)    (make-n2i (rep l) b r))
+                      ((EQ)    n)
+                      ((GT)    (make-n2i l b (rep r)))))
+                   (_ (stray-node))))))
+      (make-root (rep t))))
+
+  ;; API
+  (declare replace (Ord :elt => OrdTree :elt -> :elt -> OrdTree :elt))
+  (define (replace t a)
+    "Returns an ordtree that has an entry `a` only if `t` already has an
+entry which is `==` to `a`.  The original entry is replaced with the given
+`a`.  If `t` doesn't have an entry `==` to `a`, `t` is returned as is."
+    (let ((rep (fn (n)
+                 (match n
+                   ((Empty)    Empty)
+                   ((N1 t1)    (make-n1 (rep t1)))
+                   ((N2 l b r)
+                    (match (<=> a b)
+                      ((LT)    (make-n2i (rep l) b r))
+                      ((EQ)    (N2 l a r))
+                      ((GT)    (make-n2i l b (rep r)))))
+                   (_ (stray-node))))))
+      (make-root (rep t))))
+
+  ;; API
+  (declare remove (Ord :elt => OrdTree :elt -> :elt -> OrdTree :elt))
+  (define (remove t a)
+    "Returns an ordtree that is the same as `t` except that the entry
+which is `==` to `a` is removed.  If `t` does not have such an entry,
+`t` is returned as is."
+    (let ((del (fn (n)
+                 (match n
+                   ((Empty) Empty)
+                   ((N1 t)  (N1 (del t)))
+                   ((N2 l b r)
+                    (match (<=> a b)
+                      ((LT) (make-n2 (del l) b r))
+                      ((EQ) (match (split-min r)
+                              ((None)               (N1 l))
+                              ((Some (Tuple a1 r1)) (make-n2 l a1 r1))))
+                      ((GT) (make-n2 l b (del r)))))
+                   (_ (stray-node))))))
+      (make-root (del t))))
+
+  (define (split-min n)
+    "Helper for removal"
+    (match n
+      ((Empty)       None)
+      ((N1 t)        (match (split-min t)
+                       ((None)              None)
+                       ((Some (Tuple a t1)) (Some (Tuple a (N1 t1))))))
+      ((N2 t1 a1 t2) (match (split-min t1)
+                       ((None)               (Some (Tuple a1 (N1 t2))))
+                       ((Some (Tuple a t11)) (Some (Tuple a
+                                                          (make-n2 t11 a1 t2))))))
+      (_ (stray-node))))
+
+  ;; API
+  (declare update (Ord :elt => OrdTree :elt -> :elt
+                       -> (Optional :elt -> (Tuple (Optional :elt) :a))
+                       -> (Tuple (OrdTree :elt) :a)))
+  (define (update t a f)
+    "Generic update.  Look for the element `a` in `t`.  If there's an entry,
+call `f` with the existing entry wrapped with Some.  If there isn't an entry,
+call `f` with None.  `f` must return a tuple of possible replacement entry,
+and an auxiliary result.
+
+If the entry doesn't exist in `t` and `f` returns `(Some elt)`, `elt` is
+inserted.  If the entry exists in `t` and `f` returns None, the element
+is removed.  If the entry exists in `t` and `f` returns `(Some elt)`, `elt`
+replaces the original entry.
+
+It is important that if `f` returns `(Some elt)`, `elt` must be still greater
+than the 'previous' element and less than the 'next' element in the tree,
+otherwise the returned tree would be inconsistent.
+If you use an ordtree to keep a set of keys, you don't really need to alter
+the existing entry.  It is useful if you define your own element type that
+carries extra info, though; see OrdMap implementation."
+    (let ((unchanged? (fn (a b)
+                        (lisp Boolean (a b)
+                          (cl:eq a b))))
+          (walk (fn (n)
+                  (match n
+                    ((Empty)
+                     (match (f None)
+                       ((Tuple (None) aux) (Tuple n aux))
+                       ((Tuple (Some x) aux)
+                        (Tuple (L2 x) aux)))) ; insert
+                    ((N1 t1)
+                     (let (Tuple t2 aux) = (walk t1))
+                     (if (unchanged? t1 t2)
+                         (Tuple n aux)
+                         (Tuple (make-n1 t2) aux)))
+                    ((N2 l b r)
+                     (match (<=> a b)
+                       ((LT) (let (Tuple ll aux) = (walk l))
+                             (if (unchanged? l ll)
+                                 (Tuple n aux)
+                                 (Tuple (make-n2 ll b r) aux)))
+                       ((EQ) (match (f (Some b))
+                               ((Tuple (None) aux) ; delete
+                                (match (split-min r)
+                                  ((None) (Tuple (N1 l) aux))
+                                  ((Some (Tuple a1 r1))
+                                   (Tuple (make-n2 l a1 r1) aux))))
+                               ((Tuple (Some b2) aux) ;replace
+                                ;; NB: `f` must guarantee that the new element
+                                ;; still falls between the previous and next
+                                ;; element in the tree.
+                                ;; TODO: Should we check the conditon of
+                                ;; returned element of `f`?  It will be
+                                ;; expensive.  One idea is to check it in
+                                ;; development mode, but not in release mode.
+                                (if (unchanged? b b2)
+                                    (Tuple n aux)
+                                    (Tuple (N2 l b2 r) aux)))))
+                       ((GT) (let (Tuple rr aux) = (walk r))
+                             (if (unchanged? r rr)
+                                 (Tuple n aux)
+                                 (Tuple (make-n2 l b rr) aux)))))
+                    (_ (stray-node))))))
+      (let (Tuple t2 aux) = (walk t))
+      (Tuple (make-root t2) aux)))
+
+  (declare transform-elements ((:a -> :b) -> OrdTree :a -> OrdTree :b))
+  (define (transform-elements f tre)
+    "Returns a tree whose element consists of the result of `f` applied to
+the original element, and isomorphic to the original tree.
+
+It is important that transforming keys with `f` does not change the order
+of the element.  If `f` violates the condition, the resulting tree isn't
+guaranteed to be consistent.
+
+We do not name this `map` because of this restriction."
+    (match tre
+      ((Empty) Empty)
+      ((N1 t) (transform-elements f t))
+      ((N2 l e r) (N2 (transform-elements f l) (f e) (transform-elements f r)))
+      (_ (stray-node))))
+
+  ;; Note: We repurpose L2 node to keep element in the stack
+  (declare increasing-order (OrdTree :elt -> iter:Iterator :elt))
+  (define (increasing-order tre)
+    "Returns an iterator that traverses elements in `tre` in increasing order.
+This is same as (iter:into-iter tre)."
+    (let ((stack (cell:new (Cons tre Nil)))
+          (next! (fn ()
+                   (match (cell:pop! stack)
+                     ((None) None)
+                     ((Some (Empty)) (next!))
+                     ((Some (N1 t)) (cell:push! stack t) (next!))
+                     ((Some (N2 l e r))
+                      (cell:push! stack r)
+                      (cell:push! stack (L2 e))
+                      (cell:push! stack l)
+                      (next!))
+                     ((Some (L2 e)) (Some e))
+                     (_ (stray-node))))))
+      (iter:new next!)))
+
+  (declare decreasing-order (OrdTree :elt -> iter:Iterator :elt))
+  (define (decreasing-order tre)
+    "Returns an iterator that traverses elements in `tre` in decreasing order."
+    (let ((stack (cell:new (Cons tre Nil)))
+          (next! (fn ()
+                   (match (cell:pop! stack)
+                     ((None) None)
+                     ((Some (Empty)) (next!))
+                     ((Some (N1 t)) (cell:push! stack t) (next!))
+                     ((Some (N2 l e r))
+                      (cell:push! stack l)
+                      (cell:push! stack (L2 e))
+                      (cell:push! stack r)
+                      (next!))
+                     ((Some (L2 e)) (Some e))
+                     (_ (stray-node))))))
+      (iter:new next!)))
+  )
+
+;;
+;; Neighborhood
+;;
+
+(coalton-toplevel
+  ;; API
+  (declare max-element (Ord :elt => OrdTree :elt -> Optional :elt))
+  (define (max-element tre)
+    "Returns the maximum element in the tree, or None if the tree is empty."
+    (match tre
+      ((Empty) None)
+      ((N1 t) (max-element t))
+      ((N2 _ elt r) (match (max-element r)
+                      ((None) (Some elt))
+                      (e e)))
+      (_ (stray-node))))
+
+  ;; API
+  (declare min-element (Ord :elt => OrdTree :elt -> Optional :elt))
+  (define (min-element tre)
+    "Returns the minimum element in the tree, or None if the tree is empty."
+    (match tre
+      ((Empty) None)
+      ((N1 t) (max-element t))
+      ((N2 l elt _) (match (min-element l)
+                      ((None) (Some elt))
+                      (e e)))
+      (_ (stray-node))))
+
+  ;; API
+  (declare lookup-neighbors (Ord :elt => OrdTree :elt -> :elt
+                                 -> (Tuple3 (Optional :elt)
+                                            (Optional :elt)
+                                            (Optional :elt))))
   (define (lookup-neighbors haystack needle)
     "Returns elements LO, ON, and HI, such that LO is the closest
 element that is strictly less than `needle`, ON is the element
 that is `==` to `needle`, and HI is the closest element that is
 strictly greater than `needle`.  Any of these values can be None
 if there's no such element."
-    (rec % ((tree haystack)
-            (lo None)
-            (hi None))
+    (rec lup ((tree haystack)
+              (lo None)
+              (hi None))
       (match tree
         ((Empty) (Tuple3 lo None hi))
-        ((Branch _ left elt right)
+        ((N1 t) (lup t lo hi))
+        ((N2 left elt right)
          (match (<=> needle elt)
-           ((LT) (% left lo (Some elt)))
+           ((LT) (lup left lo (Some elt)))
            ((EQ) (let ((lo1 (match (max-element left)
                               ((None) lo)
-                              ((Some x) (Some x))))
+                              (e e)))
                        (hi1 (match (min-element right)
                               ((None) hi)
-                              ((Some x) (Some x)))))
+                              (e e))))
                    (Tuple3 lo1 (Some elt) hi1)))
-           ((GT) (% right (Some elt) hi))))
-        ((DoubleBlackEmpty) (error "Found double-black node outside of removal process")))))
-
-  ;;; inserting into and replacing elements of trees
-
-  (declare balance (Color -> (Tree :elt) -> :elt -> (Tree :elt) -> (Tree :elt)))
-  (define (balance clr left elt right)
-    (match (Branch clr left elt right)
-      ;; cases for insertion violations
-      ((Branch (Black)
-               (Branch (Red)
-                       (Branch (Red) a x b)
-                       y
-                       c)
-               z
-               d)
-       (Branch Red
-               (Branch Black a x b)
-               y
-               (Branch Black c z d)))
-      ((Branch (Black)
-               (Branch (Red)
-                       a
-                       x
-                       (Branch (Red) b y c))
-               z
-               d)
-       (Branch Red
-               (Branch Black a x b)
-               y
-               (Branch Black c z d)))
-      ((Branch (Black)
-               a
-               x
-               (Branch (Red)
-                       (Branch (Red)
-                               b
-                               y
-                               c)
-                       z
-                       d))
-       (Branch Red
-               (Branch Black a x b)
-               y
-               (Branch Black c z d)))
-      ((Branch (Black)
-               a
-               x
-               (Branch (Red)
-                       b
-                       y
-                       (Branch (Red)
-                               c
-                               z
-                               d)))
-       (Branch Red
-               (Branch Black a x b)
-               y
-               (Branch Black c z d)))
-
-      ;; duplicates of above cases with black swapped for double-black
-      ((Branch (DoubleBlack)
-               (Branch (Red)
-                       (Branch (Red) a x b)
-                       y
-                       c)
-               z
-               d)
-       (Branch Black
-               (Branch Black a x b)
-               y
-               (Branch Black c z d)))
-      ((Branch (DoubleBlack)
-               (Branch (Red)
-                       a
-                       x
-                       (Branch (Red) b y c))
-               z
-               d)
-       (Branch Black
-               (Branch Black a x b)
-               y
-               (Branch Black c z d)))
-      ((Branch (DoubleBlack)
-               a
-               x
-               (Branch (Red)
-                       (Branch (Red)
-                               b
-                               y
-                               c)
-                       z
-                       d))
-       (Branch Black
-               (Branch Black a x b)
-               y
-               (Branch Black c z d)))
-      ((Branch (DoubleBlack)
-               a
-               x
-               (Branch (Red)
-                       b
-                       y
-                       (Branch (Red)
-                               c
-                               z
-                               d)))
-       (Branch Black
-               (Branch Black a x b)
-               y
-               (Branch Black c z d)))
-
-      ;; cases for removal violations with double-blacks and/or negative-blacks
-      ((Branch (DoubleBlack)
-               a
-               x
-               (Branch (NegativeBlack)
-                       (Branch (Black) b y c)
-                       z
-                       (Branch (Black) d-left d-value d-right)))
-       (Branch Black
-               (Branch Black a x b)
-               y
-               (balance Black c z (Branch Red d-left d-value d-right))))
-
-      ((Branch (DoubleBlack)
-               (Branch (NegativeBlack)
-                       (Branch (Black) a-left a-value a-right)
-                       x
-                       (Branch (Black) b y c))
-               z
-               d)
-       (Branch Black
-               (balance Black
-                        (Branch Red a-left a-value a-right)
-                        x
-                        b)
-               y
-               (Branch Black c z d)))
-
-      (tre tre)))
-
-  (declare insert ((Ord :elt) => ((Tree :elt) -> :elt -> (Optional (Tree :elt)))))
-  (define (insert tre elt)
-    "Construct a new Tree like TRE but containing ELT. If TRE already had an element `==` to ELT, return None."
-    (let ((ins (fn (subtree)
-                 (match subtree
-                   ((Empty) (Some (Branch Red Empty elt Empty)))
-                   ((Branch clr left pivot right)
-                    (match (<=> elt pivot)
-                      ((LT) (map (fn (new-left) (balance clr new-left pivot right))
-                                 (ins left)))
-                      ((EQ) None)
-                      ((GT) (map (fn (new-right) (balance clr left pivot new-right))
-                                 (ins right)))))
-                   ((DoubleBlackEmpty) (error "Found double-black node outside of removal process"))))))
-      (map as-black (ins tre))))
-
-  (declare replace ((Ord :elt) => ((Tree :elt) -> :elt -> (Optional (Tuple (Tree :elt) :elt)))))
-  (define (replace tre elt)
-    "Construct a new Tree like TRE but with ELT replacing an old element `==` to ELT.
-
-Return the new tree and the removed element.
-
-If TRE did not have an element `==' to ELT, return None."
-    (let ((ins (fn (subtree)
-                 (match subtree
-                   ((Empty) None)
-                   ((Branch clr left pivot right)
-                    (match (<=> elt pivot)
-                      ((LT) (map (uncurry (fn (new-left removed-elt) (Tuple (balance clr new-left pivot right) removed-elt)))
-                                 (ins left)))
-                      ((EQ) (Some (Tuple (Branch clr left elt right)
-                                         pivot)))
-                      ((GT) (map (uncurry (fn (new-right removed-elt) (Tuple (balance clr left pivot new-right) removed-elt)))
-                                 (ins right)))))
-                   ((DoubleBlackEmpty) (error "Found double-black node outside of removal process"))))))
-      (map (map-fst as-black) (ins tre))))
-
-  (declare replace-or-insert ((Ord :elt) => ((Tree :elt) -> :elt -> (Tuple (Tree :elt) (Optional :elt)))))
-  (define (replace-or-insert tre elt)
-    "Construct a new Tree like TRE but containing ELT.
-
-If TRE already had an element `==` to ELT, remove it, replace it with ELT, and return the removed value
-alongside the new tree."
-    (let ((ins (fn (subtree)
-                 (match subtree
-                   ((Empty) (Tuple (Branch Red Empty elt Empty)
-                                   None))
-                   ((Branch clr left pivot right)
-                    (match (<=> elt pivot)
-                      ((LT)
-                       (let (Tuple new-left removed-elt) = (ins left))
-                       (Tuple (balance clr new-left pivot right)
-                              removed-elt))
-                      ((EQ) (Tuple (Branch clr left elt right)
-                                   (Some pivot)))
-                      ((GT)
-                       (let (Tuple new-right removed-elt) = (ins right))
-                       (Tuple (balance clr left pivot new-right)
-                              removed-elt))))
-                   ((DoubleBlackEmpty) (error "Found double-black node outside of removal process"))))))
-      (let (Tuple new-tree removed-elt) = (ins tre))
-      (Tuple (as-black new-tree) removed-elt)))
-
-  (declare insert-or-replace ((Ord :elt) => ((Tree :elt) -> :elt -> (Tree :elt))))
-  (define (insert-or-replace tre elt)
-    "Construct a new Tree like TRE but containing ELT.
-
-If TRE already had an element `==` to ELT, remove it, replace it with ELT, and discard the removed value.
-
-Like `replace-or-insert`, but prioritizing insertion as a use case."
-    (fst (replace-or-insert tre elt)))
-
-  ;;; removing from trees
-
-  ;; matt might calls this operation `sorted-map-delete'
-  (declare remove ((Ord :elt) => ((Tree :elt) -> :elt -> (Optional (Tree :elt)))))
-  (define (remove tre elt)
-    "Construct a new Tree like TRE but without an element `==' to ELT. Return None if TRE does not contain an element `==` to ELT."
-    (map as-black
-         (remove-without-as-black tre elt)))
-
-  ;; matt might calls this operation `del'
-  (declare remove-without-as-black ((Ord :elt) => ((Tree :elt) -> :elt -> (Optional (Tree :elt)))))
-  (define (remove-without-as-black tre elt)
-    (match tre
-      ((Empty) None)
-      ((Branch clr left pivot right)
-       (match (<=> elt pivot)
-         ((LT)
-          (map (fn (new-left) (bubble-double-black clr new-left pivot right))
-               (remove-without-as-black left elt)))
-         ((EQ) (Some (remove-leaving-double-black tre)))
-         ((GT)
-          (map (fn (new-right) (bubble-double-black clr left pivot new-right))
-               (remove-without-as-black right elt)))))
-      ((DoubleBlackEmpty) (error "Encountered double-black node early in `remove` while searching for the node to remove."))))
-
-  ;; matt might calls this operation `remove'
-  (declare remove-leaving-double-black (((Tree :elt) -> (Tree :elt))))
-  (define (remove-leaving-double-black tre)
-    "Remove the pivot of TRE from TRE, fusing its left and right children to form a new tree.
-
-The result tree may be in an intermediate state with a double-black node."
-    (match tre
-      ;; nodes with no subtrees
-      ((Branch (Red) (Empty) _ (Empty)) Empty)
-      ((Branch (Black) (Empty) _ (Empty)) DoubleBlackEmpty)
-
-      ;; nodes with one subtree
-      ((Branch (Black)
-               (Empty)
-               _
-               (Branch child-clr child-left child-value child-right))
-       (assert (== child-clr Red)
-           "Black node with black leaf and black non-empty child violates red-black constraints.")
-       (Branch Black child-left child-value child-right))
-      ((Branch (Black)
-               (Branch child-clr child-left child-value child-right)
-               _
-               (Empty))
-       (assert (== child-clr Red)
-           "Black node with black leaf and black non-empty child violates red-black constraints.")
-       (Branch Black child-left child-value child-right))
-      ;; all other one-child cases should be impossible because they violate red-black constraints
-
-      ;; nodes with two subtrees
-      ((Branch clr left _ right)
-       (let (Tuple new-left new-pivot) = (remove-max left))
-       (bubble-double-black clr new-left new-pivot right))
-
-      ((DoubleBlackEmpty) (error "Encountered double-black node early in `remove` while searching for the node to remove."))
-      ((Empty) (error "Attempt to `remove-leaving-double-black` on an empty tree."))))
-
-  ;; matt might calls this operation `bubble'
-  (declare bubble-double-black ((Color -> (Tree :elt) -> :elt -> (Tree :elt) -> (Tree :elt))))
-  (define (bubble-double-black clr left pivot right)
-    (if (or (tree-double-black? left) (tree-double-black? right))
-        (balance (color-plus-black clr) (tree-minus-black left) pivot (tree-minus-black right))
-        (Branch clr left pivot right)))
-
-  ;; matt might has this in two operations, `remove-max' and `sorted-map-max'
-  (declare remove-max ((Tree :elt) -> (Tuple (Tree :elt) :elt)))
-  (define (remove-max tre)
-    (match tre
-      ((Branch _ _ pivot (Empty)) (Tuple (remove-leaving-double-black tre) pivot))
-      ((Branch clr left pivot right)
-       (let (Tuple new-right removed-max) = (remove-max right))
-       (Tuple (bubble-double-black clr left pivot new-right)
-              removed-max))
-      ((DoubleBlackEmpty) (error "Encountered double-black node early in `remove` while searching for the node to remove."))
-      ((Empty) (error "Attempt to `remove-max` on an empty tree."))))
-
-  ;;; iterating through trees
-
-  (define-type (IteratorStackNode :elt)
-    (Yield :elt)
-    (Expand (Tree :elt)))
-
-  (declare tree-iterator (((cell:Cell (List (IteratorStackNode :elt))) -> (Tree :elt) -> Unit)
-                          -> (Tree :elt)
-                          -> (iter:Iterator :elt)))
-  (define (tree-iterator add-to-stack tre)
-    (let ((stack (cell:new (make-list (Expand tre))))
-          (next!
-            (fn ()
-              (match (cell:pop! stack)
-                ((None) None)
-                ((Some (Yield elt)) (Some elt))
-                ((Some (Expand node)) (add-to-stack stack node) (next!))))))
-      (iter:new next!)))
-
-  (declare stack-for-increasing-order-traversal ((cell:Cell (List (IteratorStackNode :elt))) -> (Tree :elt) -> Unit))
-  (define (stack-for-increasing-order-traversal stack node)
-    (match node
-      ((Empty) Unit)
-      ((Branch _ less elt more)
-       (cell:push! stack (Expand more))
-       (cell:push! stack (Yield elt))
-       (cell:push! stack (Expand less))
-       Unit)
-      ((DoubleBlackEmpty) (error "Found double-black node outside of removal process"))))
-
-  (declare increasing-order ((Tree :elt) -> (iter:Iterator :elt)))
-  (define increasing-order
-    "Iterate the elements of a tree, starting with the least by `<=>' and ending with the greatest."
-    (tree-iterator stack-for-increasing-order-traversal))
-
-  (declare stack-for-decreasing-order-traversal ((cell:Cell (List (IteratorStackNode :elt))) -> (Tree :elt) -> Unit))
-  (define (stack-for-decreasing-order-traversal stack node)
-    (match node
-      ((Empty) Unit)
-      ((Branch _ less elt more)
-       (cell:push! stack (Expand less))
-       (cell:push! stack (Yield elt))
-       (cell:push! stack (Expand more))
-       Unit)
-      ((DoubleBlackEmpty) (error "Found double-black node outside of removal process"))))
-
-  (declare decreasing-order ((Tree :elt) -> (iter:Iterator :elt)))
-  (define decreasing-order
-    "Iterate the elements of a tree, starting with the greatest by `<=>' and ending with the least."
-    (tree-iterator stack-for-decreasing-order-traversal))
-
-  (define-instance (iter:IntoIterator (Tree :elt) :elt)
-    (define iter:into-iter increasing-order))
-
-  (define-instance ((Eq :elt) => Eq (Tree :elt))
-    (define (== left right)
-      (iter:elementwise==! (increasing-order left) (increasing-order right))))
-
-  (define-instance ((Hash :elt) => Hash (Tree :elt))
-    (define (hash tre)
-      (iter:elementwise-hash! (increasing-order tre))))
-
-  (declare collect! ((Ord :elt) => (iter:Iterator :elt) -> (Tree :elt)))
-  (define (collect! iter)
-    "Construct a Tree containing all the elements of ITER.
-
-If ITER contains duplicates, later elements will overwrite earlier elements."
-    (iter:fold! insert-or-replace Empty iter))
-
-  (define-instance (Ord :elt => iter:FromIterator (Tree :elt) :elt)
-    (define iter:collect! collect!))
-
-  (declare merge (Ord :elt => Tree :elt -> Tree :elt -> Tree :elt))
-  (define (merge a b)
-    "Construct a Tree containing all the elements of both A and B.
-
-If A and B contain elements A' and B' respectively where (== A' B'), the result will contain either A' or
-B'. Which one is chosen for the result is undefined."
-    (iter:fold! insert-or-replace
-                a
-                (increasing-order b)))
-
-  (define-instance (Ord :elt => Semigroup (Tree :elt))
-    (define <> merge))
-
-  (define-instance (Ord :elt => Monoid (Tree :elt))
-    (define mempty Empty))
-
-  (define-instance (Foldable Tree)
-    (define (fold func init tre)
-      (iter:fold! func init (increasing-order tre)))
-    (define (foldr func init tre)
-      (iter:fold! (flip func) init (decreasing-order tre))))
-
-  ;; We possibly should have an instance (Traversable Tree). Open questions:
-  ;; - Is it necessary (or desirable) that `traverse' walk the tree in the same order as `fold',
-  ;;   i.e. left-to-right? My gut says yes.
-  ;; - Is it possible to write a better instance than one which converts the tree to an iterator using
-  ;;   `increasing-order', then traverses it via `liftA2' of `insert-or-replace'? My gut says no, given the
-  ;;   previous point.
+           ((GT) (lup right (Some elt) hi))))
+        (_ (stray-node)))))
   )
 
-(defmacro make (cl:&rest elements)
-  "Construct a tree containing the `elements`.
+;;
+;; Set operations
+;;
 
-e.g. `(tree:make 5 6 1 8 9)` returns a tree containing 1, 5, 6, 8, 9."
-  `(collect! (iter:into-iter (make-list ,@elements))))
+(coalton-toplevel
+  (declare union (Ord :elt => OrdTree :elt -> OrdTree :elt -> OrdTree :elt))
+  (define (union a b)
+    "Returns an OrdTree that contains all the elements from `a` and `b`.
+If both OrdTrees has the same (`==`) element, the one from `a` is taken."
+    (iter:fold! adjoin a (increasing-order b)))
+
+  (declare intersection (Ord :elt => OrdTree :elt -> OrdTree :elt -> OrdTree :elt))
+  (define (intersection a b)
+    "Returns an OrdTree that contains elements that appear in both `a` and `b`.
+The resulting elements are from `a`."
+    ;; TODO: This can be more efficient by traversing both trees in the
+    ;; same order and selecting common elements.
+    (iter:fold! (fn (m k)
+                  (match (lookup b k)
+                    ((None) m)
+                    ((Some _) (insert m k))))
+                Empty (increasing-order a)))
+
+  (declare difference (Ord :elt => OrdTree :elt -> OrdTree :elt -> OrdTree :elt))
+  (define (difference a b)
+    "Returns an OrdTree that contains elements in `a` but not in `b`."
+    (iter:fold! remove a (increasing-order b)))
+
+  (declare xor (Ord :elt => OrdTree :elt -> OrdTree :elt -> OrdTree :elt))
+  (define (xor a b)
+    "Rdturns an OrdTree that contains elements either in `a` or in `b`,
+but not in both."
+    (iter:fold! (fn (m k)
+                  (fst (update m k
+                               (fn (e)
+                                 (match e
+                                   ((None) (Tuple (Some k) Unit))
+                                   ((Some _) (Tuple None Unit)))))))
+                Empty (iter:chain! (increasing-order a)
+                                   (increasing-order b))))
+  )
+
+;;
+;; Instances
+;;
+
+(coalton-toplevel
+
+  (define-instance (iter:IntoIterator (OrdTree :elt) :elt)
+    (define iter:into-iter increasing-order))
+
+  (define-instance (Ord :elt => iter:FromIterator (OrdTree :elt) :elt)
+    (define (iter:collect! iter)
+      (iter:fold! insert empty iter)))
+
+  (define-instance (Eq :elt => Eq (OrdTree :elt))
+    (define (== ta tb)
+      (iter:elementwise==! (iter:into-iter ta) (iter:into-iter tb))))
+
+  (define-instance (Hash :elt => Hash (OrdTree :elt))
+    (define (hash t)
+      (iter:elementwise-hash! (iter:into-iter t))))
+
+  (define-instance (Foldable OrdTree)
+    (define (fold f seed t)
+      (iter:fold! f seed (increasing-order t)))
+    (define (foldr f seed t)
+      (iter:fold! (flip f) seed (decreasing-order t))))
+  )
