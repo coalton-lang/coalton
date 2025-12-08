@@ -211,7 +211,7 @@
 
   (declare split-at (UFix -> List :a -> (Tuple (List :a) (List :a))))
   (define (split-at n xs)
-    "Splits a list at index N. This function is equivalent to `(Tuple (take n xs) (drop n xs)`."
+    "Splits a list into a Tuple of the first N elements and all remaining elements. The return value is equivalent to `(Tuple (take n xs) (drop n xs)`."
     (rec % ((n n)
             (tail xs)
             (acc-head Nil))
