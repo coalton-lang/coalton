@@ -4,7 +4,10 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/functions
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-compatibility-layer)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:Symbol
 
@@ -85,5 +88,4 @@
       (lisp Symbol ()
         'cl:nil))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/SYMBOL")
+(compat:try-lock-package "COALTON-LIBRARY/SYMBOL")

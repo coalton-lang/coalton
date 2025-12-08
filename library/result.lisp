@@ -3,10 +3,12 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/classes
-   #:coalton-library/optional) 
+   #:coalton-library/optional
+   #:coalton-compatibility-layer)
   (:local-nicknames
    (#:cell #:coalton-library/cell)
-   (#:iter #:coalton-library/iterator))
+   (#:iter #:coalton-library/iterator)
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:ok?
    #:err?
@@ -199,5 +201,4 @@
         ((None) (Ok out))
         ((Some e) (Err e))))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/RESULT")
+(compat:try-lock-package "COALTON-LIBRARY/RESULT")

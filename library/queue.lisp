@@ -3,10 +3,12 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/functions
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-compatibility-layer)
   (:local-nicknames
    (#:cell #:coalton-library/cell)
-   (#:iter #:coalton-library/iterator))
+   (#:iter #:coalton-library/iterator)
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:Queue
    #:new
@@ -41,8 +43,7 @@
   (cl:format stream "#.(QUEUE~{ ~A~})" (queue-internal-elements self))
   self)
 
-#+sbcl
-(cl:declaim (sb-ext:freeze-type queue-internal))
+(compat:try-freeze-type queue-internal)
 
 (coalton-toplevel
 
@@ -255,5 +256,4 @@
   (define-instance (Default (Queue :a))
     (define default new)))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/QUEUE")
+(compat:try-lock-package "COALTON-LIBRARY/QUEUE")

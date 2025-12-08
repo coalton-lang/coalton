@@ -1,7 +1,10 @@
 (coalton-library/utils::defstdlib-package #:coalton-library/builtin
   (:use
    #:coalton
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-compatibility-layer)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:unreachable
    #:undefined
@@ -72,5 +75,4 @@
       ((False) y))))
 
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/BUILTIN")
+(compat:try-lock-package "COALTON-LIBRARY/BUILTIN")

@@ -2,10 +2,12 @@
   (:use
    #:coalton
    #:coalton-library/builtin
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-compatibility-layer)
   (:local-nicknames
    (#:cell #:coalton-library/cell)
-   (#:iter #:coalton-library/iterator))
+   (#:iter #:coalton-library/iterator)
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:from-some
    #:some?
@@ -155,5 +157,4 @@
   (define-instance (Default (Optional :a))
     (define (default) None)))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/OPTIONAL")
+(compat:try-lock-package "COALTON-LIBRARY/OPTIONAL")

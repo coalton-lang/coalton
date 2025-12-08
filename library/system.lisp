@@ -2,9 +2,11 @@
   (:use
    #:coalton
    #:coalton-library/builtin
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-compatibility-layer)
   (:local-nicknames
-   (#:math #:coalton-library/math))
+   (#:math #:coalton-library/math)
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:gc
    #:sleep)
@@ -275,5 +277,4 @@ Garbage collection will be performed before profiling is performed."
                (Some (uiop:argv0))
                None)))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/SYSTEM")
+(compat:try-lock-package "COALTON-LIBRARY/SYSTEM")

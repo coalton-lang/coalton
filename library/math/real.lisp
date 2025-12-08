@@ -9,7 +9,10 @@
      #:coalton-library/math/fraction
      #:coalton-library/math/integral
      #:coalton-library/classes
-     #:coalton-library/functions)
+     #:coalton-library/functions
+     #:coalton-compatibility-layer)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:Quantizable
    #:proper
@@ -301,5 +304,4 @@ Specifically, target types must have an instance of `Dividable Integer :a`.
 This conversion may result in loss of fidelity."
     (general/ (numerator q) (denominator q))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH/REAL")
+(compat:try-lock-package "COALTON-LIBRARY/MATH/REAL")

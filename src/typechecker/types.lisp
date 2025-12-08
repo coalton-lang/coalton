@@ -2,10 +2,12 @@
   (:use
    #:cl
    #:coalton-impl/typechecker/base
-   #:coalton-impl/typechecker/kinds)
+   #:coalton-impl/typechecker/kinds
+   #:coalton-compatibility-layer)
   (:local-nicknames
    (#:util #:coalton-impl/util)
-   (#:settings #:coalton-impl/settings))
+   (#:settings #:coalton-impl/settings)
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:ty                                 ; STRUCT
    #:ty-alias                           ; ACCESSOR

@@ -5,7 +5,10 @@
      #:xor
      #:not)
   (:use
-   #:coalton)
+   #:coalton
+   #:coalton-compatibility-layer)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility-layer))
   (:import-from
    #:coalton-library/classes
    #:Num)
@@ -96,6 +99,5 @@
 (define-reverse-bits UFix +n-ufix-bits+)
 (define-reverse-bits U64 64)
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/BITS")
+(compat:try-lock-package "COALTON-LIBRARY/BITS")
 

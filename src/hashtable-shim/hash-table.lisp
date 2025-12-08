@@ -4,9 +4,11 @@
            #:hash-table-size
            #:hash-table-p
            #:hash-table-count)
-  (:use #:cl)
+  (:use #:cl
+   #:coalton-compatibility-layer)
   (:local-nicknames
-   (#:util #:coalton-impl/util))
+   (#:util #:coalton-impl/util)
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:hash-table                         ; STRUCT
    #:make-hash-table                    ; FUNCTION
@@ -83,8 +85,7 @@
   (hash-function (util:required 'hash-function) :type (function (t) hash) :read-only t)
   (eq-function  (util:required 'eq-function) :type (function (t t) boolean) :read-only t))
 
-#+sbcl
-(declaim (sb-ext:freeze-type hash-table))
+(compat:try-freeze-type hash-table)
 
 (declaim (inline hash-table-size))
 (defun hash-table-capacity (table)
@@ -180,7 +181,7 @@
 
   ;; Resize when the table is over 70% full
   (when (>= (the fixnum (* (hash-table-size table) 10))
-            (the fixnum (* (the fixnum (hash-table-capacity table)) 7))) 
+            (the fixnum (* (the fixnum (hash-table-capacity table)) 7)))
     (hash-table-resize% table))
 
   (when (hash-table-insert%

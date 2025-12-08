@@ -2,7 +2,8 @@
   (:use
    #:coalton
    #:coalton-library/builtin
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-compatibility-layer)
   (:import-from
    #:coalton-library/hash
    #:define-sxhash-hasher)
@@ -11,7 +12,8 @@
    #:Vector)
   (:local-nicknames
    (#:cell #:coalton-library/cell)
-   (#:iter #:coalton-library/iterator))
+   (#:iter #:coalton-library/iterator)
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:concat
    #:reverse
@@ -265,5 +267,4 @@ does not have that suffix."
   (define-sxhash-hasher String))
 
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/STRING")
+(compat:try-lock-package "COALTON-LIBRARY/STRING")

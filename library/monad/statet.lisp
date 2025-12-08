@@ -3,9 +3,11 @@
    #:coalton
    #:coalton-library/functions
    #:coalton-library/classes
-   #:coalton-library/monad/classes)
+   #:coalton-library/monad/classes
+   #:coalton-compatibility-layer)
   (:local-nicknames
-   (:tp #:coalton-library/tuple))
+   (:tp #:coalton-library/tuple)
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:StateT
    #:run-stateT
@@ -143,5 +145,4 @@
     (define asks (compose lift asks))
     (define local (compose map-stateT local))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MONAD/STATET")
+(compat:try-lock-package "COALTON-LIBRARY/MONAD/STATET")

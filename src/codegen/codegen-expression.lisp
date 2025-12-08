@@ -3,7 +3,8 @@
    #:cl
    #:coalton-impl/codegen/pattern
    #:coalton-impl/codegen/ast
-   #:coalton-impl/codegen/codegen-match)
+   #:coalton-impl/codegen/codegen-match
+   #:coalton-compatibility-layer)
   (:import-from
    #:coalton-impl/codegen/codegen-pattern
    #:codegen-pattern)
@@ -18,7 +19,8 @@
    (#:util #:coalton-impl/util)
    (#:rt #:coalton-impl/runtime)
    (#:tc #:coalton-impl/typechecker)
-   (#:const #:coalton-impl/constants))
+   (#:const #:coalton-impl/constants)
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:codegen-expression                 ; FUNCTION
    #:function-declarations              ; FUNCTION
@@ -113,7 +115,8 @@
                     (values ,(car (last (node-lisp-form expr)))))
                  inner)))
 
-      `(locally (declare #+sbcl (optimize (sb-c::type-check 1)))
+      `(locally (declare ;; (compat:try-optimize-type-check 1)
+                         (optimize (sb-c::type-check 1)))
          ,(if settings:*emit-type-annotations*
               `(the (values ,(tc:lisp-type (node-type expr) env) &optional)
                     ,inner)

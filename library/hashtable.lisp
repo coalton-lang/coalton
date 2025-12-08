@@ -3,11 +3,13 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/classes
-   #:coalton-library/hash)
+   #:coalton-library/hash
+   #:coalton-compatibility-layer)
   (:local-nicknames
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
-   (#:shim #:coalton/hashtable-shim))
+   (#:shim #:coalton/hashtable-shim)
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:Hashtable
    #:new
@@ -258,8 +260,7 @@ Examples:
                              keys values)
                 ,ht)))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/HASHTABLE")
+(compat:try-lock-package "COALTON-LIBRARY/HASHTABLE")
 
 (in-package #:coalton-library/iterator)
 

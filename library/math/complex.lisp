@@ -6,10 +6,12 @@
     (:use #:coalton
           #:coalton-library/classes
           #:coalton-library/utils
-          #:coalton-library/math/arith)
+          #:coalton-library/math/arith
+   #:coalton-compatibility-layer)
   (:local-nicknames
    (#:arith #:coalton-library/math/arith)
-   (#:types #:coalton-library/types))
+   (#:types #:coalton-library/types)
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:Complex                            ; data type
    #:ComplexComponent                   ; type class
@@ -296,5 +298,4 @@ blackboard-bold 𝕚.)"
          (match a
            ((%Complex _ b) b))))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH/COMPLEX")
+(compat:try-lock-package "COALTON-LIBRARY/MATH/COMPLEX")

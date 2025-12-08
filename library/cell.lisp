@@ -2,7 +2,10 @@
   (:use
    #:coalton
    #:coalton-library/builtin
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-compatibility-layer)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:Cell
    #:new
@@ -32,8 +35,7 @@
   (cl:format stream "#.(CELL ~A)" (cell-internal-inner self))
   self)
 
-#+sbcl
-(cl:declaim (sb-ext:freeze-type cell-internal))
+(compat:try-freeze-type cell-internal)
 
 (coalton-toplevel
 
@@ -166,5 +168,4 @@ value."
     (inline)
     (define (default) (new (default)))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/CELL")
+(compat:try-lock-package "COALTON-LIBRARY/CELL")

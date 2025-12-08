@@ -1,8 +1,10 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/classes
   (:use
-   #:coalton)
+   #:coalton
+   #:coalton-compatibility-layer)
   (:local-nicknames
-   (#:types #:coalton-library/types))
+   (#:types #:coalton-library/types)
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:Signalable
    #:error
@@ -417,5 +419,4 @@ Typical `fail` continuations are:
       (== x (default))))
 
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/CLASSES")
+(compat:try-lock-package "COALTON-LIBRARY/CLASSES")

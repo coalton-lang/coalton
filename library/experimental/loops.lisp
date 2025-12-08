@@ -4,7 +4,8 @@
   (:use
    #:coalton
    #:coalton-library/classes
-   #:coalton-library/math/arith)
+   #:coalton-library/math/arith
+   #:coalton-compatibility-layer)
   (:export
    #:repeat
    #:dotimes
@@ -397,7 +398,7 @@ If only `start-or-stop` and `stop` are supplied, then the range is from `start-o
 
 ```
 > (coalton (dorange (x -2 2) (print x)))
--2 
+-2
 -1
 0
 1
@@ -413,7 +414,7 @@ Otherwise, the range is from `start-or-stop` (inclusive) to `stop` (exclusive) b
 
 ```
 > (coalton (dorange -2 2 2) (print x))
--2 
+-2
 0
 COALTON::UNIT/UNIT
 > (coalton (dorange -2 2 -1) (print x))
@@ -463,6 +464,5 @@ COALTON::UNIT/UNIT
          (cl:t
           `(%dorange ,start-or-stop ,stop ,step ,func)))))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/EXPERIMENTAL/LOOPS")
+(coalton-compatibility-layer:try-lock-package "COALTON-LIBRARY/EXPERIMENTAL/LOOPS")
 

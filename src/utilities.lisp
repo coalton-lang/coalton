@@ -3,12 +3,12 @@
 (defpackage #:coalton-impl/util
   (:documentation "Utility functions and methods used throughout COALTON.")
   (:use #:cl
-        #:coalton/compatibility-layer)
+        #:coalton-compatibility-layer)
   (:shadow
    #:find-package
    #:find-symbol)
   (:local-nicknames
-   (#:compat #:coalton/compatibility-layer)
+   (#:compat #:coalton-compatibility-layer)
    (#:cst #:concrete-syntax-tree))
   (:export
    #:+keyword-package+                  ; CONSTANT
@@ -141,7 +141,7 @@
   ;; requires wrapping the entire containing toplevel form in a HANDLER-BIND,
   ;; which cannot be done by the expansion of an inner macro form.
   '(locally
-      (declare (compat:try-muffle-code-deletion-note-condition))
+      `(declare (compat:try-muffle-code-deletion-note-condition))
       (coalton-bug "This error was expected to be unreachable in the Coalton source code.")))
 
 (defun maphash-values-new (function table)

@@ -2,7 +2,10 @@
   (:use
    #:coalton
    #:coalton-library/builtin
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-compatibility-layer)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:ST
    #:put
@@ -119,5 +122,4 @@ Represented as a closure from initial state to updated state and value."
             ;; and apply the state from ma to the mb
             (run (fa->scb a) state2))))))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MONAD/STATE")
+(compat:try-lock-package "COALTON-LIBRARY/MONAD/STATE")

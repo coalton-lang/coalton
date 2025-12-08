@@ -4,7 +4,10 @@
    #:coalton-library/functions
    #:coalton-library/classes
    #:coalton-library/monad/classes
-   #:coalton-library/monad/identity)
+   #:coalton-library/monad/identity
+   #:coalton-compatibility-layer)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:EnvT
    #:local-envT
@@ -206,5 +209,4 @@ Equivalent to Haskell's ReaderT monad https://hackage.haskell.org/package/transf
     (define put (compose lift put))
     (define modify (compose lift modify))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MONAD/ENVIRONMENT")
+(compat:try-lock-package "COALTON-LIBRARY/MONAD/ENVIRONMENT")

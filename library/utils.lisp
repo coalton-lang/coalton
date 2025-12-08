@@ -1,6 +1,9 @@
 (defpackage #:coalton-library/utils
   (:use
-   #:coalton)
+   #:coalton
+   #:coalton-compatibility-layer)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:defstdlib-package))
 
@@ -8,9 +11,7 @@
 
 (cl:defmacro defstdlib-package (name cl:&rest args)
   `(cl:eval-when (:compile-toplevel :load-toplevel)
-     #+sb-package-locks
      (cl:when (cl:find-package ',name)
-       (sb-ext:unlock-package ',name))
+       (compat:try-unlock-package ',name))
      (cl:defpackage ,name ,@args)
-     #+sb-package-locks
-     (sb-ext:lock-package ',name)))
+     (compat:try-lock-package ',name)))

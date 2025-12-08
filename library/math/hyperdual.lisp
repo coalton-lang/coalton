@@ -13,9 +13,11 @@
    #:coalton-library/math/elementary
    #:coalton-library/math/integral
    #:coalton-library/math/complex
-   #:coalton-library/hash)
+   #:coalton-library/hash
+   #:coalton-compatibility-layer)
   (:local-nicknames
-   (#:complex #:coalton-library/math/complex))
+   (#:complex #:coalton-library/math/complex)
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:Hyperdual
    #:d-x
@@ -378,6 +380,5 @@ Note: See identity (1) in the description of this package (`coalton-library/math
           (yy (partial-yy f x y)))
       (Cons xx (Cons xy (Cons yx (Cons yy Nil)))))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH/HYPERDUAL")
+(compat:try-lock-package "COALTON-LIBRARY/MATH/HYPERDUAL")
 

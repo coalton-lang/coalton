@@ -3,7 +3,10 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/classes
-   #:coalton-library/functions)
+   #:coalton-library/functions
+   #:coalton-compatibility-layer)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility-layer))
   (:import-from
    #:coalton-library/monad/free
    #:MonadFree
@@ -180,5 +183,4 @@ functor `f` at a time."
           (>>= (f funct-a)
                (fold-freeT f))))))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MONAD/FREET")
+(compat:try-lock-package "COALTON-LIBRARY/MONAD/FREET")

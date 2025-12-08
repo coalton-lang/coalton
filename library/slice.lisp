@@ -4,13 +4,15 @@
    #:coalton-library/builtin
    #:coalton-library/functions
    #:coalton-library/classes
-   #:coalton-library/math)
+   #:coalton-library/math
+   #:coalton-compatibility-layer)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
    (#:list #:coalton-library/list)
-   (#:vector #:coalton-library/vector))
+   (#:vector #:coalton-library/vector)
+   (#:compat #:coalton-compatibility-layer))
   (:shadowing-import-from #:coalton-library/vector #:Vector)
   (:export
    #:Slice
@@ -217,5 +219,4 @@
 
   (define-instance (Iso (Slice :a) (Vector :a))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/SLICE")
+(compat:try-lock-package "COALTON-LIBRARY/SLICE")

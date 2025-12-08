@@ -7,11 +7,13 @@
    #:coalton
    #:coalton-library/classes
    #:coalton-library/builtin
-   #:coalton-library/math/arith)
+   #:coalton-library/math/arith
+   #:coalton-compatibility-layer)
   (:import-from
    #:coalton-library/bits #:Bits)
   (:local-nicknames
-   (#:bits #:coalton-library/bits))
+   (#:bits #:coalton-library/bits)
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:Remainder
    #:Integral
@@ -321,5 +323,4 @@ are floored and truncated division, respectively."
 (%define-native-expt F32)
 (%define-native-expt F64)
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH/INTEGRAL")
+(compat:try-lock-package "COALTON-LIBRARY/MATH/INTEGRAL")

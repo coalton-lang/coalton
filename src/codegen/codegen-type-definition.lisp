@@ -1,6 +1,7 @@
 (defpackage #:coalton-impl/codegen/codegen-type-definition
   (:use
-   #:cl)
+   #:cl
+   #:coalton-compatibility-layer)
   (:import-from
    #:coalton-impl/codegen/struct-or-class
    #:struct-or-class
@@ -15,7 +16,8 @@
    (#:source #:coalton-impl/source)
    (#:global-lexical #:coalton-impl/global-lexical)
    (#:tc #:coalton-impl/typechecker)
-   (#:rt #:coalton-impl/runtime))
+   (#:rt #:coalton-impl/runtime)
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:codegen-type-definition
    #:constructor-slot-name))
@@ -143,8 +145,7 @@
 
         ,@(when (settings:coalton-release-p)
             (list
-             #+sbcl
-             `(declaim (sb-ext:freeze-type ,(tc:type-definition-name def))))))))
+             `(compat:try-freeze-type ,(tc:type-definition-name def)))))))
 
    (loop :for constructor :in (tc:type-definition-constructors def)
          :for name := (tc:constructor-entry-name constructor)

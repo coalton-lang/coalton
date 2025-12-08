@@ -3,14 +3,16 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/functions
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-compatibility-layer)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:math #:coalton-library/math)
    (#:optional #:coalton-library/optional)
    (#:cell #:coalton-library/cell)
    (#:vector #:coalton-library/vector)
-   (#:iter #:coalton-library/iterator))
+   (#:iter #:coalton-library/iterator)
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:Seq
    #:new
@@ -556,5 +558,4 @@ It attempts to rebalance with a minimum of array copying."
                          (lisp (Seq :a) () self)))))
   self)
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/SEQ")
+(compat:try-lock-package "COALTON-LIBRARY/SEQ")

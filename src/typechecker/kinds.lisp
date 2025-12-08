@@ -1,10 +1,12 @@
 (defpackage #:coalton-impl/typechecker/kinds
   (:use
    #:cl
-   #:coalton-impl/typechecker/base)
+   #:coalton-impl/typechecker/base
+   #:coalton-compatibility-layer)
   (:local-nicknames
    (#:util #:coalton-impl/util)
-   (#:settings #:coalton-impl/settings))
+   (#:settings #:coalton-impl/settings)
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:kind                               ; STRUCT
    #:kind-list                          ; TYPE

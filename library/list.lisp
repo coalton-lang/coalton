@@ -6,11 +6,13 @@
    #:coalton-library/hash
    #:coalton-library/functions
    #:coalton-library/tuple
-   #:coalton-library/optional)
+   #:coalton-library/optional
+   #:coalton-compatibility-layer)
   (:local-nicknames
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
-   (#:math #:coalton-library/math))
+   (#:math #:coalton-library/math)
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:head
    #:tail
@@ -800,5 +802,4 @@ This function is equivalent to all size-`n` elements of `(combs l)`."
   "Make a homogeneous list of `elements`. Synonym for `coalton:make-list`."
   `(coalton:make-list ,@elements))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/LIST")
+(compat:try-lock-package "COALTON-LIBRARY/LIST")

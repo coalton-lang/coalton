@@ -16,7 +16,10 @@
 
 (defpackage #:coalton-impl/runtime/optional
   (:use
-   #:cl)
+   #:cl
+   #:coalton-compatibility-layer)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:cl-none
    #:cl-none-p
@@ -35,8 +38,7 @@
 value (Some^N None)."
     (depth 0 :type (unsigned-byte 16) :read-only t))
 
-  #+sbcl
-  (cl:declaim (sb-ext:freeze-type cl-optional))
+  (compat:try-freeze-type cl-optional)
 
   ;; Below is some pretty cursed code.
   ;;
@@ -54,12 +56,12 @@ value (Some^N None)."
   ;; There must be a better way to do the below; I'm just not sure
   ;; what it is.
   (defconstant cl-optional-cache-size 4)
-  
+
   (unless (get 'cl-optional ':cache)
     (setf (get 'cl-optional ':cache)
           (loop :for i :below cl-optional-cache-size
                 :collect (%make-cl-optional i))))
-  
+
   (defmethod make-load-form ((obj cl-optional) &optional env)
     (declare (ignore env))
     (if (< (depth obj) cl-optional-cache-size)

@@ -1,7 +1,10 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/monad/classes
   (:use
    #:coalton
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-compatibility-layer)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:MonadEnvironment
    #:ask
@@ -47,5 +50,4 @@
      "Modify the computation state, discarding the old state."
      ((:s -> :s) -> :m Unit))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MONAD/CLASSES")
+(compat:try-lock-package "COALTON-LIBRARY/MONAD/CLASSES")

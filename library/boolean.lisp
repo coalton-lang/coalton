@@ -1,7 +1,10 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/boolean
   (:use
    #:coalton
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-compatibility-layer)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility-layer))
   (:import-from
    #:coalton-library/hash
    #:define-sxhash-hasher))
@@ -42,5 +45,4 @@
 
   (define-sxhash-hasher Boolean))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/BOOLEAN")
+(compat:try-lock-package "COALTON-LIBRARY/BOOLEAN")

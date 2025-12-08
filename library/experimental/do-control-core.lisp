@@ -2,11 +2,13 @@
   (:use
    #:coalton
    #:coalton-library/classes
-   #:coalton-library/functions)
+   #:coalton-library/functions
+   #:coalton-compatibility-layer)
   (:local-nicknames
    (:l #:coalton-library/list)
    (:opt #:coalton-library/optional)
-   (:rst #:coalton-library/result))
+   (:rst #:coalton-library/result)
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:when_
    #:whenM
@@ -417,5 +419,4 @@ wrapped in a 'do' block, with the yielded value bound to SYM."
       (do-match ,sym
         ,@body))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/EXPERIMENTAL/DO-CONTROL-CORE")
+(compat:try-lock-package "COALTON-LIBRARY/EXPERIMENTAL/DO-CONTROL-CORE")

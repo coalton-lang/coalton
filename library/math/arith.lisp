@@ -8,7 +8,10 @@
    #:coalton-library/builtin
    #:coalton-library/classes
    #:coalton-library/functions
-   #:coalton-library/utils)
+   #:coalton-library/utils
+   #:coalton-compatibility-layer)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility-layer))
   (:export
    #:Reciprocable
    #:/
@@ -245,5 +248,4 @@ The function `general/` is partial, and will error produce a run-time error if t
 (%define-abs-native F32)
 (%define-abs-native F64)
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH/ARITH")
+(compat:try-lock-package "COALTON-LIBRARY/MATH/ARITH")

@@ -1,10 +1,12 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/experimental/do-control-loops
   (:use
    #:coalton
-   #:coalton-library/classes)
+   #:coalton-library/classes
+   #:coalton-compatibility-layer)
   (:local-nicknames
    (:l #:coalton-library/list)
-   (:it #:coalton-library/iterator))
+   (:it #:coalton-library/iterator)
+   (#:compat #:coalton-compatibility-layer))
   (:import-from #:coalton-library/experimental/do-control-core
    #:Terminator
    #:ended?
@@ -131,5 +133,4 @@ Returns Unit."
       (do
        ,@body))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/EXPERIMENTAL/DO-CONTROL-LOOPS")
+(compat:try-lock-package "COALTON-LIBRARY/EXPERIMENTAL/DO-CONTROL-LOOPS")
