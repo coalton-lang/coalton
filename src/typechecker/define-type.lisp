@@ -549,8 +549,12 @@
            (util:find-symbol "RUNTIMEREPR" types-package))
          (runtime-repr-method
            (util:find-symbol "RUNTIME-REPR" types-package))
+         (coalton-type-method
+           (util:find-symbol "COALTON-TYPE-STRING" types-package))
          (lisp-type
            (util:find-symbol "LISPTYPE" types-package))
+         (string-type
+           (util:find-symbol "STRING" "COALTON"))
          (tvars
            (loop :for i :below (tc:kind-arity (tc:tycon-kind (type-definition-type type)))
                  :collect (parser:make-tyvar
@@ -576,6 +580,7 @@
             :location location)
      :docstring nil
      :methods (list
+               ;; method runtime-repr
                (parser:make-instance-method-definition
                 :name (parser:make-node-variable
                        :location location
@@ -595,6 +600,32 @@
                                    :body (list (util:runtime-quote (type-definition-runtime-type type)))))
                 :location location
                 ;; Always inline RUNTIME-REPR so that other
+                ;; optimizations can kick off.
+                :inline (parser:make-attribute-inline :location location))
+
+               ;; method: coalton-type-string
+               (parser:make-instance-method-definition
+                :name (parser:make-node-variable
+                       :location location
+                       :name coalton-type-method)
+                :params (list
+                         (parser:make-pattern-wildcard
+                          :location location))
+                :body (parser:make-node-body
+                       :nodes nil
+                       :last-node (parser:make-node-lisp
+                                   :location location
+                                   :type (parser:make-tycon
+                                          :location location
+                                          :name string-type)
+                                   :vars nil
+                                   :var-names nil
+                                   :body (list
+                                          (string (type-definition-name type))
+                                          #+FIXME!
+                                          (coalton-impl/typechecker/types:ty->string type))))
+                :location location
+                ;; Always inline COALTON-TYPE so that other
                 ;; optimizations can kick off.
                 :inline (parser:make-attribute-inline :location location)))
      :location location

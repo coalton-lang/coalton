@@ -212,7 +212,31 @@
    #:coalton-library/system
    #:time)
   (:export
-   #:time))
+   #:time)
+
+  (:import-from
+   #:coalton-library/show
+   #:standard-output
+   #:error-output
+   #:with-show-stream
+   #:Show
+   #:show*
+   #:show-to
+   #:show-to-string
+   #:newline
+   #:Reveal
+   #:Expose)
+  (:export
+   #:standard-output
+   #:error-output
+   #:with-show-stream
+   #:Show                               ; class and function
+   #:show*
+   #:show-to
+   #:show-to-string
+   #:newline
+   #:Reveal
+   #:Expose))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-PRELUDE")
@@ -249,4 +273,5 @@
    (#:sys #:coalton-library/system)
    (#:file #:coalton-library/file)
    (#:experimental #:coalton-library/experimental)
-   (#:loops #:coalton-library/experimental/loops)))
+   (#:loops #:coalton-library/experimental/loops)
+   (#:show #:coalton-library/show)))
