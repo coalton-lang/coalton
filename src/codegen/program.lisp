@@ -111,7 +111,7 @@ Example:
                                        (compile-scc bindings env))))
         (lisp-forms (mapcar (lambda (lisp-form)
                               (cons (car (source:location-span (source:location lisp-form)))
-                                    `((locally (declare (compat:try-optimize-type-check 1))
+                                    `((locally (declare #.(compat:try-optimize-type-check 1))
                                         ,@(parser:toplevel-lisp-form-body lisp-form)))))
                             lisp-forms)))
     (mapcan #'cdr (merge-forms bindings lisp-forms))))
@@ -174,7 +174,7 @@ Example:
             ;; Muffle redefinition warnings in SBCL. A corresponding
             ;; SB-EXT:UNMUFFLE-CONDITIONS appears at the bottom.
             ,@(when settings:*emit-type-annotations*
-                (list '(declaim (compat:try-muffle-redefinition-warning-condition))))
+                (list '(declaim #.(compat:try-muffle-redefinition-warning-condition))))
 
             ,@(when (tc:translation-unit-types translation-unit)
                 (list
@@ -194,7 +194,7 @@ Example:
                 (list
                  `(declaim (sb-ext:start-block ,@definition-names))))
 
-            (locally (declare (compat:try-optimize-type-check 0))
+            (locally (declare #.(compat:try-optimize-type-check 0))
               ,@(compile-definitions sccs definitions lisp-forms offsets env))
 
             #+sbcl
@@ -203,7 +203,7 @@ Example:
                  `(declaim (sb-ext:end-block))))
 
             ,@(when settings:*emit-type-annotations*
-                (list '(declaim (compat:try-unmuffle-redefinition-warning-condition))))
+                (list '(declaim #.(compat:try-unmuffle-redefinition-warning-condition))))
             (values))
          env)))))
 

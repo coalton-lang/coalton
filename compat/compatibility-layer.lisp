@@ -31,11 +31,11 @@
 
 (defmacro try-muffle-redefinition-warning-condition ()
   #+sbcl
-  (sb-ext:muffle-conditions sb-kernel:redefinition-warning))
+  ''(sb-ext:muffle-conditions sb-kernel:redefinition-warning))
 
 (defmacro try-unmuffle-redefinition-warning-condition ()
   #+sbcl
-  (sb-ext:unmuffle-conditions sb-kernel:redefinition-warning))
+  ''(sb-ext:unmuffle-conditions sb-kernel:redefinition-warning))
 
 (defmacro try-muffle-compiler-note-condition ()
   #+sbcl
@@ -55,10 +55,10 @@
 
 (defmacro try-optimize-type-check (the-level)
   #+sbcl
-  `(optimize (sb-c::type-check ,the-level)))
+  `'(optimize (sb-c::type-check ,the-level)))
 
 (defmacro unset-all-float-traps ()
-  (cl:eval-when (:compile-toplevel :load-toplevel :execute)
+  '(cl:eval-when (:compile-toplevel :load-toplevel :execute)
     #+ccl (ccl:set-fpu-mode :overflow nil :underflow nil :division-by-zero nil :invalid nil :inexact nil)
     #+sbcl (sb-int:set-floating-point-modes :traps nil)
     #+abcl (extensions:set-floating-point-modes :traps nil)
