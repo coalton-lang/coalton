@@ -23,8 +23,7 @@
    #:get-fixnum-bits
    #:hash-combine))
 
-;; (in-package #:coalton/compatibility-layer)
-(in-package #:coalton-compatibility)
+(cl:in-package #:coalton-compatibility)
 
 (defmacro try-muffle-code-deletion-note-condition ()
   #+sbcl
