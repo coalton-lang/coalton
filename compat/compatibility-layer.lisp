@@ -58,7 +58,6 @@
   #+sbcl
   `(optimize (sb-c::type-check ,the-level)))
 
-;; (defun unset-all-float-traps ()
 (defmacro unset-all-float-traps ()
   (cl:eval-when (:compile-toplevel :load-toplevel :execute)
     #+ccl (ccl:set-fpu-mode :overflow nil :underflow nil :division-by-zero nil :invalid nil :inexact nil)
