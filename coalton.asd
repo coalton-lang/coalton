@@ -232,6 +232,15 @@
     (declare (ignore c))
     (cl:pushnew ':sbcl-pre-2-2-2 cl:*features*)))
 
+#+sbcl
+(cl:handler-case
+    (cl:progn
+      (sb-ext:assert-version->= 2 5 7 38)
+      (cl:pushnew ':sbcl-post-2-5-7-38 cl:*features*))
+  (cl:error (c)
+    (declare (ignore c))
+    (cl:pushnew ':sbcl-pre-2-5-7-38 cl:*features*)))
+
 (asdf:defsystem "coalton/hashtable-shim"
   :description "Shim over Common Lisp hash tables with custom hash functions, for use by the Coalton standard library."
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"

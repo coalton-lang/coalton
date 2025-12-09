@@ -236,6 +236,7 @@
 
 (cl:in-package #:coalton-native-tests)
 
+#+(or (not sbcl) sbcl-post-2-5-7-38)
 (define-test tail-call-elimination-test1 ()
   "A test for tail-call-elimination in the case of mutual recursion with
 a polymorphic function and a type class method.
