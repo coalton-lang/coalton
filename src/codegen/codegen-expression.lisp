@@ -115,8 +115,7 @@
                     (values ,(car (last (node-lisp-form expr)))))
                  inner)))
 
-      `(locally (declare ;; (compat:try-optimize-type-check 1)
-                         (optimize (sb-c::type-check 1)))
+      `(locally (declare (compat:try-optimize-type-check 1))
          ,(if settings:*emit-type-annotations*
               `(the (values ,(tc:lisp-type (node-type expr) env) &optional)
                     ,inner)
