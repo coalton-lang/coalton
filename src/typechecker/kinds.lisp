@@ -2,11 +2,11 @@
   (:use
    #:cl
    #:coalton-impl/typechecker/base
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:settings #:coalton-impl/settings)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:kind                               ; STRUCT
    #:kind-list                          ; TYPE

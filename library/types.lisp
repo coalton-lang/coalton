@@ -1,9 +1,9 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/types
   (:use
    #:coalton
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:Proxy
    #:proxy-of

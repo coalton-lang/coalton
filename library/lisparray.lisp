@@ -6,12 +6,12 @@
   (:use
    #:coalton
    #:coalton-library/classes
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:complex #:coalton-library/math/complex)
    (#:ram #:coalton-library/randomaccess)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:LispArray
    #:make

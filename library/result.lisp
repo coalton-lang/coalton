@@ -4,11 +4,11 @@
    #:coalton-library/builtin
    #:coalton-library/classes
    #:coalton-library/optional
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:ok?
    #:err?

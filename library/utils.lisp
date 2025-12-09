@@ -1,9 +1,9 @@
 (defpackage #:coalton-library/utils
   (:use
    #:coalton
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:defstdlib-package))
 

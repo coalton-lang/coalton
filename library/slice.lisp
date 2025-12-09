@@ -5,14 +5,14 @@
    #:coalton-library/functions
    #:coalton-library/classes
    #:coalton-library/math
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
    (#:list #:coalton-library/list)
    (#:vector #:coalton-library/vector)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:shadowing-import-from #:coalton-library/vector #:Vector)
   (:export
    #:Slice

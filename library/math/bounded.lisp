@@ -8,9 +8,9 @@
    #:coalton-library/builtin
    #:coalton-library/classes
    #:coalton-library/functions
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:Bounded #:minBound #:maxBound))
 

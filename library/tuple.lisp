@@ -4,9 +4,9 @@
    #:coalton-library/builtin
    #:coalton-library/classes
    #:coalton-library/hash
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:fst
    #:snd

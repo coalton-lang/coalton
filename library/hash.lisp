@@ -1,12 +1,12 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/hash
   (:use
    #:coalton
-   #:coalton-compatibility-layer
+   #:coalton-compatibility
    #:coalton-library/classes)
   (:import-from #:coalton-library/math/hash-defining-macros
                 #:define-sxhash-hasher)
   (:local-nicknames
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:lisp-combine-hashes
    #:combine-hashes

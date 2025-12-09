@@ -13,9 +13,9 @@
    #:coalton-library/math/elementary
    #:coalton-library/math/integral
    #:coalton-library/hash
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:Dual
    #:primal-part

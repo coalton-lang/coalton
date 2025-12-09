@@ -3,11 +3,11 @@
    #:cl
    #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/kinds
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:settings #:coalton-impl/settings)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:ty                                 ; STRUCT
    #:ty-alias                           ; ACCESSOR

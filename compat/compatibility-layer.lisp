@@ -1,7 +1,7 @@
 ;;; Goal of this file is to collect all non-portable code, so as to
 ;;; clean up the rest of the code, and hopefully make porting easier.
 (cl:defpackage
-    #:coalton-compatibility-layer
+    #:coalton-compatibility
     ;; #:coalton/compatibility-layer
   (:use #:cl)
   (:export
@@ -24,7 +24,7 @@
    #:hash-combine))
 
 ;; (in-package #:coalton/compatibility-layer)
-(in-package #:coalton-compatibility-layer)
+(in-package #:coalton-compatibility)
 
 (defmacro try-muffle-code-deletion-note-condition ()
   #+sbcl

@@ -3,12 +3,12 @@
    #:coalton
    #:coalton-library/classes
    #:coalton-library/functions
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (:l #:coalton-library/list)
    (:opt #:coalton-library/optional)
    (:rst #:coalton-library/result)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:when_
    #:whenM

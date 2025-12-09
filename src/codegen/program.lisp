@@ -2,7 +2,7 @@
   (:use
    #:cl
    #:coalton-impl/codegen/ast
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:import-from
    #:coalton-impl/codegen/translate-expression
    #:translate-toplevel)
@@ -32,7 +32,7 @@
    (#:global-lexical #:coalton-impl/global-lexical)
    (#:rt #:coalton-impl/runtime)
    (#:tc #:coalton-impl/typechecker)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:*codegen-hook*
    #:compile-translation-unit))

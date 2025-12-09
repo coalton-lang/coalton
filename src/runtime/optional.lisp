@@ -17,9 +17,9 @@
 (defpackage #:coalton-impl/runtime/optional
   (:use
    #:cl
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:cl-none
    #:cl-none-p

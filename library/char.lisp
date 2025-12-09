@@ -4,13 +4,13 @@
    #:coalton-library/classes
    #:coalton-library/builtin
    #:coalton-library/functions
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:import-from
    #:coalton-library/hash
    #:define-sxhash-hasher)
   (:local-nicknames
    (#:iter #:coalton-library/iterator)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:char-code
    #:char-code-unchecked

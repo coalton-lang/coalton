@@ -7,11 +7,11 @@
           #:coalton-library/classes
           #:coalton-library/utils
           #:coalton-library/math/arith
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:arith #:coalton-library/math/arith)
    (#:types #:coalton-library/types)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:Complex                            ; data type
    #:ComplexComponent                   ; type class

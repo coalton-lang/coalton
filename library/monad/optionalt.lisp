@@ -4,9 +4,9 @@
    #:coalton-library/functions
    #:coalton-library/classes
    #:coalton-library/monad/classes
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:OptionalT
    #:run-optionalT

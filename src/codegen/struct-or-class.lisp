@@ -1,13 +1,13 @@
 (defpackage #:coalton-impl/codegen/struct-or-class
   (:use
    #:cl
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
    (#:global-lexical #:coalton-impl/global-lexical)
    (#:rt #:coalton-impl/runtime)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:struct-or-class                    ; FUNCTION
    #:struct-or-class-field              ; STRUCT

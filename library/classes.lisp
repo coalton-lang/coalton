@@ -1,10 +1,10 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/classes
   (:use
    #:coalton
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:types #:coalton-library/types)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:Signalable
    #:error

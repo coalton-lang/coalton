@@ -9,9 +9,9 @@
    #:coalton-library/classes
    #:coalton-library/functions
    #:coalton-library/math/bounded
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
-   (#:compat #:coalton-compatibility-layer)))
+   (#:compat #:coalton-compatibility)))
 
 (in-package #:coalton-library/math/conversions)
 

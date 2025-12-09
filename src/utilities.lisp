@@ -3,12 +3,12 @@
 (defpackage #:coalton-impl/util
   (:documentation "Utility functions and methods used throughout COALTON.")
   (:use #:cl
-        #:coalton-compatibility-layer)
+        #:coalton-compatibility)
   (:shadow
    #:find-package
    #:find-symbol)
   (:local-nicknames
-   (#:compat #:coalton-compatibility-layer)
+   (#:compat #:coalton-compatibility)
    (#:cst #:concrete-syntax-tree))
   (:export
    #:+keyword-package+                  ; CONSTANT

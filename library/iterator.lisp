@@ -6,11 +6,11 @@
    #:coalton-library/hash
    #:coalton-library/builtin
    #:coalton-library/functions
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:cell #:coalton-library/cell)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:Iterator
    #:new

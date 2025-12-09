@@ -3,10 +3,10 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/classes
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:math #:coalton-library/math)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:gc
    #:sleep)

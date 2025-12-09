@@ -2,11 +2,11 @@
   (:use
    #:coalton
    #:coalton-library/classes
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (:l #:coalton-library/list)
    (:it #:coalton-library/iterator)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:import-from #:coalton-library/experimental/do-control-core
    #:Terminator
    #:ended?

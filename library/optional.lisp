@@ -3,11 +3,11 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/classes
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:from-some
    #:some?

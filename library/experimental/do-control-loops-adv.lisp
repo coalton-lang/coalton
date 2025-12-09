@@ -3,11 +3,11 @@
    #:coalton
    #:coalton-library/classes
    #:coalton-library/functions
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (:l #:coalton-library/list)
    (:ct #:coalton-library/experimental/do-control-core)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:import-from #:coalton-library/monad/environment
    #:MonadEnvironment
    #:ask

@@ -4,12 +4,12 @@
    #:coalton-library/builtin
    #:coalton-library/classes
    #:coalton-library/hash
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
    (#:shim #:coalton/hashtable-shim)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:Hashtable
    #:new

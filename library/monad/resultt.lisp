@@ -5,9 +5,9 @@
    #:coalton-library/classes
    #:coalton-library/result
    #:coalton-library/monad/classes
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:ResultT
    #:run-resultT

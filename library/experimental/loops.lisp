@@ -5,7 +5,7 @@
    #:coalton
    #:coalton-library/classes
    #:coalton-library/math/arith
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:export
    #:repeat
    #:dotimes
@@ -464,5 +464,5 @@ COALTON::UNIT/UNIT
          (cl:t
           `(%dorange ,start-or-stop ,stop ,step ,func)))))))
 
-(coalton-compatibility-layer:try-lock-package "COALTON-LIBRARY/EXPERIMENTAL/LOOPS")
+(coalton-compatibility:try-lock-package "COALTON-LIBRARY/EXPERIMENTAL/LOOPS")
 

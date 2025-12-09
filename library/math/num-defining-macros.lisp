@@ -18,11 +18,11 @@
    #:coalton-library/functions
    #:coalton-library/utils
    #:coalton-library/math/arith
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:ff #:float-features)
    (#:bits #:coalton-library/bits)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:+fixnum-bits+
    #:+unsigned-fixnum-bits+

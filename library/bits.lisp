@@ -6,9 +6,9 @@
      #:not)
   (:use
    #:coalton
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:import-from
    #:coalton-library/classes
    #:Num)

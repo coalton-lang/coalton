@@ -5,14 +5,14 @@
    #:coalton-library/functions
    #:coalton-library/classes
    #:coalton-library/experimental/loops
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:list #:coalton-library/list)
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
    (#:ram #:coalton-library/randomaccess)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:Vector
    #:new

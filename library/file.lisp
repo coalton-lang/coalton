@@ -19,7 +19,7 @@ Common Lisp makes a distinction between file and directory paths. Directory path
    #:coalton-library/builtin
    #:coalton-library/functions
    #:coalton-library/system
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:str #:coalton-library/string)
    (#:iter #:coalton-library/iterator)
@@ -29,7 +29,7 @@ Common Lisp makes a distinction between file and directory paths. Directory path
    (#:res #:coalton-library/result)
    (#:types #:coalton-library/types)
    (#:char #:coalton-library/char)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
 
    #:Pathname

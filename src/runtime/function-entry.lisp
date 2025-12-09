@@ -1,13 +1,13 @@
 (defpackage #:coalton-impl/runtime/function-entry
   (:use
    #:cl
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:import-from
    #:coalton
    #:call-coalton-function)
   (:local-nicknames
    (#:util #:coalton-impl/util)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:function-entry
    #:function-entry-arity

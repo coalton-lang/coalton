@@ -12,10 +12,10 @@
      #:coalton-library/math/arith
      #:coalton-library/math/real
      #:coalton-library/math/complex
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:ff #:float-features)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:Trigonometric
    #:sin #:cos #:tan

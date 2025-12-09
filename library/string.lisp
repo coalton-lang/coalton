@@ -3,7 +3,7 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/classes
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:import-from
    #:coalton-library/hash
    #:define-sxhash-hasher)
@@ -13,7 +13,7 @@
   (:local-nicknames
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:concat
    #:reverse

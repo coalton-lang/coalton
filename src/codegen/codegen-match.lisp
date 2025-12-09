@@ -1,14 +1,14 @@
 (defpackage #:coalton-impl/codegen/codegen-match
   (:use
    #:cl
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:tc #:coalton-impl/typechecker)
    (#:settings #:coalton-impl/settings)
    (#:ast #:coalton-impl/codegen/ast)
    (#:pattern #:coalton-impl/codegen/pattern)
    (#:codegen-pattern #:coalton-impl/codegen/codegen-pattern)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:match-emit-jumptable-p             ; FUNCTION
    #:match-emit-fallback-p              ; FUNCTION

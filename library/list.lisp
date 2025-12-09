@@ -7,12 +7,12 @@
    #:coalton-library/functions
    #:coalton-library/tuple
    #:coalton-library/optional
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
    (#:math #:coalton-library/math)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:head
    #:tail

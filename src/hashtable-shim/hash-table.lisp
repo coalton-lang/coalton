@@ -5,10 +5,10 @@
            #:hash-table-p
            #:hash-table-count)
   (:use #:cl
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:util #:coalton-impl/util)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:hash-table                         ; STRUCT
    #:make-hash-table                    ; FUNCTION

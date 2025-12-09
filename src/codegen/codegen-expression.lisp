@@ -4,7 +4,7 @@
    #:coalton-impl/codegen/pattern
    #:coalton-impl/codegen/ast
    #:coalton-impl/codegen/codegen-match
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:import-from
    #:coalton-impl/codegen/codegen-pattern
    #:codegen-pattern)
@@ -20,7 +20,7 @@
    (#:rt #:coalton-impl/runtime)
    (#:tc #:coalton-impl/typechecker)
    (#:const #:coalton-impl/constants)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:codegen-expression                 ; FUNCTION
    #:function-declarations              ; FUNCTION

@@ -7,7 +7,7 @@
    #:coalton-library/classes
    #:coalton-library/builtin
    #:coalton-library/functions
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
 
   (:import-from
    #:coalton-library/math/arith
@@ -215,7 +215,7 @@
   (:export
    #:time))
 
-(coalton-compatibility-layer:try-lock-package "COALTON-PRELUDE")
+(coalton-compatibility:try-lock-package "COALTON-PRELUDE")
 
 (defpackage #:coalton-user
   (:import-from

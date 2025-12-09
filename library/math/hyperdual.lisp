@@ -14,10 +14,10 @@
    #:coalton-library/math/integral
    #:coalton-library/math/complex
    #:coalton-library/hash
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:complex #:coalton-library/math/complex)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:Hyperdual
    #:d-x

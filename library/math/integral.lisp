@@ -8,12 +8,12 @@
    #:coalton-library/classes
    #:coalton-library/builtin
    #:coalton-library/math/arith
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:import-from
    #:coalton-library/bits #:Bits)
   (:local-nicknames
    (#:bits #:coalton-library/bits)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:Remainder
    #:Integral

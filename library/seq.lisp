@@ -4,7 +4,7 @@
    #:coalton-library/builtin
    #:coalton-library/functions
    #:coalton-library/classes
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:math #:coalton-library/math)
@@ -12,7 +12,7 @@
    (#:cell #:coalton-library/cell)
    (#:vector #:coalton-library/vector)
    (#:iter #:coalton-library/iterator)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:Seq
    #:new

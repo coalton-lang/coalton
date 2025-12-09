@@ -1,7 +1,7 @@
 (defpackage #:coalton-impl/codegen/codegen-type-definition
   (:use
    #:cl
-   #:coalton-compatibility-layer)
+   #:coalton-compatibility)
   (:import-from
    #:coalton-impl/codegen/struct-or-class
    #:struct-or-class
@@ -17,7 +17,7 @@
    (#:global-lexical #:coalton-impl/global-lexical)
    (#:tc #:coalton-impl/typechecker)
    (#:rt #:coalton-impl/runtime)
-   (#:compat #:coalton-compatibility-layer))
+   (#:compat #:coalton-compatibility))
   (:export
    #:codegen-type-definition
    #:constructor-slot-name))
