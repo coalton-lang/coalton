@@ -28,19 +28,19 @@
 
 (defmacro try-muffle-code-deletion-note-condition ()
   #+sbcl
-  `(sb-ext:muffle-conditions sb-ext:code-deletion-note))
+  (sb-ext:muffle-conditions sb-ext:code-deletion-note))
 
 (defmacro try-muffle-redefinition-warning-condition ()
   #+sbcl
-  `(sb-ext:muffle-conditions sb-kernel:redefinition-warning))
+  (sb-ext:muffle-conditions sb-kernel:redefinition-warning))
 
 (defmacro try-unmuffle-redefinition-warning-condition ()
   #+sbcl
-  `(sb-ext:unmuffle-conditions sb-kernel:redefinition-warning))
+  (sb-ext:unmuffle-conditions sb-kernel:redefinition-warning))
 
 (defmacro try-muffle-compiler-note-condition ()
   #+sbcl
-  `(sb-ext:muffle-conditions sb-ext:compiler-note))
+  (sb-ext:muffle-conditions sb-ext:compiler-note))
 
 (defmacro try-lock-package (the-package)
   #+sb-package-locks
