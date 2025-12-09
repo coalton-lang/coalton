@@ -85,7 +85,7 @@
   (hash-function (util:required 'hash-function) :type (function (t) hash) :read-only t)
   (eq-function  (util:required 'eq-function) :type (function (t t) boolean) :read-only t))
 
-(compat:try-freeze-type hash-table)
+#.(compat:try-freeze-type hash-table)
 
 (declaim (inline hash-table-size))
 (defun hash-table-capacity (table)
