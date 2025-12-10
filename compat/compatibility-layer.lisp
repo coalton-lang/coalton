@@ -72,7 +72,9 @@
 (defmacro try-optimize-type-check (the-level)
   #+sbcl
   `'(optimize (sb-c::type-check ,the-level)
-        `(ignore bar-optimize-type-check)))
+     ;; but does it work? warning, if this is uncommented
+     ;; `(ignore bar-optimize-type-check)
+     ))
 
 (defmacro unset-all-float-traps ()
   '(cl:eval-when (:compile-toplevel :load-toplevel :execute)
