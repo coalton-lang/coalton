@@ -15,6 +15,7 @@
    (#:iter #:coalton-library/iterator)
    (#:list #:coalton-library/list)
    (#:math #:coalton-library/math)
+   (#:util #:coalton-impl/runtime)
    )
   (:shadow #:count #:empty #:xor)
   (:export
@@ -186,7 +187,7 @@ of empty hashmap, or nodes at the maximum depth."
     (match node
       ((Chain entries) entries)
       (_ (lisp :a (node)
-           (coalton-bug "Chain expected, but got ~s" node)))))
+           (util:coalton-bug "Chain expected, but got ~s" node)))))
 
   (declare chain-replace (Eq :k => HmNode :k :v -> :k -> :v -> Boolean
                              -> HmNode :k :v))

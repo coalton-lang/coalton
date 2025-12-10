@@ -9,7 +9,7 @@
   (:local-nicknames
    (#:iter #:coalton-library/iterator)
    (#:cell #:coalton-library/cell)
-   (#:util #:coalton-impl/util))
+   (#:util #:coalton-impl/runtime))
   (:shadow #:empty)
   (:export
    #:OrdTree #:empty
