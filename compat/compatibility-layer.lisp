@@ -27,35 +27,52 @@
 
 (defmacro try-muffle-code-deletion-note-condition ()
   #+sbcl
-  (sb-ext:muffle-conditions sb-ext:code-deletion-note))
+  (sb-ext:muffle-conditions sb-ext:code-deletion-note)
+  ;; but does it work? no error, with this one, so most probably *NOT*!
+  (ignore bar-muffle-code-deletion-note-condition))
 
 (defmacro try-muffle-redefinition-warning-condition ()
   #+sbcl
-  ''(sb-ext:muffle-conditions sb-kernel:redefinition-warning))
+  ''(sb-ext:muffle-conditions sb-kernel:redefinition-warning)
+  ;; but does it work? error, if this is uncommented
+  ;; '(ignore bar-muffle-redefinition-warning-condition)
+  )
 
 (defmacro try-unmuffle-redefinition-warning-condition ()
   #+sbcl
-  ''(sb-ext:unmuffle-conditions sb-kernel:redefinition-warning))
+  ''(sb-ext:unmuffle-conditions sb-kernel:redefinition-warning)
+  ;; but does it work? error, if this is uncommented
+  ;; '(ignore bar-unmuffle-redefinition-warning-condition)
+  )
 
 (defmacro try-muffle-compiler-note-condition ()
   #+sbcl
-  (sb-ext:muffle-conditions sb-ext:compiler-note))
+  (sb-ext:muffle-conditions sb-ext:compiler-note)
+  ;; but does it work? no error, with this one, so most probably *NOT*!
+  (ignore bar-muffle-compiler-note-condition))
 
 (defmacro try-lock-package (the-package)
   #+sb-package-locks
-  `(sb-ext:lock-package ,the-package))
+  `(sb-ext:lock-package ,the-package)
+  ;; but does it work? error, if this is uncommented
+  ;; `(ignore bar-lock-package)
+  )
 
 (defmacro try-unlock-package (the-package)
   #+sb-package-locks
-  `(sb-ext:unlock-package ,the-package))
+  `(sb-ext:unlock-package ,the-package)
+  ;; but does it work? error, if this is uncommented
+  ;; `(ignore bar-unlock-package)
+  )
 
 (defmacro try-freeze-type (the-type)
   #+sbcl
-  `(declaim (sb-ext:freeze-type ,the-type)))
+  `(declaim (sb-ext:freeze-type ,the-type) (ignore bar-freeze-type)))
 
 (defmacro try-optimize-type-check (the-level)
   #+sbcl
-  `'(optimize (sb-c::type-check ,the-level)))
+  `'(optimize (sb-c::type-check ,the-level)
+        `(ignore bar-optimize-type-check)))
 
 (defmacro unset-all-float-traps ()
   '(cl:eval-when (:compile-toplevel :load-toplevel :execute)
