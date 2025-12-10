@@ -43,6 +43,22 @@
   (is (== (list:drop 2 x) (make-list 3)))
   (is (== (list:take 2 x) (make-list 1 2))))
 
+(define-test test-split-at ()
+  (is (== (list:split-at 1 x) (Tuple (make-list 1)
+                                     (make-list 2 3))))
+  (is (== (list:split-at 0 x) (Tuple (make-list)
+                                     (make-list 1 2 3))))
+  (is (== (list:split-at 4 x) (Tuple (make-list 1 2 3)
+                                     (make-list)))))
+
+(define-test test-split-around ()
+  (is (== (list:split-around 1 x) (Tuple3 (make-list 1)
+                                          (Some 2)
+                                          (make-list 3))))
+  (is (== (list:split-around 4 x) (Tuple3 (make-list 1 2 3)
+                                          None
+                                          (make-list)))))
+
 (define-test test-search ()
   (is (== (list:find even? x) (Some (the Integer 2))))
   (is (== (list:find (< 10) x) None))
@@ -212,9 +228,6 @@
   Unit)
 
 (define-test test-combinatorics ()
-  (is (== (list:split #\, "one,two,three") (make-list "one" "two" "three")))
-  (is (== (list:split #\, "one,,three") (make-list "one" "" "three")))
-
   (is (set== (list:perms x)
              (make-list
               (make-list 1 2 3)

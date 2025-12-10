@@ -19,12 +19,18 @@
   (is (== (substring "foobar" 3 6)
           "bar")))
 
-(define-test string-split ()
+(define-test string-split-at ()
   (let str = "teststring")
-  (is (== (string:split 1 str)
+  (is (== (string:split-at 1 str)
           (Tuple "t" "eststring")))
-  (is (== (string:split 4 str)
+  (is (== (string:split-at 4 str)
           (Tuple "test" "string"))))
+
+(define-test string-split ()
+  (is (== (string:split #\, "test,string,test")
+          (make-list "test" "string" "test")))
+  (is (== (string:split #\, "test,,string")
+          (make-list "test" "" "string"))))
 
 (define-test strip-fixes ()
   (is (== (string:strip-prefix "pre" "prefix")

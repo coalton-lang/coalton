@@ -72,7 +72,8 @@
    #:product
    #:all
    #:any
-   #:split
+   #:split-at
+   #:split-around
    #:perms
    #:combs
    #:combsOf
@@ -210,6 +211,25 @@
            (match in
              ((Cons x xs) (f (- n 1) xs (Cons x out)))
              ((Nil) out))))))
+
+  (declare split-at (UFix -> List :a -> (Tuple (List :a) (List :a))))
+  (define (split-at n xs)
+    "Splits a list into a Tuple of the first N elements and all remaining elements. The return value is equivalent to `(Tuple (take n xs) (drop n xs)`."
+    (rec % ((n n)
+            (tail xs)
+            (acc-head Nil))
+      (if (== n 0)
+          (Tuple (%reverse! acc-head) tail)
+          (match tail
+            ((Cons x xs) (% (- n 1) xs (Cons x acc-head)))
+            ((Nil) (Tuple (%reverse! acc-head) Nil))))))
+
+  (declare split-around (UFix -> List :a -> (Tuple3 (List :a) (Optional :a) (List :a))))
+  (define (split-around n xs)
+    "Splits a list around N into a Tuple of the first N elements, the element at index N, and a tail of all remaining elements. N must be a valid index."
+    (match (split-at n xs)
+      ((Tuple head (Cons x xs)) (Tuple3 head (Some x) xs))
+      ((Tuple head (Nil)) (Tuple3 head None Nil))))
 
   (declare find ((:a -> Boolean) -> List :a -> Optional :a))
   (define (find f xs)
@@ -636,14 +656,6 @@
            True
            (any f? xs)))
       ((Nil) False)))
-
-  (declare split (Char -> String -> (List String)))
-  (define (split c str)
-	"Split a string `str` into a list of substrings by the character `c`."
-    (lisp (List String) (c str)
-      (cl:let ((split-chars (cl:list c)))
-        (cl:declare (cl:dynamic-extent split-chars))
-        (uiop:split-string str :separator split-chars))))
 
   (declare perms (List :a -> (List (List :a))))
   (define (perms l)
