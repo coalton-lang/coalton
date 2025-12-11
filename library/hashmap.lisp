@@ -29,8 +29,8 @@
    #:replace
    #:remove
    #:update
+   #:modify-get
    #:modify
-   #:modify_
    #:keys
    #:values
    #:entries
@@ -609,8 +609,8 @@ modified `HashMap`."
       (Tuple (HashMap newnode) aux)))
 
   (inline)
-  (declare modify (Hash :k => HashMap :k :v -> :k -> (:v -> :v) -> Tuple (HashMap :k :v) (Optional :v)))
-  (define (modify hm key f)
+  (declare modify-get (Hash :k => HashMap :k :v -> :k -> (:v -> :v) -> Tuple (HashMap :k :v) (Optional :v)))
+  (define (modify-get hm key f)
     "Modify the value at KEY with F. Returns the modified `HashMap` and the
 new value, if the key was found."
     (update hm key (fn (key?)
@@ -622,10 +622,10 @@ new value, if the key was found."
                           (Tuple (Some result) (Some result))))))))
 
   (inline)
-  (declare modify_ (Hash :k => HashMap :k :v -> :k -> (:v -> :v) -> HashMap :k :v))
-  (define (modify_ hm key f)
+  (declare modify (Hash :k => HashMap :k :v -> :k -> (:v -> :v) -> HashMap :k :v))
+  (define (modify hm key f)
     "Modify the value at KEY with F. Returns the modified `HashMap`."
-    (fst (modify hm key f)))
+    (fst (modify-get hm key f)))
 
   ;; Auxiliary functions for functor
   (declare %fmap-entry ((:v -> :w) ->  HmEntry :k :v ->  HmEntry :k :w))
