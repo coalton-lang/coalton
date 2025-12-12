@@ -289,8 +289,9 @@ When true, returns two `ast:node' objects representing then/else branches."
                      '()
                      (list `(type ,(tc:lisp-type subexpr-type env) ,match-var)))))
 
-     (locally
-         `(declare (compat:try-muffle-code-deletion-note-condition))
+     (compat:with-muffled-code-deletion-note-condition-if-possible
+     ;; (locally
+     ;;     `(declare #.(compat:try-muffle-code-deletion-note-condition))
          ,(cond
             ;; Case #1:
             ;;
