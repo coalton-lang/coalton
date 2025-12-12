@@ -448,3 +448,60 @@
 
   (is (hashmap:empty? ht2))
   )
+
+(define-test hashmap-modify-get-empty ()
+  (let result = (the (Tuple (hashmap:HashMap Integer Integer) (Optional integer))
+                     (hashmap:modify-get hashmap:empty 0 1+)))
+  (is (== (Tuple hashmap:empty None)
+          result)))
+
+(define-test hashmap-modify-get-missing ()
+  (let hm = (the (hashmap:HashMap Integer Integer)
+                 (list->hashmap
+                  (make-list (Tuple 0 0)
+                             (Tuple 1 1)))))
+  (let result = (hashmap:modify-get hm 2 1+))
+  (is (== (Tuple hm None)
+          result)))
+
+(define-test hashmap-modify-get-present ()
+  (let hm = (the (hashmap:HashMap Integer Integer)
+                 (list->hashmap
+                  (make-list (Tuple 0 0)
+                             (Tuple 1 1)))))
+  (let (Tuple new-hm new-val) = (hashmap:modify-get hm 0 1+))
+  (is (== (list->hashmap (make-list (Tuple 0 1)
+                                    (Tuple 1 1)))
+          new-hm))
+  (is (== (Some 1) new-val)))
+
+(define-test hashmap-modify-empty ()
+  (let result = (the (hashmap:HashMap Integer Integer)
+                     (hashmap:modify hashmap:empty 0 1+)))
+  (is (== hashmap:empty result)))
+
+(define-test hashmap-modify-missing ()
+  (let hm = (the (hashmap:HashMap Integer Integer)
+                 (list->hashmap
+                  (make-list (Tuple 0 0)
+                             (Tuple 1 1)))))
+  (let result = (hashmap:modify hm 2 1+))
+  (is (== hm result)))
+
+(define-test hashmap-modify-present ()
+  (let hm = (the (hashmap:HashMap Integer Integer)
+                 (list->hashmap
+                  (make-list (Tuple 0 0)
+                             (Tuple 1 1)))))
+  (let result = (hashmap:modify hm 0 1+))
+  (is (== (list->hashmap (make-list (Tuple 0 1)
+                                    (Tuple 1 1)))
+          result)))
+
+(define-test hashmap-show ()
+  (let hm = (the (hashmap:HashMap Integer Integer)
+                 (list->hashmap
+                  (make-list (Tuple 0 0)
+                             (Tuple 1 10)))))
+  (is (== "(0 -> 0, 1 -> 10)"
+          (hashmap:show hm))))
