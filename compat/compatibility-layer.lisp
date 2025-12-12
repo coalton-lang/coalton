@@ -1,5 +1,5 @@
-;;; Goal of this file is to collect all non-portable code, so as to
-;;; clean up the rest of the code, and hopefully make porting easier.
+;;;; Goal of this file is to collect all non-portable code, so as to
+;;;; clean up the rest of the code, and hopefully make porting easier.
 (cl:defpackage
     #:coalton-compatibility
     ;; #:coalton/compatibility-layer
@@ -11,7 +11,8 @@
 ;;; For the rest (not starting with try-), while an implementation may
 ;;; not exist at the moment for some Lisp, it might exist in the
 ;;; future.
-   #:try-muffle-code-deletion-note-condition
+   ;; #:try-muffle-code-deletion-note-condition
+   #:with-muffled-code-deletion-note-condition-if-possible
    #:try-muffle-redefinition-warning-condition
    #:try-unmuffle-redefinition-warning-condition
    #:try-muffle-compiler-note-condition
@@ -25,56 +26,85 @@
 
 (cl:in-package #:coalton-compatibility)
 
+;;; using (undefined) features debug-try-<macro-name> to enable
+;;; canaries for testing the following macros.
+;;;
+;;; Note: the (wrong on purpose) ignore declaration enabled by the
+;;; canary needs to be preceded by whatever sequence of quotes as the
+;;; actual macro, otherwise your canary is in a different mine...
+;;;
+;;; Note: These canaries may increase confidence that the code behaves
+;;; as expected but they're no proof of that - one would need to look
+;;; at the actual macroexpanded code and verify manually each use of
+;;; the macros. But if the canaries don't work, then the code is most
+;;; probably *NOT* behaving as intended! Looking at you
+;;; "try-muffle-code-deletion-note-condition"... (canary still active
+;;; and well on it -- is it because it was optimised away?)
 (defmacro try-muffle-code-deletion-note-condition ()
+  ;; but does it work?
+  ;;; This one passes...
+  #-debug-try-muffle-code-deletion-note-condition
+  ''(ignore foo-muffle-code-deletion-note-condition)
   #+sbcl
-  (sb-ext:muffle-conditions sb-ext:code-deletion-note)
-  ;; but does it work? no error, with this one, so most probably *NOT*!
-  (ignore bar-muffle-code-deletion-note-condition))
+  ''(sb-ext:muffle-conditions sb-ext:code-deletion-note))
+(defmacro with-muffled-code-deletion-note-condition-if-possible (alambda)
+  `(locally
+       (declare #+sbcl
+                (sb-ext:muffle-conditions sb-ext:code-deletion-note)
+                ;; does it work? warning if it's enabled
+                #+debug-try-muffle-code-deletion-note-condition
+                (ignore foo-muffle-code-deletion-note-condition))
+     ,alambda))
+
 
 (defmacro try-muffle-redefinition-warning-condition ()
   #+sbcl
   ''(sb-ext:muffle-conditions sb-kernel:redefinition-warning)
-  ;; but does it work? error, if this is uncommented
-  ;; '(ignore bar-muffle-redefinition-warning-condition)
-  )
+  ;; but does it work? warning, if this is enabled
+  #+debug-try-muffle-redefinition-warning-condition
+  ''(ignore foo-muffle-redefinition-warning-condition))
 
 (defmacro try-unmuffle-redefinition-warning-condition ()
   #+sbcl
   ''(sb-ext:unmuffle-conditions sb-kernel:redefinition-warning)
-  ;; but does it work? error, if this is uncommented
-  ;; '(ignore bar-unmuffle-redefinition-warning-condition)
-  )
+  ;; but does it work? warning, if this is enabled
+  #+debug-try-unmuffle-redefinition-warning-condition
+  ''(ignore foo-unmuffle-redefinition-warning-condition))
 
 (defmacro try-muffle-compiler-note-condition ()
   #+sbcl
-  (sb-ext:muffle-conditions sb-ext:compiler-note)
-  ;; but does it work? no error, with this one, so most probably *NOT*!
-  (ignore bar-muffle-compiler-note-condition))
+  ''(sb-ext:muffle-conditions sb-ext:compiler-note)
+  ;; but does it work? style-warning, if this is enabled
+  #+debug-try-muffle-compiler-note-condition
+  ''(ignore foo-muffle-compiler-note-condition))
 
 (defmacro try-lock-package (the-package)
   #+sb-package-locks
   `(sb-ext:lock-package ,the-package)
-  ;; but does it work? error, if this is uncommented
-  ;; `(ignore bar-lock-package)
-  )
+  ;; but does it work? error, if this is enabled
+  #+debug-try-lock-package
+  `(ignore foo-lock-package))
 
 (defmacro try-unlock-package (the-package)
   #+sb-package-locks
   `(sb-ext:unlock-package ,the-package)
-  ;; but does it work? error, if this is uncommented
-  ;; `(ignore bar-unlock-package)
-  )
+  ;; but does it work? error, if this is enabled
+  #+debug-try-unlock-package
+  `(ignore foo-unlock-package))
 
 (defmacro try-freeze-type (the-type)
   #+sbcl
-  `(declaim (sb-ext:freeze-type ,the-type) (ignore bar-freeze-type)))
+  `(declaim (sb-ext:freeze-type ,the-type)
+            ;; but does it work? warning, if this is enabled
+            #+debug-try-freeze-type
+            (ignore foo-freeze-type)))
 
 (defmacro try-optimize-type-check (the-level)
   #+sbcl
   `'(optimize (sb-c::type-check ,the-level)
-     ;; but does it work? warning, if this is uncommented
-     ;; `(ignore bar-optimize-type-check)
-     ))
+              ;; but does it work? warning, if this is enabled
+              #+debug-try-optimize-type-check
+              (ignore foo-optimize-type-check)))
 
 (defmacro unset-all-float-traps ()
   '(cl:eval-when (:compile-toplevel :load-toplevel :execute)
