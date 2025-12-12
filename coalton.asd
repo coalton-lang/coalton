@@ -18,8 +18,7 @@
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
   :in-order-to ((asdf:test-op (asdf:test-op #:coalton/tests)))
-  :depends-on ("coalton-empty"
-               ;; "coalton-compatibility"
+  :depends-on ("coalton-compatibility"
                "coalton-compiler"
                "coalton/library"))
 
@@ -38,8 +37,7 @@
                           (*features* (cons ':coalton-lisp-toplevel *features*)))
                       (funcall compile)))
   :defsystem-depends-on ("coalton-asdf")
-  :depends-on ("coalton-empty"
-               ;; "coalton-compatibility"
+  :depends-on ("coalton-compatibility"
                "coalton-compiler"
                "coalton/hashtable-shim"
                "trivial-garbage"
