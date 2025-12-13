@@ -37,7 +37,7 @@
   ;; Slice
   ;;
 
-  (repr :native (cl:and (cl:vector cl:t) (cl:not cl:simple-vector)))
+  (repr :native (cl:vector cl:t))
   (define-type (Slice :a))
 
   (define-class (Sliceable :a)
