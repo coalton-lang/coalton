@@ -37,7 +37,7 @@
   ;; Slice
   ;;
 
-  (repr :native (cl:and (cl:vector cl:t) (cl:not cl:simple-vector)))
+  (repr :native (cl:vector cl:t))
   (define-type (Slice :a))
 
   (define-class (Sliceable :a)
@@ -105,7 +105,7 @@
     "Returns an iterator that yeilds a series of overlapping slices of length `size`."
     (let length = (%length s))
     (let offset_ = (cell:new 0))
-    (iter:with-size 
+    (iter:with-size
         (fn ()
           (let offset = (cell:read offset_))
           (when (> (+ offset size) length)
