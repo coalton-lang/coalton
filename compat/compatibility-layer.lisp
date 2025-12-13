@@ -13,6 +13,7 @@
 ;;; future.
    ;; #:try-muffle-code-deletion-note-condition
    #:with-muffled-code-deletion-note-condition-if-possible
+   #:with-start-end-block-if-possible
    #:try-muffle-redefinition-warning-condition
    #:try-unmuffle-redefinition-warning-condition
    #:try-muffle-compiler-note-condition
@@ -20,7 +21,11 @@
    #:try-unlock-package
    #:try-freeze-type
    #:try-optimize-type-check
+   #:try-always-bound
+   #:get-hash-type
+   #:get-hash-type-2
    #:unset-all-float-traps
+   #:get-bytes-consed
    #:get-fixnum-bits
    #:hash-combine))
 
@@ -56,6 +61,13 @@
                 (ignore foo-muffle-code-deletion-note-condition))
      ,alambda))
 
+(defmacro with-start-end-block-if-possible (funs body)
+  `(progn
+     #+sbcl
+     (declaim (sb-ext:start-block ,@funs))
+     ,@(reverse body)
+     #+sbcl
+     (declaim (sb-ext:end-block))))
 
 (defmacro try-muffle-redefinition-warning-condition ()
   #+sbcl
@@ -78,9 +90,12 @@
   #+debug-try-muffle-compiler-note-condition
   ''(ignore foo-muffle-compiler-note-condition))
 
+#+ecl (require '#:package-locks)
 (defmacro try-lock-package (the-package)
   #+sb-package-locks
   `(sb-ext:lock-package ,the-package)
+  #+ecl
+  `(ext:lock-package ,the-package)
   ;; but does it work? error, if this is enabled
   #+debug-try-lock-package
   `(ignore foo-lock-package))
@@ -88,6 +103,8 @@
 (defmacro try-unlock-package (the-package)
   #+sb-package-locks
   `(sb-ext:unlock-package ,the-package)
+  #+ecl
+  `(ext:unlock-package ,the-package)
   ;; but does it work? error, if this is enabled
   #+debug-try-unlock-package
   `(ignore foo-unlock-package))
@@ -106,6 +123,33 @@
               #+debug-try-optimize-type-check
               (ignore foo-optimize-type-check)))
 
+(defmacro try-always-bound (the-var)
+  #+sbcl
+  `(declaim (sb-ext:always-bound ,the-var)
+            ;; but does it work? warning, if this is enabled
+            #-debug-try-always-bound
+            (ignore foo-always-bound)))
+
+;;; get-hash-type looks like (cl:unsigned-byte (get-fixnum-bits)), no?
+(defmacro get-hash-type ()
+  #+sbcl
+  '(cl:unsigned-byte 62)
+  #+allegro
+  '(cl:unsigned-byte 0 32)
+  ;; https://github.com/Clozure/ccl/blob/ff51228259d9dbc8a9cc7bbb08858ef4aa9fe8d0/level-0/l0-hash.lisp#L1885
+  #+ccl
+  '(cl:and cl:fixnum cl:unsigned-byte)
+  ;; https://github.com/search?q=repo%3Aarmedbear%2Fabcl++sxhash&type=code
+  #+abcl
+  '(cl:and cl:fixnum cl:unsigned-byte)
+  ;; https://gitlab.com/embeddable-common-lisp/ecl/-/blob/develop/src/cmp/proclamations.lsp
+  #+ecl
+  '(cl:unsigned-byte 0 (coalton-compatibility:get-fixnum-bits))
+  #-(or sbcl allegro ccl abcl ecl)
+  #.(cl:error "hashing is not supported on ~A" (cl:lisp-implementation-type)))
+(defmacro get-hash-type-2 ()
+  '(cl:unsigned-byte 0 (coalton-compatibility:get-fixnum-bits)))
+
 (defmacro unset-all-float-traps ()
   '(cl:eval-when (:compile-toplevel :load-toplevel :execute)
     #+ccl (ccl:set-fpu-mode :overflow nil :underflow nil :division-by-zero nil :invalid nil :inexact nil)
@@ -113,6 +157,14 @@
     #+abcl (extensions:set-floating-point-modes :traps nil)
     #+ecl  (ext:trap-fpe 'cl:t nil)
     ))
+
+#+sbcl
+(pushnew ':|COALTON:HAS-GET-BYTES-CONSED| cl:*features*)
+(defun get-bytes-consed ()
+  #+sbcl
+  (sb-ext:get-bytes-consed)
+  #-sbcl
+  0)
 
 (declaim (inline get-fixnum-bits))
 (defun get-fixnum-bits ()

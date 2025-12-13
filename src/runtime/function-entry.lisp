@@ -132,12 +132,7 @@
                       (append (list (alexandria:format-symbol *package* "F~D" i)
                                     (alexandria:format-symbol *package* "A~D" i))
                               funs)))
-      `(progn
-         #+sbcl
-         (declaim (sb-ext:start-block ,@funs))
-         ,@(reverse body)
-         #+sbcl
-         (declaim (sb-ext:end-block))))))
+      ,(compat:with-start-end-block-if-possible funs body))))
 
 (define-function-macros)
 
