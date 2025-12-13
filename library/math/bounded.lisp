@@ -7,7 +7,10 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/classes
-   #:coalton-library/functions)
+   #:coalton-library/functions
+   #:coalton-compatibility)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility))
   (:export
    #:Bounded #:minBound #:maxBound))
 
@@ -74,5 +77,4 @@
       (lisp UFix ()
         cl:most-positive-fixnum))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH/BOUNDED")
+(compat:try-lock-package "COALTON-LIBRARY/MATH/BOUNDED")

@@ -4,7 +4,10 @@
    #:coalton-library/functions
    #:coalton-library/classes
    #:coalton-library/result
-   #:coalton-library/monad/classes)
+   #:coalton-library/monad/classes
+   #:coalton-compatibility)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility))
   (:export
    #:ResultT
    #:run-resultT
@@ -207,5 +210,4 @@ with these function definitions:
     (define put (compose lift put))
     (define modify (compose lift modify))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MONAD/RESULTT")
+(compat:try-lock-package "COALTON-LIBRARY/MONAD/RESULTT")

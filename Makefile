@@ -1,5 +1,5 @@
 LISP_CACHE ?= $(HOME)/.cache/common-lisp
-SBCL_BIN=sbcl
+SBCL_BIN ?= sbcl
 SBCL=$(SBCL_BIN) --noinform --no-userinit --no-sysinit --non-interactive
 QUICKLISP_HOME=$(HOME)/quicklisp
 QUICKLISP_SETUP=$(QUICKLISP_HOME)/setup.lisp
@@ -9,12 +9,12 @@ QUICKLISP=$(SBCL) --load $(QUICKLISP_HOME)/setup.lisp \
 
 .PHONY: test test-release test-safe
 test:
-	sbcl --noinform \
+	$(SBCL_BIN) --noinform \
 		--non-interactive \
 		--eval "(asdf:test-system :coalton)"
 
 test-safe:
-	sbcl --noinform \
+	$(SBCL_BIN) --noinform \
 		 --non-interactive \
 		 --eval "(sb-ext:restrict-compiler-policy 'safety 3)" \
 		 --eval "(asdf:test-system :coalton)"
@@ -22,20 +22,20 @@ test-safe:
 # Run all tests in release mode
 
 test-release:
-	COALTON_ENV=release sbcl --noinform \
+	COALTON_ENV=release $(SBCL_BIN) --noinform \
 		--non-interactive \
 		--eval "(asdf:test-system :coalton)"
 
 .PHONY: docs
 docs:
-	sbcl --noinform \
+	$(SBCL_BIN) --noinform \
 		 --non-interactive \
 		 --eval "(ql:quickload :coalton/doc :silent t)" \
 		 --eval "(coalton/doc:write-stdlib-documentation-to-file \"docs/reference.md\")"
 
 .PHONY: web-docs
 web-docs:
-	sbcl --noinform \
+	$(SBCL_BIN) --noinform \
 		 --non-interactive \
 		 --eval "(ql:quickload :coalton/doc :silent t)" \
 		 --eval "(coalton/doc:write-stdlib-documentation-to-file \"../coalton-website/content/reference.md\" :backend :hugo :revision \"main\")"
@@ -43,7 +43,7 @@ web-docs:
 
 .PHONY: bench
 bench:
-	COALTON_ENV=release sbcl --noinform \
+	COALTON_ENV=release $(SBCL_BIN) --noinform \
 		 --non-interactive \
 		 --eval "(ql:quickload :coalton/benchmarks :silent t)" \
 		 --eval "(sb-ext::without-gcing (coalton-benchmarks:run-benchmarks))"
@@ -51,7 +51,7 @@ bench:
 .PHONY: parser-coverage
 parser-coverage:
 	mkdir coverage-report || true
-	sbcl --noinform \
+	$(SBCL_BIN) --noinform \
 		--non-interactive \
 		--eval "(require :sb-cover)" \
 		--eval "(declaim (optimize sb-cover:store-coverage-data))" \

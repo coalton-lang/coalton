@@ -1,8 +1,10 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/classes
   (:use
-   #:coalton)
+   #:coalton
+   #:coalton-compatibility)
   (:local-nicknames
-   (#:types #:coalton-library/types))
+   (#:types #:coalton-library/types)
+   (#:compat #:coalton-compatibility))
   (:export
    #:Signalable
    #:error
@@ -107,19 +109,7 @@
   ;;
   ;; Hash
   ;;
-
-  #+sbcl
-  (repr :native (cl:unsigned-byte 62))
-
-  #+allegro
-  (repr :native (cl:unsigned-byte 0 32))
-
-  ;; https://github.com/Clozure/ccl/blob/ff51228259d9dbc8a9cc7bbb08858ef4aa9fe8d0/level-0/l0-hash.lisp#L1885
-  #+ccl
-  (repr :native (cl:and cl:fixnum cl:unsigned-byte))
-
-  #-(or sbcl allegro ccl)
-  #.(cl:error "hashing is not supported on ~A" (cl:lisp-implementation-type))
+  (repr :native (compat:get-hash-type))
 
   (define-type Hash
     "Implementation dependent hash code.")
@@ -417,5 +407,4 @@ Typical `fail` continuations are:
       (== x (default))))
 
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/CLASSES")
+(compat:try-lock-package "COALTON-LIBRARY/CLASSES")

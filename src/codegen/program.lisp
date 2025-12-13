@@ -1,7 +1,8 @@
 (defpackage #:coalton-impl/codegen/program
   (:use
    #:cl
-   #:coalton-impl/codegen/ast)
+   #:coalton-impl/codegen/ast
+   #:coalton-compatibility)
   (:import-from
    #:coalton-impl/codegen/translate-expression
    #:translate-toplevel)
@@ -30,7 +31,8 @@
    (#:settings #:coalton-impl/settings)
    (#:global-lexical #:coalton-impl/global-lexical)
    (#:rt #:coalton-impl/runtime)
-   (#:tc #:coalton-impl/typechecker))
+   (#:tc #:coalton-impl/typechecker)
+   (#:compat #:coalton-compatibility))
   (:export
    #:*codegen-hook*
    #:compile-translation-unit))
@@ -109,7 +111,7 @@ Example:
                                        (compile-scc bindings env))))
         (lisp-forms (mapcar (lambda (lisp-form)
                               (cons (car (source:location-span (source:location lisp-form)))
-                                    `((locally (declare #+sbcl (optimize (sb-c::type-check 1)))
+                                    `((locally (declare #.(compat:try-optimize-type-check 1))
                                         ,@(parser:toplevel-lisp-form-body lisp-form)))))
                             lisp-forms)))
     (mapcan #'cdr (merge-forms bindings lisp-forms))))
@@ -171,9 +173,8 @@ Example:
          `(progn
             ;; Muffle redefinition warnings in SBCL. A corresponding
             ;; SB-EXT:UNMUFFLE-CONDITIONS appears at the bottom.
-            #+sbcl
             ,@(when settings:*emit-type-annotations*
-                (list '(declaim (sb-ext:muffle-conditions sb-kernel:redefinition-warning))))
+                (list '(declaim #.(compat:try-muffle-redefinition-warning-condition))))
 
             ,@(when (tc:translation-unit-types translation-unit)
                 (list
@@ -193,7 +194,7 @@ Example:
                 (list
                  `(declaim (sb-ext:start-block ,@definition-names))))
 
-            (locally (declare #+sbcl (optimize (sb-c::type-check 0)))
+            (locally (declare #.(compat:try-optimize-type-check 0))
               ,@(compile-definitions sccs definitions lisp-forms offsets env))
 
             #+sbcl
@@ -201,10 +202,8 @@ Example:
                 (list
                  `(declaim (sb-ext:end-block))))
 
-            #+sbcl
             ,@(when settings:*emit-type-annotations*
-                (list '(declaim (sb-ext:unmuffle-conditions sb-kernel:redefinition-warning))))
-
+                (list '(declaim #.(compat:try-unmuffle-redefinition-warning-condition))))
             (values))
          env)))))
 

@@ -1,12 +1,14 @@
 (defpackage #:coalton-impl/codegen/codegen-match
   (:use
-   #:cl)
+   #:cl
+   #:coalton-compatibility)
   (:local-nicknames
    (#:tc #:coalton-impl/typechecker)
    (#:settings #:coalton-impl/settings)
    (#:ast #:coalton-impl/codegen/ast)
    (#:pattern #:coalton-impl/codegen/pattern)
-   (#:codegen-pattern #:coalton-impl/codegen/codegen-pattern))
+   (#:codegen-pattern #:coalton-impl/codegen/codegen-pattern)
+   (#:compat #:coalton-compatibility))
   (:export
    #:match-emit-jumptable-p             ; FUNCTION
    #:match-emit-fallback-p              ; FUNCTION
@@ -287,8 +289,9 @@ When true, returns two `ast:node' objects representing then/else branches."
                      '()
                      (list `(type ,(tc:lisp-type subexpr-type env) ,match-var)))))
 
-     (locally
-         #+sbcl (declare (sb-ext:muffle-conditions sb-ext:code-deletion-note))
+     (compat:with-muffled-code-deletion-note-condition-if-possible
+     ;; (locally
+     ;;     `(declare #.(compat:try-muffle-code-deletion-note-condition))
          ,(cond
             ;; Case #1:
             ;;

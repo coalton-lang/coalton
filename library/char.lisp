@@ -3,12 +3,14 @@
    #:coalton
    #:coalton-library/classes
    #:coalton-library/builtin
-   #:coalton-library/functions)
+   #:coalton-library/functions
+   #:coalton-compatibility)
   (:import-from
    #:coalton-library/hash
    #:define-sxhash-hasher)
   (:local-nicknames
-   (#:iter #:coalton-library/iterator))
+   (#:iter #:coalton-library/iterator)
+   (#:compat #:coalton-compatibility))
   (:export
    #:char-code
    #:char-code-unchecked
@@ -152,5 +154,4 @@
   (define-sxhash-hasher Char))
 
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/CHAR")
+(compat:try-lock-package "COALTON-LIBRARY/CHAR")
