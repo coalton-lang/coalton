@@ -50,25 +50,27 @@
 
 
 (defun find-classes (&key (environment entry:*global-environment*)
-                          (package nil))
+                          (package nil)
+                          (reexported-symbols nil))
   "Return all class definitions in ENVIRONMENT.
 
 By default the global environment is queried.
 If non-nil, restrict to classes defined in PACKAGE."
   (remove-if (lambda (type-entry)
                (and package
-                    (not (exported-symbol-p (tc:ty-class-name type-entry) package t))))
+                    (not (exported-symbol-p (tc:ty-class-name type-entry) package (not reexported-symbols)))))
              (%values (tc:environment-class-environment environment))))
 
 (defun find-types (&key (environment entry:*global-environment*)
-                        (package nil))
+                        (package nil)
+                        (reexported-symbols nil))
   "Return all type definitions in ENVIRONMENT.
 
 By default the global environment is queried.
 If non-nil, restrict to types defined in PACKAGE."
   (remove-if (lambda (type-entry)
                (and package
-                    (not (exported-symbol-p (tc:type-entry-name type-entry) package t))))
+                    (not (exported-symbol-p (tc:type-entry-name type-entry) package (not reexported-symbols)))))
              (%values (tc:environment-type-environment environment))))
 
 (defun find-constructors (&key (environment entry:*global-environment*)
@@ -84,7 +86,8 @@ If non-nil, restrict to constructors defined in PACKAGE."
 
 (defun find-names (&key (environment entry:*global-environment*)
                         (type nil)
-                        (package nil))
+                        (package nil)
+                        (reexported-symbols nil))
   "Return all names in ENVIRONMENT.
 
 By default the global environment is queried.
@@ -93,7 +96,7 @@ If non-nil, restrict to names defined in PACKAGE."
                (or (and type
                         (not (eql type (tc:name-entry-type entry))))
                    (and package
-                        (not (exported-symbol-p (tc:name-entry-name entry) package t)))))
+                        (not (exported-symbol-p (tc:name-entry-name entry) package (not reexported-symbols))))))
              (%values (tc:environment-name-environment environment))))
 
 (defun find-instances (&key (environment entry:*global-environment*)
