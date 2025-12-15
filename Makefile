@@ -1,58 +1,89 @@
 LISP_CACHE ?= $(HOME)/.cache/common-lisp
 SBCL_BIN ?= sbcl
-SBCL=$(SBCL_BIN) --noinform --no-userinit --no-sysinit --non-interactive
+SBCL=$(SBCL_BIN) --noinform --non-interactive
+SBCLCLEAN=$(SBCL) --no-userinit --no-sysinit
+
+CCL=$(shell which -s ccl && echo 'ccl --batch' || echo 'echo ccl --batch')
+ABCL=$(shell which -s abcl && echo 'abcl --batch' || echo 'echo abcl --batch')
+ECL=$(shell which -s ecl && echo 'cat /dev/null | ecl' || echo echo 'cat /dev/null | ecl')
+
 QUICKLISP_HOME=$(HOME)/quicklisp
 QUICKLISP_SETUP=$(QUICKLISP_HOME)/setup.lisp
-QUICKLISP=$(SBCL) --load $(QUICKLISP_HOME)/setup.lisp \
-	--eval '(push (truename ".") asdf:*central-registry*)' \
-	--eval "(push (truename \"../\") ql:*local-project-directories*)"
 
-.PHONY: test test-release test-safe
+COALTON_HOME ?= $(shell test -f ./coalton.asd && echo . || echo $(QUICKLISP_HOME)/local-projects/coalton)
+EXTRA_LOCAL_PROJECTS= $(shell cd $(COALTON_HOME)/.. && pwd)
+
+SQUICKLISP=$(SBCLCLEAN) --load $(QUICKLISP_HOME)/setup.lisp \
+	--eval '(push (truename "'$(COALTON_HOME)'") asdf:*central-registry*)' \
+	--eval '(push (truename "'$(EXTRA_LOCAL_PROJECTS)'") ql:*local-project-directories*)'
+
+CQUICKLISP=$(CCL) --load $(QUICKLISP_HOME)/setup.lisp \
+	--eval '(push (truename "'$(COALTON_HOME)'") asdf:*central-registry*)' \
+	--eval '(push (truename "'$(EXTRA_LOCAL_PROJECTS)'") ql:*local-project-directories*)'
+
+AQUICKLISP=$(ABCL) --load $(QUICKLISP_HOME)/setup.lisp \
+	--eval '(push (truename "'$(COALTON_HOME)'") asdf:*central-registry*)' \
+	--eval '(push (truename "'$(EXTRA_LOCAL_PROJECTS)'") ql:*local-project-directories*)'
+
+EQUICKLISP=$(ECL) --load $(QUICKLISP_HOME)/setup.lisp \
+	--eval '(push (truename "'$(COALTON_HOME)'") asdf:*central-registry*)' \
+	--eval '(push (truename "'$(EXTRA_LOCAL_PROJECTS)'") ql:*local-project-directories*)'
+
+.PHONY: test test-release test-safe show-dir
+show-dir:
+	@echo $(COALTON_HOME)
+	@echo $(EXTRA_LOCAL_PROJECTS)
+
 test:
-	$(SBCL_BIN) --noinform \
-		--non-interactive \
+	$(SBCL) \
+		--eval "(asdf:test-system :coalton)"
+
+testc:
+	$(CCL) \
+		--eval "(asdf:test-system :coalton)"
+
+testa:
+	$(ABCL) \
+		--eval "(asdf:test-system :coalton)"
+
+teste:
+	$(ECL) \
 		--eval "(asdf:test-system :coalton)"
 
 test-safe:
-	$(SBCL_BIN) --noinform \
-		 --non-interactive \
+	$(SBCL) \
 		 --eval "(sb-ext:restrict-compiler-policy 'safety 3)" \
 		 --eval "(asdf:test-system :coalton)"
 
 # Run all tests in release mode
 
 test-release:
-	COALTON_ENV=release $(SBCL_BIN) --noinform \
-		--non-interactive \
+	COALTON_ENV=release $(SBCL) \
 		--eval "(asdf:test-system :coalton)"
 
 .PHONY: docs
 docs:
-	$(SBCL_BIN) --noinform \
-		 --non-interactive \
+	$(SBCL) \
 		 --eval "(ql:quickload :coalton/doc :silent t)" \
 		 --eval "(coalton/doc:write-stdlib-documentation-to-file \"docs/reference.md\")"
 
 .PHONY: web-docs
 web-docs:
-	$(SBCL_BIN) --noinform \
-		 --non-interactive \
+	$(SBCL) \
 		 --eval "(ql:quickload :coalton/doc :silent t)" \
 		 --eval "(coalton/doc:write-stdlib-documentation-to-file \"../coalton-website/content/reference.md\" :backend :hugo :revision \"main\")"
 
 
 .PHONY: bench
 bench:
-	COALTON_ENV=release $(SBCL_BIN) --noinform \
-		 --non-interactive \
+	COALTON_ENV=release $(SBCL) \
 		 --eval "(ql:quickload :coalton/benchmarks :silent t)" \
 		 --eval "(sb-ext::without-gcing (coalton-benchmarks:run-benchmarks))"
 
 .PHONY: parser-coverage
 parser-coverage:
 	mkdir coverage-report || true
-	$(SBCL_BIN) --noinform \
-		--non-interactive \
+	$(SBCL) \
 		--eval "(require :sb-cover)" \
 		--eval "(declaim (optimize sb-cover:store-coverage-data))" \
 		--eval "(asdf:test-system :coalton :force '(:coalton :coalton/tests))" \
@@ -71,7 +102,14 @@ parser-coverage:
 
 clean-quicklisp:
 	@echo "Cleaning up old projects in Quicklisp"
-	$(QUICKLISP) \
+	$(SQUICKLISP) \
+             --eval '(ql-dist:clean (ql-dist:dist "quicklisp"))'
+	$(CQUICKLISP) \
+             --eval '(ql-dist:clean (ql-dist:dist "quicklisp"))' \
+	< /dev/null
+	$(AQUICKLISP) \
+             --eval '(ql-dist:clean (ql-dist:dist "quicklisp"))'
+	$(EQUICKLISP) \
              --eval '(ql-dist:clean (ql-dist:dist "quicklisp"))'
 
 clean-cache:
@@ -80,3 +118,4 @@ clean-cache:
 
 cleanall: clean-cache clean-quicklisp
 	@echo "All cleaned and reindexed."
+	ls "$(LISP_CACHE)"
