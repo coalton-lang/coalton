@@ -38,18 +38,6 @@ test:
 	$(SBCL) \
 		--eval "(asdf:test-system :coalton)"
 
-testc:
-	$(CCL) \
-		--eval "(asdf:test-system :coalton)"
-
-testa:
-	$(ABCL) \
-		--eval "(asdf:test-system :coalton)"
-
-teste:
-	$(ECL) \
-		--eval "(asdf:test-system :coalton)"
-
 test-safe:
 	$(SBCL) \
 		 --eval "(sb-ext:restrict-compiler-policy 'safety 3)" \
@@ -103,13 +91,6 @@ parser-coverage:
 clean-quicklisp:
 	@echo "Cleaning up old projects in Quicklisp"
 	$(SQUICKLISP) \
-             --eval '(ql-dist:clean (ql-dist:dist "quicklisp"))'
-	$(CQUICKLISP) \
-             --eval '(ql-dist:clean (ql-dist:dist "quicklisp"))' \
-	< /dev/null
-	$(AQUICKLISP) \
-             --eval '(ql-dist:clean (ql-dist:dist "quicklisp"))'
-	$(EQUICKLISP) \
              --eval '(ql-dist:clean (ql-dist:dist "quicklisp"))'
 
 clean-cache:
