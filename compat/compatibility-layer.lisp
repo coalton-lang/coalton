@@ -162,31 +162,31 @@
     ))
 
 #+abcl
-(defconstant jvm-runtime
+(defconstant the-com-sun-management-ThreadMXBean-interface
   (java:jstatic
-   (java:jmethod "java.lang.Runtime" "getRuntime") nil))
+   (java:jmethod "java.lang.Class" "forName" "java.lang.String")
+   nil
+   "com.sun.management.ThreadMXBean"))
 #+abcl
-(defconstant max-memory-method (java:jmethod "java.lang.Runtime" "maxMemory"))
+(defconstant thePlatformMXBean
+  (java:jstatic
+   (java:jmethod "java.lang.management.ManagementFactory" "getPlatformMXBean"
+                 "java.lang.Class")
+   nil
+   the-com-sun-management-ThreadMXBean-interface))
 #+abcl
-(defconstant free-memory-method (java:jmethod "java.lang.Runtime" "freeMemory"))
-#+abcl
-(defun get-max-memory ()
-  (java:jcall max-memory-method jvm-runtime))
-#+abcl
-(defun get-free-memory()
-  (java:jcall free-memory-method jvm-runtime))
-#+abcl
-(defun get-memory-used()
-  "This is not monotonic - the memory used may decrease when the gc runs"
-  (- (get-max-memory) (get-free-memory)))
-#+(or sbcl )
+(defun getTotalThreadAllocatedBytes ()
+  (java:jcall
+   (java:jmethod "com.sun.management.ThreadMXBean" "getTotalThreadAllocatedBytes")
+   thePlatformMXBean))
+#+(or sbcl abcl)
 (pushnew ':|COALTON:HAS-GET-BYTES-CONSED| cl:*features*)
 (defun get-bytes-consed ()
   #+sbcl
   (sb-ext:get-bytes-consed)
-  #+(and abcl nil)
-  (get-memory-used)
-  #-(or sbcl )
+  #+(and abcl)
+  (getTotalThreadAllocatedBytes)
+  #-(or sbcl abcl)
   0)
 
 (pushnew
