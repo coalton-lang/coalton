@@ -25,6 +25,9 @@
    (#:env #:coalton/doc/environment)
    (#:entry #:coalton-impl/entry))
   (:export
+   ;; Backend properties
+   #:file-line-offsets
+
    ;; object classes and properties
    #:coalton-object
    #:object-aname
@@ -70,12 +73,14 @@
    #:write-link
    #:object-link
    #:source-available-p
-   #:source-location-href
 
    ;; source-name lookup utilities
    #:lookup-type-source-name
    #:lookup-class-source-name
-   #:lookup-constructor-source-name))
+   #:lookup-constructor-source-name
+
+   ;; source-definition lookup utilities
+   #:source-location-link))
 
 (in-package #:coalton/doc/model)
 
@@ -99,13 +104,6 @@
 (defun source-available-p (object)
   (and (source object)
        (source:source-available-p (source object))))
-
-(defun source-location-href (object)
-  (when (source-available-p object)
-    (format nil "~a/~a"
-            *remote*
-            (remove-prefix (ensure-suffix #\/ *local*)
-                           (source:source-name (source object))))))
 
 (defun source-span (object)
   (source:location-span (object-location object)))
@@ -523,6 +521,56 @@
     (if entry
         (tc:constructor-entry-source-name entry)
         (symbol-name symbol))))
+
+;;; Source-definition lookup utilities
+
+(defun find-line-offsets (stream)
+  "Compute the offsets of lines in a stream."
+  (file-position stream 0)
+  (loop :with index := 0
+        :for char := (read-char stream nil nil)
+        :unless char
+          :return (coerce (cons 0 offsets) 'vector)
+        :when (char= char #\Newline)
+          :collect (1+ index) :into offsets
+        :do (incf index)))
+
+(defun source-location-href (object)
+  (when (source-available-p object)
+    (format nil "~a/~a"
+            *remote*
+            (remove-prefix (ensure-suffix #\/ *local*)
+                           (source:source-name (source object))))))
+
+(defun line-number (backend source offset)
+  (let ((line-offsets (gethash (source:source-name source)
+                        (slot-value backend 'file-line-offsets))))
+    (unless line-offsets
+      (with-open-stream (stream (source:source-stream source))
+        (setf line-offsets (find-line-offsets stream)))
+      (setf (gethash (source:source-name source)
+                     (slot-value backend 'file-line-offsets))
+            line-offsets))
+    (labels ((%find (lo hi)
+               (let ((probe (+ lo (floor (/ (- hi lo) 2)))))
+                 (when (= probe lo)
+                   (return-from line-number (1+ probe)))
+                 (cond ((< offset (aref line-offsets probe))
+                        (setf hi probe))
+                       (t
+                        (setf lo probe)))
+                 (%find lo hi))))
+      (%find 0 (length line-offsets)))))
+
+(defun source-location-link (backend object)
+  (if (not (source-available-p object))
+      ""
+      (let ((source (source object))
+            (span (source-span object)))
+        (format nil "~a#L~a-L~a"
+                (source-location-href object)
+                (line-number backend source (car span))
+                (line-number backend source (cdr span))))))
 
 ;;; Output utilities
 
