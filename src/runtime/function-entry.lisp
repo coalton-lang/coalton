@@ -132,7 +132,7 @@
                       (append (list (alexandria:format-symbol *package* "F~D" i)
                                     (alexandria:format-symbol *package* "A~D" i))
                               funs)))
-      ,(compat:with-start-end-block-if-possible funs body))))
+      `(compat:with-start-end-block-if-possible (list ,@funs) ,@(reverse body)))))
 
 (define-function-macros)
 
