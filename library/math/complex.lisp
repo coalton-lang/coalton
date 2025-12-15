@@ -6,8 +6,7 @@
     (:use #:coalton
           #:coalton-library/classes
           #:coalton-library/utils
-          #:coalton-library/math/arith
-   #:coalton-compatibility)
+          #:coalton-library/math/arith)
   (:local-nicknames
    (#:arith #:coalton-library/math/arith)
    (#:types #:coalton-library/types)

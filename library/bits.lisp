@@ -5,8 +5,7 @@
      #:xor
      #:not)
   (:use
-   #:coalton
-   #:coalton-compatibility)
+   #:coalton)
   (:local-nicknames
    (#:compat #:coalton-compatibility))
   (:import-from

@@ -3,8 +3,7 @@
    #:cl
    #:coalton-impl/codegen/pattern
    #:coalton-impl/codegen/ast
-   #:coalton-impl/codegen/codegen-match
-   #:coalton-compatibility)
+   #:coalton-impl/codegen/codegen-match)
   (:import-from
    #:coalton-impl/codegen/codegen-pattern
    #:codegen-pattern)

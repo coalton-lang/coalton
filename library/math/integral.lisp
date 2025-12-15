@@ -7,8 +7,7 @@
    #:coalton
    #:coalton-library/classes
    #:coalton-library/builtin
-   #:coalton-library/math/arith
-   #:coalton-compatibility)
+   #:coalton-library/math/arith)
   (:import-from
    #:coalton-library/bits #:Bits)
   (:local-nicknames

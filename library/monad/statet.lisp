@@ -3,8 +3,7 @@
    #:coalton
    #:coalton-library/functions
    #:coalton-library/classes
-   #:coalton-library/monad/classes
-   #:coalton-compatibility)
+   #:coalton-library/monad/classes)
   (:local-nicknames
    (:tp #:coalton-library/tuple)
    (#:compat #:coalton-compatibility))

@@ -1,8 +1,7 @@
 (defpackage #:coalton-impl/codegen/program
   (:use
    #:cl
-   #:coalton-impl/codegen/ast
-   #:coalton-compatibility)
+   #:coalton-impl/codegen/ast)
   (:import-from
    #:coalton-impl/codegen/translate-expression
    #:translate-toplevel)

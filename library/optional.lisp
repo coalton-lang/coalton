@@ -2,8 +2,7 @@
   (:use
    #:coalton
    #:coalton-library/builtin
-   #:coalton-library/classes
-   #:coalton-compatibility)
+   #:coalton-library/classes)
   (:local-nicknames
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)

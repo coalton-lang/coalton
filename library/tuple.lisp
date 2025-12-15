@@ -3,8 +3,7 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/classes
-   #:coalton-library/hash
-   #:coalton-compatibility)
+   #:coalton-library/hash)
   (:local-nicknames
    (#:compat #:coalton-compatibility))
   (:export

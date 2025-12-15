@@ -2,8 +2,7 @@
   (:use
    #:coalton
    #:coalton-library/builtin
-   #:coalton-library/classes
-   #:coalton-compatibility)
+   #:coalton-library/classes)
   (:import-from
    #:coalton-library/hash
    #:define-sxhash-hasher)

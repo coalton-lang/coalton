@@ -1,7 +1,6 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/classes
   (:use
-   #:coalton
-   #:coalton-compatibility)
+   #:coalton)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:compat #:coalton-compatibility))

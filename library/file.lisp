@@ -18,8 +18,7 @@ Common Lisp makes a distinction between file and directory paths. Directory path
    #:coalton-library/classes
    #:coalton-library/builtin
    #:coalton-library/functions
-   #:coalton-library/system
-   #:coalton-compatibility)
+   #:coalton-library/system)
   (:local-nicknames
    (#:str #:coalton-library/string)
    (#:iter #:coalton-library/iterator)

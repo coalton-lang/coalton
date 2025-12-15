@@ -2,8 +2,7 @@
   (:use
    #:coalton
    #:coalton-library/classes
-   #:coalton-library/functions
-   #:coalton-compatibility)
+   #:coalton-library/functions)
   (:local-nicknames
    (:l #:coalton-library/list)
    (:opt #:coalton-library/optional)

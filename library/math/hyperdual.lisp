@@ -13,8 +13,7 @@
    #:coalton-library/math/elementary
    #:coalton-library/math/integral
    #:coalton-library/math/complex
-   #:coalton-library/hash
-   #:coalton-compatibility)
+   #:coalton-library/hash)
   (:local-nicknames
    (#:complex #:coalton-library/math/complex)
    (#:compat #:coalton-compatibility))

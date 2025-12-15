@@ -5,8 +5,7 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/lisparray
   (:use
    #:coalton
-   #:coalton-library/classes
-   #:coalton-compatibility)
+   #:coalton-library/classes)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:complex #:coalton-library/math/complex)

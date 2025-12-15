@@ -10,8 +10,7 @@
      #:coalton-library/classes
      #:coalton-library/math/arith
      #:coalton-library/math/integral
-     #:coalton-library/math/real
-     #:coalton-compatibility)
+     #:coalton-library/math/real)
   (:local-nicknames
    (#:bits #:coalton-library/bits)
    (#:compat #:coalton-compatibility))

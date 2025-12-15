@@ -7,8 +7,7 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/classes
-   #:coalton-library/functions
-   #:coalton-compatibility)
+   #:coalton-library/functions)
   (:local-nicknames
    (#:compat #:coalton-compatibility))
   (:export

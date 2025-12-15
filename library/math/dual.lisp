@@ -12,8 +12,7 @@
    #:coalton-library/math/arith
    #:coalton-library/math/elementary
    #:coalton-library/math/integral
-   #:coalton-library/hash
-   #:coalton-compatibility)
+   #:coalton-library/hash)
   (:local-nicknames
    (#:compat #:coalton-compatibility))
   (:export

@@ -4,8 +4,7 @@
    #:coalton-library/builtin
    #:coalton-library/functions
    #:coalton-library/classes
-   #:coalton-library/math
-   #:coalton-compatibility)
+   #:coalton-library/math)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:cell #:coalton-library/cell)

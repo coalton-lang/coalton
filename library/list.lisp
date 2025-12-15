@@ -6,8 +6,7 @@
    #:coalton-library/hash
    #:coalton-library/functions
    #:coalton-library/tuple
-   #:coalton-library/optional
-   #:coalton-compatibility)
+   #:coalton-library/optional)
   (:local-nicknames
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)

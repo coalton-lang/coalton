@@ -2,8 +2,7 @@
 
 (defpackage #:coalton-impl/util
   (:documentation "Utility functions and methods used throughout COALTON.")
-  (:use #:cl
-        #:coalton-compatibility)
+  (:use #:cl)
   (:shadow
    #:find-package
    #:find-symbol)

@@ -5,8 +5,7 @@
    #:coalton-library/classes
    #:coalton-library/hash
    #:coalton-library/builtin
-   #:coalton-library/functions
-   #:coalton-compatibility)
+   #:coalton-library/functions)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:cell #:coalton-library/cell)

@@ -1,8 +1,7 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/randomaccess
   (:use
    #:coalton
-   #:coalton-library/classes
-   #:coalton-compatibility)
+   #:coalton-library/classes)
   (:local-nicknames
    (#:compat #:coalton-compatibility))
   (:export

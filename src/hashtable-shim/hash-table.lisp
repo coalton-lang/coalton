@@ -4,8 +4,7 @@
            #:hash-table-size
            #:hash-table-p
            #:hash-table-count)
-  (:use #:cl
-   #:coalton-compatibility)
+  (:use #:cl)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:compat #:coalton-compatibility))

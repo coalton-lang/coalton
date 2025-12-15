@@ -2,8 +2,7 @@
   (:use
    #:coalton
    #:coalton-library/builtin
-   #:coalton-library/classes
-   #:coalton-compatibility)
+   #:coalton-library/classes)
   (:local-nicknames
    (#:math #:coalton-library/math)
    (#:compat #:coalton-compatibility))

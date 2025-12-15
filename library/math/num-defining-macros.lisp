@@ -17,8 +17,7 @@
    #:coalton-library/classes
    #:coalton-library/functions
    #:coalton-library/utils
-   #:coalton-library/math/arith
-   #:coalton-compatibility)
+   #:coalton-library/math/arith)
   (:local-nicknames
    (#:ff #:float-features)
    (#:bits #:coalton-library/bits)

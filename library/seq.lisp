@@ -3,8 +3,7 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/functions
-   #:coalton-library/classes
-   #:coalton-compatibility)
+   #:coalton-library/classes)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:math #:coalton-library/math)

@@ -4,8 +4,7 @@
    #:coalton-library/functions
    #:coalton-library/classes
    #:coalton-library/monad/classes
-   #:coalton-library/monad/identity
-   #:coalton-compatibility)
+   #:coalton-library/monad/identity)
   (:local-nicknames
    (#:compat #:coalton-compatibility))
   (:export

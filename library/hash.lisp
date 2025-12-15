@@ -1,7 +1,6 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/hash
   (:use
    #:coalton
-   #:coalton-compatibility
    #:coalton-library/classes)
   (:import-from #:coalton-library/math/hash-defining-macros
                 #:define-sxhash-hasher)

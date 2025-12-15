@@ -1,8 +1,7 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/experimental/do-control-loops
   (:use
    #:coalton
-   #:coalton-library/classes
-   #:coalton-compatibility)
+   #:coalton-library/classes)
   (:local-nicknames
    (:l #:coalton-library/list)
    (:it #:coalton-library/iterator)

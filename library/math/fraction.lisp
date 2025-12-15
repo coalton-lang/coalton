@@ -8,8 +8,7 @@
    #:coalton-library/builtin
    #:coalton-library/classes
    #:coalton-library/functions
-   #:coalton-library/math/arith
-   #:coalton-compatibility)
+   #:coalton-library/math/arith)
   (:local-nicknames
    (#:compat #:coalton-compatibility))
   (:export

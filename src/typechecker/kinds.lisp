@@ -1,8 +1,7 @@
 (defpackage #:coalton-impl/typechecker/kinds
   (:use
    #:cl
-   #:coalton-impl/typechecker/base
-   #:coalton-compatibility)
+   #:coalton-impl/typechecker/base)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:settings #:coalton-impl/settings)

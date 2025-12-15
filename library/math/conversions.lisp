@@ -8,8 +8,7 @@
    #:coalton-library/builtin
    #:coalton-library/classes
    #:coalton-library/functions
-   #:coalton-library/math/bounded
-   #:coalton-compatibility)
+   #:coalton-library/math/bounded)
   (:local-nicknames
    (#:compat #:coalton-compatibility)))
 

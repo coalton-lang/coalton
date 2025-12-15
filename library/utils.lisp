@@ -1,7 +1,6 @@
 (defpackage #:coalton-library/utils
   (:use
-   #:coalton
-   #:coalton-compatibility)
+   #:coalton)
   (:local-nicknames
    (#:compat #:coalton-compatibility))
   (:export

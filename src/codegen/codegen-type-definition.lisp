@@ -1,7 +1,6 @@
 (defpackage #:coalton-impl/codegen/codegen-type-definition
   (:use
-   #:cl
-   #:coalton-compatibility)
+   #:cl)
   (:import-from
    #:coalton-impl/codegen/struct-or-class
    #:struct-or-class

@@ -2,8 +2,7 @@
   (:use
    #:cl
    #:coalton-impl/typechecker/base
-   #:coalton-impl/typechecker/kinds
-   #:coalton-compatibility)
+   #:coalton-impl/typechecker/kinds)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:settings #:coalton-impl/settings)

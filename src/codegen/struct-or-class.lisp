@@ -1,7 +1,6 @@
 (defpackage #:coalton-impl/codegen/struct-or-class
   (:use
-   #:cl
-   #:coalton-compatibility)
+   #:cl)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)

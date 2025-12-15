@@ -4,8 +4,7 @@
    #:coalton-library/builtin
    #:coalton-library/functions
    #:coalton-library/classes
-   #:coalton-library/experimental/loops
-   #:coalton-compatibility)
+   #:coalton-library/experimental/loops)
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:list #:coalton-library/list)

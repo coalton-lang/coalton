@@ -1,7 +1,6 @@
 (defpackage #:coalton-impl/runtime/function-entry
   (:use
-   #:cl
-   #:coalton-compatibility)
+   #:cl)
   (:import-from
    #:coalton
    #:call-coalton-function)

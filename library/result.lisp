@@ -3,8 +3,7 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/classes
-   #:coalton-library/optional
-   #:coalton-compatibility)
+   #:coalton-library/optional)
   (:local-nicknames
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)

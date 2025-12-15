@@ -1,7 +1,6 @@
 (defpackage #:coalton-impl/codegen/codegen-match
   (:use
-   #:cl
-   #:coalton-compatibility)
+   #:cl)
   (:local-nicknames
    (#:tc #:coalton-impl/typechecker)
    (#:settings #:coalton-impl/settings)
@@ -290,8 +289,6 @@ When true, returns two `ast:node' objects representing then/else branches."
                      (list `(type ,(tc:lisp-type subexpr-type env) ,match-var)))))
 
      (compat:with-muffled-code-deletion-note-condition-if-possible
-     ;; (locally
-     ;;     `(declare #.(compat:try-muffle-code-deletion-note-condition))
          ,(cond
             ;; Case #1:
             ;;

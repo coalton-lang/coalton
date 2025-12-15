@@ -11,8 +11,7 @@
      #:coalton-library/utils
      #:coalton-library/math/arith
      #:coalton-library/math/real
-     #:coalton-library/math/complex
-   #:coalton-compatibility)
+     #:coalton-library/math/complex)
   (:local-nicknames
    (#:ff #:float-features)
    (#:compat #:coalton-compatibility))

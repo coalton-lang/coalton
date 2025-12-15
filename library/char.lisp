@@ -3,8 +3,7 @@
    #:coalton
    #:coalton-library/classes
    #:coalton-library/builtin
-   #:coalton-library/functions
-   #:coalton-compatibility)
+   #:coalton-library/functions)
   (:import-from
    #:coalton-library/hash
    #:define-sxhash-hasher)

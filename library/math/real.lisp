@@ -9,8 +9,7 @@
      #:coalton-library/math/fraction
      #:coalton-library/math/integral
      #:coalton-library/classes
-     #:coalton-library/functions
-     #:coalton-compatibility)
+     #:coalton-library/functions)
   (:local-nicknames
    (#:compat #:coalton-compatibility))
   (:export
