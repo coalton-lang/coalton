@@ -111,10 +111,10 @@ This function is not exported as its output is too implementation specific."
     "Returns the number of bytes consed since some unspecified point in time.
 
 The difference between two successive calls to this function represents the number of bytes consed in that period of time."
-    #+coalton:has-get-bytes-consed
+    #+|COALTON:HAS-GET-BYTES-CONSED|
     (Some (lisp Integer ()
-            (coalton-compat:get-bytes-consed)))
-    #-coalton:has-get-bytes-consed
+            (compat:get-bytes-consed)))
+    #-|COALTON:HAS-GET-BYTES-CONSED|
     None)
 
   ;;;
