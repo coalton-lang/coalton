@@ -109,7 +109,7 @@
   ;;
   ;; Hash
   ;;
-  (repr :native (compat:get-hash-type))
+  (repr :native #.(compat:get-hash-type))
 
   (define-type Hash
     "Implementation dependent hash code.")
