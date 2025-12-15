@@ -835,4 +835,4 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
 (cl:defmethod cl:print-object ((obj big-float/bfnan) out)
   (cl:format out (big-float->string obj)))
 
-(compat:try-lock-package "COALTON-LIBRARY/BIG-FLOAT")
+(coalton-compatibility:try-lock-package "COALTON-LIBRARY/BIG-FLOAT")
