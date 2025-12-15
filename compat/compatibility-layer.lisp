@@ -5,13 +5,13 @@
     ;; #:coalton/compatibility-layer
   (:use #:cl)
   (:export
+   #:get-fixnum-bits
 ;;; try-* are macros/functions that most probably will never be
-;;; implemented by all Lisps.
+;;; implemented by all Lisps. So are macros with-*-if-possible.
 ;;;
 ;;; For the rest (not starting with try-), while an implementation may
 ;;; not exist at the moment for some Lisp, it might exist in the
-;;; future.
-   ;; #:try-muffle-code-deletion-note-condition
+;;; future (and probably should if we want to port there).
    #:with-muffled-code-deletion-note-condition-if-possible
    #:with-start-end-block-if-possible
    #:try-muffle-redefinition-warning-condition
@@ -23,13 +23,17 @@
    #:try-optimize-type-check
    #:try-always-bound
    #:get-hash-type
-   #:get-hash-type-2
    #:unset-all-float-traps
    #:get-bytes-consed
-   #:get-fixnum-bits
    #:hash-combine))
 
 (cl:in-package #:coalton-compatibility)
+
+;; define first, as it's used by others and we want it inlined
+(declaim (inline get-fixnum-bits))
+(defun get-fixnum-bits ()
+  #+sbcl sb-vm:n-fixnum-bits
+  #-sbcl (+ 0 (cl:ceiling (cl:log cl:most-positive-fixnum 2))))
 
 ;;; using (undefined) features debug-try-<macro-name> to enable
 ;;; canaries for testing the following macros.
@@ -45,27 +49,21 @@
 ;;; probably *NOT* behaving as intended! Looking at you
 ;;; "try-muffle-code-deletion-note-condition"... (canary still active
 ;;; and well on it -- is it because it was optimised away?)
-(defmacro try-muffle-code-deletion-note-condition ()
-  ;; but does it work?
-  ;;; This one passes...
-  #-debug-try-muffle-code-deletion-note-condition
-  ''(ignore foo-muffle-code-deletion-note-condition)
-  #+sbcl
-  ''(sb-ext:muffle-conditions sb-ext:code-deletion-note))
-(defmacro with-muffled-code-deletion-note-condition-if-possible (alambda)
+(defmacro with-muffled-code-deletion-note-condition-if-possible (&rest alambda)
   `(locally
        (declare #+sbcl
                 (sb-ext:muffle-conditions sb-ext:code-deletion-note)
                 ;; does it work? warning if it's enabled
                 #+debug-try-muffle-code-deletion-note-condition
                 (ignore foo-muffle-code-deletion-note-condition))
-     ,alambda))
+     ,@alambda))
 
-(defmacro with-start-end-block-if-possible (funs body)
+(defmacro with-start-end-block-if-possible (funs &rest body)
+  (declare #-sbcl(ignore funs))
   `(progn
      #+sbcl
      (declaim (sb-ext:start-block ,@funs))
-     ,@(reverse body)
+     ,@body
      #+sbcl
      (declaim (sb-ext:end-block))))
 
@@ -92,6 +90,7 @@
 
 #+ecl (require '#:package-locks)
 (defmacro try-lock-package (the-package)
+  (declare #-sbcl(ignore the-package))
   #+sb-package-locks
   `(sb-ext:lock-package ,the-package)
   #+ecl
@@ -101,6 +100,7 @@
   `(ignore foo-lock-package))
 
 (defmacro try-unlock-package (the-package)
+  (declare #-sbcl(ignore the-package))
   #+sb-package-locks
   `(sb-ext:unlock-package ,the-package)
   #+ecl
@@ -110,6 +110,7 @@
   `(ignore foo-unlock-package))
 
 (defmacro try-freeze-type (the-type)
+  (declare #-sbcl(ignore the-type))
   #+sbcl
   `(declaim (sb-ext:freeze-type ,the-type)
             ;; but does it work? warning, if this is enabled
@@ -117,6 +118,7 @@
             (ignore foo-freeze-type)))
 
 (defmacro try-optimize-type-check (the-level)
+  (declare #-sbcl(ignore the-level))
   #+sbcl
   `'(optimize (sb-c::type-check ,the-level)
               ;; but does it work? warning, if this is enabled
@@ -124,31 +126,32 @@
               (ignore foo-optimize-type-check)))
 
 (defmacro try-always-bound (the-var)
+  (declare #-sbcl(ignore the-var))
   #+sbcl
   `(declaim (sb-ext:always-bound ,the-var)
-            ;; but does it work? warning, if this is enabled
-            #-debug-try-always-bound
+            ;; but does it work? error, if this is enabled
+            #+debug-try-always-bound
             (ignore foo-always-bound)))
 
 ;;; get-hash-type looks like (cl:unsigned-byte (get-fixnum-bits)), no?
-(defmacro get-hash-type ()
+(defmacro get-hash-type-original ()
   #+sbcl
-  '(cl:unsigned-byte 62)
+  ''(cl:unsigned-byte 62)
   #+allegro
-  '(cl:unsigned-byte 0 32)
+  ''(cl:unsigned-byte 32)
   ;; https://github.com/Clozure/ccl/blob/ff51228259d9dbc8a9cc7bbb08858ef4aa9fe8d0/level-0/l0-hash.lisp#L1885
   #+ccl
-  '(cl:and cl:fixnum cl:unsigned-byte)
+  ''(cl:and cl:fixnum cl:unsigned-byte)
   ;; https://github.com/search?q=repo%3Aarmedbear%2Fabcl++sxhash&type=code
   #+abcl
-  '(cl:and cl:fixnum cl:unsigned-byte)
+  ''(cl:and cl:fixnum cl:unsigned-byte)
   ;; https://gitlab.com/embeddable-common-lisp/ecl/-/blob/develop/src/cmp/proclamations.lsp
   #+ecl
-  '(cl:unsigned-byte 0 (coalton-compatibility:get-fixnum-bits))
+  `'(cl:unsigned-byte ,@(coalton-compatibility:get-fixnum-bits))
   #-(or sbcl allegro ccl abcl ecl)
   #.(cl:error "hashing is not supported on ~A" (cl:lisp-implementation-type)))
-(defmacro get-hash-type-2 ()
-  '(cl:unsigned-byte 0 (coalton-compatibility:get-fixnum-bits)))
+(defmacro get-hash-type ()
+  `'(cl:unsigned-byte ,(coalton-compatibility:get-fixnum-bits)))
 
 (defmacro unset-all-float-traps ()
   '(cl:eval-when (:compile-toplevel :load-toplevel :execute)
@@ -158,18 +161,33 @@
     #+ecl  (ext:trap-fpe 'cl:t nil)
     ))
 
-#+sbcl
+#+abcl
+(defconstant jvm-runtime
+  (java:jstatic
+   (java:jmethod "java.lang.Runtime" "getRuntime") nil))
+#+abcl
+(defconstant max-memory-method (java:jmethod "java.lang.Runtime" "maxMemory"))
+#+abcl
+(defconstant free-memory-method (java:jmethod "java.lang.Runtime" "freeMemory"))
+#+abcl
+(defun get-max-memory ()
+  (java:jcall max-memory-method jvm-runtime))
+#+abcl
+(defun get-free-memory()
+  (java:jcall free-memory-method jvm-runtime))
+#+abcl
+(defun get-memory-used()
+  "This is not monotonic - the memory used may decrease when the gc runs"
+  (- (get-max-memory) (get-free-memory)))
+#+(or sbcl )
 (pushnew ':|COALTON:HAS-GET-BYTES-CONSED| cl:*features*)
 (defun get-bytes-consed ()
   #+sbcl
   (sb-ext:get-bytes-consed)
-  #-sbcl
+  #+(and abcl nil)
+  (get-memory-used)
+  #-(or sbcl )
   0)
-
-(declaim (inline get-fixnum-bits))
-(defun get-fixnum-bits ()
-  #+sbcl sb-vm:n-fixnum-bits
-  #-sbcl (cl:1+ (cl:floor (cl:log cl:most-positive-fixnum 2))))
 
 (pushnew
  (cond ((= 16 (integer-length cl:most-positive-fixnum))
