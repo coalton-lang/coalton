@@ -1,8 +1,29 @@
-Using SBCL 2.5.11.72-d1e9d67be (git clone, make isntall) now. Deleted debian sbcl, to no longer have conflicts.
-Also updated the Makefile (in a previous commit), to ensure that all rules use the same sbcl binary.
+Local configuration:
+
+$ sbcl --version
+SBCL 2.5.11.72-d1e9d67be
+
+$ ecl --version
+ECL 24.5.10
+
+$ ccl --version
+Clozure Common Lisp Version 1.13 (v1.13-21-gda7138ef) LinuxX8664
+
+$ abcl --version
+Failed to introspect virtual threading methods: java.lang.reflect.InaccessibleObjectException: Unable to make public java.lang.Thread java.lang.ThreadBuilders$VirtualThreadFactory.newThread(java.lang.Runnable) accessible: module java.base does not "opens java.lang" to unnamed module @21575c3a
+Armed Bear Common Lisp 1.9.2
+Java 21.0.9 Ubuntu
+OpenJDK 64-Bit Server VM
+Low-level initialization completed in 0.256 seconds.
+Startup completed in 0.778 seconds.
+Loading /home/christos/.abclrc completed in 3.868 seconds.
+Type ":help" for a list of available commands.
+
+Also updated the Makefile (in a previous commit), to ensure that all rules use the same sbcl/etc. binaries.
 
 And testing it with:
 
+make cleanall
 sbcl --non-interactive \
      --eval '(ql:quickload :coalton)' \
      --eval '(cl:format t "XXXSTEP1~%")' \
@@ -12,32 +33,13 @@ sbcl --non-interactive \
      --eval '(cl:format t "XXXSTEP3~%")'
 
 Followed by:
+make cleanall
 sbcl --non-interactive \
      --eval '(asdf:test-system :coalton)' \
      --eval '(cl:format t "XXXSTEP3~%")'
 
-And by calling make cleanall test.
-
-1) BUG (?):
-Macro with-muffled-code-deletion-note-condition-if-possible now causes compilation errors. Are these due to a bug in the macro or are there instances where there are reachable cases that have not been considered?
-
-2) Not considered yet:
-src/runtime/function-entry.lisp: sbcl-specific code is different from what appears in the other files.  (declaim (sb-ext:start-block ,@funs)) / (declaim (sb-ext:end-block))
-src/typechecker/kinds.lisp: sbcl-specific code is different from what appears in the other files. (declaim (sb-ext:always-bound *next-kvar-id*))
-src/typechecker/types.lisp: sbcl-specific code is different from what appears in the other files. (declaim (sb-ext:always-bound *next-variable-id*))
-library/classes.lisp: sbcl-specific code is different from what appears in the other files. (repr :native (cl:unsigned-byte 62)) / (cl:error "hashing is not supported on ~A" (cl:lisp-implementation-type))
-
-3) Not sensible to touch:
-library/big-float/impl-sbcl.lisp: the whole file is sbcl-specific, so doesn't make sense to try to make it "compatible".
-
-4) Needs design first:
-library/system.lisp: the condition involves coalton code as well:
-  (define (monotonic-bytes-consed)
-    "Returns the number of bytes consed since some unspecified point in time.
-
-The difference between two successive calls to this function represents the number of bytes consed in that period of time."
-    #+sbcl
-    (Some (lisp Integer ()
-            (sb-ext:get-bytes-consed)))
-    #-sbcl
-    None)
+And by calling
+make cleanall test      # sbcl
+make cleanall testa     # abcl
+make cleanall teste     # ecl
+make cleanall testc     # ccl
