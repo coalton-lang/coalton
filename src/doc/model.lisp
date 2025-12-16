@@ -314,10 +314,14 @@
 
 (defclass coalton-package ()
   ((package :initarg :package
-            :reader lisp-package)))
+            :reader lisp-package)
+   (reexported-symbols :initarg :reexported-symbols
+                       :initform nil
+                       :reader reexported-symbols
+                       :documentation "If T, this package's documentation will include re-exported symbols.")))
 
-(defun make-coalton-package (package)
-  (make-instance 'coalton-package :package package))
+(defun make-coalton-package (package &key (reexported-symbols nil))
+  (make-instance 'coalton-package :package package :reexported-symbols reexported-symbols))
 
 (defmethod object-docstring ((self coalton-package))
   (documentation (lisp-package self) t))
@@ -330,7 +334,7 @@
 
 (defun package-objects (coalton-package)
   (let ((package (lisp-package coalton-package)))
-    (find-objects :package package)))
+    (find-objects :package package :reexported-symbols (reexported-symbols coalton-package))))
 
 ;; Helpers for API queries
 
@@ -438,23 +442,24 @@
   (not (endp (env:find-names :type ':value
                              :package package))))
 
-(defun find-values (&key package)
+(defun find-values (&key package reexported-symbols)
   (mapcar #'make-coalton-value
           (env:find-names :type ':value
-                          :package package)))
+                          :package package
+                          :reexported-symbols reexported-symbols)))
 
 (defun has-classes-p (package)
   (not (endp (env:find-classes :package package))))
 
-(defun find-classes (&key package)
+(defun find-classes (&key package reexported-symbols)
   (mapcar #'make-coalton-class
-          (env:find-classes :package package)))
+          (env:find-classes :package package :reexported-symbols reexported-symbols)))
 
 (defun has-types-p (package)
   "T if package defines any types."
   (not (endp (env:find-types :package package))))
 
-(defun find-types (&key package)
+(defun find-types (&key package reexported-symbols)
   "Find all types defined in PACKAGE."
   (mapcar (lambda (entry)
             (make-coalton-type entry
@@ -462,7 +467,7 @@
                                               (env:find-constructors :package package))
                                (remove-if-not (alexandria:curry #'applicable-p entry)
                                               (env:find-instances))))
-          (env:find-types :package package)))
+          (env:find-types :package package :reexported-symbols reexported-symbols)))
 
 (defun has-macros-p (package)
   (do-external-symbols (v package nil)
@@ -476,11 +481,11 @@
       (has-classes-p package)
       (has-macros-p package)))
 
-(defun find-objects (&key package)
+(defun find-objects (&key package reexported-symbols)
   "Find all Coalton OBJECTS, optionally retstricting to objects defined in PACKAGE."
-  (append (find-types :package package)
-          (find-values :package package)
-          (find-classes :package package)
+  (append (find-types :package package :reexported-symbols reexported-symbols)
+          (find-values :package package :reexported-symbols reexported-symbols)
+          (find-classes :package package :reexported-symbols reexported-symbols)
           (find-macros :package package)))
 
 (defun find-packages ()
