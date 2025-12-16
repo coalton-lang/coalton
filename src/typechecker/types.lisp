@@ -67,7 +67,6 @@
    #:next-pprint-variable-as-tvar       ; FUNCTION
    #:pprint-tvar                        ; FUNCTION
    #:pprint-ty                          ; FUNCTION
-   #:ty->string                         ; FUNCTION
    #:type-application-error             ; CONDITION
    ))
 
@@ -641,12 +640,6 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
   (if *print-readably*
       (call-next-method)
       (pprint-ty stream ty)))
-
-(defun ty->string (ty)
-  "Convert TY to a string for debugging."
-  (with-output-to-string (s)
-    (with-pprint-variable-context ()
-      (pprint-ty s ty))))
 
 ;;;
 ;;; Conditions

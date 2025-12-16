@@ -218,23 +218,22 @@
 
   (:import-from
    #:coalton-library/show
+   #:ShowType
+   #:show-type-to
+   #:Show
+   #:show-to
+   #:show-as-string
+   #:show
+   #:show*
+   #:Expose)
+  (:export
+   #:ShowType
+   #:show-type-to
    #:Show
    #:show*
    #:show-to
-   #:show-to-string
+   #:show-as-string
    #:show
-   #:Reveal
-   #:Expose)
-  (:export
-   #:standard-output
-   #:error-output
-   #:with-show-stream
-   #:Show                               ; class and function
-   #:show*
-   #:show-to
-   #:show-to-string
-   #:newline
-   #:Reveal
    #:Expose))
 
 #+sb-package-locks

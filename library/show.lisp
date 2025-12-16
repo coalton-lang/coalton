@@ -3,18 +3,24 @@
   (:use
    #:coalton
    #:coalton-library/builtin
-   #:coalton-library/functions
    #:coalton-library/classes)
+  (:local-nicknames
+   (#:types #:coalton-library/types)
+   (#:utils #:coalton-library/utils))
   (:export
    #:make-string-builder
 
+   #:ShowType
+   #:show-type-to
+   #:show-inferred-type-as-string
+   #:show-inferred-type-as-readable-string
+
    #:Show
    #:show-to
-   #:show-to-string
+   #:show-as-string
    #:show
    #:show*
 
-   #:Reveal
    #:Expose
    ))
 
@@ -67,6 +73,40 @@
       Unit)))
 
 (coalton-toplevel
+  (define-class (ShowType :a)
+    (show-type-to
+     "Execute a callback on a string representation of the Coalton type
+captured by the proxy. The callback may be called multiple times on
+different sections of the string, and the callback is guaranteed to be
+called on sections left-to-right. For example, for a callback `f`, the
+type `(Optional U64)` may be sequenced as
+
+```
+(f \"(Opt\")
+(f \"ional \")
+(f \"U64)\")
+
+Set the readable boolean to `True` to emit strings whose concatenation
+can be read by `CL:READ`."
+     (Boolean -> (String -> Unit) -> types:Proxy :a -> Unit)))
+
+  (declare show-inferred-type-as-string (ShowType :a => :a -> String))
+  (define (show-inferred-type-as-string x)
+    "Display `x`'s statically inferred type as a string."
+    (match (make-string-builder)
+      ((Tuple consume extract)
+       (show-type-to False consume (types:proxy-of x))
+       (extract))))
+
+  (declare show-inferred-type-as-readable-string (ShowType :a => :a -> String))
+  (define (show-inferred-type-as-readable-string x)
+    "Display `x`'s statically inferred type as a readable (i.e., as if by
+`CL:READ`) string."
+    (match (make-string-builder)
+      ((Tuple consume extract)
+       (show-type-to True consume (types:proxy-of x))
+       (extract))))
+  
   (define-class (Show :a)
     "Objects which have a convenient, textual, linear printed representation for
 display in a terminal. This is principally for program output and debugging."
@@ -85,15 +125,10 @@ be executed as
 (f \" \")
 (f \"3)\")
 ```"
-     ((String -> Unit) -> :a -> Unit))
-    #+ig
-    (show-type-to
-     "Display the Lisp type of `:a` to a stream. Set the readable boolean to
-`True` to print package prefixes."
-     ((String -> Unit) -> Boolean -> Proxy :a -> Unit)))
+     ((String -> Unit) -> :a -> Unit)))
 
-  (declare show-to-string (Show :a => :a -> String))
-  (define (show-to-string x)
+  (declare show-as-string (Show :a => :a -> String))
+  (define (show-as-string x)
     "Display `x` as a string.
 
 This is not necessarily identical to `(the String (into x))`."
@@ -119,31 +154,62 @@ default `(standard-output)`, but can be overridden with
 
 (coalton-toplevel
   (repr :transparent)
-  (define-type (Reveal :a)
+  (define-type (Expose :a)
     "A transparent wrapper type to force any object to be able to be shown
 according to whatever Lisp thinks. Use
 
-    (show (Reveal x))
+    (show (Expose x))
 
 to print any object `x` as if by `princ`."
-    (Reveal :a))
-
-  (repr :transparent)
-  (define-type (Expose :a)
     (Expose :a)))
 
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
-  (defmacro define-show-instance (type)
-    `(define-instance (Show ,type)
-       (define (show-to f x)
-         (f (lisp String (x)
-              (cl:with-standard-io-syntax
-                (cl:princ-to-string x))))))))
+  (cl:defmacro define-show-instance (type)
+    `(coalton-toplevel
+       (define-instance (ShowType ,(cl:read-from-string type))
+         (define (show-type-to readable? f _)
+           (f (utils:sym readable? ,type))))
+       
+       (define-instance (Show ,(cl:read-from-string type))
+         (define (show-to f x)
+           (f (lisp String (x)
+                (cl:with-standard-io-syntax
+                  (cl:princ-to-string x)))))))))
 
 (coalton-toplevel
+  (define-instance (ShowType Boolean)
+    (define (show-type-to readable? f _)
+      (f (utils:sym readable? "Boolean"))))
+
   (define-instance (Show Boolean)
     (define (show-to f x)
       (f (if x "True" "False"))))
+
+  (define-instance (ShowType :a => ShowType (Optional :a))
+    (define (show-type-to readable? f p)
+      (f "(")
+      (f (utils:sym readable? "Optional"))
+      (f " ")
+      (show-type-to readable? f (types:proxy-inner p))
+      (f ")")))
+
+  (define-instance (Show :a => Show (Optional :a))
+    (define (show-to f x)
+      (match x
+        ((Some y)
+         (f "(Some ")
+         (show-to f y)
+         (f ")"))
+        ((None)
+         (f "None")))))
+  
+  (define-instance (ShowType :a => ShowType (List :a))
+    (define (show-type-to readable? f p)
+      (f "(")
+      (f (utils:sym readable? "List"))
+      (f " ")
+      (show-type-to readable? f (types:proxy-inner p))
+      (f ")")))
 
   (define-instance (Show :a => Show (List :a))
     (define (show-to f x)
@@ -160,44 +226,69 @@ to print any object `x` as if by `princ`."
               (show-to f z)
               (% zs))))))))
 
-  (define-instance (Show (Reveal :a))
+  (define-instance ((ShowType :a) (ShowType :b) => ShowType (:a -> :b))
+    (define (show-type-to readable? f p)
+      (f "(")
+      (f (utils:sym readable? "Arrow"))
+      (f " ")
+      (show-type-to readable? f (types:proxy-function-from p))
+      (f " ")
+      (show-type-to readable? f (types:proxy-function-to p))
+      (f ")")))
+
+
+  (define-instance (ShowType :a => ShowType (types:Proxy :a))
+    (define (show-type-to readable? f p)
+      (f "(")
+      (f (utils:sym readable? "Proxy"))
+      (f " ")
+      (show-type-to readable? f (types:proxy-inner p))
+      (f ")")))
+
+  (define-instance (Show (types:Proxy :a))
+    (define (show-to f _)
+      (f "Proxy")))
+
+  (define-instance (ShowType types:LispType)
+    (define (show-type-to readable? f p)
+      (f (utils:sym readable? "LispType"))))
+
+  (define-instance (Show types:LispType)
+    (define (show-to f x)
+      (f (lisp String (x)
+           (cl:princ-to-string x)))))
+  
+  (define-instance (ShowType (Expose :a))
+    (define (show-type-to readable? f _)
+      (f (utils:sym readable? "Expose"))))
+
+  (define-instance (Show (Expose :a))
     (define (show-to f x)
       (f (lisp String (x)
            (cl:with-standard-io-syntax
-             (cl:princ-to-string x))))))
+             (cl:princ-to-string x)))))))
 
-  #+ig
-  (define-instance (coalton-library/types:RuntimeRepr :a => (Show (Expose :a)))
-    (define (show-to f x)
-      (let ((ctype (coalton-library/types:coalton-type-string
-                    (coalton-library/types:proxy-inner
-                     (coalton-library/types:proxy-of x)))))
-        (lisp Unit (s x ctype)
-          (cl:with-standard-io-syntax
-            (cl:format s "[~A] ~A" ctype x))
-          Unit))))
+(define-show-instance "Integer")
+(define-show-instance "UFix")
+(define-show-instance "Bit")
+(define-show-instance "U8")
+(define-show-instance "U16")
+(define-show-instance "U32")
+(define-show-instance "U64")
 
-  (define-show-instance Integer)
-  (define-show-instance UFix)
-  (define-show-instance Bit)
-  (define-show-instance U8)
-  (define-show-instance U16)
-  (define-show-instance U32)
-  (define-show-instance U64)
+(define-show-instance "IFix")
+(define-show-instance "I8")
+(define-show-instance "I16")
+(define-show-instance "I32")
+(define-show-instance "I64")
 
-  (define-show-instance IFix)
-  (define-show-instance I8)
-  (define-show-instance I16)
-  (define-show-instance I32)
-  (define-show-instance I64)
+(define-show-instance "F32")
+(define-show-instance "F64")
 
-  (define-show-instance F32)
-  (define-show-instance F64)
+(define-show-instance "Fraction")
 
-  (define-show-instance Fraction)
-
-  (define-show-instance String)
-  (define-show-instance Char))
+(define-show-instance "String")
+(define-show-instance "Char")
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/SHOW")
