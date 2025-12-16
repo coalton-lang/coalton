@@ -103,6 +103,7 @@
    #:ty-class-instance-codegen-sym          ; ACCESSOR
    #:ty-class-instance-method-codegen-syms  ; ACCESSOR
    #:ty-class-instance-method-codegen-inline-p ; ACCESSOR
+   #:ty-class-instance-location             ; ACCESSOR
    #:ty-class-instance-constraints-expanded ; FUNCTION
    #:ty-class-instance-list                 ; TYPE
    #:instance-environment                   ; STRUCT
@@ -765,12 +766,13 @@
 ;;;
 
 (defstruct ty-class-instance
-  (constraints             (util:required 'constraints)             :type ty-predicate-list :read-only t)
-  (predicate               (util:required 'predicate)               :type ty-predicate      :read-only t)
-  (codegen-sym             (util:required 'codegen-sym)             :type symbol            :read-only t)
-  (method-codegen-syms     (util:required 'method-codegen-syms)     :type util:symbol-list  :read-only t)
-  (method-codegen-inline-p (util:required 'method-codegen-inline-p) :type list              :read-only t)
-  (docstring               (util:required 'docstring)               :type (or null string)  :read-only t))
+  (constraints             (util:required 'constraints)             :type ty-predicate-list      :read-only t)
+  (predicate               (util:required 'predicate)               :type ty-predicate           :read-only t)
+  (codegen-sym             (util:required 'codegen-sym)             :type symbol                 :read-only t)
+  (method-codegen-syms     (util:required 'method-codegen-syms)     :type util:symbol-list       :read-only t)
+  (method-codegen-inline-p (util:required 'method-codegen-inline-p) :type list                   :read-only t)
+  (docstring               (util:required 'docstring)               :type (or null string)       :read-only t)
+  (location                nil                                      :type (or null source:location) :read-only t))
 
 (defun expand-context (context env)
   "Traverse constraint predicates by looking up those entailed by
@@ -810,6 +812,9 @@ of constraint predicates."
 (defmethod source:docstring ((self ty-class-instance))
   (ty-class-instance-docstring self))
 
+(defmethod source:location ((self ty-class-instance))
+  (ty-class-instance-location self))
+
 (defmethod make-load-form ((self ty-class-instance) &optional env)
   (make-load-form-saving-slots self :environment env))
 
@@ -835,7 +840,8 @@ of constraint predicates."
    :codegen-sym (ty-class-instance-codegen-sym instance)
    :method-codegen-syms (ty-class-instance-method-codegen-syms instance)
    :method-codegen-inline-p (ty-class-instance-method-codegen-inline-p instance)
-   :docstring (ty-class-instance-docstring instance)))
+   :docstring (ty-class-instance-docstring instance)
+   :location (ty-class-instance-location instance)))
 
 (defstruct instance-environment
   (instances    (make-immutable-listmap) :type immutable-listmap :read-only t)
