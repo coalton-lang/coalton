@@ -218,14 +218,11 @@
 
   (:import-from
    #:coalton-library/show
-   #:standard-output
-   #:error-output
-   #:with-show-stream
    #:Show
    #:show*
    #:show-to
    #:show-to-string
-   #:newline
+   #:show
    #:Reveal
    #:Expose)
   (:export
