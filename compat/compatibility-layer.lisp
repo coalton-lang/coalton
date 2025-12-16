@@ -5,6 +5,8 @@
     ;; #:coalton/compatibility-layer
   (:use #:cl)
   (:export
+   #-sbcl
+   #:*am-i-portable*
    #:get-fixnum-bits
 ;;; try-* are macros/functions that most probably will never be
 ;;; implemented by all Lisps. So are macros with-*-if-possible.
@@ -30,6 +32,10 @@
 
 (cl:in-package #:coalton-compatibility)
 
+;; used to fill in otherwise empty declarations
+#-sbcl
+(defparameter *am-i-portable* 13)
+
 ;; define first, as it's used by others and we want it inlined
 (declaim (inline get-fixnum-bits))
 (defun get-fixnum-bits ()
@@ -54,7 +60,7 @@
   `(locally
        (declare #+sbcl
                 (sb-ext:muffle-conditions sb-ext:code-deletion-note)
-                #-sbcl(t)
+                #-sbcl(special coalton-compatibility:*am-i-portable*)
                 ;; does it work? warning if it's enabled
                 #+debug-try-muffle-code-deletion-note-condition
                 (ignore foo-muffle-code-deletion-note-condition))
@@ -73,7 +79,7 @@
   #+sbcl
   ''(sb-ext:muffle-conditions sb-kernel:redefinition-warning)
   #-sbcl
-  ''(t)
+  ''(special coalton-compatibility:*am-i-portable*)
   ;; but does it work? warning, if this is enabled
   #+debug-try-muffle-redefinition-warning-condition
   ''(ignore foo-muffle-redefinition-warning-condition))
@@ -82,7 +88,7 @@
   #+sbcl
   ''(sb-ext:unmuffle-conditions sb-kernel:redefinition-warning)
   #-sbcl
-  ''(t)
+  ''(special coalton-compatibility:*am-i-portable*)
   ;; but does it work? warning, if this is enabled
   #+debug-try-unmuffle-redefinition-warning-condition
   ''(ignore foo-unmuffle-redefinition-warning-condition))
@@ -91,7 +97,7 @@
   #+sbcl
   ''(sb-ext:muffle-conditions sb-ext:compiler-note)
   #-sbcl
-  ''(t)
+  ''(special coalton-compatibility:*am-i-portable*)
   ;; but does it work? style-warning, if this is enabled
   #+debug-try-muffle-compiler-note-condition
   ''(ignore foo-muffle-compiler-note-condition))
@@ -120,7 +126,7 @@
 (defmacro try-freeze-type (the-type)
   (declare #-sbcl(ignore the-type))
   `(declaim #+sbcl(sb-ext:freeze-type ,the-type)
-            #-sbcl(t)
+            #-sbcl(special coalton-compatibility:*am-i-portable*)
             ;; but does it work? warning, if this is enabled
             #+debug-try-freeze-type
             (ignore foo-freeze-type)))
@@ -139,12 +145,12 @@
      #+debug-try-optimize-type-check
      (ignore foo-optimize-type-check))
   #-sbcl
-  ''(t))
+  ''(special coalton-compatibility:*am-i-portable*))
 
 (defmacro try-always-bound (the-var)
   (declare #-sbcl(ignore the-var))
   `(declaim #+sbcl(sb-ext:always-bound ,the-var)
-            #-sbcl(t)
+            #-sbcl(special coalton-compatibility:*am-i-portable*)
             ;; but does it work? error, if this is enabled
             #+debug-try-always-bound
             (ignore foo-always-bound)))
