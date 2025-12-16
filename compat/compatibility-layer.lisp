@@ -20,6 +20,7 @@
    #:try-lock-package
    #:try-unlock-package
    #:try-freeze-type
+   ;; #:with-optimize-type-check-if-possible
    #:try-optimize-type-check
    #:try-always-bound
    #:get-hash-type
@@ -53,6 +54,7 @@
   `(locally
        (declare #+sbcl
                 (sb-ext:muffle-conditions sb-ext:code-deletion-note)
+                #-sbcl(t)
                 ;; does it work? warning if it's enabled
                 #+debug-try-muffle-code-deletion-note-condition
                 (ignore foo-muffle-code-deletion-note-condition))
@@ -70,6 +72,8 @@
 (defmacro try-muffle-redefinition-warning-condition ()
   #+sbcl
   ''(sb-ext:muffle-conditions sb-kernel:redefinition-warning)
+  #-sbcl
+  ''(t)
   ;; but does it work? warning, if this is enabled
   #+debug-try-muffle-redefinition-warning-condition
   ''(ignore foo-muffle-redefinition-warning-condition))
@@ -77,6 +81,8 @@
 (defmacro try-unmuffle-redefinition-warning-condition ()
   #+sbcl
   ''(sb-ext:unmuffle-conditions sb-kernel:redefinition-warning)
+  #-sbcl
+  ''(t)
   ;; but does it work? warning, if this is enabled
   #+debug-try-unmuffle-redefinition-warning-condition
   ''(ignore foo-unmuffle-redefinition-warning-condition))
@@ -84,13 +90,15 @@
 (defmacro try-muffle-compiler-note-condition ()
   #+sbcl
   ''(sb-ext:muffle-conditions sb-ext:compiler-note)
+  #-sbcl
+  ''(t)
   ;; but does it work? style-warning, if this is enabled
   #+debug-try-muffle-compiler-note-condition
   ''(ignore foo-muffle-compiler-note-condition))
 
-#+ecl (require '#:package-locks)
+#+ecl(require '#:package-locks)
 (defmacro try-lock-package (the-package)
-  (declare #-sbcl(ignore the-package))
+  (declare #-(or sbcl ecl)(ignore the-package))
   #+sb-package-locks
   `(sb-ext:lock-package ,the-package)
   #+ecl
@@ -100,7 +108,7 @@
   `(ignore foo-lock-package))
 
 (defmacro try-unlock-package (the-package)
-  (declare #-sbcl(ignore the-package))
+  (declare #-(or sbcl ecl) (ignore the-package))
   #+sb-package-locks
   `(sb-ext:unlock-package ,the-package)
   #+ecl
@@ -111,24 +119,32 @@
 
 (defmacro try-freeze-type (the-type)
   (declare #-sbcl(ignore the-type))
-  #+sbcl
-  `(declaim (sb-ext:freeze-type ,the-type)
+  `(declaim #+sbcl(sb-ext:freeze-type ,the-type)
+            #-sbcl(t)
             ;; but does it work? warning, if this is enabled
             #+debug-try-freeze-type
             (ignore foo-freeze-type)))
 
+(defmacro with-optimize-type-check-if-possible (the-level &rest body)
+  #-sbcl(declare (ignore the-level))
+  #+sbcl(locally (declare (optimize (sb-c::type-check the-level)))
+          body)
+  #-sbcl body)
+
 (defmacro try-optimize-type-check (the-level)
-  (declare #-sbcl(ignore the-level))
+  #-sbcl(declare (ignore the-level))
   #+sbcl
   `'(optimize (sb-c::type-check ,the-level)
-              ;; but does it work? warning, if this is enabled
-              #+debug-try-optimize-type-check
-              (ignore foo-optimize-type-check)))
+     ;; but does it work? warning, if this is enabled
+     #+debug-try-optimize-type-check
+     (ignore foo-optimize-type-check))
+  #-sbcl
+  ''(t))
 
 (defmacro try-always-bound (the-var)
   (declare #-sbcl(ignore the-var))
-  #+sbcl
-  `(declaim (sb-ext:always-bound ,the-var)
+  `(declaim #+sbcl(sb-ext:always-bound ,the-var)
+            #-sbcl(t)
             ;; but does it work? error, if this is enabled
             #+debug-try-always-bound
             (ignore foo-always-bound)))
