@@ -46,7 +46,7 @@ Print a line to `cl:*standard-output*`."
 
   (declare traceObject (String -> :a -> Unit))
   (define (traceObject str item)
-    "Deprecated: Use `show` and `Reveal`.
+    "Deprecated: Use `show` and `Expose`.
 
 Print a line to `cl:*standard-output*` in the form \"{STR}: {ITEM}\"."
     (progn
