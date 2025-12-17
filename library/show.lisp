@@ -160,7 +160,7 @@ according to whatever Lisp thinks. Use
 
     (show (Expose x))
 
-to print any object `x` as if by `princ`."
+to print any object `x` as if by `prin1`."
     (Expose :a)))
 
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
@@ -174,7 +174,7 @@ to print any object `x` as if by `princ`."
          (define (show-to f x)
            (f (lisp String (x)
                 (cl:with-standard-io-syntax
-                  (cl:princ-to-string x)))))))))
+                  (cl:prin1-to-string x)))))))))
 
 (coalton-toplevel
   (define-instance (ShowType Boolean)
@@ -256,7 +256,7 @@ to print any object `x` as if by `princ`."
   (define-instance (Show types:LispType)
     (define (show-to f x)
       (f (lisp String (x)
-           (cl:princ-to-string x)))))
+           (cl:prin1-to-string x)))))
   
   (define-instance (ShowType (Expose :a))
     (define (show-type-to readable? f _)
@@ -266,7 +266,7 @@ to print any object `x` as if by `princ`."
     (define (show-to f x)
       (f (lisp String (x)
            (cl:with-standard-io-syntax
-             (cl:princ-to-string x)))))))
+             (cl:prin1-to-string x)))))))
 
 (define-show-instance "Integer")
 (define-show-instance "UFix")
