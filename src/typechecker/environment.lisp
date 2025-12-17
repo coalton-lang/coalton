@@ -113,6 +113,11 @@
    #:function-env-entry-name                ; ACCESSOR
    #:function-env-entry-arity               ; ACCESSOR
    #:function-env-entry-inline-p            ; ACCESSOR
+   #:function-env-entry-returns-values-p    ; ACCESSOR
+   #:make-multiple-values-info
+   #:multiple-values-info
+   #:multiple-values-info-boxed-name
+   #:multiple-values-info-unboxed-name
    #:function-environment                   ; STRUCT
    #:name-entry                             ; STRUCT
    #:make-name-entry                        ; CONSTRUCTOR
@@ -854,10 +859,18 @@ of constraint predicates."
 ;;; Function environment
 ;;;
 
+(defstruct multiple-values-info
+  boxed-name
+  unboxed-name)
+
+(defmethod make-load-form ((self multiple-values-info) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
 (defstruct function-env-entry
-  (name     (util:required 'name)     :type symbol  :read-only t)
-  (arity    (util:required 'arity)    :type fixnum  :read-only t)
-  (inline-p (util:required 'inline-p) :type boolean :read-only t))
+  (name             (util:required 'name)     :type symbol  :read-only t)
+  (arity            (util:required 'arity)    :type fixnum  :read-only t)
+  (inline-p         (util:required 'inline-p) :type boolean :read-only t)
+  (returns-values-p nil                       :type (or null multiple-values-info) :read-only t))
 
 (defmethod make-load-form ((self function-env-entry) &optional env)
   (make-load-form-saving-slots self :environment env))

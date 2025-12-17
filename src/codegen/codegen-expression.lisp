@@ -73,6 +73,23 @@
            (codegen-expression node env))
          (node-direct-application-rands node))))
 
+  (:method ((node node-multiple-values-application) env)
+    (declare (type tc:environment env))
+    `(multiple-value-call
+         #',(node-multiple-values-application-rator node)
+       ,@(mapcar
+          (lambda (node)
+            (codegen-expression node env))
+          (node-multiple-values-application-rands node))))
+  
+  (:method ((node node-multiple-values) env)
+    (declare (type tc:environment env))
+    `(values
+      ,@(loop :for expr :in (node-multiple-values-exprs node)
+              :collect (codegen-expression expr env))))
+
+
+
   (:method ((expr node-abstraction) env)
     (declare (type tc:environment env))
     (let* ((var-names (node-abstraction-vars expr))
@@ -366,7 +383,9 @@
             ,(codegen-expression (node-bind-body expr) env)))))))
 
 (defun find-constructor (initform env)
-  (if (or (node-application-p initform) (node-direct-application-p initform))
+  (if (or (node-application-p initform)
+          (node-direct-application-p initform)
+          (node-multiple-values-application-p initform))
       (and (node-rator-name initform)
            (tc:lookup-constructor env (node-rator-name initform) :no-error t))
       nil))

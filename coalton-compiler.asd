@@ -121,6 +121,7 @@
                              (:file "codegen-expression")
                              (:file "codegen-class")
                              (:file "intrinsic-applications")
+                             (:file "tail-analysis")
 
                              ;; Optimizations
                              (:file "monomorphize")
