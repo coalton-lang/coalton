@@ -2,11 +2,9 @@
 ;;;; clean up the rest of the code, and hopefully make porting easier.
 (cl:defpackage
     #:coalton-compatibility
-    ;; #:coalton/compatibility-layer
   (:use #:cl)
   (:export
-   #-sbcl
-   #:*am-i-portable*
+   #-sbcl #:*à-la-guerre-comme-à-la-guerre*
    #:get-fixnum-bits
 ;;; try-* are macros/functions that most probably will never be
 ;;; implemented by all Lisps. So are macros with-*-if-possible.
@@ -22,7 +20,6 @@
    #:try-lock-package
    #:try-unlock-package
    #:try-freeze-type
-   ;; #:with-optimize-type-check-if-possible
    #:try-optimize-type-check
    #:try-always-bound
    #:get-hash-type
@@ -32,9 +29,14 @@
 
 (cl:in-package #:coalton-compatibility)
 
-;; used to fill in otherwise empty declarations
+;; used to fill in otherwise empty declarations with (special
+;; coalton-compatibility:*à-la-guerre-comme-à-la-guerre*)
+;;
+;; Its value is an error, since we want to find out if it'll get
+;; evaluated at any point (it really shouldn't).
 #-sbcl
-(defparameter *am-i-portable* 13)
+(defparameter *à-la-guerre-comme-à-la-guerre*
+  '(error "*à-la-guerre-comme-à-la-guerre* has been evaluated - this is a bug"))
 
 ;; define first, as it's used by others and we want it inlined
 (declaim (inline get-fixnum-bits))
@@ -56,17 +58,17 @@
 ;;; probably *NOT* behaving as intended! Looking at you
 ;;; "try-muffle-code-deletion-note-condition"... (canary still active
 ;;; and well on it -- is it because it was optimised away?)
-(defmacro with-muffled-code-deletion-note-condition-if-possible (&rest alambda)
+(defmacro with-muffled-code-deletion-note-condition-if-possible (&body alambda)
   `(locally
        (declare #+sbcl
                 (sb-ext:muffle-conditions sb-ext:code-deletion-note)
-                #-sbcl(special coalton-compatibility:*am-i-portable*)
+                #-sbcl(special coalton-compatibility:*à-la-guerre-comme-à-la-guerre*)
                 ;; does it work? warning if it's enabled
                 #+debug-try-muffle-code-deletion-note-condition
                 (ignore foo-muffle-code-deletion-note-condition))
      ,@alambda))
 
-(defmacro with-start-end-block-if-possible (funs &rest body)
+(defmacro with-start-end-block-if-possible (funs &body body)
   (declare #-sbcl(ignore funs))
   `(progn
      #+sbcl
@@ -79,7 +81,7 @@
   #+sbcl
   ''(sb-ext:muffle-conditions sb-kernel:redefinition-warning)
   #-sbcl
-  ''(special coalton-compatibility:*am-i-portable*)
+  ''(special coalton-compatibility:*à-la-guerre-comme-à-la-guerre*)
   ;; but does it work? warning, if this is enabled
   #+debug-try-muffle-redefinition-warning-condition
   ''(ignore foo-muffle-redefinition-warning-condition))
@@ -88,7 +90,7 @@
   #+sbcl
   ''(sb-ext:unmuffle-conditions sb-kernel:redefinition-warning)
   #-sbcl
-  ''(special coalton-compatibility:*am-i-portable*)
+  ''(special coalton-compatibility:*à-la-guerre-comme-à-la-guerre*)
   ;; but does it work? warning, if this is enabled
   #+debug-try-unmuffle-redefinition-warning-condition
   ''(ignore foo-unmuffle-redefinition-warning-condition))
@@ -97,7 +99,7 @@
   #+sbcl
   ''(sb-ext:muffle-conditions sb-ext:compiler-note)
   #-sbcl
-  ''(special coalton-compatibility:*am-i-portable*)
+  ''(special coalton-compatibility:*à-la-guerre-comme-à-la-guerre*)
   ;; but does it work? style-warning, if this is enabled
   #+debug-try-muffle-compiler-note-condition
   ''(ignore foo-muffle-compiler-note-condition))
@@ -126,16 +128,10 @@
 (defmacro try-freeze-type (the-type)
   (declare #-sbcl(ignore the-type))
   `(declaim #+sbcl(sb-ext:freeze-type ,the-type)
-            #-sbcl(special coalton-compatibility:*am-i-portable*)
+            #-sbcl(special coalton-compatibility:*à-la-guerre-comme-à-la-guerre*)
             ;; but does it work? warning, if this is enabled
             #+debug-try-freeze-type
             (ignore foo-freeze-type)))
-
-(defmacro with-optimize-type-check-if-possible (the-level &rest body)
-  #-sbcl(declare (ignore the-level))
-  #+sbcl(locally (declare (optimize (sb-c::type-check the-level)))
-          body)
-  #-sbcl body)
 
 (defmacro try-optimize-type-check (the-level)
   #-sbcl(declare (ignore the-level))
@@ -145,12 +141,12 @@
      #+debug-try-optimize-type-check
      (ignore foo-optimize-type-check))
   #-sbcl
-  ''(special coalton-compatibility:*am-i-portable*))
+  ''(special coalton-compatibility:*à-la-guerre-comme-à-la-guerre*))
 
 (defmacro try-always-bound (the-var)
   (declare #-sbcl(ignore the-var))
   `(declaim #+sbcl(sb-ext:always-bound ,the-var)
-            #-sbcl(special coalton-compatibility:*am-i-portable*)
+            #-sbcl(special coalton-compatibility:*à-la-guerre-comme-à-la-guerre*)
             ;; but does it work? error, if this is enabled
             #+debug-try-always-bound
             (ignore foo-always-bound)))
