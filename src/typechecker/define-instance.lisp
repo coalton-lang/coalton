@@ -131,7 +131,8 @@
                 :codegen-sym instance-codegen-sym
                 :method-codegen-syms method-codegen-syms
                 :method-codegen-inline-p method-codegen-inline-p
-                :docstring (source:docstring instance))))
+                :docstring (source:docstring instance)
+                :location (parser:toplevel-define-instance-head-location instance))))
 
         (cond (context
                (setf env (tc:set-function env instance-codegen-sym (tc:make-function-env-entry
