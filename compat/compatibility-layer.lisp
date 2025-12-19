@@ -106,7 +106,7 @@
 
 #+ecl(require '#:package-locks)
 (defmacro try-lock-package (the-package)
-  (declare #-(or sbcl ecl)(ignore the-package))
+  #-(or sbcl ecl)(declare (ignore the-package))
   #+sb-package-locks
   `(sb-ext:lock-package ,the-package)
   #+ecl
@@ -116,7 +116,7 @@
   `(ignore foo-lock-package))
 
 (defmacro try-unlock-package (the-package)
-  (declare #-(or sbcl ecl) (ignore the-package))
+  #-(or sbcl ecl)(declare (ignore the-package))
   #+sb-package-locks
   `(sb-ext:unlock-package ,the-package)
   #+ecl
