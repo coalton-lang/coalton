@@ -187,6 +187,12 @@ CONSTRUCTOR of type TYPE?"
   (when (endp pattern-constructors)
     (return-from pattern-constructors-exhaustive-p nil))
 
+  (loop :with subs        := nil
+        :for pattern      :in pattern-constructors
+        :for pattern-type := (pattern-type pattern)
+        :do (setf subs (tc:unify subs pattern-type type))
+        :finally (setf type (tc:apply-substitution subs type)))
+
   ;; If we got this far, then PATTERN-CONSTRUCTORS is NOT empty,
   ;; which means we do have a list of constructors, and we can
   ;; assume that TYPE is a TYCON or a TAPP.
