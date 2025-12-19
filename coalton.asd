@@ -261,6 +261,7 @@
                "coalton/library/computable-reals"
                "coalton/library/algorithms"
                "html-entities"
+               "spinneret"
                "yason"
                "uiop")
   :around-compile (lambda (compile)
@@ -273,6 +274,7 @@
                (:file "model")
                (:file "string")
                (:file "markdown")
+               (:file "html")
                (:file "hugo")
                (:file "main")))
 

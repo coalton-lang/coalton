@@ -86,26 +86,6 @@
           :collect (1+ index) :into offsets
         :do (incf index)))
 
-(defun line-number (backend source offset)
-  (let ((line-offsets (gethash (source:source-name source)
-                        (slot-value backend 'file-line-offsets))))
-    (unless line-offsets
-      (with-open-stream (stream (source:source-stream source))
-        (setf line-offsets (find-line-offsets stream)))
-      (setf (gethash (source:source-name source)
-                     (slot-value backend 'file-line-offsets))
-            line-offsets))
-    (labels ((%find (lo hi)
-               (let ((probe (+ lo (floor (/ (- hi lo) 2)))))
-                 (when (= probe lo)
-                   (return-from line-number (1+ probe)))
-                 (cond ((< offset (aref line-offsets probe))
-                        (setf hi probe))
-                       (t
-                        (setf lo probe)))
-                 (%find lo hi))))
-      (%find 0 (length line-offsets)))))
-
 (defmethod write-object ((backend markdown-backend) (object coalton-package))
   (let ((stream (output-stream backend))
         (objects (package-objects object)))
@@ -138,16 +118,6 @@
                   (format stream "</code>~:[~;  ~%~:*~A~]~%"
                           (source:docstring instance)))
         (format stream "~%</details>~%~%")))))
-
-(defun source-location-link (backend object)
-  (if (not (source-available-p object))
-      ""
-      (let ((source (source object))
-            (span (source-span object)))
-        (format nil "~a#L~a-L~a"
-                (source-location-href object)
-                (line-number backend source (car span))
-                (line-number backend source (cdr span))))))
 
 (defmethod write-object ((backend markdown-backend) (object coalton-object))
   (let ((stream (output-stream backend)))

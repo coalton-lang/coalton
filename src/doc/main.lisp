@@ -49,10 +49,11 @@
               (head-revision))))
 
 (defun write-documentation (filename packages
-                            &key (backend :markdown) (revision nil))
+                            &key (backend :markdown)
+                                 local-path remote-path)
   "Write the documentation for a set of PACKAGES to FILENAME, using backend named by keyword BACKEND."
-  (let ((*local* (local-path))
-        (*remote* (remote-path revision)))
+  (let ((*local* local-path)
+        (*remote* remote-path))
     (format t "Generating documentation for ~D packages~%~
 Local path = ~A~%~
 Remote path = ~A~%"
@@ -72,8 +73,10 @@ Remote path = ~A~%"
 Possible values for BACKEND are:
 
   :markdown generate markdown documentation
+  :html     generate a standalone HTML document
   :hugo     generate input for hugo static site generator
             (mostly markdown, wrapped in metadata cruft)"
   (write-documentation filename (find-packages)
-                       :backend backend
-                       :revision revision))
+                       :local-path (local-path)
+                       :remote-path (remote-path revision)
+                       :backend backend))
