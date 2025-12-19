@@ -1205,6 +1205,7 @@ Instances of the following classes can be derived:
 - `Eq`
 - `Hash`
 - `Default`
+- `Show`
 
 Currently these are the only derivable classes in the standard library, but more may be added in the future.
 

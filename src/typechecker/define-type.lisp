@@ -576,6 +576,7 @@
             :location location)
      :docstring nil
      :methods (list
+               ;; method runtime-repr
                (parser:make-instance-method-definition
                 :name (parser:make-node-variable
                        :location location
