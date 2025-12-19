@@ -353,9 +353,12 @@
 
 (defun stdlib-p (symbol)
   "A standard library package is any package with the exact name 'coalton' or whose name starts with 'coalton-library'."
-  (let ((name (package-name (symbol-package symbol))))
-    (or (string-equal name "COALTON")
-        (eql 0 (search "COALTON-LIBRARY" name)))))
+  (let ((pkg (symbol-package symbol)))
+    (if (null pkg)
+        nil
+        (let ((name (package-name pkg)))
+          (or (string-equal name "COALTON")
+              (eql 0 (search "COALTON-LIBRARY" name)))))))
 
 ;;; class coalton-macro
 
