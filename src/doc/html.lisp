@@ -97,6 +97,7 @@ pre code{
 }
 details{margin:12px 0 16px;border:0;padding:0}
 summary{cursor:pointer;font-weight:600;padding:6px 0}
+.methods-item{margin-top:5px}
 .instances-list{margin:8px 0 12px 20px}
 .instances-item{margin:4px 0}
 .symbol-search{margin-top:10px;position:relative}
@@ -461,6 +462,19 @@ summary{cursor:pointer;font-weight:600;padding:6px 0}
     (with-html-string
       (:code (:raw class-html-str))
       (:raw (doc-html object))
+      (when (class-methods object)
+        (:span "Methods:")
+        (:ul :class "methods-list"
+          (dolist (method-spec (class-methods object))
+            (tc:with-pprint-variable-context ()
+              (destructuring-bind (name type docstring) method-spec
+                (:li :class "methods-item"
+                 (:code (:raw (format nil "~A :: ~A"
+                                      (html-entities:encode-entities name)
+                                      (coalton/doc/markdown::to-markdown type))))
+                 (when docstring
+                   (:span (:br)
+                          (:raw (html-entities:encode-entities docstring))))))))))
       (:raw (instances-html object)))))
 
 (defmethod write-object-body ((backend html-backend) (object coalton-value))
@@ -472,10 +486,11 @@ summary{cursor:pointer;font-weight:600;padding:6px 0}
   (doc-html object))
 
 (defun doc-html (object)
-  (with-html-string
-    (when (has-docstringp object)
-      (:p :class "docstring"
-       (object-docstring object)))))
+  (let ((spinneret:*html-style* :tree))
+    (with-html-string
+      (when (has-docstringp object)
+        (:p :class "docstring"
+            (object-docstring object))))))
 
 (defun instances-html (object)
   (let ((instances (object-instances object)))
