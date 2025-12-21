@@ -13,3 +13,9 @@ coverage-report/
 benchmarks/benchmarks-game/pidigits
 
 bench.json
+
+# misc local files of no importance
+y-ignore/
+
+# auto-created lisp code used by the makefile
+zz-temp/
