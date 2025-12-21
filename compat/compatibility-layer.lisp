@@ -168,8 +168,9 @@
   `'(cl:unsigned-byte ,@(coalton-compatibility:get-fixnum-bits))
   #-(or sbcl allegro ccl abcl ecl)
   #.(cl:error "hashing is not supported on ~A" (cl:lisp-implementation-type)))
+;; add 1 bit since we're using the sign bit as well (the hash is unsigned)
 (defmacro get-hash-type ()
-  `'(cl:unsigned-byte ,(coalton-compatibility:get-fixnum-bits)))
+  `'(cl:unsigned-byte ,(1+ (coalton-compatibility:get-fixnum-bits))))
 
 (defmacro unset-all-float-traps ()
   '(cl:eval-when (:compile-toplevel :load-toplevel :execute)
