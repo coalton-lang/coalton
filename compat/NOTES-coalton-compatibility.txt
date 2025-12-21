@@ -1,3 +1,30 @@
+# Install quicklisp
+sbcl --load quicklisp.lisp
+* (quicklisp-quickstart:install)
+
+# Installed the distribution from Ultralisp.org:
+# sbcl --eval '(ql-dist:install-dist "http://dist.ultralisp.org/" :prompt nil)'
+This actually ended up causing errors (no SAFETY=3 config would complete),
+so I've uninstalled ultralisp.
+
+## Went into local-projects and cloned fset from its repo directly. https://github.com/slburson/fset
+Neither the main branch, nor this fork work with this version of fset on
+sbcl when SAFETY=3. They need the version from quicklisp (v1.4.6). Which
+is *really* unfortunate for abcl, since that fset version didn't work
+with abcl, which is the reason why I had initially used the git version.
+
+Went into local-projects and cloned named-readtables from its repo
+directly. https://github.com/melisgl/named-readtables
+
+Went into local-projects and cloned misc-extensions from its repo
+directly. https://gitlab.common-lisp.net/misc-extensions/misc-extensions
+
+Retrieved the remaining systems required:
+sbcl --eval '(ql:quickload :coalton)' --eval '(ql:quickload :coalton/tests)'
+
+Then stopped using quicklisp and used `make -f makefile testall' from
+then on (just asdf).
+
 Local configuration:
 
 $ sbcl --version
@@ -19,6 +46,18 @@ Startup completed in 0.778 seconds.
 Loading /home/christos/.abclrc completed in 3.868 seconds.
 Type ":help" for a list of available commands.
 
+Now:
+rm -rf ~/.cache/common-lisp/* zz-temp/*
+make -f makefile testall
+LISP=clozure make -f makefile testall
+# also can use the unsupported ones (none of them works of course):
+LISP=abcl make -f makefile testall
+LISP=ecl make -f makefile testall
+LISP=allegro make -f makefile testall
+# to monitor progress and results:
+make -f makefile lisps-running
+
+OLD:
 Also updated the Makefile (in a previous commit), to ensure that all rules use the same sbcl/etc. binaries.
 
 And testing it with:
