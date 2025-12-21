@@ -15,12 +15,14 @@
    #:loop-while-valM
    #:loop-times
    #:collect-val
+   #:collect
    #:foreach
 
    #:do-loop-while
    #:do-loop-while-valM
    #:do-loop-times
    #:do-collect-val
+   #:do-collect
    #:do-foreach))
 
 (in-package #:coalton-library/experimental/do-control-loops)
@@ -79,6 +81,19 @@ no value is yielded."
          ((None)
           (pure (l:reverse result)))))))
 
+  (declare collect ((Monad :m) (it:IntoIterator :i :a) => :i -> (:a -> :m :z) -> :m (List :z)))
+  (define (collect into-itr fa->m)
+    "Apply FA->M to each element produced by INTO-ITR and run the resulting monadic action.
+Collect the results."
+    (rec % ((itr (it:into-iter into-itr))
+            (accum Nil))
+      (match (it:next! itr)
+        ((None) (pure (l:reverse accum)))
+        ((Some a)
+         (do
+          (result <- (fa->m a))
+          (% itr (Cons result accum)))))))
+
   (declare foreach ((Monad :m) (it:IntoIterator :i :a) => :i -> (:a -> :m :z) -> :m Unit))
   (define (foreach into-itr fa->m)
     "Apply FA->M to each element produced by INTO-ITR and run the resulting monadic action.
@@ -122,6 +137,14 @@ Returns Unit."
   `(collect-val
     (do
      ,@body)))
+
+(defmacro do-collect ((sym into-itr) cl:&body body)
+  "Apply FA->M to each element produced by INTO-ITR and run the resulting monadic action.
+Collect the results."
+  `(collect ,into-itr
+     (fn (,sym)
+       (do
+        ,@body))))
 
 (cl:defmacro do-foreach ((sym into-itr) cl:&body body)
   "For each element of INTO-ITR, bind it to SYM and run BODY in a 'do' block.
