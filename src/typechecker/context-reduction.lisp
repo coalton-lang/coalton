@@ -367,7 +367,8 @@ respective superclass predicate is passed to this function."
             ;; There should always be an associated expression
             ;; predicate.
             (when (null expr-pred)
-              (util:coalton-bug "There is no matching expression predicate."))
+              (util:coalton-bug
+                (format nil "No expression predicate matches ~a." pred)))
             ;; So, we create substitutions based on the
             ;; newly-determined types.
             (loop :with expr-pred-tys := (ty-predicate-types expr-pred)
