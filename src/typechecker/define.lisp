@@ -2038,35 +2038,61 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
                (output-scheme (tc:quantify local-tvars output-qual-type)))
 
           (let* ((expr-preds (tc:apply-substitution subs expr-preds))
-
-                 (known-variables
-                   (tc:apply-substitution
-                    subs
-                    (append
-                     (remove-duplicates (tc:type-variables expr-type) :test #'tc:ty=)
-                     env-tvars)))
-
                  (preds (tc:apply-substitution subs preds))
+                 (subs subs)
 
-                 ;; Whereas the lines above involving functional
-                 ;; dependencies relate to substitutions between the
-                 ;; predicates in a single list, the application here
-                 ;; of TC:FUNDEP-ENTAIL serves to create substitutions
-                 ;; for PREDS that reduces its generality with respect
-                 ;; to EXPR-PREDS where made possible by functional
-                 ;; dependencies.
-                 (subs (tc:compose-substitution-lists
-                        (tc:fundep-entail (tc-env-env env)
-                                          expr-preds
-                                          preds
-                                          known-variables)
-                        subs))
+                 ;; Known tvars for fundep-entail:
+                 ;; 1. Tvars that appear in the binding's type signature
+                 ;; 2. Tvars that have been fixed by the surrounding environment
+                 (known-variables
+                   (remove-if-not
+                    #'tc:tyvar-p
+                    (tc:apply-substitution
+                     subs
+                     (append
+                      (remove-duplicates (tc:type-variables expr-type) :test #'tc:ty=)
+                      env-tvars)))))
 
-                 (expr-preds (tc:apply-substitution subs expr-preds))
+            ;; This loop repeats fundep-entail until no new substitutions are found
+            ;; (or it hits the configured max-fundep depth). This allows the typechecker
+            ;; to follow chained fundeps, where:
+            ;;   (define-class (A :b :a (:b -> :a)))
+            ;;   (define-class (B :c :b (:c -> :b)))
+            ;;   ...
+            ;; This is necessary for cases where dependent tvars only occur in the constraint:
+            ;; (declare function ((B :c :b) (A :b :a) => Unit -> :c))
+            (loop :for i :below tc:+fundep-max-depth+
+                  :for new-subs := (tc:fundep-entail (tc-env-env env)
+                                                     expr-preds
+                                                     preds
+                                                     known-variables)
+                  :do (when (endp new-subs)
+                        (return))
 
-                 (preds (remove-if
-                         (lambda (p) (tc:entail (tc-env-env env) expr-preds p))
-                         (tc:apply-substitution subs preds))))
+                      (setf subs (tc:compose-substitution-lists new-subs subs))
+                      (setf expr-preds (tc:apply-substitution new-subs expr-preds))
+                      (setf preds (tc:apply-substitution new-subs preds))
+
+                      ;; Promote newly-determined variables for downstream fundep-entail calls,
+                      ;; so that tvars resulting from new substitutions become 'known' on the next pass.
+                      (let ((range-tvars
+                              (remove-duplicates
+                               (alexandria:mappend #'tc:type-variables
+                                                   (mapcar #'tc:substitution-to new-subs))
+                               :test #'tc:ty=)))
+                        (setf known-variables
+                              (remove-duplicates
+                               (append
+                                (remove-if-not #'tc:tyvar-p
+                                               (tc:apply-substitution new-subs known-variables))
+                                range-tvars)
+                               :test #'tc:ty=)))
+                  :finally (util:coalton-bug "Fundep chain failed to converge"))
+
+            (setf preds
+                  (remove-if
+                   (lambda (p) (tc:entail (tc-env-env env) expr-preds p))
+                   preds))
 
             (setf local-tvars
                   (expand-local-tvars env-tvars

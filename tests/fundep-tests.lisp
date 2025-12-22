@@ -208,3 +208,40 @@
                   (coalton-library/iterator:IntoIterator :c :b)
                   (coalton-library/iterator:FromIterator :e (Tuple :b :a))
                   => :c -> :d -> :e)")))
+
+(deftest fundep-nested-entail ()
+  ;; see https://github.com/coalton-lang/coalton/issues/1717
+  (check-coalton-types
+   "(define-class (HasA :t :a (:t -> :a))
+      (get-a (coalton-library/types:Proxy :t -> :a)))
+
+    (define-class (Monad :m => MonadHasA :m :t (:m -> :t)))
+
+    (declare get-has-a-prx (MonadHasA :m :t => coalton-library/types:Proxy (:m :a) -> coalton-library/types:Proxy :t))
+    (define (get-has-a-prx _)
+      coalton-library/types:Proxy)
+
+    (declare print-a-str-pure ((HasA :t :a) (MonadHasA :m :t) => Unit -> :m Unit))
+    (define (print-a-str-pure)
+      (let m-prx = coalton-library/types:Proxy)
+      (let msg = (get-a (get-has-a-prx m-prx)))
+      (coalton-library/types:as-proxy-of (pure Unit)
+                                         m-prx))")
+
+  (check-coalton-types
+   "(define-class (HasA :t :a (:t -> :a))
+      (get-a (coalton-library/types:Proxy :t -> :a)))
+
+    (define-class ((HasA :t :a) (Monad :m) => MonadHasA :m :t :a (:m -> :t)))
+
+    (declare get-has-a-prx (MonadHasA :m :t :a => coalton-library/types:Proxy (:m :b) -> coalton-library/types:Proxy :t))
+    (define (get-has-a-prx _)
+      coalton-library/types:Proxy)
+
+    (declare print-a-str-pure (MonadHasA :m :t :a => Unit -> :m Unit))
+    (define (print-a-str-pure)
+      (let m-prx = coalton-library/types:Proxy)
+      (let msg = (get-a (get-has-a-prx m-prx)))
+      (coalton-library/types:as-proxy-of (pure Unit)
+                                         m-prx))")
+  )
