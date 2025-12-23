@@ -245,3 +245,16 @@
       (coalton-library/types:as-proxy-of (pure Unit)
                                          m-prx))")
   )
+
+(deftest fundep-fundep-identity ()
+  ;; See https://github.com/coalton-lang/coalton/issues/1736
+  (check-coalton-types
+   "(define-class ((Monad :r) (Monad :m) => MonadChain :r :m (:r -> :m)))
+
+    (declare bar (MonadChain :r :m => :r String))
+    (define bar
+      (pure \"bar\"))
+
+    (declare foo (MonadChain :h :h => :h String))
+    (define foo
+      bar)"))
