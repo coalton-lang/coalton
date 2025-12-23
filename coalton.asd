@@ -174,6 +174,31 @@
   :serial t
   :components ((:file "fft")))
 
+(asdf:defsystem "coalton/cffi"
+  :description "A Coalton interface for CFFI (https://github.com/cffi/cffi)"
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton"
+  :license "MIT"
+  :version (:read-file-form "VERSION.txt")
+  :around-compile (lambda (compile)
+                    (let (#+sbcl (sb-ext:*derive-function-types* t)
+                          #+sbcl (sb-ext:*block-compile-default* ':specified))
+                      (funcall compile)))
+  :depends-on ("coalton"
+               "cffi")
+  :pathname "cffi"
+  :serial t
+  :components ((:file "utils")
+               (:file "aliases")
+               (:file "complex")
+               (:file "types")
+               (:file "pointers")
+               (:file "boxes")
+               (:file "libraries")
+               (:file "structs")
+               (:file "functions")
+               (:file "enums")
+               (:file "package")))
+
 (asdf:defsystem "coalton/testing"
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
