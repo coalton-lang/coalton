@@ -359,7 +359,7 @@ respective superclass predicate is passed to this function."
                         ;; We find the expression predicate that is
                         ;; associated with PRED based on KNOWN-TYVARS.
                         (and (eq class-name (ty-predicate-class expr-pred))
-                             (equalp known-indices (known-indices expr-pred))
+                             (subsetp known-indices (known-indices expr-pred))
                              (every #'ty=
                                     (known pred-tys)
                                     (known (ty-predicate-types expr-pred)))))
