@@ -738,6 +738,33 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
           (tc:coalton-internal-type-error ()
             (standard-expression-type-mismatch-error node subs expected-type ret-ty))))))
 
+  (:method ((node parser:node-swap) expected-type subs env) 
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (values tc:ty tc:ty-predicate-list accessor-list node-swap tc:substitution-list &optional))
+
+    (multiple-value-bind (expr-ty preds accessors expr-node subs)
+        (infer-expression-type (parser:node-swap-expr node)
+                               expected-type
+                               subs
+                               env)
+      (values
+       expr-ty
+       preds
+       accessors
+       (make-node-swap
+        :type (tc:qualify nil expr-ty)
+        :location (source:location node)
+        :expr expr-node
+        :patterns (loop :for pattern :in (parser:node-swap-patterns node)
+                        :collect (multiple-value-bind (ty_ pattern subs_)
+                                     (infer-pattern-type pattern expr-ty subs env)
+                                   (declare (ignore ty_))
+                                   (setf subs subs_)
+                                   pattern)))
+       subs)))
+
   (:method ((node parser:node-catch) expected-type subs env)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)

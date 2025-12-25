@@ -74,6 +74,10 @@
    #:make-node-match                    ; CONSTRUCTOR
    #:node-match-expr                    ; ACCESSOR
    #:node-match-branches                ; ACCESSOR
+   #:node-swap                          ; STRUCT
+   #:make-node-swap                     ; CONSTRUCTOR
+   #:node-swap-expr                     ; ACCESSOR
+   #:node-swap-patterns                 ; ACCESSOR
    #:node-catch-branch                  ; STRUCT
    #:make-node-catch-branch             ; CONSTRUCTOR
    #:node-catch-branch-pattern          ; ACCESSOR
@@ -452,6 +456,12 @@ Rebound to NIL parsing an anonymous FN.")
             (:copier nil))
   (expr     (util:required 'expr)     :type node                   :read-only t)
   (branches (util:required 'branches) :type node-match-branch-list :read-only t))
+
+(defstruct (node-swap
+            (:include node)
+            (:copier nil))
+  (expr     (util:required 'expr)     :type node         :read-only t)
+  (patterns (util:required 'patterns) :type pattern-list :read-only t))
 
 (defstruct (node-progn
             (:include node)
@@ -1002,6 +1012,21 @@ Rebound to NIL parsing an anonymous FN.")
       :branches (loop :for branches := (cst:nthrest 2 form) :then (cst:rest branches)
                       :while (cst:consp branches)
                       :collect (parse-match-branch (cst:first branches) source))
+      :location (form-location source form)))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:swap (cst:raw (cst:first form))))
+
+     ;; (swap)
+     (unless (cst:consp (cst:rest form))
+       (parse-error "Malformed swap expression"
+                    (note-end source (cst:first form) "expected expression")))
+
+     (make-node-swap
+      :expr (parse-expression (cst:second form) source)
+      :patterns (loop :for patterns := (cst:nthrest 2 form) :then (cst:rest patterns)
+                      :while (cst:consp patterns)
+                      :collect (parse-pattern (cst:first patterns) source))
       :location (form-location source form)))
 
     ((and (cst:atom (cst:first form))

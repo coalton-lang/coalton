@@ -63,6 +63,10 @@
    #:make-node-match                    ; CONSTRUCTOR
    #:node-match-expr                    ; READER
    #:node-match-branches                ; READER
+   #:node-swap                          ; STRUCT
+   #:make-node-swap                     ; CONSTRUCTOR
+   #:node-swap-expr                     ; ACCESSOR
+   #:node-swap-patterns                 ; ACCESSOR
    #:catch-branch                       ; STRUCT
    #:make-catch-branch                  ; CONSTRUCTOR
    #:catch-branch-pattern               ; READER
@@ -276,6 +280,10 @@ coalton symbols (`parser:identifier`)"
   "A pattern matching construct. Uses MATCH-BRANCH to represent branches"
   (expr     (util:required 'expr)     :type node        :read-only t)
   (branches (util:required 'branches) :type branch-list :read-only t))
+
+(defstruct (node-swap (:include node))
+  (expr     (util:required 'expr)     :type node         :read-only t)
+  (patterns (util:required 'patterns) :type pattern-list :read-only t))
 
 (defstruct catch-branch
   "A branch of a catch expression."

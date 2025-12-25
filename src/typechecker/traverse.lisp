@@ -26,6 +26,7 @@
   (lisp               #'identity :type function :read-only t)
   (match-branch       #'identity :type function :read-only t)
   (match              #'identity :type function :read-only t)
+  (swap               #'identity :type function :read-only t)
   (catch-branch       #'identity :type function :read-only t)
   (catch              #'identity :type function :read-only t)
   (progn              #'identity :type function :read-only t)
@@ -167,6 +168,18 @@
       :location (source:location node)
       :expr (traverse (node-match-expr node) block)
       :branches (traverse (node-match-branches node) block))))
+
+  (:method ((node node-swap) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+
+    (funcall
+     (traverse-swap block)
+     (make-node-swap
+      :type (node-type node)
+      :location (source:location node)
+      :expr (traverse (node-swap-expr node) block)
+      :patterns (node-swap-patterns node))))
 
   (:method ((node node-catch-branch) block)
     (declare (type traverse-block block)

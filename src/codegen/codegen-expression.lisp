@@ -295,6 +295,26 @@
               fallbackp
               branchlessp)))))))
 
+  (:method ((expr node-swap) env)
+    (declare (type tc:environment env))
+
+    (let ((swap-var (gensym "SWAP"))
+          (subexpr (codegen-expression (node-swap-expr expr) env))
+          (subexpr-type (node-type (node-swap-expr expr))))
+
+      `(let ((,swap-var ,subexpr))
+         (cond 
+           ,@(loop
+               :for pattern :in (node-swap-patterns expr)
+               :collect (multiple-value-bind (pattern fields)
+                       (coalton-impl/codegen/codegen-swap:normalize-pattern pattern)
+                     (multiple-value-bind (pred bindings _types)
+                         (codegen-pattern pattern swap-var subexpr-type env)
+                       (declare (ignore _types))
+                       `(,pred
+                         (let ,bindings
+                           ,fields)))))))))
+
   (:method ((expr node-seq) env)
     (declare (type tc:environment env))
     `(progn
