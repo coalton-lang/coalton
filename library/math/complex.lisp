@@ -9,7 +9,8 @@
           #:coalton-library/math/arith)
   (:local-nicknames
    (#:arith #:coalton-library/math/arith)
-   (#:types #:coalton-library/types))
+   (#:types #:coalton-library/types)
+   (#:compat #:coalton-compatibility))
   (:export
    #:Complex                            ; data type
    #:ComplexComponent                   ; type class
@@ -296,5 +297,4 @@ blackboard-bold 𝕚.)"
          (match a
            ((%Complex _ b) b))))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH/COMPLEX")
+(compat:try-lock-package "COALTON-LIBRARY/MATH/COMPLEX")

@@ -19,7 +19,7 @@
          (cl:let* ((arr str))
            (cl:declare (cl:type (cl:vector cl:character) arr)
                        ;; Muffle sbcl wanting to optimize aref. This cannot be optimized.
-                       #+sbcl (sb-ext:muffle-conditions sb-ext:compiler-note))
+                       #.(coalton-compatibility:try-muffle-compiler-note-condition))
            (cl:multiple-value-bind (displaced-to displaced-index-offset)
                (cl:array-displacement arr)
              (cl:if (cl:= 0 (cl:length arr))

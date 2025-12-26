@@ -5,7 +5,8 @@
    #:coalton
    #:call-coalton-function)
   (:local-nicknames
-   (#:util #:coalton-impl/util))
+   (#:util #:coalton-impl/util)
+   (#:compat #:coalton-compatibility))
   (:export
    #:function-entry
    #:function-entry-arity
@@ -34,8 +35,7 @@
   ;; of arguments to partially apply.
   (curried  (util:required 'curried)  :type simple-vector :read-only t))
 
-#+sbcl
-(declaim (sb-ext:freeze-type function-entry))
+(compat:try-freeze-type function-entry)
 
 (defmethod print-object ((function-entry function-entry) stream)
   (print-unreadable-object (function-entry stream :type t)
@@ -131,12 +131,7 @@
                       (append (list (alexandria:format-symbol *package* "F~D" i)
                                     (alexandria:format-symbol *package* "A~D" i))
                               funs)))
-      `(progn
-         #+sbcl
-         (declaim (sb-ext:start-block ,@funs))
-         ,@(reverse body)
-         #+sbcl
-         (declaim (sb-ext:end-block))))))
+      `(compat:with-start-end-block-if-possible (list ,@funs) ,@(reverse body)))))
 
 (define-function-macros)
 

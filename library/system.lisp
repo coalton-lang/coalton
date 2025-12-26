@@ -4,7 +4,8 @@
    #:coalton-library/builtin
    #:coalton-library/classes)
   (:local-nicknames
-   (#:math #:coalton-library/math))
+   (#:math #:coalton-library/math)
+   (#:compat #:coalton-compatibility))
   (:export
    #:gc
    #:sleep)
@@ -26,7 +27,7 @@
 
    #:getenv
    #:setenv!
-   
+
    #:architecture
    #:os
    #:hostname
@@ -34,7 +35,7 @@
    #:lisp-version
    #:features
    #:add-feature
-   
+
    #:cmd-args
    #:argv0))
 
@@ -109,10 +110,10 @@ This function is not exported as its output is too implementation specific."
     "Returns the number of bytes consed since some unspecified point in time.
 
 The difference between two successive calls to this function represents the number of bytes consed in that period of time."
-    #+sbcl
+    #+|COALTON:HAS-GET-BYTES-CONSED|
     (Some (lisp Integer ()
-            (sb-ext:get-bytes-consed)))
-    #-sbcl
+            (compat:get-bytes-consed)))
+    #-|COALTON:HAS-GET-BYTES-CONSED|
     None)
 
   ;;;
@@ -189,7 +190,7 @@ Garbage collection will be performed before profiling is performed."
   ;;
   ;; Accessing Environment Variables
   ;;
-  
+
   (declare getenv (String -> (Optional String)))
   (define (getenv var)
     "Gets the value of the environmental variable `var`, errors if `var` doesn't exist."
@@ -199,7 +200,7 @@ Garbage collection will be performed before profiling is performed."
                (Some env)
                None))))
 
-  
+
   (declare setenv! (String -> String -> Unit))
   (define (setenv! var val)
     "Sets an environment variable `var` to string `val`, only if `var` already exists."
@@ -210,7 +211,7 @@ Garbage collection will be performed before profiling is performed."
   ;;
   ;; Typical Environment/System variables
   ;;
-  
+
   (declare architecture (Unit -> String))
   (define (architecture)
     "The system's architecture (stored at compile time)."
@@ -259,7 +260,7 @@ Garbage collection will be performed before profiling is performed."
   ;;
   ;; Command line arguments
   ;;
-  
+
   (declare cmd-args (Unit -> (List String)))
   (define (cmd-args)
     "The current command line arguments (stored at compile time)."
@@ -275,5 +276,4 @@ Garbage collection will be performed before profiling is performed."
                (Some (uiop:argv0))
                None)))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/SYSTEM")
+(compat:try-lock-package "COALTON-LIBRARY/SYSTEM")

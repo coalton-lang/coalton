@@ -2,6 +2,8 @@
   (:use
    #:coalton
    #:coalton-library/classes)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility))
   (:export
    #:RandomAccess
    #:make
@@ -86,5 +88,4 @@ It is permitted for any of `make`, `unsafe-aref`, or `unsafe-set!` to error."
           (Some (unsafe-rotate! storage index1 index2))
           None))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/RANDOMACCESS")
+(compat:try-lock-package "COALTON-LIBRARY/RANDOMACCESS")

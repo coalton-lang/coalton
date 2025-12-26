@@ -4,7 +4,8 @@
    #:coalton-impl/typechecker/base)
   (:local-nicknames
    (#:util #:coalton-impl/util)
-   (#:settings #:coalton-impl/settings))
+   (#:settings #:coalton-impl/settings)
+   (#:compat #:coalton-compatibility))
   (:export
    #:kind                               ; STRUCT
    #:kind-list                          ; TYPE
@@ -70,7 +71,7 @@
   (from (util:required 'from) :type kind :read-only t)
   (to   (util:required 'to)   :type kind :read-only t))
 
-(defstruct (kyvar (:include kind)) 
+(defstruct (kyvar (:include kind))
   (id (util:required 'id) :type fixnum :read-only t))
 
 (defun kyvar-list-p (x)
@@ -87,8 +88,7 @@
 
 (defparameter *next-kvar-id* 0)
 
-#+sbcl
-(declaim (sb-ext:always-bound *next-kvar-id*))
+(compat:try-always-bound *next-kvar-id*)
 
 (declaim (inline make-kvariable))
 (defun make-kvariable ()
@@ -100,7 +100,7 @@
 ;;; Kind Substitutions
 ;;;
 
-(defstruct ksubstitution 
+(defstruct ksubstitution
   (from (util:required 'from) :type kyvar :read-only t)
   (to   (util:required 'to)   :type kind  :read-only t))
 

@@ -11,7 +11,8 @@
    #:Vector)
   (:local-nicknames
    (#:cell #:coalton-library/cell)
-   (#:iter #:coalton-library/iterator))
+   (#:iter #:coalton-library/iterator)
+   (#:compat #:coalton-compatibility))
   (:export
    #:concat
    #:reverse
@@ -274,5 +275,4 @@ does not have that suffix."
   (define-sxhash-hasher String))
 
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/STRING")
+(compat:try-lock-package "COALTON-LIBRARY/STRING")

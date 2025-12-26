@@ -18,7 +18,8 @@
    (#:util #:coalton-impl/util)
    (#:rt #:coalton-impl/runtime)
    (#:tc #:coalton-impl/typechecker)
-   (#:const #:coalton-impl/constants))
+   (#:const #:coalton-impl/constants)
+   (#:compat #:coalton-compatibility))
   (:export
    #:codegen-expression                 ; FUNCTION
    #:function-declarations              ; FUNCTION
@@ -113,7 +114,7 @@
                     (values ,(car (last (node-lisp-form expr)))))
                  inner)))
 
-      `(locally (declare #+sbcl (optimize (sb-c::type-check 1)))
+      `(locally (declare #.(compat:try-optimize-type-check 1))
          ,(if settings:*emit-type-annotations*
               `(the (values ,(tc:lisp-type (node-type expr) env) &optional)
                     ,inner)

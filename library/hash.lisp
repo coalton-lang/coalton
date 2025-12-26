@@ -4,6 +4,8 @@
    #:coalton-library/classes)
   (:import-from #:coalton-library/math/hash-defining-macros
                 #:define-sxhash-hasher)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility))
   (:export
    #:lisp-combine-hashes
    #:combine-hashes
@@ -19,20 +21,7 @@
 
 (cl:declaim (cl:inline lisp-combine-hashes))
 (cl:defun lisp-combine-hashes (lhs rhs)
-  ;; SBCL has a hash combination function
-  #+sbcl (sb-int:mix lhs rhs)
-
-  ;;
-  ;; Generic hash combination functions copied from:
-  ;; https://stackoverflow.com/questions/5889238/why-is-xor-the-default-way-to-combine-hashes/27952689#27952689
-  ;;
-
-  ;; 32bit hash combination
-  #+allegro (cl:logxor lhs (cl:+ rhs #x9e3779b9 (cl:ash lhs 6) (cl:ash lhs -2)))
-
-  ;; 64bit hash combination
-  ;; logand required on ccl to force the output to be a fixnum
-  #+ccl (cl:logand (cl:logxor lhs (cl:+ rhs #x517cc1b727220a95 (cl:ash lhs 6) (cl:ash lhs -2))) cl:most-positive-fixnum))
+  (compat:hash-combine lhs rhs))
 
 ;; NOTE: Both the Hash class and Hash type are defined in classes.lisp.
 
@@ -76,5 +65,4 @@
 
   (define-sxhash-hasher Hash))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/HASH")
+(compat:try-lock-package "COALTON-LIBRARY/HASH")

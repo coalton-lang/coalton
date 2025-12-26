@@ -12,7 +12,9 @@
      #:coalton-library/math/arith
      #:coalton-library/math/real
      #:coalton-library/math/complex)
-  (:local-nicknames (#:ff #:float-features))
+  (:local-nicknames
+   (#:ff #:float-features)
+   (#:compat #:coalton-compatibility))
   (:export
    #:Trigonometric
    #:sin #:cos #:tan
@@ -476,5 +478,4 @@ For a complex number `z = (complex x y)`, the following identities hold:
   ;; (define-instance (Elementary :a => Elementary (Complex :a)))
   )
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH/ELEMENTARY")
+(compat:try-lock-package "COALTON-LIBRARY/MATH/ELEMENTARY")

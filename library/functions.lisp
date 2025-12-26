@@ -3,6 +3,8 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/classes)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility))
   (:export
    #:trace
    #:traceObject
@@ -234,5 +236,4 @@ Modeled after Haskell: https://wiki.haskell.org/Bracket_pattern"
      (lisp (:m :c) (obj exit body)
        (%unwind-protect obj exit body)))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/FUNCTIONS")
+(compat:try-lock-package "COALTON-LIBRARY/FUNCTIONS")

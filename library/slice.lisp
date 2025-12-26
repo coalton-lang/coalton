@@ -10,7 +10,8 @@
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
    (#:list #:coalton-library/list)
-   (#:vector #:coalton-library/vector))
+   (#:vector #:coalton-library/vector)
+   (#:compat #:coalton-compatibility))
   (:shadowing-import-from #:coalton-library/vector #:Vector)
   (:export
    #:Slice
@@ -103,7 +104,7 @@
     "Returns an iterator that yeilds a series of overlapping slices of length `size`."
     (let length = (%length s))
     (let offset_ = (cell:new 0))
-    (iter:with-size 
+    (iter:with-size
         (fn ()
           (let offset = (cell:read offset_))
           (when (> (+ offset size) length)
@@ -217,5 +218,4 @@
 
   (define-instance (Iso (Slice :a) (Vector :a))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/SLICE")
+(compat:try-lock-package "COALTON-LIBRARY/SLICE")

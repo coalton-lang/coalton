@@ -4,6 +4,8 @@
    #:coalton-library/builtin
    #:coalton-library/classes
    #:coalton-library/functions)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility))
   (:export
    #:MonadFree
    #:wrap
@@ -141,5 +143,4 @@ References: [here](https://github.com/purescript/purescript-free/blob/v5.1.0/src
                   ((Free fa) (fold g r fa))))))
         g))))  
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MONAD/FREE")
+(compat:try-lock-package "COALTON-LIBRARY/MONAD/FREE")

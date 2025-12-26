@@ -8,7 +8,9 @@
    #:coalton-library/builtin
    #:coalton-library/classes
    #:coalton-library/functions
-   #:coalton-library/math/bounded))
+   #:coalton-library/math/bounded)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility)))
 
 (in-package #:coalton-library/math/conversions)
 
@@ -235,5 +237,4 @@ cannot be represented in :TO. These fall into a few categories:
   (integer-tryinto-float UFix cl:double-float F64 53))
 
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH/CONVERSIONS")
+(compat:try-lock-package "COALTON-LIBRARY/MATH/CONVERSIONS")
