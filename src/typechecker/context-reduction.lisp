@@ -31,7 +31,6 @@
 ;; Context reduction
 ;;
 
-
 (defun true (x)
   (if x
       t
@@ -294,7 +293,10 @@ the type variables of the class D.
           :with preds      := (expand preds)
           :with subs       := nil
           :for pred :in preds
-          :for new-subs := (fundep-entail% env expr-preds pred known-tyvars)
+          :for new-subs :=
+            (if (entail env expr-preds pred)
+                '()
+                (fundep-entail% env expr-preds pred known-tyvars))
           :do (setf subs (compose-substitution-lists subs new-subs))
           :finally (return subs))))
 

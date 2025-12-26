@@ -258,3 +258,31 @@
     (declare foo (MonadChain :h :h => :h String))
     (define foo
       bar)"))
+
+(deftest fundep-nested-fundep-instances ()
+  ;; See https://github.com/coalton-lang/coalton/pull/1743
+  (check-coalton-types
+   "
+  (define-class (FundepClass :a :b (:a -> :b))
+    (use-a (:a -> Unit)))
+
+  (define-type (BaseType :a :b)
+    (BaseType :a))
+
+  (declare unwrap% (BaseType :a :b -> :a))
+  (define (unwrap% (BaseType val))
+    val)
+
+  (define-instance (FundepClass :a :b => FundepClass (BaseType :a :b) (List :b))
+    (inline)
+    (define (use-a grouped)
+      (use-a (unwrap% grouped))))
+
+  (define-struct (WrapperType :a)
+    (inner-base-type (BaseType :a Unit)))
+
+  (define-instance (FundepClass (BaseType :a Unit) (List Unit)
+                    => FundepClass (WrapperType :a) Unit)
+    (inline)
+    (define (use-a wrapper)
+      (use-a (.inner-base-type wrapper))))"))
