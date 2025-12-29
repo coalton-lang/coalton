@@ -197,6 +197,7 @@ For example, the following are equivalent.
 
            (coalton-toplevel
              (repr :enum)
+             (derive Eq Hash)
              (define-type ,name
                ,docstring
                ,@member-names))
