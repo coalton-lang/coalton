@@ -298,6 +298,7 @@
   :depends-on ("coalton"
                "coalton/library/big-float"
                "coalton/library/algorithms"
+               "coalton/cffi"
                "coalton/testing"
                "fiasco"
                "quil-coalton/tests"
@@ -372,4 +373,5 @@
                 :components ((:file "fft-tests")))
                (:module "redef-detection"
                 :serial t
-                :components ((:file "interactive-tests")))))
+                :components ((:file "interactive-tests")))
+               (:file "cffi-tests")))
