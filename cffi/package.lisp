@@ -66,6 +66,7 @@
    #:ForeignRepr
    #:foreign-repr
    #:foreign-repr-of
+   #:foreign-size-of
    #:coalton-type-to-foreign-type
    #:define-foreign-repr-instance)
   (:export
@@ -104,18 +105,25 @@
    #:with-array-pointer)
   (:export
    #:Pointer
+   #:null-pointer
+   #:null-pointer?
    #:foreign-alloc-raw
    #:foreign-alloc
    #:foreign-alloc-uninitialized
    #:foreign-free
    #:unsafe-reinterpret
+   #:shift-pointer
    #:SimpleForeignRepr
    #:mem-ref
    #:mem-set!
    #:mem-aref
    #:mem-aset!
    #:mem-aptr
-   #:define-simple-foreign-repr-instance)
+   #:mem-cpy-raw
+   #:mem-cpy
+   #:mem-acpy
+   #:define-simple-foreign-repr-instance
+   #:with-array-pointer)
 
   (:import-from
    #:coalton-cffi/boxes
