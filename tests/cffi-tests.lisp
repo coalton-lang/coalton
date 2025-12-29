@@ -224,7 +224,12 @@
 (in-package #:coalton-native-tests)
 
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
-  (uiop:add-package-local-nickname :* :coalton-native-tests/cffi))
+  ;;
+  ;; `uiop:add-package-local-nickname` should work on SBCL, too.
+  ;; It works for me with v2.5.8, but it seems to fail in CI using v2.5.11.
+  ;;
+  #+SBCL (sb-ext:add-package-local-nickname "*" "COALTON-NATIVE-TESTS/CFFI")
+  #-SBCL (uiop:add-package-local-nickname "*" "COALTON-NATIVE-TESTS/CFFI"))
 
 (define-test test-cffi-mem-* ()
   
@@ -298,4 +303,5 @@
   (*:test-enums))
 
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
-  (uiop:remove-package-local-nickname '#:*))
+  #+SBCL (sb-ext:remove-package-local-nickname "*")
+  #-SBCL (uiop:remove-package-local-nickname "*"))
