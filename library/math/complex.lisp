@@ -296,5 +296,14 @@ blackboard-bold 𝕚.)"
          (match a
            ((%Complex _ b) b))))))
 
+(coalton-toplevel
+  (define-instance (Into (Complex F32) (Complex F64))
+    (inline)
+    (define (into x)
+      (lisp (Complex F64) (x)
+        (cl:declare (cl:type (cl:complex cl:single-float) x))
+        (cl:complex (cl:coerce (cl:realpart x) 'cl:double-float)
+                    (cl:coerce (cl:imagpart x) 'cl:double-float))))))
+
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/MATH/COMPLEX")
