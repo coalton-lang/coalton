@@ -103,5 +103,8 @@
 (define-foreign-repr-instance String  :string)
 (define-foreign-repr-instance Boolean :boolean)
 
+(define-foreign-repr-instance F32 :float)
+(define-foreign-repr-instance F64 :double)
+
 (define-foreign-repr-instance (Complex F32) cl-complex-float)
 (define-foreign-repr-instance (Complex F64) cl-complex-double)

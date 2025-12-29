@@ -220,6 +220,9 @@ There must already be an instance of `ForeignRepr` defined for `type`."
 (define-simple-foreign-repr-instance String)
 (define-simple-foreign-repr-instance Boolean)
 
+(define-simple-foreign-repr-instance F32)
+(define-simple-foreign-repr-instance F64)
+
 (define-simple-foreign-repr-instance (Complex F32))
 (define-simple-foreign-repr-instance (Complex F64))
 
