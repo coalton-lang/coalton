@@ -139,6 +139,7 @@
 (cl:defun parse-slots (slots)
   "Extract and validate the names, counts, types, foreign types, and rest forms from `slots`."
   (cl:loop
+     :with docstring := (cl:if (cl:stringp (cl:first slots)) (cl:pop slots) "")
      :for slot :in slots
      :for (name count type rest) := (cl:multiple-value-list (parse-slot slot))
      :for ctype := (cl:handler-case (coalton-type-to-foreign-type type)
@@ -149,7 +150,8 @@
      :collect type   :into types
      :collect ctype  :into ctypes
      :collect rest   :into rests
-     :finally (cl:return (cl:values names counts types ctypes rests))))
+     :finally (cl:return
+                (cl:values docstring names counts types ctypes rests))))
 
 (cl:defun check-struct-name (name)
   "Ensure that `name` is a symbol."
@@ -240,7 +242,7 @@ WARNING: Do not use types that allocate new memory when they are translated into
   (cl:setf conc-name (ensure-string conc-name))
   
   (cl:multiple-value-bind
-        (slot-names slot-counts slot-types slot-ctypes slot-rests)
+        (docstring slot-names slot-counts slot-types slot-ctypes slot-rests)
       (parse-slots slots)
 
     (cl:let ((cl-name (cl:intern (uiop:strcat "CL-" (cl:symbol-name name)))))
@@ -258,7 +260,8 @@ WARNING: Do not use types that allocate new memory when they are translated into
 
          (coalton-toplevel
            (repr :native cl-nothing)
-           (define-type ,name))
+           (define-type ,name
+             ,docstring))
 
          (define-foreign-repr-instance ,name (:struct ,cl-name))
 
