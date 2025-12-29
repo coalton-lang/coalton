@@ -100,7 +100,8 @@
    #:mem-cpy-raw
    #:mem-cpy
    #:mem-acpy
-   #:define-simple-foreign-repr-instance)
+   #:define-simple-foreign-repr-instance
+   #:with-array-pointer)
   (:export
    #:Pointer
    #:foreign-alloc-raw

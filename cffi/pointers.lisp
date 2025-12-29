@@ -10,6 +10,9 @@
    #:Proxy
    #:proxy-of
    #:proxy-inner)
+  (:import-from
+   #:coalton-library/lisparray
+   #:LispArray)
   (:export
    #:Pointer
    #:null-pointer
@@ -29,7 +32,8 @@
    #:mem-cpy-raw
    #:mem-cpy
    #:mem-acpy
-   #:define-simple-foreign-repr-instance))
+   #:define-simple-foreign-repr-instance
+   #:with-array-pointer))
 
 (in-package #:coalton-cffi/pointers)
 
@@ -218,3 +222,13 @@ There must already be an instance of `ForeignRepr` defined for `type`."
 
 (define-simple-foreign-repr-instance (Complex F32))
 (define-simple-foreign-repr-instance (Complex F64))
+
+(coalton-toplevel
+
+  (inline)
+  (declare with-array-pointer (LispArray :T  -> (Pointer :T -> :U) -> :U))
+  (define (with-array-pointer array f)
+    "Call `f` with a pointer to the data stored in `array`."
+    (lisp :U (array f)
+      (cffi:with-pointer-to-vector-data (pointer array)
+        (call-coalton-function f pointer)))))
