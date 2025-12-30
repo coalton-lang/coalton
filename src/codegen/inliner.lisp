@@ -185,20 +185,27 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
                              :value new-var))))
                    (ast:node-abstraction-vars abstraction)
                    bindings))
-         (new-abstraction
+         (new-abstraction-body
            (transformations:rename-type-variables
             (substitutions:apply-ast-substitution
              substitutions
              (ast:node-abstraction-subexpr abstraction)
              t)))
-         (new-substitutions
-           (coalton-impl/typechecker/unify::mgu
-            (ast:node-type application)
-            (ast:node-type new-abstraction))))
-    (ast:make-node-let
-     :type     (ast:node-type application)
-     :bindings bindings
-     :subexpr  (tc:apply-substitution new-substitutions new-abstraction))))
+         (new-type-substitutions nil))
+    (setf new-type-substitutions
+          (tc:unify nil
+                    (ast:node-type (ast:node-abstraction-subexpr abstraction))
+                    (ast:node-type new-abstraction-body)))
+    (setf new-type-substitutions
+          (tc:unify new-type-substitutions
+                    (ast:node-type application)
+                    (ast:node-type new-abstraction-body)))
+    (tc:apply-substitution
+     new-type-substitutions
+     (ast:make-node-let
+      :type     (ast:node-type application)
+      :bindings bindings
+      :subexpr  new-abstraction-body))))
 
 (defun try-inline-application (application env stack noinline-functions)
   "Try to inline an application node, checking internal traversal stack,
