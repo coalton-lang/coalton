@@ -2,6 +2,8 @@
   (:use
    #:coalton
    #:coalton-library/classes)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility))
   (:export
    #:unreachable
    #:undefined
@@ -72,5 +74,4 @@
       ((False) y))))
 
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/BUILTIN")
+(compat:try-lock-package "COALTON-LIBRARY/BUILTIN")

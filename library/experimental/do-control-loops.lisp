@@ -4,7 +4,8 @@
    #:coalton-library/classes)
   (:local-nicknames
    (:l #:coalton-library/list)
-   (:it #:coalton-library/iterator))
+   (:it #:coalton-library/iterator)
+   (#:compat #:coalton-compatibility))
   (:import-from #:coalton-library/experimental/do-control-core
    #:Terminator
    #:ended?
@@ -175,5 +176,4 @@ Returns Unit."
       (do
        ,@body))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/EXPERIMENTAL/DO-CONTROL-LOOPS")
+(compat:try-lock-package "COALTON-LIBRARY/EXPERIMENTAL/DO-CONTROL-LOOPS")

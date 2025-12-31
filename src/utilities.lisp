@@ -7,6 +7,7 @@
    #:find-package
    #:find-symbol)
   (:local-nicknames
+   (#:compat #:coalton-compatibility)
    (#:cst #:concrete-syntax-tree))
   (:export
    #:+keyword-package+                  ; CONSTANT
@@ -138,9 +139,8 @@
   ;; (UNREACHABLE) form to be prunable). As far as I can tell, though, that
   ;; requires wrapping the entire containing toplevel form in a HANDLER-BIND,
   ;; which cannot be done by the expansion of an inner macro form.
-  '(locally
-      #+sbcl (declare (sb-ext:muffle-conditions sb-ext:code-deletion-note))
-      (coalton-bug "This error was expected to be unreachable in the Coalton source code.")))
+  '(compat:with-muffled-code-deletion-note-condition-if-possible
+    (coalton-bug "This error was expected to be unreachable in the Coalton source code.")))
 
 (defun maphash-values-new (function table)
   "Map across the values of a hash-table. Returns a new hash-table with unchanged keys."

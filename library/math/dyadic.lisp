@@ -12,7 +12,8 @@
      #:coalton-library/math/integral
      #:coalton-library/math/real)
   (:local-nicknames
-   (#:bits #:coalton-library/bits))
+   (#:bits #:coalton-library/bits)
+   (#:compat #:coalton-compatibility))
   (:export
    #:Dyadic
    #:integer
@@ -167,5 +168,4 @@ numbers."
         a
         (Dyadic (rsh m delta) (+ delta e)))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH/DYADIC")
+(compat:try-lock-package "COALTON-LIBRARY/MATH/DYADIC")

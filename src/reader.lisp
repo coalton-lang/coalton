@@ -112,6 +112,9 @@ SOURCE provides metadata for the stream argument, for error messages."
         (t
          (read-lisp stream source first-form))))))
 
+;; ecl breaks on this - "The readmacro
+;; COALTON-IMPL/READER::READ-COALTON-TOPLEVEL-OPEN-PAREN returned 2
+;; values"
 (defun read-coalton-toplevel-open-paren (stream char)
   "This is the dispatch function for open paren in the Coalton readtable.
 It ensures the presence of source metadata for STREAM and then calls MAYBE-READ-COALTON."

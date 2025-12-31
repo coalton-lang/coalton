@@ -1,5 +1,17 @@
 (in-package #:quil-coalton-tests)
 
+#|
+;; abcl breaks on this (and other tests) - complains about "Undefined
+;; variable TEST-PARSER assumed special"
+;;
+;; But... if after the error I do:
+  (in-package #:fiasco)
+  (maphash (lambda (k v) (format t "Key: ~A Value: ~A~%" k v)) *tests*)
+;; the tests appear. And if I do:
+  (in-package #:quil-coalton-tests)
+  (run-quil-coalton-tests)
+;; then the test runs fine...
+|#
 (deftest test-parser ()
   ;; Test basic gates
   (parser-succeeds "H 0")

@@ -13,6 +13,8 @@
    #:coalton-library/math/elementary
    #:coalton-library/math/integral
    #:coalton-library/hash)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility))
   (:export
    #:Dual
    #:primal-part
@@ -203,5 +205,4 @@ component."
       (hash p1))))
 
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH/DUAL")
+(compat:try-lock-package "COALTON-LIBRARY/MATH/DUAL")

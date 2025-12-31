@@ -2,6 +2,8 @@
   (:use
    #:coalton
    #:coalton-library/classes)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility))
   (:export
    #:LiftTo
    #:lift-to
@@ -62,5 +64,4 @@
      "Modify the computation state, discarding the old state."
      ((:s -> :s) -> :m Unit))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MONAD/CLASSES")
+(compat:try-lock-package "COALTON-LIBRARY/MONAD/CLASSES")
