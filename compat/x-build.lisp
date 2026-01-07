@@ -123,7 +123,7 @@
    ;;; (1/3) Equivalent to javac's --sourcepath
    ;; ALWAYS first - Define where the current system's source code is:
    (:tree
-    ,(uiop:truename* *system-home*))
+    ,(uiop:truename* (concatenate 'string *system-home* "/")))
    ;;; (2/3) Equivalent to javac's --classpath (the two following trees)
    ;; Second, check ~/quicklisp/local-projects/ - we can lock
    ;; libraries here, hooray!
@@ -177,9 +177,16 @@
 ;;; Use the safety level, if possible.
 #+sbcl(sb-ext:restrict-compiler-policy 'safety *safety*)
 #+abcl(setq system:*safety* *safety*)
-
+;;; This next line (loading quicklisp's setup) is one I'd love to get
+;;; rid of!!!
+;;;
+;;; Looks like that without it, asdf does not search recursively below
+;;; QuickLisp's directories that have been defined in
+;;; asdf:*source-registry-parameter* (cannot find my version of fset
+;;; inside ~/quicklisp/local-projects)
+(load "~/quicklisp/setup")
 (defun load-n-test ()
-  ; (load "~/quicklisp/setup") (ql:quickload :coalton/tests)
+  ; (ql:quickload :coalton/tests)
 ;;; We no longer need quicklisp - nothing to download!
   (asdf:load-system :coalton/tests)
 
