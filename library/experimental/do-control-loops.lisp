@@ -14,6 +14,7 @@
   (:export
    #:loop-while
    #:loop-while-valM
+   #:loop-do-while
    #:loop-times
    #:collect-val
    #:collect
@@ -21,6 +22,7 @@
 
    #:do-loop-while
    #:do-loop-while-valM
+   #:do-loop-do-while
    #:do-loop-times
    #:do-collect-val
    #:do-collect
@@ -56,6 +58,18 @@ Returns Unit."
          (loop-while-valM m-operation f)))
        ((None)
         (pure Unit)))))
+
+  (declare loop-do-while ((Monad :m) (Terminator :t) => :m :t -> :m :a -> :m Unit))
+  (define (loop-do-while m-term? body)
+    "Before each iteration, evaluate M-TERM?. If it indicates completion, stop; otherwise run BODY.
+Returns Unit."
+    (do
+     (term? <- m-term?)
+     (if (ended? term?)
+         (pure Unit)
+         (do
+          body
+          (loop-do-while m-term? body)))))
 
   (declare loop-times (Monad :m => UFix -> (UFix -> :m :a) -> :m Unit))
   (define (loop-times n m-operation)
@@ -124,6 +138,13 @@ M-OPERATION yields a value. Returns Unit."
     (fn (,sym)
       (do
        ,@body))))
+
+(defmacro do-loop-do-while (m-term? cl:&body body)
+  "Before each iteration, evaluate M-TERM?. If it indicates completion, stop; otherwise run BODY.
+Wraps BODY in a 'do' block. Returns Unit."
+  `(loop-do-while ,m-term?
+    (do
+     ,@body)))
 
 (cl:defmacro do-loop-times ((sym n) cl:&body body)
     "Run BODY (in a 'do' block) N times. Binds the current index (starting at 0) to SYM.
