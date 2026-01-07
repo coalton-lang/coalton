@@ -42,7 +42,7 @@
 (declaim (inline get-fixnum-bits))
 (defun get-fixnum-bits ()
   #+sbcl sb-vm:n-fixnum-bits
-  #-sbcl (+ 0 (cl:ceiling (cl:log cl:most-positive-fixnum 2))))
+  #-sbcl (1+ (cl:floor (cl:log cl:most-positive-fixnum 2))))
 
 ;;; using (undefined) features debug-try-<macro-name> to enable
 ;;; canaries for testing the following macros.
@@ -170,7 +170,7 @@
   #.(cl:error "hashing is not supported on ~A" (cl:lisp-implementation-type)))
 ;; add 1 bit since we're using the sign bit as well (the hash is unsigned)
 (defmacro get-hash-type ()
-  `'(cl:unsigned-byte ,(1+ (coalton-compatibility:get-fixnum-bits))))
+  `'(cl:unsigned-byte ,(coalton-compatibility:get-fixnum-bits)))
 
 (defmacro unset-all-float-traps ()
   '(cl:eval-when (:compile-toplevel :load-toplevel :execute)
