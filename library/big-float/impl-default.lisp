@@ -684,7 +684,7 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
     (define pi (BFconst bf-pi))))
 
 (coalton-toplevel
-  
+
   (define-instance (Exponentiable Big-Float)
     (define (exp x)
       (let prec = (get-precision))
@@ -835,5 +835,4 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
 (cl:defmethod cl:print-object ((obj big-float/bfnan) out)
   (cl:format out (big-float->string obj)))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/BIG-FLOAT")
+(coalton-compatibility:try-lock-package "COALTON-LIBRARY/BIG-FLOAT")

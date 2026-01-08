@@ -5,7 +5,8 @@
    #:coalton-impl/typechecker/kinds)
   (:local-nicknames
    (#:util #:coalton-impl/util)
-   (#:settings #:coalton-impl/settings))
+   (#:settings #:coalton-impl/settings)
+   (#:compat #:coalton-compatibility))
   (:export
    #:ty                                 ; STRUCT
    #:ty-alias                           ; ACCESSOR
@@ -166,8 +167,7 @@
 
 (defparameter *next-variable-id* 0)
 
-#+sbcl
-(declaim (sb-ext:always-bound *next-variable-id*))
+(compat:try-always-bound *next-variable-id*)
 
 (declaim (ftype (function (&optional kind) tyvar) make-variable))
 (declaim (inline make-variable))
@@ -249,7 +249,7 @@ types from the TYPES list.")
 
 Kinds classify types in the same way that types classify values. The most common kinds are:
 - * (star): The kind of concrete types like Integer, String, Boolean
-- * -> *: The kind of type constructors taking one argument, like Maybe, List  
+- * -> *: The kind of type constructors taking one argument, like Maybe, List
 - * -> * -> *: The kind of type constructors taking two arguments, like Either, Map
 - (* -> *) -> *: The kind of higher-order type constructors like Monad
 
@@ -570,7 +570,7 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
   ;; print the stack of aliases that represent TY before printing TY.
   (when (and (eq *coalton-type-printing-mode* :types-and-aliases) (ty-alias ty))
     (format stream "[~{~S := ~}" (ty-alias ty)))
-  
+
   (etypecase ty
     (tyvar
      (if *coalton-pretty-print-tyvars*
@@ -633,7 +633,7 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
   ;; :TYPES-AND-ALIASES and TY is aliased.
   (when (and (eq *coalton-type-printing-mode* :types-and-aliases) (ty-alias ty))
     (format stream "]"))
-  
+
   ty)
 
 (defmethod print-object ((ty ty) stream)

@@ -5,7 +5,8 @@
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
    (#:global-lexical #:coalton-impl/global-lexical)
-   (#:rt #:coalton-impl/runtime))
+   (#:rt #:coalton-impl/runtime)
+   (#:compat #:coalton-compatibility))
   (:export
    #:struct-or-class                    ; FUNCTION
    #:struct-or-class-field              ; STRUCT
@@ -101,8 +102,7 @@ regardless of Coalton's release mode."
 
          ;; Freeze the type (release-only):
          (list-if-release
-          #+sbcl
-          `(declaim (sb-ext:freeze-type ,classname)))))
+          `(compat:try-freeze-type ,classname))))
 
        (:class
         (append

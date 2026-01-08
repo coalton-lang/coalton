@@ -1,3 +1,4 @@
+
 ;;; This is coalton.asd, the toplevel coalton system definition.
 ;;;
 ;;; While it would be more convenient to put all of Coalton's
@@ -17,7 +18,8 @@
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
   :in-order-to ((asdf:test-op (asdf:test-op #:coalton/tests)))
-  :depends-on ("coalton-compiler"
+  :depends-on ("coalton-compatibility"
+               "coalton-compiler"
                "coalton/library"))
 
 (asdf:defsystem "coalton/library"
@@ -35,7 +37,8 @@
                           (*features* (cons ':coalton-lisp-toplevel *features*)))
                       (funcall compile)))
   :defsystem-depends-on ("coalton-asdf")
-  :depends-on ("coalton-compiler"
+  :depends-on ("coalton-compatibility"
+               "coalton-compiler"
                "coalton/hashtable-shim"
                "trivial-garbage"
                "alexandria")
@@ -227,6 +230,15 @@
     (declare (ignore c))
     (cl:pushnew ':sbcl-pre-2-2-2 cl:*features*)))
 
+#+sbcl
+(cl:handler-case
+    (cl:progn
+      (sb-ext:assert-version->= 2 5 7 38)
+      (cl:pushnew ':sbcl-post-2-5-7-38 cl:*features*))
+  (cl:error (c)
+    (declare (ignore c))
+    (cl:pushnew ':sbcl-pre-2-5-7-38 cl:*features*)))
+
 (asdf:defsystem "coalton/hashtable-shim"
   :description "Shim over Common Lisp hash tables with custom hash functions, for use by the Coalton standard library."
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
@@ -331,7 +343,7 @@
                (:file "looping-native-tests")
                (:file "monomorphizer-tests")
                (:file "inliner-tests")
-               (:file "inliner-tests-1") ; must come after inliner-tests
+               #-abcl(:file "inliner-tests-1") ; must come after inliner-tests
                (:file "deriver-tests")
                (:file "file-tests")
                (:file "experimental-tests")

@@ -9,7 +9,8 @@
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:complex #:coalton-library/math/complex)
-   (#:ram #:coalton-library/randomaccess))
+   (#:ram #:coalton-library/randomaccess)
+   (#:compat #:coalton-compatibility))
   (:export
    #:LispArray
    #:make
@@ -229,6 +230,5 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
   (define-lisparray-specialization I64 (cl:signed-byte 64))
   (define-lisparray-specialization U64 (cl:unsigned-byte 64)))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/LISPARRAY")
+(compat:try-lock-package "COALTON-LIBRARY/LISPARRAY")
 

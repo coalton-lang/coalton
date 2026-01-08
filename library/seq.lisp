@@ -10,7 +10,8 @@
    (#:optional #:coalton-library/optional)
    (#:cell #:coalton-library/cell)
    (#:vector #:coalton-library/vector)
-   (#:iter #:coalton-library/iterator))
+   (#:iter #:coalton-library/iterator)
+   (#:compat #:coalton-compatibility))
   (:export
    #:Seq
    #:new
@@ -556,5 +557,4 @@ It attempts to rebalance with a minimum of array copying."
                          (lisp (Seq :a) () self)))))
   self)
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/SEQ")
+(compat:try-lock-package "COALTON-LIBRARY/SEQ")

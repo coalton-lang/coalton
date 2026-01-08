@@ -5,7 +5,8 @@
    #:coalton-library/functions)
   (:local-nicknames
    (:l #:coalton-library/list)
-   (:ct #:coalton-library/experimental/do-control-core))
+   (:ct #:coalton-library/experimental/do-control-core)
+   (#:compat #:coalton-compatibility))
   (:import-from #:coalton-library/monad/environment
    #:MonadEnvironment
    #:ask
@@ -339,5 +340,4 @@ immediately end execution in the operation. Returns Unit."
     (do
      ,@body)))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/EXPERIMENTAL/DO-CONTROL-LOOPS-ADV")
+(compat:try-lock-package "COALTON-LIBRARY/EXPERIMENTAL/DO-CONTROL-LOOPS-ADV")

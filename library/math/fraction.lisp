@@ -9,6 +9,8 @@
    #:coalton-library/classes
    #:coalton-library/functions
    #:coalton-library/math/arith)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility))
   (:export
    #:mkFraction
    #:numerator
@@ -106,5 +108,4 @@
 (define-into-integer-fraction U64)
 (define-into-integer-fraction UFix)
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH/FRACTION")
+(compat:try-lock-package "COALTON-LIBRARY/MATH/FRACTION")

@@ -4,6 +4,8 @@
    #:coalton-library/builtin
    #:coalton-library/classes
    #:coalton-library/hash)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility))
   (:export
    #:fst
    #:snd
@@ -154,5 +156,4 @@
   (define-instance ((Default :a) (Default :b) => (Default (Tuple :a :b)))
     (define (default) (Tuple (default) (default)))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/TUPLE")
+(compat:try-lock-package "COALTON-LIBRARY/TUPLE")

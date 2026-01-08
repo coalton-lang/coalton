@@ -1,4 +1,6 @@
 (uiop:define-package #:coalton-library/math
+  (:use
+   #:coalton-compatibility)
   (:use-reexport
    #:coalton-library/math/arith
    #:coalton-library/math/num
@@ -11,5 +13,4 @@
    #:coalton-library/math/elementary
    #:coalton-library/math/dual))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH")
+(coalton-compatibility:try-lock-package "COALTON-LIBRARY/MATH")

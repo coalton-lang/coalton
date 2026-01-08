@@ -2,6 +2,8 @@
   (:use
    #:coalton
    #:coalton-library/classes)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility))
   (:import-from
    #:coalton-library/hash
    #:define-sxhash-hasher))
@@ -42,5 +44,4 @@
 
   (define-sxhash-hasher Boolean))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/BOOLEAN")
+(compat:try-lock-package "COALTON-LIBRARY/BOOLEAN")

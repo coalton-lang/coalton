@@ -27,7 +27,8 @@ Common Lisp makes a distinction between file and directory paths. Directory path
    (#:vec #:coalton-library/vector)
    (#:res #:coalton-library/result)
    (#:types #:coalton-library/types)
-   (#:char #:coalton-library/char))
+   (#:char #:coalton-library/char)
+   (#:compat #:coalton-compatibility))
   (:export
 
    #:Pathname
@@ -744,5 +745,4 @@ File extensions need to include `.`, like \".txt\"."
     (lisp (Result FileError (List String)) (p)
       (%handle-file-function (uiop:read-file-lines p)))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/FILE")
+(compat:try-lock-package "COALTON-LIBRARY/FILE")

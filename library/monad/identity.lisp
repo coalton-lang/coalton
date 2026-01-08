@@ -3,6 +3,8 @@
    #:coalton
    #:coalton-library/builtin
    #:coalton-library/classes)
+  (:local-nicknames
+   (#:compat #:coalton-compatibility))
   (:export
    #:Identity
    #:run-identity))
@@ -42,5 +44,4 @@
     (define (>>= (Identity a) fa->idb)
       (fa->idb a))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MONAD/IDENTITY")
+(compat:try-lock-package "COALTON-LIBRARY/MONAD/IDENTITY")

@@ -8,7 +8,8 @@
    #:coalton-library/functions)
   (:local-nicknames
    (#:types #:coalton-library/types)
-   (#:cell #:coalton-library/cell))
+   (#:cell #:coalton-library/cell)
+   (#:compat #:coalton-compatibility))
   (:export
    #:Iterator
    #:new
@@ -655,5 +656,4 @@ The empty iterator will hash as 0."
   (define-class (FromIterator :container :elt (:container -> :elt))
     (collect! (Iterator :elt -> :container))))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/ITERATOR")
+(compat:try-lock-package "COALTON-LIBRARY/ITERATOR")

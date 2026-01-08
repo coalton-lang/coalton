@@ -10,7 +10,8 @@
    (#:list #:coalton-library/list)
    (#:cell #:coalton-library/cell)
    (#:iter #:coalton-library/iterator)
-   (#:ram #:coalton-library/randomaccess))
+   (#:ram #:coalton-library/randomaccess)
+   (#:compat #:coalton-compatibility))
   (:export
    #:Vector
    #:new
@@ -446,5 +447,4 @@
             :collect `(push! ,elt ,vec))
        ,vec)))
 
-#+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/VECTOR")
+(compat:try-lock-package "COALTON-LIBRARY/VECTOR")

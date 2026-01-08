@@ -1,0 +1,107 @@
+# Install quicklisp
+sbcl --load quicklisp.lisp
+* (quicklisp-quickstart:install)
+
+# Installed the distribution from Ultralisp.org:
+# sbcl --eval '(ql-dist:install-dist "http://dist.ultralisp.org/" :prompt nil)'
+This actually ended up causing errors (no SAFETY=3 config would complete),
+so I've uninstalled ultralisp.
+
+  ## Went into local-projects and cloned fset from its repo directly. https://github.com/slburson/fset
+  Neither the main branch, nor this fork work with this version of fset on
+  sbcl when SAFETY=3. They need the version from quicklisp (v1.4.6). Which
+  is *really* unfortunate for abcl, since that fset version didn't work
+  with abcl, which is the reason why I had initially used the git version.
+Latest fset fails on sbcl with safety 3. The fset author suggested that I modify
+three macros to make it work. The result is here: https://github.com/c-kloukinas/fset
+So, cloned this modified fset into local-projects
+
+While trying to compile with abcl, code broke in
+examples/quil-coalton/tests/quil-coalton-tests.lisp - abcl doesn't seem to
+recognise deftest nor defun.
+This seems to be due to fiasco:define-test-package being broken in abcl: https://github.com/joaotavora/fiasco/pull/36
+So, I've cloned the fork that attempted to fix this fset/abcl bug inside local-packages: https://github.com/appleby/fiasco/tree/fix-define-test-package-for-abcl
+git clone git@github.com:appleby/fiasco.git
+git checkout remotes/origin/fix-define-test-package-for-abcl
+(looks like I could have used git clone -b remotes/origin/fix-define-test-package-for-abcl git@github.com:appleby/fiasco.git)
+
+I've also modified abcl, to use: -XX:MaxHeapSize=64g
+#!/bin/sh
+exec java \
+  \
+        -XX:MaxHeapSize=64g \
+  \
+	-cp  ${HOME}/src/open-source/abcl/abcl.jar:"$CLASSPATH" \
+  \
+	org.armedbear.lisp.Main \
+	"$@"
+
+Went into local-projects and cloned named-readtables from its repo
+directly. https://github.com/melisgl/named-readtables
+
+Went into local-projects and cloned misc-extensions from its repo
+directly. https://gitlab.common-lisp.net/misc-extensions/misc-extensions
+
+Retrieved the remaining systems required:
+sbcl --eval '(ql:quickload :coalton)' --eval '(ql:quickload :coalton/tests)'
+
+Then stopped using quicklisp and used `make -f makefile testall' from
+then on (just asdf).
+
+Local configuration:
+
+$ sbcl --version
+SBCL 2.5.11.72-d1e9d67be
+
+$ ecl --version
+ECL 24.5.10
+
+$ ccl --version
+Clozure Common Lisp Version 1.13 (v1.13-21-gda7138ef) LinuxX8664
+
+$ abcl --version
+Failed to introspect virtual threading methods: java.lang.reflect.InaccessibleObjectException: Unable to make public java.lang.Thread java.lang.ThreadBuilders$VirtualThreadFactory.newThread(java.lang.Runnable) accessible: module java.base does not "opens java.lang" to unnamed module @21575c3a
+Armed Bear Common Lisp 1.9.2
+Java 21.0.9 Ubuntu
+OpenJDK 64-Bit Server VM
+Low-level initialization completed in 0.256 seconds.
+Startup completed in 0.778 seconds.
+Loading /home/christos/.abclrc completed in 3.868 seconds.
+Type ":help" for a list of available commands.
+
+Now:
+rm -rf ~/.cache/common-lisp/* zz-temp/*
+make -f makefile testall
+LISP=clozure make -f makefile testall
+# also can use the unsupported ones (none of them works of course):
+LISP=abcl make -f makefile testall
+LISP=ecl make -f makefile testall
+LISP=allegro make -f makefile testall
+# to monitor progress and results:
+make -f makefile lisps-running
+
+OLD:
+Also updated the Makefile (in a previous commit), to ensure that all rules use the same sbcl/etc. binaries.
+
+And testing it with:
+
+make cleanall
+sbcl --non-interactive \
+     --eval '(ql:quickload :coalton)' \
+     --eval '(cl:format t "XXXSTEP1~%")' \
+     --eval '(ql:quickload :coalton/tests)' \
+     --eval '(cl:format t "XXXSTEP2~%")' \
+     --eval '(asdf:test-system :coalton)' \
+     --eval '(cl:format t "XXXSTEP3~%")'
+
+Followed by:
+make cleanall
+sbcl --non-interactive \
+     --eval '(asdf:test-system :coalton)' \
+     --eval '(cl:format t "XXXSTEP3~%")'
+
+And by calling
+make cleanall test      # sbcl
+make cleanall testa     # abcl
+make cleanall teste     # ecl
+make cleanall testc     # ccl
