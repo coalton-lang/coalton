@@ -7,11 +7,34 @@ sbcl --load quicklisp.lisp
 This actually ended up causing errors (no SAFETY=3 config would complete),
 so I've uninstalled ultralisp.
 
-## Went into local-projects and cloned fset from its repo directly. https://github.com/slburson/fset
-Neither the main branch, nor this fork work with this version of fset on
-sbcl when SAFETY=3. They need the version from quicklisp (v1.4.6). Which
-is *really* unfortunate for abcl, since that fset version didn't work
-with abcl, which is the reason why I had initially used the git version.
+  ## Went into local-projects and cloned fset from its repo directly. https://github.com/slburson/fset
+  Neither the main branch, nor this fork work with this version of fset on
+  sbcl when SAFETY=3. They need the version from quicklisp (v1.4.6). Which
+  is *really* unfortunate for abcl, since that fset version didn't work
+  with abcl, which is the reason why I had initially used the git version.
+Latest fset fails on sbcl with safety 3. The fset author suggested that I modify
+three macros to make it work. The result is here: https://github.com/c-kloukinas/fset
+So, cloned this modified fset into local-projects
+
+While trying to compile with abcl, code broke in
+examples/quil-coalton/tests/quil-coalton-tests.lisp - abcl doesn't seem to
+recognise deftest nor defun.
+This seems to be due to fiasco:define-test-package being broken in abcl: https://github.com/joaotavora/fiasco/pull/36
+So, I've cloned the fork that attempted to fix this fset/abcl bug inside local-packages: https://github.com/appleby/fiasco/tree/fix-define-test-package-for-abcl
+git clone git@github.com:appleby/fiasco.git
+git checkout remotes/origin/fix-define-test-package-for-abcl
+(looks like I could have used git clone -b remotes/origin/fix-define-test-package-for-abcl git@github.com:appleby/fiasco.git)
+
+I've also modified abcl, to use: -XX:MaxHeapSize=64g
+#!/bin/sh
+exec java \
+  \
+        -XX:MaxHeapSize=64g \
+  \
+	-cp  ${HOME}/src/open-source/abcl/abcl.jar:"$CLASSPATH" \
+  \
+	org.armedbear.lisp.Main \
+	"$@"
 
 Went into local-projects and cloned named-readtables from its repo
 directly. https://github.com/melisgl/named-readtables
