@@ -93,6 +93,10 @@
                (:file "lisparray")
                (:file "list")
                (:file "vector")
+               (:module "collections"
+                :serial t
+                :components ((:file "immutable/list")
+                             (:file "mutable/vector")))
                (:file "char")
                (:file "string")
                (:file "slice")

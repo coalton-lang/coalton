@@ -1,3 +1,9 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; DEPRECATED ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; This package is deprecated, replaced by:
+;;; coalton-library/collections/immutable/list
+;;; Please edit that file instead!
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; DEPRECATED ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (coalton-library/utils::defstdlib-package #:coalton-library/list
   (:use
    #:coalton
