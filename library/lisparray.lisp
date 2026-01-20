@@ -9,7 +9,9 @@
   (:local-nicknames
    (#:types #:coalton-library/types)
    (#:complex #:coalton-library/math/complex)
-   (#:ram #:coalton-library/randomaccess))
+   (#:ram #:coalton-library/randomaccess)
+   (#:show #:coalton-library/show)
+   (#:utils #:coalton-library/utils))
   (:export
    #:LispArray
    #:make
@@ -41,6 +43,14 @@ Whether or not the arrays are specialized depends on the underlying Lisp impleme
       (let ((element-type (types:runtime-repr (types:proxy-inner v))))
         (lisp types:LispType (element-type)
           `(cl:simple-array ,element-type (cl:*))))))
+
+  (define-instance (show:ShowType :a => show:ShowType (LispArray :a))
+    (define (show:show-type-to readable? f p)
+      (f "(")
+      (f (utils:sym readable? "LispArray"))
+      (f " ")
+      (show:show-type-to readable? f (types:proxy-inner p))
+      (f ")")))
 
   (declare make (types:RuntimeRepr :t => UFix -> :t -> LispArray :t))
   (define (make n x)
@@ -178,6 +188,22 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
     (inline)
     (define (ram:unsafe-set! v i x)
       (set! v i x)))
+
+  (define-instance (show:Show :a => show:Show (LispArray :a))
+    (define (show:show-to f x)
+      (let l = (length x))
+      (f "(lisparray [")
+      (rec % ((i 0))
+        (cond
+          ((== i l)
+           Unit)
+          ((== i (- l 1))
+           (show:show-to f (aref x i)))
+          (True
+           (show:show-to f (aref x i))
+           (f " ")
+           (% (+ i 1)))))
+      (f "])")))
 
   (lisp-toplevel ()
     (cl:eval-when (:compile-toplevel :load-toplevel)

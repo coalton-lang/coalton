@@ -1,13 +1,18 @@
 (coalton-library/utils:defstdlib-package #:coalton-library/types
   (:use
    #:coalton)
+  (:local-nicknames
+   (#:utils #:coalton-library/utils))
   (:export
    #:Proxy
    #:proxy-of
    #:as-proxy-of
    #:proxy-inner
+   #:proxy-function-from
+   #:proxy-function-to
    #:LispType
-   #:RuntimeRepr #:runtime-repr
+   #:RuntimeRepr #:runtime-repr #:coalton-type-string
+   #:coalton-type-string-of
    #:runtime-repr-of))
 
 (in-package #:coalton-library/types)
@@ -40,17 +45,29 @@
   (define (proxy-inner _)
     Proxy)
 
+  (inline)
+  (declare proxy-function-from (Proxy (:a -> :b) -> Proxy :a))
+  (define (proxy-function-from _)
+    "Get a `Proxy` representing the \"domain\" of a function type."
+    Proxy)
+
+  (inline)
+  (declare proxy-function-to (Proxy (:a -> :b) -> Proxy :b))
+  (define (proxy-function-to _)
+    "Get a `Proxy` representing the \"codomain\" of a function type."
+    Proxy)
+
   (repr :native (cl:or cl:symbol cl:list))
   (define-type LispType
-    "The runtime representation of a Coalton type as a lisp type.")
+    "The runtime representation of a Coalton type as a Lisp type.")
 
   (define-class (RuntimeRepr :a)
     "Types which have a runtime LispType representation.
 
-`runtime-repr` corresponds to the type emitted by the Coalton compiler for the type parameter to the given Proxy.
-
 The compiler will auto-generate instances of `RuntimeRepr` for all defined types."
-    (runtime-repr (Proxy :a -> LispType)))
+    (runtime-repr
+     "The type emitted by the Coalton compiler for the type parameter to the given Proxy."
+     (Proxy :a -> LispType)))
 
   (inline)
   (declare runtime-repr-of (RuntimeRepr :a => :a -> LispType))
@@ -114,16 +131,16 @@ The compiler will auto-generate instances of `RuntimeRepr` for all defined types
 
   ;; The compiler will not auto-generate RuntimeRepr instances for
   ;; types defined in this file to avoid circular dependencies.
-  
-  (define-instance (RuntimeRepr LispType)
-    (inline)
-    (define (runtime-repr _)
-      (lisp LispType () '(cl:or cl:symbol cl:list))))
 
   (define-instance (RuntimeRepr (Proxy :a))
     (inline)
     (define (runtime-repr _)
-      (lisp LispType () '(cl:member 'proxy/proxy)))))
+      (lisp LispType () '(cl:member 'proxy/proxy))))
+  
+  (define-instance (RuntimeRepr LispType)
+    (inline)
+    (define (runtime-repr _)
+      (lisp LispType () '(cl:or cl:symbol cl:list)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-LIBRARY/TYPES")
