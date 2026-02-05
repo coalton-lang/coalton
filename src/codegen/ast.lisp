@@ -38,6 +38,7 @@
    #:make-node-abstraction              ; CONSTRUCTOR
    #:node-abstraction-vars              ; READER
    #:node-abstraction-subexpr           ; READER
+   #:node-abstraction-return-convention ; READER
    #:node-abstraction-p                 ; FUNCTION
    #:node-let                           ; STRUCT
    #:make-node-let                      ; CONSTRUCTOR
@@ -48,6 +49,7 @@
    #:make-node-lisp                     ; CONSTRUCTOR
    #:node-lisp-p                        ; FUNCTION
    #:node-lisp-vars                     ; READER
+   #:node-lisp-return-convention        ; READER
    #:node-lisp-form                     ; READER
    #:node-locally                       ; STRUCT
    #:make-node-locally                  ; CONSTRUCTOR
@@ -134,6 +136,25 @@
    #:node-bind-name                     ; READER
    #:node-bind-expr                     ; READER
    #:node-bind-body                     ; READER
+   #:node-values                        ; STRUCT
+   #:make-node-values                   ; CONSTRUCTOR
+   #:node-values-p                      ; FUNCTION
+   #:node-values-nodes                  ; READER
+   #:node-mv-call                       ; STRUCT
+   #:make-node-mv-call                  ; CONSTRUCTOR
+   #:node-mv-call-p                     ; FUNCTION
+   #:node-mv-call-expr                  ; READER
+   #:node-values-bind                   ; STRUCT
+   #:make-node-values-bind              ; CONSTRUCTOR
+   #:node-values-bind-p                 ; FUNCTION
+   #:node-values-bind-vars              ; READER
+   #:node-values-bind-expr              ; READER
+   #:node-values-bind-body              ; READER
+   #:node-values-match                  ; STRUCT
+   #:make-node-values-match             ; CONSTRUCTOR
+   #:node-values-match-p                ; FUNCTION
+   #:node-values-match-expr             ; READER
+   #:node-values-match-branches         ; READER
    #:node-variables                     ; FUNCTION
    #:node-binding-sccs                  ; FUNCTION
    #:node-free-p                        ; FUNCTION
@@ -240,7 +261,8 @@ coalton symbols (`parser:identifier`)"
 (defstruct (node-abstraction (:include node))
   "Lambda literals (fn (x) x)"
   (vars    (util:required 'vars)    :type parser:identifier-list :read-only t)
-  (subexpr (util:required 'subexpr) :type node                   :read-only t))
+  (subexpr (util:required 'subexpr) :type node                   :read-only t)
+  (return-convention ':boxed        :type (member :boxed :values) :read-only t))
 
 (defstruct (node-let (:include node))
   "Introduction of local mutually-recursive bindings (let ((x 2)) (+ x x))"
@@ -249,8 +271,9 @@ coalton symbols (`parser:identifier`)"
 
 (defstruct (node-lisp (:include node))
   "An embedded lisp form"
-  (vars (util:required 'vars) :type lisp-coalton-var-alist :read-only t)
-  (form (util:required 'form) :type t                      :read-only t))
+  (vars (util:required 'vars) :type lisp-coalton-var-alist    :read-only t)
+  (return-convention ':boxed  :type (member :boxed :values)   :read-only t)
+  (form (util:required 'form) :type t                         :read-only t))
 
 (defstruct (node-locally (:include node))
   "Node for the optimizer to use, similar to `cl:locally'."
@@ -384,6 +407,25 @@ call to (break)."
   (name (util:required 'name) :type parser:identifier :read-only t)
   (expr (util:required 'expr) :type node              :read-only t)
   (body (util:required 'body) :type node              :read-only t))
+
+(defstruct (node-values (:include node))
+  "Produce multiple values."
+  (nodes (util:required 'nodes) :type node-list :read-only t))
+
+(defstruct (node-mv-call (:include node))
+  "An expression known to already return multiple values."
+  (expr (util:required 'expr) :type node :read-only t))
+
+(defstruct (node-values-bind (:include node))
+  "Bind multiple values and evaluate body."
+  (vars (util:required 'vars) :type parser:identifier-list :read-only t)
+  (expr (util:required 'expr) :type node                   :read-only t)
+  (body (util:required 'body) :type node                   :read-only t))
+
+(defstruct (node-values-match (:include node))
+  "Pattern matching on multiple values."
+  (expr     (util:required 'expr)     :type node        :read-only t)
+  (branches (util:required 'branches) :type branch-list :read-only t))
 
 ;;;
 ;;; Functions

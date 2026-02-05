@@ -9,7 +9,8 @@
    #:traverse)
   (:local-nicknames
    (#:parser #:coalton-impl/parser)
-   (#:util #:coalton-impl/util))
+   (#:util #:coalton-impl/util)
+   (#:tc #:coalton-impl/typechecker))
   (:export
    #:ast-substitution                   ; STRUCT
    #:make-ast-substitution              ; CONSTRUCTOR
@@ -72,6 +73,7 @@ is true."
         (let ((new-lisp-node (make-node-lisp
                               :type (node-type node)
                               :vars lisp-var-bindings
+                              :return-convention (node-lisp-return-convention node)
                               :form (node-lisp-form node))))
           (if (endp let-bindings)
               new-lisp-node
@@ -116,5 +118,33 @@ is true."
                          (find name new-subs :key #'ast-substitution-from)))
                        name)
                    (funcall *traverse* node new-subs)))
-       :subexpr (funcall *traverse* (node-let-subexpr node) new-subs))))
+       :subexpr (funcall *traverse* (node-let-subexpr node) new-subs)))
+    (action (:traverse node-values-bind node new-subs)
+      (let* ((tuple-type (node-type (node-values-bind-expr node)))
+             (components (tc:tuple-component-types tuple-type)))
+        (unless components
+          (util:coalton-bug
+           "node-values-bind requires Tuple type, got ~S" tuple-type))
+        (loop :for name :in (node-values-bind-vars node)
+              :do (when (find name subs :key #'ast-substitution-from)
+                    (util:coalton-bug
+                     "Failure to apply ast substitution on variable ~A to node-values-bind"
+                     name))
+              :do (when rename-bound-variables
+                    (push (make-ast-substitution
+                           :from name
+                           :to (make-node-variable
+                                :type (pop components)
+                                :value (gensym (symbol-name name))))
+                          new-subs))))
+      (make-node-values-bind
+       :type (node-type node)
+       :vars (loop :for name :in (node-values-bind-vars node)
+                   :collect (if rename-bound-variables
+                                (node-variable-value
+                                 (ast-substitution-to
+                                  (find name new-subs :key #'ast-substitution-from)))
+                                name))
+       :expr (funcall *traverse* (node-values-bind-expr node) new-subs)
+       :body (funcall *traverse* (node-values-bind-body node) new-subs))))
    nil))

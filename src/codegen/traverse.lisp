@@ -116,7 +116,8 @@ nodes."
       (make-node-abstraction
        :type (node-type node)
        :vars (node-abstraction-vars node)
-       :subexpr (apply *traverse* (node-abstraction-subexpr node) args)))
+       :subexpr (apply *traverse* (node-abstraction-subexpr node) args)
+       :return-convention (node-abstraction-return-convention node)))
     (action (:traverse node-let node &rest args)
       (make-node-let
        :type (node-type node)
@@ -222,6 +223,35 @@ nodes."
        :name (node-bind-name node)
        :expr (apply *traverse* (node-bind-expr node) args)
        :body (apply *traverse* (node-bind-body node) args)))
+    (action (:traverse node-values node &rest args)
+      (make-node-values
+       :type (node-type node)
+       :nodes (mapcar
+               (lambda (sub)
+                 (apply *traverse* sub args))
+               (node-values-nodes node))))
+    (action (:traverse node-mv-call node &rest args)
+      (make-node-mv-call
+       :type (node-type node)
+       :expr (apply *traverse* (node-mv-call-expr node) args)))
+    (action (:traverse node-values-bind node &rest args)
+      (make-node-values-bind
+       :type (node-type node)
+       :vars (node-values-bind-vars node)
+       :expr (apply *traverse* (node-values-bind-expr node) args)
+       :body (apply *traverse* (node-values-bind-body node) args)))
+    (action (:traverse node-values-match node &rest args)
+      (make-node-values-match
+       :type (node-type node)
+       :expr (apply *traverse* (node-values-match-expr node) args)
+       :branches (mapcar
+                  (lambda (branch)
+                    (make-match-branch
+                     :pattern (match-branch-pattern branch)
+                     :body (apply *traverse*
+                                  (match-branch-body branch)
+                                  args)))
+                  (node-values-match-branches node))))
     (action (:traverse node-locally node &rest args)
       (make-node-locally
        :type (node-type node)
@@ -371,6 +401,7 @@ bound at the given point."
       (make-node-abstraction
        :type (node-type node)
        :vars (node-abstraction-vars node)
+       :return-convention (node-abstraction-return-convention node)
        :subexpr (funcall *traverse*
                          (node-abstraction-subexpr node)
                          (append (node-abstraction-vars node) bound-variables))))
@@ -409,7 +440,27 @@ bound at the given point."
          :type (node-type node)
          :name (node-bind-name node)
          :expr (funcall *traverse* (node-bind-expr node) new-bound-variables)
-         :body (funcall *traverse* (node-bind-body node) new-bound-variables)))))
+         :body (funcall *traverse* (node-bind-body node) new-bound-variables))))
+    (action (:traverse node-values-bind node bound-variables)
+      (let ((new-bound-variables (append (node-values-bind-vars node) bound-variables)))
+        (make-node-values-bind
+         :type (node-type node)
+         :vars (node-values-bind-vars node)
+         :expr (funcall *traverse* (node-values-bind-expr node) bound-variables)
+         :body (funcall *traverse* (node-values-bind-body node) new-bound-variables))))
+    (action (:traverse node-values-match node bound-variables)
+      (make-node-values-match
+       :type (node-type node)
+       :expr (funcall *traverse* (node-values-match-expr node) bound-variables)
+       :branches (mapcar
+                  (lambda (branch)
+                    (make-match-branch
+                     :pattern (match-branch-pattern branch)
+                     :body (funcall *traverse*
+                                    (match-branch-body branch)
+                                    (append (pattern-variables (match-branch-pattern branch))
+                                            bound-variables))))
+                  (node-values-match-branches node)))))
    t))
 
 (defun traverse-with-binding-list (node actions)

@@ -101,6 +101,11 @@
     (declare (type tc:environment env)
              (ignore env)
              (values tc:ty))
+    (when (eq ':values (node-lisp-return-convention expr))
+      (unless (tc:tuple-component-types (node-type expr))
+        (util:coalton-bug
+         "Expected Tuple return type for `(lisp multiple-values ...)`, got ~S"
+         (node-type expr))))
     (node-type expr))
 
   (:method ((expr match-branch) env)
@@ -255,6 +260,54 @@
      nil
      (node-type expr)
      (typecheck-node (node-bind-body expr) env))
-    (node-type expr)))
+    (node-type expr))
 
+  (:method ((expr node-values) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (let ((components (tc:tuple-component-types (node-type expr))))
+      (unless components
+        (util:coalton-bug "node-values requires Tuple type, got ~S" (node-type expr)))
+      (unless (= (length components) (length (node-values-nodes expr)))
+        (util:coalton-bug "node-values arity mismatch, expected ~D got ~D"
+                          (length components)
+                          (length (node-values-nodes expr))))
+      (loop :for subnode :in (node-values-nodes expr)
+            :for comp-ty :in components
+            :do (tc:unify nil (typecheck-node subnode env) comp-ty))
+      (node-type expr)))
 
+  (:method ((expr node-mv-call) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (let ((sub-ty (typecheck-node (node-mv-call-expr expr) env)))
+      (tc:unify nil (node-type expr) sub-ty)
+      (node-type expr)))
+
+  (:method ((expr node-values-bind) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (let ((components (tc:tuple-component-types (node-type (node-values-bind-expr expr)))))
+      (unless components
+        (util:coalton-bug "node-values-bind requires Tuple type, got ~S"
+                          (node-type (node-values-bind-expr expr))))
+      (unless (= (length components) (length (node-values-bind-vars expr)))
+        (util:coalton-bug "node-values-bind arity mismatch, expected ~D got ~D"
+                          (length components)
+                          (length (node-values-bind-vars expr))))
+      (typecheck-node (node-values-bind-expr expr) env)
+      (tc:unify nil (node-type expr) (typecheck-node (node-values-bind-body expr) env))
+      (node-type expr)))
+
+  (:method ((expr node-values-match) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (typecheck-node (node-values-match-expr expr) env)
+    (let ((type (node-type expr))
+          (subs nil))
+      (loop :for branch :in (node-values-match-branches expr)
+            :for subexpr-ty := (typecheck-node branch env) :do
+              (progn
+                (setf subs (tc:unify subs type subexpr-ty))
+                (setf subs (tc:unify subs subexpr-ty type))))
+      type)))

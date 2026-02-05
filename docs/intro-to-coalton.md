@@ -1327,6 +1327,40 @@ Coalton does not have nullary functions. However, a function with the type signa
 
 Functions can also be defined with an implicit parameter using `(fn () 5)`. This creates a function with a single implicit parameter of type `Unit`.
 
+## Inline Lisp
+
+Coalton can embed raw Common Lisp forms with `lisp`:
+
+```lisp
+(coalton-toplevel
+  (declare random-int (Integer -> Integer))
+  (define (random-int n)
+    (lisp Integer (n)
+      (cl:random n))))
+```
+
+The form is:
+
+```lisp
+(lisp <return-type> (<coalton-variables>) <lisp-form>...)
+```
+
+This is unsafe; Coalton makes no attempt to analyze anything that is happening inside of a `lisp` form. That means it's possible (and easy) to create type errors, among other things.
+
+### Multiple Values Directive `multiple-values`
+
+When the return type is a `Tuple`, you can request a multiple-value return convention by using the `multiple-values` directive:
+
+```lisp
+(coalton-toplevel
+  (declare quot-rem (Integer -> Integer -> (Tuple Integer Integer)))
+  (define (quot-rem x y)
+    (lisp multiple-values (Tuple Integer Integer) (x y)
+      (cl:truncate x y))))
+```
+
+`lisp multiple-values` requires a `Tuple` return type. The compiler can keep values unboxed through tuple-consuming code paths (for example immediate `match`, `fst`, or `snd`) and only allocate a tuple object when one is actually needed.
+
 ## Inspecting the Coalton System
 
 The `coalton` package defines several debugging functions.

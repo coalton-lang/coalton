@@ -149,10 +149,12 @@ If not, returns NIL"
                     :subexpr (make-node-lisp
                               :type (node-type node)
                               :vars new-lisp-vars
+                              :return-convention (node-lisp-return-convention node)
                               :form (node-lisp-form node)))
                    (make-node-lisp
                     :type (node-type node)
                     :vars new-lisp-vars
+                    :return-convention (node-lisp-return-convention node)
                     :form (node-lisp-form node)))))
 
            (direct-application-better-infer-types (node constant-bindings)

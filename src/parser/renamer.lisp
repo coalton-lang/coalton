@@ -162,6 +162,7 @@
      (make-node-lisp
       :location (source:location node)
       :type (node-lisp-type node)
+      :return-convention (node-lisp-return-convention node)
       :vars (rename-variables-generic% (node-lisp-vars node) ctx)
       :var-names (node-lisp-var-names node)
       :body (node-lisp-body node))

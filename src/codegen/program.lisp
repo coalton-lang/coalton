@@ -158,13 +158,13 @@ Example:
            (append
             (definition-bindings (tc:translation-unit-definitions translation-unit) env offsets)
             (instance-bindings (tc:translation-unit-instances translation-unit) env offsets)))
-         (definition-names (mapcar #'car definitions))
          (env (clean-environment-for-redefinition env definitions)))
 
     (multiple-value-bind (definitions env)
         (optimize-bindings definitions monomorphize-table inline-p-table *package* env)
 
-      (let ((sccs (node-binding-sccs definitions))
+      (let ((definition-names (mapcar #'car definitions))
+            (sccs (node-binding-sccs definitions))
             (lisp-forms (tc:translation-unit-lisp-forms translation-unit)))
 
         (values
@@ -237,7 +237,12 @@ Example:
              (,@(loop :for nil :in (node-abstraction-vars node)
                       :for ty :in (tc:function-type-arguments (node-type node))
                       :collect (tc:lisp-type ty env)))
-             (values ,(tc:lisp-type (node-type (node-abstraction-subexpr node)) env)
+             (values ,@(let* ((ret-type (node-type (node-abstraction-subexpr node)))
+                              (components (and (eq ':values (node-abstraction-return-convention node))
+                                               (tc:tuple-component-types ret-type))))
+                         (if components
+                             (mapcar (lambda (ty) (tc:lisp-type ty env)) components)
+                             (list (tc:lisp-type ret-type env))))
                      &optional))
             ,name)))
 

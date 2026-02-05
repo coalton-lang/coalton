@@ -286,3 +286,16 @@ warn: non-exhaustive match
  4 |    (match x))
    |    ^^^^^^^^^ non-exhaustive match
    |    --------- missing case "_"
+
+================================================================================
+105 Parse expression
+================================================================================
+
+(package coalton-unit-tests/prelude
+  (import coalton-prelude))
+
+(define (f-parse105 x)
+  (match (lisp multiple-values (Tuple Integer Integer) (x)
+           (cl:truncate x 2))
+    ((Tuple q r)
+     (+ q r))))

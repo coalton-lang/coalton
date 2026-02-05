@@ -143,6 +143,7 @@
       :location (source:location node)
       :vars (traverse (node-lisp-vars node) block)
       :var-names (node-lisp-var-names node)
+      :return-convention (node-lisp-return-convention node)
       :body (node-lisp-body node))))
 
   (:method ((node node-match-branch) block)

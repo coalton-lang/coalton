@@ -45,3 +45,125 @@ error: Malformed lisp expression
    |
  3 |  (define f (lisp (T -> T) (x y)))
    |            ^^^^^^^^^^^^^^^^^^^^^ expected body
+
+================================================================================
+103 Legacy keyword `:values` is parsed as a type
+================================================================================
+
+(package test-package)
+
+(define f (lisp :values))
+
+--------------------------------------------------------------------------------
+
+error: Malformed lisp expression
+  --> test:3:23
+   |
+ 3 |  (define f (lisp :values))
+   |                         ^ expected binding list
+
+================================================================================
+104 Missing expression type with multiple-values
+================================================================================
+
+(package test-package)
+
+(define f (lisp multiple-values))
+
+--------------------------------------------------------------------------------
+
+error: Malformed lisp expression
+  --> test:3:31
+   |
+ 3 |  (define f (lisp multiple-values))
+   |                                 ^ expected expression type
+
+================================================================================
+105 Missing binding list with multiple-values
+================================================================================
+
+(package test-package)
+
+(define f (lisp multiple-values (T -> T)))
+
+--------------------------------------------------------------------------------
+
+error: Malformed lisp expression
+  --> test:3:40
+   |
+ 3 |  (define f (lisp multiple-values (T -> T)))
+   |                                          ^ expected binding list
+
+================================================================================
+106 Invalid lisp multiple-values return type
+================================================================================
+
+(package test-package)
+
+(define f (lisp multiple-values Integer ()
+            (cl:values 1 2)))
+
+--------------------------------------------------------------------------------
+
+error: Invalid lisp multiple-values return type
+  --> test:3:32
+   |
+ 3 |  (define f (lisp multiple-values Integer ()
+   |                                  ^^^^^^^ `(lisp multiple-values ...)` requires a Tuple return type, but got 'INTEGER'
+
+================================================================================
+107 Uppercase multiple-values directive accepted
+================================================================================
+
+(package test-package)
+
+(define f (lisp MULTIPLE-VALUES (coalton-library/classes:Tuple Integer Integer) ()
+            (cl:values 1 2)))
+
+================================================================================
+108 Legacy keyword `:value` is parsed as a type
+================================================================================
+
+(package test-package)
+
+(define f (lisp :value))
+
+--------------------------------------------------------------------------------
+
+error: Malformed lisp expression
+  --> test:3:22
+   |
+ 3 |  (define f (lisp :value))
+   |                        ^ expected binding list
+
+================================================================================
+109 Symbol `multiple-values-extra` is parsed as a type
+================================================================================
+
+(package test-package)
+
+(define f (lisp multiple-values-extra))
+
+--------------------------------------------------------------------------------
+
+error: Malformed lisp expression
+  --> test:3:37
+   |
+ 3 |  (define f (lisp multiple-values-extra))
+   |                                       ^ expected binding list
+
+================================================================================
+110 Keyword `:multiple-values` is parsed as a type
+================================================================================
+
+(package test-package)
+
+(define f (lisp :multiple-values))
+
+--------------------------------------------------------------------------------
+
+error: Malformed lisp expression
+  --> test:3:32
+   |
+ 3 |  (define f (lisp :multiple-values))
+   |                                  ^ expected binding list

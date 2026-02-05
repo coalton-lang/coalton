@@ -229,9 +229,9 @@
         (cl:let ((x (sb-mpfr:ceiling f)))
           (sb-mpfr:coerce x 'cl:integer))))
     (define (proper f)
-      (lisp (Tuple Integer Big-Float) (f)
+      (lisp multiple-values (Tuple Integer Big-Float) (f)
         (cl:let ((x (sb-mpfr:truncate f)))
-          (Tuple
+          (cl:values
            (sb-mpfr:coerce x 'cl:integer)
            (sb-mpfr:sub f x))))))
 

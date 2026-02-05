@@ -353,10 +353,8 @@ the simplest possible such approximation."
       (lisp Integer (x)
         (cr:ceiling-r x)))
     (define (proper x)
-      (lisp (Tuple Integer CReal) (x)
-        (cl:multiple-value-bind (integer-part decimal-part)
-            (cr:truncate-r x)
-          (Tuple integer-part decimal-part)))))
+      (lisp multiple-values (Tuple Integer CReal) (x)
+        (cr:truncate-r x))))
 
   (define-instance (math:Real CReal)
     (define (real-approx prec x)

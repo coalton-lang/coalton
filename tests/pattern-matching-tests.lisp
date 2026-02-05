@@ -178,3 +178,38 @@
     (is (== (Tuple 1 x) (prod-proj-1 x)))
     (let (Tuple 1 (= tpl (Tuple _ _))) = (prod-proj-1 x))
     (is (== x tpl))))
+
+(coalton-toplevel
+  (declare mv-match-pair (Integer -> (Tuple Integer Integer)))
+  (define (mv-match-pair x)
+    (Tuple x (1+ x)))
+
+  (declare mv-match-bind-var (Integer -> (Tuple Integer Integer)))
+  (define (mv-match-bind-var x)
+    (match (mv-match-pair x)
+      (pair (Tuple (snd pair) (fst pair)))))
+
+  (declare mv-match-bind-constructor (Integer -> (Tuple Integer Integer)))
+  (define (mv-match-bind-constructor x)
+    (match (mv-match-pair x)
+      ((Tuple a b) (Tuple b a))))
+
+  (declare mv-match-wildcard-eligible (Integer -> Integer))
+  (define (mv-match-wildcard-eligible x)
+    (match (mv-match-pair x)
+      ((Tuple 0 b) b)
+      (_ x))))
+
+(define-test test-tuple-multiple-values-match-var ()
+  (is (== (Tuple 11 10)
+          (mv-match-bind-var 10)))
+  (is (== (mv-match-bind-var 42)
+          (mv-match-bind-constructor 42))))
+
+(define-test test-tuple-multiple-values-match-wildcard ()
+  (is (== 1
+          (mv-match-wildcard-eligible 0)))
+  (is (== 10
+          (mv-match-wildcard-eligible 10)))
+  (is (== (mv-match-wildcard-eligible 42)
+          (fst (mv-match-pair 42)))))

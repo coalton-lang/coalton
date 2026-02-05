@@ -54,6 +54,9 @@
   (:import-from
    #:coalton-impl/codegen/specializer
    #:apply-specializations)
+  (:import-from
+   #:coalton-impl/codegen/multiple-values
+   #:transform-tuples-to-multiple-values)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
@@ -160,6 +163,9 @@ mapping known function names to their arity."
         (setf bindings
               (loop :for (name . node) :in bindings
                     :collect (cons name (direct-application node function-table))))
+
+        ;; Rewrite Tuple code to use multiple-value calling conventions
+        (setf bindings (transform-tuples-to-multiple-values bindings env))
 
         ;; Update code db
         (loop :for (name . node) :in bindings

@@ -83,6 +83,7 @@
             (tc-note node "Expected type '~S' but got '~S'"
                      (tc:apply-substitution subs expected-type)
                      (tc:apply-substitution subs ty))))
+
 ;;;
 ;;; Entrypoint
 ;;;
@@ -661,6 +662,12 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                :location (source:location var)
                                :name (parser:node-variable-name var)))
                             (parser:node-lisp-vars node))))
+              (when (eq ':values (parser:node-lisp-return-convention node))
+                (unless (types:tuple-component-types type)
+                  (tc-error "Invalid lisp multiple-values return type"
+                            (tc-note (parser:node-lisp-type node)
+                                     "`(lisp multiple-values ...)` requires a Tuple return type, but got '~S'"
+                                     type))))
               (values
                type
                nil
@@ -670,6 +677,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 :location (source:location node)
                 :vars var-nodes
                 :var-names (parser:node-lisp-var-names node)
+                :return-convention (parser:node-lisp-return-convention node)
                 :body (parser:node-lisp-body node))
                subs)))
         (tc:coalton-internal-type-error ()

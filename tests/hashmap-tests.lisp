@@ -498,6 +498,15 @@
                                     (Tuple 1 1)))
           result)))
 
+(define-test hashmap-multiple-values-entrypoints-defined ()
+  (is
+   (lisp Boolean ()
+     (cl:not
+      (cl:null
+       (cl:and (cl:fboundp 'coalton-library/hashmap::chain-update%values)
+               (cl:fboundp 'coalton-library/hashmap::update%values)
+               (cl:fboundp 'coalton-library/hashmap::modify-get%values)))))))
+
 (define-test hashmap-show ()
   (let hm = (the (hashmap:HashMap Integer Integer)
                  (list->hashmap

@@ -51,6 +51,9 @@
    #:*optional-type*                    ; VARIABLE
    #:push-type-alias                    ; FUNCTION
    #:flatten-type                       ; FUNCTION
+   #:tuple-symbol                       ; FUNCTION
+   #:tuple-type-p                       ; FUNCTION
+   #:tuple-component-types              ; FUNCTION
    #:apply-type-argument                ; FUNCTION
    #:apply-type-argument-list           ; FUNCTION
    #:make-function-type                 ; FUNCTION
@@ -411,6 +414,38 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
           :do (push (tapp-to from) flattened-type)
           :finally (push from flattened-type))
     flattened-type))
+
+(defun tuple-symbol ()
+  "Return the `Tuple` type constructor symbol in package COALTON/CLASSES."
+  (declare (values (or null symbol) &optional))
+  (let* ((pkg (cl:find-package "COALTON/CLASSES"))
+         (sym (and pkg (cl:find-symbol "TUPLE" pkg))))
+    (when (and pkg (null sym))
+      (util:coalton-bug "Unable to find symbol with name ~A in package ~A"
+                        "TUPLE" pkg))
+    sym))
+
+(defun tuple-type-p (type)
+  "Return true when TYPE is a two-element Tuple type."
+  (declare (type ty type)
+           (values boolean &optional))
+  (let ((tuple-sym (tuple-symbol)))
+    (and tuple-sym
+         (tapp-p type)
+         (let ((lhs (tapp-from type)))
+           (and (tapp-p lhs)
+                (let ((ctor (tapp-from lhs)))
+                  (and (tycon-p ctor)
+                       (eq tuple-sym (tycon-name ctor)))))))))
+
+(defun tuple-component-types (type)
+  "Return the two component types (as a list) if TYPE is (Tuple A B), otherwise NIL."
+  (declare (type ty type)
+           (values (or null ty-list) &optional))
+  (when (tuple-type-p type)
+    (let ((lhs (tapp-from type)))
+      (list (tapp-to lhs)
+            (tapp-to type)))))
 
 (defun apply-type-argument (tcon arg &key ksubs)
   (declare (type (or tycon tapp tyvar) tcon)

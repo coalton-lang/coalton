@@ -322,6 +322,7 @@
                (:file "ordtree-tests")
                (:file "ordmap-tests")
                (:file "recursive-let-tests")
+               (:file "multiple-values-tests")
                (:file "class-tests")
                (:file "struct-tests")
                (:file "type-alias-tests")

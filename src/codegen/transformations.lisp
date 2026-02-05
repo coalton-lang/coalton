@@ -42,6 +42,16 @@ specified in `subs`."
                      :pattern (tc:apply-substitution subs (match-branch-pattern branch))
                      :body (match-branch-body branch)))
                   (node-match-branches node))))
+    (action (:after node-values-match node)
+      (make-node-values-match
+       :type (node-type node)
+       :expr (node-values-match-expr node)
+       :branches (mapcar
+                  (lambda (branch)
+                    (make-match-branch
+                     :pattern (tc:apply-substitution subs (match-branch-pattern branch))
+                     :body (match-branch-body branch)))
+                  (node-values-match-branches node))))
     (action (:after node-while-let node)
       (make-node-while-let
        :type (node-type node)
@@ -67,6 +77,11 @@ specified in `subs`."
         (values))
       (action (:after node-match node)
         (dolist (branch (node-match-branches node))
+          (alexandria:unionf tyvars
+                             (tc:type-variables (match-branch-pattern branch))))
+        (values))
+      (action (:after node-values-match node)
+        (dolist (branch (node-values-match-branches node))
           (alexandria:unionf tyvars
                              (tc:type-variables (match-branch-pattern branch))))
         (values))

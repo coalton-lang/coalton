@@ -183,10 +183,8 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
              (cl:nth-value 0 (cl:ceiling q))))
          (inline)
          (define (proper q)
-           (lisp (Tuple Integer ,type) (q)
-             (cl:multiple-value-bind (n r)
-                 (cl:truncate q)
-               (Tuple n r)))))
+           (lisp multiple-values (Tuple Integer ,type) (q)
+             (cl:truncate q))))
 
        (specialize truncate ,trunc (,type -> Integer))
        (inline)

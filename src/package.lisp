@@ -88,6 +88,7 @@
    #:rec
    #:=                                  ; Syntax
    #:lisp
+   #:multiple-values                    ; lisp return-convention directive
    #:<-                                 ; Syntax
    #:_
    #:return

@@ -62,6 +62,7 @@
    #:node-lisp                          ; STRUCT
    #:make-node-lisp                     ; CONSTRUCTOR
    #:node-lisp-type                     ; ACCESSOR
+   #:node-lisp-return-convention        ; ACCESSOR
    #:node-lisp-vars                     ; ACCESSOR
    #:node-lisp-var-names                ; ACCESSOR
    #:node-lisp-body                     ; ACCESSOR
@@ -287,6 +288,7 @@
             (:copier nil))
   (vars      (util:required 'vars)      :type node-variable-list :read-only t)
   (var-names (util:required 'var-names) :type util:symbol-list   :read-only t)
+  (return-convention ':boxed            :type (member :boxed :values) :read-only t)
   (body      (util:required 'body)      :type t                  :read-only t))
 
 (defstruct (node-match-branch
@@ -588,6 +590,7 @@
    :location (source:location node)
    :vars (tc:apply-substitution subs (node-lisp-vars node))
    :var-names (node-lisp-var-names node)
+   :return-convention (node-lisp-return-convention node)
    :body (node-lisp-body node)))
 
 (defmethod tc:apply-substitution (subs (node node-match-branch))

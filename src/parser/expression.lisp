@@ -62,6 +62,7 @@
    #:node-lisp                          ; STRUCT
    #:make-node-lisp                     ; CONSTRUCTOR
    #:node-lisp-type                     ; ACCESSOR
+   #:node-lisp-return-convention        ; ACCESSOR
    #:node-lisp-vars                     ; ACCESSOR
    #:node-lisp-var-names                ; ACCESSOR
    #:node-lisp-body                     ; ACCESSOR
@@ -263,7 +264,7 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;
 ;;;; node-rec := "(" "rec" (identifier | "(" identifier [qualified-ty] ")" ) "(" (node-let-binding | node-let-declare)+ ")" body ")"
 ;;;;
-;;;; node-lisp := "(" "lisp" type "(" variable* ")" lisp-form+ ")"
+;;;; node-lisp := "(" "lisp" ["multiple-values"] type "(" variable* ")" lisp-form+ ")"
 ;;;;
 ;;;; node-match-branch := "(" pattern body ")"
 ;;;;
@@ -427,6 +428,7 @@ Rebound to NIL parsing an anonymous FN.")
             (:include node)
             (:copier nil))
   (type      (util:required 'type)      :type ty                 :read-only t)
+  (return-convention ':boxed            :type (member :boxed :values) :read-only t)
   (vars      (util:required 'vars)      :type node-variable-list :read-only t)
   (var-names (util:required 'var-names) :type util:symbol-list   :read-only t)
   (body      (util:required 'body)      :type t                  :read-only t))
@@ -964,30 +966,48 @@ Rebound to NIL parsing an anonymous FN.")
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:lisp (cst:raw (cst:first form))))
-     ;; (lisp)
-     (unless (cst:consp (cst:rest form))
-       (parse-error "Malformed lisp expression"
-                    (note-end source (cst:first form) "expected expression type")))
+     (let* ((args (cst:rest form))
+            (values-directive-p (and (cst:consp args)
+                                     (cst:atom (cst:first args))
+                                     (eq 'coalton:multiple-values (cst:raw (cst:first args)))))
+            (directive-cst (if values-directive-p (cst:first args) nil))
+            ;; Set args to the rest, remembering we have a values
+            ;; directive.
+            (args (if values-directive-p
+                      (cst:rest args)
+                      args))
+            (return-convention (if values-directive-p ':values ':boxed)))
 
-     ;; (lisp T)
-     (unless (cst:consp (cst:rest (cst:rest form)))
-       (parse-error "Malformed lisp expression"
-                    (note-end source (cst:second form) "expected binding list")))
+       ;; (lisp) or (lisp multiple-values)
+       (unless (cst:consp args)
+         (parse-error "Malformed lisp expression"
+                      (note-end source
+                                (or directive-cst (cst:first form))
+                                "expected expression type")))
 
-     ;; (lisp T (...))
-     (unless (cst:consp (cst:rest (cst:rest (cst:rest form))))
-       (parse-error "Malformed lisp expression"
-                    (note source form "expected body")))
+       (let ((type-form (cst:first args)))
+         ;; (lisp T) or (lisp multiple-values T)
+         (unless (cst:consp (cst:rest args))
+           (parse-error "Malformed lisp expression"
+                        (note-end source type-form "expected binding list")))
 
-     (let ((vars (loop :for vars := (cst:third form) :then (cst:rest vars)
-                       :while (cst:consp vars)
-                       :collect (parse-variable (cst:first vars) source))))
-       (make-node-lisp
-        :type (parse-type (cst:second form) source)
-        :vars vars
-        :var-names (mapcar #'node-variable-name vars)
-        :body (cst:raw (cst:nthrest 3 form))
-        :location (form-location source form))))
+         (let* ((vars-form (cst:second args))
+                (body-form (cst:nthrest 2 args)))
+           ;; (lisp T (...))
+           (unless (cst:consp body-form)
+             (parse-error "Malformed lisp expression"
+                          (note source form "expected body")))
+
+           (let ((vars (loop :for vars := vars-form :then (cst:rest vars)
+                             :while (cst:consp vars)
+                             :collect (parse-variable (cst:first vars) source))))
+             (make-node-lisp
+              :type (parse-type type-form source)
+              :return-convention return-convention
+              :vars vars
+              :var-names (mapcar #'node-variable-name vars)
+              :body (cst:raw body-form)
+              :location (form-location source form)))))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:match (cst:raw (cst:first form))))

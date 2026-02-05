@@ -396,6 +396,7 @@ Returns a `node'.")
        :vars (loop :for var :in (tc:node-lisp-vars expr)
                    :for var-name :in (tc:node-lisp-var-names expr)
                    :collect (cons var-name (tc:node-variable-name var)))
+       :return-convention (tc:node-lisp-return-convention expr)
        :form (tc:node-lisp-body expr))))
 
   (:method ((expr tc:node-match) ctx env)

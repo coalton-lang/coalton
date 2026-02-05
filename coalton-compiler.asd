@@ -129,6 +129,7 @@
                              (:file "canonicalizer")
                              (:file "inliner")
                              (:file "specializer")
+                             (:file "multiple-values")
                              (:file "optimizer")
 
                              ;; Entry points

@@ -38,6 +38,55 @@
   (declare (type symbol label))
   (alexandria:format-symbol :keyword "~a-BLOCK" label))
 
+(defun values-binding-decls (vars types)
+  (declare (type list vars)
+           (type list types)
+           (values t &optional))
+  `(declare
+    (ignorable ,@vars)
+    ,@(if (not settings:*emit-type-annotations*)
+          nil
+          (loop :for var :in vars
+                :for type :in types
+                :collect `(type ,type ,var)))))
+
+(defun codegen-values-match-branch (code pattern vars component-types env)
+  (declare (type t code)
+           (type pattern pattern)
+           (type list vars)
+           (type tc:ty-list component-types)
+           (type tc:environment env)
+           (values t &optional))
+  (multiple-value-bind (pred bindings types)
+      (cond
+        ((pattern-wildcard-p pattern)
+         (values t nil nil))
+        ((pattern-constructor-p pattern)
+         (let ((subpatterns (pattern-constructor-patterns pattern)))
+           (multiple-value-bind (pred1 bindings1 types1)
+               (codegen-pattern (first subpatterns) (first vars) (first component-types) env)
+             (multiple-value-bind (pred2 bindings2 types2)
+                 (codegen-pattern (second subpatterns) (second vars) (second component-types) env)
+               (values `(and ,pred1 ,pred2)
+                       (append bindings1 bindings2)
+                       (append types1 types2))))))
+        ((pattern-var-p pattern)
+         (let ((tuple-ctor (tc:tuple-symbol)))
+           (unless tuple-ctor
+             (util:coalton-bug "Unable to resolve Tuple constructor"))
+           (values t
+                   (list (list (pattern-var-name pattern) `(,tuple-ctor ,@vars)))
+                   (list (tc:lisp-type (pattern-type pattern) env)))))
+        (t
+         (util:coalton-bug "Unsupported pattern in node-values-match: ~S" pattern)))
+
+    `(,pred
+      ,(if (endp bindings)
+           code
+           `(let ,bindings
+              ,(values-binding-decls (mapcar #'car bindings) types)
+              ,code)))))
+
 (defgeneric codegen-expression (node env)
   (:method ((node node-literal) env)
     (declare (type tc:environment env)
@@ -73,6 +122,32 @@
            (codegen-expression node env))
          (node-direct-application-rands node))))
 
+  (:method ((node node-values) env)
+    (declare (type tc:environment env))
+    `(values
+      ,@(mapcar
+         (lambda (sub)
+           (codegen-expression sub env))
+         (node-values-nodes node))))
+
+  (:method ((node node-mv-call) env)
+    (declare (type tc:environment env))
+    (codegen-expression (node-mv-call-expr node) env))
+
+  (:method ((node node-values-bind) env)
+    (declare (type tc:environment env))
+    (let* ((vars (node-values-bind-vars node))
+           (expr (codegen-expression (node-values-bind-expr node) env))
+           (body (codegen-expression (node-values-bind-body node) env))
+           (types (tc:tuple-component-types (node-type (node-values-bind-expr node)))))
+      (unless types
+        (util:coalton-bug "node-values-bind expects Tuple type, got ~S"
+                          (node-type (node-values-bind-expr node))))
+      `(multiple-value-bind ,vars ,expr
+         ,(values-binding-decls vars
+                                (mapcar (lambda (ty) (tc:lisp-type ty env)) types))
+         ,body)))
+
   (:method ((expr node-abstraction) env)
     (declare (type tc:environment env))
     (let* ((var-names (node-abstraction-vars expr))
@@ -101,21 +176,33 @@
 
   (:method ((expr node-lisp) env)
     (declare (type tc:environment env))
-    (let* ((inner `(progn ,@(butlast (node-lisp-form expr))
-                          (values ,(car (last (node-lisp-form expr))))))
+    (let* ((forms (node-lisp-form expr))
+           (last-form (car (last forms)))
+           (return-form
+             (ecase (node-lisp-return-convention expr)
+               (:boxed
+                `(values ,last-form))
+               (:values
+                last-form)))
            (inner
              (if (node-lisp-vars expr)
                  `(let ,(mapcar
                          (lambda (var)
                            (list (car var) (cdr var)))
                          (node-lisp-vars expr))
-                    ,@(butlast (node-lisp-form expr))
-                    (values ,(car (last (node-lisp-form expr)))))
-                 inner)))
-
+                    ,@(butlast forms)
+                    ,return-form)
+                 `(progn ,@(butlast forms)
+                         ,return-form)))
+           (return-types
+             (if (eq ':values (node-lisp-return-convention expr))
+                 (alexandria:if-let ((components (tc:tuple-component-types (node-type expr))))
+                   (mapcar (lambda (ty) (tc:lisp-type ty env)) components)
+                   (list (tc:lisp-type (node-type expr) env)))
+                 (list (tc:lisp-type (node-type expr) env)))))
       `(locally (declare #+sbcl (optimize (sb-c::type-check 1)))
          ,(if settings:*emit-type-annotations*
-              `(the (values ,(tc:lisp-type (node-type expr) env) &optional)
+              `(the (values ,@return-types &optional)
                     ,inner)
               inner))))
 
@@ -294,6 +381,40 @@
               jumptablep
               fallbackp
               branchlessp)))))))
+
+  (:method ((expr node-values-match) env)
+    (declare (type tc:environment env))
+    (let* ((subexpr (codegen-expression (node-values-match-expr expr) env))
+           (subexpr-type (node-type (node-values-match-expr expr)))
+           (as-match
+             (make-node-match
+              :type (node-type expr)
+              :expr (node-values-match-expr expr)
+              :branches (node-values-match-branches expr)))
+           (component-types (tc:tuple-component-types subexpr-type))
+           (lisp-types (and component-types
+                            (mapcar (lambda (ty) (tc:lisp-type ty env)) component-types)))
+           (vars (list (gensym "MV0") (gensym "MV1")))
+           (branches
+             (mapcar
+              (lambda (branch)
+                (codegen-values-match-branch
+                 (codegen-expression (match-branch-body branch) env)
+                 (match-branch-pattern branch)
+                 vars
+                 component-types
+                 env))
+              (node-values-match-branches expr)))
+           (fallbackp (match-emit-fallback-p as-match env)))
+      (unless component-types
+        (util:coalton-bug "node-values-match expects Tuple type, got ~S" subexpr-type))
+      `(multiple-value-bind ,vars ,subexpr
+         ,(values-binding-decls vars lisp-types)
+         (cond
+           ,@branches
+           ,@(if fallbackp
+                 (list '(t (error "Pattern match not exhaustive error.")))
+                 nil)))))
 
   (:method ((expr node-seq) env)
     (declare (type tc:environment env))
@@ -491,9 +612,15 @@
 (defun function-declarations (node env)
   (declare (type node-abstraction node)
            (type tc:environment env))
-  `(declare (ignorable ,@(node-abstraction-vars node))
-            ,@(when settings:*emit-type-annotations*
-                `(,@(loop :for var :in (node-abstraction-vars node)
-                          :for ty :in (tc:function-type-arguments (node-type node))
-                          :collect `(type ,(tc:lisp-type ty env) ,var))
-                  (values ,(tc:lisp-type (node-type (node-abstraction-subexpr node)) env) &optional)))))
+  (let* ((ret-type (node-type (node-abstraction-subexpr node)))
+         (components (and (eq ':values (node-abstraction-return-convention node))
+                          (tc:tuple-component-types ret-type)))
+         (return-types (if components
+                           (mapcar (lambda (ty) (tc:lisp-type ty env)) components)
+                           (list (tc:lisp-type ret-type env)))))
+    `(declare (ignorable ,@(node-abstraction-vars node))
+              ,@(when settings:*emit-type-annotations*
+                  `(,@(loop :for var :in (node-abstraction-vars node)
+                            :for ty :in (tc:function-type-arguments (node-type node))
+                            :collect `(type ,(tc:lisp-type ty env) ,var))
+                    (values ,@return-types &optional))))))
