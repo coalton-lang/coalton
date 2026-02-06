@@ -367,8 +367,8 @@ to `len`."
                 ret))
             (iter:into-iter subtrees)))))
 
-  (declare shift-n-onto! (vector:Vector :a -> vector:Vector :a -> UFix -> Unit))
-  (define (shift-n-onto! target source n0)
+  (declare %shift-n-onto! (vector:Vector :a -> vector:Vector :a -> UFix -> Unit))
+  (define (%shift-n-onto! target source n0)
     "Shifts the first `n` members of `source` onto the end of `target`, and
 shifts the each member of `target` down by `n` positions.  Mutates both
 `target` and `source`. If `n` is greater than or equal to the length of the
@@ -418,14 +418,15 @@ shifts the each member of `target` down by `n` positions.  Mutates both
       ((RelaxedNode _ _ v _) (vector:length v))))
 
   (define (%shift-n-branches-onto seq1 seq2 n)
-    "Moves `n` subbranches from the front of `seq2` to the back of
+        "Moves `n` subbranches from the front of `seq2` to the back of
 `seq1`. Leaves both in a potentially dirty state: the cumulative size
-table of relaxed nodes may be incaccurate."
+table of relaxed nodes may be inaccurate. `seq2` may furthermore be
+invalid because size can no longer be applied correctly."
     (match (Tuple seq1 seq2)
       ((Tuple (LeafArray vec1) (LeafArray vec2))
-       (shift-n-onto! vec1 vec2 n))
+       (%shift-n-onto! vec1 vec2 n))
       ((Tuple (RelaxedNode _ _ _ vec1) (RelaxedNode _ _ _ vec2))
-       (shift-n-onto! vec1 vec2 n))
+       (%shift-n-onto! vec1 vec2 n))
       (_ (unreachable))))
 
   (define (rebuild-size-table seq)
@@ -515,7 +516,9 @@ It attempts to rebalance with a minimum of array copying."
       ;;make a node from rebalanced branches
       (make-node-from-branches
        (iter:collect!
-        (iter:filter! (compose (< 0) size)
+        ;; `size` can observe transiently invalid branches during rebalancing.
+        ;; `branch-count` is robust here and still drops empty branches.
+        (iter:filter! (compose (< 0) branch-count)
                       (map branch-rebalancer
                            (iter:up-through stop))))))))
 

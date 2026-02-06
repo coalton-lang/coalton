@@ -62,7 +62,20 @@
     (is (== (Some "zero")
             (seq:get seqseq 1000)))
     (is (== (Some "one hundred twenty-seven")
-            (seq:get seqseq 1127)))))
+            (seq:get seqseq 1127))))
+
+  ;; Regression: this used to fail near 32^2 boundary while rebalancing.
+  (let ((seq
+          (legible-seq 1025))
+        (seqseq
+          (seq:conc (legible-seq 1025) (legible-seq 1025))))
+    (is (== 2050 (seq:size seqseq)))
+    (is (== (Some "zero")
+            (seq:get seqseq 1025)))
+    (is (== (Some "one thousand twenty-four")
+            (seq:get seqseq 2049)))
+    (is (== (Some "one thousand twenty-four")
+            (seq:get seq 1024)))))
 
 (define-test seq-get-and-put ()
   (let ((seq
