@@ -29,4 +29,4 @@
 
 (defun parser-succeeds (program)
   (is (typep (run-quil-parser program)
-             'coalton-library/classes::Result/Ok)))
+             'coalton/classes::Result/Ok)))

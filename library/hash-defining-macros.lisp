@@ -10,14 +10,16 @@
 ;;;;
 ;;;; NOTE: This package is not intended to be used by users.
 
-(defpackage #:coalton-library/math/hash-defining-macros
+(defpackage #:coalton/math/hash-defining-macros
+  (:nicknames
+   #:coalton-library/math/hash-defining-macros)
   (:use
    #:coalton
-   #:coalton-library/classes)
+   #:coalton/classes)
   (:export
    #:define-sxhash-hasher))
 
-(in-package #:coalton-library/math/hash-defining-macros)
+(in-package #:coalton/math/hash-defining-macros)
 
 (cl:defmacro define-sxhash-hasher (type)
   "Define an instance of Hash for the Coalton type TYPE using CL:SXHASH."

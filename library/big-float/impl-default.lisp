@@ -2,7 +2,7 @@
 ;;;;
 ;;;; Arbitrary precision floats using pure Coalton.
 
-(in-package #:coalton-library/big-float)
+(in-package #:coalton/big-float)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -836,4 +836,4 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
   (cl:format out (big-float->string obj)))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/BIG-FLOAT")
+(sb-ext:lock-package "COALTON/BIG-FLOAT")

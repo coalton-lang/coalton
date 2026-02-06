@@ -317,7 +317,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (values tc:ty tc:ty-predicate-list accessor-list node-integer-literal tc:substitution-list &optional))
     
     (let* ((num
-             (util:find-symbol "NUM" "COALTON-LIBRARY/CLASSES"))
+             (util:find-symbol "NUM" "COALTON/CLASSES"))
            (tvar
              (tc:make-variable))
            (pred
@@ -1330,7 +1330,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (values tc:ty tc:ty-predicate-list accessor-list node-for tc:substitution-list &optional))
 
     (let ((intoiter-symbol
-            (util:find-symbol "INTOITERATOR" "COALTON-LIBRARY/ITERATOR")))
+            (util:find-symbol "INTOITERATOR" "COALTON/ITERATOR")))
 
       (multiple-value-bind (pat-ty pat-node subs)
           (infer-pattern-type (parser:node-for-pattern node) (tc:make-variable) subs env)
@@ -1558,7 +1558,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (let* (;; m-type is the type of the monad and has kind "* -> *"
            (m-type (tc:make-variable (tc:make-kfun :from tc:+kstar+ :to tc:+kstar+)))
 
-           (monad-symbol (util:find-symbol "MONAD" "COALTON-LIBRARY/CLASSES"))
+           (monad-symbol (util:find-symbol "MONAD" "COALTON/CLASSES"))
 
            (preds nil)
            (accessors nil)
@@ -1708,7 +1708,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 
     (let ((ty (etypecase (parser:pattern-literal-value pat)
                 (integer (let* ((num
-                                  (util:find-symbol "NUM" "COALTON-LIBRARY/CLASSES"))
+                                  (util:find-symbol "NUM" "COALTON/CLASSES"))
                                 (tvar
                                   (tc:make-variable))
                                 (pred

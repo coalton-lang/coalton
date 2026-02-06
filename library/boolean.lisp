@@ -1,12 +1,12 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/boolean
+(coalton/utils:defstdlib-package #:coalton/boolean
   (:use
    #:coalton
-   #:coalton-library/classes)
+   #:coalton/classes)
   (:import-from
-   #:coalton-library/hash
+   #:coalton/hash
    #:define-sxhash-hasher))
 
-(in-package #:coalton-library/boolean)
+(in-package #:coalton/boolean)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -43,4 +43,4 @@
   (define-sxhash-hasher Boolean))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/BOOLEAN")
+(sb-ext:lock-package "COALTON/BOOLEAN")

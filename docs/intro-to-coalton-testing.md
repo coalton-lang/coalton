@@ -98,7 +98,7 @@ In `test.lisp`, put the following forms:
 The `defpackage`, `in-package` and `named-readtables:in-readtable` forms should all be
 familiar to you. Add any clauses to your `defpackage` that you need to reference your
 system, like `(:local-nicknames (#:f #:foo))` or `(:use #:foo)`. Also add any
-`:local-nicknames` for `coalton-library` packages you want.
+`:local-nicknames` for `coalton` packages you want.
 
 We've added one new package to our `:use` list, `#:coalton-testing`. It defines the
 utilities you need for defining tests and making assertions within them.

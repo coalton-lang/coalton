@@ -12,7 +12,7 @@ error: Ambiguous predicate
   --> test:3:13
    |
  3 |  (define x (0 1))
-   |               ^ Ambiguous predicate COALTON-LIBRARY/CLASSES:NUM :A
+   |               ^ Ambiguous predicate COALTON/CLASSES:NUM :A
 
 ================================================================================
 101 Check that you can only call callable things
@@ -63,7 +63,7 @@ error: Explicit type is missing inferred predicate
   --> test:4:8
    |
  4 |  (define x 1)
-   |          ^ Declared type :A is missing inferred predicate COALTON-LIBRARY/CLASSES:NUM :A
+   |          ^ Declared type :A is missing inferred predicate COALTON/CLASSES:NUM :A
 
 ================================================================================
 104 Check that constructors are properly typed
@@ -83,7 +83,7 @@ error: Unknown instance
   --> test:7:24
    |
  7 |  (define x (Branch (Leaf 5) (Leaf "string")))
-   |                          ^ Unknown instance COALTON-LIBRARY/CLASSES:NUM STRING
+   |                          ^ Unknown instance COALTON/CLASSES:NUM STRING
 
 ================================================================================
 105 Check that types of kind * cannot be applied to
@@ -146,7 +146,7 @@ error: Ambiguous predicate
   --> test:9:14
    |
  9 |      ((Just 5) 5)
-   |                ^ Ambiguous predicate COALTON-LIBRARY/CLASSES:NUM STRING
+   |                ^ Ambiguous predicate COALTON/CLASSES:NUM STRING
 
 ================================================================================
 108 Match branches must match on constructors

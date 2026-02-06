@@ -1,14 +1,14 @@
-(coalton-library/utils:defstdlib-package :coalton-library/ordtree
+(coalton/utils:defstdlib-package :coalton/ordtree
   (:use
    #:coalton
-   #:coalton-library/classes
-   #:coalton-library/hash
-   #:coalton-library/tuple
-   #:coalton-library/functions
-   #:coalton-library/math)
+   #:coalton/classes
+   #:coalton/hash
+   #:coalton/tuple
+   #:coalton/functions
+   #:coalton/math)
   (:local-nicknames
-   (#:iter #:coalton-library/iterator)
-   (#:cell #:coalton-library/cell)
+   (#:iter #:coalton/iterator)
+   (#:cell #:coalton/cell)
    (#:util #:coalton-impl/runtime))
   (:shadow #:empty)
   (:export
@@ -31,7 +31,7 @@
    #:difference
    #:xor))
 
-(in-package :coalton-library/ordtree)
+(in-package :coalton/ordtree)
 
 (named-readtables:in-readtable coalton:coalton)
 

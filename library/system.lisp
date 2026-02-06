@@ -1,10 +1,10 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/system
+(coalton/utils:defstdlib-package #:coalton/system
   (:use
    #:coalton
-   #:coalton-library/builtin
-   #:coalton-library/classes)
+   #:coalton/builtin
+   #:coalton/classes)
   (:local-nicknames
-   (#:math #:coalton-library/math))
+   (#:math #:coalton/math))
   (:export
    #:gc
    #:sleep)
@@ -38,7 +38,7 @@
    #:cmd-args
    #:argv0))
 
-(in-package #:coalton-library/system)
+(in-package #:coalton/system)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -276,4 +276,4 @@ Garbage collection will be performed before profiling is performed."
                None)))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/SYSTEM")
+(sb-ext:lock-package "COALTON/SYSTEM")

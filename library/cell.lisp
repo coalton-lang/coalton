@@ -1,8 +1,8 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/cell
+(coalton/utils:defstdlib-package #:coalton/cell
   (:use
    #:coalton
-   #:coalton-library/builtin
-   #:coalton-library/classes)
+   #:coalton/builtin
+   #:coalton/classes)
   (:export
    #:Cell
    #:new
@@ -16,7 +16,7 @@
    #:increment!
    #:decrement!))
 
-(in-package #:coalton-library/cell)
+(in-package #:coalton/cell)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -167,4 +167,4 @@ value."
     (define (default) (new (default)))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/CELL")
+(sb-ext:lock-package "COALTON/CELL")

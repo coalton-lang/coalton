@@ -3,7 +3,7 @@
 (coalton-toplevel
   (repr :transparent)
   (define-type (TransparentTypeTest :t)
-    (TransparentTypeTest (coalton-library/lisparray:LispArray :t)))
+    (TransparentTypeTest (coalton/lisparray:LispArray :t)))
 
   (declare complex-type-fn ((Complex :t) -> (Complex :t)))
   (define (complex-type-fn x) x)
@@ -11,26 +11,26 @@
   (declare complex-type-fn-1 ((Complex Double-Float) -> (Complex Double-Float)))
   (define (complex-type-fn-1 x) x)
 
-  (declare lisp-array-fn ((coalton-library/lisparray:LispArray :t) -> :t))
+  (declare lisp-array-fn ((coalton/lisparray:LispArray :t) -> :t))
   (define (lisp-array-fn x)
-    (coalton-library/lisparray:aref x 0))
+    (coalton/lisparray:aref x 0))
 
-  (declare lisp-array-fn-1 ((coalton-library/lisparray:LispArray IFix) -> IFix))
+  (declare lisp-array-fn-1 ((coalton/lisparray:LispArray IFix) -> IFix))
   (define (lisp-array-fn-1 x)
-    (coalton-library/lisparray:aref x 0))
+    (coalton/lisparray:aref x 0))
 
   (declare transparent-type-fn ((TransparentTypeTest :t) -> :t))
   (define (transparent-type-fn (TransparentTypeTest x))
-    (coalton-library/lisparray:aref x 0))
+    (coalton/lisparray:aref x 0))
 
   (declare transparent-type-fn-1 ((TransparentTypeTest IFix) -> IFix))
   (define (transparent-type-fn-1 (TransparentTypeTest x))
-    (coalton-library/lisparray:aref x 0))
+    (coalton/lisparray:aref x 0))
 
   (define-type (LispArrayMultiTyvar :a :b))
-  (declare lisp-array-multi-tyvar-fn ((coalton-library/lisparray:LispArray (LispArrayMultiTyvar :a :b)) -> (LispArrayMultiTyvar :a :b)))
+  (declare lisp-array-multi-tyvar-fn ((coalton/lisparray:LispArray (LispArrayMultiTyvar :a :b)) -> (LispArrayMultiTyvar :a :b)))
   (define (lisp-array-multi-tyvar-fn x)
-    (coalton-library/lisparray:aref x 0))
+    (coalton/lisparray:aref x 0))
   )
 
 (in-package #:coalton-tests)
@@ -53,7 +53,7 @@
       (is (equal 'double-float (lisp-type (coalton-type 'coalton:F64))))
 
       ;; A few special cases
-      (is (equal '(or number coalton-library/math/complex:complex)
+      (is (equal '(or number coalton/math/complex:complex)
                  (lisp-type (coalton-type-of-arg1 'coalton-native-tests::complex-type-fn))))
       (is (equal '(complex double-float)
                  (lisp-type (coalton-type-of-arg1 'coalton-native-tests::complex-type-fn-1))))

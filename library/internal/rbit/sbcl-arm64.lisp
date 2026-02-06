@@ -1,6 +1,6 @@
 ;;;; sbcl-arm64.lisp
 
-(in-package #:coalton-library/internal/rbit)
+(in-package #:coalton/internal/rbit)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   ;; Tell the compiler about the function, `%rbit`.
@@ -9,8 +9,8 @@
 
 (in-package #:sb-vm) 
 
-(define-vop (coalton-library/internal/rbit:rbit)
-  (:translate    coalton-library/internal/rbit:rbit)
+(define-vop (coalton/internal/rbit:rbit)
+  (:translate    coalton/internal/rbit:rbit)
   (:policy       :fast-safe)
   (:args         (arg :scs (unsigned-reg) :target res))
   (:arg-types    unsigned-num)
@@ -18,7 +18,7 @@
   (:result-types unsigned-num)
   (:generator    1 (inst rbit res arg)))
 
-(in-package #:coalton-library/internal/rbit)
+(in-package #:coalton/internal/rbit)
 
 (defun rbit (x)
   (rbit x))

@@ -32,9 +32,9 @@ An example:
 
 ``` coalton
 (package my-package
-  (import coalton-library/list
-          (coalton-library/vector as vec))
-  (import-from coalton-library/char
+  (import coalton/list
+          (coalton/vector as vec))
+  (import-from coalton/char
           upcase
           downcase)
   (export sum-even-numbers))
@@ -51,7 +51,7 @@ keyword:
 
 ``` coalton
 (package my-package
-  (import coalton-library/list as list)
+  (import coalton/list as list)
   (export sum-even-numbers))
 ```
 
@@ -61,7 +61,7 @@ package should be made available within your package:
 ``` coalton
 (package my-package
   "Package documentation string (optional)"
-  (import-from coalton-library/list
+  (import-from coalton/list
     filter)
   (export sum-even-numbers))
 ```
@@ -76,7 +76,7 @@ want to make available for use by other packages:
 
 ``` coalton
 (package my-package
-  (import coalton-library/list)
+  (import coalton/list)
   (export sum-even-numbers))
 ```
 

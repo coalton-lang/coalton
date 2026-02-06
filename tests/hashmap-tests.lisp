@@ -325,7 +325,7 @@
     (let ((s (cell:new 42))
           (a 2862933555777941757)
           (b 3037000493)
-          (m (coalton-library/bits:shift 64 1)))
+          (m (coalton/bits:shift 64 1)))
       ;; Simple 64bit congruential generator.
       ;; https://nuclear.llnl.gov/CNP/rng/rngman/node4.html
       ;; CL's random is cumbersome to use with portable fixed seed value.

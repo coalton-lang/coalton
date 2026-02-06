@@ -34,8 +34,8 @@
 
 (package coalton-unit-tests/parse-break
   (import coalton-prelude
-          (coalton-library/cell as cell)
-          (coalton-library/iterator as iter)))
+          (coalton/cell as cell)
+          (coalton/iterator as iter)))
 
 (define (f)
   (let ((iter (iter:up-to 10)))

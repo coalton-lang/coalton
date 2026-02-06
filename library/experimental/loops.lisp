@@ -1,10 +1,12 @@
 ;;;; loops.lisp
 
-(defpackage #:coalton-library/experimental/loops
+(defpackage #:coalton/experimental/loops
+  (:nicknames
+   #:coalton-library/experimental/loops)
   (:use
    #:coalton
-   #:coalton-library/classes
-   #:coalton-library/math/arith)
+   #:coalton/classes
+   #:coalton/math/arith)
   (:export
    #:repeat
    #:dotimes
@@ -23,7 +25,7 @@
 
 Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these loop macros."))
 
-(in-package #:coalton-library/experimental/loops)
+(in-package #:coalton/experimental/loops)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -464,5 +466,4 @@ COALTON::UNIT/UNIT
           `(%dorange ,start-or-stop ,stop ,step ,func)))))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/EXPERIMENTAL/LOOPS")
-
+(sb-ext:lock-package "COALTON/EXPERIMENTAL/LOOPS")

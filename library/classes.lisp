@@ -1,8 +1,8 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/classes
+(coalton/utils:defstdlib-package #:coalton/classes
   (:use
    #:coalton)
   (:local-nicknames
-   (#:types #:coalton-library/types))
+   (#:types #:coalton/types))
   (:export
    #:Signalable
    #:error
@@ -36,7 +36,7 @@
    #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:unwrap-into #:expect #:as-optional
    #:default #:defaulting-unwrap #:default?))
 
-(in-package #:coalton-library/classes)
+(in-package #:coalton/classes)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -418,4 +418,4 @@ Typical `fail` continuations are:
 
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/CLASSES")
+(sb-ext:lock-package "COALTON/CLASSES")

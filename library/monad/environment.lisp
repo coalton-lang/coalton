@@ -1,10 +1,10 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/monad/environment
+(coalton/utils:defstdlib-package #:coalton/monad/environment
   (:use
    #:coalton
-   #:coalton-library/functions
-   #:coalton-library/classes
-   #:coalton-library/monad/classes
-   #:coalton-library/monad/identity)
+   #:coalton/functions
+   #:coalton/classes
+   #:coalton/monad/classes
+   #:coalton/monad/identity)
   (:export
    #:EnvT
    #:local-envT
@@ -26,7 +26,7 @@
    #:local
    #:asks))
 
-(in-package #:coalton-library/monad/environment)
+(in-package #:coalton/monad/environment)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -207,4 +207,4 @@ Equivalent to Haskell's ReaderT monad https://hackage.haskell.org/package/transf
     (define modify (compose lift modify))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MONAD/ENVIRONMENT")
+(sb-ext:lock-package "COALTON/MONAD/ENVIRONMENT")

@@ -1,8 +1,8 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/functions
+(coalton/utils:defstdlib-package #:coalton/functions
   (:use
    #:coalton
-   #:coalton-library/builtin
-   #:coalton-library/classes)
+   #:coalton/builtin
+   #:coalton/classes)
   (:export
    #:trace
    #:traceObject
@@ -27,7 +27,7 @@
    #:/=
    #:bracket))
 
-(in-package #:coalton-library/functions)
+(in-package #:coalton/functions)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -235,4 +235,4 @@ Modeled after Haskell: https://wiki.haskell.org/Bracket_pattern"
        (%unwind-protect obj exit body)))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/FUNCTIONS")
+(sb-ext:lock-package "COALTON/FUNCTIONS")

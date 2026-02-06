@@ -12,10 +12,10 @@
 
 (package coalton-unit-test/lib-example-complex
   (import
-    coalton-library/classes
-    (coalton-library/hash as hash))
+    coalton/classes
+    (coalton/hash as hash))
   (import-from
-    coalton-library/list
+    coalton/list
     filter)
   (export
     first

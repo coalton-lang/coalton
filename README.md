@@ -20,7 +20,7 @@ Coalton integrates directly into Common Lisp:
 ```lisp
 (defpackage #:differentiation
   (:use #:coalton #:coalton-prelude)
-  (:local-nicknames (#:sym #:coalton-library/symbol))
+  (:local-nicknames (#:sym #:coalton/symbol))
   (:export #:Expr #:EConst #:EVar #:E+ #:E*)
   (:export #:diff #:t #:d/dt))
 

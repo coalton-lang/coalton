@@ -76,5 +76,5 @@ error: Unknown instance
   --> test:3:14
    |
  3 |  (define x (if 0 1 2))
-   |                ^ Unknown instance COALTON-LIBRARY/CLASSES:NUM BOOLEAN
+   |                ^ Unknown instance COALTON/CLASSES:NUM BOOLEAN
 

@@ -3,19 +3,19 @@
 ;;;; An implementation of Hyperdual numbers for computing second-order
 ;;;; derivatives of compositions of built-in Coalton functions.
 
-(coalton-library/utils::defstdlib-package #:coalton-library/math/hyperdual
+(coalton/utils::defstdlib-package #:coalton/math/hyperdual
   (:use
    #:coalton
-   #:coalton-library/builtin
-   #:coalton-library/classes
-   #:coalton-library/functions
-   #:coalton-library/math/arith
-   #:coalton-library/math/elementary
-   #:coalton-library/math/integral
-   #:coalton-library/math/complex
-   #:coalton-library/hash)
+   #:coalton/builtin
+   #:coalton/classes
+   #:coalton/functions
+   #:coalton/math/arith
+   #:coalton/math/elementary
+   #:coalton/math/integral
+   #:coalton/math/complex
+   #:coalton/hash)
   (:local-nicknames
-   (#:complex #:coalton-library/math/complex))
+   (#:complex #:coalton/math/complex))
   (:export
    #:Hyperdual
    #:d-x
@@ -125,7 +125,7 @@ The following list of identities describe the theory of hyperdual numbers.
  (6) (f (Hyperdual x 0 0 0) (Hyperdual y 1 1 0))
       = (Hyperdual (f x y) (∂f/∂x x y) (∂f/∂x x y) (∂²f/∂x² x y))"))
 
-(in-package #:coalton-library/math/hyperdual)
+(in-package #:coalton/math/hyperdual)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -149,7 +149,7 @@ Note: `Eq`, and `Ord` and `Hash` only make use of the primal component."
   (define (h x f0 f1 f2)
     "Compute (f x) given f0 := (f a), f1 := (f' a), and f2 := (f'' a).
 
-Note: See identity (1) in the description of this package (`coalton-library/math/hyperdual`)."
+Note: See identity (1) in the description of this package (`coalton/math/hyperdual`)."
     (let (Hyperdual _ b c d) = x)
     (Hyperdual f0 (* b f1) (* c f1) (+ (* d f1) (* (* b c) f2))))
 
@@ -379,5 +379,5 @@ Note: See identity (1) in the description of this package (`coalton-library/math
       (Cons xx (Cons xy (Cons yx (Cons yy Nil)))))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH/HYPERDUAL")
+(sb-ext:lock-package "COALTON/MATH/HYPERDUAL")
 

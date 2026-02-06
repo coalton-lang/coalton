@@ -305,18 +305,18 @@
   (signals coalton-impl/typechecker:tc-error
     (check-coalton-types
      "(define f
-        (let ((x (coalton-library/vector:new)))
+        (let ((x (coalton/vector:new)))
           (fn (n)
-            (coalton-library/vector:push! n x)
+            (coalton/vector:push! n x)
             x)))"))
 
   ;; Allocating in a function body remains polymorphic because each call
   ;; gets a fresh allocation site.
   (check-coalton-types
    "(define (mk _x)
-      (let ((x (coalton-library/vector:new)))
+      (let ((x (coalton/vector:new)))
         (fn (n)
-          (coalton-library/vector:push! n x)
+          (coalton/vector:push! n x)
           x)))"
 
    '("mk" . "(:a -> :b -> Vector :b)")))
@@ -350,17 +350,17 @@
   (signals coalton-impl/typechecker:tc-error
     (check-coalton-types
      "(define boxed-vec
-        ((fn (x) x) (coalton-library/vector:new)))"))
+        ((fn (x) x) (coalton/vector:new)))"))
 
   (signals coalton-impl/typechecker:tc-error
     (check-coalton-types
      "(define boxed-cell
-        ((fn (x) x) (coalton-library/cell:new None)))"))
+        ((fn (x) x) (coalton/cell:new None)))"))
 
   (signals coalton-impl/typechecker:tc-error
     (check-coalton-types
      "(define boxed-queue
-        ((fn (x) x) (coalton-library/queue:new)))"))
+        ((fn (x) x) (coalton/queue:new)))"))
 
   ;; User-defined opaque native types default to invariant.
   (signals coalton-impl/typechecker:tc-error
@@ -377,7 +377,7 @@
   (signals coalton-impl/typechecker:tc-error
     (check-coalton-types
      "(define wrapped-new
-        (Some (coalton-library/vector:new)))"))
+        (Some (coalton/vector:new)))"))
 
   (check-coalton-types
    "(define wrapped-none
@@ -389,36 +389,36 @@
   (signals coalton-impl/typechecker:tc-error
     (check-coalton-types
      "(define stash
-        (let ((c (coalton-library/cell:new None)))
+        (let ((c (coalton/cell:new None)))
           (fn (x)
-            (coalton-library/cell:write! c (Some x))
-            (coalton-library/cell:read c))))"))
+            (coalton/cell:write! c (Some x))
+            (coalton/cell:read c))))"))
 
   ;; Explicit type declarations still allow expansive bindings to be monomorphic.
   (check-coalton-types
    "(declare int-vec (Vector Integer))
-    (define int-vec (coalton-library/vector:new))
+    (define int-vec (coalton/vector:new))
 
     (define (push-int n)
-      (coalton-library/vector:push! n int-vec))
+      (coalton/vector:push! n int-vec))
 
     (define peek-int
       (fn ()
-        (coalton-library/vector:index 0 int-vec)))"
+        (coalton/vector:index 0 int-vec)))"
 
    '("push-int" . "(Integer -> UFix)")
    '("peek-int" . "(Unit -> Optional Integer)"))
 
   (check-coalton-types
-   "(declare int-queue (coalton-library/queue:Queue Integer))
-    (define int-queue (coalton-library/queue:new))
+   "(declare int-queue (coalton/queue:Queue Integer))
+    (define int-queue (coalton/queue:new))
 
     (define (push-int-queue n)
-      (coalton-library/queue:push! n int-queue))
+      (coalton/queue:push! n int-queue))
 
     (define pop-int-queue
       (fn ()
-        (coalton-library/queue:pop! int-queue)))"
+        (coalton/queue:pop! int-queue)))"
 
    '("push-int-queue" . "(Integer -> Unit)")
    '("pop-int-queue" . "(Unit -> Optional Integer)"))
@@ -427,21 +427,21 @@
   ;; types; Queue remains invariant for relaxed value restriction.
   (signals coalton-impl/typechecker:tc-error
     (check-coalton-types
-     "(define shared-queue (coalton-library/queue:new))
+     "(define shared-queue (coalton/queue:new))
 
       (define (push-shared-int)
-        (coalton-library/queue:push! 1 shared-queue))
+        (coalton/queue:push! 1 shared-queue))
 
       (define (push-shared-string)
-        (coalton-library/queue:push! \"oops\" shared-queue))"))
+        (coalton/queue:push! \"oops\" shared-queue))"))
 
   ;; Mutable allocations inside function bodies remain polymorphic per call.
   (check-coalton-types
    "(define (mk-stash _seed)
-      (let ((c (coalton-library/cell:new None)))
+      (let ((c (coalton/cell:new None)))
         (fn (x)
-          (coalton-library/cell:write! c (Some x))
-          (coalton-library/cell:read c))))"
+          (coalton/cell:write! c (Some x))
+          (coalton/cell:read c))))"
 
    '("mk-stash" . "(:a -> :b -> Optional :b)")))
 

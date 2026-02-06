@@ -84,7 +84,7 @@
         #:coalton-prelude)
   (:export #:extract!
            #:primes-iter)
-  (:local-nicknames (#:iter #:coalton-library/iterator)))
+  (:local-nicknames (#:iter #:coalton/iterator)))
 
 (cl:in-package #:small-coalton-programs.primes-iterator)
 

@@ -1,9 +1,9 @@
-(coalton-library/utils::defstdlib-package #:coalton-library/monad/free
+(coalton/utils::defstdlib-package #:coalton/monad/free
   (:use
    #:coalton
-   #:coalton-library/builtin
-   #:coalton-library/classes
-   #:coalton-library/functions)
+   #:coalton/builtin
+   #:coalton/classes
+   #:coalton/functions)
   (:export
    #:MonadFree
    #:wrap
@@ -13,7 +13,7 @@
    #:foldFree
    #:run-free))
 
-(in-package #:coalton-library/monad/free)
+(in-package #:coalton/monad/free)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -142,4 +142,4 @@ References: [here](https://github.com/purescript/purescript-free/blob/v5.1.0/src
         g))))  
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MONAD/FREE")
+(sb-ext:lock-package "COALTON/MONAD/FREE")

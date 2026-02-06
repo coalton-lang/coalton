@@ -153,7 +153,7 @@ Returns a `node'.")
     (let ((qual-ty (tc:node-type expr)))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
 
-      (let* ((classes-package (util:find-package "COALTON-LIBRARY/CLASSES"))
+      (let* ((classes-package (util:find-package "COALTON/CLASSES"))
              (num-class (util:find-symbol "NUM" classes-package))
              (num-pred (tc:make-ty-predicate :class num-class
                                              :types (list (tc:qualified-ty-type qual-ty))))
@@ -239,7 +239,7 @@ Returns a `node'.")
               ;; If the struct is a newtype, then return 'id' as the accessor
               (make-node-variable
                :type ty
-               :value (util:find-symbol "ID" "COALTON-LIBRARY/FUNCTIONS"))
+               :value (util:find-symbol "ID" "COALTON/FUNCTIONS"))
 
               (make-node-variable
                :type ty
@@ -705,7 +705,7 @@ Returns a `node'.")
              (pattern-type pat-arg))
 
            (classes-package
-             (util:find-package "COALTON-LIBRARY/CLASSES"))
+             (util:find-package "COALTON/CLASSES"))
 
            (some
              (util:find-symbol "SOME" classes-package))
@@ -732,7 +732,7 @@ Returns a `node'.")
              (node-type into-iter-arg))
 
            (iterator-package
-             (util:find-package "COALTON-LIBRARY/ITERATOR"))
+             (util:find-package "COALTON/ITERATOR"))
 
            (into-iter-method
              (util:find-symbol "INTO-ITER" iterator-package))
@@ -889,7 +889,7 @@ Returns a `node'.")
              (type tc:environment env)
              (values node))
 
-    (let* ((classes-package (util:find-package "COALTON-LIBRARY/CLASSES"))
+    (let* ((classes-package (util:find-package "COALTON/CLASSES"))
 
            (monad-symbol (util:find-symbol "MONAD" classes-package))
 

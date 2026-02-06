@@ -2,14 +2,14 @@
 ;;;;
 ;;;; An interface to Common Lisp rank-1 SIMPLE-ARRAYs.
 
-(coalton-library/utils:defstdlib-package #:coalton-library/lisparray
+(coalton/utils:defstdlib-package #:coalton/lisparray
   (:use
    #:coalton
-   #:coalton-library/classes)
+   #:coalton/classes)
   (:local-nicknames
-   (#:types #:coalton-library/types)
-   (#:complex #:coalton-library/math/complex)
-   (#:ram #:coalton-library/randomaccess))
+   (#:types #:coalton/types)
+   (#:complex #:coalton/math/complex)
+   (#:ram #:coalton/randomaccess))
   (:export
    #:LispArray
    #:make
@@ -19,7 +19,7 @@
    #:set!
    #:copy))
 
-(in-package #:coalton-library/lisparray)
+(in-package #:coalton/lisparray)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -230,5 +230,5 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
   (define-lisparray-specialization U64 (cl:unsigned-byte 64)))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/LISPARRAY")
+(sb-ext:lock-package "COALTON/LISPARRAY")
 

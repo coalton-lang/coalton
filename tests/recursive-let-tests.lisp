@@ -1,7 +1,7 @@
 (in-package #:coalton-tests)
 
 (uiop:define-package #:coalton-tests/recursive-let-tests
-  (:use #:coalton #:coalton-library/classes)
+  (:use #:coalton #:coalton/classes)
   (:export #:MyList #:mylist-zero-circle #:mylist-circle?
 
            #:list-zero-circle))
@@ -20,7 +20,7 @@
       (define (mylist-circle? lst)
         (match lst
           ((MyNil) False)
-          ((MyCons _ tail) (coalton-library/functions:unsafe-pointer-eq? lst tail))))))
+          ((MyCons _ tail) (coalton/functions:unsafe-pointer-eq? lst tail))))))
   ;; hacky eval of quoted form to only compile this code after compiling the previous
   ;; `with-coalton-compilation' form.
   (is (eval '(coalton:coalton (coalton-tests/recursive-let-tests:mylist-circle?

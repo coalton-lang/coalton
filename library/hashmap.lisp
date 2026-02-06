@@ -1,20 +1,20 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/hashmap
+(coalton/utils:defstdlib-package #:coalton/hashmap
   (:use
    #:coalton
-   #:coalton-library/builtin
-   #:coalton-library/classes
-   #:coalton-library/math/arith
-   #:coalton-library/tuple
-   #:coalton-library/hash
-   #:coalton-library/optional
-   #:coalton-library/experimental/loops)
+   #:coalton/builtin
+   #:coalton/classes
+   #:coalton/math/arith
+   #:coalton/tuple
+   #:coalton/hash
+   #:coalton/optional
+   #:coalton/experimental/loops)
   (:local-nicknames
-   (#:arr  #:coalton-library/lisparray)
-   (#:bits #:coalton-library/bits)
-   (#:cell #:coalton-library/cell)
-   (#:iter #:coalton-library/iterator)
-   (#:list #:coalton-library/list)
-   (#:math #:coalton-library/math)
+   (#:arr  #:coalton/lisparray)
+   (#:bits #:coalton/bits)
+   (#:cell #:coalton/cell)
+   (#:iter #:coalton/iterator)
+   (#:list #:coalton/list)
+   (#:math #:coalton/math)
    (#:util #:coalton-impl/runtime)
    )
   (:shadow #:count #:empty #:xor)
@@ -40,7 +40,7 @@
    #:xor
    #:show))
 
-(in-package #:coalton-library/hashmap)
+(in-package #:coalton/hashmap)
 
 (named-readtables:in-readtable coalton:coalton)
 

@@ -2,16 +2,16 @@
 ;;;;
 ;;;; Integral domains and operations on integers
 
-(coalton-library/utils::defstdlib-package #:coalton-library/math/integral
+(coalton/utils::defstdlib-package #:coalton/math/integral
   (:use
    #:coalton
-   #:coalton-library/classes
-   #:coalton-library/builtin
-   #:coalton-library/math/arith)
+   #:coalton/classes
+   #:coalton/builtin
+   #:coalton/math/arith)
   (:import-from
-   #:coalton-library/bits #:Bits)
+   #:coalton/bits #:Bits)
   (:local-nicknames
-   (#:bits #:coalton-library/bits))
+   (#:bits #:coalton/bits))
   (:export
    #:Remainder
    #:Integral
@@ -35,7 +35,7 @@
    #:ilog))
 
 
-(in-package #:coalton-library/math/integral)
+(in-package #:coalton/math/integral)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -322,4 +322,4 @@ are floored and truncated division, respectively."
 (%define-native-expt F64)
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH/INTEGRAL")
+(sb-ext:lock-package "COALTON/MATH/INTEGRAL")

@@ -26,7 +26,7 @@ CoaltonのコードはCommon Lispと同じくパッケージ（およびASDFシ�
 
 ## パッケージ
 
-Coaltonの標準ライブラリは、一連のパッケージ群として提供されています。たとえば、文字列に関するものは`#:coalton-library/string`パッケージにあります。すべての標準ライブラリパッケージの一覧は[Coalton Reference](https://coalton-lang.github.io/reference)を参照してください。
+Coaltonの標準ライブラリは、一連のパッケージ群として提供されています。たとえば、文字列に関するものは`#:coalton/string`パッケージにあります。すべての標準ライブラリパッケージの一覧は[Coalton Reference](https://coalton-lang.github.io/reference)を参照してください。
 
 Coaltonを使うパッケージでは、必要に応じて標準ライブラリをインポートします。このとき _`#:cl`または`#:common-lisp`パッケージは`:use`しないでください！_ 代わりに、少なくとも`#:coalton`パッケージ（コア言語機能用）と`#:coalton-prelude`（非常に一般的な標準ライブラリ定義用）の両方を`:use`します：
 
@@ -39,14 +39,14 @@ Coaltonを使うパッケージでは、必要に応じて標準ライブラリ�
 
 `#:coalton-prelude` パッケージには、標準ライブラリ内に存在しない機能は含まれておらず、単に利便性のためだけのものです。
 
-ただ、この最小限のパッケージ定義だけでは実用的ではありません。たとえば、標準ライブラリの関数 `strip-prefix`（文字列から接頭辞を削除する関数）を使いたい場合、プログラム内で `coalton-library/string:strip-prefix` と入力しなければなりません。この長いパッケージ名を使う代わりに、このパッケージのローカルなニックネームを追加します：
+ただ、この最小限のパッケージ定義だけでは実用的ではありません。たとえば、標準ライブラリの関数 `strip-prefix`（文字列から接頭辞を削除する関数）を使いたい場合、プログラム内で `coalton/string:strip-prefix` と入力しなければなりません。この長いパッケージ名を使う代わりに、このパッケージのローカルなニックネームを追加します：
 
 ```lisp
 (defpackage #:my-package
   (:use 
    #:coalton)
   (:local-nicknames 
-   (#:str #:coalton-library/string)))
+   (#:str #:coalton/string)))
 ```
 
 これにより、単に `str:strip-prefix` と入力するだけですみます。Coalton 標準ライブラリだけでなくサードパーティのライブラリからであっても、そのパッケージのニックネームを `:local-nicknames` リストに追加できます。たとえば：
@@ -56,9 +56,9 @@ Coaltonを使うパッケージでは、必要に応じて標準ライブラリ�
   (:use 
    #:coalton)
   (:local-nicknames 
-   (#:str  #:coalton-library/string)
-   (#:vec  #:coalton-library/vector)
-   (#:math #:coalton-library/math)))
+   (#:str  #:coalton/string)
+   (#:vec  #:coalton/vector)
+   (#:math #:coalton/math)))
 ```
 
 **`#:coalton` と `#:coalton-prelude` 以外の Coalton の組み込みパッケージを `:use` することは推奨しません。** Common Lisp では、パッケージが外部からシンボルをインポートすることで、歴史的に後方互換性の問題が発生してきました。さらに、Coalton は異なるパッケージで似た機能を持つ関数に対して同じシンボル名を使用しています。たとえば、stringパッケージとvectorパッケージの両方に `length` という名前のシンボルが存在し、つまり `str:length` と `vec:length` が両方存在します。これらを `:use` してしまうと `length` というシンボルが複数のパッケージ間で衝突してしまうことになります。
@@ -613,7 +613,7 @@ Coaltonは無限ループ、条件付きループ、および`for`ループス�
 > [!警告]
 > これらは実験的なもので将来変更される可能性があります。
 
-標準ライブラリの[`coalton-library/experimental/loops`](https://coalton-lang.github.io/reference/#coalton-library/experimental/loops-package)には、`dotimes`や`dolist`など対応するCommon Lispのマクロと似た、多くのLisp風の繰り返しマクロがあります。
+標準ライブラリの[`coalton/experimental/loops`](https://coalton-lang.github.io/reference/#coalton/experimental/loops-package)には、`dotimes`や`dolist`など対応するCommon Lispのマクロと似た、多くのLisp風の繰り返しマクロがあります。
 
 これらのマクロは明示的に値を収集したり累積しない限り通常 `Unit` を返します。カウンター (例: `dotimes`) やインデックス (例: `dolist-enumerated`) はたいてい `UFix` です。
 
@@ -705,7 +705,7 @@ Coalton に、私たちの定数が別の型であることを伝えるには、
 COALTON-USER> (coalton (the F32 (/ 4 2)))
 2.0
 COALTON-USER> (coalton (the Fraction (/ 4 2)))
-#.(COALTON-LIBRARY::%FRACTION 2 1)
+#.(COALTON::%FRACTION 2 1)
 ```
 
 `/` 演算子による除算の結果として `Integer` 型を返すことはできません。これは、インスタンス `Dividable Integer Integer` が定義されていないためです:
@@ -749,9 +749,9 @@ COALTON-USER> (coalton (round (the Fraction (/ 3 2))))
 分数は、`fromfrac` を使用して他の徐算可能な形式に変換できます（注：これにより精度が失われる可能性があります）：
 
 ```
-COALTON-LIBRARY/MATH/REAL> (coalton (the F64 (fromfrac 1/2)))
+COALTON/MATH/REAL> (coalton (the F64 (fromfrac 1/2)))
 0.5d0
-COALTON-LIBRARY/MATH/REAL> (coalton (the F32 (fromfrac 999/1000)))
+COALTON/MATH/REAL> (coalton (the F32 (fromfrac 999/1000)))
 0.999
 ```
 
@@ -826,7 +826,7 @@ COALTON-USER> (type-of 'fun)
 
 ### 完全な型変換と不完全な型変換
 
-Coaltonは、Common Lispの関数`cl:coerce`と同様の型変換を、`#:coalton-library/classes`パッケージの`Into`という型クラスとその唯一のメソッド`into`で実現しています。ただし、`into`メソッドは単一の引数のみを受け取ります。Coalton は、どのデータ型に変換すべきかをどのように判断するのでしょうか？これは、周囲の文脈による型推論（例えば、この例では `substring` が `String` を期待している場合）によって決定されます。
+Coaltonは、Common Lispの関数`cl:coerce`と同様の型変換を、`#:coalton/classes`パッケージの`Into`という型クラスとその唯一のメソッド`into`で実現しています。ただし、`into`メソッドは単一の引数のみを受け取ります。Coalton は、どのデータ型に変換すべきかをどのように判断するのでしょうか？これは、周囲の文脈による型推論（例えば、この例では `substring` が `String` を期待している場合）によって決定されます。
 
 ```lisp
 (coalton-toplevel
@@ -930,7 +930,7 @@ Coaltonは、Common Lispの関数`cl:coerce`と同様の型変換を、`#:coalto
   (define (nest-right (= tpl (Tuple a _))) (Tuple a tpl)))
 ```
 
- `coalton-library:if` は、真偽値の比較を行う際の省略形として使えます：
+ `coalton:if` は、真偽値の比較を行う際の省略形として使えます：
 
 ```lisp
 (coalton-toplevel
@@ -961,7 +961,7 @@ Coaltonは、Common Lispの関数`cl:coerce`と同様の型変換を、`#:coalto
       (True (into n)))))
 ```
 
-`coalton-library` の真偽演算子 `and` と `or` は、実際には必要最小限だけ評価する可変引数マクロです。関数バージョンの `boolean-and` と `boolean-or` もあります。
+`coalton` の真偽演算子 `and` と `or` は、実際には必要最小限だけ評価する可変引数マクロです。関数バージョンの `boolean-and` と `boolean-or` もあります。
 
 ```lisp
 (coalton
@@ -970,9 +970,9 @@ Coaltonは、Common Lispの関数`cl:coerce`と同様の型変換を、`#:coalto
 
 この場合、`really-expensive` は評価が省略され決して呼び出されません。`and` と `or` はどちらも1つ以上の引数を取ります。
 
-## `COALTON-LIBRARY:PROGN`
+## `COALTON:PROGN`
 
-Coaltonには、Common Lispの `cl:progn` に似た`coalton-library:progn`構文が用意されています。
+Coaltonには、Common Lispの `cl:progn` に似た`coalton:progn`構文が用意されています。
 
 ```lisp
 (coalton-toplevel
@@ -1039,7 +1039,7 @@ Coaltonの`progn`では、特殊な`let`構文を使用できます。
 
 ## `Unless` と `When`
 
-`coalton-library` パッケージには、Common Lisp での定義と類似した動作をする `unless` と `when` も含まれています。
+`coalton` パッケージには、Common Lisp での定義と類似した動作をする `unless` と `when` も含まれています。
 これらの演算子は、副作用を含む操作を条件分岐するためだけに使用することを推奨します。
 
 ```lisp
@@ -1211,7 +1211,7 @@ Coaltonには、Haskellの `do` 表現と類似した動作をする`do`マク�
 
 ## 省略関数構文
 
-Coaltonには引数なし関数のための特別な構文はありません。ただし、型シグネチャが`Unit -> *`である関数は、Coaltonでは明示的に`Unit`を渡さなくても呼び出すことができます。たとえば、`(coalton-library/vector:new)`は、`(coalton-library/vector:new Unit)`の省略形です。
+Coaltonには引数なし関数のための特別な構文はありません。ただし、型シグネチャが`Unit -> *`である関数は、Coaltonでは明示的に`Unit`を渡さなくても呼び出すことができます。たとえば、`(coalton/vector:new)`は、`(coalton/vector:new Unit)`の省略形です。
 
 
 関数は、`(fn () 5)` のような形式で暗黙のパラメーターを使用して定義することもできます。これで暗黙に `Unit` を1つパラメーターとして取る関数が作成されます。

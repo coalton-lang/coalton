@@ -19,15 +19,15 @@
    #:coalton
    #:coalton-prelude)
   (:local-nicknames
-   (#:vec #:coalton-library/vector)
-   (#:iter #:coalton-library/iterator)
-   (#:cell #:coalton-library/cell)
-   (#:char #:coalton-library/char)
-   (#:str #:coalton-library/string)
-   (#:list #:coalton-library/list)
-   (#:arith #:coalton-library/math)
-   (#:state #:coalton-library/monad/state)
-   (#:file #:coalton-library/file))
+   (#:vec #:coalton/vector)
+   (#:iter #:coalton/iterator)
+   (#:cell #:coalton/cell)
+   (#:char #:coalton/char)
+   (#:str #:coalton/string)
+   (#:list #:coalton/list)
+   (#:arith #:coalton/math)
+   (#:state #:coalton/monad/state)
+   (#:file #:coalton/file))
   (:export
    #:eval
    #:run-program

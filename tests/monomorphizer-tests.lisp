@@ -33,7 +33,7 @@
 (coalton-toplevel
   (monomorphize)
   (declare underapplication-c
-           ((List coalton-library/big-float:Big-Float) -> coalton-library/big-float:Big-Float))
+           ((List coalton/big-float:Big-Float) -> coalton/big-float:Big-Float))
   (define (underapplication-c xs)
     (match (list:maximum (append xs (map (fn (x) (* x x)) xs)))
       ((Some x) x)

@@ -1,9 +1,9 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/tuple
+(coalton/utils:defstdlib-package #:coalton/tuple
   (:use
    #:coalton
-   #:coalton-library/builtin
-   #:coalton-library/classes
-   #:coalton-library/hash)
+   #:coalton/builtin
+   #:coalton/classes
+   #:coalton/hash)
   (:export
    #:fst
    #:snd
@@ -20,7 +20,7 @@
    #:.fifth
    #:sequence-tuple5))
 
-(in-package #:coalton-library/tuple)
+(in-package #:coalton/tuple)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -155,4 +155,4 @@
     (define (default) (Tuple (default) (default)))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/TUPLE")
+(sb-ext:lock-package "COALTON/TUPLE")

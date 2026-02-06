@@ -1,6 +1,6 @@
 ;;;; These are the entry points for the coalton documentation
 ;;;; generator. A standard library package is any package with the
-;;;; exact name 'coalton' or whose name starts with 'coalton-library'.
+;;;; exact name 'coalton' or whose name starts with 'coalton/'.
 ;;;;
 ;;;; To generate markdown input for the static website generator, do:
 ;;;;

@@ -41,7 +41,7 @@
     (let* ((pkg-b (parse-package
      "(package coalton-unit-test/package-b
         (import coalton-unit-test/package-a
-          (coalton-library/list as list))
+          (coalton/list as list))
         (export d e f))"))
            (lisp-pkg-b (coalton-impl/parser/toplevel::lisp-package pkg-b)))
       (is (= 3 (length (ext-syms lisp-pkg-b))))

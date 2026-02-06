@@ -3,7 +3,7 @@
 ================================================================================
 
 (package coalton-unit-tests/parse-while
-  (import coalton-library/functions))
+  (import coalton/functions))
 
 (define (f)
   (while :alabel True (trace "one") (trace "two")))

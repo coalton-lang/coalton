@@ -5,7 +5,7 @@
     (is (== (Some "a") (seq:get seq 0)))
     (is (== (Some "b") (seq:get seq 1)))
     (is (== (Some "c") (seq:get seq 2)))
-    (is (coalton-library/optional:none? (seq:get seq 3)))
+    (is (coalton/optional:none? (seq:get seq 3)))
     (match (seq:pop seq)
       ((Some (Tuple x seq2))
        (is (== x "c"))

@@ -1,17 +1,17 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/optional
+(coalton/utils:defstdlib-package #:coalton/optional
   (:use
    #:coalton
-   #:coalton-library/builtin
-   #:coalton-library/classes)
+   #:coalton/builtin
+   #:coalton/classes)
   (:local-nicknames
-   (#:cell #:coalton-library/cell)
-   (#:iter #:coalton-library/iterator))
+   (#:cell #:coalton/cell)
+   (#:iter #:coalton/iterator))
   (:export
    #:from-some
    #:some?
    #:none?))
 
-(in-package #:coalton-library/optional)
+(in-package #:coalton/optional)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -156,4 +156,4 @@
     (define (default) None)))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/OPTIONAL")
+(sb-ext:lock-package "COALTON/OPTIONAL")

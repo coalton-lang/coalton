@@ -1,5 +1,5 @@
 (defpackage #:coalton/hashtable-shim
-  (:documentation "A Common Lisp interface for generic mutable hash tables, for use in COALTON-LIBRARY's hash tables.")
+  (:documentation "A Common Lisp interface for generic mutable hash tables, for use in COALTON's hash tables.")
   (:use #:cl)
   (:export
    #:hash-table-type

@@ -1,16 +1,16 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/seq
+(coalton/utils:defstdlib-package #:coalton/seq
   (:use
    #:coalton
-   #:coalton-library/builtin
-   #:coalton-library/functions
-   #:coalton-library/classes)
+   #:coalton/builtin
+   #:coalton/functions
+   #:coalton/classes)
   (:local-nicknames
-   (#:types #:coalton-library/types)
-   (#:math #:coalton-library/math)
-   (#:optional #:coalton-library/optional)
-   (#:cell #:coalton-library/cell)
-   (#:vector #:coalton-library/vector)
-   (#:iter #:coalton-library/iterator))
+   (#:types #:coalton/types)
+   (#:math #:coalton/math)
+   (#:optional #:coalton/optional)
+   (#:cell #:coalton/cell)
+   (#:vector #:coalton/vector)
+   (#:iter #:coalton/iterator))
   (:export
    #:Seq
    #:new
@@ -23,7 +23,7 @@
    #:conc
    #:make))
 
-(in-package #:coalton-library/seq)
+(in-package #:coalton/seq)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -560,4 +560,4 @@ It attempts to rebalance with a minimum of array copying."
   self)
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/SEQ")
+(sb-ext:lock-package "COALTON/SEQ")

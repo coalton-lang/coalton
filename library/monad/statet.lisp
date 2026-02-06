@@ -1,11 +1,11 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/monad/statet
+(coalton/utils:defstdlib-package #:coalton/monad/statet
   (:use
    #:coalton
-   #:coalton-library/functions
-   #:coalton-library/classes
-   #:coalton-library/monad/classes)
+   #:coalton/functions
+   #:coalton/classes
+   #:coalton/monad/classes)
   (:local-nicknames
-   (:tp #:coalton-library/tuple))
+   (:tp #:coalton/tuple))
   (:export
    #:StateT
    #:run-stateT
@@ -24,7 +24,7 @@
    #:put
    #:modify))
 
-(in-package #:coalton-library/monad/statet)
+(in-package #:coalton/monad/statet)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -144,4 +144,4 @@
     (define local (compose map-stateT local))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MONAD/STATET")
+(sb-ext:lock-package "COALTON/MONAD/STATET")

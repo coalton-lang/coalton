@@ -10,17 +10,19 @@
 ;;;;
 ;;;; NOTE: This package is not intended to be used by users.
 
-(defpackage #:coalton-library/math/num-defining-macros
+(defpackage #:coalton/math/num-defining-macros
+  (:nicknames
+   #:coalton-library/math/num-defining-macros)
   (:use
    #:coalton
-   #:coalton-library/builtin
-   #:coalton-library/classes
-   #:coalton-library/functions
-   #:coalton-library/utils
-   #:coalton-library/math/arith)
+   #:coalton/builtin
+   #:coalton/classes
+   #:coalton/functions
+   #:coalton/utils
+   #:coalton/math/arith)
   (:local-nicknames
    (#:ff #:float-features)
-   (#:bits #:coalton-library/bits))
+   (#:bits #:coalton/bits))
   (:export
    #:+fixnum-bits+
    #:+unsigned-fixnum-bits+
@@ -41,7 +43,7 @@
    #:define-bits-wrapping
    #:define-default-num))
 
-(in-package #:coalton-library/math/num-defining-macros)
+(in-package #:coalton/math/num-defining-macros)
 
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
   (cl:defconstant +fixnum-bits+

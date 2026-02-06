@@ -1,15 +1,17 @@
-(uiop:define-package #:coalton-library/math
+(uiop:define-package #:coalton/math
+  (:nicknames
+   #:coalton-library/math)
   (:use-reexport
-   #:coalton-library/math/arith
-   #:coalton-library/math/num
-   #:coalton-library/math/bounded
-   #:coalton-library/math/conversions
-   #:coalton-library/math/fraction
-   #:coalton-library/math/integral
-   #:coalton-library/math/real
-   #:coalton-library/math/complex
-   #:coalton-library/math/elementary
-   #:coalton-library/math/dual))
+   #:coalton/math/arith
+   #:coalton/math/num
+   #:coalton/math/bounded
+   #:coalton/math/conversions
+   #:coalton/math/fraction
+   #:coalton/math/integral
+   #:coalton/math/real
+   #:coalton/math/complex
+   #:coalton/math/elementary
+   #:coalton/math/dual))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH")
+(sb-ext:lock-package "COALTON/MATH")

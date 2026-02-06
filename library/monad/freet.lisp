@@ -1,11 +1,11 @@
-(coalton-library/utils::defstdlib-package #:coalton-library/monad/freet
+(coalton/utils::defstdlib-package #:coalton/monad/freet
   (:use
    #:coalton
-   #:coalton-library/builtin
-   #:coalton-library/classes
-   #:coalton-library/functions)
+   #:coalton/builtin
+   #:coalton/classes
+   #:coalton/functions)
   (:import-from
-   #:coalton-library/monad/free
+   #:coalton/monad/free
    #:MonadFree
    #:wrap)
   (:export
@@ -16,7 +16,7 @@
    #:run-freeT
    #:fold-freeT))
 
-(in-package #:coalton-library/monad/freet)
+(in-package #:coalton/monad/freet)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -181,4 +181,4 @@ functor `f` at a time."
                (fold-freeT f))))))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MONAD/FREET")
+(sb-ext:lock-package "COALTON/MONAD/FREET")

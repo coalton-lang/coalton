@@ -36,8 +36,8 @@
   (:use
    #:coalton
    #:coalton-prelude
-   #:coalton-library/big-float
-   #:coalton-library/math)
+   #:coalton/big-float
+   #:coalton/math)
   (:export
    #:fib
    #:fib-fixnum
@@ -51,7 +51,7 @@
   (:use
    #:coalton
    #:coalton-prelude
-   #:coalton-library/math)
+   #:coalton/math)
   (:export
    #:fib
    #:fib-fixnum
@@ -65,8 +65,8 @@
   (:use
    #:coalton
    #:coalton-prelude
-   #:coalton-library/math)
-  (:local-nicknames (#:list #:coalton-library/list))
+   #:coalton/math)
+  (:local-nicknames (#:list #:coalton/list))
   (:export
    #:tak
    #:stak
@@ -79,9 +79,9 @@
   (:use
    #:coalton
    #:coalton-prelude
-   #:coalton-library/math)
-  (:local-nicknames (#:list #:coalton-library/list)
-                    (#:cell #:coalton-library/cell))
+   #:coalton/math)
+  (:local-nicknames (#:list #:coalton/list)
+                    (#:cell #:coalton/cell))
   (:export
    #:leibniz-rec
    #:leibniz-cell)
@@ -92,11 +92,11 @@
   (:use
    #:coalton
    #:coalton-prelude
-   #:coalton-library/math)
-  (:local-nicknames (#:list #:coalton-library/list)
-                    (#:cell #:coalton-library/cell)
-                    (#:seq  #:coalton-library/seq)
-                    (#:iter #:coalton-library/iterator))
+   #:coalton/math)
+  (:local-nicknames (#:list #:coalton/list)
+                    (#:cell #:coalton/cell)
+                    (#:seq  #:coalton/seq)
+                    (#:iter #:coalton/iterator))
   (:export
    #:cons-seq
    #:cons-list
@@ -110,30 +110,30 @@
   (:use
    #:coalton
    #:coalton-prelude
-   #:coalton-library/math)
-  (:local-nicknames (#:list #:coalton-library/list)
-                    (#:cell #:coalton-library/cell)
-                    (#:seq  #:coalton-library/seq)
-                    (#:iter #:coalton-library/iterator)
-                    (#:vec  #:coalton-library/vector)
-                    (#:arr  #:coalton-library/lisparray))
+   #:coalton/math)
+  (:local-nicknames (#:list #:coalton/list)
+                    (#:cell #:coalton/cell)
+                    (#:seq  #:coalton/seq)
+                    (#:iter #:coalton/iterator)
+                    (#:vec  #:coalton/vector)
+                    (#:arr  #:coalton/lisparray))
   )
 
 (define-coalton-benchmark mapping
     ((:local-nicknames
-      (#:hashtable #:coalton-library/hashtable)
-      (#:hashmap   #:coalton-library/hashmap)
-      (#:ordmap    #:coalton-library/ordmap)))
+      (#:hashtable #:coalton/hashtable)
+      (#:hashmap   #:coalton/hashmap)
+      (#:ordmap    #:coalton/ordmap)))
   (:use
    #:coalton
    #:coalton-prelude
-   #:coalton-library/hash)
-  (:local-nicknames (#:cell      #:coalton-library/cell)
-                    (#:hashtable #:coalton-library/hashtable)
-                    (#:hashmap   #:coalton-library/hashmap)
-                    (#:iter      #:coalton-library/iterator)
-                    (#:l         #:coalton-library/experimental/loops)
-                    (#:ordmap    #:coalton-library/ordmap))
+   #:coalton/hash)
+  (:local-nicknames (#:cell      #:coalton/cell)
+                    (#:hashtable #:coalton/hashtable)
+                    (#:hashmap   #:coalton/hashmap)
+                    (#:iter      #:coalton/iterator)
+                    (#:l         #:coalton/experimental/loops)
+                    (#:ordmap    #:coalton/ordmap))
 
   )
 

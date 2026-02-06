@@ -2,16 +2,16 @@
 ;;;;
 ;;;; Big float package for various implementations
 
-(coalton-library/utils:defstdlib-package #:coalton-library/big-float
+(coalton/utils:defstdlib-package #:coalton/big-float
   (:use #:coalton
-        #:coalton-library/classes
-        #:coalton-library/functions
-        #:coalton-library/math)
-  (:import-from #:coalton-library/math/dyadic #:Dyadic)
+        #:coalton/classes
+        #:coalton/functions
+        #:coalton/math)
+  (:import-from #:coalton/math/dyadic #:Dyadic)
   (:local-nicknames
-   (#:dyadic #:coalton-library/math/dyadic)
-   (#:complex #:coalton-library/math/complex)
-   (#:bits #:coalton-library/bits))
+   (#:dyadic #:coalton/math/dyadic)
+   (#:complex #:coalton/math/complex)
+   (#:bits #:coalton/bits))
   (:export
    #:RoundingMode
    #:rndna

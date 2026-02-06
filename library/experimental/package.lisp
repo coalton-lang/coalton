@@ -1,6 +1,8 @@
-(uiop:define-package #:coalton-library/experimental
+(uiop:define-package #:coalton/experimental
+  (:nicknames
+   #:coalton-library/experimental)
   (:use-reexport
-   #:coalton-library/experimental/loops))
+   #:coalton/experimental/loops))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/EXPERIMENTAL")
+(sb-ext:lock-package "COALTON/EXPERIMENTAL")

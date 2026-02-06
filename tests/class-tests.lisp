@@ -46,9 +46,9 @@
       (structural-== (canonicalize a) (canonicalize b)))))
 
 (define-test test-folds ()
-  (let fold  = coalton-library/classes:fold)
-  (let foldr = coalton-library/classes:foldr)
-  (let mconcat = coalton-library/classes:mconcat)
+  (let fold  = coalton/classes:fold)
+  (let foldr = coalton/classes:foldr)
+  (let mconcat = coalton/classes:mconcat)
 
   (is (structural-== (fold X<> XEmpty Nil) XEmpty))
   (is (structural-==

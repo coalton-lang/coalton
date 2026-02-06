@@ -1,10 +1,10 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/symbol
+(coalton/utils:defstdlib-package #:coalton/symbol
   (:documentation "An interface to Common Lisp symbols.")
   (:use
    #:coalton
-   #:coalton-library/builtin
-   #:coalton-library/functions
-   #:coalton-library/classes)
+   #:coalton/builtin
+   #:coalton/functions
+   #:coalton/classes)
   (:export
    #:Symbol
 
@@ -16,7 +16,7 @@
    #:gensym
    ))
 
-(in-package #:coalton-library/symbol)
+(in-package #:coalton/symbol)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -86,4 +86,4 @@
         'cl:nil))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/SYMBOL")
+(sb-ext:lock-package "COALTON/SYMBOL")

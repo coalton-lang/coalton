@@ -1,6 +1,6 @@
 ;;;; package.lisp
 
-(defpackage #:coalton-library/internal/rbit
+(defpackage #:coalton/internal/rbit
   (:use #:cl)
+  (:nicknames #:coalton-library/internal/rbit)
   (:export #:rbit))
-

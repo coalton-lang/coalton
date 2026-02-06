@@ -2,14 +2,14 @@
 ;;;;
 ;;;; Numbers that exist on the real number line
 
-(coalton-library/utils::defstdlib-package #:coalton-library/math/real
+(coalton/utils::defstdlib-package #:coalton/math/real
     (:use
      #:coalton
-     #:coalton-library/math/arith
-     #:coalton-library/math/fraction
-     #:coalton-library/math/integral
-     #:coalton-library/classes
-     #:coalton-library/functions)
+     #:coalton/math/arith
+     #:coalton/math/fraction
+     #:coalton/math/integral
+     #:coalton/classes
+     #:coalton/functions)
   (:export
    #:Quantizable
    #:proper
@@ -34,7 +34,7 @@
    #:round/
    #:fromfrac))
 
-(in-package #:coalton-library/math/real)
+(in-package #:coalton/math/real)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -302,4 +302,4 @@ This conversion may result in loss of fidelity."
     (general/ (numerator q) (denominator q))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH/REAL")
+(sb-ext:lock-package "COALTON/MATH/REAL")

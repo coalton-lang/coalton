@@ -1,7 +1,7 @@
-(coalton-library/utils::defstdlib-package #:coalton-library/builtin
+(coalton/utils::defstdlib-package #:coalton/builtin
   (:use
    #:coalton
-   #:coalton-library/classes)
+   #:coalton/classes)
   (:export
    #:unreachable
    #:undefined
@@ -13,7 +13,7 @@
    #:boolean-and
    #:boolean-xor))
 
-(in-package #:coalton-library/builtin)
+(in-package #:coalton/builtin)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -73,4 +73,4 @@
 
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/BUILTIN")
+(sb-ext:lock-package "COALTON/BUILTIN")

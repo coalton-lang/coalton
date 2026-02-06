@@ -2,17 +2,17 @@
 ;;;;
 ;;;; Instances for primitive numerical types
 
-(coalton-library/utils:defstdlib-package #:coalton-library/math/num
+(coalton/utils:defstdlib-package #:coalton/math/num
   (:use
    #:coalton
-   #:coalton-library/math/num-defining-macros)
+   #:coalton/math/num-defining-macros)
   (:local-nicknames
-   (#:cls #:coalton-library/classes))
+   (#:cls #:coalton/classes))
   (:import-from
-   #:coalton-library/hash
+   #:coalton/hash
    #:define-sxhash-hasher))
 
-(in-package #:coalton-library/math/num)
+(in-package #:coalton/math/num)
 
 (named-readtables:in-readtable coalton:coalton)
 

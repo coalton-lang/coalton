@@ -1,6 +1,6 @@
 ;;;; portable.lisp
 
-(in-package #:coalton-library/internal/rbit)
+(in-package #:coalton/internal/rbit)
 
 (defun rbit (x)
   (declare (type (unsigned-byte 64) x)

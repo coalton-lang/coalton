@@ -1,8 +1,8 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/monad/state
+(coalton/utils:defstdlib-package #:coalton/monad/state
   (:use
    #:coalton
-   #:coalton-library/builtin
-   #:coalton-library/classes)
+   #:coalton/builtin
+   #:coalton/classes)
   (:export
    #:ST
    #:put
@@ -13,7 +13,7 @@
    #:modify-swap
    #:run))
 
-(in-package #:coalton-library/monad/state)
+(in-package #:coalton/monad/state)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -120,4 +120,4 @@ Represented as a closure from initial state to updated state and value."
             (run (fa->scb a) state2))))))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MONAD/STATE")
+(sb-ext:lock-package "COALTON/MONAD/STATE")

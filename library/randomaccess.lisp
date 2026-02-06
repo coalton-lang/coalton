@@ -1,7 +1,7 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/randomaccess
+(coalton/utils:defstdlib-package #:coalton/randomaccess
   (:use
    #:coalton
-   #:coalton-library/classes)
+   #:coalton/classes)
   (:export
    #:RandomAccess
    #:make
@@ -17,7 +17,7 @@
    #:unsafe-rotate!
    #:rotate!))
 
-(in-package #:coalton-library/randomaccess)
+(in-package #:coalton/randomaccess)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -87,4 +87,4 @@ It is permitted for any of `make`, `unsafe-aref`, or `unsafe-set!` to error."
           None))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/RANDOMACCESS")
+(sb-ext:lock-package "COALTON/RANDOMACCESS")

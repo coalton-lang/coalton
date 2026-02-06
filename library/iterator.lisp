@@ -1,14 +1,14 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/iterator
+(coalton/utils:defstdlib-package #:coalton/iterator
   (:shadow #:empty)
   (:use
    #:coalton
-   #:coalton-library/classes
-   #:coalton-library/hash
-   #:coalton-library/builtin
-   #:coalton-library/functions)
+   #:coalton/classes
+   #:coalton/hash
+   #:coalton/builtin
+   #:coalton/functions)
   (:local-nicknames
-   (#:types #:coalton-library/types)
-   (#:cell #:coalton-library/cell))
+   (#:types #:coalton/types)
+   (#:cell #:coalton/cell))
   (:export
    #:Iterator
    #:new
@@ -69,7 +69,7 @@
    #:FromIterator
    #:collect!))
 
-(in-package #:coalton-library/iterator)
+(in-package #:coalton/iterator)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -656,4 +656,4 @@ The empty iterator will hash as 0."
     (collect! (Iterator :elt -> :container))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/ITERATOR")
+(sb-ext:lock-package "COALTON/ITERATOR")

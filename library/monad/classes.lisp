@@ -1,7 +1,7 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/monad/classes
+(coalton/utils:defstdlib-package #:coalton/monad/classes
   (:use
    #:coalton
-   #:coalton-library/classes)
+   #:coalton/classes)
   (:export
    #:LiftTo
    #:lift-to
@@ -17,7 +17,7 @@
    #:modify
    ))
 
-(in-package #:coalton-library/monad/classes)
+(in-package #:coalton/monad/classes)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -63,4 +63,4 @@
      ((:s -> :s) -> :m Unit))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MONAD/CLASSES")
+(sb-ext:lock-package "COALTON/MONAD/CLASSES")

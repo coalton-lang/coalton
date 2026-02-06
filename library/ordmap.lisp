@@ -1,13 +1,13 @@
-(coalton-library/utils:defstdlib-package :coalton-library/ordmap
+(coalton/utils:defstdlib-package :coalton/ordmap
   (:use
    :coalton
-   :coalton-library/classes
-   :coalton-library/hash
-   :coalton-library/tuple
-   :coalton-library/functions)
+   :coalton/classes
+   :coalton/hash
+   :coalton/tuple
+   :coalton/functions)
   (:local-nicknames
-   (#:tree :coalton-library/ordtree)
-   (#:iter :coalton-library/iterator))
+   (#:tree :coalton/ordtree)
+   (#:iter :coalton/iterator))
   (:shadow #:empty)
   (:export
    #:OrdMap
@@ -32,7 +32,7 @@
    #:difference
    #:xor))
 
-(in-package :coalton-library/ordmap)
+(in-package :coalton/ordmap)
 
 (named-readtables:in-readtable coalton:coalton)
 

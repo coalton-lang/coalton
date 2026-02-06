@@ -6,7 +6,7 @@
 
 (defpackage #:benchmarks-game/pidigits
   (:use #:coalton #:coalton-prelude)
-  (:local-nicknames (#:math #:coalton-library/math))
+  (:local-nicknames (#:math #:coalton/math))
   (:export
    #:main
    #:pidigits))

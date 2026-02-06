@@ -1,13 +1,14 @@
-(defpackage #:coalton-library/derivers
+(defpackage #:coalton/derivers
   (:use #:cl)
+  (:nicknames #:coalton-library/derivers)
   (:local-nicknames
    (#:tc #:coalton-impl/typechecker)
    (#:parser #:coalton-impl/parser)
    (#:source #:coalton-impl/source)
-   (#:classes #:coalton-library/classes)
-   (#:hash #:coalton-library/hash)))
+   (#:classes #:coalton/classes)
+   (#:hash #:coalton/hash)))
 
-(in-package #:coalton-library/derivers)
+(in-package #:coalton/derivers)
 
 (defmethod tc:derive-methods ((class (eql 'classes:eq)) def env)
   "Deriver implementation for class `Eq'."
@@ -197,7 +198,7 @@ The generated method will be shaped like this:
                                                                          :location location
                                                                          :rator (parser:make-node-variable
                                                                                  :location location
-                                                                                 :name 'coalton-library/hash:combine-hashes)
+                                                                                 :name 'coalton/hash:combine-hashes)
                                                                          :rands (list
                                                                                  (parser:make-node-application
                                                                                   :location location

@@ -1,7 +1,7 @@
 (cl:defpackage #:fractal-coalton
   (:use #:coalton #:coalton-prelude)
-  (:local-nicknames (#:math #:coalton-library/math)
-                    (#:bf #:coalton-library/big-float))
+  (:local-nicknames (#:math #:coalton/math)
+                    (#:bf #:coalton/big-float))
   (:export #:lisp-mandel
            #:max-iter))
 

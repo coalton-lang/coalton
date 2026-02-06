@@ -34,7 +34,7 @@ Parse continue
 
 (package coalton-unit-tests/parse-continue
   (import coalton-prelude
-          (coalton-library/iterator as iter)))
+          (coalton/iterator as iter)))
 
 (define (f)
   (let ((iter (iter:up-to 10)))

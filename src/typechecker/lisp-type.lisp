@@ -25,8 +25,8 @@
 
 ;;; Complex
 (defun complex-tycon-p (tycon)
-  (if (find-package "COALTON-LIBRARY/MATH/COMPLEX")
-      (eq tycon (find-symbol "COMPLEX" "COALTON-LIBRARY/MATH/COMPLEX"))
+  (if (find-package "COALTON/MATH/COMPLEX")
+      (eq tycon (find-symbol "COMPLEX" "COALTON/MATH/COMPLEX"))
       nil))
 
 (defvar *specialized-complex-part-types-considered*
@@ -35,8 +35,8 @@
 
 ;;; Simple Arrays
 (defun lisparray-tycon-p (tycon)
-  (if (find-package "COALTON-LIBRARY/LISPARRAY")
-      (eq tycon (find-symbol "LISPARRAY" "COALTON-LIBRARY/LISPARRAY"))
+  (if (find-package "COALTON/LISPARRAY")
+      (eq tycon (find-symbol "LISPARRAY" "COALTON/LISPARRAY"))
       nil))
 
 

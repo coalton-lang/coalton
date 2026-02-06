@@ -1,13 +1,13 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/monad/identity
+(coalton/utils:defstdlib-package #:coalton/monad/identity
   (:use
    #:coalton
-   #:coalton-library/builtin
-   #:coalton-library/classes)
+   #:coalton/builtin
+   #:coalton/classes)
   (:export
    #:Identity
    #:run-identity))
 
-(in-package #:coalton-library/monad/identity)
+(in-package #:coalton/monad/identity)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -43,4 +43,4 @@
       (fa->idb a))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MONAD/IDENTITY")
+(sb-ext:lock-package "COALTON/MONAD/IDENTITY")

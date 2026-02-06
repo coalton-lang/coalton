@@ -2,16 +2,16 @@
 ;;;;
 ;;;; Numerical types with fixed bounds
 
-(coalton-library/utils:defstdlib-package #:coalton-library/math/bounded
+(coalton/utils:defstdlib-package #:coalton/math/bounded
   (:use
    #:coalton
-   #:coalton-library/builtin
-   #:coalton-library/classes
-   #:coalton-library/functions)
+   #:coalton/builtin
+   #:coalton/classes
+   #:coalton/functions)
   (:export
    #:Bounded #:minBound #:maxBound))
 
-(in-package #:coalton-library/math/bounded)
+(in-package #:coalton/math/bounded)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -75,4 +75,4 @@
         cl:most-positive-fixnum))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH/BOUNDED")
+(sb-ext:lock-package "COALTON/MATH/BOUNDED")

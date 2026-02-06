@@ -1,14 +1,14 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/char
+(coalton/utils:defstdlib-package #:coalton/char
   (:use
    #:coalton
-   #:coalton-library/classes
-   #:coalton-library/builtin
-   #:coalton-library/functions)
+   #:coalton/classes
+   #:coalton/builtin
+   #:coalton/functions)
   (:import-from
-   #:coalton-library/hash
+   #:coalton/hash
    #:define-sxhash-hasher)
   (:local-nicknames
-   (#:iter #:coalton-library/iterator))
+   (#:iter #:coalton/iterator))
   (:export
    #:char-code
    #:char-code-unchecked
@@ -26,7 +26,7 @@
    #:downcase
    #:range))
 
-(in-package #:coalton-library/char)
+(in-package #:coalton/char)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -153,4 +153,4 @@
 
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/CHAR")
+(sb-ext:lock-package "COALTON/CHAR")

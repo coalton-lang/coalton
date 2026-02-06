@@ -634,13 +634,13 @@ This is conservative and intentionally aligns with mutable native wrappers."
 
 (defun maybe-runtime-repr-instance (type)
   (declare (type type-definition type))
-  (unless (or (equalp *package* (find-package "COALTON-LIBRARY/TYPES"))
+  (unless (or (equalp *package* (find-package "COALTON/TYPES"))
               ;; LispArray and Complex instance of RuntimeRepr are
               ;; defined in the standard library as specialized
               ;; native types.
-              (and (equalp *package* (find-package "COALTON-LIBRARY/LISPARRAY"))
+              (and (equalp *package* (find-package "COALTON/LISPARRAY"))
                    (eq (type-definition-name type) (find-symbol "LISPARRAY" *package*)))
-              (and (equalp *package* (find-package "COALTON-LIBRARY/MATH/COMPLEX"))
+              (and (equalp *package* (find-package "COALTON/MATH/COMPLEX"))
                    (eq (type-definition-name type) (find-symbol "COMPLEX" *package*)))
               (type-definition-aliased-type type))
     (make-runtime-repr-instance type)))
@@ -651,7 +651,7 @@ This is conservative and intentionally aligns with mutable native wrappers."
   (let* ((location
            (source:location type))
          (types-package
-           (util:find-package "COALTON-LIBRARY/TYPES"))
+           (util:find-package "COALTON/TYPES"))
          (runtime-repr
            (util:find-symbol "RUNTIMEREPR" types-package))
          (runtime-repr-method

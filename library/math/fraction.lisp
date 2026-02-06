@@ -2,19 +2,19 @@
 ;;;;
 ;;;; Reduced ratios of integers
 
-(coalton-library/utils:defstdlib-package #:coalton-library/math/fraction
+(coalton/utils:defstdlib-package #:coalton/math/fraction
   (:use
    #:coalton
-   #:coalton-library/builtin
-   #:coalton-library/classes
-   #:coalton-library/functions
-   #:coalton-library/math/arith)
+   #:coalton/builtin
+   #:coalton/classes
+   #:coalton/functions
+   #:coalton/math/arith)
   (:export
    #:mkFraction
    #:numerator
    #:denominator))
 
-(in-package #:coalton-library/math/fraction)
+(in-package #:coalton/math/fraction)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -107,4 +107,4 @@
 (define-into-integer-fraction UFix)
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH/FRACTION")
+(sb-ext:lock-package "COALTON/MATH/FRACTION")

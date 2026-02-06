@@ -92,7 +92,7 @@
 (in-package #:coalton-tests)
 
 (uiop:define-package #:coalton-tests/deriver-tests
-  (:use #:coalton #:coalton-library/classes))
+  (:use #:coalton #:coalton/classes))
 
 (deftest derive-eq-for-invalid-type-test ()
   "Ensure we can't compile unsound code using derived methods."

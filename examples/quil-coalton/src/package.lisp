@@ -6,8 +6,8 @@
   (:use #:coalton
         #:coalton-prelude)
   (:local-nicknames
-   (#:string #:coalton-library/string))
+   (#:string #:coalton/string))
   (:import-from
-   #:coalton-library/functions
+   #:coalton/functions
    #:asum)
   (:export #:run-quil-parser))

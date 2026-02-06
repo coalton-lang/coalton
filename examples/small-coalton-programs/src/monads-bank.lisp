@@ -46,15 +46,15 @@
   (:use
    #:coalton
    #:coalton-prelude
-   #:coalton-library/result
-   #:coalton-library/monad/stateT
-   #:coalton-library/monad/identity
-   #:coalton-library/monad/environment
-   #:coalton-library/monad/resultt
-   #:coalton-library/experimental/do-control-core)
+   #:coalton/result
+   #:coalton/monad/stateT
+   #:coalton/monad/identity
+   #:coalton/monad/environment
+   #:coalton/monad/resultt
+   #:coalton/experimental/do-control-core)
   (:local-nicknames
-   (#:s #:coalton-library/string)
-   (#:m #:coalton-library/ordmap))
+   (#:s #:coalton/string)
+   (#:m #:coalton/ordmap))
   (:export
    :create-account
    :deposit

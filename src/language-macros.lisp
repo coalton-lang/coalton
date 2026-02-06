@@ -21,7 +21,7 @@ is equivalent to
 
 Note that this may copy the object or allocate memory."
 
-  (cl:let ((into (cl:ignore-errors (cl:find-symbol "INTO" "COALTON-LIBRARY/CLASSES"))))
+  (cl:let ((into (cl:ignore-errors (cl:find-symbol "INTO" "COALTON/CLASSES"))))
     (cl:assert into () "`as` macro does not have access to `into` yet.")
     (cl:if expr-supplied-p
            `(the ,type (,into ,expr))
@@ -48,8 +48,8 @@ is equivalent to
 
 Note that this may copy the object or allocate memory."
 
-  (cl:let ((try-into (cl:ignore-errors (cl:find-symbol "TRYINTO" "COALTON-LIBRARY/CLASSES")))
-           (Result (cl:ignore-errors (cl:find-symbol "RESULT" "COALTON-LIBRARY/CLASSES"))))
+  (cl:let ((try-into (cl:ignore-errors (cl:find-symbol "TRYINTO" "COALTON/CLASSES")))
+           (Result (cl:ignore-errors (cl:find-symbol "RESULT" "COALTON/CLASSES"))))
     (cl:assert try-into () "`try-as` macro does not have access to `try-into` yet.")
     (cl:assert Result () "`try-as` macro does not have access to `Result` yet.")
     (cl:if expr-supplied-p
@@ -77,8 +77,8 @@ is equivalent to
 
 Note that this may copy the object or allocate memory."
 
-  (cl:let ((try-into (cl:ignore-errors (cl:find-symbol "TRYINTO" "COALTON-LIBRARY/CLASSES")))
-           (unwrap (cl:ignore-errors (cl:find-symbol "UNWRAP" "COALTON-LIBRARY/CLASSES"))))
+  (cl:let ((try-into (cl:ignore-errors (cl:find-symbol "TRYINTO" "COALTON/CLASSES")))
+           (unwrap (cl:ignore-errors (cl:find-symbol "UNWRAP" "COALTON/CLASSES"))))
     (cl:assert try-into () "`try-as` macro does not have access to `try-into` yet.")
     (cl:assert unwrap () "`unwrap` macro does not have access to `unwrap` yet.")
     (cl:if expr-supplied-p
@@ -135,7 +135,7 @@ the value. The composition is thus the reverse order of `compose`.
 
 (defmacro make-list (cl:&rest forms)
   "Create a heterogeneous Coalton `List` of objects. This macro is
-deprecated; use `coalton-library/list:make`."
+deprecated; use `coalton/list:make`."
   (cl:labels
       ((list-helper (forms)
          (cl:if (cl:endp forms)

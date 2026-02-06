@@ -1,14 +1,16 @@
 ;;;; fft.lisp
 
-(defpackage #:coalton-library/algorithms/fft
+(defpackage #:coalton/algorithms/fft
   (:documentation "A coalton package for performing FFTs.")
+  (:nicknames
+   #:coalton-library/algorithms/fft)
   (:use
    #:coalton)
   (:import-from
-   #:coalton-library/system
+   #:coalton/system
    #:error)
   (:import-from
-   #:coalton-library/math
+   #:coalton/math
    #:1+
    #:1-
    #:zero?
@@ -18,7 +20,7 @@
    #:positive?
    )
   (:import-from
-   #:coalton-library/classes
+   #:coalton/classes
    #:>
    #:<
    #:<=
@@ -27,11 +29,11 @@
    #:-
    #:*)
   (:local-nicknames
-   (#:array #:coalton-library/lisparray)
-   (#:bits #:coalton-library/bits)
-   (#:loops #:coalton-library/experimental/loops)
-   (#:math #:coalton-library/math)
-   (#:ram #:coalton-library/randomaccess))
+   (#:array #:coalton/lisparray)
+   (#:bits #:coalton/bits)
+   (#:loops #:coalton/experimental/loops)
+   (#:math #:coalton/math)
+   (#:ram #:coalton/randomaccess))
   (:export
    #:FFTGroup
    #:add-identity
@@ -62,7 +64,7 @@
 
 (named-readtables:in-readtable coalton:coalton)
 
-(in-package #:coalton-library/algorithms/fft)
+(in-package #:coalton/algorithms/fft)
 
 (cl:declaim (cl:optimize (cl:speed 3) (cl:safety 0)))
 
@@ -586,4 +588,3 @@ Normalization: none"
 
   (specialize dit-butterfly dit-butterfly/c128
               (UFix -> UFix -> C128 -> Array C128 -> Array C128 -> Unit)))
-

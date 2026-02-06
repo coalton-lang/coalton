@@ -196,12 +196,12 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
 (defun num-classes ()
   ;; Lookup class symbols if they exist. This allows defaulting to
   ;; work before the standard library is fully loaded
-  (append (util:find-symbol? "NUM" "COALTON-LIBRARY/CLASSES")
-          (util:find-symbol? "QUANTIZABLE" "COALTON-LIBRARY/MATH")
-          (util:find-symbol? "RECIPROCABLE" "COALTON-LIBRARY/MATH")
-          (util:find-symbol? "COMPLEX" "COALTON-LIBRARY/MATH")
-          (util:find-symbol? "REMAINDER" "COALTON-LIBRARY/MATH")
-          (util:find-symbol? "INTEGRAL" "COALTON-LIBRARY/MATH")))
+  (append (util:find-symbol? "NUM" "COALTON/CLASSES")
+          (util:find-symbol? "QUANTIZABLE" "COALTON/MATH")
+          (util:find-symbol? "RECIPROCABLE" "COALTON/MATH")
+          (util:find-symbol? "COMPLEX" "COALTON/MATH")
+          (util:find-symbol? "REMAINDER" "COALTON/MATH")
+          (util:find-symbol? "INTEGRAL" "COALTON/MATH")))
 
 (defun default-preds (env tvars preds)
   (declare (type environment env)

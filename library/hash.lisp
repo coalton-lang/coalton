@@ -1,8 +1,8 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/hash
+(coalton/utils:defstdlib-package #:coalton/hash
   (:use
    #:coalton
-   #:coalton-library/classes)
-  (:import-from #:coalton-library/math/hash-defining-macros
+   #:coalton/classes)
+  (:import-from #:coalton/math/hash-defining-macros
                 #:define-sxhash-hasher)
   (:export
    #:lisp-combine-hashes
@@ -10,7 +10,7 @@
    #:combine-hashes-order-independent
    #:define-sxhash-hasher))
 
-(in-package #:coalton-library/hash)
+(in-package #:coalton/hash)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -77,4 +77,4 @@
   (define-sxhash-hasher Hash))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/HASH")
+(sb-ext:lock-package "COALTON/HASH")

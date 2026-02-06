@@ -1,4 +1,4 @@
-(coalton-library/utils:defstdlib-package #:coalton-library/file
+(coalton/utils:defstdlib-package #:coalton/file
     (:documentation "This is Coalton's library for directory utilities and file IO.
 
 Most functions return outputs of type `(Result FileError :a)`, ensuring that errors can be assessed and handled.
@@ -15,19 +15,19 @@ File IO is handled using stream options, for instance:
 Common Lisp makes a distinction between file and directory paths. Directory paths are always terminated with a trailing slash, file paths must never have a trailing slash.")
   (:use
    #:coalton
-   #:coalton-library/classes
-   #:coalton-library/builtin
-   #:coalton-library/functions
-   #:coalton-library/system)
+   #:coalton/classes
+   #:coalton/builtin
+   #:coalton/functions
+   #:coalton/system)
   (:local-nicknames
-   (#:str #:coalton-library/string)
-   (#:iter #:coalton-library/iterator)
-   (#:cell #:coalton-library/cell)
-   (#:list #:coalton-library/list)
-   (#:vec #:coalton-library/vector)
-   (#:res #:coalton-library/result)
-   (#:types #:coalton-library/types)
-   (#:char #:coalton-library/char))
+   (#:str #:coalton/string)
+   (#:iter #:coalton/iterator)
+   (#:cell #:coalton/cell)
+   (#:list #:coalton/list)
+   (#:vec #:coalton/vector)
+   (#:res #:coalton/result)
+   (#:types #:coalton/types)
+   (#:char #:coalton/char))
   (:export
 
    #:Pathname
@@ -102,7 +102,7 @@ Common Lisp makes a distinction between file and directory paths. Directory path
    #:read-file-to-string
    #:read-file-lines))
 
-(in-package #:coalton-library/file)
+(in-package #:coalton/file)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -745,4 +745,4 @@ File extensions need to include `.`, like \".txt\"."
       (%handle-file-function (uiop:read-file-lines p)))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/FILE")
+(sb-ext:lock-package "COALTON/FILE")

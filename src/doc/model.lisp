@@ -350,13 +350,13 @@
       (tc:type-entry-name type-entry)))
 
 (defun stdlib-p (symbol)
-  "A standard library package is any package with the exact name 'coalton' or whose name starts with 'coalton-library'."
+  "A standard library package is any package with the exact name 'coalton' or whose name starts with 'coalton/'."
   (let ((pkg (symbol-package symbol)))
     (if (null pkg)
         nil
         (let ((name (package-name pkg)))
           (or (string-equal name "COALTON")
-              (eql 0 (search "COALTON-LIBRARY" name)))))))
+              (eql 0 (search "COALTON/" name)))))))
 
 ;;; class coalton-macro
 

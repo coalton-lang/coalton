@@ -206,8 +206,8 @@ CL-USER> (format t "~R" (coalton:coalton (coalton-prelude:length (coalton:the co
 ; error: Type mismatch
 ;   --> repl input:1:46
 ;    |
-;  1 |  (COALTON:COALTON (COALTON-LIBRARY/LIST:LENGTH (COALTON:THE COALTON:UFIX 1)))
-;    |                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Expected type '(COALTON:LIST #T53400)' but got 'COALTON:UFIX'
+;  1 |  (COALTON:COALTON (COALTON/LIST:LENGTH (COALTON:THE COALTON:UFIX 1)))
+;    |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Expected type '(COALTON:LIST #T53400)' but got 'COALTON:UFIX'
 ;    [Condition of type COALTON-IMPL/TYPECHECKER/BASE:TC-ERROR]
 ```
 
@@ -225,8 +225,8 @@ CL-USER> (format t "~R" (coalton-prelude:length 1))
 ; The value
 ;   1
 ; is not of type
-;   COALTON-LIBRARY:LIST
-; when binding COALTON-LIBRARY::L-35
+;   COALTON:LIST
+; when binding COALTON::L-35
 
 ; (Possible Run-Time Error #2:)
 ;
@@ -248,7 +248,7 @@ Here, `<return-type>` should be a valid Coalton type which _you_ are guaranteein
 
 **WARNING**: Coalton does not even guarantee run-time type safety with a dynamic check. It may in the future, though.
 
-Each `<captured-variable>` refers to a lexical variable in the surrounding Coalton code that you would like to capture. The values in these lexical variables obey the aforementioned promises of this document. For instance, here is Coalton's definition of the greatest common divisor function `coalton-library:gcd`:
+Each `<captured-variable>` refers to a lexical variable in the surrounding Coalton code that you would like to capture. The values in these lexical variables obey the aforementioned promises of this document. For instance, here is Coalton's definition of the greatest common divisor function `coalton:gcd`:
 
 ```
 (declare gcd (Integer -> Integer -> Integer))
@@ -316,6 +316,5 @@ Lambda/anonymous functions in Coalton `let` bindings can be used from Lisp, as l
       (lisp :a (x square)
         (cl:format cl:nil "~a squared = ~a" x (call-coalton-function square x))))))
 ```
-
 
 

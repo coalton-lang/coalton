@@ -4,12 +4,12 @@
 
 (uiop:define-package #:coalton-prelude
   (:use-reexport
-   #:coalton-library/classes
-   #:coalton-library/builtin
-   #:coalton-library/functions)
+   #:coalton/classes
+   #:coalton/builtin
+   #:coalton/functions)
 
   (:import-from
-   #:coalton-library/math/arith
+   #:coalton/math/arith
    #:Reciprocable #:/
    #:Fraction
    #:reciprocal
@@ -35,7 +35,7 @@
    #:nonzero?)
 
   (:import-from
-   #:coalton-library/math/real
+   #:coalton/math/real
    #:floor
    #:ceiling
    #:round
@@ -49,7 +49,7 @@
    #:Rational)
 
   (:import-from
-   #:coalton-library/math/elementary
+   #:coalton/math/elementary
    #:sin
    #:cos
    #:tan
@@ -77,7 +77,7 @@
    #:nth-root)
 
   (:import-from
-   #:coalton-library/math/complex
+   #:coalton/math/complex
    #:Complex
    #:real-part
    #:imag-part)
@@ -87,7 +87,7 @@
    #:imag-part)
 
   (:import-from
-   #:coalton-library/math/integral
+   #:coalton/math/integral
    #:Integral
    #:^
    #:^^
@@ -103,7 +103,7 @@
    #:odd?)
 
   (:import-from
-   #:coalton-library/string
+   #:coalton/string
    #:substring
    #:split)
   (:export
@@ -111,7 +111,7 @@
    #:split)
 
   (:import-from
-   #:coalton-library/tuple
+   #:coalton/tuple
    #:fst
    #:snd
    #:Tuple3
@@ -125,7 +125,7 @@
    #:Tuple5)
 
   (:import-from
-   #:coalton-library/optional
+   #:coalton/optional
    #:from-some
    #:some?
    #:none?)
@@ -135,7 +135,7 @@
    #:none?)
 
   (:import-from
-   #:coalton-library/list
+   #:coalton/list
    #:head
    #:tail
    #:singleton
@@ -187,31 +187,31 @@
    #:split-at)
 
   (:import-from
-   #:coalton-library/cell
+   #:coalton/cell
    #:Cell)
   (:export
    #:Cell)
 
   (:import-from
-   #:coalton-library/vector
+   #:coalton/vector
    #:Vector)
   (:export
    #:Vector)
 
   (:import-from
-   #:coalton-library/hashtable
+   #:coalton/hashtable
    #:Hashtable)
   (:export
    #:Hashtable)
 
   (:import-from
-   #:coalton-library/iterator
+   #:coalton/iterator
    #:Iterator)
   (:export
    #:Iterator)
 
   (:import-from
-   #:coalton-library/system
+   #:coalton/system
    #:time)
   (:export
    #:time))
@@ -228,27 +228,27 @@
    #:coalton
    #:coalton-prelude)
   (:local-nicknames
-   (#:types #:coalton-library/types)
-   (#:hash #:coalton-library/hash)
-   (#:bits #:coalton-library/bits)
-   (#:math #:coalton-library/math)
-   (#:char #:coalton-library/char)
-   (#:string #:coalton-library/string)
-   (#:tuple #:coalton-library/tuple)
-   (#:optional #:coalton-library/optional)
-   (#:list #:coalton-library/list)
-   (#:result #:coalton-library/result)
-   (#:cell #:coalton-library/cell)
-   (#:vector #:coalton-library/vector)
-   (#:slice #:coalton-library/slice)
-   (#:hashtable #:coalton-library/hashtable)
-   (#:id #:coalton-library/monad/identity)
-   (#:st #:coalton-library/monad/state)
-   (#:env #:coalton-library/monad/environment)
-   (#:resultt #:coalton-library/monad/resultt)
-   (#:optionalt #:coalton-library/monad/optionalt)
-   (#:iter #:coalton-library/iterator)
-   (#:sys #:coalton-library/system)
-   (#:file #:coalton-library/file)
-   (#:experimental #:coalton-library/experimental)
-   (#:loops #:coalton-library/experimental/loops)))
+   (#:types #:coalton/types)
+   (#:hash #:coalton/hash)
+   (#:bits #:coalton/bits)
+   (#:math #:coalton/math)
+   (#:char #:coalton/char)
+   (#:string #:coalton/string)
+   (#:tuple #:coalton/tuple)
+   (#:optional #:coalton/optional)
+   (#:list #:coalton/list)
+   (#:result #:coalton/result)
+   (#:cell #:coalton/cell)
+   (#:vector #:coalton/vector)
+   (#:slice #:coalton/slice)
+   (#:hashtable #:coalton/hashtable)
+   (#:id #:coalton/monad/identity)
+   (#:st #:coalton/monad/state)
+   (#:env #:coalton/monad/environment)
+   (#:resultt #:coalton/monad/resultt)
+   (#:optionalt #:coalton/monad/optionalt)
+   (#:iter #:coalton/iterator)
+   (#:sys #:coalton/system)
+   (#:file #:coalton/file)
+   (#:experimental #:coalton/experimental)
+   (#:loops #:coalton/experimental/loops)))

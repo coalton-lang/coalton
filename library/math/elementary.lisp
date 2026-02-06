@@ -2,16 +2,16 @@
 ;;;;
 ;;;; Elementary/algebraic functions and transcendental numbers
 
-(coalton-library/utils::defstdlib-package #:coalton-library/math/elementary
+(coalton/utils::defstdlib-package #:coalton/math/elementary
     (:use
      #:coalton
-     #:coalton-library/builtin
-     #:coalton-library/classes
-     #:coalton-library/functions
-     #:coalton-library/utils
-     #:coalton-library/math/arith
-     #:coalton-library/math/real
-     #:coalton-library/math/complex)
+     #:coalton/builtin
+     #:coalton/classes
+     #:coalton/functions
+     #:coalton/utils
+     #:coalton/math/arith
+     #:coalton/math/real
+     #:coalton/math/complex)
   (:local-nicknames (#:ff #:float-features))
   (:export
    #:Trigonometric
@@ -33,7 +33,7 @@
    #:pi #:ee
    #:atan2))
 
-(in-package #:coalton-library/math/elementary)
+(in-package #:coalton/math/elementary)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -477,4 +477,4 @@ For a complex number `z = (complex x y)`, the following identities hold:
   )
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON-LIBRARY/MATH/ELEMENTARY")
+(sb-ext:lock-package "COALTON/MATH/ELEMENTARY")

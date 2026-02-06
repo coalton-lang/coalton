@@ -10,9 +10,9 @@
    #:disassemble)
   (:use #:coalton #:coalton-prelude)
   (:local-nicknames
-   (#:vector #:coalton-library/vector)
-   (#:st #:coalton-library/monad/state)
-   (#:free #:coalton-library/monad/free))
+   (#:vector #:coalton/vector)
+   (#:st #:coalton/monad/state)
+   (#:free #:coalton/monad/free))
   (:export #:run-a-program))
 
 (named-readtables:in-readtable coalton:coalton)
