@@ -85,6 +85,100 @@
 (deftype type-definition-list ()
   '(satisfies type-definition-list-p))
 
+(defun %ensure-arity-variances (variances arity)
+  (declare (type tc:variance-list variances)
+           (type alexandria:non-negative-fixnum arity)
+           (values tc:variance-list &optional))
+  (if (>= (length variances) arity)
+      (subseq variances 0 arity)
+      (append variances
+              (make-list (- arity (length variances))
+                         :initial-element ':invariant))))
+
+(defun type-definition-opaque-p (type)
+  "Return T when TYPE has no inspectable body for variance inference.
+
+Opaque types are definitions without constructors or aliases, e.g.
+`(repr :native ...) (define-type (T :a))`.
+
+Without constructor fields (or an alias body), we cannot infer whether type
+parameters are produced, consumed, or both. The inference pass therefore treats
+opaque parameters as invariant by default."
+  (declare (type type-definition type)
+           (values boolean &optional))
+  (and (null (type-definition-aliased-type type))
+       (null (type-definition-constructors type))))
+
+(defun infer-type-definition-scc-variances (types type-tyvar-table env)
+  "Infer variances for type parameters of TYPES in one SCC.
+
+TYPE-TYVAR-TABLE maps type names to the post-kind-inference tyvars for that
+type, in declaration order.
+
+This computes a fixed point over the SCC because mutually recursive type
+definitions depend on each other's parameter variances.
+
+For opaque type constructors, inference defaults to invariant parameters.
+This is conservative and intentionally aligns with mutable native wrappers."
+  (declare (type type-definition-list types)
+           (type hash-table type-tyvar-table)
+           (type tc:environment env)
+           (values hash-table &optional))
+  (let ((variance-table (make-hash-table :test #'eq))
+        (env-resolver (tc:make-env-variance-resolver env)))
+    ;; Initialize each type parameter as covariant, except opaque types, which
+    ;; are conservatively invariant.
+    ;;
+    ;; Current stdlib audit (2026-02) for parametric opaque types:
+    ;;   Cell, Vector, Queue, Slice, Hashtable, LispArray, FileStream
+    ;; All are currently modeled invariantly and each exposes mutation and/or
+    ;; mixed read-write capabilities.
+    (loop :for type :in types
+          :for name := (type-definition-name type)
+          :for tyvars := (gethash name type-tyvar-table)
+          :for initial := (make-list (length tyvars)
+                                     :initial-element (if (type-definition-opaque-p type)
+                                                          ':invariant
+                                                          ':covariant))
+          :do (setf (gethash name variance-table) initial))
+
+    (let ((changed t))
+      (loop :while changed :do
+        (setf changed nil)
+        (loop :for type :in types
+              :for name := (type-definition-name type)
+              :for tyvars := (gethash name type-tyvar-table)
+              :for current-variances := (gethash name variance-table)
+              :unless (type-definition-opaque-p type)
+                :do (let ((observed-variances (make-hash-table :test #'eql)))
+                      (labels ((resolver (tycon-name arity)
+                                 (declare (type symbol tycon-name)
+                                          (type alexandria:non-negative-fixnum arity)
+                                          (values tc:variance-list &optional))
+                                 (multiple-value-bind (local-variances foundp)
+                                     (gethash tycon-name variance-table)
+                                   (if foundp
+                                       (%ensure-arity-variances local-variances arity)
+                                       (funcall env-resolver tycon-name arity))))
+                               (observe (ty)
+                                 (declare (type tc:ty ty))
+                                 (tc:collect-tyvar-variances ty #'resolver :table observed-variances)))
+                        (if (type-definition-aliased-type type)
+                            (observe (type-definition-aliased-type type))
+                            (loop :for ctor-args :in (type-definition-constructor-args type)
+                                  :do (loop :for field-ty :in ctor-args
+                                            :do (observe field-ty))))
+
+                        (let ((next-variances
+                                (loop :for tyvar :in tyvars
+                                      :for current :in current-variances
+                                      :for observed := (tc:tyvar-variance observed-variances tyvar)
+                                      :collect (tc:variance-join current observed))))
+                          (unless (equal next-variances current-variances)
+                            (setf changed t)
+                            (setf (gethash name variance-table) next-variances)))))))
+      variance-table)))
+
 (defun toplevel-define-type (types structs type-aliases env)
   (declare (type parser:toplevel-define-type-list types)
            (type parser:toplevel-define-struct-list structs)
@@ -202,24 +296,36 @@
            :append  (multiple-value-bind (type-definitions instances_ ksubs)
                         (infer-define-type-scc-kinds scc partial-env)
                       (setf instances (append instances instances_))
-                      (loop :for type :in type-definitions
-
-                            :for parser-type := (gethash (type-definition-name type) type-table)
-
-                            :for vars := (tc:apply-ksubstitution
-                                          ksubs
-                                          (loop :for var :in (parser:type-definition-vars parser-type)
-                                                :for var-name := (parser:keyword-src-name var)
-                                                :collect (gethash var-name (partial-type-env-ty-table partial-env))))
-
-                            :do (setf env (update-env-for-type-definition type vars parser-type env))
-                            :finally (return type-definitions))))
+                      (let* ((type-tyvar-table
+                               (loop :with table := (make-hash-table :test #'eq)
+                                     :for type :in type-definitions
+                                     :for parser-type := (gethash (type-definition-name type) type-table)
+                                     :for vars := (tc:apply-ksubstitution
+                                                   ksubs
+                                                   (loop :for var :in (parser:type-definition-vars parser-type)
+                                                         :for var-name := (parser:keyword-src-name var)
+                                                         :collect (gethash var-name (partial-type-env-ty-table partial-env))))
+                                     :do (setf (gethash (type-definition-name type) table) vars)
+                                     :finally (return table)))
+                             (type-variance-table
+                               (infer-type-definition-scc-variances
+                                type-definitions
+                                type-tyvar-table
+                                env)))
+                        (loop :for type :in type-definitions
+                              :for name := (type-definition-name type)
+                              :for parser-type := (gethash name type-table)
+                              :for vars := (gethash name type-tyvar-table)
+                              :for variances := (gethash name type-variance-table)
+                              :do (setf env (update-env-for-type-definition type vars variances parser-type env))
+                              :finally (return type-definitions)))))
      instances
      env)))
 
-(defun update-env-for-type-definition (type tyvars parsed-type env)
+(defun update-env-for-type-definition (type tyvars variances parsed-type env)
   (declare (type type-definition type)
            (type tc:tyvar-list tyvars)
+           (type tc:variance-list variances)
            (type parser:type-definition parsed-type)
            (type tc:environment env)
            (values tc:environment))
@@ -286,6 +392,7 @@
           :runtime-type (type-definition-runtime-type type)
           :type (type-definition-type type)
           :tyvars tyvars
+          :variances variances
           :constructors (mapcar #'tc:constructor-entry-name (type-definition-constructors type))
           :explicit-repr (type-definition-explicit-repr type)
           :enum-repr (type-definition-enum-repr type)

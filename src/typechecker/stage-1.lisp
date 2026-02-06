@@ -10,5 +10,6 @@
    #:coalton-impl/typechecker/unify
    #:coalton-impl/typechecker/fundeps
    #:coalton-impl/typechecker/environment
+   #:coalton-impl/typechecker/variance
    #:coalton-impl/typechecker/lisp-type
    #:coalton-impl/typechecker/context-reduction))

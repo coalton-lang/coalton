@@ -300,6 +300,151 @@
 
    '("f" . "(Num :b => :a -> Tuple :b :a)")))
 
+(deftest test-weak-type-variables ()
+  ;; See gh #84
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(define f
+        (let ((x (coalton-library/vector:new)))
+          (fn (n)
+            (coalton-library/vector:push! n x)
+            x)))"))
+
+  ;; Allocating in a function body remains polymorphic because each call
+  ;; gets a fresh allocation site.
+  (check-coalton-types
+   "(define (mk _x)
+      (let ((x (coalton-library/vector:new)))
+        (fn (n)
+          (coalton-library/vector:push! n x)
+          x)))"
+
+   '("mk" . "(:a -> :b -> Vector :b)")))
+
+(deftest test-weak-type-variables-advanced ()
+  ;; Relaxed value restriction: expansive expressions can still generalize
+  ;; weak variables that occur only covariantly.
+  (check-coalton-types
+   "(define wrapped-id
+      ((fn (x) x) None))"
+
+   '("wrapped-id" . "(Optional :a)"))
+
+  (check-coalton-types
+   "(define-type (Cov :a)
+      (Cov :a))
+    (define cov-app
+      ((fn (x) x) (Cov None)))"
+
+   '("cov-app" . "(Cov (Optional :a))"))
+
+  ;; Contravariant weak occurrences are still blocked.
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(define-type (Contra :a)
+        (Contra (:a -> Unit)))
+      (define contra-app
+        ((fn (x) x) (Contra (fn (_x) Unit))))"))
+
+  ;; Opaque mutable containers are treated as invariant.
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(define boxed-vec
+        ((fn (x) x) (coalton-library/vector:new)))"))
+
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(define boxed-cell
+        ((fn (x) x) (coalton-library/cell:new None)))"))
+
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(define boxed-queue
+        ((fn (x) x) (coalton-library/queue:new)))"))
+
+  ;; User-defined opaque native types default to invariant.
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(repr :native cl:t)
+      (define-type (Opaque :a))
+      (declare opaque-wrap (:a -> Opaque :a))
+      (define (opaque-wrap x)
+        (lisp (Opaque :a) (x) x))
+      (define opaque-top
+        ((fn (x) x) (opaque-wrap None)))"))
+
+  ;; Constructor wrappers are only non-expansive when their arguments are.
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(define wrapped-new
+        (Some (coalton-library/vector:new)))"))
+
+  (check-coalton-types
+   "(define wrapped-none
+      (Some None))"
+
+   '("wrapped-none" . "(Optional (Optional :a))"))
+
+  ;; Capturing a top-level mutable cell in an implicit binding is expansive.
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(define stash
+        (let ((c (coalton-library/cell:new None)))
+          (fn (x)
+            (coalton-library/cell:write! c (Some x))
+            (coalton-library/cell:read c))))"))
+
+  ;; Explicit type declarations still allow expansive bindings to be monomorphic.
+  (check-coalton-types
+   "(declare int-vec (Vector Integer))
+    (define int-vec (coalton-library/vector:new))
+
+    (define (push-int n)
+      (coalton-library/vector:push! n int-vec))
+
+    (define peek-int
+      (fn ()
+        (coalton-library/vector:index 0 int-vec)))"
+
+   '("push-int" . "(Integer -> UFix)")
+   '("peek-int" . "(Unit -> Optional Integer)"))
+
+  (check-coalton-types
+   "(declare int-queue (coalton-library/queue:Queue Integer))
+    (define int-queue (coalton-library/queue:new))
+
+    (define (push-int-queue n)
+      (coalton-library/queue:push! n int-queue))
+
+    (define pop-int-queue
+      (fn ()
+        (coalton-library/queue:pop! int-queue)))"
+
+   '("push-int-queue" . "(Integer -> Unit)")
+   '("pop-int-queue" . "(Unit -> Optional Integer)"))
+
+  ;; A single inferred queue binding must not be usable at multiple element
+  ;; types; Queue remains invariant for relaxed value restriction.
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(define shared-queue (coalton-library/queue:new))
+
+      (define (push-shared-int)
+        (coalton-library/queue:push! 1 shared-queue))
+
+      (define (push-shared-string)
+        (coalton-library/queue:push! \"oops\" shared-queue))"))
+
+  ;; Mutable allocations inside function bodies remain polymorphic per call.
+  (check-coalton-types
+   "(define (mk-stash _seed)
+      (let ((c (coalton-library/cell:new None)))
+        (fn (x)
+          (coalton-library/cell:write! c (Some x))
+          (coalton-library/cell:read c))))"
+
+   '("mk-stash" . "(:a -> :b -> Optional :b)")))
+
 (deftest test-function-definition-shorthand ()
   (check-coalton-types
    "(define f (fn () 5))"

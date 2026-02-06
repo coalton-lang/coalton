@@ -1818,6 +1818,162 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
 ;;; Binding Group Type Inference
 ;;;
 
+;;; ---------------------------------------------------------------------------
+;;; Value restriction and weak type variables
+;;;
+;;; Coalton follows the same safety strategy used by ML-family languages for
+;;; mutable state: only non-expansive bindings are generalized.
+;;;
+;;; - Non-expansive expressions are "values" (variables, literals, lambdas, and
+;;;   constructor applications over non-expansive arguments).
+;;; - Expansive expressions are everything else: they may allocate, mutate, or
+;;;   observe effects, so they introduce weak type variables.
+;;;
+;;; Any type variables that come from expansive bindings are treated as weak:
+;;; they can be solved by unification, and are generalized only when they
+;;; appear in covariant positions (relaxed value restriction).
+;;;
+;;; The expansive/non-expansive check here is intentionally syntactic (as in
+;;; OCaml's value-restriction implementation): constructor applications over
+;;; non-expansive arguments are non-expansive; ordinary function applications
+;;; are treated as expansive.
+;;;
+;;; References:
+;;;   - Andrew K. Wright, "Simple Imperative Polymorphism" (1995)
+;;;   - Jacques Garrigue, "Relaxing the Value Restriction" (2004)
+;;;   - OCaml manual section "Polymorphism and its limitations"
+;;; ---------------------------------------------------------------------------
+
+(defun binding-init-expression (binding)
+  "Return BINDING's initializer expression used for value-restriction checks.
+
+For normal `let` bindings this is the right-hand side expression.
+For function-shorthand bindings and explicit multi-form bodies there is no
+single initializer expression, and this function returns NIL."
+  (declare (type (or parser:toplevel-define parser:node-let-binding parser:instance-method-definition) binding)
+           (values (or null parser:node) &optional))
+  (etypecase binding
+    (parser:node-let-binding
+      (parser:node-let-binding-value binding))
+    (parser:toplevel-define
+      (let ((body (parser:toplevel-define-body binding)))
+        (when (null (parser:node-body-nodes body))
+          (parser:node-body-last-node body))))
+    (parser:instance-method-definition
+      (let ((body (parser:instance-method-definition-body binding)))
+        (when (null (parser:node-body-nodes body))
+          (parser:node-body-last-node body))))))
+
+(defun nonexpansive-expression-p (node env)
+  "Return T when NODE is syntactically non-expansive.
+
+In this context:
+  - non-expansive means an expression that is value-like and can be
+    safely generalized;
+  - expansive means an expression that may allocate/effect and therefore
+    should not be generalized.
+
+Constructor applications are treated as non-expansive only when:
+  - the rator resolves to a data constructor;
+  - the application is not over-applied; and
+  - every argument is itself non-expansive.
+
+All other applications are considered expansive. This is conservative but
+matches the value-restriction safety argument."
+  (declare (type parser:node node)
+           (type tc:environment env)
+           (values boolean &optional))
+  (typecase node
+    ((or parser:node-variable
+         parser:node-literal
+         parser:node-integer-literal
+         parser:node-abstraction)
+     t)
+    (parser:node-the
+      (nonexpansive-expression-p (parser:node-the-expr node) env))
+    (parser:node-application
+      (and (typep (parser:node-application-rator node) 'parser:node-variable)
+           (let* ((name (parser:node-variable-name (parser:node-application-rator node)))
+                  (ctor (tc:lookup-constructor env name :no-error t))
+                  (rands (parser:node-application-rands node)))
+             (and ctor
+                  (<= (length rands) (tc:constructor-entry-arity ctor))
+                  (every (lambda (rand)
+                           (nonexpansive-expression-p rand env))
+                         rands)))))
+    (t nil)))
+
+(defun binding-nonexpansive-p (binding env)
+  "Return T when BINDING is eligible for generalization.
+
+Function bindings are always non-expansive because they denote lambdas.
+Non-function bindings are eligible only when their initializer is
+non-expansive."
+  (declare (type (or parser:toplevel-define parser:node-let-binding parser:instance-method-definition) binding)
+           (type tc:environment env)
+           (values boolean &optional))
+  (or (parser:binding-function-p binding)
+      (let ((init-expr (binding-init-expression binding)))
+        (and init-expr
+             (nonexpansive-expression-p init-expr env)))))
+
+(defun weak-binding-type-variables (bindings expr-tys env)
+  "Collect weak-variable candidates for this binding group.
+
+Each expansive binding contributes its inferred expression type variables.
+Those variables may unify with concrete types later. Covariant occurrences may
+still be generalized by the relaxed value restriction."
+  (declare (type list bindings)
+           (type tc:ty-list expr-tys)
+           (type tc:environment env)
+           (values tc:tyvar-list &optional))
+  (remove-duplicates
+   (loop :for binding :in bindings
+         :for expr-ty :in expr-tys
+         :unless (binding-nonexpansive-p binding env)
+           :append (tc:type-variables expr-ty))
+   :test #'tc:ty=))
+
+(defun blocked-weak-type-variables (weak-tvars expr-tys retained-preds env)
+  "Return weak variables that must remain monomorphic.
+
+Weak variables are blocked from generalization when they are not covariant in
+the inferred expression types, or when they appear in retained predicates.
+
+Variance comes from constructor metadata in ENV. Unknown or opaque constructors
+fall back to invariant, which is conservative."
+  (declare (type tc:tyvar-list weak-tvars)
+           (type tc:ty-list expr-tys)
+           (type tc:ty-predicate-list retained-preds)
+           (type tc:environment env)
+           (values tc:tyvar-list &optional))
+  (let* ((resolver (tc:make-env-variance-resolver env))
+         (variance-table
+           (tc:collect-tyvar-variances expr-tys resolver))
+         (retained-tvars
+           (tc:type-variables retained-preds)))
+    (remove-duplicates
+     (loop :for weak-var :in weak-tvars
+           :for observed-variance := (tc:tyvar-variance variance-table weak-var)
+           :when (or (find weak-var retained-tvars :test #'tc:ty=)
+                     (not (tc:variance-covariant-p observed-variance)))
+             :collect weak-var)
+     :test #'tc:ty=)))
+
+(defun error-non-generalizable-binding (binding scheme)
+  "Signal a user-facing error for a top-level weak (non-generalizable) type.
+
+At top level we reject unresolved weak variables in inferred schemes instead of
+printing an implicit weak variable notation."
+  (declare (type (or parser:toplevel-define parser:node-let-binding) binding)
+           (type tc:ty-scheme scheme))
+  (tc-error "Type is not generalizable"
+            (tc-note (parser:binding-name binding)
+                     "Inferred type ~S cannot be generalized because this binding is expansive."
+                     scheme)
+            (tc-note (parser:binding-name binding)
+                     "Hint: move this allocation into a function body (eta-expand) for fresh state per call, or add an explicit type declaration if this binding should be monomorphic.")))
+
 (defun infer-let-bindings (bindings declares subs env)
   (declare (type parser:node-let-binding-list bindings)
            (type parser:node-let-declare-list declares)
@@ -2298,7 +2454,6 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
            (loop :for binding :in bindings
                  :for ty :in expr-tys
                  :for node := (parser:binding-value binding)
-
                  :collect (multiple-value-bind (preds_ accessors_ node_ subs_)
                               (infer-binding-type binding ty subs env)
                             (setf subs subs_)
@@ -2325,7 +2480,12 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
              (expr-tvars
                (remove-duplicates (tc:type-variables expr-tys) :test #'eq))
              (local-tvars
-               (set-difference expr-tvars env-tvars :test #'eq)))
+               (set-difference expr-tvars env-tvars :test #'eq))
+             (weak-tvars
+               (intersection
+                (weak-binding-type-variables bindings expr-tys (tc-env-env env))
+                local-tvars
+                :test #'tc:ty=)))
 
         (setf preds (tc:apply-substitution subs preds))
 
@@ -2384,73 +2544,109 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
               (setf retained-preds (tc:reduce-context (tc-env-env env) retained-preds subs))
               (setf expr-tys (tc:apply-substitution subs expr-tys)))
 
-            (if restricted
-                (let* ((allowed-tvars (set-difference local-tvars (tc:type-variables retained-preds) :test #'eq))
+            (let* ((generalizable-candidates
+                     (remove-if-not
+                      #'tc:tyvar-p
+                      (tc:type-variables (tc:apply-substitution subs local-tvars))))
+                   (blocked-weak-tvars
+                     (intersection
+                      (blocked-weak-type-variables
+                       (remove-if-not #'tc:tyvar-p
+                                      (tc:apply-substitution subs weak-tvars))
+                       (tc:apply-substitution subs expr-tys)
+                       (tc:apply-substitution subs retained-preds)
+                       (tc-env-env env))
+                      generalizable-candidates
+                      :test #'tc:ty=))
+                   (generalizable-tvars
+                     (set-difference
+                      generalizable-candidates
+                      ;; Weak variables with non-covariant occurrences remain
+                      ;; monomorphic placeholders until solved.
+                      blocked-weak-tvars
+                      :test #'tc:ty=)))
 
-                       (output-qual-tys
-                         (loop :for ty :in expr-tys
-                               :collect (tc:apply-substitution subs (tc:make-qualified-ty :predicates nil :type ty))))
+              (if restricted
+                  (let* ((allowed-tvars (set-difference generalizable-tvars
+                                                        (tc:type-variables retained-preds)
+                                                        :test #'tc:ty=))
 
-                       (output-schemes
-                         (loop :for ty :in output-qual-tys
-                               :collect (tc:quantify allowed-tvars ty)))
+                         (output-qual-tys
+                           (loop :for ty :in expr-tys
+                                 :collect (tc:apply-substitution subs (tc:make-qualified-ty :predicates nil :type ty))))
 
-                       (deferred-preds (append deferred-preds retained-preds)))
+                         (output-schemes
+                           (loop :for ty :in output-qual-tys
+                                 :collect (tc:quantify allowed-tvars ty)))
 
-                  (loop :for scheme :in output-schemes
-                        :for binding :in bindings
+                         (deferred-preds (append deferred-preds retained-preds)))
 
-                        :for name := (parser:node-variable-name (parser:binding-name binding))
+                    (when (parser:binding-toplevel-p (first bindings))
+                      (loop :for scheme :in output-schemes
+                            :for binding :in bindings
+                            :when (tc:type-variables scheme)
+                              :do (error-non-generalizable-binding binding scheme)))
 
-                        :do (tc-env-replace-type env name scheme))
+                    (loop :for scheme :in output-schemes
+                          :for binding :in bindings
 
-                  (when (and (parser:binding-toplevel-p (first bindings)) deferred-preds)
-                    (error-unknown-pred (first deferred-preds)))
+                          :for name := (parser:node-variable-name (parser:binding-name binding))
 
-                  (values
-                   deferred-preds
-                   (loop :for binding :in binding-nodes
-                         :for ty :in output-qual-tys
-                         :collect (tc:apply-substitution subs (attach-explicit-binding-type binding ty)))
-                   subs))
+                          :do (tc-env-replace-type env name scheme))
 
-                (let* ((output-qual-tys
-                         (loop :for ty :in expr-tys
-                               :collect (tc:make-qualified-ty :predicates retained-preds :type ty)))
+                    (when (and (parser:binding-toplevel-p (first bindings)) deferred-preds)
+                      (error-unknown-pred (first deferred-preds)))
 
-                       (output-schemes
-                         (loop :for ty :in output-qual-tys
-                               :collect (tc:quantify (tc:type-variables (tc:apply-substitution subs local-tvars)) ty)))
+                    (values
+                     deferred-preds
+                     (loop :for binding :in binding-nodes
+                           :for ty :in output-qual-tys
+                           :collect (tc:apply-substitution subs (attach-explicit-binding-type binding ty)))
+                     subs))
 
-                       (rewrite-table
-                         (loop :with table := (make-hash-table :test #'eq)
+                  (let* ((output-qual-tys
+                           (loop :for ty :in expr-tys
+                                 :collect (tc:make-qualified-ty :predicates retained-preds :type ty)))
 
-                               :for ty :in output-qual-tys
-                               :for binding :in bindings
+                         (output-schemes
+                           (loop :for ty :in output-qual-tys
+                                 :collect (tc:quantify generalizable-tvars ty)))
 
-                               :for name := (parser:node-variable-name (parser:binding-name binding))
-                               :do (setf (gethash name table) ty)
+                         (rewrite-table
+                           (loop :with table := (make-hash-table :test #'eq)
 
-                               :finally (return table))))
+                                 :for ty :in output-qual-tys
+                                 :for binding :in bindings
 
-                  (loop :for scheme :in output-schemes
-                        :for binding :in bindings
+                                 :for name := (parser:node-variable-name (parser:binding-name binding))
+                                 :do (setf (gethash name table) ty)
 
-                        :for name := (parser:node-variable-name (parser:binding-name binding))
+                                 :finally (return table))))
 
-                        :do (tc-env-replace-type env name scheme))
+                    (when (parser:binding-toplevel-p (first bindings))
+                      (loop :for scheme :in output-schemes
+                            :for binding :in bindings
+                            :when (tc:type-variables scheme)
+                              :do (error-non-generalizable-binding binding scheme)))
 
-                  (when (and (parser:binding-toplevel-p (first bindings)) deferred-preds)
-                    (error-ambiguous-pred (first deferred-preds)))
+                    (loop :for scheme :in output-schemes
+                          :for binding :in bindings
 
-                  (values
-                   deferred-preds
-                   (loop :for binding :in binding-nodes
-                         :for ty :in output-qual-tys
-                         :collect (rewrite-recursive-calls
-                                   (tc:apply-substitution subs (attach-explicit-binding-type binding ty))
-                                   rewrite-table))
-                   subs)))))))))
+                          :for name := (parser:node-variable-name (parser:binding-name binding))
+
+                          :do (tc-env-replace-type env name scheme))
+
+                    (when (and (parser:binding-toplevel-p (first bindings)) deferred-preds)
+                      (error-ambiguous-pred (first deferred-preds)))
+
+                    (values
+                     deferred-preds
+                     (loop :for binding :in binding-nodes
+                           :for ty :in output-qual-tys
+                           :collect (rewrite-recursive-calls
+                                     (tc:apply-substitution subs (attach-explicit-binding-type binding ty))
+                                     rewrite-table))
+                     subs))))))))))
 
 (defun infer-binding-type (binding expected-type subs env)
   "Infer the type of BINDING then unify against EXPECTED-TYPE. Adds BINDING's parameters to the environment."
@@ -2723,4 +2919,3 @@ and return the set difference of the expansion and ENV-TVARS."
          (expansion (tc:generic-closure local-tvars fundeps :test #'tc:ty=))
          (expansion (remove-duplicates expansion :test #'tc:ty=)))
     (set-difference expansion env-tvars :test #'tc:ty=)))
-

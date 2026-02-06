@@ -10,6 +10,7 @@
    #:coalton-impl/typechecker/accessor
    #:coalton-impl/typechecker/partial-type-env
    #:coalton-impl/typechecker/parse-type
+   #:coalton-impl/typechecker/variance
    #:coalton-impl/typechecker/define-type
    #:coalton-impl/typechecker/derive
    #:coalton-impl/typechecker/define-class

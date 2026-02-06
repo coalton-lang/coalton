@@ -250,6 +250,91 @@ As suggested, one can replace `y` with `_y`, which tells the Coalton compiler th
 
 One should treat underscore prefixed variables as ignored whenever possible, and use a name not prefixed with `_` if it may be used. Reading from underscore-prefixed variables is permitted so that generated code (e.g., using macros or read-conditionals) may avoid unused variable warnings for variables which will be used in some compilation contexts but not others.
 
+## Polymorphism, Mutation, and the Value Restriction
+
+Coalton infers polymorphic types for `define` and `let` bindings using an ML-style value restriction with a relaxed variance check.
+
+Informally:
+
+- A **non-expansive** expression is value-like (for example: variables, literals, lambdas, and constructor applications over non-expansive arguments).
+- An **expansive** expression may allocate or otherwise depend on effects (for example: calls like `vector:new` or `cell:new`).
+- Expansive bindings introduce **weak** type variables. Weak variables are generalized only when they occur in **covariant** positions.
+
+This keeps polymorphism sound in the presence of mutation while still allowing common covariant expansive expressions to remain polymorphic.
+
+A non-expansive constructor expression can still generalize:
+
+```lisp
+(coalton-toplevel
+  (define wrapped-none (Some None)))
+;; wrapped-none : Optional (Optional :a)
+```
+
+An expansive expression can still generalize when the weak variable is only covariant:
+
+```lisp
+(coalton-toplevel
+  (define wrapped-id
+    ((fn (x) x) None)))
+;; wrapped-id : (Optional :a)
+```
+
+But expansive bindings involving invariant or contravariant occurrences do not generalize. For example, mutable containers such as `Vector` remain monomorphic:
+
+```lisp
+(coalton-toplevel
+  (define wrapped-new
+    (Some (coalton-library/vector:new))))
+;; error: Type is not generalizable
+```
+
+If you hit this, there are two common fixes:
+
+1. Move the allocation into a function body so each call gets fresh state (often via eta-expansion).
+2. Add an explicit top-level type declaration when you intentionally want a monomorphic mutable value.
+
+For example, this is intentionally monomorphic:
+
+```lisp
+(coalton-toplevel
+  (declare int-vec (Vector Integer))
+  (define int-vec (coalton-library/vector:new)))
+```
+
+References:
+
+- [OCaml manual: Polymorphism and its limitations](https://ocaml.org/manual/4.14/polymorphism.html)
+- [Jacques Garrigue, "Relaxing the Value Restriction"](https://caml.inria.fr/pub/papers/garrigue-value_restriction-fiwflp04.pdf)
+- [Andrew K. Wright, "Simple Imperative Polymorphism"](https://doi.org/10.1017/S0956796800001230)
+
+### Variance
+
+Coalton uses type-parameter variance to decide which weak type variables from expansive bindings can still be generalized.
+
+- **Covariant**: the type parameter is only produced (for example, `Optional :a`, `List :a`).
+- **Contravariant**: the type parameter is consumed (for example, function argument position in `:a -> :b`).
+- **Invariant**: both directions are possible, or mutability allows writes (common for mutable containers).
+
+Under the relaxed value restriction, weak variables are generalized only when all observed occurrences are covariant; any invariant or contravariant occurrence keeps them monomorphic.
+
+### Opaque Native Types
+
+For `define-type` forms with no constructors and no alias body (typically used with `repr :native`), Coalton cannot inspect the type's internal structure to infer variance from fields. In those cases, type parameters are treated as invariant by default.
+
+This is conservative by design. For mutable wrappers, invariance is usually required for soundness.
+
+Current parametric opaque stdlib types include:
+
+- `Vector :a`
+- `Cell :a`
+- `Queue :a`
+- `Slice :a`
+- `Hashtable :key :value`
+- `LispArray :t`
+- `FileStream :a`
+
+These are all modeled invariantly; each either exposes mutation directly or mixes read/write capabilities in one type.
+
 ## Data Types
 
 Coalton allows the definition of parametric algebraic data types.
@@ -1502,4 +1587,3 @@ For the time being, the following caveats apply;
 
 
    
-
