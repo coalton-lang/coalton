@@ -2,6 +2,7 @@
   (:use
    #:cl)
   (:local-nicknames
+   (#:pe #:coalton-impl/analysis/pattern-exhaustiveness)
    (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
   (:export
@@ -164,64 +165,51 @@
                                          (cons (pattern-type pattern)
                                                (pattern-constructor-patterns pattern)))))
 
-(defun constructor-grouping-exhaustive-p (constructor grouping type env)
-  "Does the LIST, GROUPING, cover every case of the constructor
-CONSTRUCTOR of type TYPE?"
-  (let* ((generic-type (tc:qualified-ty-type (tc:fresh-inst (tc:lookup-value-type env constructor))))
-         (matched-subs (tc:match (tc:function-return-type generic-type) type))
-         (matched-type (tc:apply-substitution matched-subs generic-type)))
-    (every (lambda (patterns type) (patterns-exhaustive-p patterns type env))
-           ;; "Rotate" the list of patterns s.t. the first element of
-           ;; the resulting list is a list of patterns covering the
-           ;; first argument of the constructor, and the second
-           ;; element is a list of patterns covering the second
-           ;; argument of the constructor, etc.
-           (apply #'mapcar #'list (mapcar #'pattern-constructor-patterns grouping))
-           ;; Grab the types of the arguments to the constructor as a
-           ;; list.
-           (tc:function-type-arguments matched-type))))
-
-(defun pattern-constructors-exhaustive-p (pattern-constructors type env)
-  "Does the LIST, PATTERN-CONSTRUCTORS, cover every case of TYPE?"
-  ;; When PATTERN-CONSTRUCTORS is empty, it is not exhaustive.
-  (when (endp pattern-constructors)
-    (return-from pattern-constructors-exhaustive-p nil))
-
-  ;; If we got this far, then PATTERN-CONSTRUCTORS is NOT empty,
-  ;; which means we do have a list of constructors, and we can
-  ;; assume that TYPE is a TYCON or a TAPP.
-  (let* ((type-name (tc:tycon-name (first (tc:flatten-type type))))
-         (constructors (tc:type-entry-constructors (tc:lookup-type env type-name)))
-         ;; Collect the patterns associated with each constructor of
-         ;; type TYPE into groupings.
-         (groupings (mapcar
-                     (lambda (constructor)
-                       (remove-if-not
-                        (lambda (pattern)
-                          (eq constructor (pattern-constructor-name pattern)))
-                        pattern-constructors))
-                     constructors)))
-    (and
-     ;; Is there at least one pattern for each constructor of type
-     ;; TYPE?
-     (every #'consp groupings)
-     ;; And, if so, are the patterns for each constructor exhaustive
-     ;; for the cases of that constructor?
-     (every (lambda (constructor grouping)
-              (constructor-grouping-exhaustive-p constructor grouping type env))
-            constructors
-            groupings))))
+(defun codegen-pattern->typechecker-pattern (pattern)
+  "Convert codegen PATTERN into a typechecker pattern."
+  (declare (type pattern pattern)
+           (values tc:pattern &optional))
+  (labels ((qualify (type)
+             (declare (type tc:ty type)
+                      (values tc:qualified-ty &optional))
+             (tc:qualify nil type))
+           (convert (pattern)
+             (declare (type pattern pattern)
+                      (values tc:pattern &optional))
+             (etypecase pattern
+               (pattern-var
+                (tc:make-pattern-var
+                 :type (qualify (pattern-type pattern))
+                 :name (pattern-var-name pattern)
+                 ;; Codegen patterns do not preserve original source names.
+                 :orig-name (pattern-var-name pattern)))
+               (pattern-binding
+                (tc:make-pattern-binding
+                 :type (qualify (pattern-type pattern))
+                 :var (convert (pattern-binding-var pattern))
+                 :pattern (convert (pattern-binding-pattern pattern))))
+               (pattern-literal
+                (tc:make-pattern-literal
+                 :type (qualify (pattern-type pattern))
+                 :value (pattern-literal-value pattern)))
+               (pattern-wildcard
+                (tc:make-pattern-wildcard
+                 :type (qualify (pattern-type pattern))))
+               (pattern-constructor
+                (tc:make-pattern-constructor
+                 :type (qualify (pattern-type pattern))
+                 :name (pattern-constructor-name pattern)
+                 :patterns (mapcar #'convert (pattern-constructor-patterns pattern)))))))
+    (convert pattern)))
 
 (defun patterns-exhaustive-p (patterns type env)
   "Does the LIST, PATTERNS, cover every case of TYPE?"
-  (or
-   ;; If any pattern is a variable or wildcard, then the entire list
-   ;; is exhaustive.
-   (member-if #'pattern-var-p patterns)
-   (member-if #'pattern-wildcard-p patterns)
-   ;; Otherwise, the list of patterns is only exhaustive if it
-   ;; contains a list of constructors which is exhaustive.
-   (pattern-constructors-exhaustive-p
-    (remove-if-not #'pattern-constructor-p patterns)
-    type
-    env)))
+  (declare (type pattern-list patterns)
+           (type tc:ty type)
+           (type tc:environment env)
+           (ignore type)
+           (values boolean &optional))
+  (pe:exhaustive-patterns-p
+   (mapcar #'pe:collapse-binding-patterns
+           (mapcar #'codegen-pattern->typechecker-pattern patterns))
+   env))

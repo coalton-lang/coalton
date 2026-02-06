@@ -294,6 +294,7 @@
                 :serial t
                 :components ((:file "cursor-tests")))
                (:file "entry-tests")
+               (:file "codegen-pattern-tests")
                (:file "toplevel-tests")
                (:file "type-inference-tests")
                (:file "fundep-tests")
