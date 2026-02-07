@@ -252,15 +252,17 @@ One should treat underscore prefixed variables as ignored whenever possible, and
 
 ## Polymorphism, Mutation, and the Value Restriction
 
-Coalton infers polymorphic types for `define` and `let` bindings using an ML-style value restriction with a relaxed variance check.
+Coalton infers polymorphic types for implicitly typed `define` and `let` bindings using a syntactic ML-style value restriction plus a relaxed variance check. This ensures the Coalton type system is sound in the presence of mutable data structures.
 
 Informally:
 
-- A **non-expansive** expression is value-like (for example: variables, literals, lambdas, and constructor applications over non-expansive arguments).
-- An **expansive** expression may allocate or otherwise depend on effects (for example: calls like `vector:new` or `cell:new`).
-- Expansive bindings introduce **weak** type variables. Weak variables are generalized only when they occur in **covariant** positions.
+- A **non-expansive** expression is syntactically value-like (for example: variables, literals, lambdas, and constructor applications over non-expansive arguments).
+- An **expansive** expression is everything else. In particular, ordinary function application is treated as expansive, even when the call is observationally pure.
+- Expansive bindings introduce **weak** type-variable candidates. Weak variables are generalized only when all observed occurrences are **covariant** and they do not occur in retained predicates (constraints).
 
-This keeps polymorphism sound in the presence of mutation while still allowing common covariant expansive expressions to remain polymorphic.
+This still allows many covariant expansive expressions to remain polymorphic.
+
+At top level, unresolved weak variables are rejected with an error.
 
 A non-expansive constructor expression can still generalize:
 
@@ -279,13 +281,15 @@ An expansive expression can still generalize when the weak variable is only cova
 ;; wrapped-id : (Optional :a)
 ```
 
-But expansive bindings involving invariant or contravariant occurrences do not generalize. For example, mutable containers such as `Vector` remain monomorphic:
+Even though this example is an ordinary function application (and thus expansive), `:a` appears covariantly, so it can still be generalized.
+
+But expansive bindings involving invariant or contravariant occurrences (or retained constraints on weak variables) do not generalize. For example, mutable containers such as `Vector` remain monomorphic:
 
 ```lisp
 (coalton-toplevel
   (define wrapped-new
     (Some (coalton/vector:new))))
-;; error: Type is not generalizable
+;; error
 ```
 
 If you hit this, there are two common fixes:
@@ -301,11 +305,13 @@ For example, this is intentionally monomorphic:
   (define int-vec (coalton/vector:new)))
 ```
 
+Coalton does not track mutability as an intrinsic quality of every type constructor. For opaque parametric type definitions, variance is assumed to be invariant by default.
+
 References:
 
-- [OCaml manual: Polymorphism and its limitations](https://ocaml.org/manual/4.14/polymorphism.html)
-- [Jacques Garrigue, "Relaxing the Value Restriction"](https://caml.inria.fr/pub/papers/garrigue-value_restriction-fiwflp04.pdf)
-- [Andrew K. Wright, "Simple Imperative Polymorphism"](https://doi.org/10.1017/S0956796800001230)
+- OCaml manual: Polymorphism and its limitations.
+- Jacques Garrigue, "Relaxing the Value Restriction".
+- Andrew K. Wright, "Simple Imperative Polymorphism".
 
 ### Variance
 
