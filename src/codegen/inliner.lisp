@@ -171,9 +171,11 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
            (type ast:node-abstraction abstraction)
            (values ast:node-let &optional))
 
-  (let* ((bindings
+  (let* ((fresh-abstraction
+           (transformations:rename-type-variables abstraction))
+         (bindings
            (mapcar (lambda (var val) (cons (gensym (symbol-name var)) val))
-                   (ast:node-abstraction-vars abstraction)
+                   (ast:node-abstraction-vars fresh-abstraction)
                    (ast:node-rands application)))
          (substitutions
            (mapcar (lambda (var binding)
@@ -183,22 +185,26 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
                         :to (ast:make-node-variable
                              :type (ast:node-type val)
                              :value new-var))))
-                   (ast:node-abstraction-vars abstraction)
+                   (ast:node-abstraction-vars fresh-abstraction)
                    bindings))
-         (new-abstraction
-           (transformations:rename-type-variables
-            (substitutions:apply-ast-substitution
-             substitutions
-             (ast:node-abstraction-subexpr abstraction)
-             t)))
+         (new-subexpr
+           (substitutions:apply-ast-substitution
+            substitutions
+            (ast:node-abstraction-subexpr fresh-abstraction)
+            t))
+         (call-type
+           (tc:make-function-type*
+            (mapcar #'ast:node-type (ast:node-rands application))
+            (ast:node-type application)))
          (new-substitutions
            (coalton-impl/typechecker/unify::mgu
-            (ast:node-type application)
-            (ast:node-type new-abstraction))))
+            (ast:node-type fresh-abstraction)
+            call-type)))
     (ast:make-node-let
      :type     (ast:node-type application)
-     :bindings bindings
-     :subexpr  (tc:apply-substitution new-substitutions new-abstraction))))
+     :bindings (loop :for (name . expr) :in bindings
+                     :collect (cons name (tc:apply-substitution new-substitutions expr)))
+     :subexpr  (tc:apply-substitution new-substitutions new-subexpr))))
 
 (defun try-inline-application (application env stack noinline-functions)
   "Try to inline an application node, checking internal traversal stack,

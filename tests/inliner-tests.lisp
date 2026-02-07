@@ -154,6 +154,24 @@
   (define (double-callsite-noinlined-foo-caller)
     (noinline (callsite-inlined-foo (+ 1 (inline (callsite-inlined-foo 1)))))))
 
+;; Regression test for inliner substitutions when argument type
+;; variables are not constrained by return type.
+(coalton-toplevel
+  (declare inliner-subst-test-helper ((Optional :a) -> :b -> :b))
+  (inline)
+  (define (inliner-subst-test-helper x y)
+    (match x
+      ((None) y)
+      ((Some _) y)))
+
+  (declare inliner-subst-test-caller ((Optional :a) -> :b -> :b))
+  (define (inliner-subst-test-caller x y)
+    (inline (inliner-subst-test-helper x y))))
+
+(define-test polymorphic-inline-substitution-runtime ()
+  (is (== 17 (inliner-subst-test-caller (Some 0) 17)))
+  (is (== "ok" (inliner-subst-test-caller None "ok"))))
+
 
 (in-package #:coalton-tests)
 
@@ -213,6 +231,40 @@
       (if (== n 0)
           1
           (* n (factorial-1 (- n 1)))))"))
+
+(defun count-let-binding-type-mismatches (let-node)
+  "Count uses of let-bound variables whose node types differ from their binding expression types."
+  (declare (type ast:node-let let-node)
+           (values fixnum &optional))
+  (let ((binding-types (make-hash-table :test #'eq))
+        (mismatch-count 0))
+    (dolist (binding (ast:node-let-bindings let-node))
+      (setf (gethash (car binding) binding-types)
+            (ast:node-type (cdr binding))))
+    (traverse:traverse
+     (ast:node-let-subexpr let-node)
+     (list
+      (traverse:action (:after ast:node-variable node)
+        (let ((expected-type
+                (gethash (ast:node-variable-value node) binding-types)))
+          (when (and expected-type
+                     (not (tc:ty= expected-type (ast:node-type node))))
+            (incf mismatch-count)))
+        (values))))
+    mismatch-count))
+
+(deftest polymorphic-inline-substitution-types-test ()
+  (let* ((caller-node
+           (coalton:lookup-code
+            'coalton-native-tests::inliner-subst-test-caller))
+         (inlined-caller-node
+           (coalton-impl/codegen/inliner:inline-applications
+            caller-node
+            entry:*global-environment*))
+         (caller-subexpr
+           (ast:node-abstraction-subexpr inlined-caller-node)))
+    (is (typep caller-subexpr 'ast:node-let))
+    (is (= 0 (count-let-binding-type-mismatches caller-subexpr)))))
 
 (defun unroll-limit-test-proc (caller)
   "The body of limit-unroll-test.  We want to run it twice, before and after
