@@ -246,6 +246,26 @@
                                          m-prx))")
   )
 
+(deftest fundep-catch-inferred-dict-regression ()
+  ;; See https://github.com/coalton-lang/coalton/issues/1719
+  (is (null
+       (collect-compiler-error
+        "(package coalton-unit-test/fundep-catch)
+         (define-class (MyClass :a :b (:a -> :b))
+           (to-zero (:a -> :b))
+           (to-zero-prx (coalton/types:Proxy :a -> :b)))
+
+         (define-instance (MyClass String Integer)
+           (define (to-zero _) 0)
+           (define (to-zero-prx _) 0))
+
+         (declare breaks (MyClass :a :t => coalton/types:Proxy :a -> String))
+         (define (breaks x)
+           (catch (progn
+                    (to-zero-prx x)
+                    \"Runs\")
+             (_ \"Fails\")))"))))
+
 (deftest fundep-fundep-identity ()
   ;; See https://github.com/coalton-lang/coalton/issues/1736
   (check-coalton-types
