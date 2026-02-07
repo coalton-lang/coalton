@@ -342,7 +342,16 @@
          (vars (loop :for var :in (parser:toplevel-define-class-vars class)
                      :for name :in var-names
                      :collect (handler-case (partial-type-env-lookup-var env name var)
-                                (error () (util:coalton-bug "missing type variable"))))))
+                                (error () (util:coalton-bug "missing type variable")))))
+         (superclass-tyvars
+           (remove-duplicates
+            (parser:collect-type-variables (parser:toplevel-define-class-preds class))
+            :test #'eq
+            :key #'parser:tyvar-name))
+         (superclass-extra-tyvars
+           (loop :for tvar :in superclass-tyvars
+                 :unless (member (parser:tyvar-name tvar) var-names :test #'eq)
+                   :collect tvar)))
 
     ;; Ensure fundeps don't have duplicate variables
     (labels ((check-duplicate-fundep-variables (vars)
@@ -367,6 +376,11 @@
       (loop :for fundep :in (parser:toplevel-define-class-fundeps class)
             :do (check-fundep-variables (parser:fundep-left fundep))
             :do (check-fundep-variables (parser:fundep-right fundep))))
+
+    ;; Superclass predicates may reference additional type variables.
+    ;; Add them now so infer-predicate-kinds can validate them.
+    (loop :for tvar :in superclass-extra-tyvars
+          :do (partial-type-env-add-var env (parser:tyvar-name tvar)))
 
     (let* ((fundeps
              (loop :for fundep :in (parser:toplevel-define-class-fundeps class)

@@ -246,6 +246,24 @@
                                          m-prx))")
   )
 
+(deftest fundep-superclass-determined-var-regression ()
+  ;; See https://github.com/coalton-lang/coalton/issues/1716
+  (check-coalton-types
+   "(define-class (HasA :t :a (:t -> :a))
+      (get-a (coalton/types:Proxy :t -> :a)))
+
+    (define-class (HasA :t :a => WrapsHasA :w :t (:w -> :t))
+      (get-two-as (:w -> Tuple :a :a)))"))
+
+(deftest fundep-superclass-determined-var-workaround-regression ()
+  ;; See https://github.com/coalton-lang/coalton/issues/1716
+  (check-coalton-types
+   "(define-class (HasA :t :a (:t -> :a))
+      (get-a (coalton/types:Proxy :t -> :a)))
+
+    (define-class (HasA :t :a => WrapsHasA :w :t :a (:w -> :t))
+      (get-two-as (:w -> Tuple :a :a)))"))
+
 (deftest fundep-catch-inferred-dict-regression ()
   ;; See https://github.com/coalton-lang/coalton/issues/1719
   (is (null
