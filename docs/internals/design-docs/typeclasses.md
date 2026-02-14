@@ -44,21 +44,23 @@ Higher kinded types are outside of scope of the initial typeclass implementation
 
 ### Constraints in Class Declarations
 
-_This section is no longer accurate._
-
 Referred to as Decision 9 in Jones 1997.
 
-```lisp
-;; Is not allowed
-(define-class (Test :a)
-  (test (fn (Eq :a) => :a -> :a -> Bool)))
+**Update**: Coalton now allows constraints on class variables in class method signatures. This was previously disallowed to simplify the implementation, but the restriction has since been lifted.
 
-;; Is allowed
+```lisp
+;; Now allowed: constraints on class variable :a in a method signature
+(define-class (Foo :a)
+  (bar (Num :a => :a -> :a)))
+
+;; Also allowed: constraints on non-class variables (always was)
 (define-class (Test :a)
-  (test (fn (Eq :b) => :b -> :b -> Bool)))
+  (test (Eq :b => :b -> :b -> Boolean)))
 ```
 
-Constraints of class variables in class methods are not allowed since this complicates code and will result in the constraint being propogated up to the class, which is already supported by the class definition syntax.
+When a method has a constraint on the class variable, the constraint is effectively propagated to the class context. For example, any call to `bar` above will require both a `Foo` instance and a `Num` instance for the type in question.
+
+This change allows more expressive type class definitions where individual methods may require additional capabilities beyond what the class itself demands.
 
 ### Self Referential Class Definitions
 

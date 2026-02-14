@@ -176,6 +176,55 @@ Here, we used `lisp` to actually construct, type, and return our `RandomState` o
 
 See [`Vector`](https://github.com/coalton-lang/coalton/blob/main/library/vector.lisp) for a more extensive example.
 
+## Promises of `define-struct`
+
+The `define-struct` form creates a single-constructor type with named fields. Its behavior varies by interaction mode:
+
+### Development Mode
+
+In development mode, structs are compiled as CLOS classes. This allows re-definition and interactive development.
+
+```
+(define-struct Point
+  (x Integer)
+  (y Integer))
+```
+
+Generates a CLOS class named `POINT` with:
+- A constructor function `POINT` that takes positional arguments: `(POINT 3 4)`
+- Field accessor functions named `CLASSNAME-FIELDNAME`, e.g., `POINT-X` and `POINT-Y`
+
+### Release Mode
+
+In release mode, structs are compiled as `defstruct` (frozen CL structs) for performance. The generated interface (constructor and accessor names) is the same, but the underlying representation uses CL's `defstruct` with `:read-only t` slots.
+
+### Accessor Naming
+
+**PROMISE**: For a struct defined as `(define-struct Foo (bar T1) (baz T2))`, the following Lisp functions will exist:
+- `FOO`: a constructor function taking positional arguments `(FOO bar-val baz-val)`
+- `FOO-BAR`: a reader function for the `bar` field
+- `FOO-BAZ`: a reader function for the `baz` field
+
+**WARNING**: Struct fields are read-only from Lisp. Coalton does not generate writer functions.
+
+### Using Structs from Lisp
+
+```lisp
+;; After defining a struct in Coalton:
+;;   (define-struct Point (x Integer) (y Integer))
+
+;; Constructing from Lisp:
+(point 3 4)               ; => #<POINT ...>
+
+;; Accessing fields from Lisp:
+(point-x (point 3 4))     ; => 3
+(point-y (point 3 4))     ; => 4
+```
+
+### Parametric Structs
+
+Parametric structs like `(define-struct (Pair :a) (first :a) (second :a))` follow the same accessor naming convention. The constructor and accessors are polymorphic at the Lisp level (they accept any type), so it is the caller's responsibility to ensure type correctness.
+
 ## Promises of `define`
 
 Consider the following definitions:
@@ -259,6 +308,34 @@ Each `<captured-variable>` refers to a lexical variable in the surrounding Coalt
 ```
 
 Here, the values of the parameters `a` and `b` are captured for use inside of the `lisp` form.
+
+## Accessing Lisp Variables from Coalton
+
+Coalton expressions cannot directly reference Lisp variables. To access a Lisp variable's value from within a `coalton` or `coalton-toplevel` form, you must use the `lisp` escape form and capture the variable explicitly:
+
+```lisp
+;; This does NOT work — x is a Lisp variable, not a Coalton binding:
+;; (let ((x 42))
+;;   (coalton (+ x 1)))  ; ERROR
+
+;; Instead, use the lisp form to bring the value into Coalton:
+(let ((x 42))
+  (coalton
+    (+ (lisp Integer () x) 1)))  ; => 43
+```
+
+The `lisp` form's capture list (the second argument) is for capturing *Coalton* lexical variables. When accessing a *Lisp* variable, leave the capture list empty and reference the variable directly in the Lisp body, since the `lisp` form's body is ordinary Lisp code with access to the surrounding Lisp lexical environment.
+
+For Lisp special (dynamic) variables, the same pattern works:
+
+```lisp
+(defvar *my-config* 100)
+
+(coalton-toplevel
+  (define (get-config)
+    (lisp Integer ()
+      *my-config*)))
+```
 
 ## Soundness of Coalton-Lisp Interop
 
