@@ -1,3 +1,13 @@
+;;;; scheme.lisp
+;;;;
+;;;; Type schemes (universally quantified types). A type scheme like
+;;;; ∀ :a. Eq :a => :a -> :a -> Boolean represents a polymorphic type
+;;;; that can be instantiated with fresh type variables at each use site.
+;;;;
+;;;; Quantification (QUANTIFY) closes over free type variables in a type,
+;;;; producing a scheme. Instantiation (INSTANTIATE) replaces the bound
+;;;; variables with fresh ones for each use, enabling let-polymorphism.
+
 (defpackage #:coalton-impl/typechecker/scheme
   (:use
    #:cl

@@ -1,3 +1,19 @@
+;;;; environment.lisp
+;;;;
+;;;; The global type environment: the central database that stores all type
+;;;; information accumulated during compilation. This includes:
+;;;;
+;;;; - Type definitions (algebraic types, structs, type aliases)
+;;;; - Type class definitions and their instances
+;;;; - Value bindings and their inferred type schemes
+;;;; - Constructor entries mapping data constructors to their parent types
+;;;; - Specialization entries for optimized type class dispatch
+;;;; - Source names for preserving user-written names through compilation
+;;;;
+;;;; The environment is an immutable data structure backed by FSET maps.
+;;;; Each compilation unit produces a new environment by extending the
+;;;; previous one, enabling incremental compilation.
+
 (defpackage #:coalton-impl/typechecker/environment
   (:use
    #:cl

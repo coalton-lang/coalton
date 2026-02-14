@@ -1,3 +1,19 @@
+;;;; optimizer.lisp
+;;;;
+;;;; The codegen optimizer transforms the codegen AST to improve the
+;;;; quality of generated Common Lisp code. Optimizations include:
+;;;;
+;;;; - Direct application: eliminates FUNCALL overhead by recognizing
+;;;;   known-function calls and emitting direct CL function calls.
+;;;; - Inlining: replaces calls to inline-declared functions with their
+;;;;   bodies, specializing for the call site.
+;;;; - Monomorphization: generates type-specialized copies of polymorphic
+;;;;   functions, eliminating dictionary-passing overhead.
+;;;; - Constant folding and dead code elimination.
+;;;; - Match compilation: optimizes nested pattern matches.
+;;;;
+;;;; The optimizer runs after translation and before final CL codegen.
+
 (defpackage #:coalton-impl/codegen/optimizer
   (:use
    #:cl

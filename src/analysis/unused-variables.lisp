@@ -1,3 +1,11 @@
+;;;; unused-variables.lisp
+;;;;
+;;;; Detects unused variable bindings in typed definitions. Walks the
+;;;; typed AST to collect variable references, then checks each parameter
+;;;; and let-binding against the set of used variables, emitting warnings
+;;;; for any that are unreferenced (excluding variables whose names start
+;;;; with underscore, which are conventionally unused).
+
 (defpackage #:coalton-impl/analysis/unused-variables
   (:use
    #:cl)

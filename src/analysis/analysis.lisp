@@ -1,3 +1,11 @@
+;;;; analysis.lisp
+;;;;
+;;;; The top-level analysis driver. After type checking, the analysis pass
+;;;; runs static checks on the typed AST: pattern exhaustiveness (are all
+;;;; match cases covered?), unused variables (are any bindings dead?), and
+;;;; underapplied values (are partially-applied constructors used as values
+;;;; where a full application was likely intended?).
+
 (defpackage #:coalton-impl/analysis/analysis
   (:use
    #:cl

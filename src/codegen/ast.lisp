@@ -1,3 +1,18 @@
+;;;; ast.lisp
+;;;;
+;;;; The codegen AST (abstract syntax tree): a lower-level intermediate
+;;;; representation used during code generation. Unlike the typechecker's
+;;;; AST which mirrors the source language, the codegen AST is closer to
+;;;; Common Lisp and includes nodes for:
+;;;;
+;;;; - Direct function application (bypassing FUNCALL)
+;;;; - Explicit type class dictionary passing
+;;;; - Struct field access and mutation
+;;;; - Loop constructs (while, for, break, continue)
+;;;; - Lisp escape nodes for FFI
+;;;;
+;;;; Each node carries its inferred type for use during optimization.
+
 (defpackage #:coalton-impl/codegen/ast
   (:use
    #:cl

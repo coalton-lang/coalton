@@ -1,3 +1,16 @@
+;;;; predicate.lisp
+;;;;
+;;;; Type class predicates and related structures. A predicate like
+;;;; (Eq :a) constrains a type variable to belong to a type class.
+;;;; This module defines:
+;;;;
+;;;; - TY-PREDICATE: a class name applied to type arguments
+;;;; - TY-CLASS: a type class definition (superclasses, methods, fundeps)
+;;;; - TY-CLASS-INSTANCE: a concrete implementation of a class for a type
+;;;; - QUALIFIED-TY: a type with class constraints (e.g., Eq :a => :a -> :a -> Boolean)
+;;;;
+;;;; These form the constraint language that drives type class resolution.
+
 (defpackage #:coalton-impl/typechecker/predicate
   (:use
    #:cl
