@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package :coalton/ordtree
+  (:documentation "Immutable ordered sets backed by weight-balanced binary trees.")
   (:use
    #:coalton
    #:coalton/classes

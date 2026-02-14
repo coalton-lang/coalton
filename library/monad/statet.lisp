@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/monad/statet
+  (:documentation "State monad transformer: thread mutable state through a monad stack.")
   (:use
    #:coalton
    #:coalton/functions

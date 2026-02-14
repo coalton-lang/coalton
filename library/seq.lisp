@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/seq
+  (:documentation "Persistent sequences based on Relaxed Radix Balanced Trees, with efficient random access and concatenation.")
   (:use
    #:coalton
    #:coalton/builtin

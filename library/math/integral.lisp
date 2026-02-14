@@ -3,6 +3,7 @@
 ;;;; Integral domains and operations on integers
 
 (coalton/utils::defstdlib-package #:coalton/math/integral
+  (:documentation "Integral type class and integer operations: division, modular arithmetic, GCD, and primality testing.")
   (:use
    #:coalton
    #:coalton/classes

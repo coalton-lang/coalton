@@ -1,4 +1,5 @@
 (coalton/utils::defstdlib-package #:coalton/list
+  (:documentation "Operations on singly-linked persistent lists: traversal, search, transformation, and set operations.")
   (:use
    #:coalton
    #:coalton/builtin

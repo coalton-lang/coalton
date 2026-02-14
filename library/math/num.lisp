@@ -3,6 +3,7 @@
 ;;;; Instances for primitive numerical types
 
 (coalton/utils:defstdlib-package #:coalton/math/num
+  (:documentation "Num, Eq, Ord, Hash, Into, and other fundamental instances for all primitive numeric types.")
   (:use
    #:coalton
    #:coalton/math/num-defining-macros)

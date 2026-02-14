@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/types
+  (:documentation "Runtime type representation: Proxy types, LispType mappings, and RuntimeRepr.")
   (:use
    #:coalton)
   (:export

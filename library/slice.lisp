@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/slice
+  (:documentation "Mutable sub-range views into Vectors, with bounds-checked and unchecked element access.")
   (:use
    #:coalton
    #:coalton/builtin

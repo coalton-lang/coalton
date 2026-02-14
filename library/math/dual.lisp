@@ -4,6 +4,7 @@
 ;;;; of compositions of built-in Coalton functions.
 
 (coalton/utils:defstdlib-package #:coalton/math/dual
+  (:documentation "Dual numbers for automatic first-order forward-mode differentiation.")
   (:use
    #:coalton
    #:coalton/builtin

@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/monad/optionalt
+  (:documentation "Optional monad transformer: add short-circuiting failure to a monad stack.")
   (:use
    #:coalton
    #:coalton/functions

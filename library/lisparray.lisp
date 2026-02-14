@@ -3,6 +3,7 @@
 ;;;; An interface to Common Lisp rank-1 SIMPLE-ARRAYs.
 
 (coalton/utils:defstdlib-package #:coalton/lisparray
+  (:documentation "Low-level interface to Common Lisp rank-1 simple-arrays with element-type specialization.")
   (:use
    #:coalton
    #:coalton/classes)

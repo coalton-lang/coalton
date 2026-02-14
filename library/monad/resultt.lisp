@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/monad/resultt
+  (:documentation "Result monad transformer: add error handling with typed errors to a monad stack.")
   (:use
    #:coalton
    #:coalton/functions

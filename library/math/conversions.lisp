@@ -3,6 +3,7 @@
 ;;;; Conversions between primitive numerical types
 
 (coalton/utils:defstdlib-package #:coalton/math/conversions
+  (:documentation "Safe (Into) and fallible (TryInto) conversions between primitive numeric types.")
   (:use
    #:coalton
    #:coalton/builtin

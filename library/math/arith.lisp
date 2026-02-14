@@ -3,6 +3,7 @@
 ;;;; Number types and basic arithmetic.
 
 (coalton/utils:defstdlib-package #:coalton/math/arith
+  (:documentation "Core arithmetic: Reciprocable, Dividable, Fraction type, and numeric conversions.")
   (:use
    #:coalton
    #:coalton/builtin

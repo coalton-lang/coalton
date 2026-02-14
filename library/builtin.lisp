@@ -1,4 +1,5 @@
 (coalton/utils::defstdlib-package #:coalton/builtin
+  (:documentation "Built-in utilities: error, unreachable, undefined, and boolean logic operators.")
   (:use
    #:coalton
    #:coalton/classes)

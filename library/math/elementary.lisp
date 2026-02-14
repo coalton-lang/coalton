@@ -3,6 +3,7 @@
 ;;;; Elementary/algebraic functions and transcendental numbers
 
 (coalton/utils::defstdlib-package #:coalton/math/elementary
+    (:documentation "Elementary and transcendental functions: trigonometric, exponential, logarithmic, and constants pi and ee.")
     (:use
      #:coalton
      #:coalton/builtin

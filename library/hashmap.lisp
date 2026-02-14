@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/hashmap
+  (:documentation "Persistent (immutable) hash maps based on Hash Array Mapped Tries, with set operations.")
   (:use
    #:coalton
    #:coalton/builtin

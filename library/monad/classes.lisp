@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/monad/classes
+  (:documentation "Monad effect classes: MonadState, MonadEnvironment, MonadError, and the LiftTo transformer lifting interface.")
   (:use
    #:coalton
    #:coalton/classes)

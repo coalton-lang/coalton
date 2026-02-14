@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/classes
+  (:documentation "Core type classes: Eq, Ord, Num, Semigroup, Monoid, Functor, Applicative, Monad, Into, and more.")
   (:use
    #:coalton)
   (:local-nicknames

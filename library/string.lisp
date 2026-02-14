@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/string
+  (:documentation "Unicode string operations: splitting, joining, searching, and conversion.")
   (:use
    #:coalton
    #:coalton/builtin

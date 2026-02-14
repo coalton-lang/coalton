@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package :coalton/ordmap
+  (:documentation "Immutable ordered maps backed by balanced binary trees, keyed by Ord-constrained types.")
   (:use
    :coalton
    :coalton/classes

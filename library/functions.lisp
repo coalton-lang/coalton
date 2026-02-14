@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/functions
+  (:documentation "Higher-order function combinators: composition, currying, fixpoints, and debugging utilities.")
   (:use
    #:coalton
    #:coalton/builtin

@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/vector
+  (:documentation "Mutable growable arrays backed by Common Lisp adjustable vectors with fill pointers.")
   (:use
    #:coalton
    #:coalton/builtin

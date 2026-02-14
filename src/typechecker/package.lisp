@@ -1,4 +1,18 @@
 (uiop:define-package #:coalton-impl/typechecker
+  (:documentation "The Coalton type checker implements Hindley-Milner type inference
+extended with type classes (following 'Typing Haskell in Haskell' by Mark P. Jones).
+
+The typechecker takes an untyped parse tree and produces a typed AST annotated
+with inferred types, resolved type class dictionaries, and specialization
+information. Key subsystems include:
+
+- Type inference (define.lisp) via constraint generation and unification
+- Kind inference (parse-type.lisp) for higher-kinded types
+- Type class resolution (context-reduction.lisp, define-class.lisp, define-instance.lisp)
+- Functional dependencies (fundeps.lisp) for multi-parameter type classes
+- Specialization (specialize.lisp) for performance-critical type class dispatch
+- Variance checking (variance.lisp) for type parameters
+- Environment management (environment.lisp, tc-env.lisp) for the global type database")
   (:mix-reexport
    #:coalton-impl/typechecker/stage-1
    #:coalton-impl/typechecker/base

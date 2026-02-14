@@ -3,6 +3,7 @@
 ;;;; Big float package for various implementations
 
 (coalton/utils:defstdlib-package #:coalton/big-float
+  (:documentation "Arbitrary-precision floating-point arithmetic (implementation-specific: uses SB-MPFR on SBCL).")
   (:use #:coalton
         #:coalton/classes
         #:coalton/functions

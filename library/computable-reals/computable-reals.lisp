@@ -3,6 +3,7 @@
 ;;;; Reals library using computable-reals (https://github.com/stylewarning/computable-reals)
 
 (defpackage #:coalton/computable-reals
+  (:documentation "Coalton interface to computable-reals: exact real arithmetic with lazy, on-demand precision.")
   (:nicknames #:coalton-library/computable-reals)
   (:use #:coalton
         #:coalton-prelude

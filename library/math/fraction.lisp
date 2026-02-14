@@ -3,6 +3,7 @@
 ;;;; Reduced ratios of integers
 
 (coalton/utils:defstdlib-package #:coalton/math/fraction
+  (:documentation "Fraction type: reduced ratios of integers with numerator/denominator access.")
   (:use
    #:coalton
    #:coalton/builtin

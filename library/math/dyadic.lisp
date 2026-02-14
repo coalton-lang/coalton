@@ -4,6 +4,7 @@
 ;;; It is not exported into the math package as it is a niche numeric type
 
 (coalton/utils::defstdlib-package #:coalton/math/dyadic
+    (:documentation "Dyadic rationals (a * 2^n): a niche numeric type used internally for big-float arithmetic.")
     (:use
      #:coalton
      #:coalton/builtin

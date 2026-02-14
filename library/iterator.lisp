@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/iterator
+  (:documentation "Lazy forward-only iterators for sequential data traversal, transformation, and aggregation.")
   (:shadow #:empty)
   (:use
    #:coalton
