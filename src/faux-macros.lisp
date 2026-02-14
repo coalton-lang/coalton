@@ -121,30 +121,44 @@
 (define-coalton-editor-macro coalton:the (type expr)
   "Declare that EXPR is of type TYPE.")
 
-(define-coalton-editor-macro coalton:or (&rest args))
+(define-coalton-editor-macro coalton:or (&rest args)
+  "Short-circuit logical disjunction. Evaluates arguments left-to-right, returning the first truthy value or False if all are False.")
 
-(define-coalton-editor-macro coalton:and (&rest args))
+(define-coalton-editor-macro coalton:and (&rest args)
+  "Short-circuit logical conjunction. Evaluates arguments left-to-right, returning False on the first False value, or the last value if all are truthy.")
 
-(define-coalton-editor-macro coalton:if (expr then else))
+(define-coalton-editor-macro coalton:if (expr then else)
+  "Conditional expression. Evaluates EXPR; if True, evaluates and returns THEN, otherwise evaluates and returns ELSE. Both branches must have the same type.")
 
-(define-coalton-editor-macro coalton:when (expr &body body))
+(define-coalton-editor-macro coalton:when (expr &body body)
+  "Evaluate BODY for side effects when EXPR is True. Returns Unit.")
 
-(define-coalton-editor-macro coalton:unless (expr &body body))
+(define-coalton-editor-macro coalton:unless (expr &body body)
+  "Evaluate BODY for side effects when EXPR is False. Returns Unit.")
 
-(define-coalton-editor-macro coalton:cond (&rest clauses))
+(define-coalton-editor-macro coalton:cond (&rest clauses)
+  "Multi-way conditional. Each clause is (TEST BODY). Clauses are evaluated in order; the body of the first clause whose test is True is returned. The last clause's test is typically True as a default.")
 
-(define-coalton-editor-macro coalton:do (&body body))
+(define-coalton-editor-macro coalton:do (&body body)
+  "Monadic do notation. Binds the results of monadic computations using left-arrow syntax (x <- expr) and sequences them. The final expression determines the result type. Operates within a monadic context inferred from the bindings.")
 
-(define-coalton-editor-macro coalton:return (&optional value))
+(define-coalton-editor-macro coalton:return (&optional value)
+  "Monadic return. Wraps VALUE in the current monadic context. Equivalent to calling `pure`.")
 
-(define-coalton-editor-macro coalton:loop (&body body))
+(define-coalton-editor-macro coalton:loop (&body body)
+  "Infinite loop. Repeatedly evaluates BODY until terminated by `break`. Supports an optional loop label keyword for nested loop control.")
 
-(define-coalton-editor-macro coalton:while (test &body body))
+(define-coalton-editor-macro coalton:while (test &body body)
+  "Conditional loop. Evaluates BODY repeatedly as long as TEST is True. Supports `break`, `continue`, and an optional loop label keyword.")
 
-(define-coalton-editor-macro coalton:while-let (pattern = test &body body))
+(define-coalton-editor-macro coalton:while-let (pattern = test &body body)
+  "Pattern-matching loop. Evaluates TEST each iteration; if it matches PATTERN, binds the pattern variables and evaluates BODY. Terminates when the pattern does not match. Supports `break`, `continue`, and an optional loop label keyword.")
 
-(define-coalton-editor-macro coalton:for (pattern in iter &body body))
+(define-coalton-editor-macro coalton:for (pattern in iter &body body)
+  "Iterator loop. Evaluates ITER (which must implement IntoIterator), then for each element matching PATTERN, evaluates BODY. Supports `break`, `continue`, and an optional loop label keyword.")
 
-(define-coalton-editor-macro coalton:break (&optional label))
+(define-coalton-editor-macro coalton:break (&optional label)
+  "Terminate the enclosing loop immediately. If LABEL is provided, terminates the loop with that label, allowing break from nested loops.")
 
-(define-coalton-editor-macro coalton:continue (&optional label))
+(define-coalton-editor-macro coalton:continue (&optional label)
+  "Skip the rest of the current loop iteration and start the next one. If LABEL is provided, continues the loop with that label.")
