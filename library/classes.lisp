@@ -86,7 +86,12 @@
   ;;
 
   (define-class (Eq :a)
-    "Types which have equality defined."
+    "Types which have equality defined.
+
+Instances must satisfy:
+- Reflexivity: `(== a a)` is `True`
+- Symmetry: `(== a b)` implies `(== b a)`
+- Transitivity: `(== a b)` and `(== b c)` implies `(== a c)`"
     (== (:a -> :a -> Boolean)))
 
   (define-instance (Eq types:LispType)
@@ -95,7 +100,15 @@
         (cl:equalp a b))))
 
   (define-class (Eq :a => Num :a)
-    "Types which have numeric operations defined."
+    "Types which have numeric operations defined.
+
+Instances must satisfy:
+- Commutativity of `+`: `(+ a b)` equals `(+ b a)`
+- Associativity of `+`: `(+ (+ a b) c)` equals `(+ a (+ b c))`
+- Associativity of `*`: `(* (* a b) c)` equals `(* a (* b c))`
+- `(fromInt 0)` is the additive identity: `(+ a (fromInt 0))` equals `a`
+- `(fromInt 1)` is the multiplicative identity: `(* a (fromInt 1))` equals `a`
+- `(- a a)` equals `(fromInt 0)`"
     (+ (:a -> :a -> :a))
     (- (:a -> :a -> :a))
     (* (:a -> :a -> :a))
@@ -163,7 +176,13 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
         ((Tuple (GT) (GT)) EQ))))
 
   (define-class (Eq :a => Ord :a)
-    "Types whose values can be ordered. Requires `Eq`."
+    "Types whose values can be totally ordered. Requires `Eq`.
+
+Instances must satisfy:
+- Reflexivity: `(<=> a a)` is `EQ`
+- Antisymmetry: if `(<=> a b)` is `LT` then `(<=> b a)` is `GT`
+- Transitivity: if `(<=> a b)` is `LT` and `(<=> b c)` is `LT` then `(<=> a c)` is `LT`
+- Consistency with `Eq`: `(<=> a b)` is `EQ` if and only if `(== a b)` is `True`"
     (<=>
      "Given two objects, return their comparison (as an `Ord` object)."
      (:a -> :a -> Ord)))
@@ -215,24 +234,45 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
   ;;
 
   (define-class (Semigroup :a)
-    "Types with an associative binary operation defined."
+    "Types with an associative binary operation defined.
+
+Instances must satisfy:
+- Associativity: `(<> (<> a b) c)` equals `(<> a (<> b c))`"
     (<> (:a -> :a -> :a)))
 
   (define-class (Semigroup :a => Monoid :a)
-    "Types with an associative binary operation and identity defined."
+    "Types with an associative binary operation and identity defined.
+
+Instances must satisfy:
+- Left identity: `(<> mempty a)` equals `a`
+- Right identity: `(<> a mempty)` equals `a`"
     (mempty :a))
 
   (define-class (Functor :f)
-    "Types which can map an inner type where the mapping adheres to the identity and composition laws."
+    "Types which can map an inner type where the mapping adheres to the identity and composition laws.
+
+Instances must satisfy:
+- Identity: `(map id x)` equals `x`
+- Composition: `(map (compose f g) x)` equals `(map f (map g x))`"
     (map ((:a -> :b) -> :f :a -> :f :b)))
 
   (define-class (Functor :f => Applicative :f)
-    "Types which are a functor which can embed pure expressions and sequence operations."
+    "Types which are a functor which can embed pure expressions and sequence operations.
+
+Instances must satisfy:
+- Identity: `(liftA2 id (pure id) v)` equals `v`
+- Homomorphism: `(liftA2 id (pure f) (pure x))` equals `(pure (f x))`
+- Interchange: `(liftA2 id u (pure y))` equals `(liftA2 id (pure (fn (f) (f y))) u)`"
     (pure (:a -> (:f :a)))
     (liftA2 ((:a -> :b -> :c) -> :f :a -> :f :b -> :f :c)))
 
   (define-class (Applicative :m => Monad :m)
-    "Types which are monads as defined in Haskell. See https://wiki.haskell.org/Monad for more information."
+    "Types which are monads as defined in Haskell. See https://wiki.haskell.org/Monad for more information.
+
+Instances must satisfy:
+- Left identity: `(>>= (pure a) f)` equals `(f a)`
+- Right identity: `(>>= m pure)` equals `m`
+- Associativity: `(>>= (>>= m f) g)` equals `(>>= m (fn (x) (>>= (f x) g)))`"
     (>>= (:m :a -> (:a -> :m :b) -> :m :b)))
 
   (define-class (MonadTransformer :t)
@@ -308,7 +348,11 @@ together."
   ;;
 
   (define-class (Into :a :b)
-    "`INTO` imples *every* element of `:a` can be represented by an element of `:b`. This conversion might not be bijective (i.e., there may be elements in `:b` that don't correspond to any in `:a`)."
+    "`INTO` imples *every* element of `:a` can be represented by an element of `:b`. This conversion might not be bijective (i.e., there may be elements in `:b` that don't correspond to any in `:a`).
+
+Instances must satisfy:
+- Totality: `into` must be defined for all values of `:a` (never error or diverge)
+- If an `(Into :b :a)` instance also exists and both form an `Iso`, then `(into (into x))` must equal `x`"
     (into (:a -> :b)))
 
   (define-class ((Into :a :b) (Into :b :a) => Iso :a :b)
