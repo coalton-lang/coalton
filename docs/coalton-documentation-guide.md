@@ -10,8 +10,9 @@ Coalton's `define` form allows for docstrings to go after the variable or functi
 ```
 (coalton-toplevel
 
-  (define *pi* (the Double-Float math:pi)
-    "This is a constant of `pi`, that will always be a `Double-Float`.")
+  (define *pi*
+    "This is a constant of `pi`, that will always be a `Double-Float`."
+    (the Double-Float math:pi))
 
   (define (get-pi)
     "This is a function that returns the `Double-Float` constant `*pi*`."

@@ -757,6 +757,26 @@ Lastly, there's a ratio type called `Fraction`, which is a ratio of two `Integer
 
 Numbers implement the `Num` type class, which has methods `+`, `-`, `*`, and `fromInt`.
 
+### Implicit Numeric Casting with `fromInt`
+
+Integer literals in Coalton are polymorphic. When you write `5` in a context that expects a type with a `Num` instance (such as `Double-Float`, `I32`, or `Fraction`), Coalton implicitly applies `fromInt` to convert the `Integer` into the expected type. This means you can write numeric code without explicit conversions in many cases:
+
+```lisp
+(coalton-toplevel
+  ;; No explicit conversion needed: 5 and 7 are converted to Double-Float
+  ;; via (fromInt 5) and (fromInt 7) implicitly
+  (declare f Double-Float)
+  (define f (+ 5 7)))         ;; f is 12.0d0
+```
+
+If the target type is ambiguous, Coalton will report a type error asking you to clarify. You can always call `fromInt` explicitly if needed:
+
+```lisp
+(coalton-toplevel
+  (declare g (F32 -> F32))
+  (define (g x) (+ x (fromInt 3))))
+```
+
 ### Division, in short
 
 Division is complicated; see the next section. But here are some quick tips.
