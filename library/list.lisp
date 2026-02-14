@@ -108,7 +108,7 @@
 
   (declare car (List :a -> :a))
   (define (car x)
-    "Return the traditional car of a list. This function is partial"
+    "Return the traditional car of a list. This function is partial."
     (match x
       ((Cons x _) x)
       ((Nil) (error "there is no first element"))))
@@ -425,7 +425,7 @@
 
   (declare difference (Eq :a => ((List :a) -> (List :a) -> (List :a))))
   (define (difference xs ys)
-    "Returns a new list with the first occurence of each element in `ys` removed from `xs`."
+    "Returns a new list with the first occurrence of each element in `ys` removed from `xs`."
     (fold (fn (a b) (remove b a)) xs ys))
 
   (declare zipWith ((:a -> :b -> :c) -> (List :a) -> (List :b) -> (List :c)))
@@ -662,7 +662,7 @@
 
   (declare combs (List :a -> (List (List :a))))
   (define (combs l)
-    "Compute a list of all combinations of elements of `l`. This function is sometimes goes by the name \"power set\" or \"subsets\".
+    "Compute a list of all combinations of elements of `l`. This function sometimes goes by the name \"power set\" or \"subsets\".
 
 The ordering of elements of `l` is preserved in the ordering of elements in each list produced by this function."
     (match l

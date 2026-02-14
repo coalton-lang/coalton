@@ -304,7 +304,7 @@ Equivalent to reversing `range-increasing`"
 
   (declare interleave! (Iterator :a -> Iterator :a -> Iterator :a))
   (define (interleave! left right)
-    "Return an interator of interleaved elements from LEFT and RIGHT which terminates as soon as both LEFT and RIGHT do.
+    "Return an iterator of interleaved elements from LEFT and RIGHT which terminates as soon as both LEFT and RIGHT do.
 
 If one iterator terminates before the other, elements from the longer iterator will be yielded without
 interleaving. (interleave empty ITER) is equivalent to (id ITER)."
@@ -350,7 +350,7 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
 
   (declare filter! ((:elt -> Boolean) -> Iterator :elt -> Iterator :elt))
   (define (filter! keep? iter)
-    "Return an iterator over the elements from ITER for which KEEP?returns true."
+    "Return an iterator over the elements from ITER for which KEEP? returns true."
     (let ((filter-iter (fn (u)
                          (match (next! iter)
                            ((None) None)

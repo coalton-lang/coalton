@@ -308,11 +308,11 @@ together."
   ;;
 
   (define-class (Into :a :b)
-    "`INTO` imples *every* element of `:a` can be represented by an element of `:b`. This conversion might not be bijective (i.e., there may be elements in `:b` that don't correspond to any in `:a`)."
+    "`INTO` implies *every* element of `:a` can be represented by an element of `:b`. This conversion might not be bijective (i.e., there may be elements in `:b` that don't correspond to any in `:a`)."
     (into (:a -> :b)))
 
   (define-class ((Into :a :b) (Into :b :a) => Iso :a :b)
-    "Opting into this marker typeclass imples that the instances for `(Into :a :b)` and `(Into :b :a)` form a bijection.")
+    "Opting into this marker typeclass implies that the instances for `(Into :a :b)` and `(Into :b :a)` form a bijection.")
 
   (define-instance (Into :a :a)
     (define (into x) x))
@@ -406,7 +406,7 @@ Typical `fail` continuations are:
   (declare defaulting-unwrap ((Unwrappable :container) (Default :element) =>
                               (:container :element) -> :element))
   (define (defaulting-unwrap container)
-    "Unwrap an `unwrappable`, returning `(default)` of the wrapped type on failure. "
+    "Unwrap an `unwrappable`, returning `(default)` of the wrapped type on failure."
     (unwrap-or-else (fn (elt) elt)
                     (fn () (default))
                     container))
