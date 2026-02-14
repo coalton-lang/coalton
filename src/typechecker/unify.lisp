@@ -1,3 +1,14 @@
+;;;; unify.lisp
+;;;;
+;;;; Type unification: the core algorithm that determines whether two types
+;;;; can be made equal by finding a substitution (mapping of type variables
+;;;; to types). Unification is the engine of type inference—each use of a
+;;;; variable or function generates constraints that are solved by unification.
+;;;;
+;;;; UNIFY finds the most general unifier (MGU) of two types, while MATCH
+;;;; finds a one-way substitution (type1 can be specialized to type2).
+;;;; Both operate on types and on type class predicates.
+
 (defpackage #:coalton-impl/typechecker/unify
   (:use
    #:cl

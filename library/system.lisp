@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/system
+  (:documentation "System utilities: timing, memory profiling, garbage collection, sleep, Lisp condition handling, and command-line arguments.")
   (:use
    #:coalton
    #:coalton/builtin

@@ -1,3 +1,15 @@
+;;;; substitutions.lisp
+;;;;
+;;;; Type substitutions: mappings from type variables to types. During type
+;;;; inference, constraints between types are solved by building up a
+;;;; substitution that, when applied to all types in scope, makes them
+;;;; consistent.
+;;;;
+;;;; A substitution list is composed and applied left-to-right. The key
+;;;; operations are COMPOSE-SUBSTITUTION-LISTS (combine two substitutions)
+;;;; and APPLY-SUBSTITUTION (replace type variables in a type according to
+;;;; the substitution).
+
 (defpackage #:coalton-impl/typechecker/substitutions
   (:use
    #:cl

@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/boolean
+  (:documentation "Boolean type class instances (Eq, Ord, Hash) and Show.")
   (:use
    #:coalton
    #:coalton/classes)

@@ -388,6 +388,12 @@ summary{cursor:pointer;font-weight:600;padding:6px 0}
                       :label "Macros"
                       :header-html-class "macros-header"
                       :content-html-class "macros-content"))
+      (:raw
+       (write-section backend objects
+                      :type 'coalton-operator
+                      :label "Operators"
+                      :header-html-class "operators-header"
+                      :content-html-class "operators-content"))
       )))
 
 (defun write-section (backend objects &key type label header-html-class content-html-class)
@@ -495,6 +501,9 @@ summary{cursor:pointer;font-weight:600;padding:6px 0}
     (:raw (doc-html object))))
 
 (defmethod write-object-body ((backend html-backend) (object coalton-macro))
+  (doc-html object))
+
+(defmethod write-object-body ((backend html-backend) (object coalton-operator))
   (doc-html object))
 
 (defun doc-html (object)

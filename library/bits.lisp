@@ -1,4 +1,5 @@
 (coalton/utils::defstdlib-package #:coalton/bits
+  (:documentation "Bitwise operations (and, or, xor, shift, rotate) on fixed-width integer types.")
   (:shadow
      #:and
      #:or

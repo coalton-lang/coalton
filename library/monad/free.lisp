@@ -1,4 +1,5 @@
 (coalton/utils::defstdlib-package #:coalton/monad/free
+  (:documentation "Free monad: build monadic computations from any Functor without choosing an interpretation.")
   (:use
    #:coalton
    #:coalton/builtin

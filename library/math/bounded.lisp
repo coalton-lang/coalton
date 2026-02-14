@@ -3,6 +3,7 @@
 ;;;; Numerical types with fixed bounds
 
 (coalton/utils:defstdlib-package #:coalton/math/bounded
+  (:documentation "Bounded type class: minBound and maxBound for fixed-width numeric types.")
   (:use
    #:coalton
    #:coalton/builtin

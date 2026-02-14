@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/result
+  (:documentation "Utilities for Result values: testing, mapping errors, and converting to Optional.")
   (:use
    #:coalton
    #:coalton/builtin

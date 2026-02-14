@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/monad/environment
+  (:documentation "Environment (reader) monad transformer: thread read-only configuration through computations.")
   (:use
    #:coalton
    #:coalton/functions

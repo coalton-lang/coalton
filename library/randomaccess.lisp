@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/randomaccess
+  (:documentation "Type class for random-access containers with indexed reads, writes, and rotation.")
   (:use
    #:coalton
    #:coalton/classes)

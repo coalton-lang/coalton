@@ -1,3 +1,17 @@
+;;;; context-reduction.lisp
+;;;;
+;;;; Type class context reduction: simplifies the set of type class
+;;;; constraints that a definition requires. After type inference, a
+;;;; function may accumulate many redundant or entailed constraints
+;;;; (e.g., both Eq :a and Ord :a, where Ord implies Eq). Context
+;;;; reduction removes redundant constraints and splits them into
+;;;; "deferred" (still polymorphic) and "retained" (can be resolved
+;;;; now) sets.
+;;;;
+;;;; Also implements defaulting: when a type variable appears only in
+;;;; Num constraints and has no other constraints, it can be defaulted
+;;;; to Integer, similar to Haskell's defaulting rules.
+
 (defpackage #:coalton-impl/typechecker/context-reduction
   (:use
    #:cl

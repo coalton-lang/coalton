@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/hash
+  (:documentation "Hash combining utilities and the define-sxhash-hasher macro for implementing Hash instances.")
   (:use
    #:coalton
    #:coalton/classes)

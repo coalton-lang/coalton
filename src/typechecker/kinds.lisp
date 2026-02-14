@@ -1,3 +1,17 @@
+;;;; kinds.lisp
+;;;;
+;;;; The kind system classifies types by their arity. Just as types
+;;;; classify values, kinds classify type constructors:
+;;;;
+;;;;   * (KSTAR) — the kind of concrete types (Integer, Boolean, etc.)
+;;;;   * -> * (KFUN) — the kind of type constructors taking one argument
+;;;;                    (List, Optional, etc.)
+;;;;   (* -> *) -> * — higher-kinded types (like Functor's argument)
+;;;;
+;;;; Kind checking ensures that type constructors are applied to the
+;;;; correct number of arguments (e.g., List needs one argument,
+;;;; Hashtable needs two).
+
 (defpackage #:coalton-impl/typechecker/kinds
   (:use
    #:cl

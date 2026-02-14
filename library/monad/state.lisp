@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/monad/state
+  (:documentation "Pure state monad: get, put, modify, and run operations over threaded state.")
   (:use
    #:coalton
    #:coalton/builtin

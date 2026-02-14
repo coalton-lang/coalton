@@ -3,6 +3,7 @@
 ;;;; Elementary/algebraic functions and transcendental numbers
 
 (coalton/utils::defstdlib-package #:coalton/math/elementary
+    (:documentation "Elementary and transcendental functions: trigonometric, exponential, logarithmic, and constants pi and ee.")
     (:use
      #:coalton
      #:coalton/builtin
@@ -175,7 +176,7 @@ For a complex number `z = (complex x y)`, the following identities hold:
     (Tuple r theta)))
 
 (cl:defmacro %define-real-float-elementary (coalton-type underlying-type)
-  "Defines the elmentary instances for a lisp floating-point type"
+  "Defines the elementary instances for a lisp floating-point type."
   `(coalton-toplevel
      (define-instance (Trigonometric ,coalton-type)
        (inline)

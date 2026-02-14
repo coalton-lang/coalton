@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/hashtable
+  (:documentation "Mutable hash tables mapping keys (with Hash instances) to values.")
   (:use
    #:coalton
    #:coalton/builtin

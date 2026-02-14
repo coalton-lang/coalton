@@ -3,6 +3,7 @@
 ;;;; Numbers that exist on the real number line
 
 (coalton/utils::defstdlib-package #:coalton/math/real
+    (:documentation "Real number classes: Quantizable (floor, ceiling) and Rational for types on the real number line.")
     (:use
      #:coalton
      #:coalton/math/arith

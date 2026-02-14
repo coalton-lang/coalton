@@ -1,3 +1,12 @@
+;;;; codegen-expression.lisp
+;;;;
+;;;; The final code generation stage: transforms the optimized codegen AST
+;;;; into Common Lisp forms that can be compiled by the host CL compiler.
+;;;; Handles translation of Coalton constructs into their CL equivalents:
+;;;; pattern matching into TYPECASE/IF chains, closures into LAMBDA forms,
+;;;; type class dispatch into structure slot access, and loop constructs
+;;;; into TAGBODY/GO forms.
+
 (defpackage #:coalton-impl/codegen/codegen-expression
   (:use
    #:cl

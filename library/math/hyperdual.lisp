@@ -4,6 +4,7 @@
 ;;;; derivatives of compositions of built-in Coalton functions.
 
 (coalton/utils::defstdlib-package #:coalton/math/hyperdual
+  (:documentation "Hyperdual numbers for automatic second-order forward-mode differentiation.")
   (:use
    #:coalton
    #:coalton/builtin

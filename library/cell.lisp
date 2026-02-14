@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/cell
+  (:documentation "Mutable single-value containers (mutable references) for local state.")
   (:use
    #:coalton
    #:coalton/builtin

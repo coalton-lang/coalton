@@ -3,6 +3,7 @@
 ;;;; Number types and basic arithmetic.
 
 (coalton/utils:defstdlib-package #:coalton/math/arith
+  (:documentation "Core arithmetic: Reciprocable, Dividable, Fraction type, and numeric conversions.")
   (:use
    #:coalton
    #:coalton/builtin
@@ -168,7 +169,7 @@ The function `general/` is partial, and will error produce a run-time error if t
   (inline)
   (declare ash (Integer -> Integer -> Integer))
   (define (ash x n)
-    "Compute the \"arithmetic shift\" of `x` by `n`. "
+    "Compute the \"arithmetic shift\" of `x` by `n`."
     (lisp Integer (x n) (cl:ash x n)))
 
   (inline)

@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/queue
+  (:documentation "Mutable FIFO queues with O(1) push and pop operations.")
   (:use
    #:coalton
    #:coalton/builtin
@@ -190,7 +191,7 @@
 
   (declare items! (Queue :a -> iter:Iterator :a))
   (define (items! q)
-    "Returns an interator over the items of `q`, removing items as they are returned."
+    "Returns an iterator over the items of `q`, removing items as they are returned."
     (iter:with-size
         (fn ()
           (pop! q))

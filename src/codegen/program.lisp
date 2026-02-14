@@ -1,3 +1,17 @@
+;;;; program.lisp
+;;;;
+;;;; The top-level code generation driver. Orchestrates the full pipeline
+;;;; from a typed translation unit to compiled Common Lisp forms:
+;;;;
+;;;; 1. Translate type definitions into CL struct/class definitions
+;;;; 2. Translate type class definitions into CL class hierarchies
+;;;; 3. Translate value definitions through the codegen pipeline
+;;;; 4. Optimize the codegen AST (inline, monomorphize, etc.)
+;;;; 5. Generate final CL forms and update the global environment
+;;;;
+;;;; The *codegen-hook* variable allows external tools (e.g., the docs
+;;;; generator) to observe the generated CL forms.
+
 (defpackage #:coalton-impl/codegen/program
   (:use
    #:cl

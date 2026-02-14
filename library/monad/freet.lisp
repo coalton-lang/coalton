@@ -1,4 +1,5 @@
 (coalton/utils::defstdlib-package #:coalton/monad/freet
+  (:documentation "Free monad transformer: layer free-monadic effects over an existing monad.")
   (:use
    #:coalton
    #:coalton/builtin

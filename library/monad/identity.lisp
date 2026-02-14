@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/monad/identity
+  (:documentation "Identity monad: trivial wrapper used as the base case for monad transformer stacks.")
   (:use
    #:coalton
    #:coalton/builtin

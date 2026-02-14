@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/tuple
+  (:documentation "Tuple types (2-element and 3-element) with accessors, destructuring, and instances.")
   (:use
    #:coalton
    #:coalton/builtin

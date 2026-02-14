@@ -3,6 +3,7 @@
 ;;;; Complex numbers
 
 (coalton/utils:defstdlib-package #:coalton/math/complex
+    (:documentation "Complex number type and the ComplexComponent class for extracting real/imaginary parts.")
     (:use #:coalton
           #:coalton/classes
           #:coalton/utils

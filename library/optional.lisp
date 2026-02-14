@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/optional
+  (:documentation "Utilities for Optional values: extracting, testing, and converting.")
   (:use
    #:coalton
    #:coalton/builtin

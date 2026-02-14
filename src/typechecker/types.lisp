@@ -1,3 +1,19 @@
+;;;; types.lisp
+;;;;
+;;;; The core type representation. Types in Coalton are represented as a
+;;;; tree of structs:
+;;;;
+;;;;   TY (abstract base)
+;;;;   ├── TYVAR   — type variable (e.g., :a), identified by a unique integer ID
+;;;;   ├── TYCON   — type constructor (e.g., Integer, List), named by a symbol
+;;;;   └── TAPP    — type application (e.g., (List Integer)), combining FROM and TO
+;;;;
+;;;; Function types like (:a -> :b) are represented as TAPP chains using
+;;;; the built-in Arrow type constructor.
+;;;;
+;;;; This module also provides the pretty-printer for types, which maps
+;;;; internal type variable IDs to human-readable names (:A, :B, ...).
+
 (defpackage #:coalton-impl/typechecker/types
   (:use
    #:cl

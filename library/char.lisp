@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/char
+  (:documentation "Character classification, case conversion, and Unicode code-point operations.")
   (:use
    #:coalton
    #:coalton/classes

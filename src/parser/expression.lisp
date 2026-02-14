@@ -234,7 +234,7 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;             | node-abstraction
 ;;;;             | node-let
 ;;;;             | node-rec
-;;;;             | node-lisp 
+;;;;             | node-lisp
 ;;;;             | node-match
 ;;;;             | node-progn
 ;;;;             | node-the
@@ -247,6 +247,12 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;             | node-unless
 ;;;;             | node-cond
 ;;;;             | node-do
+;;;;             | node-loop
+;;;;             | node-while
+;;;;             | node-while-let
+;;;;             | node-for
+;;;;             | node-break
+;;;;             | node-continue
 ;;;;
 ;;;; node-bind := "(" "let" pattern "=" expression ")"
 ;;;;
@@ -299,6 +305,20 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;                       | node-do-bind
 ;;;;
 ;;;; node-do := node-do-body-element* expression
+;;;;
+;;;; label := <a keyword symbol>
+;;;;
+;;;; node-loop := "(" "loop" label? body ")"
+;;;;
+;;;; node-while := "(" "while" label? expression body ")"
+;;;;
+;;;; node-while-let := "(" "while-let" label? pattern "=" expression body ")"
+;;;;
+;;;; node-for := "(" "for" label? pattern "in" expression body ")"
+;;;;
+;;;; node-break := "(" "break" label? ")"
+;;;;
+;;;; node-continue := "(" "continue" label? ")"
 
 (defstruct (node
             (:constructor nil)
