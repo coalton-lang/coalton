@@ -693,19 +693,19 @@ new value, if the key was found."
   ;; API
   (declare keys (Hash :k => HashMap :k :v -> (iter:Iterator :k)))
   (define (keys hm)
-    "Returns an interator to iterate over all the keys in a hashmap hm."
+    "Returns an iterator over all the keys in a hashmap hm."
     (iter:new (->generator hm (fn (k _) k))))
 
   ;; API
   (declare values (Hash :k => HashMap :k :v -> (iter:Iterator :v)))
   (define (values hm)
-    "Returns an interator to iterate over all the values in a hashmap hm."
+    "Returns an iterator over all the values in a hashmap hm."
     (iter:new (->generator hm (fn (_ v) v))))
 
   ;; API
   (declare entries (Hash :k => HashMap :k :v -> (iter:Iterator (Tuple :k :v))))
   (define (entries hm)
-    "Returns an interator to iterate over all entries in hashmap hm."
+    "Returns an iterator over all entries in hashmap hm."
     (iter:new (->generator hm Tuple)))
   )
 
@@ -767,12 +767,12 @@ The entries from A remains in the result."
 
   (declare difference (Hash :k => HashMap :k :v -> HashMap :k :v -> HashMap :k :v))
   (define (difference a b)
-    "Raturns a HashMap that contains mappings in `a` but not in `b`."
+    "Returns a HashMap that contains mappings in `a` but not in `b`."
     (iter:fold! (fn (m (Tuple k _v)) (remove m k)) a (iter:into-iter b)))
 
   (declare xor (Hash :k => HashMap :k :v -> HashMap :k :v -> HashMap :k :v))
   (define (xor a b)
-    "Raturns a HashMap that contains mappings either in `a` or in `b`,
+    "Returns a HashMap that contains mappings either in `a` or in `b`,
 but not in both."
     (iter:fold! (fn (m (Tuple k v))
                   (fst (update m k

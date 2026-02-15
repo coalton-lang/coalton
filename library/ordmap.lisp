@@ -273,14 +273,14 @@ The resulting values are from `a`."
 
   (declare difference (Ord :key => OrdMap :key :value -> OrdMap :key :value -> OrdMap :key :value))
   (define (difference a b)
-    "Raturns an OrdMap that contains mappings in `a` but not in `b`."
+    "Returns an OrdMap that contains mappings in `a` but not in `b`."
     (let (%Map ta) = a)
     (let (%Map tb) = b)
     (%Map (tree:difference ta tb)))
 
   (declare xor (Ord :key => OrdMap :key :value -> OrdMap :key :value -> OrdMap :key :value))
   (define (xor a b)
-    "Raturns an OrdMap that contains mappings either in `a` or in `b`,
+    "Returns an OrdMap that contains mappings either in `a` or in `b`,
 but not in both."
     (let (%Map ta) = a)
     (let (%Map tb) = b)

@@ -190,7 +190,7 @@
 
   (declare items! (Queue :a -> iter:Iterator :a))
   (define (items! q)
-    "Returns an interator over the items of `q`, removing items as they are returned."
+    "Returns an iterator over the items of `q`, removing items as they are returned."
     (iter:with-size
         (fn ()
           (pop! q))

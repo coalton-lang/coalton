@@ -100,7 +100,7 @@
 
   (declare iter-sliding ((Sliceable (:b :a)) => UFix -> :b :a -> iter:Iterator (Slice :a)))
   (define (iter-sliding size s)
-    "Returns an iterator that yeilds a series of overlapping slices of length `size`."
+    "Returns an iterator that yields a series of overlapping slices of length `size`."
     (let length = (%length s))
     (let offset_ = (cell:new 0))
     (iter:with-size 

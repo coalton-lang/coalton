@@ -308,11 +308,11 @@ COALTON::UNIT/UNIT
   `(%sometimes ,count (fn (,variable) ,@body)))
 
 (defmacro sumtimes ((variable count) cl:&body body)
-  "The sum of `body` for `variable` bount to every `UFix` in [0, `count`)."
+  "The sum of `body` for `variable` bound to every `UFix` in [0, `count`)."
   `(%sumtimes ,count (fn (,variable) ,@body)))
 
 (defmacro prodtimes ((variable count) cl:&body body)
-  "The product of `body` for `variable` bount to every `UFix` in [0, `count`)."
+  "The product of `body` for `variable` bound to every `UFix` in [0, `count`)."
   `(%prodtimes ,count (fn (,variable) ,@body)))
 
 (defmacro collecttimes ((variable count) cl:&body body)
@@ -320,7 +320,7 @@ COALTON::UNIT/UNIT
   `(%collecttimes ,count (fn (,variable) ,@body)))
 
 (defmacro besttimes ((variable count better?) cl:&body body)
-  "The result of evaluating `body` with `variable` bound to a `UFix` in [0, `count`) that is `better?` than the result of evaluating `body` with `variable` bound to the rest of the `UFix`s in [0, `count`).."
+  "The result of evaluating `body` with `variable` bound to a `UFix` in [0, `count`) that is `better?` than the result of evaluating `body` with `variable` bound to the rest of the `UFix`s in [0, `count`)."
   `(%besttimes ,count ,better? (fn (,variable) ,@body)))
 
 (defmacro argbesttimes ((variable count better?) cl:&body body)
