@@ -46,6 +46,7 @@ bench:
 	COALTON_ENV=release sbcl --noinform \
 		 --non-interactive \
 		 --eval "(ql:quickload :coalton/benchmarks :silent t)" \
+		 --eval "(cl:in-package #:sb-ext)" \
 		 --eval "(sb-ext::without-gcing (coalton-benchmarks:run-benchmarks))"
 
 .PHONY: parser-coverage
