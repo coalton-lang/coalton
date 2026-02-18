@@ -154,6 +154,7 @@ endif
 
 .PHONY: all show-dir lisps-running clean-blddir
 .PHONY: install-libraries get-ql clone-repos setup-ql get-ql-libs clean
+.PHONY: setup-coalton-sources
 .PHONY: test-external-libraries test-external-libraries-all
 
 all:	install-libraries testall
@@ -171,7 +172,10 @@ gitClone = cd $(EXTRA_LOCAL_PROJECTS) ; git clone $(2)
 gitPull = cd $(1) ; git pull $(2)
 gitPullOrClone = d=`dirname $(1)` ; if [ -f "$(1)" ] ; then $(call gitPull,$${d},$(2)) ; else $(call gitClone,$${d},$(2)) ; fi
 
-clone-repos: $(EXTRA_LOCAL_PROJECTS)/fset/fset.asd $(EXTRA_LOCAL_PROJECTS)/misc-extensions/misc-extensions.asd $(EXTRA_LOCAL_PROJECTS)/named-readtables/named-readtables.asd
+clone-repos: setup-coalton-sources $(EXTRA_LOCAL_PROJECTS)/fset/fset.asd $(EXTRA_LOCAL_PROJECTS)/misc-extensions/misc-extensions.asd $(EXTRA_LOCAL_PROJECTS)/named-readtables/named-readtables.asd
+
+setup-coalton-sources:
+	cwdir=`pwd` ; cd $(EXTRA_LOCAL_PROJECTS) ; ln -s $${cwdir} coalton
 
 $(EXTRA_LOCAL_PROJECTS)/fset/fset.asd:	update-repos~
 	$(call gitPullOrClone,$(EXTRA_LOCAL_PROJECTS)/fset/fset.asd,$(FSET_REPO))
@@ -312,7 +316,7 @@ web-docs:
 
 
 .PHONY: bench
-bench:
+bench:	install-libraries
 	COALTON_ENV=release $(SBCL) \
 		 --eval "(load \"$(QUICKLISP_HOME)/setup.lisp\")" \
 		 --eval "(ql:quickload :coalton/benchmarks :silent t)" \
