@@ -10,6 +10,14 @@
 ;;; The coalton-benchmarks package defines functions that runs each
 ;;; individual benchmark group, or all benchmarks at once.
 
+;; trivial-benchmark-20260101-git no longer defines :trivial-benchmark
+(eval-when (:execute :load-toplevel :compile-toplevel)
+  (when (and (not (cl:find-package :trivial-benchmark))
+             (cl:find-package :org.shirakumo.trivial-benchmark))
+    (uiop:define-package #:trivial-benchmark
+      (:use #:cl)
+      (:use-reexport #:org.shirakumo.trivial-benchmark))))
+
 (cl:defpackage #:coalton-benchmarks
   (:use #:cl
         #:trivial-benchmark)
@@ -28,7 +36,7 @@
         (native-package (intern (format nil "BENCHMARK-~S/NATIVE" name) 'keyword)))
     `(progn
        (pushnew ',benchmark-package *all-benchmarks*)
-       (define-benchmark-package ,benchmark-package ,@benchmark-clauses)
+       (trivial-benchmark:define-benchmark-package ,benchmark-package ,@benchmark-clauses)
        (defpackage ,native-package ,@native-clauses))))
 
 (define-coalton-benchmark big-float
