@@ -37,3 +37,30 @@
         (is (string= "Type mismatch"
                      (source:message c))
             "condition message is correct")))))
+
+(deftest tuple-printing-uses-shorthand ()
+  (let ((*package* (find-package "COALTON-USER")))
+    (is (string= "#T(1 2)"
+                 (princ-to-string
+                  (eval (read-from-string "(coalton (Tuple 1 2))")))))
+    (is (string= "#T(1 2 3)"
+                 (princ-to-string
+                  (eval (read-from-string "(coalton (Tuple3 1 2 3))")))))))
+
+(deftest tuple-type-printing-uses-shorthand ()
+  (let ((*package* (find-package "COALTON-USER"))
+        (coalton-impl/settings:*coalton-print-unicode* nil))
+    (eval (read-from-string
+           "(coalton-toplevel
+              (declare tuple-printing-id ((Tuple Integer Integer) -> (Tuple Integer Integer)))
+              (define (tuple-printing-id x) x))"))
+    (eval (read-from-string
+           "(coalton-toplevel
+              (declare tuple-printing-id3 ((Tuple3 Integer Integer Integer) -> (Tuple3 Integer Integer Integer)))
+              (define (tuple-printing-id3 x) x))"))
+    (is (string= "(#T(INTEGER INTEGER) -> #T(INTEGER INTEGER))"
+                 (format nil "~A"
+                         (coalton:type-of (find-symbol "TUPLE-PRINTING-ID" "COALTON-USER")))))
+    (is (string= "(#T(INTEGER INTEGER INTEGER) -> #T(INTEGER INTEGER INTEGER))"
+                 (format nil "~A"
+                         (coalton:type-of (find-symbol "TUPLE-PRINTING-ID3" "COALTON-USER")))))))

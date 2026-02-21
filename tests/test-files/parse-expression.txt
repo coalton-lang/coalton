@@ -299,3 +299,22 @@ warn: non-exhaustive match
            (cl:truncate x 2))
     ((Tuple q r)
      (+ q r))))
+
+================================================================================
+106 Parse expression
+================================================================================
+
+(package coalton-unit-tests/prelude
+  (import coalton-prelude))
+
+(declare pair-swap-parse106 (#T(Integer Integer) -> #T(Integer Integer)))
+(define (pair-swap-parse106 p)
+  (match p
+    (#T(a b)
+     #T(b a))))
+
+(declare rotate-parse106 (#T(Integer Integer Integer) -> #T(Integer Integer Integer)))
+(define (rotate-parse106 p)
+  (match p
+    (#T(a b c)
+     #T(c a b))))

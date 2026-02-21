@@ -18,6 +18,51 @@
 
 (defvar *coalton-eclector-client* (make-instance 'coalton-eclector-client))
 
+(defun resolve-symbol-from-package (package-name symbol-name)
+  "Resolve SYMBOL-NAME from PACKAGE-NAME without interning."
+  (declare (type string package-name symbol-name)
+           (values symbol &optional))
+  (let ((package (find-package package-name)))
+    (unless package
+      (error "Unable to find package ~A while expanding #T shorthand" package-name))
+    (multiple-value-bind (symbol status)
+        (find-symbol symbol-name package)
+      (unless (and symbol (eq status :external))
+        (error "Unable to resolve symbol ~A in package ~A while expanding #T shorthand"
+               symbol-name package-name))
+      symbol)))
+
+(defun tuple-shorthand-symbol (arity)
+  "Return the tuple constructor/type symbol for ARITY."
+  (declare (type (integer 0) arity)
+           (values symbol &optional))
+  (cond
+    ((= arity 2)
+     (resolve-symbol-from-package "COALTON/CLASSES" "TUPLE"))
+    ((<= 3 arity 5)
+     (resolve-symbol-from-package "COALTON/TUPLE"
+                                  (format nil "TUPLE~D" arity)))
+    (t
+     (error "#T tuple shorthand only supports arities 2 through 5"))))
+
+(defun tuple-shorthand (stream sub-char parameter)
+  "Reader dispatch function for #T(...), expanding into Tuple constructor application."
+  (declare (ignore sub-char))
+  (when parameter
+    (error "#T tuple shorthand does not accept a numeric parameter"))
+  (let ((elements (eclector.reader:read stream t nil t)))
+    (unless (alexandria:proper-list-p elements)
+      (error "#T tuple shorthand expects a proper list, e.g. #T(x y)"))
+    (cons (tuple-shorthand-symbol (length elements))
+          elements)))
+
+(defun configure-coalton-readtable (&optional (readtable eclector.readtable:*readtable*))
+  "Install Coalton-specific reader dispatch macros into READTABLE."
+  (declare (values t))
+  (eclector.readtable:set-dispatch-macro-character
+   readtable #\# #\T #'tuple-shorthand)
+  t)
+
 ;;;; Check which version of eclector is installed
 (eval-when (:compile-toplevel)
   (if (uiop:version< (asdf:component-version (asdf:find-system :eclector)) "0.10.0")
@@ -40,14 +85,17 @@
 
 (defmacro with-reader-context (stream &rest body)
   "Run the body in the toplevel reader context."
-  `(eclector.reader:call-as-top-level-read
-    *coalton-eclector-client*
-    (lambda ()
-      ,@body)
-    ,stream
-    nil
-    'eof
-    nil))
+  `(let ((eclector.readtable:*readtable*
+           (eclector.readtable:copy-readtable eclector.readtable:*readtable*)))
+     (configure-coalton-readtable eclector.readtable:*readtable*)
+     (eclector.reader:call-as-top-level-read
+      *coalton-eclector-client*
+      (lambda ()
+        ,@body)
+      ,stream
+      nil
+      'eof
+      nil)))
 
 (defun maybe-read-form (stream source &optional (eclector-client eclector.base:*client*))
   "Read the next form or return if there is no next form.

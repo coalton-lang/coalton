@@ -15,6 +15,7 @@
    (#:source #:coalton-impl/source)
    (#:global-lexical #:coalton-impl/global-lexical)
    (#:tc #:coalton-impl/typechecker)
+   (#:types #:coalton-impl/typechecker/types)
    (#:rt #:coalton-impl/runtime))
   (:export
    #:codegen-type-definition
@@ -82,6 +83,7 @@
             :for classname := (tc:constructor-entry-classname constructor)
             :for superclass := (tc:type-definition-name def)
             :for constructor-name :=  (tc:constructor-entry-name constructor)
+            :for tuple-arity := (types:tuple-constructor-arity constructor-name)
             :for fields
               := (loop :for field :in (tc:constructor-arguments constructor-name env)
                        :for runtime-type := (tc:lisp-type field env)
@@ -116,6 +118,41 @@
                                     (type ,classname self)
                                     (values ,classname))
                            (format stream "#.~s" ',(tc:constructor-entry-name constructor))
+                           self))
+                       ((and tuple-arity
+                             (= tuple-arity (tc:constructor-entry-arity constructor)))
+                        `(defmethod print-object ((self ,classname) stream)
+                           (declare (type stream stream)
+                                    (type ,classname self)
+                                    (values ,classname))
+                           (cond
+                             (*print-readably*
+                              (format stream "#.(~s" ',(tc:constructor-entry-name constructor))
+                              ,@(loop :for slot :in field-names
+                                      :collect `(cond
+                                                  ((and *print-readably* (not *read-eval*))
+                                                   (error 'print-not-readable :object self))
+
+                                                  ((and *print-readably*
+                                                        (or (listp (slot-value self ',slot))
+                                                            (symbolp (slot-value self ',slot))))
+
+                                                   (write-string " '" stream)
+                                                   (prin1 (slot-value self ',slot) stream))
+
+                                                  (t
+                                                   (write-string " " stream)
+                                                   (prin1 (slot-value self ',slot) stream))))
+                              (write-string ")" stream))
+                             (t
+                              (write-string "#T(" stream)
+                              ,@(loop :for slot :in field-names
+                                      :for first := t :then nil
+                                      :collect `(progn
+                                                  ,@(unless first
+                                                      '((write-string " " stream)))
+                                                  (prin1 (slot-value self ',slot) stream)))
+                              (write-string ")" stream)))
                            self))
                        (t
                         `(defmethod print-object ((self ,classname) stream)

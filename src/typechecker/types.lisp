@@ -52,6 +52,7 @@
    #:push-type-alias                    ; FUNCTION
    #:flatten-type                       ; FUNCTION
    #:tuple-symbol                       ; FUNCTION
+   #:tuple-constructor-arity            ; FUNCTION
    #:tuple-type-p                       ; FUNCTION
    #:tuple-component-types              ; FUNCTION
    #:apply-type-argument                ; FUNCTION
@@ -425,6 +426,24 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
                         "TUPLE" pkg))
     sym))
 
+(defun tuple-constructor-arity (constructor-name)
+  "Return tuple arity for supported tuple constructors, otherwise NIL."
+  (declare (type symbol constructor-name)
+           (values (or null fixnum) &optional))
+  (let ((pkg (symbol-package constructor-name)))
+    (when pkg
+      (let ((package-name (package-name pkg))
+            (symbol-name (symbol-name constructor-name)))
+        (cond
+          ((and (string= package-name "COALTON/CLASSES")
+                (string= symbol-name "TUPLE"))
+           2)
+          ((and (string= package-name "COALTON/TUPLE")
+                (member symbol-name '("TUPLE3" "TUPLE4" "TUPLE5") :test #'string=))
+           (nth-value 0 (parse-integer (subseq symbol-name (length "TUPLE")))))
+          (t
+           nil))))))
+
 (defun tuple-type-p (type)
   "Return true when TYPE is a two-element Tuple type."
   (declare (type ty type)
@@ -638,12 +657,23 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
                      (t (pprint-ty stream to)))))
           (print-subfunction (tapp-to ty)))
         (write-string ")" stream))
-       (t ;; Print type constructors
+      (t ;; Print type constructors
         (let* ((tcon ty)
                (tcon-args (loop :while (tapp-p tcon)
                                 :collect (tapp-to tcon)
-                                :do (setf tcon (tapp-from tcon)))))
+                                :do (setf tcon (tapp-from tcon))))
+               (tuple-arity (and (tycon-p tcon)
+                                 (tuple-constructor-arity (tycon-name tcon)))))
           (cond
+            ((and tuple-arity
+                  (= tuple-arity (length tcon-args)))
+             (write-string "#T(" stream)
+             (loop :for arg :in (reverse tcon-args)
+                   :for first := t :then nil
+                   :do (unless first
+                         (write-string " " stream))
+                       (pprint-ty stream arg))
+             (write-string ")" stream))
             ((and (tycon-p tcon)
                   (simple-kind-p (tycon-kind tcon))
                   (<= (length tcon-args)
