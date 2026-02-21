@@ -8,12 +8,12 @@ Inlining replaces a function call with the function's body at the call site, eli
 
 ### Declaring a Function Inline
 
-Use `declare` with the `inline` property to mark a function for inlining:
+Use the `(inline)` attribute before a definition to mark a function for inlining:
 
 ```lisp
 (coalton-toplevel
+  (inline)
   (declare add1 (Integer -> Integer))
-  (declare add1 inline)
   (define (add1 x)
     (+ x 1)))
 ```
@@ -23,15 +23,14 @@ When `add1` is called, the compiler will substitute the function body directly a
 ### When to Inline
 
 Inlining is most effective for:
-- **Small utility functions** — functions with a few arithmetic operations or a simple pattern match
-- **Wrapper functions** — thin wrappers around other operations
+- **Small functions** — a few operations, a simple pattern match, or a thin wrapper around another function
 - **Hot inner loops** — functions called in tight loops where call overhead matters
 
 Avoid inlining large functions, as this increases code size ("code bloat") and can hurt instruction cache performance.
 
 ### Heuristic Inlining
 
-Even without an explicit `inline` declaration, Coalton's compiler applies heuristic inlining for sufficiently small functions. The default "gentle" heuristic inlines functions with at most 4 applications and 8 AST nodes. This happens automatically and does not require any annotation.
+Even without an explicit `(inline)` attribute, Coalton's compiler applies heuristic inlining for sufficiently small functions. The default "gentle" heuristic inlines functions with at most 4 applications and 8 AST nodes. This happens automatically and does not require any annotation.
 
 The heuristic can be configured at the CL level:
 - `coalton-impl/codegen/inliner:*inliner-heuristic*` — the heuristic function (default: `'gentle-heuristic`)
@@ -74,7 +73,7 @@ The monomorphizer traverses the call graph starting from monomorphized entry poi
 - **Con:** Can increase code size if a function is called with many different type combinations
 - **Con:** Increases compile time proportional to the number of specializations generated
 
-Monomorphization is most valuable for numeric code and other performance-critical inner loops where dictionary dispatch is a measurable bottleneck.
+Monomorphization is most valuable for performance-critical code where dictionary dispatch is a measurable bottleneck.
 
 ## Specialization
 
@@ -107,45 +106,25 @@ When the compiler encounters `(sum-list my-integer-list)`, it will substitute th
 - When you want to use CL-native operations (via `lisp`) for specific types without sacrificing the generic API
 - When monomorphization alone isn't sufficient because you need a fundamentally different algorithm for certain types
 
-## Efficient Numerical Code
+## Fixed-Width Numeric Types
 
-### Use Specific Numeric Types
+The fixed-width types `IFix`, `UFix`, `I32`, `U32`, `I64`, `U64`, `F32`, and `F64` map directly to their CL counterparts. When their types are known at compile time (via type annotations or `:emit-type-annotations`), the host CL compiler can generate efficient machine instructions for arithmetic on these types.
 
-Polymorphic numeric code (using `Num :a`) incurs dictionary dispatch. When performance matters, use concrete types:
+## Compiler Configuration
 
-```lisp
-;; Polymorphic — dictionary dispatch on every + and *
-(declare slow-square (Num :a => :a -> :a))
-(define (slow-square x) (* x x))
+Coalton provides several configuration options that affect optimization. These are set via the `:coalton-config` keyword's symbol-plist, typically in your Lisp init file (e.g., `.sbclrc`). See [Configuring Coalton](configuring-coalton.md) for the full reference.
 
-;; Monomorphic — compiles directly to fixnum multiplication
-(declare fast-square (IFix -> IFix))
-(define (fast-square x) (* x x))
+Key optimization-related options:
+
+- `:compiler-mode` — `"development"` (default) or `"release"`. Release mode assumes frozen data structures and enables additional optimizations.
+- `:perform-specialization` — controls whether `specialize` directives are applied.
+- `:perform-inlining` — controls heuristic inlining (explicit `(inline)` attributes are always respected).
+- `:emit-type-annotations` — annotates generated CL code with type declarations, allowing the host compiler to generate more efficient code.
+
+You can also set the compiler mode via the `COALTON_ENV` environment variable before loading Coalton:
+
+```bash
+COALTON_ENV=release sbcl --load my-project.asd
 ```
 
-The fixed-width types `IFix`, `UFix`, `I32`, `U32`, `I64`, `U64`, `F32`, and `F64` map directly to their CL counterparts and compile to efficient machine instructions.
-
-### Avoid Unnecessary Polymorphism
-
-If a function only ever operates on one type, declare it with that type instead of using a type class constraint. The compiler can then generate specialized machine code without dictionary overhead.
-
-### Combine with Monomorphization
-
-For library code that must be polymorphic, use `(monomorphize)` to get the best of both worlds — a generic API with specialized code generation:
-
-```lisp
-(coalton-toplevel
-  (monomorphize)
-  (declare dot-product (Num :a => List :a -> List :a -> :a))
-  (define (dot-product xs ys)
-    (fold + 0 (zipWith * xs ys))))
-```
-
-### Interaction with Common Lisp Optimization
-
-Coalton respects CL optimization declarations. In release mode, the standard library is compiled with high optimization settings. You can control this via:
-
-- `COALTON_ENV=release` — enables release mode globally
-- Release mode applies `(optimize (speed 3) (safety 1))` (or similar) to generated code
-
-The host CL compiler (e.g., SBCL) then applies its own optimizations — type inference, unboxing, SIMD, etc. — to the generated code.
+In release mode, generated code is compiled with high CL optimization settings. The host CL compiler (e.g., SBCL) then applies its own optimizations — unboxing, SIMD, etc. — to the generated code.
