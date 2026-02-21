@@ -140,6 +140,28 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
     (tc:function-env-entry-inline-p entry)
     nil))
 
+(defun erase-keyword-stages (type)
+  "Convert keyword stages in TYPE into physical Optional-arrow form."
+  (declare (type tc:ty type)
+           (values tc:ty &optional))
+  (typecase type
+    (tc:keyword-stage-ty
+      (loop :with out := (erase-keyword-stages (tc:keyword-stage-ty-to type))
+            :for entry :in (reverse (tc:keyword-stage-ty-entries type))
+            :do (setf out
+                      (tc:make-function-type
+                       (erase-keyword-stages
+                        (tc:keyword-entry-physical-type
+                         (tc:keyword-ty-entry-type entry)))
+                       out))
+            :finally (return out)))
+    (tc:tapp
+      (tc:make-tapp
+       :from (erase-keyword-stages (tc:tapp-from type))
+       :to (erase-keyword-stages (tc:tapp-to type))))
+    (t
+      type)))
+
 (defun application-saturates-abstraction-p (application abstraction)
   "Check if an an application node constitutes a fully applied abstraction."
   (declare (type (or ast:node-application ast:node-direct-application) application)
@@ -193,12 +215,15 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
             (ast:node-abstraction-subexpr fresh-abstraction)
             t))
          (call-type
-           (tc:make-function-type*
-            (mapcar #'ast:node-type (ast:node-rands application))
-            (ast:node-type application)))
+           (erase-keyword-stages
+            (tc:make-function-type*
+             (mapcar #'ast:node-type (ast:node-rands application))
+             (ast:node-type application))))
+         (abstraction-call-type
+           (erase-keyword-stages (ast:node-type fresh-abstraction)))
          (new-substitutions
            (coalton-impl/typechecker/unify::mgu
-            (ast:node-type fresh-abstraction)
+            abstraction-call-type
             call-type)))
     (ast:make-node-let
      :type     (ast:node-type application)

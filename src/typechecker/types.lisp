@@ -26,6 +26,15 @@
    #:tapp-from                          ; ACCESSOR
    #:tapp-to                            ; ACCESSOR
    #:tapp-p                             ; FUNCTION
+   #:keyword-ty-entry                   ; STRUCT
+   #:make-keyword-ty-entry              ; CONSTRUCTOR
+   #:keyword-ty-entry-keyword           ; ACCESSOR
+   #:keyword-ty-entry-type              ; ACCESSOR
+   #:keyword-ty-entry-list              ; TYPE
+   #:keyword-stage-ty                   ; STRUCT
+   #:make-keyword-stage-ty              ; CONSTRUCTOR
+   #:keyword-stage-ty-entries           ; ACCESSOR
+   #:keyword-stage-ty-to                ; ACCESSOR
    #:tgen                               ; STRUCT
    #:make-tgen                          ; CONSTRUCTOR
    #:tgen-id                            ; ACCESSOR
@@ -49,6 +58,10 @@
    #:*arrow-type*                       ; VARIABLE
    #:*list-type*                        ; VARIABLE
    #:*optional-type*                    ; VARIABLE
+   #:make-optional-type                 ; FUNCTION
+   #:optional-type-p                    ; FUNCTION
+   #:optional-type-inner                ; FUNCTION
+   #:keyword-entry-physical-type        ; FUNCTION
    #:push-type-alias                    ; FUNCTION
    #:flatten-type                       ; FUNCTION
    #:tuple-symbol                       ; FUNCTION
@@ -157,6 +170,24 @@
   (from (util:required 'from) :type ty :read-only t)
   (to   (util:required 'to)   :type ty :read-only t))
 
+(defstruct keyword-ty-entry
+  (keyword (util:required 'keyword) :type keyword :read-only t)
+  (type    (util:required 'type)    :type ty      :read-only t))
+
+(defmethod make-load-form ((self keyword-ty-entry) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun keyword-ty-entry-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'keyword-ty-entry-p x)))
+
+(deftype keyword-ty-entry-list ()
+  '(satisfies keyword-ty-entry-list-p))
+
+(defstruct (keyword-stage-ty (:include ty))
+  (entries (util:required 'entries) :type keyword-ty-entry-list :read-only t)
+  (to      (util:required 'to)      :type ty                    :read-only t))
+
 (defstruct (tgen (:include ty))
   (id (util:required 'id) :type fixnum :read-only t))
 
@@ -240,6 +271,15 @@ types from the TYPES list.")
      :alias (mapcar (lambda (alias) (instantiate types alias)) (ty-alias type))
      :from (instantiate types (tapp-from type))
      :to (instantiate types (tapp-to type))))
+  (:method (types (entry keyword-ty-entry))
+    (make-keyword-ty-entry
+     :keyword (keyword-ty-entry-keyword entry)
+     :type (instantiate types (keyword-ty-entry-type entry))))
+  (:method (types (type keyword-stage-ty))
+    (make-keyword-stage-ty
+     :alias (mapcar (lambda (alias) (instantiate types alias)) (ty-alias type))
+     :entries (instantiate types (keyword-stage-ty-entries type))
+     :to (instantiate types (keyword-stage-ty-to type))))
   (:method (types (type tgen))
     (nth (tgen-id type) types))
   (:method (types (type ty))
@@ -277,7 +317,9 @@ Throws an error if applied to a malformed type application.")
     (let ((from-kind (kind-of (tapp-from type))))
       (if (kfun-p from-kind)
           (kfun-to from-kind)
-          (util:coalton-bug "Malformed type application")))))
+          (util:coalton-bug "Malformed type application"))))
+  (:method ((type keyword-stage-ty))
+    (kind-of (keyword-stage-ty-to type))))
 
 (defmethod apply-ksubstitution (subs (type tyvar))
   (make-tyvar
@@ -297,6 +339,18 @@ Throws an error if applied to a malformed type application.")
    :from (apply-ksubstitution subs (tapp-from type))
    :to (apply-ksubstitution subs (tapp-to type))))
 
+(defmethod apply-ksubstitution (subs (entry keyword-ty-entry))
+  (make-keyword-ty-entry
+   :keyword (keyword-ty-entry-keyword entry)
+   :type (apply-ksubstitution subs (keyword-ty-entry-type entry))))
+
+(defmethod apply-ksubstitution (subs (type keyword-stage-ty))
+  (make-keyword-stage-ty
+   :alias (mapcar (lambda (alias) (apply-ksubstitution subs alias)) (ty-alias type))
+   :entries (mapcar (lambda (entry) (apply-ksubstitution subs entry))
+                    (keyword-stage-ty-entries type))
+   :to (apply-ksubstitution subs (keyword-stage-ty-to type))))
+
 (defmethod kind-variables-generic% ((type tyvar))
   (kind-variables-generic% (kind-of type)))
 
@@ -307,6 +361,14 @@ Throws an error if applied to a malformed type application.")
   (append
    (kind-variables-generic% (tapp-to type))
    (kind-variables-generic% (tapp-from type))))
+
+(defmethod kind-variables-generic% ((type keyword-stage-ty))
+  (append
+   (kind-variables-generic% (keyword-stage-ty-entries type))
+   (kind-variables-generic% (keyword-stage-ty-to type))))
+
+(defmethod kind-variables-generic% ((entry keyword-ty-entry))
+  (kind-variables-generic% (keyword-ty-entry-type entry)))
 
 (declaim (ftype (function (t) util:symbol-list) type-constructors))
 (defun type-constructors (type)
@@ -340,6 +402,14 @@ Examples:
      (type-constructors-generic% (tapp-from type))
      (type-constructors-generic% (tapp-to type))))
 
+  (:method ((entry keyword-ty-entry))
+    (type-constructors-generic% (keyword-ty-entry-type entry)))
+
+  (:method ((type keyword-stage-ty))
+    (append
+     (type-constructors-generic% (keyword-stage-ty-entries type))
+     (type-constructors-generic% (keyword-stage-ty-to type))))
+
   (:method ((lst list))
     (mapcan #'type-constructors-generic% lst)))
 
@@ -363,6 +433,28 @@ Examples:
               (tapp-from type2))
          (ty= (tapp-to type1)
               (tapp-to type2))))
+
+  (:method ((entry1 keyword-ty-entry) (entry2 keyword-ty-entry))
+    (and (eq (keyword-ty-entry-keyword entry1)
+             (keyword-ty-entry-keyword entry2))
+         (ty= (keyword-ty-entry-type entry1)
+              (keyword-ty-entry-type entry2))))
+
+  (:method ((type1 keyword-stage-ty) (type2 keyword-stage-ty))
+    (and (= (length (keyword-stage-ty-entries type1))
+            (length (keyword-stage-ty-entries type2)))
+         (let ((table (make-hash-table :test #'eq)))
+           (dolist (entry (keyword-stage-ty-entries type2))
+             (setf (gethash (keyword-ty-entry-keyword entry) table) entry))
+           (every
+            (lambda (entry1)
+              (let ((entry2 (gethash (keyword-ty-entry-keyword entry1) table)))
+                (and entry2
+                     (ty= (keyword-ty-entry-type entry1)
+                          (keyword-ty-entry-type entry2)))))
+            (keyword-stage-ty-entries type1)))
+         (ty= (keyword-stage-ty-to type1)
+              (keyword-stage-ty-to type2))))
 
   (:method ((type1 tgen) (type2 tgen))
     (equalp (tgen-id type1)
@@ -389,6 +481,31 @@ Examples:
 (defvar *arrow-type*        (make-tycon :name 'coalton:Arrow        :kind (make-kfun :from +kstar+ :to (make-kfun :from +kstar+ :to +kstar+))))
 (defvar *list-type*         (make-tycon :name 'coalton:List         :kind (make-kfun :from +kstar+ :to +kstar+)))
 (defvar *optional-type*     (make-tycon :name 'coalton:Optional     :kind (make-kfun :from +kstar+ :to +kstar+)))
+
+(defun make-optional-type (type)
+  (declare (type ty type)
+           (values ty &optional))
+  (make-tapp :from *optional-type* :to type))
+
+(defun optional-type-p (type)
+  (declare (type ty type)
+           (values boolean &optional))
+  (and (tapp-p type)
+       (tycon-p (tapp-from type))
+       (eq 'coalton:Optional (tycon-name (tapp-from type)))))
+
+(defun optional-type-inner (type)
+  (declare (type ty type)
+           (values (or null ty) &optional))
+  (when (optional-type-p type)
+    (tapp-to type)))
+
+(defun keyword-entry-physical-type (entry-type)
+  (declare (type ty entry-type)
+           (values ty &optional))
+  (if (optional-type-p entry-type)
+      entry-type
+      (make-optional-type entry-type)))
 
 ;;;
 ;;; Operations on Types
@@ -495,19 +612,34 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
                           (make-function-type* (cdr args) to))))
 
 (defgeneric function-type-p (ty)
+  (:method ((ty keyword-stage-ty))
+    (plusp (length (keyword-stage-ty-entries ty))))
   (:method ((ty ty))
     (declare (type ty ty))
     (and (tapp-p ty)
          (tapp-p (tapp-from ty))
          (equalp *arrow-type* (tapp-from (tapp-from ty))))))
 
-(defun function-type-from (ty)
-  (declare (type tapp ty))
-  (tapp-to (tapp-from ty)))
+(defgeneric function-type-from (ty)
+  (:method ((ty tapp))
+    (tapp-to (tapp-from ty)))
+  (:method ((ty keyword-stage-ty))
+    (let ((entry (first (keyword-stage-ty-entries ty))))
+      (unless entry
+        (util:coalton-bug "Malformed empty keyword-stage type ~S" ty))
+      (keyword-entry-physical-type (keyword-ty-entry-type entry)))))
 
-(defun function-type-to (ty)
-  (declare (type tapp ty))
-  (tapp-to ty))
+(defgeneric function-type-to (ty)
+  (:method ((ty tapp))
+    (tapp-to ty))
+  (:method ((ty keyword-stage-ty))
+    (let ((entries (rest (keyword-stage-ty-entries ty))))
+      (if entries
+          (make-keyword-stage-ty
+           :alias (ty-alias ty)
+           :entries entries
+           :to (keyword-stage-ty-to ty))
+          (keyword-stage-ty-to ty)))))
 
 (defun function-type-arity (ty)
   (if (function-type-p ty)
@@ -525,7 +657,7 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
 (defgeneric function-return-type (ty)
   (:method ((ty ty))
     (if (function-type-p ty)
-        (function-return-type (tapp-to ty))
+        (function-return-type (function-type-to ty))
         ty)))
 
 (defun function-remove-arguments (ty num)
@@ -549,6 +681,14 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
                                (type-variables (tapp-to type)))
                        :test #'equalp
                        :from-end t))
+  (:method ((entry keyword-ty-entry))
+    (type-variables (keyword-ty-entry-type entry)))
+  (:method ((type keyword-stage-ty))
+    (remove-duplicates
+     (append (type-variables (keyword-stage-ty-entries type))
+             (type-variables (keyword-stage-ty-to type)))
+     :test #'equalp
+     :from-end t))
   ;; Otherwise, return nothing
   (:method ((type ty))
     nil)
@@ -620,23 +760,37 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
      (cond
        ((function-type-p ty) ;; Print function types
         (write-string "(" stream)
-        (pprint-ty stream (tapp-to (tapp-from ty)))
-        (write-string (if settings:*coalton-print-unicode*
-                          " → "
-                          " -> ")
-                      stream)
+        (pprint-ty stream (function-type-from ty))
         ;; Avoid printing extra parenthesis on curried functions
-        (labels ((print-subfunction (to)
+        (labels ((write-arrow ()
+                   (write-string (if settings:*coalton-print-unicode*
+                                     " → "
+                                     " -> ")
+                                 stream))
+                 (print-keyword-stage-head (stage)
+                   (declare (type keyword-stage-ty stage))
+                   (write-string "(&key" stream)
+                   (dolist (entry (keyword-stage-ty-entries stage))
+                     (write-string " " stream)
+                     (write (keyword-ty-entry-keyword entry) :stream stream)
+                     (write-string " " stream)
+                     (pprint-ty stream (keyword-ty-entry-type entry)))
+                   (write-string ")" stream))
+                 (print-subfunction (to)
                    (cond
-                     ((function-type-p to)
-                      (pprint-ty stream (tapp-to (tapp-from to)))
-                      (write-string (if settings:*coalton-print-unicode*
-                                        " → "
-                                        " -> ")
-                                    stream)
-                      (print-subfunction (tapp-to to)))
-                     (t (pprint-ty stream to)))))
-          (print-subfunction (tapp-to ty)))
+                     ;; Keyword stages should print inline in right-associative arrow chains.
+                     ((typep to 'keyword-stage-ty)
+                      (write-arrow)
+                      (print-keyword-stage-head to)
+                      (print-subfunction (keyword-stage-ty-to to)))
+                     ((and (tapp-p to) (function-type-p to))
+                      (write-arrow)
+                      (pprint-ty stream (function-type-from to))
+                      (print-subfunction (function-type-to to)))
+                     (t
+                      (write-arrow)
+                      (pprint-ty stream to)))))
+          (print-subfunction (function-type-to ty)))
         (write-string ")" stream))
        (t ;; Print type constructors
         (let* ((tcon ty)
@@ -660,6 +814,21 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
              (write-string " " stream)
              (pprint-ty stream (tapp-to ty))
              (write-string ")" stream)))))))
+    (keyword-stage-ty
+     (write-string "(" stream)
+     (write-string "(&key" stream)
+     (dolist (entry (keyword-stage-ty-entries ty))
+       (write-string " " stream)
+       (write (keyword-ty-entry-keyword entry) :stream stream)
+       (write-string " " stream)
+       (pprint-ty stream (keyword-ty-entry-type entry)))
+     (write-string ")" stream)
+     (write-string (if settings:*coalton-print-unicode*
+                       " → "
+                       " -> ")
+                   stream)
+     (pprint-ty stream (keyword-stage-ty-to ty))
+     (write-string ")" stream))
     (tgen
      (write-string "#GEN" stream)
      (write (tgen-id ty) :stream stream)))

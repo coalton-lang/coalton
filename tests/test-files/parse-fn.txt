@@ -48,3 +48,52 @@ error: Malformed function
 help: add parentheses
  3 | (define f (fn (x) 1))
    |               ---
+
+================================================================================
+103 Parse function with keyword parameters
+================================================================================
+
+(package coalton-unit-tests/prelude
+  (import coalton-prelude))
+
+(define f
+  (fn (x &key (timeout 1000) tag)
+    (match tag
+      ((Some _v) (+ timeout x))
+      ((None) x))))
+
+(define y (f 5))
+(define z (f 5 :timeout 7 :tag (Some "prod")))
+
+================================================================================
+104 Duplicate keyword parameter
+================================================================================
+
+(package test-package)
+
+(define f (fn (x &key tag tag) x))
+
+--------------------------------------------------------------------------------
+
+error: Duplicate keyword parameter
+  --> test:3:22
+   |
+ 3 |  (define f (fn (x &key tag tag) x))
+   |                        --- first definition here
+   |                        ^^^ second definition here
+
+================================================================================
+105 Malformed function
+================================================================================
+
+(package test-package)
+
+(define f (fn (x &key t &key u) x))
+
+--------------------------------------------------------------------------------
+
+error: Malformed function
+  --> test:3:17
+   |
+ 3 |  (define f (fn (x &key t &key u) x))
+   |                   ^^^^ invalid `&key` placement

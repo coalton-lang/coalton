@@ -212,7 +212,7 @@ error: Type mismatch
  13 |   (define (f a b)
     |  _^
  14 | |    (== a b))
-    | |____________^ Expected type '((LIST COLOR) -> BOOLEAN)' but got type '((LIST COLOR) -> (LIST COLOR) -> BOOLEAN)'
+    | |____________^ Expected type '((LIST COLOR) -> BOOLEAN)' but got '((LIST COLOR) -> (LIST COLOR) -> BOOLEAN)'
 
 ================================================================================
 Check that polymorphic recursion is not possible without an explicit binding
@@ -438,4 +438,119 @@ error: Ambiguous predicate
    |
  5 |    (into (into x)))
    |           ^^^^ Ambiguous predicate INTO :A :B
- 
+
+================================================================================
+102 Keyword argument inference
+================================================================================
+
+(package coalton-unit-tests/inference-keyword
+  (import coalton-prelude))
+
+(define mk
+  (fn (x &key (timeout (the Integer 1000)) tag)
+    (match tag
+      ((Some _) (+ x timeout))
+      ((None) x))))
+
+(define kw-result (mk 1 :timeout 5 :tag (Some "prod")))
+
+(define (step x y &key (bonus (the Integer 0)))
+  (+ (+ x y) bonus))
+
+(define step1 (step 10))
+(define kw-curried (step1 1 :bonus 2))
+
+================================================================================
+103 Unknown keyword argument
+================================================================================
+
+(package test-package)
+
+(define (f x &key (timeout 1000) tag)
+  x)
+(define y (f 10 :wat 1))
+
+--------------------------------------------------------------------------------
+
+error: Unknown keyword argument
+  --> test:5:16
+   |
+ 5 |  (define y (f 10 :wat 1))
+   |                  ^^^^ unknown keyword argument :WAT
+
+================================================================================
+104 Declared keyword stage mismatch (missing definition key)
+================================================================================
+
+(package test-package)
+
+(declare f (Integer -> (&key (:timeout Integer) (:tag (Optional String))) -> Integer))
+(define (f x &key (timeout 1000))
+  x)
+
+--------------------------------------------------------------------------------
+
+error: Declared keyword type mismatch
+  --> test:4:0
+   |
+ 4 |   (define (f x &key (timeout 1000))
+   |  _^
+ 5 | |   x)
+   | |____^ declared keyword :TAG is not present in function definition
+
+================================================================================
+105 Declared keyword stage mismatch (no-default key must be Optional)
+================================================================================
+
+(package test-package)
+
+(declare f (Integer -> (&key (:tag String)) -> Integer))
+(define (f x &key tag)
+  x)
+
+--------------------------------------------------------------------------------
+
+error: Declared keyword type mismatch
+  --> test:4:18
+   |
+ 4 |  (define (f x &key tag)
+   |                    ^^^ keyword :TAG has no default and must have Optional type
+
+================================================================================
+106 Declared keyword stage mismatch (undeclared definition key)
+================================================================================
+
+(package test-package)
+
+(declare f (Integer -> (&key (:timeout Integer)) -> Integer))
+(define (f x &key (timeout 1000) tag)
+  x)
+
+--------------------------------------------------------------------------------
+
+error: Declared keyword type mismatch
+  --> test:4:33
+   |
+ 4 |  (define (f x &key (timeout 1000) tag)
+   |                                   ^^^ keyword :TAG is not present in declared type
+
+================================================================================
+107 Nested keyword lambdas with defaults
+================================================================================
+
+(package test-package/keyword-nested
+  (import coalton-prelude))
+
+(define (f &key (x 1.0))
+  (fn (y &key (z 2.0))
+    (* x (+ y z))))
+
+================================================================================
+108 Keyword stage type variable
+================================================================================
+
+(package test-package)
+
+(declare pick-object (:t -> (&key :object :t) -> :t))
+(define (pick-object x &key (object x))
+  object)

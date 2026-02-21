@@ -299,3 +299,70 @@ warn: non-exhaustive match
            (cl:truncate x 2))
     ((Tuple q r)
      (+ q r))))
+
+================================================================================
+106 Parse expression with keyword calls
+================================================================================
+
+(package coalton-unit-tests/prelude
+  (import coalton-prelude))
+
+(define (f-parse106 x &key (timeout 1000) tag)
+  (match tag
+    ((Some _) (+ x timeout))
+    ((None) x)))
+
+(define a-parse106 (f-parse106 10))
+(define b-parse106 (f-parse106 10 :timeout 20 :tag (Some "prod")))
+
+================================================================================
+107 Malformed function application
+================================================================================
+
+(package test-package)
+
+(define (f x &key (timeout 1000) tag) x)
+(define y (f 10 :timeout 20 30))
+
+--------------------------------------------------------------------------------
+
+error: Malformed function application
+  --> test:4:28
+   |
+ 4 |  (define y (f 10 :timeout 20 30))
+   |                              ^^ positional argument after keyword argument
+
+================================================================================
+108 Duplicate keyword argument
+================================================================================
+
+(package test-package)
+
+(define (f x &key (timeout 1000) tag) x)
+(define y (f 10 :timeout 1 :timeout 2))
+
+--------------------------------------------------------------------------------
+
+error: Duplicate keyword argument
+  --> test:4:16
+   |
+ 4 |  (define y (f 10 :timeout 1 :timeout 2))
+   |                  -------- first argument here
+   |                  ^^^^^^^^ second argument here
+
+================================================================================
+109 Unknown keyword argument
+================================================================================
+
+(package test-package)
+
+(define (f x &key (timeout 1000) tag) x)
+(define y (f 10 :wat 1))
+
+--------------------------------------------------------------------------------
+
+error: Unknown keyword argument
+  --> test:4:16
+   |
+ 4 |  (define y (f 10 :wat 1))
+   |                  ^^^^ unknown keyword argument :WAT

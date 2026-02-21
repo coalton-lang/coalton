@@ -11,6 +11,36 @@
 
 (in-package #:coalton-impl/codegen/typecheck-node)
 
+(defun erase-keyword-stages (type)
+  "Convert keyword stages in TYPE into physical Optional-arrow form."
+  (declare (type tc:ty type)
+           (values tc:ty &optional))
+  (typecase type
+    (tc:keyword-stage-ty
+      (loop :with out := (erase-keyword-stages (tc:keyword-stage-ty-to type))
+            :for entry :in (reverse (tc:keyword-stage-ty-entries type))
+            :do (setf out
+                      (tc:make-function-type
+                       (erase-keyword-stages
+                        (tc:keyword-entry-physical-type
+                         (tc:keyword-ty-entry-type entry)))
+                       out))
+            :finally (return out)))
+    (tc:tapp
+      (tc:make-tapp
+       :from (erase-keyword-stages (tc:tapp-from type))
+       :to (erase-keyword-stages (tc:tapp-to type))))
+    (t
+      type)))
+
+(defun codegen-unify (subs type1 type2)
+  (declare (type tc:substitution-list subs)
+           (type tc:ty type1 type2)
+           (values tc:substitution-list &optional))
+  (tc:unify subs
+            (erase-keyword-stages type1)
+            (erase-keyword-stages type2)))
+
 (defgeneric typecheck-node (expr env)
   (:documentation "Check that EXPR is valid. Currently only verifies
   that applied functions match their arguments.")
@@ -37,8 +67,8 @@
       (loop :for arg :in (node-application-rands expr)
             :for arg-ty := (typecheck-node arg env) :do
               (progn
-                (setf subs (tc:unify subs (tc:function-type-from type) arg-ty))
-                (setf subs (tc:unify subs arg-ty (tc:function-type-from type)))
+                (setf subs (codegen-unify subs (tc:function-type-from type) arg-ty))
+                (setf subs (codegen-unify subs arg-ty (tc:function-type-from type)))
                 (setf type (tc:function-type-to type))))
       (node-type expr)))
 
@@ -53,8 +83,8 @@
       (loop :for arg :in (node-direct-application-rands expr)
             :for arg-ty := (typecheck-node arg env) :do
               (progn
-                (setf subs (tc:unify subs (tc:function-type-from type) arg-ty))
-                (setf subs (tc:unify subs arg-ty (tc:function-type-from type)))
+                (setf subs (codegen-unify subs (tc:function-type-from type) arg-ty))
+                (setf subs (codegen-unify subs arg-ty (tc:function-type-from type)))
                 (setf type (tc:function-type-to type))))
       (node-type expr)))
 
@@ -71,8 +101,8 @@
           (setf type (tc:function-type-to type))))
 
       (let ((subexpr-ty (typecheck-node (node-abstraction-subexpr expr) env)))
-        (setf subs (tc:unify subs type subexpr-ty))
-        (setf subs (tc:unify subs subexpr-ty type))
+        (setf subs (codegen-unify subs type subexpr-ty))
+        (setf subs (codegen-unify subs subexpr-ty type))
         (node-type expr))))
 
   (:method ((expr node-let) env)
@@ -84,8 +114,8 @@
     (let ((subexpr-ty (typecheck-node (node-let-subexpr expr) env))
 
           (subs nil))
-      (setf subs (tc:unify subs subexpr-ty (node-type expr)))
-      (setf subs (tc:unify subs (node-type expr) subexpr-ty))
+      (setf subs (codegen-unify subs subexpr-ty (node-type expr)))
+      (setf subs (codegen-unify subs (node-type expr) subexpr-ty))
       subexpr-ty))
 
   (:method ((expr node-locally) env)
@@ -93,8 +123,8 @@
              (values tc:ty))
     (let ((subexpr-ty (typecheck-node (node-locally-subexpr expr) env))
           (subs nil))
-      (setf subs (tc:unify subs subexpr-ty (node-type expr)))
-      (setf subs (tc:unify subs (node-type expr) subexpr-ty))
+      (setf subs (codegen-unify subs subexpr-ty (node-type expr)))
+      (setf subs (codegen-unify subs (node-type expr) subexpr-ty))
       subexpr-ty))
 
   (:method ((expr node-lisp) env)
@@ -123,8 +153,8 @@
       (loop :for branch :in (node-match-branches expr)
             :for subexpr-ty := (typecheck-node branch env) :do
               (progn
-                (setf subs (tc:unify subs type subexpr-ty))
-                (setf subs (tc:unify subs subexpr-ty type))))
+                (setf subs (codegen-unify subs type subexpr-ty))
+                (setf subs (codegen-unify subs subexpr-ty type))))
       type))
 
   (:method ((expr catch-branch) env)
@@ -142,8 +172,8 @@
       (loop :for branch :in (node-catch-branches expr)
             :for subexpr-ty := (typecheck-node branch env) :do
               (progn
-                (setf subs (tc:unify subs type subexpr-ty))
-                (setf subs (tc:unify subs subexpr-ty type))))
+                (setf subs (codegen-unify subs type subexpr-ty))
+                (setf subs (codegen-unify subs subexpr-ty type))))
       type))
 
   (:method ((expr node-resumable) env)
@@ -156,8 +186,8 @@
       (loop :for branch :in (node-resumable-branches expr)
             :for subexpr-ty := (typecheck-node branch env) :do
               (progn
-                (setf subs (tc:unify subs type subexpr-ty))
-                (setf subs (tc:unify subs subexpr-ty type))))
+                (setf subs (codegen-unify subs type subexpr-ty))
+                (setf subs (codegen-unify subs subexpr-ty type))))
       type))
 
   (:method ((expr resumable-branch) env)
@@ -205,8 +235,8 @@
     (let ((last-node (car (last (node-seq-nodes expr))))
 
           (subs nil))
-      (setf subs (tc:unify subs (node-type expr) (node-type last-node)))
-      (setf subs (tc:unify subs (node-type last-node) (node-type expr)))
+      (setf subs (codegen-unify subs (node-type expr) (node-type last-node)))
+      (setf subs (codegen-unify subs (node-type last-node) (node-type expr)))
       (node-type last-node)))
 
   (:method ((expr node-return-from) env)
@@ -230,7 +260,7 @@
   (:method ((expr node-block) env)
     (declare (type tc:environment env)
              (values tc:ty))
-    (tc:unify
+    (codegen-unify
      nil
      (node-type expr)
      (typecheck-node (node-block-body expr) env))
@@ -246,7 +276,7 @@
     (declare (type tc:environment env)
              (values tc:ty))
     (typecheck-node (node-dynamic-extent-node expr) env)
-    (tc:unify
+    (codegen-unify
      nil
      (node-type expr)
      (typecheck-node (node-dynamic-extent-body expr) env))
@@ -256,7 +286,7 @@
     (declare (type tc:environment env)
              (values tc:ty))
     (typecheck-node (node-bind-expr expr) env)
-    (tc:unify
+    (codegen-unify
      nil
      (node-type expr)
      (typecheck-node (node-bind-body expr) env))
@@ -274,14 +304,14 @@
                           (length (node-values-nodes expr))))
       (loop :for subnode :in (node-values-nodes expr)
             :for comp-ty :in components
-            :do (tc:unify nil (typecheck-node subnode env) comp-ty))
+            :do (codegen-unify nil (typecheck-node subnode env) comp-ty))
       (node-type expr)))
 
   (:method ((expr node-mv-call) env)
     (declare (type tc:environment env)
              (values tc:ty))
     (let ((sub-ty (typecheck-node (node-mv-call-expr expr) env)))
-      (tc:unify nil (node-type expr) sub-ty)
+      (codegen-unify nil (node-type expr) sub-ty)
       (node-type expr)))
 
   (:method ((expr node-values-bind) env)
@@ -296,7 +326,7 @@
                           (length components)
                           (length (node-values-bind-vars expr))))
       (typecheck-node (node-values-bind-expr expr) env)
-      (tc:unify nil (node-type expr) (typecheck-node (node-values-bind-body expr) env))
+      (codegen-unify nil (node-type expr) (typecheck-node (node-values-bind-body expr) env))
       (node-type expr)))
 
   (:method ((expr node-values-match) env)
@@ -308,6 +338,6 @@
       (loop :for branch :in (node-values-match-branches expr)
             :for subexpr-ty := (typecheck-node branch env) :do
               (progn
-                (setf subs (tc:unify subs type subexpr-ty))
-                (setf subs (tc:unify subs subexpr-ty type))))
+                (setf subs (codegen-unify subs type subexpr-ty))
+                (setf subs (codegen-unify subs subexpr-ty type))))
       type)))

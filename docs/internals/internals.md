@@ -63,11 +63,19 @@ Parsing of expressions also occurs in this file.
 
 Some constructions are de-sugared directly in parsing. For example, there is no `node-rec`; it is desugared into a `node-let` immediately.
 
+Keyword arguments are parsed here as explicit AST data:
+
+- function/`fn` parameters may include `&key` entries
+- call sites may include keyword argument pairs
+- parser-level validation handles malformed placement, missing values, and duplicates
+
 ### Intermediate representation for types
 
 File: `src/parser/types.lisp`
 
 The IR for types is a relatively straightforward data structure, which are substructures of `ty`. This file also contains the parser for said data structure
+
+Function types can include a keyword stage, represented as `(&key ...)` in type syntax.
 
 ### Transformations of the AST
 
@@ -109,6 +117,18 @@ Type checking relies mainly on:
 - inference via `infer-expression-type`, defined in `src/typechecker/define.lisp`
 
 There are other modules to handle more specific things, but the bulk of the "type calculus" is defined above.
+
+Keyword arguments are represented in the typechecker by a dedicated keyword-stage type node (`keyword-stage-ty`) with keyword entries (`keyword-ty-entry`).
+
+Unification currently treats keyword rows as closed: key sets must match exactly, and corresponding entry types are unified by key name.
+
+During inference, keyword stages are lowered to ordinary positional arguments before codegen:
+
+- defaulted key `k : T` is passed physically as `(Optional T)` and defaulted in the callee
+- no-default key `k : Optional T` is passed physically as `(Optional T)` directly
+- omitted keys lower to `None`
+
+After this lowering, codegen sees only ordinary lambda/application shapes.
 
 ### Environment
 

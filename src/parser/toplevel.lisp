@@ -76,7 +76,9 @@
    #:make-toplevel-define                        ; CONSTRUCTOR
    #:toplevel-define-name                        ; ACCESSOR
    #:toplevel-define-params                      ; ACCESSOR
+   #:toplevel-define-keyword-params              ; ACCESSOR
    #:toplevel-define-orig-params                 ; ACCESSOR
+   #:toplevel-define-orig-keyword-params         ; ACCESSOR
    #:toplevel-define-body                        ; ACCESSOR
    #:toplevel-define-monomorphize                ; ACCESSOR
    #:toplevel-define-list                        ; TYPE
@@ -104,6 +106,7 @@
    #:make-instance-method-definition             ; CONSTRUCTOR
    #:instance-method-definition-name             ; ACCESSOR
    #:instance-method-definition-params           ; ACCESSOR
+   #:instance-method-definition-keyword-params   ; ACCESSOR
    #:instance-method-definition-body             ; ACCESSOR
    #:instance-method-definition-inline           ; ACCESSOR
    #:instance-method-definition-list             ; TYPE
@@ -182,8 +185,10 @@
 ;;;;
 ;;;; toplevel-declare := "(" "declare" identifier qualified-ty ")"
 ;;;;
+;;;; keyword-param := <defined in src/parser/expression.lisp>
+;;;;
 ;;;; toplevel-define := "(" "define" identifier node-body ")"
-;;;;                  | "(" "define" "(" identifier pattern* ")" docstring? node-body ")"
+;;;;                  | "(" "define" "(" identifier pattern* ["&key" keyword-param*] ")" docstring? node-body ")"
 ;;;;
 ;;;; constructor := identifier docstring?
 ;;;;              | "(" identifier ")" docstring?
@@ -209,7 +214,7 @@
 ;;;;                        | "(" "define-class" "(" ( "(" ty-predicate ")" )+ "=>" class-head ")" docstring? method-definition* ")"
 ;;;;
 ;;;; instance-method-definiton := "(" "define" identifier body ")"
-;;;;                            | "(" "define" "(" identifier pattern* ")" body ")"
+;;;;                            | "(" "define" "(" identifier pattern* ["&key" keyword-param*] ")" body ")"
 ;;;;
 ;;;; toplevel-define-instance := "(" "define-instance" "(" ty-predicate ")" docstring? instance-method-definition* ")"
 ;;;;                           | "(" "define-instance" "(" ty-predicate "=>" ty-predicate ")" docstring? instance-method-definition ")"
@@ -376,7 +381,9 @@
             (:copier nil))
   (name         (util:required 'name)         :type node-variable                    :read-only t)
   (params       (util:required 'params)       :type pattern-list                     :read-only t)
+  (keyword-params nil                         :type keyword-param-list                :read-only t)
   (orig-params  (util:required 'orig-params)  :type pattern-list                     :read-only t)
+  (orig-keyword-params nil                    :type keyword-param-list                :read-only t)
   (body         (util:required 'body)         :type node-body                        :read-only t)
   (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil)
   (inline       (util:required 'inline)       :type (or null attribute-inline)       :read-only nil))
@@ -444,6 +451,7 @@
             (:copier nil))
   (name     (util:required 'name)     :type node-variable   :read-only t)
   (params   (util:required 'params)   :type pattern-list    :read-only t)
+  (keyword-params nil                 :type keyword-param-list :read-only t)
   (body     (util:required 'body)     :type node-body       :read-only t)
   (location (util:required 'location) :type source:location :read-only t)
   (inline   (util:required 'inline)   :type (or null attribute-inline) :read-only nil))
@@ -1101,7 +1109,7 @@ consume all attributes")))
     (parse-error "Malformed definition"
                  (note source form "expected value")))
 
-  (multiple-value-bind (name params)
+  (multiple-value-bind (name params keyword-params)
       (parse-argument-list (cst:second form) source)
 
     (multiple-value-bind (docstring body)
@@ -1110,7 +1118,9 @@ consume all attributes")))
       (make-toplevel-define
        :name name
        :params params
+       :keyword-params keyword-params
        :orig-params params
+       :orig-keyword-params keyword-params
        :docstring docstring
        :body body
        :monomorphize nil
@@ -1920,26 +1930,28 @@ consume all attributes")))
 
 (defun parse-argument-list (form source)
   (declare (type cst:cst form)
-           (values node-variable pattern-list))
+           (values node-variable pattern-list keyword-param-list))
 
   ;; (define x 1)
   (when (cst:atom form)
-    (return-from parse-argument-list (values (parse-variable form source) nil)))
+    (return-from parse-argument-list (values (parse-variable form source) nil nil)))
 
   ;; (define (0.5 x y) ...)
   (unless (identifierp (cst:raw (cst:first form)))
     (parse-error "Malformed function definition"
                  (note source (cst:first form) "expected symbol")))
 
-  (values
-   (parse-variable (cst:first form) source)
-   (if (cst:null (cst:rest form))
-       (list
-        (make-pattern-wildcard
-         :location (form-location source form)))
-       (loop :for vars := (cst:rest form) :then (cst:rest vars)
-             :while (cst:consp vars)
-             :collect (parse-pattern (cst:first vars) source)))))
+  (multiple-value-bind (params keyword-params)
+      (parse-fn-argument-list (cst:rest form) source)
+    (values
+     (parse-variable (cst:first form) source)
+     (if (and (null params)
+              (null keyword-params))
+         (list
+          (make-pattern-wildcard
+           :location (form-location source form)))
+         params)
+     keyword-params)))
 
 (defun parse-identifier (form source)
   (declare (type cst:cst form)
@@ -2016,12 +2028,13 @@ consume all attributes")))
                    (note source form "expected definition name")
                    context-note))
 
-    (multiple-value-bind (name params)
+    (multiple-value-bind (name params keyword-params)
         (parse-argument-list (cst:second form) source)
 
       (make-instance-method-definition
        :name name
        :params params
+       :keyword-params keyword-params
        :body (parse-body (cst:rest (cst:rest form)) form source)
        :location (form-location source form)
        :inline nil))))

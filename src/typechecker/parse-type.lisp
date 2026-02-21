@@ -96,6 +96,24 @@
             :do (setf type (tc:make-tapp :from type :to arg)))
       type))
 
+  (:method ((type tc:keyword-stage-ty) parser-type env)
+    (declare (type parser:keyword-stage-ty parser-type)
+             (type partial-type-env env)
+             (values tc:keyword-stage-ty &optional))
+    (tc:make-keyword-stage-ty
+     :entries (loop :for entry :in (tc:keyword-stage-ty-entries type)
+                    :for parser-entry :in (parser:keyword-stage-ty-entries parser-type)
+                    :collect (tc:make-keyword-ty-entry
+                              :keyword (tc:keyword-ty-entry-keyword entry)
+                              :type (apply-type-alias-substitutions
+                                     (tc:keyword-ty-entry-type entry)
+                                     (parser:keyword-ty-entry-type parser-entry)
+                                     env)))
+     :to (apply-type-alias-substitutions
+          (tc:keyword-stage-ty-to type)
+          (parser:keyword-stage-ty-to parser-type)
+          env)))
+
   (:method ((type tc:qualified-ty) parser-type env)
     (declare (type parser:qualified-ty parser-type)
              (type partial-type-env env)
@@ -355,6 +373,31 @@ the substitution :b +-> T can be inferred.
                                   :from (tc:apply-ksubstitution ksubs arg-kind)
                                   :to (tc:apply-ksubstitution ksubs expected-kind))
                                  (tc:apply-ksubstitution ksubs fun-kind)))))))))
+
+  (:method ((type parser:keyword-stage-ty) expected-kind ksubs env)
+    (declare (type tc:kind expected-kind)
+             (type tc:ksubstitution-list ksubs)
+             (type partial-type-env env)
+             (values tc:ty tc:ksubstitution-list &optional))
+
+    (let ((entries
+            (loop :for entry :in (parser:keyword-stage-ty-entries type)
+                  :collect (multiple-value-bind (entry-ty ksubs_)
+                               (infer-type-kinds (parser:keyword-ty-entry-type entry)
+                                                 tc:+kstar+
+                                                 ksubs
+                                                 env)
+                             (setf ksubs ksubs_)
+                             (tc:make-keyword-ty-entry
+                              :keyword (parser:keyword-src-name (parser:keyword-ty-entry-keyword entry))
+                              :type entry-ty)))))
+      (multiple-value-bind (to-ty ksubs)
+          (infer-type-kinds (parser:keyword-stage-ty-to type)
+                            expected-kind
+                            ksubs
+                            env)
+        (values (tc:make-keyword-stage-ty :entries entries :to to-ty)
+                ksubs))))
 
   (:method ((type parser:qualified-ty) expected-kind ksubs env)
     (declare (type tc:kind expected-kind)

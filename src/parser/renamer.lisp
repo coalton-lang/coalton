@@ -102,16 +102,37 @@
     (declare (type algo:immutable-map ctx)
              (values node algo:immutable-map))
 
-    (let* ((new-bindings (make-local-vars (mapcar #'pattern-var-name (pattern-variables (node-abstraction-params node)))))
+    (let* ((keyword-var-bindings
+             (make-local-vars
+              (mapcar (alexandria:compose #'node-variable-name #'keyword-param-binder)
+                      (node-abstraction-keyword-params node))))
+
+           (new-bindings
+             (append
+              (make-local-vars (mapcar #'pattern-var-name (pattern-variables (node-abstraction-params node))))
+              keyword-var-bindings))
 
            (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
 
       (values
        (make-node-abstraction
         :params (rename-variables-generic% (node-abstraction-params node) new-ctx)
+        :keyword-params (rename-variables-generic% (node-abstraction-keyword-params node) new-ctx)
         :body (rename-variables-generic% (node-abstraction-body node) new-ctx)
         :location (source:location node))
        ctx)))
+
+  (:method ((param keyword-param) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values keyword-param algo:immutable-map))
+    (values
+     (make-keyword-param
+      :keyword (keyword-param-keyword param)
+      :binder (rename-variables-generic% (keyword-param-binder param) ctx)
+      :default (and (keyword-param-default param)
+                    (rename-variables-generic% (keyword-param-default param) ctx))
+      :location (source:location param))
+     ctx))
 
   (:method ((node node-let-binding) ctx)
     (declare (type algo:immutable-map ctx)
@@ -313,7 +334,18 @@
      (make-node-application
       :rator (rename-variables-generic% (node-application-rator node) ctx)
       :rands (rename-variables-generic% (node-application-rands node) ctx)
+      :keyword-rands (rename-variables-generic% (node-application-keyword-rands node) ctx)
       :location (source:location node))
+     ctx))
+
+  (:method ((arg node-application-keyword-arg) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node-application-keyword-arg algo:immutable-map))
+    (values
+     (make-node-application-keyword-arg
+      :keyword (node-application-keyword-arg-keyword arg)
+      :value (rename-variables-generic% (node-application-keyword-arg-value arg) ctx)
+      :location (source:location arg))
      ctx))
 
   (:method ((node node-or) ctx)
@@ -560,8 +592,11 @@
 
     (let* ((new-bindings
              (make-local-vars
-              (mapcar #'pattern-var-name
-                      (pattern-variables (toplevel-define-params toplevel)))))
+              (append
+               (mapcar #'pattern-var-name
+                       (pattern-variables (toplevel-define-params toplevel)))
+               (mapcar (alexandria:compose #'node-variable-name #'keyword-param-binder)
+                       (toplevel-define-keyword-params toplevel)))))
            (new-ctx
              (algo:immutable-map-set-multiple ctx new-bindings)))
 
@@ -569,7 +604,9 @@
        (make-toplevel-define
         :name (toplevel-define-name toplevel)
         :params (rename-variables-generic% (toplevel-define-params toplevel) new-ctx)
+        :keyword-params (rename-variables-generic% (toplevel-define-keyword-params toplevel) new-ctx)
         :orig-params (toplevel-define-orig-params toplevel)
+        :orig-keyword-params (toplevel-define-orig-keyword-params toplevel)
         :docstring (source:docstring toplevel)
         :body (rename-variables-generic% (toplevel-define-body toplevel) new-ctx)
         :location (source:location toplevel)
@@ -583,8 +620,11 @@
 
     (let* ((new-bindings
              (make-local-vars
-              (mapcar #'pattern-var-name
-                      (pattern-variables (instance-method-definition-params method)))))
+              (append
+               (mapcar #'pattern-var-name
+                       (pattern-variables (instance-method-definition-params method)))
+               (mapcar (alexandria:compose #'node-variable-name #'keyword-param-binder)
+                       (instance-method-definition-keyword-params method)))))
 
            (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
 
@@ -592,6 +632,7 @@
        (make-instance-method-definition
         :name (instance-method-definition-name method)
         :params (rename-variables-generic% (instance-method-definition-params method) new-ctx)
+        :keyword-params (rename-variables-generic% (instance-method-definition-keyword-params method) new-ctx)
         :body (rename-variables-generic% (instance-method-definition-body method) new-ctx)
         :location (source:location method)
         :inline (instance-method-definition-inline method))
@@ -672,6 +713,23 @@
     (make-tapp
      :from (rename-type-variables-generic% (tapp-from ty) ctx)
      :to (rename-type-variables-generic% (tapp-to ty) ctx)
+     :location (source:location ty)))
+
+  (:method ((entry keyword-ty-entry) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values keyword-ty-entry &optional))
+    (make-keyword-ty-entry
+     :keyword (keyword-ty-entry-keyword entry)
+     :type (rename-type-variables-generic% (keyword-ty-entry-type entry) ctx)
+     :location (source:location entry)))
+
+  (:method ((ty keyword-stage-ty) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values keyword-stage-ty &optional))
+    (make-keyword-stage-ty
+     :entries (rename-type-variables-generic% (keyword-stage-ty-entries ty) ctx)
+     :to (and (keyword-stage-ty-to ty)
+              (rename-type-variables-generic% (keyword-stage-ty-to ty) ctx))
      :location (source:location ty)))
 
   (:method ((pred ty-predicate) ctx)

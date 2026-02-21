@@ -240,21 +240,42 @@
                 (object-aname ty)
                 (html-entities:encode-entities (object-name ty))))))
 
+(defun write-keyword-stage-head (stream stage)
+  (declare (type tc:keyword-stage-ty stage)
+           (values null &optional))
+  (write-string "(&key" stream)
+  (dolist (entry (tc:keyword-stage-ty-entries stage))
+    (write-string " " stream)
+    (write-string (html-entities:encode-entities
+                   (format nil "~S" (tc:keyword-ty-entry-keyword entry)))
+                  stream)
+    (write-string " " stream)
+    (write-string (to-markdown (tc:keyword-ty-entry-type entry)) stream))
+  (write-string ")" stream)
+  nil)
+
 (defmethod to-markdown ((ty tc:tapp))
   (with-output-to-string (stream)
     (cond
       ((tc:function-type-p ty) ;; Print function types
        (write-string "(" stream)
        (write-string (to-markdown (tc:tapp-to (tc:tapp-from ty))) stream)
-       (write-string (html-entities:encode-entities " → ") stream)
-       ;; Avoid printing extra parentheses on curried functions
-       (labels ((print-subfunction (to)
+       ;; Avoid printing extra parentheses on curried functions.
+       ;; A function tail may be a keyword stage, not only a tapp.
+       (labels ((write-arrow ()
+                  (write-string (html-entities:encode-entities " → ") stream))
+                (print-subfunction (to)
                   (cond
-                    ((tc:function-type-p to)
+                    ((typep to 'tc:keyword-stage-ty)
+                     (write-arrow)
+                     (write-keyword-stage-head stream to)
+                     (print-subfunction (tc:keyword-stage-ty-to to)))
+                    ((and (typep to 'tc:tapp) (tc:function-type-p to))
+                     (write-arrow)
                      (write-string (to-markdown (tc:tapp-to (tc:tapp-from to))) stream)
-                     (write-string (html-entities:encode-entities " → ") stream)
                      (print-subfunction (tc:tapp-to to)))
                     (t
+                     (write-arrow)
                      (write-string (to-markdown to) stream)))))
          (print-subfunction (tc:tapp-to ty)))
        (write-string ")" stream))
@@ -277,11 +298,19 @@
               (write-string (to-markdown arg) stream))
             (write-string ")" stream))
            (t
-            (write-string "(" stream)
-            (write-string (to-markdown (tc:tapp-from ty)) stream)
-            (write-string " " stream)
+           (write-string "(" stream)
+           (write-string (to-markdown (tc:tapp-from ty)) stream)
+           (write-string " " stream)
             (write-string (to-markdown (tc:tapp-to ty)) stream)
             (write-string ")" stream))))))))
+
+(defmethod to-markdown ((ty tc:keyword-stage-ty))
+  (with-output-to-string (stream)
+    (write-string "(" stream)
+    (write-keyword-stage-head stream ty)
+    (write-string (html-entities:encode-entities " → ") stream)
+    (write-string (to-markdown (tc:keyword-stage-ty-to ty)) stream)
+    (write-string ")" stream)))
 
 (defmethod to-markdown ((object tc:qualified-ty))
   (let ((preds (tc:qualified-ty-predicates object))

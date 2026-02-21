@@ -79,6 +79,7 @@
   ;; Primitive Syntax
   (:export
    #:fn #:λ
+   #:&key
    #:match
    #:throw
    #:resume-to

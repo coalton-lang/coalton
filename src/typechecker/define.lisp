@@ -84,6 +84,268 @@
                      (tc:apply-substitution subs expected-type)
                      (tc:apply-substitution subs ty))))
 
+(defun arrow-function-type-p (ty)
+  (and (tc:tapp-p ty)
+       (tc:tapp-p (tc:tapp-from ty))
+       (equalp tc:*arrow-type* (tc:tapp-from (tc:tapp-from ty)))))
+
+(defun arrow-function-type-from (ty)
+  (declare (type tc:tapp ty))
+  (tc:tapp-to (tc:tapp-from ty)))
+
+(defun arrow-function-type-to (ty)
+  (declare (type tc:tapp ty))
+  (tc:tapp-to ty))
+
+(defun parser-variable-from-symbol (symbol location)
+  (declare (type symbol symbol)
+           (type source:location location)
+           (values parser:node-variable &optional))
+  (parser:make-node-variable
+   :name symbol
+   :location location))
+
+(defun parser-pattern-var-from-symbol (symbol location)
+  (declare (type symbol symbol)
+           (type source:location location)
+           (values parser:pattern-var &optional))
+  (parser:make-pattern-var
+   :name symbol
+   :orig-name symbol
+   :location location))
+
+(defun make-keyword-default-parser-expression (hidden-name default-expr location)
+  (declare (type symbol hidden-name)
+           (type parser:node default-expr)
+           (type source:location location)
+           (values parser:node-match &optional))
+  (let* ((tmp-name (gensym "KW-SOME-"))
+         (tmp-pattern (parser-pattern-var-from-symbol tmp-name location))
+         (tmp-var (parser-variable-from-symbol tmp-name location)))
+    (parser:make-node-match
+     :expr (parser-variable-from-symbol hidden-name location)
+     :branches
+     (list
+      (parser:make-node-match-branch
+       :pattern (parser:make-pattern-constructor
+                 :name 'coalton:Some
+                 :patterns (list tmp-pattern)
+                 :location location)
+       :body (parser:make-node-body
+              :nodes nil
+              :last-node tmp-var)
+       :location location)
+      (parser:make-node-match-branch
+       :pattern (parser:make-pattern-constructor
+                 :name 'coalton:None
+                 :patterns nil
+                 :location location)
+       :body (parser:make-node-body
+              :nodes nil
+              :last-node default-expr)
+       :location location))
+     :location location)))
+
+(defun make-typed-none-node (inner-type location)
+  (declare (type tc:ty inner-type)
+           (type source:location location)
+           (values node-variable &optional))
+  (let ((optional-type (tc:make-optional-type inner-type)))
+    (make-node-variable
+     :type (tc:qualify nil optional-type)
+     :location location
+     :name 'coalton:None)))
+
+(defun make-typed-var-node (name ty location)
+  (declare (type parser:identifier name)
+           (type tc:ty ty)
+           (type source:location location)
+           (values node-variable &optional))
+  (make-node-variable
+   :type (tc:qualify nil ty)
+   :location location
+   :name name))
+
+(defun make-typed-pattern-var (name ty location)
+  (declare (type parser:identifier name)
+           (type tc:ty ty)
+           (type source:location location)
+           (values pattern-var &optional))
+  (make-pattern-var
+   :type (tc:qualify nil ty)
+   :location location
+   :name name
+   :orig-name name))
+
+(defun split-leading-args-and-keyword-stage (ty)
+  (declare (type tc:ty ty)
+           (values tc:ty-list (or null tc:keyword-stage-ty) tc:ty &optional))
+  (let ((args nil)
+        (cur ty))
+    (loop :while (arrow-function-type-p cur)
+          :do (push (arrow-function-type-from cur) args)
+              (setf cur (arrow-function-type-to cur)))
+    (if (typep cur 'tc:keyword-stage-ty)
+        (values (nreverse args)
+                cur
+                (tc:keyword-stage-ty-to cur))
+        (values (nreverse args) nil cur))))
+
+(defun maybe-build-keyword-superset-adapter (node ty expected-type subs)
+  (declare (type parser:node-variable node)
+           (type tc:ty ty expected-type)
+           (type tc:substitution-list subs)
+           (values (or null node-abstraction) tc:substitution-list &optional))
+  (block adapt
+    (let* ((location (source:location node))
+           (ty (tc:apply-substitution subs ty))
+           (expected-type (tc:apply-substitution subs expected-type))
+           (subs subs))
+      (multiple-value-bind (expected-pos expected-stage expected-to)
+          (split-leading-args-and-keyword-stage expected-type)
+        (multiple-value-bind (actual-pos actual-stage actual-to)
+            (split-leading-args-and-keyword-stage ty)
+          (unless (and expected-stage actual-stage)
+            (return-from adapt (values nil subs)))
+          (unless (= (length expected-pos) (length actual-pos))
+            (return-from adapt (values nil subs)))
+
+          (loop :for expected-arg :in expected-pos
+                :for actual-arg :in actual-pos
+                :do
+                   (handler-case
+                       (setf subs (tc:unify subs expected-arg actual-arg))
+                     (tc:coalton-internal-type-error ()
+                       (return-from adapt (values nil subs)))))
+
+          (let* ((expected-entries (tc:keyword-stage-ty-entries expected-stage))
+                 (actual-entries (tc:keyword-stage-ty-entries actual-stage))
+                 (actual-table (make-hash-table :test #'eq))
+                 (expected-table (make-hash-table :test #'eq))
+                 (expected-key-params nil)
+                 (extra-key-count 0))
+            (dolist (entry actual-entries)
+              (setf (gethash (tc:keyword-ty-entry-keyword entry) actual-table) entry))
+
+            (dolist (entry expected-entries)
+              (let* ((key (tc:keyword-ty-entry-keyword entry))
+                     (actual-entry (gethash key actual-table)))
+                (unless actual-entry
+                  (return-from adapt (values nil subs)))
+                (setf (gethash key expected-table) t)
+                (handler-case
+                    (setf subs
+                          (tc:unify subs
+                                    (tc:keyword-ty-entry-type entry)
+                                    (tc:keyword-ty-entry-type actual-entry)))
+                  (tc:coalton-internal-type-error ()
+                    (return-from adapt (values nil subs))))))
+
+            (dolist (entry actual-entries)
+              (unless (gethash (tc:keyword-ty-entry-keyword entry) expected-table)
+                (incf extra-key-count)))
+            (unless (plusp extra-key-count)
+              (return-from adapt (values nil subs)))
+
+            (handler-case
+                (setf subs (tc:unify subs expected-to actual-to))
+              (tc:coalton-internal-type-error ()
+                (return-from adapt (values nil subs))))
+
+            (setf ty (tc:apply-substitution subs ty)
+                  expected-type (tc:apply-substitution subs expected-type))
+            (multiple-value-bind (expected-pos expected-stage expected-to)
+                (split-leading-args-and-keyword-stage expected-type)
+              (declare (ignore expected-to))
+              (multiple-value-bind (_actual-pos actual-stage actual-to)
+                  (split-leading-args-and-keyword-stage ty)
+                (let ((pos-params
+                        (loop :for arg-ty :in expected-pos
+                              :collect (list :name (gensym "KW-ADAPT-POS-")
+                                             :type arg-ty)))
+                      (expected-key-map (make-hash-table :test #'eq)))
+                  (loop :for entry :in (tc:keyword-stage-ty-entries expected-stage)
+                        :for physical-ty := (tc:keyword-entry-physical-type
+                                             (tc:keyword-ty-entry-type entry))
+                        :for var-name := (gensym
+                                          (format nil "KW-ADAPT-~A-"
+                                                  (symbol-name (tc:keyword-ty-entry-keyword entry))))
+                        :do
+                           (let ((data (list :name var-name :type physical-ty)))
+                             (push data expected-key-params)
+                             (setf (gethash (tc:keyword-ty-entry-keyword entry) expected-key-map)
+                                   data)))
+                  (setf expected-key-params (nreverse expected-key-params))
+
+                  (let* ((all-params (append pos-params expected-key-params))
+                         (param-patterns
+                           (mapcar (lambda (param)
+                                     (make-typed-pattern-var (getf param :name)
+                                                             (getf param :type)
+                                                             location))
+                                   all-params))
+                         (pos-rands
+                           (mapcar (lambda (param)
+                                     (make-typed-var-node (getf param :name)
+                                                          (getf param :type)
+                                                          location))
+                                   pos-params))
+                         (keyword-rands
+                           (loop :for entry :in (tc:keyword-stage-ty-entries actual-stage)
+                                 :for key := (tc:keyword-ty-entry-keyword entry)
+                                 :for expected-param := (gethash key expected-key-map)
+                                 :collect
+                                    (if expected-param
+                                        (make-typed-var-node (getf expected-param :name)
+                                                             (getf expected-param :type)
+                                                             location)
+                                        (make-typed-none-node
+                                         (or (tc:optional-type-inner
+                                              (tc:keyword-ty-entry-type entry))
+                                             (tc:keyword-ty-entry-type entry))
+                                         location))))
+                         (body-rands (append pos-rands keyword-rands))
+                         (body-node
+                           (make-node-application
+                            :type (tc:qualify nil actual-to)
+                            :location location
+                            :rator (make-typed-var-node (parser:node-variable-name node)
+                                                        ty
+                                                        location)
+                            :rands body-rands))
+                         (wrapper
+                           (make-node-abstraction
+                            :type (tc:qualify nil expected-type)
+                            :location location
+                            :params param-patterns
+                            :body (make-node-body
+                                   :nodes nil
+                                   :last-node body-node))))
+                    (declare (ignore _actual-pos))
+                    (values wrapper subs)))))))))))
+
+(defun ensure-no-duplicate-function-parameters (patterns keyword-params)
+  (declare (type parser:pattern-list patterns)
+           (type parser:keyword-param-list keyword-params))
+  (let ((seen (make-hash-table :test #'eq)))
+    (dolist (pat (parser:pattern-variables patterns))
+      (let ((name (parser:pattern-var-name pat))
+            (first (gethash (parser:pattern-var-name pat) seen)))
+        (when first
+          (tc-error "Duplicate parameters name"
+                    (tc-note first "first parameter here")
+                    (tc-note pat "second parameter here")))
+        (setf (gethash name seen) pat)))
+    (dolist (param keyword-params)
+      (let* ((binder (parser:keyword-param-binder param))
+             (name (parser:node-variable-name binder))
+             (first (gethash name seen)))
+        (when first
+          (tc-error "Duplicate parameters name"
+                    (tc-note first "first parameter here")
+                    (tc-note binder "second parameter here")))
+        (setf (gethash name seen) binder)))))
+
 ;;;
 ;;; Entrypoint
 ;;;
@@ -207,11 +469,19 @@
                                                              :docstring (source:docstring define)
                                                              :location (source:location define))))
 
-                        :if (parser:toplevel-define-orig-params define)
+                        :if (or (parser:toplevel-define-orig-params define)
+                                (parser:toplevel-define-orig-keyword-params define))
                           :do (setf env (tc:set-function-source-parameter-names
                                          env
                                          name
-                                         (parser:toplevel-define-orig-params define)))
+                                         (append
+                                          (parser:toplevel-define-orig-params define)
+                                          (loop :for key-param :in (parser:toplevel-define-orig-keyword-params define)
+                                                :for binder := (parser:keyword-param-binder key-param)
+                                                :collect (parser:make-pattern-var
+                                                          :name (parser:node-variable-name binder)
+                                                          :orig-name (parser:node-variable-name binder)
+                                                          :location (source:location binder))))))
                         :else
                           :if (tc:lookup-function-source-parameter-names env name)
                             :do (setf env (tc:unset-function-source-parameter-names env name))))
@@ -221,7 +491,7 @@
         ;; Record dependencies
         (loop :for define :in defines
               :for name := (parser:node-variable-name (parser:binding-name define))
-              :for code := (parser:binding-value define)
+              :for code := (binding-variable-collection-node define)
               :do (redef:record-dependencies name code env))
 
         (values
@@ -343,7 +613,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (values tc:ty tc:ty-predicate-list accessor-list node-variable tc:substitution-list &optional))
+             (values tc:ty tc:ty-predicate-list accessor-list node tc:substitution-list &optional))
 
     (multiple-value-bind (ty preds)
         (tc-env-lookup-value env node)
@@ -363,7 +633,18 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 :name (parser:node-variable-name node))
                subs)))
         (tc:coalton-internal-type-error ()
-          (standard-expression-type-mismatch-error node subs expected-type ty)))))
+          (multiple-value-bind (adapter-node subs_)
+              (maybe-build-keyword-superset-adapter node ty expected-type subs)
+            (if adapter-node
+                (let ((type (tc:apply-substitution subs_ expected-type))
+                      (preds (tc:apply-substitution subs_ preds)))
+                  (values
+                   type
+                   preds
+                   nil
+                   adapter-node
+                   subs_))
+                (standard-expression-type-mismatch-error node subs expected-type ty)))))))
 
   (:method ((node parser:node-application) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -377,80 +658,178 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                subs
                                env)
 
-      (let* ((rands (or (parser:node-application-rands node)
-                        (list
-                         (parser:make-node-variable
-                          :location (source:location node)
-                          :name 'coalton:unit))))
+      (labels ((make-none-node (inner-type location)
+                 (let ((optional-type (tc:make-optional-type inner-type)))
+                   (make-node-variable
+                    :type (tc:qualify nil optional-type)
+                    :location location
+                    :name 'coalton:None)))
+               (make-some-node (value-node value-type location)
+                 (let* ((optional-type (tc:make-optional-type value-type))
+                        (some-type (tc:make-function-type value-type optional-type)))
+                   (make-node-application
+                    :type (tc:qualify nil optional-type)
+                    :location location
+                    :rator (make-node-variable
+                            :type (tc:qualify nil some-type)
+                            :location location
+                            :name 'coalton:Some)
+                    :rands (list value-node))))
+               (apply-positional-argument (rand fun-ty_)
+                 (cond
+                   ((arrow-function-type-p fun-ty_)
+                    (multiple-value-bind (ty_ preds_ accessors_ node_ subs_)
+                        (infer-expression-type rand
+                                               (arrow-function-type-from fun-ty_)
+                                               subs
+                                               env)
+                      (declare (ignore ty_))
+                      (setf preds (append preds preds_))
+                      (setf accessors (append accessors accessors_))
+                      (setf subs subs_)
+                      (values node_
+                              (tc:apply-substitution subs (arrow-function-type-to fun-ty_)))))
+                   ((typep fun-ty_ 'tc:keyword-stage-ty)
+                    (tc-error "Argument error"
+                              (tc-note rand "positional arguments cannot follow a keyword stage")))
+                   ((tc:tyvar-p fun-ty_)
+                    (let* ((new-from (tc:make-variable))
+                           (new-to (tc:make-variable))
+                           (new-ty (tc:make-function-type new-from new-to)))
+                      (setf subs (tc:unify subs fun-ty_ new-ty))
+                      (multiple-value-bind (ty_ preds_ accessors_ node_ subs_)
+                          (infer-expression-type rand new-from subs env)
+                        (declare (ignore ty_))
+                        (setf preds (append preds preds_))
+                        (setf accessors (append accessors accessors_))
+                        (setf subs subs_)
+                        (values node_ new-to))))
+                   (t
+                    (setf fun-ty (tc:apply-substitution subs fun-ty))
+                    (tc-error "Argument error"
+                              (if (null (tc:function-type-arguments fun-ty))
+                                  (tc-note node "Unable to call value of type '~S': it is not a function"
+                                           fun-ty)
+                                  (tc-note node "Function call has ~D positional arguments but inferred type '~S' only takes ~D"
+                                           (length (parser:node-application-rands node))
+                                           fun-ty
+                                           (length (tc:function-type-arguments fun-ty)))))))))
 
-             (fun-ty_ fun-ty)
-             (rand-nodes
-               ;; Apply arguments one at a time for better error messages
-               (loop :for rand :in rands
-                     :collect (cond
-                                ;; If the rator is a function then unify against its argument
-                                ((tc:function-type-p fun-ty_)
-                                 (multiple-value-bind (ty_ preds_ accessors_ node_ subs_)
-                                     (infer-expression-type rand
-                                                            (tc:function-type-from fun-ty_)
-                                                            subs
-                                                            env)
-                                   (declare (ignore ty_))
-                                   (setf preds (append preds preds_))
-                                   (setf accessors (append accessors accessors_))
-                                   (setf subs subs_)
-                                   (setf fun-ty_ (tc:apply-substitution subs (tc:function-type-to fun-ty_)))
+        (let* ((keyword-rands (parser:node-application-keyword-rands node))
+               (fun-ty_ (tc:apply-substitution subs fun-ty))
+               (explicit-positional-rands (parser:node-application-rands node))
+               (positional-rands
+                 (or explicit-positional-rands
+                     (and (null keyword-rands)
+                          (not (typep fun-ty_ 'tc:keyword-stage-ty))
+                          (list
+                           (parser:make-node-variable
+                            :location (source:location node)
+                            :name 'coalton:unit)))))
+               (rand-nodes nil))
 
-                                   node_))
+          ;; Infer positional arguments first.
+          (dolist (rand positional-rands)
+            (multiple-value-bind (rand-node next-type)
+                (apply-positional-argument rand fun-ty_)
+              (push rand-node rand-nodes)
+              (setf fun-ty_ next-type)))
 
-                                ;; If the rator is variable then unify against a new function type
-                                ((tc:tyvar-p fun-ty_)
-                                 (let* ((new-from (tc:make-variable))
+          ;; If the call supplies keyword arguments but there is no keyword stage, fail.
+          (when (and keyword-rands
+                     (not (typep fun-ty_ 'tc:keyword-stage-ty))
+                     (not (tc:tyvar-p fun-ty_)))
+            (tc-error "Unknown keyword argument"
+                      (tc-note (first keyword-rands)
+                               "function does not accept keyword arguments")))
 
-                                        (new-to (tc:make-variable))
+          ;; If we still have a type variable and keyword arguments were supplied, force a keyword stage.
+          (when (and keyword-rands (tc:tyvar-p fun-ty_))
+            (let* ((entries
+                     (mapcar (lambda (arg)
+                               (tc:make-keyword-ty-entry
+                                :keyword (parser:keyword-src-name (parser:node-application-keyword-arg-keyword arg))
+                                :type (tc:make-variable)))
+                             keyword-rands))
+                   (ret-ty (tc:make-variable))
+                   (stage (tc:make-keyword-stage-ty :entries entries :to ret-ty)))
+              (setf subs (tc:unify subs fun-ty_ stage))
+              (setf fun-ty_ (tc:apply-substitution subs stage))))
 
-                                        (new-ty (tc:make-function-type new-from new-to)))
+          ;; Consume keyword stage immediately by lowering to positional Optional arguments.
+          (when (typep fun-ty_ 'tc:keyword-stage-ty)
+            (let* ((keyword-table (make-hash-table :test #'eq))
+                   (seen-call-keys (make-hash-table :test #'eq))
+                   (stage-entries (tc:keyword-stage-ty-entries fun-ty_)))
 
-                                   (setf subs (tc:unify subs fun-ty_ new-ty))
-                                   (multiple-value-bind (ty_ preds_ accessors_ node_ subs_)
-                                       (infer-expression-type rand
-                                                              new-from
-                                                              subs
-                                                              env)
-                                     (declare (ignore ty_))
-                                     (setf preds (append preds preds_))
-                                     (setf accessors (append accessors accessors_))
-                                     (setf subs subs_)
-                                     (setf fun-ty_ new-to)
+              (dolist (entry stage-entries)
+                (setf (gethash (tc:keyword-ty-entry-keyword entry) keyword-table) entry))
 
-                                     node_)))
+              (dolist (arg keyword-rands)
+                (let* ((key (parser:keyword-src-name (parser:node-application-keyword-arg-keyword arg)))
+                       (entry (gethash key keyword-table)))
+                  (when (gethash key seen-call-keys)
+                    (tc-error "Duplicate keyword argument"
+                              (tc-note arg "duplicate keyword argument")))
+                  (setf (gethash key seen-call-keys) t)
+                  (unless entry
+                    (tc-error "Unknown keyword argument"
+                              (tc-note arg "unknown keyword argument ~S" key)))))
 
-                                ;; Otherwise signal an error
-                                (t
-                                 (setf fun-ty (tc:apply-substitution subs fun-ty))
-                                 (tc-error "Argument error"
-                                           (if (null (tc:function-type-arguments fun-ty))
-                                               (tc-note node "Unable to call value of type '~S': it is not a function"
-                                                        fun-ty)
-                                               (tc-note node "Function call has ~D arguments but inferred type '~S' only takes ~D"
-                                                        (length rands)
-                                                        fun-ty
-                                                        (length (tc:function-type-arguments fun-ty))))))))))
+              (dolist (entry stage-entries)
+                (let* ((key (tc:keyword-ty-entry-keyword entry))
+                       (entry-type (tc:keyword-ty-entry-type entry))
+                       (call-arg (find key keyword-rands
+                                       :key (lambda (arg)
+                                              (parser:keyword-src-name
+                                               (parser:node-application-keyword-arg-keyword arg)))
+                                       :test #'eq))
+                       (physical-arg-type (tc:keyword-entry-physical-type entry-type)))
 
-        (handler-case
-            (progn
-              (setf subs (tc:unify subs fun-ty_ expected-type))
-              (let ((type (tc:apply-substitution subs fun-ty_)))
-                (values type
-                        preds
-                        accessors
-                        (make-node-application :type (tc:qualify nil type)
-                                               :location (source:location node)
-                                               :rator rator-node
-                                               :rands rand-nodes)
-                        subs)))
-          (tc:coalton-internal-type-error ()
-            (standard-expression-type-mismatch-error node subs expected-type fun-ty_))))))
+                  (cond
+                    (call-arg
+                     (multiple-value-bind (value-ty preds_ accessors_ value-node subs_)
+                         (infer-expression-type (parser:node-application-keyword-arg-value call-arg)
+                                                entry-type
+                                                subs
+                                                env)
+                       (declare (ignore value-ty))
+                       (setf preds (append preds preds_))
+                       (setf accessors (append accessors accessors_))
+                       (setf subs subs_)
+                       (let ((lowered-node
+                               (if (tc:optional-type-p entry-type)
+                                   value-node
+                                   (make-some-node value-node entry-type (source:location call-arg)))))
+                         (setf subs (tc:unify subs (tc:qualified-ty-type (node-type lowered-node))
+                                              physical-arg-type))
+                         (push lowered-node rand-nodes))))
+                    (t
+                     (let* ((inner-type (or (tc:optional-type-inner entry-type)
+                                            entry-type))
+                            (none-node (make-none-node inner-type (source:location node))))
+                       (setf subs (tc:unify subs (tc:qualified-ty-type (node-type none-node))
+                                            physical-arg-type))
+                       (push none-node rand-nodes)))))))
+
+              (setf fun-ty_ (tc:keyword-stage-ty-to fun-ty_)))
+
+          (setf rand-nodes (nreverse rand-nodes))
+
+          (handler-case
+              (progn
+                (setf subs (tc:unify subs fun-ty_ expected-type))
+                (let ((type (tc:apply-substitution subs fun-ty_)))
+                  (values type
+                          preds
+                          accessors
+                          (make-node-application :type (tc:qualify nil type)
+                                                 :location (source:location node)
+                                                 :rator rator-node
+                                                 :rands rand-nodes)
+                          subs)))
+            (tc:coalton-internal-type-error ()
+              (standard-expression-type-mismatch-error node subs expected-type fun-ty_)))))))
 
   (:method ((node parser:node-bind) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -522,88 +901,201 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node-abstraction tc:substitution-list &optional))
 
-    (check-duplicates
-     (parser:pattern-variables (parser:node-abstraction-params node))
-     #'parser:pattern-var-name
-     (lambda (first second)
-       (tc-error "Duplicate parameters name"
-                 (tc-note first "first parameter here")
-                 (tc-note second "second parameter here"))))
+    (let* ((positional-params (parser:node-abstraction-params node))
+           (keyword-params (parser:node-abstraction-keyword-params node)))
 
-    (let* (;; Setup return environment
-           (*return-status* :lambda)
-           (*returns* nil)
+      (ensure-no-duplicate-function-parameters positional-params keyword-params)
 
-           (arg-tys (if (null (parser:node-abstraction-params node))
-                        (list tc:*unit-type*)
-                        (loop :for pat :in (parser:node-abstraction-params node)
-                              :collect (tc:make-variable))))
+      (let* ((*return-status* ':lambda)
+             (*returns* nil)
+             (synthetic-nullary-p (and (null positional-params)
+                                       (null keyword-params)))
+             (positional-params
+               (if synthetic-nullary-p
+                   (list (parser:make-pattern-wildcard
+                          :location (source:location node)))
+                   positional-params))
+             (remaining-expected expected-type)
+             (positional-arg-tys
+               (if synthetic-nullary-p
+                   (list tc:*unit-type*)
+                   (loop :for _pattern :in positional-params
+                         :collect (if (arrow-function-type-p remaining-expected)
+                                      (prog1 (arrow-function-type-from remaining-expected)
+                                        (setf remaining-expected (arrow-function-type-to remaining-expected)))
+                                      (tc:make-variable)))))
+             (expected-key-stage
+               (and (typep remaining-expected 'tc:keyword-stage-ty)
+                    remaining-expected))
+             (expected-key-table (make-hash-table :test #'eq))
+             (used-expected-keys (make-hash-table :test #'eq)))
 
-           (params
-             (if (null (parser:node-abstraction-params node))
-                 (list
-                  (make-pattern-wildcard
-                   :type (tc:qualify nil (first arg-tys))
-                   :location (source:location node)))
-                 (loop :for pattern :in (parser:node-abstraction-params node)
-                       :for ty :in arg-tys
-                       :collect (multiple-value-bind (ty_ pattern subs_)
-                                    (infer-pattern-type pattern ty subs env)
-                                  (declare (ignore ty_))
-                                  (setf subs subs_)
-                                  pattern)))))
+        (when (and keyword-params
+                   (not expected-key-stage)
+                   (not (tc:tyvar-p remaining-expected)))
+          (tc-error "Declared keyword type mismatch"
+                    (tc-note node
+                             "definition has keyword parameters but expected type '~S' does not have a keyword stage"
+                             remaining-expected)))
 
-      (multiple-value-bind (body-ty preds accessors body-node subs)
-          (infer-expression-type (parser:node-abstraction-body node)
-                                 (tc:make-variable)
-                                 subs
-                                 env)
+        (when expected-key-stage
+          (dolist (entry (tc:keyword-stage-ty-entries expected-key-stage))
+            (setf (gethash (tc:keyword-ty-entry-keyword entry) expected-key-table) entry)))
 
-        ;; Ensure that all early returns unify
-        (loop :with returns := (reverse *returns*)
-              :for (s1 . ty1) :in returns
-              :for (s2 . ty2) :in (cdr returns)
-              :do (handler-case
-                      (setf subs (tc:unify subs ty1 ty2))
-                    (tc:coalton-internal-type-error ()
-                      (tc-error "Return type mismatch"
-                                (tc-note s1
-                                         "First return is of type '~S'"
-                                         (tc:apply-substitution subs ty1))
-                                (tc-note s2
-                                         "Second return is of type '~S'"
-                                         (tc:apply-substitution subs ty2))))))
+        (let* ((keyword-data
+                 (loop :for param :in keyword-params
+                       :for binder := (parser:keyword-param-binder param)
+                       :for key := (parser:keyword-src-name (parser:keyword-param-keyword param))
+                       :for default := (parser:keyword-param-default param)
+                       :for expected-entry := (gethash key expected-key-table)
+                       :for visible-ty := (cond
+                                            (expected-entry
+                                             (tc:keyword-ty-entry-type expected-entry))
+                                            (default
+                                             (tc:make-variable))
+                                            (t
+                                             (tc:make-optional-type (tc:make-variable))))
+                       :for hidden-name := (gensym
+                                            (concatenate 'string
+                                                         (symbol-name (parser:node-variable-name binder))
+                                                         "-KW-"))
+                       :for hidden-pattern := (parser-pattern-var-from-symbol hidden-name (source:location binder))
+                       :for physical-ty := (tc:keyword-entry-physical-type visible-ty)
+                       :do
+                          (progn
+                            (when expected-key-stage
+                              (unless expected-entry
+                                (tc-error "Declared keyword type mismatch"
+                                          (tc-note binder "keyword ~S is not present in declared type" key)))
+                              (setf (gethash key used-expected-keys) t))
+                            (when (and (null default)
+                                       expected-entry
+                                       (not (tc:optional-type-p visible-ty)))
+                              (tc-error "Declared keyword type mismatch"
+                                        (tc-note binder "keyword ~S has no default and must have Optional type" key))))
+                       :collect (list :param param
+                                      :key key
+                                      :binder binder
+                                      :default default
+                                      :visible-ty visible-ty
+                                      :hidden-name hidden-name
+                                      :hidden-pattern hidden-pattern
+                                      :physical-ty physical-ty))))
 
-        ;; Unify the function's inferred type with one of the early returns.
-        (when *returns*
-          (handler-case
-              (setf subs (tc:unify subs (cdr (first *returns*)) body-ty))
-            (tc:coalton-internal-type-error ()
-              (tc-error "Return type mismatch"
-                        (tc-note (car (first *returns*))
-                                 "First return is of type '~S'"
-                                 (tc:apply-substitution subs (cdr (first *returns*))))
-                        (tc-note (parser:node-body-last-node (parser:node-abstraction-body node))
-                                 "Second return is of type '~S'"
-                                 (tc:apply-substitution subs body-ty))))))
+          (when expected-key-stage
+            (dolist (entry (tc:keyword-stage-ty-entries expected-key-stage))
+              (unless (gethash (tc:keyword-ty-entry-keyword entry) used-expected-keys)
+                (tc-error "Declared keyword type mismatch"
+                          (tc-note node
+                                   "declared keyword ~S is not present in function definition"
+                                   (tc:keyword-ty-entry-keyword entry))))))
 
-        (let ((ty (tc:make-function-type* arg-tys body-ty)))
-          (handler-case
-              (progn
-                (setf subs (tc:unify subs ty expected-type))
-                (let ((type (tc:apply-substitution subs ty)))
-                  (values
-                   type
-                   preds
-                   accessors
-                   (make-node-abstraction
-                    :type (tc:qualify nil type)
-                    :location (source:location node)
-                    :params params
-                    :body body-node)
-                   subs)))
-            (tc:coalton-internal-type-error ()
-              (standard-expression-type-mismatch-error node subs expected-type ty)))))))
+          (let* ((all-patterns
+                   (append positional-params
+                           (mapcar (lambda (data) (getf data :hidden-pattern))
+                                   keyword-data)))
+                 (all-arg-tys
+                   (append positional-arg-tys
+                           (mapcar (lambda (data) (getf data :physical-ty))
+                                   keyword-data)))
+                 (params
+                   (loop :for pattern :in all-patterns
+                         :for ty :in all-arg-tys
+                         :collect (multiple-value-bind (ty_ pattern subs_)
+                                      (infer-pattern-type pattern ty subs env)
+                                    (declare (ignore ty_))
+                                    (setf subs subs_)
+                                    pattern)))
+                 (body-with-keyword-binds
+                   (if keyword-data
+                       (parser:make-node-body
+                        :nodes
+                        (append
+                         (loop :for data :in keyword-data
+                               :for binder := (getf data :binder)
+                               :for default := (getf data :default)
+                               :for hidden-name := (getf data :hidden-name)
+                               :for param := (getf data :param)
+                               :for location := (source:location param)
+                               :collect
+                                 (parser:make-node-bind
+                                  :pattern (parser-pattern-var-from-symbol
+                                            (parser:node-variable-name binder)
+                                            (source:location binder))
+                                  :expr (if default
+                                            (make-keyword-default-parser-expression
+                                             hidden-name
+                                             default
+                                             location)
+                                            (parser-variable-from-symbol hidden-name location))
+                                  :location location))
+                         (parser:node-body-nodes (parser:node-abstraction-body node)))
+                        :last-node (parser:node-body-last-node (parser:node-abstraction-body node)))
+                       (parser:node-abstraction-body node))))
+
+            (multiple-value-bind (body-ty preds accessors body-node subs)
+                (infer-expression-type body-with-keyword-binds
+                                       (tc:make-variable)
+                                       subs
+                                       env)
+
+              ;; Ensure that all early returns unify
+              (loop :with returns := (reverse *returns*)
+                    :for (s1 . ty1) :in returns
+                    :for (s2 . ty2) :in (cdr returns)
+                    :do (handler-case
+                            (setf subs (tc:unify subs ty1 ty2))
+                          (tc:coalton-internal-type-error ()
+                            (tc-error "Return type mismatch"
+                                      (tc-location s1
+                                                   "First return is of type '~S'"
+                                                   (tc:apply-substitution subs ty1))
+                                      (tc-location s2
+                                                   "Second return is of type '~S'"
+                                                   (tc:apply-substitution subs ty2))))))
+
+              ;; Unify the function's inferred type with one of the early returns.
+              (when *returns*
+                (handler-case
+                    (setf subs (tc:unify subs (cdr (first *returns*)) body-ty))
+                  (tc:coalton-internal-type-error ()
+                    (tc-error "Return type mismatch"
+                              (tc-location (car (first *returns*))
+                                           "First return is of type '~S'"
+                                           (tc:apply-substitution subs (cdr (first *returns*))))
+                              (tc-note (parser:node-body-last-node body-with-keyword-binds)
+                                       "Second return is of type '~S'"
+                                       (tc:apply-substitution subs body-ty))))))
+
+              (let* ((keyword-entry-types
+                       (mapcar (lambda (data)
+                                 (tc:make-keyword-ty-entry
+                                  :keyword (getf data :key)
+                                  :type (getf data :visible-ty)))
+                               keyword-data))
+                     (ty (if keyword-entry-types
+                             (tc:make-function-type*
+                              positional-arg-tys
+                              (tc:make-keyword-stage-ty
+                               :entries keyword-entry-types
+                               :to body-ty))
+                             (tc:make-function-type* positional-arg-tys body-ty))))
+                (handler-case
+                    (progn
+                      (setf subs (tc:unify subs ty expected-type))
+                      (let ((type (tc:apply-substitution subs ty)))
+                        (values
+                         type
+                         preds
+                         accessors
+                         (make-node-abstraction
+                          :type (tc:qualify nil type)
+                          :location (source:location node)
+                          :params params
+                          :body body-node)
+                         subs)))
+                  (tc:coalton-internal-type-error ()
+                    (standard-expression-type-mismatch-error node subs expected-type ty))))))))))
 
   (:method ((node parser:node-let) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -1651,7 +2143,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
             (tc-error "Type mismatch"
                       (tc-note node "Expected type '~S' but do expression has type '~S'"
                                (tc:apply-substitution subs expected-type)
-                               (tc:apply-substitution subs ty)))))))))
+                               (tc:apply-substitution subs ty))))))))
+  )
 
 ;;;
 ;;; Pattern Type Inference
@@ -1872,6 +2365,24 @@ single initializer expression, and this function returns NIL."
         (when (null (parser:node-body-nodes body))
           (parser:node-body-last-node body))))))
 
+(defun binding-variable-collection-node (binding)
+  "Return an expression node suitable for free-variable collection on BINDING."
+  (declare (type (or parser:toplevel-define parser:node-let-binding parser:instance-method-definition) binding)
+           (values parser:node &optional))
+  (if (parser:binding-keyword-parameters binding)
+      (parser:make-node-abstraction
+       :params (parser:binding-parameters binding)
+       :keyword-params (parser:binding-keyword-parameters binding)
+       :body (parser:binding-value binding)
+       :location (source:location binding))
+      (etypecase binding
+        (parser:node-let-binding
+          (parser:node-let-binding-value binding))
+        ((or parser:toplevel-define parser:instance-method-definition)
+          (parser:make-node-progn
+           :body (parser:binding-value binding)
+           :location (source:location binding))))))
+
 (defun nonexpansive-expression-p (node env)
   "Return T when NODE is syntactically non-expansive.
 
@@ -1905,6 +2416,7 @@ matches the value-restriction safety argument."
                   (ctor (tc:lookup-constructor env name :no-error t))
                   (rands (parser:node-application-rands node)))
              (and ctor
+                  (null (parser:node-application-keyword-rands node))
                   (<= (length rands) (tc:constructor-entry-arity ctor))
                   (every (lambda (rand)
                            (nonexpansive-expression-p rand env))
@@ -2080,7 +2592,7 @@ printing an implicit weak variable notation."
 
          (impl-bindings-deps (loop :for name :in impl-bindings-names
                                    :for binding := (gethash name impl-bindings)
-                                   :for node := (parser:binding-value binding)
+                                   :for node := (binding-variable-collection-node binding)
 
                                    :for deps := (remove-duplicates
                                                  (intersection
@@ -2358,7 +2870,7 @@ printing an implicit weak variable notation."
   ;; If there is a single non-recursive binding then it is valid
   (when (and (= 1 (length bindings))
              (not (member (parser:node-variable-name (parser:binding-name (first bindings)))
-                          (parser:collect-variables (parser:binding-value (first bindings)))
+                          (parser:collect-variables (binding-variable-collection-node (first bindings)))
                           :key #'parser:node-variable-name
                           :test #'eq)))
     (return-from check-for-invalid-recursive-scc))
@@ -2390,6 +2902,8 @@ printing an implicit weak variable notation."
                            (ctor (tc:lookup-constructor env function-name :no-error t)))
 
                       (when ctor
+                        (unless (null (parser:node-application-keyword-rands node))
+                          (return-from valid-recursive-constructor-call-p nil))
                         ;; The constructor must be fully applied
                         (unless (= (length (parser:node-application-rands node)) (tc:constructor-entry-arity ctor))
                           (return-from valid-recursive-constructor-call-p nil))
@@ -2461,7 +2975,6 @@ printing an implicit weak variable notation."
          (binding-nodes
            (loop :for binding :in bindings
                  :for ty :in expr-tys
-                 :for node := (parser:binding-value binding)
                  :collect (multiple-value-bind (preds_ accessors_ node_ subs_)
                               (infer-binding-type binding ty subs env)
                             (setf subs subs_)
@@ -2663,119 +3176,55 @@ printing an implicit weak variable notation."
            (type tc:substitution-list subs)
            (values tc:ty-predicate-list accessor-list (or toplevel-define node-let-binding instance-method-definition) tc:substitution-list))
 
-  (check-duplicates
-   (parser:pattern-variables (parser:binding-parameters binding))
-   #'parser:pattern-var-name
-   (lambda (first second)
-     (tc-error "Duplicate parameters name"
-               (tc-note first "first parameter here")
-               (tc-note second "second parameter here"))))
+  (let ((params (parser:binding-parameters binding))
+        (keyword-params (parser:binding-keyword-parameters binding)))
 
-  (let* ((param-tys (loop :with args := (tc:function-type-arguments expected-type)
-                          :for pattern :in (parser:binding-parameters binding)
+    (ensure-no-duplicate-function-parameters params keyword-params)
 
-                          :if args
-                            :collect (car args)
-                            :and :do (setf args (cdr args))
-                          :else
-                            :collect (tc:make-variable)))
+    (if (or params keyword-params)
+        (multiple-value-bind (ty preds accessors value-node subs_)
+            (infer-expression-type
+             (parser:make-node-abstraction
+              :params params
+              :keyword-params keyword-params
+              :body (parser:binding-value binding)
+              :location (source:location binding))
+             expected-type
+             subs
+             env)
+          (declare (ignore ty))
+          (unless (typep value-node 'node-abstraction)
+            (util:coalton-bug "Expected abstraction node for binding ~S, got ~S"
+                              binding
+                              value-node))
+          (let* ((type (tc:qualified-ty-type (node-type value-node)))
+                 (name-node
+                   (make-node-variable
+                    :type (tc:qualify nil type)
+                    :location (source:location (parser:binding-name binding))
+                    :name (parser:node-variable-name (parser:binding-name binding))))
+                 (typed-binding
+                   (build-typed-binding
+                    binding
+                    name-node
+                    (node-abstraction-body value-node)
+                    (node-abstraction-params value-node))))
+            (values preds accessors typed-binding subs_)))
 
-         (params (loop :for pattern :in (parser:binding-parameters binding)
-                       :for ty :in param-tys
-                       :collect (multiple-value-bind (ty_ pattern subs_)
-                                    (infer-pattern-type pattern ty subs env)
-                                  (declare (ignore ty_))
-                                  (setf subs subs_)
-                                  pattern)))
-
-         (ret-ty (tc:make-variable))
-
-         (preds nil)
-         (accessors nil)
-
-         (value-node
-           (if params
-               ;; If the binding has parameters that setup the return state before inferring the binding's type
-               (let ((*return-status* :lambda)
-
-                     (*returns* nil))
-
-                 (multiple-value-bind (ty_ preds_ accessors_ value-node subs_)
-                     (infer-expression-type (parser:binding-value binding)
-                                            ret-ty
-                                            subs
-                                            env)
-                   (declare (ignore ty_))
-                   (setf subs subs_)
-                   (setf preds preds_)
-                   (setf accessors accessors_)
-
-                   ;; Ensure that all early returns unify
-                   (loop :with returns := (reverse *returns*)
-                         :for (s1 . ty1) :in returns
-                         :for (s2 . ty2) :in (cdr returns)
-                         :do (handler-case
-                                 (setf subs (tc:unify subs ty1 ty2))
-                               (tc:coalton-internal-type-error ()
-                                 (tc-error "Return type mismatch"
-                                           (tc-location s1
-                                                        "First return is of type '~S'"
-                                                        (tc:apply-substitution subs ty1))
-                                           (tc-location s2
-                                                        "Second return is of type '~S'"
-                                                        (tc:apply-substitution subs ty2))))))
-
-                   ;; Unify the function's inferred type with one of the early returns.
-                   (when *returns*
-                     (handler-case
-                         (setf subs (tc:unify subs (cdr (first *returns*)) ret-ty))
-                       (tc:coalton-internal-type-error ()
-                         (tc-error "Return type mismatch"
-                                   (tc-location (car (first *returns*))
-                                                "First return is of type '~S'"
-                                                (tc:apply-substitution subs (cdr (first *returns*))))
-                                   (tc-note (parser:binding-last-node binding)
-                                            "Second return is of type '~S'"
-                                            (tc:apply-substitution subs ret-ty))))))
-
-                   value-node))
-
-               ;; If the binding does not have parameters that just infer the binding's type
-               (multiple-value-bind (ty_ preds_ accessors_ value-node subs_)
-                   (infer-expression-type (parser:binding-value binding)
-                                          ret-ty
-                                          subs
-                                          env)
-                 (declare (ignore ty_))
-                 (setf subs subs_)
-                 (setf preds preds_)
-                 (setf accessors accessors_)
-                 value-node))))
-
-    (let ((ty (tc:make-function-type* param-tys ret-ty)))
-      (handler-case
-          (progn
-            (setf subs (tc:unify subs ty expected-type))
-
-            (let* ((type (tc:apply-substitution subs ty))
-
-                   (name-node
-                     (make-node-variable
-                      :type (tc:qualify nil type)
-                      :location (source:location (parser:binding-name binding))
-                      :name (parser:node-variable-name (parser:binding-name binding))))
-
-                   (typed-binding (build-typed-binding binding name-node value-node params)))
-              (values
-               preds
-               accessors
-               typed-binding
-               subs)))
-        (tc:coalton-internal-type-error ()
-          (tc-error "Type mismatch"
-                    (tc-note binding "Expected type '~S' but got type '~S'"
-                             (tc:apply-substitution subs expected-type)
-                             (tc:apply-substitution subs ty))))))))
+        (multiple-value-bind (value-ty preds accessors value-node subs_)
+            (infer-expression-type (parser:binding-value binding)
+                                   expected-type
+                                   subs
+                                   env)
+          (let* ((type (tc:apply-substitution subs_ value-ty))
+                 (name-node
+                   (make-node-variable
+                    :type (tc:qualify nil type)
+                    :location (source:location (parser:binding-name binding))
+                    :name (parser:node-variable-name (parser:binding-name binding))))
+                 (typed-binding
+                   (build-typed-binding binding name-node value-node nil)))
+            (values preds accessors typed-binding subs_))))))
 
 ;;;
 ;;; Helpers

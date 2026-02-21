@@ -506,3 +506,58 @@
    "(define f (fn (x) (fn (y) (+ x y))))"
 
    '("f" . "(Num :a => :a -> :a -> :a)")))
+
+(deftest test-keyword-arguments ()
+  ;; Defaulted keys expose their binder as the non-Optional type.
+  (check-coalton-types
+   "(declare f (Integer -> (&key :timeout Integer :tag (Optional String)) -> Integer))
+    (define (f x &key (timeout (the Integer 1000)) tag)
+      (match tag
+        ((Some _v) timeout)
+        ((None) x)))"
+
+   '("f" . "(Integer -> (&key :TIMEOUT Integer :TAG (Optional String)) -> Integer)"))
+
+  ;; Keys without defaults expose their binder as Optional.
+  (check-coalton-types
+   "(declare g (Integer -> (&key :tag (Optional String)) -> (Optional String)))
+    (define (g _x &key tag)
+      tag)"
+
+   '("g" . "(Integer -> (&key :TAG (Optional String)) -> (Optional String))"))
+
+  ;; Anonymous fn with keywords should infer keyword-stage types and
+  ;; remain usable through higher-order calls.
+  (check-coalton-types
+   "(declare apply-k ((Integer -> (&key :timeout Integer :tag (Optional String)) -> Integer) -> Integer))
+    (define (apply-k f)
+      (f 1 :timeout 5 :tag (Some \"prod\")))
+
+    (define mk
+      (fn (x &key (timeout (the Integer 1000)) tag)
+        (match tag
+          ((Some _) (+ x timeout))
+          ((None) x))))
+
+    (define kw-result (apply-k mk))"
+
+   '("mk" . "(Integer -> (&key :TIMEOUT Integer :TAG (Optional :a)) -> Integer)")
+   '("kw-result" . "Integer"))
+
+  ;; Positional currying still works in front of keyword stages.
+  (check-coalton-types
+   "(declare h (Integer -> Integer -> (&key :timeout Integer) -> Integer))
+    (define (h x y &key (timeout (the Integer 1)))
+      (+ (+ x y) timeout))
+    (define h1 (h 10))"
+
+   '("h" . "(Integer -> Integer -> (&key :TIMEOUT Integer) -> Integer)")
+   '("h1" . "(Integer -> (&key :TIMEOUT Integer) -> Integer)"))
+
+  ;; Keyword entries can carry type variables directly in declared types.
+  (check-coalton-types
+   "(declare poly-k (:t -> (&key :object :t) -> :t))
+    (define (poly-k x &key (object x))
+      object)"
+
+   '("poly-k" . "(:a -> (&key :OBJECT :a) -> :a)")))

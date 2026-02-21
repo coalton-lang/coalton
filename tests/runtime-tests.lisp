@@ -207,6 +207,89 @@
   (is (none? (iter:next! (gh-975))))
   (is (none? (iter:next! (gh-976)))))
 
+;; Keyword argument behavior and currying.
+(coalton-toplevel
+  (define (kw-opt-flag &key tag)
+    (match tag
+      ((Some _) 1)
+      ((None) 0)))
+
+  (define (kw-default-value x &key (timeout (+ x 1)))
+    timeout)
+
+  (define (kw-curry x y &key (bonus 0))
+    (+ (+ x y) bonus))
+
+  (define kw-curry10 (kw-curry 10)))
+
+(define-test test-keyword-args-runtime ()
+  (is (== (kw-opt-flag)
+          (kw-opt-flag :tag None)))
+  (is (== (kw-opt-flag :tag (Some "prod")) 1))
+  (is (== (kw-default-value 5) 6))
+  (is (== (kw-default-value 5 :timeout 12) 12))
+  (is (== (kw-curry10 5) 15))
+  (is (== (kw-curry10 5 :bonus 2) 17)))
+
+;; Higher-order functions with keyword calls should compile and run.
+(coalton-toplevel
+  (define (kw-hof-default &key (a "x"))
+    a)
+
+  (define (kw-hof-polymorphic f)
+    (f :a "z"))
+
+  (define kw-hof-value
+    (kw-hof-polymorphic kw-hof-default)))
+
+(define-test test-keyword-higher-order-polymorphic ()
+  (is (== kw-hof-value "z")))
+
+;; Regression: neighboring keyword definitions should not break higher-order
+;; keyword-call inference.
+(coalton-toplevel
+  (define (kw-hof-neighbor-1 _x &key (a "x"))
+    a)
+
+  (define (kw-hof-neighbor-2 _x &key (a "x") (b "y"))
+    (let ((_a a))
+      b))
+
+  (define (kw-hof-neighbor-call f)
+    (f :a "z"))
+
+  (define (kw-hof-neighbor-zero &key (a "x"))
+    a)
+
+  (define kw-hof-neighbor-value
+    (kw-hof-neighbor-call kw-hof-neighbor-zero)))
+
+(define-test test-keyword-higher-order-neighbor-definitions ()
+  (is (== kw-hof-neighbor-value "z")))
+
+;; Passing a function with a keyword superset should work when the caller
+;; only demands a subset of keys.
+(coalton-toplevel
+  (define (kw-adapt-p1 _x &key (a "a"))
+    a)
+
+  (define (kw-adapt-p2 _x &key (a "a") (b "b"))
+    (let ((_a a))
+      b))
+
+  (define (kw-adapt-c1 f)
+    (f "x" :a "aa"))
+
+  (define (kw-adapt-u1)
+    (kw-adapt-c1 kw-adapt-p1))
+
+  (define (kw-adapt-u2)
+    (kw-adapt-c1 kw-adapt-p2)))
+
+(define-test test-keyword-higher-order-superset-keys ()
+  (is (== (kw-adapt-u1) "aa"))
+  (is (== (kw-adapt-u2) "b")))
+
 (cl:defpackage #:tail-call-elimination-tests
   (:use #:coalton #:coalton-prelude)
   (:export

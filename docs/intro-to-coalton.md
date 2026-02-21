@@ -197,6 +197,47 @@ Here is an example of using a curried function to transform a list.
   (map (+ 2) nums)) ;; 4 5 6 7
 ```
 
+### Keyword Arguments
+
+Coalton also supports keyword argument stages on functions.
+
+```lisp
+(coalton-toplevel
+  (define (run-job x &key (timeout 1000) tag)
+    (match tag
+      ((Some _) (+ x timeout))
+      ((None) x))))
+```
+
+Rules:
+
+- Keyword arguments must come after positional arguments at call sites.
+- All keyword arguments are omittable.
+- A keyword with a default (for example, `(timeout 1000)`) has binder type `T`.
+- A keyword without a default (for example, `tag`) has binder type `(Optional T)`.
+- Omitting a no-default key is equivalent to passing `None`.
+
+Example calls:
+
+```lisp
+(coalton-toplevel
+  (define a (run-job 10))
+  (define b (run-job 10 :timeout 2000))
+  (define c (run-job 10 :tag (Some "prod"))))
+```
+
+Keyword information is also expressible in explicit types:
+
+```lisp
+(coalton-toplevel
+  (declare run-job
+    (Integer -> (&key :timeout Integer
+                      :tag (Optional String))
+             -> Integer)))
+```
+
+Currying still applies to positional arguments. Once a call reaches a keyword stage, that stage is consumed immediately (using provided keys and defaults/omissions). If you want to intentionally produce a keyword-taking closure after fixing positionals, use eta-expansion with `fn`.
+
 ### Pipelining Syntax and Function Composition
 
 There are convenient syntaxes for composing functions with the `pipe` and `nest` macros.

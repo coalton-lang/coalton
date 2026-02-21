@@ -77,6 +77,16 @@
      :alias (mapcar (lambda (alias) (apply-substitution subst-list alias)) (ty-alias type))
      :from (apply-substitution subst-list (tapp-from type))
      :to (apply-substitution subst-list (tapp-to type))))
+  (:method (subst-list (entry keyword-ty-entry))
+    (make-keyword-ty-entry
+     :keyword (keyword-ty-entry-keyword entry)
+     :type (apply-substitution subst-list (keyword-ty-entry-type entry))))
+  (:method (subst-list (type keyword-stage-ty))
+    (make-keyword-stage-ty
+     :alias (mapcar (lambda (alias) (apply-substitution subst-list alias)) (ty-alias type))
+     :entries (mapcar (lambda (entry) (apply-substitution subst-list entry))
+                      (keyword-stage-ty-entries type))
+     :to (apply-substitution subst-list (keyword-stage-ty-to type))))
   ;; Otherwise, do nothing
   (:method (subst-list (type ty))
     type)

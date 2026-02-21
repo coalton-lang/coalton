@@ -42,8 +42,15 @@
    #:node-abstraction                   ; STRUCT
    #:make-node-abstraction              ; CONSTRUCTOR
    #:node-abstraction-params            ; ACCESSOR
+   #:node-abstraction-keyword-params    ; ACCESSOR
    #:node-abstraction-body              ; ACCESSOR
    #:node-abstraction-p                 ; FUNCTION
+   #:keyword-param                      ; STRUCT
+   #:make-keyword-param                 ; CONSTRUCTOR
+   #:keyword-param-keyword              ; ACCESSOR
+   #:keyword-param-binder               ; ACCESSOR
+   #:keyword-param-default              ; ACCESSOR
+   #:keyword-param-list                 ; TYPE
    #:node-let-binding                   ; STRUCT
    #:make-node-let-binding              ; CONSTRUCTOR
    #:node-let-binding-name              ; ACCESSOR
@@ -113,6 +120,12 @@
    #:make-node-application              ; CONSTRUCTOR
    #:node-application-rator             ; ACCESSOR
    #:node-application-rands             ; ACCESSOR
+   #:node-application-keyword-rands     ; ACCESSOR
+   #:node-application-keyword-arg       ; STRUCT
+   #:make-node-application-keyword-arg  ; CONSTRUCTOR
+   #:node-application-keyword-arg-keyword ; ACCESSOR
+   #:node-application-keyword-arg-value ; ACCESSOR
+   #:node-application-keyword-arg-list  ; TYPE
    #:node-or                            ; STRUCT
    #:make-node-or                       ; CONSTRUCTOR
    #:node-or-nodes                      ; ACCESSOR
@@ -180,6 +193,7 @@
    #:parse-expression                   ; FUNCTION
    #:parse-expressions                  ; FUNCTION
    #:parse-body                         ; FUNCTION
+   #:parse-fn-argument-list             ; FUNCTION
    #:parse-variable                     ; FUNCTION
    ))
 
@@ -254,7 +268,10 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;
 ;;;; node-body := node-body-element* expression
 ;;;;
-;;;; node-abstraction := "(" "fn" "(" pattern* ")" node-body ")"
+;;;; node-keyword-param := identifier
+;;;;                    | "(" identifier expression ")"
+;;;;
+;;;; node-abstraction := "(" "fn" "(" pattern* ["&key" node-keyword-param*] ")" node-body ")"
 ;;;;
 ;;;; node-let-binding := "(" identifier expression ")"
 ;;;;
@@ -276,7 +293,9 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;
 ;;;; node-return := "(" "return" expression? ")"
 ;;;;
-;;;; node-application := "(" expression expression* ")"
+;;;; node-keyword-arg := keyword expression
+;;;;
+;;;; node-application := "(" expression expression* [node-keyword-arg*] ")"
 ;;;;
 ;;;; node-or := "(" "or" expression+ ")"
 ;;;;
@@ -382,8 +401,27 @@ Rebound to NIL parsing an anonymous FN.")
 (defstruct (node-abstraction
             (:include node)
             (:copier nil))
-  (params (util:required 'params) :type pattern-list :read-only t)
-  (body   (util:required 'body)   :type node-body    :read-only t))
+  (params         (util:required 'params) :type pattern-list     :read-only t)
+  (keyword-params nil                     :type keyword-param-list :read-only t)
+  (body           (util:required 'body)   :type node-body        :read-only t))
+
+(defstruct (keyword-param
+            (:copier nil))
+  (keyword  (util:required 'keyword)  :type keyword-src     :read-only t)
+  (binder   (util:required 'binder)   :type node-variable   :read-only t)
+  (default  nil                       :type (or null node)  :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self keyword-param))
+  (keyword-param-location self))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun keyword-param-list-p (x)
+    (and (alexandria:proper-list-p x)
+         (every #'keyword-param-p x))))
+
+(deftype keyword-param-list ()
+  '(satisfies keyword-param-list-p))
 
 (defstruct (node-let-binding
             (:copier nil))
@@ -474,8 +512,26 @@ Rebound to NIL parsing an anonymous FN.")
 (defstruct (node-application
             (:include node)
             (:copier nil))
-  (rator (util:required 'rator) :type node      :read-only t)
-  (rands (util:required 'rands) :type node-list :read-only t))
+  (rator         (util:required 'rator) :type node                            :read-only t)
+  (rands         (util:required 'rands) :type node-list                       :read-only t)
+  (keyword-rands nil                    :type node-application-keyword-arg-list :read-only t))
+
+(defstruct (node-application-keyword-arg
+            (:copier nil))
+  (keyword  (util:required 'keyword)  :type keyword-src     :read-only t)
+  (value    (util:required 'value)    :type node            :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self node-application-keyword-arg))
+  (node-application-keyword-arg-location self))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun node-application-keyword-arg-list-p (x)
+    (and (alexandria:proper-list-p x)
+         (every #'node-application-keyword-arg-p x))))
+
+(deftype node-application-keyword-arg-list ()
+  '(satisfies node-application-keyword-arg-list-p))
 
 (defstruct (node-or
             (:include node)
@@ -648,6 +704,158 @@ Rebound to NIL parsing an anonymous FN.")
   (expr     (util:required 'expr)     :type node                   :read-only t)
   (branches (util:required 'branches) :type node-catch-branch-list :read-only t))
 
+(defun keyword-name-from-binder (binder-name)
+  (declare (type identifier binder-name)
+           (values keyword &optional))
+  (nth-value 0
+             (intern (symbol-name binder-name) util:+keyword-package+)))
+
+(defun parse-keyword-param (form source)
+  (declare (type cst:cst form)
+           (values keyword-param &optional))
+  (labels ((make-keyword-and-binder (binder-form)
+             (unless (and (cst:atom binder-form)
+                          (identifierp (cst:raw binder-form)))
+               (parse-error "Malformed function keyword parameter"
+                            (note source binder-form "expected identifier")))
+             (let* ((binder (parse-variable binder-form source))
+                    (keyword-name (keyword-name-from-binder (node-variable-name binder))))
+               (values
+                (make-keyword-src
+                 :name keyword-name
+                 :location (form-location source binder-form))
+                binder))))
+    (cond
+      ((cst:atom form)
+       (multiple-value-bind (keyword binder)
+           (make-keyword-and-binder form)
+         (make-keyword-param
+          :keyword keyword
+          :binder binder
+          :default nil
+          :location (form-location source form))))
+      (t
+       (unless (cst:proper-list-p form)
+         (parse-error "Malformed function keyword parameter"
+                      (note source form "unexpected dotted list")))
+       (unless (cst:consp (cst:rest form))
+         (parse-error "Malformed function keyword parameter"
+                      (note source form "expected default value")))
+       (when (cst:consp (cst:rest (cst:rest form)))
+         (parse-error "Malformed function keyword parameter"
+                      (note source (cst:first (cst:rest (cst:rest form)))
+                            "unexpected trailing form")))
+       (multiple-value-bind (keyword binder)
+           (make-keyword-and-binder (cst:first form))
+         (make-keyword-param
+          :keyword keyword
+          :binder binder
+          :default (parse-expression (cst:second form) source)
+          :location (form-location source form)))))))
+
+(defun check-duplicate-keyword-parameters (keyword-params source)
+  (declare (type keyword-param-list keyword-params))
+  (let ((seen (make-hash-table :test #'eq)))
+    (dolist (param keyword-params)
+      (let* ((keyword (keyword-param-keyword param))
+             (name (keyword-src-name keyword))
+             (prev (gethash name seen)))
+        (when prev
+          (parse-error "Duplicate keyword parameter"
+                       (secondary-note source (source:location-span (source:location prev))
+                                       "first definition here")
+                       (note source (source:location-span (source:location keyword))
+                             "second definition here")))
+        (setf (gethash name seen) keyword)))))
+
+(defun keyword-marker-p (form)
+  (and (cst:atom form)
+       (symbolp (cst:raw form))
+       (string= (symbol-name (cst:raw form)) "&KEY")))
+
+(defun parse-fn-argument-list (form source)
+  (declare (type cst:cst form)
+           (values pattern-list keyword-param-list))
+  (let ((arg-forms form)
+        (params nil)
+        (keyword-params nil)
+        (in-keyword-section nil))
+    (loop :while (cst:consp arg-forms)
+          :for current := (cst:first arg-forms)
+          :do
+             (cond
+               ((keyword-marker-p current)
+                (when in-keyword-section
+                  (parse-error "Malformed function"
+                               (note source current "invalid `&key` placement")))
+                (setf in-keyword-section t))
+               (in-keyword-section
+                (push (parse-keyword-param current source) keyword-params))
+               (t
+                (push (parse-pattern current source) params)))
+             (setf arg-forms (cst:rest arg-forms)))
+    (unless (cst:null arg-forms)
+      (parse-error "Malformed function"
+                   (note source arg-forms "unexpected dotted list")))
+    (setf params (nreverse params)
+          keyword-params (nreverse keyword-params))
+    (check-duplicate-keyword-parameters keyword-params source)
+    (values params keyword-params)))
+
+(defun check-duplicate-call-keywords (keyword-rands source)
+  (declare (type node-application-keyword-arg-list keyword-rands))
+  (let ((seen (make-hash-table :test #'eq)))
+    (dolist (arg keyword-rands)
+      (let* ((keyword (node-application-keyword-arg-keyword arg))
+             (name (keyword-src-name keyword))
+             (prev (gethash name seen)))
+        (when prev
+          (parse-error "Duplicate keyword argument"
+                       (secondary-note source (source:location-span (source:location prev))
+                                       "first argument here")
+                       (note source (source:location-span (source:location keyword))
+                             "second argument here")))
+        (setf (gethash name seen) keyword)))))
+
+(defun parse-application-arguments (forms source)
+  (declare (type cst:cst forms)
+           (values node-list node-application-keyword-arg-list))
+  (let ((rands nil)
+        (keyword-rands nil)
+        (in-keyword-section nil))
+    (loop :while (cst:consp forms)
+          :for current := (cst:first forms)
+          :do
+             (cond
+               ((and (cst:atom current)
+                     (keywordp (cst:raw current)))
+                (unless (cst:consp (cst:rest forms))
+                  (parse-error "Malformed function application"
+                               (note-end source current "keyword argument value is missing")))
+                (setf in-keyword-section t)
+                (push
+                 (make-node-application-keyword-arg
+                  :keyword (make-keyword-src
+                            :name (cst:raw current)
+                            :location (form-location source current))
+                  :value (parse-expression (cst:second forms) source)
+                  :location (form-location source current))
+                 keyword-rands)
+                (setf forms (cst:rest (cst:rest forms))))
+               (in-keyword-section
+                (parse-error "Malformed function application"
+                             (note source current "positional argument after keyword argument")))
+               (t
+                (push (parse-expression current source) rands)
+                (setf forms (cst:rest forms)))))
+    (unless (cst:null forms)
+      (parse-error "Malformed function application"
+                   (note source forms "unexpected dotted list")))
+    (setf rands (nreverse rands)
+          keyword-rands (nreverse keyword-rands))
+    (check-duplicate-call-keywords keyword-rands source)
+    (values rands keyword-rands)))
+
 (defun parse-expression (form source)
   (declare (type cst:cst form)
            (values node &optional))
@@ -686,6 +894,7 @@ Rebound to NIL parsing an anonymous FN.")
     ((and (cst:atom (cst:first form))
           (eq 'coalton:fn (cst:raw (cst:first form))))
      (let ((params)
+           (keyword-params)
            (body))
 
        ;; (fn)
@@ -713,13 +922,12 @@ Rebound to NIL parsing an anonymous FN.")
        ;; Bind *LOOP-LABEL-CONTEXT* to NIL to disallow BREAKing from
        ;; or CONTINUING with loops that enclose the FN form.
        (let ((*loop-label-context* nil))
-         (setf params
-               (loop :for vars := (cst:second form) :then (cst:rest vars)
-                     :while (cst:consp vars)
-                     :collect (parse-pattern (cst:first vars) source)))
+         (multiple-value-setq (params keyword-params)
+           (parse-fn-argument-list (cst:second form) source))
          (setf body (parse-body (cst:nthrest 2 form) form source))
          (make-node-abstraction
           :params params
+          :keyword-params keyword-params
           :body body
           :location (form-location source form)))))
 
@@ -1340,13 +1548,13 @@ Rebound to NIL parsing an anonymous FN.")
     ;;
 
     (t
-     (make-node-application
-      :rator (parse-expression (cst:first form) source)
-      :rands (loop :for rands := (cst:rest form) :then (cst:rest rands)
-                   :while (cst:consp rands)
-                   :for rand := (cst:first rands)
-                   :collect (parse-expression rand source))
-      :location (form-location source form)))))
+     (multiple-value-bind (rands keyword-rands)
+         (parse-application-arguments (cst:rest form) source)
+       (make-node-application
+        :rator (parse-expression (cst:first form) source)
+        :rands rands
+        :keyword-rands keyword-rands
+        :location (form-location source form))))))
 
 (defun parse-expressions (forms source)
   (declare (type list forms)

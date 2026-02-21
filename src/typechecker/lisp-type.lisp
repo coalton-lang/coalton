@@ -129,6 +129,11 @@ USE-FUNCTION-ENTRIES specifies whether to emit FUNCTION-ENTRY for functions, emi
        ;; recurse down to the base tycon.
        (lisp-type (tapp-from ty) env))))
 
+  (:method ((ty keyword-stage-ty) env)
+    (declare (ignore ty env))
+    ;; Keyword stages are function stages and lower to positional calls.
+    'function-entry)
+
   (:method ((ty ty) env)
     (declare (ignore env))
     (util:coalton-bug "Unable to produce lisp type for ~S" ty))

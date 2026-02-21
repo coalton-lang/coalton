@@ -27,6 +27,15 @@
    #:tapp-p                             ; FUNCTION
    #:tapp-from                          ; ACCESSOR
    #:tapp-to                            ; ACCESSOR
+   #:keyword-ty-entry                   ; STRUCT
+   #:make-keyword-ty-entry              ; CONSTRUCTOR
+   #:keyword-ty-entry-keyword           ; ACCESSOR
+   #:keyword-ty-entry-type              ; ACCESSOR
+   #:keyword-ty-entry-list              ; TYPE
+   #:keyword-stage-ty                   ; STRUCT
+   #:make-keyword-stage-ty              ; CONSTRUCTOR
+   #:keyword-stage-ty-entries           ; ACCESSOR
+   #:keyword-stage-ty-to                ; ACCESSOR
    #:ty-predicate                       ; STRUCT
    #:make-ty-predicate                  ; CONSTRUCTOR
    #:ty-predicate-class                 ; ACCESSOR
@@ -56,8 +65,14 @@
 ;;;; type-list := ty ty+
 ;;;;            | ty+ "->" type-list
 ;;;;
+;;;; keyword-ty-entry := keyword ty
+;;;;                  | "(" keyword ty ")"
+;;;;
+;;;; keyword-stage-ty := "(" "&key" keyword-ty-entry+ ")"
+;;;;
 ;;;; ty := tyvar
 ;;;;     | tycon
+;;;;     | keyword-stage-ty
 ;;;;     | "(" type-list ")"
 ;;;;
 ;;;; ty-predicate := class ty+
@@ -108,6 +123,34 @@
   (from (util:required 'from) :type ty :read-only t)
   ;; The type argument
   (to   (util:required 'to)   :type ty :read-only t))
+
+(defstruct (keyword-ty-entry
+            (:copier nil))
+  "A single keyword/type pair inside an `&key` type stage."
+  (keyword  (util:required 'keyword)  :type keyword-src     :read-only t)
+  (type     (util:required 'type)     :type ty              :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self keyword-ty-entry))
+  (keyword-ty-entry-location self))
+
+(defun keyword-ty-entry-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'keyword-ty-entry-p x)))
+
+(deftype keyword-ty-entry-list ()
+  '(satisfies keyword-ty-entry-list-p))
+
+(defstruct (keyword-stage-ty (:include ty)
+                             (:copier nil))
+  "A keyword argument stage: `(&key ...)` with an optional continuation type."
+  (entries (util:required 'entries) :type keyword-ty-entry-list :read-only t)
+  (to      nil                      :type (or null ty)           :read-only t))
+
+(defun keyword-marker-p (form)
+  (and (cst:atom form)
+       (symbolp (cst:raw form))
+       (string= (symbol-name (cst:raw form)) "&KEY")))
 
 (defstruct (ty-predicate
             (:copier nil))
@@ -286,6 +329,83 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
      (parse-error "Malformed type"
                   (note source form "unexpected nullary type")))
 
+    ;; (&key ...)
+    ((keyword-marker-p (cst:first form))
+     (let ((entries nil)
+           (seen (make-hash-table :test #'eq))
+           (entries-forms (cst:rest form)))
+       (unless (cst:consp (cst:rest form))
+         (parse-error "Malformed keyword type"
+                      (note source form "expected keyword entries")))
+
+       (labels ((check-and-record-keyword-name (keyword-form)
+                  (let* ((keyword-name (cst:raw keyword-form))
+                         (prev (gethash keyword-name seen)))
+                    (when prev
+                      (parse-error "Duplicate keyword type entry"
+                                   (secondary-note source prev "first entry here")
+                                   (note source keyword-form "second entry here")))
+                    (setf (gethash keyword-name seen) keyword-form)
+                    keyword-name))
+                (push-entry (keyword-form type-form location)
+                  (let ((keyword-name (check-and-record-keyword-name keyword-form)))
+                    (push
+                     (make-keyword-ty-entry
+                      :keyword (make-keyword-src
+                                :name keyword-name
+                                :location (form-location source keyword-form))
+                      :type (parse-type type-form source)
+                      :location location)
+                     entries))))
+         (loop :while (cst:consp entries-forms)
+               :for entry := (cst:first entries-forms)
+               :do
+                  (cond
+                    ;; Flat syntax: (&key :timeout Integer ...)
+                    ((and (cst:atom entry)
+                          (keywordp (cst:raw entry)))
+                     (unless (cst:consp (cst:rest entries-forms))
+                       (parse-error "Malformed keyword type entry"
+                                    (note source entry "missing type after keyword")))
+                     (let* ((keyword-form entry)
+                            (type-form (cst:second entries-forms))
+                            (entry-location
+                              (source:make-location source
+                                                    (cons (car (cst:source keyword-form))
+                                                          (cdr (cst:source type-form))))))
+                       (push-entry keyword-form type-form entry-location)
+                       (setf entries-forms (cst:rest (cst:rest entries-forms)))))
+
+                    ;; Legacy syntax: (&key (:timeout Integer) ...)
+                    (t
+                     (unless (and (cst:consp entry)
+                                  (cst:proper-list-p entry))
+                       (parse-error "Malformed keyword type entry"
+                                    (note source entry "expected `:keyword Type` or `(:keyword Type)`")))
+                     (unless (cst:consp (cst:rest entry))
+                       (parse-error "Malformed keyword type entry"
+                                    (note source entry "expected key and type")))
+                     (when (cst:consp (cst:rest (cst:rest entry)))
+                       (parse-error "Malformed keyword type entry"
+                                    (note source (cst:first (cst:rest (cst:rest entry)))
+                                          "unexpected trailing form")))
+                     (unless (and (cst:atom (cst:first entry))
+                                  (keywordp (cst:raw (cst:first entry))))
+                       (parse-error "Malformed keyword type entry"
+                                    (note source (cst:first entry) "expected keyword")))
+                     (push-entry (cst:first entry)
+                                 (cst:second entry)
+                                 (form-location source entry))
+                     (setf entries-forms (cst:rest entries-forms))))))
+
+       (unless (cst:null entries-forms)
+         (parse-error "Malformed keyword type"
+                      (note source entries-forms "unexpected dotted list")))
+
+       (make-keyword-stage-ty
+        :entries (reverse entries)
+        :location (form-location source form))))
+
     (t
      (parse-type-list (cst:listify form) (form-location source form)))))
 
@@ -297,7 +417,13 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
   (assert forms)
 
   (if (= 1 (length forms))
-      (parse-type (first forms) (source:location-source location))
+      (let ((ty (parse-type (first forms) (source:location-source location))))
+        (when (typep ty 'keyword-stage-ty)
+          (parse-error "Malformed function type"
+                       (note (source:location-source location)
+                             (first forms)
+                             "keyword stage must be followed by `->` and a return type")))
+        ty)
       (multiple-value-bind (left right)
           (util:take-until (lambda (cst)
                              (and (cst:atom cst)
@@ -318,29 +444,40 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
                               "invalid function syntax")))
 
           (t
-           (let ((ty (parse-type (car left) (source:location-source location))))
+           (let ((left-ty (parse-type (car left) (source:location-source location))))
              (loop :for form_ :in (cdr left)
                    :for ty_ := (parse-type form_ (source:location-source location))
-                   :do (setf ty (make-tapp :from ty
-                                           :to ty_
-                                           :location location)))
+                   :do
+                      (when (typep left-ty 'keyword-stage-ty)
+                        (parse-error "Malformed function type"
+                                     (note (source:location-source location) form_
+                                           "keyword stage cannot be used in type application")))
+                      (setf left-ty (make-tapp :from left-ty
+                                               :to ty_
+                                               :location location)))
 
              (if (null right)
-                 ty
-
-                 (make-tapp
-                  :from (make-tapp
-                         :from (make-tycon
-                                :name 'coalton:Arrow
-                                :location (form-location (source:location-source location)
-                                                                (first right)))
-                         :to ty
-                         :location (source:make-location (source:location-source location)
-                                                         (cons (car (source:location-span (ty-location ty)))
-                                                               (cdr (cst:source (first right))))))
-                  :to (parse-type-list
-                       (cdr right)
-                       (source:make-location (source:location-source location)
-                                             (cons (car (cst:source (first right)))
-                                                   (cdr (cst:source (car (last right)))))))
-                  :location location))))))))
+                 left-ty
+                 (let ((to-ty
+                         (parse-type-list
+                          (cdr right)
+                          (source:make-location (source:location-source location)
+                                                (cons (car (cst:source (first right)))
+                                                      (cdr (cst:source (car (last right)))))))))
+                   (if (typep left-ty 'keyword-stage-ty)
+                       (make-keyword-stage-ty
+                        :entries (keyword-stage-ty-entries left-ty)
+                        :to to-ty
+                        :location (source:location left-ty))
+                       (make-tapp
+                        :from (make-tapp
+                               :from (make-tycon
+                                      :name 'coalton:Arrow
+                                      :location (form-location (source:location-source location)
+                                                               (first right)))
+                               :to left-ty
+                               :location (source:make-location (source:location-source location)
+                                                               (cons (car (source:location-span (ty-location left-ty)))
+                                                                     (cdr (cst:source (first right))))))
+                        :to to-ty
+                        :location location))))))))))

@@ -237,3 +237,60 @@ error: Malformed type
 help: remove `=>`
  3 | (declare f T)
    |            -
+
+================================================================================
+Parse keyword-stage function type
+================================================================================
+
+(package test-package)
+
+(declare f (Integer -> (&key :timeout Integer :tag (Optional String)) -> Integer))
+(define (f x &key (timeout 1000) tag)
+  (match tag
+    ((Some _) timeout)
+    ((None) x)))
+
+================================================================================
+Parse keyword-stage function type with type variable
+================================================================================
+
+(package test-package)
+
+(declare f (:t -> (&key :object :t) -> :t))
+(define (f x &key (object x))
+  object)
+
+================================================================================
+Duplicate keyword type entry
+================================================================================
+
+(package test-package)
+
+(declare f (Integer -> (&key (:tag (Optional String)) (:tag Integer)) -> Integer))
+(define (f x &key tag)
+  x)
+
+--------------------------------------------------------------------------------
+
+error: Duplicate keyword type entry
+  --> test:3:30
+   |
+ 3 |  (declare f (Integer -> (&key (:tag (Optional String)) (:tag Integer)) -> Integer))
+   |                                ---- first entry here
+   |                                                         ^^^^ second entry here
+
+================================================================================
+Malformed keyword type entry
+================================================================================
+
+(package test-package)
+
+(declare f (Integer -> (&key (:tag)) -> Integer))
+
+--------------------------------------------------------------------------------
+
+error: Malformed keyword type entry
+  --> test:3:29
+   |
+ 3 |  (declare f (Integer -> (&key (:tag)) -> Integer))
+   |                               ^^^^^^ expected key and type
