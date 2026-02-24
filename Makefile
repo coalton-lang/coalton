@@ -49,7 +49,7 @@ CCL_COMP=ccl --no-init --batch --quiet
 ABCL_COMP=abcl --noinit --nosystem --batch
 ECL_COMP=ecl --norc -q
 ALLEGRO_COMP=alisp --batch
-CLASP_COMP=clasp --non-interactive
+CLASP_COMP=clasp --non-interactive --norc
 # # do read ql's setup
 # SBCL_COMP=$(SBCL)
 
@@ -100,16 +100,20 @@ runOnFileDefault = $(1) --load $(2)
 runOnExprDefault = $(1) --eval $(2)
 ## How to eval and load using COMP - minimal default:
 runOnExprAndFileDefault = $(1) --eval $(2) --load $(3)
+## How to load and eval using COMP - minimal default:
+runOnFileAndExprDefault = $(1) --load $(2) --eval $(3)
 LISPEXEC=$(LISP)
   runOnFile = cat /dev/null | $(call runOnFileDefault,$(1),$(2))
   runOnExpr = cat /dev/null | $(call runOnExprDefault,$(1),$(2))
   runOnExprAndFile = cat /dev/null | $(call runOnExprAndFileDefault,$(1),$(2),$(3))
+  runOnFileAndExpr = cat /dev/null | $(call runOnFileAndExprDefault,$(1),$(2),$(3))
 
 ifeq ($(LISP),sbcl)
   COMP=$(SBCLCLEAN)
   runOnFile = $(call runOnFileDefault,$(1),$(2))
   runOnExpr = $(call runOnExprDefault,$(1),$(2))
   runOnExprAndFile = $(call runOnExprAndFileDefault,$(1),$(2),$(3))
+  runOnFileAndExpr = $(call runOnFileAndExprDefault,$(1),$(2),$(3))
 endif
 ifeq ($(LISP),alisp)
   COMP=$(ALLEGRO)
@@ -130,6 +134,8 @@ ifeq ($(LISP),ecl)
 endif
 ifeq ($(LISP),clasp)
   COMP=$(CLASP)
+  runOnExprAndFile = $(call runOnExprAndFileDefault,$(1),$(2),$(3))
+  runOnFileAndExpr = $(call runOnFileAndExprDefault,$(1),$(2),$(3))
 endif
 ifeq ($(COMP),none)
   $(warning Lisp choice "$(LISP)" is unknown. Supported choices are:)
@@ -175,7 +181,7 @@ gitPullOrClone = d=`dirname $(1)` ; if [ -f "$(1)" ] ; then $(call gitPull,$${d}
 clone-repos: setup-coalton-sources $(EXTRA_LOCAL_PROJECTS)/fset/fset.asd $(EXTRA_LOCAL_PROJECTS)/misc-extensions/misc-extensions.asd $(EXTRA_LOCAL_PROJECTS)/named-readtables/named-readtables.asd
 
 setup-coalton-sources:
-	cwdir=`pwd` ; cd $(EXTRA_LOCAL_PROJECTS) ; ln -s $${cwdir} coalton
+	cwdir=`pwd` ; cd $(EXTRA_LOCAL_PROJECTS) ; rm -f coalton* ; cp -rp $${cwdir} coalton/
 
 $(EXTRA_LOCAL_PROJECTS)/fset/fset.asd:	update-repos~
 	$(call gitPullOrClone,$(EXTRA_LOCAL_PROJECTS)/fset/fset.asd,$(FSET_REPO))
@@ -199,11 +205,9 @@ $(QUICKLISP_HOME)/setup.lisp:
 
 get-ql-libs:
 	@echo Retrieving further required external libraries for coalton and its tests
-	$(SBCL_COMP) --load "$(QUICKLISP_HOME)/setup.lisp" \
-			--eval "(ql:quickload :coalton)" \
-			--eval "(ql:quickload :coalton/doc :silent t)" \
-			--eval "(ql:quickload :coalton/benchmarks :silent t)" \
-			--eval "(ql:quickload :coalton/tests)"
+	$(call runOnFileAndExpr,$(COMP),"$(QUICKLISP_HOME)/setup.lisp","(ql:quickload :coalton)")
+	$(call runOnFileAndExpr,$(COMP),"$(QUICKLISP_HOME)/setup.lisp","(ql:quickload :coalton/doc :silent t)")
+	$(call runOnFileAndExpr,$(COMP),"$(QUICKLISP_HOME)/setup.lisp","(ql:quickload :coalton/tests)")
 
 test-external-libraries:	install-libraries
 	for f in compat/test-external-libraries/*.lisp ; do \
