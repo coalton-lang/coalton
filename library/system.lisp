@@ -276,4 +276,7 @@ Garbage collection will be performed before profiling is performed."
                (Some (uiop:argv0))
                None)))))
 
+;; cannot lock just this package in clasp, since I also need to change the
+;; respective unlock!
+#-clasp
 (compat:try-lock-package "COALTON/SYSTEM")
