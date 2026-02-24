@@ -181,7 +181,7 @@ gitPullOrClone = d=`dirname $(1)` ; if [ -f "$(1)" ] ; then $(call gitPull,$${d}
 clone-repos: setup-coalton-sources $(EXTRA_LOCAL_PROJECTS)/fset/fset.asd $(EXTRA_LOCAL_PROJECTS)/misc-extensions/misc-extensions.asd $(EXTRA_LOCAL_PROJECTS)/named-readtables/named-readtables.asd
 
 setup-coalton-sources:
-	cwdir=`pwd` ; cd $(EXTRA_LOCAL_PROJECTS) ; rm -f coalton* ; cp -rp $${cwdir} coalton/
+	cwdir=`pwd` ; cd $(EXTRA_LOCAL_PROJECTS) ; rm -rf coalton* ; cp -rp $${cwdir} coalton/
 
 $(EXTRA_LOCAL_PROJECTS)/fset/fset.asd:	update-repos~
 	$(call gitPullOrClone,$(EXTRA_LOCAL_PROJECTS)/fset/fset.asd,$(FSET_REPO))
@@ -205,9 +205,7 @@ $(QUICKLISP_HOME)/setup.lisp:
 
 get-ql-libs:
 	@echo Retrieving further required external libraries for coalton and its tests
-	$(call runOnFileAndExpr,$(COMP),"$(QUICKLISP_HOME)/setup.lisp","(ql:quickload :coalton)")
-	$(call runOnFileAndExpr,$(COMP),"$(QUICKLISP_HOME)/setup.lisp","(ql:quickload :coalton/doc :silent t)")
-	$(call runOnFileAndExpr,$(COMP),"$(QUICKLISP_HOME)/setup.lisp","(ql:quickload :coalton/tests)")
+	$(call runOnFileAndExpr,$(COMP),"$(QUICKLISP_SETUP)","(progn (ql:quickload :coalton) (ql:quickload :coalton/tests))")
 
 test-external-libraries:	install-libraries
 	for f in compat/test-external-libraries/*.lisp ; do \
