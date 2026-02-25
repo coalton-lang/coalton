@@ -18,6 +18,7 @@ COALTON_HOME ?= $(shell test -f ./coalton.asd && pwd || echo $(QUICKLISP_HOME)/l
 TEMP ?= zz-temp
 
 ## quick - just check these values
+# SEQp = t
 # CENV ="release"
 # CENV ="development"
 # CSAFETY = "3"
@@ -165,7 +166,21 @@ endif
 
 all:	install-libraries testall
 
-install-libraries:	get-ql clone-repos setup-ql get-ql-libs
+install-libraries: install-libraries~
+
+install-libraries~:
+	@LISP=$(LISP) \
+	  BLDDIR="$(BLDDIR)" \
+	  QUICKLISP_HOME="$(QUICKLISP_HOME)" \
+	  SBCL_BIN="$(SBCL_BIN)" \
+	  COALTON_HOME="$(COALTON_HOME)" \
+	  TEMP="$(TEMP)" \
+	  CENV="$(CENV)" \
+	  CSAFETY="$(CSAFETY)" \
+	  CDISABLE_SPECIALIZATION="$(CDISABLE_SPECIALIZATION)" \
+	  CHEURISTIC_INLINING="$(CHEURISTIC_INLINING)" \
+	    make get-ql clone-repos setup-ql get-ql-libs
+	@touch install-libraries~
 
 get-ql: $(QUICKLISP_HOME)/quicklisp.lisp
 
