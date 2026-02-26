@@ -1,4 +1,5 @@
 LISP ?= sbcl
+TIME ?= /bin/time
 ## run tests sequentially (t) or concurrently (nil) ?
 SEQp ?= nil
   ORIGINALp=$(shell test -f ./compat/compatibility-layer.lisp && echo nil || echo t)
@@ -19,23 +20,23 @@ TEMP ?= zz-temp
 
 ## quick - just check these values
 # SEQp = t
-# CENV ="release"
+CENV ="release"
 # CENV ="development"
-# CSAFETY = "3"
-# CDISABLE_SPECIALIZATION ="0"
-# CHEURISTIC_INLINING ="1"
+CSAFETY = "3"
+CDISABLE_SPECIALIZATION ="0"
+# CHEURISTIC_INLINING ="0"
 
 LISP_CACHE = $(BLDDIR)
 EXTRA_LOCAL_PROJECTS=$(QUICKLISP_HOME)/local-projects
 QUICKLISP_SETUP=$(QUICKLISP_HOME)/setup.lisp
 VERSION=$(shell cat VERSION.txt | tr -d \" )
 ### ****** EXTERNAL LIBRARIES NEEDED ******
-## Latest official FSet version is broken on abcl (and doesn't pass the
-## self-test in ecl).
-# FSET_REPO=https://github.com/slburson/fset.git
+## Official fset repo loads fine on sbcl, ccl, abcl, ecl, clasp (not alisp!)
+## It doesn't pass (asdf:test-system :fset) on any of them.
+FSET_REPO=https://github.com/slburson/fset.git
 ## This fork of a previous FSet version seems to work on abcl (though it doesn't
-## pass FSet's self-test on either of abcl or ecl).
-FSET_REPO=https://github.com/c-kloukinas/fset.git
+## pass FSet's self-test on either abcl or ecl).
+# FSET_REPO=https://github.com/c-kloukinas/fset.git
 MISC_EXTENSIONS_REPO=https://gitlab.common-lisp.net/misc-extensions/misc-extensions.git
 NAMED_READTABLES_REPO=https://github.com/melisgl/named-readtables.git
 
@@ -96,13 +97,13 @@ CLASP=$(shell which -s clasp && echo "$(CLASP_COMP)" || echo "echo $(CLASP_COMP)
 ## COMP is the actual compiler to be used - executable with specific arguments
 COMP=none
 ## How to load a file using COMP - minimal default:
-runOnFileDefault = $(1) --load $(2)
+runOnFileDefault = $(TIME) $(1) --load $(2)
 ## How to eval an expression using COMP - minimal default:
-runOnExprDefault = $(1) --eval $(2)
+runOnExprDefault = $(TIME) $(1) --eval $(2)
 ## How to eval and load using COMP - minimal default:
-runOnExprAndFileDefault = $(1) --eval $(2) --load $(3)
+runOnExprAndFileDefault = $(TIME) $(1) --eval $(2) --load $(3)
 ## How to load and eval using COMP - minimal default:
-runOnFileAndExprDefault = $(1) --load $(2) --eval $(3)
+runOnFileAndExprDefault = $(TIME) $(1) --load $(2) --eval $(3)
 LISPEXEC=$(LISP)
   runOnFile = cat /dev/null | $(call runOnFileDefault,$(1),$(2))
   runOnExpr = cat /dev/null | $(call runOnExprDefault,$(1),$(2))
@@ -118,9 +119,9 @@ ifeq ($(LISP),sbcl)
 endif
 ifeq ($(LISP),alisp)
   COMP=$(ALLEGRO)
-  runOnFile = cat $(2) | $(1)
-  runOnExpr = echo $(2) | $(1)
-  runOnExprAndFile = (echo $(2) ; cat $(3)) | $(1) 
+  runOnFile = cat $(2) | $(TIME) $(1)
+  runOnExpr = echo $(2) | $(TIME) $(1)
+  runOnExprAndFile = (echo $(2) ; cat $(3)) | $(TIME) $(1) 
   LISPEXEC=alisp
 endif
 ifeq ($(LISP),ccl)
@@ -170,6 +171,7 @@ install-libraries: install-libraries~
 
 install-libraries~:
 	@LISP=$(LISP) \
+	  TIME=$(TIME) \
 	  BLDDIR="$(BLDDIR)" \
 	  QUICKLISP_HOME="$(QUICKLISP_HOME)" \
 	  SBCL_BIN="$(SBCL_BIN)" \
@@ -242,6 +244,7 @@ show-dir:
 ## done).
 test:
 	LISP=$(LISP) \
+	  TIME=$(TIME) \
 	BLDDIR=$(BLDDIR) \
 	QUICKLISP_HOME=$(QUICKLISP_HOME) \
 	SBCL_BIN=$(SBCL_BIN) \
@@ -254,7 +257,7 @@ test:
 	make testall
 
 clean-blddir:
-	rm -rf $(BLDDIR)/*$(LISP)* $(TEMP)/z-out-*$(LISP)*
+	rm -rf $(BLDDIR)/*$(LISP)*
 
 testall:	clean-blddir
 	test -f $(QUICKLISP_HOME)/setup.lisp \
@@ -272,6 +275,7 @@ testall:	clean-blddir
 	  test -d $(BLDDIR)/$${caseNow}* \
 	  && echo Which already exists \
 	  || echo Which does not exist already ; \
+	  echo '' > $(TEMP)/z-out-$${caseNow}.txt ; \
 	  $(call runOnFileWithOutput,$(COMP),compat/build-test-configuration.lisp,$(TEMP)/z-out-$${caseNow}.txt) \
 	; done \
 	; done \
@@ -288,6 +292,7 @@ lisps-running:
 ifeq ($(HAS_SAFETY),yes)
 test-safe:
 	LISP=$(LISP) \
+	  TIME=$(TIME) \
 	BLDDIR=$(BLDDIR) \
 	QUICKLISP_HOME=$(QUICKLISP_HOME) \
 	SBCL_BIN=$(SBCL_BIN) \
@@ -306,6 +311,7 @@ endif
 ## Run all tests in release mode
 test-release:
 	LISP=$(LISP) \
+	  TIME=$(TIME) \
 	BLDDIR=$(BLDDIR) \
 	QUICKLISP_HOME=$(QUICKLISP_HOME) \
 	SBCL_BIN=$(SBCL_BIN) \
