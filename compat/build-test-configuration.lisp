@@ -18,6 +18,11 @@
 
 (require "asdf")
 
+;; Patch abcl - hopefully patch for bug will be included in 1.9.2+.
+#+abcl
+(when (not (asdf:version-satisfies (lisp-implementation-version) "1.9.2.0"))
+  (load "compat/abcl-precompiler-precompile-identity.lisp"))
+
 (in-package #:cl-user)
 
 (defun get-var-or-default (var-name &key (default) (get-it #'uiop:getenvp))
