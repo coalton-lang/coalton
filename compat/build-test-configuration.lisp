@@ -182,10 +182,6 @@
 ;;; Use the safety level, if possible.
 #+sbcl(sb-ext:restrict-compiler-policy 'safety *safety*)
 #+abcl(setq system:*safety* *safety*)
-#+ (or ccl ecl)
-;; For the rest of them - do your best little buddy!
-(eval-when (:execute :load-toplevel :compile-toplevel)
-  (proclaim `(optimize (safety ,*safety*))))
 ;;; This next line (loading quicklisp's setup) is one I'd love to get
 ;;; rid of!!!
 ;;;
@@ -204,6 +200,8 @@
 (defun load-n-test ()
   ; (ql:quickload :coalton/tests)
 ;;; We no longer need quicklisp - nothing to download!
+  (asdf:load-system :coalton)
+
   (asdf:load-system :coalton/tests)
 
   (asdf:test-system :coalton/tests)

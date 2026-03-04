@@ -20,11 +20,11 @@ TEMP ?= zz-temp
 
 ## quick - just check these values
 # SEQp = t
-CENV ="release"
+# CENV ="release"
 # CENV ="development"
-CSAFETY = "3"
-CDISABLE_SPECIALIZATION ="0"
-# CHEURISTIC_INLINING ="0"
+# CSAFETY = "0"
+# CDISABLE_SPECIALIZATION ="0"
+# CHEURISTIC_INLINING ="1"
 
 LISP_CACHE = $(BLDDIR)
 EXTRA_LOCAL_PROJECTS=$(QUICKLISP_HOME)/local-projects
@@ -71,13 +71,6 @@ ifeq ($(LISP),sbcl)
   HAS_SAFETY=yes
 endif
 ifeq ($(LISP),abcl)
-  HAS_SAFETY=yes
-endif
-# not fully supported but we can proclaim it globally
-ifeq ($(LISP),ecl)
-  HAS_SAFETY=yes
-endif
-ifeq ($(LISP),ccl)
   HAS_SAFETY=yes
 endif
 ifeq ($(HAS_SAFETY),yes)
@@ -286,7 +279,7 @@ testall:	clean-blddir
 ## its instances that are still running.
 ## Some extra parentheses added to not match egrep itself.
 lisps-running:
-	-ls -rt $(TEMP)/z-out-*.txt | egrep "$(LISPEXEC)" | xargs tail -n 1
+	-ls -rt $(TEMP)/z-out-*.txt | egrep "$(LISPEXEC)" | xargs tail -n 4 ; echo ''
 	-ps aux | egrep '[0-9] (((((s|a)b)|c|e)cl)|(al)isp|(cl)asp)'
 
 ifeq ($(HAS_SAFETY),yes)
