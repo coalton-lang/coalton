@@ -53,6 +53,11 @@
   (get-env-var-or-default "BLDDIR" "~/.cache/coalton-common-lisp"))
 (defparameter *quicklisp-home*
   (get-var-or-default "QUICKLISP_HOME")) ; no default - the makefile should have set it!
+
+;; Load an updated ASDF.
+(load (concatenate 'string *quicklisp-home* "/asdf"))
+
+
 (defparameter *current-lisp* (uiop:implementation-identifier))
 (defparameter *safety*
   (parse-integer (format nil "~A" (get-env-var-or-default "SAFETY" "0"))))
@@ -189,7 +194,7 @@
 ;;; QuickLisp's directories that have been defined in
 ;;; asdf:*source-registry-parameter* (cannot find my version of fset
 ;;; inside ~/quicklisp/local-projects)
-(load (concatenate 'string *quicklisp-home* "/setup"))
+;; (load (concatenate 'string *quicklisp-home* "/setup"))
 
 ;;; Fiasco is broken on abcl - see https://github.com/appleby/fiasco/tree/fix-define-test-package-for-abcl
 ;; So, (1/2) load fiasco.
@@ -202,15 +207,21 @@
 ;;; We no longer need quicklisp - nothing to download!
   (asdf:load-system :coalton)
 
+  (format t "~&XXX-YYY ~A: COALTON LOADED FINE!~%" *system-full-name*)
+
   (asdf:load-system :coalton/tests)
+
+  (format t "~&XXX-YYY ~A: COALTON/TESTS LOADED FINE!~%" *system-full-name*)
 
   (asdf:test-system :coalton/tests)
 
-  (asdf:load-system :small-coalton-programs))
+  (format t "~&XXX-YYY ~A: COALTON/TESTS TESTED FINE!~%" *system-full-name*)
+
+  (asdf:load-system :small-coalton-programs)
+
+  (format t "~&XXX-YYY ~A: SMALL-COALTON-PROGRAMS FINISHED FINE!~%" *system-full-name*))
 
 ;;; Let's see what's happening
 #+nil(trace load-n-test)
 
 (load-n-test)
-
-(format t "~&~A: FINISHED FINE!~%" *system-full-name*)
