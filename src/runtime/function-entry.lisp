@@ -167,6 +167,8 @@ NOTE: There is no FUNCTION-ENTRY for arity 1 and the function will be returned"
                        "Attempt to apply ~s to ~d arguments, but ~s is ~d."
                        function arg-count 'function-arity-limit function-arity-limit)))))
 
+#+sb-package-locks
+(sb-ext:unlock-package :coalton)
 (declaim (ftype (function ((or function function-entry) &rest t)
                           (values t &optional))
                 call-coalton-function))
@@ -196,3 +198,5 @@ NOTE: There is no FUNCTION-ENTRY for arity 1 and the function will be returned"
         `(,(aref *function-application-functions* arg-count)
           ,function
           ,@args))))
+#+sb-package-locks
+(sb-ext:lock-package :coalton)
