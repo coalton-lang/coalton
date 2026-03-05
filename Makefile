@@ -90,13 +90,13 @@ CLASP=$(shell which -s clasp && echo "$(CLASP_COMP)" || echo "echo $(CLASP_COMP)
 ## COMP is the actual compiler to be used - executable with specific arguments
 COMP=none
 ## How to load a file using COMP - minimal default:
-runOnFileDefault = $(TIME) $(1) --load $(2)
+runOnFileDefault = $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --load $(2)
 ## How to eval an expression using COMP - minimal default:
-runOnExprDefault = $(TIME) $(1) --eval $(2)
+runOnExprDefault = $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --eval $(2)
 ## How to eval and load using COMP - minimal default:
-runOnExprAndFileDefault = $(TIME) $(1) --eval $(2) --load $(3)
+runOnExprAndFileDefault = $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --eval $(2) --load $(3)
 ## How to load and eval using COMP - minimal default:
-runOnFileAndExprDefault = $(TIME) $(1) --load $(2) --eval $(3)
+runOnFileAndExprDefault = $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --load $(2) --eval $(3)
 LISPEXEC=$(LISP)
   runOnFile = cat /dev/null | $(call runOnFileDefault,$(1),$(2))
   runOnExpr = cat /dev/null | $(call runOnExprDefault,$(1),$(2))
@@ -112,9 +112,10 @@ ifeq ($(LISP),sbcl)
 endif
 ifeq ($(LISP),alisp)
   COMP=$(ALLEGRO)
-  runOnFile = cat $(2) | $(TIME) $(1)
-  runOnExpr = echo $(2) | $(TIME) $(1)
-  runOnExprAndFile = (echo $(2) ; cat $(3)) | $(TIME) $(1) 
+  runOnFile = cat $(QUICKLISP_HOME)/asdf.lisp $(2) | $(TIME) $(1)
+  runOnExpr = (cat $(QUICKLISP_HOME)/asdf.lisp ; echo $(2)) | $(TIME) $(1)
+  runOnExprAndFile = (cat $(QUICKLISP_HOME)/asdf.lisp ; echo $(2) ; cat $(3)) | $(TIME) $(1) 
+  runOnFileAndExpr = (cat $(QUICKLISP_HOME)/asdf.lisp $(2) ; echo $(3)) | $(TIME) $(1)
   LISPEXEC=alisp
 endif
 ifeq ($(LISP),ccl)
