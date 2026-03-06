@@ -2,14 +2,13 @@ LISP ?= sbcl
 TIME ?= /bin/time
 ## run tests sequentially (t) or concurrently (nil) ?
 SEQp ?= nil
-  ORIGINALp=$(shell test -f ./compat/compatibility-layer.lisp && echo nil || echo t)
+  # Is package :compatibility being used?
+  ORIGINALp=$(shell grep compat: library/classes.lisp && echo nil || echo t)
   ifeq ($(ORIGINALp),t)
-    BLDDIR ?= $(HOME)/.cache/coalton-common-lisp
-    QUICKLISP_HOME ?= $(HOME)/quicklisp-coalton-common-lisp
+    COALTON_NAME = original-coalton
     $(warning Using the original Coalton code)
   else
-    BLDDIR ?= $(HOME)/.cache/compat-coalton-common-lisp
-    QUICKLISP_HOME ?= $(HOME)/quicklisp-compat-coalton-common-lisp
+    COALTON_NAME = coalton-compat
     $(warning Using the Coalton-compat fork code)
   endif
 $(warning         With BLDDIR="$(BLDDIR)")
@@ -17,6 +16,9 @@ $(warning         With QUICKLISP_HOME="$(QUICKLISP_HOME)")
 COALTON_HOME ?= $(shell test -f ./coalton.asd && pwd || echo $(QUICKLISP_HOME)/local-projects/coalton)
 ## Directory where test output is stored.
 TEMP ?= zz-temp
+TMPDIR ?= $(HOME)/tmp
+BLDDIR = $(HOME)/.cache/$(COALTON_NAME)
+QUICKLISP_HOME = $(HOME)/quicklisp-$(COALTON_NAME)
 
 ## quick - just check these values
 # SEQp = t
@@ -257,6 +259,10 @@ testall:	clean-blddir
 	test -f $(QUICKLISP_HOME)/setup.lisp \
 		|| QUICKLISP_HOME=$(QUICKLISP_HOME) make install-libraries
 	mkdir -p $(TEMP) && test -d $(TEMP)
+	mkdir -p $(TMPDIR) && test -d $(TMPDIR) ; \
+	export TMPDIR=$(TMPDIR) ; rm $(TMPDIR)/* ; \
+	  \
+	export COALTON_NAME=$(COALTON_NAME) ; \
 	export BLDDIR=$(BLDDIR) ; \
 	export QUICKLISP_HOME=$(QUICKLISP_HOME) ; \
 	export COALTON_HOME=$(COALTON_HOME) ; \
