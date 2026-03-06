@@ -43,7 +43,8 @@
 
 ;;; Get defining characteristics for this version of the current
 ;;; system:
-(defparameter *system-name* "coalton")
+(defparameter *system-name*
+  (get-env-var-or-default "COALTON_NAME" "original-coalton"))
 (defparameter *system-version*
   (get-file-var-or-default "VERSION.txt"))
 (defparameter *system-home*
@@ -185,8 +186,9 @@
         (asdf/output-translations:output-translations))
 
 ;;; Use the safety level, if possible.
-#+sbcl(sb-ext:restrict-compiler-policy 'safety *safety*)
-#+abcl(setq system:*safety* *safety*)
+(when (eq *safety* 3)
+  #+sbcl(sb-ext:restrict-compiler-policy 'safety *safety*)
+  #+abcl(setq system:*safety* *safety*))
 ;;; This next line (loading quicklisp's setup) is one I'd love to get
 ;;; rid of!!!
 ;;;
