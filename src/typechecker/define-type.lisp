@@ -497,8 +497,51 @@ This is conservative and intentionally aligns with mutable native wrappers."
                                                        :name name
                                                        :kind (tc:apply-ksubstitution ksubs kind))))
 
-    ;; Build type-definitions for each type in the scc
-    (let ((instances nil))
+    ;; Reparse constructor field types after SCC aliases are installed so
+    ;; constructor signatures see the same expanded aliases as ordinary
+    ;; expression type parsing.
+    (let* ((alias-env
+             (loop :with alias-env := (partial-type-env-env env)
+                   :for type :in types
+                   :for name := (parser:identifier-src-name (parser:type-definition-name type))
+                   :for parser-aliased-type := (parser:type-definition-aliased-type type)
+                   :when parser-aliased-type
+                     :do (let* ((tvars
+                                  (tc:apply-ksubstitution
+                                   ksubs
+                                   (mapcar (lambda (var)
+                                             (partial-type-env-lookup-var
+                                              env
+                                              (parser:keyword-src-name var)
+                                              var))
+                                           (parser:type-definition-vars type))))
+                                (alias
+                                  (tc:apply-type-argument-list
+                                   (tc:apply-ksubstitution
+                                    ksubs
+                                    (gethash name (partial-type-env-ty-table env)))
+                                   tvars))
+                                (aliased-type
+                                  (tc:push-type-alias
+                                   (tc:apply-ksubstitution ksubs (gethash name alias-table))
+                                   alias)))
+                           (setf alias-env
+                                 (tc:set-type-alias
+                                  alias-env
+                                  name
+                                  (tc:make-type-alias-entry
+                                   :name name
+                                   :source-name (parser:identifier-src-source-name
+                                                 (parser:type-definition-name type))
+                                   :tyvars tvars
+                                   :type aliased-type
+                                   :docstring nil))))
+                   :finally (return alias-env)))
+           (alias-partial-env
+             (make-partial-type-env
+              :env alias-env
+              :ty-table (partial-type-env-ty-table env)))
+           (instances nil))
       (values
        (loop
          :for type :in types
@@ -520,29 +563,27 @@ This is conservative and intentionally aligns with mutable native wrappers."
            := (and repr (eq repr-type :native) (cst:raw (parser:attribute-repr-arg repr)))
 
 
-         ;; Apply ksubs to find the type of each constructor
+         :for constructor-args
+           := (loop
+                :for ctor :in (parser:type-definition-ctors type)
+                :collect
+                (loop :for parser-field-type
+                        :in (parser:type-definition-ctor-field-types ctor)
+                      :collect (multiple-value-bind (field-type ignored-ksubs)
+                                   (parse-type parser-field-type alias-partial-env ksubs)
+                                 (declare (ignore ignored-ksubs))
+                                 field-type)))
+
          :for constructor-types
            := (loop
-                :for ctor
-                  :in (parser:type-definition-ctors type)
-                :for ctor-name
-                  := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
+                :for ctor-args :in constructor-args
                 :for ty
                   := (tc:make-function-type*
-                      (tc:apply-ksubstitution ksubs (gethash ctor-name ctor-table))
+                      ctor-args
                       (tc:apply-type-argument-list
                        (tc:apply-ksubstitution ksubs (gethash name (partial-type-env-ty-table env)))
                        tvars))
                 :collect (tc:quantify-using-tvar-order tvars (tc:qualify nil ty)))
-
-
-         :for constructor-args
-           := (loop
-                :for ctor
-                  :in (parser:type-definition-ctors type)
-                :for ctor-name
-                  := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
-                :collect (tc:apply-ksubstitution ksubs (gethash ctor-name ctor-table)))
 
          ;; Check that repr :enum types do not have any constructors with fields
          :when (eq repr-type :enum)

@@ -183,6 +183,75 @@
     (define s \"Hello, world!\")
     (define x (the Integer (m s)))"))
 
+(deftest test-mutually-recursive-type-alias-constructors ()
+
+  (check-coalton-types
+   "(define-type (MyParser :a)
+      (MyParser :a))
+
+    (declare my-pure (:a -> (MyParser :a)))
+    (define (my-pure x) (MyParser x))
+
+    (declare my-liftA2 ((:a -> :b -> :c) -> (MyParser :a) -> (MyParser :b) -> (MyParser :c)))
+    (define (my-liftA2 f (MyParser a) (MyParser b))
+      (MyParser (f a b)))
+
+    (declare my-liftA3 ((:a -> :b -> :c -> :d) -> (MyParser :a) -> (MyParser :b) -> (MyParser :c) -> (MyParser :d)))
+    (define (my-liftA3 f (MyParser a) (MyParser b) (MyParser c))
+      (MyParser (f a b c)))
+
+    (declare my-many ((MyParser :a) -> (MyParser (List :a))))
+    (define (my-many (MyParser x))
+      (MyParser (make-list x)))
+
+    (declare my-must ((MyParser :a) -> (MyParser :a)))
+    (define (my-must p) p)
+
+    (define-type MyFormName
+      (MyName))
+
+    (define-type MyFormParam
+      (MyParam))
+
+    (define-type MyForm
+      (MyForm MyFormName MyFormKind))
+
+    (define-type-alias MyFormParams (List MyFormParam))
+    (define-type-alias MyStructField (Tuple MyForm MyFormParams))
+
+    (define-type MyFormKind
+      (MyKStruct MyFormParams (List MyStructField)))
+
+    (declare my-form-name (MyParser MyFormName))
+    (define my-form-name (my-pure MyName))
+
+    (declare my-form-param (MyParser MyFormParam))
+    (define my-form-param (my-pure MyParam))
+
+    (declare my-value-any (MyParser MyFormKind))
+    (define my-value-any
+      (my-pure (MyKStruct (make-list) (make-list))))
+
+    (declare my-struct-field (MyParser MyStructField))
+    (define my-struct-field
+      (my-liftA3 (fn (name kind params) (Tuple (MyForm name kind) params))
+                 my-form-name
+                 my-value-any
+                 (my-many my-form-param)))
+
+    (declare my-struct (MyParser MyForm))
+    (define my-struct
+      (my-liftA2 (fn (_tag (Tuple3 name size fields))
+                   (MyForm name (MyKStruct (make-list size) fields)))
+                 (my-pure MyName)
+                 (my-must
+                  (my-liftA3 (fn (name size fields) (Tuple3 name size fields))
+                             my-form-name
+                             my-form-param
+                             (my-many my-struct-field)))))"
+
+   '("my-struct" . "(MyParser MyForm)")))
+
 (deftest test-type-aliases-as-predicates ()
 
   ;; See https://github.com/coalton-lang/coalton/issues/1662
@@ -200,4 +269,3 @@
 
    '("f" . "((C :t T) => (:t -> String))")
    '("g" . "((C :t (List T)) => (:t -> String))")))
-
