@@ -55,17 +55,20 @@
     (t
      (loop :for tvar :in (parser:collect-type-variables unparsed-ty)
            :for tvar-name := (parser:tyvar-name tvar)
-           :do (partial-type-env-add-var partial-env
-                                         tvar-name
-                                         (or (parser:tyvar-source-name tvar)
-                                             tvar-name)))
+           :do (partial-type-env-ensure-var partial-env
+                                            tvar-name
+                                            (or (parser:tyvar-source-name tvar)
+                                                tvar-name)))
      (values nil nil))))
 
 (defun parse-qualified-type-internal (unparsed-ty env)
   (declare (type parser:qualified-ty unparsed-ty)
-           (type tc:environment env)
+           (type (or tc:environment partial-type-env) env)
            (values tc:qualified-ty tc:tyvar-list boolean &optional))
-  (let ((partial-env (make-partial-type-env :env env)))
+  (let* ((partial-env (if (typep env 'tc:environment)
+                          (make-partial-type-env :env env)
+                          env))
+         (base-env (partial-type-env-env partial-env)))
     (multiple-value-bind (explicit-tvars explicit-p)
         (seed-qualified-type-variables unparsed-ty partial-env)
       (multiple-value-bind (qual-ty ksubs)
@@ -85,9 +88,9 @@
                (ty (tc:qualified-ty-type qual-ty))
                (qual-ty (apply-type-alias-substitutions qual-ty unparsed-ty partial-env)))
 
-          (check-for-ambiguous-variables preds ty unparsed-ty env)
-          (check-for-reducible-by-fundeps preds ty unparsed-ty env)
-          (check-for-reducible-context preds ty unparsed-ty env)
+          (check-for-ambiguous-variables preds ty unparsed-ty base-env)
+          (check-for-reducible-by-fundeps preds ty unparsed-ty base-env)
+          (check-for-reducible-context preds ty unparsed-ty base-env)
 
           (values qual-ty explicit-tvars explicit-p))))))
 
@@ -212,13 +215,12 @@
                          (make-partial-type-env :env env)
                          env)))
 
-    (if (typep env 'tc:environment)
-      (loop :for tvar :in (parser:collect-type-variables parser-ty)
-            :for tvar-name := (parser:tyvar-name tvar)
-            :do (partial-type-env-add-var partial-env
-                                          tvar-name
-                                          (or (parser:tyvar-source-name tvar)
-                                              tvar-name))))
+    (loop :for tvar :in (parser:collect-type-variables parser-ty)
+          :for tvar-name := (parser:tyvar-name tvar)
+          :do (partial-type-env-ensure-var partial-env
+                                           tvar-name
+                                           (or (parser:tyvar-source-name tvar)
+                                               tvar-name)))
 
     (multiple-value-bind (ty ksubs)
         (infer-type-kinds parser-ty
@@ -234,23 +236,34 @@
 
 (defun parse-qualified-type (unparsed-ty env)
   (declare (type parser:qualified-ty unparsed-ty)
-           (type tc:environment env)
+           (type (or tc:environment partial-type-env) env)
            (values tc:qualified-ty &optional))
   (nth-value 0 (parse-qualified-type-internal unparsed-ty env)))
 
 (defun parse-ty-scheme (ty env)
   (declare (type parser:qualified-ty ty)
-           (type tc:environment env)
+           (type (or tc:environment partial-type-env) env)
            (values tc:ty-scheme &optional))
 
-  (multiple-value-bind (qual-ty explicit-tvars explicit-p)
-      (parse-qualified-type-internal ty env)
-    (cond
-      (explicit-p
-       (warn-on-unused-explicit-type-variables ty explicit-tvars qual-ty)
-       (tc:quantify-using-tvar-order explicit-tvars qual-ty t))
-      (t
-       (tc:quantify (tc:type-variables qual-ty) qual-ty)))))
+  (let ((in-scope-tvars
+          (if (typep env 'partial-type-env)
+              (remove-duplicates
+               (loop :for type :being :the :hash-values :of (partial-type-env-ty-table env)
+                     :when (tc:tyvar-p type)
+                       :collect type)
+               :test #'tc:ty=)
+              nil)))
+    (multiple-value-bind (qual-ty explicit-tvars explicit-p)
+        (parse-qualified-type-internal ty env)
+      (cond
+        (explicit-p
+         (warn-on-unused-explicit-type-variables ty explicit-tvars qual-ty)
+         (tc:quantify-using-tvar-order explicit-tvars qual-ty t))
+        (t
+         (tc:quantify (set-difference (tc:type-variables qual-ty)
+                                      in-scope-tvars
+                                      :test #'tc:ty=)
+                      qual-ty))))))
 
 (defun check-for-ambiguous-variables (preds type qual-ty env)
   (declare (type tc:ty-predicate-list preds)

@@ -241,6 +241,20 @@ This is conservative and intentionally aligns with mutable native wrappers."
                     :do (tc:tc-error "Unused type variable in define-type-alias"
                                      (tc:tc-note defined-var "unused variable defined here"))))
 
+  ;; Ensure that every type variable used in a type alias is declared
+  ;; by the alias head. This runs after the unused-variable check so
+  ;; existing diagnostics keep the same precedence when both apply.
+  (loop :for type :in type-aliases
+        :for defined-vars := (mapcar #'parser:keyword-src-name
+                                     (parser:type-definition-vars type))
+        :do (loop :for used-var :in (parser:collect-type-variables
+                                     (parser:type-definition-aliased-type type))
+                  :unless (member (parser:tyvar-name used-var) defined-vars :test #'eq)
+                    :do (tc:tc-error "Unknown type variable"
+                                     (tc:tc-note used-var
+                                                 "Unknown type variable ~S"
+                                                 (parser:tyvar-name used-var)))))
+
   (let* ((type-names (mapcar (alexandria:compose #'parser:identifier-src-name
                                                  #'parser:type-definition-name)
                              (append types structs type-aliases)))

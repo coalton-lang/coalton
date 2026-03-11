@@ -129,7 +129,52 @@
             (local-id (fn (y) y)))
         (local-id x)))"
 
-   '("f" . "(:a -> :a)")))
+   '("f" . "(:a -> :a)"))
+
+  (check-coalton-types
+   "(declare scoped-local-implicit (forall (:item) :item -> :item))
+    (define (scoped-local-implicit x)
+      (let ((declare keep-item (Unit -> :item))
+            (keep-item (fn (_unit) (the :item x))))
+        (keep-item Unit)))"
+
+   '("scoped-local-implicit" . "(forall (:item) (:item -> :item))"))
+
+  (check-coalton-types
+   "(declare scoped-local-explicit (forall (:outer) :outer -> :outer))
+    (define (scoped-local-explicit x)
+      (let ((declare keep-outer (forall (:inner) :outer -> :inner -> :outer))
+            (keep-outer (fn (y _z) (lisp :outer (y) y))))
+        (keep-outer x Unit)))"
+
+   '("scoped-local-explicit" . "(forall (:outer) (:outer -> :outer))"))
+
+  (check-coalton-types
+   "(declare scoped-proxy-roundtrip (forall (:item) :item -> :item))
+    (define (scoped-proxy-roundtrip x)
+      (let ((declare reify (coalton/types:Proxy :item -> :item))
+            (reify (fn (p)
+                     (coalton/types:as-proxy-of
+                      (the :item x)
+                      p))))
+        (reify (coalton/types:proxy-of x))))"
+
+   '("scoped-proxy-roundtrip" . "(forall (:item) (:item -> :item))"))
+
+  (check-coalton-types
+   "(declare scoped-proxy-inner
+      (forall (:item)
+        coalton/types:Proxy (Optional :item) -> coalton/types:Proxy :item))
+    (define (scoped-proxy-inner maybe-proxy)
+      (let ((declare drop-outer
+                    (forall (:wrapper)
+                      coalton/types:Proxy (:wrapper :item)
+                      -> coalton/types:Proxy :item))
+            (drop-outer (fn (p)
+                          (coalton/types:proxy-inner p))))
+        (drop-outer maybe-proxy)))"
+
+   '("scoped-proxy-inner" . "(forall (:item) (coalton/types:Proxy (Optional :item) -> coalton/types:Proxy :item))")))
 
 (deftest test-type-definitions ()
   ;; Test recursive type definitions
