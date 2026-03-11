@@ -34,11 +34,12 @@
   (ty-table    (make-hash-table :test #'eq) :type hash-table     :read-only t)
   (class-table (make-hash-table :test #'eq) :type hash-table     :read-only t))
 
-(defun partial-type-env-add-var (env var)
+(defun partial-type-env-add-var (env var &optional (source-name var))
   (declare (type partial-type-env env)
            (type symbol var)
            (values tc:tyvar))
-  (setf (gethash var (partial-type-env-ty-table env)) (tc:make-variable (tc:make-kvariable))))
+  (setf (gethash var (partial-type-env-ty-table env))
+        (tc:make-variable (tc:make-kvariable) source-name)))
 
 (defun partial-type-env-lookup-var (env var source)
   (declare (type partial-type-env env)

@@ -2443,7 +2443,7 @@ as a recursive function rather than a recursive value."
                   (error-unknown-pred (first deferred-preds)))
 
                 ;; Check that the declared and inferred schemes match
-                (unless (equalp declared-ty output-scheme)
+                (unless (tc:ty-scheme= declared-ty output-scheme)
                   (tc-error "Declared type is too general"
                             (tc-location location
                                          "Declared type ~S is more general than inferred type ~S."

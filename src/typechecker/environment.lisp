@@ -262,7 +262,7 @@
     (fset:do-map (name type (immutable-map-data env))
       (declare (ignore name))
       (setf out (append (type-variables type) out)))
-    (remove-duplicates out :test #'equalp)))
+    (remove-duplicates out :test #'ty=)))
 
 ;;;
 ;;; Type environments
@@ -1536,7 +1536,7 @@ Signals a coalton-bug error if the type is not found and NO-ERROR is false (the 
              (scheme (quantify (type-variables type)
                                (qualify nil type))))
 
-        (when (equalp to-scheme scheme)
+        (when (ty-scheme= to-scheme scheme)
           (return-from add-specialization
             (update-environment env
                                 :specialization-environment

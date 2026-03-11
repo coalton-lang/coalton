@@ -157,7 +157,7 @@
   (remove-duplicates
    (append (type-variables (qualified-ty-predicates type))
            (type-variables (qualified-ty-type type)))
-   :test #'equalp))
+   :test #'ty=))
 
 (defmethod kind-variables-generic% ((type qualified-ty))
   (declare (values kyvar-list &optional))

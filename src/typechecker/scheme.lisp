@@ -69,15 +69,46 @@
            (type qualified-ty type)
            (values ty-scheme))
   (let* ((vars (remove-if
-                (lambda (x) (not (find x tyvars :test #'equalp)))
+                (lambda (x) (not (find x tyvars :test #'ty=)))
                 (type-variables type)))
          (kinds (mapcar #'kind-of vars))
          (subst (loop :for var :in vars
                       :for id :from 0
-                      :collect (make-substitution :from var :to (make-tgen :id id)))))
+                      :collect (make-substitution
+                                :from var
+                                :to (make-tgen :id id
+                                               :source-name (tyvar-source-name var))))))
     (make-ty-scheme
      :kinds kinds
      :type (apply-substitution subst type))))
+
+(defun ty-scheme-instantiation-types (ty-scheme)
+  (declare (type ty-scheme ty-scheme)
+           (values tyvar-list &optional))
+  (let* ((source-names (make-array (length (ty-scheme-kinds ty-scheme))
+                                   :initial-element nil))
+         (scheme-type (ty-scheme-type ty-scheme)))
+    (labels ((collect-source-names (object)
+               (typecase object
+                 (tgen
+                  (when (< (tgen-id object) (length source-names))
+                    (setf (aref source-names (tgen-id object))
+                          (or (aref source-names (tgen-id object))
+                              (tgen-source-name object)))))
+                 (tapp
+                  (collect-source-names (tapp-from object))
+                  (collect-source-names (tapp-to object)))
+                 (qualified-ty
+                  (collect-source-names (qualified-ty-predicates object))
+                  (collect-source-names (qualified-ty-type object)))
+                 (ty-predicate
+                  (collect-source-names (ty-predicate-types object)))
+                 (list
+                  (map nil #'collect-source-names object)))))
+      (collect-source-names scheme-type)
+      (loop :for kind :in (ty-scheme-kinds ty-scheme)
+            :for i :from 0
+            :collect (make-variable kind (aref source-names i))))))
 
 (defgeneric to-scheme (ty)
   (:method ((ty qualified-ty))
@@ -91,8 +122,7 @@
 (defun fresh-inst (ty-scheme)
   (declare (type ty-scheme ty-scheme)
            (values qualified-ty &optional))
-  (let ((types (mapcar (lambda (k) (make-variable k))
-                       (ty-scheme-kinds ty-scheme))))
+  (let ((types (ty-scheme-instantiation-types ty-scheme)))
     (instantiate types (ty-scheme-type ty-scheme))))
 
 (defun scheme-predicates (ty-scheme)
@@ -119,12 +149,15 @@
 
 (defun quantify-using-tvar-order (tyvars type)
   (let* ((vars (remove-if
-                (lambda (x) (not (find x (type-variables type) :test #'equalp)))
+                (lambda (x) (not (find x (type-variables type) :test #'ty=)))
                 tyvars))
          (kinds (mapcar #'kind-of vars))
          (subst (loop :for var :in vars
                       :for id :from 0
-                      :collect (make-substitution :from var :to (make-tgen :id id)))))
+                      :collect (make-substitution
+                                :from var
+                                :to (make-tgen :id id
+                                               :source-name (tyvar-source-name var))))))
     (make-ty-scheme
      :kinds kinds
      :type (apply-substitution subst type))))
@@ -169,9 +202,8 @@
     ((null (ty-scheme-kinds scheme))
      (write (ty-scheme-type scheme) :stream stream))
     (t
-     (with-pprint-variable-scope ()
-       (let* ((types (mapcar (lambda (k) (next-pprint-variable-as-tvar k))
-                             (ty-scheme-kinds scheme)))
+     (with-pprint-variable-context ()
+       (let* ((types (ty-scheme-instantiation-types scheme))
               (new-type (instantiate types (ty-scheme-type scheme))))
          (write-string (if settings:*coalton-print-unicode*
                            "∀"

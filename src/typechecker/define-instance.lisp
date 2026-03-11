@@ -69,7 +69,10 @@
 
     ;; Define type variables in the environment
     (loop :for var :in (parser:collect-type-variables (list unparsed-pred unparsed-context))
-          :do (partial-type-env-add-var partial-env (parser:tyvar-name var)))
+          :do (partial-type-env-add-var partial-env
+                                        (parser:tyvar-name var)
+                                        (or (parser:tyvar-source-name var)
+                                            (parser:tyvar-name var))))
 
     (let* ((ksubs nil)
 
