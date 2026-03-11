@@ -83,12 +83,15 @@
 (in-package #:coalton-user)
 ;; λ
 (coalton-toplevel
+  (define-struct (ReaderTestStruct :a)
+    (reader-test-slot :a))
   (declare reader-test-f (UFix -> UFix))
   (define (reader-test-f x) x))
 " stream)
     :close-stream
     (let* ((compile-sym (find-symbol "COMPILE-COALTON-TOPLEVEL" "COALTON-IMPL/ENTRY"))
            (orig-compile (symbol-function compile-sym))
+           (saved-environment entry:*global-environment*)
            (compile-count 0)
            (source-names nil))
       (unwind-protect
@@ -110,12 +113,22 @@
                  (eval (read stream nil nil))
                  (let* ((form (read stream nil nil))
                         (expansion-1 (macroexpand-1 form))
-                        (expansion-2 (macroexpand-1 form)))
+                        (expansion-2 (macroexpand-1 form))
+                        (struct-sym (find-symbol "READERTESTSTRUCT" "COALTON-USER"))
+                        (type-entry (coalton-impl/typechecker:lookup-type entry:*global-environment* struct-sym :no-error t))
+                        (struct-entry (coalton-impl/typechecker:lookup-struct entry:*global-environment* struct-sym :no-error t)))
                    (is (= 1 compile-count)
                        "reader path should compile at most once per source form")
                    (is (eq expansion-1 expansion-2)
                        "cached macroexpansion should be reused")
                    (is (string= (namestring input-file)
                                 (first source-names))
-                       "source name should refer to the original file")))))
-        (setf (symbol-function compile-sym) orig-compile)))))
+                       "source name should refer to the original file")
+                   (is (string= "ReaderTestStruct"
+                                (coalton-impl/typechecker:type-entry-source-name type-entry))
+                       "type source-name should preserve the original spelling")
+                   (is (string= "ReaderTestStruct"
+                                (coalton-impl/typechecker:struct-entry-source-name struct-entry))
+                       "struct source-name should preserve the original spelling")))))
+        (setf (symbol-function compile-sym) orig-compile
+              entry:*global-environment* saved-environment)))))
