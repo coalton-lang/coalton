@@ -119,32 +119,28 @@ It ensures the presence of source metadata for STREAM and then calls MAYBE-READ-
     (return-from read-coalton-toplevel-open-paren
       (funcall (get-macro-character #\( (named-readtables:ensure-readtable :standard)) stream char)))
 
-  ;; "The reader macro function may return zero values or one value."
-  ;; (https://www.lispworks.com/documentation/HyperSpec/Body/02_b.htm)
-  ;; - ecl insists on this.
-  (values
-   (cond (*source*
-          ;; source metadata exists, probably courtesy of
-          ;; compile-forms: do nothing
-          (maybe-read-coalton stream *source*))
-         ((source-filename)
-          ;; no metadata, and a compile or load operation is occurring:
-          ;; bind a source-file
-          (let ((*source* (coalton-impl/source:make-source-file
-                           (source-filename)
-                           :name (buffer-name))))
-            (maybe-read-coalton stream *source*)))
-         (t
-          ;; no metadata, no file operation, therefore we are in a
-          ;; repl: bind a source-string containing cloned input
-          (let ((*source* (coalton-impl/source:make-source-string
-                           (with-output-to-string (out)
-                             (write-char #\( out)
-                             (alexandria:copy-stream stream out))
-                           :name "repl")))
-            (with-open-stream (stream (source:source-stream *source*))
-              (read-char stream)
-              (maybe-read-coalton stream *source*)))))))
+  (cond (*source*
+         ;; source metadata exists, probably courtesy of
+         ;; compile-forms: do nothing
+         (maybe-read-coalton stream *source*))
+        ((source-filename)
+         ;; no metadata, and a compile or load operation is occurring:
+         ;; bind a source-file
+         (let ((*source* (coalton-impl/source:make-source-file
+                          (source-filename)
+                          :name (buffer-name))))
+           (maybe-read-coalton stream *source*)))
+        (t
+         ;; no metadata, no file operation, therefore we are in a
+         ;; repl: bind a source-string containing cloned input
+         (let ((*source* (coalton-impl/source:make-source-string
+                          (with-output-to-string (out)
+                            (write-char #\( out)
+                            (alexandria:copy-stream stream out))
+                          :name "repl")))
+           (with-open-stream (stream (source:source-stream *source*))
+             (read-char stream)
+             (maybe-read-coalton stream *source*))))))
 
 (named-readtables:defreadtable coalton:coalton
   (:merge :standard)
