@@ -91,3 +91,10 @@
   (is (== down (string:downcase mixed)))
   (is (== up (string:upcase down)))
   (is (== up (string:upcase mixed))))
+
+(define-test string-into-vector-char-has-fill-pointer ()
+  (let vec = (the (Vector Char) (into "wow")))
+  (is (== (Some #\w) (vector:pop! vec)))
+  (is (== (vector:make #\w #\o) vec))
+  (vector:push! #\! vec)
+  (is (== (vector:make #\w #\o #\!) vec)))
