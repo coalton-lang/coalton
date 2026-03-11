@@ -132,3 +132,29 @@ help: message 5
     (is (search "Duplicate quantified type variable" msg))
     (is (search "first binding here" msg))
     (is (search "second binding here" msg))))
+
+(deftest implicit-outer-declarations-do-not-create-scoped-type-variables ()
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-scoped-forall-errors)
+
+(declare bad (:a -> :a))
+
+(define (bad x)
+  (let ((declare keep-item (forall (:b) :a -> :b -> :a))
+        (keep-item (fn (y _z) y)))
+    (keep-item x Unit)))")))
+    (is (search "Unknown type variable :A" msg))))
+
+(deftest implicit-outer-declarations-do-not-create-scoped-type-variables-via-proxy ()
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-scoped-forall-errors)
+
+(declare bad (:item -> :item))
+
+(define (bad x)
+  (let ((declare reify (coalton/types:Proxy :item -> :item))
+        (reify (fn (p)
+                 (coalton/types:as-proxy-of x p))))
+    (reify (coalton/types:proxy-of x))))")))
+    (is (search "Declared type is too general" msg))
+    (is (search "(COALTON/TYPES:PROXY :ITEM) → :ITEM" msg))))

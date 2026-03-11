@@ -14,6 +14,7 @@
    #:partial-type-env-ty-table          ; ACCESSOR
    #:partial-type-env-vars-table        ; ACCESSOR
    #:partial-type-env-add-var           ; FUNCTION
+   #:partial-type-env-ensure-var        ; FUNCTION
    #:partial-type-env-lookup-var        ; FUNCTION
    #:partial-type-env-add-type          ; FUNCTION
    #:partial-type-env-replace-type      ; FUNCTION
@@ -40,6 +41,13 @@
            (values tc:tyvar))
   (setf (gethash var (partial-type-env-ty-table env))
         (tc:make-variable (tc:make-kvariable) source-name)))
+
+(defun partial-type-env-ensure-var (env var &optional (source-name var))
+  (declare (type partial-type-env env)
+           (type symbol var)
+           (values tc:tyvar))
+  (or (gethash var (partial-type-env-ty-table env))
+      (partial-type-env-add-var env var source-name)))
 
 (defun partial-type-env-lookup-var (env var source)
   (declare (type partial-type-env env)
