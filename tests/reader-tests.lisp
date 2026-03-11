@@ -1,5 +1,28 @@
 (in-package #:coalton-tests)
 
+(defun read-form-with-source (string)
+  (let ((source (source:make-source-string string :name "test")))
+    (with-open-stream (stream (source:source-stream source))
+      (parser:with-reader-context stream
+        (values (parser:maybe-read-form stream source parser::*coalton-eclector-client*)
+                source)))))
+
+(defun cst-symbol-spans (form name)
+  (labels ((walk (node spans)
+             (cond
+               ((concrete-syntax-tree:consp node)
+                (walk (concrete-syntax-tree:rest node)
+                      (walk (concrete-syntax-tree:first node) spans)))
+               ((concrete-syntax-tree:atom node)
+                (let ((raw (concrete-syntax-tree:raw node)))
+                  (if (and (symbolp raw)
+                           (string= (symbol-name raw) name))
+                      (cons (concrete-syntax-tree:source node) spans)
+                      spans)))
+               (t
+                spans))))
+    (nreverse (walk form nil))))
+
 (defmacro coalton-example-with-gensym ()
   (let ((x (gensym)))
     `(coalton:coalton
@@ -37,3 +60,15 @@
         (is (string= "Type mismatch"
                      (source:message c))
             "condition message is correct")))))
+
+(deftest repeated-symbols-retain-distinct-source-spans ()
+  (let ((form-string "(:a -> Tuple Integer Integer -> List Tuple Integer Integer)"))
+    (multiple-value-bind (form source)
+        (read-form-with-source form-string)
+      (declare (ignore source))
+      (let* ((first (search "Tuple" form-string))
+             (second (search "Tuple" form-string :start2 (1+ first)))
+             (expected (list (cons first (+ first (length "Tuple")))
+                             (cons second (+ second (length "Tuple"))))))
+        (is (equal expected
+                   (cst-symbol-spans form "TUPLE")))))))
