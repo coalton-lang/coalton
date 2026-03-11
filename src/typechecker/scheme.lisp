@@ -12,6 +12,7 @@
   (:export
    #:ty-scheme                          ; STRUCT
    #:make-ty-scheme                     ; CONSTRUCTOR
+   #:ty-scheme-explicit-p              ; ACCESSOR
    #:ty-scheme-kinds                    ; ACCESSOR
    #:ty-scheme-type                     ; ACCESSOR
    #:ty-scheme=                         ; FUNCTION
@@ -21,6 +22,7 @@
    #:quantify                           ; FUNCTION
    #:to-scheme                          ; FUNCTION
    #:fresh-inst                         ; FUNCTION
+   #:ty-scheme-instantiation-types      ; FUNCTION
    #:scheme-predicates                  ; FUNCTION
    #:fresh-pred                         ; FUNCTION
    #:fresh-preds                        ; FUNCTION
@@ -34,8 +36,9 @@
 ;;;
 
 (defstruct ty-scheme 
-  (kinds (util:required 'kinds) :type list         :read-only t)
-  (type  (util:required 'type)  :type qualified-ty :read-only t))
+  (explicit-p nil                    :type boolean      :read-only t)
+  (kinds      (util:required 'kinds) :type list         :read-only t)
+  (type       (util:required 'type)  :type qualified-ty :read-only t))
 
 (defun ty-scheme= (ty-scheme1 ty-scheme2)
   (and (equalp (ty-scheme-kinds ty-scheme1)
@@ -79,6 +82,7 @@
                                 :to (make-tgen :id id
                                                :source-name (tyvar-source-name var))))))
     (make-ty-scheme
+     :explicit-p nil
      :kinds kinds
      :type (apply-substitution subst type))))
 
@@ -113,6 +117,7 @@
 (defgeneric to-scheme (ty)
   (:method ((ty qualified-ty))
     (make-ty-scheme
+     :explicit-p nil
      :kinds nil
      :type ty))
 
@@ -147,7 +152,7 @@
          (scheme (quantify (type-variables (cons var preds)) qual-ty)))
     (qualified-ty-predicates (fresh-inst scheme))))
 
-(defun quantify-using-tvar-order (tyvars type)
+(defun quantify-using-tvar-order (tyvars type &optional (explicit-p nil))
   (let* ((vars (remove-if
                 (lambda (x) (not (find x (type-variables type) :test #'ty=)))
                 tyvars))
@@ -159,6 +164,7 @@
                                 :to (make-tgen :id id
                                                :source-name (tyvar-source-name var))))))
     (make-ty-scheme
+     :explicit-p explicit-p
      :kinds kinds
      :type (apply-substitution subst type))))
 
@@ -168,6 +174,7 @@
 
 (defmethod apply-substitution (subst-list (type ty-scheme))
   (make-ty-scheme
+   :explicit-p (ty-scheme-explicit-p type)
    :kinds (ty-scheme-kinds type)
    :type (apply-substitution subst-list (ty-scheme-type type))))
 
@@ -188,6 +195,7 @@
 
 (defmethod remove-source-info ((scheme ty-scheme))
   (make-ty-scheme
+   :explicit-p (ty-scheme-explicit-p scheme)
    :kinds (ty-scheme-kinds scheme)
    :type (remove-source-info (ty-scheme-type scheme))))
 

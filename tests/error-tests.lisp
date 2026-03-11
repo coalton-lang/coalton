@@ -82,3 +82,53 @@ help: message 5
    |
  5 |    (cf (:a -> Tuple Integer Integer -> List Tuple Integer Integer)))
    |                                             ^^^^^ Expected kind '*' but got kind '* → (* → *)'"))
+
+(deftest explicit-forall-rejects-unbound-type-variables ()
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-explicit-forall-errors)
+
+(declare bad (forall (:a) (:a -> :b)))
+
+(define bad
+  (fn (x)
+    x))")))
+    (is (search "Unknown type variable :B" msg))
+    (is (search "(declare bad (forall (:a) (:a -> :b)))" msg))))
+
+(deftest explicit-forall-warns-on-unused-type-variables ()
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-explicit-forall-errors)
+
+(declare good (forall (:a :b) (:a -> :a)))
+
+(define good
+  (fn (x)
+    x))")))
+    (is (search "Unused quantified type variable" msg))
+    (is (search "quantified type variable :B is not used in the declared type" msg))))
+
+(deftest explicit-forall-rejects-duplicate-type-variables ()
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-explicit-forall-errors)
+
+(declare bad (forall (:a :a) (:a -> :a)))
+
+(define bad
+  (fn (x)
+    x))")))
+    (is (search "Duplicate quantified type variable" msg))
+    (is (search "first binding here" msg))
+    (is (search "second binding here" msg))))
+
+(deftest nested-forall-rejects-duplicate-type-variables ()
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-explicit-forall-errors)
+
+(declare bad (forall (:a) (forall (:a) (:a -> :a))))
+
+(define bad
+  (fn (x)
+    x))")))
+    (is (search "Duplicate quantified type variable" msg))
+    (is (search "first binding here" msg))
+    (is (search "second binding here" msg))))

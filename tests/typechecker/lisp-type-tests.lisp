@@ -36,6 +36,14 @@
   (define (named-vars-fn pair)
     pair)
 
+  (declare ordered-forall-fn (forall (:result :input) :input -> :result -> :input))
+  (define (ordered-forall-fn x _y)
+    x)
+
+  (declare nested-forall-fn (forall (:outer) (forall (:inner) :outer -> :inner -> :outer)))
+  (define (nested-forall-fn x _y)
+    x)
+
   (define-class (NameTrackedClass :monad :state)
     (name-tracked-get (:monad :state)))
   )
@@ -89,6 +97,12 @@
       (check-string= "named function type variables"
                      "FORALL :LEFT :RIGHT. ((COALTON/CLASSES:TUPLE :LEFT :RIGHT) -> (COALTON/CLASSES:TUPLE :LEFT :RIGHT))"
                      (render-type (coalton-type-of 'coalton-native-tests::named-vars-fn)))
+      (check-string= "explicit forall binder order"
+                     "FORALL :RESULT :INPUT. (:INPUT -> :RESULT -> :INPUT)"
+                     (render-type (coalton-type-of 'coalton-native-tests::ordered-forall-fn)))
+      (check-string= "nested forall binder order"
+                     "FORALL :OUTER :INNER. (:OUTER -> :INNER -> :OUTER)"
+                     (render-type (coalton-type-of 'coalton-native-tests::nested-forall-fn)))
       (check-string= "class method type variables"
                      "FORALL :MONAD :STATE. COALTON-NATIVE-TESTS::NAMETRACKEDCLASS :MONAD :STATE => (:MONAD :STATE)"
                      (render-type (coalton-type-of 'coalton-native-tests::name-tracked-get)))
