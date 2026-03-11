@@ -213,6 +213,7 @@ does not have that suffix."
       (lisp (Vector Char) (str)
         (cl:make-array (length str)
                        :adjustable cl:t
+                       :fill-pointer cl:t
                        :initial-contents str))))
 
   (define-instance (Into Char String)

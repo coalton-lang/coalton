@@ -1,7 +1,6 @@
 (defpackage #:coalton-impl/parser/reader
   (:use #:cl)
   (:local-nicknames
-   (#:cst #:concrete-syntax-tree)
    (#:source #:coalton-impl/source))
   (:shadowing-import-from
    #:coalton-impl/parser/base
@@ -13,30 +12,10 @@
 
 (in-package #:coalton-impl/parser/reader)
 
-(defclass coalton-eclector-client (eclector.parse-result:parse-result-client)
+(defclass coalton-eclector-client (eclector.concrete-syntax-tree:cst-client)
   ())
 
 (defvar *coalton-eclector-client* (make-instance 'coalton-eclector-client))
-
-;;;; Check which version of eclector is installed
-(eval-when (:compile-toplevel)
-  (if (uiop:version< (asdf:component-version (asdf:find-system :eclector)) "0.10.0")
-      (pushnew :eclector-pre-0-10-0 *features*)
-      (pushnew :eclector-post-0-10-0 *features*)))
-
-(defmethod eclector.parse-result:make-expression-result
-    ((client coalton-eclector-client) expression children source)
-
-  ;; All of our nodes need access to source into so we will tag all
-  ;; children with source info.
-
-  ;; Hack to handle breaking change in eclector
-  ;; See https://github.com/s-expressionists/Concrete-Syntax-Tree/pull/36
-  ;; See https://github.com/coalton-lang/coalton/issues/887
-  #+eclector-pre-0-10-0
-  (cst:reconstruct expression children client :default-source source)
-  #+eclector-post-0-10-0
-  (cst:reconstruct client expression children :default-source source))
 
 (defmacro with-reader-context (stream &rest body)
   "Run the body in the toplevel reader context."

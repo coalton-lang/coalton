@@ -105,6 +105,61 @@
 (define-test test-gh1594 ()
   (is (== 11 (f-gh1594))))
 
+(define-test sign-runtime ()
+  (is (== (the Bit 0) (math:sign (the Bit 0))))
+  (is (== (the Bit 1) (math:sign (the Bit 1))))
+
+  (is (== (the Integer -1) (math:sign (the Integer -2))))
+  (is (== (the Integer 0) (math:sign (the Integer 0))))
+  (is (== (the Integer 1) (math:sign (the Integer 2))))
+
+  (is (== (the I8 -1) (math:sign (the I8 -2))))
+  (is (== (the I8 0) (math:sign (the I8 0))))
+  (is (== (the I8 1) (math:sign (the I8 2))))
+
+  (is (== (the I16 -1) (math:sign (the I16 -2))))
+  (is (== (the I16 0) (math:sign (the I16 0))))
+  (is (== (the I16 1) (math:sign (the I16 2))))
+
+  (is (== (the I32 -1) (math:sign (the I32 -2))))
+  (is (== (the I32 0) (math:sign (the I32 0))))
+  (is (== (the I32 1) (math:sign (the I32 2))))
+
+  (is (== (the I64 -1) (math:sign (the I64 -2))))
+  (is (== (the I64 0) (math:sign (the I64 0))))
+  (is (== (the I64 1) (math:sign (the I64 2))))
+
+  (is (== (the IFix -1) (math:sign (the IFix -2))))
+  (is (== (the IFix 0) (math:sign (the IFix 0))))
+  (is (== (the IFix 1) (math:sign (the IFix 2))))
+
+  (is (== (the U8 0) (math:sign (the U8 0))))
+  (is (== (the U8 1) (math:sign (the U8 2))))
+
+  (is (== (the U16 0) (math:sign (the U16 0))))
+  (is (== (the U16 1) (math:sign (the U16 2))))
+
+  (is (== (the U32 0) (math:sign (the U32 0))))
+  (is (== (the U32 1) (math:sign (the U32 2))))
+
+  (is (== (the U64 0) (math:sign (the U64 0))))
+  (is (== (the U64 1) (math:sign (the U64 2))))
+
+  (is (== (the UFix 0) (math:sign (the UFix 0))))
+  (is (== (the UFix 1) (math:sign (the UFix 2))))
+
+  (is (== (the Fraction -1) (math:sign (the Fraction -2))))
+  (is (== (the Fraction 0) (math:sign (the Fraction 0))))
+  (is (== (the Fraction 1) (math:sign (the Fraction 2))))
+
+  (is (== -1f0 (math:sign -2f0)))
+  (is (== 0f0 (math:sign 0f0)))
+  (is (== 1f0 (math:sign 2f0)))
+
+  (is (== -1d0 (math:sign -2d0)))
+  (is (== 0d0 (math:sign 0d0)))
+  (is (== 1d0 (math:sign 2d0))))
+
 ;; Issue on redefining inlinable functions
 ;; https://github.com/coalton-lang/coalton/issues/1499
 ;; These functions are used by inliner-tests-1.lisp, which is
