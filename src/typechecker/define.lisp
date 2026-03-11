@@ -2287,7 +2287,9 @@ as a recursive function rather than a recursive value."
 
          (bound-variables (remove name (tc-env-bound-variables env) :test #'eq))
 
-         (fresh-qual-type (tc:fresh-inst declared-ty))
+         (declared-instantiation-types (tc:ty-scheme-instantiation-types declared-ty))
+         (fresh-qual-type (tc:instantiate declared-instantiation-types
+                                          (tc:ty-scheme-type declared-ty)))
          (fresh-type (tc:qualified-ty-type fresh-qual-type))
          (fresh-preds (tc:qualified-ty-predicates fresh-qual-type)))
 
@@ -2334,9 +2336,21 @@ as a recursive function rather than a recursive value."
                                              :test #'tc:ty=)
                                             env-tvars
                                             :test #'tc:ty=))
+               (ordered-explicit-tvars
+                 (mapcar (lambda (declared-tvar)
+                           (tc:apply-substitution subs declared-tvar))
+                         declared-instantiation-types))
 
                (output-qual-type (tc:qualify expr-preds expr-type))
-               (output-scheme (tc:quantify local-tvars output-qual-type)))
+               (output-scheme (if (tc:ty-scheme-explicit-p declared-ty)
+                                  (tc:quantify-using-tvar-order
+                                   (remove-if-not
+                                    (lambda (declared-tvar)
+                                      (find declared-tvar local-tvars :test #'tc:ty=))
+                                    ordered-explicit-tvars)
+                                   output-qual-type
+                                   t)
+                                  (tc:quantify local-tvars output-qual-type))))
 
           (let* ((expr-preds (tc:apply-substitution subs expr-preds))
                  (preds (tc:apply-substitution subs preds))

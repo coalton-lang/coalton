@@ -35,6 +35,8 @@
    #:ty-predicate-list                  ; TYPE
    #:qualified-ty                       ; STRUCT
    #:make-qualified-ty                  ; CONSTRUCTOR
+   #:qualified-ty-explicit-p           ; ACCESSOR
+   #:qualified-ty-explicit-variables   ; ACCESSOR
    #:qualified-ty-predicates            ; ACCESSOR
    #:qualified-ty-type                  ; ACCESSOR
    #:qualified-ty-list                  ; TYPE
@@ -66,6 +68,11 @@
 ;;;; qualified-ty := ty
 ;;;;               | "(" ty-predicate "=>" type-list ")"
 ;;;;               | "(" ( "(" ty-predicate ")" )+ "=>" type-list ")"
+;;;;               | "(" ("forall" | "∀") "(" tyvar* ")" qualified-ty ")"
+;;;;
+;;;; Within a forall, the quantified body consumes the rest of the enclosing
+;;;; list, so both `(forall (:a) (:a -> :a))` and `(forall (:a) :a -> :a)` are
+;;;; accepted.
 
 (defstruct (ty (:constructor nil)
                (:copier nil))
@@ -132,12 +139,35 @@
 (defstruct (qualified-ty
             (:predicate nil)
             (:copier nil))
-  (predicates (util:required 'predicates) :type ty-predicate-list :read-only t)
-  (type       (util:required 'type)       :type ty                :read-only t)
-  (location   (util:required 'location)   :type source:location   :read-only t))
+  (explicit-p         nil                 :type boolean           :read-only t)
+  (explicit-variables nil                 :type keyword-src-list  :read-only t)
+  (predicates         (util:required 'predicates) :type ty-predicate-list :read-only t)
+  (type               (util:required 'type)       :type ty                :read-only t)
+  (location           (util:required 'location)   :type source:location   :read-only t))
 
 (defmethod source:location ((self qualified-ty))
   (qualified-ty-location self))
+
+(defun parse-forall-type-variable (form source)
+  (declare (type cst:cst form)
+           (values keyword-src &optional))
+
+  (when (cst:consp form)
+    (parse-error "Invalid type variable"
+                 (note source form "expected keyword symbol")))
+
+  (unless (keywordp (cst:raw form))
+    (parse-error "Invalid type variable"
+                 (note source form "expected keyword symbol")
+                 (help source form
+                       (lambda (existing)
+                         (concatenate 'string ":" existing))
+                       "add `:` to symbol")))
+
+  (make-keyword-src
+   :name (cst:raw form)
+   :source-name (cst:raw form)
+   :location (form-location source form)))
 
 (defun flatten-type (type)
   "If TYPE is a TAPP of the form ((((T1 T2) T3) T4) ...), then return
@@ -154,9 +184,52 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
 (defun parse-qualified-type (form source)
   (declare (type cst:cst form))
 
+  (when (and (cst:consp form)
+             (cst:atom (cst:first form))
+             (member (cst:raw (cst:first form))
+                     '(coalton:forall coalton:∀)
+                     :test #'eq))
+    (unless (cst:consp (cst:rest form))
+      (parse-error "Malformed forall type"
+                   (note source form "expected quantified variables")))
+
+    (unless (cst:consp (cst:rest (cst:rest form)))
+      (parse-error "Malformed forall type"
+                   (note source form "expected quantified type")))
+
+    (unless (cst:proper-list-p (cst:second form))
+      (parse-error "Malformed forall type"
+                   (note source (cst:second form)
+                         "expected list of quantified variables")))
+
+    (let* ((body-form
+             (if (cst:null (cst:rest (cst:nthrest 2 form)))
+                 (cst:third form)
+                 (make-instance 'cst:cons-cst
+                                :raw (nthcdr 2 (cst:raw form))
+                                :first (cst:third form)
+                                :rest (cst:nthrest 3 form)
+                                :source (cst:source form))))
+           (body (parse-qualified-type
+                  body-form
+                  source))
+           (explicit-variables
+             (append
+              (parse-list #'parse-forall-type-variable (cst:second form) source)
+              (qualified-ty-explicit-variables body))))
+      (return-from parse-qualified-type
+        (make-qualified-ty
+         :explicit-p t
+         :explicit-variables explicit-variables
+         :predicates (qualified-ty-predicates body)
+         :type (qualified-ty-type body)
+         :location (form-location source form)))))
+
   (if (cst:atom form)
 
       (make-qualified-ty
+       :explicit-p nil
+       :explicit-variables nil
        :predicates nil
        :type (parse-type form source)
        :location (form-location source form))
@@ -170,6 +243,8 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
           ;; no predicates
           ((null right)
            (make-qualified-ty
+            :explicit-p nil
+            :explicit-variables nil
             :predicates nil
             :type (parse-type-list left (form-location source form))
             :location (form-location source form)))
@@ -221,6 +296,8 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
                                  predicates)))
 
              (make-qualified-ty
+              :explicit-p nil
+              :explicit-variables nil
               :predicates (reverse predicates)
               :type (parse-type-list
                      (cdr right)

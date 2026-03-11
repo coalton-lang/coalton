@@ -98,6 +98,39 @@
 
    '("a" . "(:a -> (List :a))")))
 
+(deftest test-explicit-forall-declarations ()
+  (check-coalton-types
+   "(declare choose (forall (:result :input) (:input -> :result -> :input)))
+    (define (choose x y) x)"
+
+   '("choose" . "(forall (:result :input) (:input -> :result -> :input))"))
+
+  (check-coalton-types
+   "(declare keep-first (forall (:outer) (forall (:inner) (:outer -> :inner -> :outer))))
+    (define (keep-first x y) x)"
+
+   '("keep-first" . "(forall (:outer :inner) (:outer -> :inner -> :outer))"))
+
+  (check-coalton-types
+   "(declare choose-short (forall (:result :input) :input -> :result -> :input))
+    (define (choose-short x y) x)"
+
+   '("choose-short" . "(forall (:result :input) (:input -> :result -> :input))"))
+
+  (check-coalton-types
+   "(declare keep-first-short (forall (:outer) (forall (:inner) :outer -> :inner -> :outer)))
+    (define (keep-first-short x y) x)"
+
+   '("keep-first-short" . "(forall (:outer :inner) (:outer -> :inner -> :outer))"))
+
+  (check-coalton-types
+   "(define (f x)
+      (let ((declare local-id (forall (:item) (:item -> :item)))
+            (local-id (fn (y) y)))
+        (local-id x)))"
+
+   '("f" . "(:a -> :a)")))
+
 (deftest test-type-definitions ()
   ;; Test recursive type definitions
   (check-coalton-types

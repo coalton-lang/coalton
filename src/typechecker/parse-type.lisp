@@ -31,6 +31,93 @@
 ;;; Entrypoints
 ;;;
 
+(defun seed-qualified-type-variables (unparsed-ty partial-env)
+  (declare (type parser:qualified-ty unparsed-ty)
+           (type partial-type-env partial-env)
+           (values tc:tyvar-list boolean &optional))
+  (cond
+    ((parser:qualified-ty-explicit-p unparsed-ty)
+     (let ((explicit-vars (parser:qualified-ty-explicit-variables unparsed-ty)))
+       (check-duplicates
+        explicit-vars
+        #'parser:keyword-src-name
+        (lambda (first second)
+          (tc-error "Duplicate quantified type variable"
+                    (tc-note first "first binding here")
+                    (tc-note second "second binding here"))))
+       (values
+        (loop :for tvar :in explicit-vars
+              :collect (partial-type-env-add-var partial-env
+                                                 (parser:keyword-src-name tvar)
+                                                 (or (parser:keyword-src-source-name tvar)
+                                                     (parser:keyword-src-name tvar))))
+        t)))
+    (t
+     (loop :for tvar :in (parser:collect-type-variables unparsed-ty)
+           :for tvar-name := (parser:tyvar-name tvar)
+           :do (partial-type-env-add-var partial-env
+                                         tvar-name
+                                         (or (parser:tyvar-source-name tvar)
+                                             tvar-name)))
+     (values nil nil))))
+
+(defun parse-qualified-type-internal (unparsed-ty env)
+  (declare (type parser:qualified-ty unparsed-ty)
+           (type tc:environment env)
+           (values tc:qualified-ty tc:tyvar-list boolean &optional))
+  (let ((partial-env (make-partial-type-env :env env)))
+    (multiple-value-bind (explicit-tvars explicit-p)
+        (seed-qualified-type-variables unparsed-ty partial-env)
+      (multiple-value-bind (qual-ty ksubs)
+          (infer-type-kinds unparsed-ty tc:+kstar+ nil partial-env)
+
+        (setf qual-ty (tc:apply-ksubstitution ksubs qual-ty))
+        (setf qual-ty (tc:make-qualified-ty
+                       :predicates (tc:qualified-ty-predicates qual-ty)
+                       :type (tc:qualified-ty-type qual-ty)))
+        (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables qual-ty) ksubs))
+
+        (let* ((qual-ty (tc:apply-ksubstitution ksubs qual-ty))
+               (explicit-tvars (mapcar (lambda (tvar)
+                                         (tc:apply-ksubstitution ksubs tvar))
+                                       explicit-tvars))
+               (preds (tc:qualified-ty-predicates qual-ty))
+               (ty (tc:qualified-ty-type qual-ty))
+               (qual-ty (apply-type-alias-substitutions qual-ty unparsed-ty partial-env)))
+
+          (check-for-ambiguous-variables preds ty unparsed-ty env)
+          (check-for-reducible-by-fundeps preds ty unparsed-ty env)
+          (check-for-reducible-context preds ty unparsed-ty env)
+
+          (values qual-ty explicit-tvars explicit-p))))))
+
+(defun warn-on-unused-explicit-type-variables (unparsed-ty explicit-tvars qual-ty)
+  (declare (type parser:qualified-ty unparsed-ty)
+           (type tc:tyvar-list explicit-tvars)
+           (type tc:qualified-ty qual-ty)
+           (values null))
+  (let* ((used-tvars (tc:type-variables qual-ty))
+         (unused-vars
+           (loop :for parser-var :in (parser:qualified-ty-explicit-variables unparsed-ty)
+                 :for explicit-tvar :in explicit-tvars
+                 :unless (find explicit-tvar used-tvars :test #'tc:ty=)
+                   :collect parser-var)))
+    (when unused-vars
+      (apply #'source:warn
+             (if (= 1 (length unused-vars))
+                 "Unused quantified type variable"
+                 "Unused quantified type variables")
+             (source:note
+              (source:location (first unused-vars))
+              "quantified type variable ~S is not used in the declared type"
+              (parser:keyword-src-name (first unused-vars)))
+             (loop :for unused-var :in (rest unused-vars)
+                   :collect (source:secondary-note
+                             (source:location unused-var)
+                             "quantified type variable ~S is not used in the declared type"
+                             (parser:keyword-src-name unused-var))))))
+  nil)
+
 (defgeneric apply-type-alias-substitutions (type parser-type env)
   (:documentation "Replace all type aliases in TYPE with the true types represented by them.")
   (:method ((type tc:tycon) parser-type env)
@@ -149,46 +236,21 @@
   (declare (type parser:qualified-ty unparsed-ty)
            (type tc:environment env)
            (values tc:qualified-ty &optional))
-
-  (let ((tvars (parser:collect-type-variables unparsed-ty))
-        (partial-env (make-partial-type-env :env env)))
-
-    (loop :for tvar :in tvars
-          :for tvar-name := (parser:tyvar-name tvar)
-          :do (partial-type-env-add-var partial-env
-                                        tvar-name
-                                        (or (parser:tyvar-source-name tvar)
-                                            tvar-name)))
-
-    (multiple-value-bind (qual-ty ksubs)
-        (infer-type-kinds unparsed-ty tc:+kstar+ nil partial-env)
-
-      (setf qual-ty (tc:apply-ksubstitution ksubs qual-ty))
-      (setf qual-ty (tc:make-qualified-ty
-                     :predicates (tc:qualified-ty-predicates qual-ty)
-                     :type (tc:qualified-ty-type qual-ty)))
-      (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables qual-ty) ksubs))
-
-      (let* ((qual-ty (tc:apply-ksubstitution ksubs qual-ty))
-
-             (preds (tc:qualified-ty-predicates qual-ty))
-
-             (ty (tc:qualified-ty-type qual-ty)))
-
-        (check-for-ambiguous-variables preds ty unparsed-ty env)
-        (check-for-reducible-by-fundeps preds ty unparsed-ty env)
-        (check-for-reducible-context preds ty unparsed-ty env)
-
-        (apply-type-alias-substitutions qual-ty unparsed-ty partial-env)))))
+  (nth-value 0 (parse-qualified-type-internal unparsed-ty env)))
 
 (defun parse-ty-scheme (ty env)
   (declare (type parser:qualified-ty ty)
            (type tc:environment env)
            (values tc:ty-scheme &optional))
 
-  (let* ((qual-ty (parse-qualified-type ty env))
-         (tvars (tc:type-variables qual-ty)))
-    (tc:quantify tvars qual-ty)))
+  (multiple-value-bind (qual-ty explicit-tvars explicit-p)
+      (parse-qualified-type-internal ty env)
+    (cond
+      (explicit-p
+       (warn-on-unused-explicit-type-variables ty explicit-tvars qual-ty)
+       (tc:quantify-using-tvar-order explicit-tvars qual-ty t))
+      (t
+       (tc:quantify (tc:type-variables qual-ty) qual-ty)))))
 
 (defun check-for-ambiguous-variables (preds type qual-ty env)
   (declare (type tc:ty-predicate-list preds)
