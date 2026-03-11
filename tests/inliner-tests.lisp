@@ -287,6 +287,28 @@
           1
           (* n (factorial-1 (- n 1)))))"))
 
+(deftest recursive-class-constraint-inline-test ()
+  ;; gh #1677
+  (check-coalton-types
+   "(define-class (Foo :t)
+      (bar (:t -> Unit)))
+
+    (define-instance (Foo UFix)
+      (define (bar _x)
+        Unit))
+
+    (define-instance (Foo :t => Foo (Optional :t))
+      (inline)
+      (define (bar x)
+        (match x
+          ((None) Unit)
+          ((Some x) (bar x)))))
+
+    (define (baz)
+      (let x = (Some (Some (the UFix 2))))
+      (bar x)))"
+   '("baz" . "(:a -> Unit)")))
+
 (defun count-let-binding-type-mismatches (let-node)
   "Count uses of let-bound variables whose node types differ from their binding expression types."
   (declare (type ast:node-let let-node)
