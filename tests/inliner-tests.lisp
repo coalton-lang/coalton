@@ -22,9 +22,24 @@
   (define (two-arg-double-float-add-underapply-caller x)
     (two-arg-double-float-add-underapply x)))
 
+(coalton-toplevel
+  (declare same-tu-inline-double-float-add
+    (Double-Float -> Double-Float -> Double-Float))
+  (inline)
+  (define (same-tu-inline-double-float-add x y)
+    (lisp Double-Float (x y) (cl:+ x y)))
+
+  (declare same-tu-inline-double-float-add-caller
+    (Double-Float -> Double-Float -> Double-Float))
+  (define (same-tu-inline-double-float-add-caller x y)
+    (same-tu-inline-double-float-add x y)))
+
 (define-test function-inline ()
   (is (== 5.0d0 (two-arg-double-float-add-caller 2.0d0 3.0d0)))
   (is (== 5.0d0 (two-arg-double-float-add-underapply-caller 2.0d0))))
+
+(define-test same-translation-unit-function-inline ()
+  (is (== 5.0d0 (same-tu-inline-double-float-add-caller 2.0d0 3.0d0))))
 
 (coalton-toplevel
   (define-class (class-for-inline-method-test :a)
@@ -63,6 +78,27 @@
   (declare monomorph-for-inline (Integer -> Integer))
   (define (monomorph-for-inline y)
     (num-generic-for-inline y)))
+
+(coalton-toplevel
+  (declare same-tu-specialized-generic-for-inline
+    (Num :a => :a -> :a -> :a))
+  (define (same-tu-specialized-generic-for-inline x y)
+    (+ x y))
+
+  (declare same-tu-specialized-double-float-add
+    (Double-Float -> Double-Float -> Double-Float))
+  (inline)
+  (define (same-tu-specialized-double-float-add x y)
+    (lisp Double-Float (x y) (cl:+ x y)))
+
+  (specialize same-tu-specialized-generic-for-inline
+              same-tu-specialized-double-float-add
+              (Double-Float -> Double-Float -> Double-Float))
+
+  (declare same-tu-specialized-double-float-add-caller
+    (Double-Float -> Double-Float -> Double-Float))
+  (define (same-tu-specialized-double-float-add-caller x y)
+    (same-tu-specialized-generic-for-inline x y)))
 
 (coalton-toplevel
   (inline)
@@ -266,6 +302,21 @@
                 (coalton:lookup-code
                  'coalton-native-tests::two-arg-double-float-add-caller)))))))
 
+(deftest same-translation-unit-specialization-inline ()
+  (fiasco:skip-unless (not coalton-impl/settings:*coalton-disable-specialization*))
+  (is (= 5.0d0
+         (coalton-native-tests::same-tu-specialized-double-float-add-caller
+          2.0d0
+          3.0d0))))
+
+(deftest same-translation-unit-function-inline-code ()
+  (is (equal '((cl:+ coalton-native-tests::x coalton-native-tests::y))
+             (ast:node-lisp-form
+              (ast:node-let-subexpr
+               (ast:node-abstraction-subexpr
+                (coalton:lookup-code
+                 'coalton-native-tests::same-tu-inline-double-float-add-caller)))))))
+
 (deftest method-inline-code ()
   (is (equal '((cl:+ coalton-native-tests::x coalton-native-tests::y))
              (ast:node-lisp-form
@@ -273,6 +324,15 @@
                (ast:node-abstraction-subexpr
                 (coalton:lookup-code
                  'coalton-native-tests::method-for-inline-test-caller)))))))
+
+(deftest same-translation-unit-specialization-inline-code ()
+  (fiasco:skip-unless (not coalton-impl/settings:*coalton-disable-specialization*))
+  (is (equal '((cl:+ coalton-native-tests::x coalton-native-tests::y))
+             (ast:node-lisp-form
+              (ast:node-let-subexpr
+               (ast:node-abstraction-subexpr
+                (coalton:lookup-code
+                 'coalton-native-tests::same-tu-specialized-double-float-add-caller)))))))
 
 (deftest recursive-inline-test ()
   (check-coalton-types
