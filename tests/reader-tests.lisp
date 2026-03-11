@@ -72,3 +72,50 @@
                              (cons second (+ second (length "Tuple"))))))
         (is (equal expected
                    (cst-symbol-spans form "TUPLE")))))))
+
+(deftest reader-defers-coalton-compilation ()
+  (uiop:with-temporary-file (:stream stream
+                             :pathname input-file
+                             :suffix ".lisp"
+                             :direction :output
+                             :keep t)
+    (write-string "(named-readtables:in-readtable coalton:coalton)
+(in-package #:coalton-user)
+;; λ
+(coalton-toplevel
+  (declare reader-test-f (UFix -> UFix))
+  (define (reader-test-f x) x))
+" stream)
+    :close-stream
+    (let* ((compile-sym (find-symbol "COMPILE-COALTON-TOPLEVEL" "COALTON-IMPL/ENTRY"))
+           (orig-compile (symbol-function compile-sym))
+           (compile-count 0)
+           (source-names nil))
+      (unwind-protect
+           (progn
+             (setf (symbol-function compile-sym)
+                   (lambda (program)
+                     (incf compile-count)
+                     (let* ((form (first (coalton-impl/parser/toplevel:program-defines program)))
+                            (location (source:location form)))
+                       (push (source:source-name
+                              (source:location-source location))
+                             source-names))
+                     (funcall orig-compile program)))
+             (with-open-file (stream input-file)
+               (let ((*package* (find-package "CL-USER"))
+                     (*readtable* (copy-readtable nil))
+                     (*load-truename* input-file))
+                 (eval (read stream nil nil))
+                 (eval (read stream nil nil))
+                 (let* ((form (read stream nil nil))
+                        (expansion-1 (macroexpand-1 form))
+                        (expansion-2 (macroexpand-1 form)))
+                   (is (= 1 compile-count)
+                       "reader path should compile at most once per source form")
+                   (is (eq expansion-1 expansion-2)
+                       "cached macroexpansion should be reused")
+                   (is (string= (namestring input-file)
+                                (first source-names))
+                       "source name should refer to the original file")))))
+        (setf (symbol-function compile-sym) orig-compile)))))
