@@ -173,11 +173,14 @@
 
                  :for class-name := (parser:identifier-src-name (parser:toplevel-define-class-name class))
 
-                 :for vars := (mapcar #'parser:keyword-src-name
-                                      (parser:toplevel-define-class-vars class))
+                 :for vars := (parser:toplevel-define-class-vars class)
 
                  :for tvars := (loop :for var :in vars
-                                     :collect (partial-type-env-add-var partial-env var))
+                                     :collect (partial-type-env-add-var
+                                               partial-env
+                                               (parser:keyword-src-name var)
+                                               (or (parser:keyword-src-source-name var)
+                                                   (parser:keyword-src-name var))))
 
                  :for pred := (tc:make-ty-predicate
                                :class class-name
@@ -380,7 +383,10 @@
     ;; Superclass predicates may reference additional type variables.
     ;; Add them now so infer-predicate-kinds can validate them.
     (loop :for tvar :in superclass-extra-tyvars
-          :do (partial-type-env-add-var env (parser:tyvar-name tvar)))
+          :do (partial-type-env-add-var env
+                                        (parser:tyvar-name tvar)
+                                        (or (parser:tyvar-source-name tvar)
+                                            (parser:tyvar-name tvar))))
 
     (let* ((fundeps
              (loop :for fundep :in (parser:toplevel-define-class-fundeps class)
@@ -410,6 +416,17 @@
                          :key #'parser:tyvar-name)
 
                    :for method-tyvar-names := (mapcar #'parser:tyvar-name method-tyvars)
+                   :for method-tyvar-source-names
+                     := (mapcar (lambda (tyvar)
+                                  (or (parser:tyvar-source-name tyvar)
+                                      (parser:tyvar-name tyvar)))
+                                method-tyvars)
+                   :for method-tyvar-source-table
+                     := (loop :with table := (make-hash-table :test #'eq)
+                              :for name :in method-tyvar-names
+                              :for source-name :in method-tyvar-source-names
+                              :do (setf (gethash name table) source-name)
+                              :finally (return table))
 
                    ;; Type variables referenced in ty as well as the class predicate
                    :for known-method-tyvars
@@ -455,7 +472,11 @@
                    ;; Add new type variables to the environment
                    :do (loop :for new-method-tyvar-name
                                :in (set-difference method-tyvar-names var-names :test #'eq)
-                             :do (partial-type-env-add-var env new-method-tyvar-name))
+                             :do (partial-type-env-add-var
+                                  env
+                                  new-method-tyvar-name
+                                  (or (gethash new-method-tyvar-name method-tyvar-source-table)
+                                      new-method-tyvar-name)))
 
                    :collect (multiple-value-bind (method-ty_ ksubs_)
                                 (infer-type-kinds method-ty tc:+kstar+ ksubs env)

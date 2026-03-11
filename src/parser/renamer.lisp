@@ -656,6 +656,7 @@
       (if new-name
           (make-tyvar
            :name new-name
+           :source-name (tyvar-source-name ty)
            :location (source:location ty))
           ty)))
 
@@ -710,6 +711,7 @@
       (if new-name
           (make-keyword-src
            :name new-name
+           :source-name (keyword-src-source-name keyword)
            :location (source:location keyword))
           keyword)))
 

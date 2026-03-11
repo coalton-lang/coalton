@@ -275,14 +275,19 @@ This is conservative and intentionally aligns with mutable native wrappers."
            ;; Register each type in the partial type env
            :do (loop :for type :in scc
                      :for name := (parser:identifier-src-name (parser:type-definition-name type))
-                     :for vars := (mapcar #'parser:keyword-src-name (parser:type-definition-vars type))
+                     :for vars := (parser:type-definition-vars type)
 
                      ;; Register each type's type variables in the environment. A
                      ;; mapping is stored from (type-name, var-name) to kind-variable
                      ;; because type variable names are not unique between define-types.
                      :for kvars
                        := (loop :for var :in vars
-                                :collect (tc:kind-of (partial-type-env-add-var partial-env var)))
+                                :collect (tc:kind-of
+                                          (partial-type-env-add-var
+                                           partial-env
+                                           (parser:keyword-src-name var)
+                                           (or (parser:keyword-src-source-name var)
+                                               (parser:keyword-src-name var)))))
 
                      :for kind := (if (typep type 'parser:toplevel-define-type-alias)
                                       ;; Type aliases may not alias a type of kind *.
@@ -701,9 +706,11 @@ This is conservative and intentionally aligns with mutable native wrappers."
            (util:find-symbol "LISPTYPE" types-package))
          (tvars
            (loop :for i :below (tc:kind-arity (tc:tycon-kind (type-definition-type type)))
+                 :for tvar-name := (alexandria:format-symbol util:+keyword-package+ "~d" i)
                  :collect (parser:make-tyvar
                            :location location
-                           :name (alexandria:format-symbol util:+keyword-package+ "~d" i))))
+                           :name tvar-name
+                           :source-name tvar-name)))
          (ty
            (parser:make-tycon :location location
                               :name (type-definition-name type))))

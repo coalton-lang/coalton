@@ -13,3 +13,10 @@
     (is (= 3 (apply #'coalton:call-coalton-function coalton+ '(1 2))))
     (signals coalton-impl/runtime:too-many-arguments-to-coalton-function
       (apply #'coalton:call-coalton-function coalton+ (loop :for i :below 100 :collect i)))))
+
+(deftest call-coalton-sign-ufix-from-lisp ()
+  (let ((sign-ufix (coalton:coalton
+                     (coalton:fn (x)
+                       (coalton/math:sign (coalton:the coalton:UFix x))))))
+    (is (= 0 (coalton:call-coalton-function sign-ufix 0)))
+    (is (= 1 (coalton:call-coalton-function sign-ufix 2)))))

@@ -128,7 +128,10 @@
     (if (typep env 'tc:environment)
       (loop :for tvar :in (parser:collect-type-variables parser-ty)
             :for tvar-name := (parser:tyvar-name tvar)
-            :do (partial-type-env-add-var partial-env tvar-name)))
+            :do (partial-type-env-add-var partial-env
+                                          tvar-name
+                                          (or (parser:tyvar-source-name tvar)
+                                              tvar-name))))
 
     (multiple-value-bind (ty ksubs)
         (infer-type-kinds parser-ty
@@ -152,7 +155,10 @@
 
     (loop :for tvar :in tvars
           :for tvar-name := (parser:tyvar-name tvar)
-          :do (partial-type-env-add-var partial-env tvar-name))
+          :do (partial-type-env-add-var partial-env
+                                        tvar-name
+                                        (or (parser:tyvar-source-name tvar)
+                                            tvar-name)))
 
     (multiple-value-bind (qual-ty ksubs)
         (infer-type-kinds unparsed-ty tc:+kstar+ nil partial-env)

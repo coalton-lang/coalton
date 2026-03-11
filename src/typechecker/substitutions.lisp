@@ -42,9 +42,9 @@
   (declare (type substitution-list s1)
            (type substitution-list s2)
            (values substitution-list))
-  (let ((overlap (intersection s1 s2 :key #'substitution-from :test #'equalp)))
+  (let ((overlap (intersection s1 s2 :key #'substitution-from :test #'ty=)))
     (if (every (lambda (x)
-                 (equalp (apply-substitution s1 x) (apply-substitution s2 x)))
+                 (ty= (apply-substitution s1 x) (apply-substitution s2 x)))
                (mapcar #'substitution-from overlap))
         (concatenate 'list s1 s2)
         (error 'substitution-list-merge-error))))
@@ -67,7 +67,7 @@
   (:documentation "Apply the substitutions defined in SUBST-LIST on TYPE.")
   ;; For a type variable, substitute if it is in SUBST-LIST, otherwise return the original type
   (:method (subst-list (type tyvar))
-    (let ((subst (find type subst-list :key #'substitution-from :test #'equalp)))
+    (let ((subst (find type subst-list :key #'substitution-from :test #'ty=)))
       (if subst
           (substitution-to subst)
           type)))

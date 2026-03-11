@@ -16,6 +16,7 @@
    #:make-tyvar                         ; CONSTRUCTOR
    #:tyvar-p                            ; FUNCTION
    #:tyvar-name                         ; ACCESSOR
+   #:tyvar-source-name                  ; ACCESSOR
    #:tyvar-list                         ; TYPE
    #:tycon                              ; STRUCT
    #:make-tycon                         ; CONSTRUCTOR
@@ -82,7 +83,10 @@
 
 (defstruct (tyvar (:include ty)
                   (:copier nil))
-  (name (util:required 'name) :type keyword :read-only t))
+  (name        (util:required 'name)      :type keyword           :read-only t)
+  ;; The original source spelling survives parser renaming and is reused for
+  ;; later printing of programmer-written type variables.
+  (source-name nil                        :type (or null keyword) :read-only t))
 
 (defun tyvar-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -274,7 +278,9 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
           (cst:raw form))
 
      (if (equalp (symbol-package (cst:raw form)) util:+keyword-package+)
-         (make-tyvar :name (cst:raw form) :location (form-location source form))
+         (make-tyvar :name (cst:raw form)
+                     :source-name (cst:raw form)
+                     :location (form-location source form))
          (make-tycon :name (cst:raw form) :location (form-location source form))))
 
     ((cst:atom form)
