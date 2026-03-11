@@ -55,3 +55,50 @@
 
 (define-test test-partial-monomorphization ()
   (is (== 3 (partial-monomorphization-b "x" "x" 2))))
+
+(coalton-toplevel
+  (define (polymorphic-lt-helper x y)
+    (noinline (< x y)))
+
+  (monomorphize)
+  (declare polymorphic-lt-wrapper (Integer -> Integer -> Boolean))
+  (define (polymorphic-lt-wrapper x y)
+    (polymorphic-lt-helper x y)))
+
+(define-test test-monomorphized-polymorphic-lt-runtime ()
+  (is (== True (polymorphic-lt-wrapper 1 2)))
+  (is (== False (polymorphic-lt-wrapper 2 1))))
+
+
+(in-package #:coalton-tests)
+
+(defun %count-direct-calls-if (node predicate)
+  (declare (type ast:node node)
+           (type function predicate)
+           (values fixnum &optional))
+  (let ((count 0))
+    (traverse:traverse
+     node
+     (list
+      (traverse:action (:after ast:node-direct-application app)
+        (when (funcall predicate (ast:node-direct-application-rator app))
+          (incf count))
+        (values))))
+    count))
+
+(deftest test-monomorphized-polymorphic-lt-specializes ()
+  (fiasco:skip-unless (not coalton-impl/settings:*coalton-disable-specialization*))
+  (let* ((wrapper
+           (coalton:lookup-code 'coalton-native-tests::polymorphic-lt-wrapper))
+         (wrapper-call
+           (ast:node-abstraction-subexpr wrapper)))
+    (is (typep wrapper-call 'ast:node-direct-application))
+    (let* ((candidate (ast:node-direct-application-rator wrapper-call))
+           (candidate-node (coalton:lookup-code candidate))
+           (integer-< (find-symbol "INTEGER-<" "COALTON/MATH/NUM")))
+      (is integer-<)
+      (is (= 1
+             (%count-direct-calls-if
+              candidate-node
+              (lambda (name)
+                (eq name integer-<))))))))

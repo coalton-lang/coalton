@@ -67,3 +67,18 @@ help: message 5
  16 |               (*==* a2 b2)))
     |                ----
 "))))
+
+(deftest repeated-type-constructors-report-the-correct-span ()
+  (check-string=
+   "issue 916"
+   (collect-compiler-error
+    "(package issue916
+  (import coalton-prelude))
+
+(define-class (C :a)
+  (cf (:a -> Tuple Integer Integer -> List Tuple Integer Integer)))")
+   "error: Kind mismatch
+  --> test:5:43
+   |
+ 5 |    (cf (:a -> Tuple Integer Integer -> List Tuple Integer Integer)))
+   |                                             ^^^^^ Expected kind '*' but got kind '* → (* → *)'"))

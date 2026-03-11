@@ -111,10 +111,10 @@ error: Malformed repr :native attribute
 --------------------------------------------------------------------------------
 
 error: Malformed repr :native attribute
-  --> test:3:6
+  --> test:3:22
    |
  3 |  (repr :native :native :native)
-   |        ^^^^^^^ unexpected form
+   |                        ^^^^^^^ unexpected form
 
 ================================================================================
 107 Unknown repr attribute

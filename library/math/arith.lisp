@@ -160,10 +160,11 @@ The function `general/` is partial, and will error produce a run-time error if t
   (inline)
   (declare sign ((Ord :a) (Num :a) (Num :b) => :a -> :b))
   (define (sign x)
-    "The sign of `x`, where `(sign 0) = 1`."
-    (if (< x 0)
-        -1
-        1))
+    "The sign of `x`, where `(sign 0) = 0`."
+    (cond
+      ((positive? x) 1)
+      ((negative? x) -1)
+      (True 0)))
 
   (inline)
   (declare ash (Integer -> Integer -> Integer))
@@ -219,6 +220,17 @@ The function `general/` is partial, and will error produce a run-time error if t
     "Is `x` not zero?"
     (/= x 0)))
 
+(cl:defmacro %define-sign-native (type)
+  (cl:let ((sign-spec (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-SIGN"))))
+    `(cl:progn
+       (coalton-toplevel
+         (specialize sign ,sign-spec (,type -> ,type))
+         (inline)
+         (declare ,sign-spec (,type -> ,type))
+         (define (,sign-spec n)
+           (lisp ,type (n)
+             (cl:signum n)))))))
+
 (cl:defmacro %define-abs-native (type)
   (cl:let ((abs (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-ABS"))))
     `(cl:progn
@@ -229,6 +241,22 @@ The function `general/` is partial, and will error produce a run-time error if t
          (define (,abs n)
            (lisp ,type (n)
              (cl:abs n)))))))
+
+(%define-sign-native Bit)
+(%define-sign-native Integer)
+(%define-sign-native I8)
+(%define-sign-native I16)
+(%define-sign-native I32)
+(%define-sign-native I64)
+(%define-sign-native IFix)
+(%define-sign-native U8)
+(%define-sign-native U16)
+(%define-sign-native U32)
+(%define-sign-native U64)
+(%define-sign-native UFix)
+(%define-sign-native Fraction)
+(%define-sign-native F32)
+(%define-sign-native F64)
 
 (%define-abs-native Integer)
 (%define-abs-native I8)

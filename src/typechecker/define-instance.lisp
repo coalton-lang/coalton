@@ -14,6 +14,7 @@
   (:import-from
    #:coalton-impl/typechecker/define
    #:make-tc-env
+   #:check-bindings-for-invalid-recursion
    #:infer-expl-binding-type)
   (:local-nicknames
    (#:a #:alexandria)
@@ -317,6 +318,23 @@
                                 (setf (gethash name table) (tc:apply-substitution subs method)))
 
                           :finally (return table))))
+
+      (check-bindings-for-invalid-recursion
+       (parser:toplevel-define-instance-methods unparsed-instance)
+       env
+       :binding-function-p
+       (lambda (binding)
+         (let ((typed-method
+                 (gethash (parser:node-variable-name (parser:binding-name binding))
+                          methods)))
+           (and typed-method
+                (or (and (instance-method-definition-params typed-method) t)
+                    (and (null (node-body-nodes (instance-method-definition-body typed-method)))
+                         (node-abstraction-p
+                          (node-body-last-node (instance-method-definition-body typed-method))))
+                    (consp (tc:qualified-ty-predicates
+                            (node-type (instance-method-definition-name typed-method)))))
+                t))))
 
       (make-toplevel-define-instance
        :context context

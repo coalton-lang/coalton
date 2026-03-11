@@ -21,6 +21,24 @@ Used to forbid reading while inside quasiquoted forms.")
   "The source from which program text is being read.
 This symbol may be bound to a string source in the case of direct evaluation in a repl.")
 
+;; Property-list key used on deferred form ids to cache the expansion of a
+;; single readtable-driven Coalton form across repeated macroexpansion.
+(defconstant +deferred-coalton-expansion+ '%deferred-coalton-expansion
+  "Property key used to memoize deferred Coalton macroexpansions.")
+
+;; Modes handled by deferred Coalton readtable expansion:
+;; - `coalton-toplevel` compiles toplevel definitions
+;; - `coalton-codegen` returns generated Lisp without type annotations
+;; - `coalton-codegen-types` returns generated Lisp with type annotations
+;; - `coalton-codegen-ast` prints AST output and expands to NIL
+;; - `coalton` compiles an expression form
+(deftype deferred-coalton-mode ()
+  '(member coalton:coalton-toplevel
+           coalton:coalton-codegen
+           coalton:coalton-codegen-types
+           coalton:coalton-codegen-ast
+           coalton:coalton))
+
 (defun probe-symbol (package-name symbol-name)
   "Look up SYMBOL-NAME in PACKAGE-NAME, returning its value if the package exists and the symbol is bound."
   (let ((package (find-package package-name)))
@@ -112,6 +130,152 @@ SOURCE provides metadata for the stream argument, for error messages."
         (t
          (read-lisp stream source first-form))))))
 
+(defun utf-8-char-width (char)
+  "Return the number of UTF-8 octets required to encode CHAR."
+  (let ((code (char-code char)))
+    (cond
+      ((<= code #x7F) 1)
+      ((<= code #x7FF) 2)
+      ((<= code #xFFFF) 3)
+      (t 4))))
+
+(defun file-byte-offset-to-char-offset (file byte-offset)
+  "Convert BYTE-OFFSET in FILE to the corresponding character offset."
+  (with-open-file (stream file
+                          :direction ':input
+                          :element-type 'character
+                          :external-format ':utf-8)
+    (loop :with bytes := 0
+          :with chars := 0
+          :while (< bytes byte-offset)
+          :for char := (read-char stream nil nil)
+          :while char
+          :do (incf bytes (utf-8-char-width char))
+              (incf chars)
+          :finally (return chars))))
+
+(defun source-span-matches-mode-p (source mode span)
+  "Return true when SPAN in SOURCE starts with MODE."
+  (declare (type deferred-coalton-mode mode))
+  (with-open-stream (stream (source:source-stream source))
+    (file-position stream (1+ (source:span-start span)))
+    (parser:with-reader-context stream
+      (multiple-value-bind (form presentp eofp)
+          (parser:maybe-read-form stream source)
+        (declare (ignore eofp))
+        (and presentp
+             (eql (cst:raw form) mode))))))
+
+(defun normalized-source-span (source mode start end)
+  "Return a source span whose offsets line up with SOURCE."
+  (declare (type deferred-coalton-mode mode))
+  (let ((span (cons start end)))
+    (if (not (typep source 'source::source-file))
+        span
+        (if (source-span-matches-mode-p source mode span)
+            span
+            (let* ((file (source::input-name source))
+                   (normalized-span
+                     (cons (file-byte-offset-to-char-offset file start)
+                           (file-byte-offset-to-char-offset file end))))
+              (if (source-span-matches-mode-p source mode normalized-span)
+                  normalized-span
+                  (util:coalton-bug "Unable to recover source span for ~S in ~A"
+                                    mode
+                                    (source:source-name source))))))))
+
+(defun make-deferred-coalton-form (mode source span)
+  "Return a macro form that will compile the Coalton form at SPAN in SOURCE once."
+  (declare (type deferred-coalton-mode mode))
+  (list 'coalton-impl/reader::expand-source-coalton-form
+        (gensym "COALTON-FORM-")
+        mode
+        source
+        span))
+
+(defun maybe-read-coalton-deferred (stream source start)
+  "Read a Coalton toplevel form from STREAM and defer compilation to macroexpansion.
+SOURCE provides metadata for the stream argument, and START is the offset of
+the opening parenthesis that began the current form."
+  (parser:with-reader-context stream
+    (let ((first-form
+            (multiple-value-bind (form presentp)
+                (parser:maybe-read-form stream source)
+              (unless presentp
+                (return-from maybe-read-coalton-deferred nil))
+              form)))
+      (let ((mode (cst:raw first-form)))
+        (case mode
+          ((coalton:coalton-toplevel
+            coalton:coalton-codegen
+            coalton:coalton-codegen-types
+            coalton:coalton-codegen-ast
+            coalton:coalton)
+           ;; Consume the original source form now, but compile it later from
+           ;; the exact source span so repeated compiler passes do not
+           ;; monomorphize or inline the same form more than once.
+           (read-lisp stream source first-form)
+           (make-deferred-coalton-form mode
+                                       source
+                                       (normalized-source-span source
+                                                               mode
+                                                               start
+                                                               (file-position stream))))
+          (t
+           (read-lisp stream source first-form)))))))
+
+(defun expand-source-coalton-form-1 (mode source span)
+  "Compile the Coalton form identified by MODE from SOURCE at SPAN.
+
+See the documentation of the type `deferred-coalton-mode` for the meaning of
+each MODE."
+  (declare (type deferred-coalton-mode mode))
+  (with-open-stream (stream (source:source-stream source))
+    (file-position stream (1+ (source:span-start span)))
+    (parser:with-reader-context stream
+      (multiple-value-bind (form presentp eofp)
+          (parser:maybe-read-form stream source)
+        (declare (ignore eofp))
+        (unless presentp
+          (util:coalton-bug "Missing Coalton form at ~S"
+                            (source:make-location source span)))
+        (unless (eql (cst:raw form) mode)
+          (util:coalton-bug "Expected ~S at ~S, found ~S"
+                            mode
+                            (source:make-location source span)
+                            (cst:raw form)))
+        (ecase mode
+          (coalton:coalton-toplevel
+           (entry:compile-coalton-toplevel
+            (parser:read-program stream source ':macro)))
+          (coalton:coalton-codegen
+           (let ((settings:*emit-type-annotations* nil))
+             `',(entry:entry-point
+                 (parser:read-program stream source ':macro))))
+          (coalton:coalton-codegen-types
+           (let ((settings:*emit-type-annotations* t))
+             `',(entry:entry-point
+                 (parser:read-program stream source ':macro))))
+          (coalton:coalton-codegen-ast
+           (let* ((settings:*emit-type-annotations* nil)
+                  (ast nil)
+                  (codegen:*codegen-hook* (lambda (op &rest args)
+                                            (when (eql op ':AST)
+                                              (push args ast)))))
+             (entry:entry-point (parser:read-program stream source ':macro))
+             (loop :for (name type value) :in (nreverse ast)
+                   :do (format t "~A :: ~A~%~A~%~%~%" name type value)))
+           nil)
+          (coalton:coalton
+           (entry:expression-entry-point
+            (parser:read-expressions stream source))))))))
+
+(defmacro expand-source-coalton-form (form-id mode source span)
+  "Expand the Coalton form from SOURCE at SPAN, memoized by FORM-ID."
+  (or (get form-id +deferred-coalton-expansion+)
+      (setf (get form-id +deferred-coalton-expansion+)
+            (expand-source-coalton-form-1 mode source span))))
+
 (defun read-coalton-toplevel-open-paren (stream char)
   "This is the dispatch function for open paren in the Coalton readtable.
 It ensures the presence of source metadata for STREAM and then calls MAYBE-READ-COALTON."
@@ -119,28 +283,30 @@ It ensures the presence of source metadata for STREAM and then calls MAYBE-READ-
     (return-from read-coalton-toplevel-open-paren
       (funcall (get-macro-character #\( (named-readtables:ensure-readtable :standard)) stream char)))
 
-  (cond (*source*
-         ;; source metadata exists, probably courtesy of
-         ;; compile-forms: do nothing
-         (maybe-read-coalton stream *source*))
-        ((source-filename)
-         ;; no metadata, and a compile or load operation is occurring:
-         ;; bind a source-file
-         (let ((*source* (coalton-impl/source:make-source-file
-                          (source-filename)
-                          :name (buffer-name))))
-           (maybe-read-coalton stream *source*)))
-        (t
-         ;; no metadata, no file operation, therefore we are in a
-         ;; repl: bind a source-string containing cloned input
-         (let ((*source* (coalton-impl/source:make-source-string
-                          (with-output-to-string (out)
-                            (write-char #\( out)
-                            (alexandria:copy-stream stream out))
-                          :name "repl")))
-           (with-open-stream (stream (source:source-stream *source*))
-             (read-char stream)
-             (maybe-read-coalton stream *source*))))))
+  (let ((start (1- (file-position stream))))
+    (cond
+      (*source*
+       ;; source metadata exists, probably courtesy of compile-forms: do
+       ;; nothing
+       (maybe-read-coalton stream *source*))
+      ((source-filename)
+       ;; no metadata, and a compile or load operation is occurring:
+       ;; bind a source-file
+       (let ((*source* (coalton-impl/source:make-source-file
+                        (source-filename)
+                        :name (buffer-name))))
+         (maybe-read-coalton-deferred stream *source* start)))
+      (t
+       ;; no metadata, no file operation, therefore we are in a repl:
+       ;; bind a source-string containing cloned input
+       (let ((*source* (coalton-impl/source:make-source-string
+                        (with-output-to-string (out)
+                          (write-char #\( out)
+                          (alexandria:copy-stream stream out))
+                        :name "repl")))
+         (with-open-stream (stream (source:source-stream *source*))
+           (read-char stream)
+           (maybe-read-coalton-deferred stream *source* 0)))))))
 
 (named-readtables:defreadtable coalton:coalton
   (:merge :standard)
