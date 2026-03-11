@@ -1,0 +1,117 @@
+================================================================================
+100 recursive top-level values with declarations
+================================================================================
+
+(package coalton-unit-tests/recursive-define)
+
+(declare x Integer)
+(declare y Integer)
+(define x y)
+(define y x)
+
+--------------------------------------------------------------------------------
+
+error: Invalid recursive bindings
+  --> test:5:8
+   |
+ 5 |  (define x y)
+   |          ^ top-level values cannot be defined recursively
+ 6 |  (define y x)
+   |          - recursive dependency here
+help: Top-level definitions are initialized in order. Turn one definition into a function, or build the cyclic value inside a local `let`.
+ 5 | (define x y)
+   |         -
+
+================================================================================
+101 recursive top-level function and value
+================================================================================
+
+(package coalton-unit-tests/recursive-define/prelude
+  (import coalton-prelude))
+
+(declare f-rd2 (Integer -> Integer))
+(declare x-rd2 Integer)
+(define (f-rd2 n) x-rd2)
+(define x-rd2 (f-rd2 0))
+
+--------------------------------------------------------------------------------
+
+error: Invalid recursive bindings
+  --> test:7:8
+   |
+ 6 |  (define (f-rd2 n) x-rd2)
+   |           ----- recursive dependency here
+ 7 |  (define x-rd2 (f-rd2 0))
+   |          ^^^^^ top-level recursive definitions must all be functions, but X-RD2 is a value
+help: Top-level definitions are initialized in order. Turn one definition into a function, or build the cyclic value inside a local `let`.
+ 7 | (define x-rd2 (f-rd2 0))
+   |         -----
+
+================================================================================
+102 recursive instance value methods
+================================================================================
+
+(package coalton-unit-tests/recursive-define/prelude
+  (import coalton-prelude))
+
+(define-class (C-rd3 :a)
+  (left-rd3 :a)
+  (right-rd3 :a))
+
+(define-instance (C-rd3 Integer)
+  (define left-rd3 right-rd3)
+  (define right-rd3 left-rd3))
+
+--------------------------------------------------------------------------------
+
+error: Invalid recursive bindings
+  --> test:9:10
+    |
+ 9  |    (define left-rd3 right-rd3)
+    |            ^^^^^^^^ instance value methods cannot be defined recursively
+ 10 |    (define right-rd3 left-rd3))
+    |            --------- recursive dependency here
+help: Instance methods without parameters are values. Turn one definition into a function, or build the cyclic value inside a local `let`.
+ 9  |   (define left-rd3 right-rd3)
+    |           --------
+
+================================================================================
+103 recursive instance function and value
+================================================================================
+
+(package coalton-unit-tests/recursive-define/prelude
+  (import coalton-prelude))
+
+(define-class (C-rd4 :a)
+  (f-rd4 (:a -> :a))
+  (x-rd4 :a))
+
+(define-instance (C-rd4 Integer)
+  (define (f-rd4 n) x-rd4)
+  (define x-rd4 (f-rd4 0)))
+
+--------------------------------------------------------------------------------
+
+error: Invalid recursive bindings
+  --> test:10:10
+    |
+ 9  |    (define (f-rd4 n) x-rd4)
+    |             ----- recursive dependency here
+ 10 |    (define x-rd4 (f-rd4 0)))
+    |            ^^^^^ recursive instance methods must all be functions, but X-RD4 is a value method
+help: Instance methods without parameters are values. Turn one definition into a function, or build the cyclic value inside a local `let`.
+ 10 |   (define x-rd4 (f-rd4 0)))
+    |           -----
+
+================================================================================
+104 constrained recursive instance value is allowed
+================================================================================
+
+(package coalton-unit-tests/recursive-define/prelude
+  (import coalton-prelude))
+
+(define-class (C-rd5 :a)
+  (xs-rd5 :a))
+
+(define-instance (Num :a => C-rd5 (List :a))
+  (define xs-rd5 (Cons 0 xs-rd5)))
