@@ -37,6 +37,7 @@
   (:export
    #:infer-expression-type              ; FUNCTION
    #:infer-expl-binging-type            ; FUNCTION
+   #:check-bindings-for-invalid-recursion ; FUNCTION
    #:attach-explicit-binding-type       ; FUNCTION
    ))
 
@@ -217,6 +218,20 @@
                             :do (setf env (tc:unset-function-source-parameter-names env name))))
                 nil)
           (return-from toplevel-define (values nil env)))
+
+        (let ((binding-function-table
+                (loop :with table := (make-hash-table :test #'eq)
+                      :for binding :in binding-nodes
+                      :for name := (node-variable-name (toplevel-define-name binding))
+                      :do (setf (gethash name table) (typed-binding-function-p binding))
+                      :finally (return table))))
+          (check-bindings-for-invalid-recursion
+           defines
+           (tc-env-env tc-env)
+           :binding-function-p
+           (lambda (binding)
+             (gethash (parser:node-variable-name (parser:binding-name binding))
+                      binding-function-table))))
 
         ;; Record dependencies
         (loop :for define :in defines
@@ -2040,6 +2055,123 @@ printing an implicit weak variable notation."
       (infer-bindings-type bindings dec-table subs env))))
 
 
+(defun binding-recursion-context (binding)
+  "Return the recursion-check context for BINDING.
+
+`:local` means BINDING is a `let` binding and recursive values may still be
+accepted when they are constructor-built.
+`:toplevel` means BINDING is a top-level definition.
+`:instance` means BINDING is an instance method definition."
+  (declare (type (or parser:toplevel-define
+                     parser:node-let-binding
+                     parser:instance-method-definition)
+                 binding)
+           (values (member :local :toplevel :instance) &optional))
+  (etypecase binding
+    (parser:node-let-binding ':local)
+    (parser:toplevel-define ':toplevel)
+    (parser:instance-method-definition ':instance)))
+
+(defun recursive-binding-help (binding context)
+  "Return a context-specific help note for an invalid recursive BINDING."
+  (declare (type (or parser:toplevel-define
+                     parser:node-let-binding
+                     parser:instance-method-definition)
+                 binding))
+  (case context
+    (:toplevel
+     (source:help (source:location (parser:binding-name binding))
+                  #'identity
+                  "Top-level definitions are initialized in order. Turn one definition into a function, or build the cyclic value inside a local `let`."))
+    (:instance
+     (source:help (source:location (parser:binding-name binding))
+                  #'identity
+                  "Instance methods without parameters are values. Turn one definition into a function, or build the cyclic value inside a local `let`."))))
+
+(defun typed-binding-function-p (binding)
+  "Return true when typed BINDING should be treated as a recursive function."
+  (declare (type (or toplevel-define
+                     node-let-binding
+                     instance-method-definition)
+                 binding)
+           (values boolean &optional))
+  (and
+   (or (typecase binding
+         (node-let-binding
+          (node-abstraction-p (node-let-binding-value binding)))
+         (toplevel-define
+          (or (and (toplevel-define-params binding) t)
+              (and (null (node-body-nodes (toplevel-define-body binding)))
+                   (node-abstraction-p (node-body-last-node (toplevel-define-body binding))))))
+         (instance-method-definition
+          (or (and (instance-method-definition-params binding) t)
+              (and (null (node-body-nodes (instance-method-definition-body binding)))
+                   (node-abstraction-p
+                    (node-body-last-node (instance-method-definition-body binding)))))))
+       (consp (tc:qualified-ty-predicates
+               (node-type
+                (typecase binding
+                  (node-let-binding
+                   (node-let-binding-name binding))
+                  (toplevel-define
+                   (toplevel-define-name binding))
+                  (instance-method-definition
+                   (instance-method-definition-name binding)))))))
+   t))
+
+(defun sorted-bindings-by-location (bindings)
+  (sort (copy-list bindings)
+        #'source:location<
+        :key (alexandria:compose #'source:location #'parser:binding-name)))
+
+(defun binding-sccs (bindings)
+  "Return the dependency SCCs for BINDINGS."
+  (declare (type (or parser:toplevel-define-list
+                     parser:node-let-binding-list
+                     parser:instance-method-definition-list)
+                 bindings)
+           (values list &optional))
+  (let* ((binding-table
+           (loop :with table := (make-hash-table :test #'eq)
+                 :for binding :in bindings
+                 :for name := (parser:node-variable-name (parser:binding-name binding))
+                 :do (setf (gethash name table) binding)
+                 :finally (return table)))
+         (binding-names (alexandria:hash-table-keys binding-table))
+         (binding-deps
+           (loop :for name :in binding-names
+                 :for binding := (gethash name binding-table)
+                 :for node := (parser:binding-value binding)
+                 :for deps := (remove-duplicates
+                               (intersection
+                                (mapcar #'parser:node-variable-name
+                                        (parser:collect-variables node))
+                                binding-names
+                                :test #'eq)
+                               :test #'eq)
+                 :collect (cons name deps))))
+    (loop :for scc :in (algo:tarjan-scc binding-deps)
+          :collect (loop :for name :in scc
+                         :collect (gethash name binding-table)))))
+
+(defun check-bindings-for-invalid-recursion (bindings env &key (binding-function-p #'parser:binding-function-p))
+  "Signal an error if any SCC in BINDINGS is invalidly recursive.
+
+BINDINGS is the set of bindings whose dependency graph should be checked.
+ENV is used to validate recursive constructor-built values.
+BINDING-FUNCTION-P must return true when a binding in BINDINGS should be treated
+as a recursive function rather than a recursive value."
+  (declare (type (or parser:toplevel-define-list
+                     parser:node-let-binding-list
+                     parser:instance-method-definition-list)
+                 bindings)
+           (type tc:environment env)
+           (type function binding-function-p))
+  (when (endp bindings)
+    (return-from check-bindings-for-invalid-recursion))
+  (dolist (binding-scc (binding-sccs bindings))
+    (check-for-invalid-recursive-scc binding-scc env binding-function-p)))
+
 (defun infer-bindings-type (bindings dec-table subs env)
   (declare (type list bindings)
            (type hash-table dec-table)
@@ -2059,6 +2191,10 @@ printing an implicit weak variable notation."
 
         :for scheme := (parse-ty-scheme unparsed-ty (tc-env-env env))
         :do (tc-env-add-definition env name scheme))
+
+  (when (and bindings
+             (eq ':local (binding-recursion-context (first bindings))))
+    (check-bindings-for-invalid-recursion bindings (tc-env-env env)))
 
   ;; Split apart explicit and implicit bindings
   (let* ((expl-bindings (loop :for binding :in bindings
@@ -2142,9 +2278,10 @@ printing an implicit weak variable notation."
                    tc:substitution-list
                    &optional))
   
-  ;; HACK: recursive scc checking on instances is too strict
-  (unless (typep binding 'parser:instance-method-definition)
-    (check-for-invalid-recursive-scc (list binding) (tc-env-env env)))
+  ;; Top-level and instance bindings are validated with typed information so that
+  ;; implicit dictionary arguments are treated as function parameters.
+  (unless (parser:binding-toplevel-p binding)
+    (check-for-invalid-recursive-scc (list binding) (tc-env-env env) #'parser:binding-function-p))
 
   (let* ((name (parser:node-variable-name (parser:binding-name binding)))
 
@@ -2327,113 +2464,159 @@ printing an implicit weak variable notation."
                          (tc:apply-substitution subs fresh-qual-type))
                         subs)))))))))
 
-(defun check-for-invalid-recursive-scc (bindings env)
+(defun check-for-invalid-recursive-scc (bindings env binding-function-p)
+  "Validate one recursive SCC of bindings.
+
+BINDINGS must be a non-empty strongly connected component from a binding
+dependency graph.
+ENV is used to validate recursive constructor-built values.
+BINDING-FUNCTION-P must return true when a binding in BINDINGS should be treated
+as a recursive function rather than a recursive value."
   (declare (type (or parser:toplevel-define-list
                      parser:node-let-binding-list
                      parser:instance-method-definition-list)
                  bindings)
-           (type tc:environment env))
+           (type tc:environment env)
+           (type function binding-function-p))
 
   (assert bindings)
 
-  ;; If all bindings are functions then the scc is valid
-  (when (every #'parser:binding-function-p bindings)
-    (return-from check-for-invalid-recursive-scc))
+  (let ((context (binding-recursion-context (first bindings))))
 
-  ;; If some bindings are functions and some are not then the scc is invalid
-  (when (and (some (alexandria:compose #'not #'parser:binding-function-p) bindings)
-             (some #'parser:binding-function-p bindings))
+    ;; If all bindings are functions then the scc is valid
+    (when (every binding-function-p bindings)
+      (return-from check-for-invalid-recursive-scc))
 
-    (let ((first-fn (find-if #'parser:binding-function-p bindings)))
-      (assert first-fn)
+    ;; If the SCC mixes functions and values then it is invalid.
+    (when (and (some binding-function-p bindings)
+               (notevery binding-function-p bindings))
 
-      (apply #'tc-error
-             "Invalid recursive bindings"
-             (tc-note (parser:binding-name first-fn)
-                      "function can not be defined recursively with variables")
-             (loop :for binding :in (remove first-fn bindings :test #'eq)
-                   :collect (tc-secondary-note (parser:binding-name binding)
-                                               "with definition")))))
+      (case context
+        (:local
+         (let ((first-fn (find-if binding-function-p bindings)))
+           (apply #'tc-error
+                  "Invalid recursive bindings"
+                  (tc-note (parser:binding-name first-fn)
+                           "function can not be defined recursively with variables")
+                  (loop :for binding :in (remove first-fn bindings :test #'eq)
+                        :collect (tc-secondary-note (parser:binding-name binding)
+                                                    "with definition")))))
+        (t
+         (let* ((ordered-bindings (sorted-bindings-by-location bindings))
+                (first-value (find-if-not binding-function-p ordered-bindings))
+                (help (and first-value
+                           (recursive-binding-help first-value context))))
+           (apply #'tc-error
+                  "Invalid recursive bindings"
+                  (append
+                   (list
+                    (tc-note (parser:binding-name first-value)
+                             (ecase context
+                               (:toplevel
+                                "top-level recursive definitions must all be functions, but ~S is a value")
+                               (:instance
+                                "recursive instance methods must all be functions, but ~S is a value method"))
+                             (parser:node-variable-name (parser:binding-name first-value))))
+                   (loop :for binding :in (remove first-value ordered-bindings :test #'eq)
+                         :collect (tc-secondary-note (parser:binding-name binding)
+                                                     "recursive dependency here"))
+                   (if help
+                       (list help)
+                       nil)))))))
 
-  ;; If there is a single non-recursive binding then it is valid
-  (when (and (= 1 (length bindings))
-             (not (member (parser:node-variable-name (parser:binding-name (first bindings)))
-                          (parser:collect-variables (parser:binding-value (first bindings)))
-                          :key #'parser:node-variable-name
-                          :test #'eq)))
-    (return-from check-for-invalid-recursive-scc))
+    ;; If there is a single non-recursive binding then it is valid
+    (when (and (= 1 (length bindings))
+               (not (member (parser:node-variable-name (parser:binding-name (first bindings)))
+                            (parser:collect-variables (parser:binding-value (first bindings)))
+                            :key #'parser:node-variable-name
+                            :test #'eq)))
+      (return-from check-for-invalid-recursive-scc))
 
-  ;; Toplevel bindings cannot be recursive values
-  (when (parser:binding-toplevel-p (first bindings))
-    (apply #'tc-error
-           "Invalid recursive bindings"
-           (tc-note (parser:binding-name (first bindings))
-                    "invalid recursive variable bindings")
-           (loop :for binding :in (rest bindings)
-                 :collect (tc-secondary-note (parser:binding-name binding)
-                                             "with definition"))))
+    ;; Toplevel bindings cannot be recursive values
+    (when (parser:binding-toplevel-p (first bindings))
+      (case context
+        (:local
+         (error "Unexpected local binding marked as top-level."))
+        (t
+         (let* ((ordered-bindings (sorted-bindings-by-location bindings))
+                (first-binding (first ordered-bindings))
+                (help (recursive-binding-help first-binding context)))
+           (apply #'tc-error
+                  "Invalid recursive bindings"
+                  (append
+                   (list
+                    (tc-note (parser:binding-name first-binding)
+                             (ecase context
+                               (:toplevel "top-level values cannot be defined recursively")
+                               (:instance "instance value methods cannot be defined recursively"))))
+                   (loop :for binding :in (rest ordered-bindings)
+                         :collect (tc-secondary-note (parser:binding-name binding)
+                                                     "recursive dependency here"))
+                   (if help
+                       (list help)
+                       nil)))))))
 
-  (let ((binding-names (mapcar (alexandria:compose #'parser:node-variable-name
-                                                   #'parser:binding-name)
-                               bindings)))
+    (let ((binding-names (mapcar (alexandria:compose #'parser:node-variable-name
+                                                     #'parser:binding-name)
+                                 bindings)))
 
-    (labels ((valid-recursive-constructor-call-p (node)
-               "Returns t if NODE is a valid constructor call in a recursive value binding group"
-               (typecase node
-                 (parser:node-the
-                  (valid-recursive-constructor-call-p (parser:node-the-expr node)))
-                 (parser:node-application
-                  (when (typep (parser:node-application-rator node) 'parser:node-variable)
+      (labels ((valid-recursive-constructor-call-p (node)
+                 "Returns t if NODE is a valid constructor call in a recursive value binding group"
+                 (typecase node
+                   (parser:node-the
+                    (valid-recursive-constructor-call-p (parser:node-the-expr node)))
+                   (parser:node-application
+                    (when (typep (parser:node-application-rator node) 'parser:node-variable)
 
-                    (let* ((function-name (parser:node-variable-name (parser:node-application-rator node)))
+                      (let* ((function-name (parser:node-variable-name (parser:node-application-rator node)))
 
-                           (ctor (tc:lookup-constructor env function-name :no-error t)))
+                             (ctor (tc:lookup-constructor env function-name :no-error t)))
 
-                      (when ctor
-                        ;; The constructor must be fully applied
-                        (unless (= (length (parser:node-application-rands node)) (tc:constructor-entry-arity ctor))
-                          (return-from valid-recursive-constructor-call-p nil))
+                        (when ctor
+                          ;; The constructor must be fully applied
+                          (unless (= (length (parser:node-application-rands node)) (tc:constructor-entry-arity ctor))
+                            (return-from valid-recursive-constructor-call-p nil))
 
-                        (let ((type (tc:lookup-type env (tc:constructor-entry-constructs ctor))))
+                          (let ((type (tc:lookup-type env (tc:constructor-entry-constructs ctor))))
 
-                          ;; Recursive constructors are valid on types
-                          ;; without reprs, types with repr lisp and
-                          ;; the type "List"
-                          (when (or (null (tc:type-entry-explicit-repr type))
-                                    (eq :lisp (tc:type-entry-explicit-repr type))
-                                    (eq 'coalton:List (tc:type-entry-name type)))
-                            (return-from valid-recursive-constructor-call-p
-                              (reduce
-                               (lambda (a b) (and a b))
-                               (parser:node-application-rands node)
-                               :key #'valid-recursive-value-p
-                               :initial-value t))))))))))
+                            ;; Recursive constructors are valid on types
+                            ;; without reprs, types with repr lisp and
+                            ;; the type "List"
+                            (when (or (null (tc:type-entry-explicit-repr type))
+                                      (eq :lisp (tc:type-entry-explicit-repr type))
+                                      (eq 'coalton:List (tc:type-entry-name type)))
+                              (return-from valid-recursive-constructor-call-p
+                                (reduce
+                                 (lambda (a b) (and a b))
+                                 (parser:node-application-rands node)
+                                 :key #'valid-recursive-value-p
+                                 :initial-value t))))))))))
 
-             (valid-recursive-value-p (node)
-               "Returns t if NODE is a valid subcomponent in a recursive value binding group"
-               ;; Variables are valid nodes
-               (when (typep node 'parser:node-variable)
-                 (return-from valid-recursive-value-p t))
+               (valid-recursive-value-p (node)
+                 "Returns t if NODE is a valid subcomponent in a recursive value binding group"
+                 ;; Variables are valid nodes
+                 (when (typep node 'parser:node-variable)
+                   (return-from valid-recursive-value-p t))
 
-               (when (valid-recursive-constructor-call-p node)
-                 (return-from valid-recursive-value-p t))
+                 (when (valid-recursive-constructor-call-p node)
+                   (return-from valid-recursive-value-p t))
 
-               ;; Nodes are valid if they do not reference variables in the current binding group
-               (not
-                (intersection
-                 binding-names
-                 (mapcar #'parser:node-variable-name
-                         (parser:collect-variables node))
-                 :test #'eq))))
+                 ;; Nodes are valid if they do not reference variables in the current binding group
+                 (not
+                  (intersection
+                   binding-names
+                   (mapcar #'parser:node-variable-name
+                           (parser:collect-variables node))
+                   :test #'eq))))
 
-      (when (every (alexandria:compose #'valid-recursive-constructor-call-p #'parser:binding-value) bindings)
-        (return-from check-for-invalid-recursive-scc))
+        (when (every (alexandria:compose #'valid-recursive-constructor-call-p #'parser:binding-value) bindings)
+          (return-from check-for-invalid-recursive-scc))
 
-      (apply #'tc-error "Invalid recursive bindings"
-             (tc-note (parser:binding-name (first bindings))
-                      "invalid recursive variable bindings")
-             (loop :for binding :in (rest bindings)
-                   :collect (tc-note (parser:binding-name binding) "with definition"))))))
+        (apply #'tc-error "Invalid recursive bindings"
+               (tc-note (parser:binding-name (first bindings))
+                        "invalid recursive variable bindings")
+               (loop :for binding :in (rest bindings)
+                     :collect (tc-note (parser:binding-name binding) "with definition")))))))
 
 (defun infer-impls-binding-type (bindings subs env)
   "Infer the type's of BINDINGS and then qualify those types into schemes."
@@ -2442,7 +2625,7 @@ printing an implicit weak variable notation."
            (type tc-env env)
            (values tc:ty-predicate-list (or toplevel-define-list node-let-binding-list) tc:substitution-list &optional))
 
-  (check-for-invalid-recursive-scc bindings (tc-env-env env))
+  (check-for-invalid-recursive-scc bindings (tc-env-env env) #'parser:binding-function-p)
 
   (let* (;; track variables bound before typechecking
          (bound-variables (tc-env-bound-variables env))

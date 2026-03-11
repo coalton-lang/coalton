@@ -48,6 +48,7 @@
   (%run-tests "parse-when.txt")
   (%run-tests "parse-while-let.txt")
   (%run-tests "parse-while.txt")
+  (%run-tests "recursive-define.txt")
   (%run-tests "recursive-let.txt")
   (%run-tests "struct.txt")
   (%run-tests "toplevel-progn.txt")
