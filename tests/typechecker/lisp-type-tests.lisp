@@ -36,11 +36,11 @@
   (define (named-vars-fn pair)
     pair)
 
-  (declare ordered-forall-fn (forall (:result :input) :input -> :result -> :input))
+  (declare ordered-forall-fn (forall (:result :input) :input * :result -> :input))
   (define (ordered-forall-fn x _y)
     x)
 
-  (declare nested-forall-fn (forall (:outer) (forall (:inner) :outer -> :inner -> :outer)))
+  (declare nested-forall-fn (forall (:outer) (forall (:inner) :outer * :inner -> :outer)))
   (define (nested-forall-fn x _y)
     x)
 
@@ -103,24 +103,24 @@
                      "FORALL :LEFT :RIGHT. ((COALTON/CLASSES:TUPLE :LEFT :RIGHT) -> (COALTON/CLASSES:TUPLE :LEFT :RIGHT))"
                      (render-type (coalton-type-of 'coalton-native-tests::named-vars-fn)))
       (check-string= "explicit forall binder order"
-                     "FORALL :RESULT :INPUT. (:INPUT -> :RESULT -> :INPUT)"
+                     "FORALL :RESULT :INPUT. (:INPUT * :RESULT -> :INPUT)"
                      (render-type (coalton-type-of 'coalton-native-tests::ordered-forall-fn)))
       (check-string= "nested forall binder order"
-                     "FORALL :OUTER :INNER. (:OUTER -> :INNER -> :OUTER)"
+                     "FORALL :OUTER :INNER. (:OUTER * :INNER -> :OUTER)"
                      (render-type (coalton-type-of 'coalton-native-tests::nested-forall-fn)))
       (check-string= "documentation generator preserves explicit forall order"
-                     "&forall; :RESULT :INPUT. (:INPUT &rarr; :RESULT &rarr; :INPUT)"
+                     "&forall; :RESULT :INPUT. (:INPUT * :RESULT &rarr; :INPUT)"
                      (coalton/doc/markdown::to-markdown
                       (coalton-type-of 'coalton-native-tests::ordered-forall-fn)))
       (check-string= "documentation generator preserves nested forall order"
-                     "&forall; :OUTER :INNER. (:OUTER &rarr; :INNER &rarr; :OUTER)"
+                     "&forall; :OUTER :INNER. (:OUTER * :INNER &rarr; :OUTER)"
                      (coalton/doc/markdown::to-markdown
                       (coalton-type-of 'coalton-native-tests::nested-forall-fn)))
       (check-string= "class method type variables"
                      "FORALL :MONAD :STATE. COALTON-NATIVE-TESTS::NAMETRACKEDCLASS :MONAD :STATE => (:MONAD :STATE)"
                      (render-type (coalton-type-of 'coalton-native-tests::name-tracked-get)))
       (check-string= "explicit class method forall order"
-                     "FORALL :WRAPPER :ITEM :RESULT. COALTON-NATIVE-TESTS::EXPLICITMETHODCLASS :WRAPPER => ((:WRAPPER :ITEM) -> (COALTON/TYPES:PROXY :ITEM) -> (:ITEM -> :RESULT) -> :RESULT)"
+                     "FORALL :WRAPPER :ITEM :RESULT. COALTON-NATIVE-TESTS::EXPLICITMETHODCLASS :WRAPPER => ((:WRAPPER :ITEM) -> ((COALTON/TYPES:PROXY :ITEM) -> ((:ITEM -> :RESULT) -> :RESULT)))"
                      (render-type (coalton-type-of 'coalton-native-tests::explicit-method)))
       )))
 

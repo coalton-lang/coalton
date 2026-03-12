@@ -46,37 +46,47 @@
 
 (define-test test-temporary-file-char ()
   (is (== #\h
-          (unwrap (file:with-temp-file ".txt"
+          (unwrap (file:with-temp-file
                     (fn (stream)
                       (file:write stream #\h)
                       (file:set-file-position stream 0)
-                      (file:read stream)))))))
+                      (file:read stream))
+                    :extension ".txt")))))
 
 (define-test test-temporary-file-string ()
   (is (== "Hello World!"
           (into (the (List Char)
-                     (into (unwrap (file:with-temp-file ".txt"
+                     (into (unwrap (file:with-temp-file
                                      (fn (stream)
                                        (file:write-string stream "Hello World!")
                                        (file:set-file-position stream 0)
-                                       (file:read-file-to-vector stream))))))))))
+                                       (file:read-file-to-vector stream))
+                                     :extension ".txt"))))))))
 
 (define-test test-temporary-file-byte ()
   (is (== 3
-          (unwrap (file:with-temp-file ".txt"
+          (unwrap (file:with-temp-file
                     (fn (stream)
                       (file:write stream (the U64 3))
                       (file:set-file-position stream 0)
-                      (file:read stream)))))))
+                      (file:read stream))
+                    :extension ".txt")))))
+
+(define-test test-create-temp-file ()
+  (let path = (unwrap (file:create-temp-file! :extension ".txt")))
+  (is (unwrap (file:file-exists? path)))
+  (is (res-succeeds (file:delete-file! path))))
 
 (define-test test-temporary-directory ()
   (is (== 0 (list:length (unwrap (file:with-temp-directory (fn (dir)
                                                              (file:directory-files dir)))))))
   (is (== "Hello World!" (unwrap (file:with-temp-directory (fn (dir)
                                                              (let file = (file:merge dir "test.txt"))
-                                                             (file:with-open-file (file:Bidirectional file file:EError)
+                                                             (file:with-open-file file
                                                                (fn (stream)
-                                                                 (file:write-string stream "Hello World!")))
+                                                                 (file:write-string stream "Hello World!"))
+                                                               :direction file:Bidirectional
+                                                               :if-exists file:EError)
                                                              (file:read-file-to-string file)))))))
 
 (define-test test-more-file-functions ()
@@ -91,11 +101,17 @@
         (let filepath = (file:merge testpath "test-file.txt"))
         (is (not (unwrap (file:file-exists? filepath))))
         (is (res-succeeds
-             (file:with-open-file (file:Output filepath file:EError)
+             (file:with-open-file filepath
                (fn (stream)
-                 (file:write-string stream "Hello World!")))))
+                 (file:write-string stream "Hello World!"))
+               :direction file:Output
+               :if-exists file:EError)))
         (is (unwrap (file:file-exists? filepath)))
         (is (== (unwrap (file:read-file-to-string filepath))
+                "Hello World!"))
+        (is (== (unwrap (file:with-open-file filepath
+                        (fn (stream)
+                          (file:read-line stream))))
                 "Hello World!"))
 
         (let filepath2 = (file:merge testpath "test-file2.txt"))
@@ -106,7 +122,9 @@
         (is (res-succeeds (file:write-to-file! filepath2 (iter:collect! (iter:into-iter "wow")))))
         (is (== (unwrap (file:read-file-to-string filepath2))
                 "wow"))
-        (is (res-succeeds (file:append-to-file! filepath2 (iter:collect! (iter:into-iter " and more")))))
+        (is (res-succeeds (file:write-to-file! filepath2
+                                               (iter:collect! (iter:into-iter " and more"))
+                                               :if-exists file:Append)))
         (is (== (unwrap (file:read-file-to-string filepath2))
                 "wow and more"))
 

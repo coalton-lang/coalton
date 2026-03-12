@@ -44,7 +44,7 @@
          (pure Unit)
          (loop-while m-operation))))
 
-  (declare loop-while-valM ((Monad :m) (Yielder :y) => :m (:y :a) -> (:a -> :m :b) -> :m Unit))
+  (declare loop-while-valM ((Monad :m) (Yielder :y) => :m (:y :a) * (:a -> :m :b) -> :m Unit))
   (define (loop-while-valM m-operation f)
     "Repeat M-OPERATION while it yields a value, running the yielded value applied to F.
 Returns Unit."
@@ -58,7 +58,7 @@ Returns Unit."
        ((None)
         (pure Unit)))))
 
-  (declare loop-do-while ((Monad :m) (Terminator :t) => :m :t -> :m :a -> :m Unit))
+  (declare loop-do-while ((Monad :m) (Terminator :t) => :m :t * :m :a -> :m Unit))
   (define (loop-do-while m-term? body)
     "Before each iteration, evaluate M-TERM?. If it indicates completion, stop; otherwise run BODY.
 Returns Unit."
@@ -70,7 +70,7 @@ Returns Unit."
           body
           (loop-do-while m-term? body)))))
 
-  (declare loop-times (Monad :m => UFix -> (UFix -> :m :a) -> :m Unit))
+  (declare loop-times (Monad :m => UFix * (UFix -> :m :a) -> :m Unit))
   (define (loop-times n m-operation)
     "Repeat M-OPERATION N times. Passes the current index (starting at 0) to
 M-OPERATION. Returns Unit."
@@ -95,7 +95,7 @@ no value is yielded."
          ((None)
           (pure (l:reverse result)))))))
 
-  (declare collect ((Monad :m) (it:IntoIterator :i :a) => :i -> (:a -> :m :z) -> :m (List :z)))
+  (declare collect ((Monad :m) (it:IntoIterator :i :a) => :i * (:a -> :m :z) -> :m (List :z)))
   (define (collect into-itr fa->m)
     "Apply FA->M to each element produced by INTO-ITR and run the resulting monadic action.
 Collect the results."
@@ -108,7 +108,7 @@ Collect the results."
           (result <- (fa->m a))
           (% itr (Cons result accum)))))))
 
-  (declare foreach ((Monad :m) (it:IntoIterator :i :a) => :i -> (:a -> :m :z) -> :m Unit))
+  (declare foreach ((Monad :m) (it:IntoIterator :i :a) => :i * (:a -> :m :z) -> :m Unit))
   (define (foreach into-itr fa->m)
     "Apply FA->M to each element produced by INTO-ITR and run the resulting monadic action.
 Discards the return values and returns Unit."

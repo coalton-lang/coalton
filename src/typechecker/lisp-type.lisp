@@ -60,12 +60,33 @@ USE-FUNCTION-ENTRIES specifies whether to emit FUNCTION-ENTRY for functions, emi
          (type-entry (lookup-type env tcon-name :no-error t)))
 
       (cond
+        ((eq ty *keyword-frame-type*)
+         'list)
         ;; If the type is unknown then assume it exists at runtime
         ((null type-entry)
          tcon-name)
 
         (t
          (type-entry-runtime-type type-entry)))))
+
+  (:method ((ty function-ty) env)
+    (declare (ignore ty env))
+    'function-entry)
+
+  (:method ((ty result-ty) env)
+    (let ((output-types (result-ty-output-types ty)))
+      (cond
+        ;; Capturing a zero-output expression in an ordinary value slot
+        ;; yields CL's primary-value default of NIL.
+        ((null output-types)
+         'null)
+        ;; Single-output result packs are runtime-compatible with their
+        ;; component type when stored in a value slot.
+        ((null (rest output-types))
+         (lisp-type (first output-types) env))
+        (t
+         (util:coalton-bug "Unable to produce a single lisp type for multiple-value result ~S"
+                           ty)))))
 
   (:method ((ty tapp) env)
     (cond

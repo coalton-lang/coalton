@@ -40,7 +40,7 @@
            (math:exp (math:sin (math:cos (+ x 1))))))))
 
   ;; A derivative operator
-  (declare deriv (Num :t => (math:Dual :t -> math:Dual :t) -> :t -> math:Dual :t))
+  (declare deriv (Num :t => (math:Dual :t -> math:Dual :t) * :t -> math:Dual :t))
   (define (deriv f a)
     (f (math:Dual a 1)))
 

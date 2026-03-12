@@ -112,11 +112,11 @@
     (name    AccountName)
     (balance Balance))
 
-  (declare add-balance (Amount -> Account -> Account))
+  (declare add-balance (Amount * Account -> Account))
   (define (add-balance amount acc)
     (Account (.name acc) (+ (.balance acc) amount)))
 
-  (declare subtract-balance (Amount -> Account -> Account))
+  (declare subtract-balance (Amount * Account -> Account))
   (define (subtract-balance amount acc)
     (Account (.name acc) (- (.balance acc) amount))))
 
@@ -132,10 +132,10 @@
 
   (declare print-report (BankState -> Unit))
   (define (print-report accounts)
-    (for (Account name balance) in (m:values accounts)
-      (lisp :a (name balance)
+    (for (Account name balance) in (m:values-iter accounts)
+      (lisp (-> :a) (name balance)
         (cl:format cl:t "Name:~10T~a~%Balance:~10T~a~%~%" name balance)))
-    (lisp :a ()
+    (lisp (-> :a) ()
       (cl:format cl:t "--------~%"))
     Unit))
 
@@ -193,7 +193,7 @@
     ;; See, e.g., https://github.com/coalton-lang/coalton/issues/1656.
     (EnvT Configuration (StateT BankState Identity)))
 
-  (declare run-bankM (BankM :val -> Configuration -> BankState -> Tuple BankState :val))
+  (declare run-bankM (BankM :val * Configuration * BankState -> Tuple BankState :val))
   (define (run-bankM bankm conf initial-state)
     "Takes BANKM, a BankM computation to run, CONF, an initial configuration, and an initial
 state. Runs the computation, and returns a tuple of the final state and the return value of
@@ -203,13 +203,15 @@ the computation."
 ;;; Fifth, we define some helper functions.
 
 (coalton-toplevel
-  (declare get-account (AccountName -> BankState -> BankResult Account))
+  (declare get-account (AccountName * BankState -> BankResult Account))
   (define (get-account account-name accounts)
     (opt->result (AccountNotFound account-name) (m:lookup accounts account-name)))
 
   (declare get-accountM (AccountName -> BankM (BankResult Account)))
   (define (get-accountM account-name)
-    (map (get-account account-name) get))
+    (map (fn (accounts)
+           (get-account account-name accounts))
+         get))
 
   (declare check-account-is-valid (Account -> BankM (BankResult Account)))
   (define (check-account-is-valid account)
@@ -248,7 +250,7 @@ the computation."
   ;;;
   ;;; Most of our top-level functions can follow this pattern.
 
-  (declare create-account (AccountName -> Balance -> BankM (BankResult Account)))
+  (declare create-account (AccountName * Balance -> BankM (BankResult Account)))
   (define (create-account name initial-balance)
     "Adds an account to the BankState and return the created account."
     (do
@@ -261,7 +263,7 @@ the computation."
         (account <- (check-account-is-valid unvalidated-account))
         (set-account account))))
 
-  (declare deposit (AccountName -> Amount -> BankM (BankResult Account)))
+  (declare deposit (AccountName * Amount -> BankM (BankResult Account)))
   (define (deposit account-name amount)
     "Deposit AMOUNT into account with ACCOUNT-NAME and return the Account for convenience."
     (do-resultT
@@ -275,7 +277,7 @@ the computation."
      (accounts <- get)
      (pure (Ok (print-report accounts)))))
 
-  (declare withdraw (AccountName -> Amount -> BankM (BankResult Account)))
+  (declare withdraw (AccountName * Amount -> BankM (BankResult Account)))
   (define (withdraw account-name amount)
     "Withdraw AMOUNT from account with ACCOUNT-NAME, returning the Account for convenience."
     (do
@@ -300,7 +302,7 @@ the computation."
   ;;; Instead of just running everything through a `ResultT`, we manually handle the
   ;;; different errors that can occur and return either an `Err` or `Ok` value.
 
-  (declare transfer (AccountName -> AccountName -> Balance -> BankM (BankResult Unit)))
+  (declare transfer (AccountName * AccountName * Balance -> BankM (BankResult Unit)))
   (define (transfer from-acc-name to-acc-name amount)
     (if (== from-acc-name to-acc-name)
       (pure (Err (RecursiveTransfer from-acc-name)))
@@ -317,7 +319,7 @@ the computation."
            ((Ok _)
             (pure (Ok Unit))))))))
 
-  (declare close-account (AccountName -> AccountName -> BankM (BankResult Unit)))
+  (declare close-account (AccountName * AccountName -> BankM (BankResult Unit)))
   (define (close-account acc-to-close-name deposit-acc-name)
     (do-resultT
       (acc-to-close <- (get-accountM acc-to-close-name))

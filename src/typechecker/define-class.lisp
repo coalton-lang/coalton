@@ -323,6 +323,7 @@
                                              :collect (tc:make-ty-class-method :name method-name
                                                                                :type (make-unqualified-class-method-scheme method-info)
                                                                                :outer-tvars (partial-class-method-outer-tvars method-info)
+                                                                               :explicit-tvars (partial-class-method-explicit-tvars method-info)
                                                                                :docstring (source:docstring method)))
                   :codegen-sym codegen-sym
                   :superclass-dict superclass-dict
@@ -513,7 +514,7 @@
                             ;; by the functional dependencies which are immediately provided
                             ;; in this class definition, such as in the following example.
                             ;; (define-class (C :a :b (:a -> :b))
-                            ;;   (m (Unit -> :a)) ; :B is determined by :A.
+                            ;;   (m (Void -> :a)) ; :B is determined by :A.
                             ;;   )
                             (subsetp var-names
                                      (tc:closure method-tyvar-names fundeps)
@@ -524,7 +525,7 @@
                             ;; following.
                             ;; (define-class (C :a :b (:a -> :b)))
                             ;; (define-class (D :a :b)
-                            ;;   (m (Unit -> :a)) ; :B is determined by the functional dependency
+                            ;;   (m (Void -> :a)) ; :B is determined by the functional dependency
                             ;;                    ; provided in the class definition of C.
                             ;;   )
                             (subsetp (mapcar (alexandria:curry #'tc:apply-ksubstitution ksubs) vars)

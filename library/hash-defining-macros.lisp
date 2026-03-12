@@ -26,5 +26,5 @@
   `(define-instance (Hash ,type)
      (inline)
      (define (hash item)
-       (lisp Hash (item)
+       (lisp (-> Hash) (item)
          (cl:sxhash item)))))

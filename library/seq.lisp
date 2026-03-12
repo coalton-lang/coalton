@@ -63,7 +63,7 @@
      (vector:Vector (Seq :a)))         ; subtrees
     (LeafArray (vector:Vector :a)))
 
-  (declare new (types:RuntimeRepr :a => Unit -> Seq :a))
+  (declare new (types:RuntimeRepr :a => (Void -> Seq :a)))
   (define (new)
     "Create a new empty `Seq`."
     (LeafArray (vector:new)))
@@ -76,9 +76,9 @@
       ((LeafArray leaves) (vector:length leaves))))
   
   (define (empty? seq)
-    (== 0 (size seq)))
+    (math:zero? (size seq)))
 
-  (declare get (Seq :a -> UFix -> Optional :a))
+  (declare get (Seq :a * UFix -> Optional :a))
   (define (get seq idx)
     "Get the member of `seq` at index `idx`, or `None` if `idx` is larger
 than `(size seq)`"
@@ -93,7 +93,7 @@ than `(size seq)`"
          (subtree <- (vector:index subtree-idx sts))
          (get subtree (- idx offset))))))
   
-  (declare put (Seq :a -> Ufix -> :a -> Optional (Seq :a)))
+  (declare put (Seq :a * UFix * :a -> Optional (Seq :a)))
   (define (put seq idx a)
     "If `idx` is less than `(size seq)`, Return a new `seq` whose `idx` position
 contains `a`."
@@ -102,7 +102,7 @@ contains `a`."
        (if (<= (vector:length leaves) idx)
            None
            (let ((newleaves (vector:copy leaves)))
-             (vector:set! idx a newleaves)
+             (let (values) = (vector:set! idx a newleaves))
              (Some (LeafArray newleaves)))))
 
       ((RelaxedNode h fss cst sts)
@@ -112,17 +112,17 @@ contains `a`."
          (subtree <- (vector:index subtree-idx sts))
          (new-subtree <- (put subtree (- idx offset) a))
          (let ((newsts (vector:copy sts)))
-           (vector:set! subtree-idx new-subtree newsts)
+           (let (values) = (vector:set! subtree-idx new-subtree newsts))
            (pure (RelaxedNode h fss cst newsts)))))))
 
   (define (push seq a)
     "Push `a` onto the end of `seq`, returning a new `Seq` instance."
-    (let (Tuple node in-place?) =  (%push seq a))
+    (let (values node in-place?) = (%push seq a))
     (if in-place? node
-        (let ((h (+ 1 (height seq)))
+        (let ((h (+ (the UFix 1) (height seq)))
               (s (size seq)))
           (RelaxedNode h (perfect-subtree-size-at-height h)
-                       (vector:make s (+ 1 s))
+                       (vector:make s (+ (the UFix 1) s))
                        (vector:make seq node)))))
 
   (define (pop seq)
@@ -140,31 +140,31 @@ a new `Seq` instance."
         ((Tuple leaf newsub) <- (pop (vector:last-unsafe sts)))
         (let newsts = (vector:copy sts))
         (let newcst = (vector:copy cst))
-        (let last-idx = (- (vector:length cst) 1))
+        (let last-idx = (- (vector:length cst) (the UFix 1)))
         (let seq-size = (size seq))
          (pure
           (cond
             ;; this was the only thing left in seq
-            ((== 1 seq-size)
+            ((== (the UFix 1) seq-size)
              (Tuple leaf newsub))     ; newsub is empty
 
             ;; the seq was exactly one larger than the subtree size
             ;; for the current height, this means we can reduce the tree height
-            ((== (+ 1 fss) seq-size)
-             (Tuple leaf (vector:index-unsafe 0 sts)))
+            ((== (+ (the UFix 1) fss) seq-size)
+             (Tuple leaf (vector:index-unsafe (the UFix 0) sts)))
 
             ;; it wasn't, but newsub is empty
-            ((== 0 (size newsub))
+            ((math:zero? (size newsub))
              (vector:pop! newcst)
              (vector:pop! newsts)
              (Tuple leaf (RelaxedNode h fss newcst newsts)))
 
             (True
-             (vector:set! last-idx (- (vector:last-unsafe newcst) 1) newcst)
-             (vector:set! last-idx newsub newsts)
+             (let (values) = (vector:set! last-idx (- (vector:last-unsafe newcst) (the UFix 1)) newcst))
+             (let (values) = (vector:set! last-idx newsub newsts))
              (Tuple leaf (RelaxedNode h fss newcst newsts)))))))))
 
-    (define (conc left right)
+  (define (conc left right)
     "Concatenate two `Seq`s"
     (cond
       ((empty? left) right)
@@ -212,7 +212,8 @@ a new `Seq` instance."
   ;; 
 
   (define-instance (types:RuntimeRepr :a => Semigroup (Seq :a))
-    (define <> conc))
+    (define (<> a b)
+      (conc a b)))
   
   (define-instance (types:RuntimeRepr :a => Monoid (Seq :a))
     (define mempty (new)))
@@ -229,14 +230,15 @@ a new `Seq` instance."
       (match seq
         ((LeafArray v) (LeafArray (map f v)))
         ((RelaxedNode ht fss cst subs)
-         (RelaxedNode ht fss cst (map (map f) subs))))))
+         (RelaxedNode ht fss cst (map (fn (sub) (map f sub)) subs))))))
 
   (define-instance (types:RuntimeRepr :a => iter:FromIterator (Seq :a) :a)
-    (define iter:collect!
-      (iter:fold! push (new))))
+    (define (iter:collect! it)
+      (iter:fold! push (new) it)))
 
   (define-instance (types:RuntimeRepr :a => Default (Seq :a))
-    (define default new))
+    (define (default)
+      (new)))
 
   (define-instance ((Foldable :f) (types:RuntimeRepr :a) => Into (:f :a) (Seq :a))
     (define (into fld)
@@ -246,7 +248,7 @@ a new `Seq` instance."
   (define-instance (Eq :a => Eq (Seq :a))
     (define (== a b)
       ;; because they're immutable, if they happen to be identical then == is true
-      (or (lisp Boolean (a b) (cl:eq a b))
+      (or (lisp (-> Boolean) (a b) (cl:eq a b))
           ;; otherwise, recurse
           (and (== (size a) (size b))
                (iter:every! (fn ((Tuple x y)) (== x y))
@@ -269,11 +271,11 @@ a new `Seq` instance."
     (match seq
       ;;relaxed nodes should have a minimum height of 2
       ((RelaxedNode h _ _ _) h)
-      ((LeafArray _) 1)))
+      ((LeafArray _) (the UFix 1))))
 
   ;; helper. Calculate the capacity of a subtree of node
   (define (perfect-subtree-size-at-height h)
-    (math:^ max-branching (- h 1)))
+    (math:^ max-branching (- h (the UFix 1))))
 
   ;; helper. Return the index into a Relaxed Node's subtree array, as
   ;; well as the offset to subtract from the search index.
@@ -283,83 +285,93 @@ a new `Seq` instance."
               (do (cumulative <- (vector:index gs cst))
                   (if (< idx cumulative)
                       (pure (Tuple gs last-cumulative))
-                      (search-forward (+ 1 gs) cumulative)))))) 
+                      (search-forward (+ (the UFix 1) gs) cumulative)))))) 
       (>>= (alt (if (math:zero? guess)  ; avoid UFix underflow
                     None
-                    (vector:index (- guess 1) cst)) ; Note, 0 < guess <= 31
-                (pure 0))
-           (search-forward guess))))  
+                    (vector:index (- guess (the UFix 1)) cst)) ; Note, 0 < guess <= 31
+                (pure (the UFix 0)))
+           (fn (last-cumulative)
+             (search-forward guess last-cumulative)))))  
 
-
+  (declare %push (Seq :a * :a -> (Seq :a) * Boolean))
   (define (%push seq a)
     (match seq
       ((LeafArray v)
        (if (< (vector:length v) max-branching)
            (let ((newv (vector:copy v)))
              (vector:push! a newv)
-             (Tuple (LeafArray newv) True))
-           (Tuple (LeafArray (vector:make a)) False)))
+             (values (LeafArray newv) True))
+           (values (LeafArray (vector:make a)) False)))
       
       ((RelaxedNode h fss cst sts)
-       (let (Tuple new-node in-place?) = (%push (vector:last-unsafe sts) a))
-       (cond
-         ;; modified "in place": i.e. height not adjusted on recursive step
-         (in-place?
-          (let ((newsts
-                  (vector:copy sts))
-                (newcst
-                  (vector:copy cst))
-                (last-idx
-                  (- (vector:length sts) 1)))
-            (vector:set! last-idx (+ 1 (vector:last-unsafe newcst)) newcst)
-            (vector:set! last-idx new-node newsts)
-            (Tuple (RelaxedNode h fss newcst newsts) True)))
+       (progn
+         (let (values new-node in-place?) = (%push (vector:last-unsafe sts) a))
+         (cond
+           ;; modified "in place": i.e. height not adjusted on recursive step
+           (in-place?
+            (let ((newsts
+                    (vector:copy sts))
+                  (newcst
+                    (vector:copy cst))
+                  (last-idx
+                    (- (vector:length sts) (the UFix 1))))
+              (let (values) = (vector:set! last-idx (+ (the UFix 1) (vector:last-unsafe newcst)) newcst))
+              (let (values) = (vector:set! last-idx new-node newsts))
+              (values (RelaxedNode h fss newcst newsts) True)))
 
-         ;; wasn't in place, but there's room here
-         ((< (vector:length cst) max-branching)
-          (let ((newsts
-                  (vector:copy sts))
-                (newcst
-                  (vector:copy cst)))
-            (vector:push! (+ 1 (size seq)) newcst)
-            (vector:push! new-node newsts)
-            (Tuple (RelaxedNode h fss newcst newsts) True)))
+           ;; wasn't in place, but there's room here
+           ((< (vector:length cst) max-branching)
+            (let ((newsts
+                    (vector:copy sts))
+                  (newcst
+                    (vector:copy cst)))
+              (vector:push! (+ (the UFix 1) (size seq)) newcst)
+              (vector:push! new-node newsts)
+              (values (RelaxedNode h fss newcst newsts) True)))
 
-         ;; not in place, and no room here. 
-         (True
-          (let ((newh (+ 1 (height new-node))))
-            (Tuple 
-             (RelaxedNode newh
-                          (perfect-subtree-size-at-height newh)
-                          (vector:make 1)
-                          (vector:make new-node))
-             False)))))))
+           ;; not in place, and no room here.
+           (True
+            (let ((newh (+ (the UFix 1) (height new-node))))
+              (values
+               (RelaxedNode newh
+                            (perfect-subtree-size-at-height newh)
+                            (vector:make (the UFix 1))
+                            (vector:make new-node))
+               False))))))))
 
-  (declare group-vectors (types:runtimerepr :a => UFix -> vector:Vector :a -> vector:Vector (vector:Vector :a)))
+  (declare group-vectors (types:runtimerepr :a => UFix * vector:Vector :a -> vector:Vector (vector:Vector :a)))
   (define (group-vectors len vec)
     "Return a vector of vectors of elements from `vec`, each of length `len`
 ecxept for the last one which has a nonzero length less than or equal
 to `len`."
-    (let ((result
-            (vector:new))
-          (acc
-            (vector:new)))
-      (iter:for-each!
-       (fn (elem)
-         (vector:push! elem acc)
-         (when (== len (vector:length acc))
-           (vector:push! (vector:copy acc) result)
-           (vector:clear! acc)))
-       (iter:into-iter vec))
-      ;; push the last if non-empty
-      (unless (== 0 (vector:length acc)) 
-        (vector:push! acc result)
-        Unit)
-      result))
+    (lisp (-> (vector:Vector (vector:Vector :a))) (len vec)
+      (cl:let ((result (cl:make-array 0 :fill-pointer 0 :adjustable cl:t :element-type cl:t))
+               (vec-len (cl:length vec)))
+        (cl:cond
+          ((cl:zerop vec-len)
+           result)
+          ((cl:zerop len)
+           (cl:vector-push-extend (alexandria:copy-array vec) result)
+           result)
+          (cl:t
+           (cl:loop
+             :with start = 0
+             :while (cl:< start vec-len)
+             :do
+                (cl:let* ((end (cl:min vec-len (cl:+ start len)))
+                          (chunk-len (cl:- end start))
+                          (chunk (cl:make-array chunk-len
+                                                :fill-pointer chunk-len
+                                                :adjustable cl:t
+                                                :element-type cl:t)))
+                  (cl:replace chunk vec :start2 start :end2 end)
+                  (cl:vector-push-extend chunk result)
+                  (cl:setf start end)))
+           result)))))
 
   (declare build-cumulative-size-table (vector:Vector (Seq :a) -> vector:Vector UFix))
   (define (build-cumulative-size-table subtrees)
-    (let ((cumulative (cell:new 0)))
+    (let ((cumulative (cell:new (the UFix 0))))
       (iter:collect!
        (map (fn (sub)
               (let ((ret (+ (size sub) (cell:read cumulative))))
@@ -367,7 +379,7 @@ to `len`."
                 ret))
             (iter:into-iter subtrees)))))
 
-  (declare %shift-n-onto! (vector:Vector :a -> vector:Vector :a -> UFix -> Unit))
+  (declare %shift-n-onto! (vector:Vector :a * vector:Vector :a * UFix -> Void))
   (define (%shift-n-onto! target source n0)
     "Shifts the first `n` members of `source` onto the end of `target`, and
 shifts the each member of `target` down by `n` positions.  Mutates both
@@ -377,35 +389,34 @@ shifts the each member of `target` down by `n` positions.  Mutates both
             (vector:length source))
           (n
             (min n0 source-len)))
-      (iter:for-each!
-       (fn (i)
-         (vector:push! (vector:index-unsafe i source) target)
-         (iter:for-each!
-          (fn (j)
-            (do
-             (x <- (vector:index (+ j n) source))
-             (pure (vector:set! j x source)))
-            Unit)
-          (iter:range-increasing n i source-len))
-         Unit)
-       (iter:up-to n))
-      (iter:for-each! (fn (_i) (vector:pop! source) Unit) (iter:up-to n))))
+      (let (values) = (iter:for-each!
+                       (fn (i)
+                         (vector:push! (vector:index-unsafe i source) target)
+                         (let (values) = (iter:for-each!
+                                         (fn (j)
+                                            (do
+                                             (x <- (vector:index (+ j n) source))
+                                             (let (values) = (vector:set! j x source))
+                                             (pure Unit))
+                                            (values))
+                                          (iter:range-increasing n i source-len)))
+                         (values))
+                       (iter:up-to n)))
+      (iter:for-each! (fn (_i) (vector:pop! source) (values)) (iter:up-to n))))
 
   (define (replace-first v a)
     (let ((cv (vector:copy v))) 
-      (vector:set! 0 a cv)
+      (let (values) = (vector:set! (the UFix 0) a cv))
       cv))
 
   (define (replace-last v a)
     (let ((cv  (vector:copy v))) 
-      (vector:set! (- (vector:length v) 1) a cv)
+      (let (values) = (vector:set! (- (vector:length v) (the UFix 1)) a cv))
       cv))
 
   (declare butfirst (vector:Vector :a -> vector:Vector :a))
   (define (butfirst v)
-    (iter:collect!
-     (map (flip vector:index-unsafe v)
-          (iter:range-increasing 1 1 (vector:length v)))))
+    (vector:subseq v (the UFix 1) (vector:length v)))
 
   (define (butlast v)
     (let ((cv (vector:copy v)))
@@ -424,10 +435,13 @@ table of relaxed nodes may be inaccurate. `seq2` may furthermore be
 invalid because size can no longer be applied correctly."
     (match (Tuple seq1 seq2)
       ((Tuple (LeafArray vec1) (LeafArray vec2))
-       (%shift-n-onto! vec1 vec2 n))
+       (let (values) = (%shift-n-onto! vec1 vec2 n))
+       (values))
       ((Tuple (RelaxedNode _ _ _ vec1) (RelaxedNode _ _ _ vec2))
-       (%shift-n-onto! vec1 vec2 n))
-      (_ (unreachable))))
+       (let (values) = (%shift-n-onto! vec1 vec2 n))
+       (values))
+      (_ (unreachable)))
+    (values))
 
   (define (rebuild-size-table seq)
     (match seq
@@ -442,19 +456,18 @@ invalid because size can no longer be applied correctly."
   (define (make-node-from-branches branches)
     "Makes a `Seq` tall enough to contain all the branches. Branches are
 all assumed to have the same height."
-    (let branches-length = (vector:length branches))
-    (cond ((== 0 branches-length)
+    (cond ((vector:empty? branches)
            (new))
-          ((== 1 branches-length)
+          ((vector:singleton? branches)
            (vector:pop-unsafe! branches))
           (True 
            (let ht = (height (vector:head-unsafe branches)))
            (if (<= (vector:length branches) max-branching)
-               (make-relaxed-node (+ ht 1) branches)
+               (make-relaxed-node (+ ht (the UFix 1)) branches)
                (let ((groups
                        (group-vectors max-branching branches))
                      (taller-branches
-                       (map (make-relaxed-node (+ ht 1)) groups)))
+                       (map (fn (group) (make-relaxed-node (+ ht (the UFix 1)) group)) groups)))
                  (make-node-from-branches taller-branches))))))
 
   (define (copy seq)
@@ -464,7 +477,7 @@ all assumed to have the same height."
        (LeafArray (vector:copy vec)))
       ((RelaxedNode ht fss cst seq)
        (RelaxedNode ht fss (vector:copy cst) (vector:copy seq)))))
-  
+
   (declare rebalance-branches (types:runtimerepr :a => vector:Vector (Seq :a) -> Seq :a))
   (define (rebalance-branches branches)
     "Ensures each member of `branches` has between `min-branching` and
@@ -476,51 +489,44 @@ height. It also assumes that each member of `branches` is itself already
 balanced.
 
 It attempts to rebalance with a minimum of array copying."
-    (let ((stop
-            (- (vector:length branches) 1))
-          (cached-branch
-            (cell:new None))
-          (branch-rebalancer
-            (compose
-             rebuild-size-table
-             (fn (i)
-               (let branch =
-                 (match (cell:read cached-branch)
-                   ((None) (vector:index-unsafe i branches))
-                   ((Some cached) cached)))
-               (let subbranch-count = (branch-count branch))
-               (cond
-                 ((or (== i stop) (<= min-branching subbranch-count))
-                  (cell:swap! cached-branch None)
-                  branch)
-                 (True
-                  (let this-branch =
-                    (if (optional:some? (cell:read cached-branch))
-                        branch          ; already a copy
-                        (copy branch)))
-                  ;; need to mutate the next branch so we copy it
-                  (let next-branch = 
-                    (copy (vector:index-unsafe (+ i 1) branches)))
-                  ;; Do the subbranch shifting. NOTE: the choice of
-                  ;; branch capacity comes with trade-offs: using
-                  ;; MAX-BRANCHING tends to keep trees short over
-                  ;; time, improving lookup speed. Using MIN-BRANCHING
-                  ;; tends to minimize the number of array copies we
-                  ;; will make over time. I have chosen MIN-BRANCHING.
-                  (%shift-n-branches-onto
-                   this-branch next-branch (- min-branching subbranch-count))
-                  ;; cache the branch for the next round  
-                  (cell:swap! cached-branch (Some next-branch))
-                  this-branch)))))) 
+    (let count = (vector:length branches))
+    (let result = (vector:new))
+    (let cached-branch = (cell:new None))
+    (let (values) =
+      (iter:for-each!
+       (fn (i)
+         (let branch =
+           (match (cell:read cached-branch)
+             ((None) (vector:index-unsafe i branches))
+             ((Some cached) cached)))
+         (let subbranch-count = (branch-count branch))
+         (let rebuilt =
+           (cond
+             ((or (== i (- count (the UFix 1)))
+                  (<= min-branching subbranch-count))
+              (cell:swap! cached-branch None)
+              (rebuild-size-table branch))
+             (True
+              (let this-branch =
+                (if (optional:some? (cell:read cached-branch))
+                    branch
+                    (copy branch)))
+              (let next-branch =
+                (copy (vector:index-unsafe (+ i (the UFix 1)) branches)))
+              (let (values) = (%shift-n-branches-onto
+                               this-branch next-branch (- min-branching subbranch-count)))
+              (cell:swap! cached-branch (Some next-branch))
+              (rebuild-size-table this-branch))))
+         ;; `size` can observe transiently invalid branches during rebalancing.
+         ;; `branch-count` is robust here and still drops empty branches.
+         (unless (math:zero? (branch-count rebuilt))
+           (vector:push! rebuilt result)
+           (values))
+         (values))
+       (iter:up-to count)))
+    (make-node-from-branches result))
 
-      ;;make a node from rebalanced branches
-      (make-node-from-branches
-       (iter:collect!
-        ;; `size` can observe transiently invalid branches during rebalancing.
-        ;; `branch-count` is robust here and still drops empty branches.
-        (iter:filter! (compose (< 0) branch-count)
-                      (map branch-rebalancer
-                           (iter:up-through stop))))))))
+  )
 
 (defmacro make (cl:&rest elems)
   "Create a new `Seq` containing `elems`."
@@ -554,9 +560,7 @@ It attempts to rebalance with a minimum of array copying."
 ;; by overwriting them manually, the :around method short-circuits them.
 (cl:defmethod cl:print-object :around ((self seq) stream)
   (cl:print-unreadable-object (self stream :type cl:nil)
-    (cl:format stream "SEQ~{ ~A~}"
-               (coalton ((the ((Seq :a) -> (List :a)) (fn (seq) (into seq)))
-                         (lisp (Seq :a) () self)))))
+    (cl:format stream "SEQ"))
   self)
 
 #+sb-package-locks

@@ -38,31 +38,36 @@
 
   (inline)
   (declare map-resultT ((:m (Result :e1 :a) -> :n (Result :e2 :b))
-                        -> ResultT :e1 :m :a
+                        * ResultT :e1 :m :a
                         -> ResultT :e2 :n :b))
   (define (map-resultT f (ResultT m))
     (ResultT (f m)))
 
   (inline)
-  (declare map-errM (Monad :m => (:a -> :b) -> :m (Result :a :c) -> :m (Result :b :c)))
+  (declare map-errM (Monad :m => (:a -> :b) * :m (Result :a :c) -> :m (Result :b :c)))
   (define (map-errM ferr m)
     "Map FERR over the error value of a Result contained in M."
     (map
-     (map-err ferr)
+     (fn (res) (map-err ferr res))
      m))
 
   (inline)
-  (declare map-errT (Functor :m => (:a -> :b) -> ResultT :a :m :c -> ResultT :b :m :c))
-  (define (map-errT ferr) (map-resultT (map (map-err ferr))))
+  (declare map-errT (Functor :m => (:a -> :b) * ResultT :a :m :c -> ResultT :b :m :c))
+  (define (map-errT ferr rt)
+    (map-resultT (fn (mr)
+                   (map (fn (res)
+                          (map-err ferr res))
+                        mr))
+                 rt))
 
   (inline)
-  (declare err-ifT (Monad :m => Boolean -> :err -> ResultT :err :m Unit))
+  (declare err-ifT (Monad :m => Boolean * :err -> ResultT :err :m Unit))
   (define (err-ifT failed? failure)
     "Fail with FAILURE if FAILED? is True."
     (ResultT (pure (err-if failed? failure))))
 
   (inline)
-  (declare err-ifM (Monad :m => Boolean -> :err -> :m (Result :err Unit)))
+  (declare err-ifM (Monad :m => Boolean * :err -> :m (Result :err Unit)))
   (define (err-ifM failed? failure)
     "Fail with FAILURE inside :m if FAILED? is True."
     (pure (err-if failed? failure))))
@@ -75,7 +80,9 @@
   (define-instance (Functor :m => Functor (ResultT :err :m))
     (inline)
     (define (map fa->b (ResultT m))
-      (ResultT (map (map fa->b) m))))
+      (ResultT (map (fn (res)
+                      (map fa->b res))
+                    m))))
 
   (define-instance (Monad :m => Applicative (ResultT :err :m))
     (inline)
@@ -199,13 +206,17 @@ with these function definitions:
 (coalton-toplevel
   (define-instance (MonadEnvironment :env :m => MonadEnvironment :env (ResultT :err :m))
     (define ask (lift ask))
-    (define asks (compose lift asks))
-    (define local (compose map-resultT local)))
+    (define (asks f)
+      (lift (asks f)))
+    (define (local f (ResultT mx))
+      (ResultT (local f mx))))
 
   (define-instance (MonadState :s :m => (MonadState :s (ResultT :err :m)))
     (define get (lift get))
-    (define put (compose lift put))
-    (define modify (compose lift modify))))
+    (define (put s)
+      (lift (put s)))
+    (define (modify f)
+      (lift (modify f)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/MONAD/RESULTT")

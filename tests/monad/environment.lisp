@@ -7,7 +7,7 @@
     (st:run
      (m-env:run-envT
       (do
-       (m-env:EnvT (fn (_) (st:modify (+ 2))))
+       (m-env:EnvT (fn (_) (st:modify (fn (state) (+ state 2)))))
        (m-env:EnvT (fn (_) st:get)))
       0)
      0))
@@ -18,7 +18,7 @@
   (define add-context
     (do
      (x <- m-env:ask)
-     (lift (st:modify (+ x))))))
+     (lift (st:modify (fn (state) (+ state x)))))))
 
 (define-test test-ask-envT ()
   (let (Tuple _ result) =
@@ -42,7 +42,7 @@
      (m-env:run-envT
       (do
        (x <- (the (m-env:EnvT :env :m Integer) (m-env:asks-envT .x)))
-       (m-env:lift-envT (st:modify (+ x)))
+       (m-env:lift-envT (st:modify (fn (state) (+ state x))))
        (m-env:lift-envT st:get))
       (Config 10))
      0))
@@ -54,7 +54,7 @@
      (m-env:run-envT
       (do
        add-context
-       (m-env:local-envT (* 3) add-context)
+       (m-env:local-envT (fn (x) (* 3 x)) add-context)
        (m-env:lift-envT st:get))
       2)
      0))
@@ -85,7 +85,7 @@
   (let result =
     (m-env:run-env
      (m-env:local
-      (+ 100)
+      (fn (x) (+ 100 x))
       (do
        (x <- m-env:ask)
        (pure (+ x 10))))

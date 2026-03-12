@@ -58,7 +58,7 @@
 
   (define-instance (Signalable String)
     (define (error str)
-      (lisp :a (str)
+      (lisp (-> :a) (str)
         (cl:error str)))))
 
 
@@ -87,18 +87,18 @@
 
   (define-class (Eq :a)
     "Types which have equality defined."
-    (== (:a -> :a -> Boolean)))
+    (== (:a * :a -> Boolean)))
 
   (define-instance (Eq types:LispType)
     (define (== a b)
-      (lisp Boolean (a b)
+      (lisp (-> Boolean) (a b)
         (cl:equalp a b))))
 
   (define-class (Eq :a => Num :a)
     "Types which have numeric operations defined."
-    (+ (:a -> :a -> :a))
-    (- (:a -> :a -> :a))
-    (* (:a -> :a -> :a))
+    (+ (:a * :a -> :a))
+    (- (:a * :a -> :a))
+    (* (:a * :a -> :a))
     (fromInt (Integer -> :a)))
 
   (define-instance (Eq Unit)
@@ -166,44 +166,42 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
     "Types whose values can be ordered. Requires `Eq`."
     (<=>
      "Given two objects, return their comparison (as an `Ord` object)."
-     (:a -> :a -> Ord)))
+     (:a * :a -> Ord)))
 
-  (declare > (Ord :a => :a -> :a -> Boolean))
+  (declare > (Ord :a => :a * :a -> Boolean))
   (define (> x y)
     "Is `x` greater than `y`?"
-    (match (<=> x y)
-      ((GT) True)
-      (_ False)))
+    (== (<=> x y) GT))
 
-  (declare < (Ord :a => :a -> :a -> Boolean))
+  (declare < (Ord :a => :a * :a -> Boolean))
   (define (< x y)
     "Is `x` less than `y`?"
-    (match (<=> x y)
-      ((LT) True)
-      (_ False)))
+    (== (<=> x y) LT))
 
-  (declare >= (Ord :a => :a -> :a -> Boolean))
+  (declare >= (Ord :a => :a * :a -> Boolean))
   (define (>= x y)
     "Is `x` greater than or equal to `y`?"
-    (match (<=> x y)
-      ((LT) False)
-      (_ True)))
+    (let ((cmp (<=> x y)))
+      (if (== cmp LT)
+          False
+          True)))
 
-  (declare <= (Ord :a => :a -> :a -> Boolean))
+  (declare <= (Ord :a => :a * :a -> Boolean))
   (define (<= x y)
     "Is `x` less than or equal to `y`?"
-    (match (<=> x y)
-      ((GT) False)
-      (_ True)))
+    (let ((cmp (<=> x y)))
+      (if (== cmp GT)
+          False
+          True)))
 
-  (declare max (Ord :a => :a -> :a -> :a))
+  (declare max (Ord :a => :a * :a -> :a))
   (define (max x y)
     "Returns the greater element of `x` and `y`."
     (if (> x y)
         x
         y))
 
-  (declare min (Ord :a => :a -> :a -> :a))
+  (declare min (Ord :a => :a * :a -> :a))
   (define (min x y)
     "Returns the lesser element of `x` and `y`."
     (if (< x y)
@@ -216,7 +214,7 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
 
   (define-class (Semigroup :a)
     "Types with an associative binary operation defined."
-    (<> (:a -> :a -> :a)))
+    (<> (:a * :a -> :a)))
 
   (define-class (Semigroup :a => Monoid :a)
     "Types with an associative binary operation and identity defined."
@@ -224,23 +222,23 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
 
   (define-class (Functor :f)
     "Types which can map an inner type where the mapping adheres to the identity and composition laws."
-    (map ((:a -> :b) -> :f :a -> :f :b)))
+    (map ((:a -> :b) * (:f :a) -> (:f :b))))
 
   (define-class (Functor :f => Applicative :f)
     "Types which are a functor which can embed pure expressions and sequence operations."
     (pure (:a -> (:f :a)))
-    (liftA2 ((:a -> :b -> :c) -> :f :a -> :f :b -> :f :c)))
+    (liftA2 ((:a * :b -> :c) * (:f :a) * (:f :b) -> (:f :c))))
 
   (define-class (Applicative :m => Monad :m)
     "Types which are monads as defined in Haskell. See https://wiki.haskell.org/Monad for more information."
-    (>>= (:m :a -> (:a -> :m :b) -> :m :b)))
+    (>>= ((:m :a) * (:a -> :m :b) -> (:m :b))))
 
   (define-class (MonadTransformer :t)
     "Types which are monads that wrap another monad, allowing you to use - for example - State and Result
 together."
     (lift (Monad :m => :m :a -> :t :m :a)))
 
-  (declare >> (Monad :m => (:m :a) -> (:m :b) -> (:m :b)))
+  (declare >> (Monad :m => (:m :a) * (:m :b) -> (:m :b)))
   (define (>> a b)
     "Equivalent to `(>>= a (fn (_) b))`."
     (>>= a (fn (_) b)))
@@ -255,13 +253,13 @@ together."
 
   (define-class (Applicative :f => Alternative :f)
     "Types which are monoids on applicative functors."
-    (alt (:f :a -> :f :a -> :f :a))
+    (alt ((:f :a) * (:f :a) -> (:f :a)))
     (empty (:f :a)))
 
   (define-class (Foldable :container)
     "Types which can be folded into a single element."
-    (fold  "A left tail-recursive fold."       ((:accum -> :elt -> :accum) -> :accum -> :container :elt -> :accum))
-    (foldr "A right non-tail-recursive fold."  ((:elt -> :accum -> :accum) -> :accum -> :container :elt -> :accum)))
+    (fold  "A left tail-recursive fold."       ((:accum * :elt -> :accum) * :accum * (:container :elt) -> :accum))
+    (foldr "A right non-tail-recursive fold."  ((:elt * :accum -> :accum) * :accum * (:container :elt) -> :accum)))
 
   (declare mempty? ((Eq :a) (Monoid :a) => :a -> Boolean))
   (define (mempty? a)
@@ -273,32 +271,33 @@ together."
     "Fold a container of monoids into a single element."
     (fold <> mempty a))
 
-  (declare mconcatmap ((Foldable :f) (Monoid :a) => (:b -> :a) -> :f :b -> :a))
+  (declare mconcatmap ((Foldable :f) (Monoid :a) => (:b -> :a) * (:f :b) -> :a))
   (define (mconcatmap f a)
     "Map a container to a container of monoids, and then fold that container into a single element."
     (fold (fn (a b) (<> a (f b))) mempty a))
 
-  (declare mcommute? ((Eq :a) (Semigroup :a) => :a -> :a -> Boolean))
+  (declare mcommute? ((Eq :a) (Semigroup :a) => :a * :a -> Boolean))
   (define (mcommute? a b)
     "Does `a <> b` equal `b <> a`?"
     (== (<> a b) (<> b a)))
 
   (define-class (Traversable :t)
-    (traverse (Applicative :f => (:a -> :f :b) -> :t :a -> :f (:t :b))))
+    (traverse (Applicative :f => (:a -> :f :b) * (:t :a) -> (:f (:t :b)))))
 
   (declare sequence ((Traversable :t) (Applicative :f) => :t (:f :b) -> :f (:t :b)))
-  (define sequence (traverse (fn (x) x)))
+  (define (sequence x)
+    (traverse (fn (y) y) x))
 
   (define-class (Bifunctor :f)
     "Types which take two type arguments and are functors on both."
-    (bimap ((:a -> :b) -> (:c -> :d) -> :f :a :c -> :f :b :d)))
+    (bimap ((:a -> :b) * (:c -> :d) * (:f :a :c) -> (:f :b :d))))
 
-  (declare map-fst (Bifunctor :f => (:a -> :b) -> :f :a :c -> :f :b :c))
+  (declare map-fst (Bifunctor :f => (:a -> :b) * (:f :a :c) -> (:f :b :c)))
   (define (map-fst f b)
     "Map over the first argument of a `Bifunctor`."
     (bimap f (fn (x) x) b))
 
-  (declare map-snd (Bifunctor :f => (:b -> :c) -> :f :a :b -> :f :a :c))
+  (declare map-snd (Bifunctor :f => (:b -> :c) * (:f :a :b) -> (:f :a :c)))
   (define (map-snd f b)
     "Map over the second argument of a `Bifunctor`."
     (bimap (fn (x) x) f b))
@@ -341,8 +340,8 @@ Typical `fail` continuations are:
 - Return a default value, or
 - Signal an error."
     (unwrap-or-else ((:elt -> :result)
-                     -> (Unit -> :result)
-                     -> (:container :elt)
+                     * (Void -> :result)
+                     * (:container :elt)
                      -> :result)))
 
   (define-instance (Unwrappable (Result :a))
@@ -353,7 +352,7 @@ Typical `fail` continuations are:
 
   (declare expect ((Unwrappable :container) =>
                    String
-                   -> (:container :element)
+                   * (:container :element)
                    -> :element))
   (define (expect reason container)
     "Unwrap `container`, signaling an error with the description `reason` on failure."
@@ -367,7 +366,7 @@ Typical `fail` continuations are:
   (define (unwrap container)
     "Unwrap `container`, signaling an error on failure."
     (unwrap-or-else (fn (elt) elt)
-                    (fn () (error (lisp String (container)
+                    (fn () (error (lisp (-> String) (container)
                                     (cl:format cl:nil "Unexpected ~a in UNWRAP"
                                                container))))
                     container))
@@ -379,7 +378,7 @@ Typical `fail` continuations are:
 
   (declare with-default ((Unwrappable :container) =>
                          :element
-                         -> (:container :element)
+                         * (:container :element)
                          -> :element))
   (define (with-default default container)
     "Unwrap `container`, returning `default` on failure."
@@ -401,7 +400,7 @@ Typical `fail` continuations are:
 
   (define-class (Default :a)
     "Types which have default values."
-    (default (Unit -> :a)))
+    (default (Void -> :a)))
 
   (declare defaulting-unwrap ((Unwrappable :container) (Default :element) =>
                               (:container :element) -> :element))

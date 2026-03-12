@@ -61,62 +61,66 @@
     "Rounds a fraction to the nearest integer with ties going away from zero."
     (* (sign x) (floor (+ (abs x) -1/2))))
 
-  (declare set-precision! (UFix -> Unit))
+  (declare set-precision! (UFix -> Void))
   (define (set-precision! prec-bits)
     "Set the precision of Big-Float arithmetic to PREC-BITS bits."
     (unless (> prec-bits 0)
       (error "Precision must be positive."))
-    (lisp Unit (prec-bits)
-      (cl:setf *bf-precision* prec-bits)
-      Unit))
+    (lisp (-> Void) (prec-bits)
+      (cl:progn
+        (cl:setf *bf-precision* prec-bits)
+        (cl:values))))
 
-  (declare set-rounding-mode! (RoundingMode -> Unit))
+  (declare set-rounding-mode! (RoundingMode -> Void))
   (define (set-rounding-mode! r)
     "Set the global rounding mode for Big-Float operations."
-    (lisp Unit (r)
-      (cl:setf *bf-rounding-mode* r)
-      Unit))
+    (lisp (-> Void) (r)
+      (cl:progn
+        (cl:setf *bf-rounding-mode* r)
+        (cl:values))))
 
-  (declare get-precision (Unit -> UFix))
-  (define (get-precision _)
+  (declare get-precision (Void -> UFix))
+  (define (get-precision)
     "Get the current global precision of Big-Float arithmetic"
-    (lisp UFix () *bf-precision*))
+    (lisp (-> UFix) () *bf-precision*))
 
-  (declare get-rounding-mode (Unit -> RoundingMode))
-  (define (get-rounding-mode _)
+  (declare get-rounding-mode (Void -> RoundingMode))
+  (define (get-rounding-mode)
     "Get the current rounding-mode of Big-Float arithmetic."
-    (lisp RoundingMode ()
+    (lisp (-> RoundingMode) ()
       *bf-rounding-mode*))
 
   (declare with-precision-rounding
-           (UFix -> RoundingMode -> (Unit -> :a) -> :a))
-  (define (with-precision-rounding prec-bits rnd f)
-    "Call F with a temporary Big-Float PREC-BITS precision and RND rounding-mode."
-    (lisp :a (f prec-bits rnd)
-      (cl:let ((*bf-precision* prec-bits)
-               (*bf-rounding-mode* rnd))
-        (call-coalton-function f Unit))))
+           ((Void -> :a) &key (:precision UFix) (:rounding RoundingMode) -> :a))
+  (define (with-precision-rounding f &key (precision (get-precision)) (rounding (get-rounding-mode)))
+    "Call F with a temporary Big-Float PRECISION and ROUNDING mode."
+    (lisp (-> :a) (f precision rounding)
+      (cl:let ((*bf-precision* precision)
+               (*bf-rounding-mode* rounding))
+        (call-coalton-function f))))
 
-  (declare with-precision (UFix -> (Unit -> :a) -> :a))
-  (define (with-precision prec-bits f)
-    "Call F with a temporary Big-Float precision PREC-BITS."
-    (with-precision-rounding prec-bits (get-rounding-mode) f))
+  (declare with-precision
+           ((Void -> :a) &key (:precision UFix) -> :a))
+  (define (with-precision f &key (precision (get-precision)))
+    "Call F with a temporary Big-Float PRECISION."
+    (with-precision-rounding f :precision precision))
 
-  (declare with-rounding (RoundingMode -> (Unit -> :a) -> :a))
-  (define (with-rounding rnd f)
-    "Call F with a temporary Big-Float rounding-mode RND."
-    (with-precision-rounding (get-precision) rnd f))
+  (declare with-rounding
+           ((Void -> :a) &key (:rounding RoundingMode) -> :a))
+  (define (with-rounding f &key (rounding (get-rounding-mode)))
+    "Call F with a temporary Big-Float ROUNDING mode."
+    (with-precision-rounding f :rounding rounding))
 
   (declare polylog-prec (UFix -> UFix))
   (define (polylog-prec n)
     "Raises (ilog 2 (get-precision)) to a power N or return 1 if prec is 1."
     (let x = (get-precision))
     (max 1
-         (- (lisp UFix (x n) (cl:expt (cl:integer-length x) n)) 1)))
+         (- (lisp (-> UFix) (x n) (cl:expt (cl:integer-length x) n)) 1)))
 
   (declare bit-length (Integer -> Integer))
   (define (bit-length n)
-    (lisp Integer (n)
+    (lisp (-> Integer) (n)
       (cl:integer-length n)))
 
   (declare ilog2-abs (Integer -> Integer))
@@ -128,7 +132,7 @@
   (define-type Big-Float
     (BFValue Dyadic)
     BFNegZero
-    (BFConst (Unit -> Big-Float))
+    (BFConst (Void -> Big-Float))
     BFInf
     BFNegInf
     BFNaN)
@@ -307,7 +311,7 @@
         ((nan? a) BFNaN)
         (True
          (normalize
-          (lisp Big-Float (a)
+          (lisp (-> Big-Float) (a)
             (cl:multiple-value-bind (n k s)
                 (cl:integer-decode-float a)
               (cl:if (cl:and (cl:= n 0) (cl:= s 0))
@@ -322,7 +326,7 @@
         ((nan? a) BFNaN)
         (True
          (normalize
-          (lisp Big-Float (a)
+          (lisp (-> Big-Float) (a)
             (cl:multiple-value-bind (n k s)
                 (cl:integer-decode-float a)
               (cl:if (cl:and (cl:= n 0) (cl:= s 0))
@@ -358,15 +362,14 @@
     (define (proper x)
       (match x
         ((BFValue d)
-         (match (proper d)
-           ((Tuple n d)
-            (Tuple n (BFValue d)))))
+         (let (values n d) = (proper d))
+         (values n (BFValue d)))
         ((BFConst f)
          (proper (f)))
-        ((BFNegZero) (Tuple 0 BFNegZero))
-        ((BFInf) (Tuple 0 BFInf))
-        ((BFNegInf) (Tuple 0 BFNegInf))
-        ((BFNaN) (Tuple 0 BFNaN))))
+        ((BFNegZero) (values 0 BFNegZero))
+        ((BFInf) (values 0 BFInf))
+        ((BFNegInf) (values 0 BFNegInf))
+        ((BFNaN) (values 0 BFNaN))))
     (define (floor x)
       (match x
         ((BFValue d) (floor d))
@@ -479,7 +482,7 @@ See `binary-split`."
       ((SeriesResult _ q b t)
        (general/ (* b q) t))))
 
-  (declare binary-split ((UFix -> SeriesSplit) -> UFix -> UFix -> SeriesResult))
+  (declare binary-split ((UFix -> SeriesSplit) * UFix * UFix -> SeriesResult))
   (define (binary-split s n1 n2)
     "Implements a binary splitting algorithm described by. In short,
  1) Given a series S(n) = Σ^n_i=0 a(i)p(0)...p(i)/b(i)q(0)...q(i)
@@ -526,19 +529,19 @@ Source: https://www.ginac.de/CLN/binsplit.pdf
        (<> (binary-split s n1 n3)
            (binary-split s (+ n3 1) n2)))))
 
-  (declare eval-series (SeriesSplit -> (UFix -> SeriesSplit) -> (UFix -> SeriesResult)))
+  (declare eval-series (SeriesSplit * (UFix -> SeriesSplit) * UFix -> SeriesResult))
   (define (eval-series x f n)
     (<> (make-result x)
         (binary-split f 1 n)))
 
-  (declare make-results ((Dividable Integer :a) => Ufix -> SeriesSplit -> (Integer -> SeriesSplit) -> :a))
+  (declare make-results ((Dividable Integer :a) => Ufix * SeriesSplit * (Integer -> SeriesSplit) -> :a))
   (define (make-results n start f)
     "For a binary-split series, given an initial SeriesSPlit X and a function that
 returns the nth SeriesSplit, return the series evaluated to the Nth element."
     (eval-result
      (eval-series start (fn (m) (f (toInteger m))) n)))
 
-  (declare make-recip-results ((Dividable Integer :a) => Ufix -> SeriesSplit -> (Integer -> SeriesSplit) -> :a))
+  (declare make-recip-results ((Dividable Integer :a) => Ufix * SeriesSplit * (Integer -> SeriesSplit) -> :a))
   (define (make-recip-results n start f)
     "Reciprocal of `make-result`."
     (recip-result
@@ -547,7 +550,7 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
 (coalton-toplevel
 
   ;; XXX: We can pre-compute some values here
-  (declare bf-pi (Unit -> Big-Float))
+  (declare bf-pi (Void -> Big-Float))
   (define (bf-pi)
     "Return the value of pi to the currently set precision."
     ;; Chudnovsky algorithm
@@ -576,7 +579,7 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
             (* j (* n2 n)) 1)))
         (reciprocal-sqrt (BFValue (dyadic:simplify-integer c3)))))))
 
-  (declare bf-ln2 (Unit -> Big-Float))
+  (declare bf-ln2 (Void -> Big-Float))
   (define (bf-ln2)
     "Return the value of (ln 2) to the currently set precision."
     ;; 2/3 Σ_n 1/(9^n(2n+1))
@@ -653,7 +656,7 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
              (SeriesSplit
               1 (negate (* u u)) (* v v) (+ (* 2 n) 1))))))
       (normalize
-       (with-rounding RoundDisable
+       (with-rounding
          (fn ()
            (match x
              ((BFValue (Dyadic m k))
@@ -676,7 +679,8 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
              ((BFNegZero) BFNegZero)
              ((BFInf) (scale (bf-pi) -1))
              ((BFNegInf) (scale (negate (bf-pi)) -1))
-             (_ BFNaN))))))
+             (_ BFNaN)))
+         :rounding RoundDisable)))
     (define (asin x)
       (atan (* x (reciprocal-sqrt (- 1 (* x x))))))
     (define (acos x)
@@ -736,13 +740,14 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
             (let l =  (+ j (toInteger k)))
             ;; ln (u/v + 1) + l * ln 2
             (normalize
-             (with-rounding RoundDisable
+             (with-rounding
                (fn ()
                  (+ (ln y)
                     (* (if (< l 0)
                            (general/ 1 (negate l))
                            (fromInt l))
-                       (bf-ln2)))))))))
+                       (bf-ln2))))
+               :rounding RoundDisable)))))
         ((BFConst f) (ln (f)))
         ((BFNegZero) BFNegInf)
         ((BFInf) BFInf)
@@ -771,7 +776,7 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
       (/ (ln x) (ln b)))
     (define ee (BFConst bf-ee)))
 
-  (declare bf-ee (Unit -> Big-Float))
+  (declare bf-ee (Void -> Big-Float))
   (define (bf-ee)
     "Return the value of ee = exp(1) to the currently set precision."
     (exp 1))
@@ -795,7 +800,7 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
         ((Tuple (EQ) (LT)) (/ pi -2))
         ((Tuple (EQ) (EQ)) 0)))
     (define (polar z)
-      (Tuple (magnitude z) (phase z))))
+      (values (magnitude z) (phase z))))
 
   (define-instance (Elementary Big-Float))
 
@@ -808,7 +813,7 @@ returns the nth SeriesSplit, return the series evaluated to the Nth element."
        (let prec = (ilog 10 (lsh 2 (get-precision))))
        (let z = (round (* y (^ 10 prec))))
        (let powr = (ilog 10 (max 1 (abs z))))
-       (lisp String (z powr prec)
+       (lisp (-> String) (z powr prec)
          (cl:multiple-value-bind (t r) (cl:truncate z (cl:expt 10 powr))
            (cl:format
             nil (cl:concatenate

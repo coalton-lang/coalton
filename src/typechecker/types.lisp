@@ -28,6 +28,20 @@
    #:tapp-from                          ; ACCESSOR
    #:tapp-to                            ; ACCESSOR
    #:tapp-p                             ; FUNCTION
+   #:keyword-ty-entry                   ; STRUCT
+   #:make-keyword-ty-entry              ; CONSTRUCTOR
+   #:keyword-ty-entry-keyword           ; ACCESSOR
+   #:keyword-ty-entry-type              ; ACCESSOR
+   #:keyword-ty-entry-list              ; TYPE
+   #:function-ty                        ; STRUCT
+   #:make-function-ty                   ; CONSTRUCTOR
+   #:function-ty-positional-input-types ; ACCESSOR
+   #:function-ty-keyword-input-types    ; ACCESSOR
+   #:function-ty-keyword-open-p         ; ACCESSOR
+   #:function-ty-output-types           ; ACCESSOR
+   #:result-ty                          ; STRUCT
+   #:make-result-ty                     ; CONSTRUCTOR
+   #:result-ty-output-types             ; ACCESSOR
    #:tgen                               ; STRUCT
    #:make-tgen                          ; CONSTRUCTOR
    #:tgen-id                            ; ACCESSOR
@@ -35,6 +49,7 @@
    #:tgen-source-name                   ; ACCESSOR
    #:tgen-p                             ; FUNCTION
    #:make-variable                      ; FUNCTION
+   #:ensure-next-variable-id-at-least   ; FUNCTION
    #:fresh-type-renamer                 ; FUNCTION
    #:instantiate                        ; FUNCTION
    #:kind-of                            ; FUNCTION
@@ -53,18 +68,25 @@
    #:*arrow-type*                       ; VARIABLE
    #:*list-type*                        ; VARIABLE
    #:*optional-type*                    ; VARIABLE
+   #:*keyword-frame-type*               ; VARIABLE
    #:push-type-alias                    ; FUNCTION
    #:flatten-type                       ; FUNCTION
-   #:tuple-symbol                       ; FUNCTION
-   #:tuple-type-p                       ; FUNCTION
-   #:tuple-component-types              ; FUNCTION
    #:apply-type-argument                ; FUNCTION
    #:apply-type-argument-list           ; FUNCTION
    #:make-function-type                 ; FUNCTION
    #:make-function-type*                ; FUNCTION
+   #:prepend-function-input-types       ; FUNCTION
+   #:merge-function-input-types         ; FUNCTION
+   #:normalize-function-output-types    ; FUNCTION
+   #:output-types-result-type           ; FUNCTION
+   #:multiple-value-output-types        ; FUNCTION
+   #:multiple-value-output-arity        ; FUNCTION
    #:function-type-p                    ; FUNCTION
    #:function-type-from                 ; FUNCTION
    #:function-type-to                   ; FUNCTION
+   #:function-input-arity               ; FUNCTION
+   #:function-output-types              ; FUNCTION
+   #:function-output-arity              ; FUNCTION
    #:function-type-arity                ; FUNCTION
    #:function-type-arguments            ; FUNCTION
    #:function-return-type               ; FUNCTION
@@ -168,6 +190,29 @@
   (from (util:required 'from) :type ty :read-only t)
   (to   (util:required 'to)   :type ty :read-only t))
 
+(defstruct keyword-ty-entry
+  (keyword (util:required 'keyword) :type keyword :read-only t)
+  (type    (util:required 'type)    :type ty      :read-only t))
+
+(defmethod make-load-form ((self keyword-ty-entry) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun keyword-ty-entry-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'keyword-ty-entry-p x)))
+
+(deftype keyword-ty-entry-list ()
+  '(satisfies keyword-ty-entry-list-p))
+
+(defstruct (function-ty (:include ty))
+  (positional-input-types nil :type ty-list                  :read-only t)
+  (keyword-input-types    nil :type keyword-ty-entry-list    :read-only t)
+  (keyword-open-p         nil :type boolean                  :read-only t)
+  (output-types           nil :type (or null ty-list)        :read-only t))
+
+(defstruct (result-ty (:include ty))
+  (output-types nil :type ty-list :read-only t))
+
 (defstruct (tgen (:include ty))
   (id          (util:required 'id)      :type fixnum             :read-only t)
   ;; When present, this records the original quantified binder identity.
@@ -205,6 +250,14 @@ when KIND, SOURCE-NAME, and BINDING-ID are the same."
                      :binding-id binding-id
                      :source-name source-name)
     (incf *next-variable-id*)))
+
+(defun ensure-next-variable-id-at-least (minimum-id)
+  "Advance the fresh tyvar counter so future variables have ID > MINIMUM-ID."
+  (declare (type integer minimum-id)
+           (values null &optional))
+  (when (<= *next-variable-id* minimum-id)
+    (setf *next-variable-id* (1+ minimum-id)))
+  nil)
 
 (declaim (ftype (function (tyvar) tyvar) fresh-type-renamer))
 (defun fresh-type-renamer (tyvar)
@@ -254,6 +307,22 @@ types from the TYPES list.")
      :alias (mapcar (lambda (alias) (instantiate types alias)) (ty-alias type))
      :from (instantiate types (tapp-from type))
      :to (instantiate types (tapp-to type))))
+  (:method (types (entry keyword-ty-entry))
+    (make-keyword-ty-entry
+     :keyword (keyword-ty-entry-keyword entry)
+     :type (instantiate types (keyword-ty-entry-type entry))))
+  (:method (types (type function-ty))
+    (make-function-ty
+     :alias (mapcar (lambda (alias) (instantiate types alias)) (ty-alias type))
+     :positional-input-types (instantiate types (function-ty-positional-input-types type))
+     :keyword-input-types (instantiate types (function-ty-keyword-input-types type))
+     :keyword-open-p (function-ty-keyword-open-p type)
+     :output-types (normalize-function-output-types
+                    (instantiate types (function-ty-output-types type)))))
+  (:method (types (type result-ty))
+    (make-result-ty
+     :alias (mapcar (lambda (alias) (instantiate types alias)) (ty-alias type))
+     :output-types (instantiate types (result-ty-output-types type))))
   (:method (types (type tgen))
     (nth (tgen-id type) types))
   (:method (types (type ty))
@@ -287,11 +356,18 @@ Throws an error if applied to a malformed type application.")
     (tyvar-kind type))
   (:method ((type tycon))
     (tycon-kind type))
+  (:method ((type function-ty))
+    +kstar+)
+  (:method ((type result-ty))
+    +kstar+)
   (:method ((type tapp))
     (let ((from-kind (kind-of (tapp-from type))))
       (if (kfun-p from-kind)
           (kfun-to from-kind)
-          (util:coalton-bug "Malformed type application")))))
+          (util:coalton-bug "Malformed type application: ~S has head ~S of kind ~S"
+                            type
+                            (tapp-from type)
+                            from-kind)))))
 
 (defmethod apply-ksubstitution (subs (type tyvar))
   (make-tyvar
@@ -313,6 +389,25 @@ Throws an error if applied to a malformed type application.")
    :from (apply-ksubstitution subs (tapp-from type))
    :to (apply-ksubstitution subs (tapp-to type))))
 
+(defmethod apply-ksubstitution (subs (entry keyword-ty-entry))
+  (make-keyword-ty-entry
+   :keyword (keyword-ty-entry-keyword entry)
+   :type (apply-ksubstitution subs (keyword-ty-entry-type entry))))
+
+(defmethod apply-ksubstitution (subs (type function-ty))
+  (make-function-ty
+   :alias (mapcar (lambda (alias) (apply-ksubstitution subs alias)) (ty-alias type))
+   :positional-input-types (apply-ksubstitution subs (function-ty-positional-input-types type))
+   :keyword-input-types (apply-ksubstitution subs (function-ty-keyword-input-types type))
+   :keyword-open-p (function-ty-keyword-open-p type)
+   :output-types (normalize-function-output-types
+                  (apply-ksubstitution subs (function-ty-output-types type)))))
+
+(defmethod apply-ksubstitution (subs (type result-ty))
+  (make-result-ty
+   :alias (mapcar (lambda (alias) (apply-ksubstitution subs alias)) (ty-alias type))
+   :output-types (apply-ksubstitution subs (result-ty-output-types type))))
+
 (defmethod kind-variables-generic% ((type tyvar))
   (kind-variables-generic% (kind-of type)))
 
@@ -323,6 +418,18 @@ Throws an error if applied to a malformed type application.")
   (append
    (kind-variables-generic% (tapp-to type))
    (kind-variables-generic% (tapp-from type))))
+
+(defmethod kind-variables-generic% ((entry keyword-ty-entry))
+  (kind-variables-generic% (keyword-ty-entry-type entry)))
+
+(defmethod kind-variables-generic% ((type function-ty))
+  (append
+   (kind-variables-generic% (function-ty-positional-input-types type))
+   (kind-variables-generic% (function-ty-keyword-input-types type))
+   (kind-variables-generic% (function-ty-output-types type))))
+
+(defmethod kind-variables-generic% ((type result-ty))
+  (kind-variables-generic% (result-ty-output-types type)))
 
 (declaim (ftype (function (t) util:symbol-list) type-constructors))
 (defun type-constructors (type)
@@ -356,6 +463,18 @@ Examples:
      (type-constructors-generic% (tapp-from type))
      (type-constructors-generic% (tapp-to type))))
 
+  (:method ((entry keyword-ty-entry))
+    (type-constructors-generic% (keyword-ty-entry-type entry)))
+
+  (:method ((type function-ty))
+    (append
+     (type-constructors-generic% (function-ty-positional-input-types type))
+     (type-constructors-generic% (function-ty-keyword-input-types type))
+     (type-constructors-generic% (function-ty-output-types type))))
+
+  (:method ((type result-ty))
+    (type-constructors-generic% (result-ty-output-types type)))
+
   (:method ((lst list))
     (mapcan #'type-constructors-generic% lst)))
 
@@ -379,6 +498,38 @@ Examples:
               (tapp-from type2))
          (ty= (tapp-to type1)
               (tapp-to type2))))
+
+  (:method ((type1 keyword-ty-entry) (type2 keyword-ty-entry))
+    (and (eq (keyword-ty-entry-keyword type1)
+             (keyword-ty-entry-keyword type2))
+         (ty= (keyword-ty-entry-type type1)
+              (keyword-ty-entry-type type2))))
+
+  (:method ((type1 function-ty) (type2 function-ty))
+    (and (= (length (function-ty-positional-input-types type1))
+            (length (function-ty-positional-input-types type2)))
+         (every #'ty=
+                (function-ty-positional-input-types type1)
+                (function-ty-positional-input-types type2))
+         (= (length (function-ty-keyword-input-types type1))
+            (length (function-ty-keyword-input-types type2)))
+         (every #'ty=
+                (function-ty-keyword-input-types type1)
+                (function-ty-keyword-input-types type2))
+         (eq (function-ty-keyword-open-p type1)
+             (function-ty-keyword-open-p type2))
+         (= (length (function-ty-output-types type1))
+            (length (function-ty-output-types type2)))
+         (every #'ty=
+                (function-ty-output-types type1)
+                (function-ty-output-types type2))))
+
+  (:method ((type1 result-ty) (type2 result-ty))
+    (and (= (length (result-ty-output-types type1))
+            (length (result-ty-output-types type2)))
+         (every #'ty=
+                (result-ty-output-types type1)
+                (result-ty-output-types type2))))
 
   (:method ((type1 tgen) (type2 tgen))
     (equalp (tgen-id type1)
@@ -405,6 +556,7 @@ Examples:
 (defvar *arrow-type*        (make-tycon :name 'coalton:Arrow        :kind (make-kfun :from +kstar+ :to (make-kfun :from +kstar+ :to +kstar+))))
 (defvar *list-type*         (make-tycon :name 'coalton:List         :kind (make-kfun :from +kstar+ :to +kstar+)))
 (defvar *optional-type*     (make-tycon :name 'coalton:Optional     :kind (make-kfun :from +kstar+ :to +kstar+)))
+(defvar *keyword-frame-type* (make-tycon :name 'coalton::%KeywordFrame :kind +kstar+))
 
 ;;;
 ;;; Operations on Types
@@ -431,50 +583,83 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
           :finally (push from flattened-type))
     flattened-type))
 
-(defun tuple-symbol ()
-  "Return the `Tuple` type constructor symbol in package COALTON/CLASSES."
-  (declare (values (or null symbol) &optional))
-  (let* ((pkg (cl:find-package "COALTON/CLASSES"))
-         (sym (and pkg (cl:find-symbol "TUPLE" pkg))))
-    (when (and pkg (null sym))
-      (util:coalton-bug "Unable to find symbol with name ~A in package ~A"
-                        "TUPLE" pkg))
-    sym))
+(defun output-types-result-type (output-types)
+  (declare (type (or null ty-list) output-types)
+           (values ty &optional))
+  (cond
+    ((null output-types)
+     (make-result-ty :output-types nil))
+    ((null (cdr output-types))
+     (car output-types))
+    (t
+     (make-result-ty :output-types output-types))))
 
-(defun tuple-type-p (type)
-  "Return true when TYPE is a two-element Tuple type."
-  (declare (type ty type)
-           (values boolean &optional))
-  (let ((tuple-sym (tuple-symbol)))
-    (and tuple-sym
-         (tapp-p type)
-         (let ((lhs (tapp-from type)))
-           (and (tapp-p lhs)
-                (let ((ctor (tapp-from lhs)))
-                  (and (tycon-p ctor)
-                       (eq tuple-sym (tycon-name ctor)))))))))
+(defun normalize-function-output-types (output-types)
+  (declare (type (or null ty-list) output-types)
+           (values (or null ty-list) &optional))
+  (cond
+    ((null output-types)
+     nil)
+    ((and (null (cdr output-types))
+          (typep (car output-types) 'result-ty))
+     (copy-list (result-ty-output-types (car output-types))))
+    (t
+     output-types)))
 
-(defun tuple-component-types (type)
-  "Return the two component types (as a list) if TYPE is (Tuple A B), otherwise NIL."
+(defun function-result-output-types (type)
   (declare (type ty type)
            (values (or null ty-list) &optional))
-  (when (tuple-type-p type)
-    (let ((lhs (tapp-from type)))
-      (list (tapp-to lhs)
-            (tapp-to type)))))
+  (typecase type
+    (result-ty
+      (copy-list (result-ty-output-types type)))
+    (t
+      (list type))))
+
+(defun multiple-value-output-types (type)
+  (declare (type ty type)
+           (values (or null ty-list) &optional))
+  (typecase type
+    (result-ty
+      (copy-list (result-ty-output-types type)))
+    (t
+      (list type))))
+
+(defun multiple-value-output-arity (type)
+  (declare (type ty type)
+           (values fixnum &optional))
+  (length (multiple-value-output-types type)))
+
+(defun fully-applied-arrow-type-p (type)
+  (declare (type ty type)
+           (values boolean &optional))
+  (and (tapp-p type)
+       (tapp-p (tapp-from type))
+       (tycon-p (tapp-from (tapp-from type)))
+       (eq (tycon-name (tapp-from (tapp-from type)))
+           'coalton:Arrow)))
 
 (defun apply-type-argument (tcon arg &key ksubs)
   (declare (type (or tycon tapp tyvar) tcon)
            (type ty arg)
-           (values tapp ksubstitution-list &optional))
+           (values ty ksubstitution-list &optional))
   (handler-case
       (let ((ksubs (kunify
                     (kind-of (apply-ksubstitution ksubs tcon))
                     (make-kfun :from (kind-of (apply-ksubstitution ksubs arg)) :to (make-kvariable))
                     ksubs)))
-        (values
-         (make-tapp :from tcon :to arg)
-         ksubs))
+        (let ((applied-type
+                (apply-ksubstitution
+                 ksubs
+                 (make-tapp :from tcon :to arg))))
+          (values
+           (if (fully-applied-arrow-type-p applied-type)
+               (make-function-ty
+                :positional-input-types (list (tapp-to (tapp-from applied-type)))
+                :keyword-input-types nil
+                :keyword-open-p nil
+                :output-types (list (tapp-to applied-type)))
+               applied-type)
+           ksubs)))
     (kunify-error (e)
       (declare (ignore e))
       (error 'type-application-error :type tcon :argument arg))))
@@ -499,38 +684,120 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
     (util:coalton-bug "Unable to construct function with type ~S of kind ~S" from (kind-of from)))
   (unless (kstar-p (kind-of to))
     (util:coalton-bug "Unable to construct function with type ~S of kind ~S" to (kind-of to)))
-  (make-tapp :from (make-tapp :from *arrow-type* :to from) :to to))
+  (make-function-ty
+   :positional-input-types (list from)
+   :keyword-input-types nil
+   :keyword-open-p nil
+   :output-types (function-result-output-types to)))
 
 (defun make-function-type* (args to)
   (declare (type ty-list args)
            (type ty to)
            (values ty &optional))
+  (make-function-ty
+   :positional-input-types args
+   :keyword-input-types nil
+   :keyword-open-p nil
+   :output-types (function-result-output-types to)))
+
+(defun prepend-function-input-types (args to)
+  (declare (type ty-list args)
+           (type ty to)
+           (values ty &optional))
   (if (null args)
       to
-      (make-function-type (car args)
-                          (make-function-type* (cdr args) to))))
+      (make-function-type* args to)))
+
+(defun merge-function-input-types (args to)
+  (declare (type ty-list args)
+           (type ty to)
+           (values ty &optional))
+  (if (null args)
+      to
+      (typecase to
+        (function-ty
+          ;; Codegen sometimes needs to make hidden inputs, such as explicit
+          ;; dictionaries, part of the same callable function. That operation
+          ;; is distinct from wrapping a function-valued output in another
+          ;; function type.
+          (if (and (null (function-ty-positional-input-types to))
+                   (null (function-ty-keyword-input-types to)))
+              (make-function-type* args to)
+              (make-function-ty
+               :alias (ty-alias to)
+               :positional-input-types (append args (function-ty-positional-input-types to))
+               :keyword-input-types (function-ty-keyword-input-types to)
+               :keyword-open-p (function-ty-keyword-open-p to)
+               :output-types (function-ty-output-types to))))
+        (t
+          (make-function-type* args to)))))
 
 (defgeneric function-type-p (ty)
+  (:method ((ty function-ty))
+    t)
   (:method ((ty ty))
     (declare (type ty ty))
     (and (tapp-p ty)
          (tapp-p (tapp-from ty))
          (equalp *arrow-type* (tapp-from (tapp-from ty))))))
 
-(defun function-type-from (ty)
-  (declare (type tapp ty))
-  (tapp-to (tapp-from ty)))
+(defgeneric function-type-from (ty)
+  (:method ((ty function-ty))
+    (or (first (function-ty-positional-input-types ty))
+        (util:coalton-bug "Nullary function type has no next positional input: ~S" ty)))
+  (:method ((ty tapp))
+    (tapp-to (tapp-from ty))))
 
-(defun function-type-to (ty)
-  (declare (type tapp ty))
-  (tapp-to ty))
+(defgeneric function-type-to (ty)
+  (:method ((ty function-ty))
+    (let ((remaining (rest (function-ty-positional-input-types ty))))
+      (if (or remaining
+              (function-ty-keyword-input-types ty)
+              (function-ty-keyword-open-p ty))
+          (make-function-ty
+           :alias (ty-alias ty)
+           :positional-input-types remaining
+           :keyword-input-types (function-ty-keyword-input-types ty)
+           :keyword-open-p (function-ty-keyword-open-p ty)
+           :output-types (function-ty-output-types ty))
+          (output-types-result-type (function-ty-output-types ty)))))
+  (:method ((ty tapp))
+    (tapp-to ty)))
+
+(defun function-input-arity (ty)
+  (declare (type ty ty)
+           (values fixnum &optional))
+  (typecase ty
+    (function-ty
+      (length (function-ty-positional-input-types ty)))
+    (t
+      (if (function-type-p ty)
+          (+ 1 (function-input-arity (function-type-to ty)))
+          0))))
+
+(defun function-output-arity (ty)
+  (declare (type ty ty)
+           (values fixnum &optional))
+  (typecase ty
+    (function-ty
+      (length (function-ty-output-types ty)))
+    (t
+      1)))
+
+(defgeneric function-output-types (ty)
+  (:method ((ty function-ty))
+    (copy-list (function-ty-output-types ty)))
+  (:method ((ty ty))
+    (if (function-type-p ty)
+        (list (function-return-type ty))
+        (util:coalton-bug "Expected function type, got ~S" ty))))
 
 (defun function-type-arity (ty)
-  (if (function-type-p ty)
-      (+ 1 (function-type-arity (function-type-to ty)))
-      0))
+  (function-input-arity ty))
 
 (defgeneric function-type-arguments (ty)
+  (:method ((ty function-ty))
+    (copy-list (function-ty-positional-input-types ty)))
   (:method ((ty ty))
     (if (function-type-p ty)
         (cons (function-type-from ty)
@@ -539,9 +806,11 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
         nil)))
 
 (defgeneric function-return-type (ty)
+  (:method ((ty function-ty))
+    (output-types-result-type (function-ty-output-types ty)))
   (:method ((ty ty))
     (if (function-type-p ty)
-        (function-return-type (tapp-to ty))
+        (function-return-type (function-type-to ty))
         ty)))
 
 (defun function-remove-arguments (ty num)
@@ -550,9 +819,26 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
 
   (assert (<= num (length (function-type-arguments ty))))
 
-  (make-function-type*
-   (subseq (function-type-arguments ty) num)
-   (function-return-type ty)))
+  (typecase ty
+    (function-ty
+      (let ((remaining (subseq (function-ty-positional-input-types ty) num)))
+        (if (or remaining
+                (function-ty-keyword-input-types ty)
+                (function-ty-keyword-open-p ty))
+            (make-function-ty
+             :alias (ty-alias ty)
+             :positional-input-types remaining
+             :keyword-input-types (function-ty-keyword-input-types ty)
+             :keyword-open-p (function-ty-keyword-open-p ty)
+             :output-types (function-ty-output-types ty))
+            (output-types-result-type (function-ty-output-types ty)))))
+    (t
+      (let ((remaining (subseq (function-type-arguments ty) num)))
+        (if remaining
+            (make-function-type*
+             remaining
+             (function-return-type ty))
+            (function-return-type ty))))))
 
 (defgeneric type-variables (type)
   (:documentation "Get a list containing the type variables in TYPE.")
@@ -565,6 +851,20 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
                                (type-variables (tapp-to type)))
                        :test #'ty=
                        :from-end t))
+  (:method ((entry keyword-ty-entry))
+    (type-variables (keyword-ty-entry-type entry)))
+  (:method ((type function-ty))
+    (remove-duplicates
+     (append (type-variables (function-ty-positional-input-types type))
+             (type-variables (function-ty-keyword-input-types type))
+             (type-variables (function-ty-output-types type)))
+     :test #'equalp
+     :from-end t))
+  (:method ((type result-ty))
+    (remove-duplicates
+     (type-variables (result-ty-output-types type))
+     :test #'equalp
+     :from-end t))
   ;; Otherwise, return nothing
   (:method ((type ty))
     nil)
@@ -645,6 +945,86 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
            (write (tyvar-id ty) :stream stream))))
     (tycon
      (write (tycon-name ty) :stream stream))
+    (result-ty
+     (let ((output-types (result-ty-output-types ty)))
+       (cond
+         ((null output-types)
+          (write-string "Void" stream))
+         ((null (cdr output-types))
+          (pprint-ty stream (car output-types)))
+         (t
+          (loop :for output :in output-types
+                :for firstp := t :then nil
+                :do
+                   (unless firstp
+                     (write-string " * " stream))
+                   (pprint-ty stream output))))))
+    (function-ty
+     (labels ((write-arrow ()
+                (write-string (if settings:*coalton-print-unicode*
+                                  " → "
+                                  " -> ")
+                              stream))
+              (write-output-types (output-types)
+                (cond
+                  ((null output-types)
+                   (write-string "Void" stream))
+                  ((null (cdr output-types))
+                   (write-one-stage (car output-types)))
+                  (t
+                   (loop :for output :in output-types
+                         :for firstp := t :then nil
+                         :do
+                            (unless firstp
+                              (write-string " * " stream))
+                            (pprint-ty stream output)))))
+              (write-keyword-name (keyword)
+                (format stream ":~(~A~)" (symbol-name keyword)))
+              (write-keyword-inputs (entries)
+                (write-string "&key " stream)
+                (loop :for entry :in entries
+                      :for firstp := t :then nil
+                      :do
+                         (unless firstp
+                           (write-string " " stream))
+                         (write-string "(" stream)
+                         (write-keyword-name (keyword-ty-entry-keyword entry))
+                         (write-string " " stream)
+                         (pprint-ty stream (keyword-ty-entry-type entry))
+                         (write-string ")" stream)))
+              (write-keyword-tail (openp)
+                (when openp
+                  (write-string " ..." stream)))
+              (write-one-stage (type)
+                (typecase type
+                  (function-ty
+                    (write-stage type))
+                  (t
+                    (pprint-ty stream type))))
+              (write-stage (type)
+                (write-string "(" stream)
+                (let ((inputs (function-ty-positional-input-types type))
+                      (keywords (function-ty-keyword-input-types type))
+                      (keyword-open-p (function-ty-keyword-open-p type)))
+                  (cond
+                    ((and (null inputs) (null keywords) (not keyword-open-p))
+                     (write-string "Void" stream))
+                    (t
+                     (loop :for input :in inputs
+                           :for firstp := t :then nil
+                           :do
+                              (unless firstp
+                                (write-string " * " stream))
+                              (pprint-ty stream input))
+                     (when (or keywords keyword-open-p)
+                       (when inputs
+                         (write-string " " stream))
+                       (write-keyword-inputs keywords)
+                       (write-keyword-tail keyword-open-p)))))
+                (write-arrow)
+                (write-output-types (function-ty-output-types type))
+                (write-string ")" stream)))
+       (write-stage ty)))
     (tapp
      (cond
        ((function-type-p ty) ;; Print function types

@@ -23,7 +23,7 @@
   ;; Optional
   ;;
 
-  (declare from-some (String -> (Optional :a) -> :a))
+  (declare from-some (String * (Optional :a) -> :a))
   (define (from-some str opt)
     "Get the value of OPT, erroring with the provided string if it is None."
     (match opt

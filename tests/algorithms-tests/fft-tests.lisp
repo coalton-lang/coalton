@@ -1,10 +1,7 @@
 (in-package #:coalton-native-tests)
 
 (coalton-toplevel
-
-  (define-type-alias Array array:LispArray)
-
-  (declare dft/c64 (Array (Complex F32) -> Array (Complex F32)))
+  (declare dft/c64 (array:LispArray (Complex F32) -> array:LispArray (Complex F32)))
   (define (dft/c64 v)
     (let ((n (array:length v))
           (res (array:make n 0)))
@@ -17,7 +14,7 @@
           (array:set! res i x)))
       res))
 
-  (declare idft/c64 (Array (Complex F32) -> Array (Complex F32)))
+  (declare idft/c64 (array:LispArray (Complex F32) -> array:LispArray (Complex F32)))
   (define (idft/c64 v)
     (let ((n (array:length v))
           (res (array:make n 0)))
@@ -31,7 +28,7 @@
           (array:set! res i x)))
       res))
 
-  (declare dft/c128 (Array (Complex F64) -> Array (Complex F64)))
+  (declare dft/c128 (array:LispArray (Complex F64) -> array:LispArray (Complex F64)))
   (define (dft/c128 v)
     (let ((n (array:length v))
           (res (array:make n 0)))
@@ -44,7 +41,7 @@
           (array:set! res i x)))
       res))
 
-  (declare idft/c128 (Array (Complex F64) -> Array (Complex F64)))
+  (declare idft/c128 (array:LispArray (Complex F64) -> array:LispArray (Complex F64)))
   (define (idft/c128 v)
     (let ((n (array:length v))
           (res (array:make n 0)))
@@ -79,6 +76,10 @@
                 (x2 (/ (array:aref v2 i) (complex mag2 0))))
             (is (< (math:magnitude (- x1 x2)) (/ 1 1000))))))))
 
+  (declare make-sample-array ((math:Trigonometric :a)
+                              (math:ComplexComponent :a)
+                              (types:RuntimeRepr (Complex :a))
+                              => UFix * :a -> array:LispArray (Complex :a)))
   (define (make-sample-array n f)
     (let ((v (array:make n 0)))
       (experimental:dotimes (i n)
@@ -86,26 +87,26 @@
           (array:set! v i x)))
       v)))
 
-(define-test fft-test ()
+  (define-test fft-test ()
   (let ((input (make-sample-array 32 0.25f0))
         (expected-output (dft/c64 input))
-        (actual-output (the (Array (Complex F32)) (fft:fft input))))
+        (actual-output (the (array:LispArray (Complex F32)) (fft:fft input))))
     (is-complex-array~= actual-output expected-output))
 
   (let ((input (make-sample-array 32 0.25d0))
         (expected-output (dft/c128 input))
-        (actual-output (the (Array (Complex F64)) (fft:fft input))))
+        (actual-output (the (array:LispArray (Complex F64)) (fft:fft input))))
     (is-complex-array~= actual-output expected-output)))
 
 (define-test ifft-test ()
   (let ((input (make-sample-array 32 0.25f0))
         (expected-output (idft/c64 input))
-        (actual-output (the (Array (Complex F32)) (fft:ifft input))))
+        (actual-output (the (array:LispArray (Complex F32)) (fft:ifft input))))
     (is-complex-array~= actual-output expected-output))
 
   (let ((input (make-sample-array 32 0.25d0))
         (expected-output (idft/c128 input))
-        (actual-output (the (Array (Complex F64)) (fft:ifft input))))
+        (actual-output (the (array:LispArray (Complex F64)) (fft:ifft input))))
     (is-complex-array~= actual-output expected-output)))
 
 (define-test fft!-test ()
@@ -133,25 +134,25 @@
 (define-test fft-into!-test ()
   (let ((input (make-sample-array 32 0.25f0))
         (expected-output (dft/c64 input))
-        (dst (the (Array (Complex F32)) (array:make-uninitialized 32)))
+        (dst (the (array:LispArray (Complex F32)) (array:make-uninitialized 32)))
         (actual-output (fft:fft-into! dst input)))
     (is-complex-array~= actual-output expected-output))
 
   (let ((input (make-sample-array 32 0.25d0))
         (expected-output (dft/c128 input))
-        (dst (the (Array (Complex F64)) (array:make-uninitialized 32)))
+        (dst (the (array:LispArray (Complex F64)) (array:make-uninitialized 32)))
         (actual-output (fft:fft-into! dst input)))
     (is-complex-array~= actual-output expected-output)))
 
 (define-test ifft-into!-test ()
   (let ((input (make-sample-array 32 0.25f0))
         (expected-output (idft/c64 input))
-        (dst (the (Array (Complex F32)) (array:make-uninitialized 32)))
+        (dst (the (array:LispArray (Complex F32)) (array:make-uninitialized 32)))
         (actual-output (fft:ifft-into! dst input)))
     (is-complex-array~= actual-output expected-output))
 
   (let ((input (make-sample-array 32 0.25d0))
         (expected-output (idft/c128 input))
-        (dst (the (Array (Complex F64)) (array:make-uninitialized 32)))
+        (dst (the (array:LispArray (Complex F64)) (array:make-uninitialized 32)))
         (actual-output (fft:ifft-into! dst input)))
     (is-complex-array~= actual-output expected-output)))

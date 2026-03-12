@@ -46,17 +46,11 @@
    #:coalton-impl/codegen/constant-propagation
    #:propagate-constants)
   (:import-from
-   #:coalton-impl/codegen/canonicalizer
-   #:canonicalize)
-  (:import-from
    #:coalton-impl/codegen/inliner
    #:inline-applications)
   (:import-from
    #:coalton-impl/codegen/specializer
    #:apply-specializations)
-  (:import-from
-   #:coalton-impl/codegen/multiple-values
-   #:transform-tuples-to-multiple-values)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
@@ -93,6 +87,21 @@
     (dolist (name toplevel-values)
       (when (tc:lookup-function env name :no-error t)
         (setf env (tc:unset-function env name)))))
+  env)
+
+(defun prime-optimization-env (bindings env)
+  "Seed ENV with same-unit value bindings before optimization.
+
+Only non-function bindings are published early. This is enough for method
+inlining to resolve class constants and other value methods from the current
+translation unit, without exposing in-progress function bodies to the global
+inliner while they are themselves being optimized."
+  (declare (type binding-list bindings)
+           (type tc:environment env)
+           (values tc:environment &optional))
+  (loop :for (name . node) :in bindings
+        :unless (node-abstraction-p node)
+          :do (setf env (tc:set-code env name node)))
   env)
 
 (defun make-function-table (env)
@@ -180,9 +189,6 @@ mapping known function names to their arity."
               (loop :for (name . node) :in bindings
                     :collect (cons name (direct-application node function-table))))
 
-        ;; Rewrite Tuple code to use multiple-value calling conventions
-        (setf bindings (transform-tuples-to-multiple-values bindings env))
-
         ;; Update code db
         (loop :for (name . node) :in bindings
               :do (setf env (tc:set-code env name node)))
@@ -215,7 +221,8 @@ arity. TABLE will be mutated with additional entries."
                       :properties (node-properties node)
                       :rator-type (node-type (node-application-rator node))
                       :rator name
-                      :rands (node-application-rands node)))))))
+                      :rands (node-application-rands node)
+                      :keyword-rands (node-application-keyword-rands node)))))))
 
            (add-local-funs (node)
              (loop :for (name . node) :in (node-let-bindings node)
@@ -267,7 +274,6 @@ ENV. Return a new node which is optimized."
                 (> runs 1))
        (format t "~&;; Optimizing again, attempt #~D~%" runs))
      (setf node (transform-intrinsic-applications node))
-     (setf node (canonicalize node))
      (setf node (match-dynamic-extent-lift node env))
      (setf node (propagate-constants node env))
      (setf node (apply-specializations node env))
@@ -348,6 +354,13 @@ speaking, the following kinds of transformations happen:
       (t
        (return-from pointfree node)))
 
+    ;; If there are no positional parameters left to synthesize, NODE is
+    ;; already a first-class function value. Wrapping it in a nullary thunk is
+    ;; redundant and breaks keyword-bearing nullary functions by forcing an
+    ;; extra application step.
+    (when (zerop num-params)
+      (return-from pointfree node))
+
     (let* ((orig-param-names (tc:lookup-function-source-parameter-names env (node-variable-value function)))
 
            (param-names (loop :for i :from 0 :below num-params
@@ -375,9 +388,9 @@ speaking, the following kinds of transformations happen:
        :type (node-type node)
        :vars param-names
        :subexpr (make-node-application
-                 :type (tc:make-function-type*
-                        (subseq (tc:function-type-arguments (node-type function)) (length new-args))
-                        (tc:function-return-type (node-type node)))
+                 :type (tc:function-remove-arguments
+                        (node-type function)
+                        (length new-args))
                  :properties '()
                  :rator function
                  :rands new-args)))))

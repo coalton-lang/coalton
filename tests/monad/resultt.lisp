@@ -15,12 +15,12 @@
   (let (Tuple _ result) =
     (st:run
      (m-res:run-resultT
-      (do
-       (lift (st:modify (+ 2)))
+     (do
+       (lift (st:modify (fn (state) (+ state 2))))
        (m-res:ResultT positive-or-fail)
-       (lift (st:modify (+ -10)))
+       (lift (st:modify (fn (state) (+ state -10))))
        (m-res:ResultT positive-or-fail)
-       (lift (st:modify (+ 20)))
+       (lift (st:modify (fn (state) (+ state 20))))
        (m-res:ResultT positive-or-fail)))
      0))
   (is (== (Err -8) result)))
@@ -63,7 +63,7 @@
   (let (Tuple _ ok-res) =
     (st:run
      (m-res:run-resultT
-      (m-res:map-errT (* -1)
+      (m-res:map-errT (fn (x) (* -1 x))
                       (m-res:ResultT positive-or-fail)))
      5))
   (is (== (Ok 5) ok-res)))

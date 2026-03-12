@@ -10,29 +10,32 @@
    #:function-entry
    #:function-entry-arity
    #:function-entry-function
-   #:function-entry-curried
+   #:function-entry-bound-arguments
+   #:exact-call
    #:construct-function-entry
+   #:bind-function-entry-hidden-arguments
    #:call-coalton-function
-   #:too-many-arguments-to-coalton-function
-   #:too-many-arguments-function
-   #:too-many-arguments-count
-   #:too-many-arguments-arguments))
+   #:coalton-function-arity-mismatch
+   #:coalton-function-arity-mismatch-function
+   #:coalton-function-arity-mismatch-expected-arity
+   #:coalton-function-arity-mismatch-actual-arity
+   #:coalton-function-arity-mismatch-arguments))
 
 (in-package #:coalton-impl/runtime/function-entry)
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defconstant function-arity-limit 32))
-
-;;; A FUNCTION-ENTRY represents a partially applicable function.
+;;; A FUNCTION-ENTRY represents a first-class Coalton function value.
+;;; ARITY counts only the visible positional arguments. Hidden dictionary
+;;; arguments may already be bound onto the entry, and Lisp keyword arguments
+;;; are forwarded directly to the underlying function.
 (defstruct function-entry
-  ;; The arity of the partially applicable function.
+  ;; The exact visible positional arity expected by the Coalton value.
   (arity    (util:required 'arity)    :type fixnum        :read-only t)
-  ;; A reference to the full arity Lisp function. We put this in its
-  ;; own slot to avoid an extra indirection.
+  ;; The underlying Lisp function, including any hidden dictionary or keyword
+  ;; parameters present in the compiled callable shape.
   (function (util:required 'function) :type function      :read-only t)
-  ;; A jump table, where the index of each entry determines the number
-  ;; of arguments to partially apply.
-  (curried  (util:required 'curried)  :type simple-vector :read-only t))
+  ;; Hidden dictionary arguments pre-bound for first-class overloaded values.
+  ;; These are applied before any visible positional or keyword arguments.
+  (bound-arguments nil                 :type list          :read-only t))
 
 #+sbcl
 (declaim (sb-ext:freeze-type function-entry))
@@ -40,159 +43,173 @@
 (defmethod print-object ((function-entry function-entry) stream)
   (print-unreadable-object (function-entry stream :type t)
     (format stream
-            ":ARITY ~a"
-            (function-entry-arity function-entry))))
-
-(defvar *function-constructor-functions* (make-array function-arity-limit))
-(defvar *function-application-functions* (make-array function-arity-limit))
-
-(defun unreachable-fun ()
-  (error "This should be unreachable."))
-
-(defmacro define-function-macros ()
-  (labels ((sub-application-sym (arity)
-             (alexandria:format-symbol t "A~D" arity))
-           (constructor-sym (arity)
-             (alexandria:format-symbol t "F~D" arity))
-           (define-function-macros-with-arity (arity)
-             (declare (type fixnum arity))
-             (let ((constructor-sym (constructor-sym arity))
-                   (application-sym (alexandria:format-symbol t "A~D" arity))
-                   (function-sym (alexandria:make-gensym "F"))
-                   (applied-function-sym (alexandria:make-gensym "F"))
-                   (arg-syms (alexandria:make-gensym-list arity)))
-
-               (flet ((build-curried-function (applied-arity args)
-                        (let ((fun (gensym "FUN")))
-                          (cond ((> applied-arity (length args))
-                                 ;; For oversaturated functions, we saturate repeatedly.
-                                 (let ((temps (alexandria:make-gensym-list applied-arity)))
-                                   `(lambda (,fun ,@temps)
-                                      (declare (type function ,fun))
-                                      (,(sub-application-sym (- applied-arity arity))
-                                       (funcall ,fun ,@(subseq temps 0 arity))
-                                       ,@(subseq temps arity)))))
-                                ;; This is special case is handled in
-                                ;; the application logic.
-                                ((= applied-arity (length args))
-                                 `#'unreachable-fun)
-                                (t
-                                 `(lambda (,fun ,@(subseq args 0 applied-arity))
-                                    (declare (type function ,fun))
-                                    (,(constructor-sym (- arity applied-arity))
-                                     (lambda ,(subseq args applied-arity)
-                                       (funcall ,fun ,@args)))))))))
-
-                 ;; NOTE: Since we are only calling these functions
-                 ;; from already typechecked coalton, we can use the
-                 ;; OPTIMIZE flags to remove type checks.
-                 `(progn
-                    (defun ,application-sym (,applied-function-sym ,@arg-syms)
-                      (declare #.coalton-impl/settings:*coalton-optimize*
-                               (type function-entry ,applied-function-sym)
-                               (values t))
-                      (let ((function-arity (function-entry-arity ,applied-function-sym))
-                            (raw-function (function-entry-function ,applied-function-sym)))
-                        (declare (type (mod ,function-arity-limit) function-arity))
-                        ;; Fully saturated is the most common case,
-                        ;; so we special case it.
-                        (if (= ,arity function-arity)
-                            (funcall raw-function ,@arg-syms)
-                            ;; Partially apply or overapply some
-                            ;; of the arguments by looking up
-                            ;; what to do in the jump table.
-                            (funcall
-                             (the function
-                                  (aref (function-entry-curried ,applied-function-sym) ,arity))
-                             raw-function
-                             ,@arg-syms))))
-                    (setf (aref *function-application-functions* ,arity) ',application-sym)
-
-                    (defun ,constructor-sym (,function-sym)
-                      (declare (type (function ,(loop :for i :below arity :collect 't) t) ,function-sym)
-                               #.coalton-impl/settings:*coalton-optimize*
-                               (values function-entry))
-                      (make-function-entry
-                       :arity ,arity
-                       :function ,function-sym
-                       :curried
-                       (load-time-value
-                        (vector
-                         #'unreachable-fun
-                         ,@(loop for applied-arity from 1 below function-arity-limit
-                                 collect (build-curried-function applied-arity arg-syms)))
-                        t)))
-                    (setf (aref *function-constructor-functions* ,arity) ',constructor-sym))))))
-    (let ((body nil)
-          (funs nil))
-      (loop :for i :of-type fixnum :from 1 :below function-arity-limit
-            :do (push (define-function-macros-with-arity i) body)
-            :do (setf funs
-                      (append (list (alexandria:format-symbol *package* "F~D" i)
-                                    (alexandria:format-symbol *package* "A~D" i))
-                              funs)))
-      `(progn
-         #+sbcl
-         (declaim (sb-ext:start-block ,@funs))
-         ,@(reverse body)
-         #+sbcl
-         (declaim (sb-ext:end-block))))))
-
-(define-function-macros)
-
-
-;;
-;; Functions for building and applying function entries
-;;
+            ":ARITY ~a~@[ :BOUND ~a~]"
+            (function-entry-arity function-entry)
+            (and (function-entry-bound-arguments function-entry)
+                 (length (function-entry-bound-arguments function-entry))))))
 
 (defun construct-function-entry (function arity)
-  "Construct a FUNCTION-ENTRY object with ARITY
+  "Return code that constructs a FUNCTION-ENTRY for FUNCTION with visible ARITY.
 
-NOTE: There is no FUNCTION-ENTRY for arity 1 and the function will be returned"
-       (let ((function-constructor (aref *function-constructor-functions* arity)))
-         (unless function-constructor
-           (error "Unable to construct function of arity ~A" arity))
-         `(,function-constructor ,function)))
+Nullary Coalton functions are represented explicitly with ARITY 0."
+  `(make-function-entry :arity ,arity :function ,function))
 
-(define-condition too-many-arguments-to-coalton-function (error)
+(defun bind-function-entry-hidden-arguments (function-entry &rest hidden-arguments)
+  "Return FUNCTION-ENTRY with HIDDEN-ARGUMENTS pre-applied to future calls.
+
+The returned entry exposes a reduced visible positional arity. This is used for
+first-class overloaded values after their hidden dictionary arguments have been
+resolved."
+  (declare (type function-entry function-entry)
+           (type list hidden-arguments)
+           (values function-entry &optional))
+  (if (null hidden-arguments)
+      function-entry
+      (make-function-entry
+       :arity (- (function-entry-arity function-entry)
+                 (length hidden-arguments))
+       :function (function-entry-function function-entry)
+       :bound-arguments (append (function-entry-bound-arguments function-entry)
+                                hidden-arguments))))
+
+(define-condition coalton-function-arity-mismatch (error)
   ((function :initarg :function
-             :accessor too-many-arguments-function)
-   (arg-count :initarg :arg-count
-              :accessor too-many-arguments-count)
+             :accessor coalton-function-arity-mismatch-function)
+   (expected-arity :initarg :expected-arity
+                   :accessor coalton-function-arity-mismatch-expected-arity)
+   (actual-arity :initarg :actual-arity
+                 :accessor coalton-function-arity-mismatch-actual-arity)
    (arguments :initarg :arguments
-              :accessor too-many-arguments-arguments))
+              :accessor coalton-function-arity-mismatch-arguments))
   (:report (lambda (err stream)
-             (with-slots (function arg-count) err
+             (with-slots (function expected-arity actual-arity) err
                (format stream
-                       "Attempt to apply ~s to ~d arguments, but ~s is ~d."
-                       function arg-count 'function-arity-limit function-arity-limit)))))
+                       "Attempt to apply ~s to ~d arguments, but it requires ~d."
+                       function actual-arity expected-arity)))))
+
+(defun positional-argument-count (args)
+  (declare (type list args)
+           (values fixnum &optional))
+  (loop :for arg :in args
+        :for count :from 0
+        :when (keywordp arg)
+          :return count
+        :finally (return (length args))))
+
+(defun %call-function-entry (function-entry args)
+  (declare (type function-entry function-entry)
+           (type list args)
+           (values t &optional))
+  (let ((expected-arity (function-entry-arity function-entry))
+        (actual-arity (positional-argument-count args))
+        (function (function-entry-function function-entry))
+        (bound-arguments (function-entry-bound-arguments function-entry)))
+    (if (= expected-arity actual-arity)
+        (case (length bound-arguments)
+          (0 (apply function args))
+          (1 (apply function
+                    (first bound-arguments)
+                    args))
+          (2 (apply function
+                    (first bound-arguments)
+                    (second bound-arguments)
+                    args))
+          (3 (apply function
+                    (first bound-arguments)
+                    (second bound-arguments)
+                    (third bound-arguments)
+                    args))
+          (4 (apply function
+                    (first bound-arguments)
+                    (second bound-arguments)
+                    (third bound-arguments)
+                    (fourth bound-arguments)
+                    args))
+          (t (apply function
+                    (append bound-arguments args))))
+        (error 'coalton-function-arity-mismatch
+               :function function-entry
+               :expected-arity expected-arity
+               :actual-arity actual-arity
+               :arguments args))))
+
+(defmacro exact-call (function-entry &rest args)
+  "Apply FUNCTION-ENTRY to the positional ARGS without generic keyword dispatch.
+
+This is used by compiler-generated code when the callee is known to be a
+Coalton function value and the call site has no keyword arguments. Any hidden
+arguments already bound onto FUNCTION-ENTRY are prepended before ARGS."
+  (let ((function-entry-sym (gensym "FUNCTION-ENTRY"))
+        (function-sym (gensym "FUNCTION"))
+        (bound-arguments-sym (gensym "BOUND-ARGUMENTS"))
+        (expected-arity-sym (gensym "EXPECTED-ARITY"))
+        (arg-syms (loop :repeat (length args) :collect (gensym "ARG"))))
+    `(let ((,function-entry-sym ,function-entry)
+           ,@(loop :for arg-sym :in arg-syms
+                   :for arg :in args
+                   :collect `(,arg-sym ,arg)))
+       (let ((,expected-arity-sym (function-entry-arity ,function-entry-sym)))
+         (if (= ,expected-arity-sym ,(length args))
+             (let ((,function-sym (function-entry-function ,function-entry-sym))
+                   (,bound-arguments-sym
+                     (function-entry-bound-arguments ,function-entry-sym)))
+               (case (length ,bound-arguments-sym)
+                 (0 (funcall ,function-sym ,@arg-syms))
+                 (1 (funcall ,function-sym
+                             (first ,bound-arguments-sym)
+                             ,@arg-syms))
+                 (2 (funcall ,function-sym
+                             (first ,bound-arguments-sym)
+                             (second ,bound-arguments-sym)
+                             ,@arg-syms))
+                 (3 (funcall ,function-sym
+                             (first ,bound-arguments-sym)
+                             (second ,bound-arguments-sym)
+                             (third ,bound-arguments-sym)
+                             ,@arg-syms))
+                 (4 (funcall ,function-sym
+                             (first ,bound-arguments-sym)
+                             (second ,bound-arguments-sym)
+                             (third ,bound-arguments-sym)
+                             (fourth ,bound-arguments-sym)
+                             ,@arg-syms))
+                 (t (apply ,function-sym
+                           (append ,bound-arguments-sym
+                                   (list ,@arg-syms))))))
+             (error 'coalton-function-arity-mismatch
+                    :function ,function-entry-sym
+                    :expected-arity ,expected-arity-sym
+                    :actual-arity ,(length args)
+                    :arguments (list ,@arg-syms)))))))
 
 (declaim (ftype (function ((or function function-entry) &rest t)
                           (values t &optional))
                 call-coalton-function))
 (defun coalton:call-coalton-function (function &rest args)
-  "Apply a Coalton function object FUNCTION to ARGS from Common Lisp."
-  (when (endp args)
-    (push coalton-impl/constants:+value-of-unit+ args))
-  (let ((arg-count (length args)))
-    (if (>= arg-count function-arity-limit)
-        (error 'too-many-arguments-to-coalton-function
-               :function function
-               :arg-count arg-count
-               :arguments args)
-        (apply (aref *function-application-functions* arg-count)
-               function
-               args))))
+  "Apply Coalton FUNCTION to ARGS from Common Lisp.
+
+If FUNCTION is a FUNCTION-ENTRY, this checks the visible positional arity,
+prepends any hidden bound arguments, and forwards Lisp keyword arguments
+unchanged."
+  (typecase function
+    (function-entry
+      (%call-function-entry function args))
+    (function
+      (apply function args))
+    (t
+      (apply function args))))
 
 (define-compiler-macro coalton:call-coalton-function (function &rest args)
-  (when (endp args)
-    (push 'coalton:Unit args))
-  (let ((arg-count (length args)))
-    (if (>= arg-count function-arity-limit)
-        (error 'too-many-arguments-to-coalton-function
-               :function function
-               :arg-count arg-count
-               :arguments args)
-        `(,(aref *function-application-functions* arg-count)
-          ,function
-          ,@args))))
+  (let ((function-sym (gensym "FUNCTION"))
+        (arg-syms (loop :repeat (length args) :collect (gensym "ARG"))))
+    `(let ((,function-sym ,function)
+           ,@(loop :for arg-sym :in arg-syms
+                   :for arg :in args
+                   :collect `(,arg-sym ,arg)))
+       (typecase ,function-sym
+         (function-entry
+           (%call-function-entry ,function-sym (list ,@arg-syms)))
+         (function
+           (apply ,function-sym (list ,@arg-syms)))
+         (t
+           (apply ,function-sym (list ,@arg-syms)))))))

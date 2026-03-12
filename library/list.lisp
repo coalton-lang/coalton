@@ -131,7 +131,7 @@
   (declare init (List :a -> List :a))
   (define (init l)
     "Returns every element except the last in a list."
-    (lisp (List :a) (l)
+    (lisp (-> (List :a)) (l)
       (cl:butlast l)))
 
   (declare null? (List :a -> Boolean))
@@ -160,7 +160,7 @@
       ((Cons _ (Nil)) True)
       (_ False)))
 
-  (declare repeat (UFix -> :a -> List :a))
+  (declare repeat (UFix * :a -> List :a))
   (define (repeat n x)
     "Returns a list with the same value repeated multiple times."
     (rec f ((k n)
@@ -184,10 +184,10 @@
   (declare %reverse! (List :a -> List :a))
   (define (%reverse! xs)
     "A mutating reverse operation. After (%reverse! LST), LST must not be referenced; the original list, and all its sublists, should be treated as consumed by this operation. Callers should use the return value and only the return value."
-    (lisp (List :a) (xs)
+    (lisp (-> (List :a)) (xs)
       (cl:nreverse xs)))
 
-  (declare drop (UFix -> List :a -> List :a))
+  (declare drop (UFix * List :a -> List :a))
   (define (drop n xs)
     "Returns a list with the first N elements removed."
     (if (== n 0)
@@ -197,7 +197,7 @@
            (drop (- n 1) xs))
           ((Nil) Nil))))
 
-  (declare take (UFix -> List :a -> List :a))
+  (declare take (UFix * List :a -> List :a))
   (define (take n xs)
     "Returns the first N elements of a list."
     (%reverse!
@@ -210,7 +210,7 @@
              ((Cons x xs) (f (- n 1) xs (Cons x out)))
              ((Nil) out))))))
 
-  (declare split-at (UFix -> List :a -> (Tuple (List :a) (List :a))))
+  (declare split-at (UFix * List :a -> (Tuple (List :a) (List :a))))
   (define (split-at n xs)
     "Splits a list into a Tuple of the first N elements and all remaining elements. The return value is equivalent to `(Tuple (take n xs) (drop n xs)`."
     (rec % ((n n)
@@ -222,14 +222,14 @@
             ((Cons x xs) (% (- n 1) xs (Cons x acc-head)))
             ((Nil) (Tuple (%reverse! acc-head) Nil))))))
 
-  (declare split-around (UFix -> List :a -> (Tuple3 (List :a) (Optional :a) (List :a))))
+  (declare split-around (UFix * List :a -> (Tuple3 (List :a) (Optional :a) (List :a))))
   (define (split-around n xs)
     "Splits a list around N into a Tuple of the first N elements, the element at index N, and a tail of all remaining elements. N must be a valid index."
     (match (split-at n xs)
       ((Tuple head (Cons x xs)) (Tuple3 head (Some x) xs))
       ((Tuple head (Nil)) (Tuple3 head None Nil))))
 
-  (declare find ((:a -> Boolean) -> List :a -> Optional :a))
+  (declare find ((:a -> Boolean) * List :a -> Optional :a))
   (define (find f xs)
     "Returns the first element in a list matching the predicate function F."
     (fold (fn (a b)
@@ -239,7 +239,7 @@
                (if (f b) (Some b) None))))
           None xs))
 
-  (declare filter ((:a -> Boolean) -> List :a -> List :a))
+  (declare filter ((:a -> Boolean) * List :a -> List :a))
   (define (filter f xs)
     "Returns a new list containing every element of XS that matches the predicate function F in the same order."
     (let ((fun (fn (xs ys)
@@ -259,7 +259,7 @@
           0
           l))
 
-  (declare index (UFix -> List :a -> Optional :a))
+  (declare index (UFix * List :a -> Optional :a))
   (define (index i xs)
     "Returns the Ith element of a list."
     (match xs
@@ -269,12 +269,12 @@
            (Some x)
            (index (- i 1) xs)))))
 
-  (declare nth (UFix -> List :t -> :t))
+  (declare nth (UFix * List :t -> :t))
   (define (nth n l)
     "Like INDEX, but errors if the index is not found."
     (from-some "There is no NTH" (index n l)))
 
-  (declare nth-cdr (Ufix -> List :a -> List :a))
+  (declare nth-cdr (Ufix * List :a -> List :a))
   (define (nth-cdr n l)
     "Returns the nth-cdr of a list."
     (cond ((null? l)
@@ -284,11 +284,11 @@
 	  (True
 	   (nth-cdr (math:1- n) (cdr l)))))
   
-  (declare elemIndex (Eq :a => :a -> List :a -> Optional UFix))
+  (declare elemIndex (Eq :a => :a * List :a -> Optional UFix))
   (define (elemIndex x xs)
-    (findIndex (== x) xs))
+    (findIndex (fn (y) (== x y)) xs))
 
-  (declare findIndex ((:a -> Boolean) -> List :a -> Optional UFix))
+  (declare findIndex ((:a -> Boolean) * List :a -> Optional UFix))
   (define (findIndex f xs)
     "Returns the index of the first element matching the predicate function F."
     (let ((find (fn (xs n)
@@ -300,7 +300,7 @@
                          (find xs (+ n 1))))))))
       (find xs 0)))
 
-  (declare range ((Num :int) (Ord :int) => :int -> :int -> List :int))
+  (declare range ((Num :int) (Ord :int) => :int * :int -> List :int))
   (define (range start end)
     "Returns a list containing the numbers from START to END inclusive, counting by 1.
 
@@ -323,7 +323,7 @@
       ((Nil) result)
       ((Cons x xs) (append-rev xs (Cons x result)))))
 
-  (declare append (List :a -> List :a -> List :a))
+  (declare append (List :a * List :a -> List :a))
   (define (append xs ys)
     "Appends two lists together and returns a new list."
     (%reverse! (append-rev ys (append-rev xs Nil))))
@@ -334,13 +334,13 @@
     "Appends a list of lists together into a single new list."
     (concatMap (fn (x) x) xs))
 
-  (specialize mconcatMap concatMap ((:a -> (List :b)) -> List :a -> List :b))
-  (declare concatMap ((:a -> (List :b)) -> List :a -> List :b))
+  (specialize mconcatMap concatMap ((:a -> (List :b)) * List :a -> List :b))
+  (declare concatMap ((:a -> (List :b)) * List :a -> List :b))
   (define (concatMap f xs)
     "Apply F to each element in XS and concatenate the results."
     (%reverse! (fold (fn (a b) (append-rev (f b) a)) Nil xs)))
 
-  (declare member (Eq :a => (:a -> (List :a) -> Boolean)))
+  (declare member (Eq :a => (:a * (List :a) -> Boolean)))
   (define (member e xs)
     "Returns true if any element of XS is equal to E."
     (match xs
@@ -350,7 +350,7 @@
            (member e xs)))
       ((Nil) False)))
 
-  (declare union (Eq :a => ((List :a) -> (List :a) -> (List :a))))
+  (declare union (Eq :a => ((List :a) * (List :a) -> (List :a))))
   (define (union xs ys)
     "Returns a new list with the elements from both XS and YS and without duplicates."
     (%reverse!
@@ -366,7 +366,7 @@
                (f xs acc)
                (f xs (Cons x acc)))))))))
 
-  (declare intersection (Eq :a => ((List :a) -> (List :a) -> (List :a))))
+  (declare intersection (Eq :a => ((List :a) * (List :a) -> (List :a))))
   (define (intersection xs ys)
     "Returns elements which occur in both lists. Does not return duplicates and does not guarantee order."
     (let ((inner (fn (xs ys acc)
@@ -378,7 +378,7 @@
                      ((Nil) acc)))))
       (%reverse! (inner (remove-duplicates-rev xs Nil) (remove-duplicates-rev ys Nil) Nil))))
 
-  (declare lookup (Eq :a => (:a -> (List (Tuple :a :b)) -> (Optional :b))))
+  (declare lookup (Eq :a => (:a * (List (Tuple :a :b)) -> (Optional :b))))
   (define (lookup e xs)
     "Returns the value of the first (key, value) tuple in XS where the key matches E."
     (match xs
@@ -390,7 +390,7 @@
               (lookup e xs)))))
       ((Nil) None)))
 
-  (declare remove-duplicates-rev (Eq :a => ((List :a) -> (List :a) -> (List :a))))
+  (declare remove-duplicates-rev (Eq :a => ((List :a) * (List :a) -> (List :a))))
   (define (remove-duplicates-rev xs acc)
     (match xs
       ((Nil) acc)
@@ -404,7 +404,7 @@
     "Returns a new list without duplicate elements."
     (%reverse! (remove-duplicates-rev xs Nil)))
 
-  (declare remove-rev-if ((:a -> Boolean) -> (List :a) -> (List :a) -> (List :a)))
+  (declare remove-rev-if ((:a -> Boolean) * (List :a) * (List :a) -> (List :a)))
   (define (remove-rev-if pred ys acc)
     (match ys
       ((Nil) acc)
@@ -413,22 +413,22 @@
            (append-rev ys acc)
            (remove-rev-if pred ys (Cons y acc))))))
 
-  (declare remove-if ((:a -> Boolean) -> (List :a) -> (List :a)))
+  (declare remove-if ((:a -> Boolean) * (List :a) -> (List :a)))
   (define (remove-if pred xs)
     "Return a new list with the first element for which PRED is `True` is removed."
     (%reverse! (remove-rev-if pred xs Nil)))
 
-  (declare remove (Eq :a => (:a -> (List :a) -> (List :a))))
+  (declare remove (Eq :a => (:a * (List :a) -> (List :a))))
   (define (remove x ys)
     "Return a new list with the first element equal to `x` removed."
-    (remove-if (== x) ys))
+    (remove-if (fn (y) (== x y)) ys))
 
-  (declare difference (Eq :a => ((List :a) -> (List :a) -> (List :a))))
+  (declare difference (Eq :a => ((List :a) * (List :a) -> (List :a))))
   (define (difference xs ys)
     "Returns a new list with the first occurrence of each element in `ys` removed from `xs`."
     (fold (fn (a b) (remove b a)) xs ys))
 
-  (declare zipWith ((:a -> :b -> :c) -> (List :a) -> (List :b) -> (List :c)))
+  (declare zipWith ((:a * :b -> :c) * (List :a) * (List :b) -> (List :c)))
   (define (zipWith f xs ys)
     "Builds a new list by calling `f` with elements of `xs` and `ys`."
     (%reverse!
@@ -440,7 +440,7 @@
           (g xs ys (Cons (f x y) acc)))
          (_ acc)))))
 
-  (declare zipWith3 ((:a -> :b -> :c -> :d) -> (List :a) -> (List :b) -> (List :c) -> (List :d)))
+  (declare zipWith3 ((:a * :b * :c -> :d) * (List :a) * (List :b) * (List :c) -> (List :d)))
   (define (zipWith3 f xs ys zs)
     "Build a new list by calling F with elements of XS, YS and ZS"
     (%reverse!
@@ -453,7 +453,7 @@
           (g xs ys zs (Cons (f x y z) acc)))
          (_ acc)))))
 
-  (declare zipWith4 ((:a -> :b -> :c -> :d -> :e) -> (List :a) -> (List :b) -> (List :c) -> (List :d) -> (List :e)))
+  (declare zipWith4 ((:a * :b * :c * :d -> :e) * (List :a) * (List :b) * (List :c) * (List :d) -> (List :e)))
   (define (zipWith4 f as bs cs ds)
     "Build a new list by calling F with elements of AS, BS, CS and DS"
     (%reverse!
@@ -467,7 +467,7 @@
           (g as bs cs ds (Cons (f a b c d) acc)))
          (_ acc)))))
 
-  (declare zipWith5 ((:a -> :b -> :c -> :d -> :e -> :f) -> (List :a) -> (List :b) -> (List :c) -> (List :d) -> (List :e) -> (List :f)))
+  (declare zipWith5 ((:a * :b * :c * :d * :e -> :f) * (List :a) * (List :b) * (List :c) * (List :d) * (List :e) -> (List :f)))
   (define (zipWith5 f as bs cs ds es)
     "Build a new list by calling F with elements of AS, BS, CS, DS and ES"
     (%reverse!
@@ -482,12 +482,12 @@
           (g as bs cs ds es (Cons (f a b c d e) acc)))
          (_ acc)))))
 
-  (declare zip ((List :a) -> (List :b) -> (List (Tuple :a :b))))
+  (declare zip ((List :a) * (List :b) -> (List (Tuple :a :b))))
   (define (zip xs ys)
     "Builds a list of tuples with the elements of XS and YS."
     (zipWith Tuple xs ys))
 
-  (declare countBy ((:a -> Boolean) -> (List :a) -> UFix))
+  (declare countBy ((:a -> Boolean) * (List :a) -> UFix))
   (define (countBy f things)
     "Count the number of items in THINGS that satisfy the predicate F."
     (fold (fn (sum x)
@@ -497,12 +497,12 @@
           0
           things))
 
-  (declare insert (Ord :a => (:a -> (List :a) -> (List :a))))
+  (declare insert (Ord :a => (:a * (List :a) -> (List :a))))
   (define (insert e ls)
     "Inserts an element into a list at the first place it is less than or equal to the next element."
     (insertBy <=> e ls))
 
-  (declare insertBy ((:a -> :a -> Ord) -> :a -> (List :a) -> (List :a)))
+  (declare insertBy ((:a * :a -> Ord) * :a * (List :a) -> (List :a)))
   (define (insertBy cmp x ys)
     "Generic version of insert"
     (%reverse!
@@ -520,27 +520,27 @@
     "Sort `xs`."
     (sortBy <=> xs))
 
-  (declare sortBy ((:a -> :a -> Ord) -> (List :a) -> (List :a)))
+  (declare sortBy ((:a * :a -> Ord) * (List :a) -> (List :a)))
   (define (sortBy cmp xs)
     "Sort `xs` by a custom comparison function `cmp`."
-    (lisp (List :a) (cmp xs)
+    (lisp (-> (List :a)) (cmp xs)
       (cl:sort (cl:copy-list xs)
                (cl:lambda (a b)
                  (cl:eq 'coalton/classes::ord/lt (call-coalton-function cmp a b))))))
 
-  (declare intersperse (:a -> (List :a) -> (List :a)))
+  (declare intersperse (:a * (List :a) -> (List :a)))
   (define (intersperse e xs)
     "Returns a new list by inserting `e` between every element of `xs`."
     (match xs
       ((Nil)       Nil)
       ((Cons x xs) (Cons x (concatMap (fn (y) (make-list e y)) xs)))))
 
-  (declare intercalate ((List :a) -> (List (List :a)) -> (List :a)))
+  (declare intercalate ((List :a) * (List (List :a)) -> (List :a)))
   (define (intercalate xs xss)
     "Intersperse `xs` into `xss` and then concatenate the result."
     (concat (intersperse xs xss)))
 
-  (declare insertions (:a -> List :a -> (List (List :a))))
+  (declare insertions (:a * List :a -> (List (List :a))))
   (define (insertions a l)
     "Produce a list of copies of `l`, each with A inserted at a possible position.
 
@@ -550,7 +550,8 @@
     (match l
       ((Nil)       (make-list (make-list a)))
       ((Cons x ls) (Cons (Cons a l)
-                         (map (Cons x) (insertions a ls))))))
+                         (map (fn (ys) (Cons x ys))
+                              (insertions a ls))))))
 
   (declare transpose ((List (List :a)) -> (List (List :a))))
   (define (transpose xs)
@@ -573,7 +574,7 @@
                                       ((Nil) (error "Invalid shape"))))
                                   xss)))))))
 
-  (declare partition ((:a -> Boolean) -> (List :a) -> (Tuple (List :a) (List :a))))
+  (declare partition ((:a -> Boolean) * (List :a) -> (Tuple (List :a) (List :a))))
   (define (partition f xs)
     "Splits a list into two new lists. The first list contains elements matching predicate F."
     (let ((inner (fn (xs as bs)
@@ -585,7 +586,7 @@
                           (inner xs as (Cons x bs))))))))
       (inner xs Nil Nil)))
 
-  (declare equivalence-classes-by ((:a -> :a -> Boolean) -> (List :a) -> (List (List :a))))
+  (declare equivalence-classes-by ((:a * :a -> Boolean) * (List :a) -> (List (List :a))))
   (define (equivalence-classes-by f l)
     "Break a list into a list of equivalence classes according to an equivalence relation."
     (rec g ((remaining l)
@@ -593,15 +594,16 @@
       (match remaining
         ((Nil) partitions)
         ((Cons x rst)
-         (match (partition (f x) rst)
+         (match (partition (fn (y) (f x y)) rst)
            ((Tuple yes no)
             (g no (Cons (Cons x yes) partitions))))))))
 
   (declare equivalence-classes (Eq :a => ((List :a) -> (List (List :a)))))
-  (define equivalence-classes (equivalence-classes-by ==))
+  (define (equivalence-classes l)
+    (equivalence-classes-by == l))
 
-  (declare optimumBy ((:a -> :a -> Boolean)
-                      -> (List :a)
+  (declare optimumBy ((:a * :a -> Boolean)
+                      * (List :a)
                       -> (Optional :a)))
   (define (optimumBy f xs)
     "Returns an optimum according to a total order."
@@ -635,7 +637,7 @@
     "Returns the product of `xs`."
     (fold * (fromInt 1) xs))
 
-  (declare all ((:a -> Boolean) -> (List :a) -> Boolean))
+  (declare all ((:a -> Boolean) * (List :a) -> Boolean))
   (define (all f? xs)
     "Returns `True` if every element in `xs` matches `f?`."
     (match xs
@@ -645,7 +647,7 @@
            False))
       ((Nil) True)))
 
-  (declare any ((:a -> Boolean) -> (List :a) -> Boolean))
+  (declare any ((:a -> Boolean) * (List :a) -> Boolean))
   (define (any f? l)
     "Returns `True` if at least one element in `xs` matches `f?`."
     (match l
@@ -658,7 +660,10 @@
   (declare perms (List :a -> (List (List :a))))
   (define (perms l)
     "Produce all permutations of the list L."
-    (foldr (compose concatMap insertions) (make-list Nil) l))
+    (foldr (fn (x acc)
+             (concatMap (fn (ys) (insertions x ys)) acc))
+           (make-list Nil)
+           l))
 
   (declare combs (List :a -> (List (List :a))))
   (define (combs l)
@@ -671,7 +676,7 @@ The ordering of elements of `l` is preserved in the ordering of elements in each
       ((Cons x xs)
        (concatMap (fn (y) (make-list y (Cons x y))) (combs xs)))))
 
-  (declare combsOf (UFix -> List :a -> (List (List :a))))
+  (declare combsOf (UFix * List :a -> (List (List :a))))
   (define (combsOf n l)
     "Produce a list of size-N subsets of `l`.
 
@@ -684,7 +689,8 @@ This function is equivalent to all size-`n` elements of `(combs l)`."
           (True (match l
                   ((Nil) Nil)
                   ((Cons x xs) (append
-                                (map (Cons x) (combsOf (- n 1) xs)) ; combs with X
+                                (map (fn (ys) (Cons x ys))
+                                     (combsOf (- n 1) xs)) ; combs with X
                                 (combsOf n xs))))))) ; and without x
 
   ;;
@@ -743,7 +749,7 @@ This function is equivalent to all size-`n` elements of `(combs l)`."
     (define (pure x) (Cons x Nil))
     (define (liftA2 f as bs)
       (concatMap (fn (a)
-                   (map (f a) bs))
+                   (map (fn (b) (f a b)) bs))
                  as)))
 
   (define-instance (Alternative List)
@@ -784,7 +790,7 @@ This function is equivalent to all size-`n` elements of `(combs l)`."
     (define (iter:collect! iter)
       ;; Dropping into lisp is necessary because building a list from
       ;; front to back requires mutability.
-      (lisp (List :elt) (iter)
+      (lisp (-> (List :elt)) (iter)
         (cl:loop
            :with top := cl:nil
            :with current := cl:nil

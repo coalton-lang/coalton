@@ -62,16 +62,16 @@
 
   (define-instance (Bounded IFix)
     (define minBound
-      (lisp IFix ()
+      (lisp (-> IFix) ()
         cl:most-negative-fixnum))
     (define maxBound
-      (lisp IFix ()
+      (lisp (-> IFix) ()
         cl:most-positive-fixnum)))
 
   (define-instance (Bounded UFix)
     (define minBound 0)
     (define maxBound
-      (lisp UFix ()
+      (lisp (-> UFix) ()
         cl:most-positive-fixnum))))
 
 #+sb-package-locks

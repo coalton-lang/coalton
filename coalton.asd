@@ -97,6 +97,7 @@
                (:file "string")
                (:file "slice")
                (:file "hashtable")
+               (:file "iterator-hashtable")
                (:file "hashmap")
                (:file "queue")
                (:module "monad"
@@ -297,6 +298,7 @@
                (:file "entry-tests")
                (:file "codegen-pattern-tests")
                (:file "toplevel-tests")
+               (:file "doc-tests")
                (:file "type-inference-tests")
                (:file "fundep-tests")
                (:file "fundep-fib-test")

@@ -41,7 +41,7 @@
 
 (coalton-toplevel
   (define-type (LazyStream :t)
-    (LCons :t (Unit -> LazyStream :t)))
+    (LCons :t (Void -> LazyStream :t)))
 
   (define (extract n l)
     "Take `n` primes from the stream `l`."
@@ -68,7 +68,8 @@
   (define primes
     "A stream of prime numbers."
     (let ((drop-multiples
-            (compose drop-if multiple?))
+            (fn (p xs)
+              (drop-if (fn (x) (multiple? p x)) xs)))
           (sieve
             (fn (l)
               (match l
@@ -108,6 +109,10 @@
 
   (define (primes-iter)
     "Produce an iterator of all primes in ascending order."
-    (map fst (iter:recursive-iter (sieve-step! (fn (m x) (/= 0 (mod x m))))
+    (map fst (iter:recursive-iter (fn (init+it)
+                                    (sieve-step! (fn (m)
+                                                   (fn (x)
+                                                     (/= 0 (mod x m))))
+                                                 init+it))
                                   (const False)
                                   (Tuple 2 (numbers-from 3))))))

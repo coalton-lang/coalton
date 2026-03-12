@@ -1,69 +1,40 @@
-# Function Application and Currying in Coalton
+# Function Application in Coalton
 
-Coalton functions are automatically curried like functions in Haskell and Elm. Coalton uses the same optimization as Elm to detect fully applied function calls at runtime and make a direct call to the uncurried function.
+Coalton source functions are fixed-arity. A type such as `A * B -> C` denotes
+one function that takes two arguments. A type such as `A -> B -> C` denotes a
+function that takes one argument and returns another function; this is how
+user-written currying is represented.
 
-Coalton functions are wrapped in `function-entry` structs which contain a reference to the original function as well as the functions arity and a curried version. The functions `F2...FN` produce a `function-entry` for a function of N arguments.
-Function calls are then done indirectly through the applicator functions `A2...AN`. When applying arguments to a function the number of arguments are checked against the function's arity, if they are equal then a direct uncurried call can be made.
-Otherwise the arguments are applied one at a time to the curried version of the function. If a function-entry is partially applied then it will return a bare function instead of another function entry.
-The applicator functions will apply arguments one at a time to a bare function.
+Keyword arguments are still fixed-arity at runtime. A visible type such as
+`A &key (:x B) (:y C) -> D` lowers to one Common Lisp function with one required
+positional argument and a `cl:&key` tail for the Coalton keywords.
 
+Immediate calls stay direct. If the callee is constrained, the compiler resolves
+the needed dictionaries and prepends them at the same call site. It does not
+eta-expand immediate calls into forwarding lambdas just to supply hidden
+arguments.
 
-When an fully applied call is made on `(optimize (speed 3) (safety 0))` the effective cost is only two branches more than a bare function call.
-In the benchmark below `BENCHMARK-ADD4` is the bare function call and `BENCHMARK-FADD4` is the fully applied call on a function entry.
+At runtime, first-class Coalton functions are wrapped in `function-entry`
+structs. A `function-entry` stores:
 
+- the visible positional arity
+- the underlying Lisp function
+- any hidden dictionary arguments already bound onto the value
 
-The benchmark code is available at [./function-calls-benchmarks.lisp](./function-calls-benchmarks.lisp).
+Keyword arguments do not contribute to the stored arity.
 
-## Benchmark Results
+For keyword-bearing calls, the compiler evaluates the visible arguments once and
+emits an ordinary Common Lisp call with keyword arguments. The visible Coalton
+keyword syntax therefore maps directly onto the generated `cl:&key` call shape.
 
-With `(optimize (speed 3) (safety 1))`:
+The generalized application path is still useful for explicit higher-order
+values and Common Lisp interop. In those cases, `call-coalton-function` checks
+the exact visible positional arity of a `function-entry`, prepends any bound
+hidden arguments, and forwards Lisp keyword arguments unchanged. When the call
+site is known to have no keywords and the callee is already a `function-entry`,
+the compiler may emit `exact-call` instead.
 
-```
-Results for benchmark BENCHMARK-ADD4
-                 SAMPLES  TOTAL           MINIMUM     MAXIMUM      MEDIAN      AVERAGE             DEVIATION
-REAL-TIME        10000    0.630617        6.0e-5      5.74e-4      6.0e-5      6.30617e-5          2.2454797e-5
-RUN-TIME         10000    0.616667        6.0e-5      1.61e-4      6.0e-5      6.16667e-5          5.714299e-6
-USER-RUN-TIME    10000    0.602598        5.9e-5      1.43e-4      5.9e-5      6.02598e-5          4.757216e-6
-SYSTEM-RUN-TIME  10000    0.014713        1.0e-6      5.9e-5       1.0e-6      1.4713e-6           1.8238356e-6
-PAGE-FAULTS      10000    0               0           0            0           0                   0.0
-GC-RUN-TIME      10000    0               0           0            0           0                   0.0
-BYTES-CONSED     10000    16              0           16           0           0.0016              0.159992
-EVAL-CALLS       10000    0               0           0            0           0                   0.0
-
-Results for benchmark BENCHMARK-FADD4
-                 SAMPLES  TOTAL          MINIMUM    MAXIMUM     MEDIAN     AVERAGE            DEVIATION
-REAL-TIME        10000    0.787874       7.5e-5     5.74e-4     7.5e-5     7.87874e-5         2.6699501e-5
-RUN-TIME         10000    0.769355       7.5e-5     1.9e-4      7.5e-5     7.69355e-5         6.4279498e-6
-USER-RUN-TIME    10000    0.755012       7.4e-5     1.9e-4      7.4e-5     7.55012e-5         5.3811523e-6
-SYSTEM-RUN-TIME  10000    0.015598       1.0e-6     5.3e-5      1.0e-6     1.5598e-6          2.041084e-6
-PAGE-FAULTS      10000    0              0          0           0          0                  0.0
-GC-RUN-TIME      10000    0              0          0           0          0                  0.0
-BYTES-CONSED     10000    0              0          0           0          0                  0.0
-EVAL-CALLS       10000    0              0          0           0          0                  0.0
-```
-
-With `(optimize (speed 3) (safety 0))`:
-
-```
-Results for benchmark BENCHMARK-ADD4
-                 SAMPLES  TOTAL           MINIMUM     MAXIMUM      MEDIAN      AVERAGE             DEVIATION
-REAL-TIME        10000    0.633633        6.0e-5      5.74e-4      6.0e-5      6.33633e-5          2.479171e-5
-RUN-TIME         10000    0.618514        6.0e-5      1.57e-4      6.0e-5      6.18514e-5          6.9335215e-6
-USER-RUN-TIME    10000    0.604786        5.9e-5      1.48e-4      5.9e-5      6.04786e-5          6.226487e-6
-SYSTEM-RUN-TIME  10000    0.014387        1.0e-6      3.5e-5       1.0e-6      1.4387e-6           1.7320053e-6
-PAGE-FAULTS      10000    0               0           0            0           0                   0.0
-GC-RUN-TIME      10000    0               0           0            0           0                   0.0
-BYTES-CONSED     10000    0               0           0            0           0                   0.0
-EVAL-CALLS       10000    0               0           0            0           0                   0.0
-
-Results for benchmark BENCHMARK-FADD4
-                 SAMPLES  TOTAL           MINIMUM     MAXIMUM      MEDIAN      AVERAGE             DEVIATION
-REAL-TIME        10000    0.634038        6.0e-5      5.44e-4      6.0e-5      6.34038e-5          2.4509389e-5
-RUN-TIME         10000    0.619228        6.0e-5      2.02e-4      6.0e-5      6.19228e-5          6.972951e-6
-USER-RUN-TIME    10000    0.605571        5.9e-5      1.69e-4      5.9e-5      6.05571e-5          5.95165e-6
-SYSTEM-RUN-TIME  10000    0.014658        1.0e-6      6.7e-5       1.0e-6      1.4658e-6           1.9362412e-6
-PAGE-FAULTS      10000    0               0           0            0           0                   0.0
-GC-RUN-TIME      10000    0               0           0            0           0                   0.0
-BYTES-CONSED     10000    0               0           0            0           0                   0.0
-EVAL-CALLS       10000    0               0           0            0           0                   0.0
-```
+A small benchmark harness for the current fixed-arity runtime model lives in
+[./function-calls-benchmarks.lisp](./function-calls-benchmarks.lisp). Re-run it
+when the function-entry or application path changes; the old benchmark numbers
+are intentionally omitted here because they age quickly as the runtime evolves.

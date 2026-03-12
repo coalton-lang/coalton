@@ -35,31 +35,31 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
 (coalton-toplevel
 
   (inline)
-  (declare %repeat (UFix -> (Unit -> :t) -> Unit))
+  (declare %repeat (UFix * (Void -> Void) -> Void))
   (define (%repeat n func)
     "Do `func` `n` times."
     (rec % ((i 0))
       (cond
         ((== i n)
-         Unit)
+         (values))
         (True
          (func)
          (% (1+ i))))))
 
   (inline)
-  (declare %dotimes (UFix -> (UFix -> :t) -> Unit))
+  (declare %dotimes (UFix * (UFix -> Void) -> Void))
   (define (%dotimes n func)
     "Apply `func` to every `UFix` in `[0, n)`."
     (rec % ((i 0))
       (cond
         ((== i n)
-         Unit)
+         (values))
         (True
          (func i)
          (% (1+ i))))))
 
   (inline)
-  (declare %everytimes (UFix -> (UFix -> Boolean) -> Boolean))
+  (declare %everytimes (UFix * (UFix -> Boolean) -> Boolean))
   (define (%everytimes n pred)
     "Is `pred` `True` for all `UFix`s in `[0, n)`? Returns `True` for `n = 0`."
     (rec % ((i 0))
@@ -70,7 +70,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
               False))))
 
   (inline)
-  (declare %sometimes (UFix -> (UFix -> Boolean) -> Boolean))
+  (declare %sometimes (UFix * (UFix -> Boolean) -> Boolean))
   (define (%sometimes n pred)
     "Is `pred` `True` for some `UFix` in `[0, n)`? Returns `False` for `n = 0`."
     (rec % ((i 0))
@@ -81,7 +81,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
               (% (1+ i))))))
 
   (inline)
-  (declare %sumtimes (Num :t => UFix -> (UFix -> :t) -> :t))
+  (declare %sumtimes (Num :t => UFix * (UFix -> :t) -> :t))
   (define (%sumtimes n func)
     "Sum the evaluations of `func` applied to every `UFix` in `[0, n)`. Returns 0 for `n = 0`."
     (rec % ((i 0) (acc 0))
@@ -90,7 +90,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
           (% (1+ i) (+ acc (func i))))))
 
   (inline)
-  (declare %prodtimes (Num :t => UFix -> (UFix -> :t) -> :t))
+  (declare %prodtimes (Num :t => UFix * (UFix -> :t) -> :t))
   (define (%prodtimes n func)
     "Multiply the evaluations of `func` applied to every `UFix` in `[0, n)`. Returns 1 for `n = 0`."
     (rec % ((i 0) (acc 1))
@@ -102,11 +102,11 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
   (declare %reverse! (List :t -> List :t))
   (define (%reverse! xs)
     "Reverse `xs` by mutation."
-    (lisp (List :t) (xs)
+    (lisp (-> (List :t)) (xs)
       (cl:nreverse xs)))
 
   (inline)
-  (declare %collecttimes (UFix -> (UFix -> :t) -> List :t))
+  (declare %collecttimes (UFix * (UFix -> :t) -> List :t))
   (define (%collecttimes n func)
     "Collect the applications of `func` to every `UFix` in `[0, n)` as a `List`."
     (rec % ((i 0) (acc Nil))
@@ -121,21 +121,21 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
   ;; (inline)
   ;; (declare %rplacd! (List :t -> List :t -> List :t))
   ;; (define (%rplacd! xs ys)
-  ;;   (lisp (List :t) (xs ys)
+  ;;   (lisp (-> (List :t)) (xs ys)
   ;;     (cl:locally (cl:declare (cl:optimize (cl:safety 0)))
   ;;       (cl:rplacd xs ys))))
 
   ;; (inline)
   ;; (declare %cdr (List :t -> List :t))
   ;; (define (%cdr xs)
-  ;;   (lisp (List :t) (xs)
+  ;;   (lisp (-> (List :t)) (xs)
   ;;     (cl:locally (cl:declare (cl:optimize (cl:safety 0)))
   ;;       (cl:cdr xs))))
 
   ;; (inline)
   ;; (declare %collecttimes (UFix -> (UFix -> :t) -> List :t))
   ;; (define (%collecttimes n func)
-  ;;   (let ((res (lisp (List :t) () (cl:cons cl:nil cl:nil))))
+  ;;   (let ((res (lisp (-> (List :t)) () (cl:cons cl:nil cl:nil))))
   ;;     (rec % ((i 0) (last res))
   ;;       (cond
   ;;         ((== i n)
@@ -146,7 +146,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
   ;;            (% (1+ i) new-last)))))))
 
   (inline)
-  (declare %besttimes (UFix -> (:t -> :t -> Boolean) -> (UFix -> :t) -> :t))
+  (declare %besttimes (UFix * (:t * :t -> Boolean) * (UFix -> :t) -> :t))
   (define (%besttimes n better? func)
     "Of the applications of `func` to every `UFix` in `[0, n)`, find the one that is `better?` than the rest."
     (cond
@@ -164,7 +164,7 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
                   (% (1+ i) best)))))))))
 
   (inline)
-  (declare %argbesttimes (UFix -> (:t -> :t -> Boolean) -> (UFix -> :t) -> UFix))
+  (declare %argbesttimes (UFix * (:t * :t -> Boolean) * (UFix -> :t) -> UFix))
   (define (%argbesttimes n better? func)
     "Find the `UFix` in `[0, n)` whose application of `func` is `better?` than the rest."
     (cond
@@ -182,31 +182,31 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
                   (% (1+ i) argbest best)))))))))
 
   (inline)
-  (declare %dolist (List :t1 -> (:t1 -> :t2) -> Unit))
+  (declare %dolist ((List :t1) * (:t1 -> Void) -> Void))
   (define (%dolist lis func)
     "Apply `func` to every element of `lis`."
     (rec % ((xs lis))
       (match xs
         ((Nil)
-         Unit)
+         (values))
         ((Cons x xs)
          (func x)
          (% xs)))))
 
   (inline)
-  (declare %dolist-enumerated (List :t1 -> (UFix -> :t1 -> :t2) -> Unit))
+  (declare %dolist-enumerated ((List :t1) * (UFix * :t1 -> Void) -> Void))
   (define (%dolist-enumerated lis func)
     "Apply `func` to every element of `lis` and its index, as `(func index element)`."
     (rec % ((i 0) (xs lis))
       (match xs
         ((Nil)
-         Unit)
+         (values))
         ((Cons x xs)
          (func i x)
          (% (1+ i) xs)))))
 
   (inline)
-  (declare %dorange ((Ord :t1) (Num :t1) => :t1 -> :t1 -> :t1 -> (:t1 -> :t2) -> Unit))
+  (declare %dorange ((Ord :t1) (Num :t1) => :t1 * :t1 * :t1 * (:t1 -> Void) -> Void))
   (define (%dorange from to step func)
     "Apply `func` to every number in `[from, to)` in increments/decrements of `step`.
 
@@ -235,7 +235,7 @@ COALTON::UNIT/UNIT
             (func i)
             (% (+ step i)))
            (True
-            Unit))))
+            (values)))))
       ((negative? step)
        (rec % ((i from))
          (cond
@@ -243,12 +243,12 @@ COALTON::UNIT/UNIT
             (func i)
             (% (+ step i)))
            (True
-            Unit))))
+            (values)))))
       (True
-       Unit)))
+       (values))))
 
   (inline)
-  (declare %dorange-increasing. ((Ord :t1) (Num :t1) => :t1 -> :t1 -> :t1 -> (:t1 -> :t2) -> Unit))
+  (declare %dorange-increasing. ((Ord :t1) (Num :t1) => :t1 * :t1 * :t1 * (:t1 -> Void) -> Void))
   (define (%dorange-increasing. from to step func)
     "Unsafe. Apply `func` to every number in `[from, to)` in increments of `step`."
     (rec % ((i from))
@@ -257,20 +257,20 @@ COALTON::UNIT/UNIT
          (func i)
          (% (+ step i)))
         (True
-         Unit))))
+         (values)))))
 
   (inline)
-  (declare %dorange-increasing ((Ord :t1) (Num :t1) => :t1 -> :t1 -> :t1 -> (:t1 -> :t2) -> Unit))
+  (declare %dorange-increasing ((Ord :t1) (Num :t1) => :t1 * :t1 * :t1 * (:t1 -> Void) -> Void))
   (define (%dorange-increasing from to step func)
     "Apply `func` to every number in `[from, to)` in increments of `step`."
     (cond
       ((positive? step)
        (%dorange-increasing. from to step func))
       (True
-       Unit)))
+       (values))))
 
   (inline)
-  (declare %dorange-decreasing. ((Ord :t1) (Num :t1) => :t1 -> :t1 -> :t1 -> (:t1 -> :t2) -> Unit))
+  (declare %dorange-decreasing. ((Ord :t1) (Num :t1) => :t1 * :t1 * :t1 * (:t1 -> Void) -> Void))
   (define (%dorange-decreasing. from to step func)
     "Apply `func` to every number in `(to, from]`, starting with `from`, in decrements of `step`."
     (rec % ((i from))
@@ -279,25 +279,25 @@ COALTON::UNIT/UNIT
          (func i)
          (% (+ step i)))
         (True
-         Unit))))
+         (values)))))
 
   (inline)
-  (declare %dorange-decreasing ((Ord :t1) (Num :t1) => :t1 -> :t1 -> :t1 -> (:t1 -> :t2) -> Unit))
+  (declare %dorange-decreasing ((Ord :t1) (Num :t1) => :t1 * :t1 * :t1 * (:t1 -> Void) -> Void))
   (define (%dorange-decreasing from to step func)
     "Apply `func` to every number in `(to, from]`, starting with `from`, in decrements of `step`."
     (cond
       ((negative? step)
        (%dorange-decreasing. from to step func))
       (True
-       Unit))))
+       (values)))))
 
 (defmacro repeat ((count) cl:&body body)
   "Perform `body` `count` times."
-  `(%repeat ,count (fn () ,@body)))
+  `(%repeat ,count (fn () ,@body (values))))
 
 (defmacro dotimes ((variable count) cl:&body body)
   "Perform `body` with `variable` bound to every `UFix` in [0, `count`) sequentially."
-  `(%dotimes ,count (fn (,variable) ,@body)))
+  `(%dotimes ,count (fn (,variable) ,@body (values))))
 
 (defmacro everytimes ((variable count) cl:&body body)
   "Does `body` evaluate to `True` for `variable` bound to every `UFix` in [0, `count`). Returns `True` if `(zero? count)`."
@@ -329,7 +329,7 @@ COALTON::UNIT/UNIT
 
 (defmacro dolist ((variable lis) cl:&body body)
   "Perform `body` with `variable` bound to every element of `lis`."
-  `(%dolist ,lis (fn (,variable) ,@body)))
+  `(%dolist ,lis (fn (,variable) ,@body (values))))
 
 (defmacro dolists (variables-and-lists cl:&body body)
   "Perform `body` with the variables bound to the elements of the lists. See the example below.
@@ -365,17 +365,17 @@ COALTON::UNIT/UNIT
                               (xs (cl:first remaining-xss)))
                        `(match ,xs
                           ((Nil)
-                           Unit)
+                           (values))
                           ((Cons ,x ,xs)
                            ,(populate-body (cl:rest remaining-variables)
                                            (cl:rest remaining-xss)))))))))
-      `(let ((,func (fn (,@variables) ,@body)))
+      `(let ((,func (fn (,@variables) ,@body (values))))
          (rec ,% (,@(cl:mapcar (cl:lambda (xs lis) (cl:list xs lis)) xss lists))
            ,(populate-body variables xss))))))
 
 (defmacro dolist-enumerated ((index-variable element-variable lis) cl:&body body)
   "Perform `body` with `element-variable` bound to the elements of `lis` and `index-variable` bound to their indices."
-  `(%dolist-enumerated ,lis (fn (,index-variable ,element-variable) ,@body)))
+  `(%dolist-enumerated ,lis (fn (,index-variable ,element-variable) ,@body (values))))
 
 (defmacro dorange ((variable start-or-stop cl:&optional stop step) cl:&body body)
   "Perform `body` with `variable` bound to elements of a discrete range.
@@ -422,7 +422,7 @@ COALTON::UNIT/UNIT
 COALTON::UNIT/UNIT
 ```
 "
-  (cl:let ((func `(fn (,variable) ,@body)))
+  (cl:let ((func `(fn (,variable) ,@body (values))))
     (cl:cond
       ((cl:null stop)
        (cl:cond
@@ -452,7 +452,7 @@ COALTON::UNIT/UNIT
             ((cl:and (cl:minusp step) (cl:> start-or-stop stop))
              `(%dorange-decreasing. ,start-or-stop ,stop ,step ,func))
             (cl:t
-             'Unit)))
+             '(values))))
          ((cl:and (cl:typep start-or-stop 'cl:fixnum)
                   (cl:typep stop 'cl:fixnum))
           (cl:if (cl:< start-or-stop stop)

@@ -28,14 +28,16 @@ Returns a new `ast:node'."))
         :type (ast:node-type child)
         :properties '(:inline t)
         :rator (ast:node-application-rator child)
-        :rands (ast:node-application-rands child)))
+        :rands (ast:node-application-rands child)
+        :keyword-rands (ast:node-application-keyword-rands child)))
       (ast:node-direct-application
        (ast:make-node-direct-application 
         :type (ast:node-type child)
         :properties '(:inline t)
         :rator-type (ast:node-direct-application-rator-type child)
         :rator (ast:node-direct-application-rator child)
-        :rands (ast:node-direct-application-rands child)))
+        :rands (ast:node-direct-application-rands child)
+        :keyword-rands (ast:node-direct-application-keyword-rands child)))
       (t
        child))))
 
@@ -47,14 +49,16 @@ Returns a new `ast:node'."))
         :type (ast:node-type child)
         :properties '(:noinline t)
         :rator (ast:node-application-rator child)
-        :rands (ast:node-application-rands child)))
+        :rands (ast:node-application-rands child)
+        :keyword-rands (ast:node-application-keyword-rands child)))
       (ast:node-direct-application
        (ast:make-node-direct-application 
         :type (ast:node-type child)
         :properties '(:noinline t)
         :rator-type (ast:node-direct-application-rator-type child)
         :rator (ast:node-direct-application-rator child)
-        :rands (ast:node-direct-application-rands child)))
+        :rands (ast:node-direct-application-rands child)
+        :keyword-rands (ast:node-direct-application-keyword-rands child)))
       (t
        child))))
 

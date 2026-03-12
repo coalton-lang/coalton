@@ -45,7 +45,7 @@
    #:mconcat!
    #:mconcatmap!
    #:chain!
-   #:remove-duplicates! ; defined in library/hashtable.lisp
+   #:remove-duplicates! ; defined in library/iterator-hashtable.lisp
    #:pair-with!
    #:sum!
    #:and!
@@ -84,14 +84,14 @@
 
   (define-type (Iterator :elt)
     "A forward-moving pointer into an ordered sequence of :ELTs"
-    (%Iterator (Unit -> (Optional :elt)) (Optional UFix)))
+    (%Iterator (Void -> (Optional :elt)) (Optional UFix)))
 
-  (declare new ((Unit -> Optional :elt) -> Iterator :elt))
+  (declare new ((Void -> Optional :elt) -> Iterator :elt))
   (define (new f)
     "Create a new iterator from a function that yields elements."
     (%Iterator f None))
 
-  (declare with-size ((Unit -> Optional :elt) -> UFix -> Iterator :elt))
+  (declare with-size ((Void -> Optional :elt) * UFix -> Iterator :elt))
   (define (with-size f size)
     (%Iterator f (Some size)))
 
@@ -107,9 +107,9 @@ Behavior is undefined if two threads concurrently call `next!` on the same itera
 most of the operators defined on iterators call `next!` internally, or create new iterators which will call
 `next!` on their inputs."
     (match iter
-      ((%Iterator func _) (func Unit))))
+      ((%Iterator func _) (func))))
 
-  (declare fold! ((:state -> :elt -> :state) -> :state -> Iterator :elt -> :state))
+  (declare fold! ((:state * :elt -> :state) * :state * Iterator :elt -> :state))
   (define (fold! func init iter)
     "Tail recursive in-order fold. Common Lisp calls this operation `reduce`.
 
@@ -147,7 +147,7 @@ STATE, using INIT as the first STATE."
   (define-instance (IntoIterator (Iterator :elt) :elt)
     (define into-iter id))
 
-  (declare recursive-iter ((:elt -> :elt) -> (:elt -> Boolean) -> :elt -> Iterator :elt))
+  (declare recursive-iter ((:elt -> :elt) * (:elt -> Boolean) * :elt -> Iterator :elt))
   (define (recursive-iter succ done? start)
     "An iterator which yields first START, then (SUCC START), then (SUCC (SUCC START)), and so on, stopping as soon as such a value is `done?`.
 
@@ -163,8 +163,8 @@ iterator is empty."
        None)))
 
   (declare range-increasing ((Num :num) (Ord :num) =>
-                             :num ->
-                             :num ->
+                             :num *
+                             :num *
                              :num ->
                              Iterator :num))
   (define (range-increasing step start end)
@@ -175,7 +175,9 @@ iterator is empty."
     (assert (> step 0)
         "STEP ~a should be positive and non-zero in RANGE-INCREASING"
         step)
-    (recursive-iter (+ step) (<= end) start))
+    (recursive-iter (fn (x) (+ step x))
+                    (fn (x) (<= end x))
+                    start))
 
   (declare up-to ((Num :num) (Ord :num) => :num -> Iterator :num))
   (define (up-to limit)
@@ -199,8 +201,8 @@ iterator is empty."
     RangeDone)
 
   (declare range-decreasing ((Num :num) (Ord :num) =>
-                             :num ->
-                             :num ->
+                             :num *
+                             :num *
                              :num ->
                              (Iterator :num)))
   (define (range-decreasing step start end)
@@ -244,10 +246,10 @@ Equivalent to reversing `range-increasing`"
     "An iterator which begins below the provided limit and counts down through and including zero."
     (range-decreasing 1 limit 0))
 
-  (declare count-forever ((Num :num) (Ord :num) => Unit -> Iterator :num))
-  (define (count-forever _)
+  (declare count-forever ((Num :num) (Ord :num) => (Void -> Iterator :num)))
+  (define (count-forever)
     "An infinite iterator which starts at 0 and counts upwards by 1."
-    (recursive-iter (+ 1)
+    (recursive-iter (fn (x) (+ 1 x))
                     (const False)
                     0))
 
@@ -259,7 +261,7 @@ Equivalent to reversing `range-increasing`"
        (Some item))
      None))
 
-  (declare repeat-for (:item -> UFix -> Iterator :item))
+  (declare repeat-for (:item * UFix -> Iterator :item))
   (define (repeat-for item count)
     "Yield ITEM COUNT times, then stop."
     (take! count (repeat item)))
@@ -290,7 +292,7 @@ Equivalent to reversing `range-increasing`"
     (new (fn ()
            (when (null? (cell:read state))
              (cell:write! state list)
-             Unit)
+             (values))
 
            (cell:pop! state))))
 
@@ -302,7 +304,7 @@ Equivalent to reversing `range-increasing`"
   ;; 2. to emphasize the flow of mutable data
   ;;
 
-  (declare interleave! (Iterator :a -> Iterator :a -> Iterator :a))
+  (declare interleave! (Iterator :a * Iterator :a -> Iterator :a))
   (define (interleave! left right)
     "Return an iterator of interleaved elements from LEFT and RIGHT which terminates as soon as both LEFT and RIGHT do.
 
@@ -324,7 +326,7 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
        ((Tuple (Some x) (Some y)) (Some (+ x y)))
        (_ None))))
 
-  (declare zip-with! ((:left -> :right -> :out) -> Iterator :left -> Iterator :right -> Iterator :out))
+  (declare zip-with! ((:left * :right -> :out) * Iterator :left * Iterator :right -> Iterator :out))
   (define (zip-with! f left right)
     "Return an iterator of elements from LEFT and RIGHT which terminates as soon as either LEFT or RIGHT does."
     (%Iterator
@@ -338,28 +340,28 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
         (Some (max x y)))
        (_ None))))
 
-  (declare zip! (Iterator :left -> Iterator :right -> Iterator (Tuple :left :right)))
-  (define zip!
+  (declare zip! (Iterator :left * Iterator :right -> Iterator (Tuple :left :right)))
+  (define (zip! left right)
     "Return an iterator of tuples contining elements from two iterators."
-    (zip-with! Tuple))
+    (zip-with! Tuple left right))
 
   (declare enumerate! (Iterator :elt -> Iterator (Tuple UFix :elt)))
   (define (enumerate! iter)
     "Pair successive zero-based incides with elements from ITER"
     (zip! (count-forever) iter))
 
-  (declare filter! ((:elt -> Boolean) -> Iterator :elt -> Iterator :elt))
+  (declare filter! ((:elt -> Boolean) * Iterator :elt -> Iterator :elt))
   (define (filter! keep? iter)
     "Return an iterator over the elements from ITER for which KEEP? returns true."
-    (let ((filter-iter (fn (u)
+    (let ((filter-iter (fn ()
                          (match (next! iter)
                            ((None) None)
                            ((Some candidate) (if (keep? candidate)
                                                  (Some candidate)
-                                                 (filter-iter u)))))))
+                                                 (filter-iter)))))))
       (%Iterator filter-iter (size-hint iter))))
 
-  (declare filter-map! ((:a -> Optional :b) -> Iterator :a -> Iterator :b))
+  (declare filter-map! ((:a -> Optional :b) * Iterator :a -> Iterator :b))
   (define (filter-map! f iter)
     "Map an iterator, retaining only the elements where F returns SOME."
     (let ((fun (fn ()
@@ -375,7 +377,7 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
        fun
        (size-hint iter))))
 
-  (declare map-while! ((:a -> Optional :b) -> Iterator :a -> Iterator :b))
+  (declare map-while! ((:a -> Optional :b) * Iterator :a -> Iterator :b))
   (define (map-while! f iter)
     "Map an iterator, stopping early if F returns NONE."
     (let done = (cell:new False))
@@ -409,14 +411,14 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
                                      container))))))
       (new next)))
 
-  (declare take! (UFix -> Iterator :elt -> Iterator :elt))
+  (declare take! (UFix * Iterator :elt -> Iterator :elt))
   (define (take! count iter)
     "An `Iterator` which yields at most COUNT elements from ITER."
     (map (fn ((Tuple x _)) x)
          (zip! iter
                (up-to count))))
 
-  (declare chain! (Iterator :elt -> Iterator :elt -> Iterator :elt))
+  (declare chain! (Iterator :elt * Iterator :elt -> Iterator :elt))
   (define (chain! iter1 iter2)
     "Yield all the elements of ITER1 followed by all the elements from ITER2."
     (%iterator
@@ -447,7 +449,7 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
                              ((None) None)))))))
          (%Iterator flatten-iter-inner None)))))
 
-  (declare flat-map! ((:a -> (Iterator :b)) -> Iterator :a -> Iterator :b))
+  (declare flat-map! ((:a -> (Iterator :b)) * Iterator :a -> Iterator :b))
   (define (flat-map! func iter)
     "Flatten! wrapped around map."
     (flatten! (map func iter)))
@@ -457,12 +459,12 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
     "Fold an iterator of monoids into a single element."
     (fold! <> mempty iter))
 
-  (declare mconcatmap! ((Monoid :a) => (:b -> :a) -> (Iterator :b) -> :a))
+  (declare mconcatmap! ((Monoid :a) => (:b -> :a) * (Iterator :b) -> :a))
   (define (mconcatmap! func iter)
     "Map an iterator to an iterator of monoids, and then fold that iterator into a single element."
     (fold! <> mempty (map func iter)))
 
-  (declare pair-with! ((:key -> :value) -> Iterator :key -> Iterator (Tuple :key :value)))
+  (declare pair-with! ((:key -> :value) * Iterator :key -> Iterator (Tuple :key :value)))
   (define (pair-with! func keys)
     "Returns an iterator over tuples whose FSTs are elements from KEYS, and whose SNDs are the results of applying FUNC to those KEYS."
     (map (fn (key) (Tuple key (func key)))
@@ -516,15 +518,19 @@ This operation could be called `length!`, but `count!` emphasizes the fact that 
 afterwards, ITER will be exhausted."
     (sum! (map (const 1) iter)))
 
-  (declare for-each! ((:elt -> Unit) -> Iterator :elt -> Unit))
+  (declare for-each! ((:elt -> Void) * Iterator :elt -> Void))
   (define (for-each! thunk iter)
     "Call THUNK on each element of ITER in order for side effects.
 Discard values returned by THUNK."
-    (fold! (fn (u elt) (thunk elt) u)
-           Unit
-           iter))
+    (progn
+      (fold! (fn (u elt)
+               (let (values) = (thunk elt))
+               u)
+             Unit
+             iter)
+      (values)))
 
-  (declare find! ((:elt -> Boolean) -> Iterator :elt -> Optional :elt))
+  (declare find! ((:elt -> Boolean) * Iterator :elt -> Optional :elt))
   (define (find! this? iter)
     "Return the first element of ITER for which THIS? returns `True`, or `None` if no element matches."
     (match (next! iter)
@@ -533,12 +539,12 @@ Discard values returned by THUNK."
                       (find! this? iter)))
       ((None) None)))
 
-  (declare find-map! ((:a -> Optional :b) -> Iterator :a -> Optional :b))
-  (define (find-map! f)
+  (declare find-map! ((:a -> Optional :b) * Iterator :a -> Optional :b))
+  (define (find-map! f iter)
     "Return the first element of (map F ITER) for which F returns `Some`."
-    (compose next! (filter-map! f)))
+    (next! (filter-map! f iter)))
 
-  (declare index-of! ((:elt -> Boolean) -> Iterator :elt -> Optional UFix))
+  (declare index-of! ((:elt -> Boolean) * Iterator :elt -> Optional UFix))
   (define (index-of! this? iter)
     "Return the zero-based index of the first element of ITER for which THIS? is `True`, or `None` if no element matches."
     (match (find! (compose this? (fn ((Tuple _ y)) y))
@@ -547,7 +553,7 @@ Discard values returned by THUNK."
        (Some x))
       (_ None)))
 
-  (declare optimize! ((:elt -> :elt -> Boolean) -> Iterator :elt -> Optional :elt))
+  (declare optimize! ((:elt * :elt -> Boolean) * Iterator :elt -> Optional :elt))
   (define (optimize! better? iter)
     "For an order BETTER? which returns `True` if its first argument is better than its second argument, return the best element of ITER.
 
@@ -571,8 +577,8 @@ Return `None` if ITER is empty."
     "Return the most-negative element of ITER, or `None` if ITER is empty."
     (optimize! < iter))
 
-  (declare optimize-by! ((:b -> :b -> Boolean) ->
-                         (:a -> :b) ->
+  (declare optimize-by! ((:b * :b -> Boolean) *
+                         (:a -> :b) *
                          Iterator :a ->
                          Optional :a))
   (define (optimize-by! better? f iter)
@@ -584,21 +590,21 @@ Return `None` if ITER is empty."
       ((Some (Tuple result _)) (Some result))
       ((None) None)))
 
-  (declare maximize-by! (Ord :a => (:elt -> :a) -> Iterator :elt -> Optional :elt))
+  (declare maximize-by! (Ord :a => (:elt -> :a) * Iterator :elt -> Optional :elt))
   (define (maximize-by! f iter)
     "For a function F, which maps the iterator, return the element of ITER where (F ELT) is the most-positive.
 
 Return `None' if ITER is empty."
     (optimize-by! > f iter))
 
-  (declare minimize-by! (Ord :a => (:elt -> :a) -> Iterator :elt -> Optional :elt))
+  (declare minimize-by! (Ord :a => (:elt -> :a) * Iterator :elt -> Optional :elt))
   (define (minimize-by! f iter)
     "For a function F, which maps the iterator, return the element of ITER where (F ELT) is the most-negative.
 
 Return `None' if ITER is empty."
     (optimize-by! < f iter))
 
-  (declare every! ((:elt -> Boolean) -> Iterator :elt -> Boolean))
+  (declare every! ((:elt -> Boolean) * Iterator :elt -> Boolean))
   (define (every! good? iter)
     "Return `True` if every element of ITER is GOOD?, or `False` as soon as any element is not GOOD?.
 
@@ -607,7 +613,7 @@ Returns `True` if ITER is empty."
       ((None) True)
       ((Some item) (if (good? item) (every! good? iter) False))))
 
-  (declare any! ((:elt -> Boolean) -> Iterator :elt -> Boolean))
+  (declare any! ((:elt -> Boolean) * Iterator :elt -> Boolean))
   (define (any! good? iter)
     "Return `True` as soon as any element of ITER is GOOD?, or `False` if none of them are.
 
@@ -616,7 +622,7 @@ Returns `False` if ITER is empty."
       ((Some _) True)
       ((None) False)))
 
-  (declare elementwise-match! ((:elt -> :elt -> Boolean) -> (Iterator :elt) -> (Iterator :elt) -> Boolean))
+  (declare elementwise-match! ((:elt * :elt -> Boolean) * (Iterator :elt) * (Iterator :elt) -> Boolean))
   (define (elementwise-match! same? left right)
     "Are LEFT and RIGHT elementwise-identical under SAME?
 
@@ -628,13 +634,13 @@ same length."
                                       (elementwise-match! same? left right)))
       (_ False)))
 
-  (declare elementwise==! ((Eq :elt) => ((Iterator :elt) -> (Iterator :elt) -> Boolean)))
-  (define elementwise==!
+  (declare elementwise==! ((Eq :elt) => (Iterator :elt * Iterator :elt -> Boolean)))
+  (define (elementwise==! left right)
     "Is every element of the first iterator `==' to the corresponding element of the second?
 
 True if two iterators have the same length, and for every N, the Nth element of the first iterator is `==' to
 the Nth element of the second iterator."
-    (elementwise-match! ==))
+    (elementwise-match! == left right))
 
   (declare elementwise-hash! ((Hash :elt) => ((Iterator :elt) -> Hash)))
   (define (elementwise-hash! iter)

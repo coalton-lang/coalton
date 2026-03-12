@@ -19,7 +19,7 @@
 
   (declare many1 ((Parser :a) -> (Parser (List :a))))
   (define (many1 p)
-    (>>= p (fn (a) (map (Cons a) (many0 p)))))
+    (>>= p (fn (a) (map (fn (rest) (Cons a rest)) (many0 p)))))
 
   (declare option ((Parser :a) -> (Parser (Optional :a))))
   (define (option p_)
@@ -30,7 +30,7 @@
            ((Ok (Tuple a str)) (Ok (Tuple (Some a) str)))
            ((Err _) (Ok (Tuple None str))))))))
 
-  (declare verify ((:a -> Boolean) -> ((Parser :a) -> (Parser :a))))
+  (declare verify ((:a -> Boolean) * (Parser :a) -> Parser :a))
   (define (verify f p)
     (>>= p
          (fn (x)
@@ -88,10 +88,10 @@
                  (Ok (Tuple b str))))))))))
     (define empty (fail "alt")))
 
-  (declare map2 ((:a -> (:b -> :c)) -> ((Parser :a) -> ((Parser :b) -> (Parser :c)))))
+  (declare map2 ((:a * :b -> :c) * (Parser :a) * (Parser :b) -> Parser :c))
   (define map2 liftA2)
 
-  (declare map3 ((:a -> (:b -> (:c -> :d))) -> ((Parser :a) -> ((Parser :b) -> ((Parser :c) -> (Parser :d))))))
+  (declare map3 ((:a * :b * :c -> :d) * (Parser :a) * (Parser :b) * (Parser :c) -> Parser :d))
   (define (map3 f p1_ p2_ p3_)
     (let ((p1 (get-parser p1_))
           (p2 (get-parser p2_))
@@ -109,7 +109,7 @@
                  ((Ok (Tuple c str))
                   (Ok (Tuple (f a b c) str))))))))))))
 
-  (declare map4 ((:a -> (:b -> (:c -> (:d -> :e)))) -> ((Parser :a) -> ((Parser :b) -> ((Parser :c) -> ((Parser :d) -> (Parser :e)))))))
+  (declare map4 ((:a * :b * :c * :d -> :e) * (Parser :a) * (Parser :b) * (Parser :c) * (Parser :d) -> Parser :e))
   (define (map4 f p1_ p2_ p3_ p4_)
     (let ((p1 (get-parser p1_))
           (p2 (get-parser p2_))
@@ -131,7 +131,7 @@
                     ((Ok (Tuple d str))
                      (Ok (Tuple (f a b c d) str))))))))))))))
 
-  (declare map5 ((:a -> (:b -> (:c -> (:d -> (:e -> :f))))) -> ((Parser :a) -> ((Parser :b) -> ((Parser :c) -> ((Parser :d) -> ((Parser :e) -> (Parser :f))))))))
+  (declare map5 ((:a * :b * :c * :d * :e -> :f) * (Parser :a) * (Parser :b) * (Parser :c) * (Parser :d) * (Parser :e) -> Parser :f))
   (define (map5 f p1_ p2_ p3_ p4_ p5_)
     (let ((p1 (get-parser p1_))
           (p2 (get-parser p2_))

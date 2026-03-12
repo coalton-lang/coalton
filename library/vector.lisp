@@ -64,8 +64,8 @@
   (define-type (Vector :a))
 
   (inline)
-  (declare new (Unit -> Vector :a))
-  (define (new _)
+  (declare new (Void -> Vector :a))
+  (define (new)
     "Create a new empty vector"
     (with-capacity 0))
 
@@ -73,14 +73,14 @@
   (declare with-capacity (UFix -> Vector :a))
   (define (with-capacity n)
     "Create a new vector with `n` elements preallocated."
-    (lisp (Vector :a) (n)
+    (lisp (-> (Vector :a)) (n)
       (cl:make-array n :fill-pointer 0 :adjustable cl:t :element-type cl:t)))
 
-  (declare with-initial-element (UFix -> :a -> Vector :a))
+  (declare with-initial-element (UFix * :a -> Vector :a))
   (define (with-initial-element n x)
     "Create a new vector with `n` elements equal to `x`."
     (let v = (with-capacity n))
-    (extend! v (iter:repeat-for x n))
+    (let (values) = (extend! v (iter:repeat-for x n)))
     v)
 
   (inline)
@@ -93,18 +93,18 @@
   (declare length (Vector :a -> UFix))
   (define (length v)
     "Returns the length of `v`."
-    (lisp UFix (v)
+    (lisp (-> UFix) (v)
       (cl:length v)))
 
   (inline)
-  (declare subseq (Vector :a -> UFix -> UFix -> Vector :a))
+  (declare subseq (Vector :a * UFix * UFix -> Vector :a))
   (define (subseq v start end)
     "Compute a subseq of a vector bounded by given indices.
 
 `start` index is inclusive and `end` index is exclusive."
     (let ((real-start (min start end))
           (real-end (min (length v) (max start end))))
-      (lisp (Vector :a) (real-start real-end v)
+      (lisp (-> (Vector :a)) (real-start real-end v)
         (cl:let ((result (cl:make-array (cl:- real-end real-start) :adjustable cl:t))) 
           (cl:replace result v :start2 real-start)))))
 
@@ -112,7 +112,7 @@
   (declare capacity (Vector :a -> UFix))
   (define (capacity v)
     "Returns the number of elements that `v` can store without resizing."
-    (lisp UFix (v)
+    (lisp (-> UFix) (v)
       (cl:array-dimension v 0)))
 
   (inline)
@@ -131,23 +131,24 @@
   (declare copy (Vector :a -> Vector :a))
   (define (copy v)
     "Return a new vector containing the same elements as `v`."
-    (lisp (Vector :a) (v)
+    (lisp (-> (Vector :a)) (v)
       ;; We use COPY-ARRAY and not COPY-SEQ to get identical
       ;; adjustable properties.
       (alexandria:copy-array v)))
 
-  (declare set-capacity! (UFix -> Vector :a -> Unit))
+  (declare set-capacity! (UFix * Vector :a -> Void))
   (define (set-capacity! new-capacity v)
     "Set the capacity of `v` to `new-capacity`. Setting the capacity to lower then the length will remove elements from the end."
     (let shrinking = (< new-capacity (length v)))
-    (lisp Unit (v shrinking new-capacity)
-      ;; If the array is getting larger then don't change the
-      ;; fill pointer
-      (cl:adjust-array v new-capacity :fill-pointer shrinking)
-      Unit))
+    (progn
+      (lisp (-> :any) (v shrinking new-capacity)
+        ;; If the array is getting larger then don't change the
+        ;; fill pointer
+        (cl:adjust-array v new-capacity :fill-pointer shrinking))
+      (values)))
 
   (inline)
-  (declare resect! (Vector :a -> UFix -> UFix -> Unit))
+  (declare resect! (Vector :a * UFix * UFix -> Void))
   (define (resect! v start end)
     "Destructively kills a subsequence in a vector bounded by given indices.
 
@@ -155,21 +156,21 @@
     (let ((real-start (min start end))
           (real-end (min (length v) (max start end)))
           (new-size (- (length v) (- real-end real-start))))
-      (lisp (Vector :a) (real-start real-end v)
+      (lisp (-> (Vector :a)) (real-start real-end v)
         (cl:replace v v :start1 real-start :start2 real-end))
       (set-capacity! new-size v)))
 
   (inline)
-  (declare clear! (Vector :a -> Unit))
+  (declare clear! (Vector :a -> Void))
   (define (clear! v)
     "Set the capacity of `v` to `0`."
     (set-capacity! 0 v))
 
   (inline)
-  (declare push! (:a -> Vector :a -> UFix))
+  (declare push! (:a * Vector :a -> UFix))
   (define (push! item v)
     "Append `item` to `v` and resize `v` if necessary, returning the index of the new item."
-    (lisp UFix (item v)
+    (lisp (-> UFix) (item v)
       (cl:vector-push-extend item v)))
 
   (declare pop! (Vector :a -> Optional :a))
@@ -183,10 +184,10 @@
   (declare pop-unsafe! (Vector :a -> :a))
   (define (pop-unsafe! v)
     "Remove and return the last item of `v` without checking if the vector is empty."
-    (lisp :a (v)
+    (lisp (-> :a) (v)
       (cl:vector-pop v)))
 
-  (declare index (UFix -> Vector :a -> Optional :a))
+  (declare index (UFix * Vector :a -> Optional :a))
   (define (index index v)
     "Return the `index`th element of `v`."
     (if (>= index (length v))
@@ -194,19 +195,20 @@
         (Some (index-unsafe index v))))
 
   (inline)
-  (declare index-unsafe (UFix -> Vector :a -> :a))
+  (declare index-unsafe (UFix * Vector :a -> :a))
   (define (index-unsafe idx v)
     "Return the `idx`th element of `v` without checking if the element exists."
-    (lisp :a (idx v)
+    (lisp (-> :a) (idx v)
       (cl:aref v idx)))
 
   (inline)
-  (declare set! (UFix -> :a -> Vector :a -> Unit))
+  (declare set! (UFix * :a * Vector :a -> Void))
   (define (set! idx item v)
     "Set the `idx`th element of `v` to `item`. This function left intentionally unsafe because it does not have a return value to check."
-    (lisp Void (idx item v)
-      (cl:setf (cl:aref v idx) item))
-    Unit)
+    (progn
+      (lisp (-> :any) (idx item v)
+        (cl:setf (cl:aref v idx) item))
+      (values)))
 
   (inline)
   (declare head (Vector :a -> Optional :a))
@@ -232,13 +234,13 @@
     "Return the last element of `v` without first checking if `v` is empty."
     (index-unsafe (- (length v) 1) v))
 
-  (declare find-elem (Eq :a => :a -> Vector :a -> Optional UFix))
+  (declare find-elem (Eq :a => :a * Vector :a -> Optional UFix))
   (define (find-elem e v)
     "Find the index of element `e` in `v`."
     (let ((test (fn (elem)
                   (== elem e))))
 
-      (lisp (Optional UFix) (v test)
+      (lisp (-> (Optional UFix)) (v test)
         (cl:let ((pos (cl:position-if
                        (cl:lambda (x)
                          (cl:eq cl:t (call-coalton-function test x)))
@@ -247,18 +249,18 @@
                  (Some pos)
                  None)))))
 
-  (declare append (Vector :a -> Vector :a -> Vector :a))
+  (declare append (Vector :a * Vector :a -> Vector :a))
   (define (append v1 v2)
     "Create a new vector containing the elements of `v1` followed by the elements of `v2`."
     (let out = (with-capacity (+ (length v1) (length v2))))
-    (extend! out v1)
-    (extend! out v2)
+    (let (values) = (extend! out v1))
+    (let (values) = (extend! out v2))
     out)
 
   (declare reverse! (Vector :a -> Vector :a))
   (define (reverse! v)
     "Returns a vector with the elements of vector `v` in reverse order.  The original vector may be destroyed to produce the result."
-    (lisp (Vector :a) (v)
+    (lisp (-> (Vector :a)) (v)
       (cl:nreverse v)))
 
   (declare reverse (Vector :a -> Vector :a))
@@ -270,40 +272,41 @@
         (push! (index-unsafe (- (- len i) 1) v) newv))
       newv))
 
-  (declare swap-remove! (UFix -> Vector :a -> Optional :a))
+  (declare swap-remove! (UFix * Vector :a -> Optional :a))
   (define (swap-remove! idx vec)
     "Remove the element `idx` from `vec` and replace it with the last element in `vec`. Then return the removed element."
     (if (>= idx (length vec))
         None
         (Some (swap-remove-unsafe! idx vec))))
 
-  (declare swap-remove-unsafe! (UFix -> Vector :a -> :a))
+  (declare swap-remove-unsafe! (UFix * Vector :a -> :a))
   (define (swap-remove-unsafe! idx vec)
     "Remove the element `idx` from `vec` and replace it with the last element in `vec` without bounds checking. Then return the removed element."
     (if (== (+ 1 idx) (length vec))
         (pop-unsafe! vec)
         (progn
           (let out = (index-unsafe idx vec))
-          (set! idx (pop-unsafe! vec) vec)
+          (let (values) = (set! idx (pop-unsafe! vec) vec))
           out)))
 
-  (declare sort-by! ((:a -> :a -> Boolean) -> Vector :a -> Unit))
+  (declare sort-by! ((:a * :a -> Boolean) * Vector :a -> Void))
   (define (sort-by! f v)
     "Sort a vector in-place with predicate function `f`."
-    (lisp Void (v f)
-      (cl:sort
-       v
-       (cl:lambda (a b)
-         (call-coalton-function f a b))))
-    Unit)
+    (progn
+      (lisp (-> :any) (v f)
+        (cl:sort
+         v
+         (cl:lambda (a b)
+           (call-coalton-function f a b))))
+      (values)))
 
   (inline)
-  (declare sort! (Ord :a => Vector :a -> Unit))
+  (declare sort! (Ord :a => Vector :a -> Void))
   (define (sort! v)
     "Sort a vector in-place in ascending order."
     (sort-by! < v))
 
-  (declare extend! (iter:IntoIterator :container :elt => Vector :elt -> :container -> Unit))
+  (declare extend! (iter:IntoIterator :container :elt => Vector :elt * :container -> Void))
   (define (extend! vec iter)
     "Push every element in `iter` to the end of `vec`."
     (let iter = (iter:into-iter iter))
@@ -313,14 +316,16 @@
     (let size = (with-default 0 (iter:size-hint iter)))
     (let remaining-capacity = (- (capacity vec) (length vec)))
     (when (> size remaining-capacity)
-      (set-capacity! (+ (length vec) (- size remaining-capacity)) vec))
+      (progn
+        (let (values) = (set-capacity! (+ (length vec) (- size remaining-capacity)) vec))
+        (values)))
 
-    (iter:for-each!
-     (fn (x)
-       (push! x vec)
-       Unit)
-     iter)
-    Unit)
+    (let (values) = (iter:for-each!
+                     (fn (x)
+                       (push! x vec)
+                       (values))
+                     iter))
+    (values))
 
   ;;
   ;; Instances
@@ -343,23 +348,23 @@
   (define-instance (Functor Vector)
     (define (map f v)
       (let out = (with-capacity (length v)))
-      (iter:for-each!
-       (fn (x)
-         (push! (f x) out)
-         Unit)
-       (iter:into-iter v))
+      (let (values) = (iter:for-each!
+                       (fn (x)
+                         (push! (f x) out)
+                         (values))
+                       (iter:into-iter v)))
       out))
 
   (define-instance (Foldable Vector)
     (define (fold f init vec)
-      (lisp :a (f init vec)
+      (lisp (-> :a) (f init vec)
         (cl:reduce
          (cl:lambda (b a)
            (call-coalton-function f b a))
          vec
          :initial-value init)))
     (define (foldr f init vec)
-      (lisp :a (f init vec)
+      (lisp (-> :a) (f init vec)
         (cl:reduce
          (cl:lambda (a b)
            (call-coalton-function f a b))
@@ -400,7 +405,7 @@
                    (progn
                      (push! x out)
                      (inner xs)))
-                  ((Nil) Unit)))))
+                  ((Nil) (values))))))
         (progn
           (inner lst)
           out))))
@@ -426,10 +431,10 @@
     (define (iter:collect! iter)
       (let size = (with-default 0 (iter:size-hint iter)))
       (let vec = (with-capacity size))
-      (iter:for-each! (fn (x)
-                        (push! x vec)
-                        Unit)
-                      iter)
+      (let (values) = (iter:for-each! (fn (x)
+                                        (push! x vec)
+                                        (values))
+                                      iter))
       vec))
 
   (define-instance (Default (Vector :a))

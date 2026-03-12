@@ -50,7 +50,7 @@ supported 64-bit implementation."))))
   (declare unsafe-cast (:any -> :other))
   (define (unsafe-cast x)
     "Both :ANY and :OTHER must be natively represented by a subtype of `cl:integer', and X must be a valid member of :OTHER."
-    (lisp :other (x) x))
+    (lisp (-> :other) (x) x))
 
   (declare cast-if-inbounds
     (forall (:src :target)
@@ -83,7 +83,8 @@ Emitted by `define-integer-conversions' when some elements of FROM-TYPE cannot b
 either because FROM-TYPE is signed and TO-TYPE is unsigned, or because FROM-TYPE is wider than TO-TYPE."
     `(define-instance (TryInto ,from-type ,to-type String)
        (inline)
-       (define tryInto cast-if-inbounds)))
+       (define (tryInto x)
+         (cast-if-inbounds x))))
 
   (cl:defun definitely-subtype? (sub super)
     "Test if SUB is a subtype of SUPER, i.e. every element of SUB is also an element of SUPER.
@@ -140,7 +141,7 @@ cannot be represented in :TO. These fall into a few categories:
      (define-instance (Into ,integer ,coalton-float)
        (inline)
        (define (into x)
-         (lisp ,coalton-float (x)
+         (lisp (-> ,coalton-float) (x)
            (cl:coerce x ',lisp-float))))))
 
 ;; Only exact conversions
@@ -164,14 +165,14 @@ cannot be represented in :TO. These fall into a few categories:
   (define-instance (Into F32 F64)
     (inline)
     (define (into x)
-      (lisp F64 (x)
+      (lisp (-> F64) (x)
         (cl:coerce x 'cl:double-float)))))
 
 ;; Allow Integer -> {Single,Double}-Float conversions
 (coalton-toplevel
   (define-instance (TryInto Integer F32 String)
     (define (tryInto x)
-      (lisp (Result String F32) (x)
+      (lisp (-> (Result String F32)) (x)
         (cl:let ((y (cl:ignore-errors (cl:coerce x 'cl:single-float))))
           (cl:if (cl:null y)
                  (Err "Integer to F32 conversion out-of-range")
@@ -179,7 +180,7 @@ cannot be represented in :TO. These fall into a few categories:
 
   (define-instance (TryInto Integer F64 String)
     (define (tryInto x)
-      (lisp (Result String F64) (x)
+      (lisp (-> (Result String F64)) (x)
         (cl:let ((y (cl:ignore-errors (cl:coerce x 'cl:double-float))))
           (cl:if (cl:null y)
                  (Err "Integer to F64 conversion out-of-range")
@@ -189,7 +190,7 @@ cannot be represented in :TO. These fall into a few categories:
   (cl:defmacro integer-tryinto-float (integer lisp-float float pow)
     `(define-instance (TryInto ,integer ,float String)
        (define (tryInto x)
-	 (lisp (Result String ,float) (x)
+	 (lisp (-> (Result String ,float)) (x)
            (cl:if (cl:< ,(cl:- (cl:expt 2 pow)) x ,(cl:expt 2 pow))
 	          (cl:let ((y (cl:ignore-errors (cl:coerce x ',lisp-float))))
 	            (cl:if (cl:null y)

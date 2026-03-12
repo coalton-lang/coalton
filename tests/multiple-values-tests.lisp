@@ -3,19 +3,15 @@
 (uiop:define-package #:coalton-tests/multiple-values
   (:use #:coalton #:coalton-prelude)
   (:export
-   #:mv-return-tuple
-   #:mv-id-tuple
-   #:mv-consume-tuple
+   #:mv-return-values
+   #:mv-consume-values
+   #:mv-lisp-return-values
+   #:mv-lisp-consume-values
+   #:mv-when-zero-values
+   #:mv-unless-zero-values
+   #:mv-bare-return
    #:mv-lisp-return-tuple
-   #:mv-lisp-alias-return
-   #:mv-escape-global
-   #:mv-project-fst-global
-   #:mv-project-snd-global
-   #:mv-join-point-global
-   #:mv-wildcard-match-global
-   #:mv-lisp-transitive-global
-   #:mv-transitive-global
-   #:mv-transitive-lambda))
+   #:mv-lisp-alias-return))
 
 (defun coalton-tests/multiple-values::%mv-lisp-return-helper (x)
   (declare (type integer x)
@@ -24,80 +20,49 @@
 
 (with-coalton-compilation (:package #:coalton-tests/multiple-values)
   (coalton-toplevel
-    (declare mv-return-tuple (Integer -> (Tuple Integer Integer)))
-    (define (mv-return-tuple x)
-      (Tuple x (1+ x)))
+    (declare mv-return-values (Integer -> Integer * Integer))
+    (define (mv-return-values x)
+      (values x (1+ x)))
 
-    (declare mv-id-tuple ((Tuple Integer Integer) -> (Tuple Integer Integer)))
-    (define (mv-id-tuple pair)
-      pair)
+    (declare mv-consume-values (Integer -> Integer))
+    (define (mv-consume-values x)
+      (let (values a b) = (mv-return-values x))
+      (+ a b))
 
-    (declare mv-consume-tuple ((Tuple Integer Integer) -> Integer))
-    (define (mv-consume-tuple pair)
-      (match pair
-        ((Tuple a b) (+ a b))))
+    (declare mv-lisp-return-values (Integer -> Integer * Integer))
+    (define (mv-lisp-return-values x)
+      (lisp (-> Integer * Integer) (x)
+        (%mv-lisp-return-helper x)))
+
+    (declare mv-lisp-consume-values (Integer -> Integer))
+    (define (mv-lisp-consume-values x)
+      (let (values a b) = (mv-lisp-return-values x))
+      (+ a b))
+
+    (define (mv-when-zero-values b)
+      (when b
+        (+ 1 2)))
+
+    (define (mv-unless-zero-values b)
+      (unless b
+        (+ 1 2)))
+
+    (define (mv-bare-return)
+      (return))
 
     (declare mv-lisp-return-tuple (Integer -> (Tuple Integer Integer)))
     (define (mv-lisp-return-tuple x)
-      (lisp multiple-values (Tuple Integer Integer) (x)
-        (%mv-lisp-return-helper x)))
+      (let (values a b) = (mv-lisp-return-values x))
+      (Tuple a b))
 
     (define-type-alias IntPair (Tuple Integer Integer))
 
     (declare mv-lisp-alias-return (Integer -> IntPair))
     (define (mv-lisp-alias-return x)
-      (lisp multiple-values IntPair (x)
-        (%mv-lisp-return-helper x)))
+      (let (values a b) = (mv-lisp-return-values x))
+      (Tuple a b))))
 
-    (declare mv-escape-global (Integer -> (Tuple Integer Integer)))
-    (define (mv-escape-global x)
-      (mv-id-tuple (mv-return-tuple x)))
-
-    (declare mv-project-fst-global (Integer -> Integer))
-    (define (mv-project-fst-global x)
-      (fst (mv-id-tuple (mv-return-tuple x))))
-
-    (declare mv-project-snd-global (Integer -> Integer))
-    (define (mv-project-snd-global x)
-      (snd (mv-id-tuple (mv-return-tuple x))))
-
-    (declare mv-join-point-global (Integer -> Integer))
-    (define (mv-join-point-global x)
-      (fst
-       (match (mv-return-tuple x)
-         ((Tuple 0 b) (mv-id-tuple (mv-return-tuple b)))
-         ((Tuple a _) (mv-id-tuple (mv-return-tuple a))))))
-
-    (declare mv-wildcard-match-global (Integer -> Integer))
-    (define (mv-wildcard-match-global x)
-      (match (mv-return-tuple x)
-        ((Tuple 0 b) b)
-        (_ x)))
-
-    (declare mv-lisp-transitive-global (Integer -> Integer))
-    (define (mv-lisp-transitive-global x)
-      (mv-consume-tuple (mv-id-tuple (mv-lisp-return-tuple x))))
-
-    (declare mv-transitive-global (Integer -> Integer))
-    (define (mv-transitive-global x)
-      (mv-consume-tuple (mv-id-tuple (mv-return-tuple x))))
-
-    (declare mv-transitive-lambda (Integer -> Integer))
-    (define (mv-transitive-lambda x)
-      (let make-pair = (fn (n) (Tuple n (1+ n))))
-      (let pass = (fn (pair) pair))
-      (let consume = (fn (pair)
-                       (match pair
-                         ((Tuple a b) (+ a b)))))
-      (consume (pass (make-pair x))))))
-
-(defun %mv-symbol (name)
-  (declare (type simple-string name)
-           (values symbol &optional))
-  (or (find-symbol name '#:coalton-tests/multiple-values)
-      (error "Unable to resolve symbol ~A in COALTON-TESTS/MULTIPLE-VALUES." name)))
-
-(defun %count-direct-calls-if (node predicate)
+(defun %mv-count-direct-calls-if (node predicate)
   (declare (type ast:node node)
            (type function predicate)
            (values fixnum &optional))
@@ -111,7 +76,20 @@
         (values))))
     count))
 
-(defun %count-lisp-nodes-if (node predicate)
+(defun %mv-count-values-binds (node)
+  (declare (type ast:node node)
+           (values fixnum &optional))
+  (let ((count 0))
+    (traverse:traverse
+     node
+     (list
+      (traverse:action (:after ast:node-values-bind _node)
+        (declare (ignore _node))
+        (incf count)
+        (values))))
+    count))
+
+(defun %mv-count-lisp-nodes-if (node predicate)
   (declare (type ast:node node)
            (type function predicate)
            (values fixnum &optional))
@@ -125,49 +103,40 @@
         (values))))
     count))
 
-(defun %strip-leading-binds (node)
-  (declare (type ast:node node)
-           (values ast:node &optional))
-  (loop :while (typep node 'ast:node-bind)
-        :do (setf node (ast:node-bind-body node))
-        :finally (return node)))
-
-(defun %values-rator-p (rator)
+(defun %mv-tuple-constructor-rator-p (rator)
   (declare (type symbol rator)
            (values boolean &optional))
-  (and (symbolp rator)
-       (not (null (search "%VALUES" (symbol-name rator) :test #'char=)))))
+  (eq rator 'coalton-library/classes:tuple))
 
-;; Checks transitive tuple producer/identity/consumer composition
-;; preserves behavior across global and local paths.
-(deftest tuple-multiple-values-transitive-runtime ()
+(deftest direct-multiple-values-runtime ()
+  (is (equal '(10 11)
+             (multiple-value-list
+              (eval '(coalton:coalton
+                      (coalton-tests/multiple-values:mv-return-values 10))))))
+  (is (equal '(10 11)
+             (multiple-value-list
+              (eval '(coalton:coalton
+                      (coalton-tests/multiple-values:mv-lisp-return-values 10))))))
   (is (= 21
          (eval '(coalton:coalton
-                 (coalton-tests/multiple-values:mv-transitive-global 10)))))
+                 (coalton-tests/multiple-values:mv-consume-values 10)))))
   (is (= 21
          (eval '(coalton:coalton
-                 (coalton-tests/multiple-values:mv-transitive-lambda 10))))))
+                 (coalton-tests/multiple-values:mv-lisp-consume-values 10)))))
+  (is (null
+       (multiple-value-list
+        (eval '(coalton:coalton
+                (coalton-tests/multiple-values:mv-when-zero-values coalton:True))))))
+  (is (null
+       (multiple-value-list
+        (eval '(coalton:coalton
+                (coalton-tests/multiple-values:mv-unless-zero-values coalton:False))))))
+  (is (null
+       (multiple-value-list
+        (eval '(coalton:coalton
+                (coalton-tests/multiple-values:mv-bare-return)))))))
 
-;; Checks escape-path results are returned as a single Lisp value and
-;; remain projection-correct.
-(deftest tuple-multiple-values-escape-runtime ()
-  (is (= 1
-         (length
-          (multiple-value-list
-           (eval '(coalton:coalton
-                   (coalton-tests/multiple-values:mv-escape-global 10)))))))
-  (is (= 10
-         (eval '(coalton:coalton
-                 (coalton-library/tuple:fst
-                  (coalton-tests/multiple-values:mv-escape-global 10))))))
-  (is (= 11
-         (eval '(coalton:coalton
-                 (coalton-library/tuple:snd
-                  (coalton-tests/multiple-values:mv-escape-global 10)))))))
-
-;; Checks `lisp multiple-values` tuple producers compose correctly with
-;; projections and tuple consumers.
-(deftest tuple-multiple-values-lisp-values-runtime ()
+(deftest multiple-values-to-tuple-runtime ()
   (is (= 10
          (eval '(coalton:coalton
                  (coalton-library/tuple:fst
@@ -176,13 +145,6 @@
          (eval '(coalton:coalton
                  (coalton-library/tuple:snd
                   (coalton-tests/multiple-values:mv-lisp-return-tuple 10))))))
-  (is (= 21
-         (eval '(coalton:coalton
-                 (coalton-tests/multiple-values:mv-lisp-transitive-global 10))))))
-
-;; Checks alias-typed `lisp multiple-values` tuple producers preserve
-;; projection semantics.
-(deftest tuple-multiple-values-lisp-values-alias-runtime ()
   (is (= 10
          (eval '(coalton:coalton
                  (coalton-library/tuple:fst
@@ -192,186 +154,14 @@
                  (coalton-library/tuple:snd
                   (coalton-tests/multiple-values:mv-lisp-alias-return 10)))))))
 
-;; Checks projection helpers preserve first/second component semantics
-;; through tuple pipelines.
-(deftest tuple-multiple-values-projection-runtime ()
-  (is (= 10
-         (eval '(coalton:coalton
-                 (coalton-tests/multiple-values:mv-project-fst-global 10)))))
-  (is (= 11
-         (eval '(coalton:coalton
-                 (coalton-tests/multiple-values:mv-project-snd-global 10))))))
-
-;; Checks join-point control flow over tuple results preserves runtime
-;; behavior.
-(deftest tuple-multiple-values-join-point-runtime ()
-  (is (= 1
-         (eval '(coalton:coalton
-                 (coalton-tests/multiple-values:mv-join-point-global 0)))))
-  (is (= 10
-         (eval '(coalton:coalton
-                 (coalton-tests/multiple-values:mv-join-point-global 10))))))
-
-;; Checks wildcard tuple matching preserves semantics for specific and
-;; fallback branches.
-(deftest tuple-multiple-values-wildcard-match-runtime ()
-  (is (= 1
-         (eval '(coalton:coalton
-                 (coalton-tests/multiple-values:mv-wildcard-match-global 0)))))
-  (is (= 10
-         (eval '(coalton:coalton
-                 (coalton-tests/multiple-values:mv-wildcard-match-global 10))))))
-
-;; Checks global transitive codegen uses `%values` entry points and
-;; avoids direct boxed wrapper/tuple constructor calls.
-(deftest tuple-multiple-values-transitive-global-codegen ()
-  (fiasco:skip-unless (not coalton-impl/settings:*coalton-heuristic-inlining*))
-  (let* ((node (coalton:lookup-code 'coalton-tests/multiple-values::mv-transitive-global))
-         (body (%strip-leading-binds (ast:node-abstraction-subexpr node)))
-         (values-call-count (%count-direct-calls-if body #'%values-rator-p))
-         (boxed-call-count (%count-direct-calls-if
-                            body
-                            (lambda (rator)
-                              (member rator
-                                      (list (%mv-symbol "MV-RETURN-TUPLE")
-                                            (%mv-symbol "MV-ID-TUPLE")
-                                            (%mv-symbol "MV-CONSUME-TUPLE"))
-                                      :test #'eq))))
-         (tuple-box-count (%count-direct-calls-if
-                           body
-                           (lambda (rator)
-                             (eq rator 'coalton-library/classes:tuple)))))
-    (is (>= values-call-count 3))
-    (is (= 0 boxed-call-count))
-    (is (= 0 tuple-box-count))))
-
-;; Checks local-lambda transitive codegen uses `%values` and does not
-;; emit tuple constructors.
-(deftest tuple-multiple-values-transitive-lambda-codegen ()
-  (let* ((node (coalton:lookup-code 'coalton-tests/multiple-values::mv-transitive-lambda))
-         (body (%strip-leading-binds (ast:node-abstraction-subexpr node)))
-         (values-call-count (%count-direct-calls-if body #'%values-rator-p))
-         (tuple-box-count (%count-direct-calls-if
-                           body
-                           (lambda (rator)
-                             (eq rator 'coalton-library/classes:tuple)))))
-    (is (>= values-call-count 3))
-    (is (= 0 tuple-box-count))))
-
-;; Checks `lisp multiple-values` transitive codegen uses `%values` entry points
-;; without boxed wrapper/tuple constructor calls.
-(deftest tuple-multiple-values-lisp-values-codegen ()
-  (fiasco:skip-unless (not coalton-impl/settings:*coalton-heuristic-inlining*))
-  (let* ((node (coalton:lookup-code 'coalton-tests/multiple-values::mv-lisp-transitive-global))
-         (body (%strip-leading-binds (ast:node-abstraction-subexpr node)))
-         (values-call-count (%count-direct-calls-if body #'%values-rator-p))
-         (boxed-call-count (%count-direct-calls-if
-                            body
-                            (lambda (rator)
-                              (member rator
-                                      (list (%mv-symbol "MV-LISP-RETURN-TUPLE")
-                                            (%mv-symbol "MV-ID-TUPLE")
-                                            (%mv-symbol "MV-CONSUME-TUPLE"))
-                                      :test #'eq))))
-         (tuple-box-count (%count-direct-calls-if
-                           body
-                           (lambda (rator)
-                             (eq rator 'coalton-library/classes:tuple)))))
-    (is (>= values-call-count 3))
-    (is (= 0 boxed-call-count))
-    (is (= 0 tuple-box-count))))
-
-;; Checks escape-path codegen still emits tuple construction when
-;; values must materialize.
-(deftest tuple-multiple-values-escape-boxes ()
-  (let* ((node (coalton:lookup-code 'coalton-tests/multiple-values::mv-escape-global))
-         (body (%strip-leading-binds (ast:node-abstraction-subexpr node)))
-         (tuple-box-count (%count-direct-calls-if
-                           body
-                           (lambda (rator)
-                             (eq rator 'coalton-library/classes:tuple)))))
-    (is (>= tuple-box-count 1))))
-
-;; Checks projection-path codegen uses `%values` and avoids direct
-;; boxed wrapper/tuple constructor calls.
-(deftest tuple-multiple-values-projection-codegen ()
-  (fiasco:skip-unless (not coalton-impl/settings:*coalton-heuristic-inlining*))
-  (let* ((node (coalton:lookup-code 'coalton-tests/multiple-values::mv-project-fst-global))
-         (body (%strip-leading-binds (ast:node-abstraction-subexpr node)))
-         (values-call-count (%count-direct-calls-if body #'%values-rator-p))
-         (boxed-call-count (%count-direct-calls-if
-                            body
-                            (lambda (rator)
-                              (member rator
-                                      (list (%mv-symbol "MV-RETURN-TUPLE")
-                                            (%mv-symbol "MV-ID-TUPLE"))
-                                      :test #'eq))))
-         (tuple-box-count (%count-direct-calls-if
-                           body
-                           (lambda (rator)
-                             (eq rator 'coalton-library/classes:tuple)))))
-    (is (>= values-call-count 1))
-    (is (= 0 boxed-call-count))
-    (is (= 0 tuple-box-count))))
-
-;; Checks join-point codegen uses `%values` and avoids direct boxed
-;; wrapper/tuple constructor calls.
-(deftest tuple-multiple-values-join-point-codegen ()
-  (fiasco:skip-unless (not coalton-impl/settings:*coalton-heuristic-inlining*))
-  (let* ((node (coalton:lookup-code 'coalton-tests/multiple-values::mv-join-point-global))
-         (body (%strip-leading-binds (ast:node-abstraction-subexpr node)))
-         (values-call-count (%count-direct-calls-if body #'%values-rator-p))
-         (boxed-call-count (%count-direct-calls-if
-                            body
-                            (lambda (rator)
-                              (member rator
-                                      (list (%mv-symbol "MV-RETURN-TUPLE")
-                                            (%mv-symbol "MV-ID-TUPLE"))
-                                      :test #'eq))))
-         (tuple-box-count (%count-direct-calls-if
-                           body
-                           (lambda (rator)
-                             (eq rator 'coalton-library/classes:tuple)))))
-    (is (>= values-call-count 1))
-    (is (= 0 boxed-call-count))
-    (is (= 0 tuple-box-count))))
-
-;; Checks wildcard-match codegen uses `%values` and avoids direct
-;; boxed producer/tuple constructor calls.
-(deftest tuple-multiple-values-wildcard-match-codegen ()
-  (let* ((node (coalton:lookup-code 'coalton-tests/multiple-values::mv-wildcard-match-global))
-         (body (%strip-leading-binds (ast:node-abstraction-subexpr node)))
-         (values-call-count (%count-direct-calls-if body #'%values-rator-p))
-         (boxed-call-count (%count-direct-calls-if
-                            body
-                            (lambda (rator)
-                              (eq rator (%mv-symbol "MV-RETURN-TUPLE")))))
-         (tuple-box-count (%count-direct-calls-if
-                           body
-                           (lambda (rator)
-                             (eq rator 'coalton-library/classes:tuple)))))
-    (is (>= values-call-count 1))
-    (is (= 0 boxed-call-count))
-    (is (= 0 tuple-box-count))))
-
-;; Checks `%values` entry point for `mv-lisp-return-tuple` is tagged
-;; with the `:values` return convention.
-(deftest tuple-multiple-values-lisp-values-unboxed-entrypoint ()
-  (let* ((node (coalton:lookup-code 'coalton-tests/multiple-values::mv-lisp-return-tuple%values))
-         (lisp-values-count
-            (%count-lisp-nodes-if
-             (ast:node-abstraction-subexpr node)
-             (lambda (lisp-node)
-              (eq ':values (ast:node-lisp-return-convention lisp-node))))))
-    (is (= 1 lisp-values-count))))
-
-;; Checks alias-typed `%values` entry point is tagged with the
-;; `:values` return convention.
-(deftest tuple-multiple-values-lisp-values-alias-unboxed-entrypoint ()
-  (let* ((node (coalton:lookup-code 'coalton-tests/multiple-values::mv-lisp-alias-return%values))
-         (lisp-values-count
-            (%count-lisp-nodes-if
-             (ast:node-abstraction-subexpr node)
-             (lambda (lisp-node)
-              (eq ':values (ast:node-lisp-return-convention lisp-node))))))
-    (is (= 1 lisp-values-count))))
+(deftest direct-multiple-values-codegen ()
+  (let* ((consumer-node (coalton:lookup-code 'coalton-tests/multiple-values::mv-consume-values))
+         (lisp-node (coalton:lookup-code 'coalton-tests/multiple-values::mv-lisp-return-values))
+         (consumer-body (ast:node-abstraction-subexpr consumer-node))
+         (lisp-body (ast:node-abstraction-subexpr lisp-node)))
+    (is (= 1 (%mv-count-values-binds consumer-body)))
+    (is (= 0 (%mv-count-direct-calls-if consumer-body #'%mv-tuple-constructor-rator-p)))
+    (is (= 1 (%mv-count-lisp-nodes-if
+              lisp-body
+              (lambda (node)
+                (= 2 (tc:multiple-value-output-arity (ast:node-type node)))))))))

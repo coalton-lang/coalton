@@ -58,7 +58,7 @@
 
 If no reciprocal exists for an element, produce a run-time error (e.g., zero).
 "
-    (/ (:a -> :a -> :a))
+    (/ (:a * :a -> :a))
     (reciprocal (:a -> :a)))
 
   (define-class (Dividable :arg-type :res-type)
@@ -83,7 +83,7 @@ The function `general/` is partial, and will error produce a run-time error if t
     ;; This is a type that is more pragmatic and less mathematical in
     ;; nature. It expresses a division relationship between one input
     ;; type and one output type.
-    (general/ (:arg-type -> :arg-type -> :res-type)))
+    (general/ (:arg-type * :arg-type -> :res-type)))
 
   (define-instance (Reciprocable :a => Dividable :a :a)
     (inline)
@@ -107,40 +107,40 @@ The function `general/` is partial, and will error produce a run-time error if t
 
   (define-instance (Transfinite F32)
     (define infinity
-      (lisp F32 ()
+      (lisp (-> F32) ()
         float-features:single-float-positive-infinity))
     (define nan
-      (lisp F32 ()
+      (lisp (-> F32) ()
         float-features:single-float-nan))
     (inline)
     (define (nan? x)
-      (Lisp Boolean (x)
+      (Lisp (-> Boolean) (x)
         #+(not allegro)
         (float-features:float-NaN-p x)
         #+allegro
         (cl:and (float-features:float-NaN-p x) cl:t)))
     (inline)
     (define (infinite? x)
-      (Lisp Boolean (x)
+      (Lisp (-> Boolean) (x)
         (float-features:float-infinity-p x))))
 
   (define-instance (Transfinite F64)
     (define infinity
-      (lisp F64 ()
+      (lisp (-> F64) ()
         float-features:double-float-positive-infinity))
     (define nan
-      (lisp F64 ()
+      (lisp (-> F64) ()
         float-features:double-float-nan))
     (inline)
     (define (nan? x)
-      (Lisp Boolean (x)
+      (Lisp (-> Boolean) (x)
         #+(not allegro)
         (float-features:float-NaN-p x)
         #+allegro
         (cl:and (float-features:float-NaN-p x) cl:t)))
     (inline)
     (define (infinite? x)
-      (Lisp Boolean (x)
+      (Lisp (-> Boolean) (x)
         (float-features:float-infinity-p x))))
 
   (inline)
@@ -167,10 +167,10 @@ The function `general/` is partial, and will error produce a run-time error if t
       (True 0)))
 
   (inline)
-  (declare ash (Integer -> Integer -> Integer))
+  (declare ash (Integer * Integer -> Integer))
   (define (ash x n)
     "Compute the \"arithmetic shift\" of `x` by `n`."
-    (lisp Integer (x n) (cl:ash x n)))
+    (lisp (-> Integer) (x n) (cl:ash x n)))
 
   (inline)
   (declare 1+ ((Num :num) => :num -> :num))
@@ -228,7 +228,7 @@ The function `general/` is partial, and will error produce a run-time error if t
          (inline)
          (declare ,sign-spec (,type -> ,type))
          (define (,sign-spec n)
-           (lisp ,type (n)
+           (lisp (-> ,type) (n)
              (cl:signum n)))))))
 
 (cl:defmacro %define-abs-native (type)
@@ -239,7 +239,7 @@ The function `general/` is partial, and will error produce a run-time error if t
          (inline)
          (declare ,abs (,type -> ,type))
          (define (,abs n)
-           (lisp ,type (n)
+           (lisp (-> ,type) (n)
              (cl:abs n)))))))
 
 (%define-sign-native Bit)

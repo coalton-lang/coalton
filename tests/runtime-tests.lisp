@@ -12,6 +12,66 @@
   (is (== (recursive-predicate 0 1 5) 5)))
 
 (coalton-toplevel
+  (define (keyword-add-runtime x &key (offset 1) (scale 1))
+    (+ (* x scale) offset))
+
+  (define (keyword-only-runtime &key (x 1))
+    x)
+
+  (define (keyword-default-chain-runtime base &key (offset (+ base 1)) (total (+ offset 1)))
+    total)
+
+  (define (keyword-run-runtime f x)
+    (f x))
+
+  (define (keyword-run0-runtime f)
+    (f))
+
+  (define (keyword-timeout-run-runtime f x)
+    (f x :timeout 5))
+
+  (define (keyword-string-run-runtime f)
+    (f :x "hi"))
+
+  (define (plain-id-runtime x)
+    x)
+
+  (define (keyword-id0-runtime &key (timeout 0) (extra 10))
+    (+ timeout extra))
+
+  (define (keyword-id-runtime x &key (timeout 0) (extra 10))
+    (+ (+ x timeout) extra))
+
+  (define (keyword-string-source-runtime &key (x "x") (_y "y"))
+    x)
+
+  (define-class (KeywordMethodRuntime :a)
+    (keyword-method-runtime (:a &key (:offset Integer) -> Integer)))
+
+  (define-instance (KeywordMethodRuntime Integer)
+    (define (keyword-method-runtime x &key (offset 1))
+      (+ x offset))))
+
+(define-test test-keyword-arguments-runtime ()
+  (is (== (keyword-add-runtime 2) 3))
+  (is (== (keyword-add-runtime 2 :offset 3) 5))
+  (is (== (keyword-add-runtime 2 :scale 4 :offset 3) 11))
+  (is (== (keyword-only-runtime) 1))
+  (is (== (keyword-default-chain-runtime 10) 12))
+  (is (== (keyword-default-chain-runtime 10 :offset 20) 21)))
+
+(define-test test-keyword-higher-order-runtime ()
+  (is (== (keyword-run-runtime plain-id-runtime 7) 7))
+  (is (== (keyword-run0-runtime keyword-id0-runtime) 10))
+  (is (== (keyword-run-runtime keyword-id-runtime 7) 17))
+  (is (== (keyword-timeout-run-runtime keyword-id-runtime 7) 22))
+  (is (== (keyword-string-run-runtime keyword-string-source-runtime) "hi")))
+
+(define-test test-keyword-instance-method-runtime ()
+  (is (== (keyword-method-runtime 10) 11))
+  (is (== (keyword-method-runtime 10 :offset 5) 15)))
+
+(coalton-toplevel
   (define (gh-295-f a)
     (let ((g (fn (x)
                (== x (make-list a)))))
@@ -20,14 +80,14 @@
 ;; See gh #295
 (define-test test-deferred-predicate-removal ()
   (progn
-    (is (== (gh-295-f (the Integer 1) (make-list 2 3 4)) False))
-    (is (== (gh-295-f (the Integer 1) (make-list 1)) True))))
+    (is (== ((gh-295-f (the Integer 1)) (make-list 2 3 4)) False))
+    (is (== ((gh-295-f (the Integer 1)) (make-list 1)) True))))
 
 
 ;; Test that functions can be given explicit predicates in any order
 ;; See gh #377
 (coalton-toplevel
-  (declare gh-377-a ((Num :a) (Ord :a) => :a -> :a -> :a -> (List :a)))
+  (declare gh-377-a ((Num :a) (Ord :a) => :a * :a * :a -> (List :a)))
   (define (gh-377-a step start end)
     (let ((inner
             (fn (current acc)
@@ -37,7 +97,7 @@
                          (Cons current acc))))))
       (inner start Nil)))
 
- (declare gh-377-b ((Ord :a) (Num :a) => :a -> :a -> :a -> (List :a)))
+ (declare gh-377-b ((Ord :a) (Num :a) => :a * :a * :a -> (List :a)))
   (define (gh-377-b step start end)
     (let ((inner
             (fn (current acc)
@@ -74,10 +134,18 @@
     (define (gh-400-b-method x) x)
     (define gh-400-b-constant 5)))
 
+(define-test test-class-constant-in-embedded-coalton ()
+  (is (== 5
+          (lisp (-> Integer) ()
+            (cl:eval '(coalton:coalton (the Integer gh-400-a-constant))))))
+  (is (== 5
+          (lisp (-> Integer) ()
+            (cl:eval '(coalton:coalton (the Integer gh-400-b-constant)))))))
+
 ;; Test that classes can have method constraints
 (coalton-toplevel
   (define-class (Gh-430 :a)
-    (gh-430-m (Num :b => :a -> :b -> :b -> :b)))
+    (gh-430-m (Num :b => :a * :b * :b -> :b)))
 
   (define-instance (Gh-430 String)
     (define (gh-430-m a b c)
@@ -92,7 +160,7 @@
 
 (coalton-toplevel
   (define-class (Gh-463 :a)
-    (gh-463-m (:a -> :a -> :a)))
+    (gh-463-m (:a * :a -> :a)))
 
   (define-instance (Num :a => Gh-463 :a)
     (define (gh-463-m x y)
@@ -106,7 +174,11 @@
 
 ;; Test defaulting and context reduction
 (define-test test-defaulting ()
-  (is (== (liftA2 (liftA2 +) (Some (Some (the Integer 1))) (Some (Some 2))) (Some (Some 3)))))
+  (is (== (liftA2 (fn (mx my)
+                    (liftA2 + mx my))
+                  (Some (Some (the Integer 1)))
+                  (Some (Some 2)))
+          (Some (Some 3)))))
 
 
 ;; Test that explicit type declarations in let bindings work
@@ -143,7 +215,7 @@
 ;; Check that codegen for fundep classes works
 (coalton-toplevel
   (define-class (Mult :a :b :c (:a :b -> :c))
-    (_* (:a -> :b -> :c))))
+    (_* (:a * :b -> :c))))
 
 (coalton-toplevel
   (define-class (Gh-968 :a)
