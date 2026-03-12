@@ -108,6 +108,14 @@
       (check-string= "nested forall binder order"
                      "FORALL :OUTER :INNER. (:OUTER -> :INNER -> :OUTER)"
                      (render-type (coalton-type-of 'coalton-native-tests::nested-forall-fn)))
+      (check-string= "documentation generator preserves explicit forall order"
+                     "&forall; :RESULT :INPUT. (:INPUT &rarr; :RESULT &rarr; :INPUT)"
+                     (coalton/doc/markdown::to-markdown
+                      (coalton-type-of 'coalton-native-tests::ordered-forall-fn)))
+      (check-string= "documentation generator preserves nested forall order"
+                     "&forall; :OUTER :INNER. (:OUTER &rarr; :INNER &rarr; :OUTER)"
+                     (coalton/doc/markdown::to-markdown
+                      (coalton-type-of 'coalton-native-tests::nested-forall-fn)))
       (check-string= "class method type variables"
                      "FORALL :MONAD :STATE. COALTON-NATIVE-TESTS::NAMETRACKEDCLASS :MONAD :STATE => (:MONAD :STATE)"
                      (render-type (coalton-type-of 'coalton-native-tests::name-tracked-get)))

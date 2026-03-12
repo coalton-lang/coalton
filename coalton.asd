@@ -273,6 +273,7 @@
   :depends-on ("coalton"
                "coalton/library/big-float"
                "coalton/library/algorithms"
+               "coalton/doc"
                "coalton/testing"
                "fiasco"
                "quil-coalton/tests"

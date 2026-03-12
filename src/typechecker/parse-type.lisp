@@ -236,6 +236,17 @@
       (values ty ksubs))))
 
 (defun parse-qualified-type-info (unparsed-ty env &optional ksubs (run-context-checks-p t))
+  "Parse UNPARSED-TY and return the parsed type plus explicit binder metadata.
+
+The returned values are:
+1. the parsed qualified type
+2. the explicit forall binders as instantiated tyvars, in source order
+3. whether the source type used an explicit forall
+4. the updated kind substitution
+
+When RUN-CONTEXT-CHECKS-P is false, ambiguity, fundep, and reducibility
+checks are skipped. That mode is used while class definitions are still
+being assembled."
   (declare (type parser:qualified-ty unparsed-ty)
            (type (or tc:environment partial-type-env) env)
            (type tc:ksubstitution-list ksubs)

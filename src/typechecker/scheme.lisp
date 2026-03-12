@@ -36,6 +36,8 @@
 ;;;
 
 (defstruct ty-scheme 
+  ;; True when the quantified binders came from an explicit user-written
+  ;; FORALL rather than implicit quantification.
   (explicit-p nil                    :type boolean      :read-only t)
   (kinds      (util:required 'kinds) :type list         :read-only t)
   (type       (util:required 'type)  :type qualified-ty :read-only t))
@@ -68,6 +70,11 @@
 ;;;
 
 (defun quantify (tyvars type)
+  "Quantify the TYVARS that occur in TYPE, preserving binder metadata.
+
+The resulting scheme keeps the source-name and binding-id carried by
+each quantified variable so later instantiation and pretty printing can
+recover the programmer-written binders."
   (declare (type tyvar-list tyvars)
            (type qualified-ty type)
            (values ty-scheme))
@@ -89,6 +96,11 @@
      :type (apply-substitution subst type))))
 
 (defun ty-scheme-instantiation-types (ty-scheme)
+  "Return fresh instantiation variables for TY-SCHEME's quantified binders.
+
+The returned variables preserve each binder's source-name and binding-id
+so fresh-inst, pretty printing, and scoped-forall resolution all see the
+same quantified binder identity."
   (declare (type ty-scheme ty-scheme)
            (values tyvar-list &optional))
   (let* ((source-names (make-array (length (ty-scheme-kinds ty-scheme))
@@ -134,6 +146,7 @@
     (to-scheme (qualify nil ty))))
 
 (defun fresh-inst (ty-scheme)
+  "Instantiate TY-SCHEME with fresh type variables that preserve binder metadata."
   (declare (type ty-scheme ty-scheme)
            (values qualified-ty &optional))
   (let ((types (ty-scheme-instantiation-types ty-scheme)))
@@ -162,6 +175,12 @@
     (qualified-ty-predicates (fresh-inst scheme))))
 
 (defun quantify-using-tvar-order (tyvars type &optional (explicit-p nil))
+  "Quantify TYVARS in TYPE, preserving the order supplied by TYVARS.
+
+Only variables that actually occur in TYPE are quantified. When
+EXPLICIT-P is true, the resulting scheme records that it came from an
+explicit FORALL, which is later used to decide whether the binders
+become lexically scoped."
   (let* ((vars (remove-if
                 (lambda (x) (not (find x (type-variables type) :test #'ty=)))
                 tyvars))

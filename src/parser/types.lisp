@@ -139,7 +139,10 @@
 (defstruct (qualified-ty
             (:predicate nil)
             (:copier nil))
+  ;; True when the source type used an explicit FORALL binder list.
   (explicit-p         nil                 :type boolean           :read-only t)
+  ;; The explicit FORALL binders in source order, including nested FORALLs
+  ;; after flattening, with original source spellings preserved.
   (explicit-variables nil                 :type keyword-src-list  :read-only t)
   (predicates         (util:required 'predicates) :type ty-predicate-list :read-only t)
   (type               (util:required 'type)       :type ty                :read-only t)
