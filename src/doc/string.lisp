@@ -28,9 +28,6 @@
           (format stream "~S" tcon-name)
           (format stream "~A" (lookup-type-source-name tcon-name))))))
 
-(defmethod object-aname ((ty tc:tycon))
-  (format nil "~(~A-type~)" (html-entities:encode-entities (object-name ty))))
-
 (defun write-function-types (ty)
   (with-output-to-string (stream)
     (write-string "(" stream)

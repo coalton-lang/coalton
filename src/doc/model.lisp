@@ -31,6 +31,8 @@
    ;; object classes and properties
    #:coalton-object
    #:object-aname
+   #:package-qualified-anchor
+   #:sanitize-anchor-component
    #:source
    #:source-span
    #:object-docstring
@@ -111,6 +113,25 @@
 (defgeneric object-aname (self)
   (:documentation "The link target of a thing: <name>-class, e.g."))
 
+(defun sanitize-anchor-component (string)
+  "Convert STRING into a lowercase anchor component using `-` for non-alphanumerics."
+  (string-downcase
+   (map 'string
+        (lambda (char)
+          (if (alphanumericp char)
+              char
+              #\-))
+        string)))
+
+(defun package-qualified-anchor (package name suffix)
+  "Return an anchor name with PACKAGE's sanitized name prefixed to NAME."
+  (let ((package-prefix (and package
+                             (sanitize-anchor-component (package-name package)))))
+    (format nil "~@[~A-~]~(~A-~A~)"
+            package-prefix
+            name
+            suffix)))
+
 (defun ensure-suffix (char string)
   "If STRING doesn't end with CHAR, append it."
   (if (char= (aref string (1- (length string))) char)
@@ -180,7 +201,12 @@
   "TYPE")
 
 (defmethod object-aname ((object coalton-type))
-  (format nil "~(~A-type~)" (object-name object)))
+  (let ((entry (type-entry object)))
+    (package-qualified-anchor
+     (symbol-package (tc:type-entry-name entry))
+     (or (tc:type-entry-source-name entry)
+         (symbol-name (tc:type-entry-name entry)))
+     "type")))
 
 (defclass coalton-struct (coalton-object)
   ((type-entry :initarg :type-entry
@@ -218,8 +244,12 @@
   "STRUCT")
 
 (defmethod object-aname ((self coalton-struct))
-  (format nil "~(~A-type~)"
-          (symbol-name (tc:type-entry-name (type-entry self)))))
+  (let ((entry (type-entry self)))
+    (package-qualified-anchor
+     (symbol-package (tc:type-entry-name entry))
+     (or (tc:type-entry-source-name entry)
+         (symbol-name (tc:type-entry-name entry)))
+     "type")))
 
 (defclass coalton-class (coalton-object)
   ((class-entry :initarg :class
@@ -268,7 +298,12 @@
   "CLASS")
 
 (defmethod object-aname ((self coalton-class))
-  (format nil "~(~A-class~)" (object-name self)))
+  (let ((entry (class-entry self)))
+    (package-qualified-anchor
+     (symbol-package (tc:ty-class-name entry))
+     (or (tc:ty-class-source-name entry)
+         (symbol-name (tc:ty-class-name entry)))
+     "class")))
 
 ;;; class coalton-value
 
@@ -306,7 +341,11 @@
       "VALUE"))
 
 (defmethod object-aname ((object coalton-value))
-  (format nil "~(~A-value~)" (symbol-name (tc:name-entry-name (name-entry object)))))
+  (let ((name (tc:name-entry-name (name-entry object))))
+    (package-qualified-anchor
+     (symbol-package name)
+     (symbol-name name)
+     "value")))
 
 ;;; class coalton-package
 
@@ -328,7 +367,8 @@
   (string-upcase (package-name (lisp-package self))))
 
 (defmethod object-aname ((self coalton-package))
-  (format nil "~A-package" (string-downcase (package-name (lisp-package self)))))
+  (format nil "~A-package"
+          (sanitize-anchor-component (package-name (lisp-package self)))))
 
 (defun package-objects (coalton-package)
   (let ((package (lisp-package coalton-package)))
@@ -431,11 +471,18 @@
   (documentation (coalton-macro-name x) 'function))
 
 (defmethod object-aname ((x coalton-macro))
-  (substitute
-   #\- #\/
-   (format nil "~(~A-~A-macro~)"
-           (package-name (symbol-package (coalton-macro-name x)))
-           (symbol-name (coalton-macro-name x)))))
+  (let ((name (coalton-macro-name x)))
+    (package-qualified-anchor
+     (symbol-package name)
+     (symbol-name name)
+     "macro")))
+
+(defmethod object-aname ((ty tc:tycon))
+  (let ((tcon-name (tc:tycon-name ty)))
+    (package-qualified-anchor
+     (symbol-package tcon-name)
+     (lookup-type-source-name tcon-name)
+     "type")))
 
 ;;; Public API
 
