@@ -12,6 +12,9 @@
    #:coalton-impl/typechecker/parse-type
    #:infer-predicate-kinds)
   (:import-from
+   #:coalton-impl/typechecker/tc-env
+   #:tc-env-extend-type-variable-scope)
+  (:import-from
    #:coalton-impl/typechecker/define
    #:make-tc-env
    #:check-bindings-for-invalid-recursion
@@ -29,6 +32,25 @@
    ))
 
 (in-package #:coalton-impl/typechecker/define-instance)
+
+(defun instance-scoped-method-substitutions (outer-method-types instance-scoped-tvars)
+  (declare (type list outer-method-types)
+           (type tc:tyvar-list instance-scoped-tvars)
+           (values tc:substitution-list &optional))
+  (let ((scoped-tvar-table (make-hash-table :test #'eq)))
+    (loop :for scoped-tvar :in instance-scoped-tvars
+          :for source-name := (tc:tyvar-source-name scoped-tvar)
+          :when source-name
+            :do (setf (gethash source-name scoped-tvar-table) scoped-tvar))
+    (loop :for method-tvar :in (tc:type-variables outer-method-types)
+          :for source-name := (tc:tyvar-source-name method-tvar)
+          :for scoped-tvar := (and source-name
+                                   (gethash source-name scoped-tvar-table))
+          :when (and scoped-tvar
+                     (not (tc:ty= method-tvar scoped-tvar)))
+            :collect (tc:make-substitution
+                      :from method-tvar
+                      :to scoped-tvar))))
 
 (defun toplevel-define-instance (instances env)
   (declare (type parser:toplevel-define-instance-list instances)
@@ -215,7 +237,7 @@
            (loop :with table := (make-hash-table :test #'eq)
                  :for method :in (tc:ty-class-unqualified-methods class)
                  :do (setf (gethash (tc:ty-class-method-name method) table)
-                           (tc:ty-class-method-type method))
+                           method)
                  :finally (return table))))
 
     ;; Check for superclasses and check the context of superinstances
@@ -279,29 +301,69 @@
                           (tc-note unparsed-instance "The method ~S is not defined" name)))
 
     (let* ((methods (loop :with table := (make-hash-table :test #'eq)
+                          :with instance-scoped-tvars := (tc:type-variables (cons pred context))
 
                           :for method :in (parser:toplevel-define-instance-methods unparsed-instance)
                           :for name := (parser:node-variable-name (parser:instance-method-definition-name method))
 
-                          :for class-method-scheme := (gethash name method-table)
-                          :for class-method-qual-ty := (tc:fresh-inst class-method-scheme)
+                          :for class-method := (gethash name method-table)
+                          :for class-method-scheme := (tc:ty-class-method-type class-method)
+                          :for class-method-outer-tvars := (tc:ty-class-method-outer-tvars class-method)
+                          :for class-method-explicit-p := (tc:ty-scheme-explicit-p class-method-scheme)
+                          :for class-method-tvars := (and class-method-explicit-p
+                                                          (tc:ty-scheme-instantiation-types class-method-scheme))
+                          :for class-method-qual-ty
+                            := (if class-method-explicit-p
+                                   (tc:instantiate class-method-tvars
+                                                   (tc:ty-scheme-type class-method-scheme))
+                                   (tc:fresh-inst class-method-scheme))
+                          :for scoped-method-tvars
+                            := (if class-method-explicit-p
+                                   (mapcar (lambda (tvar)
+                                             (tc:apply-substitution instance-subs tvar))
+                                           class-method-tvars)
+                                   nil)
+                          :for scoped-outer-method-tvars
+                            := (mapcar (lambda (tvar)
+                                         (tc:apply-substitution instance-subs tvar))
+                                       class-method-outer-tvars)
                           :for class-method-constraints := (tc:qualified-ty-predicates class-method-qual-ty)
                           :for class-method-ty := (tc:qualified-ty-type class-method-qual-ty)
 
                           ;; NOTE: Instance methods type still do not contain the class predicate
                           :for instance-method-context := (append context class-method-constraints)
                           :for instance-method-qual-ty
-                            := (tc:apply-substitution instance-subs (tc:qualify instance-method-context class-method-ty))
-                          :for instance-method-scheme := (tc:quantify
-                                                          (tc:type-variables instance-method-qual-ty)
-                                                          instance-method-qual-ty)
+                            := (let* ((qual-ty (tc:apply-substitution
+                                                instance-subs
+                                                (tc:qualify instance-method-context class-method-ty)))
+                                      (scoped-subs
+                                        (instance-scoped-method-substitutions
+                                         scoped-outer-method-tvars
+                                         instance-scoped-tvars)))
+                                 (tc:apply-substitution scoped-subs qual-ty))
+                          :for instance-method-scheme
+                            := (if class-method-explicit-p
+                                   (tc:quantify-using-tvar-order
+                                    scoped-method-tvars
+                                    instance-method-qual-ty
+                                    t)
+                                   (tc:quantify
+                                    (set-difference
+                                     (tc:type-variables instance-method-qual-ty)
+                                     instance-scoped-tvars
+                                     :test #'tc:ty=)
+                                    instance-method-qual-ty))
+                          :for instance-method-env
+                            := (tc-env-extend-type-variable-scope
+                                (make-tc-env :env env)
+                                instance-scoped-tvars)
 
                           :do (multiple-value-bind (preds method subs)
                                   (infer-expl-binding-type method
                                                            instance-method-scheme
                                                            (source:location method)
                                                            nil
-                                                           (make-tc-env :env env))
+                                                           instance-method-env)
 
                                 ;; Deferred predicates should always be null
                                 (unless (null preds)

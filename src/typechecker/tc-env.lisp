@@ -47,9 +47,8 @@
   (declare (type tc-env env)
            (values tc:tyvar-list &optional))
   (remove-duplicates
-   (loop :for tyvar :being :the :hash-values :of (tc-env-typevar-table env)
-         :when (tc:tyvar-p tyvar)
-           :collect tyvar)
+   (loop :for type :being :the :hash-values :of (tc-env-typevar-table env)
+         :append (tc:type-variables type))
    :test #'tc:ty=))
 
 (defun tc-env-parser-env (env)

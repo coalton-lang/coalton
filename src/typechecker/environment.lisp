@@ -84,6 +84,7 @@
    #:make-ty-class-method                   ; CONSTRUCTOR
    #:ty-class-method-name                   ; ACCESSOR
    #:ty-class-method-type                   ; ACCESSOR
+   #:ty-class-method-outer-tvars            ; ACCESSOR
    #:ty-class                               ; STRUCT
    #:make-ty-class                          ; CONSTRUCTOR
    #:ty-class-name                          ; ACCESSOR
@@ -699,6 +700,7 @@
 (defstruct ty-class-method
   (name      (util:required 'name)      :type symbol           :read-only t)
   (type      (util:required 'type)      :type ty-scheme        :read-only t)
+  (outer-tvars nil                       :type list             :read-only t)
   (docstring (util:required 'docstring) :type (or null string) :read-only t))
 
 (defmethod source:docstring ((self ty-class-method))
@@ -763,6 +765,7 @@
    :unqualified-methods (mapcar (lambda (method)
                                   (make-ty-class-method :name (ty-class-method-name method)
                                                         :type (apply-substitution subst-list (ty-class-method-type method))
+                                                        :outer-tvars (apply-substitution subst-list (ty-class-method-outer-tvars method))
                                                         :docstring (ty-class-method-docstring method)))
                                 (ty-class-unqualified-methods class))
    :codegen-sym (ty-class-codegen-sym class)
