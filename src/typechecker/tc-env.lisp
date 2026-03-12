@@ -1,7 +1,8 @@
 (defpackage #:coalton-impl/typechecker/tc-env
   (:use
    #:cl
-   #:coalton-impl/typechecker/parse-type)
+   #:coalton-impl/typechecker/parse-type
+   #:coalton-impl/typechecker/partial-type-env)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
@@ -12,11 +13,14 @@
    #:tc-env                             ; STRUCT
    #:tc-env-env                         ; ACCESSOR
    #:tc-env-ty-table                    ; ACCESSOR
+   #:tc-env-typevar-table               ; ACCESSOR
    #:tc-env-add-variable                ; FUNCTION
    #:tc-env-lookup-value                ; FUNCTION
    #:tc-env-add-definition              ; FUNCTION
    #:tc-env-bound-variables             ; FUNCTION
    #:tc-env-bindings-variables          ; FUNCTION
+   #:tc-env-parser-env                  ; FUNCTION
+   #:tc-env-extend-type-variable-scope  ; FUNCTION
    #:tc-env-replace-type                ; FUNCTION
    ))
 
@@ -33,7 +37,42 @@
   (env      (util:required 'env)          :type tc:environment :read-only t)
 
   ;; Hash table mapping variables bound in the current translation unit to types
-  (ty-table (make-hash-table :test #'eq)  :type hash-table     :read-only t))
+  (ty-table (make-hash-table :test #'eq)  :type hash-table     :read-only t)
+
+  ;; Hash table mapping scoped type variable names to the lexical
+  ;; type variables they denote.
+  (typevar-table (make-hash-table :test #'eq) :type hash-table :read-only t))
+
+(defun tc-env-scoped-type-variables (env)
+  (declare (type tc-env env)
+           (values tc:tyvar-list &optional))
+  (remove-duplicates
+   (loop :for type :being :the :hash-values :of (tc-env-typevar-table env)
+         :append (tc:type-variables type))
+   :test #'tc:ty=))
+
+(defun tc-env-parser-env (env)
+  (declare (type tc-env env)
+           (values partial-type-env &optional))
+  (let ((partial-env (make-partial-type-env :env (tc-env-env env))))
+    (maphash
+     (lambda (name tyvar)
+       (setf (gethash name (partial-type-env-ty-table partial-env)) tyvar))
+     (tc-env-typevar-table env))
+    partial-env))
+
+(defun tc-env-extend-type-variable-scope (env tyvars)
+  (declare (type tc-env env)
+           (type tc:tyvar-list tyvars)
+           (values tc-env &optional))
+  (let ((typevar-table (alexandria:copy-hash-table (tc-env-typevar-table env))))
+    (loop :for tyvar :in tyvars
+          :for source-name := (tc:tyvar-source-name tyvar)
+          :when source-name
+            :do (setf (gethash source-name typevar-table) tyvar))
+    (make-tc-env :env (tc-env-env env)
+                 :ty-table (tc-env-ty-table env)
+                 :typevar-table typevar-table)))
 
 (defun tc-env-add-variable (env name)
   "Add a variable named NAME to ENV and return the scheme."
@@ -104,13 +143,15 @@
            (values tc:tyvar-list))
 
   (remove-duplicates
-   (loop :with table := (tc-env-ty-table env)
-         :for name :in names
-         :for ty := (gethash name table)
-         :unless ty
-           :do (util:coalton-bug "Unknown binding ~A" name)
-         :append (tc:type-variables ty))
-   :test #'eq))
+   (append
+    (loop :with table := (tc-env-ty-table env)
+          :for name :in names
+          :for ty := (gethash name table)
+          :unless ty
+            :do (util:coalton-bug "Unknown binding ~A" name)
+          :append (tc:type-variables ty))
+    (tc-env-scoped-type-variables env))
+   :test #'tc:ty=))
 
 (defun tc-env-replace-type (env name scheme)
   (declare (type tc-env env)
@@ -130,9 +171,18 @@
   (maphash
    (lambda (key value)
      (setf (gethash key (tc-env-ty-table env)) (tc:apply-substitution subs value)))
-   (tc-env-ty-table env)))
+   (tc-env-ty-table env))
+  (maphash
+   (lambda (key value)
+     (setf (gethash key (tc-env-typevar-table env))
+           (tc:apply-substitution subs value)))
+   (tc-env-typevar-table env)))
 
 (defmethod tc:type-variables ((env tc-env))
   "Returns all of the type variables of the types being checked in ENV. Does not return type variables from the inner main environment because it should not contain any free type variables."
-  (loop :for ty :being :the :hash-values :of (tc-env-ty-table env)
-        :append (tc:type-variables ty)))
+  (remove-duplicates
+   (append
+    (loop :for ty :being :the :hash-values :of (tc-env-ty-table env)
+          :append (tc:type-variables ty))
+    (tc-env-scoped-type-variables env))
+   :test #'tc:ty=))

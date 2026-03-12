@@ -49,6 +49,7 @@
   (:export
    #:-> #:→
    #:=> #:⇒
+   #:forall
    #:∀
    #:Unit
    #:Void

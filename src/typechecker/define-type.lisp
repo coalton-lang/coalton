@@ -241,6 +241,20 @@ This is conservative and intentionally aligns with mutable native wrappers."
                     :do (tc:tc-error "Unused type variable in define-type-alias"
                                      (tc:tc-note defined-var "unused variable defined here"))))
 
+  ;; Ensure that every type variable used in a type alias is declared
+  ;; by the alias head. This runs after the unused-variable check so
+  ;; existing diagnostics keep the same precedence when both apply.
+  (loop :for type :in type-aliases
+        :for defined-vars := (mapcar #'parser:keyword-src-name
+                                     (parser:type-definition-vars type))
+        :do (loop :for used-var :in (parser:collect-type-variables
+                                     (parser:type-definition-aliased-type type))
+                  :unless (member (parser:tyvar-name used-var) defined-vars :test #'eq)
+                    :do (tc:tc-error "Unknown type variable"
+                                     (tc:tc-note used-var
+                                                 "Unknown type variable ~S"
+                                                 (parser:tyvar-name used-var)))))
+
   (let* ((type-names (mapcar (alexandria:compose #'parser:identifier-src-name
                                                  #'parser:type-definition-name)
                              (append types structs type-aliases)))
@@ -275,14 +289,19 @@ This is conservative and intentionally aligns with mutable native wrappers."
            ;; Register each type in the partial type env
            :do (loop :for type :in scc
                      :for name := (parser:identifier-src-name (parser:type-definition-name type))
-                     :for vars := (mapcar #'parser:keyword-src-name (parser:type-definition-vars type))
+                     :for vars := (parser:type-definition-vars type)
 
                      ;; Register each type's type variables in the environment. A
                      ;; mapping is stored from (type-name, var-name) to kind-variable
                      ;; because type variable names are not unique between define-types.
                      :for kvars
                        := (loop :for var :in vars
-                                :collect (tc:kind-of (partial-type-env-add-var partial-env var)))
+                                :collect (tc:kind-of
+                                          (partial-type-env-add-var
+                                           partial-env
+                                           (parser:keyword-src-name var)
+                                           (or (parser:keyword-src-source-name var)
+                                               (parser:keyword-src-name var)))))
 
                      :for kind := (if (typep type 'parser:toplevel-define-type-alias)
                                       ;; Type aliases may not alias a type of kind *.
@@ -701,9 +720,11 @@ This is conservative and intentionally aligns with mutable native wrappers."
            (util:find-symbol "LISPTYPE" types-package))
          (tvars
            (loop :for i :below (tc:kind-arity (tc:tycon-kind (type-definition-type type)))
+                 :for tvar-name := (alexandria:format-symbol util:+keyword-package+ "~d" i)
                  :collect (parser:make-tyvar
                            :location location
-                           :name (alexandria:format-symbol util:+keyword-package+ "~d" i))))
+                           :name tvar-name
+                           :source-name tvar-name)))
          (ty
            (parser:make-tycon :location location
                               :name (type-definition-name type))))

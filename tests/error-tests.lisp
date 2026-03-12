@@ -82,3 +82,126 @@ help: message 5
    |
  5 |    (cf (:a -> Tuple Integer Integer -> List Tuple Integer Integer)))
    |                                             ^^^^^ Expected kind '*' but got kind '* → (* → *)'"))
+
+(deftest explicit-forall-rejects-unbound-type-variables ()
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-explicit-forall-errors)
+
+(declare bad (forall (:a) (:a -> :b)))
+
+(define bad
+  (fn (x)
+    x))")))
+    (is (search "Unknown type variable :B" msg))
+    (is (search "(declare bad (forall (:a) (:a -> :b)))" msg))))
+
+(deftest explicit-forall-warns-on-unused-type-variables ()
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-explicit-forall-errors)
+
+(declare good (forall (:a :b) (:a -> :a)))
+
+(define good
+  (fn (x)
+    x))")))
+    (is (search "Unused quantified type variable" msg))
+    (is (search "quantified type variable :B is not used in the declared type" msg))))
+
+(deftest explicit-forall-rejects-duplicate-type-variables ()
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-explicit-forall-errors)
+
+(declare bad (forall (:a :a) (:a -> :a)))
+
+(define bad
+  (fn (x)
+    x))")))
+    (is (search "Duplicate quantified type variable" msg))
+    (is (search "first binding here" msg))
+    (is (search "second binding here" msg))))
+
+(deftest nested-forall-rejects-duplicate-type-variables ()
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-explicit-forall-errors)
+
+(declare bad (forall (:a) (forall (:a) (:a -> :a))))
+
+(define bad
+  (fn (x)
+    x))")))
+    (is (search "Duplicate quantified type variable" msg))
+    (is (search "first binding here" msg))
+    (is (search "second binding here" msg))))
+
+(deftest implicit-outer-declarations-do-not-create-scoped-type-variables ()
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-scoped-forall-errors)
+
+(declare bad (:a -> :a))
+
+(define (bad x)
+  (let ((declare keep-item (forall (:b) :a -> :b -> :a))
+        (keep-item (fn (y _z) y)))
+    (keep-item x Unit)))")))
+    (is (search "Unknown type variable :A" msg))))
+
+(deftest implicit-outer-declarations-do-not-create-scoped-type-variables-via-proxy ()
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-scoped-forall-errors)
+
+(declare bad (:item -> :item))
+
+(define (bad x)
+  (let ((declare reify (coalton/types:Proxy :item -> :item))
+        (reify (fn (p)
+                 (coalton/types:as-proxy-of x p))))
+    (reify (coalton/types:proxy-of x))))")))
+    (is (search "Declared type is too general" msg))
+    (is (search "(COALTON/TYPES:PROXY :ITEM) → :ITEM" msg))))
+
+(deftest implicit-class-method-binders-do-not-create-scoped-type-variables ()
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-scoped-forall-errors)
+
+(define-type (ScopedMethodWrap :f :a)
+  (ScopedMethodWrap (:f :a)))
+
+(define-class (ScopedMethodClass :wrapper)
+  (bad-scoped-method
+    ((:wrapper :item) -> (coalton/types:Proxy :item) -> (:wrapper :item))))
+
+(define-instance (ScopedMethodClass (ScopedMethodWrap :f))
+  (define (bad-scoped-method wrapped proxy)
+    (match wrapped
+      ((ScopedMethodWrap inner)
+       (let ((declare rebuild
+                     (forall (:ignored)
+                       (coalton/types:Proxy :ignored)
+                       -> (:f :item)
+                       -> (ScopedMethodWrap :f :item)))
+             (rebuild (fn (_other value)
+                        (ScopedMethodWrap (the (:f :item) value)))))
+         (rebuild proxy inner))))))")))
+    (is (search "Unknown type variable :ITEM" msg))))
+
+(deftest explicit-class-method-forall-rejects-duplicate-type-variables ()
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-scoped-forall-errors)
+
+(define-class (BadScopedMethodClass :wrapper)
+  (bad-scoped-method
+    (forall (:item :item)
+      ((:wrapper :item) -> (coalton/types:Proxy :item) -> (:wrapper :item)))))")))
+    (is (search "Duplicate quantified type variable" msg))
+    (is (search "first binding here" msg))
+    (is (search "second binding here" msg))))
+
+(deftest explicit-class-method-forall-rejects-unbound-type-variables ()
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-scoped-forall-errors)
+
+(define-class (BadScopedMethodClass :wrapper)
+  (bad-scoped-method
+    (forall (:item)
+      ((:wrapper :item) -> (coalton/types:Proxy :missing) -> (:wrapper :item)))))")))
+    (is (search "Unknown type variable :MISSING" msg))))
