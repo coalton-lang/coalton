@@ -46,8 +46,8 @@ component types."
     (%Complex :a :a))
 
   (define-instance (types:RuntimeRepr :t => types:RuntimeRepr (Complex :t))
-    (define (types:runtime-repr a)
-      (let ((inner-type (types:runtime-repr (types:proxy-inner a))))
+    (define (types:runtime-repr _)
+      (let ((inner-type (types:runtime-repr (the (types:Proxy :t) types:Proxy))))
         (lisp types:LispType (inner-type)
           (cl:if (cl:member inner-type *native-complex-types*)
                  `(cl:complex ,inner-type)

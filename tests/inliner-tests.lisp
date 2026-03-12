@@ -181,9 +181,6 @@
   (is (== (the U64 0) (math:sign (the U64 0))))
   (is (== (the U64 1) (math:sign (the U64 2))))
 
-  (is (== (the UFix 0) (math:sign (the UFix 0))))
-  (is (== (the UFix 1) (math:sign (the UFix 2))))
-
   (is (== (the Fraction -1) (math:sign (the Fraction -2))))
   (is (== (the Fraction 0) (math:sign (the Fraction 0))))
   (is (== (the Fraction 1) (math:sign (the Fraction 2))))

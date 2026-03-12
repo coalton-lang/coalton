@@ -9,6 +9,7 @@
 * [Standard Library Reference](https://coalton-lang.github.io/reference/) - external
 * [Configuring Coalton](./configuring-coalton.md)
 * [Coalton-Lisp Interop](./coalton-lisp-interop.md)
+* [Using `coalton/doc`](./using-coalton-doc.md)
 * [Intro to Coalton Testing](./intro-to-coalton-testing.md)
 
 ## Style

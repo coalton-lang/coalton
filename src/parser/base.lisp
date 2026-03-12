@@ -14,6 +14,7 @@
    #:keyword-src                        ; STRUCT
    #:make-keyword-src                   ; CONSTRUCTOR
    #:keyword-src-name                   ; ACCESSOR
+   #:keyword-src-source-name            ; ACCESSOR
    #:keyword-src-list                   ; TYPE
    #:identifier-src                     ; STRUCT
    #:make-identifier-src                ; CONSTRUCTOR
@@ -49,8 +50,11 @@
 
 (defstruct (keyword-src
             (:copier nil))
-  (name     (util:required 'name)     :type keyword :read-only t)
-  (location (util:required 'location) :type source:location :read-only t))
+  (name        (util:required 'name)      :type keyword           :read-only t)
+  ;; The original source spelling survives parser renaming and is reused for
+  ;; later printing of programmer-written type variables.
+  (source-name nil                        :type (or null keyword) :read-only t)
+  (location    (util:required 'location)  :type source:location   :read-only t))
 
 (defmethod source:location ((self keyword-src))
   (keyword-src-location self))

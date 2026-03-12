@@ -14,6 +14,7 @@
    #:partial-type-env-ty-table          ; ACCESSOR
    #:partial-type-env-vars-table        ; ACCESSOR
    #:partial-type-env-add-var           ; FUNCTION
+   #:partial-type-env-ensure-var        ; FUNCTION
    #:partial-type-env-lookup-var        ; FUNCTION
    #:partial-type-env-add-type          ; FUNCTION
    #:partial-type-env-replace-type      ; FUNCTION
@@ -34,11 +35,29 @@
   (ty-table    (make-hash-table :test #'eq) :type hash-table     :read-only t)
   (class-table (make-hash-table :test #'eq) :type hash-table     :read-only t))
 
-(defun partial-type-env-add-var (env var)
+(defun partial-type-env-add-var (env var &optional (source-name var))
+  "Add a fresh type variable binding for VAR to ENV.
+
+SOURCE-NAME preserves the programmer-written binder name for later
+pretty printing and documentation. This function always creates a new
+type variable and overwrites any existing binding for VAR."
   (declare (type partial-type-env env)
            (type symbol var)
            (values tc:tyvar))
-  (setf (gethash var (partial-type-env-ty-table env)) (tc:make-variable (tc:make-kvariable))))
+  (setf (gethash var (partial-type-env-ty-table env))
+        (tc:make-variable (tc:make-kvariable) source-name)))
+
+(defun partial-type-env-ensure-var (env var &optional (source-name var))
+  "Return the existing type variable for VAR in ENV, or create one.
+
+SOURCE-NAME is only used when a new variable must be created. This is
+the helper used while parsing types so repeated occurrences of the same
+binder share a single type variable."
+  (declare (type partial-type-env env)
+           (type symbol var)
+           (values tc:tyvar))
+  (or (gethash var (partial-type-env-ty-table env))
+      (partial-type-env-add-var env var source-name)))
 
 (defun partial-type-env-lookup-var (env var source)
   (declare (type partial-type-env env)

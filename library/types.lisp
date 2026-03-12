@@ -53,10 +53,12 @@ The compiler will auto-generate instances of `RuntimeRepr` for all defined types
     (runtime-repr (Proxy :a -> LispType)))
 
   (inline)
-  (declare runtime-repr-of (RuntimeRepr :a => :a -> LispType))
-  (define (runtime-repr-of x)
+  (declare runtime-repr-of
+    (forall (:a)
+      ((RuntimeRepr :a) => :a -> LispType)))
+  (define (runtime-repr-of _)
     "Returns the runtime representation of the type of the given value."
-    (runtime-repr (proxy-of x)))
+    (runtime-repr (the (Proxy :a) Proxy)))
 
   ;; Additional RuntimeRepr instances for early-defined types
 

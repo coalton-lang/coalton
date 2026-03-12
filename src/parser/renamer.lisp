@@ -656,6 +656,7 @@
       (if new-name
           (make-tyvar
            :name new-name
+           :source-name (tyvar-source-name ty)
            :location (source:location ty))
           ty)))
 
@@ -688,6 +689,8 @@
              (values qualified-ty))
 
     (make-qualified-ty
+     :explicit-p (qualified-ty-explicit-p qual-ty)
+     :explicit-variables (rename-type-variables-generic% (qualified-ty-explicit-variables qual-ty) ctx)
      :predicates (rename-type-variables-generic% (qualified-ty-predicates qual-ty) ctx)
      :type (rename-type-variables-generic% (qualified-ty-type qual-ty) ctx)
      :location (source:location qual-ty)))
@@ -710,6 +713,7 @@
       (if new-name
           (make-keyword-src
            :name new-name
+           :source-name (keyword-src-source-name keyword)
            :location (source:location keyword))
           keyword)))
 

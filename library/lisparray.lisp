@@ -37,34 +37,34 @@ These arrays are represented as possibly specialized `(cl:simple-array <type> (c
 Whether or not the arrays are specialized depends on the underlying Lisp implementation. Consult `cl:upgraded-array-element-type` to determine whether `LispArray` may get specialized.")
 
   (define-instance (types:RuntimeRepr :t => types:RuntimeRepr (LispArray :t))
-    (define (types:runtime-repr v)
-      (let ((element-type (types:runtime-repr (types:proxy-inner v))))
+    (define (types:runtime-repr _)
+      (let ((element-type (types:runtime-repr (the (types:Proxy :t) types:Proxy))))
         (lisp types:LispType (element-type)
           `(cl:simple-array ,element-type (cl:*))))))
 
-  (declare make (types:RuntimeRepr :t => UFix -> :t -> LispArray :t))
+  (declare make
+    (forall (:t)
+      ((types:RuntimeRepr :t) => UFix -> :t -> LispArray :t)))
   (define (make n x)
     "Make a new `LispArray` of length `n` initialized to `x`.
 
 If the type of `x` represents a specialized array "
     ;; FIXME: how can we get this statically?
-    (let ((type (types:runtime-repr (types:proxy-of x))))
+    (let ((type (types:runtime-repr (the (types:Proxy :t) types:Proxy))))
       (lisp (LispArray :t) (n x type)
         (cl:make-array n :element-type type :initial-element x))))
 
-  (declare make-uninitialized (types:RuntimeRepr :t => UFix -> LispArray :t))
+  (declare make-uninitialized
+    (forall (:t)
+      ((types:RuntimeRepr :t) => UFix -> LispArray :t)))
   (define (make-uninitialized n)
     "Make a new LispArray of length `n` that can store elements of type `:t`.
 
 WARNING: The consequences are undefined if an uninitialized element is read before being set.
 "
-    (let p = types:Proxy)
-    (let p_ = (types:proxy-inner p))
-    (let type = (types:runtime-repr p_))
-    (types:as-proxy-of
-     (lisp (LispArray :t) (n type)
-       (cl:make-array n :element-type type))
-     p))
+    (let type = (types:runtime-repr (the (types:Proxy :t) types:Proxy)))
+    (lisp (LispArray :t) (n type)
+      (cl:make-array n :element-type type)))
 
   (inline)
   (declare length (LispArray :t -> UFix))
@@ -98,7 +98,7 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
   (define-instance (types:RuntimeRepr :t => Into (List :t) (LispArray :t))
     (inline)
     (define (into xs)
-      (let ((type (types:runtime-repr (types:proxy-inner (types:proxy-of xs)))))
+      (let ((type (types:runtime-repr (the (types:Proxy :t) types:Proxy))))
         (lisp (LispArray :t) (xs type)
           (cl:make-array (cl:length xs) :element-type type :initial-contents xs)))))
 
@@ -231,4 +231,3 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/LISPARRAY")
-

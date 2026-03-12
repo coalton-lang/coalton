@@ -663,7 +663,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node-lisp tc:substitution-list &optional))
 
-    (let ((declared-ty (parse-type (parser:node-lisp-type node) (tc-env-env env))))
+    (let ((declared-ty (parse-type (parser:node-lisp-type node)
+                                   (tc-env-parser-env env))))
 
       (handler-case
           (progn
@@ -918,7 +919,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node tc:substitution-list &optional))
 
-    (let ((declared-ty (parse-type (parser:node-the-type node) (tc-env-env env))))
+    (let ((declared-ty (parse-type (parser:node-the-type node)
+                                   (tc-env-parser-env env))))
 
       (multiple-value-bind (expr-ty preds accessors expr-node subs)
           (infer-expression-type (parser:node-the-expr node)
@@ -2189,7 +2191,7 @@ as a recursive function rather than a recursive value."
   (loop :for name :being :the :hash-keys :of dec-table
         :for unparsed-ty :being :the :hash-values :of dec-table
 
-        :for scheme := (parse-ty-scheme unparsed-ty (tc-env-env env))
+        :for scheme := (parse-ty-scheme unparsed-ty (tc-env-parser-env env))
         :do (tc-env-add-definition env name scheme))
 
   (when (and bindings
@@ -2287,18 +2289,29 @@ as a recursive function rather than a recursive value."
 
          (bound-variables (remove name (tc-env-bound-variables env) :test #'eq))
 
-         (fresh-qual-type (tc:fresh-inst declared-ty))
+         (declared-instantiation-types (tc:ty-scheme-instantiation-types declared-ty))
+         (fresh-qual-type (tc:instantiate declared-instantiation-types
+                                          (tc:ty-scheme-type declared-ty)))
          (fresh-type (tc:qualified-ty-type fresh-qual-type))
-         (fresh-preds (tc:qualified-ty-predicates fresh-qual-type)))
+         (fresh-preds (tc:qualified-ty-predicates fresh-qual-type))
+         (body-env
+           (if (tc:ty-scheme-explicit-p declared-ty)
+               (tc-env-extend-type-variable-scope
+                env
+                (remove-duplicates
+                 (remove-if-not #'tc:tyvar-p
+                                (tc:type-variables fresh-qual-type))
+                 :test #'tc:ty=))
+               env)))
 
     (multiple-value-bind (preds accessors binding-node subs)
         (infer-binding-type
          binding
          fresh-type                     ; unify against declared type
          subs
-         env)
+         body-env)
 
-      (tc:apply-substitution subs env)
+      (tc:apply-substitution subs body-env)
 
       (setf accessors (tc:apply-substitution subs accessors))
 
@@ -2323,10 +2336,13 @@ as a recursive function rather than a recursive value."
         (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) fresh-preds subs)))
         (setf preds (tc:apply-substitution subs preds))
         (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
+        (tc:apply-substitution subs body-env)
 
         (let* ((expr-type (tc:apply-substitution subs fresh-type))
                (expr-preds (tc:apply-substitution subs fresh-preds))
 
+               ;; Generalization should see outer scoped type variables, but not the
+               ;; explicit binders introduced by the declaration currently being checked.
                (env-tvars (tc-env-bindings-variables env bound-variables))
                (local-tvars (set-difference (remove-duplicates
                                              (append (tc:type-variables expr-type)
@@ -2334,9 +2350,21 @@ as a recursive function rather than a recursive value."
                                              :test #'tc:ty=)
                                             env-tvars
                                             :test #'tc:ty=))
+               (ordered-explicit-tvars
+                 (mapcar (lambda (declared-tvar)
+                           (tc:apply-substitution subs declared-tvar))
+                         declared-instantiation-types))
 
                (output-qual-type (tc:qualify expr-preds expr-type))
-               (output-scheme (tc:quantify local-tvars output-qual-type)))
+               (output-scheme (if (tc:ty-scheme-explicit-p declared-ty)
+                                  (tc:quantify-using-tvar-order
+                                   (remove-if-not
+                                    (lambda (declared-tvar)
+                                      (find declared-tvar local-tvars :test #'tc:ty=))
+                                    ordered-explicit-tvars)
+                                   output-qual-type
+                                   t)
+                                  (tc:quantify local-tvars output-qual-type))))
 
           (let* ((expr-preds (tc:apply-substitution subs expr-preds))
                  (preds (tc:apply-substitution subs preds))
@@ -2443,12 +2471,14 @@ as a recursive function rather than a recursive value."
                   (error-unknown-pred (first deferred-preds)))
 
                 ;; Check that the declared and inferred schemes match
-                (unless (equalp declared-ty output-scheme)
-                  (tc-error "Declared type is too general"
-                            (tc-location location
-                                         "Declared type ~S is more general than inferred type ~S."
-                                         declared-ty
-                                         output-scheme)))
+                (let ((declared-output-scheme (tc:apply-substitution subs declared-ty)))
+                  (setf output-scheme (tc:apply-substitution subs output-scheme))
+                  (unless (tc:ty-scheme= declared-output-scheme output-scheme)
+                    (tc-error "Declared type is too general"
+                              (tc-location location
+                                           "Declared type ~S is more general than inferred type ~S."
+                                           declared-output-scheme
+                                           output-scheme))))
 
                 ;; Check for undeclared predicates
                 (when (not (null retained-preds))

@@ -315,7 +315,7 @@ summary{cursor:pointer;font-weight:600;padding:6px 0}
   (string (object-name pkg)))
 
 (defun package-id (pkg)
-  (format nil "~a-package" (string-downcase (package-name-string pkg))))
+  (object-aname pkg))
 
 (defun sidebar-html (packages)
   (with-html-string

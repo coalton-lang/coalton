@@ -169,7 +169,7 @@ error: Declared context is too general
   --> test:8:11
    |
  8 |  (declare f ((C :a :b) (D :a :c) => :a))
-   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^ the substitution :A +-> :B is determined for (C :C :A) (D :C :B) => :C by functional dependencies.
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^ the substitution :B +-> :C is determined for (C :A :B) (D :A :C) => :A by functional dependencies.
 
 ================================================================================
 109 Declared context can be reduced

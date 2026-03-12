@@ -61,7 +61,9 @@
      (mapcar (lambda (var)
                (parser:make-tyvar
                 :location (source:location def)
-                :name (parser:keyword-src-name var)))
+                :name (parser:keyword-src-name var)
+                :source-name (or (parser:keyword-src-source-name var)
+                                 (parser:keyword-src-name var))))
              (parser:type-definition-vars def)))))
 
 (defgeneric derive-methods (class def env)
