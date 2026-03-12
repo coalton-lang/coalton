@@ -30,7 +30,13 @@
 
 (defstruct partial-class
   (superclasses (util:required 'superclasses) :type tc:ty-predicate-list :read-only t)
-  (method-tys   (util:required 'method-tys)   :type tc:qualified-ty-list :read-only t))
+  (method-tys   (util:required 'method-tys)   :type list                  :read-only t))
+
+(defstruct partial-class-method
+  (type          (util:required 'type)        :type tc:qualified-ty :read-only t)
+  (outer-tvars   (util:required 'outer-tvars) :type tc:tyvar-list   :read-only t)
+  (explicit-tvars nil                         :type tc:tyvar-list   :read-only t)
+  (explicit-p    nil                          :type boolean          :read-only t))
 
 (defmethod tc:kind-variables-generic% ((partial partial-class))
   (nconc
@@ -44,6 +50,58 @@
   (make-partial-class
    :superclasses (tc:apply-ksubstitution ksubs (partial-class-superclasses partial))
    :method-tys (tc:apply-ksubstitution ksubs (partial-class-method-tys partial))))
+
+(defmethod tc:kind-variables-generic% ((method partial-class-method))
+  (nconc
+   (tc:kind-variables-generic% (partial-class-method-type method))
+   (tc:kind-variables-generic% (partial-class-method-outer-tvars method))
+   (tc:kind-variables-generic% (partial-class-method-explicit-tvars method))))
+
+(defmethod tc:apply-ksubstitution (ksubs (method partial-class-method))
+  (declare (type tc:ksubstitution-list ksubs)
+           (values partial-class-method))
+  (make-partial-class-method
+   :type (tc:apply-ksubstitution ksubs (partial-class-method-type method))
+   :outer-tvars (tc:apply-ksubstitution ksubs (partial-class-method-outer-tvars method))
+   :explicit-tvars (tc:apply-ksubstitution ksubs (partial-class-method-explicit-tvars method))
+   :explicit-p (partial-class-method-explicit-p method)))
+
+(defun partial-class-method-local-tvars (method)
+  (declare (type partial-class-method method)
+           (values tc:tyvar-list &optional))
+  (set-difference (tc:type-variables (partial-class-method-type method))
+                  (partial-class-method-outer-tvars method)
+                  :test #'tc:ty=))
+
+(defun make-unqualified-class-method-scheme (method)
+  (declare (type partial-class-method method)
+           (values tc:ty-scheme &optional))
+  (if (partial-class-method-explicit-p method)
+      (tc:quantify-using-tvar-order
+       (partial-class-method-explicit-tvars method)
+       (partial-class-method-type method)
+       t)
+      (tc:quantify nil
+                   (partial-class-method-type method))))
+
+(defun make-qualified-class-method-scheme (class-pred method)
+  (declare (type tc:ty-predicate class-pred)
+           (type partial-class-method method)
+           (values tc:ty-scheme &optional))
+  (let* ((qual-ty (partial-class-method-type method))
+         (new-qual-ty (tc:qualify (cons class-pred (tc:qualified-ty-predicates qual-ty))
+                                  (tc:qualified-ty-type qual-ty)))
+         (ordered-tvars (remove-duplicates
+                         (append (tc:type-variables class-pred)
+                                 (partial-class-method-outer-tvars method)
+                                 (if (partial-class-method-explicit-p method)
+                                     (partial-class-method-explicit-tvars method)
+                                     (partial-class-method-local-tvars method)))
+                         :test #'tc:ty=)))
+    (tc:quantify-using-tvar-order
+     ordered-tvars
+     new-qual-ty
+     (partial-class-method-explicit-p method))))
 
 ;;;
 ;;; Entrypoint
@@ -173,11 +231,14 @@
 
                  :for class-name := (parser:identifier-src-name (parser:toplevel-define-class-name class))
 
-                 :for vars := (mapcar #'parser:keyword-src-name
-                                      (parser:toplevel-define-class-vars class))
+                 :for vars := (parser:toplevel-define-class-vars class)
 
                  :for tvars := (loop :for var :in vars
-                                     :collect (partial-type-env-add-var partial-env var))
+                                     :collect (partial-type-env-add-var
+                                               partial-env
+                                               (parser:keyword-src-name var)
+                                               (or (parser:keyword-src-source-name var)
+                                                   (parser:keyword-src-name var))))
 
                  :for pred := (tc:make-ty-predicate
                                :class class-name
@@ -220,10 +281,10 @@
                                         (parser:toplevel-define-class-methods class))
 
            :for unqualifed-methods
-             := (loop :for method-ty :in (partial-class-method-tys partial)
+             := (loop :for method-info :in (partial-class-method-tys partial)
                       :for method-name :in method-names
 
-                      :collect (cons method-name method-ty))
+                      :collect (cons method-name (partial-class-method-type method-info)))
 
            :for superclass-dict
              := (loop :for super :in (partial-class-superclasses partial)
@@ -253,14 +314,15 @@
                   :superclasses (partial-class-superclasses partial)
                   :class-variables class-vars
                   :fundeps fundeps
-                  :unqualified-methods (loop :for method-ty :in (partial-class-method-tys partial)
+                  :unqualified-methods (loop :for method-info :in (partial-class-method-tys partial)
                                              :for method :in (parser:toplevel-define-class-methods class)
 
                                              :for method-name := (parser:identifier-src-name
                                                                   (parser:method-definition-name method))
 
                                              :collect (tc:make-ty-class-method :name method-name
-                                                                               :type (tc:quantify nil method-ty)
+                                                                               :type (make-unqualified-class-method-scheme method-info)
+                                                                               :outer-tvars (partial-class-method-outer-tvars method-info)
                                                                                :docstring (source:docstring method)))
                   :codegen-sym codegen-sym
                   :superclass-dict superclass-dict
@@ -268,11 +330,8 @@
                   :docstring (source:docstring class)
                   :location (source:location class))
 
-           :for method-tys := (loop :for (name . qual-ty) :in unqualifed-methods
-                                    :for type := (tc:qualified-ty-type qual-ty)
-                                    :for preds := (tc:qualified-ty-predicates qual-ty)
-                                    :for new-qual-ty := (tc:qualify (cons pred preds) type)
-                                    :collect (tc:quantify (tc:type-variables new-qual-ty) new-qual-ty))
+           :for method-tys := (loop :for method-info :in (partial-class-method-tys partial)
+                                    :collect (make-qualified-class-method-scheme pred method-info))
 
            :for class-arity := (+ (length (partial-class-superclasses partial))
                                   (length method-tys))
@@ -351,7 +410,9 @@
          (superclass-extra-tyvars
            (loop :for tvar :in superclass-tyvars
                  :unless (member (parser:tyvar-name tvar) var-names :test #'eq)
-                   :collect tvar)))
+                   :collect tvar))
+         (outer-var-names (append var-names
+                                  (mapcar #'parser:tyvar-name superclass-extra-tyvars))))
 
     ;; Ensure fundeps don't have duplicate variables
     (labels ((check-duplicate-fundep-variables (vars)
@@ -380,7 +441,10 @@
     ;; Superclass predicates may reference additional type variables.
     ;; Add them now so infer-predicate-kinds can validate them.
     (loop :for tvar :in superclass-extra-tyvars
-          :do (partial-type-env-add-var env (parser:tyvar-name tvar)))
+          :do (partial-type-env-add-var env
+                                        (parser:tyvar-name tvar)
+                                        (or (parser:tyvar-source-name tvar)
+                                            (parser:tyvar-name tvar))))
 
     (let* ((fundeps
              (loop :for fundep :in (parser:toplevel-define-class-fundeps class)
@@ -401,6 +465,7 @@
              (loop :for method :in (parser:toplevel-define-class-methods class)
 
                    :for method-ty := (parser:method-definition-type method)
+                   :for method-explicit-p := (parser:qualified-ty-explicit-p method-ty)
 
                    ;; Type variables referenced in ty
                    :for method-tyvars
@@ -410,6 +475,17 @@
                          :key #'parser:tyvar-name)
 
                    :for method-tyvar-names := (mapcar #'parser:tyvar-name method-tyvars)
+                   :for method-tyvar-source-names
+                     := (mapcar (lambda (tyvar)
+                                  (or (parser:tyvar-source-name tyvar)
+                                      (parser:tyvar-name tyvar)))
+                                method-tyvars)
+                   :for method-tyvar-source-table
+                     := (loop :with table := (make-hash-table :test #'eq)
+                              :for name :in method-tyvar-names
+                              :for source-name :in method-tyvar-source-names
+                              :do (setf (gethash name table) source-name)
+                              :finally (return table))
 
                    ;; Type variables referenced in ty as well as the class predicate
                    :for known-method-tyvars
@@ -421,6 +497,15 @@
                                   :into known-method-tyvars
                               :finally (return (mapcar (alexandria:curry #'tc:apply-ksubstitution ksubs)
                                                        known-method-tyvars)))
+                   :for outer-method-tyvars
+                     := (loop :for tyvar :in method-tyvars
+                              :for name :in method-tyvar-names
+                              :when (member name outer-var-names :test #'eq)
+                                :collect (handler-case (partial-type-env-lookup-var env name tyvar)
+                                           (error () (util:coalton-bug "missing type variable")))
+                                  :into outer-method-tyvars
+                              :finally (return (mapcar (alexandria:curry #'tc:apply-ksubstitution ksubs)
+                                                       outer-method-tyvars)))
 
                    ;; Ensure that methods are not ambiguous
                    :unless (or
@@ -448,19 +533,28 @@
                                       (tc:collect-fundep-vars (partial-type-env-env env) preds)
                                       :test #'tc:ty=)
                                      :test #'tc:ty=))
-                     :do (tc-error "Ambiguous method"
-                                   (tc-note method
-                                            "the method is ambiguous"))
+                   :do (tc-error "Ambiguous method"
+                                  (tc-note method
+                                           "the method is ambiguous"))
 
                    ;; Add new type variables to the environment
-                   :do (loop :for new-method-tyvar-name
-                               :in (set-difference method-tyvar-names var-names :test #'eq)
-                             :do (partial-type-env-add-var env new-method-tyvar-name))
+                   :do (unless method-explicit-p
+                         (loop :for new-method-tyvar-name
+                                 :in (set-difference method-tyvar-names var-names :test #'eq)
+                               :do (partial-type-env-add-var
+                                    env
+                                    new-method-tyvar-name
+                                    (or (gethash new-method-tyvar-name method-tyvar-source-table)
+                                        new-method-tyvar-name))))
 
-                   :collect (multiple-value-bind (method-ty_ ksubs_)
-                                (infer-type-kinds method-ty tc:+kstar+ ksubs env)
+                   :collect (multiple-value-bind (method-ty_ explicit-tvars explicit-p ksubs_)
+                                (parse-qualified-type-info method-ty env ksubs nil)
                               (setf ksubs ksubs_)
-                              (apply-type-alias-substitutions method-ty_ method-ty env)))))
+                              (make-partial-class-method
+                               :type method-ty_
+                               :outer-tvars outer-method-tyvars
+                               :explicit-tvars explicit-tvars
+                               :explicit-p explicit-p)))))
 
       (values (make-partial-class :superclasses preds
                                   :method-tys method-tys)

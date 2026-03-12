@@ -14,6 +14,8 @@
    #:make-tyvar                         ; CONSTRUCTOR
    #:tyvar-id                           ; ACCESSOR
    #:tyvar-kind                         ; ACCESSOR
+   #:tyvar-binding-id                   ; ACCESSOR
+   #:tyvar-source-name                  ; ACCESSOR
    #:tyvar-p                            ; FUNCTION
    #:tyvar-list                         ; TYPE
    #:tycon                              ; STRUCT
@@ -29,6 +31,8 @@
    #:tgen                               ; STRUCT
    #:make-tgen                          ; CONSTRUCTOR
    #:tgen-id                            ; ACCESSOR
+   #:tgen-binding-id                    ; ACCESSOR
+   #:tgen-source-name                   ; ACCESSOR
    #:tgen-p                             ; FUNCTION
    #:make-variable                      ; FUNCTION
    #:fresh-type-renamer                 ; FUNCTION
@@ -139,8 +143,15 @@
   '(satisfies ty-list-p))
 
 (defstruct (tyvar (:include ty))
-  (id   (util:required 'id)   :type fixnum :read-only t)
-  (kind (util:required 'kind) :type kind   :read-only t))
+  (id          (util:required 'id)      :type fixnum             :read-only t)
+  (kind        (util:required 'kind)    :type kind               :read-only t)
+  ;; Preserve binder identity across quantification/fresh-inst so scoped
+  ;; explicit forall variables can be matched without conflating shadowed
+  ;; variables that happen to reuse the same source name.
+  (binding-id  nil                      :type (or null symbol)   :read-only t)
+  ;; The original programmer-written name, if this type variable originated
+  ;; from source rather than anonymous inference state.
+  (source-name nil                      :type (or null symbol)   :read-only t))
 
 (defun tyvar-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -158,7 +169,12 @@
   (to   (util:required 'to)   :type ty :read-only t))
 
 (defstruct (tgen (:include ty))
-  (id (util:required 'id) :type fixnum :read-only t))
+  (id          (util:required 'id)      :type fixnum             :read-only t)
+  ;; When present, this records the original quantified binder identity.
+  (binding-id  nil                      :type (or null symbol)   :read-only t)
+  ;; Preserve source binder names across quantification so fresh
+  ;; instantiation and printing can recover them later.
+  (source-name nil                      :type (or null symbol)   :read-only t))
 
 (defmethod make-load-form ((self tgen) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -172,27 +188,22 @@
 #+sbcl
 (declaim (sb-ext:always-bound *next-variable-id*))
 
-(declaim (ftype (function (&optional kind) tyvar) make-variable))
+(declaim (ftype (function (&optional kind (or null symbol) (or null symbol)) tyvar) make-variable))
 (declaim (inline make-variable))
-(defun make-variable (&optional (kind +kstar+))
-  "Create a fresh type variable with the specified kind.
+(defun make-variable (&optional (kind +kstar+) source-name binding-id)
+  "Create a fresh type variable with KIND and optional source metadata.
 
-KIND defaults to +kstar+ (* kind) for concrete types. The returned type variable
-has a globally unique ID that distinguishes it from all other variables created
-during compilation.
+SOURCE-NAME preserves the programmer-written binder for later pretty
+printing and documentation. BINDING-ID preserves the identity of an
+explicit binder across quantification and fresh instantiation, so
+shadowed binders that reuse the same printed name are still distinct.
 
-This function is the primary way to generate type variables during type inference.
-Each call returns a distinct variable, even if called with the same kind.
-
-Usage in type inference:
-- Generate unknowns to be unified with concrete types
-- Create placeholder types for function parameters
-- Represent polymorphic variables during scheme instantiation
-
-Examples:
-  (make-variable)          ; Creates :a with kind *
-  (make-variable +karrow+) ; Creates :b with kind * -> *"
-  (prog1 (make-tyvar :id *next-variable-id* :kind kind)
+Each call returns a variable with a globally unique inference ID, even
+when KIND, SOURCE-NAME, and BINDING-ID are the same."
+  (prog1 (make-tyvar :id *next-variable-id*
+                     :kind kind
+                     :binding-id binding-id
+                     :source-name source-name)
     (incf *next-variable-id*)))
 
 (declaim (ftype (function (tyvar) tyvar) fresh-type-renamer))
@@ -212,8 +223,11 @@ Example usage in scheme instantiation:
   Second instantiation: :c -> :c (where :c is fresh, distinct from :b)
 
 The function preserves the kind of the original variable, so if TYVAR has kind
-* -> *, the returned variable will also have kind * -> *."
-  (make-variable (kind-of tyvar)))
+* -> *, the returned variable will also have kind * -> *. It also preserves
+TYVAR's SOURCE-NAME and BINDING-ID metadata."
+  (make-variable (kind-of tyvar)
+                 (tyvar-source-name tyvar)
+                 (tyvar-binding-id tyvar)))
 
 ;;;
 ;;; Methods
@@ -283,7 +297,9 @@ Throws an error if applied to a malformed type application.")
   (make-tyvar
    :alias (mapcar (lambda (alias) (apply-ksubstitution subs alias)) (ty-alias type))
    :id (tyvar-id type)
-   :kind (apply-ksubstitution subs (tyvar-kind type))))
+   :kind (apply-ksubstitution subs (tyvar-kind type))
+   :binding-id (tyvar-binding-id type)
+   :source-name (tyvar-source-name type)))
 
 (defmethod apply-ksubstitution (subs (type tycon))
   (make-tycon
@@ -547,14 +563,14 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
   (:method ((type tapp))
     (remove-duplicates (append (type-variables (tapp-from type))
                                (type-variables (tapp-to type)))
-                       :test #'equalp
+                       :test #'ty=
                        :from-end t))
   ;; Otherwise, return nothing
   (:method ((type ty))
     nil)
   ;; Allow for calling on lists
   (:method ((type-list list))
-    (remove-duplicates (mapcan #'type-variables type-list) :test #'equalp :from-end t)))
+    (remove-duplicates (mapcan #'type-variables type-list) :test #'ty= :from-end t)))
 
 ;;;
 ;;; Pretty printing
@@ -577,18 +593,31 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
       (setf *pprint-variable-symbol-code* (char-code #\A))
       (incf *pprint-variable-symbol-suffix*))))
 
+(defun pprint-variable-name-used-p (name)
+  (and (boundp '*pprint-tyvar-dict*)
+       (loop :for value :being :the :hash-values :of *pprint-tyvar-dict*
+             :thereis (eq name (tycon-name value)))))
+
 (defun next-pprint-variable-as-tvar (&optional (kind +kstar+))
-  "Get the next type variable as a TVAR"
+  "Get the next unused pretty-print type variable as a TVAR."
   ;; This is an awful awful hack
-  (make-tycon :name (next-pprint-variable) :kind kind))
+  (loop :for name := (next-pprint-variable)
+        :unless (pprint-variable-name-used-p name)
+          :return (make-tycon :name name :kind kind)))
 
 (defun pprint-tvar (tvar)
   (unless (boundp '*pprint-tyvar-dict*)
     (util:coalton-bug "Unable to pretty print tvar outside pprint variable context"))
   (let ((value (gethash (tyvar-id tvar) *pprint-tyvar-dict*)))
     (or value
-        (setf (gethash (tyvar-id tvar) *pprint-tyvar-dict*)
-              (next-pprint-variable-as-tvar)))))
+        (let* ((preferred-name (tyvar-source-name tvar))
+               (pretty-tyvar
+                 (if (and preferred-name
+                          (not (pprint-variable-name-used-p preferred-name)))
+                     (make-tycon :name preferred-name :kind (tyvar-kind tvar))
+                     (next-pprint-variable-as-tvar (tyvar-kind tvar)))))
+          (setf (gethash (tyvar-id tvar) *pprint-tyvar-dict*)
+                pretty-tyvar)))))
 
 (defun pprint-ty (stream ty)
   (declare (type stream stream)

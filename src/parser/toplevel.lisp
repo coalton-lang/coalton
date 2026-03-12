@@ -1878,6 +1878,7 @@ consume all attributes")))
 
   (make-keyword-src
    :name (cst:raw form)
+   :source-name (cst:raw form)
    :location (form-location source form)))
 
 (defun parse-constructor (form enclosing-form docstring source)

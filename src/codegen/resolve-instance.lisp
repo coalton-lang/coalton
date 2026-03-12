@@ -117,7 +117,7 @@
            (type tc:environment env)
            (values list &optional))
 
-  (when (tc:type-predicate= pred ctx-pred)
+  (when (matching-context-predicate-p pred ctx-pred)
     (return-from lookup-pred (list (make-node-variable
                                     :type (tc:make-function-type
                                            (pred-type sub-pred env)
@@ -136,17 +136,19 @@
        superclass-ret))))
 
 (defun lookup-pred-base (pred ctx-pred ctx-name env)
-  (let ((node (make-node-variable
-               :type (pred-type ctx-pred env)
-               :value ctx-name)))
-    (when (tc:type-predicate= pred ctx-pred)
-      (return-from lookup-pred-base (list node)))
+  (when (matching-context-predicate-p pred ctx-pred)
+    (return-from lookup-pred-base
+      (list (make-node-variable
+             :type (pred-type pred env)
+             :value ctx-name))))
 
-    (let ((superclass-ret (superclass-accessors pred ctx-pred env)))
-
-
-      (when superclass-ret
-        (cons node superclass-ret)))))
+  (let ((superclass-ret (superclass-accessors pred ctx-pred env)))
+    (when superclass-ret
+      (cons
+       (make-node-variable
+        :type (pred-type ctx-pred env)
+        :value ctx-name)
+       superclass-ret))))
 
 (defun pred-from-context (name context)
   "Lookup the predicate called NAME in CONTEXT"
@@ -163,6 +165,41 @@
        :type (tc:function-type-to (node-type (car args)))
        :name (node-variable-value (car args))
        :dict (build-call (cdr args)))))
+
+(defun matching-context-type-p (type ctx-type)
+  (declare (type tc:ty type ctx-type)
+           (values boolean &optional))
+  (typecase type
+    (tc:tyvar
+     (and (typep ctx-type 'tc:tyvar)
+          (or (tc:ty= type ctx-type)
+              ;; Fresh instantiation gives each use fresh tyvar ids, but an
+              ;; explicit forall binder still carries its quantified binding
+              ;; identity across instantiations.
+              (and (tc:tyvar-binding-id type)
+                   (eq (tc:tyvar-binding-id type)
+                       (tc:tyvar-binding-id ctx-type))
+                   (equalp (tc:kind-of type)
+                           (tc:kind-of ctx-type))))))
+    (tc:tapp
+     (and (typep ctx-type 'tc:tapp)
+          (matching-context-type-p (tc:tapp-from type)
+                                   (tc:tapp-from ctx-type))
+          (matching-context-type-p (tc:tapp-to type)
+                                   (tc:tapp-to ctx-type))))
+    (t
+     (tc:ty= type ctx-type))))
+
+(defun matching-context-predicate-p (pred ctx-pred)
+  (declare (type tc:ty-predicate pred ctx-pred)
+           (values boolean &optional))
+  (and (eq (tc:ty-predicate-class pred)
+           (tc:ty-predicate-class ctx-pred))
+       (= (length (tc:ty-predicate-types pred))
+          (length (tc:ty-predicate-types ctx-pred)))
+       (every #'matching-context-type-p
+              (tc:ty-predicate-types pred)
+              (tc:ty-predicate-types ctx-pred))))
 
 (defun resolve-context-super (pred context env)
   "Search for PRED in all CONTEXT preds and return a node"

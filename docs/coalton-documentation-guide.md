@@ -95,6 +95,14 @@ Coalton `Struct`s can feature docstrings on both the overall definition and for 
 >
 > They do, however, show up in Coalton's own documentation generation.
 
+Generated type signatures preserve the programmer-written names of type
+variables. If you write an explicit `forall`, generated documentation will also
+preserve the binder order you wrote:
+
+```lisp
+(declare keep-first (forall (:left :right) :left -> :right -> :left))
+```
+
 ### `package`
 
 Coalton's native `package` form also takes a documentation string after the package name:
@@ -152,4 +160,3 @@ If you are not using slime (or emacs), you can use Lisp's native `(cl:describe '
 You may have noticed the backticks around certain symbols in these docstrings. 
 
 Backticks help symbols format correctly in documentation generation.
-

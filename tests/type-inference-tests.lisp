@@ -98,6 +98,198 @@
 
    '("a" . "(:a -> (List :a))")))
 
+(deftest test-explicit-forall-declarations ()
+  (check-coalton-types
+   "(declare choose (forall (:result :input) (:input -> :result -> :input)))
+    (define (choose x _y) x)"
+
+   '("choose" . "(forall (:result :input) (:input -> :result -> :input))"))
+
+  (check-coalton-types
+   "(declare keep-first (forall (:outer) (forall (:inner) (:outer -> :inner -> :outer))))
+    (define (keep-first x _y) x)"
+
+   '("keep-first" . "(forall (:outer :inner) (:outer -> :inner -> :outer))"))
+
+  (check-coalton-types
+   "(declare choose-short (forall (:result :input) :input -> :result -> :input))
+    (define (choose-short x _y) x)"
+
+   '("choose-short" . "(forall (:result :input) (:input -> :result -> :input))"))
+
+  (check-coalton-types
+   "(declare keep-first-short (forall (:outer) (forall (:inner) :outer -> :inner -> :outer)))
+    (define (keep-first-short x _y) x)"
+
+   '("keep-first-short" . "(forall (:outer :inner) (:outer -> :inner -> :outer))"))
+
+  (check-coalton-types
+   "(define (f x)
+      (let ((declare local-id (forall (:item) (:item -> :item)))
+            (local-id (fn (y) y)))
+        (local-id x)))"
+
+   '("f" . "(:a -> :a)"))
+
+  (check-coalton-types
+   "(declare scoped-local-implicit (forall (:item) :item -> :item))
+    (define (scoped-local-implicit x)
+      (let ((declare keep-item (Unit -> :item))
+            (keep-item (fn (_unit) (the :item x))))
+        (keep-item Unit)))"
+
+   '("scoped-local-implicit" . "(forall (:item) (:item -> :item))"))
+
+  (check-coalton-types
+   "(declare scoped-local-explicit (forall (:outer) :outer -> :outer))
+    (define (scoped-local-explicit x)
+      (let ((declare keep-outer (forall (:inner) :outer -> :inner -> :outer))
+            (keep-outer (fn (y _z) (lisp :outer (y) y))))
+        (keep-outer x Unit)))"
+
+   '("scoped-local-explicit" . "(forall (:outer) (:outer -> :outer))"))
+
+  (check-coalton-types
+   "(declare scoped-proxy-roundtrip (forall (:item) :item -> :item))
+    (define (scoped-proxy-roundtrip x)
+      (let ((declare reify (coalton/types:Proxy :item -> :item))
+            (reify (fn (p)
+                     (coalton/types:as-proxy-of
+                      (the :item x)
+                      p))))
+        (reify (coalton/types:proxy-of x))))"
+
+   '("scoped-proxy-roundtrip" . "(forall (:item) (:item -> :item))"))
+
+  (check-coalton-types
+   "(declare scoped-proxy-inner
+      (forall (:item)
+        coalton/types:Proxy (Optional :item) -> coalton/types:Proxy :item))
+    (define (scoped-proxy-inner maybe-proxy)
+      (let ((declare drop-outer
+                    (forall (:wrapper)
+                      coalton/types:Proxy (:wrapper :item)
+                      -> coalton/types:Proxy :item))
+            (drop-outer (fn (p)
+                          (coalton/types:proxy-inner p))))
+        (drop-outer maybe-proxy)))"
+
+   '("scoped-proxy-inner" . "(forall (:item) (coalton/types:Proxy (Optional :item) -> coalton/types:Proxy :item))"))
+
+  (check-coalton-types
+   "(define-type (ScopedMethodWrap :f :a)
+      (ScopedMethodWrap (:f :a)))
+
+    (define-class (ScopedMethodClass :wrapper)
+      (scoped-method
+        (forall (:item)
+          ((:wrapper :item) -> (coalton/types:Proxy :item) -> (:wrapper :item)))))
+
+    (define-instance (ScopedMethodClass (ScopedMethodWrap :f))
+      (define (scoped-method wrapped proxy)
+        (match wrapped
+          ((ScopedMethodWrap inner)
+           (let ((declare rebuild
+                         (forall (:ignored)
+                           (coalton/types:Proxy :ignored)
+                           -> (:f :item)
+                           -> (ScopedMethodWrap :f :item)))
+                 (rebuild (fn (_other value)
+                            (ScopedMethodWrap (the (:f :item) value)))))
+             (rebuild proxy inner))))))
+
+    (declare use-scoped-method
+      (forall (:f :item)
+        ((ScopedMethodWrap :f :item) -> (coalton/types:Proxy :item) -> (ScopedMethodWrap :f :item))))
+    (define (use-scoped-method wrapped proxy)
+      (scoped-method wrapped proxy))"
+
+   '("use-scoped-method" . "(forall (:f :item) ((ScopedMethodWrap :f :item) -> (coalton/types:Proxy :item) -> (ScopedMethodWrap :f :item)))"))
+
+  (check-coalton-types
+   "(define-type (ScopedMethodWrap :f :a)
+      (ScopedMethodWrap (:f :a)))
+
+    (define-class (ScopedLispMethodClass :wrapper)
+      (scoped-lisp-method
+        (forall (:item)
+          ((:wrapper :item) -> (coalton/types:Proxy :item) -> (:wrapper :item)))))
+
+    (define-instance (ScopedLispMethodClass (ScopedMethodWrap :f))
+      (define (scoped-lisp-method wrapped _proxy)
+        (lisp (ScopedMethodWrap :f :item) (wrapped)
+          wrapped)))
+
+    (declare use-scoped-lisp-method
+      (forall (:f :item)
+        ((ScopedMethodWrap :f :item) -> (coalton/types:Proxy :item) -> (ScopedMethodWrap :f :item))))
+    (define (use-scoped-lisp-method wrapped proxy)
+      (scoped-lisp-method wrapped proxy))"
+
+   '("use-scoped-lisp-method" . "(forall (:f :item) ((ScopedMethodWrap :f :item) -> (coalton/types:Proxy :item) -> (ScopedMethodWrap :f :item)))"))
+
+  (check-coalton-types
+   "(define-type (ScopedConstraintBox :a)
+      (ScopedConstraintBox :a))
+
+    (define-class (ScopedConstraintMethodClass :wrapper)
+      (scoped-constrained-method
+        (forall (:item)
+          (Eq :item => (:wrapper :item) -> (coalton/types:Proxy :item) -> (:wrapper :item)))))
+
+    (define-instance (ScopedConstraintMethodClass ScopedConstraintBox)
+      (define (scoped-constrained-method wrapped proxy)
+        (match wrapped
+          ((ScopedConstraintBox inner)
+           (let ((declare rebuild
+                         (forall (:ignored)
+                           (Eq :item => (coalton/types:Proxy :ignored)
+                                       -> :item
+                                       -> Boolean)))
+                 (rebuild (fn (_other value)
+                            (== value inner))))
+             (if (rebuild proxy inner)
+                 wrapped
+                 (ScopedConstraintBox inner)))))))
+
+    (declare use-scoped-constrained-method
+      (forall (:item)
+        (Eq :item => (ScopedConstraintBox :item)
+                     -> (coalton/types:Proxy :item)
+                     -> (ScopedConstraintBox :item))))
+    (define (use-scoped-constrained-method wrapped proxy)
+      (scoped-constrained-method wrapped proxy))"
+
+   '("use-scoped-constrained-method" . "(forall (:item) (Eq :item => (ScopedConstraintBox :item) -> (coalton/types:Proxy :item) -> (ScopedConstraintBox :item)))"))
+
+  (check-coalton-types
+   "(define-type (ScopedMethodWrap :f :a)
+      (ScopedMethodWrap (:f :a)))
+
+    (define-class (ShadowedMethodClass :wrapper)
+      (shadowed-method
+        (forall (:item)
+          ((:wrapper :item) -> (coalton/types:Proxy Unit)))))
+
+    (define-instance (ShadowedMethodClass (ScopedMethodWrap :f))
+      (define (shadowed-method wrapped)
+        (match wrapped
+          ((ScopedMethodWrap _inner)
+           (let ((declare make-shadowed
+                         (forall (:item)
+                           :item -> (coalton/types:Proxy :item)))
+                 (make-shadowed (fn (value)
+                                  (coalton/types:proxy-of value))))
+             (make-shadowed Unit))))))
+
+    (declare use-shadowed-method
+      (forall (:f :item)
+        ((ScopedMethodWrap :f :item) -> (coalton/types:Proxy Unit))))
+    (define (use-shadowed-method wrapped)
+      (shadowed-method wrapped))"
+
+   '("use-shadowed-method" . "(forall (:f :item) ((ScopedMethodWrap :f :item) -> (coalton/types:Proxy Unit)))")))
+
 (deftest test-type-definitions ()
   ;; Test recursive type definitions
   (check-coalton-types

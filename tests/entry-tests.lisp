@@ -1,5 +1,9 @@
 (in-package #:coalton-tests)
 
+(uiop:define-package #:coalton-tests/entry-name-preservation
+  (:use #:coalton #:coalton-prelude)
+  (:export #:identity))
+
 (defun compile-test-file ()
   (test-file "examples/small-coalton-programs/src/fact-fib.coal"))
 
@@ -39,3 +43,13 @@
         (is (equalp (tc:make-function-env-entry :name fact :arity 1 :inline-p nil)
                     (tc:lookup-function entry:*global-environment* fact :no-error t))
             "Environment was restored")))))
+
+(deftest test-compile-to-fasl-with-polymorphic-declare ()
+  "Test that preserved type variable names do not break declared-vs-inferred scheme comparison during compile-file."
+  (with-coalton-compilation (:package #:coalton-tests/entry-name-preservation)
+    (coalton-toplevel
+      (declare identity (:a -> :a))
+      (define (identity x)
+        x)))
+  (is (fboundp 'coalton-tests/entry-name-preservation:identity)
+      "Polymorphic identity was bound as side effect of loading fasl"))

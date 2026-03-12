@@ -12,6 +12,7 @@
   (:export
    #:ty-scheme                          ; STRUCT
    #:make-ty-scheme                     ; CONSTRUCTOR
+   #:ty-scheme-explicit-p              ; ACCESSOR
    #:ty-scheme-kinds                    ; ACCESSOR
    #:ty-scheme-type                     ; ACCESSOR
    #:ty-scheme=                         ; FUNCTION
@@ -21,6 +22,7 @@
    #:quantify                           ; FUNCTION
    #:to-scheme                          ; FUNCTION
    #:fresh-inst                         ; FUNCTION
+   #:ty-scheme-instantiation-types      ; FUNCTION
    #:scheme-predicates                  ; FUNCTION
    #:fresh-pred                         ; FUNCTION
    #:fresh-preds                        ; FUNCTION
@@ -34,8 +36,11 @@
 ;;;
 
 (defstruct ty-scheme 
-  (kinds (util:required 'kinds) :type list         :read-only t)
-  (type  (util:required 'type)  :type qualified-ty :read-only t))
+  ;; True when the quantified binders came from an explicit user-written
+  ;; FORALL rather than implicit quantification.
+  (explicit-p nil                    :type boolean      :read-only t)
+  (kinds      (util:required 'kinds) :type list         :read-only t)
+  (type       (util:required 'type)  :type qualified-ty :read-only t))
 
 (defun ty-scheme= (ty-scheme1 ty-scheme2)
   (and (equalp (ty-scheme-kinds ty-scheme1)
@@ -65,23 +70,75 @@
 ;;;
 
 (defun quantify (tyvars type)
+  "Quantify the TYVARS that occur in TYPE, preserving binder metadata.
+
+The resulting scheme keeps the source-name and binding-id carried by
+each quantified variable so later instantiation and pretty printing can
+recover the programmer-written binders."
   (declare (type tyvar-list tyvars)
            (type qualified-ty type)
            (values ty-scheme))
   (let* ((vars (remove-if
-                (lambda (x) (not (find x tyvars :test #'equalp)))
+                (lambda (x) (not (find x tyvars :test #'ty=)))
                 (type-variables type)))
          (kinds (mapcar #'kind-of vars))
          (subst (loop :for var :in vars
                       :for id :from 0
-                      :collect (make-substitution :from var :to (make-tgen :id id)))))
+                      :collect (make-substitution
+                                :from var
+                                :to (make-tgen :id id
+                                               :binding-id (or (tyvar-binding-id var)
+                                                               (gensym "BINDER"))
+                                               :source-name (tyvar-source-name var))))))
     (make-ty-scheme
+     :explicit-p nil
      :kinds kinds
      :type (apply-substitution subst type))))
+
+(defun ty-scheme-instantiation-types (ty-scheme)
+  "Return fresh instantiation variables for TY-SCHEME's quantified binders.
+
+The returned variables preserve each binder's source-name and binding-id
+so fresh-inst, pretty printing, and scoped-forall resolution all see the
+same quantified binder identity."
+  (declare (type ty-scheme ty-scheme)
+           (values tyvar-list &optional))
+  (let* ((source-names (make-array (length (ty-scheme-kinds ty-scheme))
+                                   :initial-element nil))
+         (binding-ids (make-array (length (ty-scheme-kinds ty-scheme))
+                                  :initial-element nil))
+         (scheme-type (ty-scheme-type ty-scheme)))
+    (labels ((collect-instantiation-metadata (object)
+               (typecase object
+                 (tgen
+                  (when (< (tgen-id object) (length source-names))
+                    (setf (aref source-names (tgen-id object))
+                          (or (aref source-names (tgen-id object))
+                              (tgen-source-name object)))
+                    (setf (aref binding-ids (tgen-id object))
+                          (or (aref binding-ids (tgen-id object))
+                              (tgen-binding-id object)))))
+                 (tapp
+                  (collect-instantiation-metadata (tapp-from object))
+                  (collect-instantiation-metadata (tapp-to object)))
+                 (qualified-ty
+                  (collect-instantiation-metadata (qualified-ty-predicates object))
+                  (collect-instantiation-metadata (qualified-ty-type object)))
+                 (ty-predicate
+                  (collect-instantiation-metadata (ty-predicate-types object)))
+                 (list
+                  (map nil #'collect-instantiation-metadata object)))))
+      (collect-instantiation-metadata scheme-type)
+      (loop :for kind :in (ty-scheme-kinds ty-scheme)
+            :for i :from 0
+            :collect (make-variable kind
+                                    (aref source-names i)
+                                    (aref binding-ids i))))))
 
 (defgeneric to-scheme (ty)
   (:method ((ty qualified-ty))
     (make-ty-scheme
+     :explicit-p nil
      :kinds nil
      :type ty))
 
@@ -89,10 +146,10 @@
     (to-scheme (qualify nil ty))))
 
 (defun fresh-inst (ty-scheme)
+  "Instantiate TY-SCHEME with fresh type variables that preserve binder metadata."
   (declare (type ty-scheme ty-scheme)
            (values qualified-ty &optional))
-  (let ((types (mapcar (lambda (k) (make-variable k))
-                       (ty-scheme-kinds ty-scheme))))
+  (let ((types (ty-scheme-instantiation-types ty-scheme)))
     (instantiate types (ty-scheme-type ty-scheme))))
 
 (defun scheme-predicates (ty-scheme)
@@ -117,15 +174,27 @@
          (scheme (quantify (type-variables (cons var preds)) qual-ty)))
     (qualified-ty-predicates (fresh-inst scheme))))
 
-(defun quantify-using-tvar-order (tyvars type)
+(defun quantify-using-tvar-order (tyvars type &optional (explicit-p nil))
+  "Quantify TYVARS in TYPE, preserving the order supplied by TYVARS.
+
+Only variables that actually occur in TYPE are quantified. When
+EXPLICIT-P is true, the resulting scheme records that it came from an
+explicit FORALL, which is later used to decide whether the binders
+become lexically scoped."
   (let* ((vars (remove-if
-                (lambda (x) (not (find x (type-variables type) :test #'equalp)))
+                (lambda (x) (not (find x (type-variables type) :test #'ty=)))
                 tyvars))
          (kinds (mapcar #'kind-of vars))
          (subst (loop :for var :in vars
                       :for id :from 0
-                      :collect (make-substitution :from var :to (make-tgen :id id)))))
+                      :collect (make-substitution
+                                :from var
+                                :to (make-tgen :id id
+                                               :binding-id (or (tyvar-binding-id var)
+                                                               (gensym "BINDER"))
+                                               :source-name (tyvar-source-name var))))))
     (make-ty-scheme
+     :explicit-p explicit-p
      :kinds kinds
      :type (apply-substitution subst type))))
 
@@ -135,6 +204,7 @@
 
 (defmethod apply-substitution (subst-list (type ty-scheme))
   (make-ty-scheme
+   :explicit-p (ty-scheme-explicit-p type)
    :kinds (ty-scheme-kinds type)
    :type (apply-substitution subst-list (ty-scheme-type type))))
 
@@ -155,6 +225,7 @@
 
 (defmethod remove-source-info ((scheme ty-scheme))
   (make-ty-scheme
+   :explicit-p (ty-scheme-explicit-p scheme)
    :kinds (ty-scheme-kinds scheme)
    :type (remove-source-info (ty-scheme-type scheme))))
 
@@ -169,9 +240,8 @@
     ((null (ty-scheme-kinds scheme))
      (write (ty-scheme-type scheme) :stream stream))
     (t
-     (with-pprint-variable-scope ()
-       (let* ((types (mapcar (lambda (k) (next-pprint-variable-as-tvar k))
-                             (ty-scheme-kinds scheme)))
+     (with-pprint-variable-context ()
+       (let* ((types (ty-scheme-instantiation-types scheme))
               (new-type (instantiate types (ty-scheme-type scheme))))
          (write-string (if settings:*coalton-print-unicode*
                            "∀"

@@ -933,6 +933,59 @@ Type declarations can also be added in `let` expressions
       (g a b))))
 ```
 
+When you want the names of the quantified type variables to be part of the
+declaration, you can write an explicit `forall`:
+
+```lisp
+(coalton-toplevel
+  (declare keep-first (forall (:left :right) :left -> :right -> :left))
+  (define (keep-first x _y)
+    x))
+```
+
+The body of `forall` can be written either in the short form above or as a
+single parenthesized type:
+
+```lisp
+(declare keep-first (forall (:left :right) (:left -> :right -> :left)))
+```
+
+Explicit `forall` also makes those type variables lexically available inside the
+corresponding definition. Nested `declare`, `the`, and `lisp` annotations can
+reuse them:
+
+```lisp
+(coalton-toplevel
+  (declare scoped-id (forall (:item) :item -> :item))
+  (define (scoped-id x)
+    (let ((declare keep-item (Unit -> :item))
+          (keep-item (fn (_unit)
+                       (the :item x))))
+      (keep-item Unit))))
+```
+
+The same rule applies to local functions declared inside `let`. If a local
+declaration has an explicit `forall`, those binders are in scope inside the
+local function body, and the local body can also reuse outer scoped binders:
+
+```lisp
+(coalton-toplevel
+  (declare scoped-local (forall (:item) :item -> :item))
+  (define (scoped-local x)
+    (let ((declare keep-outer
+                  (forall (:tmp) :item -> :tmp -> :item))
+          (keep-outer (fn (y _z)
+                        (the :item y))))
+      (keep-outer x Unit))))
+```
+
+Here, `:item` comes from the outer declaration and `:tmp` comes from the local
+`forall`. If an inner `forall` reuses a binder name, the inner binder shadows
+the outer one.
+
+Declarations without `forall` are still implicitly quantified, but their type
+variable names do not become scoped names inside the body.
+
 ### Type Casting, Coercing, and Conversion
 
 Coalton manages type conversions similar to the Common Lisp function `cl:coerce` by way of a type class called `Into` (of the package `#:coalton/classes`) and its sole method `into`. However, the `into` method only takes a single argument. How should Coalton know which data type to convert to? It determines this either by type inference (i.e., by the surrounding context) as in this example, where `substring` expects a `String`:
@@ -1235,6 +1288,10 @@ Currently, *all* member functions must be defined for each type class instance.
       "The pairs are not both equal")))
 ```
 
+Class methods can also use explicit `forall`. When they do, those binders are
+in scope inside the corresponding `define-instance` method body, so local
+annotations there may reuse the method's type variables.
+
 
 ## Builtin Type Classes
 
@@ -1352,6 +1409,20 @@ The form is:
 ```
 
 This is unsafe; Coalton makes no attempt to analyze anything that is happening inside of a `lisp` form. That means it's possible (and easy) to create type errors, among other things.
+
+The `<return-type>` may mention a type variable brought into scope by an
+enclosing explicit `forall`:
+
+```lisp
+(coalton-toplevel
+  (declare identity-through-lisp (forall (:item) :item -> :item))
+  (define (identity-through-lisp x)
+    (lisp :item (x)
+      x)))
+```
+
+Embedded `(coalton ...)` forms inside the raw Lisp body are a separate Coalton
+compilation context. They do not inherit those lexical type-variable bindings.
 
 ### Multiple Values Directive `multiple-values`
 

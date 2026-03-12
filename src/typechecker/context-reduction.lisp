@@ -120,7 +120,7 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
   (let ((reduced-preds (reduce-context env preds subs)))
 
     (loop :for p :in reduced-preds
-          :if (every (lambda (tv) (member tv environment-vars :test #'equalp))
+          :if (every (lambda (tv) (member tv environment-vars :test #'ty=))
                      (type-variables p))
             :collect p :into deferred
           :else
@@ -144,10 +144,10 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
            (type ty-predicate-list preds)
            (values ambiguity-list)
            (ignore env))
-  (loop :for v :in (set-difference (type-variables preds) tvars :test #'equalp)
+  (loop :for v :in (set-difference (type-variables preds) tvars :test #'ty=)
         :for preds_ := (remove-if-not
                         (lambda (pred)
-                          (find v (type-variables pred) :test #'equalp))
+                          (find v (type-variables pred) :test #'ty=))
                         preds)
         :collect (make-ambiguity :var v :preds preds_)))
 
@@ -170,7 +170,7 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
                  ;;
                  ;; * multiple variable classes "Pred [var var]" and "Pred [var String]"
                  ;; * more complex types "Pred [List var]"
-                 (subsetp (type-variables pred-heads) (list var) :test #'equalp)
+                 (subsetp (type-variables pred-heads) (list var) :test #'ty=)
 
                  ;; Check that at least one predicate is a numeric class
                  (some (lambda (name)
@@ -382,4 +382,3 @@ respective superclass predicate is passed to this function."
                              (match from-ty to-ty)
                              new-subs))
                   :finally (return new-subs))))))))
-
