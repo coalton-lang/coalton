@@ -700,6 +700,8 @@
 (defstruct ty-class-method
   (name      (util:required 'name)      :type symbol           :read-only t)
   (type      (util:required 'type)      :type ty-scheme        :read-only t)
+  ;; Class-head binders that should be in scope in instance method bodies
+  ;; before any method-local explicit FORALL binders are introduced.
   (outer-tvars nil                       :type list             :read-only t)
   (docstring (util:required 'docstring) :type (or null string) :read-only t))
 

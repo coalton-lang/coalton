@@ -191,23 +191,15 @@
 (declaim (ftype (function (&optional kind (or null symbol) (or null symbol)) tyvar) make-variable))
 (declaim (inline make-variable))
 (defun make-variable (&optional (kind +kstar+) source-name binding-id)
-  "Create a fresh type variable with the specified kind.
+  "Create a fresh type variable with KIND and optional source metadata.
 
-KIND defaults to +kstar+ (* kind) for concrete types. The returned type variable
-has a globally unique ID that distinguishes it from all other variables created
-during compilation.
+SOURCE-NAME preserves the programmer-written binder for later pretty
+printing and documentation. BINDING-ID preserves the identity of an
+explicit binder across quantification and fresh instantiation, so
+shadowed binders that reuse the same printed name are still distinct.
 
-This function is the primary way to generate type variables during type inference.
-Each call returns a distinct variable, even if called with the same kind.
-
-Usage in type inference:
-- Generate unknowns to be unified with concrete types
-- Create placeholder types for function parameters
-- Represent polymorphic variables during scheme instantiation
-
-Examples:
-  (make-variable)          ; Creates :a with kind *
-  (make-variable +karrow+) ; Creates :b with kind * -> *"
+Each call returns a variable with a globally unique inference ID, even
+when KIND, SOURCE-NAME, and BINDING-ID are the same."
   (prog1 (make-tyvar :id *next-variable-id*
                      :kind kind
                      :binding-id binding-id
@@ -231,7 +223,8 @@ Example usage in scheme instantiation:
   Second instantiation: :c -> :c (where :c is fresh, distinct from :b)
 
 The function preserves the kind of the original variable, so if TYVAR has kind
-* -> *, the returned variable will also have kind * -> *."
+* -> *, the returned variable will also have kind * -> *. It also preserves
+TYVAR's SOURCE-NAME and BINDING-ID metadata."
   (make-variable (kind-of tyvar)
                  (tyvar-source-name tyvar)
                  (tyvar-binding-id tyvar)))

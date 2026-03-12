@@ -298,9 +298,8 @@
     ((null (tc:ty-scheme-kinds object))
      (to-markdown (tc:ty-scheme-type object)))
     (t
-     (tc:with-pprint-variable-scope ()
-       (let* ((types (mapcar (lambda (k) (tc:next-pprint-variable-as-tvar k))
-                             (tc:ty-scheme-kinds object)))
+     (tc:with-pprint-variable-context ()
+       (let* ((types (tc:ty-scheme-instantiation-types object))
               (new-type (tc:instantiate
                          types (tc:ty-scheme-type object))))
          (format nil "~A~A. ~A"

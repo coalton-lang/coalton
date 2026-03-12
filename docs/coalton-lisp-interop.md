@@ -260,6 +260,21 @@ Each `<captured-variable>` refers to a lexical variable in the surrounding Coalt
 
 Here, the values of the parameters `a` and `b` are captured for use inside of the `lisp` form.
 
+If the enclosing declaration uses an explicit `forall`, the `lisp` return type
+may mention those scoped type variables:
+
+```lisp
+(declare identity-through-lisp (forall (:item) :item -> :item))
+(define (identity-through-lisp x)
+  (lisp :item (x)
+    x))
+```
+
+That scoped type-variable visibility stops at the `lisp` boundary. If you embed
+a `(coalton ...)` form inside the raw Lisp body, it is checked as a separate
+Coalton expression and does not inherit lexical type-variable bindings from the
+surrounding Coalton definition.
+
 ## Soundness of Coalton-Lisp Interop
 
 As with almost any "foreign function interface" (especially those interfacing with C), there's lots of potential for type errors to be made that Coalton simply cannot check for at compile time. We recommend being extra cautious and being liberal with `check-type`s and other assertions when putting a value into the hands of Coalton-managed code.
@@ -316,5 +331,4 @@ Lambda/anonymous functions in Coalton `let` bindings can be used from Lisp, as l
       (lisp :a (x square)
         (cl:format cl:nil "~a squared = ~a" x (call-coalton-function square x))))))
 ```
-
 
