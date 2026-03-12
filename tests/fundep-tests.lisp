@@ -114,8 +114,8 @@
     (define (fast-evens items)
       (pipe items
             coalton/iterator:into-iter
-            (map (* 3))
-            (coalton/iterator:filter! even?)
+            (fn (iter) (map (fn (x) (* x 3)) iter))
+            (fn (iter) (coalton/iterator:filter! even? iter))
             coalton/iterator:collect!))"))
 
 (deftest fundep-unambigous-method ()
@@ -143,7 +143,7 @@
   (check-coalton-types
    "(define-class (Moo :a :b :c (:a -> :b :c))
       (moo-size (:a -> :b))
-      (moo-find (:a -> :b -> (Optional :c))))
+      (moo-find (:a * :b -> (Optional :c))))
 
     (declare filled-moos ((Num :b) (Ord :b) (Moo :a :b :c) => :a -> Iterator :b))
     (define (filled-moos moo)
@@ -155,7 +155,7 @@
   ;; see https://github.com/coalton-lang/coalton/issues/1050
   (check-coalton-types
    "(define-class (subcolable :a :b (:a -> :b))
-      (subcol (:a -> UFix -> UFix -> :a)))
+      (subcol (:a * UFix * UFix -> :a)))
     (define-class (subcolable :a :b => sizable :a :b)
       (size (:a -> UFix)))
 
@@ -173,20 +173,20 @@
     (define-class (C :a :b => D :a :b)
       (m :a))
 
-    (declare f (D :a :b => Unit -> :a))
+    (declare f (D :a :b => (Void -> :a)))
     (define (f) m)
 
-    (declare g (D (List :a) (List :b) => Unit -> List :a))
+    (declare g (D (List :a) (List :b) => (Void -> List :a)))
     (define (g) m)"
-   '("f" . "(D :a :b => Unit -> :a)")
-   '("g" . "(D (List :a) (List :b) => Unit -> List :a)"))
+   '("f" . "(D :a :b => (Void -> :a))")
+   '("g" . "(D (List :a) (List :b) => (Void -> List :a))"))
 
   ;; see https://github.com/coalton-lang/coalton/issues/1643
   (check-coalton-types
    "(declare myzip1 ((coalton/iterator:FromIterator :a (Tuple :b :c))
                      (coalton/iterator:IntoIterator :d :b)
                      (coalton/iterator:IntoIterator :e :c)
-                     => :d -> :e -> :a))
+                     => :d * :e -> :a))
     (define (myzip1 a b)
       (coalton/iterator:collect!
        (coalton/iterator:zip!
@@ -202,12 +202,12 @@
    '("myzip2" . "((coalton/iterator:FromIterator :a (Tuple :b :c))
                   (coalton/iterator:IntoIterator :d :b)
                   (coalton/iterator:IntoIterator :e :c)
-                  => :d -> :e -> :a)")
+                  => :d * :e -> :a)")
    #+CCL
    '("myzip2" . "((coalton/iterator:IntoIterator :d :a)
                   (coalton/iterator:IntoIterator :c :b)
                   (coalton/iterator:FromIterator :e (Tuple :b :a))
-                  => :c -> :d -> :e)")))
+                  => :c * :d -> :e)")))
 
 (deftest fundep-nested-entail ()
   ;; see https://github.com/coalton-lang/coalton/issues/1717
@@ -221,7 +221,7 @@
     (define (get-has-a-prx _)
       coalton/types:Proxy)
 
-    (declare print-a-str-pure ((HasA :t :a) (MonadHasA :m :t) => Unit -> :m Unit))
+    (declare print-a-str-pure ((HasA :t :a) (MonadHasA :m :t) => (Void -> :m Unit)))
     (define (print-a-str-pure)
       (let m-prx = coalton/types:Proxy)
       (let msg = (get-a (get-has-a-prx m-prx)))
@@ -238,7 +238,7 @@
     (define (get-has-a-prx _)
       coalton/types:Proxy)
 
-    (declare print-a-str-pure (MonadHasA :m :t :a => Unit -> :m Unit))
+    (declare print-a-str-pure (MonadHasA :m :t :a => (Void -> :m Unit)))
     (define (print-a-str-pure)
       (let m-prx = coalton/types:Proxy)
       (let msg = (get-a (get-has-a-prx m-prx)))

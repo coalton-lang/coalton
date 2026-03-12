@@ -20,12 +20,16 @@
    #:make-toplevel-define               ; CONSTRUCTOR
    #:toplevel-define-name               ; ACCESSOR
    #:toplevel-define-params             ; ACCESSOR
+   #:toplevel-define-keyword-params     ; ACCESSOR
+   #:toplevel-define-function-syntax-p  ; ACCESSOR
    #:toplevel-define-body               ; ACCESSOR
    #:toplevel-define-list               ; TYPE
    #:instance-method-definition         ; STRUCT
    #:make-instance-method-definition    ; CONSTRUCTOR
    #:instance-method-definition-name    ; ACCESSOR
    #:instance-method-definition-params  ; ACCESSOR
+   #:instance-method-definition-keyword-params ; ACCESSOR
+   #:instance-method-definition-function-syntax-p ; ACCESSOR
    #:instance-method-definition-body    ; ACCESSOR
    #:instance-method-definition-list    ; TYPE
    #:toplevel-define-instance           ; STRUCT
@@ -50,9 +54,11 @@
 (defstruct (toplevel-define
             (:include toplevel-definition)
             (:copier nil))
-  (name   (util:required 'name)   :type node-variable :read-only t)
-  (params (util:required 'params) :type pattern-list  :read-only t)
-  (body   (util:required 'body)   :type node-body     :read-only t))
+  (name              (util:required 'name)              :type node-variable :read-only t)
+  (params            (util:required 'params)            :type pattern-list  :read-only t)
+  (keyword-params    nil                                :type keyword-param-list :read-only t)
+  (function-syntax-p (util:required 'function-syntax-p) :type boolean       :read-only t)
+  (body              (util:required 'body)              :type node-body     :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun toplevel-define-list-p (x)
@@ -69,15 +75,19 @@
   (make-toplevel-define
    :name (tc:apply-substitution subs (toplevel-define-name node))
    :params (tc:apply-substitution subs (toplevel-define-params node))
+   :keyword-params (toplevel-define-keyword-params node)
+   :function-syntax-p (toplevel-define-function-syntax-p node)
    :body (tc:apply-substitution subs (toplevel-define-body node))
    :location (source:location node)))
 
 (defstruct (instance-method-definition
             (:include toplevel-definition)
             (:copier nil))
-  (name   (util:required 'name)   :type node-variable :read-only t)
-  (params (util:required 'params) :type pattern-list  :read-only t)
-  (body   (util:required 'body)   :type node-body     :read-only t))
+  (name              (util:required 'name)              :type node-variable :read-only t)
+  (params            (util:required 'params)            :type pattern-list  :read-only t)
+  (keyword-params    nil                                :type keyword-param-list :read-only t)
+  (function-syntax-p (util:required 'function-syntax-p) :type boolean       :read-only t)
+  (body              (util:required 'body)              :type node-body     :read-only t))
 
 (eval-when (:load-toplevel :compile-toplevel :execute)
   (defun instance-method-definition-list-p (x)
@@ -94,6 +104,8 @@
   (make-instance-method-definition
    :name (tc:apply-substitution subs (instance-method-definition-name method))
    :params (tc:apply-substitution subs (instance-method-definition-params method))
+   :keyword-params (instance-method-definition-keyword-params method)
+   :function-syntax-p (instance-method-definition-function-syntax-p method)
    :body (tc:apply-substitution subs (instance-method-definition-body method))
    :location (source:location method)))
 

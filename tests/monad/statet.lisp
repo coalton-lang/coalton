@@ -31,7 +31,8 @@
   (define just-modify
     (do
      (x <- m-env:ask)
-     (m-stt:modify (map (+ x))))))
+     (m-stt:modify (fn (ys)
+                     (map (fn (y) (+ y x)) ys))))))
 
 (define-test test-statet-get ()
   (let (Tuple state result) = (runM 100 (make-list 1 2 3) just-get))

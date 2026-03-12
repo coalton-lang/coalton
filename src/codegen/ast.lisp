@@ -27,19 +27,33 @@
    #:node-application-properties        ; READER
    #:node-application-rator             ; READER
    #:node-application-rands             ; READER
+   #:node-application-keyword-rands     ; READER
+   #:node-application-keyword-arg       ; STRUCT
+   #:make-node-application-keyword-arg  ; CONSTRUCTOR
+   #:node-application-keyword-arg-keyword ; READER
+   #:node-application-keyword-arg-value ; READER
+   #:node-application-keyword-arg-supplied-p ; READER
+   #:keyword-arg-list                   ; TYPE
    #:node-direct-application            ; STRUCT
    #:make-node-direct-application       ; CONSTRUCTOR
    #:node-direct-application-properties ; READER
    #:node-direct-application-rator-type ; READER
    #:node-direct-application-rator      ; READER
    #:node-direct-application-rands      ; READER
+   #:node-direct-application-keyword-rands ; READER
    #:node-direct-application-p          ; FUNCTION
    #:node-abstraction                   ; STRUCT
    #:make-node-abstraction              ; CONSTRUCTOR
    #:node-abstraction-vars              ; READER
+   #:node-abstraction-keyword-params    ; READER
    #:node-abstraction-subexpr           ; READER
-   #:node-abstraction-return-convention ; READER
    #:node-abstraction-p                 ; FUNCTION
+   #:keyword-param                      ; STRUCT
+   #:make-keyword-param                 ; CONSTRUCTOR
+   #:keyword-param-keyword              ; READER
+   #:keyword-param-var                  ; READER
+   #:keyword-param-supplied-p-var       ; READER
+   #:keyword-param-list                 ; TYPE
    #:node-let                           ; STRUCT
    #:make-node-let                      ; CONSTRUCTOR
    #:node-let-p                         ; FUNCTION
@@ -49,7 +63,6 @@
    #:make-node-lisp                     ; CONSTRUCTOR
    #:node-lisp-p                        ; FUNCTION
    #:node-lisp-vars                     ; READER
-   #:node-lisp-return-convention        ; READER
    #:node-lisp-form                     ; READER
    #:node-locally                       ; STRUCT
    #:make-node-locally                  ; CONSTRUCTOR
@@ -140,21 +153,12 @@
    #:make-node-values                   ; CONSTRUCTOR
    #:node-values-p                      ; FUNCTION
    #:node-values-nodes                  ; READER
-   #:node-mv-call                       ; STRUCT
-   #:make-node-mv-call                  ; CONSTRUCTOR
-   #:node-mv-call-p                     ; FUNCTION
-   #:node-mv-call-expr                  ; READER
    #:node-values-bind                   ; STRUCT
    #:make-node-values-bind              ; CONSTRUCTOR
    #:node-values-bind-p                 ; FUNCTION
    #:node-values-bind-vars              ; READER
    #:node-values-bind-expr              ; READER
    #:node-values-bind-body              ; READER
-   #:node-values-match                  ; STRUCT
-   #:make-node-values-match             ; CONSTRUCTOR
-   #:node-values-match-p                ; FUNCTION
-   #:node-values-match-expr             ; READER
-   #:node-values-match-branches         ; READER
    #:node-variables                     ; FUNCTION
    #:node-binding-sccs                  ; FUNCTION
    #:node-free-p                        ; FUNCTION
@@ -241,13 +245,46 @@ coalton symbols (`parser:identifier`)"
   "Variables like x or y"
   (value (util:required 'value) :type parser:identifier :read-only t))
 
+(defstruct keyword-param
+  "A keyword parameter in a compiled lambda list."
+  (keyword        (util:required 'keyword)        :type keyword           :read-only t)
+  (var            (util:required 'var)            :type parser:identifier :read-only t)
+  (supplied-p-var (util:required 'supplied-p-var) :type parser:identifier :read-only t))
+
+(defmethod make-load-form ((self keyword-param) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun keyword-param-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'keyword-param-p x)))
+
+(deftype keyword-param-list ()
+  '(satisfies keyword-param-list-p))
+
+(defstruct node-application-keyword-arg
+  "A keyword argument in a compiled call."
+  (keyword    (util:required 'keyword)    :type keyword            :read-only t)
+  (value      (util:required 'value)      :type node               :read-only t)
+  (supplied-p nil                         :type (or null node)     :read-only t))
+
+(defmethod make-load-form ((self node-application-keyword-arg) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun keyword-arg-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'node-application-keyword-arg-p x)))
+
+(deftype keyword-arg-list ()
+  '(satisfies keyword-arg-list-p))
+
 (defstruct (node-application (:include node))
   "Function application (f x)"
   ;; Extra information for use in optimizer can be stored here.
   ;; Currently its only valid keys are `:inline' and `:noinline'
   (properties (util:required 'properties) :type list      :read-only t)
   (rator      (util:required 'rator)      :type node      :read-only t)
-  (rands      (util:required 'rands)      :type node-list :read-only t))
+  (rands      (util:required 'rands)      :type node-list :read-only t)
+  (keyword-rands nil                      :type keyword-arg-list :read-only t))
 
 (defstruct (node-direct-application (:include node))
   "Fully saturated function application of a known function"
@@ -256,13 +293,14 @@ coalton symbols (`parser:identifier`)"
   (properties (util:required 'properties) :type list              :read-only t)
   (rator-type (util:required 'rator-type) :type tc:ty             :read-only t)
   (rator      (util:required 'rator)      :type parser:identifier :read-only t)
-  (rands      (util:required 'rands)      :type node-list         :read-only t))
+  (rands      (util:required 'rands)      :type node-list         :read-only t)
+  (keyword-rands nil                      :type keyword-arg-list  :read-only t))
 
 (defstruct (node-abstraction (:include node))
   "Lambda literals (fn (x) x)"
-  (vars    (util:required 'vars)    :type parser:identifier-list :read-only t)
-  (subexpr (util:required 'subexpr) :type node                   :read-only t)
-  (return-convention ':boxed        :type (member :boxed :values) :read-only t))
+  (vars           (util:required 'vars) :type parser:identifier-list :read-only t)
+  (keyword-params nil                    :type keyword-param-list    :read-only t)
+  (subexpr        (util:required 'subexpr) :type node               :read-only t))
 
 (defstruct (node-let (:include node))
   "Introduction of local mutually-recursive bindings (let ((x 2)) (+ x x))"
@@ -272,7 +310,6 @@ coalton symbols (`parser:identifier`)"
 (defstruct (node-lisp (:include node))
   "An embedded lisp form"
   (vars (util:required 'vars) :type lisp-coalton-var-alist    :read-only t)
-  (return-convention ':boxed  :type (member :boxed :values)   :read-only t)
   (form (util:required 'form) :type t                         :read-only t))
 
 (defstruct (node-locally (:include node))
@@ -412,20 +449,11 @@ call to (break)."
   "Produce multiple values."
   (nodes (util:required 'nodes) :type node-list :read-only t))
 
-(defstruct (node-mv-call (:include node))
-  "An expression known to already return multiple values."
-  (expr (util:required 'expr) :type node :read-only t))
-
 (defstruct (node-values-bind (:include node))
   "Bind multiple values and evaluate body."
   (vars (util:required 'vars) :type parser:identifier-list :read-only t)
   (expr (util:required 'expr) :type node                   :read-only t)
   (body (util:required 'body) :type node                   :read-only t))
-
-(defstruct (node-values-match (:include node))
-  "Pattern matching on multiple values."
-  (expr     (util:required 'expr)     :type node        :read-only t)
-  (branches (util:required 'branches) :type branch-list :read-only t))
 
 ;;;
 ;;; Functions

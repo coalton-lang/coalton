@@ -12,7 +12,7 @@ As stated in the computable-reals README:
 
 ### Instances:
 
-`Eq` and `Ord` have been implemented in order to fulfill the needs of the `Num` typeclass, though they are not exact. Their definitions are shaky because they can only be verified up to an arbitrary, specified precision. The precision threshold for `Creal` can be accessed using the library function `comparison-threshold` and changed using `set-comparison-threshold!`. The default precision is `106`.
+`Eq` and `Ord` have been implemented in order to fulfill the needs of the `Num` typeclass, though they are not exact. Their definitions are shaky because they can only be verified up to an arbitrary, specified precision. The precision threshold for `Creal` can be accessed using the library function `comparison-threshold`, changed globally using `set-comparison-threshold!`, or scoped dynamically with `with-comparison-threshold`. The default precision is `106`.
 
 Other instances defined:
 
@@ -25,5 +25,4 @@ Other instances defined:
 - `Polar`
 - `Elementary`
 - Typical `Into` instances
-
 

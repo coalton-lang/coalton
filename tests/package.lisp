@@ -42,6 +42,7 @@
    (#:result #:coalton/result)
    (#:seq #:coalton/seq)
    (#:file #:coalton/file)
+   (#:creal #:coalton/computable-reals)
    (#:experimental #:coalton/experimental)
    (#:st #:coalton/monad/state)
    (#:m-id #:coalton/monad/identity)

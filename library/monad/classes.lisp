@@ -45,7 +45,7 @@
      (:m :env))
     (local
      "Run a computation in a modified environment."
-     ((:env -> :env) -> :m :a -> :m :a))
+     ((:env -> :env) * :m :a -> :m :a))
     (asks
      "Retrieve an aspect of the computation environment."
      ((:env -> :a) -> :m :a)))

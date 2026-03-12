@@ -161,14 +161,14 @@ For example, we could wrap Common Lisp's `cl:random-state` objects like so:
 (repr :native cl:random-state)
 (define-type RandomState)
 
-(declare make-state (Unit -> RandomState))
+(declare make-state (Void -> RandomState))
 (define (make-state)
-  (lisp RandomState ()
+  (lisp (-> RandomState) ()
     (cl:make-random-state cl:t)))
 
-(declare random (RandomState -> Integer -> Integer))
+(declare random (RandomState * Integer -> Integer))
 (define (random rs n)
-  (lisp Integer (rs n)
+  (lisp (-> Integer) (rs n)
     (cl:random n rs)))
 ```
 
@@ -188,6 +188,39 @@ Consider the following definitions:
 **PROMISE**: Assuming they are unconstrained, `v` and `f` will be lexical variables in Lisp bound to those symbols.
 
 **PROMISE**: Assuming it is unconstrained, `f` will be a function in Lisp of the same arity found at the definition site.
+
+**PROMISE**: Coalton output arity maps directly to Common Lisp multiple values. A Coalton
+function returning `Void` returns zero Lisp values, a function returning one type returns one Lisp
+value, and a function returning `:a * :b * ...` returns multiple Lisp values in order.
+
+### Keyword-Bearing Functions
+
+Keyword-bearing Coalton functions compile to ordinary Common Lisp functions with `&key`
+lambda lists. Coalton keywords are still part of Coalton's own source-level function types and
+arity rules, but the generated Lisp interface uses native Common Lisp keyword arguments.
+
+For example:
+
+```lisp
+(declare scale (Integer &key (:offset Integer) (:factor Integer) -> Integer))
+(define (scale x &key (offset 0) (factor 1))
+  (+ (* x factor) offset))
+```
+
+The raw Lisp function for `scale` takes the visible positional arguments followed by ordinary
+Common Lisp keyword arguments. Omitted Coalton keywords are omitted from the Lisp call as well.
+
+So the raw Lisp calling convention is:
+
+```lisp
+(scale 10)
+(scale 10 :offset 3 :factor 4)
+```
+
+The same rule applies when calling a keyword-bearing first-class Coalton function through
+`call-coalton-function`: pass the positional arguments first and then ordinary Lisp keyword
+arguments. For constrained higher-order Coalton values, any hidden type class
+dictionaries are already bound into the function value before Lisp sees it.
 
 ## Lisp-Calls-Coalton Bridge
 
@@ -240,21 +273,29 @@ We do *not* recommend raw calls of Coalton-compiled functions, as they may be op
 Coalton can call Lisp code with the `lisp` operator, which has the syntax:
 
 ```
-(lisp <return-type> (<captured-variable> ...)
+(lisp (-> <output-type-spec>) (<captured-variable> ...)
   <lisp-code-body>)
 ```
 
-Here, `<return-type>` should be a valid Coalton type which _you_ are guaranteeing to Coalton is the correct type of the return value of `<lisp-code-body>`. A programmer should see this assertion as analogous to `cl:the`.
+Here, `<output-type-spec>` should be a valid Coalton return type specification: `Void` for zero
+outputs, a single type for one output, or a `*`-separated list of output types for multiple
+outputs. You are guaranteeing to Coalton that `<lisp-code-body>` produces values of exactly that
+shape. A programmer should see this assertion as analogous to `cl:the`.
+
+For a single-output `lisp` form, Coalton uses only the primary Common Lisp value of the final
+Lisp form. For a multiple-output `lisp` form, Coalton returns the final form's Common Lisp
+multiple values directly. For a zero-output `lisp` form, Coalton evaluates the body and then
+returns no values.
 
 **WARNING**: Coalton does not even guarantee run-time type safety with a dynamic check. It may in the future, though.
 
 Each `<captured-variable>` refers to a lexical variable in the surrounding Coalton code that you would like to capture. The values in these lexical variables obey the aforementioned promises of this document. For instance, here is Coalton's definition of the greatest common divisor function `coalton:gcd`:
 
 ```
-(declare gcd (Integer -> Integer -> Integer))
+(declare gcd (Integer * Integer -> Integer))
 (define (gcd a b)
   "Compute the greatest common divisor of A and B."
-  (lisp Integer (a b)
+  (lisp (-> Integer) (a b)
     (cl:gcd a b)))
 ```
 
@@ -266,7 +307,7 @@ may mention those scoped type variables:
 ```lisp
 (declare identity-through-lisp (forall (:item) :item -> :item))
 (define (identity-through-lisp x)
-  (lisp :item (x)
+  (lisp (-> :item) (x)
     x))
 ```
 
@@ -274,6 +315,23 @@ That scoped type-variable visibility stops at the `lisp` boundary. If you embed
 a `(coalton ...)` form inside the raw Lisp body, it is checked as a separate
 Coalton expression and does not inherit lexical type-variable bindings from the
 surrounding Coalton definition.
+
+Here is a multiple-output example:
+
+```
+(declare quot-rem (Integer * Integer -> Integer * Integer))
+(define (quot-rem x y)
+  (lisp (-> Integer * Integer) (x y)
+    (cl:truncate x y)))
+```
+
+From Common Lisp, an unconstrained function like `quot-rem` follows the normal multiple-value
+protocol:
+
+```lisp
+CL-USER> (multiple-value-list (coalton-user::quot-rem 17 5))
+(3 2)
+```
 
 ## Soundness of Coalton-Lisp Interop
 
@@ -293,7 +351,7 @@ The simplest example is calling a function without type class constraints. This 
     (* x x))
 
   (define (print-int-square x)
-    (lisp String (x)
+    (lisp (-> String) (x)
       (cl:format cl:nil "~a squared = ~a" x (int-square x)))))
 ```
 Functions with type class constraints cannot be called this way, but instead must be called with a nested lisp form containing the argument:
@@ -306,29 +364,29 @@ Functions with type class constraints cannot be called this way, but instead mus
     (* x x))
 
   (define (print-num-square1 x)
-    (lisp String (x)
-      (cl:format cl:nil "~a squared = ~a" x (coalton (num-square (lisp :a () x)))))))
+    (lisp (-> String) (x)
+      (cl:format cl:nil "~a squared = ~a" x (coalton (num-square (lisp (-> :a) () x)))))))
 ```
-If you have a function with no input, Coalton declares it as a function taking `Unit` as input. Thus, it must be wrapped in a Coalton form:
+If you have a function with no input, it is truly nullary and can be called directly from Lisp:
 ```
 (coalton-toplevel
 
-  (declare spell-2 (Unit -> String))
+  (declare spell-2 (Void -> String))
   (define (spell-2)
     "two")
 
   (define (how-do-you-spell-2)
-    (lisp String ()
-      (cl:format cl:nil "2 is spelled '~a'" (coalton (spell-2))))))
+    (lisp (-> String) ()
+      (cl:format cl:nil "2 is spelled '~a'" (spell-2)))))
 ```
 Lambda/anonymous functions in Coalton `let` bindings can be used from Lisp, as long they are unconstrained by a type class:
 ```
 (coalton-toplevel
+  (declare lambda-print-square (Integer -> String))
   (define (lambda-print-square x)
     (let ((declare square (Integer -> Integer))
           (square (fn (a)
                     (* a a))))
-      (lisp :a (x square)
+      (lisp (-> String) (x square)
         (cl:format cl:nil "~a squared = ~a" x (call-coalton-function square x))))))
 ```
-

@@ -22,32 +22,32 @@
 
   (let d = (fold (fn (m k)
                    (match (ordtree:lookup m k)
-                     ((None) (lisp :a (k)
+                     ((None) (lisp (-> :a) (k)
                                (cl:error "Key ~a dissapeared unexpectedly" k)))
                      ((Some _) Unit))
                    (let ((m1 (ordtree:remove m k)))
                      (match (ordtree:lookup m1 k)
                        ((None) Unit)
-                       ((Some _) (lisp :a (k)
+                       ((Some _) (lisp (-> :a) (k)
                                    (cl:error "Key ~a failed to be removed" k))))
                      (if (ordtree::consistent? m1)
                          Unit
-                         (lisp :a (k)
+                         (lisp (-> :a) (k)
                            (cl:error "Key ~a removal caused inconsistency" k)))
                      m1))
                  c data))
   (is (ordtree:empty? d))
 
-  (let (Tuple bb prev) = (ordtree:update a 1 (fn (z) (Tuple (Some 1) z))))
+  (let (values bb prev) = (ordtree:update a 1 (fn (z) (values (Some 1) z))))
   (is (== (ordtree:lookup bb 1) (Some 1)))
   (is (== prev None))
-  (let (Tuple bb2 prev2) = (ordtree:update bb 1 (Tuple None)))
+  (let (values bb2 prev2) = (ordtree:update bb 1 (fn (z) (values None z))))
   (is (ordtree:empty? bb2))
   (is (== prev2 (Some 1)))
 
   (let cc = (fold (fn (m k)
-                     (let (Tuple mm _) =
-                       (ordtree:update m k (fn (_) (Tuple (Some k) False))))
+                     (let (values mm _) =
+                       (ordtree:update m k (fn (_) (values (Some k) False))))
                     mm)
                   a data))
   (is (some? (fold (fn (m k) (>>= (ordtree:lookup cc k) Some))
@@ -55,7 +55,7 @@
   (is (ordtree::consistent? cc))
 
   (let dd = (fold (fn (m k)
-                    (let (Tuple m1 _) = (ordtree:update m k (Tuple None)))
+                    (let (values m1 _) = (ordtree:update m k (fn (z) (values None z))))
                     (is (ordtree::consistent? m1))
                     m1)
                   cc data))
@@ -84,66 +84,67 @@
                                  (OrdTreeTestEntry 4 "four")))))
 
   ;; lookup - hit
-  (match (ordtree:update a (OrdTreeTestEntry 1 "")
-                          (fn (e)
-                            (match e
-                              ((None) (Tuple None "nope"))
-                              ((Some (OrdTreeTestEntry _ v)) (Tuple e v)))))
-    ((Tuple b v)
-     (is (== v "one"))
-     (is (== (ordtree:lookup b (OrdTreeTestEntry 1 ""))
-             (Some (OrdTreeTestEntry 1 "one"))))))
+  (let (values b v) =
+    (ordtree:update a (OrdTreeTestEntry 1 "")
+                    (fn (e)
+                      (match e
+                        ((None) (values None "nope"))
+                        ((Some (OrdTreeTestEntry _ v)) (values e v))))))
+  (is (== v "one"))
+  (is (== (ordtree:lookup b (OrdTreeTestEntry 1 ""))
+          (Some (OrdTreeTestEntry 1 "one"))))
 
   ;; lookup - miss
-  (match (ordtree:update a (OrdTreeTestEntry 0 "")
-                          (fn (e)
-                            (match e
-                              ((None) (Tuple None "nope"))
-                              ((Some (OrdTreeTestEntry _ v)) (Tuple e v)))))
-    ((Tuple _ v) (is (== v "nope"))))
+  (let (values _ v) =
+    (ordtree:update a (OrdTreeTestEntry 0 "")
+                    (fn (e)
+                      (match e
+                        ((None) (values None "nope"))
+                        ((Some (OrdTreeTestEntry _ v)) (values e v))))))
+  (is (== v "nope"))
 
   ;; delete - hit
-  (match (ordtree:update a (OrdTreeTestEntry 2 "")
-                          (fn (e)
-                            (match e
-                              ((None) (Tuple None "nope"))
-                              ((Some (OrdTreeTestEntry _ v)) (Tuple None v)))))
-    ((Tuple b v)
-     (is (== v "two"))
-     (is (== (ordtree:lookup b (OrdTreeTestEntry 2 "")) None))))
+  (let (values b v) =
+    (ordtree:update a (OrdTreeTestEntry 2 "")
+                    (fn (e)
+                      (match e
+                        ((None) (values None "nope"))
+                        ((Some (OrdTreeTestEntry _ v)) (values None v))))))
+  (is (== v "two"))
+  (is (== (ordtree:lookup b (OrdTreeTestEntry 2 "")) None))
 
   ;; delete - miss
-  (match (ordtree:update a (OrdTreeTestEntry 0 "")
-                          (fn (e)
-                            (match e
-                              ((None) (Tuple None "nope"))
-                              ((Some _) (Tuple None "huh?")))))
-    ((Tuple b v)
-     (is (== v "nope"))))
+  (let (values _ v) =
+    (ordtree:update a (OrdTreeTestEntry 0 "")
+                    (fn (e)
+                      (match e
+                        ((None) (values None "nope"))
+                        ((Some _) (values None "huh?"))))))
+  (is (== v "nope"))
 
   ;; insert
-  (match (ordtree:update a (OrdTreeTestEntry 0 "")
-                          (fn (e)
-                            (match e
-                              ((None)  (Tuple (Some (OrdTreeTestEntry 0 "zero"))
-                                              "yeah"))
-                              ((Some _) (Tuple None "huh?")))))
-    ((Tuple b v)
-     (is (== v "yeah"))
-     (is (== (ordtree:lookup b (OrdTreeTestEntry 0 ""))
-             (Some (OrdTreeTestEntry 0 "zero"))))))
+  (let (values b v) =
+    (ordtree:update a (OrdTreeTestEntry 0 "")
+                    (fn (e)
+                      (match e
+                        ((None)  (values (Some (OrdTreeTestEntry 0 "zero"))
+                                         "yeah"))
+                        ((Some _) (values None "huh?"))))))
+  (is (== v "yeah"))
+  (is (== (ordtree:lookup b (OrdTreeTestEntry 0 ""))
+          (Some (OrdTreeTestEntry 0 "zero"))))
 
   ;; replace
-  (match (ordtree:update a (OrdTreeTestEntry 3 "")
-                          (fn (e)
-                            (match e
-                              ((None)  (Tuple None "huh?"))
-                              ((Some (OrdTreeTestEntry _ v))
-                               (Tuple (Some (OrdTreeTestEntry 3 "san")) v)))))
-    ((Tuple b v)
-     (is (== v "three"))
-     (is (== (ordtree:lookup b (OrdTreeTestEntry 3 ""))
-             (Some (OrdTreeTestEntry 3 "san"))))))
+  (let (values b v) =
+    (ordtree:update a (OrdTreeTestEntry 3 "")
+                    (fn (e)
+                      (match e
+                        ((None)  (values None "huh?"))
+                        ((Some (OrdTreeTestEntry _ v))
+                         (values (Some (OrdTreeTestEntry 3 "san")) v))))))
+  (is (== v "three"))
+  (is (== (ordtree:lookup b (OrdTreeTestEntry 3 ""))
+          (Some (OrdTreeTestEntry 3 "san"))))
   )
 
 (coalton-toplevel
@@ -182,7 +183,8 @@
           a))
 
   (is (== (ordtree->list
-           (ordtree:transform-elements (* 2) (list->ordtree (range 0 10))))
+           (ordtree:transform-elements (fn (x) (* x 2))
+                                       (list->ordtree (range 0 10))))
           (make-list 0 2 4 6 8 10 12 14 16 18 20)))
   )
 
@@ -284,7 +286,7 @@
                            mb bigdata))))
       (inctime! tb2 5))
 
-    (lisp :a (ndata nrepeat acctime)
+    (lisp (-> :a) (ndata nrepeat acctime)
       (cl:format cl:t "~%(ndata ~6d repeat ~6d~%~
                        ;Brother tree:~%~
                        :insert ~8d~%~

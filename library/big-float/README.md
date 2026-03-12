@@ -13,3 +13,13 @@ variable`COALTON_PORTABLE_BIGFLOAT=1` or add the feature
 `:coalton-portable-bigfloat` to proceed anyways.
 All other implementations will use a `Big-Float` written in Coalton. This comes
 at a significant slow down and increased memory usage.
+
+Dynamic precision and rounding are configured with scoped helpers. For example:
+
+```lisp
+(big-float:with-precision-rounding
+  (fn ()
+    ...)
+  :precision 256
+  :rounding big-float:rndn)
+```

@@ -51,12 +51,12 @@ a = (+ (* b (quot a b)) (rem a b))
 a = (+ (* b (div a b)) (mod a b))
 ```
 "
-    (quot (:a -> :a -> :a))
-    (rem (:a -> :a -> :a))
-    (quotRem (:a -> :a -> (Tuple :a :a)))
-    (div (:a -> :a -> :a))
-    (mod (:a -> :a -> :a))
-    (divMod (:a -> :a -> (Tuple :a :a))))
+    (quot (:a * :a -> :a))
+    (rem (:a * :a -> :a))
+    (quotRem (:a * :a -> :a * :a))
+    (div (:a * :a -> :a))
+    (mod (:a * :a -> :a))
+    (divMod (:a * :a -> :a * :a)))
 
   (define-class ((Remainder :int) (Ord :int) => Integral :int)
     "Integral is a number that is either even or odd where `div` and `quot`
@@ -69,12 +69,12 @@ are floored and truncated division, respectively."
     "Converts any Integral N into any Num."
     (fromInt (toInteger n)))
 
-  (declare rsh ((Integral :n) (Bits :b) => :b -> :n -> :b))
+  (declare rsh ((Integral :n) (Bits :b) => :b * :n -> :b))
   (define (rsh x n)
     "Right shift X by N"
     (bits:shift (negate (toInteger n)) x))
 
-  (declare lsh ((Integral :n) (Bits :b) => :b -> :n -> :b))
+  (declare lsh ((Integral :n) (Bits :b) => :b * :n -> :b))
   (define (lsh x n)
     "Left shift X by N"
     (bits:shift (toInteger n) x))
@@ -89,7 +89,7 @@ are floored and truncated division, respectively."
     "Is N odd?"
     (== 1 (mod n 2)))
 
-  (declare ^ ((Num :a) (Integral :int) => (:a -> :int -> :a)))
+  (declare ^ ((Num :a) (Integral :int) => (:a * :int -> :a)))
   (define (^ base power)
     "Exponentiate BASE to a non-negative POWER."
     (let (
@@ -115,20 +115,20 @@ are floored and truncated division, respectively."
         ((== power 0) 1)
         (True (error "Can't exponentiate with a negative exponent.")))))
 
-  (declare ^^ ((Reciprocable :a) (Integral :int) => (:a -> :int -> :a)))
+  (declare ^^ ((Reciprocable :a) (Integral :int) => (:a * :int -> :a)))
   (define (^^ base power)
     "Exponentiate BASE to a signed POWER."
     (if (< power 0)
         (^ (/ 1 base) (negate power))
         (^ base power)))
 
-  (declare gcd ((Remainder :a) (Ord :a) => :a -> :a -> :a))
+  (declare gcd ((Remainder :a) (Ord :a) => :a * :a -> :a))
   (define (gcd a b)
     "The greatest common divisor of A and B."
     (if (== b 0) a
         (gcd (abs b) (abs (rem a b)))))
 
-  (declare lcm ((Remainder :a) (Ord :a) => :a -> :a -> :a))
+  (declare lcm ((Remainder :a) (Ord :a) => :a * :a -> :a))
   (define (lcm a b)
     "The least common multiple of A and B."
     (if (or (== a 0) (== b 0))
@@ -147,7 +147,7 @@ are floored and truncated division, respectively."
              acc
              (% (- a 1) (* a acc)))))))
 
-  (declare ilog ((Integral :int) => :int -> :int -> :int))
+  (declare ilog ((Integral :int) => :int * :int -> :int))
   (define (ilog b x)
     "The floor of the logarithm with base B > 1 of X >= 1."
     ;; See GHC's wordLogBase#
@@ -185,28 +185,26 @@ are floored and truncated division, respectively."
      (define-instance (Remainder ,type)
        (inline)
        (define (quot a n)
-         (fromInt (lisp Integer (a n) (cl:truncate a n))))
+         (fromInt (lisp (-> Integer) (a n) (cl:truncate a n))))
        (inline)
        (define (rem a n)
-         (lisp ,type (a n) (cl:rem a n)))
+         (lisp (-> ,type) (a n) (cl:rem a n)))
        (inline)
        (define (quotRem a n)
-         (match (lisp multiple-values (Tuple Integer ,type) (a n)
-                  (cl:truncate a n))
-           ((Tuple q r)
-            (Tuple (fromInt q) r))))
+         (let (values q r) = (lisp (-> Integer * ,type) (a n)
+                               (cl:truncate a n)))
+         (values (fromInt q) r))
        (inline)
        (define (div a n)
-         (fromInt (lisp Integer (a n) (cl:floor a n))))
+         (fromInt (lisp (-> Integer) (a n) (cl:floor a n))))
        (inline)
        (define (mod a n)
-         (lisp ,type (a n) (cl:mod a n)))
+         (lisp (-> ,type) (a n) (cl:mod a n)))
        (inline)
        (define (divMod a n)
-         (match (lisp multiple-values (Tuple Integer ,type) (a n)
-                  (cl:floor a n))
-           ((Tuple d m)
-            (Tuple (fromInt d) m)))))))
+         (let (values d m) = (lisp (-> Integer * ,type) (a n)
+                               (cl:floor a n)))
+         (values (fromInt d) m)))))
 
 (cl:defmacro %define-integral-native (type signed)
   (cl:let ((even? (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-EVEN?")))
@@ -228,46 +226,46 @@ are floored and truncated division, respectively."
          (inline)
          (declare ,even? (,type -> Boolean))
          (define (,even? n)
-           (lisp Boolean (n) (to-boolean (cl:evenp n))))
+           (lisp (-> Boolean) (n) (to-boolean (cl:evenp n))))
 
          (specialize odd? ,odd? (,type -> Boolean))
          (inline)
          (declare ,odd? (,type -> Boolean))
          (define (,odd? n)
-           (lisp Boolean (n) (to-boolean (cl:oddp n))))
+           (lisp (-> Boolean) (n) (to-boolean (cl:oddp n))))
 
-         (specialize ^ ,^ (,type -> ,type -> ,type))
-         (declare ,^ (,type -> ,type -> ,type))
+         (specialize ^ ,^ (,type * ,type -> ,type))
+         (declare ,^ (,type * ,type -> ,type))
          ,(cl:cond
             (signed
              `(define (,^ base power)
                 (if (< power 0)
                     (error "Can't exponentiate with a negative exponent.")
-                    (lisp ,type (base power) (cl:expt base power)))))
+                    (lisp (-> ,type) (base power) (cl:expt base power)))))
             (cl:t
              `(progn
                 (inline)
                 (define (,^ base power)
-                  (lisp ,type (base power) (cl:expt base power))))))
+                  (lisp (-> ,type) (base power) (cl:expt base power))))))
 
-         (specialize ^^ ,^^ (,type -> ,type -> ,type))
+         (specialize ^^ ,^^ (,type * ,type -> ,type))
          (inline)
-         (declare ,^^ (,type -> ,type -> ,type))
+         (declare ,^^ (,type * ,type -> ,type))
          (define (,^^ base power)
-           (lisp ,type (base power) (cl:expt base power)))
+           (lisp (-> ,type) (base power) (cl:expt base power)))
 
-         (specialize gcd ,gcd (,type -> ,type -> ,type))
+         (specialize gcd ,gcd (,type * ,type -> ,type))
          (inline)
-         (declare ,gcd (,type -> ,type -> ,type))
+         (declare ,gcd (,type * ,type -> ,type))
          (define (,gcd a b)
-           (lisp ,type (a b) (cl:gcd a b)))
+           (lisp (-> ,type) (a b) (cl:gcd a b)))
 
-         (specialize lcm ,lcm (,type -> ,type -> ,type))
+         (specialize lcm ,lcm (,type * ,type -> ,type))
          (inline)
-         (declare ,lcm (,type -> ,type -> ,type))
+         (declare ,lcm (,type * ,type -> ,type))
          (define (,lcm a b)
            ;; Allow Coalton to handle fixnum overflow
-           (fromInt (lisp Integer (a b) (cl:lcm a b))))
+           (fromInt (lisp (-> Integer) (a b) (cl:lcm a b))))
 
          (specialize isqrt ,isqrt (,type -> ,type))
          (declare ,isqrt (,type -> ,type))
@@ -276,12 +274,12 @@ are floored and truncated division, respectively."
              `(define (,isqrt a)
                 (if (< a 0)
                     (error "Can't take ISQRT of a negative number.")
-                    (lisp ,type (a) (cl:isqrt a)))))
+                    (lisp (-> ,type) (a) (cl:isqrt a)))))
             (cl:t
              `(progn
                 (inline)
                 (define (,isqrt a)
-                  (lisp ,type (a) (cl:isqrt a))))))))))
+                  (lisp (-> ,type) (a) (cl:isqrt a))))))))))
 
 (%define-integral-native Integer cl:t)
 (%define-integral-native I8 cl:t)
@@ -304,18 +302,18 @@ are floored and truncated division, respectively."
            (^^ (cl:intern (cl:concatenate 'cl:string (cl:symbol-name type) "-^^"))))
 
     `(coalton-toplevel
-       (specialize ^ ,^ (,type -> Integer -> ,type))
-       (declare ,^ (,type -> Integer -> ,type))
+       (specialize ^ ,^ (,type * Integer -> ,type))
+       (declare ,^ (,type * Integer -> ,type))
        (define (,^ base power)
          (if (< power 0)
              (error "Can't exponentiate with a negative exponent.")
-             (lisp ,type (base power) (cl:expt base power))))
+             (lisp (-> ,type) (base power) (cl:expt base power))))
 
-       (specialize ^^ ,^^ (,type -> Integer -> ,type))
+       (specialize ^^ ,^^ (,type * Integer -> ,type))
        (inline)
-       (declare ,^^ (,type -> Integer -> ,type))
+       (declare ,^^ (,type * Integer -> ,type))
        (define (,^^ base power)
-         (lisp ,type (base power) (cl:expt base power))))))
+         (lisp (-> ,type) (base power) (cl:expt base power))))))
 
 (%define-native-expt Fraction)
 (%define-native-expt F32)

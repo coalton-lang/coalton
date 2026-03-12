@@ -3,8 +3,9 @@
 (named-readtables:in-readtable coalton:coalton)
 
 (coalton-toplevel
-  (define (gh-624a x y)
-    (+ x y))
+  (define (gh-624a x)
+    (fn (y)
+      (+ x y)))
 
   (declare gh-624b (Num :a => :a -> :a))
   (define gh-624b
@@ -19,7 +20,9 @@
   (is (== 4 (gh-624c 2))))
 
 (coalton-toplevel
-  (define (underapplication-a x y) (+ x y))
+  (define (underapplication-a x)
+    (fn (y)
+      (+ x y)))
 
   (monomorphize)
   (declare underapplication-b (Integer -> Integer))
@@ -49,7 +52,7 @@
     (+ 1 z))
 
   (monomorphize)
-  (declare partial-monomorphization-b (Eq :a => :a -> :a -> Integer -> Integer))
+  (declare partial-monomorphization-b (Eq :a => :a * :a * Integer -> Integer))
   (define (partial-monomorphization-b x y z)
     (partial-monomorphization-a x y z)))
 
@@ -61,7 +64,7 @@
     (noinline (< x y)))
 
   (monomorphize)
-  (declare polymorphic-lt-wrapper (Integer -> Integer -> Boolean))
+  (declare polymorphic-lt-wrapper (Integer * Integer -> Boolean))
   (define (polymorphic-lt-wrapper x y)
     (polymorphic-lt-helper x y)))
 

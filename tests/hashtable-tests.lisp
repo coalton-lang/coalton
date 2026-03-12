@@ -2,8 +2,10 @@
 
 (define-test simple-hashtable ()
   (let ((ht (the (Hashtable String Integer) (hashtable:new)))
-        (insert! (hashtable:set! ht))
-        (get (hashtable:get ht)))
+        (insert! (fn (key value)
+                   (hashtable:set! ht key value)))
+        (get (fn (key)
+               (hashtable:get ht key))))
     (progn
       (insert! "zero" 0)
       (insert! "one" 1)

@@ -85,6 +85,7 @@
    #:ty-class-method-name                   ; ACCESSOR
    #:ty-class-method-type                   ; ACCESSOR
    #:ty-class-method-outer-tvars            ; ACCESSOR
+   #:ty-class-method-explicit-tvars         ; ACCESSOR
    #:ty-class                               ; STRUCT
    #:make-ty-class                          ; CONSTRUCTOR
    #:ty-class-name                          ; ACCESSOR
@@ -190,6 +191,7 @@
    #:collect-fundep-vars                    ; FUNCTION
    #:update-instance-fundeps                ; FUNCTION
    #:solve-fundeps                          ; FUNCTION
+   #:synchronize-type-variable-counter      ; FUNCTION
    ))
 
 ;;;;
@@ -557,13 +559,13 @@
             :compressed-repr 'nil))
 
           ('coalton:Unit
-           (make-constructor-entry
+          (make-constructor-entry
             :name 'coalton:Unit
             :source-name "Unit"
             :arity 0
             :constructs 'coalton:Unit
             :classname 'coalton::Unit/Unit
-            :docstring "`Unit` represents nullary parameters and return types."
+            :docstring "`Unit` is the explicit one-value unit type, distinct from zero-value returns `()`."
             :compressed-repr coalton-impl/constants:+value-of-unit+))
 
           ('coalton:Cons
@@ -703,6 +705,9 @@
   ;; Class-head binders that should be in scope in instance method bodies
   ;; before any method-local explicit FORALL binders are introduced.
   (outer-tvars nil                       :type list             :read-only t)
+  ;; Method-local explicit FORALL binders, kept in source order so instance
+  ;; methods can preserve their scoped names when typechecking nested declares.
+  (explicit-tvars nil                    :type list             :read-only t)
   (docstring (util:required 'docstring) :type (or null string) :read-only t))
 
 (defmethod source:docstring ((self ty-class-method))
@@ -768,6 +773,7 @@
                                   (make-ty-class-method :name (ty-class-method-name method)
                                                         :type (apply-substitution subst-list (ty-class-method-type method))
                                                         :outer-tvars (apply-substitution subst-list (ty-class-method-outer-tvars method))
+                                                        :explicit-tvars (apply-substitution subst-list (ty-class-method-explicit-tvars method))
                                                         :docstring (ty-class-method-docstring method)))
                                 (ty-class-unqualified-methods class))
    :codegen-sym (ty-class-codegen-sym class)
@@ -1097,6 +1103,102 @@ of constraint predicates."
 
 (defmethod type-variables ((env environment))
   (type-variables (environment-value-environment env)))
+
+(defun synchronize-type-variable-counter (env)
+  "Advance `*next-variable-id*` past any tyvar IDs stored in ENV.
+
+Compiled environment updates can reload typechecker structures whose tyvar IDs
+were chosen in a previous image. When the fresh-variable counter is reset in a
+new image, those persisted IDs can collide with newly inferred tyvars and cause
+unrelated substitutions to alias each other."
+  (declare (type environment env)
+           (values null &optional))
+  (let ((max-id -1))
+    (labels ((scan (object)
+               (typecase object
+                 (null nil)
+                 (tyvar
+                  (setf max-id (max max-id (tyvar-id object)))
+                  (scan (ty-alias object)))
+                 (tycon
+                  (scan (ty-alias object)))
+                 (tgen
+                  (scan (ty-alias object)))
+                 (tapp
+                  (scan (ty-alias object))
+                  (scan (tapp-from object))
+                  (scan (tapp-to object)))
+                 (keyword-ty-entry
+                  (scan (keyword-ty-entry-type object)))
+                 (function-ty
+                  (scan (ty-alias object))
+                  (scan (function-ty-positional-input-types object))
+                  (scan (function-ty-keyword-input-types object))
+                  (scan (function-ty-output-types object)))
+                 (result-ty
+                  (scan (ty-alias object))
+                  (scan (result-ty-output-types object)))
+                 (qualified-ty
+                  (scan (qualified-ty-predicates object))
+                  (scan (qualified-ty-type object)))
+                 (ty-predicate
+                  (scan (ty-predicate-types object)))
+                 (ty-scheme
+                  (scan (ty-scheme-type object)))
+                 (type-entry
+                  (scan (type-entry-runtime-type object))
+                  (scan (type-entry-type object))
+                  (scan (type-entry-tyvars object)))
+                 (type-alias-entry
+                  (scan (type-alias-entry-type object))
+                  (scan (type-alias-entry-tyvars object)))
+                 (struct-field
+                  (scan (struct-field-type object)))
+                 (struct-entry
+                  (scan (struct-entry-fields object)))
+                 (ty-class-method
+                  (scan (ty-class-method-type object))
+                  (scan (ty-class-method-outer-tvars object))
+                  (scan (ty-class-method-explicit-tvars object)))
+                 (ty-class
+                  (scan (ty-class-predicate object))
+                  (scan (ty-class-superclasses object))
+                  (scan (ty-class-unqualified-methods object))
+                  (scan (ty-class-superclass-dict object)))
+                 (ty-class-instance
+                  (scan (ty-class-instance-constraints object))
+                  (scan (ty-class-instance-predicate object)))
+                 (instance-environment
+                  (scan (instance-environment-instances object)))
+                 (specialization-entry
+                  (scan (specialization-entry-to-ty object)))
+                 (immutable-map
+                  (fset:do-map (_ value (immutable-map-data object))
+                    (declare (ignore _))
+                    (scan value)))
+                 (immutable-listmap
+                  (fset:do-map (_ value (immutable-listmap-data object))
+                    (declare (ignore _))
+                    (scan value)))
+                 (environment
+                  (scan (environment-value-environment object))
+                  (scan (environment-type-environment object))
+                  (scan (environment-constructor-environment object))
+                  (scan (environment-type-alias-environment object))
+                  (scan (environment-struct-environment object))
+                  (scan (environment-class-environment object))
+                  (scan (environment-instance-environment object))
+                  (scan (environment-specialization-environment object)))
+                 (cons
+                  (scan (car object))
+                  (scan (cdr object)))
+                 (list
+                  (dolist (entry object)
+                    (scan entry)))
+                 (t nil))))
+      (scan env)
+      (ensure-next-variable-id-at-least max-id))
+    nil))
 
 ;;;
 ;;; Functions

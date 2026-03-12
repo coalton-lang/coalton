@@ -143,7 +143,7 @@ break, or produced a value."
            (unwrap-loop (fa->lpt-m-stp-a a))))))))
 
   (inline)
-  (declare map-loopT ((:m (Step :a) -> :n (Step :b)) -> LoopT :m :a -> LoopT :n :b))
+  (declare map-loopT ((:m (Step :a) -> :n (Step :b)) * LoopT :m :a -> LoopT :n :b))
   (define (map-loopT fm-stp-a->n-stp-b (LoopT m-stp-a))
     (LoopT
      (fm-stp-a->n-stp-b m-stp-a)))
@@ -154,7 +154,8 @@ break, or produced a value."
     (LoopT (map Value% ma)))
 
   (define-instance (MonadTransformer LoopT)
-    (define lift lift-loopT))
+    (define (lift x)
+      (lift-loopT x)))
 
   ;;
   ;; Standard Library Instances
@@ -162,13 +163,17 @@ break, or produced a value."
 
   (define-instance (MonadEnvironment :e :m => MonadEnvironment :e (LoopT :m))
     (define ask (lift ask))
-    (define asks (compose lift asks))
-    (define local (compose map-loopT local)))
+    (define (asks f)
+      (lift (asks f)))
+    (define (local f m)
+      (map-loopT (fn (x) (local f x)) m)))
 
   (define-instance (MonadState :s :m => MonadState :s (LoopT :m))
     (define get (lift get))
-    (define put (compose lift put))
-    (define modify (compose lift modify))))
+    (define (put x)
+      (lift (put x)))
+    (define (modify f)
+      (lift (modify f)))))
 
 ;;;
 ;;; Loop Controls
@@ -197,7 +202,7 @@ break, or produced a value."
             (pure Unit)
             (loop-while body))))))
 
-  (declare loop-do-while ((Monad :m) (ct::Terminator :t) => :m :t -> LoopT :m :a -> :m Unit))
+  (declare loop-do-while ((Monad :m) (ct::Terminator :t) => :m :t * LoopT :m :a -> :m Unit))
   (define (loop-do-while m-term? body)
     "Before each iteration, evaluate M-TERM?. If it indicates completion, stop; otherwise run BODY.
 Respects break and continue within BODY. Returns Unit."
@@ -211,7 +216,7 @@ Respects break and continue within BODY. Returns Unit."
             ((Break%) (pure Unit))
             (_ (loop-do-while m-term? body)))))))
 
-  (declare loop-times (Monad :m => UFix -> (UFix -> LoopT :m :a) -> :m Unit))
+  (declare loop-times (Monad :m => UFix * (UFix -> LoopT :m :a) -> :m Unit))
   (define (loop-times n body)
     "Repeat BODY N times. Passes the current index (starting at 0) to BODY.
 Returns Unit."
@@ -256,7 +261,7 @@ Returns the collected list."
             ((None)
              (pure (l:reverse result)))))))))
 
-  (declare foreach (Monad :m => List :a -> (:a -> LoopT :m :z) -> :m Unit))
+  (declare foreach (Monad :m => List :a * (:a -> LoopT :m :z) -> :m Unit))
   (define (foreach lst fa->lpt-m)
     "For each element of LST, run FA->LPT-M on it. Break stops the iteration.
 Continue skips to the next element. Discards return values and returns Unit."

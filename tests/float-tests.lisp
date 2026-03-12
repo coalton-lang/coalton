@@ -5,7 +5,7 @@
 (coalton-toplevel
   (define-class (LooseCompare :a)
     "Loosely compares floats"
-    (~ (:a -> :a -> Boolean)))
+    (~ (:a * :a -> Boolean)))
 
   (define-instance (LooseCompare F32)
     (define (~ a b)
@@ -105,16 +105,18 @@
   (define (check-against-double x y)
     "Checks to see if a double-float within a tolerable error of a big-float thunk."
     (is (<= (abs (- (math:to-fraction (the F64 x))
-                    (big-float:with-precision-rounding 53 big-float:rndn
-                      (fn () (math:to-fraction (the big-float:Big-Float (y)))))))
+                    (big-float:with-precision-rounding
+                      (fn () (math:to-fraction (the big-float:Big-Float (y))))
+                      :precision 53
+                      :rounding big-float:rndn)))
             ;; 2^-48 is the worst a double-float will compare to a coerced fraction.
             (math:^^ 2 -48)))))
 
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
   (cl:defmacro double-check (f)
     "Syntatic sugar for defining big-float  checks against double-floats"
-    `(map (fn (x) (check-against-double (,f (fst x)) (fn () (,f (snd x)))))
-          (zipWith Tuple float-checklist float-checklist))))
+    `(for (Tuple x y) in (zipWith Tuple float-checklist float-checklist)
+       (check-against-double (,f x) (fn () (,f y))))))
 
 (define-test float-double-to-big ()
   (double-check (fn (x) x))
@@ -131,16 +133,17 @@
                          (min (math:reciprocal (abs x)) (abs x))))))
   (double-check
    (fn (x) (math:acos (* (math:sign x)
-                         (min (math:reciprocal (abs x)) (abs x))))))
-
-  Unit)
+                         (min (math:reciprocal (abs x)) (abs x)))))))
 
 (coalton-toplevel
   (define (test-constant a b)
     "Checks a big-float against an integer representing the actual first 64 digits."
     (is (<= (abs (- (math:to-fraction
                      (the big-float:Big-Float
-                          (big-float:with-precision-rounding 208 big-float:rndn a)))
+                          (big-float:with-precision-rounding
+                            a
+                            :precision 208
+                            :rounding big-float:rndn)))
                     (/ b (^ 10 63))))
             (^^ 2 -207)))))
 
@@ -151,3 +154,12 @@
    big-float:bf-pi 3141592653589793238462643383279502884197169399375105820974944592)
   (test-constant
    (fn () (math:ln 2)) 693147180559945309417232121458176568075500134360255254120680009))
+
+(define-test creal-comparison-threshold-scoping ()
+  (let baseline = (creal:comparison-threshold))
+  (let scoped = (creal:with-comparison-threshold
+                  (fn ()
+                    (creal:comparison-threshold))
+                  :bits (+ baseline 1)))
+  (is (== scoped (+ baseline 1)))
+  (is (== (creal:comparison-threshold) baseline)))

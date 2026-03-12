@@ -145,6 +145,19 @@ treated as invariant to preserve soundness."
                    (walk entry variance)))
                (tyvar
                  (record node variance))
+               (function-ty
+                 ;; Function inputs are contravariant, outputs covariant.
+                 (dolist (arg (function-ty-positional-input-types node))
+                   (walk arg (variance-compose variance ':contravariant)))
+                 (dolist (entry (function-ty-keyword-input-types node))
+                   (walk (keyword-ty-entry-type entry)
+                         (variance-compose variance ':contravariant)))
+                 (when (function-ty-output-types node)
+                   (dolist (output (function-ty-output-types node))
+                     (walk output (variance-compose variance ':covariant)))))
+               (result-ty
+                 (dolist (output (result-ty-output-types node))
+                   (walk output (variance-compose variance ':covariant))))
                (tapp
                  (let* ((flattened (flatten-type node))
                         (head (first flattened))

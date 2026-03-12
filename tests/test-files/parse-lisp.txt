@@ -15,7 +15,7 @@ error: Malformed lisp expression
    |                 ^ expected expression type
 
 ================================================================================
-101 Missing binding list
+101 Legacy lisp return type rejected
 ================================================================================
 
 (package test-package)
@@ -24,14 +24,14 @@ error: Malformed lisp expression
 
 --------------------------------------------------------------------------------
 
-error: Malformed lisp expression
-  --> test:3:24
+error: Malformed lisp return type
+  --> test:3:19
    |
  3 |  (define f (lisp (T -> T)))
-   |                          ^ expected binding list
+   |                     ^^ nothing may appear to the left of `->` in a `lisp` return type
 
 ================================================================================
-102 Missing body
+102 Legacy lisp return type rejected before body parsing
 ================================================================================
 
 (package test-package)
@@ -40,14 +40,14 @@ error: Malformed lisp expression
 
 --------------------------------------------------------------------------------
 
-error: Malformed lisp expression
-  --> test:3:10
+error: Malformed lisp return type
+  --> test:3:19
    |
  3 |  (define f (lisp (T -> T) (x y)))
-   |            ^^^^^^^^^^^^^^^^^^^^^ expected body
+   |                     ^^ nothing may appear to the left of `->` in a `lisp` return type
 
 ================================================================================
-103 Legacy keyword `:values` is parsed as a type
+103 Legacy keyword values rejected
 ================================================================================
 
 (package test-package)
@@ -56,72 +56,67 @@ error: Malformed lisp expression
 
 --------------------------------------------------------------------------------
 
-error: Malformed lisp expression
-  --> test:3:23
+error: Malformed lisp return type
+  --> test:3:16
    |
  3 |  (define f (lisp :values))
-   |                         ^ expected binding list
+   |                  ^^^^^^^ use `(-> ...)` return type syntax in `lisp` forms
 
 ================================================================================
-104 Missing expression type with multiple-values
-================================================================================
-
-(package test-package)
-
-(define f (lisp multiple-values))
-
---------------------------------------------------------------------------------
-
-error: Malformed lisp expression
-  --> test:3:31
-   |
- 3 |  (define f (lisp multiple-values))
-   |                                 ^ expected expression type
-
-================================================================================
-105 Missing binding list with multiple-values
-================================================================================
-
-(package test-package)
-
-(define f (lisp multiple-values (T -> T)))
-
---------------------------------------------------------------------------------
-
-error: Malformed lisp expression
-  --> test:3:40
-   |
- 3 |  (define f (lisp multiple-values (T -> T)))
-   |                                          ^ expected binding list
-
-================================================================================
-106 Invalid lisp multiple-values return type
+104 Legacy multiple-values directive rejected
 ================================================================================
 
 (package test-package)
 
 (define f (lisp multiple-values Integer ()
-            (cl:values 1 2)))
+            (cl:values 1)))
 
 --------------------------------------------------------------------------------
 
-error: Invalid lisp multiple-values return type
-  --> test:3:32
+error: Malformed lisp expression
+  --> test:3:16
    |
  3 |  (define f (lisp multiple-values Integer ()
-   |                                  ^^^^^^^ `(lisp multiple-values ...)` requires a Tuple return type, but got 'INTEGER'
+   |                  ^^^^^^^^^^^^^^^ use `(-> ...)` return types instead of the legacy `multiple-values` directive
 
 ================================================================================
-107 Uppercase multiple-values directive accepted
+105 Uppercase multiple-values directive rejected
 ================================================================================
 
 (package test-package)
 
-(define f (lisp MULTIPLE-VALUES (coalton-library/classes:Tuple Integer Integer) ()
+(define f (lisp MULTIPLE-VALUES (-> Integer * Integer) ()
             (cl:values 1 2)))
 
+--------------------------------------------------------------------------------
+
+error: Malformed lisp expression
+  --> test:3:16
+   |
+ 3 |  (define f (lisp MULTIPLE-VALUES (-> Integer * Integer) ()
+   |                  ^^^^^^^^^^^^^^^ use `(-> ...)` return types instead of the legacy `multiple-values` directive
+
 ================================================================================
-108 Legacy keyword `:value` is parsed as a type
+106 Single-output lisp arrow return type
+================================================================================
+
+(package test-package)
+
+(define f (lisp (-> Integer) ()
+            1))
+
+================================================================================
+107 Multi-output lisp arrow return type
+================================================================================
+
+(package test-package)
+
+(define (f)
+  (lisp (-> Integer * Integer) ()
+    (cl:values 1 2)))
+
+================================================================================
+108 Legacy keyword value rejected
 ================================================================================
 
 (package test-package)
@@ -130,14 +125,14 @@ error: Invalid lisp multiple-values return type
 
 --------------------------------------------------------------------------------
 
-error: Malformed lisp expression
-  --> test:3:22
+error: Malformed lisp return type
+  --> test:3:16
    |
  3 |  (define f (lisp :value))
-   |                        ^ expected binding list
+   |                  ^^^^^^ use `(-> ...)` return type syntax in `lisp` forms
 
 ================================================================================
-109 Symbol `multiple-values-extra` is parsed as a type
+109 Legacy symbol rejected
 ================================================================================
 
 (package test-package)
@@ -146,14 +141,14 @@ error: Malformed lisp expression
 
 --------------------------------------------------------------------------------
 
-error: Malformed lisp expression
-  --> test:3:37
+error: Malformed lisp return type
+  --> test:3:16
    |
  3 |  (define f (lisp multiple-values-extra))
-   |                                       ^ expected binding list
+   |                  ^^^^^^^^^^^^^^^^^^^^^ use `(-> ...)` return type syntax in `lisp` forms
 
 ================================================================================
-110 Keyword `:multiple-values` is parsed as a type
+110 Legacy keyword multiple-values rejected
 ================================================================================
 
 (package test-package)
@@ -162,8 +157,8 @@ error: Malformed lisp expression
 
 --------------------------------------------------------------------------------
 
-error: Malformed lisp expression
-  --> test:3:32
+error: Malformed lisp return type
+  --> test:3:16
    |
  3 |  (define f (lisp :multiple-values))
-   |                                  ^ expected binding list
+   |                  ^^^^^^^^^^^^^^^^ use `(-> ...)` return type syntax in `lisp` forms

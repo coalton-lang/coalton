@@ -33,6 +33,10 @@
    #:make-node-bind                     ; CONSTRUCTOR
    #:node-bind-pattern                  ; ACCESSOR
    #:node-bind-expr                     ; ACCESSOR
+   #:node-values-bind                   ; STRUCT
+   #:make-node-values-bind              ; CONSTRUCTOR
+   #:node-values-bind-patterns          ; ACCESSOR
+   #:node-values-bind-expr              ; ACCESSOR
    #:node-body-element                  ; TYPE
    #:node-body-element-list             ; TYPE
    #:node-body                          ; STRUCT
@@ -42,8 +46,16 @@
    #:node-abstraction                   ; STRUCT
    #:make-node-abstraction              ; CONSTRUCTOR
    #:node-abstraction-params            ; ACCESSOR
+   #:node-abstraction-keyword-params    ; ACCESSOR
    #:node-abstraction-body              ; ACCESSOR
    #:node-abstraction-p                 ; FUNCTION
+   #:keyword-param                      ; STRUCT
+   #:make-keyword-param                 ; CONSTRUCTOR
+   #:keyword-param-keyword              ; ACCESSOR
+   #:keyword-param-binder               ; ACCESSOR
+   #:keyword-param-default              ; ACCESSOR
+   #:keyword-param-list                 ; TYPE
+   #:parse-fn-argument-list             ; FUNCTION
    #:node-let-binding                   ; STRUCT
    #:make-node-let-binding              ; CONSTRUCTOR
    #:node-let-binding-name              ; ACCESSOR
@@ -61,8 +73,7 @@
    #:node-let-body                      ; ACCESSOR
    #:node-lisp                          ; STRUCT
    #:make-node-lisp                     ; CONSTRUCTOR
-   #:node-lisp-type                     ; ACCESSOR
-   #:node-lisp-return-convention        ; ACCESSOR
+   #:node-lisp-output-types             ; ACCESSOR
    #:node-lisp-vars                     ; ACCESSOR
    #:node-lisp-var-names                ; ACCESSOR
    #:node-lisp-body                     ; ACCESSOR
@@ -103,6 +114,9 @@
    #:node-return                        ; STRUCT
    #:make-node-return                   ; CONSTRUCTOR
    #:node-return-expr                   ; ACCESSOR
+   #:node-values                        ; STRUCT
+   #:make-node-values                   ; CONSTRUCTOR
+   #:node-values-nodes                  ; ACCESSOR
    #:node-throw                         ; STRUCT
    #:make-node-throw                    ; CONSTRUCTOR
    #:node-throw-expr                    ; ACCESSOR
@@ -113,6 +127,12 @@
    #:make-node-application              ; CONSTRUCTOR
    #:node-application-rator             ; ACCESSOR
    #:node-application-rands             ; ACCESSOR
+   #:node-application-keyword-rands     ; ACCESSOR
+   #:node-application-keyword-arg       ; STRUCT
+   #:make-node-application-keyword-arg  ; CONSTRUCTOR
+   #:node-application-keyword-arg-keyword ; ACCESSOR
+   #:node-application-keyword-arg-value ; ACCESSOR
+   #:node-application-keyword-arg-list  ; TYPE
    #:node-or                            ; STRUCT
    #:make-node-or                       ; CONSTRUCTOR
    #:node-or-nodes                      ; ACCESSOR
@@ -254,7 +274,8 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;
 ;;;; node-body := node-body-element* expression
 ;;;;
-;;;; node-abstraction := "(" "fn" "(" pattern* ")" node-body ")"
+;;;; node-keyword-param := "(" identifier expression ")"
+;;;; node-abstraction := "(" "fn" "(" pattern* ["&key" node-keyword-param*] ")" node-body ")"
 ;;;;
 ;;;; node-let-binding := "(" identifier expression ")"
 ;;;;
@@ -264,7 +285,9 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;
 ;;;; node-rec := "(" "rec" (identifier | "(" identifier [qualified-ty] ")" ) "(" (node-let-binding | node-let-declare)+ ")" body ")"
 ;;;;
-;;;; node-lisp := "(" "lisp" ["multiple-values"] type "(" variable* ")" lisp-form+ ")"
+;;;; node-lisp := "(" "lisp" type "(" lisp-variable* ")" lisp-form+ ")"
+;;;;
+;;;; lisp-variable := variable | "(" identifier variable ")"
 ;;;;
 ;;;; node-match-branch := "(" pattern body ")"
 ;;;;
@@ -276,7 +299,8 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;
 ;;;; node-return := "(" "return" expression? ")"
 ;;;;
-;;;; node-application := "(" expression expression* ")"
+;;;; node-keyword-arg := keyword expression
+;;;; node-application := "(" expression expression* [node-keyword-arg*] ")"
 ;;;;
 ;;;; node-or := "(" "or" expression+ ")"
 ;;;;
@@ -354,8 +378,17 @@ Rebound to NIL parsing an anonymous FN.")
 (defmethod source:location ((self node-bind))
   (node-bind-location self))
 
+(defstruct (node-values-bind
+            (:copier nil))
+  (patterns (util:required 'patterns)  :type pattern-list    :read-only t)
+  (expr     (util:required 'expr)      :type node            :read-only t)
+  (location (util:required 'location)  :type source:location :read-only t))
+
+(defmethod source:location ((self node-values-bind))
+  (node-values-bind-location self))
+
 (deftype node-body-element ()
-  '(or node node-bind))
+  '(or node node-bind node-values-bind))
 
 (defun node-body-element-p (x)
   (typep x 'node-body-element))
@@ -382,8 +415,27 @@ Rebound to NIL parsing an anonymous FN.")
 (defstruct (node-abstraction
             (:include node)
             (:copier nil))
-  (params (util:required 'params) :type pattern-list :read-only t)
-  (body   (util:required 'body)   :type node-body    :read-only t))
+  (params         (util:required 'params) :type pattern-list       :read-only t)
+  (keyword-params nil                     :type keyword-param-list :read-only t)
+  (body           (util:required 'body)   :type node-body          :read-only t))
+
+(defstruct (keyword-param
+            (:copier nil))
+  (keyword  (util:required 'keyword)  :type keyword-src     :read-only t)
+  (binder   (util:required 'binder)   :type node-variable   :read-only t)
+  (default  (util:required 'default)  :type node            :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self keyword-param))
+  (keyword-param-location self))
+
+(eval-when (:load-toplevel :compile-toplevel :execute)
+  (defun keyword-param-list-p (x)
+    (and (alexandria:proper-list-p x)
+         (every #'keyword-param-p x))))
+
+(deftype keyword-param-list ()
+  '(satisfies keyword-param-list-p))
 
 (defstruct (node-let-binding
             (:copier nil))
@@ -427,8 +479,7 @@ Rebound to NIL parsing an anonymous FN.")
 (defstruct (node-lisp
             (:include node)
             (:copier nil))
-  (type      (util:required 'type)      :type ty                 :read-only t)
-  (return-convention ':boxed            :type (member :boxed :values) :read-only t)
+  (output-types (util:required 'output-types) :type (or null ty-list)  :read-only t)
   (vars      (util:required 'vars)      :type node-variable-list :read-only t)
   (var-names (util:required 'var-names) :type util:symbol-list   :read-only t)
   (body      (util:required 'body)      :type t                  :read-only t))
@@ -471,11 +522,34 @@ Rebound to NIL parsing an anonymous FN.")
             (:copier nil))
   (expr (util:required 'expr) :type (or null node) :read-only t))
 
+(defstruct (node-values
+            (:include node)
+            (:copier nil))
+  (nodes (util:required 'nodes) :type node-list :read-only t))
+
 (defstruct (node-application
             (:include node)
             (:copier nil))
-  (rator (util:required 'rator) :type node      :read-only t)
-  (rands (util:required 'rands) :type node-list :read-only t))
+  (rator         (util:required 'rator) :type node                           :read-only t)
+  (rands         (util:required 'rands) :type node-list                      :read-only t)
+  (keyword-rands nil                    :type node-application-keyword-arg-list :read-only t))
+
+(defstruct (node-application-keyword-arg
+            (:copier nil))
+  (keyword  (util:required 'keyword)  :type keyword-src     :read-only t)
+  (value    (util:required 'value)    :type node            :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self node-application-keyword-arg))
+  (node-application-keyword-arg-location self))
+
+(eval-when (:load-toplevel :compile-toplevel :execute)
+  (defun node-application-keyword-arg-list-p (x)
+    (and (alexandria:proper-list-p x)
+         (every #'node-application-keyword-arg-p x))))
+
+(deftype node-application-keyword-arg-list ()
+  '(satisfies node-application-keyword-arg-list-p))
 
 (defstruct (node-or
             (:include node)
@@ -537,7 +611,7 @@ Rebound to NIL parsing an anonymous FN.")
   (node-do-bind-location self))
 
 (deftype node-do-body-element ()
-  '(or node node-bind node-do-bind))
+  '(or node node-bind node-values-bind node-do-bind))
 
 (defun node-do-body-element-p (x)
   (typep x 'node-do-body-element))
@@ -648,6 +722,157 @@ Rebound to NIL parsing an anonymous FN.")
   (expr     (util:required 'expr)     :type node                   :read-only t)
   (branches (util:required 'branches) :type node-catch-branch-list :read-only t))
 
+(defun values-symbol-p (symbol)
+  (declare (type t symbol)
+           (values boolean))
+  (and (symbolp symbol)
+       (string= "VALUES" (symbol-name symbol))))
+
+(defun values-pattern-form-p (form)
+  (declare (type cst:cst form)
+           (values boolean))
+  (and (cst:consp form)
+       (cst:atom (cst:first form))
+       (values-symbol-p (cst:raw (cst:first form)))))
+
+(defun keyword-name-from-binder (binder-name)
+  (declare (type identifier binder-name)
+           (values keyword &optional))
+  (nth-value 0
+             (intern (symbol-name binder-name) util:+keyword-package+)))
+
+(defun parse-keyword-param (form source)
+  (declare (type cst:cst form)
+           (values keyword-param &optional))
+  (unless (and (cst:consp form)
+               (cst:proper-list-p form))
+    (parse-error "Malformed function keyword parameter"
+                 (note source form "expected `(name init-expr)`")))
+  (unless (cst:consp (cst:rest form))
+    (parse-error "Malformed function keyword parameter"
+                 (note source form "expected identifier and default expression")))
+  (unless (cst:atom (cst:first form))
+    (parse-error "Malformed function keyword parameter"
+                 (note source (cst:first form) "expected identifier")))
+  (unless (identifierp (cst:raw (cst:first form)))
+    (parse-error "Malformed function keyword parameter"
+                 (note source (cst:first form) "expected identifier")))
+  (when (cst:consp (cst:rest (cst:rest form)))
+    (parse-error "Malformed function keyword parameter"
+                 (note source (cst:third form) "unexpected trailing form")))
+  (let* ((binder-form (cst:first form))
+         (binder (parse-variable binder-form source))
+         (keyword-name (keyword-name-from-binder (node-variable-name binder))))
+    (make-keyword-param
+     :keyword (make-keyword-src
+               :name keyword-name
+               :location (form-location source binder-form))
+     :binder binder
+     :default (parse-expression (cst:second form) source)
+     :location (form-location source form))))
+
+(defun check-duplicate-keyword-parameters (keyword-params source)
+  (declare (type keyword-param-list keyword-params))
+  (let ((seen (make-hash-table :test #'eq)))
+    (dolist (param keyword-params)
+      (let* ((keyword (keyword-param-keyword param))
+             (name (keyword-src-name keyword))
+             (prev (gethash name seen)))
+        (when prev
+          (parse-error "Duplicate keyword parameter"
+                       (secondary-note source (source:location-span (source:location prev))
+                                       "first definition here")
+                       (note source (source:location-span (source:location keyword))
+                             "second definition here")))
+        (setf (gethash name seen) keyword)))))
+
+(defun keyword-marker-p (form)
+  (and (cst:atom form)
+       (symbolp (cst:raw form))
+       (string= (symbol-name (cst:raw form)) "&KEY")))
+
+(defun parse-fn-argument-list (form source)
+  (declare (type cst:cst form)
+           (values pattern-list keyword-param-list))
+  (let ((arg-forms form)
+        (params nil)
+        (keyword-params nil)
+        (in-keyword-section nil))
+    (loop :while (cst:consp arg-forms)
+          :for current := (cst:first arg-forms)
+          :do
+             (cond
+               ((keyword-marker-p current)
+                (when in-keyword-section
+                  (parse-error "Malformed function"
+                               (note source current "invalid `&key` placement")))
+                (setf in-keyword-section t))
+               (in-keyword-section
+                (push (parse-keyword-param current source) keyword-params))
+               (t
+                (push (parse-pattern current source) params)))
+             (setf arg-forms (cst:rest arg-forms)))
+    (unless (cst:null arg-forms)
+      (parse-error "Malformed function"
+                   (note source arg-forms "unexpected dotted list")))
+    (setf params (nreverse params)
+          keyword-params (nreverse keyword-params))
+    (check-duplicate-keyword-parameters keyword-params source)
+    (values params keyword-params)))
+
+(defun check-duplicate-call-keywords (keyword-rands source)
+  (declare (type node-application-keyword-arg-list keyword-rands))
+  (let ((seen (make-hash-table :test #'eq)))
+    (dolist (arg keyword-rands)
+      (let* ((keyword (node-application-keyword-arg-keyword arg))
+             (name (keyword-src-name keyword))
+             (prev (gethash name seen)))
+        (when prev
+          (parse-error "Duplicate keyword argument"
+                       (secondary-note source (source:location-span (source:location prev))
+                                       "first argument here")
+                       (note source (source:location-span (source:location keyword))
+                             "second argument here")))
+        (setf (gethash name seen) keyword)))))
+
+(defun parse-application-arguments (forms source)
+  (declare (type cst:cst forms)
+           (values node-list node-application-keyword-arg-list))
+  (unless (cst:proper-list-p forms)
+    (parse-error "Malformed function application"
+                 (note source forms "unexpected dotted list")))
+  (let ((rands nil)
+        (keyword-rands nil)
+        (in-keyword-section nil))
+    (loop :for rest := forms :then (cst:rest rest)
+          :while (cst:consp rest)
+          :for current := (cst:first rest)
+          :do
+             (cond
+               ((and (cst:atom current)
+                     (keywordp (cst:raw current)))
+                (unless (cst:consp (cst:rest rest))
+                  (parse-error "Malformed function application"
+                               (note-end source current "keyword argument value is missing")))
+                (setf in-keyword-section t)
+                (push (make-node-application-keyword-arg
+                       :keyword (make-keyword-src
+                                 :name (cst:raw current)
+                                 :location (form-location source current))
+                       :value (parse-expression (cst:second rest) source)
+                       :location (form-location source current))
+                      keyword-rands)
+                (setf rest (cst:rest rest)))
+               (in-keyword-section
+                (parse-error "Malformed function application"
+                             (note source current "positional argument after keyword argument")))
+               (t
+                (push (parse-expression current source) rands))))
+    (setf rands (nreverse rands)
+          keyword-rands (nreverse keyword-rands))
+    (check-duplicate-call-keywords keyword-rands source)
+    (values rands keyword-rands)))
+
 (defun parse-expression (form source)
   (declare (type cst:cst form)
            (values node &optional))
@@ -684,8 +909,17 @@ Rebound to NIL parsing an anonymous FN.")
     ;;
 
     ((and (cst:atom (cst:first form))
+          (values-symbol-p (cst:raw (cst:first form))))
+     (make-node-values
+      :location (form-location source form)
+      :nodes (loop :for values := (cst:rest form) :then (cst:rest values)
+                   :while (cst:consp values)
+                   :collect (parse-expression (cst:first values) source))))
+
+    ((and (cst:atom (cst:first form))
           (eq 'coalton:fn (cst:raw (cst:first form))))
      (let ((params)
+           (keyword-params)
            (body))
 
        ;; (fn)
@@ -713,13 +947,12 @@ Rebound to NIL parsing an anonymous FN.")
        ;; Bind *LOOP-LABEL-CONTEXT* to NIL to disallow BREAKing from
        ;; or CONTINUING with loops that enclose the FN form.
        (let ((*loop-label-context* nil))
-         (setf params
-               (loop :for vars := (cst:second form) :then (cst:rest vars)
-                     :while (cst:consp vars)
-                     :collect (parse-pattern (cst:first vars) source)))
+         (multiple-value-setq (params keyword-params)
+           (parse-fn-argument-list (cst:second form) source))
          (setf body (parse-body (cst:nthrest 2 form) form source))
          (make-node-abstraction
           :params params
+          :keyword-params keyword-params
           :body body
           :location (form-location source form)))))
 
@@ -967,47 +1200,55 @@ Rebound to NIL parsing an anonymous FN.")
     ((and (cst:atom (cst:first form))
           (eq 'coalton:lisp (cst:raw (cst:first form))))
      (let* ((args (cst:rest form))
-            (values-directive-p (and (cst:consp args)
-                                     (cst:atom (cst:first args))
-                                     (eq 'coalton:multiple-values (cst:raw (cst:first args)))))
-            (directive-cst (if values-directive-p (cst:first args) nil))
-            ;; Set args to the rest, remembering we have a values
-            ;; directive.
-            (args (if values-directive-p
-                      (cst:rest args)
-                      args))
-            (return-convention (if values-directive-p ':values ':boxed)))
+            (legacy-values-directive-p
+              (and (cst:consp args)
+                   (cst:atom (cst:first args))
+                   (let ((raw (cst:raw (cst:first args))))
+                     (and (symbolp raw)
+                          (not (keywordp raw))
+                          (string= "MULTIPLE-VALUES" (symbol-name raw)))))))
 
-       ;; (lisp) or (lisp multiple-values)
+       (when legacy-values-directive-p
+         (parse-error "Malformed lisp expression"
+                      (note source
+                            (cst:first args)
+                            "use `(-> ...)` return types instead of the legacy `multiple-values` directive")))
+
+       ;; (lisp)
        (unless (cst:consp args)
          (parse-error "Malformed lisp expression"
                       (note-end source
-                                (or directive-cst (cst:first form))
+                                (cst:first form)
                                 "expected expression type")))
 
        (let ((type-form (cst:first args)))
-         ;; (lisp T) or (lisp multiple-values T)
+         (let ((output-types (parse-lisp-return-type type-form source)))
+           ;; (lisp (-> ...))
          (unless (cst:consp (cst:rest args))
            (parse-error "Malformed lisp expression"
                         (note-end source type-form "expected binding list")))
 
          (let* ((vars-form (cst:second args))
                 (body-form (cst:nthrest 2 args)))
-           ;; (lisp T (...))
+           ;; (lisp (-> ...) (...))
            (unless (cst:consp body-form)
              (parse-error "Malformed lisp expression"
                           (note source form "expected body")))
 
-           (let ((vars (loop :for vars := vars-form :then (cst:rest vars)
-                             :while (cst:consp vars)
-                             :collect (parse-variable (cst:first vars) source))))
+           (let ((vars nil)
+                 (var-names nil))
+             (loop :for vars-cst := vars-form :then (cst:rest vars-cst)
+                   :while (cst:consp vars-cst)
+                   :do (multiple-value-bind (var var-name)
+                           (parse-lisp-variable-binding (cst:first vars-cst) source)
+                         (push var vars)
+                         (push var-name var-names)))
              (make-node-lisp
-              :type (parse-type type-form source)
-              :return-convention return-convention
-              :vars vars
-              :var-names (mapcar #'node-variable-name vars)
+              :output-types output-types
+              :vars (nreverse vars)
+              :var-names (nreverse var-names)
               :body (cst:raw body-form)
-              :location (form-location source form)))))))
+              :location (form-location source form))))))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:match (cst:raw (cst:first form))))
@@ -1340,13 +1581,13 @@ Rebound to NIL parsing an anonymous FN.")
     ;;
 
     (t
-     (make-node-application
-      :rator (parse-expression (cst:first form) source)
-      :rands (loop :for rands := (cst:rest form) :then (cst:rest rands)
-                   :while (cst:consp rands)
-                   :for rand := (cst:first rands)
-                   :collect (parse-expression rand source))
-      :location (form-location source form)))))
+     (multiple-value-bind (rands keyword-rands)
+         (parse-application-arguments (cst:rest form) source)
+       (make-node-application
+        :rator (parse-expression (cst:first form) source)
+        :rands rands
+        :keyword-rands keyword-rands
+        :location (form-location source form))))))
 
 (defun parse-expressions (forms source)
   (declare (type list forms)
@@ -1381,6 +1622,31 @@ Rebound to NIL parsing an anonymous FN.")
   (make-node-variable
    :name (cst:raw form)
    :location (form-location source form)))
+
+(defun parse-lisp-variable-binding (form source)
+  (declare (type cst:cst form)
+           (values node-variable symbol &optional))
+  (cond
+    ((and (cst:atom form)
+          (identifierp (cst:raw form)))
+     (let ((var (parse-variable form source)))
+       (values var (node-variable-name var))))
+    ((cst:proper-list-p form)
+     (let ((items (cst:listify form)))
+       (unless (= 2 (length items))
+         (parse-error "Invalid lisp binding"
+                      (note source form "expected identifier or (identifier identifier)")))
+       (let ((lisp-name-form (first items))
+             (coalton-name-form (second items)))
+         (unless (and (cst:atom lisp-name-form)
+                      (identifierp (cst:raw lisp-name-form)))
+           (parse-error "Invalid lisp binding"
+                        (note source lisp-name-form "expected identifier")))
+         (values (parse-variable coalton-name-form source)
+                 (cst:raw lisp-name-form)))))
+    (t
+     (parse-error "Invalid lisp binding"
+                  (note source form "expected identifier or (identifier identifier)")))))
 
 (defun parse-accessor (form source)
   (declare (type cst:cst form)
@@ -1473,17 +1739,27 @@ Rebound to NIL parsing an anonymous FN.")
 ;; Forms passed to parse-node-bind must be previously verified by `shorthand-let-p'
 (defun parse-node-bind (form source)
   (declare (type cst:cst form)
-           (values node-bind))
+           (values node-body-element))
 
   (when (cst:consp (cst:rest (cst:rest (cst:rest (cst:rest form)))))
     (parse-error "Malformed shorthand let"
                  (note source (cst:first (cst:rest (cst:rest (cst:rest (cst:rest form)))))
                        "unexpected trailing form")))
 
-  (make-node-bind
-   :pattern (parse-pattern (cst:second form) source)
-   :expr (parse-expression (cst:fourth form) source)
-   :location (form-location source form)))
+  (let ((pattern-form (cst:second form))
+        (expr (parse-expression (cst:fourth form) source))
+        (location (form-location source form)))
+    (if (values-pattern-form-p pattern-form)
+        (make-node-values-bind
+         :patterns (loop :for patterns := (cst:rest pattern-form) :then (cst:rest patterns)
+                         :while (cst:consp patterns)
+                         :collect (parse-pattern (cst:first patterns) source))
+         :expr expr
+         :location location)
+        (make-node-bind
+         :pattern (parse-pattern pattern-form source)
+         :expr expr
+         :location location))))
 
 (defun parse-body-element (form source)
   (declare (type cst:cst form)

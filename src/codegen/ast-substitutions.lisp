@@ -73,7 +73,6 @@ is true."
         (let ((new-lisp-node (make-node-lisp
                               :type (node-type node)
                               :vars lisp-var-bindings
-                              :return-convention (node-lisp-return-convention node)
                               :form (node-lisp-form node))))
           (if (endp let-bindings)
               new-lisp-node
@@ -93,7 +92,8 @@ is true."
          :properties (node-properties node)
          :rator-type (node-direct-application-rator-type node)
          :rator (node-variable-value (ast-substitution-to res))
-         :rands (node-direct-application-rands node))))
+         :rands (node-direct-application-rands node)
+         :keyword-rands (node-direct-application-keyword-rands node))))
     (action (:traverse node-let node new-subs)
       (loop :for (name . expr) :in (node-let-bindings node)
             :do (when (find name subs :key #'ast-substitution-from)
@@ -120,11 +120,8 @@ is true."
                    (funcall *traverse* node new-subs)))
        :subexpr (funcall *traverse* (node-let-subexpr node) new-subs)))
     (action (:traverse node-values-bind node new-subs)
-      (let* ((tuple-type (node-type (node-values-bind-expr node)))
-             (components (tc:tuple-component-types tuple-type)))
-        (unless components
-          (util:coalton-bug
-           "node-values-bind requires Tuple type, got ~S" tuple-type))
+      (let* ((output-pack-type (node-type (node-values-bind-expr node)))
+             (components (tc:multiple-value-output-types output-pack-type)))
         (loop :for name :in (node-values-bind-vars node)
               :do (when (find name subs :key #'ast-substitution-from)
                     (util:coalton-bug

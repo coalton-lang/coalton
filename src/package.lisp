@@ -52,7 +52,6 @@
    #:forall
    #:∀
    #:Unit
-   #:Void
    #:Boolean #:True #:False
    #:Char
    #:Bit
@@ -80,6 +79,7 @@
   ;; Primitive Syntax
   (:export
    #:fn #:λ
+   #:&key
    #:match
    #:throw
    #:resume-to
@@ -89,7 +89,6 @@
    #:rec
    #:=                                  ; Syntax
    #:lisp
-   #:multiple-values                    ; lisp return-convention directive
    #:<-                                 ; Syntax
    #:_
    #:return

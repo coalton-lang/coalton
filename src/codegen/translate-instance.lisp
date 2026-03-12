@@ -12,7 +12,9 @@
    #:resolve-dict)
   (:import-from
    #:coalton-impl/codegen/translate-expression
-   #:translate-toplevel)
+   #:bind-hidden-function-arguments
+   #:translate-toplevel
+   #:physical-callable-type)
   (:local-nicknames
    (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
@@ -21,6 +23,26 @@
    ))
 
 (in-package #:coalton-impl/codegen/translate-instance)
+
+(defun translate-qualified-method-value (qual-sym qual-type visible-type dict-nodes)
+  (declare (type symbol qual-sym)
+           (type tc:ty qual-type visible-type)
+           (type list dict-nodes)
+           (values node &optional))
+  (let ((rator (make-node-variable
+                :type qual-type
+                :value qual-sym)))
+    (if (tc:function-type-p visible-type)
+        (bind-hidden-function-arguments
+         rator
+         (physical-callable-type visible-type)
+         dict-nodes)
+        (make-node-application
+         :type visible-type
+         :properties '()
+         :rator rator
+         :rands dict-nodes
+         :keyword-rands nil))))
 
 (defun translate-instance (instance env)
   (declare (type tc:toplevel-define-instance instance)
@@ -45,6 +67,13 @@
          (ctx-ty
            (loop :for pred :in (tc:toplevel-define-instance-context instance)
                  :collect (pred-type pred env)))
+
+         (ctx-nodes
+           (loop :for (pred . ctx-var) :in ctx
+                 :for ctx-ty := (pred-type pred env)
+                 :collect (make-node-variable
+                           :type ctx-ty
+                           :value ctx-var)))
 
          (subs (tc:predicate-match (tc:ty-class-predicate class) pred))
 
@@ -75,10 +104,33 @@
            (loop :for pred :in superclass-preds
                  :collect (pred-type pred env)))
 
+         (superclass-dict-nodes
+           (loop :for pred :in superclass-preds
+                 :collect (resolve-dict pred ctx env)))
+
+         (method-arg-nodes
+           (cond
+             ((null ctx)
+              (loop :for sym :in method-codegen-syms
+                    :for ty :in method-ty
+                    :collect (make-node-variable
+                              :type ty
+                              :value sym)))
+             (t
+              (loop :for qual-sym :in method-codegen-syms
+                    :for unqual-type :in method-ty
+                    :for qual-method :in (mapcar #'cdr method-definitions)
+                    :for qual-type := (node-type qual-method)
+                    :collect (translate-qualified-method-value
+                              qual-sym
+                              qual-type
+                              unqual-type
+                              ctx-nodes)))))
+
          ;; Initial node
          (var-node
            (make-node-variable
-            :type (tc:make-function-type*
+            :type (tc:merge-function-input-types
                    (append
                     superclass-ty
                     method-ty)
@@ -93,57 +145,7 @@
                 :type (pred-type pred env)
                 :properties '()
                 :rator var-node
-                :rands (append
-                        ;; Superclass dictionary arguments
-                        (loop :for pred :in superclass-preds
-                              :collect (resolve-dict pred ctx env))
-
-                        ;; The COND below could be replaced simply
-                        ;; with
-                        ;;
-                        ;;     unqualified-method-definitions
-                        ;;
-                        ;; however, this will duplicate the method
-                        ;; bodies in the final codegen output. As
-                        ;; such, instead, we want to look up the
-                        ;; symbols that these methods are bound to
-                        ;; (METHOD-CODEGEN-SYMS) and apply them to the
-                        ;; context variables as needed.
-                        (cond
-                          ;; In this case, there is no context, so we
-                          ;; can just refer to the method symbols
-                          ;; directly.
-                          ((null ctx)
-                           (loop :for sym :in method-codegen-syms
-                                 :for ty :in method-ty
-                                 :collect (make-node-variable
-                                           :type ty
-                                           :value sym)))
-
-                          ;; In this case, we have to take a method symbol M and construct an appliaction
-                          ;;
-                          ;;    (M CTX1 CTX2 ... CTXn).
-                          ;;
-                          ;; This in turns transforms a qualified type
-                          ;; (of M) to an unqualified type (of the
-                          ;; application of M).
-                          (t
-                           (loop :for qual-sym :in method-codegen-syms
-                                 :for unqual-method :in unqualified-method-definitions
-                                 :for unqual-type :in method-ty
-                                 :for qual-method :in (mapcar #'cdr method-definitions)
-                                 :for qual-type := (node-type qual-method)
-                                 :collect (make-node-application
-                                           :type unqual-type
-                                           :properties '()
-                                           :rator (make-node-variable
-                                                   :type qual-type
-                                                   :value qual-sym)
-                                           :rands (loop :for (pred . ctx-var) :in ctx
-                                                        :for ctx-ty := (pred-type pred env)
-                                                        :collect (make-node-variable
-                                                                  :type ctx-ty
-                                                                  :value ctx-var))))))))))
+                :rands (append superclass-dict-nodes method-arg-nodes))))
 
          (dict-node
            (if ctx
@@ -162,6 +164,9 @@
             method-definitions)))
 
     (loop :for (name . node) :in bindings
-          :do (typecheck-node node env))
+          :do (handler-case
+                  (typecheck-node node env)
+                (tc:coalton-internal-type-error (e)
+                  (error e))))
 
     bindings))

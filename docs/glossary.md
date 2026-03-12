@@ -179,9 +179,9 @@ Continuing the example above, we could make `Integer` an instance of `Stringable
 ```
 (define-instance (Stringable Integer)
   (define (from-string s)
-    (lisp Integer (s)
+    (lisp (-> Integer) (s)
       (cl:parse-integer s)))
-  (define (to-integer i)
-    (lisp String (i)
+  (define (to-string i)
+    (lisp (-> String) (i)
       (cl:prin1-to-string i))))
 ```

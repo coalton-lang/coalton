@@ -597,7 +597,7 @@ This is conservative and intentionally aligns with mutable native wrappers."
            := (loop
                 :for ctor-args :in constructor-args
                 :for ty
-                  := (tc:make-function-type*
+                  := (tc:prepend-function-input-types
                       ctor-args
                       (tc:apply-type-argument-list
                        (tc:apply-ksubstitution ksubs (gethash name (partial-type-env-ty-table env)))
@@ -752,13 +752,14 @@ This is conservative and intentionally aligns with mutable native wrappers."
                 :params (list
                          (parser:make-pattern-wildcard
                           :location location))
+                :function-syntax-p t
                 :body (parser:make-node-body
                        :nodes nil
                        :last-node (parser:make-node-lisp
                                    :location location
-                                   :type (parser:make-tycon
-                                          :location location
-                                          :name lisp-type)
+                                   :output-types (list (parser:make-tycon
+                                                        :location location
+                                                        :name lisp-type))
                                    :vars nil
                                    :var-names nil
                                    :body (list (util:runtime-quote (type-definition-runtime-type type)))))

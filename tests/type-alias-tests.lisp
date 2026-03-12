@@ -84,7 +84,7 @@
    "(define-type-alias (UnaryOperator :a) (:a -> :a))")
 
   (check-coalton-types
-   "(define-type-alias (Collapse :a :b :c :d) (:d -> :c -> :b -> :a))"))
+   "(define-type-alias (Collapse :a :b :c :d) (:d * :c * :b -> :a))"))
 
 (deftest test-complex-type-alias-definition ()
 
@@ -129,12 +129,12 @@
 
   
   (check-coalton-types
-   "(define-type-alias (FoldFunc :a :b) (:a -> :b -> :a))
+   "(define-type-alias (FoldFunc :a :b) (:a * :b -> :a))
 
     (declare f (FoldFunc (List Integer) Integer))
     (define (f xs x) (Cons x xs))"
 
-   '("f" . "((List Integer) -> Integer -> (List Integer))"))
+   '("f" . "((List Integer) * Integer -> (List Integer))"))
 
   (check-coalton-types
    "(define-type-alias (UnaryOperator :a) (:a -> :a))
@@ -192,11 +192,11 @@
     (declare my-pure (:a -> (MyParser :a)))
     (define (my-pure x) (MyParser x))
 
-    (declare my-liftA2 ((:a -> :b -> :c) -> (MyParser :a) -> (MyParser :b) -> (MyParser :c)))
+    (declare my-liftA2 ((:a * :b -> :c) * (MyParser :a) * (MyParser :b) -> (MyParser :c)))
     (define (my-liftA2 f (MyParser a) (MyParser b))
       (MyParser (f a b)))
 
-    (declare my-liftA3 ((:a -> :b -> :c -> :d) -> (MyParser :a) -> (MyParser :b) -> (MyParser :c) -> (MyParser :d)))
+    (declare my-liftA3 ((:a * :b * :c -> :d) * (MyParser :a) * (MyParser :b) * (MyParser :c) -> (MyParser :d)))
     (define (my-liftA3 f (MyParser a) (MyParser b) (MyParser c))
       (MyParser (f a b c)))
 
@@ -271,7 +271,7 @@
     (define as1 (make-iopure 1))
     (define cc (make-iobind as1 (fn (_x) (make-iopure \"a\"))))"
 
-   '("make-iobind" . "((IOBind :a Unit) -> (:a -> (IOBind :b Unit)) -> (IOBind :a :b))")
+   '("make-iobind" . "((IOBind :a Unit) * (:a -> (IOBind :b Unit)) -> (IOBind :a :b))")
    '("cc" . "(IOBind Integer String)"))
 
   (check-coalton-types

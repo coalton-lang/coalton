@@ -121,6 +121,14 @@ same quantified binder identity."
                  (tapp
                   (collect-instantiation-metadata (tapp-from object))
                   (collect-instantiation-metadata (tapp-to object)))
+                 (keyword-ty-entry
+                  (collect-instantiation-metadata (keyword-ty-entry-type object)))
+                 (function-ty
+                  (collect-instantiation-metadata (function-ty-positional-input-types object))
+                  (collect-instantiation-metadata (function-ty-keyword-input-types object))
+                  (collect-instantiation-metadata (function-ty-output-types object)))
+                 (result-ty
+                  (collect-instantiation-metadata (result-ty-output-types object)))
                  (qualified-ty
                   (collect-instantiation-metadata (qualified-ty-predicates object))
                   (collect-instantiation-metadata (qualified-ty-type object)))

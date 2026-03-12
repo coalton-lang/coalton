@@ -35,37 +35,39 @@
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
-  (declare trace (String -> Unit))
+  (declare trace (String -> Void))
   (define (trace str)
     "Print a line to `cl:*standard-output*`."
-    (progn
-      (lisp :a (str) (cl:format cl:t "~A~%" str))
-      Unit))
+    (lisp (-> Void) (str)
+      (cl:progn
+        (cl:format cl:t "~A~%" str)
+        (cl:values))))
 
-  (declare traceObject (String -> :a -> Unit))
+  (declare traceObject (String * :a -> Void))
   (define (traceObject str item)
     "Print a line to `cl:*standard-output*` in the form \"{STR}: {ITEM}\"."
-    (progn
-      (lisp :a (str item) (cl:format cl:t "~A: ~A~%" str item))
-      Unit))
+    (lisp (-> Void) (str item)
+      (cl:progn
+        (cl:format cl:t "~A: ~A~%" str item)
+        (cl:values))))
 
-  (declare print ((Into :a String) => :a -> Unit))
+  (declare print ((Into :a String) => :a -> Void))
   (define (print item)
     "Print the String representation of `item` to `cl:*standard-output*`."
     (trace (into item)))
 
   (inline)
-  (declare unsafe-pointer-eq? (:a -> :a -> Boolean))
+  (declare unsafe-pointer-eq? (:a * :a -> Boolean))
   (define (unsafe-pointer-eq? a b)
-    (lisp Boolean (a b)
+    (lisp (-> Boolean) (a b)
       (to-boolean (cl:eq a b))))
 
   ;;
   ;; Function combinators
   ;;
 
-  (declare fix (((:a -> :b) -> (:a -> :b)) -> (:a -> :b)))
-  (define (fix f n)
+  (declare fix (((:a -> :b) * :a -> :b) -> (:a -> :b)))
+  (define (fix f)
     "Compute the fixed point of a unary function. This is equivalent to the Y-combinator of the lambda calculus. This combinator allows recursion without specific assignment of names. For example, the factorial function can be written
 
     (define fact
@@ -74,7 +76,8 @@
           (if (== n 0)
             1
             (* n (f (- n 1)))))))"
-    (f (fix f) n))
+    (fn (n)
+      (f (fix f) n)))
 
   (inline)
   (declare id (:a -> :a))
@@ -83,36 +86,36 @@
     x)
 
   (inline)
-  (declare const (:a -> :b -> :a))
-  (define (const a _b)
+  (declare const (:a -> (:b -> :a)))
+  (define (const a)
     "A function that always returns its first argument."
-    a)
+    (fn (_b) a))
 
   (inline)
-  (declare flip ((:a -> :b -> :c) -> :b -> :a -> :c))
-  (define (flip f x y)
+  (declare flip ((:a * :b -> :c) -> (:b * :a -> :c)))
+  (define (flip f)
     "Returns a function that takes its arguments in reverse order."
-    (f y x))
+    (fn (x y) (f y x)))
 
-  (declare reduce (Foldable :f => (:a -> :b -> :b) -> :b -> (:f :a) -> :b))
+  (declare reduce (Foldable :f => (:a * :b -> :b) * :b * (:f :a) -> :b))
   (define (reduce f y xs)
     "The same as `fold` but with the argument order swapped to match `cl:reduce`"
     (fold (flip f) y xs))
 
   (inline)
-  (declare compose ((:b -> :c) -> (:a -> :b) -> :a -> :c))
-  (define (compose f g x)
+  (declare compose ((:b -> :c) * (:a -> :b) -> (:a -> :c)))
+  (define (compose f g)
     "Equivalent to `(f (g x))`."
-    (f (g x))))
+    (fn (x) (f (g x)))))
 
 (coalton-toplevel
  
- (declare conjoin ((:a -> Boolean) -> (:a -> Boolean) -> :a -> Boolean))
+ (declare conjoin ((:a -> Boolean) * (:a -> Boolean) * :a -> Boolean))
  (define (conjoin f g x)
    "Compute the conjunction of two unary Boolean functions."
    (and (f x) (g x)))
 
- (declare disjoin ((:a -> Boolean) -> (:a -> Boolean) -> :a -> Boolean))
+ (declare disjoin ((:a -> Boolean) * (:a -> Boolean) * :a -> Boolean))
  (define (disjoin f g x)
    "Compute the disjunction of two unary Boolean functions."
    (or (f x) (g x))))
@@ -144,24 +147,26 @@ For example, the following expressions are equivalent.
 (coalton-toplevel
 
  (inline)
- (declare complement ((:a -> Boolean) -> :a -> Boolean))
+ (declare complement ((:a -> Boolean) * :a -> Boolean))
  (define (complement f x)
    "Compute the complement of a unary Boolean function."
    (not (f x)))
 
- (declare curry ((Tuple :left :right -> :result) -> :left -> :right -> :result))
- (define (curry func left right)
-   "Take a function whose input is a tuple and enable curried application of the left and right parameters, equivalent to `(func (Tuple left right))`."
-   (func (Tuple left right)))
+ (declare curry ((Tuple :left :right -> :result) -> (:left * :right -> :result)))
+ (define (curry func)
+   "Adapt a function on `(Tuple left right)` into a two-argument function."
+   (fn (left right)
+     (func (Tuple left right))))
 
- (declare uncurry ((:left -> :right -> :result) -> Tuple :left :right -> :result))
- (define (uncurry func tpl)
-   "Take a function with two currying parameters and enable their input as a single `Tuple`."
-   (match tpl
-          ((Tuple left right)
-           (func left right))))
+ (declare uncurry ((:left * :right -> :result) -> (Tuple :left :right -> :result)))
+ (define (uncurry func)
+   "Adapt a two-argument function into one that accepts a single `Tuple`."
+   (fn (tpl)
+     (match tpl
+       ((Tuple left right)
+        (func left right)))))
 
- (declare pair-with ((:left -> :right) -> :left -> Tuple :left :right))
+ (declare pair-with ((:left -> :right) * :left -> Tuple :left :right))
  (define (pair-with func left)
    "Create a `Tuple` of the form `(Tuple left (func left))`."
    (Tuple left (func left)))
@@ -183,7 +188,7 @@ For example, the following expressions are equivalent.
     (foldr alt empty xs))
 
   (inline)
-  (declare /= (Eq :a => :a -> :a -> Boolean))
+  (declare /= (Eq :a => :a * :a -> Boolean))
   (define (/= a b)
     "Is `a` not equal to `b`?"
     (boolean-not (== a b)))
@@ -202,7 +207,7 @@ For example, the following expressions are equivalent.
     (define (liftA2 f g h) (fn (x) (f (g x) (h x)))))
 
   (define-instance (Monad (Arrow :a))
-    (define (>>= f g) (fn (x) (g (f x) x)))))
+    (define (>>= f g) (fn (x) ((g (f x)) x)))))
 
 ;;;
 ;;; Bracket pattern
@@ -219,9 +224,9 @@ For example, the following expressions are equivalent.
 (coalton-toplevel
 
   (declare bracket (Monad :m
-                          => :m :a
-                          -> (:a -> :m :b)
-                          -> (:a -> :m :c)
+                          => (:m :a)
+                          * (:a -> :m :b)
+                          * (:a -> :m :c)
                           -> :m :c))
   (define (bracket init exit body)
     "Bracket takes an initial state, performs a body of operations, and then forces a safe exit.
@@ -231,7 +236,7 @@ This wraps `cl:unwind-protect`.
 Modeled after Haskell: https://wiki.haskell.org/Bracket_pattern"
     (do
      (obj <- init)
-     (lisp (:m :c) (obj exit body)
+     (lisp (-> (:m :c)) (obj exit body)
        (%unwind-protect obj exit body)))))
 
 #+sb-package-locks

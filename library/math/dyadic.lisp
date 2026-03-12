@@ -33,7 +33,7 @@
     "`(Dyadic n k)` represents the rational $\\mathtt{n}\\cdot 2^{\\mathtt{k}}$."
     (Dyadic Integer Integer))
 
-  (declare exact-ilog (Integer -> Integer -> (Optional Integer)))
+  (declare exact-ilog (Integer * Integer -> (Optional Integer)))
   (define (exact-ilog b x)
     "Computes the logarithm with base `b` of `x` only if the result is an
 integer."
@@ -41,8 +41,8 @@ integer."
         (Some (ilog b x))
         None))
 
-  (declare dyadic-compare ((Integer -> Integer -> :a)
-                           -> Dyadic -> Dyadic -> :a))
+  (declare dyadic-compare ((Integer * Integer -> :a)
+                           * Dyadic * Dyadic -> :a))
   (define (dyadic-compare f a b)
     "Return the result of a comparision function `f` on two dyadics `a` and
 `b`."
@@ -62,8 +62,8 @@ integer."
     (define (<=> a b)
       (dyadic-compare <=> a b)))
 
-  (declare dyadic-group ((Integer -> Integer -> Integer)
-                         -> Dyadic -> Dyadic -> Dyadic))
+  (declare dyadic-group ((Integer * Integer -> Integer)
+                         * Dyadic * Dyadic -> Dyadic))
   (define (dyadic-group f a b)
     "Apply an operation `f` on `a` and `b` with matching exponents."
     (match (Tuple a b)
@@ -89,12 +89,12 @@ integer."
     "Finds the simplest dyadic given an integer."
     (if (== n 0)
         (Dyadic 0 0)
-        (match (divMod n 2)
-          ((Tuple d m)
-           (if (== m 0)
-               (* (Dyadic 1 1)
-                  (simplify-integer d))
-               (Dyadic n 0))))))
+        (progn
+          (let (values d m) = (divMod n 2))
+          (if (== m 0)
+              (* (Dyadic 1 1)
+                 (simplify-integer d))
+              (Dyadic n 0)))))
 
   (define (simplify d)
     "Simplifies a dyadic by maximizing the absolute value of the exponent."
@@ -117,10 +117,10 @@ integer."
       (match x
         ((Dyadic n k)
          (if (>= k 0)
-             (Tuple (* n (lsh 1 k)) 0)
-             (match (quotRem n (rsh 1 k))
-               ((Tuple q r)
-                (Tuple q (Dyadic r k))))))))
+             (values (* n (lsh 1 k)) 0)
+             (progn
+               (let (values q r) = (quotRem n (rsh 1 k)))
+               (values q (Dyadic r k)))))))
     (define (floor x)
       (match x
         ((Dyadic n k)
@@ -132,7 +132,7 @@ integer."
   (define (dyadic-round x)
     "Rounds a dyadic to the nearest integer with ties going to even
 numbers."
-    (let (Tuple n r) = (proper x))
+    (let (values n r) = (proper x))
     (let m = (if (< r 0)
                  (- n 1)
                  (+ n 1)))
@@ -157,7 +157,7 @@ numbers."
     (match x
       ((Dyadic n k) (Dyadic n (+ k j)))))
 
-  (declare shift (UFix -> Dyadic -> Dyadic))
+  (declare shift (UFix * Dyadic -> Dyadic))
   (define (shift k a)
     "Shift dyadic `a` to its floor with $\\mathtt{k}+1$ bits of precision."
     (let (Dyadic m e) = a)

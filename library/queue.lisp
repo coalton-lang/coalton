@@ -54,28 +54,28 @@
   (define-type (Queue :a)
     "Unbounded FIFO queue implemented with a linked list.")
 
-  (declare new (Unit -> Queue :a))
+  (declare new (Void -> Queue :a))
   (define (new)
     "Create a new empty queue."
-    (lisp (Queue :a) ()
+    (lisp (-> (Queue :a)) ()
       (make-queue-internal)))
 
   (declare length (Queue :a -> UFix))
   (define (length q)
     "Returns the length of `q`."
-    (lisp UFix (q)
+    (lisp (-> UFix) (q)
       (queue-internal-length q)))
 
   (declare empty? (Queue :a -> Boolean))
   (define (empty? q)
     "Is `q` empty?"
-    (lisp Boolean (q)
+    (lisp (-> Boolean) (q)
       (cl:null (queue-internal-elements q))))
 
   (declare copy (Queue :a -> Queue :a))
   (define (copy q)
     "Return a new queue containing the same elements as `q`."
-    (lisp (Queue :a) (q)
+    (lisp (-> (Queue :a)) (q)
       (cl:multiple-value-bind (elements last)
           ;; Copy the list, holding on to a reference to the last cons
           (cl:loop
@@ -91,40 +91,41 @@
          :last last
          :length (queue-internal-length q)))))
 
-  (declare clear! (Queue :a -> Unit))
+  (declare clear! (Queue :a -> Void))
   (define (clear! q)
     "Clear all elements from `q`."
-    (lisp Unit (q)
-      (cl:setf (queue-internal-elements q) cl:nil
-               (queue-internal-last q) cl:nil
-               (queue-internal-length q) 0)
-      Unit))
+    (progn
+      (lisp (-> :any) (q)
+        (cl:setf (queue-internal-elements q) cl:nil
+                 (queue-internal-last q) cl:nil
+                 (queue-internal-length q) 0))
+      (values)))
 
-  (declare push! (:a -> Queue :a -> Unit))
+  (declare push! (:a * Queue :a -> Void))
   (define (push! item q)
     "Push `item` onto the end of `q`."
-    (lisp Unit (item q)
-      (cl:let ((last (cl:cons item cl:nil)))
-        (cl:if (cl:null (queue-internal-elements q))
-               ;; Set up the queue with the first element. Note that the same
-               ;; reference to the singleton list is shared by both
-               ;; QUEUE-INTERNAL-ELEMENTS and QUEUE-INTERNAL-LAST.
-               (cl:setf (queue-internal-elements q) last
-                        (queue-internal-last q) last)
+    (progn
+      (lisp (-> :any) (item q)
+        (cl:let ((last (cl:cons item cl:nil)))
+          (cl:if (cl:null (queue-internal-elements q))
+                 ;; Set up the queue with the first element. Note that the same
+                 ;; reference to the singleton list is shared by both
+                 ;; QUEUE-INTERNAL-ELEMENTS and QUEUE-INTERNAL-LAST.
+                 (cl:setf (queue-internal-elements q) last
+                          (queue-internal-last q) last)
 
-               ;; We can now append elements to QUEUE-INTERNAL-ELEMENTS simply by
-               ;; modifying QUEUE-INTERNAL-LAST, whose reference is shared by
-               ;; QUEUE-INTERNAL-ELEMENTS,
-               ;;
-               ;; We do this instead of a single SETF for type safety of
-               ;; QUEUE-INTERNAL-LAST.
-               (cl:let ((old (queue-internal-last q)))
-                 (cl:setf (queue-internal-last q) last
-                          (cl:cdr old) last)))
+                 ;; We can now append elements to QUEUE-INTERNAL-ELEMENTS simply by
+                 ;; modifying QUEUE-INTERNAL-LAST, whose reference is shared by
+                 ;; QUEUE-INTERNAL-ELEMENTS,
+                 ;;
+                 ;; We do this instead of a single SETF for type safety of
+                 ;; QUEUE-INTERNAL-LAST.
+                 (cl:let ((old (queue-internal-last q)))
+                   (cl:setf (queue-internal-last q) last
+                            (cl:cdr old) last)))
 
-        (cl:incf (queue-internal-length q)))
-
-      Unit))
+          (cl:incf (queue-internal-length q))))
+      (values)))
 
   (declare pop! (Queue :a -> Optional :a))
   (define (pop! q)
@@ -136,7 +137,7 @@
   (declare pop-unsafe! (Queue :a -> :a))
   (define (pop-unsafe! q)
     "Remove and return the first item of `q` without checking if the queue is empty."
-    (lisp :a (q)
+    (lisp (-> :a) (q)
       (cl:prog1
           (cl:or (cl:pop (queue-internal-elements q))
                  (cl:error "pop-unsafe! called on an empty Queue."))
@@ -152,40 +153,39 @@
   (declare peek-unsafe (Queue :a -> :a))
   (define (peek-unsafe q)
     "Peek at the first item of `q` without checking if the queue is empty."
-    (lisp :a (q)
+    (lisp (-> :a) (q)
       (cl:or (cl:car (queue-internal-elements q))
              (cl:error "peek-unsafe called on an empty Queue."))))
 
-  (declare index (UFix -> Queue :a -> Optional :a))
+  (declare index (UFix * Queue :a -> Optional :a))
   (define (index index q)
     "Return the `index`th element of `q`."
     (if (>= index (length q))
         None
         (Some (index-unsafe index q))))
 
-  (declare index-unsafe (UFix -> Queue :a -> :a))
+  (declare index-unsafe (UFix * Queue :a -> :a))
   (define (index-unsafe index q)
     "Return the `index`th element of `q` without checking if the element exists."
-    (lisp :a (index q)
+    (lisp (-> :a) (index q)
       (cl:nth index (queue-internal-elements q))))
 
-  (declare append (Queue :a -> Queue :a -> Queue :a))
+  (declare append (Queue :a * Queue :a -> Queue :a))
   (define (append q1 q2)
     "Create a new queue containing the elements of `q1` followed by the elements of `q2`."
     (let out = (new))
-    (extend! out q1)
-    (extend! out q2)
+    (let (values) = (extend! out q1))
+    (let (values) = (extend! out q2))
     out)
 
-  (declare extend! (iter:IntoIterator :container :elt => Queue :elt -> :container -> Unit))
+  (declare extend! (iter:IntoIterator :container :elt => Queue :elt * :container -> Void))
   (define (extend! q iter)
     "Push every element in `iter` to the end of `q`."
     (let iter = (iter:into-iter iter))
 
     (iter:for-each!
      (fn (x)
-       (push! x q)
-       Unit)
+       (push! x q))
      iter))
 
   (declare items! (Queue :a -> iter:Iterator :a))
@@ -207,28 +207,28 @@
           (iter:every! id (iter:zip-with! == (iter:into-iter q1) (iter:into-iter q2))))))
 
   (define-instance (Semigroup (Queue :a))
-    (define <> append))
+    (define (<> a b)
+      (append a b)))
 
   (define-instance (Functor Queue)
     (define (map f q)
       (let out = (new))
-      (iter:for-each!
-       (fn (x)
-         (push! (f x) out)
-         Unit)
-       (iter:into-iter q))
+      (let (values) = (iter:for-each!
+                       (fn (x)
+                         (push! (f x) out))
+                       (iter:into-iter q)))
       out))
 
   (define-instance (Foldable Queue)
     (define (fold f init q)
-      (lisp :a (f init q)
+      (lisp (-> :a) (f init q)
         (cl:reduce
          (cl:lambda (b a)
            (call-coalton-function f b a))
          (queue-internal-elements q)
          :initial-value init)))
     (define (foldr f init q)
-      (lisp :a (f init q)
+      (lisp (-> :a) (f init q)
         (cl:reduce
          (cl:lambda (a b)
            (call-coalton-function f a b))
@@ -249,11 +249,12 @@
   (define-instance (iter:FromIterator (Queue :a) :a)
     (define (iter:collect! iter)
       (let out = (new))
-      (extend! out iter)
+      (let (values) = (extend! out iter))
       out))
 
   (define-instance (Default (Queue :a))
-    (define default new)))
+    (define (default)
+      (new))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/QUEUE")

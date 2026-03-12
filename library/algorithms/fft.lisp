@@ -82,19 +82,20 @@
   (declare ilog2 (UFix -> UFix))
   (define (ilog2 x)
     "The base-2 logarithm of `x`. Assumes `(power-of-2? x)`."
-    (1- (lisp UFix (x) (cl:integer-length x)))))
+    (1- (lisp (-> UFix) (x) (cl:integer-length x)))))
 
 (coalton-toplevel
 
   (declare bit-reversed-permutation! ((ram:RandomAccess :c :t)
-                                      => UFix -> :c -> Unit))
+                                      => UFix * :c -> Void))
   (define (bit-reversed-permutation! n storage)
     "Sort the first `n` elements of `storage` into bit-reversed order. Assumes `(power-of-2? n)` and `(<= n (ram:length storage))`."
     (let ((nbits (ilog2 n)))
       (loops:dotimes (i n)
         (let ((j (inline (bits:reverse-n-bits nbits i))))
           (when (< i j)
-            (inline (ram:unsafe-rotate! storage i j))))))))
+            (ram:unsafe-rotate! storage i j))))
+      (values))))
 
 (coalton-toplevel
 
@@ -122,10 +123,10 @@
 
 These are types which are valid elements for a collection which may undergo a discrete Fourier transform. Examples include complex floating-point numbers and finite (modular) integers."  
     (add-identity :t)
-    (add (:t -> :t -> :t))
+    (add (:t * :t -> :t))
     (add-inverse (:t -> :t)))
 
-  (declare subtract (FFTGroup :t => :t -> :t -> :t))
+  (declare subtract (FFTGroup :t => :t * :t -> :t))
   (define (subtract x y)
     (add x (add-inverse y)))
 
@@ -134,7 +135,7 @@ These are types which are valid elements for a collection which may undergo a di
 
 These are types which are valid elements for a collection which may undergo a discrete Fourier transform. Examples include complex floating-point numbers and finite (modular) integers."  
     (multiply-identity :t)
-    (multiply (:t -> :t -> :t)))
+    (multiply (:t * :t -> :t)))
 
   (define-class (FFTRing :t => FFTField :t)
     "A class of types, each of which is a mathematical field.
@@ -142,7 +143,7 @@ These are types which are valid elements for a collection which may undergo a di
 These are types which are valid elements for a collection which may undergo a discrete Fourier transform. Examples include complex floating-point numbers and finite (modular) integers."  
     (multiply-inverse (:t -> :t)))
 
-  (declare divide (FFTField :t => :t -> :t -> :t))
+  (declare divide (FFTField :t => :t * :t -> :t))
   (define (divide x y)
     (multiply x (multiply-inverse y)))
 
@@ -151,7 +152,7 @@ These are types which are valid elements for a collection which may undergo a di
 
 These are types which are valid elements for a collection which may undergo a discrete Fourier transform. Examples include complex floating-point numbers and finite (modular) integers."
     (cyclic-add-identity :t)
-    (cyclic-add (:t -> :t -> :t))
+    (cyclic-add (:t * :t -> :t))
     (cyclic-add-inverse (:t -> :t))
     (cyclic-nth-generator
      "A function which returns a primitive `n`th root of unity."
@@ -163,7 +164,7 @@ These are types which are valid elements for a collection which may undergo a di
 
   (declare dif-butterfly ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
                           (FFTRing :t) (FFTCyclicGroup :t)
-                          => UFix -> UFix -> :t -> :c -> :d -> Unit))
+                          => UFix * UFix * :t * :c * :d -> Void))
   (define (dif-butterfly j k w dst src)
     "Perform a single decimation-in-frequency butterfly operation for indices `j` and `k` with the twiddle factor `w`, reading from `src` and writing to `dst`."
     (let ((a (ram:unsafe-aref src j))
@@ -175,10 +176,10 @@ These are types which are valid elements for a collection which may undergo a di
 
 (coalton-toplevel
 
-  (declare dif-kernel ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
+  (declare dif-kernel ((ram:RandomAccess :c :t)
                        (FFTRing :t) (FFTCyclicGroup :t)
-                       => UFix -> UFix -> UFix -> :t -> :t
-                       -> UFix -> UFix -> :c -> :d -> Unit))
+                       => UFix * UFix * UFix * :t * :t
+                       * UFix * UFix * :c * :c -> Void))
   (define (dif-kernel n m m/2 wm w j k dst src)
     "A tail-recursive kernel for performing a decimation-in-frequency fourier transform for storage of length `n`, for butterfly clusters of size `m`, reading from `src` and writing to `dst`."
     (cond
@@ -210,19 +211,58 @@ These are types which are valid elements for a collection which may undergo a di
        ;; Reset the indices.
        (let j   = 0)
        (let k   = m/2)
-       ;; Ensure data is read from and written to the same storage after
-       ;; the first iteration.
-       (let src = dst)
        ;; Iterate.
-       (dif-kernel n m m/2 wm w j k dst src))
+       (dif-kernel n m m/2 wm w j k dst dst))
       (True
-       Unit))))
+       (values)))))
+
+(coalton-toplevel
+
+  (declare dif-kernel-initial ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
+                               (FFTRing :t) (FFTCyclicGroup :t)
+                               => UFix * UFix * UFix * :t * :t
+                               * UFix * UFix * :c * :d -> Void))
+  (define (dif-kernel-initial n m m/2 wm w j k dst src)
+    "A tail-recursive kernel for the first decimation-in-frequency layer, allowing distinct input and output storage."
+    (cond
+      ((zero? (bits:and j m/2)) ; Equivalent to (< (mod j m) m/2)
+       ;; Perform a butterfly operation.
+       (dif-butterfly j k w dst src)
+       ;; Rotate the twiddle factor.
+       (let w = (cyclic-add w wm))
+       ;; Increment the indices.
+       (let j = (1+ j))
+       (let k = (1+ k))
+       ;; Iterate.
+       (dif-kernel-initial n m m/2 wm w j k dst src))
+      ((< (+ j m/2) n)
+       ;; Reset the twiddle factor.
+       (let w = cyclic-add-identity)
+       ;; Shift the indices to the next block.
+       (let j = (+ j m/2))
+       (let k = (+ k m/2))
+       ;; Iterate.
+       (dif-kernel-initial n m m/2 wm w j k dst src))
+      ((> m 2)
+       ;; Update the parameters for the next layer of butterfly operations.
+       (let m   = m/2)
+       (let m/2 = (bits:shift -1 m/2))
+       (let wm  = (cyclic-add wm wm))
+       ;; Reset the twiddle factor.
+       (let w   = cyclic-add-identity)
+       ;; Reset the indices.
+       (let j   = 0)
+       (let k   = m/2)
+       ;; Iterate from the second layer onward using a single storage type.
+       (dif-kernel n m m/2 wm w j k dst dst))
+      (True
+       (values)))))
 
 (coalton-toplevel
 
   (declare dif-fft-raw ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
                         (FFTRing :t) (FFTCyclicGroup :t)
-                        => :c -> :d -> Unit))
+                        => :c * :d -> Void))
   (define (dif-fft-raw dst src)
     "A decimation-in-frequency fast fourier transform, reading from `src` and writing to `dst`.
 
@@ -236,13 +276,13 @@ Normalization: none"
     (let w    = cyclic-add-identity)
     (let j    = 0)
     (let k    = m/2)
-    (dif-kernel n m m/2 wm w j k dst src)))
+    (dif-kernel-initial n m m/2 wm w j k dst src)))
 
 (coalton-toplevel
 
   (declare dif-ifft-raw ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
                          (FFTRing :t) (FFTCyclicGroup :t)
-                         => :c -> :d -> Unit))
+                         => :c * :d -> Void))
   (define (dif-ifft-raw dst src)
     "A decimation-in-frequency inverse fast fourier transform, reading from `src` and writing to `dst`.
 
@@ -256,7 +296,7 @@ Normalization: none"
     (let w    = cyclic-add-identity)
     (let j    = 0)
     (let k    = m/2)
-    (dif-kernel n m m/2 wm w j k dst src)))
+    (dif-kernel-initial n m m/2 wm w j k dst src)))
 
 ;;; Define the decimation-in-time raw FFT and inverse FFT.
 
@@ -264,7 +304,7 @@ Normalization: none"
 
   (declare dit-butterfly ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
                           (FFTRing :t) (FFTCyclicGroup :t)
-                          => UFix -> UFix -> :t -> :c -> :d -> Unit))
+                          => UFix * UFix * :t * :c * :d -> Void))
   (define (dit-butterfly j k w dst src)
     "Perform a single decimation-in-time butterfly operation for indices `j` and `k` with the twiddle factor `w`, reading from `src` and writing to `dst`."
     (let ((a (ram:unsafe-aref src j))
@@ -278,10 +318,10 @@ Normalization: none"
 (coalton-toplevel
 
   (declare dit-kernel
-           ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
+           ((ram:RandomAccess :c :t)
             (FFTRing :t) (FFTCyclicGroup :t)
-            => Boolean -> UFix -> UFix -> UFix -> :t -> :t
-            -> UFix -> UFix -> :c -> :d -> Unit))
+            => Boolean * UFix * UFix * UFix * :t * :t
+            * UFix * UFix * :c * :c -> Void))
   (define (dit-kernel inv? n m m/2 wm w j k dst src)
     "A tail-recursive kernel for performing a decimation-in-time fourier transform for storage of length `n`, for butterfly clusters of size `m`, reading from `src` and writing to `dst`."
     (cond
@@ -314,19 +354,60 @@ Normalization: none"
        ;; Reset the indices.
        (let j   = 0)
        (let k   = m/2)
-       ;; Ensure data is read from and written to the same storage
-       ;; after the first iteration.
-       (let src = dst)
        ;; Iterate.
-       (dit-kernel inv? n m m/2 wm w j k dst src))
+       (dit-kernel inv? n m m/2 wm w j k dst dst))
       (True
-       Unit))))
+       (values)))))
+
+(coalton-toplevel
+
+  (declare dit-kernel-initial
+           ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
+            (FFTRing :t) (FFTCyclicGroup :t)
+            => Boolean * UFix * UFix * UFix * :t * :t
+            * UFix * UFix * :c * :d -> Void))
+  (define (dit-kernel-initial inv? n m m/2 wm w j k dst src)
+    "A tail-recursive kernel for the first decimation-in-time layer, allowing distinct input and output storage."
+    (cond
+      ((zero? (bits:and j m/2)) ; Equivalent to (< (mod j m) m/2)
+       ;; Perform a butterfly operation.
+       (dit-butterfly j k w dst src)
+       ;; Rotate the twiddle factor.
+       (let w = (cyclic-add w wm))
+       ;; Increment the indices.
+       (let j = (1+ j))
+       (let k = (1+ k))
+       ;; Iterate.
+       (dit-kernel-initial inv? n m m/2 wm w j k dst src))
+      ((< (+ j m/2) n)
+       ;; Reset the twiddle factor.
+       (let w = cyclic-add-identity)
+       ;; Shift the indices to the next block.
+       (let j = (+ j m/2))
+       (let k = (+ k m/2))
+       ;; Iterate.
+       (dit-kernel-initial inv? n m m/2 wm w j k dst src))
+      ((< m n)
+       ;; Update the parameters for the next layer of butterfly operations.
+       (let m   = (bits:shift 1 m))
+       (let m/2 = (bits:shift 1 m/2))
+       (let wm  = (cyclic-nth-generator m))
+       (let wm  = (if inv? wm (cyclic-add-inverse wm)))
+       ;; Reset the twiddle factor.
+       (let w   = cyclic-add-identity)
+       ;; Reset the indices.
+       (let j   = 0)
+       (let k   = m/2)
+       ;; Iterate from the second layer onward using a single storage type.
+       (dit-kernel inv? n m m/2 wm w j k dst dst))
+      (True
+       (values)))))
 
 (coalton-toplevel
 
   (declare dit-fft-raw ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
                         (FFTRing :t) (FFTCyclicGroup :t)
-                        => :c -> :d -> Unit))
+                        => :c * :d -> Void))
   (define (dit-fft-raw dst src)
     "A decimation-in-time fast fourier transform, reading from `src` and writing to `dst`.
 
@@ -341,13 +422,13 @@ Normalization: none"
     (let w    = cyclic-add-identity)
     (let j    = 0)
     (let k    = m/2)
-    (dit-kernel inv? n m m/2 wm w j k dst src)))
+    (dit-kernel-initial inv? n m m/2 wm w j k dst src)))
 
 (coalton-toplevel
 
   (declare dit-ifft-raw ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
                          (FFTRing :t) (FFTCyclicGroup :t)
-                         => :c -> :d -> Unit))
+                         => :c * :d -> Void))
   (define (dit-ifft-raw dst src)
     "A decimation-in-time inverse fast fourier transform, reading from `src` and writing to `dst`.
 
@@ -362,7 +443,7 @@ Normalization: none"
     (let w    = cyclic-add-identity)
     (let j    = 0)
     (let k    = m/2)
-    (dit-kernel inv? n m m/2 wm w j k dst src)))
+    (dit-kernel-initial inv? n m m/2 wm w j k dst src)))
 
 ;;; Define the primary interface.
 
@@ -406,7 +487,7 @@ Normalization: none"
 
   (declare fft-into! ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
                       (FFTRing :t) (FFTCyclicGroup :t)
-                      => :d -> :c -> :d))
+                      => :d * :c -> :d))
   (define (fft-into! dst src)
     "Perform a fast Fourier transform of `src`, writing the result to `dst`. If `dst` is longer than `src`, then remaining elements of `dst` are left unmutated."
     (let ((n (ram:length src)))
@@ -423,7 +504,7 @@ Normalization: none"
 
   (declare ifft-into! ((ram:RandomAccess :c :t) (ram:RandomAccess :d :t)
                       (FFTField :t) (FFTCyclicGroup :t) (Num :t)
-                      => :d -> :c -> :d))
+                      => :d * :c -> :d))
   (define (ifft-into! dst src)
     "Perform an inverse fast Fourier transform of `src`, writing the result to `dst`. If `dst` is longer than `src`, then remaining elements of `dst` are left unmutated."
     (let ((n (ram:length src)))
@@ -490,14 +571,14 @@ Normalization: none"
   (define-type-alias C128 (Complex F64))
 
   (define-instance (FFTGroup C64)
-    (define add-identity (lisp C64 () #C(0f0 0f0)))
+    (define add-identity (lisp (-> C64) () #C(0f0 0f0)))
     (inline)
     (define (add x y) (+ x y))
     (inline)
     (define (add-inverse x) (- add-identity x)))
 
   (define-instance (FFTRing C64)
-    (define multiply-identity (lisp C64 () #C(1f0 0f0)))
+    (define multiply-identity (lisp (-> C64) () #C(1f0 0f0)))
     (inline)
     (define (multiply x y) (* x y)))
 
@@ -506,7 +587,7 @@ Normalization: none"
     (define (multiply-inverse x) (/ multiply-identity x)))
 
   (define-instance (FFTCyclicGroup C64)
-    (define cyclic-add-identity (lisp C64 () #C(1f0 0f0)))
+    (define cyclic-add-identity (lisp (-> C64) () #C(1f0 0f0)))
     (inline)
     (define (cyclic-add x y) (* x y))
     (inline)
@@ -516,8 +597,8 @@ Normalization: none"
       (inline (math:cis (/ (* 2f0 math:pi) (math:integral->num n))))))
 
   (inline)
-  (declare dif-butterfly/c64 (UFix -> UFix -> C64
-                                   -> Array C64 -> Array C64 -> Unit))
+  (declare dif-butterfly/c64 (UFix * UFix * C64
+                                   * Array C64 * Array C64 -> Void))
   (define (dif-butterfly/c64 j k w dst src)
     (let ((a (ram:unsafe-aref src j))
           (b (ram:unsafe-aref src k)))
@@ -525,11 +606,11 @@ Normalization: none"
       (ram:unsafe-set! dst k (* w (- a b)))))
 
   (specialize dif-butterfly dif-butterfly/c64
-              (UFix -> UFix -> C64 -> Array C64 -> Array C64 -> Unit))
+              (UFix * UFix * C64 * Array C64 * Array C64 -> Void))
 
   (inline)
-  (declare dit-butterfly/c64 (UFix -> UFix -> C64
-                                   -> Array C64 -> Array C64 -> Unit))
+  (declare dit-butterfly/c64 (UFix * UFix * C64
+                                   * Array C64 * Array C64 -> Void))
   (define (dit-butterfly/c64 j k w dst src)
     (let ((a (ram:unsafe-aref src j))
           (wb (* w (ram:unsafe-aref src k))))
@@ -537,17 +618,17 @@ Normalization: none"
       (ram:unsafe-set! dst k (- a wb))))
 
   (specialize dit-butterfly dit-butterfly/c64
-              (UFix -> UFix -> C64 -> Array C64 -> Array C64 -> Unit))
+              (UFix * UFix * C64 * Array C64 * Array C64 -> Void))
 
   (define-instance (FFTGroup C128)
-    (define add-identity (lisp C128 () #C(0d0 0d0)))
+    (define add-identity (lisp (-> C128) () #C(0d0 0d0)))
     (inline)
     (define (add x y) (+ x y))
     (inline)
     (define (add-inverse x) (- add-identity x)))
 
   (define-instance (FFTRing C128)
-    (define multiply-identity (lisp C128 () #C(1d0 0d0)))
+    (define multiply-identity (lisp (-> C128) () #C(1d0 0d0)))
     (inline)
     (define (multiply x y) (* x y)))
 
@@ -556,7 +637,7 @@ Normalization: none"
     (define (multiply-inverse x) (/ multiply-identity x)))
 
   (define-instance (FFTCyclicGroup C128)
-    (define cyclic-add-identity (lisp C128 () #C(1d0 0d0)))
+    (define cyclic-add-identity (lisp (-> C128) () #C(1d0 0d0)))
     (inline)
     (define (cyclic-add x y) (* x y))
     (inline)
@@ -566,8 +647,8 @@ Normalization: none"
       (inline (math:cis (/ (* 2d0 math:pi) (math:integral->num n))))))
 
   (inline)
-  (declare dif-butterfly/c128 (UFix -> UFix -> C128
-                                    -> Array C128 -> Array C128 -> Unit))
+  (declare dif-butterfly/c128 (UFix * UFix * C128
+                                    * Array C128 * Array C128 -> Void))
   (define (dif-butterfly/c128 j k w dst src)
     (let ((a (ram:unsafe-aref src j))
           (b (ram:unsafe-aref src k)))
@@ -575,11 +656,11 @@ Normalization: none"
       (ram:unsafe-set! dst k (* w (- a b)))))
 
   (specialize dif-butterfly dif-butterfly/c128
-              (UFix -> UFix -> C128 -> Array C128 -> Array C128 -> Unit))
+              (UFix * UFix * C128 * Array C128 * Array C128 -> Void))
 
   (inline)
-  (declare dit-butterfly/c128 (UFix -> UFix -> C128
-                                    -> Array C128 -> Array C128 -> Unit))
+  (declare dit-butterfly/c128 (UFix * UFix * C128
+                                    * Array C128 * Array C128 -> Void))
   (define (dit-butterfly/c128 j k w dst src)
     (let ((a (ram:unsafe-aref src j))
           (wb (* w (ram:unsafe-aref src k))))
@@ -587,4 +668,4 @@ Normalization: none"
       (ram:unsafe-set! dst k (- a wb))))
 
   (specialize dit-butterfly dit-butterfly/c128
-              (UFix -> UFix -> C128 -> Array C128 -> Array C128 -> Unit)))
+              (UFix * UFix * C128 * Array C128 * Array C128 -> Void)))

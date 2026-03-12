@@ -4,9 +4,9 @@
 
 (coalton-toplevel
   (define *initial-env* (from-some "Failed to init classenv"
-                                   (th:compose
-                                    th:addPreludeClasses
-                                    th:exampleInsts
+                                   ((th:compose
+                                     th:addPreludeClasses
+                                     th:exampleInsts)
                                     th:initialEnv))))
 
 (define-test test-thih-type-inference ()

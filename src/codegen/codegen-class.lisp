@@ -16,6 +16,47 @@
 
 (in-package #:coalton-impl/codegen/codegen-class)
 
+(defun method-wrapper-keyword-specs (visible-type)
+  (declare (type tc:ty visible-type)
+           (values list &optional))
+  (when (typep visible-type 'tc:function-ty)
+    (loop :for entry :in (tc:function-ty-keyword-input-types visible-type)
+          :collect (list :keyword (tc:keyword-ty-entry-keyword entry)
+                         :var (gensym "KEYWORD-ARG-")
+                         :supplied-p-var (gensym "KEYWORD-SUPPLIED-P-")))))
+
+(defun method-wrapper-lambda-list (positional-params keyword-specs)
+  (declare (type list positional-params keyword-specs)
+           (values list &optional))
+  (append
+   (list 'dict)
+   positional-params
+   (when keyword-specs
+     (list* '&key
+            (loop :for spec :in keyword-specs
+                  :collect `((,(getf spec :keyword) ,(getf spec :var))
+                             nil
+                             ,(getf spec :supplied-p-var)))))))
+
+(defun method-wrapper-call (method-accessor positional-params keyword-specs)
+  (declare (type symbol method-accessor)
+           (type list positional-params keyword-specs)
+           (values t &optional))
+  (cond
+    ((null keyword-specs)
+     (if (null positional-params)
+         `(,method-accessor dict)
+         `(rt:exact-call (,method-accessor dict) ,@positional-params)))
+    (t
+     `(apply #'rt:call-coalton-function
+             (,method-accessor dict)
+             (append
+              (list ,@positional-params)
+              ,@(loop :for spec :in keyword-specs
+                      :collect `(if ,(getf spec :supplied-p-var)
+                                    (list ,(getf spec :keyword) ,(getf spec :var))
+                                    '())))))))
+
 (defun codegen-class-definitions (classes env)
   (declare (type tc:ty-class-list classes)
            (type tc:environment env)
@@ -55,8 +96,12 @@
            (type tc:environment env))
   (let* ((qual-ty
            (tc:fresh-inst (tc:ty-class-method-type method)))
+         (visible-type
+           (tc:qualified-ty-type qual-ty))
          (method-contraint-args
            (length (tc:qualified-ty-predicates qual-ty)))
+         (keyword-specs
+           (method-wrapper-keyword-specs visible-type))
          (arity (+ (tc:function-type-arity (tc:qualified-ty-type qual-ty))
                    method-contraint-args))
          (params
@@ -72,11 +117,13 @@
            (alexandria:format-symbol (symbol-package class-codegen-sym)
                                      "~A-~A" class-codegen-sym method-name)))
     `((declaim (inline ,method-name))
-      (defun ,method-name (dict ,@params)
+      (defun ,method-name ,(method-wrapper-lambda-list params keyword-specs)
         (declare #.settings:*coalton-optimize*)
-        ,(if (null params)
-             `(,method-accessor dict)
-             `(rt:call-coalton-function (,method-accessor dict) ,@params)))
+        (declare (ignorable dict ,@params
+                            ,@(loop :for spec :in keyword-specs
+                                    :append (list (getf spec :var)
+                                                  (getf spec :supplied-p-var)))))
+        ,(method-wrapper-call method-accessor params keyword-specs))
       ;; Generate the wrapper functions
       (global-lexical:define-global-lexical ,method-name rt:function-entry)
       (setf ,method-name
