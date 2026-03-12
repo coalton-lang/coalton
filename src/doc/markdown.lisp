@@ -35,13 +35,13 @@
 ;;;;
 ;;;; The following format is used for links to objects in documentation:
 ;;;;
-;;;; Package: `${name}-package`
+;;;; Package: `${sanitized-package-name}-package`
 ;;;; File: `${package}-${name}-file`
 ;;;;   where `name` is the filepath relative to the provided asdf system
 ;;;;   with all non-alphanumeric characters replaced with `-`.
-;;;; Type: `${name}-type`
-;;;; Class: `${name}-class`
-;;;; Value: `${name}-value`
+;;;; Type: `${sanitized-package-name}-${name}-type`
+;;;; Class: `${sanitized-package-name}-${name}-class`
+;;;; Value: `${sanitized-package-name}-${name}-value`
 
 (defpackage #:coalton/doc/markdown
   (:use
@@ -308,8 +308,12 @@
                  (to-markdown new-type)))))))
 
 (defmethod to-markdown ((object tc:ty-predicate))
-  (let ((class-source-name (lookup-class-source-name (tc:ty-predicate-class object))))
-    (format nil "<a href=\"#~(~A-class~)\">~:*~A</a>~{ ~A~}"
+  (let* ((class-name (tc:ty-predicate-class object))
+         (class-source-name (lookup-class-source-name class-name)))
+    (format nil "<a href=\"#~A\">~A</a>~{ ~A~}"
+            (package-qualified-anchor (symbol-package class-name)
+                                      class-source-name
+                                      "class")
             (html-entities:encode-entities class-source-name)
             (mapcar #'to-markdown (tc:ty-predicate-types object)))))
 

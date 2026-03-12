@@ -124,6 +124,31 @@
                      (render-type (coalton-type-of 'coalton-native-tests::explicit-method)))
       )))
 
+(deftest test-documentation-anchors-include-package-name ()
+  (let* ((env coalton-impl/entry:*global-environment*)
+         (hashmap-count
+           (coalton/doc/model::make-coalton-value
+            (coalton-impl/typechecker/environment:lookup-name env 'coalton/hashmap:count)))
+         (hashtable-count
+           (coalton/doc/model::make-coalton-value
+            (coalton-impl/typechecker/environment:lookup-name env 'coalton/hashtable:count)))
+         (explicit-method-markdown
+           (coalton/doc/markdown::to-markdown
+            (coalton-impl/typechecker/environment:lookup-value-type
+             env
+             'coalton-native-tests::explicit-method))))
+    (check-string= "hashmap count anchor"
+                   "coalton-hashmap-count-value"
+                   (coalton/doc/model:object-aname hashmap-count))
+    (check-string= "hashtable count anchor"
+                   "coalton-hashtable-count-value"
+                   (coalton/doc/model:object-aname hashtable-count))
+    (is (not (string= (coalton/doc/model:object-aname hashmap-count)
+                      (coalton/doc/model:object-aname hashtable-count))))
+    (is (search "href=\"#coalton-types-proxy-type\"" explicit-method-markdown))
+    (is (search "href=\"#coalton-native-tests-explicitmethodclass-class\""
+                explicit-method-markdown))))
+
 (deftest test-tyvar-source-names-do-not-affect-quantification ()
   (let* ((left (coalton-impl/typechecker:make-tyvar
                 :id 0
