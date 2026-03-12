@@ -52,32 +52,18 @@ supported 64-bit implementation."))))
     "Both :ANY and :OTHER must be natively represented by a subtype of `cl:integer', and X must be a valid member of :OTHER."
     (lisp :other (x) x))
 
-  (inline)
-  (declare unify (:ty -> :ty -> :ty))
-  (define (unify _ use)
-    "Declare a constraint that two values are of the same type.
-
-Used in `cast-if-inbounds' to force the type inference engine to read minBound and maxBound from the correct
-`Bounded' instance."
-    use)
-
-  (declare cast-if-inbounds ((Ord :src) (Bounded :target) =>
-                             :src -> (Result String :target)))
+  (declare cast-if-inbounds
+    (forall (:src :target)
+      ((Ord :src) (Bounded :target) => :src -> (Result String :target))))
   (define (cast-if-inbounds x)
     "Cast X, minBound and maxBound to `Integer', and compare them. If X is within the bounds, `unsafe-cast' it to the result type."
-    (let max-bound = maxBound)
-    (let min-bound = minBound)
+    (let max-bound = (the :target maxBound))
+    (let min-bound = (the :target minBound))
     (let int = (the Integer (unsafe-cast x)))
     (if (or (< int (unsafe-cast min-bound))
             (> int (unsafe-cast max-bound)))
         (Err "value out of range")
-        (Ok
-         ;; type hackery to get the minBound and maxBound from the Bounded instance of :target. if we
-         ;; removed the two `unify' calls, type inference would compute extra type variables for
-         ;; minBound and maxBound, each with the constraints `Bounded _' and `Into _ Integer', but
-         ;; without unifying them with :target.
-         (unify max-bound (unify min-bound
-                                 (unsafe-cast x)))))))
+        (Ok (the :target (unsafe-cast x))))))
 
 ;; these functions are called at compile-time by `define-integer-conversions', so they must be `eval-when
 ;; :compile-toplevel'.
