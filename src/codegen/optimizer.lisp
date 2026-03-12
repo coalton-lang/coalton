@@ -106,6 +106,15 @@ mapping known function names to their arity."
       (setf (gethash name table) (tc:function-env-entry-arity entry)))
     table))
 
+(defun update-binding-env (bindings inline-p-table env)
+  (declare (type binding-list bindings)
+           (type hash-table inline-p-table)
+           (type tc:environment env)
+           (values tc:environment &optional))
+  (loop :for (name . node) :in bindings
+        :do (setf env (tc:set-code env name node)))
+  (update-function-env bindings inline-p-table env))
+
 (defun optimize-bindings (bindings monomorphize-table inline-p-table package env)
   (declare (type binding-list bindings)
            (type hash-table monomorphize-table)
@@ -114,12 +123,19 @@ mapping known function names to their arity."
            (type tc:environment env)
            (values binding-list tc:environment))
 
-
-  (let ((bindings (optimize-bindings-initial bindings package env)))
-
-    ;; Make code and environment data available to the monomorphizer
-    (loop :for (name . node) :in bindings
-          :do (setf env (tc:set-code env name node)))
+  (let ((bindings
+          ;; Optimize each dependency SCC once, publishing completed SCCs into
+          ;; the environment before optimizing later SCCs. This enables
+          ;; same-translation-unit inlining and specialization without exposing
+          ;; mutually recursive groups to each other during optimization.
+          (loop :with initial-bindings := bindings
+                :for scc :in (node-binding-sccs initial-bindings)
+                :for scc-bindings := (loop :for binding :in initial-bindings
+                                          :when (member (car binding) scc)
+                                            :collect binding)
+                :for optimized-scc := (optimize-bindings-initial scc-bindings package env)
+                :do (setf env (update-binding-env optimized-scc inline-p-table env))
+                :append optimized-scc)))
 
     (let* ((manager (make-candidate-manager))
 
@@ -155,7 +171,7 @@ mapping known function names to their arity."
 
 
       ;; Update function env
-      (setf env (update-function-env bindings inline-p-table env))
+      (setf env (update-binding-env bindings inline-p-table env))
 
 
       (let ((function-table (make-function-table env)))

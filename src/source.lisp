@@ -272,7 +272,9 @@ If locations appear in different sources, compare the sources by name."
                (length (- end start)))
           (when (plusp length)
             (with-open-stream (stream (source-stream source))
-              (file-position (inner-stream stream) start)
+              ;; Source spans are tracked in character offsets when reading
+              ;; through SOURCE-STREAM.
+              (file-position stream start)
               (let* ((buffer (make-string length))
                      (read-count (read-sequence buffer stream)))
                 (if (= read-count length)

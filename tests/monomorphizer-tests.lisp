@@ -86,19 +86,28 @@
         (values))))
     count))
 
+(defun %strip-leading-lets (node)
+  (declare (type ast:node node)
+           (values ast:node &optional))
+  (loop :while (typep node 'ast:node-let)
+        :do (setf node (ast:node-let-subexpr node))
+        :finally (return node)))
+
 (deftest test-monomorphized-polymorphic-lt-specializes ()
   (fiasco:skip-unless (not coalton-impl/settings:*coalton-disable-specialization*))
   (let* ((wrapper
            (coalton:lookup-code 'coalton-native-tests::polymorphic-lt-wrapper))
          (wrapper-call
-           (ast:node-abstraction-subexpr wrapper)))
+           (%strip-leading-lets
+            (ast:node-abstraction-subexpr wrapper))))
     (is (typep wrapper-call 'ast:node-direct-application))
     (let* ((candidate (ast:node-direct-application-rator wrapper-call))
-           (candidate-node (coalton:lookup-code candidate))
-           (integer-< (find-symbol "INTEGER-<" "COALTON/MATH/NUM")))
+           (integer-< (find-symbol "INTEGER-<" "COALTON/MATH/NUM"))
+           (candidate-node (coalton:lookup-code candidate)))
       (is integer-<)
-      (is (= 1
-             (%count-direct-calls-if
-              candidate-node
-              (lambda (name)
-                (eq name integer-<))))))))
+      (is (or (eq candidate integer-<)
+              (= 1
+                 (%count-direct-calls-if
+                  candidate-node
+                  (lambda (name)
+                    (eq name integer-<)))))))))
