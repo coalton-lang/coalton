@@ -252,6 +252,40 @@
 
    '("my-struct" . "(MyParser MyForm)")))
 
+(deftest test-self-referential-type-alias-constructors ()
+
+  ;; See https://github.com/coalton-lang/coalton/issues/1633.
+  ;; `as1` is declared explicitly to isolate the alias-resolution bug
+  ;; from the newer expansive-binding generalization check.
+  (check-coalton-types
+   "(define-type-alias (IO :a) (IOBind :a Unit))
+
+    (define-type (IOBind :a :b)
+      (IOPure :a)
+      (IOBind (IO :a) (:a -> IO :b)))
+
+    (define (make-iopure a) (IOPure a))
+    (define (make-iobind io f) (IOBind io f))
+
+    (declare as1 (IO Integer))
+    (define as1 (make-iopure 1))
+    (define cc (make-iobind as1 (fn (_x) (make-iopure \"a\"))))"
+
+   '("make-iobind" . "((IOBind :a Unit) -> (:a -> (IOBind :b Unit)) -> (IOBind :a :b))")
+   '("cc" . "(IOBind Integer String)"))
+
+  (check-coalton-types
+   "(define-type-alias A S)
+
+    (define-struct S
+      (x A))
+
+    (declare get-x (S -> S))
+    (define get-x .x)"
+
+   '("S" . "(S -> S)")
+   '("get-x" . "(S -> S)")))
+
 (deftest test-type-aliases-as-predicates ()
 
   ;; See https://github.com/coalton-lang/coalton/issues/1662

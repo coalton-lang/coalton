@@ -225,6 +225,7 @@
 ;; Checks global transitive codegen uses `%values` entry points and
 ;; avoids direct boxed wrapper/tuple constructor calls.
 (deftest tuple-multiple-values-transitive-global-codegen ()
+  (fiasco:skip-unless (not coalton-impl/settings:*coalton-heuristic-inlining*))
   (let* ((node (coalton:lookup-code 'coalton-tests/multiple-values::mv-transitive-global))
          (body (%strip-leading-binds (ast:node-abstraction-subexpr node)))
          (values-call-count (%count-direct-calls-if body #'%values-rator-p))
@@ -260,6 +261,7 @@
 ;; Checks `lisp multiple-values` transitive codegen uses `%values` entry points
 ;; without boxed wrapper/tuple constructor calls.
 (deftest tuple-multiple-values-lisp-values-codegen ()
+  (fiasco:skip-unless (not coalton-impl/settings:*coalton-heuristic-inlining*))
   (let* ((node (coalton:lookup-code 'coalton-tests/multiple-values::mv-lisp-transitive-global))
          (body (%strip-leading-binds (ast:node-abstraction-subexpr node)))
          (values-call-count (%count-direct-calls-if body #'%values-rator-p))
@@ -293,6 +295,7 @@
 ;; Checks projection-path codegen uses `%values` and avoids direct
 ;; boxed wrapper/tuple constructor calls.
 (deftest tuple-multiple-values-projection-codegen ()
+  (fiasco:skip-unless (not coalton-impl/settings:*coalton-heuristic-inlining*))
   (let* ((node (coalton:lookup-code 'coalton-tests/multiple-values::mv-project-fst-global))
          (body (%strip-leading-binds (ast:node-abstraction-subexpr node)))
          (values-call-count (%count-direct-calls-if body #'%values-rator-p))
@@ -314,6 +317,7 @@
 ;; Checks join-point codegen uses `%values` and avoids direct boxed
 ;; wrapper/tuple constructor calls.
 (deftest tuple-multiple-values-join-point-codegen ()
+  (fiasco:skip-unless (not coalton-impl/settings:*coalton-heuristic-inlining*))
   (let* ((node (coalton:lookup-code 'coalton-tests/multiple-values::mv-join-point-global))
          (body (%strip-leading-binds (ast:node-abstraction-subexpr node)))
          (values-call-count (%count-direct-calls-if body #'%values-rator-p))
