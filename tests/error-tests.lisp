@@ -158,3 +158,50 @@ help: message 5
     (reify (coalton/types:proxy-of x))))")))
     (is (search "Declared type is too general" msg))
     (is (search "(COALTON/TYPES:PROXY :ITEM) → :ITEM" msg))))
+
+(deftest implicit-class-method-binders-do-not-create-scoped-type-variables ()
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-scoped-forall-errors)
+
+(define-type (ScopedMethodWrap :f :a)
+  (ScopedMethodWrap (:f :a)))
+
+(define-class (ScopedMethodClass :wrapper)
+  (bad-scoped-method
+    ((:wrapper :item) -> (coalton/types:Proxy :item) -> (:wrapper :item))))
+
+(define-instance (ScopedMethodClass (ScopedMethodWrap :f))
+  (define (bad-scoped-method wrapped proxy)
+    (match wrapped
+      ((ScopedMethodWrap inner)
+       (let ((declare rebuild
+                     (forall (:ignored)
+                       (coalton/types:Proxy :ignored)
+                       -> (:f :item)
+                       -> (ScopedMethodWrap :f :item)))
+             (rebuild (fn (_other value)
+                        (ScopedMethodWrap (the (:f :item) value)))))
+         (rebuild proxy inner))))))")))
+    (is (search "Unknown type variable :ITEM" msg))))
+
+(deftest explicit-class-method-forall-rejects-duplicate-type-variables ()
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-scoped-forall-errors)
+
+(define-class (BadScopedMethodClass :wrapper)
+  (bad-scoped-method
+    (forall (:item :item)
+      ((:wrapper :item) -> (coalton/types:Proxy :item) -> (:wrapper :item)))))")))
+    (is (search "Duplicate quantified type variable" msg))
+    (is (search "first binding here" msg))
+    (is (search "second binding here" msg))))
+
+(deftest explicit-class-method-forall-rejects-unbound-type-variables ()
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-scoped-forall-errors)
+
+(define-class (BadScopedMethodClass :wrapper)
+  (bad-scoped-method
+    (forall (:item)
+      ((:wrapper :item) -> (coalton/types:Proxy :missing) -> (:wrapper :item)))))")))
+    (is (search "Unknown type variable :MISSING" msg))))

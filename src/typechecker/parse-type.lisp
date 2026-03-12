@@ -20,6 +20,7 @@
    #:apply-type-alias-substitutions     ; FUNCTION
    #:parse-type                         ; FUNCTION
    #:parse-qualified-type               ; FUNCTION
+   #:parse-qualified-type-info          ; FUNCTION
    #:parse-ty-scheme                    ; FUNCTION
    #:infer-type-kinds                   ; FUNCTION
    #:infer-predicate-kinds              ; FUNCTION
@@ -234,11 +235,46 @@
       (setf ty (apply-type-alias-substitutions ty parser-ty partial-env))
       (values ty ksubs))))
 
+(defun parse-qualified-type-info (unparsed-ty env &optional ksubs (run-context-checks-p t))
+  (declare (type parser:qualified-ty unparsed-ty)
+           (type (or tc:environment partial-type-env) env)
+           (type tc:ksubstitution-list ksubs)
+           (values tc:qualified-ty tc:tyvar-list boolean tc:ksubstitution-list &optional))
+  (let* ((partial-env (if (typep env 'tc:environment)
+                          (make-partial-type-env :env env)
+                          env))
+         (base-env (partial-type-env-env partial-env)))
+    (multiple-value-bind (explicit-tvars explicit-p)
+        (seed-qualified-type-variables unparsed-ty partial-env)
+      (multiple-value-bind (qual-ty ksubs)
+          (infer-type-kinds unparsed-ty tc:+kstar+ ksubs partial-env)
+
+        (setf qual-ty (tc:apply-ksubstitution ksubs qual-ty))
+        (setf qual-ty (tc:make-qualified-ty
+                       :predicates (tc:qualified-ty-predicates qual-ty)
+                       :type (tc:qualified-ty-type qual-ty)))
+        (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables qual-ty) ksubs))
+
+        (let* ((qual-ty (tc:apply-ksubstitution ksubs qual-ty))
+               (explicit-tvars (mapcar (lambda (tvar)
+                                         (tc:apply-ksubstitution ksubs tvar))
+                                       explicit-tvars))
+               (preds (tc:qualified-ty-predicates qual-ty))
+               (ty (tc:qualified-ty-type qual-ty))
+               (qual-ty (apply-type-alias-substitutions qual-ty unparsed-ty partial-env)))
+
+          (when run-context-checks-p
+            (check-for-ambiguous-variables preds ty unparsed-ty base-env)
+            (check-for-reducible-by-fundeps preds ty unparsed-ty base-env)
+            (check-for-reducible-context preds ty unparsed-ty base-env))
+
+          (values qual-ty explicit-tvars explicit-p ksubs))))))
+
 (defun parse-qualified-type (unparsed-ty env)
   (declare (type parser:qualified-ty unparsed-ty)
            (type (or tc:environment partial-type-env) env)
            (values tc:qualified-ty &optional))
-  (nth-value 0 (parse-qualified-type-internal unparsed-ty env)))
+  (nth-value 0 (parse-qualified-type-info unparsed-ty env)))
 
 (defun parse-ty-scheme (ty env)
   (declare (type parser:qualified-ty ty)

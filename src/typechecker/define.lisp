@@ -2311,7 +2311,7 @@ as a recursive function rather than a recursive value."
          subs
          body-env)
 
-      (tc:apply-substitution subs env)
+      (tc:apply-substitution subs body-env)
 
       (setf accessors (tc:apply-substitution subs accessors))
 
@@ -2336,10 +2336,13 @@ as a recursive function rather than a recursive value."
         (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) fresh-preds subs)))
         (setf preds (tc:apply-substitution subs preds))
         (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
+        (tc:apply-substitution subs body-env)
 
         (let* ((expr-type (tc:apply-substitution subs fresh-type))
                (expr-preds (tc:apply-substitution subs fresh-preds))
 
+               ;; Generalization should see outer scoped type variables, but not the
+               ;; explicit binders introduced by the declaration currently being checked.
                (env-tvars (tc-env-bindings-variables env bound-variables))
                (local-tvars (set-difference (remove-duplicates
                                              (append (tc:type-variables expr-type)
@@ -2469,6 +2472,7 @@ as a recursive function rather than a recursive value."
 
                 ;; Check that the declared and inferred schemes match
                 (let ((declared-output-scheme (tc:apply-substitution subs declared-ty)))
+                  (setf output-scheme (tc:apply-substitution subs output-scheme))
                   (unless (tc:ty-scheme= declared-output-scheme output-scheme)
                     (tc-error "Declared type is too general"
                               (tc-location location

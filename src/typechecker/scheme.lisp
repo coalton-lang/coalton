@@ -80,6 +80,8 @@
                       :collect (make-substitution
                                 :from var
                                 :to (make-tgen :id id
+                                               :binding-id (or (tyvar-binding-id var)
+                                                               (gensym "BINDER"))
                                                :source-name (tyvar-source-name var))))))
     (make-ty-scheme
      :explicit-p nil
@@ -91,28 +93,35 @@
            (values tyvar-list &optional))
   (let* ((source-names (make-array (length (ty-scheme-kinds ty-scheme))
                                    :initial-element nil))
+         (binding-ids (make-array (length (ty-scheme-kinds ty-scheme))
+                                  :initial-element nil))
          (scheme-type (ty-scheme-type ty-scheme)))
-    (labels ((collect-source-names (object)
+    (labels ((collect-instantiation-metadata (object)
                (typecase object
                  (tgen
                   (when (< (tgen-id object) (length source-names))
                     (setf (aref source-names (tgen-id object))
                           (or (aref source-names (tgen-id object))
-                              (tgen-source-name object)))))
+                              (tgen-source-name object)))
+                    (setf (aref binding-ids (tgen-id object))
+                          (or (aref binding-ids (tgen-id object))
+                              (tgen-binding-id object)))))
                  (tapp
-                  (collect-source-names (tapp-from object))
-                  (collect-source-names (tapp-to object)))
+                  (collect-instantiation-metadata (tapp-from object))
+                  (collect-instantiation-metadata (tapp-to object)))
                  (qualified-ty
-                  (collect-source-names (qualified-ty-predicates object))
-                  (collect-source-names (qualified-ty-type object)))
+                  (collect-instantiation-metadata (qualified-ty-predicates object))
+                  (collect-instantiation-metadata (qualified-ty-type object)))
                  (ty-predicate
-                  (collect-source-names (ty-predicate-types object)))
+                  (collect-instantiation-metadata (ty-predicate-types object)))
                  (list
-                  (map nil #'collect-source-names object)))))
-      (collect-source-names scheme-type)
+                  (map nil #'collect-instantiation-metadata object)))))
+      (collect-instantiation-metadata scheme-type)
       (loop :for kind :in (ty-scheme-kinds ty-scheme)
             :for i :from 0
-            :collect (make-variable kind (aref source-names i))))))
+            :collect (make-variable kind
+                                    (aref source-names i)
+                                    (aref binding-ids i))))))
 
 (defgeneric to-scheme (ty)
   (:method ((ty qualified-ty))
@@ -162,6 +171,8 @@
                       :collect (make-substitution
                                 :from var
                                 :to (make-tgen :id id
+                                               :binding-id (or (tyvar-binding-id var)
+                                                               (gensym "BINDER"))
                                                :source-name (tyvar-source-name var))))))
     (make-ty-scheme
      :explicit-p explicit-p
