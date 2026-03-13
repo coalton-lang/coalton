@@ -14,7 +14,6 @@
    #:make-tyvar                         ; CONSTRUCTOR
    #:tyvar-id                           ; ACCESSOR
    #:tyvar-kind                         ; ACCESSOR
-   #:tyvar-binding-id                   ; ACCESSOR
    #:tyvar-source-name                  ; ACCESSOR
    #:tyvar-p                            ; FUNCTION
    #:tyvar-list                         ; TYPE
@@ -45,7 +44,6 @@
    #:tgen                               ; STRUCT
    #:make-tgen                          ; CONSTRUCTOR
    #:tgen-id                            ; ACCESSOR
-   #:tgen-binding-id                    ; ACCESSOR
    #:tgen-source-name                   ; ACCESSOR
    #:tgen-p                             ; FUNCTION
    #:make-variable                      ; FUNCTION
@@ -167,10 +165,6 @@
 (defstruct (tyvar (:include ty))
   (id          (util:required 'id)      :type fixnum             :read-only t)
   (kind        (util:required 'kind)    :type kind               :read-only t)
-  ;; Preserve binder identity across quantification/fresh-inst so scoped
-  ;; explicit forall variables can be matched without conflating shadowed
-  ;; variables that happen to reuse the same source name.
-  (binding-id  nil                      :type (or null symbol)   :read-only t)
   ;; The original programmer-written name, if this type variable originated
   ;; from source rather than anonymous inference state.
   (source-name nil                      :type (or null symbol)   :read-only t))
@@ -215,8 +209,6 @@
 
 (defstruct (tgen (:include ty))
   (id          (util:required 'id)      :type fixnum             :read-only t)
-  ;; When present, this records the original quantified binder identity.
-  (binding-id  nil                      :type (or null symbol)   :read-only t)
   ;; Preserve source binder names across quantification so fresh
   ;; instantiation and printing can recover them later.
   (source-name nil                      :type (or null symbol)   :read-only t))
@@ -233,21 +225,18 @@
 #+sbcl
 (declaim (sb-ext:always-bound *next-variable-id*))
 
-(declaim (ftype (function (&optional kind (or null symbol) (or null symbol)) tyvar) make-variable))
+(declaim (ftype (function (&optional kind (or null symbol)) tyvar) make-variable))
 (declaim (inline make-variable))
-(defun make-variable (&optional (kind +kstar+) source-name binding-id)
+(defun make-variable (&optional (kind +kstar+) source-name)
   "Create a fresh type variable with KIND and optional source metadata.
 
 SOURCE-NAME preserves the programmer-written binder for later pretty
-printing and documentation. BINDING-ID preserves the identity of an
-explicit binder across quantification and fresh instantiation, so
-shadowed binders that reuse the same printed name are still distinct.
+printing and documentation.
 
 Each call returns a variable with a globally unique inference ID, even
-when KIND, SOURCE-NAME, and BINDING-ID are the same."
+when KIND and SOURCE-NAME are the same."
   (prog1 (make-tyvar :id *next-variable-id*
                      :kind kind
-                     :binding-id binding-id
                      :source-name source-name)
     (incf *next-variable-id*)))
 
@@ -277,10 +266,9 @@ Example usage in scheme instantiation:
 
 The function preserves the kind of the original variable, so if TYVAR has kind
 * -> *, the returned variable will also have kind * -> *. It also preserves
-TYVAR's SOURCE-NAME and BINDING-ID metadata."
+TYVAR's SOURCE-NAME metadata."
   (make-variable (kind-of tyvar)
-                 (tyvar-source-name tyvar)
-                 (tyvar-binding-id tyvar)))
+                 (tyvar-source-name tyvar)))
 
 ;;;
 ;;; Methods
@@ -374,7 +362,6 @@ Throws an error if applied to a malformed type application.")
    :alias (mapcar (lambda (alias) (apply-ksubstitution subs alias)) (ty-alias type))
    :id (tyvar-id type)
    :kind (apply-ksubstitution subs (tyvar-kind type))
-   :binding-id (tyvar-binding-id type)
    :source-name (tyvar-source-name type)))
 
 (defmethod apply-ksubstitution (subs (type tycon))

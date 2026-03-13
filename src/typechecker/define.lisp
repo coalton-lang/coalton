@@ -2811,6 +2811,14 @@ as a recursive function rather than a recursive value."
                 (remove-duplicates declared-instantiation-types :test #'tc:ty=))
                env)))
 
+    (when (and declared-explicit-p
+               (not (typep binding 'parser:instance-method-definition)))
+      (setf body-env
+            (tc-env-shadow-definition
+             body-env
+             name
+             (tc:to-scheme fresh-qual-type))))
+
     (multiple-value-bind (preds accessors binding-node subs)
         (infer-binding-type
          binding

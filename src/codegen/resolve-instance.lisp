@@ -169,26 +169,7 @@
 (defun matching-context-type-p (type ctx-type)
   (declare (type tc:ty type ctx-type)
            (values boolean &optional))
-  (typecase type
-    (tc:tyvar
-     (and (typep ctx-type 'tc:tyvar)
-          (or (tc:ty= type ctx-type)
-              ;; Fresh instantiation gives each use fresh tyvar ids, but an
-              ;; explicit forall binder still carries its quantified binding
-              ;; identity across instantiations.
-              (and (tc:tyvar-binding-id type)
-                   (eq (tc:tyvar-binding-id type)
-                       (tc:tyvar-binding-id ctx-type))
-                   (equalp (tc:kind-of type)
-                           (tc:kind-of ctx-type))))))
-    (tc:tapp
-     (and (typep ctx-type 'tc:tapp)
-          (matching-context-type-p (tc:tapp-from type)
-                                   (tc:tapp-from ctx-type))
-          (matching-context-type-p (tc:tapp-to type)
-                                   (tc:tapp-to ctx-type))))
-    (t
-     (tc:ty= type ctx-type))))
+  (tc:ty= type ctx-type))
 
 (defun matching-context-predicate-p (pred ctx-pred)
   (declare (type tc:ty-predicate pred ctx-pred)
