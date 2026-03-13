@@ -269,20 +269,23 @@ Example:
                      &optional))
             ,name)))
 
-   ;; Emit inline declamations for functions declared inline at definition-site
-   (loop :for (name . node) :in bindings
-         :if (and (node-abstraction-p node) (function-declared-inline-p name env))
-         :collect `(declaim (inline ,name)))
-
    ;; Compile functions
    (loop :for (name . node) :in bindings
          :if (node-abstraction-p node)
-           :append (list
-                    (compile-function name node env)
-                    `(setf
-                      ,name
-                      ,(rt:construct-function-entry
-                        `#',name (length (node-abstraction-vars node))))))
+           :append (append
+                    ;; Save the Lisp definition for user-directed CL inlining
+                    ;; without leaving the function globally inline by default.
+                    (when (function-declared-inline-p name env)
+                      `((declaim (inline ,name))))
+                    (list
+                     (compile-function name node env))
+                    (when (function-declared-inline-p name env)
+                      `((declaim (notinline ,name))))
+                    (list
+                     `(setf
+                       ,name
+                       ,(rt:construct-function-entry
+                         `#',name (length (node-abstraction-vars node)))))))
 
   ;; Compile variables
   (loop :for (name . node) :in bindings

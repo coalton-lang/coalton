@@ -189,6 +189,13 @@ Consider the following definitions:
 
 **PROMISE**: Assuming it is unconstrained, `f` will be a function in Lisp of the same arity found at the definition site.
 
+If a Coalton function or method definition is marked `inline`, Coalton emits the standard Common
+Lisp `inline`/`notinline` definition pattern: the function is defined while `inline` is in effect,
+and `notinline` is proclaimed afterward. This preserves the function body for later user-directed
+Common Lisp inlining without making Common Lisp inlining the default policy for all later call
+sites. Coalton's own inliner is separate from this and may still inline Coalton code according to
+Coalton's rules.
+
 **PROMISE**: Coalton output arity maps directly to Common Lisp multiple values. A Coalton
 function returning `Void` returns zero Lisp values, a function returning one type returns one Lisp
 value, and a function returning `:a * :b * ...` returns multiple Lisp values in order.
