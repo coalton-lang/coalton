@@ -51,13 +51,14 @@ jobs:
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
+	  (load "quicklisp/setup")
           (setq system:*safety* ${{ matrix.SAFETY }})
           (ql:quickload :coalton/tests)
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
           (asdf:load-system :small-coalton-programs)
           EOF
-          abcl --noinform --noinit --nosystem --batch --load run-tests.lisp
+          cat /dev/null | abcl --noinform --noinit --nosystem --batch --load run-tests.lisp
       - name: Run Clasp tests
         if: matrix.LISP_IMPL == 'clasp'
         env:
@@ -66,6 +67,7 @@ jobs:
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
+	  (load "quicklisp/setup")
           (ql:quickload :coalton/tests)
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
@@ -80,6 +82,7 @@ jobs:
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
+	  (load "quicklisp/setup")
           (ql:quickload :coalton/tests)
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
