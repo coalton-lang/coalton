@@ -17,7 +17,8 @@
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
   :in-order-to ((asdf:test-op (asdf:test-op #:coalton/tests)))
-  :depends-on ("coalton-compiler"
+  :depends-on ("coalton-compatibility"
+               "coalton-compiler"
                "coalton/library"))
 
 (asdf:defsystem "coalton/library"
@@ -35,7 +36,8 @@
                           (*features* (cons ':coalton-lisp-toplevel *features*)))
                       (funcall compile)))
   :defsystem-depends-on ("coalton-asdf")
-  :depends-on ("coalton-compiler"
+  :depends-on ("coalton-compatibility"
+               "coalton-compiler"
                "coalton/hashtable-shim"
                "trivial-garbage"
                "alexandria")
@@ -179,7 +181,8 @@
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
   :depends-on ("coalton"
-               "fiasco")
+               "fiasco"
+               #+abcl "compat/abcl-fiasco-patch")
   :pathname "src/testing/"
   :serial t
   :components ((:file "package")
@@ -276,6 +279,7 @@
                "coalton/doc"
                "coalton/testing"
                "fiasco"
+               #+abcl "compat/abcl-fiasco-patch"
                "quil-coalton/tests"
                "thih-coalton/tests")
   :perform (asdf:test-op (o s)
@@ -334,7 +338,7 @@
                (:file "looping-native-tests")
                (:file "monomorphizer-tests")
                (:file "inliner-tests")
-               (:file "inliner-tests-1") ; must come after inliner-tests
+               #-abcl(:file "inliner-tests-1") ; must come after inliner-tests
                (:file "deriver-tests")
                (:file "file-tests")
                (:file "experimental-tests")
