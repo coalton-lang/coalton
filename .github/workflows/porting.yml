@@ -50,8 +50,9 @@ jobs:
           COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
+	  echo $USER
           cat <<EOF > run-tests.lisp
-	  (load "quicklisp/setup")
+	  (load "/root/.abclrc")
           (setq system:*safety* ${{ matrix.SAFETY }})
           (ql:quickload :coalton/tests)
           (asdf:test-system :coalton/tests)
@@ -67,7 +68,7 @@ jobs:
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
-	  (load "quicklisp/setup")
+	  (load "/root/.clasprc")
           (ql:quickload :coalton/tests)
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
@@ -82,7 +83,7 @@ jobs:
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
-	  (load "quicklisp/setup")
+	  (load "/root/.eclrc")
           (ql:quickload :coalton/tests)
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
