@@ -13,8 +13,6 @@
    #:required                           ; FUNCTION
    #:unreachable                        ; MACRO
    #:coalton-bug                        ; FUNCTION
-   #:debug-log                          ; MACRO
-   #:debug-tap                          ; MACRO
    #:runtime-quote                      ; FUNCTION
    #:symbol-list                        ; TYPE
    #:string-list                        ; TYPE
@@ -66,19 +64,6 @@
   (cons
    (car (cst:source (first csts)))
    (cdr (cst:source (car (last csts))))))
-
-(defmacro debug-log (&rest vars)
-  "Log names and values of VARS to standard output"
-  `(let ((*print-circle* nil))
-     (format t
-             ,(format nil "~&~{~A: ~~A~~%~}" vars)
-             ,@vars)))
-
-(defmacro debug-tap (var)
-  (let ((var-name (gensym)))
-    `(let ((,var-name ,var))
-       (format t ,(format nil "~A: ~~A~~%" var) ,var-name)
-       ,var-name)))
 
 (defun runtime-quote (x)
   `',x)
