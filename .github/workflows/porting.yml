@@ -1,4 +1,4 @@
-name: Porting (2 abcl, ecl, clasp)
+name: "Porting (2 abcl, ecl, clasp)"
 
 on:
   push:
@@ -58,7 +58,7 @@ jobs:
           ; TODO: Remove this or add tests for these programs.
           (asdf:load-system :small-coalton-programs)
           EOF
-          cat /dev/null | abcl --noinform --noinit --nosystem --batch --load run-tests.lisp
+          abcl --noinform --noinit --nosystem --batch --load run-tests.lisp < /dev/null
       - name: Run Clasp tests
         if: matrix.LISP_IMPL == 'clasp'
         env:
