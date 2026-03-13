@@ -44,6 +44,26 @@
          :rands dict-nodes
          :keyword-rands nil))))
 
+(defun strip-bound-context-predicates (qual-ty context-preds)
+  (declare (type tc:qualified-ty qual-ty)
+           (type tc:ty-predicate-list context-preds)
+           (values tc:qualified-ty &optional))
+  (let ((preds (tc:qualified-ty-predicates qual-ty)))
+    (unless (<= (length context-preds) (length preds))
+      (util:coalton-bug "Cannot strip ~S from qualified type ~S"
+                        context-preds
+                        qual-ty))
+    (loop :for expected :in context-preds
+          :for actual :in preds
+          :unless (tc:type-predicate= actual expected)
+            :do (util:coalton-bug
+                 "Expected instance context predicate ~S at the front of ~S"
+                 expected
+                 qual-ty))
+    (tc:make-qualified-ty
+     :predicates (nthcdr (length context-preds) preds)
+     :type (tc:qualified-ty-type qual-ty))))
+
 (defun translate-instance (instance env)
   (declare (type tc:toplevel-define-instance instance)
            (type tc:environment env))
@@ -91,9 +111,11 @@
          (unqualified-method-definitions
            (loop :for method :in (tc:ty-class-unqualified-methods class)
                  :for method-name := (tc:ty-class-method-name method)
-                 :for method-type := (tc:apply-substitution subs (tc:ty-class-method-type method))
                  :for binding := (gethash method-name (tc:toplevel-define-instance-methods instance))
-                 :collect (translate-toplevel (tc:attach-explicit-binding-type binding (tc:fresh-inst method-type))
+                 :for method-type := (strip-bound-context-predicates
+                                      (tc:binding-type binding)
+                                      (mapcar #'car ctx))
+                 :collect (translate-toplevel (tc:attach-explicit-binding-type binding method-type)
                                               env
                                               method-name
                                               :extra-context ctx)))

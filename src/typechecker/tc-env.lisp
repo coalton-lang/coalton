@@ -21,6 +21,7 @@
    #:tc-env-bindings-variables          ; FUNCTION
    #:tc-env-parser-env                  ; FUNCTION
    #:tc-env-extend-type-variable-scope  ; FUNCTION
+   #:tc-env-shadow-definition           ; FUNCTION
    #:tc-env-replace-type                ; FUNCTION
    ))
 
@@ -73,6 +74,22 @@
     (make-tc-env :env (tc-env-env env)
                  :ty-table (tc-env-ty-table env)
                  :typevar-table typevar-table)))
+
+(defun tc-env-shadow-definition (env name scheme)
+  "Return a copy of ENV where NAME resolves to SCHEME.
+
+This is used when checking an explicitly typed binding so recursive
+references within that binding reuse the same instantiated scoped
+type variables instead of re-instantiating the declared scheme."
+  (declare (type tc-env env)
+           (type symbol name)
+           (type tc:ty-scheme scheme)
+           (values tc-env &optional))
+  (let ((ty-table (alexandria:copy-hash-table (tc-env-ty-table env))))
+    (setf (gethash name ty-table) scheme)
+    (make-tc-env :env (tc-env-env env)
+                 :ty-table ty-table
+                 :typevar-table (tc-env-typevar-table env))))
 
 (defun tc-env-add-variable (env name)
   "Add a variable named NAME to ENV and return the scheme."
