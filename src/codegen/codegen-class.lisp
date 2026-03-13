@@ -124,6 +124,7 @@
                                     :append (list (getf spec :var)
                                                   (getf spec :supplied-p-var)))))
         ,(method-wrapper-call method-accessor params keyword-specs))
+      (declaim (notinline ,method-name))
       ;; Generate the wrapper functions
       (global-lexical:define-global-lexical ,method-name rt:function-entry)
       (setf ,method-name
