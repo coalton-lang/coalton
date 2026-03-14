@@ -155,7 +155,8 @@
                               :if-feature (:or :coalton-portable-bigfloat (:not :sbcl)))))
                (:module "computable-reals"
                 :serial t
-                :components ((:file "computable-reals")))))
+                :components ((:file "computable-reals")))
+               (:file "realalgebraic")))
 
 (asdf:defsystem "coalton/library/big-float"
   :description "Deprecated. Use coalton/xmath."
@@ -316,6 +317,7 @@
                (:file "dual-tests")
                (:file "hyperdual-tests")
                (:file "quantize-tests")
+               (:file "realalgebraic-tests")
                (:file "hashtable-tests")
                (:file "hashmap-tests")
                (:file "iterator-tests")
