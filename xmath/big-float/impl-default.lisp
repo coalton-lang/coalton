@@ -2,7 +2,7 @@
 ;;;;
 ;;;; Arbitrary precision floats using pure Coalton.
 
-(in-package #:coalton/big-float)
+(in-package #:coalton/xmath/big-float)
 
 (named-readtables:in-readtable coalton:coalton)
 

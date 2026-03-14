@@ -10,9 +10,11 @@
      #:coalton/functions
      #:coalton/utils
      #:coalton/math/arith
+     #:coalton/math/integral
      #:coalton/math/real
      #:coalton/math/complex)
-  (:local-nicknames (#:ff #:float-features))
+  (:local-nicknames
+   (#:ff #:float-features))
   (:export
    #:Trigonometric
    #:sin #:cos #:tan

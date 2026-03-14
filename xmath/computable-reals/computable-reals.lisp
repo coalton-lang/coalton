@@ -2,8 +2,9 @@
 ;;;;
 ;;;; Reals library using computable-reals (https://github.com/stylewarning/computable-reals)
 
-(defpackage #:coalton/computable-reals
-  (:nicknames #:coalton-library/computable-reals)
+(defpackage #:coalton/xmath/computable-reals
+  (:nicknames #:coalton/computable-reals
+              #:coalton-library/computable-reals)
   (:use #:coalton
         #:coalton-prelude
         #:coalton/math)
@@ -21,7 +22,7 @@
    #:rationalize
    #:cr-print))
 
-(in-package #:coalton/computable-reals)
+(in-package #:coalton/xmath/computable-reals)
 
 (named-readtables:in-readtable coalton:coalton)
 

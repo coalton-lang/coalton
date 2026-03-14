@@ -3,7 +3,10 @@
 ;;;; An implementation of Dual numbers for the computing derivatives
 ;;;; of compositions of built-in Coalton functions.
 
-(coalton/utils:defstdlib-package #:coalton/math/dual
+(coalton/utils:defstdlib-package #:coalton/xmath/dual
+  (:nicknames
+   #:coalton/math/dual
+   #:coalton-library/math/dual)
   (:use
    #:coalton
    #:coalton/builtin
@@ -69,7 +72,7 @@ References:
 - [2] https://blog.demofox.org/2014/12/30/dual-numbers-automatic-differentiation/
 - [3] https://hackage.haskell.org/package/ad"))
 
-(in-package #:coalton/math/dual)
+(in-package #:coalton/xmath/dual)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -204,4 +207,4 @@ component."
 
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON/MATH/DUAL")
+(sb-ext:lock-package "COALTON/XMATH/DUAL")

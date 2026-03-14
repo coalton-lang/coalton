@@ -27,7 +27,7 @@
                   (simple-warning (e) (declare (ignore e))))))))
 
 
-(in-package #:coalton/big-float)
+(in-package #:coalton/xmath/big-float)
 
 (named-readtables:in-readtable coalton:coalton)
 
