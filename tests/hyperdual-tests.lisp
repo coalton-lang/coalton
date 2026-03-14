@@ -134,8 +134,9 @@
        (make-list 0.1 0.2 0.3 0.4 0.8)))
 
 (define-test univariate-hyperdual-test-6 ()
-  (pipe (make-list 0.2 0.5 1.3 3.0 10.0)
-        (all (test-univariate f6 d0f6 d1f6 d2f6))))
+  (all (fn (x)
+         (test-univariate f6 d0f6 d1f6 d2f6 x))
+       (make-list 0.2 0.5 1.3 3.0 10.0)))
 
 (coalton-toplevel
 
