@@ -34,6 +34,12 @@
   (find keyword entries :key #'keyword-ty-entry-keyword :test #'eq))
 
 (defun ensure-compatible-function-types (type1 type2 condition)
+  "Verify that two function types have compatible structure for unification.
+
+Checks that positional arity, keyword count, output arity, and keyword-open-p
+all match exactly.  Also checks that every keyword in type1 exists in type2.
+Because the keyword counts are equal, this subset check implies set equality:
+same count + type1 ⊆ type2 ⟹ type1 = type2 (as keyword sets)."
   (flet ((fail ()
            (error condition :type1 type1 :type2 type2)))
     (unless (= (length (function-ty-positional-input-types type1))

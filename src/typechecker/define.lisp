@@ -118,29 +118,6 @@
     (t
      (values nil nil))))
 
-(defun function-keyword-input-arity (type)
-  (declare (type tc:ty type)
-           (values fixnum &optional))
-  (typecase type
-    (tc:function-ty
-      (length (tc:function-ty-keyword-input-types type)))
-    (t
-      0)))
-
-(defun explicit-nullary-function-callable-p (type)
-  (declare (type tc:ty type)
-           (values boolean &optional))
-  (and (tc:function-type-p type)
-       (zerop (tc:function-input-arity type))))
-
-(defun current-call-stage-underapplied-p (type remaining-rands)
-  (declare (type tc:ty type)
-           (type list remaining-rands)
-           (values boolean &optional))
-  (and (tc:function-type-p type)
-       (< (length remaining-rands)
-          (tc:function-input-arity type))))
-
 (defun function-keyword-entry (type keyword)
   (declare (type tc:function-ty type)
            (type keyword keyword)
@@ -202,6 +179,11 @@
                          (tc:function-ty-output-types type)))
 
 (defun maybe-update-local-function-type (env node type)
+  "Refine a locally-bound function's type when keyword extension discovers new
+keywords at a call site.  Only updates schemes that still contain free type
+variables (i.e., unresolved placeholders from let-bound lambdas).  Monomorphic
+schemes and already-quantified schemes are left alone -- their types are fully
+determined and must not be widened."
   (declare (type tc-env env)
            (type parser:node node)
            (type tc:function-ty type)
@@ -209,30 +191,139 @@
   (when (typep node 'parser:node-variable)
     (let* ((name (parser:node-variable-name node))
            (scheme (gethash name (tc-env-ty-table env))))
-      ;; Only refine unresolved local placeholders. Replacing an already
-      ;; quantified scheme would drop its quantification and leak free type
-      ;; variables into the translation-unit environment.
       (when (and scheme
                  (tc:type-variables scheme))
         (tc-env-replace-type env name (tc:to-scheme type)))))
   nil)
 
-(defun typed-pattern-wildcard (type location)
-  (declare (type tc:ty type)
-           (type source:location location)
-           (values pattern-wildcard &optional))
-  (make-pattern-wildcard
-   :type (tc:qualify nil type)
-   :location location))
+(defun infer-keyword-params (keyword-params expected-keyword-table subs env)
+  "Infer types for keyword parameters and their defaults.
+
+Each keyword's default is checked before the binder is added to the local
+environment, ensuring sequential visibility (later defaults can reference
+earlier keywords, but not themselves)."
+  (declare (type parser:keyword-param-list keyword-params)
+           (type hash-table expected-keyword-table)
+           (type tc:substitution-list subs)
+           (type tc-env env)
+           (values list tc:keyword-ty-entry-list list
+                   tc:ty-predicate-list accessor-list
+                   tc:substitution-list &optional))
+  (let ((typed-keyword-params nil)
+        (keyword-entry-types nil)
+        (keyword-prefix-nodes nil)
+        (preds nil)
+        (accessors nil))
+    (dolist (param keyword-params)
+      (let* ((binder (parser:keyword-param-binder param))
+             (binder-name (parser:node-variable-name binder))
+             (key (parser:keyword-src-name (parser:keyword-param-keyword param)))
+             (expected-entry (gethash key expected-keyword-table))
+             (visible-ty (or (and expected-entry
+                                  (tc:keyword-ty-entry-type expected-entry))
+                             (tc:make-variable)))
+             (present-name (gensym "KW-PRESENT-"))
+             (value-name (gensym "KW-VALUE-"))
+             (location (source:location param)))
+        (multiple-value-bind (default-ty preds_ accessors_ default-node subs_)
+            (infer-expression-type (parser:keyword-param-default param)
+                                   visible-ty
+                                   subs
+                                   env)
+          (declare (ignore default-ty))
+          (setf subs subs_)
+          (setf visible-ty (tc:apply-substitution subs visible-ty))
+          ;; Add the keyword binder to the local environment only after
+          ;; its default has been checked, so later defaults can see it.
+          (tc-env-add-variable env binder-name)
+          (tc-env-replace-type env binder-name (tc:to-scheme visible-ty))
+          (push (make-keyword-param
+                 :keyword key
+                 :value-var value-name
+                 :supplied-p-var present-name)
+                typed-keyword-params)
+          (push (tc:make-keyword-ty-entry
+                 :keyword key
+                 :type visible-ty)
+                keyword-entry-types)
+          (push (make-node-bind
+                 :pattern (typed-pattern-var binder-name visible-ty (source:location binder))
+                 :expr (make-node-if
+                        :type (tc:qualify nil visible-ty)
+                        :location location
+                        :expr (typed-node-variable present-name tc:*boolean-type* location)
+                        :then (typed-node-variable value-name visible-ty location)
+                        :else default-node)
+                 :location location)
+                keyword-prefix-nodes)
+          (setf preds (append preds preds_))
+          (setf accessors (append accessors accessors_)))))
+    (values typed-keyword-params keyword-entry-types keyword-prefix-nodes
+            preds accessors subs)))
+
+(defun resolve-tyvar-application-type (fun-ty node expected-type subs
+                                       positional-rands keyword-rands)
+  "When a function application's operator is a type variable, construct a fresh
+function type matching the call site shape and unify it with the operator."
+  (declare (type tc:tyvar fun-ty)
+           (type parser:node node)
+           (type tc:ty expected-type)
+           (type tc:substitution-list subs)
+           (type list positional-rands keyword-rands)
+           (values tc:function-ty tc:substitution-list &optional))
+  (multiple-value-bind (has-output-context-p output-types)
+      (direct-call-output-context node (tc:apply-substitution subs expected-type))
+    (let* ((new-froms (loop :repeat (length positional-rands)
+                            :collect (tc:make-variable)))
+           (new-keywords (loop :for arg :in keyword-rands
+                               :collect (tc:make-keyword-ty-entry
+                                         :keyword (parser:keyword-src-name
+                                                   (parser:node-application-keyword-arg-keyword arg))
+                                         :type (tc:make-variable))))
+           ;; keyword-open-p is an inference artifact, not a definition
+           ;; property: it marks call sites where the callee may accept
+           ;; additional keywords discovered later during unification.
+           ;; Calls that mention no keywords stay closed so that
+           ;; function-value coercion can accept callee values carrying
+           ;; additional optional keywords without requiring exact match.
+           (keyword-open-p (consp keyword-rands))
+           (new-to (and (not has-output-context-p)
+                        (tc:make-variable)))
+           (new-ty (tc:make-function-ty
+                    :positional-input-types new-froms
+                    :keyword-input-types (normalize-keyword-entries new-keywords)
+                    :keyword-open-p keyword-open-p
+                    :output-types (if has-output-context-p
+                                      output-types
+                                      (list new-to)))))
+      (setf subs (tc:unify subs fun-ty new-ty))
+      (values (tc:apply-substitution subs new-ty) subs))))
 
 (defun coerce-function-value-type (actual-type expected-type subs)
+  "Coerce a function value's type to match an expected function type.
+
+A function value can be viewed through any interface that uses a subset of its
+optional keywords.  For example, a function of type (A &key (:x B) (:y C) -> D)
+is usable where (A &key (:x B) -> D) is expected -- the :y keyword is simply
+hidden from the caller's view.
+
+For each keyword the expected-type mentions:
+  - If actual-type already has it, include it in the visible interface.
+  - If actual-type is keyword-open, extend it with a fresh type variable.
+  - Otherwise, signal a unification error.
+
+Both types are then PROJECTED to only the shared keyword interface (with
+keyword-open-p=nil) before unification.  The projections are closed views,
+not the original types.
+
+Returns four values:
+  1. Updated substitution list
+  2. The visible expected-type (projected to shared keywords, closed)
+  3. The effective actual-type (full type, possibly extended with new keywords)
+  4. Boolean: whether a runtime wrapper is needed (currently always nil)"
   (declare (type tc:function-ty actual-type expected-type)
            (type tc:substitution-list subs)
            (values tc:substitution-list tc:function-ty tc:function-ty boolean &optional))
-  ;; A function value can always be viewed through any interface that uses a
-  ;; subset of its optional keywords. This keeps plain nullary/higher-order
-  ;; uses compatible with keyword-bearing functions, while still requiring all
-  ;; keywords the context actually mentions to be present.
   (let ((effective-type actual-type)
         (actual-visible-entries nil)
         (expected-visible-entries nil))
@@ -705,31 +796,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (typed-keyword-rands nil))
 
         (when (tc:tyvar-p fun-ty_)
-          (multiple-value-bind (has-output-context-p output-types)
-              (direct-call-output-context node (tc:apply-substitution subs expected-type))
-            (let* ((new-froms (loop :repeat (length positional-rands)
-                                    :collect (tc:make-variable)))
-                   (new-keywords (loop :for arg :in keyword-rands
-                                       :collect (tc:make-keyword-ty-entry
-                                                 :keyword (parser:keyword-src-name
-                                                           (parser:node-application-keyword-arg-keyword arg))
-                                                 :type (tc:make-variable))))
-                   ;; Only infer an open keyword tail when the call site actually
-                   ;; mentions keywords. Zero-argument calls stay closed and rely
-                   ;; on function-value coercion to accept callee values with
-                   ;; additional optional keywords.
-                   (keyword-open-p (consp keyword-rands))
-                   (new-to (and (not has-output-context-p)
-                                (tc:make-variable)))
-                   (new-ty (tc:make-function-ty
-                            :positional-input-types new-froms
-                            :keyword-input-types (normalize-keyword-entries new-keywords)
-                            :keyword-open-p keyword-open-p
-                            :output-types (if has-output-context-p
-                                              output-types
-                                              (list new-to)))))
-              (setf subs (tc:unify subs fun-ty_ new-ty))
-              (setf fun-ty_ (tc:apply-substitution subs new-ty)))))
+          (multiple-value-bind (resolved-ty subs_)
+              (resolve-tyvar-application-type fun-ty_ node expected-type subs
+                                              positional-rands keyword-rands)
+            (setf fun-ty_ resolved-ty
+                  subs subs_)))
 
         (unless (tc:function-type-p fun-ty_)
           (tc-error "Argument error"
@@ -975,60 +1046,9 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
           (dolist (entry (tc:function-ty-keyword-input-types expected-function-type))
             (setf (gethash (tc:keyword-ty-entry-keyword entry) expected-keyword-table) entry)))
 
-        (let* ((typed-keyword-params nil)
-               (keyword-entry-types nil)
-               (keyword-prefix-nodes nil)
-               (default-preds nil)
-               (default-accessors nil))
-
-          (dolist (param keyword-params)
-            (let* ((binder (parser:keyword-param-binder param))
-                   (binder-name (parser:node-variable-name binder))
-                   (key (parser:keyword-src-name (parser:keyword-param-keyword param)))
-                   (expected-entry (and expected-function-type
-                                        (gethash key expected-keyword-table)))
-                   (visible-ty (or (and expected-entry
-                                        (tc:keyword-ty-entry-type expected-entry))
-                                   (tc:make-variable)))
-                   (present-name (gensym "KW-PRESENT-"))
-                   (value-name (gensym "KW-VALUE-"))
-                   (location (source:location param)))
-
-              (multiple-value-bind (default-ty preds_ accessors_ default-node subs_)
-                  (infer-expression-type (parser:keyword-param-default param)
-                                         visible-ty
-                                         subs
-                                         env)
-                (declare (ignore default-ty))
-                (setf subs subs_)
-                (setf visible-ty (tc:apply-substitution subs visible-ty))
-
-                ;; Add the keyword binder to the local environment only after
-                ;; its default has been checked, so later defaults can see it.
-                (tc-env-add-variable env binder-name)
-                (tc-env-replace-type env binder-name (tc:to-scheme visible-ty))
-
-                (push (make-keyword-param
-                       :keyword key
-                       :value-var value-name
-                       :supplied-p-var present-name)
-                      typed-keyword-params)
-                (push (tc:make-keyword-ty-entry
-                       :keyword key
-                       :type visible-ty)
-                      keyword-entry-types)
-                (push (make-node-bind
-                       :pattern (typed-pattern-var binder-name visible-ty (source:location binder))
-                       :expr (make-node-if
-                              :type (tc:qualify nil visible-ty)
-                              :location location
-                              :expr (typed-node-variable present-name tc:*boolean-type* location)
-                              :then (typed-node-variable value-name visible-ty location)
-                              :else default-node)
-                       :location location)
-                      keyword-prefix-nodes)
-                (setf default-preds (append default-preds preds_))
-                (setf default-accessors (append default-accessors accessors_)))))
+        (multiple-value-bind (typed-keyword-params keyword-entry-types keyword-prefix-nodes
+                              default-preds default-accessors subs)
+            (infer-keyword-params keyword-params expected-keyword-table subs env)
 
           (multiple-value-bind (body-ty preds accessors body-node subs)
               (infer-expression-type (parser:node-abstraction-body node)

@@ -38,13 +38,6 @@
 This will be bound for the extent of any TRANSLATE-TOPLEVEL call, or
 TRANSLATE-EXPRESSION when an abstraction is being translated.")
 
-(defun keyword-function-needs-frame-p (type)
-  (declare (type tc:ty type)
-           (values boolean &optional))
-  (and (typep type 'tc:function-ty)
-       (or (plusp (length (tc:function-ty-keyword-input-types type)))
-           (tc:function-ty-keyword-open-p type))))
-
 (defun physical-callable-type (type)
   (declare (type tc:ty type)
            (values tc:ty &optional))

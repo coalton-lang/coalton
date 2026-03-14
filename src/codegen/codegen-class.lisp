@@ -16,6 +16,14 @@
 
 (in-package #:coalton-impl/codegen/codegen-class)
 
+;;; Method wrapper keyword generation.
+;;;
+;;; These parallel the keyword handling in codegen-expression (abstraction-
+;;; lambda-list, keyword-tail-forms), but operate on class method types
+;;; rather than codegen AST nodes.  They use plists instead of keyword-param
+;;; structs because the specs are generated from type information alone,
+;;; without a parsed AST node.
+
 (defun method-wrapper-keyword-specs (visible-type)
   (declare (type tc:ty visible-type)
            (values list &optional))

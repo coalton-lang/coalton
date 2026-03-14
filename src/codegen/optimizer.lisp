@@ -89,21 +89,6 @@
         (setf env (tc:unset-function env name)))))
   env)
 
-(defun prime-optimization-env (bindings env)
-  "Seed ENV with same-unit value bindings before optimization.
-
-Only non-function bindings are published early. This is enough for method
-inlining to resolve class constants and other value methods from the current
-translation unit, without exposing in-progress function bodies to the global
-inliner while they are themselves being optimized."
-  (declare (type binding-list bindings)
-           (type tc:environment env)
-           (values tc:environment &optional))
-  (loop :for (name . node) :in bindings
-        :unless (node-abstraction-p node)
-          :do (setf env (tc:set-code env name node)))
-  env)
-
 (defun make-function-table (env)
   "Create a function table from ENV. A \"function table\" is a hash table
 mapping known function names to their arity."

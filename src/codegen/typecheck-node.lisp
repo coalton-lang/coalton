@@ -6,6 +6,7 @@
    (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
   (:export
+   #:explicit-nullary-callable-p ; FUNCTION
    #:typecheck-node ; FUNCTION
    ))
 
@@ -78,10 +79,13 @@
                          (tc:function-ty-keyword-input-types callee-type)
                          :key #'tc:keyword-ty-entry-keyword
                          :test #'eq)))
-        (when entry
-          (let ((arg-ty (typecheck-node (node-application-keyword-arg-value arg) env)))
-            (setf subs (tc:unify subs (tc:keyword-ty-entry-type entry) arg-ty))
-            (setf subs (tc:unify subs arg-ty (tc:keyword-ty-entry-type entry)))))))
+        (unless entry
+          (util:coalton-bug "Keyword ~S not found in function type ~S at site ~S"
+                            (node-application-keyword-arg-keyword arg)
+                            callee-type
+                            site))
+        (let ((arg-ty (typecheck-node (node-application-keyword-arg-value arg) env)))
+          (setf subs (tc:unify subs (tc:keyword-ty-entry-type entry) arg-ty)))))
     subs))
 
 (defun check-positional-argument-type (subs expected-type actual-type)
@@ -98,8 +102,7 @@
        expected-type
        subs)))
     (t
-     (setf subs (tc:unify subs expected-type actual-type))
-     (tc:unify subs actual-type expected-type))))
+     (tc:unify subs expected-type actual-type))))
 
 (defgeneric typecheck-node (expr env)
   (:documentation "Check that EXPR is valid. Currently only verifies
@@ -119,7 +122,8 @@
   (:method ((expr node-application) env)
     (declare (type tc:environment env)
              (values tc:ty))
-    (let* ((type (typecheck-node (node-application-rator expr) env))
+    (let* ((rator-type (typecheck-node (node-application-rator expr) env))
+           (type rator-type)
            (subs nil))
       (loop :for arg :in (node-application-rands expr)
             :for arg-ty := (typecheck-node arg env) :do
@@ -134,7 +138,7 @@
             (tc:compose-substitution-lists
              (check-keyword-application
               (application-callee-type
-               (typecheck-node (node-application-rator expr) env)
+               rator-type
                (node-application-rands expr)
                (node-application-keyword-rands expr))
               (node-application-keyword-rands expr)
@@ -173,12 +177,9 @@
   (:method ((expr node-abstraction) env)
     (declare (type tc:environment env)
              (values tc:ty))
-    (let ((type (abstraction-subexpr-type expr))
-          (subs nil))
-
+    (let ((type (abstraction-subexpr-type expr)))
       (let ((subexpr-ty (typecheck-node (node-abstraction-subexpr expr) env)))
-        (setf subs (tc:unify subs type subexpr-ty))
-        (setf subs (tc:unify subs subexpr-ty type))
+        (tc:unify nil type subexpr-ty)
         (node-type expr))))
 
   (:method ((expr node-let) env)
@@ -186,21 +187,15 @@
              (values tc:ty))
     (loop :for (name . node) :in (node-let-bindings expr) :do
       (typecheck-node node env))
-
-    (let ((subexpr-ty (typecheck-node (node-let-subexpr expr) env))
-
-          (subs nil))
-      (setf subs (tc:unify subs subexpr-ty (node-type expr)))
-      (setf subs (tc:unify subs (node-type expr) subexpr-ty))
+    (let ((subexpr-ty (typecheck-node (node-let-subexpr expr) env)))
+      (tc:unify nil subexpr-ty (node-type expr))
       subexpr-ty))
 
   (:method ((expr node-locally) env)
     (declare (type tc:environment env)
              (values tc:ty))
-    (let ((subexpr-ty (typecheck-node (node-locally-subexpr expr) env))
-          (subs nil))
-      (setf subs (tc:unify subs subexpr-ty (node-type expr)))
-      (setf subs (tc:unify subs (node-type expr) subexpr-ty))
+    (let ((subexpr-ty (typecheck-node (node-locally-subexpr expr) env)))
+      (tc:unify nil subexpr-ty (node-type expr))
       subexpr-ty))
 
   (:method ((expr node-lisp) env)
@@ -217,15 +212,10 @@
   (:method ((expr node-match) env)
     (declare (type tc:environment env)
              (values tc:ty))
-    (let ((type (node-type expr))
-
-          (subs nil))
-
+    (let ((type (node-type expr)))
       (loop :for branch :in (node-match-branches expr)
             :for subexpr-ty := (typecheck-node branch env) :do
-              (progn
-                (setf subs (tc:unify subs type subexpr-ty))
-                (setf subs (tc:unify subs subexpr-ty type))))
+              (tc:unify nil type subexpr-ty))
       type))
 
   (:method ((expr catch-branch) env)
@@ -236,29 +226,19 @@
   (:method ((expr node-catch) env)
     (declare (type tc:environment env)
              (values tc:ty))
-    (let ((type (node-type expr))
-
-          (subs nil))
-
+    (let ((type (node-type expr)))
       (loop :for branch :in (node-catch-branches expr)
             :for subexpr-ty := (typecheck-node branch env) :do
-              (progn
-                (setf subs (tc:unify subs type subexpr-ty))
-                (setf subs (tc:unify subs subexpr-ty type))))
+              (tc:unify nil type subexpr-ty))
       type))
 
   (:method ((expr node-resumable) env)
     (declare (type tc:environment env)
              (values tc:ty))
-    (let ((type (node-type expr))
-
-          (subs nil))
-
+    (let ((type (node-type expr)))
       (loop :for branch :in (node-resumable-branches expr)
             :for subexpr-ty := (typecheck-node branch env) :do
-              (progn
-                (setf subs (tc:unify subs type subexpr-ty))
-                (setf subs (tc:unify subs subexpr-ty type))))
+              (tc:unify nil type subexpr-ty))
       type))
 
   (:method ((expr resumable-branch) env)
@@ -302,12 +282,8 @@
     (assert (not (null (node-seq-nodes expr))))
     (loop :for node :in (node-seq-nodes expr) :do
       (typecheck-node node env))
-
-    (let ((last-node (car (last (node-seq-nodes expr))))
-
-          (subs nil))
-      (setf subs (tc:unify subs (node-type expr) (node-type last-node)))
-      (setf subs (tc:unify subs (node-type last-node) (node-type expr)))
+    (let ((last-node (car (last (node-seq-nodes expr)))))
+      (tc:unify nil (node-type expr) (node-type last-node))
       (node-type last-node)))
 
   (:method ((expr node-return-from) env)
