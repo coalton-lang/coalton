@@ -3,7 +3,10 @@
 ;;; Dyadic rationals meant for implementing big floats
 ;;; It is not exported into the math package as it is a niche numeric type
 
-(coalton/utils::defstdlib-package #:coalton/math/dyadic
+(coalton/utils::defstdlib-package #:coalton/xmath/dyadic
+    (:nicknames
+     #:coalton/math/dyadic
+     #:coalton-library/math/dyadic)
     (:use
      #:coalton
      #:coalton/builtin
@@ -21,7 +24,7 @@
    #:scale
    #:shift))
 
-(in-package #:coalton/math/dyadic)
+(in-package #:coalton/xmath/dyadic)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -35,11 +38,17 @@
 
   (declare exact-ilog (Integer * Integer -> (Optional Integer)))
   (define (exact-ilog b x)
-    "Computes the logarithm with base `b` of `x` only if the result is an
-integer."
-    (if (== 0 (mod b x))
-        (Some (ilog b x))
-        None))
+    "Compute `k` such that `x = b^k` when it exists."
+    (if (or (<= b 1)
+            (<= x 0))
+        None
+        (rec go ((y x)
+                 (k 0))
+          (if (== y 1)
+              (Some k)
+              (if (== 0 (mod y b))
+                  (go (quot y b) (+ k 1))
+                  None)))))
 
   (declare dyadic-compare ((Integer * Integer -> :a)
                            * Dyadic * Dyadic -> :a))
@@ -161,11 +170,13 @@ numbers."
   (define (shift k a)
     "Shift dyadic `a` to its floor with $\\mathtt{k}+1$ bits of precision."
     (let (Dyadic m e) = a)
-    (let j = (ilog 2 (abs m)))
-    (let delta = (- j (toInteger k)))
-    (if (<= delta 0)
+    (if (== m 0)
         a
-        (Dyadic (rsh m delta) (+ delta e)))))
+        (let ((j (ilog 2 (abs m))))
+          (let ((delta (- j (toInteger k))))
+            (if (<= delta 0)
+                a
+                (Dyadic (rsh m delta) (+ delta e))))))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON/MATH/DYADIC")
+(sb-ext:lock-package "COALTON/XMATH/DYADIC")

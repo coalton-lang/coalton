@@ -73,6 +73,16 @@
   (define (d2f4 _x)
     0)
 
+  (define (f6 x)
+    (log 2 x))
+
+  (define (d0f6 x)
+    (f6 x))
+  (define (d1f6 x)
+    (reciprocal (* x (ln 2))))
+  (define (d2f6 x)
+    (negate (reciprocal (* (* x x) (ln 2)))))
+
   ;; Radical
 
   (define (f5 x)
@@ -122,6 +132,10 @@
   (all (fn (x)
          (test-univariate f4 d0f4 d1f4 d2f4 x))
        (make-list 0.1 0.2 0.3 0.4 0.8)))
+
+(define-test univariate-hyperdual-test-6 ()
+  (pipe (make-list 0.2 0.5 1.3 3.0 10.0)
+        (all (test-univariate f6 d0f6 d1f6 d2f6))))
 
 (coalton-toplevel
 

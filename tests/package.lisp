@@ -24,6 +24,7 @@
   (:local-nicknames
    (#:types #:coalton/types)
    (#:math #:coalton/math)
+   (#:dual #:coalton/math/dual)
    (#:hyperdual #:coalton/math/hyperdual)
    (#:big-float #:coalton/big-float)
    (#:bits #:coalton/bits)
@@ -50,7 +51,7 @@
    (#:m-res #:coalton/monad/resultt)
    (#:m-env #:coalton/monad/environment)
    (#:m-stt #:coalton/monad/statet)
-   (#:fft #:coalton/algorithms/fft)))
+   (#:fft #:coalton/xmath/fft)))
 
 (in-package #:coalton-native-tests)
 

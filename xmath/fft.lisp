@@ -1,8 +1,9 @@
 ;;;; fft.lisp
 
-(defpackage #:coalton/algorithms/fft
+(defpackage #:coalton/xmath/fft
   (:documentation "A coalton package for performing FFTs.")
   (:nicknames
+   #:coalton/algorithms/fft
    #:coalton-library/algorithms/fft)
   (:use
    #:coalton)
@@ -64,7 +65,7 @@
 
 (named-readtables:in-readtable coalton:coalton)
 
-(in-package #:coalton/algorithms/fft)
+(in-package #:coalton/xmath/fft)
 
 (cl:declaim (cl:optimize (cl:speed 3) (cl:safety 0)))
 

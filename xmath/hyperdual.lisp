@@ -3,7 +3,10 @@
 ;;;; An implementation of Hyperdual numbers for computing second-order
 ;;;; derivatives of compositions of built-in Coalton functions.
 
-(coalton/utils::defstdlib-package #:coalton/math/hyperdual
+(coalton/utils::defstdlib-package #:coalton/xmath/hyperdual
+  (:nicknames
+   #:coalton/math/hyperdual
+   #:coalton-library/math/hyperdual)
   (:use
    #:coalton
    #:coalton/builtin
@@ -125,7 +128,7 @@ The following list of identities describe the theory of hyperdual numbers.
  (6) (f (Hyperdual x 0 0 0) (Hyperdual y 1 1 0))
       = (Hyperdual (f x y) (∂f/∂x x y) (∂f/∂x x y) (∂²f/∂x² x y))"))
 
-(in-package #:coalton/math/hyperdual)
+(in-package #:coalton/xmath/hyperdual)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -149,7 +152,7 @@ Note: `Eq`, and `Ord` and `Hash` only make use of the primal component."
   (define (h x f0 f1 f2)
     "Compute (f x) given f0 := (f a), f1 := (f' a), and f2 := (f'' a).
 
-Note: See identity (1) in the description of this package (`coalton/math/hyperdual`)."
+Note: See identity (1) in the description of this package (`coalton/xmath/hyperdual`)."
     (let (Hyperdual _ b c d) = x)
     (Hyperdual f0 (* b f1) (* c f1) (+ (* d f1) (* (* b c) f2))))
 
@@ -294,7 +297,7 @@ Note: See identity (1) in the description of this package (`coalton/math/hyperdu
       (exp (* (ln x) y)))
     (define (log x y)
       ;; logₓy = ln(y) / ln(x)
-      (/ (ln x) (ln y)))
+      (/ (ln y) (ln x)))
     (define ee (Hyperdual ee 0 0 0)))
 
   (define-instance ((Radical :t) (Reciprocable :t) (Exponentiable :t) => Radical (Hyperdual :t))
@@ -379,4 +382,4 @@ Note: See identity (1) in the description of this package (`coalton/math/hyperdu
       (Cons xx (Cons xy (Cons yx (Cons yy Nil)))))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON/MATH/HYPERDUAL")
+(sb-ext:lock-package "COALTON/XMATH/HYPERDUAL")
