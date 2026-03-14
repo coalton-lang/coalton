@@ -13,6 +13,9 @@
   (:import-from
    #:coalton-impl/codegen/transformations
    #:node-variables)
+  (:import-from
+   #:coalton-impl/codegen/typecheck-node
+   #:explicit-nullary-callable-p)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
@@ -106,14 +109,6 @@
                     positional-rands))
     ,@(nth-value 0 (keyword-tail-forms keyword-rands env))))
 
-(defun explicit-nullary-callable-p (type)
-  (declare (type tc:ty type)
-           (values boolean &optional))
-  (and (typep type 'tc:function-ty)
-       (null (tc:function-ty-positional-input-types type))
-       (null (tc:function-ty-keyword-input-types type))
-       (not (tc:function-ty-keyword-open-p type))))
-
 (defgeneric node-output-lisp-types (node env)
   (:documentation "Return the physical Common Lisp output types for NODE.")
   (:method ((node node-abstraction) env)
@@ -153,6 +148,10 @@
                value)
            value)))))
 
+  ;; Keyword dispatch for indirect calls (through function-entry).
+  ;; The parallel logic for direct calls is in the node-direct-application
+  ;; method below; both share keyword-tail-forms/keyword-call-args-list-form
+  ;; for the dynamic-keyword path.
   (:method ((node node-application) env)
     (declare (type tc:environment env))
     (let ((rator (codegen-expression (node-application-rator node) env))
@@ -183,6 +182,8 @@
                  ,rator
                  ,(keyword-call-args-list-form rands keyword-rands env))))))
 
+  ;; Keyword dispatch for direct calls (known callee).
+  ;; Parallel to node-application above but uses the function name directly.
   (:method ((node node-direct-application) env)
     (declare (type tc:environment env))
     (let* ((positional-rands (node-direct-application-rands node))

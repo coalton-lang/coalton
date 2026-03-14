@@ -65,12 +65,18 @@ resolved."
            (values function-entry &optional))
   (if (null hidden-arguments)
       function-entry
-      (make-function-entry
-       :arity (- (function-entry-arity function-entry)
-                 (length hidden-arguments))
-       :function (function-entry-function function-entry)
-       :bound-arguments (append (function-entry-bound-arguments function-entry)
-                                hidden-arguments))))
+      (let ((new-arity (- (function-entry-arity function-entry)
+                          (length hidden-arguments))))
+        (assert (>= new-arity 0) ()
+                "bind-function-entry-hidden-arguments: ~D hidden arguments ~
+                 exceeds visible arity ~D"
+                (length hidden-arguments)
+                (function-entry-arity function-entry))
+        (make-function-entry
+         :arity new-arity
+         :function (function-entry-function function-entry)
+         :bound-arguments (append (function-entry-bound-arguments function-entry)
+                                  hidden-arguments)))))
 
 (define-condition coalton-function-arity-mismatch (error)
   ((function :initarg :function
