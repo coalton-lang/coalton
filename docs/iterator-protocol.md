@@ -9,7 +9,7 @@ An `Iterator :elt` is defined as a function that, when called, returns either `(
 ```lisp
 ;; The Iterator type (simplified)
 (define-type (Iterator :elt)
-  (%Iterator (Unit -> (Optional :elt)) (Optional UFix)))
+  (%Iterator (Void -> (Optional :elt)) (Optional UFix)))
 ```
 
 The second field is an optional size hint that some operations use for pre-allocation.
@@ -52,7 +52,7 @@ Any type that implements `IntoIterator` can be converted into an iterator with `
   (define ones (iter:repeat 1))
 
   ;; Repeat a value a fixed number of times
-  (define five-zeros (iter:repeat-for 5 0))
+  (define five-zeros (iter:repeat-for 0 5))
 
   ;; Yield a single element
   (define just-one (iter:once 42))
