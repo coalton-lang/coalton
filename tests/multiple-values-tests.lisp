@@ -11,7 +11,12 @@
    #:mv-unless-zero-values
    #:mv-bare-return
    #:mv-lisp-return-tuple
-   #:mv-lisp-alias-return))
+   #:mv-lisp-alias-return
+   #:mv-rec-void
+   #:mv-rec-single
+   #:mv-rec-pair
+   #:mv-rec-nested-void
+   #:mv-rec-mutual-void))
 
 (defun coalton-tests/multiple-values::%mv-lisp-return-helper (x)
   (declare (type integer x)
@@ -49,6 +54,51 @@
 
     (define (mv-bare-return)
       (return))
+
+    ;; rec returning 0, 1, and 2 values
+    (declare mv-rec-void (UFix -> Void))
+    (define (mv-rec-void n)
+      "rec that returns zero values (Void)."
+      (rec go ((i 0))
+        (when (< i n)
+          (go (+ i 1)))))
+
+    (declare mv-rec-single (UFix -> UFix))
+    (define (mv-rec-single n)
+      "rec that returns a single value."
+      (rec go ((i 0))
+        (if (>= i n)
+            i
+            (go (+ i 1)))))
+
+    (declare mv-rec-pair (UFix -> UFix * UFix))
+    (define (mv-rec-pair n)
+      "rec that returns two values."
+      (rec go ((i 0))
+        (if (>= i n)
+            (values i (* i i))
+            (go (+ i 1)))))
+
+    (declare mv-rec-nested-void (UFix * UFix -> Void))
+    (define (mv-rec-nested-void m n)
+      "Nested rec loops both returning Void via when."
+      (rec outer ((i 0))
+        (when (< i m)
+          (rec inner ((j 0))
+            (when (< j n)
+              (inner (+ j 1))))
+          (outer (+ i 1)))))
+
+    (declare mv-rec-mutual-void (UFix -> Void))
+    (define (mv-rec-mutual-void n)
+      "Mutually recursive let-bound functions both returning Void."
+      (let ((ping (fn (i)
+              (when (< i n)
+                (pong (+ i 1)))))
+            (pong (fn (j)
+              (when (< j n)
+                (ping (+ j 1))))))
+        (ping 0)))
 
     (declare mv-lisp-return-tuple (Integer -> (Tuple Integer Integer)))
     (define (mv-lisp-return-tuple x)
@@ -135,6 +185,32 @@
        (multiple-value-list
         (eval '(coalton:coalton
                 (coalton-tests/multiple-values:mv-bare-return)))))))
+
+(deftest rec-multiple-values-runtime ()
+  ;; rec returning Void (0 values)
+  (is (null
+       (multiple-value-list
+        (eval '(coalton:coalton
+                (coalton-tests/multiple-values:mv-rec-void 5))))))
+  ;; rec returning a single value
+  (is (= 5
+         (eval '(coalton:coalton
+                 (coalton-tests/multiple-values:mv-rec-single 5)))))
+  ;; rec returning two values
+  (is (equal '(5 25)
+             (multiple-value-list
+              (eval '(coalton:coalton
+                      (coalton-tests/multiple-values:mv-rec-pair 5))))))
+  ;; nested rec both returning Void via when
+  (is (null
+       (multiple-value-list
+        (eval '(coalton:coalton
+                (coalton-tests/multiple-values:mv-rec-nested-void 3 4))))))
+  ;; mutual recursion returning Void via when
+  (is (null
+       (multiple-value-list
+        (eval '(coalton:coalton
+                (coalton-tests/multiple-values:mv-rec-mutual-void 5)))))))
 
 (deftest multiple-values-to-tuple-runtime ()
   (is (= 10
