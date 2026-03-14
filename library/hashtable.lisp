@@ -145,10 +145,10 @@
   (define (extend! table iter)
     "Insert all of the key value pairs from ITER into TABLE, overwriting duplicate keys."
     (let iter = (iter:into-iter iter))
-    (let (values) = (iter:for-each!
-                     (fn ((Tuple key value))
-                       (set! table key value))
-                     iter))
+    (iter:for-each!
+     (fn ((Tuple key value))
+       (set! table key value))
+     iter)
     (values))
 
   ;;
@@ -173,10 +173,10 @@
     (define (iter:collect! iter)
       (let capacity = (with-default (the UFix 0) (iter:size-hint iter)))
       (let table = (with-capacity (into capacity)))
-      (let (values) = (iter:for-each!
-                       (fn ((Tuple key value))
-                         (set! table key value))
-                       iter))
+      (iter:for-each!
+       (fn ((Tuple key value))
+         (set! table key value))
+       iter)
       table))
 
   (define-instance (Hash :key => Default (Hashtable :key :value))

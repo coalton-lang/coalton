@@ -102,7 +102,7 @@ contains `a`."
        (if (<= (vector:length leaves) idx)
            None
            (let ((newleaves (vector:copy leaves)))
-             (let (values) = (vector:set! idx a newleaves))
+             (vector:set! idx a newleaves)
              (Some (LeafArray newleaves)))))
 
       ((RelaxedNode h fss cst sts)
@@ -112,7 +112,7 @@ contains `a`."
          (subtree <- (vector:index subtree-idx sts))
          (new-subtree <- (put subtree (- idx offset) a))
          (let ((newsts (vector:copy sts)))
-           (let (values) = (vector:set! subtree-idx new-subtree newsts))
+           (vector:set! subtree-idx new-subtree newsts)
            (pure (RelaxedNode h fss cst newsts)))))))
 
   (define (push seq a)
@@ -160,8 +160,8 @@ a new `Seq` instance."
              (Tuple leaf (RelaxedNode h fss newcst newsts)))
 
             (True
-             (let (values) = (vector:set! last-idx (- (vector:last-unsafe newcst) (the UFix 1)) newcst))
-             (let (values) = (vector:set! last-idx newsub newsts))
+             (vector:set! last-idx (- (vector:last-unsafe newcst) (the UFix 1)) newcst)
+             (vector:set! last-idx newsub newsts)
              (Tuple leaf (RelaxedNode h fss newcst newsts)))))))))
 
   (define (conc left right)
@@ -315,8 +315,8 @@ a new `Seq` instance."
                     (vector:copy cst))
                   (last-idx
                     (- (vector:length sts) (the UFix 1))))
-              (let (values) = (vector:set! last-idx (+ (the UFix 1) (vector:last-unsafe newcst)) newcst))
-              (let (values) = (vector:set! last-idx new-node newsts))
+              (vector:set! last-idx (+ (the UFix 1) (vector:last-unsafe newcst)) newcst)
+              (vector:set! last-idx new-node newsts)
               (values (RelaxedNode h fss newcst newsts) True)))
 
            ;; wasn't in place, but there's room here
@@ -389,29 +389,29 @@ shifts the each member of `target` down by `n` positions.  Mutates both
             (vector:length source))
           (n
             (min n0 source-len)))
-      (let (values) = (iter:for-each!
-                       (fn (i)
-                         (vector:push! (vector:index-unsafe i source) target)
-                         (let (values) = (iter:for-each!
-                                         (fn (j)
-                                            (do
-                                             (x <- (vector:index (+ j n) source))
-                                             (let (values) = (vector:set! j x source))
-                                             (pure Unit))
-                                            (values))
-                                          (iter:range-increasing n i source-len)))
-                         (values))
-                       (iter:up-to n)))
+      (iter:for-each!
+       (fn (i)
+         (vector:push! (vector:index-unsafe i source) target)
+         (iter:for-each!
+          (fn (j)
+            (do
+             (x <- (vector:index (+ j n) source))
+             (let (values) = (vector:set! j x source))
+             (pure Unit))
+            (values))
+          (iter:range-increasing n i source-len))
+         (values))
+       (iter:up-to n))
       (iter:for-each! (fn (_i) (vector:pop! source) (values)) (iter:up-to n))))
 
   (define (replace-first v a)
     (let ((cv (vector:copy v))) 
-      (let (values) = (vector:set! (the UFix 0) a cv))
+      (vector:set! (the UFix 0) a cv)
       cv))
 
   (define (replace-last v a)
     (let ((cv  (vector:copy v))) 
-      (let (values) = (vector:set! (- (vector:length v) (the UFix 1)) a cv))
+      (vector:set! (- (vector:length v) (the UFix 1)) a cv)
       cv))
 
   (declare butfirst (vector:Vector :a -> vector:Vector :a))
@@ -435,10 +435,10 @@ table of relaxed nodes may be inaccurate. `seq2` may furthermore be
 invalid because size can no longer be applied correctly."
     (match (Tuple seq1 seq2)
       ((Tuple (LeafArray vec1) (LeafArray vec2))
-       (let (values) = (%shift-n-onto! vec1 vec2 n))
+       (%shift-n-onto! vec1 vec2 n)
        (values))
       ((Tuple (RelaxedNode _ _ _ vec1) (RelaxedNode _ _ _ vec2))
-       (let (values) = (%shift-n-onto! vec1 vec2 n))
+       (%shift-n-onto! vec1 vec2 n)
        (values))
       (_ (unreachable)))
     (values))
@@ -492,38 +492,37 @@ It attempts to rebalance with a minimum of array copying."
     (let count = (vector:length branches))
     (let result = (vector:new))
     (let cached-branch = (cell:new None))
-    (let (values) =
-      (iter:for-each!
-       (fn (i)
-         (let branch =
-           (match (cell:read cached-branch)
-             ((None) (vector:index-unsafe i branches))
-             ((Some cached) cached)))
-         (let subbranch-count = (branch-count branch))
-         (let rebuilt =
-           (cond
-             ((or (== i (- count (the UFix 1)))
-                  (<= min-branching subbranch-count))
-              (cell:swap! cached-branch None)
-              (rebuild-size-table branch))
-             (True
-              (let this-branch =
-                (if (optional:some? (cell:read cached-branch))
-                    branch
-                    (copy branch)))
-              (let next-branch =
-                (copy (vector:index-unsafe (+ i (the UFix 1)) branches)))
-              (let (values) = (%shift-n-branches-onto
-                               this-branch next-branch (- min-branching subbranch-count)))
-              (cell:swap! cached-branch (Some next-branch))
-              (rebuild-size-table this-branch))))
-         ;; `size` can observe transiently invalid branches during rebalancing.
-         ;; `branch-count` is robust here and still drops empty branches.
-         (unless (math:zero? (branch-count rebuilt))
-           (vector:push! rebuilt result)
-           (values))
+    (iter:for-each!
+     (fn (i)
+       (let branch =
+         (match (cell:read cached-branch)
+           ((None) (vector:index-unsafe i branches))
+           ((Some cached) cached)))
+       (let subbranch-count = (branch-count branch))
+       (let rebuilt =
+         (cond
+           ((or (== i (- count (the UFix 1)))
+                (<= min-branching subbranch-count))
+            (cell:swap! cached-branch None)
+            (rebuild-size-table branch))
+           (True
+            (let this-branch =
+              (if (optional:some? (cell:read cached-branch))
+                  branch
+                  (copy branch)))
+            (let next-branch =
+              (copy (vector:index-unsafe (+ i (the UFix 1)) branches)))
+            (%shift-n-branches-onto
+             this-branch next-branch (- min-branching subbranch-count))
+            (cell:swap! cached-branch (Some next-branch))
+            (rebuild-size-table this-branch))))
+       ;; `size` can observe transiently invalid branches during rebalancing.
+       ;; `branch-count` is robust here and still drops empty branches.
+       (unless (math:zero? (branch-count rebuilt))
+         (vector:push! rebuilt result)
          (values))
-       (iter:up-to count)))
+       (values))
+     (iter:up-to count))
     (make-node-from-branches result))
 
   )

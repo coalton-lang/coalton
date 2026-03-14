@@ -12,6 +12,6 @@
                      (match (coalton/hashtable:get already-seen elt)
                        ((Some _) False)
                        ((None)
-                        (let (values) = (coalton/hashtable:set! already-seen elt Unit))
+                        (coalton/hashtable:set! already-seen elt Unit)
                         True)))))
       (filter! unique? iter))))
