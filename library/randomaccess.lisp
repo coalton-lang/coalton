@@ -69,7 +69,7 @@ It is permitted for any of `make`, `unsafe-aref`, or `unsafe-set!` to error."
              (lisp (-> Boolean) (index storage-length)
                (to-boolean (cl:< index storage-length))))
         (progn
-          (let (values) = (unsafe-set! storage index value))
+          (unsafe-set! storage index value)
           (Some Unit))
         None))
 
@@ -79,7 +79,7 @@ It is permitted for any of `make`, `unsafe-aref`, or `unsafe-set!` to error."
     (let ((element1 (unsafe-aref storage index1))
           (element2 (unsafe-aref storage index2)))
       (progn
-        (let (values) = (unsafe-set! storage index1 element2))
+        (unsafe-set! storage index1 element2)
         (unsafe-set! storage index2 element1))))
 
   (declare rotate! (RandomAccess :f :t => :f * UFix * UFix -> Optional Unit))
@@ -93,7 +93,7 @@ It is permitted for any of `make`, `unsafe-aref`, or `unsafe-set!` to error."
                (lisp (-> Boolean) (index2 storage-length)
                  (to-boolean (cl:< index2 storage-length))))
           (progn
-            (let (values) = (unsafe-rotate! storage index1 index2))
+            (unsafe-rotate! storage index1 index2)
             (Some Unit))
           None))))
 

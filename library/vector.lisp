@@ -80,7 +80,7 @@
   (define (with-initial-element n x)
     "Create a new vector with `n` elements equal to `x`."
     (let v = (with-capacity n))
-    (let (values) = (extend! v (iter:repeat-for x n)))
+    (extend! v (iter:repeat-for x n))
     v)
 
   (inline)
@@ -253,8 +253,8 @@
   (define (append v1 v2)
     "Create a new vector containing the elements of `v1` followed by the elements of `v2`."
     (let out = (with-capacity (+ (length v1) (length v2))))
-    (let (values) = (extend! out v1))
-    (let (values) = (extend! out v2))
+    (extend! out v1)
+    (extend! out v2)
     out)
 
   (declare reverse! (Vector :a -> Vector :a))
@@ -286,7 +286,7 @@
         (pop-unsafe! vec)
         (progn
           (let out = (index-unsafe idx vec))
-          (let (values) = (set! idx (pop-unsafe! vec) vec))
+          (set! idx (pop-unsafe! vec) vec)
           out)))
 
   (declare sort-by! ((:a * :a -> Boolean) * Vector :a -> Void))
@@ -317,14 +317,14 @@
     (let remaining-capacity = (- (capacity vec) (length vec)))
     (when (> size remaining-capacity)
       (progn
-        (let (values) = (set-capacity! (+ (length vec) (- size remaining-capacity)) vec))
+        (set-capacity! (+ (length vec) (- size remaining-capacity)) vec)
         (values)))
 
-    (let (values) = (iter:for-each!
-                     (fn (x)
-                       (push! x vec)
-                       (values))
-                     iter))
+    (iter:for-each!
+     (fn (x)
+       (push! x vec)
+       (values))
+     iter)
     (values))
 
   ;;
@@ -348,11 +348,11 @@
   (define-instance (Functor Vector)
     (define (map f v)
       (let out = (with-capacity (length v)))
-      (let (values) = (iter:for-each!
-                       (fn (x)
-                         (push! (f x) out)
-                         (values))
-                       (iter:into-iter v)))
+      (iter:for-each!
+       (fn (x)
+         (push! (f x) out)
+         (values))
+       (iter:into-iter v))
       out))
 
   (define-instance (Foldable Vector)
@@ -431,10 +431,10 @@
     (define (iter:collect! iter)
       (let size = (with-default 0 (iter:size-hint iter)))
       (let vec = (with-capacity size))
-      (let (values) = (iter:for-each! (fn (x)
-                                        (push! x vec)
-                                        (values))
-                                      iter))
+      (iter:for-each! (fn (x)
+                        (push! x vec)
+                        (values))
+                      iter)
       vec))
 
   (define-instance (Default (Vector :a))

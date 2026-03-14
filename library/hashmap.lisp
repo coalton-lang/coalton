@@ -249,10 +249,10 @@ entry with INDEX, the entry is replaced."
               (newpos (index->pos newmask i)))
           (if (== i index)
               (progn
-                (let (values) = (arr:set! newarray newpos elt))
+                (arr:set! newarray newpos elt)
                 (values))
               (progn
-                (let (values) = (arr:set! newarray newpos (arr:aref array oldpos)))
+                (arr:set! newarray newpos (arr:aref array oldpos))
                 (values))))))
     (Tree newmask newarray))
 
@@ -271,7 +271,7 @@ ensure the entry exists.  Returns an updated node."
               (let ((oldpos (index->pos mask i))
                     (newpos (index->pos newmask i)))
                 (progn
-                  (let (values) = (arr:set! newarray newpos (arr:aref array oldpos)))
+                  (arr:set! newarray newpos (arr:aref array oldpos))
                   (values)))))
           (Tree newmask newarray))))
     (cond
@@ -303,12 +303,12 @@ a new entry."
           (let ((arr (arr:make 2 (Chain Nil)))
                 (mask (bits:or (index->mask ind1) (index->mask ind2))))
             (cond ((< ind1 ind2)
-                   (let (values) = (arr:set! arr 0 (Leaf entry1)))
-                   (let (values) = (arr:set! arr 1 (Leaf entry2)))
+                   (arr:set! arr 0 (Leaf entry1))
+                   (arr:set! arr 1 (Leaf entry2))
                    (values))
                   (True
-                   (let (values) = (arr:set! arr 0 (Leaf entry2)))
-                   (let (values) = (arr:set! arr 1 (Leaf entry1)))
+                   (arr:set! arr 0 (Leaf entry2))
+                   (arr:set! arr 1 (Leaf entry1))
                    (values)))
             (Tree mask arr)))))
 
@@ -634,7 +634,7 @@ new value, if the key was found."
        (let newarr = (arr:make-uninitialized (arr:length arr)))
        (dotimes (i (arr:length arr))
          (progn
-           (let (values) = (arr:set! newarr i (%map f (arr:aref arr i))))
+           (arr:set! newarr i (%map f (arr:aref arr i)))
            (values)))
        (Tree mask newarr))))
 

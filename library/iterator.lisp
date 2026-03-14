@@ -524,7 +524,7 @@ afterwards, ITER will be exhausted."
 Discard values returned by THUNK."
     (progn
       (fold! (fn (u elt)
-               (let (values) = (thunk elt))
+               (thunk elt)
                u)
              Unit
              iter)

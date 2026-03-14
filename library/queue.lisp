@@ -174,8 +174,8 @@
   (define (append q1 q2)
     "Create a new queue containing the elements of `q1` followed by the elements of `q2`."
     (let out = (new))
-    (let (values) = (extend! out q1))
-    (let (values) = (extend! out q2))
+    (extend! out q1)
+    (extend! out q2)
     out)
 
   (declare extend! (iter:IntoIterator :container :elt => Queue :elt * :container -> Void))
@@ -213,10 +213,10 @@
   (define-instance (Functor Queue)
     (define (map f q)
       (let out = (new))
-      (let (values) = (iter:for-each!
-                       (fn (x)
-                         (push! (f x) out))
-                       (iter:into-iter q)))
+      (iter:for-each!
+       (fn (x)
+         (push! (f x) out))
+       (iter:into-iter q))
       out))
 
   (define-instance (Foldable Queue)
@@ -249,7 +249,7 @@
   (define-instance (iter:FromIterator (Queue :a) :a)
     (define (iter:collect! iter)
       (let out = (new))
-      (let (values) = (extend! out iter))
+      (extend! out iter)
       out))
 
   (define-instance (Default (Queue :a))
