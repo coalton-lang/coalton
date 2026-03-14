@@ -208,6 +208,7 @@
                (:file "seq")
                (:file "matrix")
                (:file "mapping")
+               (:file "cell")
                (:module "gabriel-benchmarks"
                 :serial t
                 :components ((:file "tak")
