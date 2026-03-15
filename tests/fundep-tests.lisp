@@ -108,6 +108,152 @@
                (coalton/iterator:into-iter
                (the (List Integer) items)))))"))
 
+(deftest ty-scheme-alpha-equivalence ()
+  (flet ((parse-scheme (string)
+           (let ((source (source:make-source-string string)))
+             (with-open-stream (stream (source:source-stream source))
+               (tc:parse-ty-scheme
+                (parser:parse-qualified-type
+                 (eclector.concrete-syntax-tree:read stream)
+                 source)
+                entry:*global-environment*)))))
+    (is (tc:ty-scheme=
+         (parse-scheme
+          "((coalton/iterator:FromIterator :a (coalton/classes:Tuple :b :c))
+            (coalton/iterator:IntoIterator :d :b)
+            (coalton/iterator:IntoIterator :e :c)
+            => :d * :e -> :a)")
+         (parse-scheme
+          "((coalton/iterator:IntoIterator :right-container :right-element)
+            (coalton/iterator:IntoIterator :left-container :left-element)
+            (coalton/iterator:FromIterator :result
+             (coalton/classes:Tuple :left-element :right-element))
+            => :left-container * :right-container -> :result)")))))
+
+;;; Targeted tests for ty-scheme= predicate bag matching.
+;;; The optimization commits to the first predicate match (no backtracking)
+;;; when the tgen map is complete after comparing the main type.
+
+(deftest ty-scheme=-complete-map-predicate-order ()
+  "When all tgen ids appear in the main type, predicate order shouldn't matter.
+This exercises the O(n²) fast path."
+  (flet ((parse-scheme (string)
+           (let ((source (source:make-source-string string)))
+             (with-open-stream (stream (source:source-stream source))
+               (tc:parse-ty-scheme
+                (parser:parse-qualified-type
+                 (eclector.concrete-syntax-tree:read stream)
+                 source)
+                entry:*global-environment*)))))
+    ;; Same predicates, different order, all vars used in main type
+    (is (tc:ty-scheme=
+         (parse-scheme "(coalton/classes:Eq :a => :a -> :a -> coalton:Boolean)")
+         (parse-scheme "(coalton/classes:Eq :b => :b -> :b -> coalton:Boolean)")))
+    ;; Two predicates, reversed order, vars in main type
+    (is (tc:ty-scheme=
+         (parse-scheme
+          "((coalton/classes:Eq :a) (coalton/classes:Ord :b)
+            => :a -> :b -> coalton:Boolean)")
+         (parse-scheme
+          "((coalton/classes:Ord :y) (coalton/classes:Eq :x)
+            => :x -> :y -> coalton:Boolean)")))
+    ;; Multiple predicates on different vars, all present in main type
+    (is (tc:ty-scheme=
+         (parse-scheme
+          "((coalton/classes:Num :a) (coalton/classes:Num :b) (coalton/classes:Eq :a)
+            => :a -> :b -> coalton:Boolean)")
+         (parse-scheme
+          "((coalton/classes:Eq :x) (coalton/classes:Num :y) (coalton/classes:Num :x)
+            => :x -> :y -> coalton:Boolean)")))))
+
+(deftest ty-scheme=-incomplete-map-backtracking ()
+  "When tgen ids appear only in predicates (not in the main type), the map is
+incomplete and backtracking is required.  The greedy first-match can pick the
+wrong pairing, so the O(n!) backtracking path must find the correct one."
+  ;; Construct schemes directly because the parser rejects ambiguous type
+  ;; variables.  Both schemes represent:
+  ;;   forall a b c. (C a b, C a c) => a -> Unit
+  ;; where b and c appear only in predicates, leaving the map incomplete
+  ;; after comparing the main type.
+  (let* ((class-name (gensym "TEST-CLASS-"))
+         (tgen0 (tc:make-tgen :id 0))    ; a — used in main type
+         (tgen1 (tc:make-tgen :id 1))    ; b — predicate-only
+         (tgen2 (tc:make-tgen :id 2))    ; c — predicate-only
+         (pred-ab (tc:make-ty-predicate :class class-name :types (list tgen0 tgen1)))
+         (pred-ac (tc:make-ty-predicate :class class-name :types (list tgen0 tgen2)))
+         (main-ty (tc:make-function-ty :positional-input-types (list tgen0)
+                                       :output-types (list tc:*unit-type*)))
+         ;; Scheme 1: preds in order (ab, ac)
+         (scheme1 (tc:make-ty-scheme
+                   :kinds (list tc:+kstar+ tc:+kstar+ tc:+kstar+)
+                   :type (tc:make-qualified-ty :predicates (list pred-ab pred-ac)
+                                               :type main-ty)))
+         ;; Scheme 2: preds reversed (ac, ab)
+         (scheme2 (tc:make-ty-scheme
+                   :kinds (list tc:+kstar+ tc:+kstar+ tc:+kstar+)
+                   :type (tc:make-qualified-ty :predicates (list pred-ac pred-ab)
+                                               :type main-ty))))
+    (is (tc:ty-scheme= scheme1 scheme2))
+    ;; Also verify: same scheme equals itself
+    (is (tc:ty-scheme= scheme1 scheme1))))
+
+(deftest ty-scheme=-incomplete-map-distinguishes-constraints ()
+  "With an incomplete map, schemes that differ in predicate argument structure
+must be distinguished even though the predicate-only variables are ambiguous."
+  (let* ((class-name (gensym "TEST-CLASS-"))
+         (tgen0 (tc:make-tgen :id 0))
+         (tgen1 (tc:make-tgen :id 1))
+         (tgen2 (tc:make-tgen :id 2))
+         (main-ty (tc:make-function-ty :positional-input-types (list tgen0)
+                                       :output-types (list tc:*unit-type*)))
+         ;; Scheme 1: (C a b, C a c) => a -> Unit
+         (scheme1 (tc:make-ty-scheme
+                   :kinds (list tc:+kstar+ tc:+kstar+ tc:+kstar+)
+                   :type (tc:make-qualified-ty
+                          :predicates (list (tc:make-ty-predicate :class class-name
+                                                                  :types (list tgen0 tgen1))
+                                           (tc:make-ty-predicate :class class-name
+                                                                  :types (list tgen0 tgen2)))
+                          :type main-ty)))
+         ;; Scheme 2: (C a b, C c a) => a -> Unit — second pred has args flipped
+         (scheme2 (tc:make-ty-scheme
+                   :kinds (list tc:+kstar+ tc:+kstar+ tc:+kstar+)
+                   :type (tc:make-qualified-ty
+                          :predicates (list (tc:make-ty-predicate :class class-name
+                                                                  :types (list tgen0 tgen1))
+                                           (tc:make-ty-predicate :class class-name
+                                                                  :types (list tgen2 tgen0)))
+                          :type main-ty))))
+    ;; Different predicate argument structure — should NOT be equal
+    (is (not (tc:ty-scheme= scheme1 scheme2)))))
+
+(deftest ty-scheme=-nonequivalent ()
+  "Schemes that should NOT be alpha-equivalent."
+  (flet ((parse-scheme (string)
+           (let ((source (source:make-source-string string)))
+             (with-open-stream (stream (source:source-stream source))
+               (tc:parse-ty-scheme
+                (parser:parse-qualified-type
+                 (eclector.concrete-syntax-tree:read stream)
+                 source)
+                entry:*global-environment*)))))
+    ;; Different predicates
+    (is (not (tc:ty-scheme=
+              (parse-scheme "(coalton/classes:Eq :a => :a -> coalton:Boolean)")
+              (parse-scheme "(coalton/classes:Ord :a => :a -> coalton:Boolean)"))))
+    ;; Same predicates but vars swapped in main type
+    (is (not (tc:ty-scheme=
+              (parse-scheme
+               "((coalton/classes:Eq :a) (coalton/classes:Ord :b) => :a -> :b -> coalton:Boolean)")
+              (parse-scheme
+               "((coalton/classes:Eq :a) (coalton/classes:Ord :b) => :b -> :a -> coalton:Boolean)"))))
+    ;; Different number of predicates
+    (is (not (tc:ty-scheme=
+              (parse-scheme
+               "((coalton/classes:Eq :a) (coalton/classes:Ord :a) => :a -> coalton:Boolean)")
+              (parse-scheme
+               "(coalton/classes:Eq :a => :a -> coalton:Boolean)"))))))
+
 (deftest fundep-explicit-binding ()
   (check-coalton-types
    "(declare fast-evens (coalton/iterator:IntoIterator :a coalton:Integer => :a -> coalton:List coalton:Integer))
