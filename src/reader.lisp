@@ -4,6 +4,7 @@
   (:local-nicknames
    (#:cst #:concrete-syntax-tree)
    (#:codegen #:coalton-impl/codegen)
+   (#:pmacro #:coalton-impl/parser/macro)
    (#:preader #:coalton-impl/parser/reader)
    (#:settings #:coalton-impl/settings)
    (#:source #:coalton-impl/source)
@@ -350,14 +351,64 @@ Eclector bracket reader in parser/reader.lisp."
         (*print-circle* t))
     (prin1-to-string form)))
 
+(defun macro-body-start (form)
+  "Return the source offset of the first body form inside CST FORM."
+  (if (cst:consp (cst:rest form))
+      (source:span-start (cst:source (cst:second form)))
+      (source:span-end (cst:source (cst:first form)))))
+
+(defun compile-cst-forms (mode form source)
+  "Compile Coalton MODE by re-reading the original parser CST FORM from SOURCE."
+  (declare (type deferred-coalton-mode mode)
+           (type cst:cst form))
+  (with-open-stream (stream (source:source-stream source))
+    (file-position stream (macro-body-start form))
+    (parser:with-reader-context stream
+      (ecase mode
+        (coalton:coalton-toplevel
+         (entry:compile-coalton-toplevel
+          (parser:read-program stream source ':macro)))
+        (coalton:coalton-codegen
+         (let ((settings:*emit-type-annotations* nil))
+           `',(entry:entry-point
+               (parser:read-program stream source ':macro))))
+        (coalton:coalton-codegen-types
+         (let ((settings:*emit-type-annotations* t))
+           `',(entry:entry-point
+               (parser:read-program stream source ':macro))))
+        (coalton:coalton-codegen-ast
+         (let* ((settings:*emit-type-annotations* nil)
+                (ast nil)
+                (codegen:*codegen-hook* (lambda (op &rest args)
+                                          (when (eql op ':AST)
+                                            (push args ast)))))
+           (entry:entry-point (parser:read-program stream source ':macro))
+           (loop :for (name type value) :in (nreverse ast)
+                 :do (format t "~A :: ~A~%~A~%~%~%" name type value)))
+         nil)
+        (coalton:coalton
+         (entry:expression-entry-point
+          (parser:read-expressions stream source)))))))
+
 (defun compile-forms (mode forms)
-  "Compile FORMS as Coalton using the indicated MODE."
-  (let* ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton))
-         (string (print-form (cons mode forms)))
-         (*source* (coalton-impl/source:make-source-string string
-                                                           :name "<macroexpansion>")))
-    (with-input-from-string (stream string)
-      (cl:read stream))))
+  "Compile FORMS as Coalton using the indicated MODE.
+
+When called from within a Coalton macro expansion (i.e. `*macro-expansion-form*'
+and `*macro-expansion-source*' are bound), delegates to `compile-cst-forms' which
+re-reads the body from the original source. This preserves precise source
+locations. Otherwise falls back to printing the forms and re-reading them, which
+is needed when forms are generated programmatically outside the parser."
+  (if (and pmacro:*macro-expansion-form*
+           pmacro:*macro-expansion-source*)
+      (compile-cst-forms mode
+                         pmacro:*macro-expansion-form*
+                         pmacro:*macro-expansion-source*)
+      (let* ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton))
+             (string (print-form (cons mode forms)))
+             (*source* (coalton-impl/source:make-source-string string
+                                                               :name "<macroexpansion>")))
+        (with-input-from-string (stream string)
+          (cl:read stream)))))
 
 (defmacro coalton:coalton-toplevel (&body forms)
   "Compile Coalton FORMS."
