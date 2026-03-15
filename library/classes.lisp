@@ -30,6 +30,8 @@
    #:Traversable #:traverse
    #:Bifunctor #:bimap #:map-fst #:map-snd
    #:sequence
+   #:FromCollection #:make-empty-collection #:adjoin-to-collection #:finalize-collection
+   #:FromAssociation #:make-empty-association #:adjoin-to-association #:finalize-association
    #:Into
    #:TryInto
    #:Iso
@@ -301,6 +303,51 @@ together."
   (define (map-snd f b)
     "Map over the second argument of a `Bifunctor`."
     (bimap (fn (x) x) f b))
+
+  (define-class (FromCollection :collection :element (:collection -> :element))
+    "Types which can be built from collection builder syntax `[a b c]`.
+
+The three methods form a fold protocol:
+
+  1. `make-empty-collection` creates the initial accumulator (takes Void so
+     mutable collections like Vector get a fresh instance each time).
+  2. `adjoin-to-collection` is called once per element, left to right.
+  3. `finalize-collection` post-processes the result (e.g. reversing a
+     cons-list that was built in reverse).
+
+When no concrete type is specified, the compiler defaults to `Seq`."
+    (make-empty-collection
+     "Return the initial accumulator. Takes Void so mutable collections get a fresh instance each time."
+     (Void -> :collection))
+    (adjoin-to-collection
+     "Add one evaluated builder element to a partially built collection. Called once per element in source order."
+     (:collection * :element -> :collection))
+    (finalize-collection
+     "Post-process the finished collection. Implementations that build in reverse should reverse here; collections that are already in order can return the argument unchanged."
+     (:collection -> :collection)))
+
+  (define-class (FromAssociation :association :key :value (:association -> :key :value))
+    "Types which can be built from association builder syntax `[k1 => v1 k2 => v2]`.
+
+The three methods form a fold protocol:
+
+  1. `make-empty-association` creates the initial accumulator (takes Void so
+     mutable collections like Hashtable get a fresh instance each time).
+  2. `adjoin-to-association` is called once per key/value pair, left to right.
+     Duplicate keys should be kept or discarded consistently; the standard
+     instances keep the first occurrence.
+  3. `finalize-association` post-processes the result.
+
+When no concrete type is specified, the compiler defaults to `Seq (Tuple :key :value)`."
+    (make-empty-association
+     "Return the initial accumulator. Takes Void so mutable collections get a fresh instance each time."
+     (Void -> :association))
+    (adjoin-to-association
+     "Add one key/value pair to a partially built association. Called once per entry in source order. Duplicate keys keep the first occurrence."
+     (:association * :key * :value -> :association))
+    (finalize-association
+     "Post-process the finished association. Collections that are already in order can return the argument unchanged."
+     (:association -> :association)))
 
   ;;
   ;; Conversions

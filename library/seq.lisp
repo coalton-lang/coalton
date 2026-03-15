@@ -236,6 +236,23 @@ a new `Seq` instance."
     (define (iter:collect! it)
       (iter:fold! push (new) it)))
 
+  (define-instance (types:RuntimeRepr :a => FromCollection (Seq :a) :a)
+    (define (make-empty-collection)
+      (new))
+    (define (adjoin-to-collection seq item)
+      (push seq item))
+    (define (finalize-collection seq)
+      seq))
+
+  (define-instance (types:RuntimeRepr (Tuple :key :value) =>
+                    FromAssociation (Seq (Tuple :key :value)) :key :value)
+    (define (make-empty-association)
+      (new))
+    (define (adjoin-to-association assoc key value)
+      (push assoc (Tuple key value)))
+    (define (finalize-association assoc)
+      assoc))
+
   (define-instance (types:RuntimeRepr :a => Default (Seq :a))
     (define (default)
       (new)))

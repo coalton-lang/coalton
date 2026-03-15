@@ -723,6 +723,14 @@ new value, if the key was found."
     (define (iter:collect! iter)
       (collect! iter)))
 
+  (define-instance (Hash :key => FromAssociation (HashMap :key :value) :key :value)
+    (define (make-empty-association)
+      empty)
+    (define (adjoin-to-association assoc key value)
+      (adjoin assoc key value))
+    (define (finalize-association assoc)
+      assoc))
+
   (define-instance (Functor (HashMap :key))
     (define (map func mp)
       (HashMap (%map func (root mp)))))

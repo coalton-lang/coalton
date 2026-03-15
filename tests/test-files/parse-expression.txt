@@ -311,3 +311,82 @@ warn: non-exhaustive match
   (let (values q r) = (lisp (-> Integer * Integer) (x)
                         (cl:truncate x 2)))
   (+ q r))
+
+================================================================================
+106 Malformed collection comprehension
+================================================================================
+
+(package test-package)
+
+(define x [x for x])
+
+--------------------------------------------------------------------------------
+
+error: Reader error
+  --> test:1:22
+   |
+ 1 |   (package test-package)
+   |  _______________________^
+ 2 | | 
+ 3 | | (define x [x for x])
+   | |___________________^ reader error: Malformed collection comprehension: missing IN after FOR binder
+
+================================================================================
+107 Malformed collection comprehension
+================================================================================
+
+(package test-package)
+
+(define x [x with y])
+
+--------------------------------------------------------------------------------
+
+error: Reader error
+  --> test:1:22
+   |
+ 1 |   (package test-package)
+   |  _______________________^
+ 2 | | 
+ 3 | | (define x [x with y])
+   | |____________________^ reader error: Malformed collection comprehension: missing = after WITH binder
+
+================================================================================
+108 Parse expression
+================================================================================
+
+(package coalton-unit-tests/prelude
+  (import coalton-prelude))
+
+(define f-parse108
+  (the (coalton/seq:Seq Integer)
+       [0 for _ in (coalton/iterator:once True)]))
+
+================================================================================
+109 Malformed association comprehension
+================================================================================
+
+(package test-package)
+
+(define x [x => x when])
+
+--------------------------------------------------------------------------------
+
+error: Reader error
+  --> test:1:22
+   |
+ 1 |   (package test-package)
+   |  _______________________^
+ 2 | | 
+ 3 | | (define x [x => x when])
+   | |_______________________^ reader error: Malformed association comprehension: missing WHEN predicate
+
+================================================================================
+110 Parse expression
+================================================================================
+
+(package coalton-unit-tests/prelude
+  (import coalton-prelude))
+
+(define f-parse110
+  (the (coalton/seq:Seq (Tuple Integer Integer))
+       [0 => 1 for _ in (coalton/iterator:once True)]))

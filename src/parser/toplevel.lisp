@@ -567,6 +567,8 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
          (attributes
            (make-array 0 :adjustable t :fill-pointer t)))
 
+    (install-coalton-reader-syntax eclector.readtable:*readtable*)
+
     (loop :do
       (multiple-value-bind (form presentp eofp)
           (maybe-read-form stream source *coalton-eclector-client*)
@@ -606,9 +608,11 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
          (eclector.readtable:*readtable*
            (eclector.readtable:copy-readtable eclector.readtable:*readtable*)))
 
+    (install-coalton-reader-syntax eclector.readtable:*readtable*)
+
     ;; Read the coalton form
     (multiple-value-bind (form presentp)
-        (maybe-read-form stream source *coalton-eclector-client*)
+        (maybe-read-expression-form stream source *coalton-eclector-client*)
 
       (unless presentp
         (parse-error "Malformed coalton expression"
@@ -618,7 +622,7 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
 
       ;; Ensure there is only one form
       (multiple-value-bind (form presentp)
-          (maybe-read-form stream source *coalton-eclector-client*)
+          (maybe-read-expression-form stream source *coalton-eclector-client*)
 
         (when presentp
           (parse-error "Malformed coalton expression"
@@ -631,9 +635,11 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
          (eclector.readtable:*readtable*
            (eclector.readtable:copy-readtable eclector.readtable:*readtable*)))
 
+    (install-coalton-reader-syntax eclector.readtable:*readtable*)
+
     ;; Read the coalton form
     (multiple-value-bind (form presentp)
-        (maybe-read-form stream source *coalton-eclector-client*)
+        (maybe-read-expression-form stream source *coalton-eclector-client*)
 
       (unless presentp
         (parse-error "Malformed coalton expression"
@@ -645,7 +651,7 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
         ;; Read multiple forms if present.
         (block collect-additional-forms
           (loop (multiple-value-bind (next-form presentp)
-                    (maybe-read-form stream source *coalton-eclector-client*)
+                    (maybe-read-expression-form stream source *coalton-eclector-client*)
                   (if presentp
                       (push next-form additional-forms)
                       (return-from collect-additional-forms)))))
@@ -933,6 +939,25 @@ If the attribute is not unique, or a repr attribute is present, signal a parse e
                    (source:note (aref attributes 0) "~A cannot have attributes" toplevel-form-name)
                    (secondary-note source form "when parsing ~A" toplevel-form-name)))))
 
+(defun deferred-coalton-wrapper-macro-p (symbol)
+  "Is SYMBOL a Coalton wrapper macro whose expansion should be parsed without
+the imprecise-source-location :MACRO context?
+
+These macros re-read their body from the original source (via compile-cst-forms
+in reader.lisp), so source locations remain precise and the :MACRO warning
+would be misleading."
+  (and (symbolp symbol)
+       (eq (symbol-package symbol) (find-package "COALTON"))
+       (get symbol 'coalton-wrapper-macro-p)))
+
+;; Register the known wrapper macros.
+(dolist (sym '(coalton:coalton-toplevel
+               coalton:coalton-codegen
+               coalton:coalton-codegen-types
+               coalton:coalton-codegen-ast
+               coalton:coalton))
+  (setf (get sym 'coalton-wrapper-macro-p) t))
+
 
 ;;; This is the parser for complete toplevel Coalton attributes,
 ;;; declarations and definitions. It selects a sub-parser by examining
@@ -1087,9 +1112,12 @@ consume all attributes")))
        ((and (cst:atom (cst:first form))
              (symbolp (cst:raw (cst:first form)))
              (macro-function (cst:raw (cst:first form))))
-        (source:with-context
-            (:macro "Error occurs within macro context. Source locations may be imprecise")
-          (parse-toplevel-form (expand-macro form source) program attributes source)))
+        (let ((macro-name (cst:raw (cst:first form))))
+          (if (deferred-coalton-wrapper-macro-p macro-name)
+              (parse-toplevel-form (expand-macro form source) program attributes source)
+              (source:with-context
+                  (:macro "Error occurs within macro context. Source locations may be imprecise")
+                (parse-toplevel-form (expand-macro form source) program attributes source)))))
 
        ((parse-error "Invalid toplevel form"
                      (note source (cst:first form) "unknown toplevel form")))))))

@@ -805,6 +805,22 @@ This function is equivalent to all size-`n` elements of `(combs l)`."
                         (cl:setf current top)))
            :finally (cl:return top)))))
 
+  (define-instance (FromCollection (List :elt) :elt)
+    (define (make-empty-collection)
+      Nil)
+    (define (adjoin-to-collection list item)
+      (Cons item list))
+    (define (finalize-collection list)
+      (reverse list)))
+
+  (define-instance (FromAssociation (List (Tuple :key :value)) :key :value)
+    (define (make-empty-association)
+      Nil)
+    (define (adjoin-to-association assoc key value)
+      (Cons (Tuple key value) assoc))
+    (define (finalize-association assoc)
+      (reverse assoc)))
+
   (define-instance (Into (Optional :a) (List :a))
     (define (into opt)
       (match opt

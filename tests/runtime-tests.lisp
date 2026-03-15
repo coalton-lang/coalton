@@ -1,5 +1,7 @@
 (cl:in-package #:coalton-native-tests)
 
+(named-readtables:in-readtable coalton:coalton)
+
 (coalton-toplevel
   (define (recursive-predicate x inc goal)
     (if (== x goal)
@@ -70,6 +72,77 @@
 (define-test test-keyword-instance-method-runtime ()
   (is (== (keyword-method-runtime 10) 11))
   (is (== (keyword-method-runtime 10 :offset 5) 15)))
+
+(coalton-toplevel
+  (define shorthand-runtime \x.(+ x 1)))
+
+(define-test test-reader-shorthand-function-runtime ()
+  (is (== (shorthand-runtime 4) 5)))
+
+(coalton-toplevel
+  (define list-builder-runtime
+    (the (List Integer) [1 2 3]))
+
+  (define vector-builder-runtime
+    (the (coalton/vector:Vector Integer) [1 2 3]))
+
+  (define queue-builder-runtime
+    (the (coalton/queue:Queue Integer) [1 2 3]))
+
+  (define seq-comprehension-runtime
+    (the (seq:Seq Integer)
+         [(* x y)
+          for x in (iter:up-to 4)
+          with y = (+ x 1)
+          when (even? x)]))
+
+  (define association-seq-runtime
+    (the (seq:Seq (Tuple Integer Integer))
+         [x => (* x x)
+          for x in (iter:up-to 4)]))
+
+  (define empty-association-runtime
+    (the (seq:Seq (Tuple Integer Integer))
+         [=>]))
+
+  (define ordmap-builder-runtime
+    (the (coalton/ordmap:OrdMap Integer Integer)
+         [x => (* x x)
+          for x in (iter:up-to 4)]))
+
+  (define hashmap-builder-runtime
+    (the (hashmap:HashMap Integer Integer)
+         [x => (* x x)
+          for x in (iter:up-to 4)]))
+
+  (define hashtable-builder-runtime
+    (the (coalton/hashtable:Hashtable Integer Integer)
+         [x => (* x x)
+          for x in (iter:up-to 4)])))
+
+(define-test test-reader-builder-syntax-runtime ()
+  (is (== list-builder-runtime (make-list 1 2 3)))
+  (is (== (coalton/vector:length vector-builder-runtime) 3))
+  (is (== (coalton/vector:index 1 vector-builder-runtime) (Some 2)))
+  (is (== (coalton/queue:length queue-builder-runtime) 3))
+  (is (== (coalton/queue:index 2 queue-builder-runtime) (Some 3)))
+  (is (== (the (List Integer) (into seq-comprehension-runtime))
+          (make-list 0 6)))
+  (is (== (the (List (Tuple Integer Integer)) (into association-seq-runtime))
+          (make-list (Tuple 0 0)
+                     (Tuple 1 1)
+                     (Tuple 2 4)
+                     (Tuple 3 9))))
+  (is (== (the (List (Tuple Integer Integer)) (into empty-association-runtime))
+          Nil))
+  (is (== (coalton/ordmap:lookup ordmap-builder-runtime 0) (Some 0)))
+  (is (== (coalton/ordmap:lookup ordmap-builder-runtime 3) (Some 9)))
+  (is (== (hashmap:count hashmap-builder-runtime) 4))
+  (is (== (hashmap:lookup hashmap-builder-runtime 0) (Some 0)))
+  (is (== (hashmap:lookup hashmap-builder-runtime 3) (Some 9)))
+  (is (== (coalton/hashtable:count hashtable-builder-runtime) 4))
+  (is (== (coalton/hashtable:get hashtable-builder-runtime 0) (Some 0)))
+  (is (== (coalton/hashtable:get hashtable-builder-runtime 3) (Some 9))))
 
 (coalton-toplevel
   (define (gh-295-f a)
