@@ -226,6 +226,14 @@ If `coll` contains duplicate keys, later values will overwrite earlier values."
     (define (iter:collect! x)
       (collect! x)))
 
+  (define-instance (Ord :key => FromAssociation (OrdMap :key :value) :key :value)
+    (define (make-empty-association)
+      empty)
+    (define (adjoin-to-association assoc key value)
+      (adjoin assoc key value))
+    (define (finalize-association assoc)
+      assoc))
+
 
   ;; Mapping API
   (declare update (Ord :key => OrdMap :key :value * :key

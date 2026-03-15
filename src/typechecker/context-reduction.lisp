@@ -22,6 +22,9 @@
    #:reduce-context                     ; FUNCTION
    #:split-context                      ; FUNCTION
    #:default-preds                      ; FUNCTION
+   #:*builder-class-cache*              ; VARIABLE
+   #:default-builder-subs               ; FUNCTION
+   #:expand-defaulted-builder-preds     ; FUNCTION
    #:default-subs                       ; FUNCTION
    ))
 
@@ -151,6 +154,60 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
                         preds)
         :collect (make-ambiguity :var v :preds preds_)))
 
+(defun lookup-type-constructor (env package name)
+  (let* ((symbol (first (util:find-symbol? name package)))
+         (entry (and symbol
+                     (lookup-type env symbol :no-error t))))
+    (and entry
+         (type-entry-type entry))))
+
+;; Cached builder class symbols to avoid repeated FIND-SYMBOL? lookups.
+(defvar *builder-class-cache* nil
+  "Plist cache for builder class symbols, reset at the start of each defaulting pass.")
+
+(defun cached-builder-symbol (key fallback)
+  (or (getf *builder-class-cache* key)
+      (let ((sym (funcall fallback)))
+        (setf (getf *builder-class-cache* key) sym)
+        sym)))
+
+(defun builder-default-candidates (env ambig)
+  (let* ((var (ambiguity-var ambig))
+         (from-collection (cached-builder-symbol
+                           :from-collection
+                           (lambda () (first (util:find-symbol? "FROMCOLLECTION" "COALTON/CLASSES")))))
+         (from-association (cached-builder-symbol
+                            :from-association
+                            (lambda () (first (util:find-symbol? "FROMASSOCIATION" "COALTON/CLASSES")))))
+         (seq-type (cached-builder-symbol
+                    :seq-type
+                    (lambda () (lookup-type-constructor env "COALTON/SEQ" "SEQ"))))
+         (tuple-type (cached-builder-symbol
+                      :tuple-type
+                      (lambda () (lookup-type-constructor env "COALTON/CLASSES" "TUPLE")))))
+    (loop :for pred :in (ambiguity-preds ambig)
+          :for types := (ty-predicate-types pred)
+          :when (and from-collection
+                     seq-type
+                     (eq (ty-predicate-class pred) from-collection)
+                     (>= (length types) 2)
+                     (ty= var (first types)))
+            :do (multiple-value-bind (default-type)
+                    (apply-type-argument seq-type (second types))
+                  (return (list default-type)))
+          :when (and from-association
+                     seq-type
+                     tuple-type
+                     (eq (ty-predicate-class pred) from-association)
+                     (>= (length types) 3)
+                     (ty= var (first types)))
+            :do (multiple-value-bind (tuple-entry-type)
+                    (apply-type-argument-list tuple-type (list (second types)
+                                                               (third types)))
+                  (multiple-value-bind (default-type)
+                      (apply-type-argument seq-type tuple-entry-type)
+                    (return (list default-type)))))))
+
 (defun candidates (env ambig)
   (declare (type environment env)
            (type ambiguity ambig))
@@ -160,32 +217,33 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
          (pred-names (mapcar #'ty-predicate-class preds)) ; is
          (pred-heads (mapcar #'ty-predicate-types preds)) ; ts
          )
-    (loop :for type :in (defaults env)
+    (or (builder-default-candidates env ambig)
+        (loop :for type :in (defaults env)
 
-          :when (and
-                 ;; Check that for the predicates containing VAR, VAR is their only type variable
-                 ;;
-                 ;; NOTE: Haskell has a much stricter check here. Haskell requires that the predicate
-                 ;; is in the form "Pred [var]". Coalton will default the following other predicates
-                 ;;
-                 ;; * multiple variable classes "Pred [var var]" and "Pred [var String]"
-                 ;; * more complex types "Pred [List var]"
-                 (subsetp (type-variables pred-heads) (list var) :test #'ty=)
+              :when (and
+                     ;; Check that for the predicates containing VAR, VAR is their only type variable
+                     ;;
+                     ;; NOTE: Haskell has a much stricter check here. Haskell requires that the predicate
+                     ;; is in the form "Pred [var]". Coalton will default the following other predicates
+                     ;;
+                     ;; * multiple variable classes "Pred [var var]" and "Pred [var String]"
+                     ;; * more complex types "Pred [List var]"
+                     (subsetp (type-variables pred-heads) (list var) :test #'ty=)
 
-                 ;; Check that at least one predicate is a numeric class
-                 (some (lambda (name)
-                         (find name (num-classes) :test #'equalp))
-                       pred-names)
+                     ;; Check that at least one predicate is a numeric class
+                     (some (lambda (name)
+                             (find name (num-classes) :test #'equalp))
+                           pred-names)
 
-                 ;; NOTE: Haskell checks that all predicates are stdlib classes here
+                     ;; NOTE: Haskell checks that all predicates are stdlib classes here
 
-                 ;; Check that the variable would be defaulted to a valid type
-                 ;; for the given predicates
-                 (every (lambda (name)
-                          (entail env nil (make-ty-predicate :class name :types (list type))))
-                        pred-names))
+                     ;; Check that the variable would be defaulted to a valid type
+                     ;; for the given predicates
+                     (every (lambda (name)
+                              (entail env nil (make-ty-predicate :class name :types (list type))))
+                            pred-names))
 
-            :collect type)))
+                :collect type))))
 
 (defun defaults (env)
   (declare (type environment env)
@@ -217,6 +275,39 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
         
         :when candidates
           :append (ambiguity-preds ambig)))
+
+(defun default-builder-subs (env tvars preds)
+  (declare (type environment env)
+           (type tyvar-list tvars)
+           (type ty-predicate-list preds)
+           (values substitution-list &optional))
+  (loop :for ambig :in (ambiguities env tvars preds)
+        :for candidates := (builder-default-candidates env ambig)
+        :when candidates
+          :collect (make-substitution :from (ambiguity-var ambig)
+                                      :to (first candidates))))
+
+(defun expand-defaulted-builder-preds (env preds)
+  (declare (type environment env)
+           (type ty-predicate-list preds)
+           (values ty-predicate-list &optional))
+  (let ((from-collection (cached-builder-symbol
+                          :from-collection
+                          (lambda () (first (util:find-symbol? "FROMCOLLECTION" "COALTON/CLASSES")))))
+        (from-association (cached-builder-symbol
+                           :from-association
+                           (lambda () (first (util:find-symbol? "FROMASSOCIATION" "COALTON/CLASSES"))))))
+    (loop :for pred :in preds
+          :for class := (ty-predicate-class pred)
+          :if (or (eq class from-collection)
+                  (eq class from-association))
+            :append (multiple-value-bind (inst-preds foundp)
+                        (by-inst env pred)
+                      (if foundp
+                          inst-preds
+                          (list pred)))
+          :else
+            :collect pred)))
 
 (defun default-subs (env tvars preds)
   (declare (type environment env)

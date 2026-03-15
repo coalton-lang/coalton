@@ -567,6 +567,8 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
          (attributes
            (make-array 0 :adjustable t :fill-pointer t)))
 
+    (install-coalton-reader-syntax eclector.readtable:*readtable*)
+
     (loop :do
       (multiple-value-bind (form presentp eofp)
           (maybe-read-form stream source *coalton-eclector-client*)
@@ -606,6 +608,8 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
          (eclector.readtable:*readtable*
            (eclector.readtable:copy-readtable eclector.readtable:*readtable*)))
 
+    (install-coalton-reader-syntax eclector.readtable:*readtable*)
+
     ;; Read the coalton form
     (multiple-value-bind (form presentp)
         (maybe-read-expression-form stream source *coalton-eclector-client*)
@@ -630,6 +634,8 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
   (let* (;; Setup eclector readtable
          (eclector.readtable:*readtable*
            (eclector.readtable:copy-readtable eclector.readtable:*readtable*)))
+
+    (install-coalton-reader-syntax eclector.readtable:*readtable*)
 
     ;; Read the coalton form
     (multiple-value-bind (form presentp)

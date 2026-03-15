@@ -179,6 +179,19 @@
        iter)
       table))
 
+  (define-instance (Hash :key => FromAssociation (Hashtable :key :value) :key :value)
+    (define (make-empty-association)
+      (new))
+    (define (adjoin-to-association table key value)
+      (match (get table key)
+        ((Some _) table)
+        ((None)
+         (progn
+           (set! table key value)
+           table))))
+    (define (finalize-association table)
+      table))
+
   (define-instance (Hash :key => Default (Hashtable :key :value))
     (define (default)
       (new)))

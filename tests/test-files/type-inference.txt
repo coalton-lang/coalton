@@ -438,4 +438,133 @@ error: Ambiguous predicate
    |
  5 |    (into (into x)))
    |           ^^^^ Ambiguous predicate INTO :A :B
+
+================================================================================
+Collection builder elements must be homogeneous
+================================================================================
+
+(package coalton-builder-error-collection
+  (import coalton-prelude))
+
+(coalton-toplevel
+  (define x ["x" "y" Nil]))
+
+--------------------------------------------------------------------------------
+
+error: Collection element type mismatch
+  --> test:5:21
+   |
+ 5 |    (define x ["x" "y" Nil]))
+   |               --- earlier element here
+   |                       ^^^ collection elements must all have the same type; expected 'STRING' but got '(LIST :A)'
+
+================================================================================
+Association builder values must be homogeneous
+================================================================================
+
+(package coalton-builder-error-values
+  (import coalton-prelude))
+
+(coalton-toplevel
+  (define x ["x" => "x" "y" => Nil]))
+
+--------------------------------------------------------------------------------
+
+error: Association value type mismatch
+  --> test:5:31
+   |
+ 5 |    (define x ["x" => "x" "y" => Nil]))
+   |                      --- earlier value here
+   |                                 ^^^ association values must all have the same type; expected 'STRING' but got '(LIST :A)'
+
+================================================================================
+Association builder keys must be homogeneous
+================================================================================
+
+(package coalton-builder-error-keys
+  (import coalton-prelude))
+
+(coalton-toplevel
+  (define x ["x" => 1 Nil => 2]))
+
+--------------------------------------------------------------------------------
+
+error: Association key type mismatch
+  --> test:5:22
+   |
+ 5 |    (define x ["x" => 1 Nil => 2]))
+   |               --- earlier key here
+   |                        ^^^ association keys must all have the same type; expected 'STRING' but got '(LIST :A)'
+
+================================================================================
+Collection comprehension iterables must implement IntoIterator
+================================================================================
+
+(package coalton-comprehension-iterable-error
+  (import coalton-prelude))
+
+(coalton-toplevel
+  (define x (the (coalton/seq:Seq Integer) [x for x in True])))
+
+--------------------------------------------------------------------------------
+
+error: Unknown instance
+  --> test:5:44
+   |
+ 5 |    (define x (the (coalton/seq:Seq Integer) [x for x in True])))
+   |                                              ^^^^^^^^^^^^^^^ Unknown instance COALTON/ITERATOR:INTOITERATOR BOOLEAN INTEGER
+
+================================================================================
+Collection comprehension when clauses must be Boolean
+================================================================================
+
+(package coalton-comprehension-when-error
+  (import coalton-prelude))
+
+(coalton-toplevel
+  (define x [x for x in (coalton/iterator:once 1) when "no"]))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:5:55
+   |
+ 5 |    (define x [x for x in (coalton/iterator:once 1) when "no"]))
+   |                                                         ^^^^ Expected type 'BOOLEAN' but got 'STRING'
+
+================================================================================
+Association comprehension iterables must implement IntoIterator
+================================================================================
+
+(package coalton-association-comprehension-iterable-error
+  (import coalton-prelude))
+
+(coalton-toplevel
+  (define x (the (coalton/seq:Seq (Tuple Integer Integer)) [x => x for x in True])))
+
+--------------------------------------------------------------------------------
+
+error: Unknown instance
+  --> test:5:60
+   |
+ 5 |    (define x (the (coalton/seq:Seq (Tuple Integer Integer)) [x => x for x in True])))
+   |                                                              ^^^^^^^^^^^^^^^^^^^^ Unknown instance COALTON/ITERATOR:INTOITERATOR BOOLEAN INTEGER
+
+================================================================================
+Association comprehension when clauses must be Boolean
+================================================================================
+
+(package coalton-association-comprehension-when-error
+  (import coalton-prelude))
+
+(coalton-toplevel
+  (define x [x => x for x in (coalton/iterator:once 1) when "no"]))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:5:60
+   |
+ 5 |    (define x [x => x for x in (coalton/iterator:once 1) when "no"]))
+   |                                                              ^^^^ Expected type 'BOOLEAN' but got 'STRING'
  

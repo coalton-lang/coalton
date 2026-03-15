@@ -252,6 +252,15 @@
       (extend! out iter)
       out))
 
+  (define-instance (FromCollection (Queue :a) :a)
+    (define (make-empty-collection)
+      (new))
+    (define (adjoin-to-collection queue item)
+      (push! item queue)
+      queue)
+    (define (finalize-collection queue)
+      queue))
+
   (define-instance (Default (Queue :a))
     (define (default)
       (new))))

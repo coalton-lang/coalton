@@ -4,6 +4,7 @@
   (:local-nicknames
    (#:cst #:concrete-syntax-tree)
    (#:codegen #:coalton-impl/codegen)
+   (#:preader #:coalton-impl/parser/reader)
    (#:settings #:coalton-impl/settings)
    (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util)
@@ -317,9 +318,24 @@ It ensures the presence of source metadata for STREAM and then calls MAYBE-READ-
 ;; `coalton' switch to the Eclector reader, which handles `\' via
 ;; `interpret-token' in parser/reader.lisp.
 
+(defun read-cl-bracket-form (stream char)
+  "Reader macro for `[...]` builder syntax on the CL readtable.
+Reads a `]`-delimited list and desugars it into builder form, mirroring the
+Eclector bracket reader in parser/reader.lisp."
+  (declare (ignore char))
+  (preader:desugar-bracket-builder
+   (read-delimited-list #\] stream t)))
+
+(defun read-cl-close-bracket (stream char)
+  "Signal an error for an unmatched `]` outside bracket syntax."
+  (declare (ignore stream char))
+  (error "Unmatched close bracket `]`"))
+
 (named-readtables:defreadtable coalton:coalton
   (:merge :standard)
   (:macro-char #\( 'read-coalton-toplevel-open-paren)
+  (:macro-char #\[ 'read-cl-bracket-form)
+  (:macro-char #\] 'read-cl-close-bracket)
   (:macro-char #\` (lambda (s c)
                      (let ((*coalton-reader-allowed* nil))
                        (funcall (get-macro-character #\` (named-readtables:ensure-readtable :standard)) s c))))

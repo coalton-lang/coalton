@@ -437,6 +437,15 @@
                       iter)
       vec))
 
+  (define-instance (FromCollection (Vector :a) :a)
+    (define (make-empty-collection)
+      (new))
+    (define (adjoin-to-collection vec item)
+      (push! item vec)
+      vec)
+    (define (finalize-collection vec)
+      vec))
+
   (define-instance (Default (Vector :a))
     (inline)
     (define default new)))
