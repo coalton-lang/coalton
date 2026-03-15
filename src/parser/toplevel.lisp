@@ -608,7 +608,7 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
 
     ;; Read the coalton form
     (multiple-value-bind (form presentp)
-        (maybe-read-form stream source *coalton-eclector-client*)
+        (maybe-read-expression-form stream source *coalton-eclector-client*)
 
       (unless presentp
         (parse-error "Malformed coalton expression"
@@ -618,7 +618,7 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
 
       ;; Ensure there is only one form
       (multiple-value-bind (form presentp)
-          (maybe-read-form stream source *coalton-eclector-client*)
+          (maybe-read-expression-form stream source *coalton-eclector-client*)
 
         (when presentp
           (parse-error "Malformed coalton expression"
@@ -633,7 +633,7 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
 
     ;; Read the coalton form
     (multiple-value-bind (form presentp)
-        (maybe-read-form stream source *coalton-eclector-client*)
+        (maybe-read-expression-form stream source *coalton-eclector-client*)
 
       (unless presentp
         (parse-error "Malformed coalton expression"
@@ -645,7 +645,7 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
         ;; Read multiple forms if present.
         (block collect-additional-forms
           (loop (multiple-value-bind (next-form presentp)
-                    (maybe-read-form stream source *coalton-eclector-client*)
+                    (maybe-read-expression-form stream source *coalton-eclector-client*)
                   (if presentp
                       (push next-form additional-forms)
                       (return-from collect-additional-forms)))))
@@ -932,7 +932,6 @@ If the attribute is not unique, or a repr attribute is present, signal a parse e
       (parse-error (format nil "Invalid attribute for ~A" toplevel-form-name)
                    (source:note (aref attributes 0) "~A cannot have attributes" toplevel-form-name)
                    (secondary-note source form "when parsing ~A" toplevel-form-name)))))
-
 
 ;;; This is the parser for complete toplevel Coalton attributes,
 ;;; declarations and definitions. It selects a sub-parser by examining

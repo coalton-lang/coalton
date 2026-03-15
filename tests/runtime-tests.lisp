@@ -1,5 +1,7 @@
 (cl:in-package #:coalton-native-tests)
 
+(named-readtables:in-readtable coalton:coalton)
+
 (coalton-toplevel
   (define (recursive-predicate x inc goal)
     (if (== x goal)
@@ -70,6 +72,12 @@
 (define-test test-keyword-instance-method-runtime ()
   (is (== (keyword-method-runtime 10) 11))
   (is (== (keyword-method-runtime 10 :offset 5) 15)))
+
+(coalton-toplevel
+  (define shorthand-runtime \x.(+ x 1)))
+
+(define-test test-reader-shorthand-function-runtime ()
+  (is (== (shorthand-runtime 4) 5)))
 
 (coalton-toplevel
   (define (gh-295-f a)
