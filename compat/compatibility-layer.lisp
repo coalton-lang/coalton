@@ -21,6 +21,11 @@
    #:get-hash-type
    #:hash-combine))
 
+;; Patch abcl - hopefully patch for bug will be included in 1.9.2+.
+#+abcl
+(when (not (asdf:version-satisfies (lisp-implementation-version) "1.9.2.0"))
+  (load "compat/abcl-precompiler-precompile-identity.lisp"))
+
 (cl:in-package #:coalton-compatibility)
 
 ;;; Hashing (or sbcl allegro ccl abcl ecl) - hopefully it's generic.
