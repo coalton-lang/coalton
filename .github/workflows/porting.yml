@@ -67,7 +67,10 @@ jobs:
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
-          (load "/.clasprc")
+          ;;; Clasp cannot find /.clasprc - copy its code here instead.
+          ;; (load "/.clasprc")
+            #-quicklisp (load "/root/quicklisp/setup.lisp")
+            (setf ql:*local-project-directories* (quote ("/extras" "/lisp")))
           (ql:quickload :coalton/tests)
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
