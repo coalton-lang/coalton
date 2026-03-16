@@ -10,9 +10,11 @@
      #:coalton/functions
      #:coalton/utils
      #:coalton/math/arith
+     #:coalton/math/integral
      #:coalton/math/real
      #:coalton/math/complex)
-  (:local-nicknames (#:ff #:float-features))
+  (:local-nicknames
+   (#:ff #:float-features))
   (:export
    #:Trigonometric
    #:sin #:cos #:tan
@@ -51,12 +53,12 @@
     (atan  (:a -> :a))
     (pi    (:a)))
 
-  (declare sincos (Trigonometric :a => :a -> (Tuple :a :a)))
+  (declare sincos (Trigonometric :a => :a -> :a * :a))
   (define (sincos x)
     "Computes the sine and cosine of X."
-    (Tuple (sin x) (cos x)))
+    (values (sin x) (cos x)))
 
-  (declare atan2 ((Ord :f) (Trigonometric :f) (Reciprocable :f) => :f -> :f -> :f))
+  (declare atan2 ((Ord :f) (Trigonometric :f) (Reciprocable :f) => :f * :f -> :f))
   (define (atan2 y x)
     "Computes the two-argument arctangent of `y` and `x`, which is roughly the same
 as `(atan (/ y x))` when defined and accounting for the quadrant of
@@ -78,16 +80,16 @@ the point $(\\mathtt{x},\\mathtt{y})$."
     (pow x y) = (exp (* y (ln x)))
 "
     (exp (:a -> :a))
-    (pow (:a -> :a -> :a))
+    (pow (:a * :a -> :a))
     (ln  (:a -> :a))
-    (log (:a -> :a -> :a))
+    (log (:a * :a -> :a))
     (ee  (:a)))
 
   (define-class (Radical :a)
     "Obeys:
 
     (^ (sqrt x) 2) = x = (^^ (nth-root n x) n)"
-    (nth-root (Integer -> :a -> :a))
+    (nth-root (Integer * :a -> :a))
     (sqrt (:a -> :a)))
 
   (define-class ((ComplexComponent :a) (Num :a) => Polar :a)
@@ -96,11 +98,11 @@ the point $(\\mathtt{x},\\mathtt{y})$."
 For a complex number `z = (complex x y)`, the following identities hold:
 
     z = (* (magnitude z) (exp (* ii (phase z))))
-    (polar z) = (Tuple (magnitude z) (phase z))
+    (polar z) = (values (magnitude z) (phase z))
     (phase z) = (atan2 y x)
 "
     (phase (Complex :a -> :a))
-    (polar (Complex :a -> (Tuple :a :a))))
+    (polar (Complex :a -> :a * :a)))
 
   (define (magnitude z)
     "The magnitude of a complex number. For `z = x + yi`,
@@ -172,7 +174,7 @@ For a complex number `z = (complex x y)`, the following identities hold:
         ;; x = 0, y = 0
         ;; Pretend principal angle of 0 is 0
         (True 0)))
-    (Tuple r theta)))
+    (values r theta)))
 
 (cl:defmacro %define-real-float-elementary (coalton-type underlying-type)
   "Defines the elementary instances for a lisp floating-point type."
@@ -187,7 +189,7 @@ For a complex number `z = (complex x y)`, the following identities hold:
             nan)
 
            (True
-            (lisp ,coalton-type (x)
+            (lisp (-> ,coalton-type) (x)
               (#+(not ccl) cl:progn
                  #+ccl ff:with-float-traps-masked #+ccl cl:t
                  (cl:sin x))))))
@@ -201,7 +203,7 @@ For a complex number `z = (complex x y)`, the following identities hold:
             nan)
 
            (True
-            (lisp ,coalton-type (x)
+            (lisp (-> ,coalton-type) (x)
               (#+(not ccl) cl:progn
                  #+ccl ff:with-float-traps-masked #+ccl cl:t
                  (cl:cos x))))))
@@ -215,7 +217,7 @@ For a complex number `z = (complex x y)`, the following identities hold:
             nan)
 
            (True
-            (lisp ,coalton-type (x)
+            (lisp (-> ,coalton-type) (x)
               (#+(not ccl) cl:progn
                  #+ccl ff:with-float-traps-masked #+ccl cl:t
                  (cl:tan x))))))
@@ -231,7 +233,7 @@ For a complex number `z = (complex x y)`, the following identities hold:
            (True
             (if (or (nan? x) (> x 1) (< x -1))
                 nan
-                (lisp ,coalton-type (x)
+                (lisp (-> ,coalton-type) (x)
                   (#+(not ccl) cl:progn
                      #+ccl ff:with-float-traps-masked #+ccl cl:t
                      (cl:asin x)))))))
@@ -240,7 +242,7 @@ For a complex number `z = (complex x y)`, the following identities hold:
        (define (acos x)
          (if (or (nan? x) (> x 1) (< x -1))
              nan
-             (lisp ,coalton-type (x)
+             (lisp (-> ,coalton-type) (x)
                (#+(not ccl) cl:progn
                   #+ccl ff:with-float-traps-masked #+ccl cl:t
                   (cl:acos x)))))
@@ -254,23 +256,23 @@ For a complex number `z = (complex x y)`, the following identities hold:
             nan)
 
            (True
-            (lisp ,coalton-type (x)
+            (lisp (-> ,coalton-type) (x)
               (#+(not ccl) cl:progn
                  #+ccl ff:with-float-traps-masked #+ccl cl:t
                  (cl:atan x))))))
        (define pi
-         (lisp ,coalton-type ()
+         (lisp (-> ,coalton-type) ()
            (cl:coerce cl:pi ',underlying-type))))
 
      (define-instance (Polar ,coalton-type)
        (inline)
        (define (phase x)
-         (lisp ,coalton-type (x)
+         (lisp (-> ,coalton-type) (x)
            (#+(not ccl) cl:progn
               #+ccl ff:with-float-traps-masked #+ccl cl:t
               (cl:phase x))))
        (define (polar x)
-         (Tuple (magnitude x) (phase x))))
+         (values (magnitude x) (phase x))))
 
      (define-instance (Exponentiable ,coalton-type)
        (inline)
@@ -291,7 +293,7 @@ For a complex number `z = (complex x y)`, the following identities hold:
             (negate infinity))
 
            (True
-            (lisp ,coalton-type (x y)
+            (lisp (-> ,coalton-type) (x y)
               (#+(not ccl) cl:progn
                  #+ccl ff:with-float-traps-masked #+ccl cl:t
                  (cl:expt x y))))))
@@ -308,7 +310,7 @@ For a complex number `z = (complex x y)`, the following identities hold:
             (negate infinity))
 
            (True
-            (lisp ,coalton-type (x)
+            (lisp (-> ,coalton-type) (x)
               (#+(not ccl) cl:progn
                  #+ccl ff:with-float-traps-masked #+ccl cl:t
                  (cl:let ((res (cl:exp x)))
@@ -326,7 +328,7 @@ For a complex number `z = (complex x y)`, the following identities hold:
               ((and (< x 1) (>= x 0)) negative-infinity)
               (True nan)))
            ((and (> b 0) (> x 0))
-            (lisp ,coalton-type (b x)
+            (lisp (-> ,coalton-type) (b x)
               (#+(not ccl) cl:progn
                  #+ccl ff:with-float-traps-masked #+ccl cl:t
                  (cl:log x b))))
@@ -337,12 +339,12 @@ For a complex number `z = (complex x y)`, the following identities hold:
          (cond
            ((nan? x) nan)
            ((> x 0)
-            (lisp ,coalton-type (x)
+            (lisp (-> ,coalton-type) (x)
               (cl:log x)))
            ((< x 0) nan)
            (True negative-infinity)))
         (define ee
-         (lisp ,coalton-type ()
+         (lisp (-> ,coalton-type) ()
            (cl:exp (cl:coerce 1 ',underlying-type)))))
 
      (define-instance (Radical ,coalton-type)
@@ -350,7 +352,7 @@ For a complex number `z = (complex x y)`, the following identities hold:
        (define (sqrt x)
          (if (or (nan? x) (< x 0))
              nan
-             (lisp ,coalton-type (x)
+             (lisp (-> ,coalton-type) (x)
                (#+(not ccl) cl:progn
                   #+ccl ff:with-float-traps-masked #+ccl cl:t
                   (cl:sqrt x)))))
@@ -380,10 +382,9 @@ For a complex number `z = (complex x y)`, the following identities hold:
   (define-instance (Elementary :a => Exponentiable (Complex :a))
     (define (ln z)
       ;; The principal natural log of a complex number
-      (match (polar z)
-        ((Tuple r theta)
-         ;; ln r + iθ
-         (complex (ln r) theta))))
+      (let (values r theta) = (polar z))
+      ;; ln r + iθ
+      (complex (ln r) theta))
     (define (exp z)
       ;; The natural exponential map of a complex number
       (let x = (real-part z))
@@ -399,20 +400,18 @@ For a complex number `z = (complex x y)`, the following identities hold:
 
   (define-instance (Elementary :a => Radical (Complex :a))
     (define (sqrt z)
-      (match (polar z)
-        ((Tuple r theta)
-         (let sqrt-r = (sqrt r))
-         (let phi = (/ theta 2))
-         ;; sqrt(z) = sqrt(r) (cos theta/2 + i sin theta/2)
-         (complex (* sqrt-r (cos phi)) (* sqrt-r (sin phi))))))
+      (let (values r theta) = (polar z))
+      (let sqrt-r = (sqrt r))
+      (let phi = (/ theta 2))
+      ;; sqrt(z) = sqrt(r) (cos theta/2 + i sin theta/2)
+      (complex (* sqrt-r (cos phi)) (* sqrt-r (sin phi))))
     (define (nth-root n z)
       ;; nth-root(z) = nth-root(r) * exp (i theta / n)
-      (match (polar z)
-        ((Tuple r theta)
-         (let nth-root-r = (nth-root n r))
-         (let phi = (/ theta (fromInt n)))
-         ;; sqrt(z) = sqrt(r) (cos theta/2 + i sin theta/2)
-         (complex (* nth-root-r (cos phi)) (* nth-root-r (sin phi)))))))
+      (let (values r theta) = (polar z))
+      (let nth-root-r = (nth-root n r))
+      (let phi = (/ theta (fromInt n)))
+      ;; sqrt(z) = sqrt(r) (cos theta/2 + i sin theta/2)
+      (complex (* nth-root-r (cos phi)) (* nth-root-r (sin phi)))))
 
   (define-instance (Elementary :a => Trigonometric (Complex :a))
     (define (sin z)

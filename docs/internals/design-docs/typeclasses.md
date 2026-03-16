@@ -5,11 +5,11 @@
 ```lisp
 ;; Defining a class
 (define-class (Eq :a)
-  (== (:a -> :a -> Boolean)))
+  (== (:a * :a -> Boolean)))
 
 ;; Defining a class with a context
 (define-class (Eq :a => Ord :a)
-  (< (:a -> :a -> Boolean))
+  (< (:a * :a -> Boolean))
   ...)
 
 ;; Defining an instance of a class
@@ -31,7 +31,7 @@
           ((None)   True))))))
 
 ;; Declaring a function with type constraints
-(declare f (Eq :a => :a -> :a -> Boolean))
+(declare f (Eq :a => :a * :a -> Boolean))
 (define (f a b)
   (== a b))
 ```

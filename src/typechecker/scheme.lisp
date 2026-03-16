@@ -72,9 +72,9 @@
 (defun quantify (tyvars type)
   "Quantify the TYVARS that occur in TYPE, preserving binder metadata.
 
-The resulting scheme keeps the source-name and binding-id carried by
-each quantified variable so later instantiation and pretty printing can
-recover the programmer-written binders."
+The resulting scheme keeps the source-name carried by each quantified
+variable so later instantiation and pretty printing can recover the
+programmer-written binders."
   (declare (type tyvar-list tyvars)
            (type qualified-ty type)
            (values ty-scheme))
@@ -87,8 +87,6 @@ recover the programmer-written binders."
                       :collect (make-substitution
                                 :from var
                                 :to (make-tgen :id id
-                                               :binding-id (or (tyvar-binding-id var)
-                                                               (gensym "BINDER"))
                                                :source-name (tyvar-source-name var))))))
     (make-ty-scheme
      :explicit-p nil
@@ -98,15 +96,12 @@ recover the programmer-written binders."
 (defun ty-scheme-instantiation-types (ty-scheme)
   "Return fresh instantiation variables for TY-SCHEME's quantified binders.
 
-The returned variables preserve each binder's source-name and binding-id
-so fresh-inst, pretty printing, and scoped-forall resolution all see the
-same quantified binder identity."
+The returned variables preserve each binder's source-name so fresh-inst
+and pretty printing can recover the programmer-written binders."
   (declare (type ty-scheme ty-scheme)
            (values tyvar-list &optional))
   (let* ((source-names (make-array (length (ty-scheme-kinds ty-scheme))
                                    :initial-element nil))
-         (binding-ids (make-array (length (ty-scheme-kinds ty-scheme))
-                                  :initial-element nil))
          (scheme-type (ty-scheme-type ty-scheme)))
     (labels ((collect-instantiation-metadata (object)
                (typecase object
@@ -114,13 +109,18 @@ same quantified binder identity."
                   (when (< (tgen-id object) (length source-names))
                     (setf (aref source-names (tgen-id object))
                           (or (aref source-names (tgen-id object))
-                              (tgen-source-name object)))
-                    (setf (aref binding-ids (tgen-id object))
-                          (or (aref binding-ids (tgen-id object))
-                              (tgen-binding-id object)))))
+                              (tgen-source-name object)))))
                  (tapp
                   (collect-instantiation-metadata (tapp-from object))
                   (collect-instantiation-metadata (tapp-to object)))
+                 (keyword-ty-entry
+                  (collect-instantiation-metadata (keyword-ty-entry-type object)))
+                 (function-ty
+                  (collect-instantiation-metadata (function-ty-positional-input-types object))
+                  (collect-instantiation-metadata (function-ty-keyword-input-types object))
+                  (collect-instantiation-metadata (function-ty-output-types object)))
+                 (result-ty
+                  (collect-instantiation-metadata (result-ty-output-types object)))
                  (qualified-ty
                   (collect-instantiation-metadata (qualified-ty-predicates object))
                   (collect-instantiation-metadata (qualified-ty-type object)))
@@ -132,8 +132,7 @@ same quantified binder identity."
       (loop :for kind :in (ty-scheme-kinds ty-scheme)
             :for i :from 0
             :collect (make-variable kind
-                                    (aref source-names i)
-                                    (aref binding-ids i))))))
+                                    (aref source-names i))))))
 
 (defgeneric to-scheme (ty)
   (:method ((ty qualified-ty))
@@ -146,7 +145,7 @@ same quantified binder identity."
     (to-scheme (qualify nil ty))))
 
 (defun fresh-inst (ty-scheme)
-  "Instantiate TY-SCHEME with fresh type variables that preserve binder metadata."
+  "Instantiate TY-SCHEME with fresh type variables that preserve binder names."
   (declare (type ty-scheme ty-scheme)
            (values qualified-ty &optional))
   (let ((types (ty-scheme-instantiation-types ty-scheme)))
@@ -190,8 +189,6 @@ become lexically scoped."
                       :collect (make-substitution
                                 :from var
                                 :to (make-tgen :id id
-                                               :binding-id (or (tyvar-binding-id var)
-                                                               (gensym "BINDER"))
                                                :source-name (tyvar-source-name var))))))
     (make-ty-scheme
      :explicit-p explicit-p

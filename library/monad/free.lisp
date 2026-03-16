@@ -49,7 +49,7 @@ References: [here](https://serokell.io/blog/introduction-to-free-monads) and [he
     (Val :a))
 
   (declare foldFree (Monad :c =>
-                           (:a (Free :a :b) -> :c (Free :a :b)) ->
+                           (:a (Free :a :b) -> :c (Free :a :b)) *
                            (Free :a :b) ->
                            (:c :b)))
   (define (foldFree nat fr)
@@ -57,9 +57,9 @@ References: [here](https://serokell.io/blog/introduction-to-free-monads) and [he
 free monad to a target monad."
     (match fr
       ((Val a) (pure a))
-      ((Free fa) (>>= (nat fa) (foldFree nat)))))
+      ((Free fa) (>>= (nat fa) (fn (x) (foldFree nat x))))))
 
-  (declare run-free (Functor :f => (:f (Free :f :a) -> Free :f :a) -> Free :f :a -> :a))
+  (declare run-free (Functor :f => (:f (Free :f :a) -> Free :f :a) * Free :f :a -> :a))
   (define (run-free transf op)
     "Run a free monad with a function that unwraps a single layer of the functor
 `f` at a time.
@@ -79,9 +79,9 @@ References: [here](https://github.com/purescript/purescript-free/blob/v5.1.0/src
     (define (map f freef)
       (match freef
         ((Val a) (Val (f a)))
-        ((Free g) (Free (map (map f) g))))))
+        ((Free g) (Free (map (fn (x) (map f x)) g))))))
 
-  (declare free-apply (Functor :f => Free :f (:a -> :b) -> Free :f :a -> Free :f :b))
+  (declare free-apply (Functor :f => Free :f (:a -> :b) * Free :f :a -> Free :f :b))
   (define (free-apply free-f-func free-fa)
     "This is <*> implemented for Free :f"
     (match free-f-func
@@ -93,25 +93,27 @@ References: [here](https://github.com/purescript/purescript-free/blob/v5.1.0/src
          (fn (func) (free-apply func free-fa))
          funky-func)))))
 
-  (declare free-lifta2 (Functor :f => (:a -> :b -> :c) -> Free :f :a -> Free :f :b -> Free :f :c))
+  (declare free-lifta2 (Functor :f => (:a * :b -> :c) * Free :f :a * Free :f :b -> Free :f :c))
   (define (free-lifta2 op fa fb)
-    (free-apply (map op fa) fb))
+    (free-apply (map (fn (a) (fn (b) (op a b))) fa) fb))
 
   (define-instance (Functor :f => Applicative (Free :f))
-    (define pure Val)
-    (define lifta2 free-lifta2))
+    (define (pure x)
+      (Val x))
+    (define (lifta2 f x y)
+      (free-lifta2 f x y)))
 
   (define-instance (Functor :f => Monad (Free :f))
     (define (>>= fa a->fb)
       (match fa
         ((Val a) (a->fb a))
         ((Free ga)
-         (Free (map
-                ((flip >>=) a->fb)
-                ga))))))
+         (Free (map (fn (x) (>>= x a->fb))
+                    ga))))))
 
   (define-instance (Functor :f => MonadFree :f (Free :f))
-    (define wrap Free))
+    (define (wrap x)
+      (Free x)))
 
   (define-instance (Traversable :t => Traversable (Free :t))
     ;; implementation taken from
@@ -125,21 +127,21 @@ References: [here](https://github.com/purescript/purescript-free/blob/v5.1.0/src
         (g freea))))
 
   (define-instance (Foldable :f => Foldable (Free :f))
-    (define (foldr f)
+    (define (foldr f r freea)
       (let ((g
               (fn (r fr)
                 (match fr
                   ((Val a) (f a r))
-                  ((Free fa) (foldr (flip g) r fa))))))
-        g))
+                  ((Free fa) (foldr (fn (fr r2) (g r2 fr)) r fa))))))
+        (g r freea)))
 
-    (define (fold f)
+    (define (fold f r freea)
       (let ((g
               (fn (r fr)
                 (match fr
                   ((Val a) (f r a))
                   ((Free fa) (fold g r fa))))))
-        g))))  
+        (g r freea)))))  
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/MONAD/FREE")

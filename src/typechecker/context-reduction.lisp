@@ -272,7 +272,7 @@ For example, consider the following,
 (define-class (C :a :b => D :a :b)
   (m :a))
 
-(declare f (D :a :b => Unit -> :a))
+(declare f (D :a :b => (Void -> :a)))
 (define (f) m)
 ```
 

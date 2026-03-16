@@ -227,6 +227,59 @@
 
 ;;; Type printing (modification of pprint-type)
 
+(defun markdown-keyword-name (keyword)
+  (html-entities:encode-entities
+   (format nil ":~(~A~)" (symbol-name keyword))))
+
+(defun write-markdown-output-types (stream output-types)
+  (cond
+    ((null output-types)
+     (write-string "Void" stream))
+    ((null (cdr output-types))
+     (write-string (to-markdown (car output-types)) stream))
+    (t
+     (loop :for output :in output-types
+           :for firstp := t :then nil
+           :do
+              (unless firstp
+                (write-string " * " stream))
+              (write-string (to-markdown output) stream)))))
+
+(defun write-markdown-function-stage (stream ty)
+  (let ((inputs (tc:function-ty-positional-input-types ty))
+        (keywords (tc:function-ty-keyword-input-types ty))
+        (keyword-open-p (tc:function-ty-keyword-open-p ty)))
+    (write-string "(" stream)
+    (cond
+      ((and (null inputs) (null keywords) (not keyword-open-p))
+       (write-string "Void" stream))
+      (t
+       (loop :for input :in inputs
+             :for firstp := t :then nil
+             :do
+                (unless firstp
+                  (write-string " * " stream))
+                (write-string (to-markdown input) stream))
+       (when (or keywords keyword-open-p)
+         (when inputs
+           (write-char #\Space stream))
+         (write-string "&key" stream)
+         (when keywords
+           (write-char #\Space stream)
+           (loop :for entry :in keywords
+                 :for firstp := t :then nil
+                 :do
+                    (unless firstp
+                      (write-char #\Space stream))
+                    (format stream "(~A ~A)"
+                            (markdown-keyword-name (tc:keyword-ty-entry-keyword entry))
+                            (to-markdown (tc:keyword-ty-entry-type entry)))))
+         (when keyword-open-p
+           (write-string " ..." stream)))))
+    (write-string (html-entities:encode-entities " → ") stream)
+    (write-markdown-output-types stream (tc:function-ty-output-types ty))
+    (write-string ")" stream)))
+
 (defmethod to-markdown ((ty tc:tyvar))
   (html-entities:encode-entities
    (with-output-to-string (stream)
@@ -239,6 +292,14 @@
         (format nil "<a href=\"#~A\">~A</a>"
                 (object-aname ty)
                 (html-entities:encode-entities (object-name ty))))))
+
+(defmethod to-markdown ((ty tc:function-ty))
+  (with-output-to-string (stream)
+    (write-markdown-function-stage stream ty)))
+
+(defmethod to-markdown ((ty tc:result-ty))
+  (with-output-to-string (stream)
+    (write-markdown-output-types stream (tc:result-ty-output-types ty))))
 
 (defmethod to-markdown ((ty tc:tapp))
   (with-output-to-string (stream)

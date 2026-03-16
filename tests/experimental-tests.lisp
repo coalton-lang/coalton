@@ -16,10 +16,10 @@
 (define-test experimental-loops-dotimes-test ()
   (let ((x (cell:new 0)))
     (experimental:dotimes (i 0)
-      (cell:update! (+ i) x))
+      (cell:update! (fn (acc) (+ i acc)) x))
     (is (== 0 (cell:read x)))
     (experimental:dotimes (i 10)
-      (cell:update! (+ i) x))
+      (cell:update! (fn (acc) (+ i acc)) x))
     (is (== 45 (cell:read x)))))
 
 (define-test experimental-loops-everytimes-test ()
@@ -66,7 +66,7 @@
   (let ((xs (make-list 0 1 2 3 4))
         (c (cell:new 0)))
     (experimental:dolist (x xs)
-      (cell:update! (+ x) c))
+      (cell:update! (fn (acc) (+ x acc)) c))
     (is (== 10 (cell:read c)))))
 
 (define-test experimental-loops-dolists-test ()
@@ -74,21 +74,21 @@
         (ys (make-list 0 10 20 30 40))
         (c (cell:new 0)))
     (experimental:dolists ((x xs) (y ys))
-      (cell:update! (+ (+ x y)) c))
+      (cell:update! (fn (acc) (+ (+ x y) acc)) c))
     (is (== 110 (cell:read c)))))
 
 (define-test experimental-loops-dolist-enumerated-test ()
   (let ((xs (make-list 0 1 4 9 16))
         (c (cell:new 0)))
     (experimental:dolist-enumerated (i x xs)
-      (cell:update! (+ (+ i x)) c))
+      (cell:update! (fn (acc) (+ (+ i x) acc)) c))
     (is (== 40 (cell:read c)))))
 
 (define-test experimental-loops-dorange-test1 ()
   (let ((c (cell:new 0)))
     (experimental:dorange (x 0) (cell:increment! c))
     (is (zero? (cell:read c)))
-    (experimental:dorange (x 5) (cell:update! (+ (* x x)) c))
+    (experimental:dorange (x 5) (cell:update! (fn (acc) (+ (* x x) acc)) c))
     (is (== 30 (cell:read c)))))
 
 (define-test experimental-loops-dorange-test2 ()
@@ -124,4 +124,3 @@
       (experimental:dorange (x start stop step)
         (cell:push! c x)))
     (is (== (make-list 4 6 0 -2) (cell:read c)))))
-

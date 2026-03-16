@@ -73,6 +73,16 @@
   (define (d2f4 _x)
     0)
 
+  (define (f6 x)
+    (log 2 x))
+
+  (define (d0f6 x)
+    (f6 x))
+  (define (d1f6 x)
+    (reciprocal (* x (ln 2))))
+  (define (d2f6 x)
+    (negate (reciprocal (* (* x x) (ln 2)))))
+
   ;; Radical
 
   (define (f5 x)
@@ -99,24 +109,34 @@
       (or (~ %fx fx) (progn (print x) False)))))
 
 (define-test univariate-hyperdual-test-1 ()
-  (pipe (make-list -10.0 -4.0 0.0 1.0 1344.34)
-        (all (test-univariate f1 d0f1 d1f1 d2f1))))
+  (all (fn (x)
+         (test-univariate f1 d0f1 d1f1 d2f1 x))
+       (make-list -10.0 -4.0 0.0 1.0 1344.34)))
 
 (define-test univariate-hyperdual-test-2 ()
-  (pipe (make-list -10.0 -4.0 0.1 1.0 1344.34)
-        (all (test-univariate f2 d0f2 d1f2 d2f2))))
+  (all (fn (x)
+         (test-univariate f2 d0f2 d1f2 d2f2 x))
+       (make-list -10.0 -4.0 0.1 1.0 1344.34)))
 
 (define-test univariate-hyperdual-test-3 ()
-  (pipe (make-list 0.2 0.4 0.7 0.9)
-        (all (test-univariate f3 d0f3 d1f3 d2f3))))
+  (all (fn (x)
+         (test-univariate f3 d0f3 d1f3 d2f3 x))
+       (make-list 0.2 0.4 0.7 0.9)))
 
 (define-test univariate-hyperdual-test-4 ()
-  (pipe (make-list 0.1 0.2 0.3 0.4 10.0)
-        (all (test-univariate f4 d0f4 d1f4 d2f4))))
+  (all (fn (x)
+         (test-univariate f4 d0f4 d1f4 d2f4 x))
+       (make-list 0.1 0.2 0.3 0.4 10.0)))
 
 (define-test univariate-hyperdual-test-5 ()
-  (pipe (make-list 0.1 0.2 0.3 0.4 0.8)
-        (all (test-univariate f4 d0f4 d1f4 d2f4))))
+  (all (fn (x)
+         (test-univariate f4 d0f4 d1f4 d2f4 x))
+       (make-list 0.1 0.2 0.3 0.4 0.8)))
+
+(define-test univariate-hyperdual-test-6 ()
+  (all (fn (x)
+         (test-univariate f6 d0f6 d1f6 d2f6 x))
+       (make-list 0.2 0.5 1.3 3.0 10.0)))
 
 (coalton-toplevel
 
@@ -183,4 +203,3 @@
 (define-test hyperdual-laplacian-test ()
   (for (Tuple x y) in points
     (is (== (+ (dxxg x y) (dyyg x y)) (hyperdual:laplacian g x y)))))
-

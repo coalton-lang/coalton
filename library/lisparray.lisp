@@ -39,19 +39,19 @@ Whether or not the arrays are specialized depends on the underlying Lisp impleme
   (define-instance (types:RuntimeRepr :t => types:RuntimeRepr (LispArray :t))
     (define (types:runtime-repr _)
       (let ((element-type (types:runtime-repr (the (types:Proxy :t) types:Proxy))))
-        (lisp types:LispType (element-type)
+        (lisp (-> types:LispType) (element-type)
           `(cl:simple-array ,element-type (cl:*))))))
 
   (declare make
     (forall (:t)
-      ((types:RuntimeRepr :t) => UFix -> :t -> LispArray :t)))
+      ((types:RuntimeRepr :t) => UFix * :t -> LispArray :t)))
   (define (make n x)
     "Make a new `LispArray` of length `n` initialized to `x`.
 
 If the type of `x` represents a specialized array "
     ;; FIXME: how can we get this statically?
     (let ((type (types:runtime-repr (the (types:Proxy :t) types:Proxy))))
-      (lisp (LispArray :t) (n x type)
+      (lisp (-> (LispArray :t)) (n x type)
         (cl:make-array n :element-type type :initial-element x))))
 
   (declare make-uninitialized
@@ -63,43 +63,44 @@ If the type of `x` represents a specialized array "
 WARNING: The consequences are undefined if an uninitialized element is read before being set.
 "
     (let type = (types:runtime-repr (the (types:Proxy :t) types:Proxy)))
-    (lisp (LispArray :t) (n type)
+    (lisp (-> (LispArray :t)) (n type)
       (cl:make-array n :element-type type)))
 
   (inline)
   (declare length (LispArray :t -> UFix))
   (define (length v)
     "Return the length of the `LispArray` `v`."
-    (lisp UFix (v)
+    (lisp (-> UFix) (v)
       (cl:length v)))
 
   (inline)
-  (declare aref (LispArray :t -> UFix -> :t))
+  (declare aref (LispArray :t * UFix -> :t))
   (define (aref v i)
     "Read the `i`th value of the `LispArray` `v`."
-    (lisp :t (v i)
+    (lisp (-> :t) (v i)
       (cl:aref v i)))
 
   (inline)
-  (declare set! (LispArray :t -> UFix -> :t -> Unit))
+  (declare set! (LispArray :t * UFix * :t -> Void))
   (define (set! v i x)
     "Set the `i`th value of the `LispArray` `v` to `x`."
-    (lisp Unit (v i x)
-      (cl:setf (cl:aref v i) x)
-      Unit))
+    (progn
+      (lisp (-> :any) (v i x)
+        (cl:setf (cl:aref v i) x))
+      (values)))
 
   (inline)
   (declare copy (LispArray :t -> LispArray :t))
   (define (copy v)
     "Make a deep copy of the `LispArray` `v`."
-    (lisp (LispArray :t) (v)
+    (lisp (-> (LispArray :t)) (v)
       (cl:copy-seq v)))
 
   (define-instance (types:RuntimeRepr :t => Into (List :t) (LispArray :t))
     (inline)
     (define (into xs)
       (let ((type (types:runtime-repr (the (types:Proxy :t) types:Proxy))))
-        (lisp (LispArray :t) (xs type)
+        (lisp (-> (LispArray :t)) (xs type)
           (cl:make-array (cl:length xs) :element-type type :initial-contents xs)))))
 
   (define-instance (Into (LispArray :t) (List :t))
@@ -188,31 +189,32 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
                  (ref (cl:intern (cl:format cl:nil "aref/~a" coalton-type)))
                  (set (cl:intern (cl:format cl:nil "set!/~a" coalton-type))))
           `(progn
-             (specialize make ,mak (UFix -> ,coalton-type -> LispArray ,coalton-type))
+             (specialize make ,mak (UFix * ,coalton-type -> LispArray ,coalton-type))
              (inline)
-             (declare ,mak (UFix -> ,coalton-type -> LispArray ,coalton-type))
+             (declare ,mak (UFix * ,coalton-type -> LispArray ,coalton-type))
              (define (,mak n x)
-               (lisp (LispArray ,coalton-type) (n x)
+               (lisp (-> (LispArray ,coalton-type)) (n x)
                  (cl:make-array n :element-type ',lisp-type :initial-element x)))
              (specialize make-uninitialized ,mun (UFix -> LispArray ,coalton-type))
              (inline)
              (declare ,mun (UFix -> LispArray ,coalton-type))
              (define (,mun n)
-               (lisp (LispArray ,coalton-type) (n)
+               (lisp (-> (LispArray ,coalton-type)) (n)
                  (cl:make-array n :element-type ',lisp-type)))
-             (specialize aref ,ref (LispArray ,coalton-type -> UFix -> ,coalton-type))
+             (specialize aref ,ref (LispArray ,coalton-type * UFix -> ,coalton-type))
              (inline)
-             (declare ,ref (LispArray ,coalton-type -> UFix -> ,coalton-type))
+             (declare ,ref (LispArray ,coalton-type * UFix -> ,coalton-type))
              (define (,ref v i)
-               (lisp ,coalton-type (v i)
+               (lisp (-> ,coalton-type) (v i)
                  (cl:aref (cl:the (cl:simple-array ,lisp-type (cl:*)) v) i)))
-             (specialize set! ,set (LispArray ,coalton-type -> UFix -> ,coalton-type -> Unit))
+             (specialize set! ,set (LispArray ,coalton-type * UFix * ,coalton-type -> Void))
              (inline)
-             (declare ,set (LispArray ,coalton-type -> UFix -> ,coalton-type -> Unit))
+             (declare ,set (LispArray ,coalton-type * UFix * ,coalton-type -> Void))
              (define (,set v i x)
-               (lisp Unit (v i x)
-                 (cl:setf (cl:aref (cl:the (cl:simple-array ,lisp-type (cl:*)) v) i) x)
-                 Unit)))))))
+               (progn
+                 (lisp (-> :any) (v i x)
+                   (cl:setf (cl:aref (cl:the (cl:simple-array ,lisp-type (cl:*)) v) i) x))
+                 (values))))))))
 
   (define-lisparray-specialization F32 cl:single-float)
   (define-lisparray-specialization F64 cl:double-float)

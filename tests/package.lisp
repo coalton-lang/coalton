@@ -24,6 +24,8 @@
   (:local-nicknames
    (#:types #:coalton/types)
    (#:math #:coalton/math)
+   (#:ra #:coalton/xmath/realalgebraic)
+   (#:dual #:coalton/math/dual)
    (#:hyperdual #:coalton/math/hyperdual)
    (#:big-float #:coalton/big-float)
    (#:bits #:coalton/bits)
@@ -42,6 +44,7 @@
    (#:result #:coalton/result)
    (#:seq #:coalton/seq)
    (#:file #:coalton/file)
+   (#:creal #:coalton/computable-reals)
    (#:experimental #:coalton/experimental)
    (#:st #:coalton/monad/state)
    (#:m-id #:coalton/monad/identity)
@@ -49,7 +52,7 @@
    (#:m-res #:coalton/monad/resultt)
    (#:m-env #:coalton/monad/environment)
    (#:m-stt #:coalton/monad/statet)
-   (#:fft #:coalton/algorithms/fft)))
+   (#:fft #:coalton/xmath/fft)))
 
 (in-package #:coalton-native-tests)
 

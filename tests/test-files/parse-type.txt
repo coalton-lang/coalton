@@ -11,12 +11,42 @@
 (declare g (T :a))
 (declare h (T :a :b :c))
 (declare j (T -> T))
-(declare k (T :a -> T :b -> T :c))
+(declare k (T :a * T :b -> T :c))
 (declare l (T (:a -> :b) -> T :d))
 
 (declare m (T :a => T))
 (declare n ((T :a) => T))
 (declare o ((T :a) (T :b) => T)) 
+
+================================================================================
+20 Parse keyword-only function type
+================================================================================
+
+(package coalton-unit-tests)
+
+(declare keyword-only-type (&key (:x Integer) -> Integer))
+(define (keyword-only-type &key (x 1))
+  x)
+
+================================================================================
+21 Parse empty keyword marker in function type
+================================================================================
+
+(package coalton-unit-tests)
+
+(declare empty-keyword-type (Integer &key -> Integer))
+(define (empty-keyword-type x &key)
+  x)
+
+================================================================================
+22 Parse nested keyword function type
+================================================================================
+
+(package coalton-unit-tests)
+
+(declare keyword-higher-order ((&key (:x String) -> String) -> String))
+(define (keyword-higher-order f)
+  (f :x "hi"))
 
 ================================================================================
 Malformed type

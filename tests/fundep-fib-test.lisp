@@ -38,10 +38,38 @@
   (define (fib _)
     Proxy))
 
-(define-test test-fundep-fib () 
-  (is (== 0 (reify-peano (fib (the (Proxy Z) Proxy)))))
-  (is (== 1 (reify-peano (fib (the (Proxy (S Z)) Proxy)))))
-  (is (== 1 (reify-peano (fib (the (Proxy (S (S Z))) Proxy)))))
-  (is (== 2 (reify-peano (fib (the (Proxy (S (S (S Z)))) Proxy)))))
-  (is (== 3 (reify-peano (fib (the (Proxy (S (S (S (S Z))))) Proxy)))))
-  (is (== 5 (reify-peano (fib (the (Proxy (S (S (S (S (S Z)))))) Proxy))))))
+(fiasco:deftest test-fundep-fib-0 ()
+  (fiasco:is (cl:= 0
+                   (coalton:coalton
+                     (the Integer
+                       (reify-peano (fib (the (Proxy Z) Proxy))))))))
+
+(fiasco:deftest test-fundep-fib-1 ()
+  (fiasco:is (cl:= 1
+                   (coalton:coalton
+                     (the Integer
+                       (reify-peano (fib (the (Proxy (S Z)) Proxy))))))))
+
+(fiasco:deftest test-fundep-fib-2 ()
+  (fiasco:is (cl:= 1
+                   (coalton:coalton
+                     (the Integer
+                       (reify-peano (fib (the (Proxy (S (S Z))) Proxy))))))))
+
+(fiasco:deftest test-fundep-fib-3 ()
+  (fiasco:is (cl:= 2
+                   (coalton:coalton
+                     (the Integer
+                       (reify-peano (fib (the (Proxy (S (S (S Z)))) Proxy))))))))
+
+(fiasco:deftest test-fundep-fib-4 ()
+  (fiasco:is (cl:= 3
+                   (coalton:coalton
+                     (the Integer
+                       (reify-peano (fib (the (Proxy (S (S (S (S Z))))) Proxy))))))))
+
+(fiasco:deftest test-fundep-fib-5 ()
+  (fiasco:is (cl:= 5
+                   (coalton:coalton
+                     (the Integer
+                       (reify-peano (fib (the (Proxy (S (S (S (S (S Z)))))) Proxy))))))))

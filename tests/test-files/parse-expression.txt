@@ -53,7 +53,7 @@
 
 (define (f-parse6)
   (let ((x (the UFix 1))
-        (declare y (Unit -> UFix))
+        (declare y (Void -> UFix))
         (y (fn () (+ 1 2))))
     (+ x (y))))
 
@@ -65,7 +65,7 @@
   (import coalton-prelude))
 
 (define (f-parse7 a b c)
-  (lisp Integer (a b c)
+  (lisp (-> Integer) (a b c)
     (cl:+ a b c)))
 
 ================================================================================
@@ -141,6 +141,19 @@
     (f-parse14 x)
     (let y = 2)
     (+ x y)))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:4:0
+   |
+ 4 |   (define (f-parse14)
+   |  _^
+ 5 | |   (progn
+ ...
+ 8 | |     (let y = 2)
+ 9 | |     (+ x y)))
+   | |_____________^ Expected type '(:A -> :B)' but got '(Void -> :A)'
 
 ================================================================================
 15 Parse expression
@@ -295,7 +308,6 @@ warn: non-exhaustive match
   (import coalton-prelude))
 
 (define (f-parse105 x)
-  (match (lisp multiple-values (Tuple Integer Integer) (x)
-           (cl:truncate x 2))
-    ((Tuple q r)
-     (+ q r))))
+  (let (values q r) = (lisp (-> Integer * Integer) (x)
+                        (cl:truncate x 2)))
+  (+ q r))

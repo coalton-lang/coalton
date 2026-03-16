@@ -81,7 +81,8 @@ example, the type parameter to `Iterator` is `:elt` (short for "element"), not `
 
 ## Parameter order
 
-The order of parameters to functions should be considered in order to support currying.
+The order of parameters to functions should be considered in order to support the common
+higher-order use cases of the function.
 
 Generally (although with some exceptions), parameters should be ordered:
 

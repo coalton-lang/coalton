@@ -58,7 +58,7 @@
   `(define-instance (Eq ,type)
      (inline)
      (define (== a b)
-       (lisp Boolean (a b)
+       (lisp (-> Boolean) (a b)
          ;; Use cl:= so that (== 0.0 -0.0) => True
          (cl:= a b)))))
 
@@ -79,7 +79,7 @@
        (define-instance (Ord ,type)
          (inline)
          (define (<=> a b)
-           (lisp Ord (a b)
+           (lisp (-> Ord) (a b)
              (cl:cond
                ((cl:< a b)
                 LT)
@@ -88,46 +88,46 @@
                (cl:t
                 EQ)))))
 
-       (specialize > ,>-spec (,type -> ,type -> Boolean))
+       (specialize > ,>-spec (,type * ,type -> Boolean))
        (inline)
-       (declare ,>-spec (,type -> ,type -> Boolean))
+       (declare ,>-spec (,type * ,type -> Boolean))
        (define (,>-spec a b)
-         (lisp Boolean (a b)
+         (lisp (-> Boolean) (a b)
            (to-boolean (cl:> a b))))
 
-       (specialize >= ,>=-spec (,type -> ,type -> Boolean))
+       (specialize >= ,>=-spec (,type * ,type -> Boolean))
        (inline)
-       (declare ,>=-spec (,type -> ,type -> Boolean))
+       (declare ,>=-spec (,type * ,type -> Boolean))
        (define (,>=-spec a b)
-         (lisp Boolean (a b)
+         (lisp (-> Boolean) (a b)
            (to-boolean (cl:>= a b))))
 
-       (specialize < ,<-spec (,type -> ,type -> Boolean))
+       (specialize < ,<-spec (,type * ,type -> Boolean))
        (inline)
-       (declare ,<-spec (,type -> ,type -> Boolean))
+       (declare ,<-spec (,type * ,type -> Boolean))
        (define (,<-spec a b)
-         (lisp Boolean (a b)
+         (lisp (-> Boolean) (a b)
            (to-boolean (cl:< a b))))
 
-       (specialize <= ,<=-spec (,type -> ,type -> Boolean))
+       (specialize <= ,<=-spec (,type * ,type -> Boolean))
        (inline)
-       (declare ,<=-spec (,type -> ,type -> Boolean))
+       (declare ,<=-spec (,type * ,type -> Boolean))
        (define (,<=-spec a b)
-         (lisp Boolean (a b)
+         (lisp (-> Boolean) (a b)
            (to-boolean (cl:<= a b))))
 
-       (specialize min ,min-spec (,type -> ,type -> ,type))
+       (specialize min ,min-spec (,type * ,type -> ,type))
        (inline)
-       (declare ,min-spec (,type -> ,type -> ,type))
+       (declare ,min-spec (,type * ,type -> ,type))
        (define (,min-spec a b)
-         (lisp ,type (a b)
+         (lisp (-> ,type) (a b)
            (cl:min a b)))
 
-       (specialize max ,max-spec (,type -> ,type -> ,type))
+       (specialize max ,max-spec (,type * ,type -> ,type))
        (inline)
-       (declare ,max-spec (,type -> ,type -> ,type))
+       (declare ,max-spec (,type * ,type -> ,type))
        (define (,max-spec a b)
-         (lisp ,type (a b)
+         (lisp (-> ,type) (a b)
            (cl:max a b))))))
 
 
@@ -163,22 +163,22 @@
   `(define-instance (Num ,type)
      (inline)
      (define (+ a b)
-       (lisp ,type (a b)
+       (lisp (-> ,type) (a b)
          (,overflow-handler (cl:+ a b))))
 
      (inline)
      (define (- a b)
-       (lisp ,type (a b)
+       (lisp (-> ,type) (a b)
          (,overflow-handler (cl:- a b))))
 
      (inline)
      (define (* a b)
-       (lisp ,type (a b)
+       (lisp (-> ,type) (a b)
          (,overflow-handler (cl:* a b))))
 
      (inline)
      (define (fromInt x)
-       (lisp ,type (x)
+       (lisp (-> ,type) (x)
          (,overflow-handler x)))))
 
 (cl:defmacro define-num-wrapping (type bits)
@@ -186,22 +186,22 @@
   `(define-instance (Num ,type)
      (inline)
      (define (+ a b)
-       (lisp ,type (a b)
+       (lisp (-> ,type) (a b)
          (cl:values (cl:mod (cl:+ a b) ,(cl:expt 2 bits)))))
 
      (inline)
      (define (- a b)
-       (lisp ,type (a b)
+       (lisp (-> ,type) (a b)
          (cl:values (cl:mod (cl:- a b) ,(cl:expt 2 bits)))))
 
      (inline)
      (define (* a b)
-       (lisp ,type (a b)
+       (lisp (-> ,type) (a b)
          (cl:values (cl:mod (cl:* a b) ,(cl:expt 2 bits)))))
 
      (inline)
      (define (fromInt x)
-       (lisp ,type (x)
+       (lisp (-> ,type) (x)
          (cl:values (cl:mod x ,(cl:expt 2 bits)))))))
 
 
@@ -222,28 +222,28 @@
   `(define-instance (Num ,type)
      (inline)
      (define (+ a b)
-       (lisp ,type (a b)
+       (lisp (-> ,type) (a b)
          (#+(not ccl) cl:progn
             #+ccl ff:with-float-traps-masked #+ccl cl:t
             (cl:+ a b))))
 
      (inline)
      (define (- a b)
-       (lisp ,type (a b)
+       (lisp (-> ,type) (a b)
          (#+(not ccl) cl:progn
             #+ccl ff:with-float-traps-masked #+ccl cl:t
             (cl:- a b))))
 
      (inline)
      (define (* a b)
-       (lisp ,type (a b)
+       (lisp (-> ,type) (a b)
          (#+(not ccl) cl:progn
             #+ccl ff:with-float-traps-masked #+ccl cl:t
             (cl:* a b))))
 
      (inline)
      (define (fromInt x)
-       (lisp ,type (x)
+       (lisp (-> ,type) (x)
          (cl:or (cl:ignore-errors (cl:coerce x ',lisp-type))
                 (cl:if (cl:< x 0)
                        ,minus-inf
@@ -255,7 +255,7 @@
   `(define-instance (TryInto ,type Fraction String)
      (define (tryInto x)
        (if (finite? x)
-           (Ok (lisp Fraction (x) (cl:rational x)))
+           (Ok (lisp (-> Fraction) (x) (cl:rational x)))
            (Err "Could not convert NaN or infinity into a Fraction")))))
 
 
@@ -283,7 +283,7 @@
           negative-infinity)
 
          (True
-          (lisp ,type (x y)
+          (lisp (-> ,type) (x y)
             (#+(not ccl) cl:progn
                #+ccl ff:with-float-traps-masked #+ccl cl:t
                (cl:/ x y))))))
@@ -296,7 +296,7 @@
           infinity)
 
          (True
-          (lisp ,type (x)
+          (lisp (-> ,type) (x)
             (#+(not ccl) cl:progn
                #+ccl ff:with-float-traps-masked #+ccl cl:t
                (cl:/ x))))))))
@@ -307,7 +307,7 @@
      (define (general/ x y)
        (if (== y 0)
            (/ (fromInt x) (fromInt y))
-           (lisp ,type (x y)
+           (lisp (-> ,type) (x y)
              (cl:or (cl:ignore-errors (cl:coerce (cl:/ x y) ',lisp-type))
                     (cl:if (cl:eq (cl:< x 0) (cl:< y 0))
                            (coalton (the ,type infinity))
@@ -319,27 +319,27 @@
   `(define-instance (bits:Bits ,type)
      (inline)
      (define (bits:and a b)
-       (lisp ,type (a b)
+       (lisp (-> ,type) (a b)
          (cl:logand a b)))
 
      (inline)
      (define (bits:or a b)
-       (lisp ,type (a b)
+       (lisp (-> ,type) (a b)
          (cl:logior a b)))
 
      (inline)
      (define (bits:xor a b)
-       (lisp ,type (a b)
+       (lisp (-> ,type) (a b)
          (cl:logxor a b)))
 
      (inline)
      (define (bits:not x)
-       (lisp ,type (x)
+       (lisp (-> ,type) (x)
          (cl:lognot x)))
 
      (inline)
      (define (bits:shift amount bits)
-       (lisp ,type (amount bits)
+       (lisp (-> ,type) (amount bits)
          (,handle-overflow (cl:ash bits amount))))))
 
 (cl:declaim (cl:inline unsigned-lognot))
@@ -354,27 +354,27 @@
   `(define-instance (bits:Bits ,type)
      (inline)
      (define (bits:and a b)
-       (lisp ,type (a b)
+       (lisp (-> ,type) (a b)
          (cl:logand a b)))
 
      (inline)
      (define (bits:or a b)
-       (lisp ,type (a b)
+       (lisp (-> ,type) (a b)
          (cl:logior a b)))
 
      (inline)
      (define (bits:xor a b)
-       (lisp ,type (a b)
+       (lisp (-> ,type) (a b)
          (cl:logxor a b)))
 
      (inline)
      (define (bits:not x)
-       (lisp ,type (x)
+       (lisp (-> ,type) (x)
          (unsigned-lognot x ,width)))
 
      (inline)
      (define (bits:shift amount bits)
-       (lisp ,type (amount bits)
+       (lisp (-> ,type) (amount bits)
          (cl:logand (cl:ash bits amount)
                     ,(cl:1- (cl:ash 1 width)))))))
 

@@ -90,7 +90,7 @@
   ;; Navigating through bf-cells (> <)
   ;;
 
-  (declare move-right (Unit -> (state:ST BF-State Unit)))
+  (declare move-right (Void -> (state:ST BF-State Unit)))
   (define (move-right)
     "Moves the pointer one bf-cell to the right."
     (do
@@ -104,7 +104,7 @@
           0
           (cell:write! cell (1- value)))))
 
-  (declare move-left (Unit -> (state:ST BF-State Unit)))
+  (declare move-left (Void -> (state:ST BF-State Unit)))
   (define (move-left)
     "Moves the pointer one bf-cell to the left."
     (do
@@ -116,23 +116,25 @@
   ;; Changing bf-cell values (+ -)
   ;;
 
-  (declare incr (Unit -> (state:ST BF-State Unit)))
+  (declare incr (Void -> (state:ST BF-State Unit)))
   (define (incr)
     "Increments the value for the current bf-cell."
     (do
      (bfs <- state:get)
-     (pure (vec:set! (cell:read (.pointer bfs))
-                     (1+ (value-at-pointer bfs))
-                     (.memory bfs)))))
+     (let _ = (vec:set! (cell:read (.pointer bfs))
+                        (1+ (value-at-pointer bfs))
+                        (.memory bfs)))
+     (pure Unit)))
 
-  (declare decr (Unit -> (state:ST BF-State Unit)))
+  (declare decr (Void -> (state:ST BF-State Unit)))
   (define (decr)
     "Decrements the value for the current bf-cell."
     (do
      (bfs <- state:get)
-     (pure (vec:set! (cell:read (.pointer bfs))
-                     (1- (value-at-pointer bfs))
-                     (.memory bfs)))))
+     (let _ = (vec:set! (cell:read (.pointer bfs))
+                        (1- (value-at-pointer bfs))
+                        (.memory bfs)))
+     (pure Unit)))
 
   ;;
   ;; Printing Cells (.)
@@ -143,7 +145,7 @@
     "Converts an ASCII character code into a string."
     (into (make-list (unwrap (char:code-char ascii-value)))))
 
-  (declare display (Unit -> (state:ST BF-State Unit)))
+  (declare display (Void -> (state:ST BF-State Unit)))
   (define (display)
     "Prints the value at the pointer to the print buffer."
     (do
@@ -162,12 +164,12 @@
 
   (define (prompt-char)
     "A prompt for obtaining one character as input."
-    (Lisp Char ()
+    (Lisp (-> Char) ()
       (cl:format cl:*query-io* "Input a character: ")
       (cl:finish-output cl:*query-io*)
       (cl:read-char cl:*query-io*)))
 
-  (declare take-input (Unit -> (state:ST BF-State Unit)))
+  (declare take-input (Void -> (state:ST BF-State Unit)))
   (define (take-input)
     "Takes and stores a character as an ascii code at the pointer."
     (do
@@ -242,7 +244,7 @@
       ((BFLeft) (move-left))
       ((BFPlus) (incr))
       ((BFMinus) (decr))
-      ((BFPRint) (display))
+      ((BFPrint) (display))
       ((BFInput) (take-input))
       ((BFLoop v) (exec-loop (into v)))))
 

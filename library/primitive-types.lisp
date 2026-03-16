@@ -14,30 +14,27 @@
 ;;; looked up at compile-time and emitted directly.
 
 (coalton-toplevel
-  (repr :native cl:t)
-  (define-type Void)
-
   ;; Boolean is an early type
   (declare True Boolean)
-  (define True (lisp Boolean () cl:t))
+  (define True (lisp (-> Boolean) () cl:t))
 
   (declare False Boolean)
-  (define False (lisp Boolean () cl:nil))
+  (define False (lisp (-> Boolean) () cl:nil))
 
   ;; Unit is an early type
   (declare Unit Unit)
-  (define Unit (lisp Unit () coalton-impl/constants:+value-of-unit+))
+  (define Unit (lisp (-> Unit) () coalton-impl/constants:+value-of-unit+))
 
   ;; List is an early type
   (inline)
-  (declare Cons (:a -> (List :a) -> (List :a)))
+  (declare Cons (:a * (List :a) -> (List :a)))
   (define (Cons x xs)
-    (lisp (List :a) (x xs)
+    (lisp (-> (List :a)) (x xs)
       (cl:cons x xs)))
 
   (declare Nil (List :a))
   (define Nil
-    (lisp (List :a) ()
+    (lisp (-> (List :a)) ()
       cl:nil))
 
   ;; Optional is an early type
@@ -60,7 +57,7 @@ matching, as in the following example.
     value)
   (_ (error \"Oh, no!\")))
 ```"
-    (lisp (Optional :a) (x)
+    (lisp (-> (Optional :a)) (x)
       (coalton-impl/runtime:cl-some x)))
 
   (declare None (Optional :a))
@@ -75,7 +72,7 @@ matching, as in the following example.
    \"Fantastic!\")
   (_ (error \"Oh, no!\")))
 ```"
-    (lisp (Optional :a) ()
+    (lisp (-> (Optional :a)) ()
       coalton-impl/runtime:cl-none))
 
   (repr :native cl:bit)
@@ -127,4 +124,3 @@ matching, as in the following example.
 
   (define-type-alias Double-Float F64
     "Deprecated name for F64. This is provided for backward compatibility."))
-

@@ -3,56 +3,67 @@ SBCL_BIN=sbcl
 SBCL=$(SBCL_BIN) --noinform --no-userinit --no-sysinit --non-interactive
 QUICKLISP_HOME=$(HOME)/quicklisp
 QUICKLISP_SETUP=$(QUICKLISP_HOME)/setup.lisp
-QUICKLISP=$(SBCL) --load $(QUICKLISP_HOME)/setup.lisp \
-	--eval '(push (truename ".") asdf:*central-registry*)' \
-	--eval "(push (truename \"../\") ql:*local-project-directories*)"
+REPO_ROOT=$(abspath $(CURDIR))
+LOCAL_SOURCE_REGISTRY=$(REPO_ROOT)//
+QUICKLISP=env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+	$(SBCL) --load $(QUICKLISP_HOME)/setup.lisp
+TEST_FORMS=--load $(QUICKLISP_SETUP) \
+	--eval "(ql:quickload :coalton/tests)" \
+	--eval "(asdf:test-system :coalton/tests)" \
+	--eval "(asdf:load-system :small-coalton-programs)"
 
 .PHONY: test test-release test-safe
 test:
-	sbcl --noinform \
-		--non-interactive \
-		--eval "(asdf:test-system :coalton)"
+	env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+		$(SBCL) \
+		$(TEST_FORMS)
 
 test-safe:
-	sbcl --noinform \
-		 --non-interactive \
-		 --eval "(sb-ext:restrict-compiler-policy 'safety 3)" \
-		 --eval "(asdf:test-system :coalton)"
+	env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+		$(SBCL) \
+		--eval "(sb-ext:restrict-compiler-policy 'safety 3)" \
+		$(TEST_FORMS)
 
 # Run all tests in release mode
 
 test-release:
-	COALTON_ENV=release sbcl --noinform \
-		--non-interactive \
-		--eval "(asdf:test-system :coalton)"
+	env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+		COALTON_ENV=release \
+		$(SBCL) \
+		$(TEST_FORMS)
 
 .PHONY: docs
 docs:
-	sbcl --noinform \
-		 --non-interactive \
-		 --eval "(ql:quickload :coalton/doc :silent t)" \
-		 --eval "(coalton/doc:write-stdlib-documentation-to-file \"docs/reference.md\")"
+	env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+		$(SBCL) \
+		--load $(QUICKLISP_SETUP) \
+		--eval "(ql:quickload :coalton/doc :silent t)" \
+		--eval "(coalton/doc:write-stdlib-documentation-to-file \"docs/reference.md\")"
 
 .PHONY: web-docs
 web-docs:
-	sbcl --noinform \
-		 --non-interactive \
-		 --eval "(ql:quickload :coalton/doc :silent t)" \
-		 --eval "(coalton/doc:write-stdlib-documentation-to-file \"../coalton-website/content/reference.md\" :backend :hugo :revision \"main\")"
+	env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+		$(SBCL) \
+		--load $(QUICKLISP_SETUP) \
+		--eval "(ql:quickload :coalton/doc :silent t)" \
+		--eval "(coalton/doc:write-stdlib-documentation-to-file \"../coalton-website/content/reference.md\" :backend :hugo :revision \"main\")"
 
 
 .PHONY: bench
 bench:
-	COALTON_ENV=release sbcl --noinform \
-		 --non-interactive \
-		 --eval "(ql:quickload :coalton/benchmarks :silent t)" \
-		 --eval "(sb-ext::without-gcing (coalton-benchmarks:run-benchmarks))"
+	env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+		COALTON_ENV=release \
+		$(SBCL) \
+		--load $(QUICKLISP_SETUP) \
+		--eval "(ql:quickload :coalton/benchmarks :silent t)" \
+		--eval "(sb-ext::without-gcing (coalton-benchmarks:run-benchmarks))"
 
 .PHONY: parser-coverage
 parser-coverage:
 	mkdir coverage-report || true
-	sbcl --noinform \
-		--non-interactive \
+	env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+		$(SBCL) \
+		--load $(QUICKLISP_SETUP) \
 		--eval "(require :sb-cover)" \
 		--eval "(declaim (optimize sb-cover:store-coverage-data))" \
 		--eval "(asdf:test-system :coalton :force '(:coalton :coalton/tests))" \

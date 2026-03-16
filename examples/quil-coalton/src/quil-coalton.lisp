@@ -283,7 +283,7 @@
   (define parse-quil-program
     (map
      QuilProgram
-     (map2 const
+     (map2 (fn (a _b) a)
            (many0
             (map2 (fn (a _b) a)
                   ;; Quil statements

@@ -36,11 +36,11 @@
   (define (named-vars-fn pair)
     pair)
 
-  (declare ordered-forall-fn (forall (:result :input) :input -> :result -> :input))
+  (declare ordered-forall-fn (forall (:result :input) :input * :result -> :input))
   (define (ordered-forall-fn x _y)
     x)
 
-  (declare nested-forall-fn (forall (:outer) (forall (:inner) :outer -> :inner -> :outer)))
+  (declare nested-forall-fn (forall (:outer) (forall (:inner) :outer * :inner -> :outer)))
   (define (nested-forall-fn x _y)
     x)
 
@@ -51,6 +51,42 @@
     (explicit-method
       (forall (:item :result)
         ((:wrapper :item) -> (coalton/types:Proxy :item) -> (:item -> :result) -> :result))))
+
+  (declare explicit-rec-eq
+    (forall (:item)
+      (coalton/classes:Eq :item => :item -> Boolean)))
+  (define (explicit-rec-eq x)
+    (if (== x x)
+        True
+        (explicit-rec-eq x)))
+
+  (declare explicit-rec-eq-integer (Integer -> Boolean))
+  (define (explicit-rec-eq-integer x)
+    (explicit-rec-eq x))
+
+  (repr :transparent)
+  (define-type (ScopedDictBox :a)
+    (ScopedDictBox :a))
+
+  (define-class (ScopedDictClass :wrapper)
+    (scoped-dict-method
+      (forall (:item)
+        (coalton/classes:Eq :item => (:wrapper :item) * (coalton/types:Proxy :item) -> Boolean))))
+
+  (define-instance (ScopedDictClass ScopedDictBox)
+    (define (scoped-dict-method wrapped proxy)
+      (match wrapped
+        ((ScopedDictBox inner)
+         (let ((declare rebuild
+                       (forall (:ignored)
+                         (coalton/classes:Eq :item => (coalton/types:Proxy :ignored) * :item -> Boolean)))
+               (rebuild (fn (_other value)
+                          (== value inner))))
+           (rebuild proxy inner))))))
+
+  (declare scoped-dict-method-integer (Integer -> Boolean))
+  (define (scoped-dict-method-integer x)
+    (scoped-dict-method (ScopedDictBox x) (coalton/types:proxy-of x)))
   )
 
 (in-package #:coalton-tests)
@@ -103,24 +139,24 @@
                      "FORALL :LEFT :RIGHT. ((COALTON/CLASSES:TUPLE :LEFT :RIGHT) -> (COALTON/CLASSES:TUPLE :LEFT :RIGHT))"
                      (render-type (coalton-type-of 'coalton-native-tests::named-vars-fn)))
       (check-string= "explicit forall binder order"
-                     "FORALL :RESULT :INPUT. (:INPUT -> :RESULT -> :INPUT)"
+                     "FORALL :RESULT :INPUT. (:INPUT * :RESULT -> :INPUT)"
                      (render-type (coalton-type-of 'coalton-native-tests::ordered-forall-fn)))
       (check-string= "nested forall binder order"
-                     "FORALL :OUTER :INNER. (:OUTER -> :INNER -> :OUTER)"
+                     "FORALL :OUTER :INNER. (:OUTER * :INNER -> :OUTER)"
                      (render-type (coalton-type-of 'coalton-native-tests::nested-forall-fn)))
       (check-string= "documentation generator preserves explicit forall order"
-                     "&forall; :RESULT :INPUT. (:INPUT &rarr; :RESULT &rarr; :INPUT)"
+                     "&forall; :RESULT :INPUT. (:INPUT * :RESULT &rarr; :INPUT)"
                      (coalton/doc/markdown::to-markdown
                       (coalton-type-of 'coalton-native-tests::ordered-forall-fn)))
       (check-string= "documentation generator preserves nested forall order"
-                     "&forall; :OUTER :INNER. (:OUTER &rarr; :INNER &rarr; :OUTER)"
+                     "&forall; :OUTER :INNER. (:OUTER * :INNER &rarr; :OUTER)"
                      (coalton/doc/markdown::to-markdown
                       (coalton-type-of 'coalton-native-tests::nested-forall-fn)))
       (check-string= "class method type variables"
                      "FORALL :MONAD :STATE. COALTON-NATIVE-TESTS::NAMETRACKEDCLASS :MONAD :STATE => (:MONAD :STATE)"
                      (render-type (coalton-type-of 'coalton-native-tests::name-tracked-get)))
       (check-string= "explicit class method forall order"
-                     "FORALL :WRAPPER :ITEM :RESULT. COALTON-NATIVE-TESTS::EXPLICITMETHODCLASS :WRAPPER => ((:WRAPPER :ITEM) -> (COALTON/TYPES:PROXY :ITEM) -> (:ITEM -> :RESULT) -> :RESULT)"
+                     "FORALL :WRAPPER :ITEM :RESULT. COALTON-NATIVE-TESTS::EXPLICITMETHODCLASS :WRAPPER => ((:WRAPPER :ITEM) -> ((COALTON/TYPES:PROXY :ITEM) -> ((:ITEM -> :RESULT) -> :RESULT)))"
                      (render-type (coalton-type-of 'coalton-native-tests::explicit-method)))
       )))
 
@@ -164,63 +200,6 @@
     (is (coalton-impl/typechecker:ty= left right))
     (is (= 1 (length (coalton-impl/typechecker:ty-scheme-kinds scheme))))))
 
-(deftest test-resolve-dict-matches-preserved-forall-binders ()
-  (let* ((env coalton-impl/entry:*global-environment*)
-         (binder-token (gensym "BINDER"))
-         (query-tyvar (coalton-impl/typechecker:make-tyvar
-                       :id 1000
-                       :kind coalton-impl/typechecker:+kstar+
-                       :binding-id binder-token
-                       :source-name :query))
-         (context-tyvar (coalton-impl/typechecker:make-tyvar
-                         :id 1001
-                         :kind coalton-impl/typechecker:+kstar+
-                         :binding-id binder-token
-                         :source-name :context))
-         (pred (coalton-impl/typechecker:make-ty-predicate
-                :class 'coalton/classes:Eq
-                :types (list query-tyvar)))
-         (context-pred (coalton-impl/typechecker:make-ty-predicate
-                        :class 'coalton/classes:Eq
-                        :types (list context-tyvar)))
-         (dict-name (gensym "DICT"))
-         (node (coalton-impl/codegen/resolve-instance:resolve-dict
-                pred
-                (list (cons context-pred dict-name))
-                env)))
-    (is (coalton-impl/codegen/ast:node-variable-p node))
-    (is (eq dict-name (coalton-impl/codegen/ast:node-variable-value node)))
-    (is (coalton-impl/typechecker:ty=
-         (coalton-impl/codegen/ast:node-type node)
-         (coalton-impl/codegen/resolve-instance:pred-type pred env)))))
-
-(deftest test-resolve-dict-does-not-match-shadowing-forall-binders ()
-  (let* ((env coalton-impl/entry:*global-environment*)
-         (outer-binder-token (gensym "OUTER"))
-         (inner-binder-token (gensym "INNER"))
-         (query-tyvar (coalton-impl/typechecker:make-tyvar
-                       :id 1000
-                       :kind coalton-impl/typechecker:+kstar+
-                       :binding-id inner-binder-token
-                       :source-name :item))
-         (context-tyvar (coalton-impl/typechecker:make-tyvar
-                         :id 1001
-                         :kind coalton-impl/typechecker:+kstar+
-                         :binding-id outer-binder-token
-                         :source-name :item))
-         (pred (coalton-impl/typechecker:make-ty-predicate
-                :class 'coalton/classes:Eq
-                :types (list query-tyvar)))
-         (context-pred (coalton-impl/typechecker:make-ty-predicate
-                        :class 'coalton/classes:Eq
-                        :types (list context-tyvar))))
-    (handler-case
-        (progn
-          (coalton-impl/codegen/resolve-instance:resolve-dict
-           pred
-           (list (cons context-pred (gensym "DICT")))
-           env)
-          (is nil))
-      (simple-error (c)
-        (is (search "Unknown instance for predicate"
-                    (princ-to-string c)))))))
+(deftest test-scoped-forall-dictionary-resolution ()
+  (is (coalton:lookup-code 'coalton-native-tests::explicit-rec-eq-integer))
+  (is (coalton:lookup-code 'coalton-native-tests::scoped-dict-method-integer)))

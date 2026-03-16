@@ -28,19 +28,85 @@
           (format stream "~S" tcon-name)
           (format stream "~A" (lookup-type-source-name tcon-name))))))
 
+(defmethod object-aname ((ty tc:tycon))
+  (let ((tcon-name (tc:tycon-name ty)))
+    (package-qualified-anchor
+     (symbol-package tcon-name)
+     (lookup-type-source-name tcon-name)
+     "type")))
+
+(defun keyword-name-string (keyword)
+  (format nil ":~(~A~)" (symbol-name keyword)))
+
+(defun write-output-types (stream output-types)
+  (cond
+    ((null output-types)
+     (write-string "Void" stream))
+    ((null (cdr output-types))
+     (write-string (object-name (car output-types)) stream))
+    (t
+     (loop :for output :in output-types
+           :for firstp := t :then nil
+           :do
+              (unless firstp
+                (write-string " * " stream))
+              (write-string (object-name output) stream)))))
+
+(defun write-function-stage (stream ty)
+  (let ((inputs (tc:function-ty-positional-input-types ty))
+        (keywords (tc:function-ty-keyword-input-types ty))
+        (keyword-open-p (tc:function-ty-keyword-open-p ty)))
+    (write-char #\( stream)
+    (cond
+      ((and (null inputs) (null keywords) (not keyword-open-p))
+       (write-string "Void" stream))
+      (t
+       (loop :for input :in inputs
+             :for firstp := t :then nil
+             :do
+                (unless firstp
+                  (write-string " * " stream))
+                (write-string (object-name input) stream))
+       (when (or keywords keyword-open-p)
+         (when inputs
+           (write-char #\Space stream))
+         (write-string "&key" stream)
+         (when keywords
+           (write-char #\Space stream)
+           (loop :for entry :in keywords
+                 :for firstp := t :then nil
+                 :do
+                    (unless firstp
+                      (write-char #\Space stream))
+                    (format stream "(~A ~A)"
+                            (keyword-name-string (tc:keyword-ty-entry-keyword entry))
+                            (object-name (tc:keyword-ty-entry-type entry)))))
+         (when keyword-open-p
+           (write-string " ..." stream)))))
+    (write-string " -> " stream)
+    (write-output-types stream (tc:function-ty-output-types ty))
+    (write-char #\) stream)))
+
+(defmethod object-name ((ty tc:function-ty))
+  (with-output-to-string (stream)
+    (write-function-stage stream ty)))
+
+(defmethod object-name ((ty tc:result-ty))
+  (with-output-to-string (stream)
+    (write-output-types stream (tc:result-ty-output-types ty))))
 (defun write-function-types (ty)
   (with-output-to-string (stream)
     (write-string "(" stream)
-    (object-name (tc:tapp-to (tc:tapp-from ty)))
+    (write-string (object-name (tc:tapp-to (tc:tapp-from ty))) stream)
     (write-string " -> " stream)
     ;; Avoid printing extra parentheses on curried functions
     (labels ((print-subfunction (to)
                (cond ((tc:function-type-p to)
-                      (object-name (tc:tapp-to (tc:tapp-from to)))
+                      (write-string (object-name (tc:tapp-to (tc:tapp-from to))) stream)
                       (write-string " -> " stream)
                       (print-subfunction (tc:tapp-to to)))
                      (t
-                      (object-name to)))))
+                      (write-string (object-name to) stream)))))
       (print-subfunction (tc:tapp-to ty)))
     (write-string ")" stream)))
 
@@ -58,13 +124,13 @@
              (write-string (object-name tcon) stream)
              (dolist (arg (reverse tcon-args))
                (write-string " " stream)
-               (object-name arg))
+               (write-string (object-name arg) stream))
              (write-string ")" stream))
             (t
              (write-string "(" stream)
-             (object-name (tc:tapp-from ty))
+             (write-string (object-name (tc:tapp-from ty)) stream)
              (write-string " " stream)
-             (object-name (tc:tapp-to ty))
+             (write-string (object-name (tc:tapp-to ty)) stream)
              (write-string ")" stream))))))
 
 (defmethod object-name ((ty tc:tapp))

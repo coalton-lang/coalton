@@ -40,50 +40,61 @@
     "Establishes that `:f` is a random-access store of elements of type `:t`. The **storage type** `:f` implies the **stored type** `:t`. The storage is expected to be sequential and O(1) in random access reads and writes.
 
 It is permitted for any of `make`, `unsafe-aref`, or `unsafe-set!` to error."
-    (make (UFix -> :t -> :f))
+    (make (UFix * :t -> :f))
     (make-uninitialized (UFix -> :f))
     (length (:f -> UFix))
     (readable? (:f -> Boolean))
     (writable? (:f -> Boolean))
-    (unsafe-aref (:f -> UFix -> :t))
-    (unsafe-set! (:f -> UFix -> :t -> Unit))))
+    (unsafe-aref (:f * UFix -> :t))
+    (unsafe-set! (:f * UFix * :t -> Void))))
 
 ;;; Derived Functions
 (coalton-toplevel
 
-  (declare aref (RandomAccess :f :t => :f -> UFix -> Optional :t))
+  (declare aref (RandomAccess :f :t => :f * UFix -> Optional :t))
   (define (aref storage index)
     "Read the element at `index` of the random-access storage `storage`. Return `None` if the read is out-of-bounds or not permitted."
+    (let storage-length = (length storage))
     (if (and (readable? storage)
-             (< index (length storage)))
+             (lisp (-> Boolean) (index storage-length)
+               (to-boolean (cl:< index storage-length))))
         (Some (unsafe-aref storage index))
         None))
 
-  (declare set! (RandomAccess :f :t => :f -> UFix -> :t -> Optional Unit))
+  (declare set! (RandomAccess :f :t => :f * UFix * :t -> Optional Unit))
   (define (set! storage index value)
     "Write the element `value` at `index` of the random-access storage `storage`. Return `None` if the write is out-of-bounds or not permitted."
+    (let storage-length = (length storage))
     (if (and (writable? storage)
-             (< index (length storage)))
-        (Some (unsafe-set! storage index value))
+             (lisp (-> Boolean) (index storage-length)
+               (to-boolean (cl:< index storage-length))))
+        (progn
+          (unsafe-set! storage index value)
+          (Some Unit))
         None))
 
-  (declare unsafe-rotate! (RandomAccess :f :t => :f -> UFix -> UFix -> Unit))
+  (declare unsafe-rotate! (RandomAccess :f :t => :f * UFix * UFix -> Void))
   (define (unsafe-rotate! storage index1 index2)
     "Rotate the elements at indices `index1` and `index2` of the random-access storage `storage`."
     (let ((element1 (unsafe-aref storage index1))
           (element2 (unsafe-aref storage index2)))
-      (unsafe-set! storage index1 element2)
-      (unsafe-set! storage index2 element1)))
+      (progn
+        (unsafe-set! storage index1 element2)
+        (unsafe-set! storage index2 element1))))
 
-  (declare rotate! (RandomAccess :f :t => :f -> UFix -> UFix -> Optional Unit))
+  (declare rotate! (RandomAccess :f :t => :f * UFix * UFix -> Optional Unit))
   (define (rotate! storage index1 index2)
     "Rotate the elements at indices `index1` and `index2` of the random-access storage `storage`. Return `None` if the indices are out-of-bounds or if reading from or writing to `storage` is not permitted."
     (let ((storage-length (length storage)))
       (if (and (writable? storage)
                (readable? storage)
-               (< index1 storage-length)
-               (< index2 storage-length))
-          (Some (unsafe-rotate! storage index1 index2))
+               (lisp (-> Boolean) (index1 storage-length)
+                 (to-boolean (cl:< index1 storage-length)))
+               (lisp (-> Boolean) (index2 storage-length)
+                 (to-boolean (cl:< index2 storage-length))))
+          (progn
+            (unsafe-rotate! storage index1 index2)
+            (Some Unit))
           None))))
 
 #+sb-package-locks

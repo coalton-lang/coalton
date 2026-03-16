@@ -59,7 +59,7 @@
   (define tString (mkList tChar))
 
   ;; Renamed from 'fn' due to keyword collision
-  (declare mkFn (Type -> Type -> Type))
+  (declare mkFn (Type * Type -> Type))
   (define (mkFn a b)
     (TAp (TAp tArrow a) b))
 
@@ -67,7 +67,7 @@
   (define (mkList a)
     (TAp tList a))
 
-  (declare mkPair (Type -> Type -> Type))
+  (declare mkPair (Type * Type -> Type))
   (define (mkPair a b)
     (TAp (TAp tTuple2 a) b))
 
@@ -109,13 +109,13 @@
   (declare nullSubst Subst)
   (define nullSubst (Subst Nil))
 
-  (declare +-> (Tyvar -> Type -> Subst))
+  (declare +-> (Tyvar * Type -> Subst))
   (define (+-> u t)
     (Subst (make-list (Tuple u t))))
 
 
   (define-class (Types :t)
-    (apply (Subst -> :t -> :t))
+    (apply (Subst * :t -> :t))
     (tv (:t -> (List Tyvar))))
 
   (define-instance (Types Type)
@@ -137,12 +137,12 @@
 
   (define-instance (Types :a => Types (List :a))
     (define (apply s t)
-      (map (apply s) t))
+      (map (fn (x) (apply s x)) t))
     (define (tv t)
       (remove-duplicates (fold append Nil (map tv t)))))
 
 
-  (declare @@ (Subst -> Subst -> Subst))
+  (declare @@ (Subst * Subst -> Subst))
   (define (@@ s1 s2)
     (Subst (append
             (map
@@ -153,7 +153,7 @@
              (get-subst s2))
             (get-subst s1))))
 
-  (declare merge (MonadFail :m => (Subst -> Subst -> (:m Subst))))
+  (declare merge (MonadFail :m => (Subst * Subst -> :m Subst)))
   (define (merge s1 s2)
     (let ((agree (all (fn (v)
                         (== (apply s1 (TVar v))
@@ -171,7 +171,7 @@
   ;; Unification and Matching
   ;;
 
-  (declare mgu (MonadFail :m => (Type -> Type -> (:m Subst))))
+  (declare mgu (MonadFail :m => (Type * Type -> :m Subst)))
   (define (mgu t1 t2)
     (match (Tuple t1 t2)
       ((Tuple (TAp l r) (Tap l_ r_))
@@ -190,7 +190,7 @@
       ((Tuple _ _)
        (fail "Types do not unify"))))
 
-  (declare varBind (MonadFail :m => (Tyvar -> Type -> (:m Subst))))
+  (declare varBind (MonadFail :m => (Tyvar * Type -> :m Subst)))
   (define (varBind u t_)
     (if (== t_ (TVar u))
         (pure nullSubst)
@@ -201,7 +201,7 @@
                 (pure (+-> u t_))))))
 
   ;; Renamed from 'match' in thih
-  (declare matchType (MonadFail :m => (Type -> Type -> (:m Subst))))
+  (declare matchType (MonadFail :m => (Type * Type -> :m Subst)))
   (define (matchType t1 t2)
     (match (Tuple t1 t2)
 
@@ -252,20 +252,21 @@
       (tv t)))
 
 
-  (declare mguPred (Pred -> Pred -> (Optional Subst)))
+  (declare mguPred (Pred * Pred -> Optional Subst))
   (define (mguPred p q)
     ((lift mgu) p q))
 
-  (declare matchPred (Pred -> Pred -> (Optional Subst)))
+  (declare matchPred (Pred * Pred -> Optional Subst))
   (define matchPred (lift matchType))
 
-  (declare lift (MonadFail :m => ((Type -> Type -> (:m Subst)) -> (Pred -> Pred -> (:m Subst)))))
-  (define (lift m p1 p2)
-    (match (Tuple p1 p2)
-      ((Tuple (IsIn i _t) (IsIn i_ t_))
-       (if (== i i_)
-           (m _t t_)
-           (fail "Classes differ")))))
+  (declare lift (MonadFail :m => ((Type * Type -> (:m Subst)) -> (Pred * Pred -> (:m Subst)))))
+  (define (lift m)
+    (fn (p1 p2)
+      (match (Tuple p1 p2)
+        ((Tuple (IsIn i _t) (IsIn i_ t_))
+         (if (== i i_)
+             (m _t t_)
+             (fail "Classes differ"))))))
 
 
   (define-type Class
@@ -296,17 +297,17 @@
   (define (defaults (ClassEnv _ ds))
     ds)
 
-  (declare super (ClassEnv -> Id -> (List Id)))
+  (declare super (ClassEnv * Id -> List Id))
   (define (super ce i)
-    (match (classes ce i)
+    (match ((classes ce) i)
       ((Some c)
        (fst (get-class c)))
       (_
        (error "unreachable"))))
 
-  (declare insts (ClassEnv -> Id -> (List Inst)))
+  (declare insts (ClassEnv * Id -> List Inst))
   (define (insts ce i)
-    (match (classes ce i)
+    (match ((classes ce) i)
       ((Some c)
        (snd (get-class c)))
       (_
@@ -318,13 +319,13 @@
       ((Some _) True)
       ((None) False)))
 
-  (declare modify (ClassEnv -> Id -> Class -> ClassEnv))
+  (declare modify (ClassEnv * Id * Class -> ClassEnv))
   (define (modify ce i c)
     (ClassEnv
      (fn (j)
        (if (== i j)
            (Some c)
-           (classes ce j)))
+           ((classes ce) j)))
      (defaults ce)))
 
   (declare initialEnv ClassEnv)
@@ -334,22 +335,24 @@
 
   ;; (define-type-alias EnvTransformer (ClassEnv -> (Optional ClassEnv)))
 
-  (declare compose ((ClassEnv -> (Optional ClassEnv)) -> (ClassEnv -> (Optional ClassEnv)) -> (ClassEnv -> (Optional ClassEnv))))
-  (define (compose f g ce)
-    (match (f ce)
-      ((None) None)
-      ((Some ce_) (g ce_))))
+  (declare compose ((ClassEnv -> (Optional ClassEnv)) * (ClassEnv -> (Optional ClassEnv)) -> (ClassEnv -> (Optional ClassEnv))))
+  (define (compose f g)
+    (fn (ce)
+      (match (f ce)
+        ((None) None)
+        ((Some ce_) (g ce_)))))
 
 
-  (declare addClass (Id -> (List Id) -> (ClassEnv -> (Optional ClassEnv))))
-  (define (addClass i is ce)
-    (cond
-      ((defined (classes ce i))
-       (fail "class already defined"))
-      ((any (fn (x) (not (defined (classes ce x)))) is)
-       (fail "superclass not defined"))
-      (True
-       (Some (modify ce i (Class (Tuple is Nil)))))))
+  (declare addClass (Id * (List Id) -> (ClassEnv -> (Optional ClassEnv))))
+  (define (addClass i is)
+    (fn (ce)
+      (cond
+        ((defined ((classes ce) i))
+         (fail "class already defined"))
+        ((any (fn (x) (not (defined ((classes ce) x)))) is)
+         (fail "superclass not defined"))
+        (True
+         (Some (modify ce i (Class (Tuple is Nil))))))))
 
   (define addPreludeClasses
     (compose addCoreClasses addNumClasses))
@@ -380,28 +383,29 @@
             (addClass (Id "RealFloat") (make-list (Id "RealFrac") (Id "Floating"))))))
 
 
-  (declare addInst ((List Pred) -> Pred -> (ClassEnv -> (Optional ClassEnv))))
-  (define (addInst ps p ce)
-    (match p
-      ((IsIn i _)
-       (let ((its (insts ce i))
-             (qs (map
-                  (fn (x)
-                    (match x
-                      ((Instance (Qual _ q)) q)))
-                  its))
-             (c (Class
-                 (Tuple (super ce i)
-                        (Cons (Instance (Qual ps p)) its)))))
-         (cond
-           ((not (defined (classes ce i)))
-            (fail "No class for instance"))
-           ((any (overlap p) qs)
-            (fail "Overlapping instance"))
-           (True
-            (pure (modify ce i c))))))))
+  (declare addInst ((List Pred) * Pred -> (ClassEnv -> (Optional ClassEnv))))
+  (define (addInst ps p)
+    (fn (ce)
+      (match p
+        ((IsIn i _)
+         (let ((its (insts ce i))
+               (qs (map
+                    (fn (x)
+                      (match x
+                        ((Instance (Qual _ q)) q)))
+                    its))
+               (c (Class
+                   (Tuple (super ce i)
+                          (Cons (Instance (Qual ps p)) its)))))
+           (cond
+             ((not (defined ((classes ce) i)))
+              (fail "No class for instance"))
+             ((any (fn (q) (overlap p q)) qs)
+              (fail "Overlapping instance"))
+             (True
+              (pure (modify ce i c)))))))))
 
-  (declare overlap (Pred -> Pred -> Boolean))
+  (declare overlap (Pred * Pred -> Boolean))
   (define (overlap p q)
     (defined (mguPred p q)))
 
@@ -424,7 +428,7 @@
   ;; Entailment
   ;;
 
-  (declare bySuper (ClassEnv -> Pred -> (List Pred)))
+  (declare bySuper (ClassEnv * Pred -> List Pred))
   (define (bySuper ce p)
     (match p
       ((IsIn i t)
@@ -433,7 +437,7 @@
                             (bySuper ce (IsIn i_ t)))
                           (super ce i)))))))
 
-  (declare byInst (ClassEnv -> Pred -> (Optional (List Pred))))
+  (declare byInst (ClassEnv * Pred -> Optional (List Pred)))
   (define (byInst ce p)
     (match p
       ((IsIn i _)
@@ -443,19 +447,19 @@
                    ((Instance (Qual ps h))
                     (>>= (matchPred h p)
                          (fn (u)
-                           (Some (map (apply u) ps)))))))))
+                           (Some (map (fn (x) (apply u x)) ps)))))))))
          (asum (map tryInst (insts ce i)))))))
 
-  (declare entail (ClassEnv -> (List Pred) -> Pred -> Boolean))
+  (declare entail (ClassEnv * (List Pred) * Pred -> Boolean))
   (define (entail ce ps p)
     (or (any
-         (list:member p)
-         (map (bySuper ce) ps))
+         (fn (q) (list:member p q))
+         (map (fn (q) (bySuper ce q)) ps))
         (match (byInst ce p)
           ((None)
            False)
           ((Some qs)
-           (all (entail ce ps) qs)))))
+           (all (fn (q) (entail ce ps q)) qs)))))
 
   (declare inHnf (Pred -> Boolean))
   (define (inHnf pred)
@@ -468,13 +472,13 @@
       (match pred
         ((IsIn _ t) (hnf t)))))
 
-  (declare toHnfs (MonadFail :m => (ClassEnv -> (List Pred) -> (:m (List Pred)))))
+  (declare toHnfs (MonadFail :m => (ClassEnv * (List Pred) -> :m (List Pred))))
   (define (toHnfs ce ps)
-    (>>= (traverse (toHnf ce) ps)
+    (>>= (traverse (fn (p) (toHnf ce p)) ps)
          (fn (pss)
            (pure (foldr append Nil pss)))))
 
-  (declare toHnf (MonadFail :m => (ClassEnv -> Pred -> (:m (List Pred)))))
+  (declare toHnf (MonadFail :m => (ClassEnv * Pred -> :m (List Pred))))
   (define (toHnf ce p)
     (if (inHnf p)
         (pure (make-list p))
@@ -484,7 +488,7 @@
           ((Some ps)
            (toHnfs ce ps)))))
 
-  (declare simplify (ClassEnv -> (List Pred) -> (List Pred)))
+  (declare simplify (ClassEnv * (List Pred) -> List Pred))
   (define (simplify ce xs)
     (rec f ((rs Nil)
             (xs xs))
@@ -496,16 +500,16 @@
              (f rs ps)
              (f (Cons p rs) ps))))))
 
-  (declare reduce (MonadFail :m => (ClassEnv -> (List Pred) -> (:m (List Pred)))))
+  (declare reduce (MonadFail :m => (ClassEnv * (List Pred) -> :m (List Pred))))
   (define (reduce ce ps)
     (>>= (toHnfs ce ps)
          (fn (qs)
            (pure (simplify ce qs)))))
 
-  (declare scEntail (ClassEnv -> (List Pred) -> Pred -> Boolean))
+  (declare scEntail (ClassEnv * (List Pred) * Pred -> Boolean))
   (define (scEntail ce ps p)
-    (any (list:member p)
-         (map (bySuper ce) ps)))
+    (any (fn (q) (list:member p q))
+         (map (fn (q) (bySuper ce q)) ps)))
 
 
   ;;
@@ -522,7 +526,7 @@
     (define (tv (Forall _ qt))
       (tv qt)))
 
-  (declare quantify ((List Tyvar) -> (Qual Type) -> Scheme))
+  (declare quantify ((List Tyvar) * (Qual Type) -> Scheme))
   (define (quantify vs qt)
     (let ((vs_ (filter
                 (fn (e)
@@ -552,7 +556,7 @@
     (define (tv (Assump _ sc))
       (tv sc)))
 
-  (declare find (MonadFail :m => (Id -> (List Assump) -> (:m Scheme))))
+  (declare find (MonadFail :m => (Id * (List Assump) -> :m Scheme)))
   (define (find i xs)
     (match xs
       ((Nil)
@@ -568,9 +572,9 @@
   ;;
 
   (define-type (TI :a)
-    (TI (Subst -> Integer -> (Tuple3 Subst Integer :a))))
+    (TI (Subst * Integer -> (Tuple3 Subst Integer :a))))
 
-  (declare get-ti ((TI :a) -> (Subst -> Integer -> (Tuple3 Subst Integer :a))))
+  (declare get-ti ((TI :a) -> (Subst * Integer -> (Tuple3 Subst Integer :a))))
   (define (get-ti (TI y))
     y)
 
@@ -612,7 +616,7 @@
   (define getSubst (TI (fn (s n)
                          (Tuple3 s n s))))
 
-  (declare unify (Type -> Type -> (TI Unit)))
+  (declare unify (Type * Type -> TI Unit))
   (define (unify t1 t2)
     (do (s <- getSubst)
         (u <- (mgu (apply s t1) (apply s t2)))
@@ -638,7 +642,7 @@
 
 
   (define-class (Instantiate :t)
-    (inst ((List Type) -> :t -> :t)))
+    (inst ((List Type) * :t -> :t)))
 
   (define-instance (Instantiate Type)
     (define (inst ts t)
@@ -648,8 +652,8 @@
         (_ t))))
 
   (define-instance (Instantiate :a => Instantiate (List :a))
-    (define (inst ts)
-      (map (inst ts))))
+    (define (inst ts xs)
+      (map (fn (x) (inst ts x)) xs)))
 
   (define-instance (Instantiate :t => Instantiate (Qual :t))
     (define (inst ts (Qual ps t))
@@ -760,7 +764,7 @@
     (Ap Expr Expr)
     (ELet BindGroup Expr))
 
-  (declare tiExpr (ClassEnv -> (List Assump) -> Expr -> (TI (Tuple (List Pred) Type))))
+  (declare tiExpr (ClassEnv * (List Assump) * Expr -> TI (Tuple (List Pred) Type)))
   (define (tiExpr ce as e)
     (match e
       ((Var i)
@@ -799,7 +803,7 @@
   (define-type Alt
     (Alt (List Pat) Expr))
 
-  (declare tiAlt (ClassEnv -> (List Assump) -> Alt -> (TI (Tuple (List Pred) Type))))
+  (declare tiAlt (ClassEnv * (List Assump) * Alt -> TI (Tuple (List Pred) Type)))
   (define (tiAlt ce as alt_)
     (match alt_
       ((Alt pats e)
@@ -811,18 +815,18 @@
                     ((Tuple qs t)
                      (pure (Tuple (append ps qs) (foldr mkFn t ts))))))))))))
 
-  (declare tiAlts (ClassEnv -> (List Assump) -> (List Alt) -> Type -> (TI (List Pred))))
+  (declare tiAlts (ClassEnv * (List Assump) * (List Alt) * Type -> TI (List Pred)))
   (define (tiAlts ce as alts t)
-    (do (psts <- (traverse (tiAlt ce as) alts))
-        (traverse (unify t) (map snd psts))
+    (do (psts <- (traverse (fn (alt) (tiAlt ce as alt)) alts))
+        (traverse (fn (t_) (unify t t_)) (map snd psts))
       (pure (concat (map fst psts)))))
 
   ;; From Types to Type Schemes
 
-  (declare split (MonadFail :m => (ClassEnv -> (List Tyvar) -> (List Tyvar) -> (List Pred) -> (:m (Tuple (List Pred) (List Pred))))))
+  (declare split (MonadFail :m => (ClassEnv * (List Tyvar) * (List Tyvar) * (List Pred) -> :m (Tuple (List Pred) (List Pred)))))
   (define (split ce fs gs ps)
     (do (ps_ <- (reduce ce ps))
-        (match (list:partition (fn (x) (all (flip list:member fs) (tv x)))
+        (match (list:partition (fn (x) (all (fn (v) (list:member v fs)) (tv x)))
                                ps_)
           ((Tuple ds rs)
            (do (rs_ <- (defaultedPreds ce (append fs gs) rs))
@@ -831,7 +835,7 @@
   (define-type Ambiguity
     (Ambiguity Tyvar (List Pred)))
 
-  (declare ambiguities (ClassEnv -> (List Tyvar) -> (List Pred) -> (List Ambiguity)))
+  (declare ambiguities (ClassEnv * (List Tyvar) * (List Pred) -> List Ambiguity))
   (define (ambiguities _ce vs ps)
     (map (fn (v)
            (Ambiguity v (filter
@@ -852,7 +856,7 @@
           (make-list "Eq" "Ord" "Show" "Read" "Bounded" "Enum" "Ix" "Functor" "Monad" "MonadPlus"))
      numClasses))
 
-  (declare candidates (ClassEnv -> Ambiguity -> (List Type)))
+  (declare candidates (ClassEnv * Ambiguity -> List Type))
   (define (candidates ce am)
     (match am
       ((Ambiguity v qs)
@@ -868,12 +872,12 @@
                       ((IsIn _ t)
                        t)))
                   qs)))
-         (if (and (all (== (TVar v)) ts)
-                  (and (any (flip list:member numClasses) is)
-                       (all (flip list:member stdClasses) is)))
+         (if (and (all (fn (t_) (== (TVar v) t_)) ts)
+                  (and (any (fn (i) (list:member i numClasses)) is)
+                       (all (fn (i) (list:member i stdClasses)) is)))
              (let ((ts_ (defaults ce)))
                (if (all (fn (t_)
-                          (all (entail ce Nil)
+                          (all (fn (q) (entail ce Nil q))
                                (map (fn (i) (IsIn i t_))
                                     is)))
                         ts_)
@@ -881,22 +885,23 @@
                    Nil))
              Nil)))))
 
-  (declare withDefaults (MonadFail :m => (((List Ambiguity) -> (List Type) -> :a) -> ClassEnv -> (List Tyvar) -> (List Pred) -> (:m :a))))
-  (define (withDefaults f ce vs ps)
-    (let ((vps (ambiguities ce vs ps))
-          (tss (map (candidates ce) vps)))
-      (if (any list:null? tss)
-          (fail "Cannot resolve ambiguity")
-          (pure (f vps (map (fn (l) (from-some "" (head l))) tss))))))
+  (declare withDefaults (MonadFail :m => (((List Ambiguity) * (List Type) -> :a) -> (ClassEnv * (List Tyvar) * (List Pred) -> :m :a))))
+  (define (withDefaults f)
+    (fn (ce vs ps)
+      (let ((vps (ambiguities ce vs ps))
+            (tss (map (fn (vp) (candidates ce vp)) vps)))
+        (if (any list:null? tss)
+            (fail "Cannot resolve ambiguity")
+            (pure (f vps (map (fn (l) (from-some "" (head l))) tss)))))))
 
-  (declare defaultedPreds (MonadFail :m => (ClassEnv -> (List Tyvar) -> (List Pred) -> (:m (List Pred)))))
+  (declare defaultedPreds (MonadFail :m => (ClassEnv * (List Tyvar) * (List Pred) -> :m (List Pred))))
   (define defaultedPreds
     (withDefaults (fn (vps _ts) (concat (map (fn (a)
                                                (match a
                                                  ((Ambiguity _ x) x)))
                                              vps)))))
 
-  (declare defaultSubst (MonadFail :m => (ClassEnv -> (List Tyvar) -> (List Pred) -> (:m Subst))))
+  (declare defaultSubst (MonadFail :m => (ClassEnv * (List Tyvar) * (List Pred) -> :m Subst)))
   (define defaultSubst
     (withDefaults (fn (vps ts)
                     (Subst (zip (map (fn (a)
@@ -910,7 +915,7 @@
   (define-type Expl
     (Expl Id Scheme (List Alt)))
 
-  (declare tiExpl (ClassEnv -> (List Assump) -> Expl -> (TI (List Pred))))
+  (declare tiExpl (ClassEnv * (List Assump) * Expl -> TI (List Pred)))
   (define (tiExpl ce as e)
     (match e
       ((Expl _ sc alts)
@@ -953,7 +958,7 @@
                             alts))))))
       (any simple bs)))
 
-  (declare tiImpls (ClassEnv -> (List Assump) -> (List Impl) -> (TI (Tuple (List Pred) (List Assump)))))
+  (declare tiImpls (ClassEnv * (List Assump) * (List Impl) -> TI (Tuple (List Pred) (List Assump))))
   (define (tiImpls ce as bs)
     (do (ts <- (traverse (fn (_) (newTVar Star)) bs))
         (let is    = (map (fn (b)
@@ -966,7 +971,7 @@
                           (match b
                             ((Impl _ a) a)))
                         bs))
-      (pss <- (sequence (zipWith (tiAlts ce as_) altss ts)))
+      (pss <- (sequence (zipWith (fn (alts t) (tiAlts ce as_ alts t)) altss ts)))
       (s <- getSubst)
       (let ps_ = (apply s (concat pss)))
       (let ts_ = (apply s ts))
@@ -1002,7 +1007,7 @@
   (define-type BindGroup
     (BindGroup (List Expl) (List (List Impl))))
 
-  (declare tiBindGroup (ClassEnv -> (List Assump) -> BindGroup -> (TI (Tuple (List Pred) (List Assump)))))
+  (declare tiBindGroup (ClassEnv * (List Assump) * BindGroup -> TI (Tuple (List Pred) (List Assump))))
   (define (tiBindGroup ce as bg)
     (match bg
       ((BindGroup es iss)
@@ -1011,37 +1016,37 @@
                                ((Expl v sc _)
                                 (Assump v sc))))
                            es))
-           (tiI <- (tiSeq tiImpls ce (append as_ as) iss))
+           (tiI <- ((tiSeq tiImpls) ce (append as_ as) iss))
          (match tiI
            ((Tuple ps as__)
-            (do (qss <- (traverse (tiExpl ce (append as__ (append as_ as))) es))
+            (do (qss <- (traverse (fn (e) (tiExpl ce (append as__ (append as_ as)) e)) es))
                 (pure (Tuple (append ps (concat qss))
                              (append as__ as_))))))))))
 
-  (declare tiSeq ((ClassEnv -> (List Assump) -> :bg -> (TI (Tuple (List Pred) (List Assump)))) ->
-                  (ClassEnv -> (List Assump) -> (List :bg) -> (TI (Tuple (List Pred) (List Assump))))))
-  (define (tiSeq ti ce as bg)
-    (match bg
-      ((Nil)
-       (pure (Tuple Nil Nil)))
-      ((Cons bs bss)
-       (do (x <- (ti ce as bs))
-           (match x
-             ((Tuple ps as_)
-              (do (x <- (tiSeq ti ce (append as_ as) bss))
-                  (match x
-                    ((Tuple qs as__)
-                     (pure (Tuple (append ps qs)
-                                  (append as__ as_))))))))))))
+  (declare tiSeq ((ClassEnv * (List Assump) * :bg -> (TI (Tuple (List Pred) (List Assump)))) -> (ClassEnv * (List Assump) * (List :bg) -> (TI (Tuple (List Pred) (List Assump))))))
+  (define (tiSeq ti)
+    (fn (ce as bg)
+      (match bg
+        ((Nil)
+         (pure (Tuple Nil Nil)))
+        ((Cons bs bss)
+         (do (x <- (ti ce as bs))
+             (match x
+               ((Tuple ps as_)
+                (do (x <- ((tiSeq ti) ce (append as_ as) bss))
+                    (match x
+                      ((Tuple qs as__)
+                       (pure (Tuple (append ps qs)
+                                    (append as__ as_)))))))))))))
 
 
   (define-type Program
     (Program (List BindGroup)))
 
-  (declare tiProgram (ClassEnv -> (List Assump) -> Program -> (List Assump)))
+  (declare tiProgram (ClassEnv * (List Assump) * Program -> List Assump))
   (define (tiProgram ce as (Program bgs))
     (runTI
-     (do (seq <- (tiSeq tiBindGroup ce as bgs))
+     (do (seq <- ((tiSeq tiBindGroup) ce as bgs))
          (match seq
            ((Tuple ps as_)
             (do (s  <- getSubst)
@@ -1049,6 +1054,6 @@
               (s_ <- (defaultSubst ce Nil rs))
               (pure (apply (@@ s_ s) as_))))))))
 
-  (declare assumption-list-equal ((List Assump) -> (List Assump) -> Boolean))
+  (declare assumption-list-equal ((List Assump) * (List Assump) -> Boolean))
   (define (assumption-list-equal a b)
     (== a b)))

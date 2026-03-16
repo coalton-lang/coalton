@@ -19,7 +19,7 @@
    #:foreach
    #:entries
    #:keys
-   #:values
+   #:values-iter
    #:extend!
    #:make))
 
@@ -39,124 +39,109 @@
   (define-type (Hashtable :key :value)
     "A mutable hash table.")
 
-  (declare %get-hash-test-funcs (Hash :key => Unit -> (Tuple (:key -> :key -> Boolean) (:key -> Hash))))
-  (define (%get-hash-test-funcs _)
-    "Construct closures over the `Hash' instance for KEY"
-    (Tuple == hash))
-
-  (declare %make-hashtable ((Hash :key) =>
-                            (:key -> :key -> Boolean)
-                            -> (:key -> Hash)
-                            -> Integer
-                            -> Hashtable :key :value))
-  (define (%make-hashtable test hash_ cap)
-    "Inner function: allocate a hash table using the COALTON/HASHTABLE-SHIM interface"
-    (lisp (Hashtable :key :value) (cap test hash_)
-      (cl:flet ((coalton-hashtable-test (a b)
-                  (call-coalton-function test a b))
-                (coalton-hashtable-hash (key)
-                  (call-coalton-function hash_ key)))
-        (shim:make-custom-hash-table
-         cap
-         #'coalton-hashtable-hash
-         #'coalton-hashtable-test))))
-
   (declare default-hash-table-capacity UFix)
   (define default-hash-table-capacity
     ;; same as SBCL's
-    17)
+    (the UFix 17))
+
+  (declare key-eq (Hash :key => :key * :key -> Boolean))
+  (define (key-eq a b)
+    (== a b))
 
   (declare with-capacity (Hash :key => Integer -> Hashtable :key :value))
   (define (with-capacity capacity)
     "Create a new empty hashtable with a given capacity"
-    (match (%get-hash-test-funcs)
-      ((Tuple test hash)
-       (%make-hashtable test hash capacity))))
+    (lisp (-> (Hashtable :key :value)) (capacity (eq-fn key-eq) (hash-fn hash))
+      (cl:flet ((coalton-hashtable-test (a b)
+                  (call-coalton-function eq-fn a b))
+                (coalton-hashtable-hash (key)
+                  (call-coalton-function hash-fn key)))
+        (shim:make-custom-hash-table
+         capacity
+         #'coalton-hashtable-hash
+         #'coalton-hashtable-test))))
 
-  (declare new (Hash :key => Unit -> Hashtable :key :value))
+  (declare new (Hash :key => (Void -> Hashtable :key :value)))
   (define (new)
     "Create a new empty hashtable"
     ;; default size is the same as SBCL's
     (with-capacity (into default-hash-table-capacity)))
 
-  (declare get (Hash :key => Hashtable :key :value -> :key -> Optional :value))
+  (declare get (Hash :key => Hashtable :key :value * :key -> Optional :value))
   (define (get table key)
     "Lookup KEY in TABLE"
-    (lisp (Optional :a) (key table)
+    (lisp (-> (Optional :a)) (key table)
       (cl:multiple-value-bind (elem exists?)
           (shim:custom-hash-table-get table key)
         (cl:if exists?
                (Some elem)
                None))))
 
-  (declare set! (Hash :key => Hashtable :key :value -> :key -> :value -> Unit))
+  (declare set! (Hash :key => Hashtable :key :value * :key * :value -> Void))
   (define (set! table key value)
     "Set KEY to VALUE in TABLE"
-    (lisp Unit (table key value)
-      (cl:progn
-        (shim:custom-hash-table-set table key value)
-        Unit)))
+    (progn
+      (lisp (-> :any) (table key value)
+        (shim:custom-hash-table-set table key value))
+      (values)))
 
-  (declare remove! (Hash :key => Hashtable :key :value -> :key -> Unit))
+  (declare remove! (Hash :key => Hashtable :key :value * :key -> Void))
   (define (remove! table key)
     "Remove the entry at KEY from TABLE"
-    (lisp Unit (table key)
-      (cl:progn
-        (shim:custom-hash-table-remove table key)
-        Unit)))
+    (progn
+      (lisp (-> :any) (table key)
+        (shim:custom-hash-table-remove table key))
+      (values)))
 
   (declare count (Hashtable :key :value -> Integer))
   (define (count table)
     "Returns the number of entries in TABLE"
-    (lisp Integer (table)
+    (lisp (-> Integer) (table)
       (shim:custom-hash-table-count table)))
 
   (declare entries (Hashtable :key :value -> iter:Iterator (Tuple :key :value)))
   (define (entries table)
     "Returns the key-values pairs as a list."
-    (let lisp-iter = (lisp :a (table) (shim:custom-hash-table-iter table)))
-    (iter:with-size
-        (fn ()
-          (lisp (Optional (Tuple :key :value)) (lisp-iter)
-            (cl:multiple-value-bind (presentp key value)
-                (cl:funcall lisp-iter)
-              (cl:if presentp
-                     (Some (Tuple key value))
-                     None))))
-      (with-default 0 (the (Result String UFix) (tryinto (count table))))))
+    (let lisp-iter = (lisp (-> :a) (table) (shim:custom-hash-table-iter table)))
+    (iter:new
+     (fn ()
+       (lisp (-> (Optional (Tuple :key :value))) (lisp-iter)
+         (cl:multiple-value-bind (presentp key value)
+             (cl:funcall lisp-iter)
+           (cl:if presentp
+                  (Some (Tuple key value))
+                  None))))))
 
   (declare keys (Hashtable :key :value -> iter:Iterator :key))
   (define (keys table)
     "Returns the keys in TABLE as a list"
-    (let lisp-iter = (lisp :a (table) (shim:custom-hash-table-iter table)))
-    (iter:with-size
-        (fn ()
-          (lisp (Optional :key) (lisp-iter)
-            (cl:multiple-value-bind (presentp key value)
-                (cl:funcall lisp-iter)
-              (cl:declare (cl:ignore value))
-              (cl:if presentp
-                     (Some key)
-                     None))))
-      (with-default 0 (the (Result String Ufix) (tryinto (count table))))))
+    (let lisp-iter = (lisp (-> :a) (table) (shim:custom-hash-table-iter table)))
+    (iter:new
+     (fn ()
+       (lisp (-> (Optional :key)) (lisp-iter)
+         (cl:multiple-value-bind (presentp key value)
+             (cl:funcall lisp-iter)
+           (cl:declare (cl:ignore value))
+           (cl:if presentp
+                  (Some key)
+                  None))))))
 
-  (declare values (Hashtable :key :value -> iter:Iterator :value))
-  (define (values table)
+  (declare values-iter (Hashtable :key :value -> iter:Iterator :value))
+  (define (values-iter table)
     "Returns the values in TABLE as a list"
-    (let lisp-iter = (lisp :a (table) (shim:custom-hash-table-iter table)))
-    (iter:with-size
-        (fn ()
-          (lisp (Optional :value) (lisp-iter)
-            (cl:multiple-value-bind (presentp key value)
-                (cl:funcall lisp-iter)
-              (cl:declare (cl:ignore key))
-              (cl:if presentp
-                     (Some value)
-                     None))))
-      (with-default 0 (the (Result String UFix) (tryinto (count table)))))) 
+    (let lisp-iter = (lisp (-> :a) (table) (shim:custom-hash-table-iter table)))
+    (iter:new
+     (fn ()
+       (lisp (-> (Optional :value)) (lisp-iter)
+         (cl:multiple-value-bind (presentp key value)
+             (cl:funcall lisp-iter)
+           (cl:declare (cl:ignore key))
+           (cl:if presentp
+                  (Some value)
+                  None)))))) 
 
   (declare extend! ((Hash :key) (iter:IntoIterator :container (Tuple :key :value))
-                   => Hashtable :key :value -> :container -> Unit))
+                   => Hashtable :key :value * :container -> Void))
   (define (extend! table iter)
     "Insert all of the key value pairs from ITER into TABLE, overwriting duplicate keys."
     (let iter = (iter:into-iter iter))
@@ -164,7 +149,7 @@
      (fn ((Tuple key value))
        (set! table key value))
      iter)
-    Unit)
+    (values))
 
   ;;
   ;; Instances
@@ -186,7 +171,7 @@
 
   (define-instance (Hash :key => iter:FromIterator (Hashtable :key :value) (Tuple :key :value))
     (define (iter:collect! iter)
-      (let capacity = (with-default 0 (iter:size-hint iter)))
+      (let capacity = (with-default (the UFix 0) (iter:size-hint iter)))
       (let table = (with-capacity (into capacity)))
       (iter:for-each!
        (fn ((Tuple key value))
@@ -195,7 +180,8 @@
       table))
 
   (define-instance (Hash :key => Default (Hashtable :key :value))
-    (define default new))
+    (define (default)
+      (new)))
 
   (define-instance ((Hash :key) (Hash :value) => Hash (Hashtable :key :value))
     (define (hash table)
@@ -260,18 +246,3 @@ Examples:
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/HASHTABLE")
-
-(in-package #:coalton/iterator)
-
-(coalton-toplevel
-  (declare remove-duplicates! (Hash :elt => Iterator :elt -> Iterator :elt))
-  (define (remove-duplicates! iter)
-    "Yield unique elements from ITER in order of first appearance."
-    (let ((already-seen (coalton/hashtable:new))
-          (unique? (fn (elt)
-                     (match (coalton/hashtable:get already-seen elt)
-                       ((Some _) False)
-                       ((None)
-                        (coalton/hashtable:set! already-seen elt Unit)
-                        True)))))
-      (filter! unique? iter))))

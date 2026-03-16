@@ -1,10 +1,10 @@
 (in-package #:coalton-native-tests)
 
 (define-test test-while-loop ()
-  (let ((countdown (cell:new 10))
-        (sum (cell:new 0)))
-    (while (< 0 (cell:decrement! countdown))
-      (cell:update! (+ (cell:read countdown)) sum))
+    (let ((countdown (cell:new 10))
+          (sum (cell:new 0)))
+      (while (< 0 (cell:decrement! countdown))
+      (cell:update! (fn (acc) (+ (cell:read countdown) acc)) sum))
     (is (== 0 (cell:read countdown)))
     (is (== 45 (cell:read sum)))))
 
@@ -14,7 +14,7 @@
   (let sum = (cell:new 0))
 
   (while (< 0 (cell:decrement! countdown))
-    (cell:update! (+ (cell:read countdown)) sum)
+    (cell:update! (fn (acc) (+ (cell:read countdown) acc)) sum)
     (when (== (cell:read countdown) 5) (break)))
 
   (is (== 5 (cell:read countdown)))
@@ -25,7 +25,7 @@
   (cell:swap! sum 0)
 
   (while :aloop (< 0 (cell:decrement! countdown))
-    (cell:update! (+ (cell:read countdown)) sum)
+    (cell:update! (fn (acc) (+ (cell:read countdown) acc)) sum)
     (when (== (cell:read countdown) 5) (break :aloop)))
 
   (is (== 5 (cell:read countdown)))
@@ -37,7 +37,7 @@
 
   (while :aloop (< 0 (cell:decrement! countdown))
     (when (odd? (cell:read countdown)) (continue :aloop))
-    (cell:update! (+ (cell:read countdown)) sum))
+    (cell:update! (fn (acc) (+ (cell:read countdown) acc)) sum))
 
   (is (== 20 (cell:read sum))))
 
@@ -47,32 +47,32 @@
         (sum (cell:new 0)))
     (while-let
      (Some wtf) = (iter:next! iter)
-     (cell:update! (+ wtf) sum))
+     (cell:update! (fn (acc) (+ wtf acc)) sum))
     (is (== 45 (cell:read sum)))))
 
 
 (define-test test-for ()
   (let ((sum (cell:new 0)))
 
-    (for x in (iter:up-to 10) (cell:update! (+ x) sum))
+    (for x in (iter:up-to 10) (cell:update! (fn (acc) (+ x acc)) sum))
     (is (== 45 (cell:read sum)))
 
     (cell:swap! sum 0)
     (for x in (iter:up-to 20)
-         (cell:update! (+ x) sum)
+         (cell:update! (fn (acc) (+ x acc)) sum)
          (when (== 9 x) (break)))
     (is (== 45 (cell:read sum )))
 
     (cell:swap! sum 0)
     (for x in (iter:up-to 20)
          (when (even? x) (continue))
-         (cell:update! (+ x) sum))
+         (cell:update! (fn (acc) (+ x acc)) sum))
     (is (== 100 (cell:read sum)))
 
 
     (cell:swap! sum 0)
     (for :aloop x in (iter:up-to 20)
-         (cell:update! (+ x) sum)
+         (cell:update! (fn (acc) (+ x acc)) sum)
          (when (== 9 x) (break :aloop)))
     (is (== 45 (cell:read sum )))
 
@@ -80,7 +80,7 @@
     (cell:swap! sum 0)
     (for :aloop x in (iter:up-to 20)
          (when (even? x) (continue :aloop))
-         (cell:update! (+ x) sum))
+         (cell:update! (fn (acc) (+ x acc)) sum))
     (is (== 100 (cell:read sum)))))
 
 (define-test test-loop-control ()
@@ -150,7 +150,6 @@
             (continue :outer)))     ; we can continue from outer in inner
         (cell:swap! counter 0))
   (is (== 279 (list:car (cell:read acc)))))
-
 
 
 

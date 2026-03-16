@@ -11,7 +11,7 @@
 ;;;; always represent (Optional^M :t) as either an element of type :t
 ;;;; or as a CL-OPTIONAL with a depth between 0 and M-1.
 ;;;;
-;;;; For example, (lisp (Optional (Optional :t)) () 5) is
+;;;; For example, (lisp (-> (Optional (Optional :t))) () 5) is
 ;;;; unambiguously equal to (Some (Some 5)).
 
 (defpackage #:coalton-impl/runtime/optional

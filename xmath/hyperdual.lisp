@@ -3,7 +3,10 @@
 ;;;; An implementation of Hyperdual numbers for computing second-order
 ;;;; derivatives of compositions of built-in Coalton functions.
 
-(coalton/utils::defstdlib-package #:coalton/math/hyperdual
+(coalton/utils::defstdlib-package #:coalton/xmath/hyperdual
+  (:nicknames
+   #:coalton/math/hyperdual
+   #:coalton-library/math/hyperdual)
   (:use
    #:coalton
    #:coalton/builtin
@@ -125,7 +128,7 @@ The following list of identities describe the theory of hyperdual numbers.
  (6) (f (Hyperdual x 0 0 0) (Hyperdual y 1 1 0))
       = (Hyperdual (f x y) (∂f/∂x x y) (∂f/∂x x y) (∂²f/∂x² x y))"))
 
-(in-package #:coalton/math/hyperdual)
+(in-package #:coalton/xmath/hyperdual)
 
 (named-readtables:in-readtable coalton:coalton)
 
@@ -145,11 +148,11 @@ Note: `Eq`, and `Ord` and `Hash` only make use of the primal component."
 
   ;; utilities
 
-  (declare h (Num :t => Hyperdual :t -> :t -> :t -> :t -> Hyperdual :t))
+  (declare h (Num :t => Hyperdual :t * :t * :t * :t -> Hyperdual :t))
   (define (h x f0 f1 f2)
     "Compute (f x) given f0 := (f a), f1 := (f' a), and f2 := (f'' a).
 
-Note: See identity (1) in the description of this package (`coalton/math/hyperdual`)."
+Note: See identity (1) in the description of this package (`coalton/xmath/hyperdual`)."
     (let (Hyperdual _ b c d) = x)
     (Hyperdual f0 (* b f1) (* c f1) (+ (* d f1) (* (* b c) f2))))
 
@@ -294,7 +297,7 @@ Note: See identity (1) in the description of this package (`coalton/math/hyperdu
       (exp (* (ln x) y)))
     (define (log x y)
       ;; logₓy = ln(y) / ln(x)
-      (/ (ln x) (ln y)))
+      (/ (ln y) (ln x)))
     (define ee (Hyperdual ee 0 0 0)))
 
   (define-instance ((Radical :t) (Reciprocable :t) (Exponentiable :t) => Radical (Hyperdual :t))
@@ -321,55 +324,55 @@ Note: See identity (1) in the description of this package (`coalton/math/hyperdu
   ;; functions
 
   (define-type-alias (UnOp :t) (:t -> :t))
-  (define-type-alias (BinOp :t) (:t -> :t -> :t))
+  (define-type-alias (BinOp :t) (:t * :t -> :t))
 
-  (declare d-x (Num :t => UnOp (Hyperdual :t)  -> :t -> :t))
+  (declare d-x (Num :t => UnOp (Hyperdual :t) * :t -> :t))
   (define (d-x f x)
     "Compute f'(x)."
     (.b (f (Hyperdual x 1 1 0))))
 
-  (declare d-xx (Num :t => UnOp (Hyperdual :t)  -> :t -> :t))
+  (declare d-xx (Num :t => UnOp (Hyperdual :t) * :t -> :t))
   (define (d-xx f x)
     "Compute f''(x)."
     (.d (f (Hyperdual x 1 1 0))))
 
-  (declare partial-x (Num :t => BinOp (Hyperdual :t)  -> :t -> :t -> :t))
+  (declare partial-x (Num :t => BinOp (Hyperdual :t) * :t * :t -> :t))
   (define (partial-x f x y)
     "Compute ∂f/∂x(x, y)."
     (.b (f (Hyperdual x 1 0 0) (Hyperdual y 0 1 0))))
 
-  (declare partial-y (Num :t => BinOp (Hyperdual :t)  -> :t -> :t -> :t))
+  (declare partial-y (Num :t => BinOp (Hyperdual :t) * :t * :t -> :t))
   (define (partial-y f x y)
     "Compute ∂f/∂y(x, y)."
     (.c (f (Hyperdual x 1 0 0) (Hyperdual y 0 1 0))))
 
-  (declare gradient (Num :t => BinOp (Hyperdual :t) -> :t -> :t -> List :t))
+  (declare gradient (Num :t => BinOp (Hyperdual :t) * :t * :t -> List :t))
   (define (gradient f x y)
     "Compute the gradient (∂f/∂x, ∂f/∂y) at the point (x, y)."
     (match (f (Hyperdual x 1 0 0) (Hyperdual y 0 1 0))
       ((Hyperdual _ b c _) (Cons b (Cons c Nil)))))
 
-  (declare partial-xx (Num :t => BinOp (Hyperdual :t)  -> :t -> :t -> :t))
+  (declare partial-xx (Num :t => BinOp (Hyperdual :t) * :t * :t -> :t))
   (define (partial-xx f x y)
     "Compute ∂²f/∂x²(x, y)."
     (.d (f (Hyperdual x 1 1 0) (Hyperdual y 0 0 0))))
 
-  (declare partial-xy (Num :t => BinOp (Hyperdual :t) -> :t -> :t -> :t))
+  (declare partial-xy (Num :t => BinOp (Hyperdual :t) * :t * :t -> :t))
   (define (partial-xy f x y)
     "Compute ∂²f/∂x∂y(x, y)."
     (.d (f (Hyperdual x 1 0 0) (Hyperdual y 0 1 0))))
 
-  (declare partial-yy (Num :t => BinOp (Hyperdual :t) -> :t -> :t -> :t))
+  (declare partial-yy (Num :t => BinOp (Hyperdual :t) * :t * :t -> :t))
   (define (partial-yy f x y)
     "Compute ∂²f/∂y²(x, y)."
     (.d (f (Hyperdual x 0 0 0) (Hyperdual y 1 1 0))))
 
-  (declare laplacian (Num :t => BinOp (Hyperdual :t) -> :t -> :t -> :t))
+  (declare laplacian (Num :t => BinOp (Hyperdual :t) * :t * :t -> :t))
   (define (laplacian f x y)
     "Compute the Laplacian ∂²f/∂x² + ∂²f/∂y² at the point (x, y)."
     (+ (partial-xx f x y) (partial-yy f x y)))
 
-  (declare hessian (Num :t => BinOp (Hyperdual :t) -> :t -> :t -> List :t))
+  (declare hessian (Num :t => BinOp (Hyperdual :t) * :t * :t -> List :t))
   (define (hessian f x y)
     "Compute the flat Hessian (∂²f/∂x², ∂²f/∂x∂y, ∂²f/∂y∂x, ∂²f/∂y²) at the point (x, y)."
     (let ((xx (partial-xx f x y))
@@ -379,5 +382,4 @@ Note: See identity (1) in the description of this package (`coalton/math/hyperdu
       (Cons xx (Cons xy (Cons yx (Cons yy Nil)))))))
 
 #+sb-package-locks
-(sb-ext:lock-package "COALTON/MATH/HYPERDUAL")
-
+(sb-ext:lock-package "COALTON/XMATH/HYPERDUAL")

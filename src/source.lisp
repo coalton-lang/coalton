@@ -226,6 +226,9 @@ OFFSET indicates starting character offset within the file."
   (span nil
    :type span :read-only t))
 
+(defmethod location ((self location))
+  self)
+
 (defun end-location (location)
   "Return a new location that points at a zero-length span immediately past tht end of LOCATION."
   (make-location (location-source location)

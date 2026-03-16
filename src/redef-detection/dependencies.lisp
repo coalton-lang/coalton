@@ -154,6 +154,13 @@
                                           (parser:node-bind-pattern elem)))
                              (setf (gethash (parser:pattern-var-name pvar) new-locals) t))
                            (setf current-locals new-locals)))
+                        (parser:node-values-bind
+                         (traverse (parser:node-values-bind-expr elem) current-locals)
+                         (let ((new-locals (alexandria:copy-hash-table current-locals)))
+                           (dolist (pvar (parser:pattern-variables
+                                          (parser:node-values-bind-patterns elem)))
+                             (setf (gethash (parser:pattern-var-name pvar) new-locals) t))
+                           (setf current-locals new-locals)))
                         (parser:node
                          ;; Any other expression node
                          (traverse elem current-locals))))
@@ -163,6 +170,14 @@
                  ;; Bind (shorthand let binding)
                  (parser:node-bind
                   (traverse (parser:node-bind-expr node) local-bindings))
+
+                 (parser:node-values-bind
+                  (traverse (parser:node-values-bind-expr node) local-bindings))
+
+                 (parser:node-values
+                  (mapc (lambda (subnode)
+                          (traverse subnode local-bindings))
+                        (parser:node-values-nodes node)))
 
                  ;; Loops
                  (parser:node-while

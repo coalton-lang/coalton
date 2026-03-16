@@ -14,7 +14,7 @@
       (define-type MyList
         MyNil
         (MyCons IFix MyList))
-      (define (mylist-zero-circle _)
+      (define (mylist-zero-circle)
         (let ((lst (MyCons 0 lst)))
           lst))
       (define (mylist-circle? lst)
@@ -47,12 +47,12 @@
 
   (check-coalton-types
    "(define foo
-      (let ((loop-times (the (UFix -> Unit)
+      (let ((loop-times (the (UFix -> Void)
                              (fn (n)
                                (unless (== n 0)
                                  (loop-times (- n 1)))))))
         (loop-times 100)))"
-   '("foo" . "Unit")))
+   '("foo" . "Void")))
 
 (deftest recursive-let-constant-propagation ()
   "Test that constant let bindings are propagated to the other bindings. See GitHub issue #1442."
@@ -80,4 +80,3 @@
 
     (is (< (- end start) 1))
     (is (equalp value '(1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0)))))
-

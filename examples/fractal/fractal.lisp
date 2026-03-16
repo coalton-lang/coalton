@@ -40,7 +40,7 @@
          (if (== iter max-iter)
              (unwrap (tryinto iter))
              (let ((r (math:to-fraction (+ (into (the Integer (into iter))) (smooth x-out y-out)))))
-               (lisp F32 (r)
+               (lisp (-> F32) (r)
                  (cl:coerce (cl:/ r max-iter) 'cl:single-float)))))))))
 
 (cl:defpackage #:fractal

@@ -18,15 +18,16 @@
       :name (parser:make-node-variable
              :location location
              :name 'classes:==)
-      :params (list
-               (parser:make-pattern-var
-                :location location
-                :name 'a
-                :orig-name 'a)
-               (parser:make-pattern-var
-                :location location
-                :name 'b
-                :orig-name 'b))
+     :params (list
+              (parser:make-pattern-var
+               :location location
+               :name 'a
+               :orig-name 'a)
+              (parser:make-pattern-var
+               :location location
+               :name 'b
+               :orig-name 'b))
+      :function-syntax-p t
       :body (parser:make-node-body
              :nodes nil
              :last-node (parser:make-node-match
@@ -158,13 +159,14 @@ The generated method will be shaped like this:
   (let ((location (source:location def)))
     (list
      (parser:make-instance-method-definition
-      :name (parser:make-node-variable
-             :location location
-             :name 'classes:hash)
+     :name (parser:make-node-variable
+            :location location
+            :name 'classes:hash)
       :params (list (parser:make-pattern-var
                      :location location
                      :name 'x
                      :orig-name 'x))
+      :function-syntax-p t
       :body (parser:make-node-body
              :nodes nil
              :last-node (parser:make-node-match
@@ -213,7 +215,9 @@ The generated method will be shaped like this:
                                                                       cfields
                                                                       :initial-value (parser:make-node-lisp
                                                                                       :location location
-                                                                                      :type (parser:make-tycon :location location :name 'classes:hash)
+                                                                                      :output-types (list (parser:make-tycon
+                                                                                                           :location location
+                                                                                                           :name 'classes:hash))
                                                                                       :vars '()
                                                                                       :var-names '()
                                                                                       :body (list
@@ -249,11 +253,8 @@ Requires field to only have a single constructor."
       :name (parser:make-node-variable
              :location location
              :name 'classes:default)
-      :params (list
-               (parser:make-pattern-var
-                :location location
-                :name 'coalton:_
-                :orig-name 'coalton:_))
+      :params nil
+      :function-syntax-p t
       :body (parser:make-node-body
              :nodes nil
              :last-node

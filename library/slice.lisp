@@ -49,7 +49,7 @@
     (inline)
     (define %length length))
 
-  (declare new ((Sliceable (:b :a)) => UFix -> UFix -> :b :a -> Slice :a))
+  (declare new ((Sliceable (:b :a)) => UFix * UFix * :b :a -> Slice :a))
   (define (new start len v)
     "Create a new slice backed by `v` starting at index `start` and continuing for `len` elements."
     (when (< start 0)
@@ -62,7 +62,7 @@
     (when (> end (%length v))
       (error "Slice cannot extend beyond length of backing vector."))
 
-    (lisp (Slice :a) (v start len)
+    (lisp (-> (Slice :a)) (v start len)
       (cl:make-array
        len
        :element-type cl:t
@@ -73,18 +73,19 @@
   (declare length (Slice :a -> UFix))
   (define (length s)
     "Returns the length of `s`."
-    (lisp UFix (s)
+    (lisp (-> UFix) (s)
       (cl:array-dimension s 0)))
 
   (inline)
-  (declare set! (UFix -> :a -> (Slice :a) -> Unit))
+  (declare set! (UFix * :a * (Slice :a) -> Void))
   (define (set! idx item s)
     "Set the element at index `idx` in `s` to `item`."
-    (lisp :a (idx item s)
-      (cl:setf (cl:aref s idx) item))
-    Unit)
+    (progn
+      (lisp (-> :any) (idx item s)
+        (cl:setf (cl:aref s idx) item))
+      (values)))
 
-  (declare index (UFix -> (Slice :a) -> (Optional :a)))
+  (declare index (UFix * (Slice :a) -> (Optional :a)))
   (define (index idx s)
     "Lookup the element at `index` in `s`."
     (if (>= idx (length s))
@@ -92,13 +93,13 @@
         (Some (index-unsafe idx s))))
 
   (inline)
-  (declare index-unsafe (UFix -> (Slice :a) -> :a))
+  (declare index-unsafe (UFix * (Slice :a) -> :a))
   (define (index-unsafe idx s)
     "Lookup the element at `index` in `s` without bounds checking."
-    (lisp :a (idx s)
+    (lisp (-> :a) (idx s)
       (cl:aref s idx)))
 
-  (declare iter-sliding ((Sliceable (:b :a)) => UFix -> :b :a -> iter:Iterator (Slice :a)))
+  (declare iter-sliding ((Sliceable (:b :a)) => UFix * :b :a -> iter:Iterator (Slice :a)))
   (define (iter-sliding size s)
     "Returns an iterator that yields a series of overlapping slices of length `size`."
     (let length = (%length s))
@@ -115,7 +116,7 @@
           0
           (- (+ length 1) size))))
 
-  (declare iter-chunked ((Sliceable (:b :a)) => UFix -> :b :a -> iter:Iterator (Slice :a)))
+  (declare iter-chunked ((Sliceable (:b :a)) => UFix * :b :a -> iter:Iterator (Slice :a)))
   (define (iter-chunked size s)
     "Divide `s` into a series of slices of length `size`. Will return a final shorter slice if `s` does not divide evenly."
     (let length = (%length s))
@@ -128,10 +129,10 @@
 
           (when (> (+ offset size) length)
             (let remaining = (- length offset))
-            (cell:update! (+ size) offset_)
+            (cell:update! (fn (x) (+ size x)) offset_)
             (return (Some (new offset remaining s))))
 
-          (cell:update! (+ size) offset_)
+          (cell:update! (fn (x) (+ size x)) offset_)
           (Some (new offset size s)))
       (cond
         ;; If size is greater than length the iterator is empty
@@ -143,7 +144,7 @@
         (True
          (+ 1 (div length size))))))
 
-  (declare iter-chunked-exact ((Sliceable (:b :a)) => UFix -> :b :a -> iter:Iterator (Slice :a)))
+  (declare iter-chunked-exact ((Sliceable (:b :a)) => UFix * :b :a -> iter:Iterator (Slice :a)))
   (define (iter-chunked-exact size s)
     "Divide `s` into a series of slices of length `size`. Will skip trailing elements if `s` does not divide evenly."
     (let length = (%length s))
@@ -154,7 +155,7 @@
         (when (> (+ offset size) length)
           (return None))
 
-        (cell:update! (+ size) offset_)
+        (cell:update! (fn (x) (+ size x)) offset_)
         (Some (new offset size s)))
       (div length size)))
 
@@ -178,7 +179,7 @@
       ;; fine, because it isn't observable with the slice API.
       (let vec = (vector:with-capacity (with-default 0 (iter:size-hint iter))))
       (vector:extend! vec iter)
-      (lisp (Slice :a) (vec) vec)))
+      (lisp (-> (Slice :a)) (vec) vec)))
 
   (define-instance (Eq :a => Eq (Slice :a))
     (define (== s1 s2)
@@ -188,14 +189,14 @@
 
   (define-instance (Foldable Slice)
     (define (fold f init s)
-      (lisp :a (f init s)
+      (lisp (-> :a) (f init s)
         (cl:reduce
          (cl:lambda (b a)
            (call-coalton-function f b a))
          s
          :initial-value init)))
     (define (foldr f init s)
-      (lisp :a (f init s)
+      (lisp (-> :a) (f init s)
         (cl:reduce
          (cl:lambda (a b)
            (call-coalton-function f a b))

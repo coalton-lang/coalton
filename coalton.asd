@@ -68,7 +68,7 @@
                (:file "symbol")
                (:module "math"
                 :serial t
-                :components ((:file "arith")
+               :components ((:file "arith")
                              (:file "num-defining-macros")
                              (:file "num")
                              (:file "bounded")
@@ -78,9 +78,6 @@
                              (:file "real")
                              (:file "complex")
                              (:file "elementary")
-                             (:file "dyadic")
-                             (:file "dual")
-                             (:file "hyperdual")
                              (:file "package")))
                (:module "experimental"
                 :serial t
@@ -99,6 +96,7 @@
                (:file "string")
                (:file "slice")
                (:file "hashtable")
+               (:file "iterator-hashtable")
                (:file "hashmap")
                (:file "queue")
                (:module "monad"
@@ -130,8 +128,8 @@
 (cl:when (cl:member (uiop:getenv "COALTON_PORTABLE_BIGFLOAT") '("1" "true" "t") :test #'cl:equalp)
   (cl:pushnew ':coalton-portable-bigfloat cl:*features*))
 
-(asdf:defsystem "coalton/library/big-float"
-  :description "An arbitrary precision floating point library."
+(asdf:defsystem "coalton/xmath"
+  :description "Extended mathematics library for Coalton."
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
@@ -141,40 +139,47 @@
                       (funcall compile)))
   :depends-on ("coalton"
                "coalton/library"
+               "computable-reals"
                (:feature (:and (:not :coalton-portable-bigfloat) :sbcl) "sb-mpfr")
                (:feature (:and (:not :coalton-portable-bigfloat) :sbcl) "sb-gmp"))
-  :pathname "library/big-float/"
+  :pathname "xmath/"
   :serial t
-  :components ((:file "package")
-               (:file "impl-sbcl"
-                :if-feature (:and (:not :coalton-portable-bigfloat) :sbcl))
-               (:file "impl-default"
-                :if-feature (:or :coalton-portable-bigfloat (:not :sbcl)))))
+  :components ((:file "dyadic")
+               (:file "dual")
+               (:file "hyperdual")
+               (:file "fft")
+               (:module "big-float"
+                :serial t
+                :components ((:file "package")
+                             (:file "impl-sbcl"
+                              :if-feature (:and (:not :coalton-portable-bigfloat) :sbcl))
+                             (:file "impl-default"
+                              :if-feature (:or :coalton-portable-bigfloat (:not :sbcl)))))
+               (:module "computable-reals"
+                :serial t
+                :components ((:file "computable-reals")))
+               (:file "realalgebraic")))
+
+(asdf:defsystem "coalton/library/big-float"
+  :description "Deprecated. Use coalton/xmath."
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :version (:read-file-form "VERSION.txt")
+  :depends-on ("coalton/xmath"))
 
 (asdf:defsystem "coalton/library/computable-reals"
-  :description "A Coalton interface for computable-reals (https://github.com/stylewarning/computable-reals)"
+  :description "Deprecated. Use coalton/xmath."
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
-  :pathname "library/computable-reals"
-  :depends-on ("coalton"
-               "computable-reals")
-  :serial t
-  :components ((:file "computable-reals")))
+  :depends-on ("coalton/xmath"))
 
 (asdf:defsystem "coalton/library/algorithms"
+  :description "Deprecated. Use coalton/xmath."
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
-  :around-compile (lambda (compile)
-                    (let (#+sbcl (sb-ext:*derive-function-types* t)
-                          #+sbcl (sb-ext:*block-compile-default* ':specified))
-                      (funcall compile)))
-  :depends-on ("coalton"
-               "coalton/library")
-  :pathname "library/algorithms"
-  :serial t
-  :components ((:file "fft")))
+  :depends-on ("coalton/xmath"))
 
 (asdf:defsystem "coalton/testing"
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
@@ -248,9 +253,7 @@
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
   :depends-on ("coalton"
-               "coalton/library/big-float"
-               "coalton/library/computable-reals"
-               "coalton/library/algorithms"
+               "coalton/xmath"
                "html-entities"
                "spinneret"
                "yason"
@@ -277,6 +280,7 @@
                "coalton/library/big-float"
                "coalton/library/algorithms"
                "coalton/doc"
+               "coalton/xmath"
                "coalton/testing"
                "fiasco"
                #+abcl "compat/abcl-fiasco-patch"
@@ -301,6 +305,7 @@
                (:file "entry-tests")
                (:file "codegen-pattern-tests")
                (:file "toplevel-tests")
+               (:file "doc-tests")
                (:file "type-inference-tests")
                (:file "fundep-tests")
                (:file "fundep-fib-test")
@@ -316,6 +321,7 @@
                (:file "dual-tests")
                (:file "hyperdual-tests")
                (:file "quantize-tests")
+               (:file "realalgebraic-tests")
                (:file "hashtable-tests")
                (:file "hashmap-tests")
                (:file "iterator-tests")

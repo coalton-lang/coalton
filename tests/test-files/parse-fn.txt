@@ -48,3 +48,24 @@ error: Malformed function
 help: add parentheses
  3 | (define f (fn (x) 1))
    |               ---
+
+================================================================================
+20 Function with keyword parameters
+================================================================================
+
+(package coalton-unit-tests/prelude
+  (import coalton-prelude))
+
+(define f-parse20
+  (fn (x &key (offset 1))
+    (+ x offset)))
+
+================================================================================
+21 Function with empty keyword marker
+================================================================================
+
+(package coalton-unit-tests)
+
+(define f-parse21
+  (fn (x &key)
+    x))
