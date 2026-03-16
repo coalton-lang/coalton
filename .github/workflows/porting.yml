@@ -1,4 +1,4 @@
-name: "Porting (2 abcl, ecl, clasp)"
+name: Porting (2 abcl, ecl, clasp)
 
 on:
   push:
@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        LISP_IMPL: ["abcl", "clasp", "ecl"]
+        LISP_IMPL: [ "abcl", "clasp", "ecl" ]
         COALTON_ENV: ["release", "development"]
         SAFETY: ["0", "3"]
         DISABLE_SPECIALIZATION: ["1", "0"]
@@ -50,9 +50,8 @@ jobs:
           COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
-	  echo $USER
-          cat <<EOF > run-tests.lisp
-	  (load "/root/.abclrc")
+          printenv ; cat <<EOF > run-tests.lisp
+          (load "/root/.abclrc")
           (setq system:*safety* ${{ matrix.SAFETY }})
           (ql:quickload :coalton/tests)
           (asdf:test-system :coalton/tests)
@@ -67,8 +66,8 @@ jobs:
           COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
-          cat <<EOF > run-tests.lisp
-	  (load "/root/.clasprc")
+          printenv ; cat <<EOF > run-tests.lisp
+          (load "/root/.clasprc")
           (ql:quickload :coalton/tests)
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
@@ -82,8 +81,8 @@ jobs:
           COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
-          cat <<EOF > run-tests.lisp
-	  (load "/root/.eclrc")
+          printenv ; cat <<EOF > run-tests.lisp
+          (load "/root/.eclrc")
           (ql:quickload :coalton/tests)
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
