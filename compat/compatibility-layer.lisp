@@ -209,14 +209,14 @@
 
 #+ecl(require '#:package-locks)
 (defmacro try-lock-package (the-package)
-  #-(or sbcl ecl)(declare (ignore the-package))
+  #-(or sbcl ecl clasp)(declare (ignore the-package))
   #+sb-package-locks
   `(sb-ext:lock-package ,the-package)
   #+(or ecl clasp)
   `(ext:lock-package ,the-package))
 
 (defmacro try-unlock-package (the-package)
-  #-(or sbcl ecl)(declare (ignore the-package))
+  #-(or sbcl ecl clasp)(declare (ignore the-package))
   #+sb-package-locks
   `(sb-ext:unlock-package ,the-package)
   #+(or ecl clasp)
