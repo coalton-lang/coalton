@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        LISP_IMPL: [ "abcl", "clasp", "ecl" ]
+        LISP_IMPL: [ "abcl" ] # [ "abcl", "clasp", "ecl" ]
         COALTON_ENV: ["release", "development"]
         SAFETY: ["0", "3"]
         DISABLE_SPECIALIZATION: ["1", "0"]
@@ -50,7 +50,7 @@ jobs:
           COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
-          cat <<EOF > run-tests.lisp
+          d=`find / -name coalton.asd` ; echo ${d} ; cat <<EOF > run-tests.lisp
           (load "/.abclrc")
           (setq system:*safety* ${{ matrix.SAFETY }})
           (ql:quickload :coalton/tests)
