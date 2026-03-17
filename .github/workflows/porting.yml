@@ -60,7 +60,7 @@ jobs:
           ; TODO: Remove this or add tests for these programs.
           (asdf:load-system :small-coalton-programs)
           EOF
-          abcl --noinform --noinit --nosystem --batch --load run-tests.lisp < /dev/null
+          CL_SOURCE_REGISTRY="/__w/${GITHUB_REPOSITORY#*/}/${GITHUB_REPOSITORY#*/}//" abcl --noinform --noinit --nosystem --batch --load run-tests.lisp < /dev/null
       - name: Run Clasp tests
         if: matrix.LISP_IMPL == 'clasp'
         env:
@@ -78,7 +78,7 @@ jobs:
           ; TODO: Remove this or add tests for these programs.
           (asdf:load-system :small-coalton-programs)
           EOF
-          clasp --script run-tests.lisp
+          CL_SOURCE_REGISTRY="/__w/${GITHUB_REPOSITORY#*/}/${GITHUB_REPOSITORY#*/}//" clasp --script run-tests.lisp
       - name: Run ECL tests
         if: matrix.LISP_IMPL == 'ecl'
         env:
@@ -93,4 +93,4 @@ jobs:
           ; TODO: Remove this or add tests for these programs.
           (asdf:load-system :small-coalton-programs)
           EOF
-          ecl --norc -q --shell run-tests.lisp
+          CL_SOURCE_REGISTRY="/__w/${GITHUB_REPOSITORY#*/}/${GITHUB_REPOSITORY#*/}//" ecl --norc -q --shell run-tests.lisp
