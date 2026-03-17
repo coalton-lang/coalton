@@ -20,17 +20,17 @@ jobs:
         id: set-repo
         run: |
           PRIMARY="ghcr.io/${{ github.repository_owner }}/sbcl-base:latest"
-          DEFAULT="ghcr.io/coalton-lang/sbcl-base:latest"
+          OFFICIAL="ghcr.io/coalton-lang/sbcl-base:latest"
           if docker manifest inspect $PRIMARY > /dev/null 2>&1; then
             echo Will use PRIMARY image $PRIMARY >&2
             echo "image_repo_name=${{ github.repository_owner }}" >> $GITHUB_OUTPUT
           else # Note - for some reason I cannot pull the image from coalton-lang
-            if docker manifest inspect $DEFAULT > /dev/null 2>&1; then
+            if docker manifest inspect $OFFICIAL > /dev/null 2>&1; then
               echo Failed to access PRIMARY image $PRIMARY >&2
-              echo Instead will use DEFAULT image $DEFAULT >&2
+              echo Instead will use OFFICIAL image $OFFICIAL >&2
               echo "image_repo_name=coalton-lang" >> $GITHUB_OUTPUT
             else
-              echo Failed to access DEFAULT image $DEFAULT >&2
+              echo Failed to access OFFICIAL image $OFFICIAL >&2
               exit 1
             fi
           fi
