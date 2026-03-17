@@ -104,7 +104,7 @@ jobs:
           (asdf:load-system :small-coalton-programs)
           EOF
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
-	  ls ${CL_SOURCE_REGISTRY}/coalton.asd
+          ls ${CL_SOURCE_REGISTRY}/coalton.asd
           cat run-tests.lisp | alisp --batch
       - name: Run Clozure CL tests
         if: matrix.LISP_IMPL == 'ccl'
