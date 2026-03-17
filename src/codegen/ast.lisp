@@ -68,6 +68,7 @@
    #:make-node-locally                  ; CONSTRUCTOR
    #:node-locally-p                     ; FUNCTION
    #:node-locally-noinline-functions    ; READER
+   #:node-locally-type-check            ; READER
    #:node-locally-subexpr               ; READER
    #:match-branch                       ; STRUCT
    #:make-match-branch                  ; CONSTRUCTOR
@@ -315,6 +316,7 @@ coalton symbols (`parser:identifier`)"
 (defstruct (node-locally (:include node))
   "Node for the optimizer to use, similar to `cl:locally'."
   (noinline-functions (util:required 'noinline-functions) :type parser:identifier-list :read-only t)
+  (type-check nil :type (or null (integer 0 3)) :read-only t)
   (subexpr            (util:required 'subexpr)            :type node                   :read-only t))
 
 (defstruct match-branch

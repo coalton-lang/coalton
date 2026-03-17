@@ -112,6 +112,9 @@
 (define-coalton-editor-macro coalton:lisp (type vars &body lisp-expr)
   "An escape from Coalton into the Lisp world.")
 
+(define-coalton-editor-macro coalton++:unsafe (&body body)
+  "Lexically disable generated Lisp type checks within BODY.")
+
 (define-coalton-editor-macro coalton:match (expr &body patterns)
   "Pattern matching construct.")
 

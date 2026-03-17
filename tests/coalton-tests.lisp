@@ -41,6 +41,7 @@
   (%run-tests "parse-method.txt")
   (%run-tests "parse-pattern.txt")
   (%run-tests "parse-return.txt")
+  (%run-tests "parse-unsafe.txt")
   (%run-tests "parse-the.txt")
   (%run-tests "parse-toplevel.txt")
   (%run-tests "parse-type.txt")

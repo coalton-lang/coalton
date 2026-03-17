@@ -30,6 +30,7 @@
   (catch-branch       #'identity :type function :read-only t)
   (catch              #'identity :type function :read-only t)
   (progn              #'identity :type function :read-only t)
+  (unsafe             #'identity :type function :read-only t)
   (return             #'identity :type function :read-only t)
   (values             #'identity :type function :read-only t)
   (throw              #'identity :type function :read-only t)
@@ -239,6 +240,17 @@
       :type (node-type node)
       :location (source:location node)
       :body (traverse (node-progn-body node) block))))
+
+  (:method ((node node-unsafe) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+
+    (funcall
+     (traverse-unsafe block)
+     (make-node-unsafe
+      :type (node-type node)
+      :location (source:location node)
+      :body (traverse (node-unsafe-body node) block))))
 
   (:method ((node node-return) block)
     (declare (type traverse-block block)

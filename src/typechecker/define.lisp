@@ -1473,6 +1473,26 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                  subs))))
         (tc:coalton-internal-type-error ()
           (standard-expression-type-mismatch-error node subs expected-type type-scheme-type)))))
+  (:method ((node parser:node-unsafe) expected-type subs env)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (values tc:ty tc:ty-predicate-list accessor-list node-unsafe tc:substitution-list))
+
+    (multiple-value-bind (body-ty preds accessors body-node subs)
+        (infer-expression-type (parser:node-unsafe-body node)
+                               expected-type
+                               subs
+                               env)
+      (values
+       body-ty
+       preds
+       accessors
+       (make-node-unsafe
+        :type (tc:qualify nil body-ty)
+        :location (source:location node)
+        :body body-node)
+       subs)))
 
   (:method ((node parser:node-the) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -2498,6 +2518,10 @@ matches the value-restriction safety argument."
          parser:node-abstraction
          parser:node-type-of)
      t)
+    (parser:node-unsafe
+      (let ((body (parser:node-unsafe-body node)))
+        (and (null (parser:node-body-nodes body))
+             (nonexpansive-expression-p (parser:node-body-last-node body) env))))
     (parser:node-the
       (nonexpansive-expression-p (parser:node-the-expr node) env))
     (parser:node-application
@@ -3186,6 +3210,11 @@ as a recursive function rather than a recursive value."
       (labels ((valid-recursive-constructor-call-p (node)
                  "Returns t if NODE is a valid constructor call in a recursive value binding group"
                  (typecase node
+                   (parser:node-unsafe
+                    (let ((body (parser:node-unsafe-body node)))
+                      (and (null (parser:node-body-nodes body))
+                           (valid-recursive-constructor-call-p
+                            (parser:node-body-last-node body)))))
                    (parser:node-the
                     (valid-recursive-constructor-call-p (parser:node-the-expr node)))
                    (parser:node-application
@@ -3499,6 +3528,11 @@ as a recursive function rather than a recursive value."
                (typecase node
                  (parser:node-abstraction
                   node)
+                 (parser:node-unsafe
+                  (let ((body (parser:node-unsafe-body node)))
+                    (and (null (parser:node-body-nodes body))
+                         (initform-abstraction-node
+                          (parser:node-body-last-node body)))))
                  (parser:node-the
                   (initform-abstraction-node (parser:node-the-expr node)))
                  (t

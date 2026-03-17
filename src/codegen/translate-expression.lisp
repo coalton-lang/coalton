@@ -887,6 +887,20 @@ Returns a `node'.")
        :type (tc:qualified-ty-type qual-ty)
        :nodes (list (translate-expression (tc:node-progn-body expr) ctx env)))))
 
+  (:method ((expr tc:node-unsafe) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+
+    (let ((qual-ty (tc:node-type expr)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      (make-node-locally
+       :type (tc:qualified-ty-type qual-ty)
+       :noinline-functions nil
+       :type-check 0
+       :subexpr (translate-expression (tc:node-unsafe-body expr) ctx env))))
+
   (:method ((expr tc:node-return) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)

@@ -137,6 +137,9 @@
                  (parser:node-progn
                   (traverse (parser:node-progn-body node) local-bindings))
 
+                 (parser:node-unsafe
+                  (traverse (parser:node-unsafe-body node) local-bindings))
+
                  ;; Do notation - bind shadows sequentially
                  (parser:node-do
                   (let ((current-locals local-bindings))
