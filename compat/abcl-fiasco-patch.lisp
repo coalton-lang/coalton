@@ -1,3 +1,10 @@
+#+abcl
+(when (packagep (find-package :fiasco))
+  (pushnew ':|KNOW-PACKAGE-FIASCO| *features*))
+
+#+(and abcl |KNOW-PACKAGE-FIASCO|)
+(when t
+
 (in-package :fiasco)
 
 ;;; Redefine define-test-package, so that it doesn't call make-package.
@@ -31,3 +38,6 @@ packages."
 		     package-options))
 	 (defsuite (,suite-sym :bind-to-package ,name
 			       :in ,in))))))
+
+(format *error-output*
+        "                *** Patched fiasco:define-test-package for ABCL ***~%"))
