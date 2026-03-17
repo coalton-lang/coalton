@@ -52,8 +52,16 @@ jobs:
         exclude:
           ## abcl excluded as it fails (ql:quickload :fset)
           - LISP_IMPL: "abcl"
+            COALTON_ENV: "release"
+            SAFETY: "3"
+            DISABLE_SPECIALIZATION: "0"
+            HEURISTIC_INLINING: "0"
           ## clasp excluded as it fails (ql:quickload :serapeum)
           - LISP_IMPL: "clasp"
+            COALTON_ENV: "release"
+            SAFETY: "3"
+            DISABLE_SPECIALIZATION: "0"
+            HEURISTIC_INLINING: "0"
           # Since we don't have a way of switching safety on clasp or ecl, we can
           # just ignore high safety tests.
           # - LISP_IMPL: "clasp"
@@ -78,6 +86,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Sanity-check for ABCL - fset?
+        if: matrix.LISP_IMPL == 'abcl'
         run: |
           cat <<EOF > run-tests.lisp
           (load "/.abclrc")
@@ -90,7 +99,7 @@ jobs:
           EOF
           abcl --noinform --noinit --nosystem --batch --load run-tests.lisp < /dev/null
       - name: Run ABCL tests
-        if: matrix.LISP_IMPL == 'abcl'
+        if: matrix.LISP_IMPL == 'XXXabcl'
         env:
           COALTON_ENV: ${{ matrix.COALTON_ENV }}
           COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
@@ -110,6 +119,7 @@ jobs:
           ls ${CL_SOURCE_REGISTRY}/coalton.asd
           abcl --noinform --noinit --nosystem --batch --load run-tests.lisp < /dev/null
       - name: Sanity-check for CLASP - serapeum?
+        if: matrix.LISP_IMPL == 'clasp'
         run: |
           cat <<EOF > run-tests.lisp
           ;;; Clasp cannot find /.clasprc - copy its code here instead.
@@ -122,7 +132,7 @@ jobs:
           EOF
           clasp --script run-tests.lisp
       - name: Run Clasp tests
-        if: matrix.LISP_IMPL == 'clasp'
+        if: matrix.LISP_IMPL == 'XXXclasp'
         env:
           COALTON_ENV: ${{ matrix.COALTON_ENV }}
           COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
