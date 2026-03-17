@@ -18,7 +18,7 @@ jobs:
       - name: Check if primary image exists
         id: set-repo
         run: |
-          PRIMARY="ghcr.io/${{ github.repository_owner }}/sbcl-base:latest"
+          PRIMARY="ghcr.io/${{ github.repository_owner }}/Xbcl-base:latest"
           if docker manifest inspect $PRIMARY > /dev/null 2>&1; then
             echo "image_repo_name=${{ github.repository_owner }}"
           else
