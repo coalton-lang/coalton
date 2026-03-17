@@ -146,3 +146,9 @@
    #:Boolean/True
    #:Boolean/False
    #:Unit/Unit))
+
+(defpackage #:coalton++
+  (:documentation "Experimental features of Coalton.")
+  (:use)
+  (:export
+   #:unsafe))

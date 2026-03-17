@@ -110,6 +110,9 @@
    #:node-type-of                       ; STRUCT
    #:make-node-type-of                  ; CONSTRUCTOR
    #:node-type-of-expr                  ; ACCESSOR
+   #:node-unsafe                        ; STRUCT
+   #:make-node-unsafe                   ; CONSTRUCTOR
+   #:node-unsafe-body                   ; ACCESSOR
    #:node-the                           ; STRUCT
    #:make-node-the                      ; CONSTRUCTOR
    #:node-the-type                      ; ACCESSOR
@@ -261,6 +264,7 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;             | node-match
 ;;;;             | node-progn
 ;;;;             | node-type-of
+;;;;             | node-unsafe
 ;;;;             | node-the
 ;;;;             | node-return
 ;;;;             | node-application
@@ -306,6 +310,7 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;; node-progn := "(" "progn" body ")"
 ;;;;
 ;;;; node-type-of := "(" "type-of" expression ")"
+;;;; node-unsafe := "(" "unsafe" body ")"
 ;;;;
 ;;;; node-the := "(" "the" type expression ")"
 ;;;;
@@ -541,6 +546,10 @@ Rebound to NIL parsing an anonymous FN.")
             (:include node)
             (:copier nil))
   (expr (util:required 'expr) :type node :read-only t))
+(defstruct (node-unsafe
+            (:include node)
+            (:copier nil))
+  (body (util:required 'body) :type node-body :read-only t))
 
 (defstruct (node-the
             (:include node)
@@ -1343,6 +1352,12 @@ Rebound to NIL parsing an anonymous FN.")
 
      (make-node-type-of
       :expr (parse-expression (cst:second form) source)
+      :location (form-location source form)))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton++:unsafe (cst:raw (cst:first form))))
+     (make-node-unsafe
+      :body (parse-body (cst:rest form) (cst:first form) source)
       :location (form-location source form)))
 
     ((and (cst:atom (cst:first form))

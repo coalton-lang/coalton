@@ -256,6 +256,7 @@ nodes."
       (make-node-locally
        :type (node-type node)
        :noinline-functions (node-locally-noinline-functions node)
+       :type-check (node-locally-type-check node)
        :subexpr (apply *traverse* (node-locally-subexpr node) args))))
    t))
 

@@ -32,6 +32,9 @@
 
 (in-package #:coalton-impl/codegen/codegen-expression)
 
+(defvar *emit-lisp-type-checks-p* t
+  "When false, embedded `lisp` forms inherit the surrounding type-check policy.")
+
 (defun continue-label (label)
   (declare (type symbol label))
   (alexandria:format-symbol :keyword "~a-CONTINUE" label))
@@ -256,8 +259,26 @@
 
   (:method ((expr node-locally) env)
     (declare (type tc:environment env))
-    `(locally (declare (notinline ,@(node-locally-noinline-functions expr)))
-       ,(codegen-expression (node-locally-subexpr expr) env)))
+    (let* ((type-check (node-locally-type-check expr))
+           (subexpr
+             (let ((*emit-lisp-type-checks-p*
+                     (if (eql type-check 0)
+                         nil
+                         *emit-lisp-type-checks-p*)))
+               (codegen-expression (node-locally-subexpr expr) env)))
+           (declarations nil))
+      (when (node-locally-noinline-functions expr)
+        (push `(notinline ,@(node-locally-noinline-functions expr)) declarations))
+      (when type-check
+        (if (eql 0 type-check)
+            (push '(optimize (safety 0) #+sbcl (sb-c::type-check 0))
+                  declarations)
+            (push `(optimize #+sbcl (sb-c::type-check ,type-check))
+                  declarations)))
+      `(locally
+         ,@(when declarations
+             `((declare ,@(nreverse declarations))))
+         ,subexpr)))
 
   (:method ((expr node-lisp) env)
     (declare (type tc:environment env))
@@ -284,11 +305,15 @@
                  `(progn ,@prefix-forms
                          ,@tail-forms)))
            (return-types (node-output-lisp-types expr env)))
-      `(locally (declare #+sbcl (optimize (sb-c::type-check 1)))
-         ,(if settings:*emit-type-annotations*
-              `(the (values ,@return-types &optional)
-                    ,inner)
-              inner))))
+      (let ((body
+              (if settings:*emit-type-annotations*
+                  `(the (values ,@return-types &optional)
+                        ,inner)
+                  inner)))
+        (if *emit-lisp-type-checks-p*
+            `(locally (declare #+sbcl (optimize (sb-c::type-check 1)))
+               ,body)
+            body))))
 
   (:method ((expr node-while) env)
     (declare (type tc:environment env))

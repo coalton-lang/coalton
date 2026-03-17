@@ -105,6 +105,9 @@
    #:node-progn                         ; STRUCT
    #:make-node-progn                    ; CONSTRUCTOR
    #:node-progn-body                    ; ACCESSOR
+   #:node-unsafe                        ; STRUCT
+   #:make-node-unsafe                   ; CONSTRUCTOR
+   #:node-unsafe-body                   ; ACCESSOR
    #:node-the                           ; STRUCT
    #:make-node-the                      ; CONSTRUCTOR
    #:node-the-type                      ; ACCESSOR
@@ -355,6 +358,11 @@
   (branches (util:required 'branches)     :type node-match-branch-list :read-only t))
 
 (defstruct (node-progn
+            (:include node)
+            (:copier nil))
+  (body (util:required 'body) :type node-body :read-only t))
+
+(defstruct (node-unsafe
             (:include node)
             (:copier nil))
   (body (util:required 'body) :type node-body :read-only t))
@@ -720,6 +728,14 @@
    :type (tc:apply-substitution subs (node-type node))
    :location (source:location node)
    :body (tc:apply-substitution subs (node-progn-body node))))
+
+(defmethod tc:apply-substitution (subs (node node-unsafe))
+  (declare (type tc:substitution-list subs)
+           (values node-unsafe))
+  (make-node-unsafe
+   :type (tc:apply-substitution subs (node-type node))
+   :location (source:location node)
+   :body (tc:apply-substitution subs (node-unsafe-body node))))
 
 (defmethod tc:apply-substitution (subs (node node-return))
   (declare (type tc:substitution-list subs)
