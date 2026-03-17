@@ -29,9 +29,9 @@ jobs:
         id: set-image
         run: |
           if [ "${{ steps.check.outputs.exists }}" == "true" ]; then
-            echo "final_image=ghcr.io/${{ github.repository_owner }}" >> $GITHUB_OUTPUT
+            echo "final_image=${{ github.repository_owner }}" >> $GITHUB_OUTPUT
           else
-            echo "final_image=ghcr.io/coalton-lang" >> $GITHUB_OUTPUT
+            echo "final_image=coalton-lang" >> $GITHUB_OUTPUT
           fi
 
   test:
@@ -62,7 +62,7 @@ jobs:
       packages: read
 
     container:
-      image: ${{ needs.check-image.outputs.image }}/${{ matrix.LISP_IMPL }}-base
+      image: ghcr.io/${{ needs.check-image.outputs.image }}/${{ matrix.LISP_IMPL }}-base
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
