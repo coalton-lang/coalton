@@ -186,11 +186,11 @@
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
   :depends-on ("coalton"
-               "fiasco"
-               #+abcl "compat/abcl-fiasco-patch")
+               "fiasco")
   :pathname "src/testing/"
   :serial t
-  :components ((:file "package")
+  :components (#+abcl("compat/abcl-fiasco-patch")
+               (:file "package")
                (:file "coalton-native-test-utils")))
 
 (asdf:defsystem "coalton/benchmarks"
@@ -283,7 +283,6 @@
                "coalton/xmath"
                "coalton/testing"
                "fiasco"
-               #+abcl "compat/abcl-fiasco-patch"
                "quil-coalton/tests"
                "thih-coalton/tests")
   :perform (asdf:test-op (o s)
@@ -291,7 +290,8 @@
                            (error "Tests failed")))
   :pathname "tests/"
   :serial t
-  :components ((:file "package")
+  :components (#+abcl("compat/abcl-fiasco-patch")
+               (:file "package")
                (:file "loader")
                (:file "utilities")
                (:file "source-tests")
