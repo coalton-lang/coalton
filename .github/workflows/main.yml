@@ -13,16 +13,16 @@ jobs:
   check-image:
     runs-on: ubuntu-latest
     outputs:
-      repo_name: ${{ steps.extract-parts.outputs.repo_name }}
+      repo_name: ${{ steps.extract-parts.outputs.image_repo_name }}
     steps:
       - name: Check if primary image exists
         id: set-repo
         run: |
           PRIMARY="ghcr.io/${{ github.repository_owner }}/sbcl-base:latest"
           if docker manifest inspect $PRIMARY > /dev/null 2>&1; then
-            echo "final_repo=${{ github.repository_owner }}"
+            echo "image_repo_name=${{ github.repository_owner }}"
           else
-            echo "final_repo=coalton-lang"
+            echo "image_repo_name=coalton-lang"
           fi >> $GITHUB_OUTPUT
 
   test:
@@ -53,7 +53,7 @@ jobs:
       packages: read
 
     container:
-      image: ghcr.io/${{ steps.set-repo.outputs.final_repo }}/${{ matrix.LISP_IMPL }}-base
+      image: ghcr.io/${{ steps.set-repo.outputs.image_repo_name }}/${{ matrix.LISP_IMPL }}-base
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
