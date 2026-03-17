@@ -15,7 +15,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        LISP_IMPL: [ "abcl", "clasp", "ecl" ]
+        LISP_IMPL: [ # "abcl", ## commented out as it fails (ql:quickload :fset)
+                     "clasp", "ecl" ]
         COALTON_ENV: ["release", "development"]
         SAFETY: ["0", "3"]
         DISABLE_SPECIALIZATION: ["1", "0"]
