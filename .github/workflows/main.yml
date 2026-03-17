@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       image_repo_name: ${{ steps.set-repo.outputs.image_repo_name }}
+      repo_name: ${{ steps.set-repo.outputs.repo_name }}
     steps:
       - name: Check if primary image exists
         id: set-repo
@@ -24,6 +25,7 @@ jobs:
           else # Note - for some reason I cannot pull the image from coalton-lang
             echo "image_repo_name=coalton-lang"
           fi >> $GITHUB_OUTPUT
+          echo repo_name="${GITHUB_REPOSITORY#*/}" >> $GITHUB_OUTPUT
 
   test:
     runs-on: ubuntu-latest
@@ -57,7 +59,8 @@ jobs:
       env:
         # Tell ASDF to look through our repo recursively
         # See https://github.com/actions/runner/issues/2058
-        CL_SOURCE_REGISTRY: "${{ github.workspace }}//"
+        # CL_SOURCE_REGISTRY: "${{ github.workspace }}//"
+        CL_SOURCE_REGISTRY: "/__w/${{ needs.check-image.outputs.repo_name }}/${{ needs.check-image.outputs.repo_name }}//"
 
     steps:
       - uses: actions/checkout@v3
@@ -76,6 +79,7 @@ jobs:
           (asdf:load-system :small-coalton-programs)
           EOF
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
+          ls ${CL_SOURCE_REGISTRY}/coalton.asd
           sbcl --non-interactive --load run-tests.lisp
       - name: Run Allegro CL tests
         if: matrix.LISP_IMPL == 'allegro'
@@ -91,6 +95,7 @@ jobs:
           (asdf:load-system :small-coalton-programs)
           EOF
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
+	  ls ${CL_SOURCE_REGISTRY}/coalton.asd
           cat run-tests.lisp | alisp --batch
       - name: Run Clozure CL tests
         if: matrix.LISP_IMPL == 'ccl'
@@ -106,4 +111,5 @@ jobs:
           (asdf:load-system :small-coalton-programs)
           EOF
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
+          ls ${CL_SOURCE_REGISTRY}/coalton.asd
           ccl64-wrapped.sh --batch --load run-tests.lisp
