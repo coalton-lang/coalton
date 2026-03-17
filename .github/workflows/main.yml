@@ -62,7 +62,8 @@ jobs:
       env:
         # Tell ASDF to look through our repo recursively
         # See https://github.com/actions/runner/issues/2058
-        CL_SOURCE_REGISTRY: "/__w/coalton-compat/coalton-compat//"
+        # CL_SOURCE_REGISTRY: "/__w/coalton-compat/coalton-compat//"
+        CL_SOURCE_REGISTRY: "${{ github.workspace }}//"
 
     steps:
       - uses: actions/checkout@v3
@@ -80,7 +81,9 @@ jobs:
           ; TODO: Remove this or add tests for these programs.
           (asdf:load-system :small-coalton-programs)
           EOF
-          CL_SOURCE_REGISTRY="/__w/${GITHUB_REPOSITORY#*/}/${GITHUB_REPOSITORY#*/}//" sbcl --non-interactive --load run-tests.lisp
+          echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
+          sbcl --non-interactive --load run-tests.lisp
+          echo CL_SOURCE_REGISTRY="/__w/${GITHUB_REPOSITORY#*/}/${GITHUB_REPOSITORY#*/}//" sbcl --non-interactive --load run-tests.lisp
       - name: Run Allegro CL tests
         if: matrix.LISP_IMPL == 'allegro'
         env:
