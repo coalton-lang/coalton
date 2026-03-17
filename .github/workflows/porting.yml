@@ -2,15 +2,35 @@ name: Porting (2 abcl, ecl, clasp)
 
 on:
   push:
-    branches: [ "compat-in-small-pieces" ]
+    branches: [ main ]
   pull_request:
-    branches: [ "compat-in-small-pieces" ]
+    branches: [ main ]
 
   workflow_dispatch:
 
 jobs:
+
+  check-image:
+    runs-on: ubuntu-latest
+    outputs:
+      image_repo_name: ${{ steps.set-repo.outputs.image_repo_name }}
+      repo_name: ${{ steps.set-repo.outputs.repo_name }}
+    steps:
+      - name: Check if primary image exists
+        id: set-repo
+        run: |
+          PRIMARY="ghcr.io/${{ github.repository_owner }}/sbcl-base:latest"
+          if docker manifest inspect $PRIMARY > /dev/null 2>&1; then
+            echo "image_repo_name=${{ github.repository_owner }}"
+          else # Note - for some reason I cannot pull the image from coalton-lang
+            echo "image_repo_name=coalton-lang"
+          fi >> $GITHUB_OUTPUT
+          echo repo_name="${GITHUB_REPOSITORY#*/}" >> $GITHUB_OUTPUT
+
   test:
     runs-on: ubuntu-latest
+
+    needs: check-image
 
     strategy:
       fail-fast: false
@@ -33,14 +53,15 @@ jobs:
       packages: read
 
     container:
-      image: ghcr.io/${{ github.repository_owner }}/${{ matrix.LISP_IMPL }}-port
+      image: ghcr.io/${{ needs.check-image.outputs.image_repo_name }}/${{ matrix.LISP_IMPL }}-port
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
       env:
         # Tell ASDF to look through our repo recursively
         # See https://github.com/actions/runner/issues/2058
-        CL_SOURCE_REGISTRY: "${{ github.workspace }}//"
+        # CL_SOURCE_REGISTRY: "${{ github.workspace }}//"
+        CL_SOURCE_REGISTRY: "/__w/${{ needs.check-image.outputs.repo_name }}/${{ needs.check-image.outputs.repo_name }}//"
 
     steps:
       - uses: actions/checkout@v3
@@ -62,6 +83,7 @@ jobs:
           (asdf:load-system :small-coalton-programs)
           EOF
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
+          ls ${CL_SOURCE_REGISTRY}/coalton.asd
           abcl --noinform --noinit --nosystem --batch --load run-tests.lisp < /dev/null
       - name: Run Clasp tests
         if: matrix.LISP_IMPL == 'clasp'
@@ -81,6 +103,7 @@ jobs:
           (asdf:load-system :small-coalton-programs)
           EOF
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
+          ls ${CL_SOURCE_REGISTRY}/coalton.asd
           clasp --script run-tests.lisp
       - name: Run ECL tests
         if: matrix.LISP_IMPL == 'ecl'
@@ -97,4 +120,5 @@ jobs:
           (asdf:load-system :small-coalton-programs)
           EOF
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
+          ls ${CL_SOURCE_REGISTRY}/coalton.asd
           ecl --norc -q --shell run-tests.lisp
