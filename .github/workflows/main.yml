@@ -32,7 +32,7 @@ jobs:
       packages: read
 
     container:
-      image: ghcr.io/c-kloukinas/${{ matrix.LISP_IMPL }}-base
+      image: ghcr.io/${{ github.repository_owner }}/${{ matrix.LISP_IMPL }}-base
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
