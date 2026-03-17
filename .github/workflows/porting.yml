@@ -44,17 +44,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        LISP_IMPL: [ # "abcl", ## commented out as it fails (ql:quickload :fset)
-                     "clasp", "ecl" ]
+        LISP_IMPL: [ "abcl", "clasp", "ecl" ]
         COALTON_ENV: ["release", "development"]
         SAFETY: ["0", "3"]
         DISABLE_SPECIALIZATION: ["1", "0"]
         HEURISTIC_INLINING: ["1", "0"]
         exclude:
+          ## abcl excluded as it fails (ql:quickload :fset)
+          - LISP_IMPL: "abcl"
+          ## clasp excluded as it fails (ql:quickload :serapeum)
+          - LISP_IMPL: "clasp"
           # Since we don't have a way of switching safety on clasp or ecl, we can
           # just ignore high safety tests.
-          - LISP_IMPL: "clasp"
-            SAFETY: "3"
+          # - LISP_IMPL: "clasp"
+          #   SAFETY: "3"
           - LISP_IMPL: "ecl"
             SAFETY: "3"
 
@@ -74,6 +77,18 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - name: Sanity-check for ABCL - fset?
+        run: |
+          cat <<EOF > run-tests.lisp
+          (load "/.abclrc")
+            ;; Ensure fiasco is patched in abcl
+            (ql:quickload :fiasco) (load "compat/abcl-fiasco-patch")
+          (load "compat/abcl-precompiler-precompile-identity")
+          (ql:quickload :fset)
+          (asdf:test-system :fset)
+          (format *error-output* "~%ABCL can load FSet!~%")
+          EOF
+          abcl --noinform --noinit --nosystem --batch --load run-tests.lisp < /dev/null
       - name: Run ABCL tests
         if: matrix.LISP_IMPL == 'abcl'
         env:
@@ -94,6 +109,18 @@ jobs:
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
           ls ${CL_SOURCE_REGISTRY}/coalton.asd
           abcl --noinform --noinit --nosystem --batch --load run-tests.lisp < /dev/null
+      - name: Sanity-check for CLASP - serapeum?
+        run: |
+          cat <<EOF > run-tests.lisp
+          ;;; Clasp cannot find /.clasprc - copy its code here instead.
+          ;; (load "/.clasprc")
+            #-quicklisp (load "/root/quicklisp/setup.lisp")
+            (setf ql:*local-project-directories* (quote ("/extras" "/lisp")))
+          (ql:quickload :serapeum)
+          (asdf:test-system :serapeum)
+          (format *error-output* "~%CLASP can load Serapeum!~%")
+          EOF
+          clasp --script run-tests.lisp
       - name: Run Clasp tests
         if: matrix.LISP_IMPL == 'clasp'
         env:
