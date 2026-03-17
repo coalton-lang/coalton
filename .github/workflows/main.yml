@@ -21,7 +21,7 @@ jobs:
           PRIMARY="ghcr.io/${{ github.repository_owner }}/sbcl-base:latest"
           if docker manifest inspect $PRIMARY > /dev/null 2>&1; then
             echo "image_repo_name=${{ github.repository_owner }}"
-          else
+          else # Note - for some reason I cannot pull the image from coalton-lang
             echo "image_repo_name=coalton-lang"
           fi >> $GITHUB_OUTPUT
 
@@ -33,16 +33,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # LISP_IMPL: ["sbcl", "allegro", "ccl"]
-        # COALTON_ENV: ["release", "development"]
-        # SAFETY: ["0", "3"]
-        # DISABLE_SPECIALIZATION: ["1", "0"]
-        # HEURISTIC_INLINING: ["1", "0"]
-        LISP_IMPL: ["sbcl"]
-        COALTON_ENV: ["release"]
-        SAFETY: ["0"]
-        DISABLE_SPECIALIZATION: ["0"]
-        HEURISTIC_INLINING: ["1"]
+        LISP_IMPL: ["sbcl", "allegro", "ccl"]
+        COALTON_ENV: ["release", "development"]
+        SAFETY: ["0", "3"]
+        DISABLE_SPECIALIZATION: ["1", "0"]
+        HEURISTIC_INLINING: ["1", "0"]
         exclude:
           # Since we don't have a way of switching safety on allegro or ccl, we can
           # just ignore high safety tests.
