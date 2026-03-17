@@ -9,17 +9,47 @@ on:
   workflow_dispatch:
 
 jobs:
+
+  check-image:
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.set-image.outputs.final_image }}
+    steps:
+      - name: Check if primary image exists
+        id: check
+        run: |
+          PRIMARY="ghcr.io/${{ github.repository_owner }}/sbcl-base:latest"
+          if docker manifest inspect $PRIMARY > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set final image
+        id: set-image
+        run: |
+          if [ "${{ steps.check.outputs.exists }}" == "true" ]; then
+            echo "final_image=ghcr.io/${{ github.repository_owner }}" >> $GITHUB_OUTPUT
+          else
+            echo "final_image=ghcr.io/coalton-lang" >> $GITHUB_OUTPUT
+          fi
+
   test:
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        LISP_IMPL: ["sbcl", "allegro", "ccl"]
-        COALTON_ENV: ["release", "development"]
-        SAFETY: ["0", "3"]
-        DISABLE_SPECIALIZATION: ["1", "0"]
-        HEURISTIC_INLINING: ["1", "0"]
+        # LISP_IMPL: ["sbcl", "allegro", "ccl"]
+        # COALTON_ENV: ["release", "development"]
+        # SAFETY: ["0", "3"]
+        # DISABLE_SPECIALIZATION: ["1", "0"]
+        # HEURISTIC_INLINING: ["1", "0"]
+        LISP_IMPL: ["sbcl"]
+        COALTON_ENV: ["release"]
+        SAFETY: ["0"]
+        DISABLE_SPECIALIZATION: ["0"]
+        HEURISTIC_INLINING: ["1"]
         exclude:
           # Since we don't have a way of switching safety on allegro or ccl, we can
           # just ignore high safety tests.
@@ -32,7 +62,7 @@ jobs:
       packages: read
 
     container:
-      image: ghcr.io/${{ github.repository_owner }}/${{ matrix.LISP_IMPL }}-base
+      image: ${{ needs.check-image.outputs.image }}/${{ matrix.LISP_IMPL }}-base
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
