@@ -6,6 +6,9 @@
 ;;; The patch is already in abcl's repo, hopefully it'll make it in
 ;;; the 1.9.2+ release.
 
+#+abcl
+(when (not (asdf:version-satisfies (lisp-implementation-version) "1.9.2.0"))
+
 (cl:in-package :precompiler)
 
 (declaim (ftype (function (t t) t) precompile-function-call))
@@ -31,4 +34,5 @@
           (return-from precompile-function-call (precompile1 (expand-inline form expansion))))))
     (cons op (mapcar #'precompile1 (cdr form)))))
 
-(format *error-output* "                *** Patched abcl's precompiler:precompile-identity ***~%")
+(format *error-output*
+        "                *** Patched ABCL's precompiler:precompile-identity ***~%"))
