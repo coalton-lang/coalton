@@ -189,7 +189,7 @@
                "fiasco")
   :pathname "src/testing/"
   :serial t
-  :components (#+abcl("compat/abcl-fiasco-patch")
+  :components (#+abcl(:file "compat/abcl-fiasco-patch")
                (:file "package")
                (:file "coalton-native-test-utils")))
 
@@ -290,7 +290,7 @@
                            (error "Tests failed")))
   :pathname "tests/"
   :serial t
-  :components (#+abcl("compat/abcl-fiasco-patch")
+  :components (#+abcl(:file "compat/abcl-fiasco-patch")
                (:file "package")
                (:file "loader")
                (:file "utilities")
