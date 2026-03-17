@@ -1,3 +1,5 @@
+(defpackage #:abcl-fiasco-patch) ; to keep asdf happy
+
 (in-package :fiasco)
 
 ;;; Redefine define-test-package, so that it doesn't call make-package.
