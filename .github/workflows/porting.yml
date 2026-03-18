@@ -44,10 +44,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-          ## abcl excluded as it fails (ql:quickload :fset)
+          ## abcl excluded as it fails (ql:quickload :fset) - trying now with abcl from repo
           ##
           ## clasp excluded as it fails (ql:quickload :serapeum)
-        LISP_IMPL: [ # "abcl", "clasp",
+        LISP_IMPL: [ "abcl", # "clasp",
                      "ecl" ]
         COALTON_ENV: ["release", "development"]
         SAFETY: ["0", "3"]
