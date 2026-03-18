@@ -218,6 +218,11 @@
               (tc:unify nil type subexpr-ty))
       type))
 
+  (:method ((expr node-swap) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (node-type expr))
+
   (:method ((expr catch-branch) env)
     (declare (type tc:environment env)
              (values tc:ty &optional))

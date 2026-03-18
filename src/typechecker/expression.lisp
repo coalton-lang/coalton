@@ -84,6 +84,10 @@
    #:make-node-match                    ; CONSTRUCTOR
    #:node-match-expr                    ; ACCESSOR
    #:node-match-branches                ; ACCESSOR
+   #:node-swap                          ; STRUCT
+   #:make-node-swap                     ; CONSTRUCTOR
+   #:node-swap-expr                     ; ACCESSOR
+   #:node-swap-patterns                 ; ACCESSOR
    #:node-catch-branch                  ; STRUCT
    #:make-node-catch-branch             ; CONSTRUCTOR
    #:node-catch-branch-pattern          ; ACCESSOR
@@ -353,6 +357,12 @@
             (:copier nil))
   (expr     (util:required 'expr)         :type node                   :read-only t)
   (branches (util:required 'branches)     :type node-match-branch-list :read-only t))
+
+(defstruct (node-swap
+            (:include node)
+            (:copier nil))
+  (expr     (util:required 'expr)         :type node         :read-only t)
+  (patterns (util:required 'patterns)     :type pattern-list :read-only t))
 
 (defstruct (node-progn
             (:include node)
@@ -678,6 +688,15 @@
    :location (source:location node)
    :expr (tc:apply-substitution subs (node-match-expr node))
    :branches (tc:apply-substitution subs (node-match-branches node))))
+
+(defmethod tc:apply-substitution (subs (node node-swap))
+  (declare (type tc:substitution-list subs)
+           (values node-swap))
+  (make-node-swap
+   :type (tc:apply-substitution subs (node-type node))
+   :location (source:location node)
+   :expr (tc:apply-substitution subs (node-swap-expr node))
+   :patterns (tc:apply-substitution subs (node-swap-patterns node))))
 
 (defmethod tc:apply-substitution (subs (node node-catch-branch))
   (declare (type tc:substitution-list subs)

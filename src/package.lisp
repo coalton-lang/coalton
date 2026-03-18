@@ -81,6 +81,7 @@
    #:fn #:λ
    #:&key
    #:match
+   #:swap
    #:throw
    #:resume-to
    #:resumable
