@@ -86,14 +86,20 @@ jobs:
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
-          (load "/.abclrc")
-            ;; Ensure fiasco is patched in abcl
-            (ql:quickload :fiasco) (load "compat/abcl-fiasco-patch")
-          (setq system:*safety* ${{ matrix.SAFETY }})
-          (ql:quickload :coalton/tests)
-          (asdf:test-system :coalton/tests)
-          ; TODO: Remove this or add tests for these programs.
-          (asdf:load-system :small-coalton-programs)
+          (cl:handler-case
+            (cl:progn
+              (load "/.abclrc")
+                ;; Ensure fiasco is patched in abcl
+                (ql:quickload :fiasco) (load "compat/abcl-fiasco-patch")
+              (setq system:*safety* ${{ matrix.SAFETY }})
+              (ql:quickload :coalton/tests)
+              (asdf:test-system :coalton/tests)
+              ; TODO: Remove this or add tests for these programs.
+              (asdf:load-system :small-coalton-programs)
+              (uiop:quit 0))
+            (cl:error (c)
+              (declare (ignore c))
+              (uiop:quit 1)))
           EOF
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
           ls ${CL_SOURCE_REGISTRY}/coalton.asd

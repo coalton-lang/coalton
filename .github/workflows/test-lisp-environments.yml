@@ -71,11 +71,17 @@ jobs:
           (load "/.abclrc")
             ;; Ensure fiasco is patched in abcl
             (ql:quickload :fiasco) (load "compat/abcl-fiasco-patch")
-          (load "compat/abcl-precompiler-precompile-identity")
-          (ql:quickload :fset)
-          (format *error-output* "~%ABCL loads FSet!~%")
-          (asdf:test-system :fset)
-          (format *error-output* "~%ABCL can test FSet!~%")
+          ;; (load "compat/abcl-precompiler-precompile-identity")
+          (cl:handler-case
+            (cl:progn
+              (ql:quickload :fset)
+              (format *error-output* "~%ABCL loads FSet!~%")
+              (asdf:test-system :fset)
+              (format *error-output* "~%ABCL can test FSet!~%")
+              (uiop:quit 0))
+            (cl:error (c)
+              (declare (ignore c))
+              (uiop:quit 1)))
           EOF
           abcl --noinform --noinit --nosystem --batch --load run-tests.lisp < /dev/null
 
