@@ -71,7 +71,6 @@ jobs:
           (load "/.abclrc")
             ;; Ensure fiasco is patched in abcl
             (ql:quickload :fiasco) (load "compat/abcl-fiasco-patch")
-          ;; (load "compat/abcl-precompiler-precompile-identity")
           (cl:handler-case
             (cl:progn
               (ql:quickload :fset)
