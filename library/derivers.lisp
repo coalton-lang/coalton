@@ -295,6 +295,7 @@ Requires field to only have a single constructor."
                 :location location
                 :name 'x
                 :orig-name 'x))
+      :function-syntax-p t
       :body (parser:make-node-body
              :nodes nil
              :last-node (parser:make-node-match
