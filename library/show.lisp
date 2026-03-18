@@ -5,23 +5,15 @@
    #:coalton/builtin
    #:coalton/classes)
   (:local-nicknames
-   (#:types #:coalton/types)
-   (#:utils #:coalton/utils))
+   (#:types #:coalton/types))
   (:export
    #:make-string-builder
-
-   #:ShowType
-   #:show-type-to
-   #:show-inferred-type-as-string
-   #:show-inferred-type-as-readable-string
 
    #:Show
    #:show-to
    #:show-as-string
    #:show
-   #:show*
-   #:expose-to
-   #:expose))
+   #:show*))
 
 (in-package #:coalton/show)
 
@@ -71,44 +63,6 @@
       (cl:values))))
 
 (coalton-toplevel
-  (define-class (ShowType :a)
-    "Types which can render their own Coalton type representation.
-
-The compiler auto-generates `ShowType` instances for ordinary
-first-order defined types after `ShowType` is available. Bootstrap and
-structural instances are provided manually by the standard library."
-    (show-type-to
-     "Execute a callback on a string representation of the Coalton type
-captured by the proxy. The callback may be called multiple times on
-different sections of the string, and the callback is guaranteed to be
-called on sections left-to-right. For example, for a callback `f`, the
-type `(Optional U64)` may be sequenced as
-
-```
-(f \"(Opt\")
-(f \"ional \")
-(f \"U64)\")
-```
-
-Set `:readable?` to `True` to emit strings whose concatenation can be
-read by `CL:READ`."
-     ((String -> Void) * types:Proxy :a &key (:readable? Boolean) -> Void)))
-
-  (declare show-inferred-type-as-string (ShowType :a => :a -> String))
-  (define (show-inferred-type-as-string x)
-    "Display `x`'s statically inferred type as a string."
-    (let (values consume extract) = (make-string-builder))
-    (show-type-to consume (types:proxy-of x))
-    (extract))
-
-  (declare show-inferred-type-as-readable-string (ShowType :a => :a -> String))
-  (define (show-inferred-type-as-readable-string x)
-    "Display `x`'s statically inferred type as a readable (i.e., as if by
-`CL:READ`) string."
-    (let (values consume extract) = (make-string-builder))
-    (show-type-to consume (types:proxy-of x) :readable? True)
-    (extract))
-
   (define-class (Show :a)
     "Objects which have a convenient, textual, linear printed representation for
 display in a terminal. This is principally for program output and debugging."
@@ -151,19 +105,9 @@ This is not necessarily identical to `(the String (into x))`."
   `(progn
      ,@(cl:loop :for item :in items :collect `(show ,item))))
 
-(coalton-toplevel
-  (repr :transparent)
-  (define-type (%Expose :a)
-    "Internal transparent wrapper used to implement `expose` and `expose-to`."
-    (%Expose :a)))
-
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
   (cl:defmacro define-show-instance (type)
     `(coalton-toplevel
-       (define-instance (ShowType ,(cl:read-from-string type))
-         (define (show-type-to f _ &key (readable? False))
-           (f (utils:sym readable? ,type))))
-
        (define-instance (Show ,(cl:read-from-string type))
          (define (show-to f x)
            (f (lisp (-> String) (x)
@@ -171,21 +115,9 @@ This is not necessarily identical to `(the String (into x))`."
                   (cl:prin1-to-string x)))))))))
 
 (coalton-toplevel
-  (define-instance (ShowType Boolean)
-    (define (show-type-to f _ &key (readable? False))
-      (f (utils:sym readable? "Boolean"))))
-
   (define-instance (Show Boolean)
     (define (show-to f x)
       (f (if x "True" "False"))))
-
-  (define-instance (ShowType :a => ShowType (Optional :a))
-    (define (show-type-to f _ &key (readable? False))
-      (f "(")
-      (f (utils:sym readable? "Optional"))
-      (f " ")
-      (show-type-to f (the (types:Proxy :a) types:Proxy) :readable? readable?)
-      (f ")")))
 
   (define-instance (Show :a => Show (Optional :a))
     (define (show-to f x)
@@ -196,14 +128,6 @@ This is not necessarily identical to `(the String (into x))`."
          (f ")"))
         ((None)
          (f "None")))))
-
-  (define-instance (ShowType :a => ShowType (List :a))
-    (define (show-type-to f _ &key (readable? False))
-      (f "(")
-      (f (utils:sym readable? "List"))
-      (f " ")
-      (show-type-to f (the (types:Proxy :a) types:Proxy) :readable? readable?)
-      (f ")")))
 
   (define-instance (Show :a => Show (List :a))
     (define (show-to f x)
@@ -217,62 +141,24 @@ This is not necessarily identical to `(the String (into x))`."
            (match items
              ((Nil) (f ")"))
              ((Cons z zs)
-              (show-to f z)
+             (show-to f z)
               (% zs))))))))
-
-  (define-instance ((ShowType :a) (ShowType :b) => ShowType (:a -> :b))
-    (define (show-type-to f _ &key (readable? False))
-      (f "(")
-      (f (utils:sym readable? "Arrow"))
-      (f " ")
-      (show-type-to f (the (types:Proxy :a) types:Proxy) :readable? readable?)
-      (f " ")
-      (show-type-to f (the (types:Proxy :b) types:Proxy) :readable? readable?)
-      (f ")")))
-
-  (define-instance (ShowType :a => ShowType (types:Proxy :a))
-    (define (show-type-to f _ &key (readable? False))
-      (f "(")
-      (f (utils:sym readable? "Proxy"))
-      (f " ")
-      (show-type-to f (the (types:Proxy :a) types:Proxy) :readable? readable?)
-      (f ")")))
 
   (define-instance (Show (types:Proxy :a))
     (define (show-to f _)
       (f "Proxy")))
-
-  (define-instance (ShowType types:LispType)
-    (define (show-type-to f _ &key (readable? False))
-      (f (utils:sym readable? "LispType"))))
 
   (define-instance (Show types:LispType)
     (define (show-to f x)
       (f (lisp (-> String) (x)
            (cl:prin1-to-string x)))))
 
-  (define-instance (ShowType :a => Show (%Expose :a))
+  (define-instance (Show types:TypeScheme)
     (define (show-to f x)
-      (f "#<")
-      (show-type-to f (the (types:Proxy :a) types:Proxy))
-      (f " ")
       (f (lisp (-> String) (x)
            (cl:with-standard-io-syntax
-             (cl:prin1-to-string x))))
-      (f ">"))))
-
-(coalton-toplevel
-  (declare expose-to (ShowType :a => (String -> Void) * :a -> Void))
-  (define (expose-to f x)
-    "Execute a callback on a debugging representation of `x` whose payload is
-printed as by `CL:PRIN1`, prefixed by `x`'s inferred Coalton type."
-    (show-to f (%Expose x)))
-
-  (declare expose (ShowType :a => :a -> Void))
-  (define (expose x)
-    "Display `x` to the show stream as by `CL:PRIN1`, prefixed by `x`'s
-inferred Coalton type."
-    (show (%Expose x))))
+             (cl:let ((cl:*print-readably* cl:nil))
+               (cl:prin1-to-string x))))))))
 
 (define-show-instance "Integer")
 (define-show-instance "UFix")

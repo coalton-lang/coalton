@@ -172,6 +172,7 @@
    #:unset-name                             ; FUNCTION
    #:lookup-class-instances                 ; FUNCTION
    #:lookup-class-instance                  ; FUNCTION
+   #:synthesized-class-instance-constraints ; FUNCTION
    #:lookup-instance-by-codegen-sym         ; FUNCTION
    #:lookup-function-source-parameter-names ; FUNCTION
    #:set-function-source-parameter-names    ; FUNCTION
@@ -1475,6 +1476,31 @@ Signals a coalton-bug error if the type is not found and NO-ERROR is false (the 
            (type symbol class)
            (values fset:seq &optional))
   (immutable-listmap-lookup (instance-environment-instances (environment-instance-environment env)) class :no-error no-error))
+
+(defun synthesized-class-instance-constraints (pred)
+  "Return compiler-synthesized constraints for PRED when applicable.
+
+This currently covers structural `RuntimeRepr` instances for function types
+that cannot be expressed as ordinary source instances.
+
+Returns two values:
+1. A list of prerequisite predicates.
+2. A boolean indicating whether a synthesized instance exists."
+  (declare (type ty-predicate pred)
+           (values ty-predicate-list boolean &optional))
+  (let ((types-package (cl:find-package "COALTON/TYPES")))
+    (unless (and types-package
+                 (= 1 (length (ty-predicate-types pred))))
+      (return-from synthesized-class-instance-constraints (values nil nil)))
+    (let* ((runtime-repr (cl:find-symbol "RUNTIMEREPR" types-package))
+           (head-type (first (ty-predicate-types pred)))
+           (location (source:location pred)))
+      (declare (ignore location))
+      (unless (typep head-type 'function-ty)
+        (return-from synthesized-class-instance-constraints (values nil nil)))
+      (if (eq (ty-predicate-class pred) runtime-repr)
+          (values nil t)
+          (values nil nil)))))
 
 (defun lookup-class-instance (env pred &key no-error)
   (declare (type environment env))

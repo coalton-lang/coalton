@@ -81,6 +81,7 @@
    #:fn #:λ
    #:&key
    #:match
+   #:type-of
    #:throw
    #:resume-to
    #:resumable
@@ -134,7 +135,6 @@
    #:lookup-type
    #:lookup-runtime-type
    #:lookup-fundeps
-   #:type-of
    #:describe-type-of
    #:describe-type-alias
    #:set-type-printing-mode

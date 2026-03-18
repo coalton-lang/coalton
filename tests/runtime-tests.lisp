@@ -55,54 +55,45 @@
       (+ x offset))))
 
 (coalton-toplevel
-  (declare render-show-type-default (ShowType :a => types:Proxy :a -> String))
-  (define (render-show-type-default p)
-    (let parts = (cell:new Nil))
-    (show-type-to
-     (fn (part)
-       (cell:push! parts part)
-       (values))
-     p)
-    (fold <> "" (list:reverse (cell:read parts))))
+  (declare type-of-literal-string String)
+  (define type-of-literal-string
+    (show-as-string (type-of 1)))
 
-  (declare render-show-type-keyword-false (ShowType :a => types:Proxy :a -> String))
-  (define (render-show-type-keyword-false p)
-    (let parts = (cell:new Nil))
-    (show-type-to
-     (fn (part)
-       (cell:push! parts part)
-       (values))
-     p
-     :readable? False)
-    (fold <> "" (list:reverse (cell:read parts))))
+  (declare type-of-erroring-expression-string String)
+  (define type-of-erroring-expression-string
+    (show-as-string
+     (type-of
+      (lisp (-> Integer) ()
+        (cl:error "type-of should not evaluate this expression")))))
 
-  (declare render-show-type-readable (ShowType :a => types:Proxy :a -> String))
-  (define (render-show-type-readable p)
-    (let parts = (cell:new Nil))
-    (show-type-to
-     (fn (part)
-       (cell:push! parts part)
-       (values))
-     p
-     :readable? True)
-    (fold <> "" (list:reverse (cell:read parts))))
+  (declare type-of-keyword-function-string String)
+  (define type-of-keyword-function-string
+    (show-as-string
+     (type-of
+      (fn (x y &key (z 0))
+        (* z (+ x y))))))
 
-  (declare render-expose (ShowType :a => :a -> String))
-  (define (render-expose x)
-    (let parts = (cell:new Nil))
-    (expose-to
-     (fn (part)
-       (cell:push! parts part)
-       (values))
-     x)
-    (fold <> "" (list:reverse (cell:read parts)))))
+  (declare type-of-local-variable-string (:a -> String))
+  (define (type-of-local-variable-string x)
+    (show-as-string (type-of x)))
 
-(coalton-toplevel
-  (define-type RuntimeShowNullary
-    RuntimeShowNullary)
+  (declare string-prefix? (String * String -> Boolean))
+  (define (string-prefix? prefix s)
+    (lisp (-> Boolean) (prefix s)
+      (cl:let ((prefix-len (cl:length prefix)))
+        (cl:and (cl:<= prefix-len (cl:length s))
+                (cl:string= prefix s :end1 prefix-len :end2 prefix-len)))))
 
-  (define-type (RuntimeShowBi :err :ok)
-    (RuntimeShowBi :err :ok)))
+  (declare string-contains? (String * String -> Boolean))
+  (define (string-contains? needle haystack)
+    (lisp (-> Boolean) (needle haystack)
+      (cl:not (cl:null (cl:search needle haystack)))))
+
+  (declare runtime-repr-is-function-entry? (types:RuntimeRepr :a => types:Proxy :a -> Boolean))
+  (define (runtime-repr-is-function-entry? p)
+    (let repr = (types:runtime-repr p))
+    (lisp (-> Boolean) (repr)
+      (cl:eq repr 'coalton-impl/runtime/function-entry:function-entry))))
 
 (define-test test-keyword-arguments-runtime ()
   (is (== (keyword-add-runtime 2) 3))
@@ -123,34 +114,25 @@
   (is (== (keyword-method-runtime 10) 11))
   (is (== (keyword-method-runtime 10 :offset 5) 15)))
 
-(define-test test-show-type-to-keyword-argument ()
-  (let p = (the (types:Proxy (List Integer)) types:Proxy))
-  (is (== (render-show-type-default p)
-          "(List Integer)"))
-  (is (== (render-show-type-default p)
-          (render-show-type-keyword-false p)))
-  (is (/= (render-show-type-default p)
-          (render-show-type-readable p))))
+(define-test test-type-of-shows-constrained-polymorphic-types ()
+  (is (== type-of-literal-string
+          "∀ :A. COALTON/CLASSES:NUM :A ⇒ :A")))
 
-(define-test test-auto-generated-show-type ()
-  (is (== (render-show-type-default
-           (the (types:Proxy RuntimeShowNullary) types:Proxy))
-          "RuntimeShowNullary"))
-  (is (== (render-show-type-default
-           (the (types:Proxy (RuntimeShowBi String Integer)) types:Proxy))
-          "(RuntimeShowBi String Integer)"))
-  (is (== (render-show-type-default
-           (the (types:Proxy (math:Complex Integer)) types:Proxy))
-          "(Complex Integer)"))
-  (is (== (render-show-type-default
-           (the (types:Proxy (array:LispArray Integer)) types:Proxy))
-          "(LispArray Integer)")))
+(define-test test-type-of-does-not-evaluate-its-expression ()
+  (is (== type-of-erroring-expression-string
+          "COALTON:INTEGER")))
 
-(define-test test-expose-show-includes-type ()
-  (is (== (render-expose 1)
-          "#<Integer 1>"))
-  (is (== (render-expose "hi")
-          "#<String \"hi\">")))
+(define-test test-type-of-shows-keyword-function-types ()
+  (is (== type-of-keyword-function-string
+          "∀ :A. COALTON/CLASSES:NUM :A ⇒ (:A * :A &key (:z :A) → :A)")))
+
+(define-test test-type-of-shows-local-type-variables ()
+  (is (== (type-of-local-variable-string True)
+          "∀ :A. :A")))
+
+(define-test test-synthesized-runtime-repr-for-general-function-types ()
+  (is (runtime-repr-is-function-entry?
+       (the (types:Proxy (Integer * String -> Boolean * Char)) types:Proxy))))
 
 (coalton-toplevel
   (define (gh-295-f a)

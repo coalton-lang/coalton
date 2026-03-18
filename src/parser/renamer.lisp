@@ -312,6 +312,16 @@
       :location (source:location node))
      ctx))
 
+  (:method ((node node-type-of) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+
+    (values
+     (make-node-type-of
+      :expr (rename-variables-generic% (node-type-of-expr node) ctx)
+      :location (source:location node))
+     ctx))
+
   (:method ((node node-the) ctx)
     (declare (type algo:immutable-map ctx)
              (values node algo:immutable-map))

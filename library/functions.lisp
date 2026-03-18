@@ -47,7 +47,7 @@ Print a line to `cl:*standard-output*`."
 
   (declare traceObject (String * :a -> Void))
   (define (traceObject str item)
-    "Deprecated: Use `show` and `expose`.
+    "Deprecated: Use `show` or explicit formatting.
 
 Print a line to `cl:*standard-output*` in the form \"{STR}: {ITEM}\"."
     (lisp (-> Void) (str item)

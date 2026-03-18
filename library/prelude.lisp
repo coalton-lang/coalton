@@ -218,25 +218,17 @@
 
   (:import-from
    #:coalton/show
-   #:ShowType
-   #:show-type-to
    #:Show
    #:show*
    #:show-to
    #:show-as-string
-   #:show
-   #:expose-to
-   #:expose)
+   #:show)
   (:export
-   #:ShowType
-   #:show-type-to
    #:Show
    #:show*
    #:show-to
    #:show-as-string
-   #:show
-   #:expose-to
-   #:expose))
+   #:show))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-PRELUDE")

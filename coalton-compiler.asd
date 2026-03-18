@@ -110,6 +110,7 @@
                              (:file "transformations")
                              (:file "ast-substitutions")
                              (:file "resolve-instance")
+                             (:file "resolve-instance-synthesized")
                              (:file "typecheck-node")
                              (:file "hoister")
                              (:file "translate-expression")

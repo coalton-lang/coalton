@@ -107,6 +107,9 @@
    #:node-progn                         ; STRUCT
    #:make-node-progn                    ; CONSTRUCTOR
    #:node-progn-body                    ; ACCESSOR
+   #:node-type-of                       ; STRUCT
+   #:make-node-type-of                  ; CONSTRUCTOR
+   #:node-type-of-expr                  ; ACCESSOR
    #:node-the                           ; STRUCT
    #:make-node-the                      ; CONSTRUCTOR
    #:node-the-type                      ; ACCESSOR
@@ -257,6 +260,7 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;             | node-lisp
 ;;;;             | node-match
 ;;;;             | node-progn
+;;;;             | node-type-of
 ;;;;             | node-the
 ;;;;             | node-return
 ;;;;             | node-application
@@ -300,6 +304,8 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;; node-match := "(" "match" pattern match-branch* ")"
 ;;;;
 ;;;; node-progn := "(" "progn" body ")"
+;;;;
+;;;; node-type-of := "(" "type-of" expression ")"
 ;;;;
 ;;;; node-the := "(" "the" type expression ")"
 ;;;;
@@ -530,6 +536,11 @@ Rebound to NIL parsing an anonymous FN.")
             (:include node)
             (:copier nil))
   (body (util:required 'body) :type node-body :read-only t))
+
+(defstruct (node-type-of
+            (:include node)
+            (:copier nil))
+  (expr (util:required 'expr) :type node :read-only t))
 
 (defstruct (node-the
             (:include node)
@@ -892,6 +903,32 @@ Rebound to NIL parsing an anonymous FN.")
           keyword-rands (nreverse keyword-rands))
     (check-duplicate-call-keywords keyword-rands source)
     (values rands keyword-rands)))
+
+(defun show-symbol (name)
+  (declare (type string name)
+           (values (or null symbol) &optional))
+  (let ((package (find-package "COALTON/SHOW")))
+    (and package
+         (find-symbol name package))))
+
+(defun synthetic-node-variable (name location)
+  (declare (type symbol name)
+           (type source:location location)
+           (values node-variable &optional))
+  (make-node-variable
+   :location location
+   :name name))
+
+(defun synthetic-application (rator rands location)
+  (declare (type symbol rator)
+           (type node-list rands)
+           (type source:location location)
+           (values node-application &optional))
+  (make-node-application
+   :location location
+   :rator (synthetic-node-variable rator location)
+   :rands rands
+   :keyword-rands nil))
 
 (defun parse-expression (form source)
   (declare (type cst:cst form)
@@ -1289,6 +1326,23 @@ Rebound to NIL parsing an anonymous FN.")
           (eq 'coalton:progn (cst:raw (cst:first form))))
      (make-node-progn
       :body (parse-body (cst:rest form) (cst:first form) source)
+      :location (form-location source form)))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:type-of (cst:raw (cst:first form))))
+     ;; (type-of)
+     (unless (cst:consp (cst:rest form))
+       (parse-error "Malformed type-of expression"
+                    (note-end source (cst:first form) "expected expression")))
+
+     ;; (type-of a b ...)
+     (when (cst:consp (cst:rest (cst:rest form)))
+       (parse-error "Malformed type-of expression"
+                    (note source (cst:first (cst:rest (cst:rest form)))
+                          "unexpected trailing form")))
+
+     (make-node-type-of
+      :expr (parse-expression (cst:second form) source)
       :location (form-location source form)))
 
     ((and (cst:atom (cst:first form))
