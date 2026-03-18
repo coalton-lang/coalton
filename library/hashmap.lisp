@@ -13,6 +13,7 @@
    (#:bits #:coalton/bits)
    (#:cell #:coalton/cell)
    (#:iter #:coalton/iterator)
+   (#:show #:coalton/show)
    (#:list #:coalton/list)
    (#:math #:coalton/math)
    (#:util #:coalton-impl/runtime)
@@ -37,8 +38,7 @@
    #:union
    #:intersection
    #:difference
-   #:xor
-   #:show))
+   #:xor))
 
 (in-package #:coalton/hashmap)
 
@@ -783,21 +783,25 @@ but not in both."
   (define-instance (Hash :k => Monoid (HashMap :k :v))
     (define mempty Empty))
 
-  (declare show ((Hash :k) (Into :k String) (Into :v String) => HashMap :k :v -> String))
-  (define (show hm)
-    "Return a human-readable representation of HM."
-    (let the-entries = (entries hm))
-    (match (iter:next! the-entries)
-      ((None) "()")
-      ((Some (Tuple k1 v1))
-       (<> "("
-           (<>
-            (iter:fold!
-             (fn (accum (Tuple k v))
-                 (<> accum (<> ", " (<> (into k) (<> " -> " (into v))))))
-             (<> (into k1) (<> " -> " (into v1)))
-             the-entries)
-            ")")))))
+  (define-instance ((show:Show :k) (show:Show :v) (Hash :k) => show:Show (HashMap :k :v))
+    (define (show:show-to f hm)
+      (let the-entries = (entries hm))
+      (match (iter:next! the-entries)
+        ((None) (f "()"))
+        ((Some (Tuple k1 v1))
+         (f "(")
+         (show:show-to f k1)
+         (f " -> ")
+         (show:show-to f v1)
+         (rec %show-rest ()
+           (match (iter:next! the-entries)
+             ((None) (f ")"))
+             ((Some (Tuple k v))
+              (f ", ")
+              (show:show-to f k)
+              (f " -> ")
+              (show:show-to f v)
+              (%show-rest))))))))
   )
 
 ;;

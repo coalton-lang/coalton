@@ -35,6 +35,7 @@
    (#:slice #:coalton/slice)
    (#:hashtable #:coalton/hashtable)
    (#:hashmap #:coalton/hashmap)
+   (#:show #:coalton/show)
    (#:cell #:coalton/cell)
    (#:iter #:coalton/iterator)
    (#:list #:coalton/list)

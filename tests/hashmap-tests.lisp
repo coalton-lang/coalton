@@ -473,4 +473,4 @@
                   (make-list (Tuple 0 0)
                              (Tuple 1 10)))))
   (is (== "(0 -> 0, 1 -> 10)"
-          (hashmap:show hm))))
+          (show:show-as-string hm))))
