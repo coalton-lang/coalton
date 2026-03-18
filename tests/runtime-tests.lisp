@@ -1,5 +1,7 @@
 (cl:in-package #:coalton-native-tests)
 
+(named-readtables:in-readtable coalton:coalton)
+
 (coalton-toplevel
   (define (recursive-predicate x inc goal)
     (if (== x goal)
@@ -52,6 +54,56 @@
     (define (keyword-method-runtime x &key (offset 1))
       (+ x offset))))
 
+(coalton-toplevel
+  (declare render-show-type-default (ShowType :a => types:Proxy :a -> String))
+  (define (render-show-type-default p)
+    (let parts = (cell:new Nil))
+    (show-type-to
+     (fn (part)
+       (cell:push! parts part)
+       (values))
+     p)
+    (fold <> "" (list:reverse (cell:read parts))))
+
+  (declare render-show-type-keyword-false (ShowType :a => types:Proxy :a -> String))
+  (define (render-show-type-keyword-false p)
+    (let parts = (cell:new Nil))
+    (show-type-to
+     (fn (part)
+       (cell:push! parts part)
+       (values))
+     p
+     :readable? False)
+    (fold <> "" (list:reverse (cell:read parts))))
+
+  (declare render-show-type-readable (ShowType :a => types:Proxy :a -> String))
+  (define (render-show-type-readable p)
+    (let parts = (cell:new Nil))
+    (show-type-to
+     (fn (part)
+       (cell:push! parts part)
+       (values))
+     p
+     :readable? True)
+    (fold <> "" (list:reverse (cell:read parts))))
+
+  (declare render-expose (ShowType :a => :a -> String))
+  (define (render-expose x)
+    (let parts = (cell:new Nil))
+    (expose-to
+     (fn (part)
+       (cell:push! parts part)
+       (values))
+     x)
+    (fold <> "" (list:reverse (cell:read parts)))))
+
+(coalton-toplevel
+  (define-type RuntimeShowNullary
+    RuntimeShowNullary)
+
+  (define-type (RuntimeShowBi :err :ok)
+    (RuntimeShowBi :err :ok)))
+
 (define-test test-keyword-arguments-runtime ()
   (is (== (keyword-add-runtime 2) 3))
   (is (== (keyword-add-runtime 2 :offset 3) 5))
@@ -70,6 +122,35 @@
 (define-test test-keyword-instance-method-runtime ()
   (is (== (keyword-method-runtime 10) 11))
   (is (== (keyword-method-runtime 10 :offset 5) 15)))
+
+(define-test test-show-type-to-keyword-argument ()
+  (let p = (the (types:Proxy (List Integer)) types:Proxy))
+  (is (== (render-show-type-default p)
+          "(List Integer)"))
+  (is (== (render-show-type-default p)
+          (render-show-type-keyword-false p)))
+  (is (/= (render-show-type-default p)
+          (render-show-type-readable p))))
+
+(define-test test-auto-generated-show-type ()
+  (is (== (render-show-type-default
+           (the (types:Proxy RuntimeShowNullary) types:Proxy))
+          "RuntimeShowNullary"))
+  (is (== (render-show-type-default
+           (the (types:Proxy (RuntimeShowBi String Integer)) types:Proxy))
+          "(RuntimeShowBi String Integer)"))
+  (is (== (render-show-type-default
+           (the (types:Proxy (math:Complex Integer)) types:Proxy))
+          "(Complex Integer)"))
+  (is (== (render-show-type-default
+           (the (types:Proxy (array:LispArray Integer)) types:Proxy))
+          "(LispArray Integer)")))
+
+(define-test test-expose-show-includes-type ()
+  (is (== (render-expose 1)
+          "#<Integer 1>"))
+  (is (== (render-expose "hi")
+          "#<String \"hi\">")))
 
 (coalton-toplevel
   (define (gh-295-f a)

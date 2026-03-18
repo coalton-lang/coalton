@@ -9,7 +9,9 @@
           #:coalton/math/arith)
   (:local-nicknames
    (#:arith #:coalton/math/arith)
-   (#:types #:coalton/types))
+   (#:types #:coalton/types)
+   (#:utils #:coalton/utils)
+   (#:show #:coalton/show))
   (:export
    #:Complex                            ; data type
    #:ComplexComponent                   ; type class
@@ -51,7 +53,25 @@ component types."
         (lisp (-> types:LispType) (inner-type)
           (cl:if (cl:member inner-type *native-complex-types*)
                  `(cl:complex ,inner-type)
-                 'Complex))))))
+                 'Complex)))))
+
+  (define-instance ((types:RuntimeRepr :t) (show:Show :t) => show:Show (Complex :t))
+    (define (show:show-to f x)
+      (let inner-type = (types:runtime-repr (the (types:Proxy :t) types:Proxy)))
+      (let native-type = (lisp (-> Boolean) (inner-type)
+                           (cl:and (cl:member inner-type *native-complex-types*) cl:t)))
+      (cond 
+        (native-type
+         (f (lisp (-> String) (x) (cl:princ-to-string x))))
+        (True
+         (match x
+           ((%Complex re im)
+            
+            (f "(complex ")
+            (show:show-to f re)
+            (f " ")
+            (show:show-to f im)
+            (f ")"))))))))
 
 ;; Quirk: We had to split the above COALTON-TOPLEVEL from the bottom
 ;; one because Allegro needs to know about Complex before it gets used

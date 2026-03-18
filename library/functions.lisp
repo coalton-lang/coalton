@@ -37,7 +37,9 @@
 (coalton-toplevel
   (declare trace (String -> Void))
   (define (trace str)
-    "Print a line to `cl:*standard-output*`."
+    "Deprecated: Use `show`.
+
+Print a line to `cl:*standard-output*`."
     (lisp (-> Void) (str)
       (cl:progn
         (cl:format cl:t "~A~%" str)
@@ -45,7 +47,9 @@
 
   (declare traceObject (String * :a -> Void))
   (define (traceObject str item)
-    "Print a line to `cl:*standard-output*` in the form \"{STR}: {ITEM}\"."
+    "Deprecated: Use `show` and `expose`.
+
+Print a line to `cl:*standard-output*` in the form \"{STR}: {ITEM}\"."
     (lisp (-> Void) (str item)
       (cl:progn
         (cl:format cl:t "~A: ~A~%" str item)

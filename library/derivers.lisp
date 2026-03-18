@@ -6,11 +6,12 @@
    (#:parser #:coalton-impl/parser)
    (#:source #:coalton-impl/source)
    (#:classes #:coalton/classes)
-   (#:hash #:coalton/hash)))
+   (#:hash #:coalton/hash)
+   (#:show #:coalton/show)))
 
 (in-package #:coalton/derivers)
 
-(defmethod tc:derive-methods ((class (eql 'classes:eq)) def env)
+(defmethod tc:derive-methods ((class (eql 'classes:Eq)) def env)
   "Deriver implementation for class `Eq'."
   (let ((location (source:location def)))
     (list
@@ -134,7 +135,7 @@
             :key #'hash-symbol
             :initial-value (hash-symbol symbol))))
 
-(defmethod tc:derive-methods ((class (eql 'classes:hash)) def env)
+(defmethod tc:derive-methods ((class (eql 'classes:Hash)) def env)
   "Deriver implementation for class `Hash'.
 
 The hashes generated are not guaranteed to be stable when the type is
@@ -229,7 +230,7 @@ The generated method will be shaped like this:
       :location location
       :inline nil))))
 
-(defmethod tc:derive-methods ((class (eql 'classes:default)) def env)
+(defmethod tc:derive-methods ((class (eql 'classes:Default)) def env)
   "Deriver implementation for class `Default'.
 Requires field to only have a single constructor."
   (unless (= 1 (length (parser:type-definition-ctors def)))
@@ -274,5 +275,119 @@ Requires field to only have a single constructor."
                                                  :location location
                                                  :name 'classes:default)
                                          :rands '())))))
+      :location location
+      :inline nil))))
+
+(defmethod tc:derive-methods ((class (eql 'show:Show)) def env)
+  "Deriver implementation for class `Show'."
+  (let ((location (source:location def)))
+    (list
+     (parser:make-instance-method-definition
+      :name (parser:make-node-variable
+             :location location
+             :name 'show:show-to)
+      :params (list
+               (parser:make-pattern-var
+                :location location
+                :name 'f
+                :orig-name 'f)
+               (parser:make-pattern-var
+                :location location
+                :name 'x
+                :orig-name 'x))
+      :function-syntax-p t
+      :body (parser:make-node-body
+             :nodes nil
+             :last-node (parser:make-node-match
+                         :location location
+                         :expr (parser:make-node-variable
+                                :location location
+                                :name 'x)
+                         :branches (loop
+                                     :for ctor :in (parser:type-definition-ctors def)
+                                     :for cname := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
+                                     :for cname-str := (parser:identifier-src-source-name (parser:type-definition-ctor-name ctor))
+                                     :for cfields := (mapcar (lambda (_)
+                                                               (declare (ignore _))
+                                                               (gensym "ctor-field"))
+                                                             (parser:type-definition-ctor-field-types ctor))
+                                     :collect
+                                     (parser:make-node-match-branch
+                                      :location location
+                                      :pattern (parser:make-pattern-constructor
+                                                :location location
+                                                :name cname
+                                                :patterns (loop :for cfield :in cfields
+                                                                :collect (parser:make-pattern-var
+                                                                          :location location
+                                                                          :name cfield
+                                                                          :orig-name cfield)))
+                                      :body (if (zerop (length cfields))
+                                                (parser:make-node-body
+                                                 :nodes nil
+                                                 :last-node (parser:make-node-application
+                                                             :location location
+                                                             :rator (parser:make-node-variable
+                                                                     :location location
+                                                                     :name 'f)
+                                                             :rands (list
+                                                                     (parser:make-node-literal
+                                                                      :location location
+                                                                      :value (or cname-str
+                                                                                 (string cname))))))
+                                                 (parser:make-node-body
+                                                 :nodes (list*
+                                                         (parser:make-node-application
+                                                             :location location
+                                                             :rator (parser:make-node-variable
+                                                                     :location location
+                                                                     :name 'f)
+                                                             :rands (list
+                                                                     (parser:make-node-literal
+                                                                      :location location
+                                                                      :value "(")))
+                                                         ;; print head
+                                                         (parser:make-node-application
+                                                          :location location
+                                                          :rator (parser:make-node-variable
+                                                                  :location location
+                                                                  :name 'f)
+                                                          :rands (list
+                                                                  (parser:make-node-literal
+                                                                   :location location
+                                                                   :value (or cname-str
+                                                                              (string cname)))))
+                                                         ;; print arguments
+                                                         (loop :for cfield :in cfields
+                                                               :collect (parser:make-node-application
+                                                                         :location location
+                                                                         :rator (parser:make-node-variable
+                                                                                 :location location
+                                                                                 :name 'f)
+                                                                         :rands (list
+                                                                                 (parser:make-node-literal
+                                                                                  :location location
+                                                                                  :value " ")))
+                                                               :collect (parser:make-node-application
+                                                                         :location location
+                                                                         :rator (parser:make-node-variable
+                                                                                 :location location
+                                                                                 :name 'show:show-to)
+                                                                         :rands (list
+                                                                                 (parser:make-node-variable
+                                                                                  :location location
+                                                                                  :name 'f)
+                                                                                 (parser:make-node-variable
+                                                                                  :location location
+                                                                                  :name cfield)))))
+                                                 :last-node (parser:make-node-application
+                                                             :location location
+                                                             :rator (parser:make-node-variable
+                                                                     :location location
+                                                                     :name 'f)
+                                                             :rands (list
+                                                                     (parser:make-node-literal
+                                                                      :location location
+                                                                      :value ")")))))))))
       :location location
       :inline nil))))

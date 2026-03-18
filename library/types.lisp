@@ -7,7 +7,8 @@
    #:as-proxy-of
    #:proxy-inner
    #:LispType
-   #:RuntimeRepr #:runtime-repr
+   #:RuntimeRepr
+   #:runtime-repr
    #:runtime-repr-of))
 
 (in-package #:coalton/types)
@@ -42,15 +43,15 @@
 
   (repr :native (cl:or cl:symbol cl:list))
   (define-type LispType
-    "The runtime representation of a Coalton type as a lisp type.")
+    "The runtime representation of a Coalton type as a Lisp type.")
 
   (define-class (RuntimeRepr :a)
     "Types which have a runtime LispType representation.
 
-`runtime-repr` corresponds to the type emitted by the Coalton compiler for the type parameter to the given Proxy.
-
 The compiler will auto-generate instances of `RuntimeRepr` for all defined types."
-    (runtime-repr (Proxy :a -> LispType)))
+    (runtime-repr
+     "The type emitted by the Coalton compiler for the type parameter to the given Proxy."
+     (Proxy :a -> LispType)))
 
   (inline)
   (declare runtime-repr-of
@@ -116,7 +117,7 @@ The compiler will auto-generate instances of `RuntimeRepr` for all defined types
 
   ;; The compiler will not auto-generate RuntimeRepr instances for
   ;; types defined in this file to avoid circular dependencies.
-  
+
   (define-instance (RuntimeRepr LispType)
     (inline)
     (define (runtime-repr _)
