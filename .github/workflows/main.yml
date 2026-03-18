@@ -80,6 +80,8 @@ jobs:
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
+          ;; This must be set before loading Coalton.
+          (setf (get :coalton-config :emit-type-annotations) nil)
           (ql:quickload :coalton/tests)
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
