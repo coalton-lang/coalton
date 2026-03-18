@@ -6,6 +6,7 @@
    #:proxy-of
    #:as-proxy-of
    #:proxy-inner
+   #:TypeScheme
    #:LispType
    #:RuntimeRepr
    #:runtime-repr
@@ -44,6 +45,10 @@
   (repr :native (cl:or cl:symbol cl:list))
   (define-type LispType
     "The runtime representation of a Coalton type as a Lisp type.")
+
+  (repr :native coalton-impl/typechecker:ty-scheme)
+  (define-type TypeScheme
+    "An opaque reflection object representing a Coalton type scheme.")
 
   (define-class (RuntimeRepr :a)
     "Types which have a runtime LispType representation.

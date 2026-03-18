@@ -129,6 +129,10 @@
                  (parser:node-the
                   (traverse (parser:node-the-expr node) local-bindings))
 
+                 ;; Static type reflection traverses the reflected expression
+                 (parser:node-type-of
+                  (traverse (parser:node-type-of-expr node) local-bindings))
+
                  ;; Progn
                  (parser:node-progn
                   (traverse (parser:node-progn-body node) local-bindings))

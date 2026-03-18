@@ -177,19 +177,6 @@
             (print-package p (gethash p sorted-by-package)))
           (maphash #'print-package sorted-by-package)))))
 
-(defun coalton:type-of (symbol)
-  "Lookup the type of value SYMBOL in the global environment. Return either
-
-- a TY-SCHEME (which will pretty print as a Coalton type) representing the type of the symbol SYMBOL,
-
-- the symbol :MACRO if SYMBOL names a macro, or
-
-- NIL if the symbol isn't known to Coalton."
-  (check-type symbol symbol)
-  (if (macro-function symbol)
-      ':macro
-      (tc:lookup-value-type entry:*global-environment* symbol :no-error t)))
-
 (defun coalton:describe-type-of (symbol)
   "Lookup the type of value SYMBOL in the global environment.
 

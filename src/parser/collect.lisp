@@ -251,6 +251,10 @@ in expressions. May not include all bound variables."
     (declare (values node-variable-list &optional))
     (collect-variables-generic% (node-progn-body node)))
 
+  (:method ((node node-type-of))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (node-type-of-expr node)))
+
   (:method ((node node-the))
     (declare (values node-variable-list &optional))
     (collect-variables-generic% (node-the-expr node)))
