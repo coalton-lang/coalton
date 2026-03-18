@@ -1,4 +1,4 @@
-name: Porting (2 abcl, ecl, clasp)
+name: Test Lisp environments (abcl, clasp)
 
 on:
   push:
@@ -44,23 +44,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-          ## abcl excluded as it fails (ql:quickload :fset)
-          ##
-          ## clasp excluded as it fails (ql:quickload :serapeum)
-        LISP_IMPL: [ # "abcl", "clasp",
-                     "ecl" ]
-        COALTON_ENV: ["release", "development"]
-        SAFETY: ["0", "3"]
-        DISABLE_SPECIALIZATION: ["1", "0"]
-        HEURISTIC_INLINING: ["1", "0"]
-        exclude:
-          # Since we don't have a way of switching safety on clasp or ecl, we can
-          # just ignore high safety tests.
-          # - LISP_IMPL: "clasp"
-          #   SAFETY: "3"
-          - LISP_IMPL: "ecl"
-            SAFETY: "3"
-
+        # ecl seems to be fine with all external packages
+        LISP_IMPL: [ "abcl", "clasp" #, "ecl"
+                    ]
     permissions:
       packages: read
 
@@ -78,62 +64,32 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Run ABCL tests
+      - name: Sanity-check for ABCL - fset?
         if: matrix.LISP_IMPL == 'abcl'
-        env:
-          COALTON_ENV: ${{ matrix.COALTON_ENV }}
-          COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
-          COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
           (load "/.abclrc")
             ;; Ensure fiasco is patched in abcl
             (ql:quickload :fiasco) (load "compat/abcl-fiasco-patch")
-          (setq system:*safety* ${{ matrix.SAFETY }})
-          (ql:quickload :coalton/tests)
-          (asdf:test-system :coalton/tests)
-          ; TODO: Remove this or add tests for these programs.
-          (asdf:load-system :small-coalton-programs)
+          (load "compat/abcl-precompiler-precompile-identity")
+          (ql:quickload :fset)
+          (format *error-output* "~%ABCL loads FSet!~%")
+          (asdf:test-system :fset)
+          (format *error-output* "~%ABCL can test FSet!~%")
           EOF
-          echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
-          ls ${CL_SOURCE_REGISTRY}/coalton.asd
           abcl --noinform --noinit --nosystem --batch --load run-tests.lisp < /dev/null
 
-      - name: Run Clasp tests
+      - name: Sanity-check for CLASP - serapeum?
         if: matrix.LISP_IMPL == 'clasp'
-        env:
-          COALTON_ENV: ${{ matrix.COALTON_ENV }}
-          COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
-          COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
           ;;; Clasp cannot find /.clasprc - copy its code here instead.
           ;; (load "/.clasprc")
             #-quicklisp (load "/root/quicklisp/setup.lisp")
             (setf ql:*local-project-directories* (quote ("/extras" "/lisp")))
-          (ql:quickload :coalton/tests)
-          (asdf:test-system :coalton/tests)
-          ; TODO: Remove this or add tests for these programs.
-          (asdf:load-system :small-coalton-programs)
+          (ql:quickload :serapeum)
+          (format *error-output* "~%CLASP loads Serapeum!~%")
+          (asdf:test-system :serapeum)
+          (format *error-output* "~%CLASP can test Serapeum!~%")
           EOF
-          echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
-          ls ${CL_SOURCE_REGISTRY}/coalton.asd
           clasp --script run-tests.lisp
-
-      - name: Run ECL tests
-        if: matrix.LISP_IMPL == 'ecl'
-        env:
-          COALTON_ENV: ${{ matrix.COALTON_ENV }}
-          COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
-          COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
-        run: |
-          cat <<EOF > run-tests.lisp
-          (load "/.eclrc")
-          (ql:quickload :coalton/tests)
-          (asdf:test-system :coalton/tests)
-          ; TODO: Remove this or add tests for these programs.
-          (asdf:load-system :small-coalton-programs)
-          EOF
-          echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
-          ls ${CL_SOURCE_REGISTRY}/coalton.asd
-          ecl --norc -q --shell run-tests.lisp
