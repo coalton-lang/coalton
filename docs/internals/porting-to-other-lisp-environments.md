@@ -147,15 +147,15 @@ depends directly upon (*not* the transitive closure of depends-on), we
 have discovered the following cases:
 
 - Cannot load at all:
- -- *SBCL*: (none)
- -- *CCL*: (none)
- -- ABCL: (none)
- -- CLASP: `:spinneret` ([most probably due to a bug in `:serapeum`](https://github.com/ruricolist/serapeum/issues/181))
- -- ECL: `:spinneret`
+  - *SBCL*: (none)
+  - *CCL*: (none)
+  - ABCL: (none)
+  - CLASP: `:spinneret` ([most probably due to a bug in `:serapeum`](https://github.com/ruricolist/serapeum/issues/181))
+  - ECL: `:spinneret`
 
 - Testing fails:
- -- *SBCL*: `:concrete-syntax-tree`
- -- *CCL*: (none)
- -- ABCL: `:concrete-syntax-tree :eclector :yason :concrete-syntax-tree` (the last three fail their tests but `asdf:test-system` returns `t`)
- -- CLASP: `:trivial-garbage :float-features :fset`
- -- ECL: `:mgl-pax`
+  - *SBCL*: `:concrete-syntax-tree`
+  - *CCL*: (none)
+  - ABCL: `:concrete-syntax-tree :eclector :yason :concrete-syntax-tree` (the last three fail their tests but `asdf:test-system` returns `t`)
+  - CLASP: `:trivial-garbage :float-features :fset`
+  - ECL: `:mgl-pax`
