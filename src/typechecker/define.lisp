@@ -600,6 +600,35 @@ Returns four values:
     (t
       1)))
 
+(defun reflect-expression-type-scheme (node subs env)
+  (declare (type parser:node node)
+           (type tc:substitution-list subs)
+           (type tc-env env)
+           (values tc:ty-scheme tc:substitution-list &optional))
+  (multiple-value-bind (ty preds accessors _ subs)
+      (infer-expression-type node
+                             (tc:make-variable)
+                             subs
+                             env)
+    (declare (ignore _))
+    (multiple-value-bind (preds subs)
+        (tc:solve-fundeps (tc-env-env env) preds subs)
+      (setf accessors (tc:apply-substitution subs accessors))
+      (multiple-value-bind (accessors subs_)
+          (solve-accessors accessors (tc-env-env env))
+        (setf subs (tc:compose-substitution-lists subs subs_))
+        (when accessors
+          (tc:tc-error "Ambiguous accessor"
+                       (source:note (first accessors)
+                                    "accessor is ambiguous")))
+        (let* ((preds (tc:reduce-context (tc-env-env env) preds subs))
+               (ty (tc:apply-substitution subs ty))
+               (qual-ty (tc:qualify preds ty)))
+          (values
+           (tc:remove-source-info
+            (tc:quantify (tc:type-variables qual-ty) qual-ty))
+           subs))))))
+
 (defgeneric infer-expression-type (node expected-type subs env)
   (:documentation "Infer the type of NODE and then unify against EXPECTED-TYPE
 
@@ -1416,6 +1445,34 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
         :location (source:location node)
         :body body-node)
        subs)))
+
+  (:method ((node parser:node-type-of) expected-type subs env)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (values tc:ty tc:ty-predicate-list accessor-list node-lisp tc:substitution-list &optional))
+
+    (let* ((type-scheme-name (util:find-symbol "TYPESCHEME" "COALTON/TYPES"))
+           (type-scheme-type (tc:type-entry-type (tc:lookup-type (tc-env-env env) type-scheme-name))))
+      (handler-case
+          (progn
+            (setf subs (tc:unify subs type-scheme-type expected-type))
+            (multiple-value-bind (scheme subs)
+                (reflect-expression-type-scheme (parser:node-type-of-expr node) subs env)
+              (let ((type (tc:apply-substitution subs type-scheme-type)))
+                (values
+                 type
+                 nil
+                 nil
+                 (make-node-lisp
+                  :type (tc:qualify nil type)
+                  :location (source:location node)
+                  :vars nil
+                  :var-names nil
+                  :body (list (util:runtime-quote scheme)))
+                 subs))))
+        (tc:coalton-internal-type-error ()
+          (standard-expression-type-mismatch-error node subs expected-type type-scheme-type)))))
 
   (:method ((node parser:node-the) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -2438,7 +2495,8 @@ matches the value-restriction safety argument."
     ((or parser:node-variable
          parser:node-literal
          parser:node-integer-literal
-         parser:node-abstraction)
+         parser:node-abstraction
+         parser:node-type-of)
      t)
     (parser:node-the
       (nonexpansive-expression-p (parser:node-the-expr node) env))
