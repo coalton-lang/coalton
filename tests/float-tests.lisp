@@ -115,8 +115,12 @@
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
   (cl:defmacro double-check (f)
     "Syntatic sugar for defining big-float  checks against double-floats"
-    `(for (Tuple x y) in (zipWith Tuple float-checklist float-checklist)
-       (check-against-double (,f x) (fn () (,f y))))))
+    `(iter:for-each!
+      (fn (pair)
+        (match pair
+          ((Tuple x y)
+           (check-against-double (,f x) (fn () (,f y))))))
+      (iter:into-iter (zipWith Tuple float-checklist float-checklist)))))
 
 (define-test float-double-to-big ()
   (double-check (fn (x) x))

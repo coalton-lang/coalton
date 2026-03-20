@@ -236,6 +236,64 @@ reconstruct the full codegen-visible function type here."
    :type (tc:output-types-result-type nil)
    :nodes nil))
 
+(defun translate-body-elements-into (body-nodes tail-node ctx env)
+  "Translate BODY-NODES and sequence them in front of TAIL-NODE.
+
+The resulting codegen node preserves the original let-style and
+values-bind scoping of BODY-NODES while reusing TAIL-NODE as the final
+expression."
+  (declare (type tc:node-body-element-list body-nodes)
+           (type node tail-node)
+           (type pred-context ctx)
+           (type tc:environment env)
+           (values node &optional))
+  (loop :with out-node := tail-node
+        :for body-node :in (reverse body-nodes) :do
+          (setf out-node
+                (etypecase body-node
+                  (tc:node-values-bind
+                   (make-node-values-bind
+                    :type (node-type out-node)
+                    :vars (values-bind-vars (tc:node-values-bind-patterns body-node))
+                    :expr (translate-expression (tc:node-values-bind-expr body-node) ctx env)
+                    :body out-node))
+                  (tc:node-bind
+                   (let ((ty (node-type out-node))
+                         (pattern (tc:node-bind-pattern body-node)))
+                     (typecase pattern
+                       (tc:pattern-var
+                        (make-node-bind
+                         :type ty
+                         :name (tc:pattern-var-name pattern)
+                         :expr (translate-expression (tc:node-bind-expr body-node) ctx env)
+                         :body out-node))
+                       (t
+                        (make-node-match
+                         :type ty
+                         :expr (translate-expression (tc:node-bind-expr body-node) ctx env)
+                         :branches (list
+                                    (make-match-branch
+                                     :pattern (translate-pattern pattern)
+                                     :body out-node)))))))
+                  (tc:node
+                   (make-node-seq
+                    :type (node-type out-node)
+                    :nodes (list (translate-expression body-node ctx env)
+                                 out-node)))))
+        :finally (return out-node)))
+
+(defun translate-discarding-body-elements (body-nodes ctx env)
+  "Translate BODY-NODES as a body whose final value is discarded.
+
+This is used for loop bodies and similar contexts where the user forms
+are sequenced for effect and the translated body should end in zero
+values."
+  (declare (type tc:node-body-element-list body-nodes)
+           (type pred-context ctx)
+           (type tc:environment env)
+           (values node &optional))
+  (translate-body-elements-into body-nodes (zero-values-node) ctx env))
+
 (defun specialize-qual-type-to-context (qual-ty ctx)
   "Specialize QUAL-TY to any uniquely matching predicates in CTX.
 
@@ -647,43 +705,11 @@ Returns a `node'.")
     (declare (type pred-context ctx)
              (type tc:environment env)
              (values node))
-
-    (loop :with out-node := (translate-expression (tc:node-body-last-node expr) ctx env)
-          :for body-node :in (reverse (tc:node-body-nodes expr)) :do
-            (setf out-node
-                  (etypecase body-node
-                    (tc:node-values-bind
-                     (make-node-values-bind
-                      :type (node-type out-node)
-                      :vars (values-bind-vars (tc:node-values-bind-patterns body-node))
-                      :expr (translate-expression (tc:node-values-bind-expr body-node) ctx env)
-                      :body out-node))
-                    (tc:node-bind
-                     (let ((ty (node-type out-node)))
-
-                       (let ((pattern (tc:node-bind-pattern body-node)))
-                         (typecase (tc:node-bind-pattern body-node)
-                           (tc:pattern-var
-                            (make-node-bind
-                             :type ty
-                             :name (tc:pattern-var-name pattern)
-                             :expr (translate-expression (tc:node-bind-expr body-node) ctx env)
-                             :body out-node))
-                           (t
-                            (make-node-match
-                             :type ty
-                             :expr (translate-expression (tc:node-bind-expr body-node) ctx env)
-                             :branches (list
-                                        (make-match-branch
-                                         :pattern (translate-pattern pattern)
-                                         :body out-node))))))))
-
-                    (tc:node
-                     (make-node-seq
-                      :type (node-type out-node)
-                      :nodes (list (translate-expression body-node ctx env)
-                                   out-node)))))
-          :finally (return out-node)))
+    (translate-body-elements-into
+     (tc:node-body-nodes expr)
+     (translate-expression (tc:node-body-last-node expr) ctx env)
+     ctx
+     env))
 
   (:method ((expr tc:node-abstraction) ctx env)
     (declare (type pred-context ctx)
@@ -1122,147 +1148,27 @@ Returns a `node'.")
                           :nodes (list (translate-expression (tc:node-unless-body expr) ctx env)
                                        (zero-values-node))))))))
 
-  (:method ((expr tc:node-while) ctx env)
-    (declare (type pred-context ctx)
-             (type tc:environment env)
-             (values node))
-
-    (make-node-while
-     :type (tc:qualified-ty-type (tc:node-type expr))
-     :label (tc:node-while-label expr)
-     :expr (translate-expression (tc:node-while-expr expr) ctx env)
-     :body (translate-expression (tc:node-while-body expr) ctx env)))
-
-  (:method ((expr tc:node-while-let) ctx env)
-    (declare (type pred-context ctx)
-             (type tc:environment env)
-             (values node))
-    (make-node-while-let
-     :type (tc:qualified-ty-type (tc:node-type expr))
-     :pattern (translate-pattern (tc:node-while-let-pattern expr))
-     :label (tc:node-while-let-label expr)
-     :expr (translate-expression (tc:node-while-let-expr expr) ctx env)
-     :body (translate-expression (tc:node-while-let-body expr) ctx env)))
-
   (:method ((expr tc:node-for) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)
              (values node))
-    (let* ((pat-arg
-             (translate-pattern (tc:node-for-pattern expr)))
-
-           (pat-arg-ty
-             (pattern-type pat-arg))
-
-           (classes-package
-             (util:find-package "COALTON/CLASSES"))
-
-           (some
-             (util:find-symbol "SOME" classes-package))
-
-           (optional
-             (util:find-symbol "OPTIONAL" classes-package))
-
-           (optional-pat-arg-ty
-             (tc:apply-type-argument
-              (tc:make-tycon :name optional
-                             :kind (tc:make-kfun :from tc:+kstar+ :to tc:+kstar+))
-              pat-arg-ty))
-
-           (some-pattern
-             (make-pattern-constructor
-              :type optional-pat-arg-ty
-              :name some
-              :patterns (list pat-arg)))
-
-           (into-iter-arg
-             (translate-expression (tc:node-for-expr expr) ctx env))
-
-           (into-iter-arg-ty
-             (node-type into-iter-arg))
-
-           (iterator-package
-             (util:find-package "COALTON/ITERATOR"))
-
-           (into-iter-method
-             (util:find-symbol "INTO-ITER" iterator-package))
-
-           (intoiter-class
-             (util:find-symbol "INTOITERATOR" iterator-package))
-
-           (iterator
-             (util:find-symbol "ITERATOR" iterator-package))
-
-           (iter-ty
-             (tc:apply-type-argument
-              (tc:make-tycon :name iterator
-                             :kind (tc:make-kfun :from tc:+kstar+ :to tc:+kstar+))
-              pat-arg-ty))
-
-           (intoiterator-pred
-             (tc:make-ty-predicate
-              :class intoiter-class
-              :types (list into-iter-arg-ty pat-arg-ty)
-              :location (source:location expr)))
-
-           (into-iter-node
-             (make-node-application
-              :type iter-ty
-              :properties '()
-              :rator (make-node-variable
-                      :type (tc:make-function-type*
-                             (list (pred-type intoiterator-pred env)
-                                   (node-type into-iter-arg))
-                             iter-ty)
-                      :value into-iter-method)
-              :rands (list
-                      (resolve-dict intoiterator-pred ctx env)
-                      into-iter-arg)))
-
-           (next-method
-             (util:find-symbol "NEXT!" iterator-package))
-
-           (into-iter-binding-var-name
-             (gensym "ITER-"))
-
-           (iter-next-node
-             (make-node-application
-              :type optional-pat-arg-ty
-              :properties '()
-              :rator (make-node-variable
-                      :type (tc:make-function-type*
-                             (list iter-ty)
-                             optional-pat-arg-ty)
-                      :value next-method)
-              :rands (list (make-node-variable
-                            :type iter-ty
-                            :value  into-iter-binding-var-name))))
-
-           (result-ty
-             (tc:qualified-ty-type (tc:node-type expr)))
-
-           (while-let-node
-             (make-node-while-let
-              :type result-ty
-              :label (tc:node-for-label expr)
-              :pattern some-pattern
-              :expr iter-next-node
-              :body (translate-expression (tc:node-for-body expr) ctx env))))
-
-      (make-node-bind
-       :type result-ty
-       :name into-iter-binding-var-name
-       :expr into-iter-node
-       :body while-let-node)))
-
-  (:method ((expr tc:node-loop) ctx env)
-    (declare (type pred-context ctx)
-             (type tc:environment env)
-             (values node))
-    (make-node-loop
+    (make-node-for
      :type (tc:qualified-ty-type (tc:node-type expr))
-     :label (tc:node-loop-label expr)
-     :body (translate-expression (tc:node-loop-body expr) ctx env)))
+     :label (tc:node-for-label expr)
+     :bindings
+     (loop :for binding :in (tc:node-for-bindings expr)
+           :collect (make-node-for-binding
+                     :name (tc:node-variable-name (tc:node-for-binding-name binding))
+                     :type (tc:qualified-ty-type (tc:node-type (tc:node-for-binding-name binding)))
+                     :init (translate-expression (tc:node-for-binding-init binding) ctx env)
+                     :step (and (tc:node-for-binding-step binding)
+                                (translate-expression (tc:node-for-binding-step binding) ctx env))))
+     :returns (and (tc:node-for-returns expr)
+                   (translate-expression (tc:node-for-returns expr) ctx env))
+     :termination-kind (tc:node-for-termination-kind expr)
+     :termination-expr (and (tc:node-for-termination-expr expr)
+                            (translate-expression (tc:node-for-termination-expr expr) ctx env))
+     :body (translate-expression (tc:node-for-body expr) ctx env)))
 
   (:method ((expr tc:node-break) ctx env)
     (declare (type pred-context ctx)

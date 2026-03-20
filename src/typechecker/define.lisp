@@ -1848,167 +1848,160 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
             (tc:coalton-internal-type-error ()
               (standard-expression-type-mismatch-error node subs expected-type result-ty)))))))
 
-
-  (:method ((node parser:node-while) expected-type subs env)
-    (declare (type tc:ty expected-type)
-             (type tc:substitution-list subs)
-             (type tc-env env)
-             (values tc:ty tc:ty-predicate-list accessor-list node-while tc:substitution-list &optional))
-    (multiple-value-bind (expr-ty preds accessors expr-node subs)
-        (infer-expression-type (parser:node-while-expr node)
-                               tc:*boolean-type*
-                               subs
-                               env)
-      (declare (ignore expr-ty))
-
-      (multiple-value-bind (body-ty preds_ accessors_ body-node subs)
-          (infer-expression-type (parser:node-while-body node)
-                                 (tc:make-variable)
-                                 subs
-                                 env)
-        (declare (ignore body-ty))
-
-        (setf preds (append preds preds_))
-        (setf accessors (append accessors accessors_))
-
-        (let ((result-ty (zero-result-type)))
-          (handler-case
-              (progn
-                (setf subs (tc:unify subs result-ty expected-type))
-                (values
-                 result-ty
-                 preds
-                 accessors
-                 (make-node-while
-                  :type (tc:qualify nil result-ty)
-                  :location (source:location node)
-                  :label (parser:node-while-label node)
-                  :expr expr-node
-                  :body body-node)
-                 subs))
-            (tc:coalton-internal-type-error ()
-              (standard-expression-type-mismatch-error node subs expected-type result-ty)))))))
-
-  (:method ((node parser:node-while-let) expected-type subs env)
-    (declare (type tc:ty expected-type)
-             (type tc:substitution-list subs)
-             (type tc-env env)
-             (values tc:ty tc:ty-predicate-list accessor-list node-while-let tc:substitution-list &optional))
-
-    (multiple-value-bind (expr-ty preds accessors expr-node subs)
-        (infer-expression-type (parser:node-while-let-expr node)
-                               (tc:make-variable) 
-                               subs
-                               env)
-
-      (multiple-value-bind (pat-ty pat-node subs)
-          (infer-pattern-type (parser:node-while-let-pattern node) expr-ty subs env)
-        (declare (ignore pat-ty))
-        
-        (multiple-value-bind (body-ty preds_ accessors_ body-node subs)
-            (infer-expression-type (parser:node-while-let-body node)
-                                   (tc:make-variable)
-                                   subs
-                                   env)
-          (declare (ignore body-ty))
-          (setf preds (append preds preds_))
-          (setf accessors (append accessors accessors_))
-          
-          (let ((result-ty (zero-result-type)))
-            (handler-case
-                (progn
-                  (setf subs (tc:unify subs result-ty expected-type))
-                  (values
-                   result-ty
-                   preds
-                   accessors
-                   (make-node-while-let
-                    :type (tc:qualify nil result-ty)
-                    :location (source:location node)
-                    :label (parser:node-while-let-label node)
-                    :pattern pat-node
-                    :expr expr-node
-                    :body body-node)
-                   subs))
-              (tc:coalton-internal-type-error ()
-                (standard-expression-type-mismatch-error node subs expected-type result-ty))))))))
-
-
   (:method ((node parser:node-for) expected-type subs env)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node-for tc:substitution-list &optional))
 
-    (let ((intoiter-symbol
-            (util:find-symbol "INTOITERATOR" "COALTON/ITERATOR")))
+    (let ((def-table (make-hash-table :test #'eq))
+          (dec-table (make-hash-table :test #'eq))
+          (preds nil)
+          (accessors nil))
 
-      (multiple-value-bind (pat-ty pat-node subs)
-          (infer-pattern-type (parser:node-for-pattern node) (tc:make-variable) subs env)
+      ;; Ensure that there are no duplicate loop bindings.
+      (loop :for binding :in (parser:node-for-bindings node)
+            :for name := (parser:node-variable-name (parser:node-for-binding-name binding))
+            :if (gethash name def-table)
+              :do (tc-error "Duplicate binding in loop"
+                            (tc-note (parser:node-for-binding-name binding)
+                                     "second definition here")
+                            (tc-note (parser:node-for-binding-name
+                                      (gethash name def-table))
+                                     "first definition here"))
+            :else
+              :do (setf (gethash name def-table) binding))
 
-        (multiple-value-bind (expr-ty preds accessors expr-node subs)
-            (infer-expression-type (parser:node-for-expr node) (tc:make-variable) subs env)
+      ;; Ensure that there are no duplicate declarations.
+      (loop :for declare :in (parser:node-for-declares node)
+            :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
+            :if (gethash name dec-table)
+              :do (tc-error "Duplicate declaration in loop"
+                            (tc-note (parser:node-let-declare-name declare)
+                                     "second declaration here")
+                            (tc-note (parser:node-let-declare-name
+                                      (gethash name dec-table))
+                                     "first declaration here"))
+            :else
+              :do (setf (gethash name dec-table) declare))
 
-          (multiple-value-bind (body-ty preds_ accessors_ body-node subs)
-              (infer-expression-type (parser:node-for-body node) (tc:make-variable) subs env)
+      ;; Ensure that each declaration has an associated loop binding.
+      (loop :for declare :in (parser:node-for-declares node)
+            :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
+            :unless (gethash name def-table)
+              :do (tc-error "Orphan declare in loop"
+                            (tc-note (parser:node-let-declare-name declare)
+                                     "declaration does not have an associated loop binding")))
 
-            (declare (ignore body-ty))
+      (let* ((declare-table
+               (loop :with table := (make-hash-table :test #'eq)
+                     :for declare :in (parser:node-for-declares node)
+                     :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
+                     :do (setf (gethash name table) (parser:node-let-declare-type declare))
+                     :finally (return table)))
+             (init-bindings
+               (loop :for binding :in (parser:node-for-bindings node)
+                     :collect (parser:make-node-let-binding
+                               :name (parser:node-for-binding-name binding)
+                               :value (parser:node-for-binding-init binding)
+                               :location (source:location binding)))))
 
-            (setf preds     (append preds     preds_))
-            (setf accessors (append accessors accessors_))
+        (multiple-value-bind (preds_ accessors_ binding-init-nodes subs)
+            (infer-bindings-type init-bindings declare-table subs env)
+          (setf preds (append preds preds_))
+          (setf accessors (append accessors accessors_))
 
-            (let ((result-ty (zero-result-type)))
-              (handler-case
-                  (progn
-                    (setf subs (tc:unify subs result-ty expected-type))
-                    (values
-                     result-ty
-                     (cons
-                      (tc:make-ty-predicate
-                       :class intoiter-symbol
-                       :types (list expr-ty pat-ty)
-                       :location (source:location node))
-                      preds)
-                     accessors
-                     (make-node-for
-                      :type (tc:qualify nil result-ty)
-                      :location (source:location node)
-                      :label (parser:node-for-label node)
-                      :pattern pat-node
-                      :expr expr-node
-                      :body body-node)
-                     subs))
-                (tc:coalton-internal-type-error ()
-                  (standard-expression-type-mismatch-error node subs expected-type result-ty)))))))))
+          (let ((binding-init-table (make-hash-table :test #'eq)))
+            (loop :for binding :in binding-init-nodes
+                  :for name := (node-variable-name (node-let-binding-name binding))
+                  :do (setf (gethash name binding-init-table) binding))
 
-  (:method ((node parser:node-loop) expected-type subs env)
-    (declare (type tc:ty expected-type)
-             (type tc:substitution-list subs)
-             (type tc-env env)
-             (values tc:ty tc:ty-predicate-list accessor-list node-loop tc:substitution-list &optional))
+            (multiple-value-bind (termination-ty preds_ accessors_ termination-node subs)
+                (if (parser:node-for-termination-kind node)
+                    (infer-expression-type
+                     (parser:node-for-termination-expr node)
+                     (ecase (parser:node-for-termination-kind node)
+                       ((:while :until) tc:*boolean-type*)
+                       (:repeat tc:*ufix-type*))
+                     subs
+                     env)
+                    (values nil nil nil nil subs))
+              (declare (ignore termination-ty))
+              (setf preds (append preds preds_))
+              (setf accessors (append accessors accessors_))
 
-    (multiple-value-bind (body-ty preds accessors body-node subs)
-        (infer-expression-type (parser:node-loop-body node)
-                               (tc:make-variable)
-                               subs
-                               env)
-      (declare (ignore body-ty))
-      (let ((result-ty (zero-result-type)))
-        (handler-case
-            (progn
-              (setf subs (tc:unify subs result-ty expected-type))
-              (values
-               result-ty
-               preds
-               accessors
-               (make-node-loop
-                :type (tc:qualify nil result-ty)
-                :location (source:location node)
-                :label (parser:node-loop-label node)
-                :body body-node)
-               subs))
-          (tc:coalton-internal-type-error ()
-            (standard-expression-type-mismatch-error node subs expected-type result-ty))))))
+              (multiple-value-bind (result-ty preds_ accessors_ returns-node subs)
+                  (if (parser:node-for-returns node)
+                      (infer-expression-type (parser:node-for-returns node)
+                                             (tc:make-variable)
+                                             subs
+                                             env)
+                      (values (zero-result-type) nil nil nil subs))
+                (setf preds (append preds preds_))
+                (setf accessors (append accessors accessors_))
+
+                (let ((binding-step-nodes
+                        (loop :for binding :in (parser:node-for-bindings node)
+                              :for name := (parser:node-variable-name
+                                            (parser:node-for-binding-name binding))
+                              :for init-binding := (gethash name binding-init-table)
+                              :for qual-type := (node-type (node-let-binding-name init-binding))
+                              :collect (and (parser:node-for-binding-step binding)
+                                            (multiple-value-bind (step-ty preds_ accessors_ step-node subs_)
+                                                (infer-expression-type (parser:node-for-binding-step binding)
+                                                                       (tc:qualified-ty-type qual-type)
+                                                                       subs
+                                                                       env)
+                                              (declare (ignore step-ty))
+                                              (setf subs subs_)
+                                              (setf preds (append preds preds_))
+                                              (setf accessors (append accessors accessors_))
+                                              step-node)))))
+
+                  (multiple-value-bind (body-ty preds_ accessors_ body-node subs)
+                      (infer-expression-type (parser:node-for-body node)
+                                             (zero-result-type)
+                                             subs
+                                             env)
+                    (declare (ignore body-ty))
+                    (setf preds (append preds preds_))
+                    (setf accessors (append accessors accessors_))
+
+                    (handler-case
+                        (progn
+                          (setf subs (tc:unify subs result-ty expected-type))
+                          (values
+                           result-ty
+                           preds
+                           accessors
+                           (make-node-for
+                            :type (tc:qualify nil result-ty)
+                            :location (source:location node)
+                            :label (parser:node-for-label node)
+                            :bindings
+                            (loop :for binding :in (parser:node-for-bindings node)
+                                  :for name := (parser:node-variable-name
+                                                (parser:node-for-binding-name binding))
+                                  :for init-binding := (gethash name binding-init-table)
+                                  :for qual-type := (node-type (node-let-binding-name init-binding))
+                                  :for step-node :in binding-step-nodes
+                                  :collect (make-node-for-binding
+                                            :name (make-node-variable
+                                                   :type qual-type
+                                                   :location (source:location
+                                                              (parser:node-for-binding-name binding))
+                                                   :name name)
+                                            :init (node-let-binding-value init-binding)
+                                            :step step-node
+                                            :location (source:location binding)))
+                            :returns returns-node
+                            :termination-kind (parser:node-for-termination-kind node)
+                            :termination-expr termination-node
+                            :body body-node)
+                           subs))
+                      (tc:coalton-internal-type-error ()
+                        (standard-expression-type-mismatch-error
+                         node subs expected-type result-ty))))))))))))
 
   (:method ((node parser:node-break) expected-type subs env)
     (declare (type tc:ty expected-type)

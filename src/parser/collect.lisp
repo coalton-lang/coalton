@@ -205,6 +205,12 @@ in expressions. May not include all bound variables."
     (declare (values node-variable-list &optional))
     (collect-variables-generic% (node-let-binding-value node)))
 
+  (:method ((node node-for-binding))
+    (declare (values node-variable-list &optional))
+    (nconc (collect-variables-generic% (node-for-binding-init node))
+           (and (node-for-binding-step node)
+                (collect-variables-generic% (node-for-binding-step node)))))
+
   (:method ((node node-let))
     (declare (values node-variable-list))
     (nconc
@@ -328,24 +334,15 @@ in expressions. May not include all bound variables."
     (declare (values node-variable-list))
     (mapcan #'collect-variables-generic% (node-cond-clauses node)))
 
-  (:method ((node node-while))
-    (declare (values node-variable-list))
-    (nconc (collect-variables-generic% (node-while-expr node))
-           (collect-variables-generic% (node-while-body node))))
-
-  (:method ((node node-while-let))
-    (declare (values node-variable-list))
-    (nconc (collect-variables-generic% (node-while-let-expr node))
-           (collect-variables-generic% (node-while-let-body node))))
-
   (:method ((node node-for))
     (declare (values node-variable-list))
-    (nconc (collect-variables-generic% (node-for-expr node))
-           (collect-variables-generic% (node-for-body node))))  
-  
-  (:method ((node node-loop))
-    (declare (values node-variable-list))
-    (collect-variables-generic% (node-loop-body node)))
+    (nconc
+     (mapcan #'collect-variables-generic% (node-for-bindings node))
+     (and (node-for-returns node)
+          (collect-variables-generic% (node-for-returns node)))
+     (and (node-for-termination-expr node)
+          (collect-variables-generic% (node-for-termination-expr node)))
+     (collect-variables-generic% (node-for-body node))))
 
   (:method ((node node-break))
     (declare (values node-variable-list &optional))

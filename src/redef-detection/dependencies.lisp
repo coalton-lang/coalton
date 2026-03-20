@@ -187,28 +187,22 @@
                         (parser:node-values-nodes node)))
 
                  ;; Loops
-                 (parser:node-while
-                  (traverse (parser:node-while-expr node) local-bindings)
-                  (traverse (parser:node-while-body node) local-bindings))
-
-                 (parser:node-while-let
-                  (traverse (parser:node-while-let-expr node) local-bindings)
-                  (let ((new-locals (alexandria:copy-hash-table local-bindings)))
-                    (dolist (pvar (parser:pattern-variables
-                                   (parser:node-while-let-pattern node)))
-                      (setf (gethash (parser:pattern-var-name pvar) new-locals) t))
-                    (traverse (parser:node-while-let-body node) new-locals)))
-
                  (parser:node-for
-                  (traverse (parser:node-for-expr node) local-bindings)
+                  (dolist (binding (parser:node-for-bindings node))
+                    (traverse (parser:node-for-binding-init binding) local-bindings))
                   (let ((new-locals (alexandria:copy-hash-table local-bindings)))
-                    (dolist (pvar (parser:pattern-variables
-                                   (parser:node-for-pattern node)))
-                      (setf (gethash (parser:pattern-var-name pvar) new-locals) t))
+                    (dolist (binding (parser:node-for-bindings node))
+                      (setf (gethash (parser:node-variable-name
+                                      (parser:node-for-binding-name binding))
+                                     new-locals)
+                            t)
+                      (when (parser:node-for-binding-step binding)
+                        (traverse (parser:node-for-binding-step binding) new-locals)))
+                    (when (parser:node-for-returns node)
+                      (traverse (parser:node-for-returns node) new-locals))
+                    (when (parser:node-for-termination-expr node)
+                      (traverse (parser:node-for-termination-expr node) new-locals))
                     (traverse (parser:node-for-body node) new-locals)))
-
-                 (parser:node-loop
-                  (traverse (parser:node-loop-body node) local-bindings))
 
                  (parser:node-break
                   nil) ; No expressions

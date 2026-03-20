@@ -502,108 +502,101 @@ Coalton має спеціальний вбудований оператор `rec
 
 ### Вбудовані конструкції циклів
 
-Coalton підтримує нескінченні цикли, умовні цикли та ітерації типу `for`.
+Coalton підтримує імперативні цикли, умовні цикли та ітерацію на основі зіставлення з шаблоном.
 
-#### `loop`, `while`, `while-let`, and `for`
+#### `for`
 
 Можна зациклитися назавжди 
 
 ```lisp
-(loop (trace "hi"))
+(for ()
+  (show "hi"))
 ```
 
-Можна зациклитися, доки деяка умова істинна
+Можна використовувати умову `:while`, коли потрібні лише умова та тіло
 
 ```lisp
 (coalton
  (let ((counter (cell:new 0))
        (limit 10))
-   (while (< (cell:read counter) limit)
-     (trace "hi") 
+   (for ()
+     :while (< (cell:read counter) limit)
+     (show "hi")
      (cell:increment! counter))))
 ```
 
-Можна зациклитися, доки патерн співпадає
+Можна поєднати `for`, `match` та `break`, коли ітерація залежить від збігу патерна
 
 ```lisp
 (coalton
  (let ((xs (vector:make 4 3 2 1)))
-   (while-let (Some x) = (vector:pop! xs)
-              (traceobject "x" x))))
+   (for ()
+     (match (vector:pop! xs)
+       ((Some x) (show x))
+       ((None) (break))))))
 ```
-
-Можна ітеруватися по елементах `IntoIterator`
-
-```lisp
-(coalton
- (for x in "coalton"
-      (traceobject "x" x)))
-```
-
 
 #### `break` and `continue`
 
-Кожна з вищезгаданих форм циклів підтримує `break` та `continue`.
+Форма `for` підтримує `break` та `continue`.
 
-Конструкція `break` негайно завершує ітерацію. Наступний приклад виводить `c`, `o` та `a`, а потім завершується.
+Конструкція `break` негайно завершує ітерацію. Наступний приклад виводить `0`, `1` та `2`, а потім завершується.
 
 ```lisp
 (coalton
- (for x in "coalton"
-      (when (== x #\l)
-        (break))
-      (traceobject "x" x)))
+ (let counter = (cell:new 0))
+ (for ()
+   (when (== 3 (cell:read counter))
+     (break))
+   (show (cell:read counter))
+   (cell:increment! counter)))
 ```
 
-Конструкція `continue` пропускає решту тіла циклу і починає наступну ітерацію. Наступний приклад виводить `c`, `o`, `a`, `t`, `o` та `n`, пропускаючи виведення `l`.
+Конструкція `continue` пропускає решту тіла циклу і починає наступну ітерацію. Наступний приклад виводить `1`, `3` та `5`, пропускаючи парні значення.
 
 ```lisp
 (coalton
- (for x in "coalton"
-      (when (== x #\l)
-        (continue))
-      (traceobject "x" x)))
+ (let counter = (cell:new 0))
+ (for ()
+   (when (== 6 (cell:read counter))
+     (break))
+   (let n = (cell:read counter))
+   (cell:increment! counter)
+   (when (== 0 (mod n 2))
+     (continue))
+   (show n)))
 ```
 
 
 #### Мітки циклів
 
-Кожна з вищезгаданих форм циклів може приймати необов'язкову мітку циклу. Ці мітки можуть використовуватися разом із `break` та `continue` для досягнення складного керування ітерацією.
+Форма `for` може приймати необов'язкову мітку циклу. Ці мітки можуть використовуватися разом із `break` та `continue` для досягнення складного керування ітерацією.
 
-Для кожної з форм циклів мітка може слідувати безпосередньо за відкриваючим терміном циклу:
+Мітка може слідувати безпосередньо за словом `for`:
 
 ```lisp 
 
-(loop :outer (do-stuff))
+(for :outer () (do-stuff))
 
-(while :a-label (is-true?) (do-stuff))
-
-(while-let :another-label 
-   (Some thing) = (get-something)
-   (do-stuff thing))
-
-(for :iter word in words 
-   (do-stuff-with word))
-
+(for :another-label ()
+  :while (is-true?)
+  (do-stuff))
 ```
 
-У наступному повністю вигаданому прикладі зовнішній цикл позначений як `:outer`. Ця мітка передається в `break` зсередини внутрішнього циклу `while`, щоб припинити ітерацію, коли сума акумулятора та лічильника перевищить 500. Без мітки `:outer`, `break` вийшов би лише з внутрішнього циклу `while`.
+У наступному повністю вигаданому прикладі зовнішній цикл позначений як `:outer`. Ця мітка передається в `break` зсередини внутрішнього `for`, щоб припинити ітерацію, коли сума `x` та `y` перевищить 500. Без мітки `:outer`, `break` вийшов би лише з внутрішнього `for`.
 
 ```lisp
 (coalton 
-  (let ((counter (cell:new 0))
-        (acc (cell:new Nil)))
-    (loop :outer
-          (while (< (cell:increment! counter) 10)
-            (let x = (fold + (cell:read counter) (cell:read acc)))
-            (when (< 500 x)
-              (break :outer))
-            (when (== 0 (mod (cell:read counter) 3)) 
-              (continue))
-            (cell:push! acc x))
-          (when (< (length (cell:read acc)) 500)
-            (cell:swap! counter 0)
-            Unit))
+  (let ((acc (cell:new Nil)))
+    (for :outer ((x 0 (+ x 10)))
+      (for ((y 0 (1+ y)))
+        :while (< y 10)
+        (let total = (+ x y))
+        (when (< 500 total)
+          (break :outer))
+        (when (== 0 (mod y 3))
+          (continue))
+        (cell:push! acc total)))
     (cell:read acc)))
 ```
 
@@ -1426,8 +1419,9 @@ standard call
 (declare make-breakfast-for (UFix -> (Vector Egg)))
 (define (make-breakfast-for n)
   (let ((eggs (vector:make))
-        (skip  SkipEgg))              ; can construct outside of resume-to
-    (for i in (iter:up-to n)
+        (skip  SkipEgg))
+    (for ((i 0 (1+ i)))
+      :repeat n
       (let egg = (if (== 0 (mod i 5)) Xenomorph (Goose False False)))
       (do
        (cooked <- (catch (make-breakfast-with egg)
@@ -1470,4 +1464,3 @@ make-breakfast-for
 
 
    
-

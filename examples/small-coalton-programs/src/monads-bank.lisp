@@ -53,6 +53,7 @@
    #:coalton/monad/resultt
    #:coalton/experimental/do-control-core)
   (:local-nicknames
+   (#:iter #:coalton/iterator)
    (#:s #:coalton/string)
    (#:m #:coalton/ordmap))
   (:export
@@ -132,9 +133,14 @@
 
   (declare print-report (BankState -> Unit))
   (define (print-report accounts)
-    (for (Account name balance) in (m:values-iter accounts)
-      (lisp (-> :a) (name balance)
-        (cl:format cl:t "Name:~10T~a~%Balance:~10T~a~%~%" name balance)))
+    (iter:for-each!
+     (fn (account)
+       (match account
+         ((Account name balance)
+          (lisp (-> :a) (name balance)
+            (cl:format cl:t "Name:~10T~a~%Balance:~10T~a~%~%" name balance))
+          (values))))
+     (m:values-iter accounts))
     (lisp (-> :a) ()
       (cl:format cl:t "--------~%"))
     Unit))

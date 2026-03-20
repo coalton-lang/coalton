@@ -97,21 +97,21 @@
    #:make-node-resumable                ; CONSTRUCTOR
    #:node-resumable-expr                ; READER
    #:node-resumable-branches            ; READER
-   #:node-while                         ; STRUCT
-   #:make-node-while                    ; CONSTRUCTOR
-   #:node-while-label                   ; READER
-   #:node-while-expr                    ; READER
-   #:node-while-body                    ; ACESSOR
-   #:node-while-let                     ; STRUCT
-   #:make-node-while-let                ; CONSTRUCTOR
-   #:node-while-let-label               ; ACESSOR
-   #:node-while-let-pattern             ; READER
-   #:node-while-let-expr                ; READER
-   #:node-while-let-body                ; ACESSOR
-   #:node-loop                          ; STRUCT
-   #:make-node-loop                     ; CONSTRUCTOR
-   #:node-loop-body                     ; READER
-   #:node-loop-label                    ; READER
+   #:node-for-binding                  ; STRUCT
+   #:make-node-for-binding             ; CONSTRUCTOR
+   #:node-for-binding-name             ; READER
+   #:node-for-binding-type             ; READER
+   #:node-for-binding-init             ; READER
+   #:node-for-binding-step             ; READER
+   #:node-for-binding-list             ; TYPE
+   #:node-for                          ; STRUCT
+   #:make-node-for                     ; CONSTRUCTOR
+   #:node-for-bindings                 ; READER
+   #:node-for-returns                  ; READER
+   #:node-for-termination-kind         ; READER
+   #:node-for-termination-expr         ; READER
+   #:node-for-body                     ; READER
+   #:node-for-label                    ; READER
    #:node-break                         ; STRUCT
    #:make-node-break                    ; CONSTRUCTOR
    #:node-break-label                   ; READER
@@ -381,31 +381,38 @@ coalton symbols (`parser:identifier`)"
   (branches (util:required 'branches) :type resumable-branch-list :read-only t))
 
 
-(defstruct (node-while (:include node))
-  "A looping construct. Executes a body until an expression is false."
-  (label (util:required 'label) :type keyword :read-only t)
-  (expr  (util:required 'expr)  :type node    :read-only t)
-  (body  (util:required 'body)  :type node    :read-only t))
+(defstruct node-for-binding
+  "A single `for` variable with an initializer and optional step expression."
+  (name (util:required 'name) :type parser:identifier :read-only t)
+  (type (util:required 'type) :type tc:ty             :read-only t)
+  (init (util:required 'init) :type node              :read-only t)
+  (step nil                   :type (or null node)    :read-only t))
 
-(defstruct (node-while-let (:include node))
-  "A looping construct. Executes a body until a pattern match fails."
-  (label   (util:required 'label)   :type keyword :read-only t)
-  (pattern (util:required 'pattern) :type pattern :read-only t)
-  (expr    (util:required 'expr)    :type node    :read-only t)
-  (body    (util:required 'body)    :type node    :read-only t))
+(defmethod make-load-form ((self node-for-binding) &optional env)
+  (make-load-form-saving-slots self :environment env))
 
-(defstruct (node-loop (:include node))
-  "A labelled looping construct. Loops forever until broken out of by a
-call to (break)."
-  (label (util:required 'label) :type keyword :read-only t)
-  (body  (util:required 'body)  :type node    :read-only t))
+(defun node-for-binding-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'node-for-binding-p x)))
+
+(deftype node-for-binding-list ()
+  '(satisfies node-for-binding-list-p))
+
+(defstruct (node-for (:include node))
+  "A labelled imperative `for` with explicit bindings and step expressions."
+  (label            (util:required 'label)            :type keyword                         :read-only t)
+  (bindings         (util:required 'bindings)         :type node-for-binding-list          :read-only t)
+  (returns          nil                               :type (or null node)                  :read-only t)
+  (termination-kind nil                               :type (member nil :while :until :repeat) :read-only t)
+  (termination-expr nil                               :type (or null node)                  :read-only t)
+  (body             (util:required 'body)             :type node                            :read-only t))
 
 (defstruct (node-break (:include node))
-  "A break statment used to exit a loop."
+  "A break statement used to exit a `for`."
   (label (util:required 'label) :type keyword :read-only t))
 
 (defstruct (node-continue (:include node))
-  "A continue statment used to skip to the next iteration of a loop."
+  "A continue statement used to skip to the next iteration of a `for`."
   (label (util:required 'label) :type keyword :read-only t))
 
 (defstruct (node-seq (:include node))
