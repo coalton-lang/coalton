@@ -110,7 +110,43 @@
         (unless (== i 0)
           (loop (- i 1)))))"
 
-   '("count-down" . "(Num :a => :a -> Void)")))
+   '("count-down" . "(Num :a => :a -> Void)"))
+
+  (check-coalton-types
+   "(define (count-to n)
+      (for ((declare i UFix)
+            (i 0 (1+ i)))
+        :returns i
+        :while (< i n)
+        Unit))
+
+    (define (repeat-from-binding)
+      (for ((x 10))
+        :repeat x
+        (show \"hi\")))
+
+    (define (for-init-binding-scope)
+      (for ((declare a UFix)
+            (declare b UFix)
+            (a b)
+            (b 1 (+ b 1)))
+        :returns b
+        :while (< b 10)
+        Unit))
+
+    (define (sum-to n)
+      (for ((declare i UFix)
+            (declare acc UFix)
+            (i 0 (1+ i))
+            (acc 0 (+ acc i)))
+        :returns acc
+        :repeat n
+        Unit))"
+
+   '("count-to" . "(UFix -> UFix)")
+   '("repeat-from-binding" . "(Void -> Void)")
+   '("for-init-binding-scope" . "(Void -> UFix)")
+   '("sum-to" . "(UFix -> UFix)")))
 
 (deftest test-keyword-function-types ()
   (check-coalton-types

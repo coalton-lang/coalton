@@ -94,11 +94,11 @@ Iterators are consumed by calling `next!` repeatedly. Most users will not call `
 (iter:sum! (iter:up-to 10))  ;; => 45
 ```
 
-### Looping with `for`
+### Iterating for Side Effects
 
 ```lisp
-(for x in (iter:up-to 5)
-  (traceobject "x" x))
+(iter:for-each! show
+                (iter:up-to 5))
 ```
 
 ### Searching
@@ -253,10 +253,17 @@ Use the `FromIterator` type class via `collect!`:
 (coalton-toplevel
   (define (group-by-parity n)
     (let ((evens (vec:new))
-          (odds  (vec:new)))
-      (for i in (iter:up-to n)
-        (if (even? i)
-            (vec:push! i evens)
-            (vec:push! i odds)))
+          (odds  (vec:new))
+          (iter  (iter:up-to n)))
+      (for ()
+        (let next = (iter:next! iter))
+        (when (== next None)
+          (break))
+        (match next
+          ((Some i)
+           (if (even? i)
+               (vec:push! i evens)
+               (vec:push! i odds)))
+          ((None) Unit)))
       (Tuple evens odds))))
 ```

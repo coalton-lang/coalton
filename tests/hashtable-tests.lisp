@@ -56,12 +56,17 @@
           (hash (hashtable:make (0 "zero") (1 "one")))))
 
   (let ht1 = (hashtable:new))
-  (for x in (iter:up-to 10000)
+  (for ((declare x UFix)
+        (x 0 (1+ x)))
+    :repeat 10000
     (hashtable:set! ht1 x x))
 
   (let ht2 = (hashtable:new))
-  (for x in (iter:down-from 10000)
-    (hashtable:set! ht2 x x))
+  (for ((declare x UFix)
+        (x 10000 (1- x)))
+    :repeat 10000
+    (let y = (1- x))
+    (hashtable:set! ht2 y y))
 
   (is (== (hash ht1) (hash ht2)))
 

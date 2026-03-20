@@ -94,12 +94,9 @@
    #:_
    #:return
    #:the
-   #:while
-   #:while-let
-   #:loop
+   #:for
    #:break
    #:continue
-   #:for
    #:in                                 ; Syntax
    )
 

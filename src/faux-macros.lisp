@@ -148,20 +148,11 @@
 (define-coalton-editor-macro coalton:return (&optional value)
   "Monadic return. Wraps VALUE in the current monadic context. Equivalent to calling `pure`.")
 
-(define-coalton-editor-macro coalton:loop (&body body)
-  "Infinite loop. Repeatedly evaluates BODY until terminated by `break`. Supports an optional loop label keyword for nested loop control.")
-
-(define-coalton-editor-macro coalton:while (test &body body)
-  "Conditional loop. Evaluates BODY repeatedly as long as TEST is True. Supports `break`, `continue`, and an optional loop label keyword.")
-
-(define-coalton-editor-macro coalton:while-let (pattern = test &body body)
-  "Pattern-matching loop. Evaluates TEST each iteration; if it matches PATTERN, binds the pattern variables and evaluates BODY. Terminates when the pattern does not match. Supports `break`, `continue`, and an optional loop label keyword.")
-
-(define-coalton-editor-macro coalton:for (pattern in iter &body body)
-  "Iterator loop. Evaluates ITER (which must implement IntoIterator), then for each element matching PATTERN, evaluates BODY. Supports `break`, `continue`, and an optional loop label keyword.")
+(define-coalton-editor-macro coalton:for (&rest header-and-body)
+  "Imperative iteration. Syntax: (for [label] (<binding-clause>*) [:returns expr] [(:while | :until | :repeat) expr] body...). Binding clauses are (declare var type) or (var init [step]). The binding list is required, but it may be empty, and any `:returns` clause must appear immediately after it.")
 
 (define-coalton-editor-macro coalton:break (&optional label)
-  "Terminate the enclosing loop immediately. If LABEL is provided, terminates the loop with that label, allowing break from nested loops.")
+  "Terminate the enclosing `for` immediately. If LABEL is provided, terminates the `for` with that label, allowing break from nested loops. In the imperative `for` form, `break` skips the current iteration's step phase.")
 
 (define-coalton-editor-macro coalton:continue (&optional label)
-  "Skip the rest of the current loop iteration and start the next one. If LABEL is provided, continues the loop with that label.")
+  "Skip the rest of the current `for` iteration and start the next one. If LABEL is provided, continues the `for` with that label. In the imperative `for` form, `continue` still performs the step phase before the next iteration.")
