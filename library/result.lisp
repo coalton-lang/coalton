@@ -30,14 +30,14 @@
   ;; Result
   ;;
 
-  (declare err-if (Boolean -> :err -> Result :err Unit))
+  (declare err-if (Boolean * :err -> Result :err Unit))
   (define (err-if failed? failure)
     "Fail with FAILURE value if FAILED? is True."
     (if failed?
         (Err failure)
         (Ok Unit)))
 
-  (declare opt->result (:err -> Optional :a -> Result :err :a))
+  (declare opt->result (:err * Optional :a -> Result :err :a))
   (define (opt->result failure opt)
     "Convert OPT to a Result, using FAILURE value if None."
     (match opt
@@ -64,14 +64,14 @@
     "Wrap a value inside F-A inside of 'Ok'."
     (map Ok f-a))
 
-  (declare map-err ((:a -> :b) -> Result :a :c -> Result :b :c))
+  (declare map-err ((:a -> :b) * Result :a :c -> Result :b :c))
   (define (map-err f x)
     "Map over the ERR case"
     (match x
       ((Err x) (Err (f x)))
       ((Ok x) (Ok x))))
 
-  (declare ok-or-def (:a -> Result :err :a -> :a))
+  (declare ok-or-def (:a * Result :err :a -> :a))
   (define (ok-or-def def res)
     "Take value in RES if it is OK, or DEF if it is ERR."
     (match res

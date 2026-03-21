@@ -5,8 +5,8 @@
 ;;; We depend on some of the functionality of float-tests.lisp.
 
 (coalton-toplevel
-  (define-instance (LooseCompare :t => LooseCompare (math:Dual :t))
-    (define (~ (math:Dual a1 b1) (math:Dual a2 b2))
+  (define-instance (LooseCompare :t => LooseCompare (dual:Dual :t))
+    (define (~ (dual:Dual a1 b1) (dual:Dual a2 b2))
       (and (~ a1 a2) (~ b1 b2))))
 
   ;; Some test functions.
@@ -40,15 +40,15 @@
            (math:exp (math:sin (math:cos (+ x 1))))))))
 
   ;; A derivative operator
-  (declare deriv (Num :t => (math:Dual :t -> math:Dual :t) -> :t -> math:Dual :t))
+  (declare deriv (Num :t => (dual:Dual :t -> dual:Dual :t) * :t -> dual:Dual :t))
   (define (deriv f a)
-    (f (math:Dual a 1)))
+    (f (dual:Dual a 1)))
 
   (define (test-dual dual-f f df a)
     ;; N.B. DUAL-F and F are always the "same function", but they need
     ;; to be instantiated separately on different types.
     (let ((dual-method (deriv dual-f a))
-          (manual-method (math:Dual (f a) (df a))))
+          (manual-method (dual:Dual (f a) (df a))))
       (is (~ dual-method manual-method)))))
 
 (define-test dual-tests ()

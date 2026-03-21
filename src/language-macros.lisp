@@ -161,7 +161,7 @@ to the `format-string` via `cl:format` to produce an error message."
     `(let ((,datum-temp ,datum)
            ,@(cl:mapcar #'cl:list format-data-temps format-data))
        (progn
-         (lisp :any (,datum-temp ,@format-data-temps)
+         (lisp (-> :any) (,datum-temp ,@format-data-temps)
            (cl:assert ,datum-temp ()
                       ,(cl:format cl:nil
                                   "Assertion ~a failed: ~a"

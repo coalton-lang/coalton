@@ -8,6 +8,7 @@
   (:export
    #:pred-context                       ; TYPE
    #:pred-type                          ; FUNCTION
+   #:register-static-dict-resolver      ; FUNCTION
    #:resolve-dict                       ; FUNCTION
    #:resolve-static-dict                ; FUNCTION
    ))
@@ -37,6 +38,25 @@
       :kind pred-kind)
      (tc:ty-predicate-types pred))))
 
+(defvar *static-dict-resolvers* nil
+  "Symbols naming additional static dictionary resolvers.")
+
+(defun register-static-dict-resolver (resolver)
+  (declare (type symbol resolver)
+           (values symbol &optional))
+  (pushnew resolver *static-dict-resolvers* :test #'eq)
+  resolver)
+
+(defun resolve-extra-static-dict (pred context env)
+  (declare (type tc:ty-predicate pred)
+           (type pred-context context)
+           (values (or null node) boolean &optional))
+  (dolist (resolver *static-dict-resolvers* (values nil nil))
+    (multiple-value-bind (dict foundp)
+        (funcall resolver pred context env)
+      (when foundp
+        (return (values dict t))))))
+
 (defun resolve-static-dict (pred context env)
   "Attempt to resolve PRED from static instances"
   (declare (type tc:ty-predicate pred)
@@ -45,46 +65,58 @@
 
   ;; Lookup the predicate as a static instance
   (multiple-value-bind (instance subs)
-      (tc:lookup-class-instance env pred)
+      (tc:lookup-class-instance env pred :no-error t)
+    (cond
+      (instance
+       (let*
+           ;; Apply substitutions to find the superclass constraints
+           ((instance-constraints
+              (tc:apply-substitution
+               subs
+               (tc:ty-class-instance-constraints-expanded instance env)))
 
-    (let*
-        ;; Apply substitutions to find the superclass constraints
-        ((instance-constraints
-           (tc:apply-substitution
-            subs
-            (tc:ty-class-instance-constraints-expanded instance env)))
+            ;; Apply any fundep substitutions
+            (fundep-subs (nth-value 1 (tc:solve-fundeps env instance-constraints subs)))
+            (instance-constraints
+              (tc:apply-substitution
+               fundep-subs
+               (tc:ty-class-instance-constraints-expanded instance env)))
 
-         ;; Apply any fundep substitutions
-         (fundep-subs (nth-value 1 (tc:solve-fundeps env instance-constraints subs)))
-         (instance-constraints
-           (tc:apply-substitution
-            fundep-subs
-            (tc:ty-class-instance-constraints-expanded instance env)))
+            ;; Generate dicts from those constraints
+            (subdicts
+              (mapcar
+               (lambda (pred)
+                 (resolve-dict pred context env))
+               instance-constraints))
 
-         ;; Generate dicts from those constraints
-         (subdicts
-           (mapcar
-            (lambda (pred)
-              (resolve-dict pred context env))
-            instance-constraints))
+            ;; Find the types of those dicts
+            (arg-types (mapcar #'node-type subdicts)))
 
-         ;; Find the types of those dicts
-         (arg-types (mapcar #'node-type subdicts)))
+         (if (null subdicts)
+             ;; If the instance has no superclasses return a variable
+             (make-node-variable
+              :type (pred-type pred env)
+              :value (tc:ty-class-instance-codegen-sym instance))
 
-      (if (null subdicts)
-          ;; If the instance has no superclasses return a variable
-          (make-node-variable
-           :type (pred-type pred env)
-           :value (tc:ty-class-instance-codegen-sym instance))
-
-          ;; Otherwise create a new dict at runtime
-          (make-node-application
-           :type (pred-type pred env) 
-           :properties '()
-           :rator (make-node-variable
-                   :type (tc:make-function-type* arg-types (pred-type pred env))
-                   :value (tc:ty-class-instance-codegen-sym instance))
-           :rands subdicts)))))
+             ;; Otherwise create a new dict at runtime
+             (make-node-application
+              :type (pred-type pred env)
+              :properties '()
+              :rator (make-node-variable
+                      :type (tc:make-function-type* arg-types (pred-type pred env))
+                      :value (tc:ty-class-instance-codegen-sym instance))
+              :rands subdicts))))
+      (t
+       ;; No explicit instance matched. Give compiler-registered resolvers a
+       ;; chance to synthesize a dictionary for internal type shapes, then
+       ;; fall back to the ordinary instance lookup to signal the usual error.
+       (multiple-value-bind (dict foundp)
+           (resolve-extra-static-dict pred context env)
+         (cond
+           (foundp
+            dict)
+           (t
+            (tc:lookup-class-instance env pred))))))))
 
 
 (defun superclass-accessors (pred ctx-pred env)
@@ -169,26 +201,7 @@
 (defun matching-context-type-p (type ctx-type)
   (declare (type tc:ty type ctx-type)
            (values boolean &optional))
-  (typecase type
-    (tc:tyvar
-     (and (typep ctx-type 'tc:tyvar)
-          (or (tc:ty= type ctx-type)
-              ;; Fresh instantiation gives each use fresh tyvar ids, but an
-              ;; explicit forall binder still carries its quantified binding
-              ;; identity across instantiations.
-              (and (tc:tyvar-binding-id type)
-                   (eq (tc:tyvar-binding-id type)
-                       (tc:tyvar-binding-id ctx-type))
-                   (equalp (tc:kind-of type)
-                           (tc:kind-of ctx-type))))))
-    (tc:tapp
-     (and (typep ctx-type 'tc:tapp)
-          (matching-context-type-p (tc:tapp-from type)
-                                   (tc:tapp-from ctx-type))
-          (matching-context-type-p (tc:tapp-to type)
-                                   (tc:tapp-to ctx-type))))
-    (t
-     (tc:ty= type ctx-type))))
+  (tc:ty= type ctx-type))
 
 (defun matching-context-predicate-p (pred ctx-pred)
   (declare (type tc:ty-predicate pred ctx-pred)

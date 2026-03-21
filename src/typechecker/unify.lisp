@@ -28,6 +28,161 @@
                          (apply-substitution substs type2))))
     (compose-substitution-lists new-substs substs)))
 
+(defun function-keyword-entry (entries keyword)
+  (declare (type keyword keyword)
+           (values (or null keyword-ty-entry) &optional))
+  (find keyword entries :key #'keyword-ty-entry-keyword :test #'eq))
+
+(defun ensure-compatible-function-types (type1 type2 condition)
+  "Verify that two function types have compatible structure for unification.
+
+Checks that positional arity, keyword count, output arity, and keyword-open-p
+all match exactly.  Also checks that every keyword in type1 exists in type2.
+Because the keyword counts are equal, this subset check implies set equality:
+same count + type1 ⊆ type2 ⟹ type1 = type2 (as keyword sets).
+
+Output arity is compared after normalizing: a single type-variable output is
+compatible with zero outputs (Void), since unification can bind the variable
+to the zero-result type."
+  (flet ((fail ()
+           (error condition :type1 type1 :type2 type2)))
+    (unless (= (length (function-ty-positional-input-types type1))
+               (length (function-ty-positional-input-types type2)))
+      (fail))
+    (unless (= (length (function-ty-keyword-input-types type1))
+               (length (function-ty-keyword-input-types type2)))
+      (fail))
+    (unless (or (= (length (function-ty-output-types type1))
+                   (length (function-ty-output-types type2)))
+                ;; A single tyvar output is compatible with zero outputs (Void).
+                (and (null (function-ty-output-types type1))
+                     (= 1 (length (function-ty-output-types type2)))
+                     (tyvar-p (first (function-ty-output-types type2))))
+                (and (null (function-ty-output-types type2))
+                     (= 1 (length (function-ty-output-types type1)))
+                     (tyvar-p (first (function-ty-output-types type1)))))
+      (fail))
+    (unless (eq (function-ty-keyword-open-p type1)
+                (function-ty-keyword-open-p type2))
+      (fail))
+    (dolist (entry (function-ty-keyword-input-types type1))
+      (unless (function-keyword-entry (function-ty-keyword-input-types type2)
+                                      (keyword-ty-entry-keyword entry))
+        (fail)))))
+
+(defun mgu-keyword-function-types (type1 type2)
+  (let ((subs nil))
+    (loop :for from-type :in (function-ty-positional-input-types type1)
+          :for to-type :in (function-ty-positional-input-types type2)
+          :do (setf subs
+                    (compose-substitution-lists
+                     (mgu (apply-substitution subs from-type)
+                          (apply-substitution subs to-type))
+                     subs)))
+    (dolist (entry1 (function-ty-keyword-input-types type1))
+      (let ((entry2 (function-keyword-entry (function-ty-keyword-input-types type2)
+                                            (keyword-ty-entry-keyword entry1))))
+        (setf subs
+              (compose-substitution-lists
+               (mgu (apply-substitution subs (keyword-ty-entry-type entry1))
+                    (apply-substitution subs (keyword-ty-entry-type entry2)))
+               subs))))
+    (let ((ot1 (function-ty-output-types type1))
+          (ot2 (function-ty-output-types type2)))
+      (cond
+        ;; Same arity: unify pairwise
+        ((= (length ot1) (length ot2))
+         (loop :for from-type :in ot1
+               :for to-type :in ot2
+               :do (setf subs
+                         (compose-substitution-lists
+                          (mgu (apply-substitution subs from-type)
+                               (apply-substitution subs to-type))
+                          subs))))
+        ;; One side has a single tyvar, the other is Void: bind the tyvar
+        ((and (null ot1) (= 1 (length ot2)) (tyvar-p (first ot2)))
+         (setf subs
+               (compose-substitution-lists
+                (mgu (apply-substitution subs (first ot2))
+                     (make-result-ty :output-types nil))
+                subs)))
+        ((and (null ot2) (= 1 (length ot1)) (tyvar-p (first ot1)))
+         (setf subs
+               (compose-substitution-lists
+                (mgu (apply-substitution subs (first ot1))
+                     (make-result-ty :output-types nil))
+                subs)))))
+    subs))
+
+(defun match-keyword-function-types (type1 type2)
+  (let ((subs nil))
+    (loop :for from-type :in (function-ty-positional-input-types type1)
+          :for to-type :in (function-ty-positional-input-types type2)
+          :do (setf subs
+                    (compose-substitution-lists
+                     (match (apply-substitution subs from-type)
+                            (apply-substitution subs to-type))
+                     subs)))
+    (dolist (entry1 (function-ty-keyword-input-types type1))
+      (let ((entry2 (function-keyword-entry (function-ty-keyword-input-types type2)
+                                            (keyword-ty-entry-keyword entry1))))
+        (setf subs
+              (compose-substitution-lists
+               (match (apply-substitution subs (keyword-ty-entry-type entry1))
+                      (apply-substitution subs (keyword-ty-entry-type entry2)))
+               subs))))
+    (let ((ot1 (function-ty-output-types type1))
+          (ot2 (function-ty-output-types type2)))
+      (cond
+        ((= (length ot1) (length ot2))
+         (loop :for from-type :in ot1
+               :for to-type :in ot2
+               :do (setf subs
+                         (compose-substitution-lists
+                          (match (apply-substitution subs from-type)
+                                 (apply-substitution subs to-type))
+                          subs))))
+        ((and (null ot1) (= 1 (length ot2)) (tyvar-p (first ot2)))
+         (setf subs
+               (compose-substitution-lists
+                (match (apply-substitution subs (first ot2))
+                       (make-result-ty :output-types nil))
+                subs)))
+        ((and (null ot2) (= 1 (length ot1)) (tyvar-p (first ot1)))
+         (setf subs
+               (compose-substitution-lists
+                (match (apply-substitution subs (first ot1))
+                       (make-result-ty :output-types nil))
+                subs)))))
+    subs))
+
+(defun ensure-compatible-result-types (type1 type2 condition)
+  (unless (= (length (result-ty-output-types type1))
+             (length (result-ty-output-types type2)))
+    (error condition :type1 type1 :type2 type2)))
+
+(defun mgu-result-types (type1 type2)
+  (let ((subs nil))
+    (loop :for from-type :in (result-ty-output-types type1)
+          :for to-type :in (result-ty-output-types type2)
+          :do (setf subs
+                    (compose-substitution-lists
+                     (mgu (apply-substitution subs from-type)
+                          (apply-substitution subs to-type))
+                     subs)))
+    subs))
+
+(defun match-result-types (type1 type2)
+  (let ((subs nil))
+    (loop :for from-type :in (result-ty-output-types type1)
+          :for to-type :in (result-ty-output-types type2)
+          :do (setf subs
+                    (compose-substitution-lists
+                     (match (apply-substitution subs from-type)
+                            (apply-substitution subs to-type))
+                     subs)))
+    subs))
+
 (defgeneric mgu (type1 type2)
   (:documentation "Returns a SUBSTITUTION-LIST of the most general substitutions required to unify TYPE1 and TYPE2.")
   (:method ((type1 tapp) (type2 tapp))
@@ -36,6 +191,12 @@
            (s2 (mgu (apply-substitution s1 (tapp-to type1))
                     (apply-substitution s1 (tapp-to type2)))))
       (compose-substitution-lists s2 s1)))
+  (:method ((type1 function-ty) (type2 function-ty))
+    (ensure-compatible-function-types type1 type2 'unification-error)
+    (mgu-keyword-function-types type1 type2))
+  (:method ((type1 result-ty) (type2 result-ty))
+    (ensure-compatible-result-types type1 type2 'unification-error)
+    (mgu-result-types type1 type2))
   (:method ((type1 tyvar) (type2 ty))
     (bind-variable type1 type2))
   (:method ((type1 ty) (type2 tyvar))
@@ -69,6 +230,12 @@ apply s type1 == type2")
     (let ((s1 (match (tapp-from type1) (tapp-from type2)))
           (s2 (match (tapp-to type1) (tapp-to type2))))
       (merge-substitution-lists s1 s2)))
+  (:method ((type1 function-ty) (type2 function-ty))
+    (ensure-compatible-function-types type1 type2 'unification-error)
+    (match-keyword-function-types type1 type2))
+  (:method ((type1 result-ty) (type2 result-ty))
+    (ensure-compatible-result-types type1 type2 'unification-error)
+    (match-result-types type1 type2))
   (:method ((type1 tyvar) (type2 ty))
     (if (equalp (kind-of type1) (kind-of type2))
         (list (make-substitution :from type1 :to type2))

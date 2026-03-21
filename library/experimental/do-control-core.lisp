@@ -74,7 +74,7 @@
   (define-class (Traversable :y => Yielder :y)
     "A data type that can terminate or yield a value into control flow."
     (yield (:y :a -> Optional :a))
-    (concat-mapA (Applicative :m => :y :a -> (:a -> :m (:y :b)) -> :m (:y :b)))
+    (concat-mapA (Applicative :m => :y :a * (:a -> :m (:y :b)) -> :m (:y :b)))
     (wrap-success (:a -> :y :a)))
 
   (define-instance (Yielder Optional)
@@ -114,7 +114,7 @@
   ;;
 
   (inline)
-  (declare when_ ((Monad :m) (Terminator :t) => :t -> :m :z -> :m Unit))
+  (declare when_ ((Monad :m) (Terminator :t) => :t * :m :z -> :m Unit))
   (define (when_ term? m)
     "Run the monadic operation M when the terminator TERM? indicates completion,
 or do nothing."
@@ -123,7 +123,7 @@ or do nothing."
         (pure Unit)))
 
   (inline)
-  (declare whenM ((Monad :m) (Terminator :t) => :m :t -> :m :z -> :m Unit))
+  (declare whenM ((Monad :m) (Terminator :t) => :m :t * :m :z -> :m Unit))
   (define (whenM mterm? mop)
     "Evaluate MTERM?, and if it indicates completion, run MOP, or do nothing."
     (do
@@ -131,7 +131,7 @@ or do nothing."
      (when_ term? mop)))
 
   (inline)
-  (declare when-val ((Monad :m) (Yielder :y) => :y :a -> (:a -> :m :z) -> :m Unit))
+  (declare when-val ((Monad :m) (Yielder :y) => :y :a * (:a -> :m :z) -> :m Unit))
   (define (when-val val? f->m)
     "If VAL? yields a value, apply F->M to it. If not, do nothing. Always returns Unit."
     (match (yield val?)
@@ -143,7 +143,7 @@ or do nothing."
         (pure Unit)))))
 
   (inline)
-  (declare when-valM ((Monad :m) (Yielder :y) => :m (:y :a) -> (:a -> :m :z) -> :m Unit))
+  (declare when-valM ((Monad :m) (Yielder :y) => :m (:y :a) * (:a -> :m :z) -> :m Unit))
   (define (when-valM mval? f->m)
     "Evaluate MVAL?, and if it yields, run F->M on the value. Otherwise, do nothing."
     (do
@@ -151,7 +151,7 @@ or do nothing."
      (when-val val? f->m)))
 
   (inline)
-  (declare if* ((Monad :m) (Terminator :t) => :t -> :m :b -> :m :b -> :m :b))
+  (declare if* ((Monad :m) (Terminator :t) => :t * :m :b * :m :b -> :m :b))
   (define (if* val? m-true m-false)
     "Choose between M-TRUE and M-FALSE based on VAL?. If (ended? VAL?) is true, run M-TRUE,
 else run M-FALSE."
@@ -160,7 +160,7 @@ else run M-FALSE."
         m-false))
 
   (inline)
-  (declare if-val ((Monad :m) (Yielder :y) => :y :a -> (:a -> :m :b) -> :m :b -> :m :b))
+  (declare if-val ((Monad :m) (Yielder :y) => :y :a * (:a -> :m :b) * :m :b -> :m :b))
   (define (if-val val? f-mval m-none)
     "If VAL? yields a value, apply F-MVAL to it. Otherwise, run M-NONE."
     (match (yield val?)
@@ -170,7 +170,7 @@ else run M-FALSE."
        (f-mval x))))
 
   (inline)
-  (declare if-val_ ((Monad :m) (Yielder :y) => :y :a -> (:a -> :m :b) -> :m :c -> :m Unit))
+  (declare if-val_ ((Monad :m) (Yielder :y) => :y :a * (:a -> :m :b) * :m :c -> :m Unit))
   (define (if-val_ val? f-mval m-none)
     "Like if-val, but discards the branch result and returns Unit."
     (match (yield val?)
@@ -180,7 +180,7 @@ else run M-FALSE."
        (do (f-mval x) (pure Unit)))))
 
   (inline)
-  (declare if-valM ((Monad :m) (Yielder :y) => :m (:y :a) -> (:a -> :m :b) -> :m :b -> :m :b))
+  (declare if-valM ((Monad :m) (Yielder :y) => :m (:y :a) * (:a -> :m :b) * :m :b -> :m :b))
   (define (if-valM mval? f-mval m-none)
     "Evaluate MVAL? and dispatch to F-MVAL if the result yields a value.
 Otherwise evaluate M-NONE."
@@ -189,13 +189,13 @@ Otherwise evaluate M-NONE."
      (if-val val? f-mval m-none)))
 
   (inline)
-  (declare map-success ((Monad :m) (Yielder :y) => :y :a -> (:a -> :m :b) -> :m (:y :b)))
+  (declare map-success ((Monad :m) (Yielder :y) => :y :a * (:a -> :m :b) -> :m (:y :b)))
   (define (map-success val? f->mb)
     "Map F->MB over the successful/available value(s) of VAL? within the monad."
     (traverse f->mb val?))
 
   (inline)
-  (declare map-successM ((Monad :m) (Yielder :y) => :m (:y :a) -> (:a -> :m :b) -> :m (:y :b)))
+  (declare map-successM ((Monad :m) (Yielder :y) => :m (:y :a) * (:a -> :m :b) -> :m (:y :b)))
   (define (map-successM mval? f->mb)
     "Evaluate MVAL? and map F->MB over the successful value(s) from inside the monad."
     (do
@@ -203,11 +203,11 @@ Otherwise evaluate M-NONE."
      (map-success val? f->mb)))
 
   (inline)
-  (declare flatmap-success ((Monad :m) (Yielder :y) => :y :a -> (:a -> :m (:y :b)) -> :m (:y :b)))
+  (declare flatmap-success ((Monad :m) (Yielder :y) => :y :a * (:a -> :m (:y :b)) -> :m (:y :b)))
   (define flatmap-success concat-mapA)
 
   (inline)
-  (declare flatmap-successM ((Monad :m) (Yielder :y) => :m (:y :a) -> (:a -> :m (:y :b)) -> :m (:y :b)))
+  (declare flatmap-successM ((Monad :m) (Yielder :y) => :m (:y :a) * (:a -> :m (:y :b)) -> :m (:y :b)))
   (define (flatmap-successM mval? f->mval?b)
     "Evaluate MVAL?, and if the result yields a value, then flatmap F->MVAL?B
 over the value."

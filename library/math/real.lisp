@@ -52,7 +52,7 @@
 And
 
 
-    (proper x) = (Tuple (truncate x) (- x (truncate x)))
+    (proper x) = (values (truncate x) (- x (truncate x)))
 
 
 where
@@ -60,13 +60,13 @@ where
 
     (truncate x) = (* (sign x) (floor (abs x))
 "
-    (proper (:a -> (Tuple Integer :a)))
+    (proper (:a -> Integer * :a))
     (floor (:a -> Integer))
     (ceiling (:a -> Integer)))
 
   (define-class ((Quantizable :a) (Num :a) => Real :a)
     "A real number that can be approximated with abs(real-approx x - x) < 2^-n."
-    (real-approx (UFix -> :a -> Fraction)))
+    (real-approx (UFix * :a -> Fraction)))
 
   (define-class ((Real :a) (Ord :a) => Rational :a)
     "Any number that can be exactly represented by a fraction, or is not finite.
@@ -86,39 +86,38 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
   (declare truncate ((Quantizable :a) => :a -> Integer))
   (define (truncate x)
     "Returns the integer closest/equal to `x` that is within `0` and `x`."
-    (match (proper x)
-      ((Tuple t _) t)))
+    (let (values t _) = (proper x))
+    t)
 
   (declare round ((Quantizable :a) (Num :a) => :a -> Integer))
   (define (round x)
     "Return the nearest integer to X, with ties breaking towards even numbers."
-    (match (proper x)
-      ((Tuple n r)
-       (match (<=> (abs (floor r)) (abs (ceiling r)))
-         ;; Negative r
-         ((GT)
-          ;; r <=> -0.5
-          (let s = (+ (* 2 r) 1))
-          (match (<=> (abs (floor s)) (abs (ceiling s)))
-            ((LT) n)
-            ((GT) (- n 1))
-            ;; r = -0.5
-            ((EQ) (if (even? n)
-                      n
-                      (- n 1)))))
-         ;; Positive r
-         ((LT)
-          ;; r <=> 0.5
-          (let s = (- (* 2 r) 1))
-          (match (<=> (abs (floor s)) (abs (ceiling s)))
-            ((LT) (+ n 1))
-            ((GT) n)
-            ;; r = 0.5
-            ((EQ) (if (even? n)
-                      n
-                      (+ n 1)))))
-         ;; Zero r
-         ((EQ) n)))))
+    (let (values n r) = (proper x))
+    (match (<=> (abs (floor r)) (abs (ceiling r)))
+      ;; Negative r
+      ((GT)
+       ;; r <=> -0.5
+       (let s = (+ (* 2 r) 1))
+       (match (<=> (abs (floor s)) (abs (ceiling s)))
+         ((LT) n)
+         ((GT) (- n 1))
+         ;; r = -0.5
+         ((EQ) (if (even? n)
+                   n
+                   (- n 1)))))
+      ;; Positive r
+      ((LT)
+       ;; r <=> 0.5
+       (let s = (- (* 2 r) 1))
+       (match (<=> (abs (floor s)) (abs (ceiling s)))
+         ((LT) (+ n 1))
+         ((GT) n)
+         ;; r = 0.5
+         ((EQ) (if (even? n)
+                   n
+                   (+ n 1)))))
+      ;; Zero r
+      ((EQ) n)))
 
   (define (rational-approx precision x)
     "Implemention of `real-approx' for rationals."
@@ -147,7 +146,7 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
        (define (floor x) (fromInt (toInteger x)))
        (define (ceiling x) (fromInt (toInteger x)))
        (define (proper x)
-         (Tuple (fromInt (toInteger x)) 0)))
+         (values (fromInt (toInteger x)) 0)))
 
      (define-instance (Real ,coalton-type)
        (define (real-approx _ x) (fromInt (toInteger x))))
@@ -175,22 +174,22 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
        (define-instance (Quantizable ,type)
          (inline)
          (define (floor q)
-           (lisp Integer (q)
+           (lisp (-> Integer) (q)
              (cl:nth-value 0 (cl:floor q))))
          (inline)
          (define (ceiling q)
-           (lisp Integer (q)
+           (lisp (-> Integer) (q)
              (cl:nth-value 0 (cl:ceiling q))))
-         (inline)
-         (define (proper q)
-           (lisp multiple-values (Tuple Integer ,type) (q)
-             (cl:truncate q))))
+        (inline)
+        (define (proper q)
+          (lisp (-> Integer * ,type) (q)
+            (cl:truncate q))))
 
        (specialize truncate ,trunc (,type -> Integer))
        (inline)
        (declare ,trunc (,type -> Integer))
        (define (,trunc x)
-         (lisp Integer (x)
+         (lisp (-> Integer) (x)
            (cl:nth-value 0 (cl:truncate x))))
 
        (define-instance (Real ,type)
@@ -201,18 +200,18 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
        (define-instance (Rational ,type)
          (inline)
          (define (to-fraction x)
-           (lisp Fraction (x)
+           (lisp (-> Fraction) (x)
              (cl:rational x)))
          (inline)
          (define (best-approx x)
-           (lisp Fraction (x)
+           (lisp (-> Fraction) (x)
              (cl:rationalize x))))
 
        (specialize round ,round (,type -> Integer))
        (inline)
        (declare ,round (,type -> Integer))
        (define (,round x)
-         (lisp Integer (x)
+         (lisp (-> Integer) (x)
            (cl:nth-value 0 (cl:round x)))))))
 
 (%define-native-rationals Fraction)
@@ -254,7 +253,7 @@ remainders expressed as values of type of X."
     "Return the nearest integer to X, with ties breaking toward positive infinity."
     (floor/ (ceiling (* 2 x)) 2))
 
-  (declare safe/ ((Num :a) (Dividable :a :b) => (:a -> :a -> (Optional :b))))
+  (declare safe/ ((Num :a) (Dividable :a :b) => (:a * :a -> (Optional :b))))
   (define (safe/ x y)
     "Safely divide X by Y, returning None if Y is zero."
     (if (== y 0)
@@ -262,30 +261,30 @@ remainders expressed as values of type of X."
         (Some (general/ x y))))
 
   (inline)
-  (declare exact/ (Integer -> Integer -> Fraction))
+  (declare exact/ (Integer * Integer -> Fraction))
   (define (exact/ a b)
     "Exactly divide two integers and produce a fraction."
     (general/ a b))
 
   (inline)
-  (declare inexact/ (Integer -> Integer -> Double-Float))
+  (declare inexact/ (Integer * Integer -> Double-Float))
   (define (inexact/ a b)
     "Compute the quotient of integers as a double-precision float.
 
 Note: This does *not* divide double-float arguments."
     (general/ a b))
 
-  (declare floor/ (Integer -> Integer -> Integer))
+  (declare floor/ (Integer * Integer -> Integer))
   (define (floor/ a b)
     "Divide two integers and compute the floor of the quotient."
     (floor (exact/ a b)))
 
-  (declare ceiling/ (Integer -> Integer -> Integer))
+  (declare ceiling/ (Integer * Integer -> Integer))
   (define (ceiling/ a b)
     "Divide two integers and compute the ceiling of the quotient."
     (ceiling (exact/ a b)))
 
-  (declare round/ (Integer -> Integer -> Integer))
+  (declare round/ (Integer * Integer -> Integer))
   (define (round/ a b)
     "Divide two integers and round the quotient."
     (round (exact/ a b)))

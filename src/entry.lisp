@@ -195,7 +195,8 @@
     `(let ((env *global-environment*))
        ,@(loop :for (fn . args) :in updates
                :collect `(setf env (,fn env ,@(mapcar #'util:runtime-quote args))))
-       (setf *global-environment* env))))
+       (setf *global-environment* env)
+       (tc:synchronize-type-variable-counter env))))
 
 (defun compile-coalton-toplevel (program)
   "Compile PROGRAM and return a single form suitable for direct inclusion by Lisp compiler. For implementing coalton-toplevel macro."

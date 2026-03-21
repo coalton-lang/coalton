@@ -46,24 +46,28 @@
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
-  (declare gc (Unit -> Unit))
-  (define (gc _)
+  (declare gc (Void -> Void))
+  (define (gc)
     "Perform a full garbage collection."
-    (lisp Unit ()
-      (trivial-garbage:gc :full cl:t)
-      Unit))
+    (lisp (-> Void) ()
+      (cl:progn
+        (trivial-garbage:gc :full cl:t)
+        (cl:values))))
 
-  (declare sleep ((math:Rational :a) => :a -> Unit))
+  (declare sleep ((math:Rational :a) => :a -> Void))
   (define (sleep n)
     "Sleep for `n` seconds, where `n` can be of any type with an instance of `Rational`.
 
 Sleep uses type class `Rational`'s `best-approx` instead of `Real`'s `real-approx` because it handles the approximation without arbitrary precision. The only `Real` type excluded by this decision is `CReal`."
     (if (math:negative? n)
-        (error "sleep must be a nonnegative number.")
+        (progn
+          (error "sleep must be a nonnegative number.")
+          (values))
         (let ((frac (math:best-approx n)))
-          (lisp Unit (frac)
-            (cl:sleep frac)
-            Unit)))))
+          (lisp (-> Void) (frac)
+            (cl:progn
+              (cl:sleep frac)
+              (cl:values)))))))
 
 ;;;
 ;;; Pofiling
@@ -71,26 +75,26 @@ Sleep uses type class `Rational`'s `best-approx` instead of `Real`'s `real-appro
 
 (coalton-toplevel
 
-  (declare get-run-time (Unit -> Integer))
+  (declare get-run-time (Void -> Integer))
   (define (get-run-time)
     "Gets the run-time in internal time units. This is implementation specific: it may measure real time, run time, CPU cycles, or some other quantity.
 
 The difference between two successive calls to this function represents quantity accumulated during that period of time.
 
 This function is not exported as its output is too implementation specific."
-    (lisp Integer ()
+    (lisp (-> Integer) ()
       (cl:get-internal-run-time)))
 
-  (declare get-real-time (Unit -> Integer))
+  (declare get-real-time (Void -> Integer))
   (define (get-real-time)
     "Gets the real-time in internal time units. The difference between two successive calls to this function represents the time that has elapsed."
-    (lisp Integer ()
+    (lisp (-> Integer) ()
       (cl:get-internal-real-time)))
 
   (declare internal-time-units-per-second Integer)
   (define internal-time-units-per-second
     "The number of internal time units per second. This is implementation specific."
-    (lisp Integer ()
+    (lisp (-> Integer) ()
       cl:internal-time-units-per-second))
 
   (declare time-units->seconds (Integer -> Fraction))
@@ -104,13 +108,13 @@ This function is not exported as its output is too implementation specific."
     (math:round/ (* 1000000 t)
                  internal-time-units-per-second))
 
-  (declare monotonic-bytes-consed (Unit -> (Optional Integer)))
+  (declare monotonic-bytes-consed (Void -> (Optional Integer)))
   (define (monotonic-bytes-consed)
     "Returns the number of bytes consed since some unspecified point in time.
 
 The difference between two successive calls to this function represents the number of bytes consed in that period of time."
     #+sbcl
-    (Some (lisp Integer ()
+    (Some (lisp (-> Integer) ()
             (sb-ext:get-bytes-consed)))
     #-sbcl
     None)
@@ -119,19 +123,19 @@ The difference between two successive calls to this function represents the numb
   ;;; Function instrumentation
   ;;;
 
-  (declare time ((Unit -> :a) -> (Tuple :a Integer)))
+  (declare time ((Void -> :a) -> :a * Integer))
   (define (time f)
-    "Run the thunk `f` and return a tuple containing its value along with the run time in microseconds.
+    "Run the thunk `f` and return its value along with the run time in microseconds.
 
 While the result will always contain microseconds, some implementations may return a value rounded to less precision (e.g., rounded to the nearest second or millisecond)."
     (let start = (get-real-time))
     (let value = (f))
     (let end   = (get-real-time))
-    (Tuple value (time-units->rounded-microseconds (- end start))))
+    (values value (time-units->rounded-microseconds (- end start))))
 
-  (declare space ((Unit -> :a) -> (Tuple :a (Optional Integer))))
+  (declare space ((Void -> :a) -> :a * (Optional Integer)))
   (define (space f)
-    "Run the thunk `f` and return a tuple containing its value along with the approximate number of bytes consed during the course of executing f.
+    "Run the thunk `f` and return its value along with the approximate number of bytes consed during the course of executing f.
 
 The amount of space used may be peculiar to the implementation, such as rounding to certain page boundaries.
 
@@ -140,7 +144,7 @@ A garbage collection will be forced prior to invoking `f`."
     (let start = (monotonic-bytes-consed))
     (let value = (f))
     (let end   = (monotonic-bytes-consed))
-    (Tuple value (liftA2 - end start)))
+    (values value (liftA2 - end start)))
 
   (define-struct (MeteredResult :a)
     "Function output with space and timing metedata."
@@ -151,7 +155,7 @@ A garbage collection will be forced prior to invoking `f`."
     (bytes-consed
      "The number of bytes consed during the run." (Optional Integer)))
 
-  (declare spacetime ((Unit -> :a) -> (MeteredResult :a)))
+  (declare spacetime ((Void -> :a) -> (MeteredResult :a)))
   (define (spacetime f)
     "Runs a function, gathering space and timing information and returning a `MeteredResults` object.
 
@@ -183,7 +187,7 @@ Garbage collection will be performed before profiling is performed."
 
   (define-instance (Signalable LispCondition)
     (define (error condition)
-      (lisp :a (condition)
+      (lisp (-> :a) (condition)
         (cl:error condition))))
 
   ;;
@@ -193,83 +197,84 @@ Garbage collection will be performed before profiling is performed."
   (declare getenv (String -> (Optional String)))
   (define (getenv var)
     "Gets the value of the environmental variable `var`, errors if `var` doesn't exist."
-    (lisp (Optional String) (var)
+    (lisp (-> (Optional String)) (var)
       (cl:let ((env (uiop:getenvp var)))
         (cl:if env
                (Some env)
                None))))
 
   
-  (declare setenv! (String -> String -> Unit))
+  (declare setenv! (String * String -> Void))
   (define (setenv! var val)
     "Sets an environment variable `var` to string `val`, only if `var` already exists."
-    (lisp Unit (var val)
-      (cl:setf (uiop:getenv var) val)
-      Unit))
+    (lisp (-> Void) (var val)
+      (cl:progn
+        (cl:setf (uiop:getenv var) val)
+        (cl:values))))
 
   ;;
   ;; Typical Environment/System variables
   ;;
   
-  (declare architecture (Unit -> String))
+  (declare architecture (Void -> String))
   (define (architecture)
     "The system's architecture (stored at compile time)."
-    (lisp String ()
+    (lisp (-> String) ()
       (cl:string (uiop:architecture))))
 
-  (declare os (Unit -> String))
+  (declare os (Void -> String))
   (define (os)
     "The system's operating system (stored at compile time)."
-    (lisp String ()
+    (lisp (-> String) ()
       (cl:string (uiop:detect-os))))
 
-  (declare hostname (Unit -> String))
+  (declare hostname (Void -> String))
   (define (hostname)
     "Returns the system's hostname. This is a function because the hostname can be redefined."
-    (lisp String ()
+    (lisp (-> String) ()
       (uiop:hostname)))
 
-  (declare implementation (Unit -> String))
+  (declare implementation (Void -> String))
   (define (implementation)
     "The lisp implementation (stored at compile time)."
-    (lisp String ()
+    (lisp (-> String) ()
       (cl:string (uiop:implementation-type))))
 
-  (declare lisp-version (Unit -> String))
+  (declare lisp-version (Void -> String))
   (define (lisp-version)
     "The lisp implementation version (stored at compile time)."
-    (lisp String ()
+    (lisp (-> String) ()
       (uiop:lisp-version-string)))
 
-  (declare features (Unit -> (List String)))
+  (declare features (Void -> (List String)))
   (define (features)
     "Returns a list of active features, from `cl:*features*`."
-    (lisp (list String) ()
+    (lisp (-> (list String)) ()
       (cl:mapcar #'cl:symbol-name cl:*features*)))
 
-  (declare add-feature (String -> Unit))
+  (declare add-feature (String -> Void))
   (define (add-feature feat)
     "Adds a feature `feat` to `cl:*features*`."
-    (lisp Boolean (feat)
-      (cl:push (cl:intern feat "KEYWORD")
-               cl:*features*)
-      cl:t)
-    Unit)
+    (lisp (-> Void) (feat)
+      (cl:progn
+        (cl:push (cl:intern feat "KEYWORD")
+                 cl:*features*)
+        (cl:values))))
 
   ;;
   ;; Command line arguments
   ;;
   
-  (declare cmd-args (Unit -> (List String)))
+  (declare cmd-args (Void -> (List String)))
   (define (cmd-args)
     "The current command line arguments (stored at compile time)."
-    (lisp (List String) ()
+    (lisp (-> (List String)) ()
       (uiop:command-line-arguments)))
 
-  (declare argv0 (Unit -> (Optional String)))
+  (declare argv0 (Void -> (Optional String)))
   (define (argv0)
     "The first command line argument (stored at compile time)."
-    (lisp (Optional String) ()
+    (lisp (-> (Optional String)) ()
       (cl:let ((arg (uiop:argv0)))
         (cl:if arg
                (Some (uiop:argv0))

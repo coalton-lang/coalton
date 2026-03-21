@@ -32,7 +32,7 @@
 
   (inline)
   (declare map-optionalT ((:m (Optional :a) -> :n (Optional :b))
-                          -> OptionalT :m :a
+                          * OptionalT :m :a
                           -> OptionalT :n :b))
   (define (map-optionalT f (OptionalT m))
     (OptionalT (f m))))
@@ -45,7 +45,9 @@
   (define-instance (Functor :m => Functor (OptionalT :m))
     (inline)
     (define (map fa->b (OptionalT m))
-      (OptionalT (map (map fa->b) m))))
+      (OptionalT (map (fn (opt)
+                        (map fa->b opt))
+                      m))))
   
   (define-instance (Monad :m => Applicative (OptionalT :m))
     (inline)
@@ -101,13 +103,17 @@
 (coalton-toplevel
   (define-instance (MonadEnvironment :env :m => MonadEnvironment :env (OptionalT :m))
     (define ask (lift ask))
-    (define asks (compose lift asks))
-    (define local (compose map-optionalT local)))
+    (define (asks f)
+      (lift (asks f)))
+    (define (local f (OptionalT mx))
+      (OptionalT (local f mx))))
 
   (define-instance (MonadState :s :m => (MonadState :s (OptionalT :m)))
     (define get (lift get))
-    (define put (compose lift put))
-    (define modify (compose lift modify))))
+    (define (put s)
+      (lift (put s)))
+    (define (modify f)
+      (lift (modify f)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/MONAD/OPTIONALT")

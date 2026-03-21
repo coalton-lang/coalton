@@ -42,6 +42,17 @@
     (nconc (collect-referenced-types-generic% (tapp-from type))
            (collect-referenced-types-generic% (tapp-to type))))
 
+  (:method ((entry keyword-ty-entry))
+    (declare (values tycon-list))
+    (collect-referenced-types-generic% (keyword-ty-entry-type entry)))
+
+  (:method ((type function-ty))
+    (declare (values tycon-list))
+    (nconc
+     (collect-referenced-types-generic% (function-ty-positional-input-types type))
+     (collect-referenced-types-generic% (function-ty-keyword-input-types type))
+     (collect-referenced-types-generic% (function-ty-output-types type))))
+
   (:method ((pred ty-predicate))
     (declare (values tycon-list))
     (mapcan #'collect-referenced-types-generic% (ty-predicate-types pred)))
@@ -70,7 +81,11 @@
 
   (:method ((type toplevel-define-struct))
     (declare (values tycon-list))
-    (mapcan #'collect-referenced-types-generic% (toplevel-define-struct-fields type))))
+    (mapcan #'collect-referenced-types-generic% (toplevel-define-struct-fields type)))
+
+  (:method ((list list))
+    (declare (values tycon-list &optional))
+    (mapcan #'collect-referenced-types-generic% list)))
 
 (defun collect-type-variables (type)
   "Returns a deduplicated list of all `TYVAR's in TYPE."
@@ -91,6 +106,21 @@
     (declare (values tyvar-list))
     (nconc (collect-type-variables-generic% (tapp-from type))
            (collect-type-variables-generic% (tapp-to type))))
+
+  (:method ((entry keyword-ty-entry))
+    (declare (values tyvar-list))
+    (collect-type-variables-generic% (keyword-ty-entry-type entry)))
+
+  (:method ((type function-ty))
+    (declare (values tyvar-list))
+    (nconc
+     (collect-type-variables-generic% (function-ty-positional-input-types type))
+     (collect-type-variables-generic% (function-ty-keyword-input-types type))
+     (collect-type-variables-generic% (function-ty-output-types type))))
+
+  (:method ((type result-ty))
+    (declare (values tyvar-list))
+    (collect-type-variables-generic% (result-ty-output-types type)))
 
   (:method ((pred ty-predicate))
     (declare (values tyvar-list))
@@ -151,6 +181,10 @@ in expressions. May not include all bound variables."
     (declare (values node-variable-list &optional))
     (collect-variables-generic% (node-bind-expr node)))
 
+  (:method ((node node-values-bind))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (node-values-bind-expr node)))
+
   (:method ((node node-body))
     (declare (values node-variable-list &optional))
     (nconc
@@ -159,7 +193,13 @@ in expressions. May not include all bound variables."
 
   (:method ((node node-abstraction))
     (declare (values node-variable-list &optional))
-    (collect-variables-generic% (node-abstraction-body node)))
+    (nconc
+     (mapcan #'collect-variables-generic% (node-abstraction-keyword-params node))
+     (collect-variables-generic% (node-abstraction-body node))))
+
+  (:method ((param keyword-param))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (keyword-param-default param)))
 
   (:method ((node node-let-binding))
     (declare (values node-variable-list &optional))
@@ -211,15 +251,23 @@ in expressions. May not include all bound variables."
     (declare (values node-variable-list &optional))
     (collect-variables-generic% (node-progn-body node)))
 
+  (:method ((node node-type-of))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (node-type-of-expr node)))
+
   (:method ((node node-the))
     (declare (values node-variable-list &optional))
     (collect-variables-generic% (node-the-expr node)))
 
   (:method ((node node-return))
     (declare (values node-variable-list &optional))
-    ;; node-return's return expression may be null (and default to Unit)
+    ;; node-return's return expression may be null (and default to zero values)
     (when (node-return-expr node)
       (collect-variables-generic% (node-return-expr node))))
+
+  (:method ((node node-values))
+    (declare (values node-variable-list &optional))
+    (mapcan #'collect-variables-generic% (node-values-nodes node)))
 
   (:method ((node node-throw))
     (declare (values node-variable-list &optional))
@@ -233,7 +281,12 @@ in expressions. May not include all bound variables."
     (declare (values node-variable-list &optional))
     (nconc
      (collect-variables-generic% (node-application-rator node))
-     (mapcan #'collect-variables-generic% (node-application-rands node))))
+     (mapcan #'collect-variables-generic% (node-application-rands node))
+     (mapcan #'collect-variables-generic% (node-application-keyword-rands node))))
+
+  (:method ((node node-application-keyword-arg))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (node-application-keyword-arg-value node)))
 
   (:method ((node node-or))
     (declare (values node-variable-list))

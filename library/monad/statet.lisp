@@ -56,12 +56,12 @@
               (pure (Tuple s s)))))
 
   (inline)
-  (declare run-stateT (Applicative :m => StateT :s :m :a -> :s -> :m (Tuple :s :a)))
+  (declare run-stateT (Applicative :m => StateT :s :m :a * :s -> :m (Tuple :s :a)))
   (define (run-stateT (StateT fs->msa) s)
     (fs->msa s))
 
   (inline)
-  (declare run-stateT_ (Applicative :m => StateT :s :m :a -> :s -> :m :a))
+  (declare run-stateT_ (Applicative :m => StateT :s :m :a * :s -> :m :a))
   (define (run-stateT_ st-op s)
     "Run ST-OP, discarding the state and returning the result."
     (map tp:snd (run-stateT st-op s)))
@@ -79,7 +79,7 @@
   ;;
 
   (inline)
-  (declare map-stateT ((:m (Tuple :s :a) -> :n (Tuple :s :b)) -> StateT :s :m :a -> StateT :s :n :b))
+  (declare map-stateT ((:m (Tuple :s :a) -> :n (Tuple :s :b)) * StateT :s :m :a -> StateT :s :n :b))
   (define (map-stateT fma->nb (StateT fs->msa))
     "Map the return value, the final state, and the execution context."
     (StateT (fn (s)
@@ -126,12 +126,15 @@
 
   (define-instance (MonadTransformer (StateT :s))
     (inline)
-    (define lift lift-stateT))
+    (define (lift m)
+      (lift-stateT m)))
 
   (define-instance (Monad :m => MonadState :s (StateT :s :m))
     (define get get-stateT)
-    (define put put-stateT)
-    (define modify modify-stateT)))
+    (define (put s)
+      (put-stateT s))
+    (define (modify f)
+      (modify-stateT f))))
 
 ;;;
 ;;; StateT Instances for other Transformers
@@ -140,8 +143,10 @@
 (coalton-toplevel
   (define-instance (MonadEnvironment :e :m => (MonadEnvironment :e (StateT :s :m)))
     (define ask (lift ask))
-    (define asks (compose lift asks))
-    (define local (compose map-stateT local))))
+    (define (asks f)
+      (lift (asks f)))
+    (define (local f st)
+      (map-stateT (fn (mx) (local f mx)) st))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/MONAD/STATET")

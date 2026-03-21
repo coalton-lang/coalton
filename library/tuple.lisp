@@ -148,7 +148,7 @@
 
   (define-instance (Traversable (Tuple :a))
     (define (traverse f (Tuple a b))
-      (map (Tuple a)
+      (map (fn (x) (Tuple a x))
            (f b))))
 
   (define-instance ((Default :a) (Default :b) => (Default (Tuple :a :b)))

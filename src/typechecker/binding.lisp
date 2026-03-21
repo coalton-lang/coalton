@@ -14,6 +14,7 @@
    #:binding-type                       ; FUNCTION
    #:binding-value                      ; FUNCTION
    #:binding-parameters                 ; FUNCTION
+   #:binding-keyword-parameters         ; FUNCTION
    #:binding-restricted-p               ; FUNCTION
    #:binding-last-node                  ; FUNCTION
    ))
@@ -80,6 +81,21 @@
 
     (instance-method-definition-params binding)))
 
+(defgeneric binding-keyword-parameters (binding)
+  (:documentation "Returns the keyword parameters of BINDING")
+
+  (:method ((binding node-let-binding))
+    (declare (values keyword-param-list))
+    nil)
+
+  (:method ((binding toplevel-define))
+    (declare (values keyword-param-list))
+    (toplevel-define-keyword-params binding))
+
+  (:method ((binding instance-method-definition))
+    (declare (values keyword-param-list))
+    (instance-method-definition-keyword-params binding)))
+
 (defgeneric binding-restricted-p (binding)
   (:documentation "Returns t if BINDING is restricted")
 
@@ -92,7 +108,7 @@
     (declare (values boolean))
 
     (and
-     (or (toplevel-define-params binding)
+     (or (toplevel-define-function-syntax-p binding)
 
          (and (null (node-body-nodes (toplevel-define-body binding)))
               (node-abstraction-p (node-body-last-node (toplevel-define-body binding)))))
@@ -102,7 +118,7 @@
     (declare (values boolean))
 
     (and
-     (or (instance-method-definition-params binding)
+     (or (instance-method-definition-function-syntax-p binding)
 
          (and (null (node-body-nodes (instance-method-definition-body binding)))
               (node-abstraction-p

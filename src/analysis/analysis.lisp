@@ -73,12 +73,16 @@
          (analysis-bind-traversal (node)
            (declare (type tc:node-bind node))
            (check-pattern-exhaustiveness (tc:node-bind-pattern node) env)
+           node)
+         (analysis-values-bind-traversal (node)
+           (declare (type tc:node-values-bind node))
            node))
 
     (let ((analysis-traverse-block
             (tc:make-traverse-block
              :match #'analysis-match-traversal 
              :abstraction #'analysis-abstraction-traversal
+             :values-bind #'analysis-values-bind-traversal
              :bind #'analysis-bind-traversal)))
 
       ;; Run analysis on definitions

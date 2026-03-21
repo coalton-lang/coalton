@@ -32,9 +32,9 @@ we map over."
   (define-instance (Functor (ArithExprF :t))
     (define (map f ast)
       (match ast
-        ((AddE t1 t2 cont) (AddE t1 t2 (map f cont)))
-        ((SubE t1 t2 cont) (SubE t1 t2 (map f cont)))
-        ((InputE cont) (InputE (map f cont))))))
+        ((AddE t1 t2 cont) (AddE t1 t2 (fn (x) (f (cont x)))))
+        ((SubE t1 t2 cont) (SubE t1 t2 (fn (x) (f (cont x)))))
+        ((InputE cont) (InputE (fn (x) (f (cont x))))))))
 
 
   ;;
@@ -42,15 +42,15 @@ we map over."
   ;; functor
   ;; 
 
-  (declare add (:t -> :t -> free:Free (ArithExprF :t) :t))
+  (declare add (:t * :t -> free:Free (ArithExprF :t) :t))
   (define (add x y)
     (free:liftf (AddE x y id)))
 
-  (declare sub (:t -> :t -> free:Free (ArithExprF :t) :t))
+  (declare sub (:t * :t -> free:Free (ArithExprF :t) :t))
   (define (sub x y)
     (free:liftf (SubE x y id)))
   
-  (declare input (Unit -> free:Free (ArithExprF :t) :t))
+  (declare input (Void -> free:Free (ArithExprF :t) :t))
   (define (input)
     (free:liftf (InputE id)))
 
@@ -80,7 +80,8 @@ we map over."
                  ((AddE x y next) (pure (next (+ x y))))
                  ((SubE x y next) (pure (next (- x y))))
                  ((InputE next)
-                  (map (compose next (fn (vec) (defaulting-unwrap (vector:pop! vec))))
+                  (map (fn (vec)
+                         (next (defaulting-unwrap (vector:pop! vec))))
                        st:get))))
      program))
 

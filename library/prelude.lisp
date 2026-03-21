@@ -214,7 +214,21 @@
    #:coalton/system
    #:time)
   (:export
-   #:time))
+   #:time)
+
+  (:import-from
+   #:coalton/show
+   #:Show
+   #:show*
+   #:show-to
+   #:show-as-string
+   #:show)
+  (:export
+   #:Show
+   #:show*
+   #:show-to
+   #:show-as-string
+   #:show))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON-PRELUDE")
@@ -251,4 +265,5 @@
    (#:sys #:coalton/system)
    (#:file #:coalton/file)
    (#:experimental #:coalton/experimental)
-   (#:loops #:coalton/experimental/loops)))
+   (#:loops #:coalton/experimental/loops)
+   (#:show #:coalton/show)))

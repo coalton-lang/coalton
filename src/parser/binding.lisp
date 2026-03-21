@@ -17,6 +17,7 @@
    #:binding-name                       ; FUNCTION
    #:binding-value                      ; FUNCTION
    #:binding-parameters                 ; FUNCTION
+   #:binding-keyword-parameters         ; FUNCTION
    #:binding-toplevel-p                 ; FUNCTION
    #:binding-function-p                 ; FUNCTION
    #:binding-last-node                  ; FUNCTION
@@ -69,6 +70,21 @@
     (declare (values pattern-list &optional))
     (instance-method-definition-params binding)))
 
+(defgeneric binding-keyword-parameters (binding)
+  (:documentation "Returns the keyword parameters bound in BINDING")
+
+  (:method ((binding node-let-binding))
+    (declare (values keyword-param-list))
+    nil)
+
+  (:method ((binding toplevel-define))
+    (declare (values keyword-param-list &optional))
+    (toplevel-define-keyword-params binding))
+
+  (:method ((binding instance-method-definition))
+    (declare (values keyword-param-list &optional))
+    (instance-method-definition-keyword-params binding)))
+
 (defgeneric binding-toplevel-p (binding)
   (:documentation "Returns t if BINDING is a toplevel binding.")
 
@@ -103,7 +119,7 @@
 
   (:method ((binding toplevel-define))
     (declare (values boolean))
-    (and (or (toplevel-define-params binding)
+    (and (or (toplevel-define-function-syntax-p binding)
 
              (and (null (node-body-nodes (toplevel-define-body binding)))
                   (initform-abstraction-p (node-body-last-node (toplevel-define-body binding)))))
@@ -111,7 +127,7 @@
 
   (:method ((binding instance-method-definition))
     (declare (values boolean))
-    (and (or (instance-method-definition-params binding)
+    (and (or (instance-method-definition-function-syntax-p binding)
 
              (and (null (node-body-nodes (instance-method-definition-body binding)))
                   (initform-abstraction-p (node-body-last-node (instance-method-definition-body binding)))))

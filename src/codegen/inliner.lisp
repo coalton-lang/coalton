@@ -146,8 +146,14 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
            (type ast:node-abstraction abstraction)
            (values boolean &optional))
 
-  (= (length (ast:node-abstraction-vars abstraction))
-     (length (ast:node-rands application))))
+  (and (null (ast:node-abstraction-keyword-params abstraction))
+       (null (etypecase application
+               (ast:node-application
+                (ast:node-application-keyword-rands application))
+               (ast:node-direct-application
+                (ast:node-direct-application-keyword-rands application))))
+       (= (length (ast:node-abstraction-vars abstraction))
+          (length (ast:node-rands application)))))
 
 (defun call-marked-for-inline-p (application)
   "Check if the the application ought to be inlined at the callsite."
@@ -173,38 +179,66 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
 
   (let* ((fresh-abstraction
            (transformations:rename-type-variables abstraction))
-         (bindings
-           (mapcar (lambda (var val) (cons (gensym (symbol-name var)) val))
-                   (ast:node-abstraction-vars fresh-abstraction)
-                   (ast:node-rands application)))
-         (substitutions
-           (mapcar (lambda (var binding)
-                     (destructuring-bind (new-var . val) binding
-                       (substitutions:make-ast-substitution
-                        :from var
-                        :to (ast:make-node-variable
-                             :type (ast:node-type val)
-                             :value new-var))))
-                   (ast:node-abstraction-vars fresh-abstraction)
-                   bindings))
-         (new-subexpr
-           (substitutions:apply-ast-substitution
-            substitutions
-            (ast:node-abstraction-subexpr fresh-abstraction)
-            t))
-         (call-type
-           (tc:make-function-type*
-            (mapcar #'ast:node-type (ast:node-rands application))
-            (ast:node-type application)))
-         (new-substitutions
-           (coalton-impl/typechecker/unify::mgu
-            (ast:node-type fresh-abstraction)
-            call-type)))
-    (ast:make-node-let
-     :type     (ast:node-type application)
-     :bindings (loop :for (name . expr) :in bindings
-                     :collect (cons name (tc:apply-substitution new-substitutions expr)))
-     :subexpr  (tc:apply-substitution new-substitutions new-subexpr))))
+         (bindings nil)
+         (substitutions nil)
+         (new-substitutions nil)
+         (expected-arg-types
+           (tc:function-type-arguments (ast:node-type fresh-abstraction))))
+    (loop :for var :in (ast:node-abstraction-vars fresh-abstraction)
+          :for val :in (ast:node-rands application)
+          :for expected-type :in expected-arg-types
+          :for new-var := (gensym (symbol-name var))
+          :do
+             (let* ((expected-type (tc:apply-substitution new-substitutions expected-type))
+                    (actual-type (tc:apply-substitution new-substitutions (ast:node-type val)))
+                    (binding-type actual-type))
+               ;; Higher-order keyword-bearing function values use a subset-compatible
+               ;; interface in the typechecker. Preserve that rule while inlining so
+               ;; heuristic inlining does not make valid calls ill-typed.
+               (cond
+                 ((and (typep expected-type 'tc:function-ty)
+                       (typep actual-type 'tc:function-ty))
+                  (multiple-value-bind (subs visible-expected-type)
+                      (coalton-impl/typechecker/define::coerce-function-value-type
+                       actual-type
+                       expected-type
+                       new-substitutions)
+                    (setf new-substitutions subs
+                          binding-type visible-expected-type)))
+                 (t
+                  (setf new-substitutions
+                        (tc:unify new-substitutions expected-type actual-type))
+                  (setf binding-type
+                        (tc:apply-substitution new-substitutions expected-type))))
+               (push (cons new-var (tc:apply-substitution new-substitutions val))
+                     bindings)
+               (push (substitutions:make-ast-substitution
+                      :from var
+                      :to (ast:make-node-variable
+                           :type binding-type
+                           :value new-var))
+                     substitutions)))
+    (setf bindings (nreverse bindings)
+          substitutions (nreverse substitutions))
+    (setf new-substitutions
+          (tc:unify new-substitutions
+                    (tc:apply-substitution
+                     new-substitutions
+                     (tc:function-return-type
+                      (ast:node-type fresh-abstraction)))
+                    (tc:apply-substitution
+                     new-substitutions
+                     (ast:node-type application))))
+    (let* ((new-subexpr
+             (substitutions:apply-ast-substitution
+              substitutions
+              (ast:node-abstraction-subexpr fresh-abstraction)
+              t)))
+      (ast:make-node-let
+       :type     (ast:node-type application)
+       :bindings (loop :for (name . expr) :in bindings
+                       :collect (cons name (tc:apply-substitution new-substitutions expr)))
+       :subexpr  (tc:apply-substitution new-substitutions new-subexpr)))))
 
 (defun try-inline-application (application env stack noinline-functions)
   "Try to inline an application node, checking internal traversal stack,
@@ -218,6 +252,11 @@ is appropriate."
 
   (let ((name (ast:node-rator-name application)))
     (cond
+      ((or (and (ast:node-application-p application)
+                (ast:node-application-keyword-rands application))
+           (and (ast:node-direct-application-p application)
+                (ast:node-direct-application-keyword-rands application)))
+       application)
       ((find name noinline-functions)
        (debug! ";; Locally noinline reached ~a" name)
        application)
@@ -296,6 +335,50 @@ is appropriate."
     (t
      (values nil nil))))
 
+(defun inline-nullary-method-target (method-name result-type properties env direct-p)
+  (declare (type symbol method-name)
+           (type tc:ty result-type)
+           (type list properties)
+           (type tc:environment env)
+           (type boolean direct-p)
+           (values ast:node &optional))
+  (labels ((make-nullary-call (rator)
+             (if (and direct-p
+                      (ast:node-variable-p rator))
+                 (ast:make-node-direct-application
+                  :type result-type
+                  :properties properties
+                  :rator-type (ast:node-type rator)
+                  :rator (ast:node-variable-value rator)
+                  :rands nil)
+                 (ast:make-node-application
+                  :type result-type
+                  :properties properties
+                  :rator rator
+                  :rands nil))))
+  (let ((code (tc:lookup-code env method-name :no-error t)))
+    (cond
+      ;; After dictionary application, the source expression may still denote a
+      ;; first-class function value. In that case we want the resolved method
+      ;; binding itself, not a call to it.
+      ((tc:function-type-p result-type)
+       (ast:make-node-variable
+        :type result-type
+        :value method-name))
+
+      ;; Class constants and other value methods are stored in dictionaries as
+      ;; plain values, not as nullary function entries.
+      ((and code (not (ast:node-abstraction-p code)))
+       (if (tc:function-type-p (ast:node-type code))
+           (make-nullary-call code)
+           code))
+
+      (t
+       (make-nullary-call
+        (ast:make-node-variable
+         :type (tc:make-function-type* nil result-type)
+         :value method-name)))))))
+
 (defun inline-method (node env)
   (declare (type ast:node-application node)
            (type tc:environment env)
@@ -304,6 +387,9 @@ is appropriate."
   (unless *inline-methods-p*
     (return-from inline-method
       node))
+
+  (when (ast:node-application-keyword-rands node)
+    (return-from inline-method node))
 
   (let ((rator (ast:node-application-rator node))
         (rands (ast:node-application-rands node)))
@@ -316,11 +402,14 @@ is appropriate."
                node)
 
               ((null inner-rands)
-               (print-inline-success! ";; Inlining method to variable ~a" method-name)
+               (print-inline-success! ";; Inlining method to nullary application ~a" method-name)
                (push method-name *functions-inlined*)
-               (ast:make-node-variable
-                :type (ast:node-type node)
-                :value method-name))
+               (inline-nullary-method-target
+                method-name
+                (ast:node-type node)
+                (ast:node-properties node)
+                env
+                nil))
 
               (t
                (print-inline-success! ";; Inlining method to application ~a" method-name)
@@ -344,6 +433,9 @@ is appropriate."
     (return-from inline-direct-method
       node))
 
+  (when (ast:node-direct-application-keyword-rands node)
+    (return-from inline-direct-method node))
+
   (let ((rands (ast:node-direct-application-rands node)))
     (multiple-value-bind (dict inner-rands) (extract-dict rands)
       (if (null dict)
@@ -354,11 +446,14 @@ is appropriate."
                node)
 
               ((null inner-rands)
-               (print-inline-success! ";; Inlining direct method to variable ~a" method-name)
+               (print-inline-success! ";; Inlining direct method to nullary application ~a" method-name)
                (push method-name *functions-inlined*)
-               (ast:make-node-variable
-                :type (ast:node-type node)
-                :value method-name))
+               (inline-nullary-method-target
+                method-name
+                (ast:node-type node)
+                (ast:node-properties node)
+                env
+                t))
 
               (t
                (print-inline-success! ";; Inlining direct method to application ~a" method-name)

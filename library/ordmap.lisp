@@ -23,7 +23,7 @@
    #:remove
    #:update
    #:keys
-   #:values
+   #:values-iter
    #:entries
    #:collect!
    #:collect
@@ -55,7 +55,17 @@
   (define (value pair)
     (match pair
       ((MapPair _ v) v)
-      (_ (error "Misuse of `JustKey': Cannot read the Value of a JustKey"))))
+      (_ (stray-just-key))))
+
+  (declare stray-just-key (Void -> :a))
+  (define (stray-just-key)
+    (lisp (-> :a) ()
+      (coalton-impl/runtime:coalton-bug "Misuse of `JustKey': Cannot read the value of a JustKey")))
+
+  (declare stray-just-key/values (Void -> :a * :b))
+  (define (stray-just-key/values)
+    (lisp (-> :a * :b) ()
+      (coalton-impl/runtime:coalton-bug "Misuse of `JustKey': Cannot read the value of a JustKey")))
 
   (define-instance (Into (MapPair :key :value) (Tuple :key :value))
     (define (into pair)
@@ -87,7 +97,7 @@
     (tree:empty? t))
 
   ;; Mapping API
-  (declare lookup ((Ord :key) => OrdMap :key :value -> :key -> Optional :value))
+  (declare lookup ((Ord :key) => OrdMap :key :value * :key -> Optional :value))
   (define (lookup mp k)
     "Retrieve the value associated with K in MP, or None if MP does not contain K."
     (let (%Map tre) = mp)
@@ -105,7 +115,7 @@
     (let (%Map tre) = mp)
     (map into (tree:min-element tre)))
 
-  (declare lookup-neighbors ((Ord :key) => OrdMap :key :value -> :key
+  (declare lookup-neighbors ((Ord :key) => OrdMap :key :value * :key
                              -> (Tuple3 (Optional (Tuple :key :value))
                                         (Optional (Tuple :key :value))
                                         (Optional (Tuple :key :value)))))
@@ -125,7 +135,7 @@ Any of these values can be None if there's no such entry."
          (Tuple3 (convert lo) (convert on) (convert hi))))))
 
   ;; Mapping API
-  (declare insert (Ord :key => OrdMap :key :value -> :key -> :value -> OrdMap :key :value))
+  (declare insert (Ord :key => OrdMap :key :value * :key * :value -> OrdMap :key :value))
   (define (insert mp k v)
     "Returns an OrdMap in which the key `k` is associated with `v` added
 to the `mp`.  If `mp` already contains mapping for `k`, it is replaced."
@@ -133,7 +143,7 @@ to the `mp`.  If `mp` already contains mapping for `k`, it is replaced."
     (%Map (tree:insert tre (MapPair k v))))
 
   ;; Mapping API
-  (declare adjoin (Ord :key => OrdMap :key :value -> :key -> :value -> OrdMap :key :value))
+  (declare adjoin (Ord :key => OrdMap :key :value * :key * :value -> OrdMap :key :value))
   (define (adjoin mp k v)
     "Returns an OrdMap in which the key `k` is associated with `v` added
 to the `mp`, only when `mp` doesn't have an association with `k`.
@@ -142,7 +152,7 @@ If `mp` already contains an association with `k`, `mp` is returned as is."
     (%Map (tree:adjoin tre (MapPair k v))))
 
   ;; Mapping API
-  (declare replace (Ord :key => OrdMap :key :value -> :key -> :value -> OrdMap :key :value))
+  (declare replace (Ord :key => OrdMap :key :value * :key * :value -> OrdMap :key :value))
   (define (replace mp k v)
     "Returns an OrdMap in which the key `k` is associated with `v` replaced
 from `mp`, when `mp` already has an association with `k`.
@@ -151,7 +161,7 @@ If `mp` doesn't has an association with `k`, `mp` is returned as is."
     (%Map (tree:replace tre (MapPair k v))))
 
   ;; Mapping API
-  (declare remove (Ord :key => OrdMap :key :value -> :key -> OrdMap :key :value))
+  (declare remove (Ord :key => OrdMap :key :value * :key -> OrdMap :key :value))
   (define (remove mp k)
     "Returns an OrdMap in which the association with key 'k' is removed from
 `mp`.  If `mp` doesn't have an association with `k`, it is returned as is."
@@ -165,7 +175,8 @@ If `mp` doesn't has an association with `k`, `mp` is returned as is."
       ((%Map tre) (map into (tree:increasing-order tre)))))
 
   (define-instance (iter:IntoIterator (OrdMap :key :value) (Tuple :key :value))
-    (define iter:into-iter entries))
+    (define (iter:into-iter x)
+      (entries x)))
 
   (declare keys ((OrdMap :key :value) -> (iter:Iterator :key)))
   (define (keys mp)
@@ -173,8 +184,8 @@ If `mp` doesn't has an association with `k`, `mp` is returned as is."
     (match mp
       ((%Map tre) (map key (tree:increasing-order tre)))))
 
-  (declare values ((OrdMap :key :value) -> (iter:Iterator :value)))
-  (define (values mp)
+  (declare values-iter ((OrdMap :key :value) -> (iter:Iterator :value)))
+  (define (values-iter mp)
     "Iterate over the values in MP, sorted by their corresponding keys in least-to-greatest order."
     (match mp
       ((%Map tre) (map value (tree:increasing-order tre)))))
@@ -193,7 +204,9 @@ If `mp` doesn't has an association with `k`, `mp` is returned as is."
 
 If `iter` contains duplicate keys, later values will overwrite earlier values."
     (iter:fold! (fn (mp tpl)
-                  (uncurry (insert mp) tpl))
+                  (match tpl
+                    ((Tuple k v)
+                     (insert mp k v))))
                 empty
                 iter))
 
@@ -203,28 +216,30 @@ If `iter` contains duplicate keys, later values will overwrite earlier values."
 
 If `coll` contains duplicate keys, later values will overwrite earlier values."
     (fold (fn (mp tpl)
-            (uncurry (insert mp) tpl))
+            (match tpl
+              ((Tuple k v)
+               (insert mp k v))))
           empty
           coll))
 
   (define-instance (Ord :key => iter:FromIterator (OrdMap :key :value) (Tuple :key :value))
-    (define iter:collect! collect!))
+    (define (iter:collect! x)
+      (collect! x)))
 
 
   ;; Mapping API
-  (declare update (Ord :key => OrdMap :key :value -> :key
-                       -> (Optional :value -> Tuple (Optional :value) :a)
-                       -> Tuple (OrdMap :key :value) :a))
+  (declare update (Ord :key => OrdMap :key :value * :key
+                       * (Optional :value -> (Optional :value) * :a)
+                       -> (OrdMap :key :value) * :a))
   (define (update mp k f)
     "Lookup an association with `k` in `mp`.  If there's an entry, call `f`
 with its value wrapped with Some.  If there isn't an entry, call 'f' with
-None.  `f` must return a tuple of possible new value and an auxiliary
-result.
-If the fst of `f`'s return value is Some, its content is inserted into
-`mp` in association with `k`.   If the fst of `f`'s return value is None,
-an association with `k` in `mp` is removed.  A possibly updated mapping
-is returned as the fst element of the tuple.
-The auxiliary result from `f` is returnd as the snd result.
+None.  `f` must return a possible new value and an auxiliary result.
+If the first return value of `f` is Some, its content is inserted into
+`mp` in association with `k`. If the first return value of `f` is None,
+an association with `k` in `mp` is removed. A possibly updated mapping
+is returned as the first value.
+The auxiliary result from `f` is returned as the second value.
 
 This can be used for the caller to obtain the previous state along
 updated map.  For example, the following code inserts an entry (k, v)
@@ -232,27 +247,27 @@ into mp, and obtain (Some v') or None in the second value of the
 result, where v' is the previous value associated with k.
 
 ```
-(update mp k (Tuple v))
+(update mp k (fn (prev) (values (Some v) prev)))
 ```
 "
     (let (%Map tre) = mp)
     (let call-f = (fn (e) (match e
                             ((None) (f None))
                             ((Some (MapPair _ v)) (f (Some v)))
-                            ((Some _) (error "Stray JustKey")))))
-    (let (Tuple tre2 aux) =
+                            ((Some _) (stray-just-key/values)))))
+    (let (values tre2 aux) =
       (tree:update tre (JustKey k)
                    (fn (e)
-                     (let (Tuple vv aux) = (call-f e))
+                     (let (values vv aux) = (call-f e))
                      (match vv
                        ((None)
-                        (Tuple (the (Optional (MapPair :a :b)) None) aux))
+                        (values (the (Optional (MapPair :a :b)) None) aux))
                        ((Some v)
-                        (Tuple (Some (MapPair k v)) aux))))))
-    (Tuple (%Map tre2) aux))
+                        (values (Some (MapPair k v)) aux))))))
+    (values (%Map tre2) aux))
 
 
-  (declare union (Ord :key => OrdMap :key :value -> OrdMap :key :value -> OrdMap :key :value))
+  (declare union (Ord :key => OrdMap :key :value * OrdMap :key :value -> OrdMap :key :value))
   (define (union a b)
     "Construct an OrdMap containing all the mappings of both A and B.
 
@@ -263,7 +278,7 @@ The operation is associative, but not commutative."
     (let (%Map tb) = b)
     (%Map (tree:union ta tb)))
 
-  (declare intersection (Ord :key => OrdMap :key :value -> OrdMap :key :value -> OrdMap :key :value))
+  (declare intersection (Ord :key => OrdMap :key :value * OrdMap :key :value -> OrdMap :key :value))
   (define (intersection a b)
     "Construct an OrdMap contaning elements whose key appears in both `a` and `b`.
 The resulting values are from `a`."
@@ -271,14 +286,14 @@ The resulting values are from `a`."
     (let (%Map tb) = b)
     (%Map (tree:intersection ta tb)))
 
-  (declare difference (Ord :key => OrdMap :key :value -> OrdMap :key :value -> OrdMap :key :value))
+  (declare difference (Ord :key => OrdMap :key :value * OrdMap :key :value -> OrdMap :key :value))
   (define (difference a b)
     "Returns an OrdMap that contains mappings in `a` but not in `b`."
     (let (%Map ta) = a)
     (let (%Map tb) = b)
     (%Map (tree:difference ta tb)))
 
-  (declare xor (Ord :key => OrdMap :key :value -> OrdMap :key :value -> OrdMap :key :value))
+  (declare xor (Ord :key => OrdMap :key :value * OrdMap :key :value -> OrdMap :key :value))
   (define (xor a b)
     "Returns an OrdMap that contains mappings either in `a` or in `b`,
 but not in both."
@@ -287,7 +302,8 @@ but not in both."
     (%Map (tree:xor ta tb)))
 
   (define-instance (Ord :key => Semigroup (OrdMap :key :value))
-    (define <> union))
+    (define (<> a b)
+      (union a b)))
 
   (define-instance (Ord :key => Monoid (OrdMap :key :value))
     (define mempty Empty))
@@ -298,7 +314,7 @@ but not in both."
       (%Map (tree:transform-elements (fn (e)
                                        (match e
                                          ((MapPair k v) (MapPair k (func v)))
-                                         ((JustKey _) (error "Stray JustKey"))))
+                                         ((JustKey _) (stray-just-key))))
                                      tre))))
 
   ;; As with `tree:Tree', `OrdMap' should probably implement `Traversable'.

@@ -2,14 +2,17 @@
 
 ## Function Calls
  
-Type class constraints on functions are turned into additional parameters. These additional parameters are used to pass type class dictionaries. For example the following type `f :: (Num :a) (Ord :a) => :a -> :a -> :a` would be compiled to the following lisp function definition.
+Type class constraints on functions are turned into additional parameters. These additional parameters are used to pass type class dictionaries. For example the following type `f :: (Num :a) (Ord :a) => :a * :a -> :a` would be compiled to the following lisp function definition.
 
 ```lisp
 (defun f (G103 G104 A-27 B-28)
   ...)
 ```
 
-Here `G103` and `G104` will hold the `Num` and `Ord` instance dictionaries for whichever `:a` is chosen by the caller. Variables with constraints are wrapped in a function.
+Here `G103` and `G104` will hold the `Num` and `Ord` instance dictionaries for whichever `:a` is chosen by the caller. Immediate calls on constrained functions pass these dictionary arguments directly.
+When a constrained function is used as a first-class value, Coalton keeps it as a
+function value and binds the hidden dictionary arguments onto that value instead
+of synthesizing a forwarding wrapper lambda.
 
 ## Classes
 
@@ -49,14 +52,16 @@ Instances without constraints are compiled to variables.
               a)))
 ```
 
-Instances with constraints such as such as `Eq :a => (Eq (Optional :a))` are compiled to functions.
+Instances with constraints such as `Eq :a => (Eq (Optional :a))` are compiled to functions.
 
 ```lisp
 (defun |INSTANCE/EQ OPTIONAL :A| (G105)
   (make-CLASS/NUM ...))
 ```
 
-Each method definion in an instance is also compiled to a seperate function. These functions are used for static method calls. The `==` method on `Eq :a => (Eq (Optional :a))` would be compiled to:
+Each method definition in an instance is also compiled to a separate function.
+These functions are used for static method calls. The `==` method on
+`Eq :a => (Eq (Optional :a))` would be compiled to:
 
 ```lisp
 (defun |INSTANCE/EQ OPTIONAL :A-=| (G106 a b)

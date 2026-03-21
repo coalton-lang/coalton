@@ -51,13 +51,13 @@
     (Env (:env -> :value)))
 
   (inline)
-  (declare run-env (Env :env :value -> :env -> :value))
+  (declare run-env (Env :env :value * :env -> :value))
   (define (run-env (Env env-computation) env)
     "Run a Env inside an environment."
     (env-computation env))
 
   (inline)
-  (declare local-env ((:env -> :env) -> Env :env :value -> Env :env :value))
+  (declare local-env ((:env -> :env) * Env :env :value -> Env :env :value))
   (define (local-env fenv menv)
     (Env (fn (env)
            (run-env menv (fenv env)))))
@@ -82,7 +82,8 @@
   (define-instance (Functor (Env :env))
     (inline)
     (define (map fa->b menv)
-      (Env (compose fa->b (run-env menv)))))
+      (Env (fn (env)
+             (fa->b (run-env menv env))))))
 
   (define-instance (Applicative (Env :env))
     (inline)
@@ -103,8 +104,10 @@
 
   (define-instance (MonadEnvironment :env (Env :env))
     (define ask ask-env)
-    (define local local-env)
-    (define asks asks-env)))
+    (define (local f m)
+      (local-env f m))
+    (define (asks f)
+      (asks-env f))))
 
 
 ;;
@@ -120,7 +123,7 @@ Equivalent to Haskell's ReaderT monad https://hackage.haskell.org/package/transf
     (EnvT (:env -> :m :value)))
 
   (inline)
-  (declare local-envT ((:env -> :env) -> EnvT :env :m :value -> EnvT :env :m :value))
+  (declare local-envT ((:env -> :env) * EnvT :env :m :value -> EnvT :env :m :value))
   (define (local-envT fenv (EnvT fenv->a))
     "Run a computation in a modified environment."
     (EnvT (fn (env)
@@ -140,7 +143,7 @@ Equivalent to Haskell's ReaderT monad https://hackage.haskell.org/package/transf
             (pure (fenv->a env)))))
 
   (inline)
-  (declare run-envT (EnvT :env :m :value -> :env -> :m :value))
+  (declare run-envT (EnvT :env :m :value * :env -> :m :value))
   (define (run-envT (EnvT fenv->val) env)
     "Run a EnvT inside an environment."
     (fenv->val env)))
@@ -151,7 +154,7 @@ Equivalent to Haskell's ReaderT monad https://hackage.haskell.org/package/transf
 
 (coalton-toplevel
   (inline)
-  (declare map-envT ((:m :a -> :n :b) -> EnvT :env :m :a -> EnvT :env :n :b))
+  (declare map-envT ((:m :a -> :n :b) * EnvT :env :m :a -> EnvT :env :n :b))
   (define (map-envT fma->nb (EnvT fenv->ma))
     (EnvT (fn (env)
             (fma->nb (fenv->ma env)))))
@@ -165,7 +168,9 @@ Equivalent to Haskell's ReaderT monad https://hackage.haskell.org/package/transf
   (define-instance (Functor :m => Functor (EnvT :env :m))
     (inline)
     (define (map fa->b env-a)
-      (map-envT (map fa->b) env-a)))
+      (map-envT (fn (ma)
+                  (map fa->b ma))
+                env-a)))
 
   (define-instance (Applicative :m => Applicative (EnvT :env :m))
     (inline)
@@ -188,13 +193,16 @@ Equivalent to Haskell's ReaderT monad https://hackage.haskell.org/package/transf
 
   (define-instance (MonadTransformer (EnvT :env))
     (inline)
-    (define lift lift-envT)))
+    (define (lift m)
+      (lift-envT m))))
 
 (coalton-toplevel
   (define-instance (Monad :m => MonadEnvironment :env (EnvT :env :m))
     (define ask ask-envT)
-    (define local local-envT)
-    (define asks asks-envT)))
+    (define (local f st)
+      (local-envT f st))
+    (define (asks f)
+      (asks-envT f))))
 
 ;;;
 ;;; EnvT Instances for other Transformers

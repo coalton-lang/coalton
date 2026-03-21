@@ -21,7 +21,7 @@
     (E*     (Expr :t) (Expr :t)))
 
   ;; The classic `diff` function, in Coalton.
-  (declare diff (Num :t => sym:Symbol -> Expr :t -> Expr :t))
+  (declare diff (Num :t => sym:Symbol * Expr :t -> Expr :t))
   (define (diff x f)
     "Compute the derivative of `f` with respect to `x`."
     (match f
@@ -39,9 +39,9 @@
   (define t (sym:make-symbol "t"))
 
   (declare d/dt (Num :t => Expr :t -> Expr :t))
-  (define d/dt
+  (define (d/dt f)
     "The time derivative operator."
-    (diff t))
+    (diff t f))
 
   (define (square x)
     (E* x x)))

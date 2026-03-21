@@ -73,10 +73,40 @@
           type)))
   ;; For a type application, recurse down into all the types
   (:method (subst-list (type tapp))
-    (make-tapp
+    (let* ((alias (mapcar (lambda (alias) (apply-substitution subst-list alias))
+                          (ty-alias type)))
+           (from (apply-substitution subst-list (tapp-from type)))
+           (to (apply-substitution subst-list (tapp-to type)))
+           (applied-type (make-tapp :alias alias :from from :to to)))
+      (if (and (tapp-p applied-type)
+               (function-type-p applied-type))
+          (make-function-ty
+           :alias alias
+           :positional-input-types (list (tapp-to (tapp-from applied-type)))
+           :keyword-input-types nil
+           :keyword-open-p nil
+           :output-types (list (tapp-to applied-type)))
+          applied-type)))
+  (:method (subst-list (entry keyword-ty-entry))
+    (make-keyword-ty-entry
+     :keyword (keyword-ty-entry-keyword entry)
+     :type (apply-substitution subst-list (keyword-ty-entry-type entry))))
+  (:method (subst-list (type function-ty))
+    (make-function-ty
      :alias (mapcar (lambda (alias) (apply-substitution subst-list alias)) (ty-alias type))
-     :from (apply-substitution subst-list (tapp-from type))
-     :to (apply-substitution subst-list (tapp-to type))))
+     :positional-input-types (apply-substitution subst-list
+                                                (function-ty-positional-input-types type))
+     :keyword-input-types (apply-substitution subst-list
+                                             (function-ty-keyword-input-types type))
+     :keyword-open-p (function-ty-keyword-open-p type)
+     :output-types (normalize-function-output-types
+                    (apply-substitution subst-list
+                                        (function-ty-output-types type)))))
+  (:method (subst-list (type result-ty))
+    (make-result-ty
+     :alias (mapcar (lambda (alias) (apply-substitution subst-list alias)) (ty-alias type))
+     :output-types (apply-substitution subst-list
+                                       (result-ty-output-types type))))
   ;; Otherwise, do nothing
   (:method (subst-list (type ty))
     type)

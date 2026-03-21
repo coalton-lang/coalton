@@ -9,7 +9,7 @@
 (named-readtables:in-readtable coalton:coalton)
 
 (coalton-toplevel
-  (declare always-returns-zero (Unit -> Integer))
+  (declare always-returns-zero (Void -> Integer))
   (define (always-returns-zero)
     "A silly function that should always return 0."
     0)

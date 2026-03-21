@@ -597,7 +597,7 @@ This is conservative and intentionally aligns with mutable native wrappers."
            := (loop
                 :for ctor-args :in constructor-args
                 :for ty
-                  := (tc:make-function-type*
+                  := (tc:prepend-function-input-types
                       ctor-args
                       (tc:apply-type-argument-list
                        (tc:apply-ksubstitution ksubs (gethash name (partial-type-env-ty-table env)))
@@ -679,18 +679,25 @@ This is conservative and intentionally aligns with mutable native wrappers."
                  :docstring (source:docstring type)
                  :location (source:location type)
                  :exception-p (parser:type-definition-exception-p type)
-                 :resumption-p (parser:type-definition-resumption-p type)))
+                 :resumption-p (parser:type-definition-resumption-p type))))
 
-              (runtime-repr-instance (maybe-runtime-repr-instance type-definition)))
-           
-
-           (when runtime-repr-instance
-             (push runtime-repr-instance instances))
-           
+           (setf instances
+                 ;; Some generated instances depend only on the raw type
+                 ;; definition and can be queued before the type has been
+                 ;; installed in the full environment.
+                 (append (maybe-pre-install-generated-instances type-definition env)
+                         instances))
            type-definition))
 
        instances
        ksubs))))
+
+(defun maybe-pre-install-generated-instances (type env)
+  (declare (type type-definition type)
+           (type partial-type-env env)
+           (values parser:toplevel-define-instance-list))
+  (declare (ignore env))
+  (maybe-runtime-repr-instance type))
 
 (defun maybe-runtime-repr-instance (type)
   (declare (type type-definition type))
@@ -703,7 +710,56 @@ This is conservative and intentionally aligns with mutable native wrappers."
               (and (equalp *package* (find-package "COALTON/MATH/COMPLEX"))
                    (eq (type-definition-name type) (find-symbol "COMPLEX" *package*)))
               (type-definition-aliased-type type))
-    (make-runtime-repr-instance type)))
+    (list (make-runtime-repr-instance type))))
+
+(defun generated-instance-type-variables (type)
+  (declare (type type-definition type)
+           (values parser:tyvar-list))
+  (loop :for i :below (tc:kind-arity (tc:tycon-kind (type-definition-type type)))
+        :for tvar-name := (alexandria:format-symbol util:+keyword-package+ "~d" i)
+        :collect (parser:make-tyvar
+                  :location (source:location type)
+                  :name tvar-name
+                  :source-name tvar-name)))
+
+(defun generated-instance-applied-type (type tvars &optional (arity (length tvars)))
+  (declare (type type-definition type)
+           (type parser:tyvar-list tvars)
+           (type alexandria:non-negative-fixnum arity)
+           (values parser:ty))
+  (let ((ty (parser:make-tycon
+             :location (source:location type)
+             :name (type-definition-name type))))
+    (loop :for tvar :in tvars
+          :repeat arity
+          :do (setf ty
+                    (parser:make-tapp
+                     :location (source:location type)
+                     :from ty
+                     :to tvar)))
+    ty))
+
+(defun generated-instance-definition (type class methods &key context ty)
+  (declare (type type-definition type)
+           (type symbol class)
+           (type parser:instance-method-definition-list methods)
+           (type parser:ty-predicate-list context)
+           (type parser:ty ty)
+           (values parser:toplevel-define-instance))
+  (let ((location (source:location type)))
+    (parser:make-toplevel-define-instance
+     :context context
+     :pred (parser:make-ty-predicate
+            :class (parser:make-identifier-src
+                    :name class
+                    :location location)
+            :types (list ty)
+            :location location)
+     :docstring nil
+     :methods methods
+     :location location
+     :head-location location
+     :compiler-generated t)))
 
 (defun make-runtime-repr-instance (type)
   (declare (type type-definition type))
@@ -718,54 +774,34 @@ This is conservative and intentionally aligns with mutable native wrappers."
            (util:find-symbol "RUNTIME-REPR" types-package))
          (lisp-type
            (util:find-symbol "LISPTYPE" types-package))
-         (tvars
-           (loop :for i :below (tc:kind-arity (tc:tycon-kind (type-definition-type type)))
-                 :for tvar-name := (alexandria:format-symbol util:+keyword-package+ "~d" i)
-                 :collect (parser:make-tyvar
-                           :location location
-                           :name tvar-name
-                           :source-name tvar-name)))
-         (ty
-           (parser:make-tycon :location location
-                              :name (type-definition-name type))))
+         (tvars (generated-instance-type-variables type)))
 
-    (loop :for tvar :in tvars
-          :do (setf ty (parser:make-tapp
-                        :location location
-                        :from ty
-                        :to tvar)))
-
-    (parser:make-toplevel-define-instance
-     :context nil
-     :pred (parser:make-ty-predicate
-            :class (parser:make-identifier-src
-                    :name runtime-repr
-                    :location location)
-            :types (list ty)
-            :location location)
-     :docstring nil
-     :methods (list
-               (parser:make-instance-method-definition
-                :name (parser:make-node-variable
-                       :location location
-                       :name runtime-repr-method)
-                :params (list
-                         (parser:make-pattern-wildcard
-                          :location location))
-                :body (parser:make-node-body
-                       :nodes nil
-                       :last-node (parser:make-node-lisp
-                                   :location location
-                                   :type (parser:make-tycon
-                                          :location location
-                                          :name lisp-type)
-                                   :vars nil
-                                   :var-names nil
-                                   :body (list (util:runtime-quote (type-definition-runtime-type type)))))
-                :location location
-                ;; Always inline RUNTIME-REPR so that other
-                ;; optimizations can kick off.
-                :inline (parser:make-attribute-inline :location location)))
+    (generated-instance-definition
+     type
+     runtime-repr
+     (list
+      ;; method runtime-repr
+      (parser:make-instance-method-definition
+       :name (parser:make-node-variable
+              :location location
+              :name runtime-repr-method)
+       :params (list
+                (parser:make-pattern-wildcard
+                 :location location))
+       :function-syntax-p t
+       :body (parser:make-node-body
+              :nodes nil
+              :last-node (parser:make-node-lisp
+                          :location location
+                          :output-types (list (parser:make-tycon
+                                               :location location
+                                               :name lisp-type))
+                          :vars nil
+                          :var-names nil
+                          :body (list (util:runtime-quote (type-definition-runtime-type type)))))
      :location location
-     :head-location location
-     :compiler-generated t)))
+     ;; Always inline RUNTIME-REPR so that other
+     ;; optimizations can kick off.
+     :inline (parser:make-attribute-inline :location location)))
+     :context nil
+     :ty (generated-instance-applied-type type tvars))))

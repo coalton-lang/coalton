@@ -28,6 +28,14 @@
 
 (in-package #:coalton-impl/typechecker/parse-type)
 
+(defun normalize-keyword-input-types (entries)
+  (declare (type list entries)
+           (values tc:keyword-ty-entry-list &optional))
+  (sort (copy-list entries)
+        #'string<
+        :key (lambda (entry)
+               (symbol-name (tc:keyword-ty-entry-keyword entry)))))
+
 ;;;
 ;;; Entrypoints
 ;;;
@@ -144,7 +152,7 @@
   (:method ((type tc:tapp) parser-type env)
     (declare (type parser:ty parser-type)
              (type partial-type-env env)
-             (values tc:tapp))
+             (values tc:ty))
     ;; Flatten the type-checker and parser types.
     (let ((flattened-tapp (tc:flatten-type type))
           (flattened-parser-tapp (parser:flatten-type parser-type)))
@@ -184,8 +192,47 @@
       (setf type (first flattened-tapp))
       ;; Reconstruct the flattened type with any remaining types to be applied.
       (loop :for arg :in (rest flattened-tapp)
-            :do (setf type (tc:make-tapp :from type :to arg)))
+            :do (setf type (nth-value 0 (tc:apply-type-argument type arg))))
       type))
+
+  (:method ((entry tc:keyword-ty-entry) (parser-entry parser:keyword-ty-entry) env)
+    (declare (type partial-type-env env))
+    (tc:make-keyword-ty-entry
+     :keyword (tc:keyword-ty-entry-keyword entry)
+     :type (apply-type-alias-substitutions (tc:keyword-ty-entry-type entry)
+                                           (parser:keyword-ty-entry-type parser-entry)
+                                           env)))
+
+  (:method ((type tc:function-ty) (parser-type parser:function-ty) env)
+    (declare
+             (type partial-type-env env)
+             (values tc:function-ty))
+    (tc:make-function-ty
+     :alias (mapcar (lambda (alias)
+                      (apply-type-alias-substitutions alias parser-type env))
+                    (tc:ty-alias type))
+     :positional-input-types
+     (loop :for input :in (tc:function-ty-positional-input-types type)
+           :for parser-input :in (parser:function-ty-positional-input-types parser-type)
+           :collect (apply-type-alias-substitutions input parser-input env))
+     :keyword-input-types
+     (normalize-keyword-input-types
+      (loop :for entry :in (tc:function-ty-keyword-input-types type)
+            :for parser-entry :in (parser:function-ty-keyword-input-types parser-type)
+            :collect (apply-type-alias-substitutions entry parser-entry env)))
+     :output-types
+     (loop :for output :in (tc:function-ty-output-types type)
+           :for parser-output :in (parser:function-ty-output-types parser-type)
+           :collect (apply-type-alias-substitutions output parser-output env))))
+
+  (:method ((type tc:result-ty) (parser-type parser:result-ty) env)
+    (declare (type partial-type-env env)
+             (values tc:result-ty))
+    (tc:make-result-ty
+     :output-types
+     (loop :for output :in (tc:result-ty-output-types type)
+           :for parser-output :in (parser:result-ty-output-types parser-type)
+           :collect (apply-type-alias-substitutions output parser-output env))))
 
   (:method ((type tc:qualified-ty) parser-type env)
     (declare (type parser:qualified-ty parser-type)
@@ -483,6 +530,75 @@ the substitution :b +-> T can be inferred.
                                   :from (tc:apply-ksubstitution ksubs arg-kind)
                                   :to (tc:apply-ksubstitution ksubs expected-kind))
                                  (tc:apply-ksubstitution ksubs fun-kind)))))))))
+
+  (:method ((entry parser:keyword-ty-entry) expected-kind ksubs env)
+    (declare (ignore expected-kind)
+             (type tc:ksubstitution-list ksubs)
+             (type partial-type-env env)
+             (values tc:keyword-ty-entry tc:ksubstitution-list &optional))
+    (multiple-value-bind (type ksubs)
+        (infer-type-kinds (parser:keyword-ty-entry-type entry) tc:+kstar+ ksubs env)
+      (values (tc:make-keyword-ty-entry
+               :keyword (parser:keyword-src-name
+                         (parser:keyword-ty-entry-keyword entry))
+               :type type)
+              ksubs)))
+
+  (:method ((type parser:function-ty) expected-kind ksubs env)
+    (declare (type tc:kind expected-kind)
+             (type tc:ksubstitution-list ksubs)
+             (type partial-type-env env)
+             (values tc:function-ty tc:ksubstitution-list &optional))
+    (handler-case
+        (setf ksubs (tc:kunify expected-kind tc:+kstar+ ksubs))
+      (tc:coalton-internal-type-error ()
+        (tc-error "Kind mismatch"
+                  (tc-note type "Expected kind '~S' but function types are of kind '*'"
+                           expected-kind))))
+    (let ((positional-input-types
+            (loop :for input :in (parser:function-ty-positional-input-types type)
+                  :collect (multiple-value-bind (input-type ksubs_)
+                               (infer-type-kinds input tc:+kstar+ ksubs env)
+                             (setf ksubs ksubs_)
+                             input-type)))
+          (keyword-input-types
+            (normalize-keyword-input-types
+             (loop :for entry :in (parser:function-ty-keyword-input-types type)
+                   :collect (multiple-value-bind (entry-type ksubs_)
+                                (infer-type-kinds entry tc:+kstar+ ksubs env)
+                              (setf ksubs ksubs_)
+                              entry-type))))
+          (output-types
+            (loop :for output :in (parser:function-ty-output-types type)
+                  :collect (multiple-value-bind (output-type ksubs_)
+                               (infer-type-kinds output tc:+kstar+ ksubs env)
+                             (setf ksubs ksubs_)
+                             output-type))))
+      (values (tc:make-function-ty
+               :positional-input-types positional-input-types
+               :keyword-input-types keyword-input-types
+               :output-types output-types)
+              ksubs)))
+
+  (:method ((type parser:result-ty) expected-kind ksubs env)
+    (declare (type tc:kind expected-kind)
+             (type tc:ksubstitution-list ksubs)
+             (type partial-type-env env)
+             (values tc:result-ty tc:ksubstitution-list &optional))
+    (handler-case
+        (setf ksubs (tc:kunify expected-kind tc:+kstar+ ksubs))
+      (tc:coalton-internal-type-error ()
+        (tc-error "Kind mismatch"
+                  (tc-note type "Expected kind '~S' but output packs are of kind '*'"
+                           expected-kind))))
+    (let ((output-types
+            (loop :for output :in (parser:result-ty-output-types type)
+                  :collect (multiple-value-bind (output-type ksubs_)
+                               (infer-type-kinds output tc:+kstar+ ksubs env)
+                             (setf ksubs ksubs_)
+                             output-type))))
+      (values (tc:output-types-result-type output-types)
+              ksubs)))
 
   (:method ((type parser:qualified-ty) expected-kind ksubs env)
     (declare (type tc:kind expected-kind)

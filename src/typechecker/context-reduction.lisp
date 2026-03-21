@@ -67,6 +67,10 @@ Returns (PREDS FOUNDP)"
                                         (ty-class-instance-constraints-expanded inst env))))
           (return-from by-inst (values resulting-preds t)))
       (predicate-unification-error () nil)))
+  (multiple-value-bind (preds foundp)
+      (synthesized-class-instance-constraints pred)
+    (when foundp
+      (return-from by-inst (values preds t))))
   (values nil nil))
 
 (defun entail (env preds pred)
@@ -272,7 +276,7 @@ For example, consider the following,
 (define-class (C :a :b => D :a :b)
   (m :a))
 
-(declare f (D :a :b => Unit -> :a))
+(declare f (D :a :b => (Void -> :a)))
 (define (f) m)
 ```
 

@@ -19,9 +19,9 @@
   (let (Tuple _ result2) =
     (st:run (m-opt:run-optionalT
              (do
-              (lift (st:modify (+ 2)))
+              (lift (st:modify (fn (state) (+ state 2))))
               assert-positive
-              (lift (st:modify (+ 3)))
+              (lift (st:modify (fn (state) (+ state 3))))
               (lift st:get)))
             0))
   (is (== (Some 5) result2)))
@@ -43,20 +43,22 @@
     (m-opt:run-optionalT
      (m-opt:map-optionalT
       split-positive-state
-      (lift (st:modify (map (+ 3)))))))
+      (lift (st:modify (fn (opt)
+                         (map (fn (x) (+ x 3)) opt)))))))
   (is (== (Ok (Some 3)) result1))
   (let result2 =
     (m-opt:run-optionalT
      (m-opt:map-optionalT
       split-positive-state
-      (lift (st:modify (map (+ -2)))))))
+      (lift (st:modify (fn (opt)
+                         (map (fn (x) (+ x -2)) opt)))))))
   (is (== (Err (Some -2)) result2))
   (let result3 =
     (m-opt:run-optionalT
      (m-opt:map-optionalT
       split-positive-state
       (lift (do
-       (st:modify (map (+ -2)))
+       (st:modify (fn (opt)
+                    (map (fn (x) (+ x -2)) opt)))
        (st:modify (fn (opt) (>>= opt (fn (x) (if (> x 0) (Some x) None))))))))))
   (is (== (Err None) result3)))
-

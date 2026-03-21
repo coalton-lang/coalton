@@ -44,12 +44,12 @@ Represented as a closure from initial state to updated state and value."
     (ST (fn (state) (Tuple state state))))
 
   (inline)
-  (declare run (ST :state :a -> :state -> Tuple :state :a))
-  (define (run sc)
+  (declare run (ST :state :a * :state -> Tuple :state :a))
+  (define (run sc state)
     "Runs a StatefulComputation to produce a final updated state and value given an initial state"
     (match sc
       ((ST fstate)
-       fstate)))
+       (fstate state))))
 
   (inline)
   (declare modify ((:state -> :state) -> ST :state Unit))

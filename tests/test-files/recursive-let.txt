@@ -4,7 +4,7 @@
 
 (package coalton-unit-tests/recursive-let)
 
-(declare flipped-cons (List :elt -> :elt -> List :elt))
+(declare flipped-cons (List :elt * :elt -> List :elt))
 (define (flipped-cons list new-head)
   (Cons new-head list))
 (declare make-loop (:elt -> List :elt))
@@ -27,7 +27,7 @@ error: Invalid recursive bindings
 
 (repr :transparent)
 (define-type (MyLoop :elt) (MyLoop (MyLoop :elt)))
-(declare make-loop (Unit -> (MyLoop :any)))
+(declare make-loop (Void -> (MyLoop :any)))
 (define (make-loop)
   (let ((loop (MyLoop loop))) loop))
 
@@ -49,7 +49,7 @@ error: Invalid recursive bindings
 (define-type (MyNullableLoop :elt)
   (NonNull :elt)
   (MyLoop (MyNullableLoop :elt)))
-(declare make-loop (Unit -> (MyNullableLoop :any)))
+(declare make-loop (Void -> (MyNullableLoop :any)))
 (define (make-loop)
   (let ((lp (MyLoop lp)))
     lp)))
@@ -70,7 +70,7 @@ error: Invalid recursive bindings
 
 (define-type (PairedLoop :elt)
   (PairedLoop (:elt coalton:-> (PairedLoop :elt)) :elt))
-(declare make-partial-loop (Unit -> :elt -> (PairedLoop :elt)))
+(declare make-partial-loop (Void -> :elt -> (PairedLoop :elt)))
 (define (make-partial-loop)
   (let ((lp (PairedLoop lp))) lp))
 
@@ -110,8 +110,8 @@ error: Invalid recursive bindings
 (package coalton-unit-tests/recursive-let)
 
 (define-type LoopFn
-  (LoopFn (coalton:Unit coalton:-> LoopFn)))
-(declare make-loop-fn (Unit -> LoopFn))
+  (LoopFn (Void -> LoopFn)))
+(declare make-loop-fn (Void -> LoopFn))
   (define (make-loop-fn)
     (let ((lp (LoopFn func))
                 (func (fn () lp)))

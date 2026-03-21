@@ -19,6 +19,7 @@
   (literal            #'identity :type function :read-only t)
   (integer-literal    #'identity :type function :read-only t)
   (bind               #'identity :type function :read-only t)
+  (values-bind        #'identity :type function :read-only t)
   (body               #'identity :type function :read-only t)
   (abstraction        #'identity :type function :read-only t)
   (let-binding        #'identity :type function :read-only t)
@@ -30,6 +31,7 @@
   (catch              #'identity :type function :read-only t)
   (progn              #'identity :type function :read-only t)
   (return             #'identity :type function :read-only t)
+  (values             #'identity :type function :read-only t)
   (throw              #'identity :type function :read-only t)
   (resume-to          #'identity :type function :read-only t)
   (resumable-branch   #'identity :type function :read-only t)
@@ -87,6 +89,17 @@
       :expr (traverse (node-bind-expr node) block)
       :location (source:location node))))
 
+  (:method ((node node-values-bind) block)
+    (declare (type traverse-block block)
+             (values node-values-bind &optional))
+
+    (funcall
+     (traverse-values-bind block)
+     (make-node-values-bind
+      :patterns (node-values-bind-patterns node)
+      :expr (traverse (node-values-bind-expr node) block)
+      :location (source:location node))))
+
   (:method ((node node-body) block)
     (declare (type traverse-block block)
              (values node-body &optional))
@@ -107,6 +120,7 @@
       :type (node-type node)
       :location (source:location node)
       :params (node-abstraction-params node)
+      :keyword-params (node-abstraction-keyword-params node)
       :body (traverse (node-abstraction-body node) block))))
 
   (:method ((node node-let-binding) block)
@@ -143,7 +157,6 @@
       :location (source:location node)
       :vars (traverse (node-lisp-vars node) block)
       :var-names (node-lisp-var-names node)
-      :return-convention (node-lisp-return-convention node)
       :body (node-lisp-body node))))
 
   (:method ((node node-match-branch) block)
@@ -235,9 +248,20 @@
      (traverse-return block)
      (make-node-return
       :type (node-type node)
-      :location (source:location node)
-      :expr (traverse (node-return-expr node) block) ; the nil case is handled by the list instance
+     :location (source:location node)
+     :expr (traverse (node-return-expr node) block) ; the nil case is handled by the list instance
       )))
+
+  (:method ((node node-values) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+
+    (funcall
+     (traverse-values block)
+     (make-node-values
+      :type (node-type node)
+      :location (source:location node)
+      :nodes (traverse (node-values-nodes node) block))))
 
   (:method ((node node-throw) block)
     (declare (type traverse-block block)
@@ -269,7 +293,16 @@
       :type (node-type node)
       :location (source:location node)
       :rator (traverse (node-application-rator node) block)
-      :rands (traverse (node-application-rands node) block))))
+      :rands (traverse (node-application-rands node) block)
+      :keyword-rands (traverse (node-application-keyword-rands node) block))))
+
+  (:method ((node node-application-keyword-arg) block)
+    (declare (type traverse-block block)
+             (values node-application-keyword-arg &optional))
+
+    (make-node-application-keyword-arg
+     :keyword (node-application-keyword-arg-keyword node)
+     :value (traverse (node-application-keyword-arg-value node) block)))
 
   (:method ((node node-or) block)
     (declare (type traverse-block block)

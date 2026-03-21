@@ -192,7 +192,7 @@ error: Argument mismatch
 (package coalton-unit-tests/inference)
 
 (define-class (Eq_ :a)
-  (== (:a -> :a -> coalton:Boolean)))
+  (== (:a * :a -> coalton:Boolean)))
 
 (define-instance (Eq_ :a => Eq_ (List :a))
   (define (== a b) False))
@@ -206,13 +206,13 @@ error: Argument mismatch
 
 --------------------------------------------------------------------------------
 
-error: Type mismatch
+error: Arity mismatch
   --> test:13:0
     |
  13 |   (define (f a b)
     |  _^
  14 | |    (== a b))
-    | |____________^ Expected type '((LIST COLOR) -> BOOLEAN)' but got type '((LIST COLOR) -> (LIST COLOR) -> BOOLEAN)'
+    | |____________^ Function definition has 2 positional parameters but expected type '((LIST COLOR) -> BOOLEAN)' takes 1
 
 ================================================================================
 Check that polymorphic recursion is not possible without an explicit binding
@@ -221,7 +221,7 @@ Check that polymorphic recursion is not possible without an explicit binding
 (package coalton-unit-tests/inference)
 
 (define-class (Eq_ :a)
-  (== (:a -> :a -> Boolean)))
+  (== (:a * :a -> Boolean)))
 
 (define-instance (Eq_ :a => Eq_ (List :a))
   (define (== a b) False))
@@ -305,7 +305,7 @@ Check than non overlapping instances can be defined
 (package coalton-unit-tests/inference)
 
 (define-class (Eq_ :a)
-  (==? (:a -> :a -> Boolean)))
+  (==? (:a * :a -> Boolean)))
 
 (define-instance (Eq_ :a => Eq_ (Tuple :a Integer))
   (define (==? a b) False))

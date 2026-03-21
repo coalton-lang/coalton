@@ -153,9 +153,14 @@ Functions are defined similarly to variables. Unlike Common Lisp, Coalton functi
 ```
 
 
-### Functions and Currying
+### Fixed-Arity Functions and Manual Currying
 
-*All* functions in Coalton take *exactly* one input, and produce *exactly* one output. Consider this function:
+Coalton functions have fixed input and output arities. A type like `Integer * String -> Boolean`
+describes a function that takes two arguments and returns one value. A type like
+`Integer -> String -> Boolean` describes a function that takes one argument and returns another
+function.
+
+Consider this function:
 
 ```lisp
 (coalton-toplevel
@@ -163,38 +168,115 @@ Functions are defined similarly to variables. Unlike Common Lisp, Coalton functi
     (+ c (* a b))))
 ```
 
-Truth be known, `fma` actually technically takes *one argument*: `a`. To a Common Lisper, this function is roughly equivalent to
-
-```lisp
-(defun fma (a)
-  (lambda (b)
-    (lambda (c)
-      (+ c (* a b)))))
-```
-
-However, Coalton hides this reality from you unless you need it:
+`fma` really takes three arguments:
 
 ```lisp
 (coalton-toplevel
-  (define fma1 (fma 2))      ; equiv: b -> (c -> (c + 2*b))
-  (define fma2 (fma 2 3))    ; equiv: c -> (c + 6)
-  (define fma3 (fma 2 3 4))) ; equiv: 10
+  (define fma3 (fma 2 3 4))) ; evaluates to 10
 ```
 
-We can see that we can call `fma` as if it's a three argument function, but that's merely convenient syntax. We can also call it with fewer arguments. Sometimes this property is called *curried functions*.
+If you want currying or partial application, write it explicitly by returning a function:
 
-Coalton does work to optimize these functions to reduce as much closure allocation as possible. In fact, `(fma x y z)` will get compiled as a simple add and multiply, without any closure allocations.
+```lisp
+(coalton-toplevel
+  (define (make-fma a)
+    (fn (b)
+      (fn (c)
+        (+ c (* a b)))))
 
-Here is an example of using a curried function to transform a list.
+  (define fma1 (make-fma 2))
+  (define fma2 ((make-fma 2) 3))
+  (define fma3 (((make-fma 2) 3) 4)))
+```
+
+Coalton still optimizes ordinary fixed-arity calls aggressively. A fully applied call like
+`(fma x y z)` compiles as a direct fixed-arity call rather than as a chain of closure
+allocations.
+
+### Keyword Arguments
+
+Coalton also supports fixed-arity keyword arguments. Keyword parameters come after all positional
+parameters and are introduced with `&key`:
+
+```lisp
+(coalton-toplevel
+  (define (render-line x &key (width 80) (pad "."))
+    ...))
+```
+
+Every actual keyword parameter must have an initial value. The parameter name determines the
+surface keyword, so `width` is called with `:width` and `pad` is called with `:pad`.
+
+Calls supply positional arguments first, followed by keyword/value pairs:
+
+```lisp
+(coalton-toplevel
+  (render-line 5)
+  (render-line 5 :width 120)
+  (render-line 5 :pad "-" :width 120))
+```
+
+Keyword arguments are optional. If a keyword is omitted, its initial value is used. Once a
+keyword argument appears, no later positional arguments are allowed.
+
+We recommend using the `Optional` type to denote parameters which do not require a value.
+However, an explicit `None` initializer is still required.
+
+Anonymous functions use the same syntax:
+
+```lisp
+(coalton-toplevel
+  (define add-offset
+    (fn (x &key (offset 1))
+      (+ x offset))))
+```
+
+Types write the keyword tail between the positional inputs and `->`:
+
+```lisp
+(declare render-line (Integer &key (:width Integer) (:pad String) -> String))
+(declare make-default (&key (:x Integer) -> Integer))
+```
+
+A bare `&key` with no following keyword parameters is allowed in both definitions and types, but
+it is treated exactly the same as omitting `&key` entirely:
+
+```lisp
+(define (identity-with-empty-key x &key) x)
+(declare identity-with-empty-key (Integer &key -> Integer))
+```
+
+Explicit declarations are exact about which keywords exist. Inferred higher-order function types
+may internally remain open to additional keywords for compatibility, but there is no separate
+surface syntax for those open rows.
+
+Here is an example of using an explicitly constructed function to transform a list.
 
 ```lisp
 (coalton-toplevel
   ;; Lists can be created with the make-list macro
-  (define nums (make-list 2 3 4 5)))
+  (define nums (make-list 2 3 4 5))
+
+  (define add2
+    (fn (x)
+      (+ 2 x))))
 
 (coalton
-  ;; Functions in Coalton are curried
-  (map (+ 2) nums)) ;; 4 5 6 7
+  (map add2 nums)) ;; 4 5 6 7
+```
+
+Functions may also return multiple values directly. This is distinct from returning a `Tuple`,
+which is still an ordinary single value.
+
+```lisp
+(coalton-toplevel
+  (declare sum-and-product (Integer * Integer -> Integer * Integer))
+  (define (sum-and-product x y)
+    (values (+ x y) (* x y))))
+
+(coalton
+  (let (values s p) = (sum-and-product 3 4)
+  (+ s p))) ;; 19
 ```
 
 ### Pipelining Syntax and Function Composition
@@ -215,7 +297,7 @@ There are convenient syntaxes for composing functions with the `pipe` and `nest`
 
 These are useful to make code less noisy.
 
-Note that since these are macros (indicated by their variadic arguments), they *cannot* be used as higher-order functions. Consider either currying or the `compose` function if you're thinking in that direction.
+Note that since these are macros (indicated by their variadic arguments), they *cannot* be used as higher-order functions. Consider either an explicit `fn` wrapper or the `compose` function if you're thinking in that direction.
 
 ### Ignoring Function Parameters
 
@@ -571,7 +653,7 @@ We can make a monomorphic variant for `Integer` by declaring the type of the rec
 
 ```lisp
 (define (fib-monomorphic n)
-  (rec (% (Integer -> Integer -> Integer -> Integer))
+  (rec (% (Integer * Integer * Integer -> Integer))
        ((i n)
         (a 0)
         (b 1))
@@ -928,7 +1010,7 @@ Type declarations can also be added in `let` expressions
 ```lisp
 (coalton-toplevel
   (define (f a b)
-    (let ((declare g (Integer -> Integer -> Integer))
+    (let ((declare g (Integer * Integer -> Integer))
           (g +))
       (g a b))))
 ```
@@ -1141,19 +1223,19 @@ Coalton has a `coalton:progn` construct similar to lisp.
 
 ```lisp
 (coalton-toplevel
-  (declare f (Integer -> Integer -> (Tuple Integer Integer)))
+  (declare f (Integer * Integer -> Integer * Integer))
   (define (f x y)
     (progn
       (+ x y)
       (* x y)
-      (Tuple x y))))
+      (values x y))))
 ```
 
 Coalton's `progn` can have flattened `let` syntax.
 
 ```lisp
 (coalton-toplevel
- (declare f (Integer -> Integer -> String))
+ (declare f (Integer * Integer -> String))
  (define (f x y)
    (progn
      (let x_ = (into x))
@@ -1196,7 +1278,7 @@ Function definitions create an implicit `progn` block
 
 ```lisp
 (coalton-toplevel
-  (declare f (Integer -> Integer -> String))
+  (declare f (Integer * Integer -> String))
   (define (f x y)
     (let x_ = (into x))
     (let y_ = (into y))
@@ -1256,7 +1338,7 @@ Currently, *all* member functions must be defined for each type class instance.
 (coalton-toplevel
   ;; Type classes are defined with the define-class keyword
   (define-class (Eq :a)
-    (== (:a -> :a -> Boolean)))
+    (== (:a * :a -> Boolean)))
 
   (define-type Color
     Red
@@ -1274,14 +1356,14 @@ Currently, *all* member functions must be defined for each type class instance.
     (define (/= a b) (not (== a b))))
 
   ;; Type declarations can have constraints
-  (declare is-eql (Eq :a => (:a -> :a -> String)))
+  (declare is-eql (Eq :a => (:a * :a -> String)))
   (define (is-eql a b)
     (if (== a b)
       "They are equal"
       "They are not equal"))
 
   ;; Multiple constraints must be wrapped in parentheses
-  (declare double-is-eql ((Eq :a) (Eq :b) => (:a -> :a -> :b -> :b -> String)))
+  (declare double-is-eql ((Eq :a) (Eq :b) => (:a * :a * :b * :b -> String)))
   (define (double-is-eql a b c d)
     (if (and (== a b) (== c d))
       "Both pairs are equal"
@@ -1353,6 +1435,7 @@ Instances of the following classes can be derived:
 - `Eq`
 - `Hash`
 - `Default`
+- `Show`
 
 Currently these are the only derivable classes in the standard library, but more may be added in the future.
 
@@ -1384,11 +1467,22 @@ Inline type annotations can be added to resolve ambiguities when using type clas
   (define f (the U32 (+ (fromInt 5) (fromInt 7)))))
 ```
 
-## Shorthand Function Syntax
+## Nullary Functions
 
-Coalton does not have nullary functions. However, a function with the type signature `Unit -> *` can be called in Coalton without explicitly passing `Unit`. For instance, the Coalton form `(coalton/vector:new)` is a shorthand for `(coalton/vector:new Unit)`.
+Coalton has true nullary functions. A type like `(Void -> Integer)` denotes a function that
+takes zero arguments and returns one `Integer`.
 
-Functions can also be defined with an implicit parameter using `(fn () 5)`. This creates a function with a single implicit parameter of type `Unit`.
+Functions can be defined with `(fn () ...)`:
+
+```lisp
+(coalton-toplevel
+  (declare five (Void -> Integer))
+  (define five
+    (fn () 5)))
+```
+
+`Unit` remains an ordinary type and value. A function of type `Unit -> Integer` still takes one
+argument, and must be called as `(f Unit)`.
 
 ## Inline Lisp
 
@@ -1398,26 +1492,31 @@ Coalton can embed raw Common Lisp forms with `lisp`:
 (coalton-toplevel
   (declare random-int (Integer -> Integer))
   (define (random-int n)
-    (lisp Integer (n)
+    (lisp (-> Integer) (n)
       (cl:random n))))
 ```
 
 The form is:
 
 ```lisp
-(lisp <return-type> (<coalton-variables>) <lisp-form>...)
+(lisp (-> <output-type-spec>) (<coalton-variables>) <lisp-form>...)
 ```
 
 This is unsafe; Coalton makes no attempt to analyze anything that is happening inside of a `lisp` form. That means it's possible (and easy) to create type errors, among other things.
 
-The `<return-type>` may mention a type variable brought into scope by an
+`<output-type-spec>` may be `Void`, a single type, or a `*`-separated list of output types.
+Single-output `lisp` forms consume only the primary Common Lisp value of their last form.
+Multiple-output `lisp` forms return Common Lisp multiple values directly. Zero-output `lisp`
+forms evaluate their body and then return no values.
+
+The `<output-type-spec>` may also mention a type variable brought into scope by an
 enclosing explicit `forall`:
 
 ```lisp
 (coalton-toplevel
   (declare identity-through-lisp (forall (:item) :item -> :item))
   (define (identity-through-lisp x)
-    (lisp :item (x)
+    (lisp (-> :item) (x)
       x)))
 ```
 
@@ -1426,17 +1525,26 @@ compilation context. They do not inherit those lexical type-variable bindings.
 
 ### Multiple Values Directive `multiple-values`
 
-When the return type is a `Tuple`, you can request a multiple-value return convention by using the `multiple-values` directive:
+For example:
 
 ```lisp
 (coalton-toplevel
-  (declare quot-rem (Integer -> Integer -> (Tuple Integer Integer)))
+  (declare quot-rem (Integer * Integer -> Integer * Integer))
   (define (quot-rem x y)
-    (lisp multiple-values (Tuple Integer Integer) (x y)
+    (lisp (-> Integer * Integer) (x y)
       (cl:truncate x y))))
 ```
 
-`lisp multiple-values` requires a `Tuple` return type. The compiler can keep values unboxed through tuple-consuming code paths (for example immediate `match`, `fst`, or `snd`) and only allocate a tuple object when one is actually needed.
+These values can be destructured with `let (values ...) = ...`:
+
+```lisp
+(coalton
+  (let (values q r) = (quot-rem 17 5)
+  (Tuple q r)))
+```
+
+Non-final expressions in sequencing constructs such as `progn`, `when`, `unless`, and `cond`
+may also produce zero values without requiring an explicit `let (values) = ...`.
 
 ## Inspecting the Coalton System
 
@@ -1535,7 +1643,7 @@ Specialization can be listed in the repl with `print-specializations`.
 * Lists in Coalton must be homogeneous.
 * To denote anonymous functions, Coalton uses `fn` (*not* `lambda`).
 * Numerical operators like `+` only take 2 arguments.
-* Negation is done with `negate`.  The form `(- x)` is a curried function equivalent to `(fn (z) (- x z))`.
+* Negation is done with `negate`. The operator `-` is a fixed-arity subtraction operator.
 
 For more details, see the [glossary](./glossary.md).
 
@@ -1565,12 +1673,12 @@ Coalton's exception handling system is incomplete and evolving. The design has b
 If you want to catch any exception, including Common Lisp error conditions, you can use a wildcard pattern:
 
 ```lisp
-(declare divide-by-random (Integer -> Integer -> Integer))
+(declare divide-by-random (Integer * Integer -> Integer))
 (define (divide-by-random r m)
     "Divide `r` by a random integer between `0` and `m`. 
      If the divisor is `0`, then print the divide by zero error
      and then return `0.0`"
-    (catch (lisp Integer (r m) (cl:/ r (cl:random m)))
+    (catch (lisp (-> Integer) (r m) (cl:/ r (cl:random m)))
         (_ (trace "An error was received")
            0)))
 ```

@@ -52,7 +52,6 @@
    #:forall
    #:∀
    #:Unit
-   #:Void
    #:Boolean #:True #:False
    #:Char
    #:Bit
@@ -80,7 +79,9 @@
   ;; Primitive Syntax
   (:export
    #:fn #:λ
+   #:&key
    #:match
+   #:type-of
    #:throw
    #:resume-to
    #:resumable
@@ -89,7 +90,6 @@
    #:rec
    #:=                                  ; Syntax
    #:lisp
-   #:multiple-values                    ; lisp return-convention directive
    #:<-                                 ; Syntax
    #:_
    #:return
@@ -135,7 +135,6 @@
    #:lookup-type
    #:lookup-runtime-type
    #:lookup-fundeps
-   #:type-of
    #:describe-type-of
    #:describe-type-alias
    #:set-type-printing-mode

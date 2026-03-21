@@ -58,7 +58,7 @@ that contains a filling of various sweet or savoury ingredients."
      
     (bake-time
      "How long will it take to bake an item of type :a given its size?"
-     (:a -> UFix -> UFix)))
+     (:a * UFix -> UFix)))
      
   (define-instance (Bakeable Pie)
      "An instance of Bakeable for baking pies."

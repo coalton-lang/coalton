@@ -37,26 +37,26 @@
 ;; NOTE: Both the Hash class and Hash type are defined in classes.lisp.
 
 (coalton-toplevel
-  (declare combine-hashes (Hash -> Hash -> Hash))
+  (declare combine-hashes (Hash * Hash -> Hash))
   (define (combine-hashes lhs rhs)
-    (lisp Hash (lhs rhs)
+    (lisp (-> Hash) (lhs rhs)
       (lisp-combine-hashes lhs rhs)))
 
-  (declare combine-hashes-order-independent (Hash -> Hash -> Hash))
+  (declare combine-hashes-order-independent (Hash * Hash -> Hash))
   (define (combine-hashes-order-independent lhs rhs)
-    (lisp Hash (lhs rhs)
+    (lisp (-> Hash) (lhs rhs)
       (cl:logxor lhs rhs)))
 
   (define-instance (Eq Hash)
     (define (== a b)
-      (lisp Boolean (a b)
+      (lisp (-> Boolean) (a b)
         (cl:= a b))))
 
   (define-instance (Ord Hash)
     (define (<=> a b)
       (if (== a b)
           EQ
-          (if (lisp Boolean (a b) (to-boolean (cl:> a b)))
+          (if (lisp (-> Boolean) (a b) (to-boolean (cl:> a b)))
               GT
               LT))))
 
@@ -66,12 +66,12 @@
 
   (define-instance (Monoid Hash)
     (define mempty
-      (lisp Hash ()
+      (lisp (-> Hash) ()
         0)))
 
   (define-instance (Default Hash)
     (define (default)
-      (lisp Hash ()
+      (lisp (-> Hash) ()
         0)))
 
   (define-sxhash-hasher Hash))
