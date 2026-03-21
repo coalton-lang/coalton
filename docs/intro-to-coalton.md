@@ -1099,7 +1099,7 @@ The `the`-`into` pattern is so common that Coalton provides a shorthand called `
 ;; ==> (#\m #\s #\p #\i)
 ```
 
-The `into` method is used only when a conversion can always be performed from one type to another. If not values of a type can be converted, then another type class `TryInto` with a method `tryInto` is used. The `tryinto` method returns a `Result` type which indicates whether the conversion was successful or not. 
+The `into` method is used only when a conversion can always be performed from one type to another. If not values of a type can be converted, then another type class `TryInto` with a method `tryInto` is used. The `tryinto` method returns an `Optional` type, yielding `Some` on success and `None` on failure.
 
 **Note that `as` only works for conversions via `into`, i.e., conversions that are total.** There is no corresponding syntax for `tryInto`.
 

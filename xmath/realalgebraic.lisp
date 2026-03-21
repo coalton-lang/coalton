@@ -1897,15 +1897,14 @@ theorem and certify by exact substitution in the defining polynomial."
       ((Some _) True)
       ((None) False)))
 
-  (declare try-fraction (RealAlgebraic -> (Result String Fraction)))
+  (declare try-fraction (RealAlgebraic -> (Optional Fraction)))
   (define (try-fraction x)
     "Attempt to extract an exact rational value for `x`.
 
-Returns `Err` when `x` is not known to be rational."
+Returns `None` when `x` is not known to be rational."
     (match (%rational-certificate x)
-      ((Some q) (Ok q))
-      ((None)
-       (Err "Could not certify that this real algebraic number is rational."))))
+      ((Some q) (Some q))
+      ((None) None)))
 
   (declare %integer-certificate (RealAlgebraic -> (Optional Integer)))
   (define (%integer-certificate x)
@@ -2022,7 +2021,7 @@ Returns `Err` when `x` is not known to be rational."
     (define (into x)
       (from-fraction x)))
 
-  (define-instance (TryInto RealAlgebraic Fraction String)
+  (define-instance (TryInto RealAlgebraic Fraction)
     (define (tryInto x)
       (try-fraction x)))
 

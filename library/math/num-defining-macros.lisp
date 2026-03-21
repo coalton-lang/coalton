@@ -271,12 +271,12 @@
 
 ;;; Utility to define type -> Fraction conversions.
 (cl:defmacro define-float-fraction-conversion (type)
-  `(define-instance (TryInto ,type Fraction String)
+  `(define-instance (TryInto ,type Fraction)
      (define (tryInto x)
        (if (finite? x)
-           (Ok (coalton++:unsafe
-                 (lisp (-> Fraction) (x) (cl:rational x))))
-           (Err "Could not convert NaN or infinity into a Fraction")))))
+           (Some (coalton++:unsafe
+                   (lisp (-> Fraction) (x) (cl:rational x))))
+           None))))
 
 
 ;;; Utility to define Reciprocable instances on floats.

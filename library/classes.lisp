@@ -316,9 +316,9 @@ together."
   (define-instance (Into :a :a)
     (define (into x) x))
 
-  (define-class (TryInto :a :b :c (:a :b -> :c))
-    "`TRY-INTO` implies some elements of `:a` can be represented exactly by an element of `:b`, but sometimes not. If not, an error of type `:c` is returned."
-    (tryInto (:a -> (Result :c :b))))
+  (define-class (TryInto :a :b)
+    "`TRY-INTO` implies some elements of `:a` can be represented exactly by an element of `:b`, but sometimes not. Failed conversions return `None`."
+    (tryInto (:a -> (Optional :b))))
 
   (define-instance (Iso :a :a))
 
@@ -350,6 +350,12 @@ Typical `fail` continuations are:
       ((Ok elt) (succeed elt))
       ((Err _) (fail)))))
 
+  (define-instance (Unwrappable Optional)
+    (define (unwrap-or-else succeed fail opt)
+      (match opt
+        ((Some elt) (succeed elt))
+        ((None) (fail)))))
+
   (declare expect ((Unwrappable :container) =>
                    String
                    * (:container :element)
@@ -371,7 +377,7 @@ Typical `fail` continuations are:
                                                container))))
                     container))
 
-  (declare unwrap-into (TryInto :a :b :c => :a -> :b))
+  (declare unwrap-into (TryInto :a :b => :a -> :b))
   (define (unwrap-into x)
     "Same as `tryInto` followed by `unwrap`."
     (unwrap (tryinto x)))
