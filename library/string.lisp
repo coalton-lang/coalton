@@ -270,13 +270,13 @@ does not have that suffix."
       (lisp (-> String) (z)
         (cl:prin1-to-string z))))
 
-  (define-instance (TryInto String Integer String)
+  (define-instance (TryInto String Integer)
     (define (tryInto s)
-      (lisp (-> (Result String Integer)) (s)
+      (lisp (-> (Optional Integer)) (s)
         (cl:let ((z (cl:ignore-errors (cl:parse-integer s))))
           (cl:if (cl:null z)
-                 (Err (concat "Cannot parse string as integer: " s))
-                 (Ok z))))))
+                 None
+                 (Some z))))))
 
   (define-instance (Default String)
     (define (default) ""))
