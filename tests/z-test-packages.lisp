@@ -6,7 +6,7 @@
 (defvar *cannot-load* nil)
 (defvar *testing-fails* nil)
 
-#+sbcl (push :concrete-syntax-tree *testing-fails*)
+#+sbcl (push :concrete-syntax-tree *testing-fails*) ; testing it crashes sbcl
 ;; #+ccl (push :spinneret *testing-fails*) ;; needed extra packages.
 
 #+abcl (push :concrete-syntax-tree *testing-fails*) ; + eclector yason

@@ -155,9 +155,9 @@ have discovered the following cases:
   - ECL: `:spinneret`
 
 - Testing fails:
-  - *SBCL*: `:concrete-syntax-tree`
+  - *SBCL*: `:concrete-syntax-tree` (testing it causes sbcl to *crash*)
   - *CCL*: (none)
-  - ABCL: `:concrete-syntax-tree :eclector :yason :concrete-syntax-tree` (the last three fail their tests but `asdf:test-system` returns `t`)
+  - ABCL: `:concrete-syntax-tree :eclector :yason` (the last two fail their tests but `asdf:test-system` returns `t`)
   - CLASP: `:trivial-garbage :float-features :fset`
   - ECL: `:mgl-pax`
 
