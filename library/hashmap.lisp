@@ -723,6 +723,30 @@ new value, if the key was found."
     (define (iter:collect! iter)
       (collect! iter)))
 
+  (define-instance (Hash :key =>
+                    FromItemizedAssociation (HashMap :key :value)
+                                            :key
+                                            :value
+                                            (HashMap :key :value))
+    (define (begin-association-builder _ _size)
+      empty)
+    (define (adjoin-to-association-builder _ assoc _index key value)
+      (adjoin assoc key value))
+    (define (finalize-association-builder _ assoc)
+      assoc))
+
+  (define-instance (Hash :key =>
+                    FromAssociationComprehension (HashMap :key :value)
+                                                 :key
+                                                 :value
+                                                 (HashMap :key :value))
+    (define (begin-association-comprehension _ _size-hint)
+      empty)
+    (define (adjoin-to-association-comprehension _ assoc key value)
+      (adjoin assoc key value))
+    (define (finalize-association-comprehension _ assoc)
+      assoc))
+
   (define-instance (Functor (HashMap :key))
     (define (map func mp)
       (HashMap (%map func (root mp)))))

@@ -805,6 +805,44 @@ This function is equivalent to all size-`n` elements of `(combs l)`."
                         (cl:setf current top)))
            :finally (cl:return top)))))
 
+  (define-instance (FromItemizedCollection (List :elt) :elt (List :elt))
+    (define (begin-collection-builder _ _size)
+      Nil)
+    (define (adjoin-to-collection-builder _ list _index item)
+      (Cons item list))
+    (define (finalize-collection-builder _ list)
+      (reverse list)))
+
+  (define-instance (FromItemizedAssociation (List (Tuple :key :value))
+                                            :key
+                                            :value
+                                            (List (Tuple :key :value)))
+    (define (begin-association-builder _ _size)
+      Nil)
+    (define (adjoin-to-association-builder _ assoc _index key value)
+      (Cons (Tuple key value) assoc))
+    (define (finalize-association-builder _ assoc)
+      (reverse assoc)))
+
+  (define-instance (FromCollectionComprehension (List :elt) :elt (List :elt))
+    (define (begin-collection-comprehension _ _size-hint)
+      Nil)
+    (define (adjoin-to-collection-comprehension _ list item)
+      (Cons item list))
+    (define (finalize-collection-comprehension _ list)
+      (reverse list)))
+
+  (define-instance (FromAssociationComprehension (List (Tuple :key :value))
+                                                 :key
+                                                 :value
+                                                 (List (Tuple :key :value)))
+    (define (begin-association-comprehension _ _size-hint)
+      Nil)
+    (define (adjoin-to-association-comprehension _ assoc key value)
+      (Cons (Tuple key value) assoc))
+    (define (finalize-association-comprehension _ assoc)
+      (reverse assoc)))
+
   (define-instance (Into (Optional :a) (List :a))
     (define (into opt)
       (match opt

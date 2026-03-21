@@ -236,6 +236,47 @@ a new `Seq` instance."
     (define (iter:collect! it)
       (iter:fold! push (new) it)))
 
+  (define-instance (types:RuntimeRepr :a => FromItemizedCollection (Seq :a) :a (Seq :a))
+    (define (begin-collection-builder _ _size)
+      (new))
+    (define (adjoin-to-collection-builder _ seq _index item)
+      (push seq item))
+    (define (finalize-collection-builder _ seq)
+      seq))
+
+  (define-instance (types:RuntimeRepr (Tuple :key :value) =>
+                    FromItemizedAssociation (Seq (Tuple :key :value))
+                                            :key
+                                            :value
+                                            (Seq (Tuple :key :value)))
+    (define (begin-association-builder _ _size)
+      (new))
+    (define (adjoin-to-association-builder _ assoc _index key value)
+      (push assoc (Tuple key value)))
+    (define (finalize-association-builder _ assoc)
+      assoc))
+
+  (define-instance (types:RuntimeRepr :a =>
+                    FromCollectionComprehension (Seq :a) :a (Seq :a))
+    (define (begin-collection-comprehension _ _size-hint)
+      (new))
+    (define (adjoin-to-collection-comprehension _ seq item)
+      (push seq item))
+    (define (finalize-collection-comprehension _ seq)
+      seq))
+
+  (define-instance (types:RuntimeRepr (Tuple :key :value) =>
+                    FromAssociationComprehension (Seq (Tuple :key :value))
+                                                 :key
+                                                 :value
+                                                 (Seq (Tuple :key :value)))
+    (define (begin-association-comprehension _ _size-hint)
+      (new))
+    (define (adjoin-to-association-comprehension _ assoc key value)
+      (push assoc (Tuple key value)))
+    (define (finalize-association-comprehension _ assoc)
+      assoc))
+
   (define-instance (types:RuntimeRepr :a => Default (Seq :a))
     (define (default)
       (new)))
