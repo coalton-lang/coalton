@@ -10,6 +10,7 @@
    #:parse-error)
   (:local-nicknames
    (#:cst #:concrete-syntax-tree)
+   (#:reader #:coalton-impl/parser/reader)
    (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util)
    (#:const #:coalton-impl/constants))
@@ -123,6 +124,43 @@
    #:make-node-the                      ; CONSTRUCTOR
    #:node-the-type                      ; ACCESSOR
    #:node-the-expr                      ; ACCESSOR
+   #:node-collection-builder            ; STRUCT
+   #:make-node-collection-builder       ; CONSTRUCTOR
+   #:node-collection-builder-elements   ; ACCESSOR
+   #:association-entry                  ; STRUCT
+   #:make-association-entry             ; CONSTRUCTOR
+   #:association-entry-key              ; ACCESSOR
+   #:association-entry-value            ; ACCESSOR
+   #:association-entry-list             ; TYPE
+   #:node-association-builder           ; STRUCT
+   #:make-node-association-builder      ; CONSTRUCTOR
+   #:node-association-builder-entries   ; ACCESSOR
+   #:builder-clause                     ; STRUCT
+   #:builder-with-clause                ; STRUCT
+   #:make-builder-with-clause           ; CONSTRUCTOR
+   #:builder-with-clause-binder         ; ACCESSOR
+   #:builder-with-clause-expr           ; ACCESSOR
+   #:builder-for-clause                 ; STRUCT
+   #:make-builder-for-clause            ; CONSTRUCTOR
+   #:builder-for-clause-binder          ; ACCESSOR
+   #:builder-for-clause-expr            ; ACCESSOR
+   #:builder-below-clause               ; STRUCT
+   #:make-builder-below-clause          ; CONSTRUCTOR
+   #:builder-below-clause-binder        ; ACCESSOR
+   #:builder-below-clause-expr          ; ACCESSOR
+   #:builder-when-clause                ; STRUCT
+   #:make-builder-when-clause           ; CONSTRUCTOR
+   #:builder-when-clause-expr           ; ACCESSOR
+   #:builder-clause-list                ; TYPE
+   #:node-collection-comprehension      ; STRUCT
+   #:make-node-collection-comprehension ; CONSTRUCTOR
+   #:node-collection-comprehension-head ; ACCESSOR
+   #:node-collection-comprehension-clauses ; ACCESSOR
+   #:node-association-comprehension     ; STRUCT
+   #:make-node-association-comprehension ; CONSTRUCTOR
+   #:node-association-comprehension-key ; ACCESSOR
+   #:node-association-comprehension-value ; ACCESSOR
+   #:node-association-comprehension-clauses ; ACCESSOR
    #:node-return                        ; STRUCT
    #:make-node-return                   ; CONSTRUCTOR
    #:node-return-expr                   ; ACCESSOR
@@ -564,6 +602,92 @@ Rebound to NIL parsing an anonymous FN.")
   (type (util:required 'type) :type ty   :read-only t)
   (expr (util:required 'expr) :type node :read-only t))
 
+(defstruct (node-collection-builder
+            (:include node)
+            (:copier nil))
+  "AST node for collection builder syntax such as `[a b c]`."
+  (elements (util:required 'elements) :type node-list :read-only t))
+
+(defstruct association-entry
+  "AST node for one evaluated key/value entry inside an association builder."
+  (key      (util:required 'key)      :type node             :read-only t)
+  (value    (util:required 'value)    :type node             :read-only t)
+  (location (util:required 'location) :type source:location  :read-only t))
+
+(defmethod source:location ((self association-entry))
+  (association-entry-location self))
+
+(defun association-entry-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'association-entry-p x)))
+
+(deftype association-entry-list ()
+  '(satisfies association-entry-list-p))
+
+(defstruct (node-association-builder
+            (:include node)
+            (:copier nil))
+  "AST node for association builder syntax such as `[a => b c => d]`."
+  (entries (util:required 'entries) :type association-entry-list :read-only t))
+
+(defstruct (builder-clause
+            (:constructor nil)
+            (:copier nil))
+  "Base AST type for builder comprehension clauses."
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self builder-clause))
+  (builder-clause-location self))
+
+(defstruct (builder-with-clause
+            (:include builder-clause)
+            (:copier nil))
+  "AST node for a `:with` clause inside builder comprehension syntax."
+  (binder (util:required 'binder) :type node-variable :read-only t)
+  (expr   (util:required 'expr)   :type node          :read-only t))
+
+(defstruct (builder-for-clause
+            (:include builder-clause)
+            (:copier nil))
+  "AST node for a `:for ... :in ...` clause inside builder comprehension syntax."
+  (binder (util:required 'binder) :type node-variable :read-only t)
+  (expr   (util:required 'expr)   :type node          :read-only t))
+
+(defstruct (builder-below-clause
+            (:include builder-clause)
+            (:copier nil))
+  "AST node for a `:for ... :below ...` clause inside builder comprehension syntax."
+  (binder (util:required 'binder) :type node-variable :read-only t)
+  (expr   (util:required 'expr)   :type node          :read-only t))
+
+(defstruct (builder-when-clause
+            (:include builder-clause)
+            (:copier nil))
+  "AST node for a `:when` filter clause inside builder comprehension syntax."
+  (expr (util:required 'expr) :type node :read-only t))
+
+(defun builder-clause-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'builder-clause-p x)))
+
+(deftype builder-clause-list ()
+  '(satisfies builder-clause-list-p))
+
+(defstruct (node-collection-comprehension
+            (:include node)
+            (:copier nil))
+  "AST node for collection builder comprehension syntax."
+  (head    (util:required 'head)    :type node                :read-only t)
+  (clauses (util:required 'clauses) :type builder-clause-list :read-only t))
+
+(defstruct (node-association-comprehension
+            (:include node)
+            (:copier nil))
+  "AST node for association builder comprehension syntax."
+  (key     (util:required 'key)     :type node                :read-only t)
+  (value   (util:required 'value)   :type node                :read-only t)
+  (clauses (util:required 'clauses) :type builder-clause-list :read-only t))
+
 (defstruct (node-return
             (:include node)
             (:copier nil))
@@ -902,6 +1026,94 @@ Rebound to NIL parsing an anonymous FN.")
     (check-duplicate-call-keywords keyword-rands source)
     (values rands keyword-rands)))
 
+(defun builder-marker-p (form marker)
+  (and (cst:atom form)
+       (eq (cst:raw form) marker)))
+
+(defun parse-builder-binder (form source context)
+  (unless (and (cst:atom form)
+               (identifierp (cst:raw form)))
+    (parse-error context
+                 (note source form "expected identifier binder")))
+  (make-node-variable
+   :name (cst:raw form)
+   :location (form-location source form)))
+
+(defun parse-association-entry (form source)
+  (unless (cst:proper-list-p form)
+    (parse-error "Malformed association builder"
+                 (note source form "expected association entry")))
+  (unless (builder-marker-p (cst:first form) (reader:association-entry-marker))
+    (parse-error "Malformed association builder"
+                 (note source form "expected association entry")))
+  (unless (cst:consp (cst:rest form))
+    (parse-error "Malformed association builder"
+                 (note-end source (cst:first form) "expected entry key")))
+  (unless (cst:consp (cst:rest (cst:rest form)))
+    (parse-error "Malformed association builder"
+                 (note-end source (cst:second form) "expected entry value")))
+  (when (cst:consp (cst:nthrest 3 form))
+    (parse-error "Malformed association builder"
+                 (note source (cst:fourth form) "unexpected trailing form")))
+  (make-association-entry
+   :key (parse-expression (cst:second form) source)
+   :value (parse-expression (cst:third form) source)
+   :location (form-location source form)))
+
+(defun parse-binary-builder-clause (form source)
+  "Validate and parse a builder clause that takes a binder and an expression."
+  (unless (cst:consp (cst:rest form))
+    (parse-error "Malformed builder clause"
+                 (note-end source (cst:first form) "expected binder")))
+  (unless (cst:consp (cst:rest (cst:rest form)))
+    (parse-error "Malformed builder clause"
+                 (note-end source (cst:second form) "expected expression")))
+  (when (cst:consp (cst:nthrest 3 form))
+    (parse-error "Malformed builder clause"
+                 (note source (cst:fourth form) "unexpected trailing form")))
+  (values (parse-builder-binder (cst:second form) source "Malformed builder clause")
+          (parse-expression (cst:third form) source)
+          (form-location source form)))
+
+(defun parse-builder-clause (form source)
+  (unless (cst:proper-list-p form)
+    (parse-error "Malformed builder clause"
+                 (note source form "expected builder clause")))
+  (cond
+    ((builder-marker-p (cst:first form) (reader:builder-with-marker))
+     (multiple-value-bind (binder expr location)
+         (parse-binary-builder-clause form source)
+       (make-builder-with-clause
+        :binder binder :expr expr :location location)))
+    ((builder-marker-p (cst:first form) (reader:builder-for-marker))
+     (multiple-value-bind (binder expr location)
+         (parse-binary-builder-clause form source)
+       (make-builder-for-clause
+        :binder binder :expr expr :location location)))
+    ((builder-marker-p (cst:first form) (reader:builder-below-marker))
+     (multiple-value-bind (binder expr location)
+         (parse-binary-builder-clause form source)
+       (make-builder-below-clause
+        :binder binder :expr expr :location location)))
+    ((builder-marker-p (cst:first form) (reader:builder-when-marker))
+     (unless (cst:consp (cst:rest form))
+       (parse-error "Malformed builder clause"
+                    (note-end source (cst:first form) "expected predicate")))
+     (when (cst:consp (cst:nthrest 2 form))
+       (parse-error "Malformed builder clause"
+                    (note source (cst:third form) "unexpected trailing form")))
+     (make-builder-when-clause
+      :expr (parse-expression (cst:second form) source)
+      :location (form-location source form)))
+    (t
+     (parse-error "Malformed builder clause"
+                  (note source form "unknown builder clause")))))
+
+(defun parse-builder-clauses (forms source)
+  (loop :for clauses := forms :then (cst:rest clauses)
+        :while (cst:consp clauses)
+        :collect (parse-builder-clause (cst:first clauses) source)))
+
 (defun show-symbol (name)
   (declare (type string name)
            (values (or null symbol) &optional))
@@ -973,6 +1185,46 @@ Rebound to NIL parsing an anonymous FN.")
     ;;
     ;; Keywords
     ;;
+
+    ((and (cst:atom (cst:first form))
+          (eq (reader:collection-builder-marker) (cst:raw (cst:first form))))
+     (make-node-collection-builder
+      :location (form-location source form)
+      :elements (loop :for items := (cst:rest form) :then (cst:rest items)
+                      :while (cst:consp items)
+                      :collect (parse-expression (cst:first items) source))))
+
+    ((and (cst:atom (cst:first form))
+          (eq (reader:association-builder-marker) (cst:raw (cst:first form))))
+     (make-node-association-builder
+      :location (form-location source form)
+      :entries (loop :for items := (cst:rest form) :then (cst:rest items)
+                     :while (cst:consp items)
+                     :collect (parse-association-entry (cst:first items) source))))
+
+    ((and (cst:atom (cst:first form))
+          (eq (reader:collection-comprehension-marker) (cst:raw (cst:first form))))
+     (unless (cst:consp (cst:rest form))
+       (parse-error "Malformed collection comprehension"
+                    (note-end source (cst:first form) "expected head expression")))
+     (make-node-collection-comprehension
+      :location (form-location source form)
+      :head (parse-expression (cst:second form) source)
+      :clauses (parse-builder-clauses (cst:nthrest 2 form) source)))
+
+    ((and (cst:atom (cst:first form))
+          (eq (reader:association-comprehension-marker) (cst:raw (cst:first form))))
+     (unless (cst:consp (cst:rest form))
+       (parse-error "Malformed association comprehension"
+                    (note-end source (cst:first form) "expected key expression")))
+     (unless (cst:consp (cst:rest (cst:rest form)))
+       (parse-error "Malformed association comprehension"
+                    (note-end source (cst:second form) "expected value expression")))
+     (make-node-association-comprehension
+      :location (form-location source form)
+      :key (parse-expression (cst:second form) source)
+      :value (parse-expression (cst:third form) source)
+      :clauses (parse-builder-clauses (cst:nthrest 3 form) source)))
 
     ((and (cst:atom (cst:first form))
           (values-symbol-p (cst:raw (cst:first form))))

@@ -38,6 +38,42 @@
                  (setf (gethash name seen) t)
                  (push name deps)))
 
+             (traverse-builder-clauses (clauses local-bindings)
+               "Traverse builder CLAUSES, returning the lexical scope visible to the builder head."
+               (declare (type hash-table local-bindings)
+                        (values hash-table &optional))
+               (loop :with current-locals := local-bindings
+                     :for clause :in clauses
+                     :do
+                        (etypecase clause
+                          (parser:builder-with-clause
+                           (traverse (parser:builder-with-clause-expr clause) current-locals)
+                           (let ((new-locals (alexandria:copy-hash-table current-locals)))
+                             (setf (gethash (parser:node-variable-name
+                                             (parser:builder-with-clause-binder clause))
+                                            new-locals)
+                                   t)
+                             (setf current-locals new-locals)))
+                          (parser:builder-for-clause
+                           (traverse (parser:builder-for-clause-expr clause) current-locals)
+                           (let ((new-locals (alexandria:copy-hash-table current-locals)))
+                             (setf (gethash (parser:node-variable-name
+                                             (parser:builder-for-clause-binder clause))
+                                            new-locals)
+                                   t)
+                             (setf current-locals new-locals)))
+                          (parser:builder-below-clause
+                           (traverse (parser:builder-below-clause-expr clause) current-locals)
+                           (let ((new-locals (alexandria:copy-hash-table current-locals)))
+                             (setf (gethash (parser:node-variable-name
+                                             (parser:builder-below-clause-binder clause))
+                                            new-locals)
+                                   t)
+                             (setf current-locals new-locals)))
+                          (parser:builder-when-clause
+                           (traverse (parser:builder-when-clause-expr clause) current-locals)))
+                     :finally (return current-locals)))
+
              (traverse (node local-bindings)
                "Traverse NODE with LOCAL-BINDINGS hash-set tracking local variables."
                (declare (type hash-table local-bindings))
@@ -80,6 +116,33 @@
 
                  (parser:node-integer-literal
                   nil)
+
+                 (parser:node-collection-builder
+                  (dolist (element (parser:node-collection-builder-elements node))
+                    (traverse element local-bindings)))
+
+                 (parser:node-association-builder
+                  (dolist (entry (parser:node-association-builder-entries node))
+                    (traverse (parser:association-entry-key entry) local-bindings)
+                    (traverse (parser:association-entry-value entry) local-bindings)))
+
+                 (parser:node-collection-comprehension
+                  (let ((head-locals
+                          (traverse-builder-clauses
+                           (parser:node-collection-comprehension-clauses node)
+                           local-bindings)))
+                    (traverse (parser:node-collection-comprehension-head node)
+                              head-locals)))
+
+                 (parser:node-association-comprehension
+                  (let ((head-locals
+                          (traverse-builder-clauses
+                           (parser:node-association-comprehension-clauses node)
+                           local-bindings)))
+                    (traverse (parser:node-association-comprehension-key node)
+                              head-locals)
+                    (traverse (parser:node-association-comprehension-value node)
+                              head-locals)))
 
                  ;; Body node (used in let, lambda, etc.)
                  (parser:node-body

@@ -74,8 +74,8 @@
         (* z (+ x y))))))
 
   (declare type-of-local-variable-string (:a -> String))
-  (define (type-of-local-variable-string x)
-    (show-as-string (type-of x)))
+  (define (type-of-local-variable-string _x)
+    (show-as-string (type-of _x)))
 
   (declare string-prefix? (String * String -> Boolean))
   (define (string-prefix? prefix s)
@@ -133,6 +133,214 @@
 (define-test test-synthesized-runtime-repr-for-general-function-types ()
   (is (runtime-repr-is-function-entry?
        (the (types:Proxy (Integer * String -> Boolean * Char)) types:Proxy))))
+
+(coalton-toplevel
+  (derive Eq)
+  (define-struct (CollectionTrace :elt)
+    (initial-size-hint (Optional UFix))
+    (items (List (Tuple UFix :elt))))
+
+  (derive Eq)
+  (define-struct (AssociationTrace :key :value)
+    (initial-size-hint (Optional UFix))
+    (items (List (Tuple UFix (Tuple :key :value)))))
+
+  (define-instance (FromItemizedCollection (CollectionTrace :elt)
+                                           :elt
+                                           (Tuple (Optional UFix) (List (Tuple UFix :elt))))
+    (define (begin-collection-builder _ size)
+      (Tuple (Some size) Nil))
+    (define (adjoin-to-collection-builder _ builder index item)
+      (match builder
+        ((Tuple initial-size-hint items)
+         (Tuple initial-size-hint
+                (Cons (Tuple index item) items)))))
+    (define (finalize-collection-builder _ builder)
+      (match builder
+        ((Tuple initial-size-hint items)
+         (CollectionTrace initial-size-hint
+                          (reverse items))))))
+
+  (define-instance (FromCollectionComprehension (CollectionTrace :elt)
+                                                :elt
+                                                (Tuple UFix (CollectionTrace :elt)))
+    (define (begin-collection-comprehension _ size-hint)
+      (Tuple 0 (CollectionTrace size-hint Nil)))
+    (define (adjoin-to-collection-comprehension _ builder item)
+      (match builder
+        ((Tuple index (CollectionTrace initial-size-hint items))
+         (Tuple (+ index 1)
+                (CollectionTrace initial-size-hint
+                                 (Cons (Tuple index item) items))))))
+    (define (finalize-collection-comprehension _ builder)
+      (match builder
+        ((Tuple _ (CollectionTrace initial-size-hint items))
+         (CollectionTrace initial-size-hint
+                          (reverse items))))))
+
+  (define-instance (FromItemizedAssociation (AssociationTrace :key :value)
+                                            :key
+                                            :value
+                                            (Tuple (Optional UFix)
+                                                   (List (Tuple UFix (Tuple :key :value)))))
+    (define (begin-association-builder _ size)
+      (Tuple (Some size) Nil))
+    (define (adjoin-to-association-builder _ builder index key value)
+      (match builder
+        ((Tuple initial-size-hint items)
+         (Tuple initial-size-hint
+                (Cons (Tuple index (Tuple key value)) items)))))
+    (define (finalize-association-builder _ builder)
+      (match builder
+        ((Tuple initial-size-hint items)
+         (AssociationTrace initial-size-hint
+                           (reverse items))))))
+
+  (define-instance (FromAssociationComprehension (AssociationTrace :key :value)
+                                                 :key
+                                                 :value
+                                                 (Tuple UFix (AssociationTrace :key :value)))
+    (define (begin-association-comprehension _ size-hint)
+      (Tuple 0 (AssociationTrace size-hint Nil)))
+    (define (adjoin-to-association-comprehension _ builder key value)
+      (match builder
+        ((Tuple index (AssociationTrace initial-size-hint items))
+         (Tuple (+ index 1)
+                (AssociationTrace initial-size-hint
+                                  (Cons (Tuple index (Tuple key value)) items))))))
+    (define (finalize-association-comprehension _ builder)
+      (match builder
+        ((Tuple _ (AssociationTrace initial-size-hint items))
+         (AssociationTrace initial-size-hint
+                           (reverse items))))))
+
+)
+
+(coalton-toplevel
+
+  (define list-builder-runtime
+    (the (List Integer) [1 2 3]))
+
+  (define vector-builder-runtime
+    (the (coalton/vector:Vector Integer) [1 2 3]))
+
+  (define lisparray-builder-runtime
+    (the (coalton/lisparray:LispArray Integer) [1 2 3]))
+
+  (define lisparray-comprehension-runtime
+    (the (coalton/lisparray:LispArray Integer)
+         [(* x 2)
+          :for x :in (iter:take! 2 (iter:filter! even? (iter:count-forever)))]))
+
+  (define queue-builder-runtime
+    (the (coalton/queue:Queue Integer) [1 2 3]))
+
+  (define seq-comprehension-runtime
+    (the (seq:Seq Integer)
+         [(* x y)
+          :for x :below 4
+          :with y = (+ x 1)
+          :when (even? x)]))
+
+  (define seq-below-runtime (the (seq:Seq Integer) [(* x x) :for x :below 5]))
+
+  (define association-seq-runtime
+    (the (seq:Seq (Tuple Integer Integer))
+         [x => (* x x)
+          :for x :in (iter:take! 4 (iter:filter! even? (iter:count-forever)))]))
+
+  (define association-below-runtime
+    (the (seq:Seq (Tuple Integer Integer)) [x => (* x x) :for x :below 4]))
+
+  (define empty-association-runtime (the (seq:Seq (Tuple Integer Integer)) [=>]))
+
+  (define ordmap-builder-runtime
+    (the (coalton/ordmap:OrdMap Integer Integer) [x => (* x x) :for x :below 4]))
+
+  (define hashmap-builder-runtime
+    (the (hashmap:HashMap Integer Integer) [x => (* x x) :for x :below 4]))
+
+  (define hashtable-builder-runtime
+    (the (coalton/hashtable:Hashtable Integer Integer) [x => (* x x) :for x :below 4]))
+
+  (define collection-builder-trace-runtime
+    (the (CollectionTrace Integer)
+         [10 20 30]))
+
+  (define collection-comprehension-trace-runtime
+    (the (CollectionTrace Integer)
+         [(* x 2)
+          :for x :in (iter:take! 2 (iter:filter! even? (iter:count-forever)))]))
+
+  (define collection-below-trace-runtime
+    (the (CollectionTrace Integer) [(* x 2) :for x :below 5 :when (even? x)]))
+
+  (define association-builder-trace-runtime
+    (the (AssociationTrace Integer Integer)
+         [1 => 2 3 => 4]))
+
+  (define association-comprehension-trace-runtime
+    (the (AssociationTrace Integer Integer)
+         [x => (* x x)
+          :for x :in (iter:take! 2 (iter:filter! even? (iter:count-forever)))])))
+
+(define-test test-reader-builder-syntax-runtime ()
+  (is (== list-builder-runtime (make-list 1 2 3)))
+  (is (== (coalton/vector:length vector-builder-runtime) 3))
+  (is (== (coalton/vector:index 1 vector-builder-runtime) (Some 2)))
+  (is (== (coalton/lisparray:length lisparray-builder-runtime) 3))
+  (is (== (coalton/lisparray:aref lisparray-builder-runtime 1) 2))
+  (is (== (coalton/lisparray:length lisparray-comprehension-runtime) 2))
+  (is (== (coalton/lisparray:aref lisparray-comprehension-runtime 0) 0))
+  (is (== (coalton/lisparray:aref lisparray-comprehension-runtime 1) 4))
+  (is (== (coalton/queue:length queue-builder-runtime) 3))
+  (is (== (coalton/queue:index 2 queue-builder-runtime) (Some 3)))
+  (is (== (the (List Integer) (into seq-comprehension-runtime))
+          (make-list 0 6)))
+  (is (== (the (List Integer) (into seq-below-runtime))
+          (make-list 0 1 4 9 16)))
+  (is (== (the (List (Tuple Integer Integer)) (into association-seq-runtime))
+          (make-list (Tuple 0 0)
+                     (Tuple 2 4)
+                     (Tuple 4 16)
+                     (Tuple 6 36))))
+  (is (== (the (List (Tuple Integer Integer)) (into association-below-runtime))
+          (make-list (Tuple 0 0)
+                     (Tuple 1 1)
+                     (Tuple 2 4)
+                     (Tuple 3 9))))
+  (is (== (the (List (Tuple Integer Integer)) (into empty-association-runtime))
+          Nil))
+  (is (== (coalton/ordmap:lookup ordmap-builder-runtime 0) (Some 0)))
+  (is (== (coalton/ordmap:lookup ordmap-builder-runtime 3) (Some 9)))
+  (is (== (hashmap:count hashmap-builder-runtime) 4))
+  (is (== (hashmap:lookup hashmap-builder-runtime 0) (Some 0)))
+  (is (== (hashmap:lookup hashmap-builder-runtime 3) (Some 9)))
+  (is (== (coalton/hashtable:count hashtable-builder-runtime) 4))
+  (is (== (coalton/hashtable:get hashtable-builder-runtime 0) (Some 0)))
+  (is (== (coalton/hashtable:get hashtable-builder-runtime 3) (Some 9)))
+  (is (== collection-builder-trace-runtime
+          (CollectionTrace (Some (the UFix 3))
+                           (make-list (Tuple (the UFix 0) 10)
+                                      (Tuple (the UFix 1) 20)
+                                      (Tuple (the UFix 2) 30)))))
+  (is (== collection-comprehension-trace-runtime
+          (CollectionTrace None
+                           (make-list (Tuple (the UFix 0) 0)
+                                      (Tuple (the UFix 1) 4)))))
+  (is (== collection-below-trace-runtime
+          (CollectionTrace None
+                           (make-list (Tuple (the UFix 0) 0)
+                                      (Tuple (the UFix 1) 4)
+                                      (Tuple (the UFix 2) 8)))))
+  (is (== association-builder-trace-runtime
+          (AssociationTrace (Some (the UFix 2))
+                            (make-list (Tuple (the UFix 0) (Tuple 1 2))
+                                       (Tuple (the UFix 1) (Tuple 3 4))))))
+  (is (== association-comprehension-trace-runtime
+          (AssociationTrace None
+                            (make-list (Tuple (the UFix 0) (Tuple 0 0))
+                                       (Tuple (the UFix 1) (Tuple 2 4)))))))
 
 (coalton-toplevel
   (define (gh-295-f a)

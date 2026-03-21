@@ -901,6 +901,75 @@
    "(define f (fn () 5))"
    '("f" . "(Num :a => (Void -> :a))")))
 
+(deftest test-collection-builder-defaults ()
+  (check-coalton-types
+   "(define seq-default [1 2 3])
+    (define assoc-default [1 => 2 3 => 4])"
+   '("seq-default" . "(coalton/seq:Seq Integer)")
+   '("assoc-default" . "(coalton/seq:Seq (Tuple Integer Integer))")))
+
+(deftest test-empty-association-builder ()
+  (check-coalton-types
+   "(define empty-assoc
+      (the (coalton/seq:Seq (Tuple Integer Integer))
+           [=>]))"
+   '("empty-assoc" . "(coalton/seq:Seq (Tuple Integer Integer))")))
+
+(deftest test-explicit-builder-instances ()
+  (check-coalton-types
+   "(define vector-builder
+      (the (coalton/vector:Vector Integer) [1 2 3]))
+    (define lisparray-builder
+      (the (coalton/lisparray:LispArray Integer) [1 2 3]))
+    (define lisparray-comprehension-builder
+      (the (coalton/lisparray:LispArray Integer)
+           [x :for x :in (coalton/iterator:up-to 3)]))
+    (define seq-below-builder
+      (the (coalton/seq:Seq F32)
+           [x :for x :below 3.0]))
+    (define queue-builder
+      (the (coalton/queue:Queue Integer) [1 2 3]))
+    (define ordmap-builder
+      (the (coalton/ordmap:OrdMap Integer Integer)
+           [1 => 2 3 => 4]))
+    (define hashtable-builder
+      (the (coalton/hashtable:Hashtable Integer Integer)
+           [1 => 2 3 => 4]))"
+   '("vector-builder" . "(coalton/vector:Vector Integer)")
+   '("lisparray-builder" . "(coalton/lisparray:LispArray Integer)")
+   '("lisparray-comprehension-builder" . "(coalton/lisparray:LispArray Integer)")
+   '("seq-below-builder" . "(coalton/seq:Seq F32)")
+   '("queue-builder" . "(coalton/queue:Queue Integer)")
+   '("ordmap-builder" . "(coalton/ordmap:OrdMap Integer Integer)")
+   '("hashtable-builder" . "(coalton/hashtable:Hashtable Integer Integer)")))
+
+(deftest test-collection-builder-function-defaults ()
+  (check-coalton-types
+   "(define (mk-seq-default)
+      [True False])
+    (define (mk-assoc-default)
+      [True => False False => True])
+   (define (mk-seq-comprehension-default)
+      [x :for x :in (coalton/iterator:once True)])
+    (define (mk-seq-comprehension-underscore)
+      [False :for _ :in (coalton/iterator:once True)])
+    (define (mk-seq-below-default)
+      [x :for x :below 3])
+    (define (mk-assoc-comprehension-default)
+      [x => x :for x :in (coalton/iterator:once True)])
+    (define (mk-assoc-comprehension-underscore)
+      [False => True :for _ :in (coalton/iterator:once True)])
+    (define (mk-assoc-below-default)
+      [x => x :for x :below 3])"
+   '("mk-seq-default" . "(Void -> coalton/seq:Seq Boolean)")
+   '("mk-assoc-default" . "(Void -> coalton/seq:Seq (Tuple Boolean Boolean))")
+   '("mk-seq-comprehension-default" . "(Void -> coalton/seq:Seq Boolean)")
+   '("mk-seq-comprehension-underscore" . "(Void -> coalton/seq:Seq Boolean)")
+   '("mk-seq-below-default" . "((coalton/types:RuntimeRepr :num) (Num :num) (Ord :num) => (Void -> coalton/seq:Seq :num))")
+   '("mk-assoc-comprehension-default" . "(Void -> coalton/seq:Seq (Tuple Boolean Boolean))")
+   '("mk-assoc-comprehension-underscore" . "(Void -> coalton/seq:Seq (Tuple Boolean Boolean))")
+   '("mk-assoc-below-default" . "((Num :num) (Ord :num) => (Void -> coalton/seq:Seq (Tuple :num :num)))")))
+
 (deftest test-function-implicit-progn ()
   (check-coalton-types
    "(define (f a)

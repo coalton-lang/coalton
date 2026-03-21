@@ -91,6 +91,397 @@
                      (tc:apply-substitution subs expected-type)
                      (tc:apply-substitution subs ty))))
 
+(defun required-builder-symbol (package-name symbol-name)
+  (or (first (util:find-symbol? symbol-name package-name))
+      (util:coalton-bug "Unable to find builder helper symbol ~A::~A"
+                        package-name
+                        symbol-name)))
+
+(defun make-parser-variable-node (name location)
+  (parser:make-node-variable
+   :name name
+   :location location))
+
+(defun make-parser-integer-literal-node (value location)
+  (parser:make-node-integer-literal
+   :value value
+   :location location))
+
+(defun make-parser-pattern-var (name location)
+  (parser:make-pattern-var
+   :name name
+   :orig-name name
+   :location location))
+
+(defun make-parser-body (last-node)
+  (parser:make-node-body
+   :nodes nil
+   :last-node last-node))
+
+(defun make-parser-zero-values-node (location)
+  (parser:make-node-values
+   :nodes nil
+   :location location))
+
+(defun make-parser-application (rator rands location &optional (keyword-rands nil))
+  (parser:make-node-application
+   :rator rator
+   :rands rands
+   :keyword-rands keyword-rands
+   :location location))
+
+(defun builder-call-node (package-name symbol-name args location)
+  "Build a parser application node that calls PACKAGE-NAME::SYMBOL-NAME with ARGS."
+  (make-parser-application
+   (make-parser-variable-node (required-builder-symbol package-name symbol-name) location)
+   args
+   location))
+
+(defun make-builder-size-node (size location)
+  (declare (type alexandria:non-negative-fixnum size))
+  (make-parser-integer-literal-node size location))
+
+(defun make-builder-size-hint-node (size location)
+  (declare (type (or null alexandria:non-negative-fixnum) size))
+  (if size
+      (builder-call-node "COALTON/CLASSES" "SOME"
+                         (list (make-builder-size-node size location))
+                         location)
+      (make-parser-variable-node (required-builder-symbol "COALTON/CLASSES" "NONE")
+                                 location)))
+
+(defun make-builder-proxy-node (location)
+  (make-parser-variable-node (required-builder-symbol "COALTON/TYPES" "PROXY")
+                             location))
+
+(defun with-builder-proxy-node (location body)
+  (declare (type source:location location)
+           (type function body)
+           (values parser:node &optional))
+  (let* ((proxy-name (gensym "BUILDER-PROXY-"))
+         (proxy-node (make-parser-variable-node proxy-name location))
+         (fn-node (parser:make-node-abstraction
+                   :params (list (make-parser-pattern-var proxy-name location))
+                   :keyword-params nil
+                   :body (make-parser-body (funcall body proxy-node))
+                   :location location)))
+    (make-parser-application fn-node
+                             (list (make-builder-proxy-node location))
+                             location)))
+
+(defun leading-builder-for-clause (clauses)
+  (declare (type list clauses)
+           (values (or null parser:builder-for-clause) &optional))
+  (let ((clause (first clauses)))
+    (and clause
+         (typep clause 'parser:builder-for-clause)
+         clause)))
+
+(defun with-leading-builder-size-hint (clauses location body)
+  (declare (type list clauses)
+           (type source:location location)
+           (type function body)
+           (values parser:node &optional))
+  (let ((leading-for (leading-builder-for-clause clauses)))
+    (if (null leading-for)
+        (funcall body (make-builder-size-hint-node nil location) nil)
+        (let* ((clause-location (source:location leading-for))
+               (source-name (gensym "BUILDER-SOURCE-"))
+               (source-node (make-parser-variable-node source-name clause-location))
+               (iter-node (builder-call-node "COALTON/ITERATOR" "INTO-ITER"
+                                             (list source-node)
+                                             clause-location))
+               (size-hint-node (builder-call-node "COALTON/ITERATOR" "SIZE-HINT"
+                                                  (list iter-node)
+                                                  clause-location)))
+          (parser:make-node-let
+           :bindings (list
+                      (parser:make-node-let-binding
+                       :name source-node
+                       :value (parser:builder-for-clause-expr leading-for)
+                       :location clause-location))
+           :declares nil
+           :body (make-parser-body
+                  (funcall body
+                           size-hint-node
+                           (list (cons leading-for source-node))))
+           :location clause-location)))))
+
+(defun desugar-builder-clauses-to-parser-node (clauses state base-form
+                                               &optional replacements)
+  (if (endp clauses)
+      (funcall base-form state)
+      (let ((clause (first clauses)))
+        (typecase clause
+          (parser:builder-with-clause
+            (parser:make-node-let
+             :bindings (list
+                        (parser:make-node-let-binding
+                         :name (parser:builder-with-clause-binder clause)
+                         :value (parser:builder-with-clause-expr clause)
+                         :location (source:location clause)))
+             :declares nil
+             :body (make-parser-body
+                    (desugar-builder-clauses-to-parser-node
+                     (rest clauses)
+                     state
+                     base-form
+                     replacements))
+             :location (source:location clause)))
+          (parser:builder-when-clause
+            (parser:make-node-if
+             :expr (parser:builder-when-clause-expr clause)
+             :then (desugar-builder-clauses-to-parser-node
+                    (rest clauses)
+                    state
+                    base-form
+                    replacements)
+             :else state
+             :location (source:location clause)))
+          (parser:builder-for-clause
+            (let* ((clause-location (source:location clause))
+                   (for-expr (or (cdr (assoc clause replacements :test #'eq))
+                                 (parser:builder-for-clause-expr clause)))
+                   (state-name (gensym "COLL-STATE-"))
+                   (state-node (make-parser-variable-node state-name clause-location))
+                   (body-node (desugar-builder-clauses-to-parser-node
+                               (rest clauses)
+                               state-node
+                               base-form
+                               replacements))
+                   (fn-node (parser:make-node-abstraction
+                             :params (list (make-parser-pattern-var state-name clause-location)
+                                           (make-parser-pattern-var
+                                            (parser:node-variable-name (parser:builder-for-clause-binder clause))
+                                            (source:location (parser:builder-for-clause-binder clause))))
+                             :keyword-params nil
+                             :body (make-parser-body body-node)
+                             :location clause-location)))
+              (builder-call-node "COALTON/ITERATOR" "FOLD!"
+                                 (list fn-node
+                                       state
+                                       (builder-call-node "COALTON/ITERATOR" "INTO-ITER"
+                                                          (list for-expr)
+                                                          clause-location))
+                                 clause-location)))
+          (parser:builder-below-clause
+            (let* ((clause-location (source:location clause))
+                   (initial-state-name (gensym "COLL-INITIAL-STATE-"))
+                   (initial-state-node (make-parser-variable-node initial-state-name clause-location))
+                   (state-name (gensym "COLL-STATE-"))
+                   (state-node (make-parser-variable-node state-name clause-location))
+                   (limit-name (gensym "COLL-LIMIT-"))
+                   (limit-node (make-parser-variable-node limit-name clause-location))
+                   (index-name (parser:node-variable-name (parser:builder-below-clause-binder clause)))
+                   (index-location (source:location (parser:builder-below-clause-binder clause)))
+                   (index-node (make-parser-variable-node index-name index-location)))
+              (make-parser-application
+               (parser:make-node-abstraction
+                :params (list (make-parser-pattern-var initial-state-name clause-location))
+                :keyword-params nil
+                :body (make-parser-body
+                       (parser:make-node-for
+                        :label :builder-below
+                        :bindings
+                        (list
+                         (parser:make-node-for-binding
+                          :name state-node
+                          :init initial-state-node
+                          :step (desugar-builder-clauses-to-parser-node
+                                 (rest clauses)
+                                 state-node
+                                 base-form
+                                 replacements)
+                          :location clause-location)
+                         (parser:make-node-for-binding
+                          :name index-node
+                          :init (make-parser-integer-literal-node 0 index-location)
+                          :step (builder-call-node "COALTON/MATH/ARITH" "1+"
+                                                   (list index-node)
+                                                   index-location)
+                          :location index-location)
+                         (parser:make-node-for-binding
+                          :name limit-node
+                          :init (parser:builder-below-clause-expr clause)
+                          :location clause-location))
+                        :declares nil
+                        :returns state-node
+                        :termination-kind :while
+                        :termination-expr (builder-call-node "COALTON/CLASSES" "<"
+                                                             (list index-node limit-node)
+                                                             clause-location)
+                        :body (make-parser-body
+                               (make-parser-zero-values-node clause-location))
+                        :location clause-location))
+                :location clause-location)
+               (list state)
+               clause-location)))
+          (t
+            (util:coalton-bug "Unexpected builder clause ~S" clause))))))
+
+(defun desugar-parser-builder-node (node)
+  (typecase node
+    (parser:node-collection-builder
+      (let* ((elements (parser:node-collection-builder-elements node))
+             (location (source:location node)))
+        (with-builder-proxy-node
+            location
+          (lambda (proxy-node)
+            (let* ((size (make-builder-size-node (length elements) location))
+                   (builder-state
+                     (loop :with state := (builder-call-node "COALTON/CLASSES"
+                                                            "BEGIN-COLLECTION-BUILDER"
+                                                            (list proxy-node size)
+                                                            location)
+                           :for element :in elements
+                           :for index :from 0
+                           :do (setf state
+                                     (builder-call-node
+                                      "COALTON/CLASSES"
+                                      "ADJOIN-TO-COLLECTION-BUILDER"
+                                      (list proxy-node
+                                            state
+                                            (make-builder-size-node index (source:location element))
+                                            element)
+                                      (source:location element)))
+                           :finally (return state))))
+              (builder-call-node "COALTON/CLASSES" "FINALIZE-COLLECTION-BUILDER"
+                                 (list proxy-node builder-state)
+                                 location))))))
+    (parser:node-association-builder
+      (let* ((entries (parser:node-association-builder-entries node))
+             (location (source:location node)))
+        (with-builder-proxy-node
+            location
+          (lambda (proxy-node)
+            (let* ((size (make-builder-size-node (length entries) location))
+                   (builder-state
+                     (loop :with state := (builder-call-node "COALTON/CLASSES"
+                                                            "BEGIN-ASSOCIATION-BUILDER"
+                                                            (list proxy-node size)
+                                                            location)
+                           :for entry :in entries
+                           :for index :from 0
+                           :do (setf state
+                                     (builder-call-node
+                                      "COALTON/CLASSES"
+                                      "ADJOIN-TO-ASSOCIATION-BUILDER"
+                                      (list proxy-node
+                                            state
+                                            (make-builder-size-node index (source:location entry))
+                                            (parser:association-entry-key entry)
+                                            (parser:association-entry-value entry))
+                                      (source:location entry)))
+                           :finally (return state))))
+              (builder-call-node "COALTON/CLASSES" "FINALIZE-ASSOCIATION-BUILDER"
+                                 (list proxy-node builder-state)
+                                 location))))))
+    (parser:node-collection-comprehension
+      (let ((location (source:location node))
+            (clauses (parser:node-collection-comprehension-clauses node))
+            (head (parser:node-collection-comprehension-head node)))
+        (with-leading-builder-size-hint
+         clauses
+         location
+          (lambda (size-hint replacements)
+            (let ((head-location (source:location head)))
+              (with-builder-proxy-node
+                  location
+                (lambda (proxy-node)
+                  (builder-call-node "COALTON/CLASSES" "FINALIZE-COLLECTION-COMPREHENSION"
+                                     (list
+                                      proxy-node
+                                      (desugar-builder-clauses-to-parser-node
+                                       clauses
+                                       (builder-call-node "COALTON/CLASSES"
+                                                          "BEGIN-COLLECTION-COMPREHENSION"
+                                                          (list proxy-node size-hint)
+                                                          location)
+                                       (lambda (state)
+                                         (builder-call-node
+                                          "COALTON/CLASSES"
+                                          "ADJOIN-TO-COLLECTION-COMPREHENSION"
+                                          (list proxy-node state head)
+                                          head-location))
+                                       replacements))
+                                     location))))))))
+    (parser:node-association-comprehension
+      (let ((location (source:location node))
+            (clauses (parser:node-association-comprehension-clauses node)))
+        (with-leading-builder-size-hint
+         clauses
+         location
+          (lambda (size-hint replacements)
+            (with-builder-proxy-node
+                location
+              (lambda (proxy-node)
+                (builder-call-node "COALTON/CLASSES" "FINALIZE-ASSOCIATION-COMPREHENSION"
+                                   (list
+                                    proxy-node
+                                    (desugar-builder-clauses-to-parser-node
+                                     clauses
+                                     (builder-call-node "COALTON/CLASSES"
+                                                        "BEGIN-ASSOCIATION-COMPREHENSION"
+                                                        (list proxy-node size-hint)
+                                                        location)
+                                     (lambda (state)
+                                       (builder-call-node
+                                        "COALTON/CLASSES"
+                                        "ADJOIN-TO-ASSOCIATION-COMPREHENSION"
+                                        (list proxy-node
+                                              state
+                                              (parser:node-association-comprehension-key node)
+                                              (parser:node-association-comprehension-value node))
+                                        location))
+                                     replacements))
+                                   location)))))))
+    (t
+      (util:coalton-bug "Cannot desugar non-builder node ~S" node))))
+
+(defun homogeneous-builder-item-error (kind expected-type actual-type current-node first-node)
+  (tc-error (ecase kind
+              (:collection "Collection element type mismatch")
+              (:association-key "Association key type mismatch")
+              (:association-value "Association value type mismatch"))
+            (tc-note current-node
+                     (ecase kind
+                       (:collection
+                        "collection elements must all have the same type; expected '~S' but got '~S'")
+                       (:association-key
+                        "association keys must all have the same type; expected '~S' but got '~S'")
+                       (:association-value
+                        "association values must all have the same type; expected '~S' but got '~S'"))
+                     expected-type
+                     actual-type)
+            (tc-secondary-note first-node
+                               (ecase kind
+                                 (:collection "earlier element here")
+                                 (:association-key "earlier key here")
+                                 (:association-value "earlier value here")))))
+
+(defun check-homogeneous-builder-items (kind items subs env)
+  (declare (type list items)
+           (type tc:substitution-list subs)
+           (type tc-env env)
+           (values tc:substitution-list &optional))
+  (let ((shared-ty (tc:make-variable))
+        (first-node nil))
+    (dolist (item items subs)
+      (multiple-value-bind (item-ty preds accessors typed-item subs_)
+          (infer-expression-type item (tc:make-variable) subs env)
+        (declare (ignore preds accessors typed-item))
+        (setf subs subs_)
+        (handler-case
+            (setf subs (tc:unify subs shared-ty item-ty))
+          (tc:coalton-internal-type-error ()
+            (homogeneous-builder-item-error kind
+                                            (tc:apply-substitution subs shared-ty)
+                                            (tc:apply-substitution subs item-ty)
+                                            item
+                                            first-node)))
+        (unless first-node
+          (setf first-node item))))))
+
 (defun values-result-type (component-types)
   (declare (type tc:ty-list component-types)
            (values tc:ty &optional))
@@ -1546,6 +1937,51 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                subs))
           (tc:coalton-internal-type-error ()
             (standard-expression-type-mismatch-error node subs expected-type expr-ty))))))
+
+  (:method ((node parser:node-collection-builder) expected-type subs env)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (values tc:ty tc:ty-predicate-list accessor-list node tc:substitution-list &optional))
+    (setf subs (check-homogeneous-builder-items
+                :collection
+                (parser:node-collection-builder-elements node)
+                subs
+                env))
+    (infer-expression-type (desugar-parser-builder-node node) expected-type subs env))
+
+  (:method ((node parser:node-association-builder) expected-type subs env)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (values tc:ty tc:ty-predicate-list accessor-list node tc:substitution-list &optional))
+    (setf subs (check-homogeneous-builder-items
+                :association-key
+                (mapcar #'parser:association-entry-key
+                        (parser:node-association-builder-entries node))
+                subs
+                env))
+    (setf subs (check-homogeneous-builder-items
+                :association-value
+                (mapcar #'parser:association-entry-value
+                        (parser:node-association-builder-entries node))
+                subs
+                env))
+    (infer-expression-type (desugar-parser-builder-node node) expected-type subs env))
+
+  (:method ((node parser:node-collection-comprehension) expected-type subs env)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (values tc:ty tc:ty-predicate-list accessor-list node tc:substitution-list &optional))
+    (infer-expression-type (desugar-parser-builder-node node) expected-type subs env))
+
+  (:method ((node parser:node-association-comprehension) expected-type subs env)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (values tc:ty tc:ty-predicate-list accessor-list node tc:substitution-list &optional))
+    (infer-expression-type (desugar-parser-builder-node node) expected-type subs env))
 
   (:method ((node parser:node-return) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -3387,6 +3823,37 @@ as a recursive function rather than a recursive value."
             (setf subs (tc:compose-substitution-lists
                         (tc:default-subs (tc-env-env env) nil defaultable-preds)
                         subs))
+
+            ;; Builder syntax should default its collection representation
+            ;; even in unrestricted bindings, leaving element predicates alone.
+            (let ((coalton-impl/typechecker/context-reduction:*builder-class-cache* nil))
+              (setf subs (tc:compose-substitution-lists
+                          (tc:default-builder-subs (tc-env-env env)
+                                                   nil
+                                                   (append deferred-preds retained-preds))
+                          subs))
+
+              ;; Once the collection/association type defaults, builder-state
+              ;; variables become determined by the builder class functional
+              ;; dependencies. Solve them before we expand the predicates
+              ;; against concrete instances.
+              (setf subs (nth-value 1
+                                    (tc:solve-fundeps (tc-env-env env)
+                                                      (append deferred-preds retained-preds)
+                                                      subs)))
+
+              (setf deferred-preds
+                    (tc:expand-defaulted-builder-preds
+                     (tc-env-env env)
+                     (tc:apply-substitution subs deferred-preds)))
+              (setf retained-preds
+                    (tc:expand-defaulted-builder-preds
+                     (tc-env-env env)
+                     (tc:apply-substitution subs retained-preds))))
+
+            (setf deferred-preds (tc:reduce-context (tc-env-env env) deferred-preds nil))
+            (setf retained-preds (tc:reduce-context (tc-env-env env) retained-preds nil))
+            (setf expr-tys (tc:apply-substitution subs expr-tys))
 
             (when (parser:binding-toplevel-p (first bindings))
               (if restricted

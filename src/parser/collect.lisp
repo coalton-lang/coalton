@@ -268,6 +268,46 @@ in expressions. May not include all bound variables."
     (declare (values node-variable-list &optional))
     (collect-variables-generic% (node-the-expr node)))
 
+  (:method ((node node-collection-builder))
+    (declare (values node-variable-list &optional))
+    (mapcan #'collect-variables-generic% (node-collection-builder-elements node)))
+
+  (:method ((entry association-entry))
+    (declare (values node-variable-list &optional))
+    (nconc (collect-variables-generic% (association-entry-key entry))
+           (collect-variables-generic% (association-entry-value entry))))
+
+  (:method ((node node-association-builder))
+    (declare (values node-variable-list &optional))
+    (mapcan #'collect-variables-generic% (node-association-builder-entries node)))
+
+  (:method ((clause builder-with-clause))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (builder-with-clause-expr clause)))
+
+  (:method ((clause builder-for-clause))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (builder-for-clause-expr clause)))
+
+  (:method ((clause builder-below-clause))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (builder-below-clause-expr clause)))
+
+  (:method ((clause builder-when-clause))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (builder-when-clause-expr clause)))
+
+  (:method ((node node-collection-comprehension))
+    (declare (values node-variable-list &optional))
+    (nconc (collect-variables-generic% (node-collection-comprehension-head node))
+           (mapcan #'collect-variables-generic% (node-collection-comprehension-clauses node))))
+
+  (:method ((node node-association-comprehension))
+    (declare (values node-variable-list &optional))
+    (nconc (collect-variables-generic% (node-association-comprehension-key node))
+           (collect-variables-generic% (node-association-comprehension-value node))
+           (mapcan #'collect-variables-generic% (node-association-comprehension-clauses node))))
+
   (:method ((node node-return))
     (declare (values node-variable-list &optional))
     ;; node-return's return expression may be null (and default to zero values)

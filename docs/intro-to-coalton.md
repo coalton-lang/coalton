@@ -84,6 +84,53 @@ After creating your package `#:my-package`, you must switch to it with:
 
 The `named-readtables:in-readtable` form is optional but encouraged. Using Coalton's reader allows compiler errors to accurately refer to source code and provide correct line numbers.
 
+### `.ct` Files and ASDF
+
+Coalton code is often written in ordinary `.lisp` files, but Coalton also
+supports `.ct` files in ASDF definitions. A `.ct` file is still a Lisp source
+file: it contains ordinary Lisp forms such as `in-package`,
+`coalton-toplevel`, and `coalton`. Unlike an ordinary `.lisp` file, a `.ct`
+file is already read in Coalton's readtable, so it does not need an explicit
+`named-readtables:in-readtable` form. The main role of the `.ct` file is to
+easily distinguish code that is primarily Coalton code in a project, and to
+make using Coalton a little more ergonomic in such files.
+
+To use `.ct` files in an ASDF system, add `coalton-asdf` to
+`:defsystem-depends-on`, then use `:ct-file` in the component list:
+
+```lisp
+(asdf:defsystem "my-project"
+  :depends-on ("coalton")
+  :defsystem-depends-on ("coalton-asdf")
+  :components ((:file "lisp-functions")
+               (:ct-file "core")
+               (:ct-file "algorithms")))
+```
+
+For example, a preceding Lisp file can define helper functions that `core.ct`
+uses:
+
+```lisp
+;;; lisp-functions.lisp
+(cl:in-package #:my-package)
+
+(cl:defun native-add1 (x)
+  (cl:1+ x))
+```
+
+```lisp
+;;; core.ct
+(in-package #:my-package)
+
+(coalton-toplevel
+  (define (add1-through-lisp n)
+    (lisp (-> Integer) (n)
+      (native-add1 n)))))
+```
+
+In other words, `:ct-file` is an ASDF convenience for Coalton-style Lisp source.
+It does not introduce a separate surface language.
+
 The first primary entry points for Coalton code. Definitions and the like sit in a toplevel-form called `coalton-toplevel`.
 
 ```lisp
@@ -1013,6 +1060,135 @@ Lists can also be deconstructed with `match`.
       ((Cons _ _) "is not empty")
       ((Nil) "is empty"))))
 ```
+
+## Collection and Association Builder Syntax
+
+When the Coalton reader is active, square brackets can be used as collection and
+association builders.
+
+```lisp
+(coalton-toplevel
+  (define xs [1 2 3])
+
+  (define empty-xs
+    (the (List Integer) []))
+
+  (define pairs
+    ["x" => 1
+     "y" => 2])
+
+  (define empty-pairs
+    (the (Seq (Tuple String Integer))
+         [=>])))
+```
+
+`[a b c]` is a collection builder. `[]` is an empty collection builder. `[=>]`
+is an empty association builder. Any other bracket form containing `=>` is an
+association builder.
+
+Collection builders must be homogeneous: all elements must have the same type.
+Association builders are homogeneous in both their keys and their values: all
+keys must have the same type, and all values must have the same type.
+
+When no concrete result type is specified, collection builders default to
+`Seq`, and association builders default to
+`Seq (Tuple :key :value)`.
+
+In practice, `the` is often the clearest way to ascertain the intended result
+type. This is especially useful for empty builders like `[]` and `[=>]`, since
+those forms do not determine their element, key, or value types on their own.
+It is also the way to request a specific target collection type.
+This is of course unnecessary if the object is inferred to be the desired type.
+
+```lisp
+(coalton-toplevel
+  (define empty-xs
+    (the (List Integer) []))
+
+  (define empty-pairs
+    (the (Seq (Tuple String Integer)) [=>]))
+
+  (define xs
+    (the (List Integer) [1 2 3]))
+
+  (define ys
+    (the (Vector Integer) [1 2 3])))
+```
+
+The same bracket syntax also supports comprehensions:
+
+```lisp
+(coalton-toplevel
+  (define evens
+    [x
+     :for x :below 10
+     :when (even? x)])
+
+  (define scaled
+    [y
+     :for x :below 5
+     :with y = (* x 10)
+     :when (even? x)])
+
+  (define first-ten
+    [x
+     :for x :below 10])
+
+  (define squares
+    [x => (* x x)
+     :for x :below 5]))
+```
+
+Collection comprehensions default to `Seq`, and association comprehensions
+default to `Seq (Tuple :key :value)` in the same way as itemized builders. As
+with `[]` and `[=>]`, `the` can be used whenever you want to ascertain a more
+specific result type.
+
+### Extending Builder Syntax to User-Defined Types
+
+Builder syntax is open to user-defined types through four type classes:
+
+- `FromItemizedCollection` for `[a b c]`
+- `FromItemizedAssociation` for `[k => v ...]`
+- `FromCollectionComprehension` for `[expr :for ...]`
+- `FromAssociationComprehension` for `[key => value :for ...]`
+
+The itemized classes are for inputs whose elements or entries are explicitly and
+finitely itemized in source. They receive the exact number of source items up
+front, and the exact zero-based source index of each item as it is added. The
+comprehension classes are stream-oriented: they receive an advisory initial size
+hint, then each emitted element or entry, and finally convert their builder
+state to the target collection.
+
+Here is a simple collection-builder instance for a user-defined wrapper around
+`List`. The builder state is just a temporary list, which is reversed once at
+the end.
+
+```lisp
+(coalton-toplevel
+  (define-type (Bag :a)
+    (Bag (List :a)))
+
+  (define-instance (FromItemizedCollection (Bag :a) :a (List :a))
+    (define (begin-collection-builder _ _)
+      Nil)
+    (define (adjoin-to-collection-builder _ builder _ item)
+      (Cons item builder))
+    (define (finalize-collection-builder _ builder)
+      (Bag (reverse builder))))
+
+  (define bag
+    (the (Bag Integer) [1 2 3])))
+```
+
+The first ignored argument is a `types:Proxy` for the target collection type,
+and the third type parameter of `FromItemizedCollection` is the intermediate
+builder state. In this example the final collection is `Bag :a`, but the
+builder state is just `List :a`.
+
+To support comprehensions as well, define a corresponding
+`FromCollectionComprehension` instance. Association syntax works the same way,
+using `FromItemizedAssociation` and `FromAssociationComprehension`.
 
 ## Static Typing
 
