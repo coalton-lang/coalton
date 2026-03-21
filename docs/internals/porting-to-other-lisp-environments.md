@@ -125,7 +125,8 @@ While self-testing FSet, it turned out that it fails on abcl & clasp.
 For abcl, the issue is one for which a solution is already in abcl's
 repository but has not yet been included in the latest official
 release (1.9.2 as of this writing), so [a patch for it has been
-provided](https://github.com/coalton-lang/coalton/commit/d683d8037588d3fffb46e1bc1cb9c3fec7f6bb19). Indeed, when building abcl from its repository sources (version 1.9.3-dev), then FSet passes all its tests.
+provided](https://github.com/coalton-lang/coalton/commit/d683d8037588d3fffb46e1bc1cb9c3fec7f6bb19).
+Indeed, when building abcl from its repository sources (version 1.9.3-dev), then FSet passes all its tests.
 
 For clasp, [the issue seems to be a clasp
 bug](https://github.com/clasp-developers/clasp/issues/1731).
@@ -159,3 +160,6 @@ have discovered the following cases:
   - ABCL: `:concrete-syntax-tree :eclector :yason :concrete-syntax-tree` (the last three fail their tests but `asdf:test-system` returns `t`)
   - CLASP: `:trivial-garbage :float-features :fset`
   - ECL: `:mgl-pax`
+
+File `tests/z-test-packages.lisp` contains some preliminary code for testing
+QuickLisp packages used by this project.

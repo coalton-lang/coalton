@@ -1,7 +1,7 @@
 ;;;; An attempt to discover packages that abcl/clasp/ecl have problems
 ;;;; with.
 ;;;;
-;;;; mkdir -p zz-temp ; rm -rf ~/.cache/co* ; for LISP in sbcl ccl abcl clasp ecl ; do (${LISP} --load ~/quicklisp/setup.lisp --load compat/test-packages.lisp > zz-temp/test-package-${LISP}.txt 2>&1 &); done
+;;;; mkdir -p zz-temp ; rm -rf ~/.cache/common-lisp ; for LISP in sbcl ccl abcl clasp ecl ; do (${LISP} --load compat/test-packages.lisp > zz-temp/test-package-${LISP}.txt 2>&1 &); done
 
 (defvar *cannot-load* nil)
 (defvar *testing-fails* nil)
@@ -9,7 +9,7 @@
 #+sbcl (push :concrete-syntax-tree *testing-fails*)
 ;; #+ccl (push :spinneret *testing-fails*) ;; needed extra packages.
 
-#+abcl (push :concrete-syntax-tree *testing-fails*) ; + eclector yason concrete-syntax-tree
+#+abcl (push :concrete-syntax-tree *testing-fails*) ; + eclector yason
 
 #+clasp (push :spinneret *cannot-load*) ;; reason :serapeum
 #+clasp (dolit (pkg '(:trivial-garbage :float-features :fset :bordeaux-threads))
