@@ -62,17 +62,20 @@
 
   (define-instance (Bounded IFix)
     (define minBound
-      (lisp (-> IFix) ()
-        cl:most-negative-fixnum))
+      (coalton++:unsafe
+        (lisp (-> IFix) ()
+          cl:most-negative-fixnum)))
     (define maxBound
-      (lisp (-> IFix) ()
-        cl:most-positive-fixnum)))
+      (coalton++:unsafe
+        (lisp (-> IFix) ()
+          cl:most-positive-fixnum))))
 
   (define-instance (Bounded UFix)
     (define minBound 0)
     (define maxBound
-      (lisp (-> UFix) ()
-        cl:most-positive-fixnum))))
+      (coalton++:unsafe
+        (lisp (-> UFix) ()
+          cl:most-positive-fixnum)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/MATH/BOUNDED")

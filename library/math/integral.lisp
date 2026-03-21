@@ -226,13 +226,15 @@ are floored and truncated division, respectively."
          (inline)
          (declare ,even? (,type -> Boolean))
          (define (,even? n)
-           (lisp (-> Boolean) (n) (to-boolean (cl:evenp n))))
+           (coalton++:unsafe
+             (lisp (-> Boolean) (n) (to-boolean (cl:evenp n)))))
 
          (specialize odd? ,odd? (,type -> Boolean))
          (inline)
          (declare ,odd? (,type -> Boolean))
          (define (,odd? n)
-           (lisp (-> Boolean) (n) (to-boolean (cl:oddp n))))
+           (coalton++:unsafe
+             (lisp (-> Boolean) (n) (to-boolean (cl:oddp n)))))
 
          (specialize ^ ,^ (,type * ,type -> ,type))
          (declare ,^ (,type * ,type -> ,type))
@@ -241,31 +243,36 @@ are floored and truncated division, respectively."
              `(define (,^ base power)
                 (if (< power 0)
                     (error "Can't exponentiate with a negative exponent.")
-                    (lisp (-> ,type) (base power) (cl:expt base power)))))
+                    (coalton++:unsafe
+                      (lisp (-> ,type) (base power) (cl:expt base power))))))
             (cl:t
              `(progn
                 (inline)
                 (define (,^ base power)
-                  (lisp (-> ,type) (base power) (cl:expt base power))))))
+                  (coalton++:unsafe
+                    (lisp (-> ,type) (base power) (cl:expt base power)))))))
 
          (specialize ^^ ,^^ (,type * ,type -> ,type))
          (inline)
          (declare ,^^ (,type * ,type -> ,type))
          (define (,^^ base power)
-           (lisp (-> ,type) (base power) (cl:expt base power)))
+           (coalton++:unsafe
+             (lisp (-> ,type) (base power) (cl:expt base power))))
 
          (specialize gcd ,gcd (,type * ,type -> ,type))
          (inline)
          (declare ,gcd (,type * ,type -> ,type))
          (define (,gcd a b)
-           (lisp (-> ,type) (a b) (cl:gcd a b)))
+           (coalton++:unsafe
+             (lisp (-> ,type) (a b) (cl:gcd a b))))
 
          (specialize lcm ,lcm (,type * ,type -> ,type))
          (inline)
          (declare ,lcm (,type * ,type -> ,type))
          (define (,lcm a b)
            ;; Allow Coalton to handle fixnum overflow
-           (fromInt (lisp (-> Integer) (a b) (cl:lcm a b))))
+           (fromInt (coalton++:unsafe
+                      (lisp (-> Integer) (a b) (cl:lcm a b)))))
 
          (specialize isqrt ,isqrt (,type -> ,type))
          (declare ,isqrt (,type -> ,type))
@@ -274,12 +281,14 @@ are floored and truncated division, respectively."
              `(define (,isqrt a)
                 (if (< a 0)
                     (error "Can't take ISQRT of a negative number.")
-                    (lisp (-> ,type) (a) (cl:isqrt a)))))
+                    (coalton++:unsafe
+                      (lisp (-> ,type) (a) (cl:isqrt a))))))
             (cl:t
              `(progn
                 (inline)
                 (define (,isqrt a)
-                  (lisp (-> ,type) (a) (cl:isqrt a))))))))))
+                  (coalton++:unsafe
+                    (lisp (-> ,type) (a) (cl:isqrt a)))))))))))
 
 (%define-integral-native Integer cl:t)
 (%define-integral-native I8 cl:t)
@@ -307,13 +316,15 @@ are floored and truncated division, respectively."
        (define (,^ base power)
          (if (< power 0)
              (error "Can't exponentiate with a negative exponent.")
-             (lisp (-> ,type) (base power) (cl:expt base power))))
+             (coalton++:unsafe
+               (lisp (-> ,type) (base power) (cl:expt base power)))))
 
        (specialize ^^ ,^^ (,type * Integer -> ,type))
        (inline)
        (declare ,^^ (,type * Integer -> ,type))
        (define (,^^ base power)
-         (lisp (-> ,type) (base power) (cl:expt base power))))))
+         (coalton++:unsafe
+           (lisp (-> ,type) (base power) (cl:expt base power)))))))
 
 (%define-native-expt Fraction)
 (%define-native-expt F32)

@@ -50,23 +50,23 @@ component types."
   (define-instance (types:RuntimeRepr :t => types:RuntimeRepr (Complex :t))
     (define (types:runtime-repr _)
       (let ((inner-type (types:runtime-repr (the (types:Proxy :t) types:Proxy))))
-        (lisp (-> types:LispType) (inner-type)
-          (cl:if (cl:member inner-type *native-complex-types*)
-                 `(cl:complex ,inner-type)
-                 'Complex)))))
+        (coalton++:unsafe
+          (lisp (-> types:LispType) (inner-type)
+            (cl:if (cl:member inner-type *native-complex-types*)
+                   `(cl:complex ,inner-type)
+                   'Complex))))))
 
   (define-instance ((types:RuntimeRepr :t) (show:Show :t) => show:Show (Complex :t))
     (define (show:show-to f x)
       (let inner-type = (types:runtime-repr (the (types:Proxy :t) types:Proxy)))
       (let native-type = (lisp (-> Boolean) (inner-type)
                            (cl:and (cl:member inner-type *native-complex-types*) cl:t)))
-      (cond 
+      (cond
         (native-type
          (f (lisp (-> String) (x) (cl:princ-to-string x))))
         (True
          (match x
            ((%Complex re im)
-            
             (f "(complex ")
             (show:show-to f re)
             (f " ")
@@ -216,65 +216,74 @@ blackboard-bold 𝕚.)"
          (define-instance (ComplexComponent ,type)
            (inline)
            (define (complex a b)
-             (lisp (-> (Complex ,type)) (a b)
-               (cl:declare (cl:type ,repr a b))
-               (cl:complex a b)))
+             (coalton++:unsafe
+               (lisp (-> (Complex ,type)) (a b)
+                 (cl:declare (cl:type ,repr a b))
+                 (cl:complex a b))))
            (inline)
            (define (real-part a)
-             (lisp (-> ,type) (a)
-               (cl:realpart a)))
+             (coalton++:unsafe
+               (lisp (-> ,type) (a)
+                 (cl:realpart a))))
            (inline)
            (define (imag-part a)
-             (lisp (-> ,type) (a)
-               (cl:imagpart a))))
+             (coalton++:unsafe
+               (lisp (-> ,type) (a)
+                 (cl:imagpart a)))))
 
          (specialize conjugate ,conj (Complex ,type -> Complex ,type))
          (inline)
          (declare ,conj (Complex ,type -> Complex ,type))
          (define (,conj a)
-           (lisp (-> (Complex ,type)) (a)
-             (cl:declare (cl:type (cl:complex ,repr) a))
-             (cl:conjugate a)))
+           (coalton++:unsafe
+             (lisp (-> (Complex ,type)) (a)
+               (cl:declare (cl:type (cl:complex ,repr) a))
+               (cl:conjugate a))))
 
          (specialize complex-equal ,equal (Complex ,type * Complex ,type -> Boolean))
          (inline)
          (declare ,equal (Complex ,type * Complex ,type -> Boolean))
          (define (,equal a b)
-           (lisp (-> Boolean) (a b)
-             (cl:declare (cl:type (cl:complex ,repr) a b))
-             (cl:= a b)))
+           (coalton++:unsafe
+             (lisp (-> Boolean) (a b)
+               (cl:declare (cl:type (cl:complex ,repr) a b))
+               (cl:= a b))))
 
          (specialize complex-plus ,plus (Complex ,type * Complex ,type -> Complex ,type))
          (inline)
          (declare ,plus (Complex ,type * Complex ,type -> Complex ,type))
          (define (,plus a b)
-           (lisp (-> (Complex ,type)) (a b)
-             (cl:declare (cl:type (cl:complex ,repr) a b))
-             (cl:+ a b)))
+           (coalton++:unsafe
+             (lisp (-> (Complex ,type)) (a b)
+               (cl:declare (cl:type (cl:complex ,repr) a b))
+               (cl:+ a b))))
 
          (specialize complex-minus ,minus (Complex ,type * Complex ,type -> Complex ,type))
          (inline)
          (declare ,minus (Complex ,type * Complex ,type -> Complex ,type))
          (define (,minus a b)
-           (lisp (-> (Complex ,type)) (a b)
-             (cl:declare (cl:type (cl:complex ,repr) a b))
-             (cl:- a b)))
+           (coalton++:unsafe
+             (lisp (-> (Complex ,type)) (a b)
+               (cl:declare (cl:type (cl:complex ,repr) a b))
+               (cl:- a b))))
 
          (specialize complex-times ,times (Complex ,type * Complex ,type -> Complex ,type))
          (inline)
          (declare ,times (Complex ,type * Complex ,type -> Complex ,type))
          (define (,times a b)
-           (lisp (-> (Complex ,type)) (a b)
-             (cl:declare (cl:type (cl:complex ,repr) a b))
-             (cl:* a b)))
+           (coalton++:unsafe
+             (lisp (-> (Complex ,type)) (a b)
+               (cl:declare (cl:type (cl:complex ,repr) a b))
+               (cl:* a b))))
 
          (specialize complex-fromint ,cfromint (Integer -> Complex ,type))
          (inline)
          (declare ,cfromint (Integer -> Complex ,type))
          (define (,cfromint n)
            (let ((f (the ,type (fromint n))))
-             (lisp (-> (Complex ,type)) (f)
-               (cl:complex f ,(cl:coerce 0 repr)))))
+             (coalton++:unsafe
+               (lisp (-> (Complex ,type)) (f)
+                 (cl:complex f ,(cl:coerce 0 repr))))))
 
          ,@(cl:if
             (cl:not division)
