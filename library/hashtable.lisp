@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/hashtable
+  (:documentation "Mutable hash tables keyed by Coalton `Hash` and `Eq` instances.")
   (:use
    #:coalton
    #:coalton/builtin
@@ -7,7 +8,8 @@
   (:local-nicknames
    (#:cell #:coalton/cell)
    (#:iter #:coalton/iterator)
-   (#:shim #:coalton/hashtable-shim))
+   (#:shim #:coalton/hashtable-shim)
+   (#:show #:coalton/show))
   (:export
    #:HashTable
    #:new
@@ -164,6 +166,29 @@
        (fn (key)
          (== (get ht1 key) (get ht2 key)))
        (keys ht1))))
+
+  (define-instance ((show:Show :key) (show:Show :value) => show:Show (HashTable :key :value))
+    (define (show:show-to f table)
+      (let table-entries = (entries table))
+      (match (iter:next! table-entries)
+        ((None)
+         (f "#<HashTable [=>]>"))
+        ((Some (Tuple key value))
+         (f "#<HashTable [")
+         (show:show-to f key)
+         (f " => ")
+         (show:show-to f value)
+         (rec % ()
+           (match (iter:next! table-entries)
+             ((None)
+              (values))
+             ((Some (Tuple next-key next-value))
+             (f " ")
+             (show:show-to f next-key)
+             (f " => ")
+             (show:show-to f next-value)
+              (%))))
+         (f "]>")))))
 
   (define-instance (iter:IntoIterator (HashTable :key :value) (Tuple :key :value))
     (define (iter:into-iter table)

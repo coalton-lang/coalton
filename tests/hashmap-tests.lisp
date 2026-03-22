@@ -472,5 +472,8 @@
                  (list->hashmap
                   (make-list (Tuple 0 0)
                              (Tuple 1 10)))))
-  (is (== "(0 -> 0, 1 -> 10)"
-          (hashmap:show hm))))
+  (is (== "#<HashMap [0 => 0 1 => 10]>"
+          (show-as-string hm)))
+  (is (== "#<HashMap [=>]>"
+          (show-as-string (the (hashmap:HashMap Integer Integer)
+                               hashmap:empty)))))

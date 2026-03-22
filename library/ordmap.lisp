@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package :coalton/ordmap
+  (:documentation "Immutable maps ordered by key comparison and iterated in ascending key order.")
   (:use
    :coalton
    :coalton/classes
@@ -7,7 +8,8 @@
    :coalton/functions)
   (:local-nicknames
    (#:tree :coalton/ordtree)
-   (#:iter :coalton/iterator))
+   (#:iter :coalton/iterator)
+   (#:show :coalton/show))
   (:shadow #:empty)
   (:export
    #:OrdMap
@@ -197,6 +199,29 @@ If `mp` doesn't has an association with `k`, `mp` is returned as is."
   (define-instance ((Hash :key) (Hash :value) => Hash (OrdMap :key :value))
     (define (hash mp)
       (iter:elementwise-hash! (entries mp))))
+
+  (define-instance ((show:Show :key) (show:Show :value) => show:Show (OrdMap :key :value))
+    (define (show:show-to f mp)
+      (let map-entries = (entries mp))
+      (match (iter:next! map-entries)
+        ((None)
+         (f "#<OrdMap [=>]>"))
+        ((Some (Tuple key value))
+         (f "#<OrdMap [")
+         (show:show-to f key)
+         (f " => ")
+         (show:show-to f value)
+         (rec % ()
+           (match (iter:next! map-entries)
+             ((None)
+              (values))
+             ((Some (Tuple next-key next-value))
+             (f " ")
+             (show:show-to f next-key)
+             (f " => ")
+             (show:show-to f next-value)
+              (%))))
+         (f "]>")))))
 
   (declare collect! ((Ord :key) => ((iter:Iterator (Tuple :key :value)) -> (OrdMap :key :value))))
   (define (collect! iter)

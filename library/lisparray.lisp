@@ -3,6 +3,7 @@
 ;;;; An interface to Common Lisp rank-1 SIMPLE-ARRAYs.
 
 (coalton/utils:defstdlib-package #:coalton/lisparray
+  (:documentation "Fixed-size one-dimensional Common Lisp arrays for interop and efficient storage.")
   (:use
    #:coalton
    #:coalton/classes)
@@ -239,7 +240,7 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
   (define-instance (show:Show :a => show:Show (LispArray :a))
     (define (show:show-to f x)
       (let l = (length x))
-      (f "(lisparray [")
+      (f "#<LispArray [")
       (rec % ((i 0))
         (cond
           ((== i l)
@@ -250,7 +251,7 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
            (show:show-to f (aref x i))
            (f " ")
            (% (+ i 1)))))
-      (f "])")))
+      (f "]>")))
 
   (lisp-toplevel ()
     (cl:eval-when (:compile-toplevel :load-toplevel)

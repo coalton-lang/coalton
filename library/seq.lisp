@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/seq
+  (:documentation "Persistent sequences based on relaxed radix balanced trees.")
   (:use
    #:coalton
    #:coalton/builtin
@@ -10,7 +11,8 @@
    (#:optional #:coalton/optional)
    (#:cell #:coalton/cell)
    (#:vector #:coalton/vector)
-   (#:iter #:coalton/iterator))
+   (#:iter #:coalton/iterator)
+   (#:show #:coalton/show))
   (:export
    #:Seq
    #:new
@@ -295,6 +297,25 @@ a new `Seq` instance."
                (iter:every! (fn ((Tuple x y)) (== x y))
                             (iter:zip! (iter:into-iter a)
                                        (iter:into-iter b)))))))
+
+  (define-instance (show:Show :a => show:Show (Seq :a))
+    (define (show:show-to f seq)
+      (f "#<Seq [")
+      (let items = (iter:into-iter seq))
+      (match (iter:next! items)
+        ((None)
+         (values))
+        ((Some item)
+         (show:show-to f item)
+         (rec % ()
+           (match (iter:next! items)
+             ((None)
+              (values))
+             ((Some next-item)
+              (f " ")
+              (show:show-to f next-item)
+              (%))))))
+      (f "]>")))
 
   (define-instance (Into (Seq :a) (List :a))
     (define (into seq)

@@ -75,3 +75,11 @@
 
   (is (/= (hash (the (Hashtable String String) (hashtable:make)))
           (hash (hashtable:make ("a" "b"))))))
+
+(define-test hashtable-show ()
+  (let ht = (hashtable:new))
+  (is (== "#<HashTable [=>]>"
+          (show-as-string (the (Hashtable String Integer) (hashtable:new)))))
+  (hashtable:set! ht "alpha" 1)
+  (is (== "#<HashTable [\"alpha\" => 1]>"
+          (show-as-string ht))))
