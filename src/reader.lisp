@@ -308,6 +308,15 @@ It ensures the presence of source metadata for STREAM and then calls MAYBE-READ-
            (read-char stream)
            (maybe-read-coalton-deferred stream *source* 0)))))))
 
+;; NOTE: Shorthand lambda syntax `\x.body` is NOT registered on this CL
+;; readtable. CL's `set-macro-character' would strip `\' of its single-escape
+;; syntax type, breaking `\"' inside string literals. In practice,
+;; `named-readtables:defreadtable' silently ignores the override for `\' (it
+;; remains single-escape), so the CL readtable never dispatched to a shorthand
+;; handler anyway. Shorthand lambdas work because `coalton-toplevel' and
+;; `coalton' switch to the Eclector reader, which handles `\' via
+;; `interpret-token' in parser/reader.lisp.
+
 (named-readtables:defreadtable coalton:coalton
   (:merge :standard)
   (:macro-char #\( 'read-coalton-toplevel-open-paren)

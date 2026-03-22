@@ -135,6 +135,12 @@
        (the (types:Proxy (Integer * String -> Boolean * Char)) types:Proxy))))
 
 (coalton-toplevel
+  (define shorthand-runtime \x.(+ x 1)))
+
+(define-test test-reader-shorthand-function-runtime ()
+  (is (== (shorthand-runtime 4) 5)))
+
+(coalton-toplevel
   (define (gh-295-f a)
     (let ((g (fn (x)
                (== x (make-list a)))))

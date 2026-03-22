@@ -901,6 +901,13 @@
    "(define f (fn () 5))"
    '("f" . "(Num :a => (Void -> :a))")))
 
+(deftest test-reader-shorthand-function-syntax ()
+  (check-coalton-types
+   "(define reader-id \\x.x)
+    (define reader-zero \\.0)"
+   '("reader-id" . "(:a -> :a)")
+   '("reader-zero" . "(Num :a => (Void -> :a))")))
+
 (deftest test-function-implicit-progn ()
   (check-coalton-types
    "(define (f a)
