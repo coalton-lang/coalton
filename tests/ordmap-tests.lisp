@@ -285,3 +285,15 @@
                       (Tuple 3 "naS")
                       (Tuple 4 "iS")))))
   )
+
+(define-test ordmap-show ()
+  (let m = (the (ordmap:OrdMap Integer Integer)
+                (list->ordmap
+                 (make-list (Tuple 3 30)
+                            (Tuple 1 10)
+                            (Tuple 2 20)))))
+  (is (== "#<OrdMap [=>]>"
+          (show-as-string (the (ordmap:OrdMap Integer Integer)
+                               ordmap:empty))))
+  (is (== "#<OrdMap [1 => 10 2 => 20 3 => 30]>"
+          (show-as-string m))))

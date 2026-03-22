@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/hashmap
+  (:documentation "Immutable hash array mapped trie maps from keys to values.")
   (:use
    #:coalton
    #:coalton/builtin
@@ -15,6 +16,7 @@
    (#:iter #:coalton/iterator)
    (#:list #:coalton/list)
    (#:math #:coalton/math)
+   (#:show #:coalton/show)
    (#:util #:coalton-impl/runtime)
    )
   (:shadow #:count #:empty #:xor)
@@ -37,8 +39,7 @@
    #:union
    #:intersection
    #:difference
-   #:xor
-   #:show))
+   #:xor))
 
 (in-package #:coalton/hashmap)
 
@@ -807,21 +808,28 @@ but not in both."
   (define-instance (Hash :k => Monoid (HashMap :k :v))
     (define mempty Empty))
 
-  (declare show ((Hash :k) (Into :k String) (Into :v String) => HashMap :k :v -> String))
-  (define (show hm)
-    "Return a human-readable representation of HM."
-    (let the-entries = (entries hm))
-    (match (iter:next! the-entries)
-      ((None) "()")
-      ((Some (Tuple k1 v1))
-       (<> "("
-           (<>
-            (iter:fold!
-             (fn (accum (Tuple k v))
-                 (<> accum (<> ", " (<> (into k) (<> " -> " (into v))))))
-             (<> (into k1) (<> " -> " (into v1)))
-             the-entries)
-            ")")))))
+  (define-instance ((Hash :k) (show:Show :k) (show:Show :v) => show:Show (HashMap :k :v))
+    (define (show:show-to f hm)
+      (let hm-entries = (entries hm))
+      (match (iter:next! hm-entries)
+        ((None)
+         (f "#<HashMap [=>]>"))
+        ((Some (Tuple key value))
+         (f "#<HashMap [")
+         (show:show-to f key)
+         (f " => ")
+         (show:show-to f value)
+         (rec % ()
+           (match (iter:next! hm-entries)
+             ((None)
+              (values))
+             ((Some (Tuple next-key next-value))
+             (f " ")
+             (show:show-to f next-key)
+             (f " => ")
+              (show:show-to f next-value)
+              (%))))
+         (f "]>")))))
   )
 
 ;;

@@ -1,4 +1,5 @@
 (coalton/utils::defstdlib-package #:coalton/list
+  (:documentation "Immutable singly linked lists and list-processing utilities.")
   (:use
    #:coalton
    #:coalton/builtin
