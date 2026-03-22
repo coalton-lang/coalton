@@ -32,6 +32,9 @@
 
 (in-package #:coalton-impl/codegen/codegen-expression)
 
+(defvar *emit-lisp-type-checks-p* t
+  "When false, embedded `lisp` forms inherit the surrounding type-check policy.")
+
 (defun continue-label (label)
   (declare (type symbol label))
   (alexandria:format-symbol :keyword "~a-CONTINUE" label))
@@ -55,6 +58,31 @@
           (loop :for var :in vars
                 :for type :in types
                 :collect `(type ,type ,var)))))
+
+(defun loop-binding-declaration-table (bindings env)
+  (declare (type node-for-binding-list bindings)
+           (type tc:environment env)
+           (values hash-table &optional))
+  (let ((table (make-hash-table :test #'eq)))
+    (when settings:*emit-type-annotations*
+      (loop :for binding :in bindings
+            :for name := (node-for-binding-name binding)
+            :do (setf (gethash name table)
+                      (list `(type ,(tc:lisp-type (node-for-binding-type binding) env)
+                                   ,name)))))
+    table))
+
+(defun loop-step-form (bindings env)
+  (declare (type node-for-binding-list bindings)
+           (type tc:environment env)
+           (values (or null list) &optional))
+  (let ((assignments
+          (loop :for binding :in bindings
+                :when (node-for-binding-step binding)
+                  :append (list (node-for-binding-name binding)
+                                (codegen-expression (node-for-binding-step binding) env)))))
+    (when assignments
+      `(psetq ,@assignments))))
 
 (defun abstraction-lambda-list (node)
   (declare (type node-abstraction node)
@@ -256,8 +284,26 @@
 
   (:method ((expr node-locally) env)
     (declare (type tc:environment env))
-    `(locally (declare (notinline ,@(node-locally-noinline-functions expr)))
-       ,(codegen-expression (node-locally-subexpr expr) env)))
+    (let* ((type-check (node-locally-type-check expr))
+           (subexpr
+             (let ((*emit-lisp-type-checks-p*
+                     (if (eql type-check 0)
+                         nil
+                         *emit-lisp-type-checks-p*)))
+               (codegen-expression (node-locally-subexpr expr) env)))
+           (declarations nil))
+      (when (node-locally-noinline-functions expr)
+        (push `(notinline ,@(node-locally-noinline-functions expr)) declarations))
+      (when type-check
+        (if (eql 0 type-check)
+            (push '(optimize (safety 0) #+sbcl (sb-c::type-check 0))
+                  declarations)
+            (push `(optimize #+sbcl (sb-c::type-check ,type-check))
+                  declarations)))
+      `(locally
+         ,@(when declarations
+             `((declare ,@(nreverse declarations))))
+         ,subexpr)))
 
   (:method ((expr node-lisp) env)
     (declare (type tc:environment env))
@@ -284,65 +330,83 @@
                  `(progn ,@prefix-forms
                          ,@tail-forms)))
            (return-types (node-output-lisp-types expr env)))
-      `(locally (declare #+sbcl (optimize (sb-c::type-check 1)))
-         ,(if settings:*emit-type-annotations*
-              `(the (values ,@return-types &optional)
-                    ,inner)
-              inner))))
+      (let ((body
+              (if settings:*emit-type-annotations*
+                  `(the (values ,@return-types &optional)
+                        ,inner)
+                  inner)))
+        (if *emit-lisp-type-checks-p*
+            `(locally (declare #+sbcl (optimize (sb-c::type-check 1)))
+               ,body)
+            body))))
 
-  (:method ((expr node-while) env)
+  (:method ((expr node-for) env)
     (declare (type tc:environment env))
-
-    (let ((pred-expr (codegen-expression (node-while-expr expr) env))
-          (body-expr (codegen-expression (node-while-body expr) env))
-          (label (node-while-label expr)))
-      `(loop
-         :named ,(break-label label)
-         :while ,pred-expr
-         :do (block ,(continue-label label) ,body-expr)
-         :finally (return-from ,(break-label label) (values)))))
-
-  (:method ((expr node-while-let) env)
-    (declare (type tc:environment env))
-
-    (let ((match-expr-type (node-type (node-while-let-expr expr)))
-          (match-expr (codegen-expression (node-while-let-expr expr) env))
-          (body-expr (codegen-expression (node-while-let-body expr) env))
-          (label (node-while-let-label expr))
-          (match-var (gensym "MATCH")))
-
-      (multiple-value-bind (pred bindings types)
-          (codegen-pattern (node-while-let-pattern expr) match-var match-expr-type env)
-        `(loop
-           :named ,(break-label label)
-           :for ,match-var ,@(if settings:*emit-type-annotations*
-                                 `(:of-type ,(tc:lisp-type match-expr-type env))
-                                 nil)
-             := ,match-expr
-           :while ,pred
-           :do (block ,(continue-label label)
-                 ,(cond ((null bindings) body-expr)
-                        (t `(let ,bindings
-                              (declare (ignorable ,@(mapcar #'car bindings))
-                                       ,@(cond
-                                           (settings:*emit-type-annotations*
-                                            (loop :for binding :in bindings
-                                                  :for var := (car binding)
-                                                  :for type :in types
-                                                  :collect `(type ,type ,var)))
-                                           (t
-                                            nil)))
-                              ,body-expr))))
-           :finally (return-from ,(break-label label) (values))))))
-
-  (:method ((expr node-loop) env)
-    (declare (type tc:environment env))
-    (let ((body-expr (codegen-expression (node-loop-body expr) env))
-          (label (node-loop-label expr)))
-      `(loop :named ,(break-label label)
-             :do (block ,(continue-label label)
-                   ,body-expr)
-             :finally (return-from ,(break-label label) (values)))))
+    (let* ((bindings (node-for-bindings expr))
+           (label (node-for-label expr))
+           (start-tag (gensym "LOOP-START-"))
+           (done-tag (gensym "LOOP-DONE-"))
+           (break-target (break-label label))
+           (continue-target (continue-label label))
+           (binding-decl-table (loop-binding-declaration-table bindings env))
+           (init-bindings
+             (loop :for binding :in bindings
+                   :collect (cons (node-for-binding-name binding)
+                                  (node-for-binding-init binding))))
+           (termination-kind (node-for-termination-kind expr))
+           (termination-expr (and (node-for-termination-expr expr)
+                                  (codegen-expression (node-for-termination-expr expr) env)))
+           (body-expr (codegen-expression (node-for-body expr) env))
+           (step-form (loop-step-form bindings env))
+           (returns-expr (and (node-for-returns expr)
+                              (codegen-expression (node-for-returns expr) env))))
+      (let* ((loop-expr
+               (case termination-kind
+                 (:repeat
+                  (let ((repeat-var (gensym "LOOP-REPEAT-")))
+                    `(let ((,repeat-var ,termination-expr))
+                       ,@(when settings:*emit-type-annotations*
+                           `((declare (type ,(tc:lisp-type tc:*ufix-type* env) ,repeat-var))))
+                       (block ,break-target
+                         (tagbody
+                          ,start-tag
+                          (when (zerop ,repeat-var)
+                            (go ,done-tag))
+                          (block ,continue-target
+                            ,body-expr)
+                          ,@(when step-form
+                              (list step-form))
+                          (setq ,repeat-var (1- ,repeat-var))
+                          (go ,start-tag)
+                          ,done-tag)))))
+                 (t
+                  `(block ,break-target
+                     (tagbody
+                      ,start-tag
+                      ,@(case termination-kind
+                          (:while `((unless ,termination-expr
+                                      (go ,done-tag))))
+                          (:until `((when ,termination-expr
+                                      (go ,done-tag))))
+                          (otherwise nil))
+                      (block ,continue-target
+                        ,body-expr)
+                      ,@(when step-form
+                          (list step-form))
+                      (go ,start-tag)
+                      ,done-tag)))))
+             (loop-form
+               `(progn
+                  ,loop-expr
+                  ,(or returns-expr '(values))))
+             (loop-body loop-form))
+        (codegen-recursive-bindings
+         init-bindings
+         (node-binding-sccs init-bindings)
+         (node-variables expr :variable-namespace-only t)
+         env
+         loop-body
+         binding-decl-table))))
 
   (:method ((expr node-break) env)
     (declare (type tc:environment env))
@@ -575,21 +639,40 @@
     (otherwise
      `(slot-value ,instance ',(constructor-slot-name ctor-ent nth-slot)))))
 
-(defun codegen-let (node sccs local-vars env)
-  (declare (type node-let node)
+(defun recursive-binding-declarations (names binding-decl-table)
+  (declare (type util:symbol-list names)
+           (type (or null hash-table) binding-decl-table)
+           (values list &optional))
+  (append
+   (if names
+       (list `(ignorable ,@names))
+       nil)
+   (if binding-decl-table
+       (loop :for name :in names
+             :appending (copy-list (gethash name binding-decl-table)))
+       nil)))
+
+(defun codegen-recursive-bindings (bindings sccs local-vars env inner-form
+                                    &optional binding-decl-table)
+  "Emit recursive binding code for BINDINGS around INNER-FORM.
+
+This is shared by `let` and the one-time initializer phase of `for` so both
+forms follow the same binding semantics."
+  (declare (type binding-list bindings)
            (type list sccs)
            (type util:symbol-list local-vars)
-           (type tc:environment env))
+           (type tc:environment env)
+           (type (or null hash-table) binding-decl-table))
 
   (when (null sccs)
-    (return-from codegen-let (codegen-expression (node-let-subexpr node) env)))
+    (return-from codegen-recursive-bindings inner-form))
 
   (let* ((scc (car sccs))
          (scc-bindings
            (remove-if-not
             (lambda (binding)
               (find (car binding) scc))
-            (node-let-bindings node))))
+            bindings)))
 
     (cond
       ;; Function binding group
@@ -597,7 +680,8 @@
        (let* (;; functions in this scc referenced in the variable namespace
               (binding-names-vars (intersection (mapcar #'car scc-bindings) local-vars))
 
-              (inner (codegen-let node (cdr sccs) local-vars env))
+              (inner (codegen-recursive-bindings bindings (cdr sccs) local-vars env inner-form
+                                                 binding-decl-table))
 
               (inner
                 (if binding-names-vars
@@ -628,7 +712,11 @@
                          ,(loop :for (name . node) :in scc-bindings
                                 :if (find name binding-names-vars :test #'equalp)
                                   :collect name)
-                       (declare (ignorable ,@(mapcar #'car scc-bindings)))
+                       ,@(let ((decls (recursive-binding-declarations
+                                       (mapcar #'car scc-bindings)
+                                       binding-decl-table)))
+                           (when decls
+                             `((declare ,@decls))))
                        ,inner)
                     inner)))
          node))
@@ -637,7 +725,8 @@
                 (data-letrec-able-p (cdr pair)
                                     env))
               scc-bindings)
-       (let* ((inner (codegen-let node (cdr sccs) local-vars env))
+       (let* ((inner (codegen-recursive-bindings bindings (cdr sccs) local-vars env inner-form
+                                                 binding-decl-table))
               (assignments (loop :for (name . initform) :in scc-bindings
                                  :for ctor-info := (find-constructor initform env)
                                  :appending (loop :for arg :in (node-rands initform)
@@ -655,7 +744,11 @@
          `(let ,(mapcar (lambda (scc-binding allocation)
                           (list (car scc-binding) allocation))
                  scc-bindings allocations)
-            (declare (ignorable ,@(mapcar #'car scc-bindings)))
+            ,@(let ((decls (recursive-binding-declarations
+                            (mapcar #'car scc-bindings)
+                            binding-decl-table)))
+                (when decls
+                  `((declare ,@decls))))
             ,@assignments
             ,inner)))
 
@@ -665,10 +758,25 @@
              (node_ (cdr (first scc-bindings))))
 
          `(let ((,name ,(codegen-expression node_ env)))
-            (declare (ignorable ,name))
-            ,(codegen-let node (cdr sccs) local-vars env))))
+            ,@(let ((decls (recursive-binding-declarations (list name) binding-decl-table)))
+                (when decls
+                  `((declare ,@decls))))
+            ,(codegen-recursive-bindings bindings (cdr sccs) local-vars env inner-form
+                                         binding-decl-table))))
 
       (t (error "Invalid scc binding group. This should have been detected during typechecking.")))))
+
+(defun codegen-let (node sccs local-vars env)
+  (declare (type node-let node)
+           (type list sccs)
+           (type util:symbol-list local-vars)
+           (type tc:environment env))
+  (codegen-recursive-bindings
+   (node-let-bindings node)
+   sccs
+   local-vars
+   env
+   (codegen-expression (node-let-subexpr node) env)))
 
 
 (defun function-declarations (node env)

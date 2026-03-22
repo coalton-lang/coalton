@@ -189,10 +189,11 @@ For a complex number `z = (complex x y)`, the following identities hold:
             nan)
 
            (True
-            (lisp (-> ,coalton-type) (x)
-              (#+(not ccl) cl:progn
-                 #+ccl ff:with-float-traps-masked #+ccl cl:t
-                 (cl:sin x))))))
+            (coalton++:unsafe
+              (lisp (-> ,coalton-type) (x)
+                (#+(not ccl) cl:progn
+                   #+ccl ff:with-float-traps-masked #+ccl cl:t
+                   (cl:sin x)))))))
 
        (inline)
        (define (cos x)
@@ -203,10 +204,11 @@ For a complex number `z = (complex x y)`, the following identities hold:
             nan)
 
            (True
-            (lisp (-> ,coalton-type) (x)
-              (#+(not ccl) cl:progn
-                 #+ccl ff:with-float-traps-masked #+ccl cl:t
-                 (cl:cos x))))))
+            (coalton++:unsafe
+              (lisp (-> ,coalton-type) (x)
+                (#+(not ccl) cl:progn
+                   #+ccl ff:with-float-traps-masked #+ccl cl:t
+                   (cl:cos x)))))))
 
        (inline)
        (define (tan x)
@@ -256,21 +258,24 @@ For a complex number `z = (complex x y)`, the following identities hold:
             nan)
 
            (True
-            (lisp (-> ,coalton-type) (x)
-              (#+(not ccl) cl:progn
-                 #+ccl ff:with-float-traps-masked #+ccl cl:t
-                 (cl:atan x))))))
+            (coalton++:unsafe
+              (lisp (-> ,coalton-type) (x)
+                (#+(not ccl) cl:progn
+                   #+ccl ff:with-float-traps-masked #+ccl cl:t
+                   (cl:atan x)))))))
        (define pi
-         (lisp (-> ,coalton-type) ()
-           (cl:coerce cl:pi ',underlying-type))))
+         (coalton++:unsafe
+           (lisp (-> ,coalton-type) ()
+             (cl:coerce cl:pi ',underlying-type)))))
 
      (define-instance (Polar ,coalton-type)
        (inline)
        (define (phase x)
-         (lisp (-> ,coalton-type) (x)
-           (#+(not ccl) cl:progn
-              #+ccl ff:with-float-traps-masked #+ccl cl:t
-              (cl:phase x))))
+         (coalton++:unsafe
+           (lisp (-> ,coalton-type) (x)
+             (#+(not ccl) cl:progn
+                #+ccl ff:with-float-traps-masked #+ccl cl:t
+                (cl:phase x)))))
        (define (polar x)
          (values (magnitude x) (phase x))))
 
@@ -293,10 +298,11 @@ For a complex number `z = (complex x y)`, the following identities hold:
             (negate infinity))
 
            (True
-            (lisp (-> ,coalton-type) (x y)
-              (#+(not ccl) cl:progn
-                 #+ccl ff:with-float-traps-masked #+ccl cl:t
-                 (cl:expt x y))))))
+            (coalton++:unsafe
+              (lisp (-> ,coalton-type) (x y)
+                (#+(not ccl) cl:progn
+                   #+ccl ff:with-float-traps-masked #+ccl cl:t
+                   (cl:expt x y)))))))
 
        (inline)
        (define (exp x)
@@ -310,13 +316,14 @@ For a complex number `z = (complex x y)`, the following identities hold:
             (negate infinity))
 
            (True
-            (lisp (-> ,coalton-type) (x)
-              (#+(not ccl) cl:progn
-                 #+ccl ff:with-float-traps-masked #+ccl cl:t
-                 (cl:let ((res (cl:exp x)))
-                   (cl:if (cl:complexp res)
-                          (cl:realpart res)
-                          res)))))))
+            (coalton++:unsafe
+              (lisp (-> ,coalton-type) (x)
+                (#+(not ccl) cl:progn
+                   #+ccl ff:with-float-traps-masked #+ccl cl:t
+                   (cl:let ((res (cl:exp x)))
+                     (cl:if (cl:complexp res)
+                            (cl:realpart res)
+                            res))))))))
 
        (inline)
        (define (log b x)
@@ -328,10 +335,11 @@ For a complex number `z = (complex x y)`, the following identities hold:
               ((and (< x 1) (>= x 0)) negative-infinity)
               (True nan)))
            ((and (> b 0) (> x 0))
-            (lisp (-> ,coalton-type) (b x)
-              (#+(not ccl) cl:progn
-                 #+ccl ff:with-float-traps-masked #+ccl cl:t
-                 (cl:log x b))))
+            (coalton++:unsafe
+              (lisp (-> ,coalton-type) (b x)
+                (#+(not ccl) cl:progn
+                   #+ccl ff:with-float-traps-masked #+ccl cl:t
+                   (cl:log x b)))))
            (True nan)))
 
        (inline)
@@ -339,23 +347,26 @@ For a complex number `z = (complex x y)`, the following identities hold:
          (cond
            ((nan? x) nan)
            ((> x 0)
-            (lisp (-> ,coalton-type) (x)
-              (cl:log x)))
+            (coalton++:unsafe
+              (lisp (-> ,coalton-type) (x)
+                (cl:log x))))
            ((< x 0) nan)
            (True negative-infinity)))
         (define ee
-         (lisp (-> ,coalton-type) ()
-           (cl:exp (cl:coerce 1 ',underlying-type)))))
+         (coalton++:unsafe
+           (lisp (-> ,coalton-type) ()
+             (cl:exp (cl:coerce 1 ',underlying-type))))))
 
      (define-instance (Radical ,coalton-type)
        (inline)
        (define (sqrt x)
          (if (or (nan? x) (< x 0))
              nan
-             (lisp (-> ,coalton-type) (x)
-               (#+(not ccl) cl:progn
-                  #+ccl ff:with-float-traps-masked #+ccl cl:t
-                  (cl:sqrt x)))))
+             (coalton++:unsafe
+               (lisp (-> ,coalton-type) (x)
+                 (#+(not ccl) cl:progn
+                    #+ccl ff:with-float-traps-masked #+ccl cl:t
+                    (cl:sqrt x))))))
        (inline)
        (define (nth-root n x)
          (canonical-nth-root n x)))

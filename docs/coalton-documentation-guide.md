@@ -137,12 +137,19 @@ Comments are useful for local information that doesn't need to be accessed publi
 
   (define (factorial n)
     ;; this needs to be a cell because product needs to be mutable
-    (let product = (cell:new 1))
-
-    (for i in (iter:range-increasing 1 1 (1+ n)) ; this iterates from 1 to n
-      (cell:update! (* i) product))              ; and updates the product accordingly
-
-    (cell:read product)))
+    (let ((product (cell:new 1))
+          (numbers (iter:range-increasing 1 1 (1+ n))))
+      (for ()
+        (let next = (iter:next! numbers))
+        (when (== next None)
+          (break))
+        (match next
+          ((Some i)
+           (cell:update! (* i) product)
+           Unit)
+          ((None) Unit)))                        ; this iterates from 1 to n
+                                                 ; and updates the product accordingly
+      (cell:read product))))
 ```
 
 The Coalton development team follows standard lisp comment style conventions, as seen in the [hyperspec](https://www.lispworks.com/documentation/HyperSpec/Body/02_ddb.htm).

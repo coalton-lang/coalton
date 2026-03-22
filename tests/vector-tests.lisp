@@ -85,3 +85,7 @@
   (let v = (vector:make 0 1 2 3 4 5 6))
   (is (== (vector:make 2 3) (vector:subseq v 2 4)))
   (is (== v (vector:subseq v 0 1000))))
+
+(define-test test-vector-show ()
+  (is (== "#<Vector [1 2 3]>"
+          (show-as-string (vector:make 1 2 3)))))

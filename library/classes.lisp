@@ -30,6 +30,12 @@
    #:Traversable #:traverse
    #:Bifunctor #:bimap #:map-fst #:map-snd
    #:sequence
+   #:FromItemizedCollection #:begin-collection-builder #:adjoin-to-collection-builder #:finalize-collection-builder
+   #:FromItemizedAssociation #:begin-association-builder #:adjoin-to-association-builder #:finalize-association-builder
+   #:FromCollectionComprehension #:begin-collection-comprehension
+   #:adjoin-to-collection-comprehension #:finalize-collection-comprehension
+   #:FromAssociationComprehension #:begin-association-comprehension
+   #:adjoin-to-association-comprehension #:finalize-association-comprehension
    #:Into
    #:TryInto
    #:Iso
@@ -302,6 +308,116 @@ together."
     "Map over the second argument of a `Bifunctor`."
     (bimap (fn (x) x) f b))
 
+  (define-class (FromItemizedCollection :collection :element :builder
+                                        (:collection -> :element :builder))
+    "Types which can be built from collection builder syntax `[a b c]`, where the
+elements are explicitly and finitely itemized in source.
+
+These methods form an exact indexed builder protocol:
+
+  1. `begin-collection-builder` creates the initial builder state. It receives
+     the exact number of source items in the builder syntax.
+  2. `adjoin-to-collection-builder` is called once per element, left to right,
+     with the zero-based source index of that element.
+  3. `finalize-collection-builder` converts the builder state into the final
+     collection.
+
+Use this class for converting a finite, explicitly itemized sequence of source
+elements into a target collection.
+
+When no concrete type is specified, the compiler defaults to `Seq`."
+    (begin-collection-builder
+     "Return the initial builder state for a builder with exactly SIZE source elements."
+     (types:Proxy :collection * UFix -> :builder))
+    (adjoin-to-collection-builder
+     "Add one evaluated builder element to the builder state. INDEX is the zero-based source position of ITEM."
+     (types:Proxy :collection * :builder * UFix * :element -> :builder))
+    (finalize-collection-builder
+     "Convert the completed builder state into the final collection."
+     (types:Proxy :collection * :builder -> :collection)))
+
+  (define-class (FromItemizedAssociation :association :key :value :builder
+                                         (:association -> :key :value :builder))
+    "Types which can be built from association builder syntax `[k1 => v1 k2 => v2]`,
+where the entries are explicitly and finitely itemized in source.
+
+These methods form an exact indexed builder protocol:
+
+  1. `begin-association-builder` creates the initial builder state. It receives
+     the exact number of source entries in the builder syntax.
+  2. `adjoin-to-association-builder` is called once per key/value pair, left to
+     right, with the zero-based source index of that entry. Duplicate keys
+     should be kept or discarded consistently; the standard instances keep the
+     first occurrence.
+  3. `finalize-association-builder` converts the builder state into the final
+     association.
+
+Use this class for converting a finite, explicitly itemized sequence of source
+entries into a target association.
+
+When no concrete type is specified, the compiler defaults to `Seq (Tuple :key :value)`."
+    (begin-association-builder
+     "Return the initial builder state for a builder with exactly SIZE source entries."
+     (types:Proxy :association * UFix -> :builder))
+    (adjoin-to-association-builder
+     "Add one key/value pair to the builder state. INDEX is the zero-based source position of the entry. Duplicate keys keep the first occurrence."
+     (types:Proxy :association * :builder * UFix * :key * :value -> :builder))
+    (finalize-association-builder
+     "Convert the completed builder state into the final association."
+     (types:Proxy :association * :builder -> :association)))
+
+  (define-class (FromCollectionComprehension :collection :element :builder
+                                             (:collection -> :element :builder))
+    "Types which can be built from collection comprehension syntax like `[expr :for ...]`.
+
+These methods form a streaming builder protocol:
+
+  1. `begin-collection-comprehension` creates the initial builder state. It
+     receives an advisory size hint when the compiler can cheaply determine
+     one.
+  2. `adjoin-to-collection-comprehension` is called once per emitted element,
+     left to right.
+  3. `finalize-collection-comprehension` converts the builder state into the
+     final collection.
+
+When no concrete type is specified, the compiler defaults to `Seq`."
+    (begin-collection-comprehension
+     "Return the initial builder state. SIZE-HINT is an advisory initial capacity hint: `Some n` when the compiler can cheaply approximate a useful starting size, and `None` otherwise."
+     (types:Proxy :collection * Optional UFix -> :builder))
+    (adjoin-to-collection-comprehension
+     "Add one emitted comprehension element to the builder state."
+     (types:Proxy :collection * :builder * :element -> :builder))
+    (finalize-collection-comprehension
+     "Convert the finished builder state into the target collection."
+     (types:Proxy :collection * :builder -> :collection)))
+
+  (define-class (FromAssociationComprehension :association :key :value :builder
+                                              (:association -> :key :value :builder))
+    "Types which can be built from association comprehension syntax like `[key => value :for ...]`.
+
+These methods form a streaming builder protocol:
+
+  1. `begin-association-comprehension` creates the initial builder state. It
+     receives an advisory size hint when the compiler can cheaply determine
+     one.
+  2. `adjoin-to-association-comprehension` is called once per emitted key/value
+     pair, left to right. Duplicate keys should be kept or discarded
+     consistently; the standard association instances keep the first
+     occurrence.
+  3. `finalize-association-comprehension` converts the builder state into the
+     final association.
+
+When no concrete type is specified, the compiler defaults to `Seq (Tuple :key :value)`."
+    (begin-association-comprehension
+     "Return the initial builder state. SIZE-HINT is an advisory initial capacity hint: `Some n` when the compiler can cheaply approximate a useful starting size, and `None` otherwise."
+     (types:Proxy :association * Optional UFix -> :builder))
+    (adjoin-to-association-comprehension
+     "Add one emitted key/value pair to the builder state. Duplicate keys keep the first occurrence."
+     (types:Proxy :association * :builder * :key * :value -> :builder))
+    (finalize-association-comprehension
+     "Convert the finished builder state into the target association."
+     (types:Proxy :association * :builder -> :association)))
+
   ;;
   ;; Conversions
   ;;
@@ -316,9 +432,9 @@ together."
   (define-instance (Into :a :a)
     (define (into x) x))
 
-  (define-class (TryInto :a :b :c (:a :b -> :c))
-    "`TRY-INTO` implies some elements of `:a` can be represented exactly by an element of `:b`, but sometimes not. If not, an error of type `:c` is returned."
-    (tryInto (:a -> (Result :c :b))))
+  (define-class (TryInto :a :b)
+    "`TRY-INTO` implies some elements of `:a` can be represented exactly by an element of `:b`, but sometimes not. Failed conversions return `None`."
+    (tryInto (:a -> (Optional :b))))
 
   (define-instance (Iso :a :a))
 
@@ -350,6 +466,12 @@ Typical `fail` continuations are:
       ((Ok elt) (succeed elt))
       ((Err _) (fail)))))
 
+  (define-instance (Unwrappable Optional)
+    (define (unwrap-or-else succeed fail opt)
+      (match opt
+        ((Some elt) (succeed elt))
+        ((None) (fail)))))
+
   (declare expect ((Unwrappable :container) =>
                    String
                    * (:container :element)
@@ -371,7 +493,7 @@ Typical `fail` continuations are:
                                                container))))
                     container))
 
-  (declare unwrap-into (TryInto :a :b :c => :a -> :b))
+  (declare unwrap-into (TryInto :a :b => :a -> :b))
   (define (unwrap-into x)
     "Same as `tryInto` followed by `unwrap`."
     (unwrap (tryinto x)))

@@ -47,14 +47,17 @@ supported 64-bit implementation."))))
 
 (coalton-toplevel
   (inline)
-  (declare unsafe-cast (:any -> :other))
+  (declare unsafe-cast
+    (forall (:from :to)
+      (:from -> :to)))
   (define (unsafe-cast x)
     "Both :ANY and :OTHER must be natively represented by a subtype of `cl:integer', and X must be a valid member of :OTHER."
-    (lisp (-> :other) (x) x))
+    (coalton++:unsafe
+      (lisp (-> :to) (x) x)))
 
   (declare cast-if-inbounds
     (forall (:src :target)
-      ((Ord :src) (Bounded :target) => :src -> (Result String :target))))
+      ((Ord :src) (Bounded :target) => :src -> (Optional :target))))
   (define (cast-if-inbounds x)
     "Cast X, minBound and maxBound to `Integer', and compare them. If X is within the bounds, `unsafe-cast' it to the result type."
     (let max-bound = (the :target maxBound))
@@ -62,8 +65,8 @@ supported 64-bit implementation."))))
     (let int = (the Integer (unsafe-cast x)))
     (if (or (< int (unsafe-cast min-bound))
             (> int (unsafe-cast max-bound)))
-        (Err "value out of range")
-        (Ok (the :target (unsafe-cast x))))))
+        None
+        (Some (the :target (unsafe-cast x))))))
 
 ;; these functions are called at compile-time by `define-integer-conversions', so they must be `eval-when
 ;; :compile-toplevel'.
@@ -81,7 +84,7 @@ Emitted by `define-integer-conversions' only if every element of FROM-TYPE can b
 
 Emitted by `define-integer-conversions' when some elements of FROM-TYPE cannot be represented in TO-TYPE,
 either because FROM-TYPE is signed and TO-TYPE is unsigned, or because FROM-TYPE is wider than TO-TYPE."
-    `(define-instance (TryInto ,from-type ,to-type String)
+    `(define-instance (TryInto ,from-type ,to-type)
        (inline)
        (define (tryInto x)
          (cast-if-inbounds x))))
@@ -141,8 +144,9 @@ cannot be represented in :TO. These fall into a few categories:
      (define-instance (Into ,integer ,coalton-float)
        (inline)
        (define (into x)
-         (lisp (-> ,coalton-float) (x)
-           (cl:coerce x ',lisp-float))))))
+         (coalton++:unsafe
+           (lisp (-> ,coalton-float) (x)
+             (cl:coerce x ',lisp-float)))))))
 
 ;; Only exact conversions
 ;; F32: 24 bit mantissa (not including sign)
@@ -165,38 +169,39 @@ cannot be represented in :TO. These fall into a few categories:
   (define-instance (Into F32 F64)
     (inline)
     (define (into x)
-      (lisp (-> F64) (x)
-        (cl:coerce x 'cl:double-float)))))
+      (coalton++:unsafe
+        (lisp (-> F64) (x)
+          (cl:coerce x 'cl:double-float))))))
 
 ;; Allow Integer -> {Single,Double}-Float conversions
 (coalton-toplevel
-  (define-instance (TryInto Integer F32 String)
+  (define-instance (TryInto Integer F32)
     (define (tryInto x)
-      (lisp (-> (Result String F32)) (x)
+      (lisp (-> (Optional F32)) (x)
         (cl:let ((y (cl:ignore-errors (cl:coerce x 'cl:single-float))))
           (cl:if (cl:null y)
-                 (Err "Integer to F32 conversion out-of-range")
-                 (Ok y))))))
+                 None
+                 (Some y))))))
 
-  (define-instance (TryInto Integer F64 String)
+  (define-instance (TryInto Integer F64)
     (define (tryInto x)
-      (lisp (-> (Result String F64)) (x)
+      (lisp (-> (Optional F64)) (x)
         (cl:let ((y (cl:ignore-errors (cl:coerce x 'cl:double-float))))
           (cl:if (cl:null y)
-                 (Err "Integer to F64 conversion out-of-range")
-                 (Ok y)))))))
+                 None
+                 (Some y)))))))
 
 (cl:eval-when (:compile-toplevel :load-toplevel)
   (cl:defmacro integer-tryinto-float (integer lisp-float float pow)
-    `(define-instance (TryInto ,integer ,float String)
+    `(define-instance (TryInto ,integer ,float)
        (define (tryInto x)
-	 (lisp (-> (Result String ,float)) (x)
+         (lisp (-> (Optional ,float)) (x)
            (cl:if (cl:< ,(cl:- (cl:expt 2 pow)) x ,(cl:expt 2 pow))
-	          (cl:let ((y (cl:ignore-errors (cl:coerce x ',lisp-float))))
-	            (cl:if (cl:null y)
-		           (coalton-impl/util:unreachable)
-		           (Ok y)))
-	          (Err ,(cl:format cl:nil "Given integer is not within (-2^~D, 2^~D)." pow pow))))))))
+                  (cl:let ((y (cl:ignore-errors (cl:coerce x ',lisp-float))))
+                    (cl:if (cl:null y)
+                           None
+                           (Some y)))
+                  None))))))
 
 (coalton-toplevel
   ;; Single Float

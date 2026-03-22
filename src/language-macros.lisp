@@ -36,7 +36,7 @@ Note that this may copy the object or allocate memory."
 
 is equivalent to
 
-    (the (Result :_ <type>) (tryInto <expr>))
+    (the (Optional <type>) (tryInto <expr>))
 
 and
 
@@ -44,19 +44,19 @@ and
 
 is equivalent to
 
-    (fn (expr) (the (Result :_ <type>) (tryInto expr))).
+    (fn (expr) (the (Optional <type>) (tryInto expr))).
 
 Note that this may copy the object or allocate memory."
 
   (cl:let ((try-into (cl:ignore-errors (cl:find-symbol "TRYINTO" "COALTON/CLASSES")))
-           (Result (cl:ignore-errors (cl:find-symbol "RESULT" "COALTON/CLASSES"))))
+           (Optional (cl:ignore-errors (cl:find-symbol "OPTIONAL" "COALTON/CLASSES"))))
     (cl:assert try-into () "`try-as` macro does not have access to `try-into` yet.")
-    (cl:assert Result () "`try-as` macro does not have access to `Result` yet.")
+    (cl:assert Optional () "`try-as` macro does not have access to `Optional` yet.")
     (cl:if expr-supplied-p
-           `(the (,Result :_ ,type) (,try-into ,expr))
+           `(the (,Optional ,type) (,try-into ,expr))
            (alexandria:with-gensyms (lexpr)
              `(fn (,lexpr)
-                (the (,Result :_ ,type) (,try-into ,lexpr)))))))
+                (the (,Optional ,type) (,try-into ,lexpr)))))))
 
 (defmacro unwrap-as (type cl:&optional (expr cl:nil expr-supplied-p))
   "A syntactic convenience for type casting.

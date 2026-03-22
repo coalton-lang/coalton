@@ -199,6 +199,12 @@
    #:Vector)
 
   (:import-from
+   #:coalton/seq
+   #:Seq)
+  (:export
+   #:Seq)
+
+  (:import-from
    #:coalton/hashtable
    #:Hashtable)
   (:export

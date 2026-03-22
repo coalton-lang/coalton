@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/queue
+  (:documentation "Mutable FIFO queues with efficient insertion at the back and removal from the front.")
   (:use
    #:coalton
    #:coalton/builtin
@@ -6,7 +7,8 @@
    #:coalton/classes)
   (:local-nicknames
    (#:cell #:coalton/cell)
-   (#:iter #:coalton/iterator))
+   (#:iter #:coalton/iterator)
+   (#:show #:coalton/show))
   (:export
    #:Queue
    #:new
@@ -206,6 +208,25 @@
           False
           (iter:every! id (iter:zip-with! == (iter:into-iter q1) (iter:into-iter q2))))))
 
+  (define-instance (show:Show :a => show:Show (Queue :a))
+    (define (show:show-to f q)
+      (f "#<Queue [")
+      (let items = (iter:into-iter q))
+      (match (iter:next! items)
+        ((None)
+         (values))
+        ((Some item)
+         (show:show-to f item)
+         (rec % ()
+           (match (iter:next! items)
+             ((None)
+              (values))
+             ((Some next-item)
+              (f " ")
+              (show:show-to f next-item)
+              (%))))))
+      (f "]>")))
+
   (define-instance (Semigroup (Queue :a))
     (define (<> a b)
       (append a b)))
@@ -251,6 +272,24 @@
       (let out = (new))
       (extend! out iter)
       out))
+
+  (define-instance (FromItemizedCollection (Queue :a) :a (Queue :a))
+    (define (begin-collection-builder _ _size)
+      (new))
+    (define (adjoin-to-collection-builder _ queue _index item)
+      (push! item queue)
+      queue)
+    (define (finalize-collection-builder _ queue)
+      queue))
+
+  (define-instance (FromCollectionComprehension (Queue :a) :a (Queue :a))
+    (define (begin-collection-comprehension _ _size-hint)
+      (new))
+    (define (adjoin-to-collection-comprehension _ queue item)
+      (push! item queue)
+      queue)
+    (define (finalize-collection-comprehension _ queue)
+      queue))
 
   (define-instance (Default (Queue :a))
     (define (default)

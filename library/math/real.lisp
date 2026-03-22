@@ -174,23 +174,27 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
        (define-instance (Quantizable ,type)
          (inline)
          (define (floor q)
-           (lisp (-> Integer) (q)
-             (cl:nth-value 0 (cl:floor q))))
+           (coalton++:unsafe
+             (lisp (-> Integer) (q)
+               (cl:nth-value 0 (cl:floor q)))))
          (inline)
          (define (ceiling q)
-           (lisp (-> Integer) (q)
-             (cl:nth-value 0 (cl:ceiling q))))
+           (coalton++:unsafe
+             (lisp (-> Integer) (q)
+               (cl:nth-value 0 (cl:ceiling q)))))
         (inline)
         (define (proper q)
-          (lisp (-> Integer * ,type) (q)
-            (cl:truncate q))))
+          (coalton++:unsafe
+            (lisp (-> Integer * ,type) (q)
+              (cl:truncate q)))))
 
        (specialize truncate ,trunc (,type -> Integer))
        (inline)
        (declare ,trunc (,type -> Integer))
        (define (,trunc x)
-         (lisp (-> Integer) (x)
-           (cl:nth-value 0 (cl:truncate x))))
+         (coalton++:unsafe
+           (lisp (-> Integer) (x)
+             (cl:nth-value 0 (cl:truncate x)))))
 
        (define-instance (Real ,type)
          (inline)
@@ -200,19 +204,22 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
        (define-instance (Rational ,type)
          (inline)
          (define (to-fraction x)
-           (lisp (-> Fraction) (x)
-             (cl:rational x)))
+           (coalton++:unsafe
+             (lisp (-> Fraction) (x)
+               (cl:rational x))))
          (inline)
          (define (best-approx x)
-           (lisp (-> Fraction) (x)
-             (cl:rationalize x))))
+           (coalton++:unsafe
+             (lisp (-> Fraction) (x)
+               (cl:rationalize x)))))
 
        (specialize round ,round (,type -> Integer))
        (inline)
        (declare ,round (,type -> Integer))
        (define (,round x)
-         (lisp (-> Integer) (x)
-           (cl:nth-value 0 (cl:round x)))))))
+         (coalton++:unsafe
+           (lisp (-> Integer) (x)
+             (cl:nth-value 0 (cl:round x))))))))
 
 (%define-native-rationals Fraction)
 (%define-native-rationals F32)

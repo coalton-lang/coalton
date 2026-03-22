@@ -114,12 +114,6 @@
         ((Some a) (map Some (fa->mb a)))
         ((None) (pure None)))))
 
-  (define-instance (Unwrappable Optional)
-    (define (unwrap-or-else succeed fail opt)
-      (match opt
-        ((Some elt) (succeed elt))
-        ((None) (fail)))))
-
   (define-instance (iter:IntoIterator (Optional :a) :a)
     (define (iter:into-iter opt)
       (match opt

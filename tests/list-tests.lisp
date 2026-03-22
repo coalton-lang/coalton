@@ -254,6 +254,12 @@
               (make-list 1 3)
               (make-list 2 3)))))
 
+(define-test test-show ()
+  (is (== "#<List [1 2 3]>"
+          (show-as-string x)))
+  (is (== "#<List []>"
+          (show-as-string n))))
+
 (define-test test-instances ()
   (is (== (map (fn (y) (+ y 1)) x) (make-list 2 3 4)))
   (is (== (map (fn (y) (+ y 1)) x) (make-list 2 3 4)))
