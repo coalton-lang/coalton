@@ -203,6 +203,17 @@
       :location (source:location node))
      ctx))
 
+  (:method ((node node-dynamic-binding) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node-dynamic-binding algo:immutable-map))
+
+    (values
+     (make-node-dynamic-binding
+      :name (node-dynamic-binding-name node)
+      :value (rename-variables-generic% (node-dynamic-binding-value node) ctx)
+      :location (source:location node))
+     ctx))
+
   (:method ((node node-let-declare) ctx)
     (declare (type algo:immutable-map ctx)
              (values node-let-declare algo:immutable-map))
@@ -232,6 +243,17 @@
         :body (rename-variables-generic% (node-let-body node) new-ctx)
         :location (source:location node))
        ctx)))
+
+  (:method ((node node-dynamic-let) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+
+    (values
+     (make-node-dynamic-let
+      :bindings (rename-variables-generic% (node-dynamic-let-bindings node) ctx)
+      :subexpr (rename-variables-generic% (node-dynamic-let-subexpr node) ctx)
+      :location (source:location node))
+     ctx))
 
   (:method ((node node-for) ctx)
     (declare (type algo:immutable-map ctx)

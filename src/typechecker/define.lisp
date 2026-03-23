@@ -1613,7 +1613,46 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
           :type (tc:qualify nil ty)
           :location (source:location node)
           :bindings binding-nodes
-          :body body-node)
+         :body body-node)
+         subs))))
+
+  (:method ((node parser:node-dynamic-let) expected-type subs env)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (values tc:ty tc:ty-predicate-list accessor-list node-dynamic-let tc:substitution-list))
+
+    (check-duplicates
+     (parser:node-dynamic-let-bindings node)
+     (alexandria:compose #'parser:node-variable-name #'parser:node-dynamic-binding-name)
+     (lambda (first second)
+       (tc-error "Duplicate binding in dynamic-bind"
+                 (tc-note first "first binding here")
+                 (tc-note second "second binding here"))))
+
+    (let ((preds nil)
+          (binding-nodes nil))
+      (dolist (binding (parser:node-dynamic-let-bindings node))
+        (multiple-value-bind (preds_ binding-node subs_)
+            (infer-dynamic-binding-type binding subs env)
+          (setf subs subs_)
+          (setf preds (append preds preds_))
+          (push binding-node binding-nodes)))
+
+      (multiple-value-bind (ty preds_ accessors body-node subs)
+          (infer-expression-type (parser:node-dynamic-let-subexpr node)
+                                 expected-type
+                                 subs
+                                 env)
+        (values
+         ty
+         (append preds preds_)
+         accessors
+         (make-node-dynamic-let
+          :type (tc:qualify nil ty)
+          :location (source:location node)
+          :bindings (nreverse binding-nodes)
+          :subexpr body-node)
          subs))))
 
   (:method ((node parser:node-lisp) expected-type subs env)
@@ -3579,6 +3618,183 @@ as a recursive function rather than a recursive value."
                          (tc:apply-substitution subs fresh-qual-type))
                         subs)))))))))
 
+(defun infer-dynamic-binding-type (binding subs env)
+  "Infer the initializer of dynamic BINDING against the existing scheme of its dynamic variable.
+
+Dynamic rebinding is checked in the outer environment so initializer references
+see the old value rather than a recursive self-binding. The resulting scheme
+must match the variable's existing scheme after applying the same relaxed
+value-restriction and variance logic used for implicit bindings."
+  (declare (type parser:node-dynamic-binding binding)
+           (type tc:substitution-list subs)
+           (type tc-env env)
+           (values tc:ty-predicate-list node-dynamic-binding tc:substitution-list &optional))
+  (let* ((name-node (parser:node-dynamic-binding-name binding))
+         (name (parser:node-variable-name name-node))
+         (declared-ty
+           (or (gethash name (tc-env-ty-table env))
+               (tc:lookup-value-type (tc-env-env env) name :no-error t))))
+    (unless declared-ty
+      ;; Reuse normal unbound-variable diagnostics.
+      (tc-env-lookup-value env name-node)
+      (util:coalton-bug "Expected an error for unknown dynamic variable ~S" name))
+
+    (let* ((synthetic-binding
+             (parser:make-node-let-binding
+              :name name-node
+              :value (parser:node-dynamic-binding-value binding)
+              :location (source:location binding)))
+           ;; Ignore the rebound variable itself when deciding which type
+           ;; variables come from the surrounding environment.
+           (bound-variables (remove name (tc-env-bound-variables env) :test #'eq))
+           (expr-ty (tc:qualified-ty-type (tc:fresh-inst declared-ty))))
+
+      (multiple-value-bind (preds accessors binding-node subs_)
+          (infer-binding-type synthetic-binding expr-ty subs env)
+        (setf subs subs_)
+        (tc:apply-substitution subs env)
+
+        (setf accessors (tc:apply-substitution subs accessors))
+
+        (multiple-value-bind (accessors subs_)
+            (solve-accessors accessors (tc-env-env env))
+          (setf subs (tc:compose-substitution-lists subs subs_))
+
+          (when accessors
+            (tc-error "Ambiguous accessor"
+                      (tc-note (first accessors) "accessor is ambiguous")))
+
+          (let* ((expr-ty (tc:apply-substitution subs expr-ty))
+                 (env-tvars (tc-env-bindings-variables env bound-variables))
+                 (expr-tvars (remove-duplicates (tc:type-variables expr-ty) :test #'eq))
+                 (local-tvars (set-difference expr-tvars env-tvars :test #'eq))
+                 (weak-tvars
+                   (intersection
+                    (weak-binding-type-variables (list synthetic-binding)
+                                                 (list expr-ty)
+                                                 (tc-env-env env))
+                    local-tvars
+                    :test #'tc:ty=)))
+
+            (setf preds (tc:apply-substitution subs preds))
+
+            ;; Keep dynamic rebinding aligned with ordinary implicit bindings by
+            ;; reusing the same fundep, defaulting, and weak-variable handling.
+            (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
+            (setf preds (tc:apply-substitution subs preds))
+            (setf local-tvars
+                  (expand-local-tvars env-tvars
+                                      local-tvars
+                                      preds
+                                      (tc-env-env env)))
+            (setf env-tvars
+                  (expand-local-tvars local-tvars
+                                      (tc:type-variables
+                                       (tc:apply-substitution subs env-tvars))
+                                      preds
+                                      (tc-env-env env)))
+
+            (multiple-value-bind (deferred-preds retained-preds)
+                (tc:split-context (tc-env-env env) env-tvars preds subs)
+
+              (let* ((defaultable-preds
+                       (handler-case
+                           (tc:default-preds (tc-env-env env)
+                                             (append env-tvars local-tvars)
+                                             retained-preds)
+                         (tc:coalton-internal-type-error (e)
+                           (error-ambiguous-pred (tc:ambiguous-constraint-pred e)))))
+                     (retained-preds
+                       (set-difference retained-preds defaultable-preds :test #'eq))
+                     (restricted (not (parser:binding-function-p synthetic-binding))))
+
+                (setf subs (tc:compose-substitution-lists
+                            (tc:default-subs (tc-env-env env) nil defaultable-preds)
+                            subs))
+
+                (let ((coalton-impl/typechecker/context-reduction:*builder-class-cache* nil))
+                  (setf subs (tc:compose-substitution-lists
+                              (tc:default-builder-subs (tc-env-env env)
+                                                       nil
+                                                       (append deferred-preds retained-preds))
+                              subs))
+                  (setf subs (nth-value 1
+                                        (tc:solve-fundeps (tc-env-env env)
+                                                          (append deferred-preds retained-preds)
+                                                          subs)))
+                  (setf deferred-preds
+                        (tc:expand-defaulted-builder-preds
+                         (tc-env-env env)
+                         (tc:apply-substitution subs deferred-preds)))
+                  (setf retained-preds
+                        (tc:expand-defaulted-builder-preds
+                         (tc-env-env env)
+                         (tc:apply-substitution subs retained-preds))))
+
+                (setf deferred-preds (tc:reduce-context (tc-env-env env) deferred-preds nil))
+                (setf retained-preds (tc:reduce-context (tc-env-env env) retained-preds nil))
+                (setf expr-ty (tc:apply-substitution subs expr-ty))
+
+                (let* ((generalizable-candidates
+                         (remove-if-not
+                          #'tc:tyvar-p
+                          (tc:type-variables (tc:apply-substitution subs local-tvars))))
+                       (blocked-weak-tvars
+                         (intersection
+                          (blocked-weak-type-variables
+                           (remove-if-not #'tc:tyvar-p
+                                          (tc:apply-substitution subs weak-tvars))
+                           (list (tc:apply-substitution subs expr-ty))
+                           (tc:apply-substitution subs retained-preds)
+                           (tc-env-env env))
+                          generalizable-candidates
+                          :test #'tc:ty=))
+                       (generalizable-tvars
+                         (set-difference generalizable-candidates
+                                         blocked-weak-tvars
+                                         :test #'tc:ty=))
+                       (output-qual-type
+                         (if restricted
+                             (tc:apply-substitution
+                              subs
+                              (tc:make-qualified-ty :predicates nil :type expr-ty))
+                             (tc:apply-substitution
+                              subs
+                              (tc:make-qualified-ty :predicates retained-preds :type expr-ty))))
+                       (output-scheme
+                         (if restricted
+                             (tc:quantify
+                              (set-difference generalizable-tvars
+                                              (tc:type-variables retained-preds)
+                                              :test #'tc:ty=)
+                              output-qual-type)
+                             (tc:quantify generalizable-tvars output-qual-type)))
+                       (deferred-preds
+                         (if restricted
+                             (append deferred-preds retained-preds)
+                             deferred-preds))
+                       (declared-output-scheme
+                         (tc:apply-substitution subs declared-ty)))
+
+                  (unless (tc:ty-scheme= declared-output-scheme output-scheme)
+                    (tc-error "Dynamic binding does not preserve variable type"
+                              (tc-note name-node
+                                       "Dynamic variable ~S has type ~S, but this binding inferred ~S."
+                                       name
+                                       declared-output-scheme
+                                       output-scheme)))
+
+                  (values
+                   deferred-preds
+                   (make-node-dynamic-binding
+                    :name (make-node-variable
+                           :name name
+                           :type output-qual-type
+                           :location (source:location name-node))
+                    :value (node-let-binding-value (tc:apply-substitution subs binding-node))
+                    :location (source:location binding))
+                   subs))))))))))
+
 (defun check-for-invalid-recursive-scc (bindings env binding-function-p)
   "Validate one recursive SCC of bindings.
 
@@ -3759,17 +3975,18 @@ as a recursive function rather than a recursive value."
                         (type (or parser:toplevel-define parser:node-let-binding) binding)
                         (values tc:ty &optional))
                (let ((annotated-ty (binding-inline-annotation-type binding)))
-                 (if annotated-ty
-                     (progn
-                       ;; Recursive references must see the inline ascription, not a
-                       ;; placeholder result variable.
-                       (tc-env-add-definition env
-                                              name
-                                              (tc:make-ty-scheme
-                                               :kinds nil
-                                               :type (tc:qualify nil annotated-ty)))
-                       annotated-ty)
-                     (tc-env-add-variable env name)))))
+                 (cond
+                   (annotated-ty
+                    ;; Recursive references must see the inline ascription, not a
+                    ;; placeholder result variable.
+                    (tc-env-add-definition env
+                                           name
+                                           (tc:make-ty-scheme
+                                            :kinds nil
+                                            :type (tc:qualify nil annotated-ty)))
+                    annotated-ty)
+                   (t
+                    (tc-env-add-variable env name))))))
 
       (let* (;; track variables bound before typechecking
              (bound-variables (tc-env-bound-variables env))

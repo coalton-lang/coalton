@@ -548,6 +548,47 @@
   (is (none? (iter:next! (gh-975))))
   (is (none? (iter:next! (gh-976)))))
 
+(coalton-toplevel
+  (declare *dynamic-runtime-counter* Integer)
+  (define *dynamic-runtime-counter* 1)
+
+  (declare *dynamic-runtime-left* Integer)
+  (define *dynamic-runtime-left* 10)
+
+  (declare *dynamic-runtime-right* Integer)
+  (define *dynamic-runtime-right* 20)
+
+  (declare *dynamic-runtime-fn* (Integer -> Integer))
+  (define *dynamic-runtime-fn* (fn (x) x))
+
+  (define (dynamic-runtime-increment)
+    (dynamic-bind ((*dynamic-runtime-counter* (+ *dynamic-runtime-counter* 1)))
+      *dynamic-runtime-counter*))
+
+  (define (dynamic-runtime-short-let)
+    (let *dynamic-runtime-counter* = (+ *dynamic-runtime-counter* 1))
+    *dynamic-runtime-counter*)
+
+  (define (dynamic-runtime-counter)
+    *dynamic-runtime-counter*)
+
+  (define (dynamic-runtime-swap)
+    (dynamic-bind ((*dynamic-runtime-left* *dynamic-runtime-right*)
+                   (*dynamic-runtime-right* *dynamic-runtime-left*))
+      (Tuple *dynamic-runtime-left* *dynamic-runtime-right*)))
+
+  (define (dynamic-runtime-call n)
+    (dynamic-bind ((*dynamic-runtime-fn* (fn (x) (+ x 1))))
+      (*dynamic-runtime-fn* n))))
+
+(define-test test-dynamic-variables-runtime ()
+  (is (== 2 (dynamic-runtime-increment)))
+  (is (== 1 (dynamic-runtime-counter)))
+  (is (== 2 (dynamic-runtime-short-let)))
+  (is (== 1 (dynamic-runtime-counter)))
+  (is (== (Tuple 20 10) (dynamic-runtime-swap)))
+  (is (== 6 (dynamic-runtime-call 5))))
+
 (cl:defpackage #:tail-call-elimination-tests
   (:use #:coalton #:coalton-prelude)
   (:export

@@ -59,6 +59,16 @@
    #:node-let-p                         ; FUNCTION
    #:node-let-bindings                  ; READER
    #:node-let-subexpr                   ; READER
+   #:node-dynamic-binding               ; STRUCT
+   #:make-node-dynamic-binding          ; CONSTRUCTOR
+   #:node-dynamic-binding-name          ; READER
+   #:node-dynamic-binding-value         ; READER
+   #:node-dynamic-binding-list          ; TYPE
+   #:node-dynamic-let                   ; STRUCT
+   #:make-node-dynamic-let              ; CONSTRUCTOR
+   #:node-dynamic-let-p                 ; FUNCTION
+   #:node-dynamic-let-bindings          ; READER
+   #:node-dynamic-let-subexpr           ; READER
    #:node-lisp                          ; STRUCT
    #:make-node-lisp                     ; CONSTRUCTOR
    #:node-lisp-p                        ; FUNCTION
@@ -307,6 +317,26 @@ coalton symbols (`parser:identifier`)"
   "Introduction of local mutually-recursive bindings (let ((x 2)) (+ x x))"
   (bindings (util:required 'bindings) :type binding-list :read-only t)
   (subexpr  (util:required 'subexpr)  :type node         :read-only t))
+
+(defstruct node-dynamic-binding
+  "A special-variable binding used by dynamic-bind."
+  (name  (util:required 'name)  :type parser:identifier :read-only t)
+  (value (util:required 'value) :type node              :read-only t))
+
+(defmethod make-load-form ((self node-dynamic-binding) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun node-dynamic-binding-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'node-dynamic-binding-p x)))
+
+(deftype node-dynamic-binding-list ()
+  '(satisfies node-dynamic-binding-list-p))
+
+(defstruct (node-dynamic-let (:include node))
+  "A dynamic scope wrapper implemented with Common Lisp special bindings."
+  (bindings (util:required 'bindings) :type node-dynamic-binding-list :read-only t)
+  (subexpr  (util:required 'subexpr)  :type node                      :read-only t))
 
 (defstruct (node-lisp (:include node))
   "An embedded lisp form"

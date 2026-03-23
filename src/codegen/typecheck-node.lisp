@@ -191,6 +191,15 @@
       (tc:unify nil subexpr-ty (node-type expr))
       subexpr-ty))
 
+  (:method ((expr node-dynamic-let) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (loop :for binding :in (node-dynamic-let-bindings expr) :do
+      (typecheck-node (node-dynamic-binding-value binding) env))
+    (let ((subexpr-ty (typecheck-node (node-dynamic-let-subexpr expr) env)))
+      (tc:unify nil subexpr-ty (node-type expr))
+      subexpr-ty))
+
   (:method ((expr node-locally) env)
     (declare (type tc:environment env)
              (values tc:ty))

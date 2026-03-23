@@ -86,6 +86,7 @@
    #:resume-to
    #:resumable
    #:catch
+   #:dynamic-bind
    #:let
    #:rec
    #:=                                  ; Syntax

@@ -97,6 +97,9 @@
 (define-coalton-editor-macro coalton:catch (expr &body handler-patterns)
     "Exception handling expression.")
 
+(define-coalton-editor-macro coalton:dynamic-bind (bindings &body body)
+    "Dynamically rebind Coalton dynamic variables.")
+
 (define-coalton-editor-macro coalton:resumable (expr &body handler-patterns)
     "Resumption handling expression.")
 

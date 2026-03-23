@@ -346,6 +346,9 @@ propagate dictionaries that have been moved by the hoister."
                (unless name
                  (return-from validate-candidate nil))
 
+               (when (util:dynamic-variable-name-p name)
+                 (return-from validate-candidate nil))
+
                (let ((candidate
                        (valid-candidate-p
                         name
@@ -386,6 +389,9 @@ propagate dictionaries that have been moved by the hoister."
                    (rands (node-rands node)))
 
                (unless name
+                 (return-from apply-candidate nil))
+
+               (when (util:dynamic-variable-name-p name)
                  (return-from apply-candidate nil))
 
                (let ((candidate (valid-candidate-p

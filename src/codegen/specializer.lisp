@@ -29,6 +29,9 @@
                (unless rator-name
                  (return-from apply-specialization))
 
+               (when (util:dynamic-variable-name-p rator-name)
+                 (return-from apply-specialization))
+
                (let ((from-ty (tc:lookup-value-type env rator-name :no-error t)))
                  (unless from-ty
                    (return-from apply-specialization))

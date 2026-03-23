@@ -96,6 +96,15 @@
                         (setf (gethash name new-locals) t)))
                     (traverse (parser:node-let-body node) new-locals)))
 
+                 ;; Dynamic binding - initializers and body both see the same
+                 ;; lexical scope because dynamic bindings do not introduce
+                 ;; lexical variables.
+                 (parser:node-dynamic-let
+                  (dolist (binding (parser:node-dynamic-let-bindings node))
+                    (traverse (parser:node-dynamic-binding-value binding)
+                              local-bindings))
+                  (traverse (parser:node-dynamic-let-subexpr node) local-bindings))
+
                  ;; Lambda - parameters shadow
                  (parser:node-abstraction
                   (let ((new-locals (alexandria:copy-hash-table local-bindings)))

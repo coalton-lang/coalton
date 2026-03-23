@@ -1831,8 +1831,8 @@ consume all attributes")))
                        "unexpected form")))
 
   (make-toplevel-specialize
-   :from (parse-variable (cst:second form) source)
-   :to (parse-variable (cst:third form) source)
+   :from (parse-ordinary-variable (cst:second form) source)
+   :to (parse-ordinary-variable (cst:third form) source)
    :type (parse-type (cst:fourth form) source)
    :location (form-location source form)))
 
@@ -1890,7 +1890,7 @@ consume all attributes")))
 
       (make-method-definition
        :name (make-identifier-src
-              :name (node-variable-name (parse-variable (cst:first method-form) source))
+              :name (node-variable-name (parse-ordinary-variable (cst:first method-form) source))
               :source-name (source:extract-source-text source (cst:source (cst:first method-form)))
               :location (form-location source (cst:first method-form)))
        :docstring docstring
@@ -1975,7 +1975,7 @@ consume all attributes")))
   (multiple-value-bind (params keyword-params)
       (parse-fn-argument-list (cst:rest form) source)
     (values
-     (parse-variable (cst:first form) source)
+     (parse-ordinary-variable (cst:first form) source)
      params
      keyword-params
      t)))
@@ -2057,6 +2057,11 @@ consume all attributes")))
 
     (multiple-value-bind (name params keyword-params function-syntax-p)
         (parse-argument-list (cst:second form) source)
+      (when (util:dynamic-variable-name-p (node-variable-name name))
+        (parse-error "Malformed method definition"
+                     (note source (cst:second form)
+                           "method names cannot use dynamic-variable earmuffs")
+                     context-note))
 
       (make-instance-method-definition
        :name name

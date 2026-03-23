@@ -1,0 +1,111 @@
+================================================================================
+1 Parse dynamic binding
+================================================================================
+
+(package coalton-unit-tests)
+
+(declare *x* Integer)
+(define *x* 0)
+
+(define y
+  (dynamic-bind ((*x* 1))
+    *x*))
+
+================================================================================
+2 Parse shorthand dynamic let in body
+================================================================================
+
+(package coalton-unit-tests)
+
+(declare *x* Integer)
+(define *x* 0)
+
+(define y
+  (let *x* = 1)
+  *x*)
+
+================================================================================
+3 Parse shorthand dynamic let in do
+================================================================================
+
+(package coalton-unit-tests/prelude
+  (import coalton-prelude))
+
+(declare *x* Integer)
+(define *x* 0)
+
+(declare y (Optional Integer))
+(define y
+  (do
+    (let *x* = 1)
+    (pure *x*)))
+
+================================================================================
+100 Ordinary lexical binder cannot use earmuffs
+================================================================================
+
+(package test-package)
+
+(define y
+  (let ((*x* 1))
+    *x*))
+
+--------------------------------------------------------------------------------
+
+error: Invalid variable
+  --> test:4:9
+   |
+ 4 |    (let ((*x* 1))
+   |           ^^^ ordinary variables cannot use dynamic-variable earmuffs
+
+================================================================================
+101 Function-syntax dynamic name is invalid
+================================================================================
+
+(package test-package)
+
+(define (*x* y) y)
+
+--------------------------------------------------------------------------------
+
+error: Invalid variable
+  --> test:3:9
+   |
+ 3 |  (define (*x* y) y)
+   |           ^^^ ordinary variables cannot use dynamic-variable earmuffs
+
+================================================================================
+102 Dynamic binding target must use earmuffs
+================================================================================
+
+(package test-package)
+
+(define y
+  (dynamic-bind ((x 1))
+    x))
+
+--------------------------------------------------------------------------------
+
+error: Invalid dynamic variable
+  --> test:4:18
+   |
+ 4 |    (dynamic-bind ((x 1))
+   |                    ^ dynamic variables must begin and end with '*' and contain at least one non-'*' character
+
+================================================================================
+103 Pattern variables cannot use earmuffs
+================================================================================
+
+(package test-package)
+
+(define y
+  (match 1
+    (*x* *x*)))
+
+--------------------------------------------------------------------------------
+
+error: Invalid pattern
+  --> test:5:5
+   |
+ 5 |      (*x* *x*)))
+   |       ^^^ pattern variables cannot use dynamic-variable earmuffs
