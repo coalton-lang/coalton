@@ -156,3 +156,6 @@
 
 (define-coalton-editor-macro coalton:continue (&optional label)
   "Skip the rest of the current `for` iteration and start the next one. If LABEL is provided, continues the `for` with that label. In the imperative `for` form, `continue` still performs the step phase before the next iteration.")
+
+(define-coalton-editor-macro coalton:type-of (expr)
+  "Return the inferred type scheme of `expr`, which can be displayed with `show`.")
