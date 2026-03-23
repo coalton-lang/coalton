@@ -260,7 +260,8 @@
                             (with-open-stream (stream (source:source-stream source))
                               (tc:parse-ty-scheme
                                (parser:parse-qualified-type
-                                (eclector.concrete-syntax-tree:read stream)
+                                (parser:with-reader-context stream
+                                  (eclector.concrete-syntax-tree:read stream))
                                 source)
                                env)))))
                    (is (tc:ty-scheme=

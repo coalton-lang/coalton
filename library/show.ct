@@ -156,9 +156,9 @@ This is not necessarily identical to `(the String (into x))`."
   (define-instance (Show types:TypeScheme)
     (define (show-to f x)
       (f (lisp (-> String) (x)
-           (cl:with-standard-io-syntax
-             (cl:let ((cl:*print-readably* cl:nil))
-               (cl:prin1-to-string x))))))))
+           (coalton-impl/typechecker/type-string:type-to-string
+            x
+            coalton-impl/entry:*global-environment*))))))
 
 (define-show-instance "Integer")
 (define-show-instance "UFix")

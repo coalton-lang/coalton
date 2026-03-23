@@ -15,7 +15,9 @@
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
    (#:source #:coalton-impl/source)
-   (#:tc #:coalton-impl/typechecker/stage-1))
+   (#:settings #:coalton-impl/settings)
+   (#:tc #:coalton-impl/typechecker/stage-1)
+   (#:type-string #:coalton-impl/typechecker/type-string))
   (:export
    #:apply-type-alias-substitutions     ; FUNCTION
    #:parse-type                         ; FUNCTION
@@ -27,6 +29,10 @@
    ))
 
 (in-package #:coalton-impl/typechecker/parse-type)
+
+(defun type-object-string (object env)
+  (let ((settings:*coalton-print-unicode* nil))
+    (type-string:type-to-string object env)))
 
 (defun normalize-keyword-input-types (entries)
   (declare (type list entries)
@@ -374,12 +380,15 @@ being assembled."
       (tc-error
        "Invalid qualified type"
        (tc-note qual-ty
-                "The type variable~p ~{~S~^ ~} ~[~;is~:;are~] ~
-                 ambiguous in the type ~S"
+                "The type variable~p ~{~A~^ ~} ~[~;is~:;are~] ~
+                 ambiguous in the type ~A"
                 (length ambiguous-vars)
-                ambiguous-vars
+                (mapcar (lambda (var)
+                          (type-object-string var env))
+                        ambiguous-vars)
                 (length ambiguous-vars)
-                (tc:make-qualified-ty :predicates preds :type type))))))
+                (type-object-string (tc:make-qualified-ty :predicates preds :type type)
+                                    env))))))
 
 (defun check-for-reducible-by-fundeps (preds ty unparsed-ty env)
   "This check is used to ensure that PREDs cannot be reduced by instance
@@ -414,21 +423,22 @@ the substitution :b +-> T can be inferred.
            (tc-note
             unparsed-ty
             (with-pprint-variable-context ()
-              (format nil "the substitution~p ~{~S +-> ~S~^, ~} ~[~;is~:;are~] ~
-                           determined for ~S by functional dependencies."
+              (format nil "the substitution~p ~{~A +-> ~A~^, ~} ~[~;is~:;are~] ~
+                           determined for ~A by functional dependencies."
                       (length subs)
                       (loop :for sub :in subs
-                            :collect (tc:substitution-from sub)
-                            :collect (tc:substitution-to sub))
+                            :collect (type-object-string (tc:substitution-from sub) env)
+                            :collect (type-object-string (tc:substitution-to sub) env))
                       (length subs)
-                      (tc:make-qualified-ty :predicates preds :type ty)))))))
+                      (type-object-string (tc:make-qualified-ty :predicates preds :type ty)
+                                          env)))))))
     (tc:context-fundep-conflict (e)
       (tc-error
        "Context conflicts with functional dependencies"
        (tc-note unparsed-ty
-                "the predicates ~S and ~S conflict with functional dependencies"
-                (tc:context-fundep-conflict-first-pred e)
-                (tc:context-fundep-conflict-second-pred e))))))
+                "the predicates ~A and ~A conflict with functional dependencies"
+                (type-object-string (tc:context-fundep-conflict-first-pred e) env)
+                (type-object-string (tc:context-fundep-conflict-second-pred e) env))))))
 
 (defun check-for-reducible-context (preds ty qual-ty env)
   (declare (type tc:ty-predicate-list preds)
@@ -445,8 +455,9 @@ the substitution :b +-> T can be inferred.
         (if (null reduced-preds)
             "declared predicates are redundant"
             (with-pprint-variable-context ()
-              (format nil "qualified type can be reduced to ~S"
-                      (tc:make-qualified-ty :predicates reduced-preds :type ty)))))))))
+              (format nil "qualified type can be reduced to ~A"
+                      (type-object-string (tc:make-qualified-ty :predicates reduced-preds :type ty)
+                                          env)))))))))
 
 ;;;
 ;;; Kind Inference

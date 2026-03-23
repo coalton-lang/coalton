@@ -153,7 +153,7 @@ error: Type mismatch
  ...
  8 | |     (let y = 2)
  9 | |     (+ x y)))
-   | |_____________^ Expected type '(:A -> :B)' but got '(Void -> :A)'
+   | |_____________^ Expected type ':A -> :B' but got 'Void -> :A'
 
 ================================================================================
 15 Parse expression

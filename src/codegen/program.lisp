@@ -310,7 +310,9 @@ Example:
          (let* ((name (car binding))
                 (type (tc:lookup-value-type env name :no-error t)))
            (unless (null type)
-             (format t "~&;; ~a :: ~a~%" name type)))))
+             (format t "~&;; ~a :: ~a~%"
+                     name
+                     (tc:type-to-string type env))))))
 
      ;; Docstrings
      (loop :for (name . node) :in bindings

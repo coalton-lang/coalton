@@ -470,7 +470,7 @@ error: Instance missing context
    |  _^
  5 | |   (A String)
  6 | |   (B String))
-   | |_____________^ No instance for COALTON/CLASSES:EQ HASHABLESTRUCT
+   | |_____________^ No instance for Eq HashableStruct
 
 ================================================================================
 122 Derive Hash with Eq

@@ -114,15 +114,15 @@
 
 (define-test test-type-of-shows-constrained-polymorphic-types ()
   (is (== type-of-literal-string
-          "∀ :A. COALTON/CLASSES:NUM :A ⇒ :A")))
+          "∀ :A. Num :A ⇒ :A")))
 
 (define-test test-type-of-does-not-evaluate-its-expression ()
   (is (== type-of-erroring-expression-string
-          "COALTON:INTEGER")))
+          "Integer")))
 
 (define-test test-type-of-shows-keyword-function-types ()
   (is (== type-of-keyword-function-string
-          "∀ :A. COALTON/CLASSES:NUM :A ⇒ (:A * :A &key (:z :A) → :A)")))
+          "∀ :A. Num :A ⇒ :A * :A &key (:z :A) → :A")))
 
 (define-test test-type-of-shows-local-type-variables ()
   (is (== (type-of-local-variable-string True)
