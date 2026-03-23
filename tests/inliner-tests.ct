@@ -332,6 +332,53 @@
 
 (in-package #:coalton-tests)
 
+(defun compile-test-program (toplevel-string)
+  (let* ((package-name (format nil "COALTON-INLINE-EMIT-~A" (gensym))))
+    (let ((*package* (make-package package-name
+                                   :use '("COALTON" "COALTON-PRELUDE"))))
+      (unwind-protect
+           (let ((source (source:make-source-string toplevel-string :name package-name)))
+             (with-open-stream (stream (source:source-stream source))
+               (parser:with-reader-context stream
+                 (nth-value 0
+                            (entry:entry-point
+                             (parser:read-program stream source))))))
+        (delete-package *package*)))))
+
+(defun compiled-program-locally-forms (toplevel-string)
+  (let* ((program (compile-test-program toplevel-string))
+         (locally-form (find-if (lambda (form)
+                                  (and (consp form)
+                                       (eq 'locally (car form))))
+                                (rest program))))
+    (is locally-form)
+    (rest locally-form)))
+
+(defun compiled-defun (forms name)
+  (find-if (lambda (form)
+             (and (consp form)
+                  (eq 'defun (car form))
+                  (string= name (symbol-name (second form)))))
+           forms))
+
+(defun declaim-declaration-names (forms declaration-name)
+  (loop :for form :in forms
+        :when (and (consp form)
+                   (eq 'declaim (car form)))
+          :append (loop :for declaration :in (rest form)
+                        :when (and (consp declaration)
+                                   (eq declaration-name (car declaration)))
+                          :collect (mapcar #'symbol-name (rest declaration)))))
+
+(defun defun-declaration-names (defun-form declaration-name)
+  (loop :for form :in (cdddr defun-form)
+        :while (and (consp form)
+                    (eq 'declare (car form)))
+        :append (loop :for declaration :in (rest form)
+                      :when (and (consp declaration)
+                                 (eq declaration-name (car declaration)))
+                        :collect (mapcar #'symbol-name (rest declaration)))))
+
 ;; See gh #1293
 (deftest test-inliner-rename-bound-variables ()
   (check-coalton-types
@@ -381,6 +428,34 @@
                (ast:node-abstraction-subexpr
                 (coalton:lookup-code
                  'coalton-native-tests::same-tu-inline-double-float-add-caller)))))))
+
+(deftest emitted-inline-defuns-use-local-notinline-for-recursive-sccs ()
+  (let* ((forms (compiled-program-locally-forms
+                 "(declare f (Integer -> Integer))
+                  (declare g (Integer -> Integer))
+                  (inline)
+                  (define (f n) (g n))
+                  (inline)
+                  (define (g n) (f n))"))
+         (f-defun (compiled-defun forms "F"))
+         (g-defun (compiled-defun forms "G")))
+    (is f-defun)
+    (is g-defun)
+    (is (null (declaim-declaration-names forms 'notinline)))
+    (is (equal '(("F" "G"))
+               (defun-declaration-names f-defun 'notinline)))
+    (is (equal '(("F" "G"))
+               (defun-declaration-names g-defun 'notinline)))))
+
+(deftest emitted-inline-method-wrappers-do-not-reset-notinline-globally ()
+  (let ((forms (compiled-program-locally-forms
+                "(define-class (C :a)
+                   (m (:a -> :a)))
+                 (define-instance (C Integer)
+                   (inline)
+                   (define (m x)
+                     x))")))
+    (is (null (declaim-declaration-names forms 'notinline)))))
 
 (deftest method-inline-code ()
   (is (equal '((cl:+ coalton-native-tests::x coalton-native-tests::y))
