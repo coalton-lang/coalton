@@ -131,18 +131,20 @@ This is not necessarily identical to `(the String (into x))`."
 
   (define-instance (Show :a => Show (List :a))
     (define (show-to f x)
-      (match x
-        ((Nil)
-         (f "()"))
-        ((Cons y ys)
-         (f "(")
-         (show-to f y)
-         (rec % ((items ys))
-           (match items
-             ((Nil) (f ")"))
-             ((Cons z zs)
-             (show-to f z)
-              (% zs))))))))
+      (f "#<List [")
+      (rec % ((items x))
+        (match items
+          ((Nil)
+           (values))
+          ((Cons y ys)
+           (show-to f y)
+           (match ys
+             ((Nil)
+              (values))
+             (_
+              (f " ")
+              (% ys))))))
+      (f "]>")))
 
   (define-instance (Show (types:Proxy :a))
     (define (show-to f _)

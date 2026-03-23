@@ -5,7 +5,7 @@
 (package coalton-unit-tests)
 
 (define (f)
-  (loop
+  (for ()
     (continue)))
 
 ================================================================================
@@ -15,32 +15,20 @@
 (package coalton-unit-tests)
 
 (define (f)
-  (for x in "hello"
-       (continue)))
-
-================================================================================
-Parse continue
-================================================================================
-
-(package coalton-unit-tests)
-
-(define (f)
-  (while true
+  (for ()
+    (let _x = True)
     (continue)))
 
 ================================================================================
 Parse continue
 ================================================================================
 
-(package coalton-unit-tests/parse-continue
-  (import coalton-prelude
-          (coalton/iterator as iter)))
+(package coalton-unit-tests)
 
 (define (f)
-  (let ((iter (iter:up-to 10)))
-    (while-let
-     (Some n) = (iter:next! iter)
-     (continue))))
+  (for ()
+    :while True
+    (continue)))
 
 ================================================================================
 Parse continue
@@ -49,7 +37,9 @@ Parse continue
 (package coalton-unit-tests)
 
 (define (f)
-  (loop :alabel (continue)))
+  (for ()
+    (let _x = 1)
+    (continue)))
 
 ================================================================================
 Parse continue
@@ -58,8 +48,8 @@ Parse continue
 (package coalton-unit-tests)
 
 (define (f)
-  (loop :alabel
-        (continue :alabel)))
+  (for :alabel ()
+    (continue)))
 
 ================================================================================
 Parse continue
@@ -68,9 +58,19 @@ Parse continue
 (package coalton-unit-tests)
 
 (define (f)
-  (while :somelabel true
-    (loop :anotherlabel
-          (continue :somelabel))))
+  (for :alabel ()
+    (continue :alabel)))
+
+================================================================================
+Parse continue
+================================================================================
+
+(package coalton-unit-tests)
+
+(define (f)
+  (for :somelabel ()
+    (for :anotherlabel ()
+      (continue :somelabel))))
 
 ================================================================================
 Invalid continue
@@ -86,7 +86,7 @@ error: Invalid continue
   --> test:3:10
    |
  3 |  (define f (continue))
-   |            ^^^^^^^^^^ continue does not appear in an enclosing loop
+   |            ^^^^^^^^^^ continue does not appear in an enclosing for
 
 ================================================================================
 Invalid argument in continue
@@ -95,7 +95,7 @@ Invalid argument in continue
 (package test-parser)
 
 (define f
-  (loop :foo        
+  (for :foo ()
     (continue notakeyword)))
 
 --------------------------------------------------------------------------------
@@ -113,7 +113,7 @@ Invalid label in continue
 (package test-parser)
 
 (define f
-  (loop :foo        
+  (for :foo ()
     (continue :not-foo)))
 
 --------------------------------------------------------------------------------
@@ -122,7 +122,7 @@ error: Invalid label in continue
   --> test:5:14
    |
  5 |      (continue :not-foo)))
-   |                ^^^^^^^^ label not found in any enclosing loop
+   |                ^^^^^^^^ label not found in any enclosing for
 
 ================================================================================
 Invalid continue
@@ -131,7 +131,7 @@ Invalid continue
 (package test-parser)
 
 (define f
-  (loop
+  (for ()
     (let ((continuer (fn () (continue))))
       (continuer))))
 
@@ -141,7 +141,7 @@ error: Invalid continue
   --> test:5:28
    |
  5 |      (let ((continuer (fn () (continue))))
-   |                              ^^^^^^^^^^ continue does not appear in an enclosing loop
+   |                              ^^^^^^^^^^ continue does not appear in an enclosing for
 
 ================================================================================
 Invalid label in continue
@@ -150,15 +150,15 @@ Invalid label in continue
 (package test-parser)
 
 (define f
-  (loop :blech
-        (let ((continuer (fn () (continue :blech))))
-          (continuer))))
+  (for :blech ()
+    (let ((continuer (fn () (continue :blech))))
+      (continuer))))
 
 
 --------------------------------------------------------------------------------
 
 error: Invalid label in continue
-  --> test:5:42
+  --> test:5:38
    |
- 5 |          (let ((continuer (fn () (continue :blech))))
-   |                                            ^^^^^^ label not found in any enclosing loop
+ 5 |      (let ((continuer (fn () (continue :blech))))
+   |                                        ^^^^^^ label not found in any enclosing for

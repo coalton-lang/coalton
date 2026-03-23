@@ -34,43 +34,51 @@
   (declare numerator (Fraction -> Integer))
   (define (numerator q)
     "The numerator of a fraction."
-    (lisp (-> Integer) (q)
-      (cl:numerator q)))
+    (coalton++:unsafe
+      (lisp (-> Integer) (q)
+        (cl:numerator q))))
 
   (declare denominator (Fraction -> Integer))
   (define (denominator q)
     "The denominator of a fraction."
-    (lisp (-> Integer) (q)
-      (cl:denominator q)))
+    (coalton++:unsafe
+      (lisp (-> Integer) (q)
+        (cl:denominator q))))
 
   (define-instance (Eq Fraction)
     (define (== a b)
-      (lisp (-> Boolean) (a b)
-        (cl:= a b))))
+      (coalton++:unsafe
+        (lisp (-> Boolean) (a b)
+          (cl:= a b)))))
 
   (define-instance (Ord Fraction)
     (define (<=> a b)
-      (lisp (-> Ord) (a b)
-        (cl:cond
-          ((cl:< a b)
-           LT)
-          ((cl:> a b)
-           GT)
-          (cl:t
-           EQ)))))
+      (coalton++:unsafe
+        (lisp (-> Ord) (a b)
+          (cl:cond
+            ((cl:< a b)
+             LT)
+            ((cl:> a b)
+             GT)
+            (cl:t
+             EQ))))))
 
   (define-instance (Num Fraction)
     (define (+ p q)
-      (lisp (-> Fraction) (p q)
-        (cl:+ p q)))
+      (coalton++:unsafe
+        (lisp (-> Fraction) (p q)
+          (cl:+ p q))))
     (define (- p q)
-      (lisp (-> Fraction) (p q)
-        (cl:- p q)))
+      (coalton++:unsafe
+        (lisp (-> Fraction) (p q)
+          (cl:- p q))))
     (define (* p q)
-      (lisp (-> Fraction) (p q)
-        (cl:* p q)))
+      (coalton++:unsafe
+        (lisp (-> Fraction) (p q)
+          (cl:* p q))))
     (define (fromInt z)
-      (lisp (-> Fraction) (z) z)))
+      (coalton++:unsafe
+        (lisp (-> Fraction) (z) z))))
 
   (define-instance (Reciprocable Fraction)
     (define (/ a b)
@@ -90,8 +98,9 @@
     `(coalton-toplevel
        (define-instance (Into ,integer-type Fraction)
          (define (into i)
-           (lisp (-> Fraction) (i)
-             i))))))
+           (coalton++:unsafe
+             (lisp (-> Fraction) (i)
+               i)))))))
 
 (define-into-integer-fraction Integer)
 (define-into-integer-fraction I8)

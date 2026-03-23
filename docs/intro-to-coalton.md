@@ -84,6 +84,53 @@ After creating your package `#:my-package`, you must switch to it with:
 
 The `named-readtables:in-readtable` form is optional but encouraged. Using Coalton's reader allows compiler errors to accurately refer to source code and provide correct line numbers.
 
+### `.ct` Files and ASDF
+
+Coalton code is often written in ordinary `.lisp` files, but Coalton also
+supports `.ct` files in ASDF definitions. A `.ct` file is still a Lisp source
+file: it contains ordinary Lisp forms such as `in-package`,
+`coalton-toplevel`, and `coalton`. Unlike an ordinary `.lisp` file, a `.ct`
+file is already read in Coalton's readtable, so it does not need an explicit
+`named-readtables:in-readtable` form. The main role of the `.ct` file is to
+easily distinguish code that is primarily Coalton code in a project, and to
+make using Coalton a little more ergonomic in such files.
+
+To use `.ct` files in an ASDF system, add `coalton-asdf` to
+`:defsystem-depends-on`, then use `:ct-file` in the component list:
+
+```lisp
+(asdf:defsystem "my-project"
+  :depends-on ("coalton")
+  :defsystem-depends-on ("coalton-asdf")
+  :components ((:file "lisp-functions")
+               (:ct-file "core")
+               (:ct-file "algorithms")))
+```
+
+For example, a preceding Lisp file can define helper functions that `core.ct`
+uses:
+
+```lisp
+;;; lisp-functions.lisp
+(cl:in-package #:my-package)
+
+(cl:defun native-add1 (x)
+  (cl:1+ x))
+```
+
+```lisp
+;;; core.ct
+(in-package #:my-package)
+
+(coalton-toplevel
+  (define (add1-through-lisp n)
+    (lisp (-> Integer) (n)
+      (native-add1 n)))))
+```
+
+In other words, `:ct-file` is an ASDF convenience for Coalton-style Lisp source.
+It does not introduce a separate surface language.
+
 The first primary entry points for Coalton code. Definitions and the like sit in a toplevel-form called `coalton-toplevel`.
 
 ```lisp
@@ -672,118 +719,153 @@ Now it works without any type declarations on use:
 
 ### Built-In Looping Constructs
 
-Coalton supports infinite looping, conditional looping, and `for`-loop styled iteration. 
+Coalton supports imperative looping, conditional looping, and pattern-based iteration.
 
-#### `loop`, `while`, `while-let`, and `for`
+#### `for`
 
-You can loop forever 
+The built-in imperative `for` form has the following shape:
 
 ```lisp
-(loop (trace "hi"))
+(for [label] (<binding-clause>*)
+  [:returns expr]
+  [(:while | :until | :repeat) expr]
+  body...)
+
+;; <binding-clause> := (declare var Type)
+;;                   | (var init-expr [step-expr])
 ```
 
-You can loop while some condition is true
+The binding list is required, but it may be empty: `()`. Initializers are evaluated
+once before the first iteration, and the initializer binding group follows the
+same scoping rules as `let`. Step expressions are evaluated after each completed
+iteration, simultaneously, using the pre-step bindings from that iteration. If
+no termination clause is present, the iteration is infinite unless exited by
+`break`.
+
+You can iterate forever:
+
+```lisp
+(for ()
+  (show "hi"))
+```
+
+You can also use `for` as a counted or state-threading loop:
+
+```lisp
+(coalton
+ (for ((declare i UFix)
+       (declare acc UFix)
+       (i 0 (1+ i))
+       (acc 0 (+ acc i)))
+   :returns acc
+   :repeat 10
+   (when (even? i)
+     (continue))
+   (show i)))
+```
+
+If a `:returns` clause is present, that expression is evaluated once when the `for` exits
+normally or via `break`. If `:returns` is absent, the `for` produces no values.
+
+You can use a `:while` clause when you only need a condition and a body:
 
 ```lisp
 (coalton
  (let ((counter (cell:new 0))
        (limit 10))
-   (while (< (cell:read counter) limit)
-     (trace "hi") 
+   (for ()
+     :while (< (cell:read counter) limit)
+     (show "hi")
      (cell:increment! counter))))
 ```
 
-You can loop so long as a pattern matches 
+You can also combine `for` with `match` and `break` when iteration depends on a
+pattern match:
 
 ```lisp
 (coalton
  (let ((xs (vector:make 4 3 2 1)))
-   (while-let (Some x) = (vector:pop! xs)
-              (traceobject "x" x))))
+   (for ()
+     (match (vector:pop! xs)
+       ((Some x) (show x))
+       ((None) (break))))))
 ```
-
-You can loop over instances of `IntoIterator`
-
-```lisp
-(coalton
- (for x in "coalton"
-      (traceobject "x" x)))
-```
-
 
 #### `break` and `continue`
 
-Each of the above looping forms supports `break` and `continue`.
+The imperative `for` form supports `break` and `continue`.
 
 The `break` form immediately terminates iteration.  The following
-prints out `c`, `o`, and `a` and then terminates.
+prints out `0`, `1`, and `2` and then terminates.
 
 ```lisp
 (coalton
- (for x in "coalton"
-      (when (== x #\l)
-        (break))
-      (traceobject "x" x)))
+ (let counter = (cell:new 0))
+ (for ()
+   (when (== 3 (cell:read counter))
+     (break))
+   (show (cell:read counter))
+   (cell:increment! counter)))
 ```
 
-The `continue` form skips the remainder of the loop's body and starts
-on its next iteration. The following prints out `c`, `o`, `a`, `t`,
-`o`, and `n`, having skipped the printing of `l`.
+The `continue` form skips the remainder of the `for` body and starts
+on its next iteration. The following prints out `1`, `3`, and `5`,
+having skipped the even values.
 
 ```lisp
 (coalton
- (for x in "coalton"
-      (when (== x #\l)
-        (continue))
-      (traceobject "x" x)))
+ (let counter = (cell:new 0))
+ (for ()
+   (when (== 6 (cell:read counter))
+     (break))
+   (let n = (cell:read counter))
+   (cell:increment! counter)
+   (when (== 0 (mod n 2))
+     (continue))
+   (show n)))
 ```
 
+For the imperative `for` form specifically, `continue` still performs the
+step phase before the next iteration, while `break` skips the current iteration's
+step phase.
 
-#### Loop Labels
 
-Each of the above looping forms takes an optional loop label
-keyword. These labels can be used in conjunction with `break` and
-`continue` to achieve complex control flow.
+#### For Labels
 
-For each of the looping forms, a label may immediately follow the
-opening term of the loop:
+The `for` form takes an optional label keyword. These labels
+can be used in conjunction with `break` and `continue` to achieve
+complex control flow.
+
+A label may immediately follow `for`:
 
 ```lisp 
 
-(loop :outer (do-stuff))
+(for :outer () (do-stuff))
 
-(while :a-label (is-true?) (do-stuff))
-
-(while-let :another-label 
-   (Some thing) = (get-something)
-   (do-stuff thing))
-
-(for :iter word in words 
-   (do-stuff-with word))
+(for :another-label ()
+  :while (is-true?)
+  (do-stuff))
 
 ```
 
-In the following entirely artificial example, the outermost loop is
+In the following entirely artificial example, the outermost `for` is
 labeled `:outer`. This label is passed to `break` from inside the
-inner `while` loop to terminate iteration whenever the sum of the
-accumulator and the counter exceeds 500.  Without the `:outer` label,
-`break` would have only broken out of the inner `while` loop.
+inner `for` to terminate iteration whenever the sum of `x` and `y`
+exceeds 500. Without the `:outer` label, `break` would have only
+broken out of the inner `for`.
 
 ```lisp
 (coalton 
-  (let ((counter (cell:new 0))
-        (acc (cell:new Nil)))
-    (loop :outer
-          (while (< (cell:increment! counter) 10)
-            (let x = (fold + (cell:read counter) (cell:read acc)))
-            (when (< 500 x)
-              (break :outer))
-            (when (== 0 (mod (cell:read counter) 3)) 
-              (continue))
-            (cell:push! acc x))
-          (when (< (length (cell:read acc)) 500)
-            (cell:swap! counter 0)
-            Unit))
+  (let ((acc (cell:new Nil)))
+    (for :outer ((x 0 (+ x 10)))
+      (for ((y 0 (1+ y)))
+        :while (< y 10)
+        (let total = (+ x y))
+        (when (< 500 total)
+          (break :outer))
+        (when (== 0 (mod y 3))
+          (continue))
+        (cell:push! acc total)))
     (cell:read acc)))
 ```
 
@@ -979,6 +1061,135 @@ Lists can also be deconstructed with `match`.
       ((Nil) "is empty"))))
 ```
 
+## Collection and Association Builder Syntax
+
+When the Coalton reader is active, square brackets can be used as collection and
+association builders.
+
+```lisp
+(coalton-toplevel
+  (define xs [1 2 3])
+
+  (define empty-xs
+    (the (List Integer) []))
+
+  (define pairs
+    ["x" => 1
+     "y" => 2])
+
+  (define empty-pairs
+    (the (Seq (Tuple String Integer))
+         [=>])))
+```
+
+`[a b c]` is a collection builder. `[]` is an empty collection builder. `[=>]`
+is an empty association builder. Any other bracket form containing `=>` is an
+association builder.
+
+Collection builders must be homogeneous: all elements must have the same type.
+Association builders are homogeneous in both their keys and their values: all
+keys must have the same type, and all values must have the same type.
+
+When no concrete result type is specified, collection builders default to
+`Seq`, and association builders default to
+`Seq (Tuple :key :value)`.
+
+In practice, `the` is often the clearest way to ascertain the intended result
+type. This is especially useful for empty builders like `[]` and `[=>]`, since
+those forms do not determine their element, key, or value types on their own.
+It is also the way to request a specific target collection type.
+This is of course unnecessary if the object is inferred to be the desired type.
+
+```lisp
+(coalton-toplevel
+  (define empty-xs
+    (the (List Integer) []))
+
+  (define empty-pairs
+    (the (Seq (Tuple String Integer)) [=>]))
+
+  (define xs
+    (the (List Integer) [1 2 3]))
+
+  (define ys
+    (the (Vector Integer) [1 2 3])))
+```
+
+The same bracket syntax also supports comprehensions:
+
+```lisp
+(coalton-toplevel
+  (define evens
+    [x
+     :for x :below 10
+     :when (even? x)])
+
+  (define scaled
+    [y
+     :for x :below 5
+     :with y = (* x 10)
+     :when (even? x)])
+
+  (define first-ten
+    [x
+     :for x :below 10])
+
+  (define squares
+    [x => (* x x)
+     :for x :below 5]))
+```
+
+Collection comprehensions default to `Seq`, and association comprehensions
+default to `Seq (Tuple :key :value)` in the same way as itemized builders. As
+with `[]` and `[=>]`, `the` can be used whenever you want to ascertain a more
+specific result type.
+
+### Extending Builder Syntax to User-Defined Types
+
+Builder syntax is open to user-defined types through four type classes:
+
+- `FromItemizedCollection` for `[a b c]`
+- `FromItemizedAssociation` for `[k => v ...]`
+- `FromCollectionComprehension` for `[expr :for ...]`
+- `FromAssociationComprehension` for `[key => value :for ...]`
+
+The itemized classes are for inputs whose elements or entries are explicitly and
+finitely itemized in source. They receive the exact number of source items up
+front, and the exact zero-based source index of each item as it is added. The
+comprehension classes are stream-oriented: they receive an advisory initial size
+hint, then each emitted element or entry, and finally convert their builder
+state to the target collection.
+
+Here is a simple collection-builder instance for a user-defined wrapper around
+`List`. The builder state is just a temporary list, which is reversed once at
+the end.
+
+```lisp
+(coalton-toplevel
+  (define-type (Bag :a)
+    (Bag (List :a)))
+
+  (define-instance (FromItemizedCollection (Bag :a) :a (List :a))
+    (define (begin-collection-builder _ _)
+      Nil)
+    (define (adjoin-to-collection-builder _ builder _ item)
+      (Cons item builder))
+    (define (finalize-collection-builder _ builder)
+      (Bag (reverse builder))))
+
+  (define bag
+    (the (Bag Integer) [1 2 3])))
+```
+
+The first ignored argument is a `types:Proxy` for the target collection type,
+and the third type parameter of `FromItemizedCollection` is the intermediate
+builder state. In this example the final collection is `Bag :a`, but the
+builder state is just `List :a`.
+
+To support comprehensions as well, define a corresponding
+`FromCollectionComprehension` instance. Association syntax works the same way,
+using `FromItemizedAssociation` and `FromAssociationComprehension`.
+
 ## Static Typing
 
 Coalton code is statically type checked. Types are inferred.
@@ -1099,7 +1310,7 @@ The `the`-`into` pattern is so common that Coalton provides a shorthand called `
 ;; ==> (#\m #\s #\p #\i)
 ```
 
-The `into` method is used only when a conversion can always be performed from one type to another. If not values of a type can be converted, then another type class `TryInto` with a method `tryInto` is used. The `tryinto` method returns a `Result` type which indicates whether the conversion was successful or not. 
+The `into` method is used only when a conversion can always be performed from one type to another. If not values of a type can be converted, then another type class `TryInto` with a method `tryInto` is used. The `tryinto` method returns an `Optional` type, yielding `Some` on success and `None` on failure.
 
 **Note that `as` only works for conversions via `into`, i.e., conversions that are total.** There is no corresponding syntax for `tryInto`.
 
@@ -1749,8 +1960,9 @@ Now define a function that makes breakfast for `n` people.  It tries to cook eac
 (declare make-breakfast-for (UFix -> (Vector Egg)))
 (define (make-breakfast-for n)
   (let ((eggs (vector:make))
-        (skip  SkipEgg))              ; can construct outside of resume-to
-    (for i in (iter:up-to n)
+        (skip  SkipEgg))
+    (for ((i 0 (1+ i)))
+      :repeat n
       (let egg = (if (== 0 (mod i 5)) Xenomorph (Goose False False)))
       (do
        (cooked <- (catch (make-breakfast-with egg)

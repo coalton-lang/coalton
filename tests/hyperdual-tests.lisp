@@ -160,46 +160,63 @@
   (define (dxyg x y)
     (+ (* 204 (* (^ x 2) (^ y 3))) (* 24 x)))
 
-  (define points (make-list (Tuple -10 3) (Tuple 0 0) (Tuple 1 47))))
+  (define points (make-list (Tuple -10 3) (Tuple 0 0) (Tuple 1 47)))
+
+  (define (for-each-point f)
+    (iter:for-each!
+     (fn (pair)
+       (match pair
+         ((Tuple x y) (f x y))))
+     (iter:into-iter points))))
 
 (define-test hyperdual-d-x-test ()
-  (for (Tuple x y) in points
-    (is (== (dxg x y) (hyperdual:d-x (fn (%x) (g %x (into y))) x)))))
+  (for-each-point
+   (fn (x y)
+     (is (== (dxg x y) (hyperdual:d-x (fn (%x) (g %x (into y))) x))))))
 
 (define-test hyperdual-d-xx-test ()
-  (for (Tuple x y) in points
-    (is (== (dxxg x y) (hyperdual:d-xx (fn (%x) (g %x (into y))) x)))))
+  (for-each-point
+   (fn (x y)
+     (is (== (dxxg x y) (hyperdual:d-xx (fn (%x) (g %x (into y))) x))))))
 
 (define-test hyperdual-partial-x-test ()
-  (for (Tuple x y) in points
-    (is (== (dxg x y) (hyperdual:partial-x g x y)))))
+  (for-each-point
+   (fn (x y)
+     (is (== (dxg x y) (hyperdual:partial-x g x y))))))
 
 (define-test hyperdual-partial-y-test ()
-  (for (Tuple x y) in points
-    (is (== (dyg x y) (hyperdual:partial-y g x y)))))
+  (for-each-point
+   (fn (x y)
+     (is (== (dyg x y) (hyperdual:partial-y g x y))))))
 
 (define-test hyperdual-partial-xx-test ()
-  (for (Tuple x y) in points
-    (is (== (dxxg x y) (hyperdual:partial-xx g x y)))))
+  (for-each-point
+   (fn (x y)
+     (is (== (dxxg x y) (hyperdual:partial-xx g x y))))))
 
 (define-test hyperdual-partial-xy-test ()
-  (for (Tuple x y) in points
-    (is (== (dxyg x y) (hyperdual:partial-xy g x y)))))
+  (for-each-point
+   (fn (x y)
+     (is (== (dxyg x y) (hyperdual:partial-xy g x y))))))
 
 (define-test hyperdual-partial-yy-test ()
-  (for (Tuple x y) in points
-    (is (== (dyyg x y) (hyperdual:partial-yy g x y)))))
+  (for-each-point
+   (fn (x y)
+     (is (== (dyyg x y) (hyperdual:partial-yy g x y))))))
 
 (define-test hyperdual-gradient-test ()
-  (for (Tuple x y) in points
-    (is (all (uncurry ==) (zip (make-list (dxg x y) (dyg x y))
-                              (hyperdual:gradient g x y))))))
+  (for-each-point
+   (fn (x y)
+     (is (all (uncurry ==) (zip (make-list (dxg x y) (dyg x y))
+                               (hyperdual:gradient g x y)))))))
 
 (define-test hyperdual-hessian-test ()
-  (for (Tuple x y) in points
-    (is (all (uncurry ==) (zip (make-list (dxxg x y) (dxyg x y) (dxyg x y) (dyyg x y))
-                              (hyperdual:hessian g x y))))))
+  (for-each-point
+   (fn (x y)
+     (is (all (uncurry ==) (zip (make-list (dxxg x y) (dxyg x y) (dxyg x y) (dyyg x y))
+                               (hyperdual:hessian g x y)))))))
 
 (define-test hyperdual-laplacian-test ()
-  (for (Tuple x y) in points
-    (is (== (+ (dxxg x y) (dyyg x y)) (hyperdual:laplacian g x y)))))
+  (for-each-point
+   (fn (x y)
+     (is (== (+ (dxxg x y) (dyyg x y)) (hyperdual:laplacian g x y))))))

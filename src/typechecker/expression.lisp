@@ -60,6 +60,12 @@
    #:node-let-binding-name              ; ACCESSOR
    #:node-let-binding-value             ; ACCESSOR
    #:node-let-binding-list              ; TYPE
+   #:node-for-binding                  ; STRUCT
+   #:make-node-for-binding             ; CONSTRUCTOR
+   #:node-for-binding-name             ; ACCESSOR
+   #:node-for-binding-init             ; ACCESSOR
+   #:node-for-binding-step             ; ACCESSOR
+   #:node-for-binding-list             ; TYPE
    #:node-let-declare                   ; STRUCT
    #:make-node-let-declare              ; CONSTRUCTOR
    #:node-let-declare-name              ; ACCESSOR
@@ -105,6 +111,9 @@
    #:node-progn                         ; STRUCT
    #:make-node-progn                    ; CONSTRUCTOR
    #:node-progn-body                    ; ACCESSOR
+   #:node-unsafe                        ; STRUCT
+   #:make-node-unsafe                   ; CONSTRUCTOR
+   #:node-unsafe-body                   ; ACCESSOR
    #:node-the                           ; STRUCT
    #:make-node-the                      ; CONSTRUCTOR
    #:node-the-type                      ; ACCESSOR
@@ -150,27 +159,14 @@
    #:make-node-unless                   ; CONSTRUCTOR
    #:node-unless-expr                   ; ACCESSOR
    #:node-unless-body                   ; ACCESSOR
-   #:node-while                         ; STRUCT
-   #:make-node-while                    ; CONSTRUCTOR
-   #:node-while-label                   ; ACCESSOR
-   #:node-while-expr                    ; ACCESSOR
-   #:node-while-body                    ; ACCESSOR
-   #:node-while-let                     ; STRUCT
-   #:make-node-while-let                ; CONSTRUCTOR
-   #:node-while-let-label               ; ACCESSOR
-   #:node-while-let-pattern             ; ACCESSOR 
-   #:node-while-let-expr                ; ACCESSOR
-   #:node-while-let-body                ; ACCESSOR
-   #:node-for                           ; STRUCT
-   #:make-node-for                      ; CONSTRUCTOR
-   #:node-for-label                     ; ACCESSOR
-   #:node-for-pattern                   ; ACCESSOR 
-   #:node-for-expr                      ; ACCESSOR
-   #:node-for-body                      ; ACCESSOR
-   #:node-loop                          ; STRUCT
-   #:make-node-loop                     ; CONSTRUCTOR
-   #:node-loop-label                    ; ACCESSOR
-   #:node-loop-body                     ; ACCESSOR
+   #:node-for                          ; STRUCT
+   #:make-node-for                     ; CONSTRUCTOR
+   #:node-for-label                    ; ACCESSOR
+   #:node-for-bindings                 ; ACCESSOR
+   #:node-for-returns                  ; ACCESSOR
+   #:node-for-termination-kind         ; ACCESSOR
+   #:node-for-termination-expr         ; ACCESSOR
+   #:node-for-body                     ; ACCESSOR
    #:node-break                         ; STRUCT
    #:make-node-break                    ; CONSTRUCTOR
    #:node-break-label                   ; ACCESSOR
@@ -319,6 +315,23 @@
 (deftype node-let-binding-list ()
   '(satisfies node-let-binding-list-p))
 
+(defstruct (node-for-binding
+            (:copier nil))
+  (name     (util:required 'name)     :type node-variable   :read-only t)
+  (init     (util:required 'init)     :type node            :read-only t)
+  (step     nil                       :type (or null node)  :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self node-for-binding))
+  (node-for-binding-location self))
+
+(defun node-for-binding-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'node-for-binding-p x)))
+
+(deftype node-for-binding-list ()
+  '(satisfies node-for-binding-list-p))
+
 (defstruct (node-let
             (:include node)
             (:copier nil))
@@ -355,6 +368,11 @@
   (branches (util:required 'branches)     :type node-match-branch-list :read-only t))
 
 (defstruct (node-progn
+            (:include node)
+            (:copier nil))
+  (body (util:required 'body) :type node-body :read-only t))
+
+(defstruct (node-unsafe
             (:include node)
             (:copier nil))
   (body (util:required 'body) :type node-body :read-only t))
@@ -478,34 +496,15 @@
   (expr (util:required 'expr) :type node      :read-only t)
   (body (util:required 'body) :type node-body :read-only t))
 
-(defstruct (node-while
-            (:include node)
-            (:copier nil))
-  (label (util:required 'label) :type keyword   :read-only t)
-  (expr  (util:required 'expr)  :type node      :read-only t)
-  (body  (util:required 'body)  :type node-body :read-only t))
-
-(defstruct (node-while-let
-            (:include node)
-            (:copier nil))
-  (label   (util:required 'label)   :type keyword   :read-only t)
-  (pattern (util:required 'pattern) :type pattern   :read-only t)
-  (expr    (util:required 'expr)    :type node      :read-only t)
-  (body    (util:required 'body)    :type node-body :read-only t))
-
 (defstruct (node-for
             (:include node)
             (:copier nil))
-  (label   (util:required 'label)   :type keyword   :read-only t)
-  (pattern (util:required 'pattern) :type pattern   :read-only t)
-  (expr    (util:required 'expr)    :type node      :read-only t)
-  (body    (util:required 'body)    :type node-body :read-only t))
-
-(defstruct (node-loop
-            (:include node)
-            (:copier nil))
-  (label (util:required 'label) :type keyword   :read-only t)
-  (body  (util:required 'body)  :type node-body :read-only t))
+  (label            (util:required 'label)            :type keyword                        :read-only t)
+  (bindings         (util:required 'bindings)         :type node-for-binding-list         :read-only t)
+  (returns          nil                               :type (or null node)                 :read-only t)
+  (termination-kind nil                               :type (member nil :while :until :repeat) :read-only t)
+  (termination-expr nil                               :type (or null node)                 :read-only t)
+  (body             (util:required 'body)             :type node-body                      :read-only t))
 
 (defstruct (node-break
             (:include node)
@@ -643,6 +642,15 @@
    :value (tc:apply-substitution subs (node-let-binding-value node))
    :location (source:location node)))
 
+(defmethod tc:apply-substitution (subs (node node-for-binding))
+  (declare (type tc:substitution-list subs)
+           (values node-for-binding))
+  (make-node-for-binding
+   :name (tc:apply-substitution subs (node-for-binding-name node))
+   :init (tc:apply-substitution subs (node-for-binding-init node))
+   :step (tc:apply-substitution subs (node-for-binding-step node))
+   :location (source:location node)))
+
 (defmethod tc:apply-substitution (subs (node node-let))
   (declare (type tc:substitution-list subs)
            (values node-let))
@@ -720,6 +728,14 @@
    :type (tc:apply-substitution subs (node-type node))
    :location (source:location node)
    :body (tc:apply-substitution subs (node-progn-body node))))
+
+(defmethod tc:apply-substitution (subs (node node-unsafe))
+  (declare (type tc:substitution-list subs)
+           (values node-unsafe))
+  (make-node-unsafe
+   :type (tc:apply-substitution subs (node-type node))
+   :location (source:location node)
+   :body (tc:apply-substitution subs (node-unsafe-body node))))
 
 (defmethod tc:apply-substitution (subs (node node-return))
   (declare (type tc:substitution-list subs)
@@ -814,27 +830,6 @@
    :expr (tc:apply-substitution subs (node-unless-expr node))
    :body (tc:apply-substitution subs (node-unless-body node))))
 
-(defmethod tc:apply-substitution (subs (node node-while))
-  (declare (type tc:substitution-list subs)
-           (values node-while))
-  (make-node-while
-   :type (tc:apply-substitution subs (node-type node))
-   :location (source:location node)
-   :label (node-while-label node)
-   :expr (tc:apply-substitution subs (node-while-expr node))
-   :body (tc:apply-substitution subs (node-while-body node))))
-
-(defmethod tc:apply-substitution (subs (node node-while-let))
-  (declare (type tc:substitution-list subs)
-           (values node-while-let))
-  (make-node-while-let
-   :type (tc:apply-substitution subs (node-type node))
-   :location (source:location node)
-   :label (node-while-let-label node)
-   :pattern (tc:apply-substitution subs (node-while-let-pattern node))
-   :expr (tc:apply-substitution subs (node-while-let-expr node))
-   :body (tc:apply-substitution subs (node-while-let-body node))))
-
 (defmethod tc:apply-substitution (subs (node node-for))
   (declare (type tc:substitution-list subs)
            (values node-for))
@@ -842,18 +837,11 @@
    :type (tc:apply-substitution subs (node-type node))
    :location (source:location node)
    :label (node-for-label node)
-   :pattern (tc:apply-substitution subs (node-for-pattern node))
-   :expr (tc:apply-substitution subs (node-for-expr node))
+   :bindings (tc:apply-substitution subs (node-for-bindings node))
+   :returns (tc:apply-substitution subs (node-for-returns node))
+   :termination-kind (node-for-termination-kind node)
+   :termination-expr (tc:apply-substitution subs (node-for-termination-expr node))
    :body (tc:apply-substitution subs (node-for-body node))))
-
-(defmethod tc:apply-substitution (subs (node node-loop))
-  (declare (type tc:substitution-list subs)
-           (values node-loop))
-  (make-node-loop
-   :type (tc:apply-substitution subs (node-type node))
-   :location (source:location node)
-   :label (node-loop-label node)
-   :body (tc:apply-substitution subs (node-loop-body node))))
 
 (defmethod tc:apply-substitution (subs (node node-break))
   (declare (type tc:substitution-list subs)

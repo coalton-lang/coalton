@@ -94,12 +94,9 @@
    #:_
    #:return
    #:the
-   #:while
-   #:while-let
-   #:loop
+   #:for
    #:break
    #:continue
-   #:for
    #:in                                 ; Syntax
    )
 
@@ -146,3 +143,9 @@
    #:Boolean/True
    #:Boolean/False
    #:Unit/Unit))
+
+(defpackage #:coalton++
+  (:documentation "Experimental features of Coalton.")
+  (:use)
+  (:export
+   #:unsafe))

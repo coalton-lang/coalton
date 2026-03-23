@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/vector
+  (:documentation "Resizable mutable vectors with efficient indexed access and amortized end updates.")
   (:use
    #:coalton
    #:coalton/builtin
@@ -10,7 +11,8 @@
    (#:list #:coalton/list)
    (#:cell #:coalton/cell)
    (#:iter #:coalton/iterator)
-   (#:ram #:coalton/randomaccess))
+   (#:ram #:coalton/randomaccess)
+   (#:show #:coalton/show))
   (:export
    #:Vector
    #:new
@@ -337,6 +339,25 @@
           False
           (iter:every! id (iter:zip-with! == (iter:into-iter v1) (iter:into-iter v2))))))
 
+  (define-instance (show:Show :a => show:Show (Vector :a))
+    (define (show:show-to f vec)
+      (f "#<Vector [")
+      (let items = (iter:into-iter vec))
+      (match (iter:next! items)
+        ((None)
+         (values))
+        ((Some item)
+         (show:show-to f item)
+         (rec % ()
+           (match (iter:next! items)
+             ((None)
+              (values))
+             ((Some next-item)
+              (f " ")
+              (show:show-to f next-item)
+              (%))))))
+      (f "]>")))
+
   (define-instance (Monoid (Vector :a))
     (inline)
     (define mempty (new)))
@@ -435,6 +456,24 @@
                         (push! x vec)
                         (values))
                       iter)
+      vec))
+
+  (define-instance (FromItemizedCollection (Vector :a) :a (Vector :a))
+    (define (begin-collection-builder _ size)
+      (with-capacity size))
+    (define (adjoin-to-collection-builder _ vec _index item)
+      (push! item vec)
+      vec)
+    (define (finalize-collection-builder _ vec)
+      vec))
+
+  (define-instance (FromCollectionComprehension (Vector :a) :a (Vector :a))
+    (define (begin-collection-comprehension _ size-hint)
+      (with-capacity (with-default 0 size-hint)))
+    (define (adjoin-to-collection-comprehension _ vec item)
+      (push! item vec)
+      vec)
+    (define (finalize-collection-comprehension _ vec)
       vec))
 
   (define-instance (Default (Vector :a))

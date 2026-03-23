@@ -205,6 +205,12 @@ in expressions. May not include all bound variables."
     (declare (values node-variable-list &optional))
     (collect-variables-generic% (node-let-binding-value node)))
 
+  (:method ((node node-for-binding))
+    (declare (values node-variable-list &optional))
+    (nconc (collect-variables-generic% (node-for-binding-init node))
+           (and (node-for-binding-step node)
+                (collect-variables-generic% (node-for-binding-step node)))))
+
   (:method ((node node-let))
     (declare (values node-variable-list))
     (nconc
@@ -254,10 +260,53 @@ in expressions. May not include all bound variables."
   (:method ((node node-type-of))
     (declare (values node-variable-list &optional))
     (collect-variables-generic% (node-type-of-expr node)))
+  (:method ((node node-unsafe))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (node-unsafe-body node)))
 
   (:method ((node node-the))
     (declare (values node-variable-list &optional))
     (collect-variables-generic% (node-the-expr node)))
+
+  (:method ((node node-collection-builder))
+    (declare (values node-variable-list &optional))
+    (mapcan #'collect-variables-generic% (node-collection-builder-elements node)))
+
+  (:method ((entry association-entry))
+    (declare (values node-variable-list &optional))
+    (nconc (collect-variables-generic% (association-entry-key entry))
+           (collect-variables-generic% (association-entry-value entry))))
+
+  (:method ((node node-association-builder))
+    (declare (values node-variable-list &optional))
+    (mapcan #'collect-variables-generic% (node-association-builder-entries node)))
+
+  (:method ((clause builder-with-clause))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (builder-with-clause-expr clause)))
+
+  (:method ((clause builder-for-clause))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (builder-for-clause-expr clause)))
+
+  (:method ((clause builder-below-clause))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (builder-below-clause-expr clause)))
+
+  (:method ((clause builder-when-clause))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (builder-when-clause-expr clause)))
+
+  (:method ((node node-collection-comprehension))
+    (declare (values node-variable-list &optional))
+    (nconc (collect-variables-generic% (node-collection-comprehension-head node))
+           (mapcan #'collect-variables-generic% (node-collection-comprehension-clauses node))))
+
+  (:method ((node node-association-comprehension))
+    (declare (values node-variable-list &optional))
+    (nconc (collect-variables-generic% (node-association-comprehension-key node))
+           (collect-variables-generic% (node-association-comprehension-value node))
+           (mapcan #'collect-variables-generic% (node-association-comprehension-clauses node))))
 
   (:method ((node node-return))
     (declare (values node-variable-list &optional))
@@ -325,24 +374,15 @@ in expressions. May not include all bound variables."
     (declare (values node-variable-list))
     (mapcan #'collect-variables-generic% (node-cond-clauses node)))
 
-  (:method ((node node-while))
-    (declare (values node-variable-list))
-    (nconc (collect-variables-generic% (node-while-expr node))
-           (collect-variables-generic% (node-while-body node))))
-
-  (:method ((node node-while-let))
-    (declare (values node-variable-list))
-    (nconc (collect-variables-generic% (node-while-let-expr node))
-           (collect-variables-generic% (node-while-let-body node))))
-
   (:method ((node node-for))
     (declare (values node-variable-list))
-    (nconc (collect-variables-generic% (node-for-expr node))
-           (collect-variables-generic% (node-for-body node))))  
-  
-  (:method ((node node-loop))
-    (declare (values node-variable-list))
-    (collect-variables-generic% (node-loop-body node)))
+    (nconc
+     (mapcan #'collect-variables-generic% (node-for-bindings node))
+     (and (node-for-returns node)
+          (collect-variables-generic% (node-for-returns node)))
+     (and (node-for-termination-expr node)
+          (collect-variables-generic% (node-for-termination-expr node)))
+     (collect-variables-generic% (node-for-body node))))
 
   (:method ((node node-break))
     (declare (values node-variable-list &optional))

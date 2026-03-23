@@ -81,50 +81,58 @@
   (define-instance (cls:Num Bit)
     (inline)
     (define (cls:+ a b)
-      (lisp (-> Bit) (a b)
-        (cl:logxor a b)))
+      (coalton++:unsafe
+        (lisp (-> Bit) (a b)
+          (cl:logxor a b))))
 
     (inline)
     (define (cls:- a b)
-      (lisp (-> Bit) (a b)
-        (cl:logxor a b)))
+      (coalton++:unsafe
+        (lisp (-> Bit) (a b)
+          (cl:logxor a b))))
 
     (inline)
     (define (cls:* a b)
-      (lisp (-> Bit) (a b)
-        (cl:logand a b)))
+      (coalton++:unsafe
+        (lisp (-> Bit) (a b)
+          (cl:logand a b))))
 
     (inline)
     (define (cls:fromInt x)
       "The integer `x` is converted to a `Bit` by its zeroth bit (i.e.,
 whether it's even or odd)."
-      (lisp (-> Bit) (x)
-        (cl:ldb (cl:byte 1 0) x))))
+      (coalton++:unsafe
+        (lisp (-> Bit) (x)
+          (cl:ldb (cl:byte 1 0) x)))))
 
   ;; UFixes are unsafe and depend on implementation.
   (define-instance (cls:Num UFix)
     (inline)
     (define (cls:+ a b)
-      (lisp (-> UFix) (a b)
-        (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
-          (cl:+ a b))))
+      (coalton++:unsafe
+        (lisp (-> UFix) (a b)
+          (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
+            (cl:+ a b)))))
 
     (inline)
     (define (cls:- a b)
-      (lisp (-> UFix) (a b)
-        (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
-          (cl:- a b))))
+      (coalton++:unsafe
+        (lisp (-> UFix) (a b)
+          (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
+            (cl:- a b)))))
 
     (inline)
     (define (cls:* a b)
-      (lisp (-> UFix) (a b)
-        (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
-          (cl:* a b))))
+      (coalton++:unsafe
+        (lisp (-> UFix) (a b)
+          (cl:locally (cl:declare (cl:optimize cl:speed (cl:safety 0)))
+            (cl:* a b)))))
 
     (inline)
     (define (cls:fromInt x)
-      (lisp (-> UFix) (x)
-        (cl:mod x #.(cl:expt 2 +fixnum-bits+)))))
+      (coalton++:unsafe
+        (lisp (-> UFix) (x)
+          (cl:mod x #.(cl:expt 2 +fixnum-bits+))))))
 
 
 ;;;

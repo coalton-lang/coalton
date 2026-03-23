@@ -32,6 +32,7 @@
    (#:char #:coalton/char)
    (#:string #:coalton/string)
    (#:vector #:coalton/vector)
+   (#:queue #:coalton/queue)
    (#:slice #:coalton/slice)
    (#:hashtable #:coalton/hashtable)
    (#:hashmap #:coalton/hashmap)

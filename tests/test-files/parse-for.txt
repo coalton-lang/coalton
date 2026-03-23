@@ -1,4 +1,48 @@
 ================================================================================
+1 Parse for
+================================================================================
+
+(package coalton-unit-tests/prelude
+  (import coalton-prelude))
+
+(define f
+  (for ()
+    (break)))
+
+================================================================================
+2 Parse for
+================================================================================
+
+(package coalton-unit-tests/prelude
+  (import coalton-prelude))
+
+(define (f n)
+  (for :search ((declare i UFix)
+                (i 0 (1+ i)))
+    :returns i
+    :while (< i n)
+    (when (== i 5)
+      (break :search))))
+
+================================================================================
+3 Parse for
+================================================================================
+
+(package coalton-unit-tests/prelude
+  (import coalton-prelude))
+
+(define (f n)
+  (for ((declare i UFix)
+        (declare acc UFix)
+        (i 0 (1+ i))
+        (acc 0 (+ acc i)))
+    :returns acc
+    :repeat n
+    (when (even? i)
+      (continue))
+    acc))
+
+================================================================================
 100 Malformed for expression
 ================================================================================
 
@@ -12,7 +56,7 @@ error: Malformed for expression
   --> test:3:14
    |
  3 |  (define f (for))
-   |                ^ expected pattern
+   |                ^ expected binding list
 
 ================================================================================
 101 Malformed for expression
@@ -20,31 +64,33 @@ error: Malformed for expression
 
 (package test-parser)
 
-(define f (for x))
+(define f (for :alabel))
 
 --------------------------------------------------------------------------------
 
 error: Malformed for expression
-  --> test:3:16
+  --> test:3:22
    |
- 3 |  (define f (for x))
-   |                  ^ expected in
+ 3 |  (define f (for :alabel))
+   |                        ^ expected binding list
 
 ================================================================================
-102 Malformed for expression
+102 Malformed for binding
 ================================================================================
 
 (package test-parser)
 
-(define f (for x y))
+(define f
+  (for ((x))
+    x))
 
 --------------------------------------------------------------------------------
 
-error: Malformed for expression
-  --> test:3:17
+error: Malformed for binding
+  --> test:4:10
    |
- 3 |  (define f (for x y))
-   |                   ^ expected in
+ 4 |    (for ((x))
+   |            ^ for bindings must have an initializer
 
 ================================================================================
 103 Malformed for expression
@@ -52,15 +98,17 @@ error: Malformed for expression
 
 (package test-parser)
 
-(define f (for x in iter))
+(define f
+  (for ()
+    :returns))
 
 --------------------------------------------------------------------------------
 
 error: Malformed for expression
-  --> test:3:24
+  --> test:5:12
    |
- 3 |  (define f (for x in iter))
-   |                          ^ expected body
+ 5 |      :returns))
+   |              ^ expected expression after :returns
 
 ================================================================================
 104 Malformed for expression
@@ -68,12 +116,106 @@ error: Malformed for expression
 
 (package test-parser)
 
-(define f (for :label x in iter))
+(define f
+  (for ()
+    :repeat))
 
 --------------------------------------------------------------------------------
 
 error: Malformed for expression
-  --> test:3:31
+  --> test:5:11
    |
- 3 |  (define f (for :label x in iter))
-   |                                 ^ expected body
+ 5 |      :repeat))
+   |             ^ expected expression after :repeat
+
+================================================================================
+105 For repeat type mismatch
+================================================================================
+
+(package test-package)
+
+(define f
+  (for ()
+    :repeat "a"))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:5:12
+   |
+ 5 |      :repeat "a"))
+   |              ^^^ Expected type 'UFIX' but got 'STRING'
+
+================================================================================
+106 For while type mismatch
+================================================================================
+
+(package test-package)
+
+(define f
+  (for ()
+    :while "a"))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:5:11
+   |
+ 5 |      :while "a"))
+   |             ^^^ Expected type 'BOOLEAN' but got 'STRING'
+
+================================================================================
+107 For step type mismatch
+================================================================================
+
+(package test-package)
+
+(define f
+  (for ((declare i UFix)
+        (i 0 "a"))))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:5:13
+   |
+ 5 |          (i 0 "a"))))
+   |               ^^^ Expected type 'UFIX' but got 'STRING'
+
+================================================================================
+108 Malformed for expression
+================================================================================
+
+(package test-parser)
+
+(define f
+  (for ()
+    :repeat 10
+    :returns 0))
+
+--------------------------------------------------------------------------------
+
+error: Malformed for expression
+  --> test:6:4
+   |
+ 6 |      :returns 0))
+   |      ^^^^^^^^ :returns clause must appear immediately after the binding list
+
+================================================================================
+109 Malformed for expression
+================================================================================
+
+(package test-parser)
+
+(define f
+  (for ()
+    0
+    :returns 1))
+
+--------------------------------------------------------------------------------
+
+error: Malformed for expression
+  --> test:6:4
+   |
+ 6 |      :returns 1))
+   |      ^^^^^^^^ :returns clause must appear immediately after the binding list

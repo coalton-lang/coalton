@@ -179,24 +179,23 @@ nodes."
                   (node-resumable-branches node))))
 
     
-    (action (:traverse node-while node &rest args)
-      (make-node-while
+    (action (:traverse node-for node &rest args)
+      (make-node-for
        :type (node-type node)
-       :label (node-while-label node)
-       :expr (apply *traverse* (node-while-expr node) args)
-       :body (apply *traverse* (node-while-body node) args)))
-    (action (:traverse node-while-let node &rest args)
-      (make-node-while-let
-       :type (node-type node)
-       :label (node-while-let-label node)
-       :pattern (node-while-let-pattern node)
-       :expr (apply *traverse* (node-while-let-expr node) args)
-       :body (apply *traverse* (node-while-let-body node) args)))
-    (action (:traverse node-loop node &rest args)
-      (make-node-loop
-       :type (node-type node)
-       :label (node-loop-label node)
-       :body (apply *traverse* (node-loop-body node) args)))
+       :label (node-for-label node)
+       :bindings (loop :for binding :in (node-for-bindings node)
+                       :collect (make-node-for-binding
+                                 :name (node-for-binding-name binding)
+                                 :type (node-for-binding-type binding)
+                                 :init (apply *traverse* (node-for-binding-init binding) args)
+                                 :step (and (node-for-binding-step binding)
+                                            (apply *traverse* (node-for-binding-step binding) args))))
+       :returns (and (node-for-returns node)
+                     (apply *traverse* (node-for-returns node) args))
+       :termination-kind (node-for-termination-kind node)
+       :termination-expr (and (node-for-termination-expr node)
+                              (apply *traverse* (node-for-termination-expr node) args))
+       :body (apply *traverse* (node-for-body node) args)))
     (action (:traverse node-seq node &rest args)
       (make-node-seq
        :type (node-type node)
@@ -256,6 +255,7 @@ nodes."
       (make-node-locally
        :type (node-type node)
        :noinline-functions (node-locally-noinline-functions node)
+       :type-check (node-locally-type-check node)
        :subexpr (apply *traverse* (node-locally-subexpr node) args))))
    t))
 
@@ -453,7 +453,26 @@ bound at the given point."
          :type (node-type node)
          :vars (node-values-bind-vars node)
          :expr (funcall *traverse* (node-values-bind-expr node) bound-variables)
-         :body (funcall *traverse* (node-values-bind-body node) new-bound-variables)))))
+         :body (funcall *traverse* (node-values-bind-body node) new-bound-variables))))
+    (action (:traverse node-for node bound-variables)
+      (let ((new-bound-variables (append (mapcar #'node-for-binding-name (node-for-bindings node))
+                                         bound-variables)))
+        (make-node-for
+         :type (node-type node)
+         :label (node-for-label node)
+         :bindings (loop :for binding :in (node-for-bindings node)
+                         :collect (make-node-for-binding
+                                   :name (node-for-binding-name binding)
+                                   :type (node-for-binding-type binding)
+                                   :init (funcall *traverse* (node-for-binding-init binding) bound-variables)
+                                   :step (and (node-for-binding-step binding)
+                                              (funcall *traverse* (node-for-binding-step binding) new-bound-variables))))
+         :returns (and (node-for-returns node)
+                       (funcall *traverse* (node-for-returns node) new-bound-variables))
+         :termination-kind (node-for-termination-kind node)
+         :termination-expr (and (node-for-termination-expr node)
+                                (funcall *traverse* (node-for-termination-expr node) new-bound-variables))
+         :body (funcall *traverse* (node-for-body node) new-bound-variables)))))
    t))
 
 (defun traverse-with-binding-list (node actions)

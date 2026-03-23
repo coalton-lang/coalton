@@ -5,7 +5,7 @@
 (package coalton-unit-tests)
 
 (define f
-  (loop
+  (for ()
     (break)))
 
 ================================================================================
@@ -15,8 +15,9 @@
 (package coalton-unit-tests)
 
 (define f
-  (for x in "hello"
-       (break)))
+  (for ()
+    (let _x = True)
+    (break)))
 
 ================================================================================
 3 Parse break
@@ -25,23 +26,20 @@
 (package coalton-unit-tests)
 
 (define f
-  (while true
+  (for ()
+    :while true
     (break)))
 
 ================================================================================
-4 Parse break: in while-let
+4 Parse break
 ================================================================================
 
-(package coalton-unit-tests/parse-break
-  (import coalton-prelude
-          (coalton/cell as cell)
-          (coalton/iterator as iter)))
+(package coalton-unit-tests)
 
-(define (f)
-  (let ((iter (iter:up-to 10)))
-    (while-let
-     (Some n) = (iter:next! iter)
-     (break))))
+(define f
+  (for ()
+    (let _x = 1)
+    (break)))
 
 ================================================================================
 5 Parse break
@@ -50,7 +48,8 @@
 (package coalton-unit-tests)
 
 (define f
-  (loop :alabel (break)))
+  (for :alabel ()
+    (break)))
 
 ================================================================================
 6 Parse break
@@ -59,8 +58,8 @@
 (package coalton-unit-tests)
 
 (define f
-  (loop :alabel
-        (break :alabel)))
+  (for :alabel ()
+    (break :alabel)))
 
 ================================================================================
 7 Parse break
@@ -69,7 +68,7 @@
 (package coalton-unit-tests)
 
 (define f
-  (while :somelabel true
+  (for :somelabel ()
     (break :somelabel)))
 
 ================================================================================
@@ -86,7 +85,7 @@ error: Invalid break
   --> test:3:10
    |
  3 |  (define f (break))
-   |            ^^^^^^^ break does not appear in an enclosing loop
+   |            ^^^^^^^ break does not appear in an enclosing for
 
 ================================================================================
 101 Invalid label in break
@@ -95,15 +94,16 @@ error: Invalid break
 (package test-parser)
 
 (define f
-  (while :x True (break :y)))
+  (for :x ()
+    (break :y)))
 
 --------------------------------------------------------------------------------
 
 error: Invalid label in break
-  --> test:4:24
+  --> test:5:11
    |
- 4 |    (while :x True (break :y)))
-   |                          ^^ label not found in any enclosing loop
+ 5 |      (break :y)))
+   |             ^^ label not found in any enclosing for
 
 ================================================================================
 102 Invalid label in break
@@ -112,15 +112,16 @@ error: Invalid label in break
 (package test-parser)
 
 (define f
-  (while :x True (return (fn () (break :x)))))
+  (for :x ()
+    (return (fn () (break :x)))))
 
 --------------------------------------------------------------------------------
 
 error: Invalid label in break
-  --> test:4:39
+  --> test:5:26
    |
- 4 |    (while :x True (return (fn () (break :x)))))
-   |                                         ^^ label not found in any enclosing loop
+ 5 |      (return (fn () (break :x)))))
+   |                            ^^ label not found in any enclosing for
 
 ================================================================================
 103 Invalid break
@@ -129,12 +130,13 @@ error: Invalid label in break
 (package test-parser)
 
 (define f
-  (while True (return (fn () (break)))))
+  (for ()
+    (return (fn () (break)))))
 
 --------------------------------------------------------------------------------
 
 error: Invalid break
-  --> test:4:29
+  --> test:5:19
    |
- 4 |    (while True (return (fn () (break)))))
-   |                               ^^^^^^^ break does not appear in an enclosing loop
+ 5 |      (return (fn () (break)))))
+   |                     ^^^^^^^ break does not appear in an enclosing for

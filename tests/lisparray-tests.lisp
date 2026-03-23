@@ -136,3 +136,8 @@
     (is (== v1 v4))
     (is (/= v1 v2))
     (is (/= v1 v3))))
+
+(define-test array-show ()
+  (let v = (as (array:LispArray Integer) (make-list 1 2 3)))
+  (is (== "#<LispArray [1 2 3]>"
+          (show-as-string v))))

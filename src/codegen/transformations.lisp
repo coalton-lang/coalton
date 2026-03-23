@@ -42,14 +42,7 @@ specified in `subs`."
                     (make-match-branch
                      :pattern (tc:apply-substitution subs (match-branch-pattern branch))
                      :body (match-branch-body branch)))
-                  (node-match-branches node))))
-    (action (:after node-while-let node)
-      (make-node-while-let
-       :type (node-type node)
-       :label (node-while-let-label node)
-       :pattern (tc:apply-substitution subs (node-while-let-pattern node))
-       :expr (node-while-let-expr node)
-       :body (node-while-let-body node))))))
+                  (node-match-branches node)))))))
 
 (defmethod tc:type-variables ((node node))
   "Collect all type variables from nodes and patterns in the tree of `node`."
@@ -70,10 +63,6 @@ specified in `subs`."
         (dolist (branch (node-match-branches node))
           (alexandria:unionf tyvars
                              (tc:type-variables (match-branch-pattern branch))))
-        (values))
-      (action (:after node-while-let node)
-        (alexandria:unionf tyvars
-                           (tc:type-variables (node-while-let-pattern node)))
         (values))))
     tyvars))
 

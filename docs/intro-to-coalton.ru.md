@@ -503,108 +503,101 @@ Coalton имеет специальный встроенный оператор 
 
 ### Встроенные конструкции циклов
 
-Coalton поддерживает бесконечные циклы, условные циклы и итерирование типа `for`.
+Coalton поддерживает императивные циклы, условные циклы и итерацию на основе сопоставления с образцом.
 
-#### `loop`, `while`, `while-let`, and `for`
+#### `for`
 
 Можно зациклиться навсегда
 
 ```lisp
-(loop (trace "hi"))
+(for ()
+  (show "hi"))
 ```
 
-Можно зациклиться, пока некоторое условие истинно
+Можно использовать условие `:while`, когда нужны только условие и тело
 
 ```lisp
 (coalton
  (let ((counter (cell:new 0))
        (limit 10))
-   (while (< (cell:read counter) limit)
-     (trace "hi") 
+   (for ()
+     :while (< (cell:read counter) limit)
+     (show "hi")
      (cell:increment! counter))))
 ```
 
-Можно зациклиться, пока паттерн совпадает
+Можно объединить `for`, `match` и `break`, когда итерация зависит от совпадения паттерна
 
 ```lisp
 (coalton
  (let ((xs (vector:make 4 3 2 1)))
-   (while-let (Some x) = (vector:pop! xs)
-              (traceobject "x" x))))
+   (for ()
+     (match (vector:pop! xs)
+       ((Some x) (show x))
+       ((None) (break))))))
 ```
-
-Можно итерироваться по элементам `IntoIterator`
-
-```lisp
-(coalton
- (for x in "coalton"
-      (traceobject "x" x)))
-```
-
 
 #### `break` and `continue`
 
-Каждая из вышеупомянутых форм циклов поддерживает `break` и `continue`.
+Форма `for` поддерживает `break` и `continue`.
 
-Конструкция `break` немедленно завершает итерирование. Следующий пример выводит `c`, `o` и `a`, а затем завершается.
+Конструкция `break` немедленно завершает итерацию. Следующий пример выводит `0`, `1` и `2`, а затем завершается.
 
 ```lisp
 (coalton
- (for x in "coalton"
-      (when (== x #\l)
-        (break))
-      (traceobject "x" x)))
+ (let counter = (cell:new 0))
+ (for ()
+   (when (== 3 (cell:read counter))
+     (break))
+   (show (cell:read counter))
+   (cell:increment! counter)))
 ```
 
-Конструкция `continue` пропускает остальную часть тела цикла и начинает следующую итерацию. Следующий пример выводит `c`, `o`, `a`, `t`, `o` и `n`, пропуская вывод `l`.
+Конструкция `continue` пропускает оставшуюся часть тела цикла и начинает следующую итерацию. Следующий пример выводит `1`, `3` и `5`, пропуская четные значения.
 
 ```lisp
 (coalton
- (for x in "coalton"
-      (when (== x #\l)
-        (continue))
-      (traceobject "x" x)))
+ (let counter = (cell:new 0))
+ (for ()
+   (when (== 6 (cell:read counter))
+     (break))
+   (let n = (cell:read counter))
+   (cell:increment! counter)
+   (when (== 0 (mod n 2))
+     (continue))
+   (show n)))
 ```
 
 
 #### Метки циклов
 
-Каждая из вышеупомянутых форм циклов может принимать необязательную метку цикла. Эти метки могут использоваться вместе с `break` и `continue` для достижения сложного управления итерацией.
+Форма `for` может принимать необязательную метку цикла. Эти метки могут использоваться вместе с `break` и `continue` для достижения сложного управления итерацией.
 
-Для каждой из форм циклов метка может следовать сразу за открывающим термином цикла:
+Метка может следовать сразу за словом `for`:
 
 ```lisp 
 
-(loop :outer (do-stuff))
+(for :outer () (do-stuff))
 
-(while :a-label (is-true?) (do-stuff))
-
-(while-let :another-label 
-   (Some thing) = (get-something)
-   (do-stuff thing))
-
-(for :iter word in words 
-   (do-stuff-with word))
-
+(for :another-label ()
+  :while (is-true?)
+  (do-stuff))
 ```
 
-В следующем полностью вымышленном примере внешний цикл помечен как `:outer`. Эта метка передается в `break` изнутри внутреннего цикла `while`, чтобы прекратить итерацию, когда сумма аккумулятора и счетчика превысит 500. Без метки `:outer`, `break` вышел бы только из внутреннего цикла `while`.
+В следующем полностью вымышленном примере внешний цикл помечен как `:outer`. Эта метка передается в `break` изнутри внутреннего `for`, чтобы прекратить итерацию, когда сумма `x` и `y` превысит 500. Без метки `:outer`, `break` вышел бы только из внутреннего `for`.
 
 ```lisp
 (coalton 
-  (let ((counter (cell:new 0))
-        (acc (cell:new Nil)))
-    (loop :outer
-          (while (< (cell:increment! counter) 10)
-            (let x = (fold + (cell:read counter) (cell:read acc)))
-            (when (< 500 x)
-              (break :outer))
-            (when (== 0 (mod (cell:read counter) 3)) 
-              (continue))
-            (cell:push! acc x))
-          (when (< (length (cell:read acc)) 500)
-            (cell:swap! counter 0)
-            Unit))
+  (let ((acc (cell:new Nil)))
+    (for :outer ((x 0 (+ x 10)))
+      (for ((y 0 (1+ y)))
+        :while (< y 10)
+        (let total = (+ x y))
+        (when (< 500 total)
+          (break :outer))
+        (when (== 0 (mod y 3))
+          (continue))
+        (cell:push! acc total)))
     (cell:read acc)))
 ```
 
@@ -862,7 +855,7 @@ Coalton управляет преобразованием типов, анало
 ;; ==> (#\m #\s #\p #\i)
 ```
 
-Метод `into` используется только тогда, когда преобразование всегда может быть выполнено из одного типа в другой. Если значение не может быть преобразовано в тип, то используется другой класс `TryInto` с методом `tryInto`. Метод `tryinto` возвращает тип `Result`, который указывает, было ли преобразование успешным или нет.
+Метод `into` используется только тогда, когда преобразование всегда может быть выполнено из одного типа в другой. Если значение не может быть преобразовано в тип, то используется другой класс `TryInto` с методом `tryInto`. Метод `tryinto` возвращает тип `Optional`: `Some` при успешном преобразовании и `None` при неудаче.
 
 **Заметка: `as` работает только для преобразований через `into`, т.е. полных преобразований.** Нет соответствующего синтаксиса для `tryInto`.
 
@@ -1428,8 +1421,9 @@ standard call
 (declare make-breakfast-for (UFix -> (Vector Egg)))
 (define (make-breakfast-for n)
   (let ((eggs (vector:make))
-        (skip  SkipEgg))              ; can construct outside of resume-to
-    (for i in (iter:up-to n)
+        (skip  SkipEgg))
+    (for ((i 0 (1+ i)))
+      :repeat n
       (let egg = (if (== 0 (mod i 5)) Xenomorph (Goose False False)))
       (do
        (cooked <- (catch (make-breakfast-with egg)
@@ -1473,4 +1467,3 @@ make-breakfast-for
 
 
    
-

@@ -3,6 +3,7 @@
 ;;;; An interface to Common Lisp rank-1 SIMPLE-ARRAYs.
 
 (coalton/utils:defstdlib-package #:coalton/lisparray
+  (:documentation "Fixed-size one-dimensional Common Lisp arrays for interop and efficient storage.")
   (:use
    #:coalton
    #:coalton/classes)
@@ -98,6 +99,60 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
     (lisp (-> (LispArray :t)) (v)
       (cl:copy-seq v)))
 
+  (declare builder-growth-capacity (UFix * UFix -> UFix))
+  (define (builder-growth-capacity current-capacity min-needed)
+    (if (== current-capacity 0)
+        (max 4 min-needed)
+        (max min-needed (+ current-capacity current-capacity))))
+
+  (declare resize-copy (types:RuntimeRepr :t => UFix * LispArray :t -> LispArray :t))
+  (define (resize-copy new-size array)
+    (let out = (make-uninitialized new-size))
+    (progn
+      (lisp (-> :any) (out array)
+        (cl:replace out array))
+      out))
+
+  (define-struct (LispArrayBuilder :t)
+    (size UFix)
+    (storage (LispArray :t)))
+
+  (define-instance (types:RuntimeRepr :t =>
+                    FromItemizedCollection (LispArray :t) :t (LispArray :t))
+    (define (begin-collection-builder _ size)
+      (make-uninitialized size))
+    (define (adjoin-to-collection-builder _ array index item)
+      (progn
+        (set! array index item)
+        array))
+    (define (finalize-collection-builder _ array)
+      array))
+
+  (define-instance (types:RuntimeRepr :t =>
+                    FromCollectionComprehension (LispArray :t)
+                                                :t
+                                                (LispArrayBuilder :t))
+    (define (begin-collection-comprehension _ size-hint)
+      (LispArrayBuilder 0
+                        (make-uninitialized (with-default 0 size-hint))))
+    (define (adjoin-to-collection-comprehension _ builder item)
+      (match builder
+        ((LispArrayBuilder size storage)
+         (let capacity = (length storage))
+         (let target = (if (< size capacity)
+                           storage
+                           (resize-copy (builder-growth-capacity capacity (+ size 1))
+                                        storage)))
+         (progn
+           (set! target size item)
+           (LispArrayBuilder (+ size 1) target)))))
+    (define (finalize-collection-comprehension _ builder)
+      (match builder
+        ((LispArrayBuilder size storage)
+         (if (== size (length storage))
+             storage
+             (resize-copy size storage))))))
+
   (define-instance (types:RuntimeRepr :t => Into (List :t) (LispArray :t))
     (inline)
     (define (into xs)
@@ -185,7 +240,7 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
   (define-instance (show:Show :a => show:Show (LispArray :a))
     (define (show:show-to f x)
       (let l = (length x))
-      (f "(lisparray [")
+      (f "#<LispArray [")
       (rec % ((i 0))
         (cond
           ((== i l)
@@ -196,7 +251,7 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
            (show:show-to f (aref x i))
            (f " ")
            (% (+ i 1)))))
-      (f "])")))
+      (f "]>")))
 
   (lisp-toplevel ()
     (cl:eval-when (:compile-toplevel :load-toplevel)

@@ -330,6 +330,7 @@
                (:file "call-coalton-from-lisp")
                (:file "bits-tests")
                (:file "vector-tests")
+               (:file "queue-tests")
                (:file "string-tests")
                (:file "optional-tests")
                (:file "ordtree-tests")

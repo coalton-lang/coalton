@@ -33,6 +33,30 @@
   (loop :for var :in vars
         :collect (cons var (make-local-var var :package package))))
 
+(defun rename-builder-binder (binder ctx)
+  (declare (type node-variable binder)
+           (type algo:immutable-map ctx)
+           (values node-variable algo:immutable-map &optional))
+  (let* ((new-name (make-local-var (node-variable-name binder)))
+         (renamed (make-node-variable
+                   :name new-name
+                   :location (source:location binder))))
+    (values renamed
+            (algo:immutable-map-set ctx (node-variable-name binder) new-name))))
+
+(defun rename-builder-clauses-sequentially (clauses ctx)
+  (declare (type builder-clause-list clauses)
+           (type algo:immutable-map ctx)
+           (values builder-clause-list algo:immutable-map &optional))
+  (loop :with renamed := nil
+        :with current-ctx := ctx
+        :for clause :in clauses
+        :do (multiple-value-bind (renamed-clause next-ctx)
+                (rename-variables-generic% clause current-ctx)
+              (push renamed-clause renamed)
+              (setf current-ctx next-ctx))
+        :finally (return (values (nreverse renamed) current-ctx))))
+
 (defun rename-variables (node)
   (rename-variables-generic% node (algo:make-immutable-map)))
 
@@ -209,6 +233,44 @@
         :location (source:location node))
        ctx)))
 
+  (:method ((node node-for) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+
+    (let* ((new-bindings
+             (make-local-vars
+              (mapcar (alexandria:compose
+                       #'node-variable-name
+                       #'node-for-binding-name)
+                      (node-for-bindings node))))
+           (new-ctx
+             (algo:immutable-map-set-multiple ctx new-bindings)))
+
+      (values
+       (make-node-for
+        :location (source:location node)
+        :label (node-for-label node)
+        :bindings
+        (loop :for binding :in (node-for-bindings node)
+              :collect (make-node-for-binding
+                        :name (rename-variables-generic% (node-for-binding-name binding) new-ctx)
+                        :init (rename-variables-generic% (node-for-binding-init binding) new-ctx)
+                        :step (and (node-for-binding-step binding)
+                                   (rename-variables-generic%
+                                    (node-for-binding-step binding)
+                                    new-ctx))
+                        :location (source:location binding)))
+        :declares (rename-variables-generic% (node-for-declares node) new-ctx)
+        :returns (and (node-for-returns node)
+                      (rename-variables-generic% (node-for-returns node) new-ctx))
+        :termination-kind (node-for-termination-kind node)
+        :termination-expr (and (node-for-termination-expr node)
+                               (rename-variables-generic%
+                                (node-for-termination-expr node)
+                                new-ctx))
+        :body (rename-variables-generic% (node-for-body node) new-ctx))
+       ctx)))
+
   (:method ((node node-lisp) ctx)
     (declare (type algo:immutable-map ctx)
              (values node algo:immutable-map))
@@ -322,6 +384,16 @@
       :location (source:location node))
      ctx))
 
+  (:method ((node node-unsafe) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+
+    (values
+     (make-node-unsafe
+      :body (rename-variables-generic% (node-unsafe-body node) ctx)
+      :location (source:location node))
+     ctx))
+
   (:method ((node node-the) ctx)
     (declare (type algo:immutable-map ctx)
              (values node algo:immutable-map))
@@ -330,8 +402,106 @@
      (make-node-the
       :type (node-the-type node)
       :expr (rename-variables-generic% (node-the-expr node) ctx)
+     :location (source:location node))
+     ctx))
+
+  (:method ((node node-collection-builder) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+    (values
+     (make-node-collection-builder
+      :elements (rename-variables-generic% (node-collection-builder-elements node) ctx)
       :location (source:location node))
      ctx))
+
+  (:method ((entry association-entry) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values association-entry algo:immutable-map))
+    (values
+     (make-association-entry
+      :key (rename-variables-generic% (association-entry-key entry) ctx)
+      :value (rename-variables-generic% (association-entry-value entry) ctx)
+      :location (source:location entry))
+     ctx))
+
+  (:method ((node node-association-builder) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+    (values
+     (make-node-association-builder
+      :entries (rename-variables-generic% (node-association-builder-entries node) ctx)
+      :location (source:location node))
+     ctx))
+
+  (:method ((clause builder-with-clause) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values builder-with-clause algo:immutable-map))
+    (multiple-value-bind (binder next-ctx)
+        (rename-builder-binder (builder-with-clause-binder clause) ctx)
+      (values
+       (make-builder-with-clause
+        :binder binder
+        :expr (rename-variables-generic% (builder-with-clause-expr clause) ctx)
+        :location (source:location clause))
+       next-ctx)))
+
+  (:method ((clause builder-for-clause) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values builder-for-clause algo:immutable-map))
+    (multiple-value-bind (binder next-ctx)
+        (rename-builder-binder (builder-for-clause-binder clause) ctx)
+      (values
+       (make-builder-for-clause
+        :binder binder
+        :expr (rename-variables-generic% (builder-for-clause-expr clause) ctx)
+        :location (source:location clause))
+       next-ctx)))
+
+  (:method ((clause builder-below-clause) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values builder-below-clause algo:immutable-map))
+    (multiple-value-bind (binder next-ctx)
+        (rename-builder-binder (builder-below-clause-binder clause) ctx)
+      (values
+       (make-builder-below-clause
+        :binder binder
+        :expr (rename-variables-generic% (builder-below-clause-expr clause) ctx)
+        :location (source:location clause))
+       next-ctx)))
+
+  (:method ((clause builder-when-clause) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values builder-when-clause algo:immutable-map))
+    (values
+     (make-builder-when-clause
+      :expr (rename-variables-generic% (builder-when-clause-expr clause) ctx)
+      :location (source:location clause))
+     ctx))
+
+  (:method ((node node-collection-comprehension) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+    (multiple-value-bind (clauses final-ctx)
+        (rename-builder-clauses-sequentially (node-collection-comprehension-clauses node) ctx)
+      (values
+       (make-node-collection-comprehension
+        :head (rename-variables-generic% (node-collection-comprehension-head node) final-ctx)
+        :clauses clauses
+        :location (source:location node))
+       ctx)))
+
+  (:method ((node node-association-comprehension) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+    (multiple-value-bind (clauses final-ctx)
+        (rename-builder-clauses-sequentially (node-association-comprehension-clauses node) ctx)
+      (values
+       (make-node-association-comprehension
+        :key (rename-variables-generic% (node-association-comprehension-key node) final-ctx)
+        :value (rename-variables-generic% (node-association-comprehension-value node) final-ctx)
+        :clauses clauses
+        :location (source:location node))
+       ctx)))
 
   (:method ((node node-return) ctx)
     (declare (type algo:immutable-map ctx)
@@ -442,70 +612,6 @@
       :expr (rename-variables-generic% (node-when-expr node) ctx)
       :body (rename-variables-generic% (node-when-body node) ctx)
       :location (source:location node))
-     ctx))
-
-  (:method ((node node-while) ctx)
-    (declare (type algo:immutable-map ctx)
-             (values node algo:immutable-map))
-    (values
-     (make-node-while
-      :expr (rename-variables-generic% (node-while-expr node) ctx)
-      :label (node-while-label node)
-      :body (rename-variables-generic% (node-while-body node) ctx)
-      :location (source:location node))
-     ctx))
-
-  (:method ((node node-while-let) ctx)
-    (declare (type algo:immutable-map ctx)
-             (values node algo:immutable-map))
-    (let*
-        ((new-bindings
-           (make-local-vars
-            (mapcar #'pattern-var-name
-                    (pattern-variables (node-while-let-pattern node)))))
-
-         (new-ctx
-           (algo:immutable-map-set-multiple ctx new-bindings)))
-
-
-      (values
-       (make-node-while-let
-        :label (node-while-let-label node)
-        :pattern (rename-variables-generic% (node-while-let-pattern node) new-ctx)
-        :expr (rename-variables-generic% (node-while-let-expr node) ctx)
-        :body (rename-variables-generic% (node-while-let-body node) new-ctx)
-        :location (source:location node))
-       new-ctx)))
-
-  (:method ((node node-for) ctx)
-    (declare (type algo:immutable-map ctx)
-             (values node algo:immutable-map))
-    (let*
-        ((new-bindings
-           (make-local-vars
-            (mapcar #'pattern-var-name
-                    (pattern-variables (node-for-pattern node)))))
-
-         (new-ctx
-           (algo:immutable-map-set-multiple ctx new-bindings)))
-
-      (values
-       (make-node-for
-        :label (node-for-label node)
-        :pattern (rename-variables-generic% (node-for-pattern node) new-ctx)
-        :expr (rename-variables-generic% (node-for-expr node) ctx)
-        :body (rename-variables-generic% (node-for-body node) new-ctx)
-        :location (source:location node))
-       new-ctx)))
-
-  (:method ((node node-loop) ctx)
-    (declare (type algo:immutable-map ctx)
-             (values node algo:immutable-map))
-    (values
-     (make-node-loop
-      :location (source:location node)
-      :label (node-loop-label node)
-      :body (rename-variables-generic% (node-loop-body node) ctx))
      ctx))
 
   (:method ((node node-break) ctx)
