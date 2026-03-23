@@ -860,7 +860,7 @@ COEFFS is a list of integer coefficients in descending degree order."
         False
         (== (%root-count-open g sturm lo hi) 1)))
 
-  (declare %compare-certified (RealAlgebraic * RealAlgebraic -> Ord))
+  (declare %compare-certified (RealAlgebraic * RealAlgebraic -> Ordering))
   (define (%compare-certified a b)
     "Certified comparison in native Coalton.
 

@@ -173,7 +173,7 @@
   ;; Ordering
   (define-instance (Ord Big-Float)
     (define (<=> a b)
-      (lisp (-> Ord) (a b)
+      (lisp (-> Ordering) (a b)
         (cl:ecase (sb-mpfr:compare a b)
           (-1  LT)
           (0   EQ)

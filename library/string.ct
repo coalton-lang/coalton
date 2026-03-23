@@ -183,7 +183,7 @@ does not have that suffix."
 
   (define-instance (Ord String)
     (define (<=> a b)
-      (lisp (-> Ord) (a b)
+      (lisp (-> Ordering) (a b)
         (cl:cond
           ((cl:string> a b) GT)
           ((cl:string< a b) LT)
