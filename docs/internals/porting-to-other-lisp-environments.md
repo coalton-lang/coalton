@@ -157,9 +157,9 @@ have discovered the following cases:
 - Testing fails:
   - *SBCL*: `:concrete-syntax-tree` (testing it causes sbcl to *crash*)
   - *CCL*: (none)
-  - ABCL: `:concrete-syntax-tree :eclector :yason` (the last two fail their tests but `asdf:test-system` returns `t`)
+  - ABCL: `:eclector :yason` (`:eclector` fails its tests but `asdf:test-system` returns `t`)
   - CLASP: `:trivial-garbage :float-features :fset`
-  - ECL: `:mgl-pax`
+  - ECL: `:mgl-pax` (causes a segmentation fault)
 
-File `tests/z-test-packages.lisp` contains some preliminary code for testing
+File `docs/internals/porting-to-other-lisp-environments-test-packages.lisp` contains some preliminary code for testing
 QuickLisp packages used by this project.
