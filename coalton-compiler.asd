@@ -65,6 +65,7 @@
                              (:file "unify")
                              (:file "fundeps")
                              (:file "environment")
+                             (:file "type-string")
                              (:file "variance")
 
                              (:module "redef-detection"

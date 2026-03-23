@@ -120,7 +120,7 @@ error: Invalid accessor
   --> test:3:11
    |
  3 |  (define x (.x #\X))
-   |             ^^ struct accessor cannot be applied to a value of type 'CHAR'
+   |             ^^ struct accessor cannot be applied to a value of type 'Char'
 
 ================================================================================
 107 invalid-struct-accessors

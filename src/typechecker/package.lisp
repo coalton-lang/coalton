@@ -18,4 +18,5 @@
    #:coalton-impl/typechecker/define
    #:coalton-impl/typechecker/define-instance
    #:coalton-impl/typechecker/specialize
+   #:coalton-impl/typechecker/type-string
    #:coalton-impl/typechecker/translation-unit))

@@ -213,4 +213,4 @@ error: Context conflicts with functional dependencies
   --> test:8:11
    |
  8 |  (declare f ((C :a String) (D :a Integer) => :a))
-   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the predicates C :A STRING and C :A INTEGER conflict with functional dependencies
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the predicates C :A String and C :A Integer conflict with functional dependencies

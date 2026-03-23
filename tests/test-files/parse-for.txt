@@ -144,7 +144,7 @@ error: Type mismatch
   --> test:5:12
    |
  5 |      :repeat "a"))
-   |              ^^^ Expected type 'UFIX' but got 'STRING'
+   |              ^^^ Expected type 'UFix' but got 'String'
 
 ================================================================================
 106 For while type mismatch
@@ -162,7 +162,7 @@ error: Type mismatch
   --> test:5:11
    |
  5 |      :while "a"))
-   |             ^^^ Expected type 'BOOLEAN' but got 'STRING'
+   |             ^^^ Expected type 'Boolean' but got 'String'
 
 ================================================================================
 107 For step type mismatch
@@ -180,7 +180,7 @@ error: Type mismatch
   --> test:5:13
    |
  5 |          (i 0 "a"))))
-   |               ^^^ Expected type 'UFIX' but got 'STRING'
+   |               ^^^ Expected type 'UFix' but got 'String'
 
 ================================================================================
 108 Malformed for expression

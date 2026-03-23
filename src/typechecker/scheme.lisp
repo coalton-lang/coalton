@@ -356,35 +356,3 @@ become lexically scoped."
    :explicit-p (ty-scheme-explicit-p scheme)
    :kinds (ty-scheme-kinds scheme)
    :type (remove-source-info (ty-scheme-type scheme))))
-
-;;;
-;;; Pretty printing
-;;;
-
-(defun pprint-scheme (stream scheme)
-  (declare (type stream stream)
-           (type ty-scheme scheme))
-  (cond
-    ((null (ty-scheme-kinds scheme))
-     (write (ty-scheme-type scheme) :stream stream))
-    (t
-     (with-pprint-variable-context ()
-       (let* ((types (ty-scheme-instantiation-types scheme))
-              (new-type (instantiate types (ty-scheme-type scheme))))
-         (write-string (if settings:*coalton-print-unicode*
-                           "∀"
-                           "FORALL")
-                       stream)
-         (loop :for ty :in types
-               :do (write-char #\space stream)
-                   (write ty :stream stream))
-         (write-string ". " stream)
-         (write new-type :stream stream)))
-     ))
-
-  nil)
-
-(defmethod print-object ((scheme ty-scheme) stream)
-  (if *print-readably*
-      (call-next-method)
-      (pprint-scheme stream scheme)))
