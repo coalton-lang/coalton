@@ -148,16 +148,11 @@
 
    (loop :for constructor :in (tc:type-definition-constructors def)
          :for name := (tc:constructor-entry-name constructor)
-         :for ty := (tc:lookup-value-type env name)
          :for docstring := (source:docstring constructor)
-         :collect `(setf (documentation ',name 'variable)
-                         ,(format nil "~A :: ~A~@[~%~A~]"
-                            name
-                            ty
-                            docstring))
-         :when (> (tc:constructor-entry-arity constructor) 0)
-           :collect `(setf (documentation ',name 'function)
-                           ,(format nil "~A :: ~A~@[~%~A~]"
-                              name
-                              ty
-                              docstring)))))
+         :append (when docstring
+                   (list `(setf (documentation ',name 'variable)
+                                ,docstring)))
+         :append (when (and docstring
+                            (plusp (tc:constructor-entry-arity constructor)))
+                   (list `(setf (documentation ',name 'function)
+                                ,docstring))))))

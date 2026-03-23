@@ -136,14 +136,9 @@
       (global-lexical:define-global-lexical ,method-name rt:function-entry)
       (setf ,method-name
             ;; We need a function of arity + 1 to account for DICT
-            ,(rt:construct-function-entry `#',method-name (+ arity 1))
-            (documentation ',method-name 'variable)
-            ,(format nil "~A :: ~A~@[~%~A~]~%"
-                     method-name
-                     (tc:lookup-value-type env method-name)
-                     method-docstring)
-            (documentation ',method-name 'function)
-            ,(format nil "~A :: ~A~@[~%~A~]~%"
-                     method-name
-                     (tc:lookup-value-type env method-name)
-                     method-docstring)))))
+            ,(rt:construct-function-entry `#',method-name (+ arity 1)))
+      ,@(when method-docstring
+          `((setf (documentation ',method-name 'variable)
+                  ,method-docstring)
+            (setf (documentation ',method-name 'function)
+                  ,method-docstring))))))

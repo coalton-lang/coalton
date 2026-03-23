@@ -315,20 +315,12 @@ Example:
      ;; Docstrings
      (loop :for (name . node) :in bindings
            :for entry := (tc:lookup-name env name :no-error t)
-           :for type := (tc:lookup-value-type env name :no-error t)
-           :for docstring
-             := (cond
-                  ((and entry (source:docstring entry) type)
-                   (format nil "~A :: ~A~%~A" name type (source:docstring entry)))
-
-                  ((and entry (source:docstring entry))
-                   (source:docstring entry))
-
-                  (type
-                   (format nil "~A :: ~A" name type)))
+           :for docstring := (and entry (source:docstring entry))
            :append (when docstring
                      (list `(setf (documentation ',name 'variable)
                                   ,docstring)))
-           :append (when (and entry (node-abstraction-p node))
+           :append (when (and docstring
+                              entry
+                              (node-abstraction-p node))
                      (list `(setf (documentation ',name 'function)
                                   ,docstring)))))))
