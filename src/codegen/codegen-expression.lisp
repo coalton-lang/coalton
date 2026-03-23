@@ -169,7 +169,8 @@
          `(quote ,(eval value)))
         ;; General case: Emit the symbol itself.
         (otherwise
-         (alexandria:if-let ((entry (tc:lookup-function env value :no-error t)))
+         (alexandria:if-let ((entry (and (not (util:dynamic-variable-name-p value))
+                                         (tc:lookup-function env value :no-error t))))
            (if (and (not (tc:function-type-p (node-type node)))
                     (zerop (tc:function-env-entry-arity entry)))
                `(rt:exact-call ,value)
@@ -281,6 +282,13 @@
        sccs
        (node-variables expr :variable-namespace-only t)
        env)))
+
+  (:method ((expr node-dynamic-let) env)
+    (declare (type tc:environment env))
+    `(let ,(loop :for binding :in (node-dynamic-let-bindings expr)
+                 :collect (list (node-dynamic-binding-name binding)
+                                (codegen-expression (node-dynamic-binding-value binding) env)))
+       ,(codegen-expression (node-dynamic-let-subexpr expr) env)))
 
   (:method ((expr node-locally) env)
     (declare (type tc:environment env))

@@ -62,6 +62,11 @@
    #:node-let-binding-name              ; ACCESSOR
    #:node-let-binding-value             ; ACCESSOR
    #:node-let-binding-list              ; TYPE
+   #:node-dynamic-binding               ; STRUCT
+   #:make-node-dynamic-binding          ; CONSTRUCTOR
+   #:node-dynamic-binding-name          ; ACCESSOR
+   #:node-dynamic-binding-value         ; ACCESSOR
+   #:node-dynamic-binding-list          ; TYPE
    #:node-for-binding                  ; STRUCT
    #:make-node-for-binding             ; CONSTRUCTOR
    #:node-for-binding-name             ; ACCESSOR
@@ -78,6 +83,10 @@
    #:node-let-bindings                  ; ACCESSOR
    #:node-let-declares                  ; ACCESSOR
    #:node-let-body                      ; ACCESSOR
+   #:node-dynamic-let                   ; STRUCT
+   #:make-node-dynamic-let              ; CONSTRUCTOR
+   #:node-dynamic-let-bindings          ; ACCESSOR
+   #:node-dynamic-let-subexpr           ; ACCESSOR
    #:node-lisp                          ; STRUCT
    #:make-node-lisp                     ; CONSTRUCTOR
    #:node-lisp-output-types             ; ACCESSOR
@@ -239,6 +248,8 @@
    #:parse-expressions                  ; FUNCTION
    #:parse-body                         ; FUNCTION
    #:parse-variable                     ; FUNCTION
+   #:parse-ordinary-variable            ; FUNCTION
+   #:parse-dynamic-variable             ; FUNCTION
    ))
 
 ;;;;
@@ -512,6 +523,22 @@ Rebound to NIL parsing an anonymous FN.")
 (deftype node-let-binding-list ()
   '(satisfies node-let-binding-list-p))
 
+(defstruct (node-dynamic-binding
+            (:copier nil))
+  (name     (util:required 'name)     :type node-variable   :read-only t)
+  (value    (util:required 'value)    :type node            :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self node-dynamic-binding))
+  (node-dynamic-binding-location self))
+
+(defun node-dynamic-binding-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'node-dynamic-binding-p x)))
+
+(deftype node-dynamic-binding-list ()
+  '(satisfies node-dynamic-binding-list-p))
+
 (defstruct (node-for-binding
             (:copier nil))
   (name     (util:required 'name)     :type node-variable   :read-only t)
@@ -551,6 +578,12 @@ Rebound to NIL parsing an anonymous FN.")
   (bindings (util:required 'bindings) :type node-let-binding-list :read-only t)
   (declares (util:required 'declares) :type node-let-declare-list :read-only t)
   (body     (util:required 'body)     :type node-body             :read-only t))
+
+(defstruct (node-dynamic-let
+            (:include node)
+            (:copier nil))
+  (bindings (util:required 'bindings) :type node-dynamic-binding-list :read-only t)
+  (subexpr  (util:required 'subexpr)  :type node                      :read-only t))
 
 (defstruct (node-lisp
             (:include node)
@@ -894,6 +927,13 @@ Rebound to NIL parsing an anonymous FN.")
   (nth-value 0
              (intern (symbol-name binder-name) util:+keyword-package+)))
 
+(defun dynamic-variable-form-p (form)
+  (declare (type cst:cst form)
+           (values boolean &optional))
+  (and (cst:atom form)
+       (symbolp (cst:raw form))
+       (util:dynamic-variable-name-p (cst:raw form))))
+
 (defun parse-keyword-param (form source)
   (declare (type cst:cst form)
            (values keyword-param &optional))
@@ -914,7 +954,7 @@ Rebound to NIL parsing an anonymous FN.")
     (parse-error "Malformed function keyword parameter"
                  (note source (cst:third form) "unexpected trailing form")))
   (let* ((binder-form (cst:first form))
-         (binder (parse-variable binder-form source))
+         (binder (parse-ordinary-variable binder-form source))
          (keyword-name (keyword-name-from-binder (node-variable-name binder))))
     (make-keyword-param
      :keyword (make-keyword-src
@@ -1035,9 +1075,11 @@ Rebound to NIL parsing an anonymous FN.")
                (identifierp (cst:raw form)))
     (parse-error context
                  (note source form "expected identifier binder")))
-  (make-node-variable
-   :name (cst:raw form)
-   :location (form-location source form)))
+  (if (string= "_" (symbol-name (cst:raw form)))
+      (make-node-variable
+       :name (cst:raw form)
+       :location (form-location source form))
+      (parse-ordinary-variable form source)))
 
 (defun parse-association-entry (form source)
   (unless (cst:proper-list-p form)
@@ -1396,6 +1438,30 @@ Rebound to NIL parsing an anonymous FN.")
         :declares (nreverse declares)
         :body (parse-body (cst:nthrest 2 form) form source)
         :location (form-location source form))))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:dynamic-bind (cst:raw (cst:first form))))
+
+     (unless (cst:consp (cst:rest form))
+       (parse-error "Malformed dynamic-bind"
+                    (note-end source (cst:first form) "expected dynamic binding list")))
+
+     (unless (cst:consp (cst:rest (cst:rest form)))
+       (parse-error "Malformed dynamic-bind"
+                    (note-end source (cst:second form) "expected dynamic-bind body")))
+
+     (unless (cst:proper-list-p (cst:second form))
+       (parse-error "Malformed dynamic-bind"
+                    (note source (cst:second form) "expected binding list")))
+
+     (make-node-dynamic-let
+      :bindings (loop :for bindings := (cst:second form) :then (cst:rest bindings)
+                      :while (cst:consp bindings)
+                      :collect (parse-dynamic-binding (cst:first bindings)
+                                                      source
+                                                      :context "Malformed dynamic binding"))
+      :subexpr (body-forms->node (cst:nthrest 2 form) form source)
+      :location (form-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:rec (cst:raw (cst:first form))))
@@ -1933,6 +1999,26 @@ Rebound to NIL parsing an anonymous FN.")
    :name (cst:raw form)
    :location (form-location source form)))
 
+(defun parse-ordinary-variable (form source)
+  (declare (type cst:cst form)
+           (values node-variable &optional))
+  (let ((var (parse-variable form source)))
+    (when (util:dynamic-variable-name-p (node-variable-name var))
+      (parse-error "Invalid variable"
+                   (note source form
+                         "ordinary variables cannot use dynamic-variable earmuffs")))
+    var))
+
+(defun parse-dynamic-variable (form source)
+  (declare (type cst:cst form)
+           (values node-variable &optional))
+  (let ((var (parse-variable form source)))
+    (unless (util:dynamic-variable-name-p (node-variable-name var))
+      (parse-error "Invalid dynamic variable"
+                   (note source form
+                         "dynamic variables must begin and end with '*' and contain at least one non-'*' character")))
+    var))
+
 (defun parse-lisp-variable-binding (form source)
   (declare (type cst:cst form)
            (values node-variable symbol &optional))
@@ -2001,22 +2087,29 @@ Rebound to NIL parsing an anonymous FN.")
 
   (assert (cst:proper-list-p form))
 
-  (let* (last-node
-
-         (nodes (loop :for nodes := form :then (cst:rest nodes)
-                      :while (cst:consp nodes)
-
-                      ;; Not the last node
-                      :if (cst:consp (cst:rest nodes))
-                        :collect (parse-body-element (cst:first nodes) source)
-
-                      ;; The last node
-                      :else
-                        :do (setf last-node (parse-body-last-node (cst:first nodes) source)))))
-
-    
+  (let ((nodes nil)
+        (last-node nil)
+        (remaining form))
+    (loop :while (cst:consp remaining)
+          :for current := (cst:first remaining)
+          :do
+             (cond
+               ((cst:consp (cst:rest remaining))
+                (cond
+                  ((dynamic-shorthand-let-p current)
+                   (setf last-node
+                         (make-node-dynamic-let
+                          :bindings (list (parse-dynamic-shorthand-binding current source))
+                          :subexpr (body-forms->node (cst:rest remaining) preceding-form source)
+                          :location (form-location source current)))
+                   (return))
+                  (t
+                   (push (parse-body-element current source) nodes))))
+               (t
+                (setf last-node (parse-body-last-node current source))))
+             (setf remaining (cst:rest remaining)))
     (make-node-body
-     :nodes nodes
+     :nodes (nreverse nodes)
      :last-node last-node)))
 
 (defun shorthand-let-p (form)
@@ -2045,6 +2138,54 @@ Rebound to NIL parsing an anonymous FN.")
           (eq (cst:raw (cst:first form)) 'coalton:let)
           (cst:atom (cst:third form))
           (eq (cst:raw (cst:third form)) 'coalton:=)))))
+
+(defun dynamic-shorthand-let-p (form)
+  (declare (type cst:cst form)
+           (values boolean &optional))
+  (and (shorthand-let-p form)
+       (dynamic-variable-form-p (cst:second form))))
+
+(defun parse-dynamic-binding (form source &key (context "Malformed dynamic binding"))
+  (declare (type cst:cst form)
+           (type string context)
+           (values node-dynamic-binding &optional))
+  (when (cst:atom form)
+    (parse-error context
+                 (note source form "expected list")))
+  (unless (cst:proper-list-p form)
+    (parse-error context
+                 (note source form "unexpected dotted list")))
+  (unless (cst:consp (cst:rest form))
+    (parse-error context
+                 (note-end source (cst:first form)
+                           "dynamic bindings must have a value")))
+  (when (cst:consp (cst:rest (cst:rest form)))
+    (parse-error context
+                 (note source (cst:first (cst:rest (cst:rest form)))
+                       "unexpected trailing form")))
+  (make-node-dynamic-binding
+   :name (parse-dynamic-variable (cst:first form) source)
+   :value (parse-expression (cst:second form) source)
+   :location (form-location source form)))
+
+(defun parse-dynamic-shorthand-binding (form source)
+  (declare (type cst:cst form)
+           (values node-dynamic-binding &optional))
+  (when (cst:consp (cst:rest (cst:rest (cst:rest (cst:rest form)))))
+    (parse-error "Malformed shorthand let"
+                 (note source (cst:first (cst:rest (cst:rest (cst:rest (cst:rest form)))))
+                       "unexpected trailing form")))
+  (make-node-dynamic-binding
+   :name (parse-dynamic-variable (cst:second form) source)
+   :value (parse-expression (cst:fourth form) source)
+   :location (form-location source form)))
+
+(defun body-forms->node (forms preceding-form source)
+  (declare (type cst:cst forms)
+           (values node &optional))
+  (make-node-progn
+   :body (parse-body forms preceding-form source)
+   :location (source:make-location source (util:cst-source-range (cst:listify forms)))))
 
 ;; Forms passed to parse-node-bind must be previously verified by `shorthand-let-p'
 (defun parse-node-bind (form source)
@@ -2124,7 +2265,7 @@ Rebound to NIL parsing an anonymous FN.")
                        "unexpected trailing form")))
 
   (make-node-let-binding
-   :name (parse-variable (cst:first form) source)
+   :name (parse-ordinary-variable (cst:first form) source)
    :value (parse-expression (cst:second form) source)
    :location (form-location source form)))
 
@@ -2157,7 +2298,7 @@ Rebound to NIL parsing an anonymous FN.")
                          "unexpected trailing form")))
 
     (make-node-for-binding
-     :name (parse-variable (cst:first form) source)
+     :name (parse-ordinary-variable (cst:first form) source)
      :init (parse-expression (cst:second form) source)
      :step (and step-form
                 (parse-expression step-form source))
@@ -2188,7 +2329,7 @@ Rebound to NIL parsing an anonymous FN.")
                        "unexpected trailing form")))
 
   (make-node-let-binding
-   :name (parse-variable (cst:first form) source)
+   :name (parse-ordinary-variable (cst:first form) source)
    :value (parse-expression (cst:second form) source)
    :location (form-location source form)))
 
@@ -2295,6 +2436,43 @@ Rebound to NIL parsing an anonymous FN.")
    :body (parse-body (cst:rest form) (cst:first form) source)
    :location (form-location source form)))
 
+(defun parse-do-forms (forms parent-form source location)
+  (declare (type cst:cst forms parent-form)
+           (type source:location location)
+           (values node-do &optional))
+  (let ((nodes nil)
+        (last-node nil)
+        (remaining forms))
+    (loop :while (cst:consp remaining)
+          :for current := (cst:first remaining)
+          :do
+             (cond
+               ((cst:consp (cst:rest remaining))
+                (cond
+                  ((dynamic-shorthand-let-p current)
+                   (setf last-node
+                         (make-node-dynamic-let
+                          :bindings (list (parse-dynamic-shorthand-binding current source))
+                          :subexpr (parse-do-forms
+                                    (cst:rest remaining)
+                                    parent-form
+                                    source
+                                    (source:make-location
+                                     source
+                                     (util:cst-source-range
+                                      (cst:listify (cst:rest remaining)))))
+                          :location (form-location source current)))
+                   (return))
+                  (t
+                   (push (parse-do-body-element current source) nodes))))
+               (t
+                (setf last-node (parse-do-body-last-node current parent-form source))))
+             (setf remaining (cst:rest remaining)))
+    (make-node-do
+     :nodes (nreverse nodes)
+     :last-node last-node
+     :location location)))
+
 (defun parse-do (form source)
   (declare (type cst:cst form))
 
@@ -2304,23 +2482,10 @@ Rebound to NIL parsing an anonymous FN.")
     (parse-error "Malformed do expression"
                  (note-end source (cst:first form) "expected one or more forms")))
 
-  (let* (last-node
-
-         (nodes (loop :for nodes := (cst:rest form) :then (cst:rest nodes)
-                      :while (cst:consp nodes)
-                      :for node := (cst:first nodes)
-
-                      ;; Not the last node
-                      :if (cst:consp (cst:rest nodes))
-                        :collect (parse-do-body-element node source)
-
-                      :else
-                        :do (setf last-node (parse-do-body-last-node node (cst:first form) source)))))
-
-    (make-node-do
-     :nodes nodes
-     :last-node last-node
-     :location (form-location source form))))
+  (parse-do-forms (cst:rest form)
+                  (cst:first form)
+                  source
+                  (form-location source form)))
 
 (defun do-bind-p (form)
   "Returns t if FORM is in the form of (x <- y+)"
@@ -2410,7 +2575,7 @@ Rebound to NIL parsing an anonymous FN.")
                  (note source (cst:fourth form) "unexpected form")))
 
   (make-node-let-declare
-   :name (parse-variable (cst:second form) source)
+   :name (parse-ordinary-variable (cst:second form) source)
    :type (parse-qualified-type (cst:third form) source)
    :location (form-location source form)))
 

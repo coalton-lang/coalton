@@ -594,6 +594,10 @@ Coalton offers three main ways to do explicit loops:
 
 Coalton strives to ensure tail calls are always eliminated. As such, tail recursion is idiomatic in Coalton.
 
+One important exception is `dynamic-bind`: rebinding a dynamic variable around a
+call introduces dynamic scope setup/teardown, so a call inside that
+`dynamic-bind` is not treated as tail-recursive.
+
 ```lisp
 (coalton-toplevel
   (define (find-integer predicate limit)
@@ -1558,6 +1562,80 @@ Function definitions create an implicit `progn` block
     (let y_ = (into y))
     (<> x_ y_)))
 ```
+
+## Dynamic Variables
+
+Coalton also supports dynamically scoped variables, similar to Common Lisp
+special variables.
+
+- Dynamic variable names must begin and end with `*`, and must contain at
+  least one non-`*` character, such as `*x*` or `*current-port*`.
+- Ordinary lexical variables cannot use earmuff names.
+- Dynamic variables are defined and declared with the usual `define` and
+  `declare` forms.
+
+```lisp
+(coalton-toplevel
+  (declare *base* Integer)
+  (define *base* 10)
+
+  (define (base-value)
+    *base*))
+```
+
+Referencing a dynamic variable uses the variable name directly:
+
+```lisp
+(coalton
+  *base*)
+```
+
+To rebind one or more dynamic variables, use `dynamic-bind`:
+
+```lisp
+(coalton
+  (dynamic-bind ((*base* 20))
+    (base-value))) ; returns 20
+```
+
+Inside `progn`, function bodies, and similar flattened-body contexts, there is
+also shorthand syntax:
+
+```lisp
+(coalton-toplevel
+  (define (f)
+    (let *base* = 20)
+    (base-value))) ; returns 20
+```
+
+Dynamic bindings are parallel and non-recursive. That means each initializer is
+checked in the outer environment and can refer to the old dynamic value:
+
+```lisp
+(coalton-toplevel
+  (declare *left* Integer)
+  (define *left* 1)
+  (declare *right* Integer)
+  (define *right* 2)
+
+  (define swapped
+    (dynamic-bind ((*left* *right*)
+                   (*right* *left*))
+      (Tuple *left* *right*))))
+```
+
+The type of a dynamic rebinding must preserve the variable's existing type.
+Polymorphic dynamic variables use the same value-restriction and variance checks
+as ordinary inferred bindings, so expansive rebindings are only accepted when
+their weak type variables can be generalized safely.
+
+Dynamic variables may have any ordinary Coalton type, including function types.
+The restriction is on rebinding, not on the declared type: each rebinding must
+preserve the variable's existing type, and polymorphic rebindings remain subject
+to the usual value restriction.
+
+Because `dynamic-bind` establishes and later restores dynamic scope, wrapping a
+recursive call in `dynamic-bind` breaks tail recursion.
 
 ## Unless and When
 

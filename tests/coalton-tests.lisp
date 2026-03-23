@@ -28,6 +28,7 @@
   (%run-tests "parse-cond.txt")
   (%run-tests "parse-continue.txt")
   (%run-tests "parse-declare.txt")
+  (%run-tests "parse-dynamic.txt")
   (%run-tests "parse-do.txt")
   (%run-tests "parse-expression.txt")
   (%run-tests "parse-fn.txt")

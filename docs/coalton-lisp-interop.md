@@ -189,6 +189,13 @@ Consider the following definitions:
 
 **PROMISE**: Assuming it is unconstrained, `f` will be a function in Lisp of the same arity found at the definition site.
 
+**PROMISE**: A top-level Coalton dynamic variable will also exist in Lisp as a
+global special variable of the same name, as if established by `defvar`.
+
+**WARNING**: The consequences are undefined if Common Lisp code mutates that
+special variable directly, or dynamically rebinds it around the execution of
+Coalton code.
+
 **PROMISE**: If a Coalton function or method definition is marked `inline`, the generated Common
 Lisp code will include a `cl:declaim` for `cl:inline` on the generated function.
 

@@ -23,7 +23,9 @@
   (body               #'identity :type function :read-only t)
   (abstraction        #'identity :type function :read-only t)
   (let-binding        #'identity :type function :read-only t)
+  (dynamic-binding    #'identity :type function :read-only t)
   (let                #'identity :type function :read-only t)
+  (dynamic-let        #'identity :type function :read-only t)
   (lisp               #'identity :type function :read-only t)
   (match-branch       #'identity :type function :read-only t)
   (match              #'identity :type function :read-only t)
@@ -132,6 +134,17 @@
       :value (traverse (node-let-binding-value node) block)
       :location (source:location node))))
 
+  (:method ((node node-dynamic-binding) block)
+    (declare (type traverse-block block)
+             (values node-dynamic-binding &optional))
+
+    (funcall
+     (traverse-dynamic-binding block)
+     (make-node-dynamic-binding
+      :name (node-dynamic-binding-name node)
+      :value (traverse (node-dynamic-binding-value node) block)
+      :location (source:location node))))
+
   (:method ((node node-for-binding) block)
     (declare (type traverse-block block)
              (values node-for-binding &optional))
@@ -153,6 +166,18 @@
       :location (source:location node)
       :bindings (traverse (node-let-bindings node) block)
       :body (traverse (node-let-body node) block))))
+
+  (:method ((node node-dynamic-let) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+
+    (funcall
+     (traverse-dynamic-let block)
+     (make-node-dynamic-let
+      :type (node-type node)
+      :location (source:location node)
+      :bindings (traverse (node-dynamic-let-bindings node) block)
+      :subexpr (traverse (node-dynamic-let-subexpr node) block))))
 
   (:method ((node node-lisp) block)
     (declare (type traverse-block block)

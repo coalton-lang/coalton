@@ -259,8 +259,12 @@ Example:
                            (function-declared-inline-p name env))
                   :collect name)))
     (append
-     ;; Predeclare symbol macros
+     ;; Predeclare ordinary globals and special dynamic variables.
      (loop :for (name . node) :in bindings
+           :if (util:dynamic-variable-name-p name)
+             :append `((declaim (special ,name))
+                       (defvar ,name))
+           :else
            :collect `(global-lexical:define-global-lexical ,name ,(tc:lisp-type (node-type node) env)))
 
      ;; Function declarations
@@ -281,11 +285,11 @@ Example:
      (loop :for (name . node) :in bindings
            :if (node-abstraction-p node)
              :append (append
-                      ;; Keep emitted definitions globally inline for Lisp callers,
-                      ;; but stop inline SCC members from recursively inlining each
-                      ;; other while their own bodies are compiled.
-                      (when (function-declared-inline-p name env)
-                        `((declaim (inline ,name))))
+                     ;; Keep emitted definitions globally inline for Lisp callers,
+                     ;; but stop inline SCC members from recursively inlining each
+                     ;; other while their own bodies are compiled.
+                     (when (function-declared-inline-p name env)
+                       `((declaim (inline ,name))))
                       (list
                        (compile-function name
                                          node
