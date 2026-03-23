@@ -273,7 +273,7 @@
                              :tyvar-writer #'write-markdown-tyvar
                              :keyword-name-writer #'markdown-keyword-name
                              :arrow-string (html-entities:encode-entities " → ")
-                             :implication-string (html-entities:encode-entities "⇒")
+                             :implication-string (html-entities:encode-entities " ⇒ ")
                              :forall-string (html-entities:encode-entities "∀")))))
 
 (defmethod to-markdown ((object tc:ty))
