@@ -1,0 +1,590 @@
+(cl:in-package #:coalton-native-tests)
+
+(coalton-toplevel
+  (define (recursive-predicate x inc goal)
+    (if (== x goal)
+        goal
+        (recursive-predicate (+ x inc) inc goal))))
+
+;; Test that functions with typeclass constraints call themselves recursively
+;; This was bugged in the past #216 #147 #125
+(define-test test-recursive-predicate ()
+  (is (== (recursive-predicate 0 1 5) 5)))
+
+(coalton-toplevel
+  (define (keyword-add-runtime x &key (offset 1) (scale 1))
+    (+ (* x scale) offset))
+
+  (define (keyword-only-runtime &key (x 1))
+    x)
+
+  (define (keyword-default-chain-runtime base &key (offset (+ base 1)) (total (+ offset 1)))
+    total)
+
+  (define (keyword-run-runtime f x)
+    (f x))
+
+  (define (keyword-run0-runtime f)
+    (f))
+
+  (define (keyword-timeout-run-runtime f x)
+    (f x :timeout 5))
+
+  (define (keyword-string-run-runtime f)
+    (f :x "hi"))
+
+  (define (plain-id-runtime x)
+    x)
+
+  (define (keyword-id0-runtime &key (timeout 0) (extra 10))
+    (+ timeout extra))
+
+  (define (keyword-id-runtime x &key (timeout 0) (extra 10))
+    (+ (+ x timeout) extra))
+
+  (define (keyword-string-source-runtime &key (x "x") (_y "y"))
+    x)
+
+  (define-class (KeywordMethodRuntime :a)
+    (keyword-method-runtime (:a &key (:offset Integer) -> Integer)))
+
+  (define-instance (KeywordMethodRuntime Integer)
+    (define (keyword-method-runtime x &key (offset 1))
+      (+ x offset))))
+
+(coalton-toplevel
+  (declare type-of-literal-string String)
+  (define type-of-literal-string
+    (show-as-string (type-of 1)))
+
+  (declare type-of-erroring-expression-string String)
+  (define type-of-erroring-expression-string
+    (show-as-string
+     (type-of
+      (lisp (-> Integer) ()
+        (cl:error "type-of should not evaluate this expression")))))
+
+  (declare type-of-keyword-function-string String)
+  (define type-of-keyword-function-string
+    (show-as-string
+     (type-of
+      (fn (x y &key (z 0))
+        (* z (+ x y))))))
+
+  (declare type-of-local-variable-string (:a -> String))
+  (define (type-of-local-variable-string _x)
+    (show-as-string (type-of _x)))
+
+  (declare string-prefix? (String * String -> Boolean))
+  (define (string-prefix? prefix s)
+    (lisp (-> Boolean) (prefix s)
+      (cl:let ((prefix-len (cl:length prefix)))
+        (cl:and (cl:<= prefix-len (cl:length s))
+                (cl:string= prefix s :end1 prefix-len :end2 prefix-len)))))
+
+  (declare string-contains? (String * String -> Boolean))
+  (define (string-contains? needle haystack)
+    (lisp (-> Boolean) (needle haystack)
+      (cl:not (cl:null (cl:search needle haystack)))))
+
+  (declare runtime-repr-is-function-entry? (types:RuntimeRepr :a => types:Proxy :a -> Boolean))
+  (define (runtime-repr-is-function-entry? p)
+    (let repr = (types:runtime-repr p))
+    (lisp (-> Boolean) (repr)
+      (cl:eq repr 'coalton-impl/runtime/function-entry:function-entry))))
+
+(define-test test-keyword-arguments-runtime ()
+  (is (== (keyword-add-runtime 2) 3))
+  (is (== (keyword-add-runtime 2 :offset 3) 5))
+  (is (== (keyword-add-runtime 2 :scale 4 :offset 3) 11))
+  (is (== (keyword-only-runtime) 1))
+  (is (== (keyword-default-chain-runtime 10) 12))
+  (is (== (keyword-default-chain-runtime 10 :offset 20) 21)))
+
+(define-test test-keyword-higher-order-runtime ()
+  (is (== (keyword-run-runtime plain-id-runtime 7) 7))
+  (is (== (keyword-run0-runtime keyword-id0-runtime) 10))
+  (is (== (keyword-run-runtime keyword-id-runtime 7) 17))
+  (is (== (keyword-timeout-run-runtime keyword-id-runtime 7) 22))
+  (is (== (keyword-string-run-runtime keyword-string-source-runtime) "hi")))
+
+(define-test test-keyword-instance-method-runtime ()
+  (is (== (keyword-method-runtime 10) 11))
+  (is (== (keyword-method-runtime 10 :offset 5) 15)))
+
+(define-test test-type-of-shows-constrained-polymorphic-types ()
+  (is (== type-of-literal-string
+          "∀ :A. COALTON/CLASSES:NUM :A ⇒ :A")))
+
+(define-test test-type-of-does-not-evaluate-its-expression ()
+  (is (== type-of-erroring-expression-string
+          "COALTON:INTEGER")))
+
+(define-test test-type-of-shows-keyword-function-types ()
+  (is (== type-of-keyword-function-string
+          "∀ :A. COALTON/CLASSES:NUM :A ⇒ (:A * :A &key (:z :A) → :A)")))
+
+(define-test test-type-of-shows-local-type-variables ()
+  (is (== (type-of-local-variable-string True)
+          "∀ :A. :A")))
+
+(define-test test-synthesized-runtime-repr-for-general-function-types ()
+  (is (runtime-repr-is-function-entry?
+       (the (types:Proxy (Integer * String -> Boolean * Char)) types:Proxy))))
+
+(coalton-toplevel
+  (derive Eq)
+  (define-struct (CollectionTrace :elt)
+    (initial-size-hint (Optional UFix))
+    (items (List (Tuple UFix :elt))))
+
+  (derive Eq)
+  (define-struct (AssociationTrace :key :value)
+    (initial-size-hint (Optional UFix))
+    (items (List (Tuple UFix (Tuple :key :value)))))
+
+  (define-instance (FromItemizedCollection (CollectionTrace :elt)
+                                           :elt
+                                           (Tuple (Optional UFix) (List (Tuple UFix :elt))))
+    (define (begin-collection-builder _ size)
+      (Tuple (Some size) Nil))
+    (define (adjoin-to-collection-builder _ builder index item)
+      (match builder
+        ((Tuple initial-size-hint items)
+         (Tuple initial-size-hint
+                (Cons (Tuple index item) items)))))
+    (define (finalize-collection-builder _ builder)
+      (match builder
+        ((Tuple initial-size-hint items)
+         (CollectionTrace initial-size-hint
+                          (reverse items))))))
+
+  (define-instance (FromCollectionComprehension (CollectionTrace :elt)
+                                                :elt
+                                                (Tuple UFix (CollectionTrace :elt)))
+    (define (begin-collection-comprehension _ size-hint)
+      (Tuple 0 (CollectionTrace size-hint Nil)))
+    (define (adjoin-to-collection-comprehension _ builder item)
+      (match builder
+        ((Tuple index (CollectionTrace initial-size-hint items))
+         (Tuple (+ index 1)
+                (CollectionTrace initial-size-hint
+                                 (Cons (Tuple index item) items))))))
+    (define (finalize-collection-comprehension _ builder)
+      (match builder
+        ((Tuple _ (CollectionTrace initial-size-hint items))
+         (CollectionTrace initial-size-hint
+                          (reverse items))))))
+
+  (define-instance (FromItemizedAssociation (AssociationTrace :key :value)
+                                            :key
+                                            :value
+                                            (Tuple (Optional UFix)
+                                                   (List (Tuple UFix (Tuple :key :value)))))
+    (define (begin-association-builder _ size)
+      (Tuple (Some size) Nil))
+    (define (adjoin-to-association-builder _ builder index key value)
+      (match builder
+        ((Tuple initial-size-hint items)
+         (Tuple initial-size-hint
+                (Cons (Tuple index (Tuple key value)) items)))))
+    (define (finalize-association-builder _ builder)
+      (match builder
+        ((Tuple initial-size-hint items)
+         (AssociationTrace initial-size-hint
+                           (reverse items))))))
+
+  (define-instance (FromAssociationComprehension (AssociationTrace :key :value)
+                                                 :key
+                                                 :value
+                                                 (Tuple UFix (AssociationTrace :key :value)))
+    (define (begin-association-comprehension _ size-hint)
+      (Tuple 0 (AssociationTrace size-hint Nil)))
+    (define (adjoin-to-association-comprehension _ builder key value)
+      (match builder
+        ((Tuple index (AssociationTrace initial-size-hint items))
+         (Tuple (+ index 1)
+                (AssociationTrace initial-size-hint
+                                  (Cons (Tuple index (Tuple key value)) items))))))
+    (define (finalize-association-comprehension _ builder)
+      (match builder
+        ((Tuple _ (AssociationTrace initial-size-hint items))
+         (AssociationTrace initial-size-hint
+                           (reverse items))))))
+
+)
+
+(coalton-toplevel
+
+  (define list-builder-runtime
+    (the (List Integer) [1 2 3]))
+
+  (define vector-builder-runtime
+    (the (coalton/vector:Vector Integer) [1 2 3]))
+
+  (define lisparray-builder-runtime
+    (the (coalton/lisparray:LispArray Integer) [1 2 3]))
+
+  (define lisparray-comprehension-runtime
+    (the (coalton/lisparray:LispArray Integer)
+         [(* x 2)
+          :for x :in (iter:take! 2 (iter:filter! even? (iter:count-forever)))]))
+
+  (define queue-builder-runtime
+    (the (coalton/queue:Queue Integer) [1 2 3]))
+
+  (define seq-comprehension-runtime
+    (the (seq:Seq Integer)
+         [(* x y)
+          :for x :below 4
+          :with y = (+ x 1)
+          :when (even? x)]))
+
+  (define seq-below-runtime (the (seq:Seq Integer) [(* x x) :for x :below 5]))
+
+  (define association-seq-runtime
+    (the (seq:Seq (Tuple Integer Integer))
+         [x => (* x x)
+          :for x :in (iter:take! 4 (iter:filter! even? (iter:count-forever)))]))
+
+  (define association-below-runtime
+    (the (seq:Seq (Tuple Integer Integer)) [x => (* x x) :for x :below 4]))
+
+  (define empty-association-runtime (the (seq:Seq (Tuple Integer Integer)) [=>]))
+
+  (define ordmap-builder-runtime
+    (the (coalton/ordmap:OrdMap Integer Integer) [x => (* x x) :for x :below 4]))
+
+  (define hashmap-builder-runtime
+    (the (hashmap:HashMap Integer Integer) [x => (* x x) :for x :below 4]))
+
+  (define hashtable-builder-runtime
+    (the (coalton/hashtable:Hashtable Integer Integer) [x => (* x x) :for x :below 4]))
+
+  (define collection-builder-trace-runtime
+    (the (CollectionTrace Integer)
+         [10 20 30]))
+
+  (define collection-comprehension-trace-runtime
+    (the (CollectionTrace Integer)
+         [(* x 2)
+          :for x :in (iter:take! 2 (iter:filter! even? (iter:count-forever)))]))
+
+  (define collection-below-trace-runtime
+    (the (CollectionTrace Integer) [(* x 2) :for x :below 5 :when (even? x)]))
+
+  (define association-builder-trace-runtime
+    (the (AssociationTrace Integer Integer)
+         [1 => 2 3 => 4]))
+
+  (define association-comprehension-trace-runtime
+    (the (AssociationTrace Integer Integer)
+         [x => (* x x)
+          :for x :in (iter:take! 2 (iter:filter! even? (iter:count-forever)))])))
+
+(define-test test-reader-builder-syntax-runtime ()
+  (is (== list-builder-runtime (make-list 1 2 3)))
+  (is (== (coalton/vector:length vector-builder-runtime) 3))
+  (is (== (coalton/vector:index 1 vector-builder-runtime) (Some 2)))
+  (is (== (coalton/lisparray:length lisparray-builder-runtime) 3))
+  (is (== (coalton/lisparray:aref lisparray-builder-runtime 1) 2))
+  (is (== (coalton/lisparray:length lisparray-comprehension-runtime) 2))
+  (is (== (coalton/lisparray:aref lisparray-comprehension-runtime 0) 0))
+  (is (== (coalton/lisparray:aref lisparray-comprehension-runtime 1) 4))
+  (is (== (coalton/queue:length queue-builder-runtime) 3))
+  (is (== (coalton/queue:index 2 queue-builder-runtime) (Some 3)))
+  (is (== (the (List Integer) (into seq-comprehension-runtime))
+          (make-list 0 6)))
+  (is (== (the (List Integer) (into seq-below-runtime))
+          (make-list 0 1 4 9 16)))
+  (is (== (the (List (Tuple Integer Integer)) (into association-seq-runtime))
+          (make-list (Tuple 0 0)
+                     (Tuple 2 4)
+                     (Tuple 4 16)
+                     (Tuple 6 36))))
+  (is (== (the (List (Tuple Integer Integer)) (into association-below-runtime))
+          (make-list (Tuple 0 0)
+                     (Tuple 1 1)
+                     (Tuple 2 4)
+                     (Tuple 3 9))))
+  (is (== (the (List (Tuple Integer Integer)) (into empty-association-runtime))
+          Nil))
+  (is (== (coalton/ordmap:lookup ordmap-builder-runtime 0) (Some 0)))
+  (is (== (coalton/ordmap:lookup ordmap-builder-runtime 3) (Some 9)))
+  (is (== (hashmap:count hashmap-builder-runtime) 4))
+  (is (== (hashmap:lookup hashmap-builder-runtime 0) (Some 0)))
+  (is (== (hashmap:lookup hashmap-builder-runtime 3) (Some 9)))
+  (is (== (coalton/hashtable:count hashtable-builder-runtime) 4))
+  (is (== (coalton/hashtable:get hashtable-builder-runtime 0) (Some 0)))
+  (is (== (coalton/hashtable:get hashtable-builder-runtime 3) (Some 9)))
+  (is (== collection-builder-trace-runtime
+          (CollectionTrace (Some (the UFix 3))
+                           (make-list (Tuple (the UFix 0) 10)
+                                      (Tuple (the UFix 1) 20)
+                                      (Tuple (the UFix 2) 30)))))
+  (is (== collection-comprehension-trace-runtime
+          (CollectionTrace None
+                           (make-list (Tuple (the UFix 0) 0)
+                                      (Tuple (the UFix 1) 4)))))
+  (is (== collection-below-trace-runtime
+          (CollectionTrace None
+                           (make-list (Tuple (the UFix 0) 0)
+                                      (Tuple (the UFix 1) 4)
+                                      (Tuple (the UFix 2) 8)))))
+  (is (== association-builder-trace-runtime
+          (AssociationTrace (Some (the UFix 2))
+                            (make-list (Tuple (the UFix 0) (Tuple 1 2))
+                                       (Tuple (the UFix 1) (Tuple 3 4))))))
+  (is (== association-comprehension-trace-runtime
+          (AssociationTrace None
+                            (make-list (Tuple (the UFix 0) (Tuple 0 0))
+                                       (Tuple (the UFix 1) (Tuple 2 4)))))))
+
+(coalton-toplevel
+  (define (gh-295-f a)
+    (let ((g (fn (x)
+               (== x (make-list a)))))
+      g)))
+
+;; See gh #295
+(define-test test-deferred-predicate-removal ()
+  (progn
+    (is (== ((gh-295-f (the Integer 1)) (make-list 2 3 4)) False))
+    (is (== ((gh-295-f (the Integer 1)) (make-list 1)) True))))
+
+
+;; Test that functions can be given explicit predicates in any order
+;; See gh #377
+(coalton-toplevel
+  (declare gh-377-a ((Num :a) (Ord :a) => :a * :a * :a -> (List :a)))
+  (define (gh-377-a step start end)
+    (let ((inner
+            (fn (current acc)
+              (if (> current end)
+                  acc
+                  (inner (+ current step)
+                         (Cons current acc))))))
+      (inner start Nil)))
+
+ (declare gh-377-b ((Ord :a) (Num :a) => :a * :a * :a -> (List :a)))
+  (define (gh-377-b step start end)
+    (let ((inner
+            (fn (current acc)
+              (if (> current end)
+                  acc
+                  (inner (+ current step)
+                         (Cons current acc))))))
+      (inner start Nil))))
+
+(define-test test-explicit-predicate-order ()
+  (progn
+    (is (== (gh-377-a (the Integer 1) 0 5)
+            (make-list 5 4 3 2 1 0)))
+    (is (== (gh-377-b (the Integer 1) 0 5)
+            (make-list 5 4 3 2 1 0)))))
+
+
+;; Test that classes can have both methods and constants in either order
+;; See gh #400
+(coalton-toplevel
+  (define-class (Gh-400-a :a)
+    (gh-400-a-constant :a)
+    (gh-400-a-method (:a -> :a)))
+
+  (define-class (Gh-400-b :a)
+    (gh-400-b-method (:a -> :a))
+    (gh-400-b-constant :a))
+
+  (define-instance (Gh-400-a Integer)
+    (define gh-400-a-constant 5)
+    (define (gh-400-a-method x) x))
+
+  (define-instance (Gh-400-b Integer)
+    (define (gh-400-b-method x) x)
+    (define gh-400-b-constant 5)))
+
+(define-test test-class-constant-in-embedded-coalton ()
+  (is (== 5
+          (lisp (-> Integer) ()
+            (cl:eval '(coalton:coalton (the Integer gh-400-a-constant))))))
+  (is (== 5
+          (lisp (-> Integer) ()
+            (cl:eval '(coalton:coalton (the Integer gh-400-b-constant)))))))
+
+;; Test that classes can have method constraints
+(coalton-toplevel
+  (define-class (Gh-430 :a)
+    (gh-430-m (Num :b => :a * :b * :b -> :b)))
+
+  (define-instance (Gh-430 String)
+    (define (gh-430-m a b c)
+      (+ b c))))
+
+(define-test test-method-constraints ()
+  (is (== 5 (gh-430-m "str" 2 3)))
+  (is (== 2 (gh-430-m "hello" 1 1))))
+
+;; Test that unused instance predicates are compiled correctly
+;; See gh #463
+
+(coalton-toplevel
+  (define-class (Gh-463 :a)
+    (gh-463-m (:a * :a -> :a)))
+
+  (define-instance (Num :a => Gh-463 :a)
+    (define (gh-463-m x y)
+      x))
+
+  (define (gh-463-f x)
+    (gh-463-m x 2)))
+
+(define-test test-unused-instance-constraint ()
+  (is (== 3 (gh-463-f 3))))
+
+;; Test defaulting and context reduction
+(define-test test-defaulting ()
+  (is (== (liftA2 (fn (mx my)
+                    (liftA2 + mx my))
+                  (Some (Some (the Integer 1)))
+                  (Some (Some 2)))
+          (Some (Some 3)))))
+
+
+;; Test that explicit type declarations in let bindings work
+;; See gh #478
+(define-test test-explicit-type-decs-in-let ()
+  (let ((declare z (Num :a => :a -> :a))
+        (z id))
+    (z 5)))
+
+;; Test multi param typeclass context reduction
+(coalton-toplevel
+  (declare context-reduction (Into :a Integer => :a -> Integer))
+  (define (context-reduction x)
+    (into x)))
+
+;; Check that defaulting propagates through let bindings
+;; See gh #526
+(coalton-toplevel
+  (define gh-526
+    (let ((y (even? 2)))
+      y)))
+
+(define-test test-defaulting-propagation ()
+  (is (== True gh-526)))
+
+;; Check that defaulted monomorphized bindings work
+(coalton-toplevel
+  (define gh-654 +))
+
+(define-test test-monomorphized-defaulting ()
+  (is (== 2 (gh-654 1 1))))
+
+
+;; Check that codegen for fundep classes works
+(coalton-toplevel
+  (define-class (Mult :a :b :c (:a :b -> :c))
+    (_* (:a * :b -> :c))))
+
+(coalton-toplevel
+  (define-class (Gh-968 :a)
+    (gh-968-m (:a -> :a)))
+
+  (define-class (Gh-968 :a => Gh-968-b :a))
+
+  (declare gh-968-f (Gh-968-b :a => :a -> :a))
+  (define (gh-968-f x)
+    (gh-968-m x))
+
+  (define-instance (gh-968 Unit)
+    (define gh-968-m (fn (x) x)))
+
+  (define-instance (gh-968-b Unit))
+
+  (define gh-968-x (gh-968-f Unit)))
+
+(coalton-toplevel
+  (define-type (WrapperT :a)
+    (Single :a)
+    (Many (Vector (WrapperT :a))))
+
+  (define-instance (Eq :a => Eq (WrapperT :a))
+    (define (== a b)
+      (match (Tuple a b)
+        ((Tuple (Single x) (Single y))
+         (== x y))
+
+        ((Tuple (Many xs) (Many ys))
+         (== xs ys))
+
+        (_ False)))))
+
+(define-test test-gh-973 ()
+    (is (== (Many (vector:make (Single "hello")))
+            (Many (vector:make (Single "hello"))))))
+
+;; Test accessors on transparent structs
+(coalton-toplevel
+  (repr :transparent)
+  (define-struct (TransparentWrapper :a)
+    (inner :a)))
+
+(define-test test-transparent-wrapper ()
+  (is (== (make-list "x")
+          (map .inner (make-list (TransparentWrapper "x"))))))
+
+;; Test iter:into-iter (see i1198)
+
+(coalton-toplevel
+  (define (gh-974)
+    (iter:into-iter iter:Empty))
+  (define (gh-975)
+    (iter:into-iter Nil))
+  (define (gh-976)
+    (iter:into-iter (iter:into-iter iter:Empty))))
+
+(define-test test-into-iter-iter-empty ()
+  (is (none? (iter:next! (gh-974))))
+  (is (none? (iter:next! (gh-975))))
+  (is (none? (iter:next! (gh-976)))))
+
+(cl:defpackage #:tail-call-elimination-tests
+  (:use #:coalton #:coalton-prelude)
+  (:export
+   #:foo1))
+
+(cl:in-package #:tail-call-elimination-tests)
+
+(coalton-toplevel
+
+  (define-class (Bar1 :t)
+    (bar1 (:t -> :t)))
+
+  (define-instance (Bar1 UFix)
+    (define (bar1 x)
+      (if (< x 10000000)
+          (foo1 x)
+          x)))
+
+  (define-instance (Bar1 Integer)
+    (define (bar1 x)
+      (if (< x 10000000)
+          (foo1 x)
+          x)))
+
+  (define (foo1 x)
+    (bar1 (1+ x))))
+
+(cl:in-package #:coalton-native-tests)
+
+(define-test tail-call-elimination-test1 ()
+  "A test for tail-call-elimination in the case of mutual recursion with
+a polymorphic function and a type class method.
+
+This test is expected to fail with SBCL for versions below 2.5.7.38."
+  (is (== 10000000 (tail-call-elimination-tests::foo1 (the UFix 0))))
+  (is (== 10000000 (tail-call-elimination-tests::foo1 (the Integer 0)))))
+
+(define-test test-nullary-or-and ()
+  (is (and))
+  (is (not (or))))

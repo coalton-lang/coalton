@@ -1,0 +1,302 @@
+(in-package #:coalton-native-tests)
+
+(coalton-toplevel
+  (declare unwrap-ok (Result String :a -> :a))
+  (define (unwrap-ok result)
+    (match result
+      ((Ok x) x)
+      ((Err msg) (error msg))))
+
+  (declare sqrt2 ra:RealAlgebraic)
+  (define sqrt2
+    (unwrap-ok (ra:root (make-list 1 0 -2) 1 2)))
+
+  (declare sqrt2-alt ra:RealAlgebraic)
+  (define sqrt2-alt
+    ;; Same root represented through a polynomial with repeated roots.
+    (unwrap-ok (ra:root (make-list 1 0 -4 0 4) 1 2)))
+
+  (declare interval-width (ra:RealAlgebraic -> Fraction))
+  (define (interval-width x)
+    (match (ra:isolating-interval x)
+      ((Tuple lo hi) (- hi lo))))
+
+  ;; Deterministic LCG so fuzz-like tests are reproducible.
+  (declare ra-fuzz/modulus Integer)
+  (define ra-fuzz/modulus
+    (bits:shift 64 1))
+
+  (declare ra-fuzz-next (Integer -> Integer))
+  (define (ra-fuzz-next seed)
+    (mod (+ (* 6364136223846793005 seed)
+            1442695040888963407)
+         ra-fuzz/modulus))
+
+  (declare ra-fuzz-bounded (Integer * Integer * Integer -> Integer))
+  (define (ra-fuzz-bounded seed lo hi)
+    (+ lo
+       (mod seed
+            (+ (- hi lo) 1))))
+
+  (declare ra-fuzz-fraction (Integer -> (Tuple Integer Fraction)))
+  (define (ra-fuzz-fraction seed)
+    "Return next seed and a fraction with small numerator/denominator."
+    (let s1 = (ra-fuzz-next seed))
+    (let s2 = (ra-fuzz-next s1))
+    (let num = (ra-fuzz-bounded s1 -40 40))
+    (let den = (ra-fuzz-bounded s2 1 23))
+    (Tuple s2 (math:general/ num den)))
+
+  (declare ra-fuzz-nonsquare (Integer -> (Tuple Integer Integer)))
+  (define (ra-fuzz-nonsquare seed)
+    "Return next seed and a non-square integer in [2, 200]."
+    (let s1 = (ra-fuzz-next seed))
+    (let n = (+ 2 (mod s1 199)))
+    (let k = (math:isqrt n))
+    (if (== (* k k) n)
+        (ra-fuzz-nonsquare s1)
+        (Tuple s1 n))))
+
+(define-test realalgebraic-construction-and-comparison-test ()
+  (let bounds = (ra:isolating-interval sqrt2))
+  (match bounds
+    ((Tuple lo hi)
+     (is (< lo hi))
+     (is (< lo 2))
+     (is (> hi 1))))
+
+  (is (> sqrt2 1))
+  (is (< sqrt2 2))
+  (is (== sqrt2 sqrt2-alt)))
+
+(define-test realalgebraic-arithmetic-test ()
+  (is (== (* sqrt2 sqrt2) 2))
+  (is (== (/ sqrt2 sqrt2) 1))
+  (is (== (* (+ sqrt2 1)
+             (- sqrt2 1))
+          1))
+  (is (== (+ sqrt2 (- 0 sqrt2)) 0)))
+
+(define-test realalgebraic-exact-cancellation-test ()
+  ;; Exact identity (base form):
+  ;;   (sqrt(2) + sqrt(3))^2 = 5 + 2*sqrt(6)
+  ;; This directly implies the larger example
+  ;;   (sqrt(2) + sqrt(3))^40 = (5 + 2*sqrt(6))^20
+  ;; while keeping the unit test fast.
+  (let lhs =
+    (^ (+ (math:sqrt (the ra:RealAlgebraic (fromInt 2)))
+          (math:sqrt (the ra:RealAlgebraic (fromInt 3))))
+       2))
+  (let rhs =
+    (^ (+ (the ra:RealAlgebraic (fromInt 5))
+          (* (the ra:RealAlgebraic (fromInt 2))
+             (math:sqrt (the ra:RealAlgebraic (fromInt 6)))))
+       1))
+  (is (== lhs rhs))
+  (is (== (- lhs rhs) 0)))
+
+(define-test realalgebraic-radical-test ()
+  (let two = (the ra:RealAlgebraic (fromInt 2)))
+  (let n33 = (the ra:RealAlgebraic (fromInt 33)))
+  (let root33 = (math:nth-root 5 n33))
+  (is (== (math:sqrt (the ra:RealAlgebraic (fromInt 9)))
+          (the ra:RealAlgebraic (fromInt 3))))
+  (is (== (math:sqrt two) sqrt2))
+  (is (== (math:nth-root 3 (the ra:RealAlgebraic (fromInt 27)))
+          (the ra:RealAlgebraic (fromInt 3))))
+  (is (== (math:nth-root 3 (the ra:RealAlgebraic (fromInt -27)))
+          (the ra:RealAlgebraic (fromInt -3))))
+  (is (== (^ root33 5) n33)))
+
+(define-test realalgebraic-radical-domain-test ()
+  (is (lisp (-> Boolean) ()
+        (cl:handler-case
+            (cl:progn
+              (coalton:coalton
+                (math:sqrt (the ra:RealAlgebraic (fromInt -1))))
+              cl:nil)
+          (cl:error () cl:t))))
+  (is (lisp (-> Boolean) ()
+        (cl:handler-case
+            (cl:progn
+              (coalton:coalton
+                (math:nth-root 2 (the ra:RealAlgebraic (fromInt -1))))
+              cl:nil)
+          (cl:error () cl:t))))
+  (is (lisp (-> Boolean) ()
+        (cl:handler-case
+            (cl:progn
+              (coalton:coalton
+                (math:nth-root 0 (the ra:RealAlgebraic (fromInt 1))))
+              cl:nil)
+          (cl:error () cl:t)))))
+
+(define-test realalgebraic-roots-api-test ()
+  ;; x^3 - x = x(x - 1)(x + 1)
+  (let roots = (unwrap-ok (ra:real-roots (make-list 1 0 -1 0))))
+  (is (== 3 (length roots)))
+  (match roots
+    ((Cons r1 (Cons r2 (Cons r3 Nil)))
+     (is (== r1 -1))
+     (is (== r2 0))
+     (is (== r3 1)))
+    (_
+     (is False))))
+
+(define-test realalgebraic-roots-squarefree-normalization-test ()
+  ;; (x - 1)^2 (x + 2) = x^3 - 3x + 2 has distinct roots -2 and 1.
+  (let roots = (unwrap-ok (ra:real-roots (make-list 1 0 -3 2))))
+  (is (== 2 (length roots)))
+  (match roots
+    ((Cons r1 (Cons r2 Nil))
+     (is (== r1 -2))
+     (is (== r2 1)))
+    (_
+     (is False))))
+
+(define-test realalgebraic-zero-polynomial-rejected-test ()
+  (match (ra:real-roots (make-list 0 0 0))
+    ((Err _) (is True))
+    ((Ok _) (is False))))
+
+(define-test realalgebraic-approx-and-rational-test ()
+  (let tight = (ra:refine-to-width 1/1024 sqrt2))
+  (is (<= (interval-width tight) 1/1024))
+
+  (let q = (math:real-approx 24 sqrt2))
+  (is (< (abs (- (* q q) 2)) 1/100000))
+
+  (let rational-root = (unwrap-ok (ra:root (make-list 2 -3) 1 2)))
+  (is (ra:rational? rational-root))
+  (is (not (ra:rational? sqrt2)))
+  (is (ra:rational? rational-root))
+  (is (== (unwrap (the (Optional Fraction) (tryInto rational-root))) 3/2)))
+
+(define-test realalgebraic-exact-integer-quantization-test ()
+  (let pos-int-root = (unwrap-ok (ra:root (make-list 1 0 -4) 1 3)))
+  (let neg-int-root = (unwrap-ok (ra:root (make-list 1 0 -4) -3 -1)))
+
+  (is (== (floor pos-int-root) 2))
+  (is (== (ceiling pos-int-root) 2))
+  (let (values whole frac) = (math:proper pos-int-root))
+  (is (== whole 2))
+  (is (== frac 0))
+
+  (is (== (floor neg-int-root) -2))
+  (is (== (ceiling neg-int-root) -2))
+  (let (values whole2 frac2) = (math:proper neg-int-root))
+  (is (== whole2 -2))
+  (is (== frac2 0)))
+
+(define-test realalgebraic-printer-test ()
+  (let repr = (ra:show sqrt2))
+  (is (lisp (-> Boolean) (repr)
+        (cl:not (cl:null (cl:search "AlgRoot{poly=" repr)))))
+  (is (lisp (-> Boolean) (repr)
+        (cl:not (cl:null (cl:search "interval=(" repr)))))
+
+  (let rational-root = (unwrap-ok (ra:root (make-list 2 -3) 1 2)))
+  (is (== (ra:decimal-string 3 rational-root) "1.500"))
+  (is (== (ra:decimal-string 5 sqrt2) "1.41421"))
+
+  ;; Exact half-up rounding checks at the printed boundary.
+  (is (== (ra:decimal-string 2 (the ra:RealAlgebraic (into 1/8))) "0.13")) ; 0.125 -> 0.13
+  (is (== (ra:decimal-string 0 (the ra:RealAlgebraic (into -5/2))) "-3"))) ; -2.5 -> -3
+
+(define-test realalgebraic-fuzz-rational-roundtrip-test ()
+  (is
+   (rec go ((i 0)
+            (seed 424242))
+     (if (>= i 200)
+         True
+         (match (ra-fuzz-fraction seed)
+           ((Tuple next-seed q)
+            (let x = (the ra:RealAlgebraic (into q)))
+            (match (the (Optional Fraction) (tryInto x))
+              ((None) False)
+              ((Some qx)
+               (and (ra:rational? x)
+                    (== q qx)
+                    (go (+ i 1) next-seed))))))))))
+
+(define-test realalgebraic-fuzz-rational-arithmetic-test ()
+  (is
+   (rec go ((i 0)
+            (seed 31337))
+     (if (>= i 120)
+         True
+         (match (ra-fuzz-fraction seed)
+           ((Tuple seed1 q1)
+            (match (ra-fuzz-fraction seed1)
+              ((Tuple seed2 q2raw)
+               (match (ra-fuzz-fraction seed2)
+                 ((Tuple seed3 q3raw)
+                  (let q2 = (if (== q2raw 0) 1 q2raw))
+                  (let q3 = (if (== q3raw 0) 1 q3raw))
+                  (let x = (the ra:RealAlgebraic (into q1)))
+                  (let y = (the ra:RealAlgebraic (into q2)))
+                  (let z = (the ra:RealAlgebraic (into q3)))
+                  (and (== (+ x y) (the ra:RealAlgebraic (into (+ q1 q2))))
+                       (== (- x y) (the ra:RealAlgebraic (into (- q1 q2))))
+                       (== (* x y) (the ra:RealAlgebraic (into (* q1 q2))))
+                       (== (/ x y) (the ra:RealAlgebraic (into (/ q1 q2))))
+                       (== (/ (* x z) z) x)
+                       (== (- (+ x sqrt2) sqrt2) x)
+                       (go (+ i 1) seed3))))))))))))
+
+(define-test realalgebraic-fuzz-comparison-test ()
+  (is
+   (rec go ((i 0)
+            (seed 20260207))
+     (if (>= i 180)
+         True
+         (match (ra-fuzz-fraction seed)
+           ((Tuple seed1 q1)
+            (match (ra-fuzz-fraction seed1)
+              ((Tuple seed2 q2)
+               (let ((x (the ra:RealAlgebraic (into q1)))
+                     (y (the ra:RealAlgebraic (into q2))))
+                 (and (== (< x y) (< q1 q2))
+                      (== (> x y) (> q1 q2))
+                      (== (== x y) (== q1 q2))
+                      (go (+ i 1) seed2)))))))))))
+
+(define-test realalgebraic-performance-smoke-test ()
+  (let s2 = (math:sqrt (the ra:RealAlgebraic (fromInt 2))))
+  (let s3 = (math:sqrt (the ra:RealAlgebraic (fromInt 3))))
+  (let sum = (+ s2 s3))
+  (let expected = (+ (the ra:RealAlgebraic (fromInt 5))
+                     (* (the ra:RealAlgebraic (fromInt 2))
+                        (math:sqrt (the ra:RealAlgebraic (fromInt 6))))))
+  (is (== (* sum sum) expected))
+  (is (== s2 (math:sqrt (the ra:RealAlgebraic (fromInt 2)))))
+  (is (== (^ (math:nth-root 3 (the ra:RealAlgebraic (fromInt 5))) 3)
+          (the ra:RealAlgebraic (fromInt 5)))))
+
+(define-test realalgebraic-fuzz-root-apis-test ()
+  ;; Exercise both root construction and real-roots across many small polynomials.
+  (is
+   (rec go ((i 0)
+            (seed 777))
+     (if (>= i 80)
+         True
+         (match (ra-fuzz-nonsquare seed)
+           ((Tuple seed1 n0)
+            (let ((k (math:isqrt n0))
+                  (seed2 (ra-fuzz-next seed1)))
+              (let ((sq (unwrap-ok (ra:root (make-list 1 0 (negate n0))
+                                            (fromInt k)
+                                            (fromInt (+ k 1)))))
+                    (seed3 (ra-fuzz-next seed2))
+                    (a (ra-fuzz-bounded seed2 -25 25)))
+                (let ((b0 (ra-fuzz-bounded seed3 -25 25)))
+                  (let ((b (if (== a b0) (+ b0 1) b0)))
+                    (let ((roots (unwrap-ok (ra:real-roots (make-list 1 (negate (+ a b)) (* a b))))))
+                      (match roots
+                        ((Cons r1 (Cons r2 Nil))
+                         (and (== (* sq sq) (fromInt n0))
+                              (not (ra:rational? sq))
+                              (== r1 (fromInt (min a b)))
+                              (== r2 (fromInt (max a b)))
+                              (go (+ i 1) seed3)))
+                        (_ False)))))))))))))
