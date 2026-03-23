@@ -501,7 +501,7 @@
     "Inserts an element into a list at the first place it is less than or equal to the next element."
     (insertBy <=> e ls))
 
-  (declare insertBy ((:a * :a -> Ord) * :a * (List :a) -> (List :a)))
+  (declare insertBy ((:a * :a -> Ordering) * :a * (List :a) -> (List :a)))
   (define (insertBy cmp x ys)
     "Generic version of insert"
     (%reverse!
@@ -519,13 +519,13 @@
     "Sort `xs`."
     (sortBy <=> xs))
 
-  (declare sortBy ((:a * :a -> Ord) * (List :a) -> (List :a)))
+  (declare sortBy ((:a * :a -> Ordering) * (List :a) -> (List :a)))
   (define (sortBy cmp xs)
     "Sort `xs` by a custom comparison function `cmp`."
     (lisp (-> (List :a)) (cmp xs)
       (cl:sort (cl:copy-list xs)
                (cl:lambda (a b)
-                 (cl:eq 'coalton/classes::ord/lt (call-coalton-function cmp a b))))))
+                 (cl:eq 'coalton/classes::ordering/lt (call-coalton-function cmp a b))))))
 
   (declare intersperse (:a * (List :a) -> (List :a)))
   (define (intersperse e xs)
