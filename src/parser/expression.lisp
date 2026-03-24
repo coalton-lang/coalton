@@ -10,6 +10,7 @@
    #:parse-error)
   (:local-nicknames
    (#:cst #:concrete-syntax-tree)
+   (#:reader #:coalton-impl/parser/reader)
    (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util)
    (#:const #:coalton-impl/constants))
@@ -33,6 +34,10 @@
    #:make-node-bind                     ; CONSTRUCTOR
    #:node-bind-pattern                  ; ACCESSOR
    #:node-bind-expr                     ; ACCESSOR
+   #:node-values-bind                   ; STRUCT
+   #:make-node-values-bind              ; CONSTRUCTOR
+   #:node-values-bind-patterns          ; ACCESSOR
+   #:node-values-bind-expr              ; ACCESSOR
    #:node-body-element                  ; TYPE
    #:node-body-element-list             ; TYPE
    #:node-body                          ; STRUCT
@@ -42,13 +47,32 @@
    #:node-abstraction                   ; STRUCT
    #:make-node-abstraction              ; CONSTRUCTOR
    #:node-abstraction-params            ; ACCESSOR
+   #:node-abstraction-keyword-params    ; ACCESSOR
    #:node-abstraction-body              ; ACCESSOR
    #:node-abstraction-p                 ; FUNCTION
+   #:keyword-param                      ; STRUCT
+   #:make-keyword-param                 ; CONSTRUCTOR
+   #:keyword-param-keyword              ; ACCESSOR
+   #:keyword-param-binder               ; ACCESSOR
+   #:keyword-param-default              ; ACCESSOR
+   #:keyword-param-list                 ; TYPE
+   #:parse-fn-argument-list             ; FUNCTION
    #:node-let-binding                   ; STRUCT
    #:make-node-let-binding              ; CONSTRUCTOR
    #:node-let-binding-name              ; ACCESSOR
    #:node-let-binding-value             ; ACCESSOR
    #:node-let-binding-list              ; TYPE
+   #:node-dynamic-binding               ; STRUCT
+   #:make-node-dynamic-binding          ; CONSTRUCTOR
+   #:node-dynamic-binding-name          ; ACCESSOR
+   #:node-dynamic-binding-value         ; ACCESSOR
+   #:node-dynamic-binding-list          ; TYPE
+   #:node-for-binding                  ; STRUCT
+   #:make-node-for-binding             ; CONSTRUCTOR
+   #:node-for-binding-name             ; ACCESSOR
+   #:node-for-binding-init             ; ACCESSOR
+   #:node-for-binding-step             ; ACCESSOR
+   #:node-for-binding-list             ; TYPE
    #:node-let-declare                   ; STRUCT
    #:make-node-let-declare              ; CONSTRUCTOR
    #:node-let-declare-name              ; ACCESSOR
@@ -59,10 +83,14 @@
    #:node-let-bindings                  ; ACCESSOR
    #:node-let-declares                  ; ACCESSOR
    #:node-let-body                      ; ACCESSOR
+   #:node-let-sequential-p              ; ACCESSOR
+   #:node-dynamic-let                   ; STRUCT
+   #:make-node-dynamic-let              ; CONSTRUCTOR
+   #:node-dynamic-let-bindings          ; ACCESSOR
+   #:node-dynamic-let-subexpr           ; ACCESSOR
    #:node-lisp                          ; STRUCT
    #:make-node-lisp                     ; CONSTRUCTOR
-   #:node-lisp-type                     ; ACCESSOR
-   #:node-lisp-return-convention        ; ACCESSOR
+   #:node-lisp-output-types             ; ACCESSOR
    #:node-lisp-vars                     ; ACCESSOR
    #:node-lisp-var-names                ; ACCESSOR
    #:node-lisp-body                     ; ACCESSOR
@@ -96,13 +124,59 @@
    #:node-progn                         ; STRUCT
    #:make-node-progn                    ; CONSTRUCTOR
    #:node-progn-body                    ; ACCESSOR
+   #:node-type-of                       ; STRUCT
+   #:make-node-type-of                  ; CONSTRUCTOR
+   #:node-type-of-expr                  ; ACCESSOR
+   #:node-unsafe                        ; STRUCT
+   #:make-node-unsafe                   ; CONSTRUCTOR
+   #:node-unsafe-body                   ; ACCESSOR
    #:node-the                           ; STRUCT
    #:make-node-the                      ; CONSTRUCTOR
    #:node-the-type                      ; ACCESSOR
    #:node-the-expr                      ; ACCESSOR
+   #:node-collection-builder            ; STRUCT
+   #:make-node-collection-builder       ; CONSTRUCTOR
+   #:node-collection-builder-elements   ; ACCESSOR
+   #:association-entry                  ; STRUCT
+   #:make-association-entry             ; CONSTRUCTOR
+   #:association-entry-key              ; ACCESSOR
+   #:association-entry-value            ; ACCESSOR
+   #:association-entry-list             ; TYPE
+   #:node-association-builder           ; STRUCT
+   #:make-node-association-builder      ; CONSTRUCTOR
+   #:node-association-builder-entries   ; ACCESSOR
+   #:builder-clause                     ; STRUCT
+   #:builder-with-clause                ; STRUCT
+   #:make-builder-with-clause           ; CONSTRUCTOR
+   #:builder-with-clause-binder         ; ACCESSOR
+   #:builder-with-clause-expr           ; ACCESSOR
+   #:builder-for-clause                 ; STRUCT
+   #:make-builder-for-clause            ; CONSTRUCTOR
+   #:builder-for-clause-binder          ; ACCESSOR
+   #:builder-for-clause-expr            ; ACCESSOR
+   #:builder-below-clause               ; STRUCT
+   #:make-builder-below-clause          ; CONSTRUCTOR
+   #:builder-below-clause-binder        ; ACCESSOR
+   #:builder-below-clause-expr          ; ACCESSOR
+   #:builder-when-clause                ; STRUCT
+   #:make-builder-when-clause           ; CONSTRUCTOR
+   #:builder-when-clause-expr           ; ACCESSOR
+   #:builder-clause-list                ; TYPE
+   #:node-collection-comprehension      ; STRUCT
+   #:make-node-collection-comprehension ; CONSTRUCTOR
+   #:node-collection-comprehension-head ; ACCESSOR
+   #:node-collection-comprehension-clauses ; ACCESSOR
+   #:node-association-comprehension     ; STRUCT
+   #:make-node-association-comprehension ; CONSTRUCTOR
+   #:node-association-comprehension-key ; ACCESSOR
+   #:node-association-comprehension-value ; ACCESSOR
+   #:node-association-comprehension-clauses ; ACCESSOR
    #:node-return                        ; STRUCT
    #:make-node-return                   ; CONSTRUCTOR
    #:node-return-expr                   ; ACCESSOR
+   #:node-values                        ; STRUCT
+   #:make-node-values                   ; CONSTRUCTOR
+   #:node-values-nodes                  ; ACCESSOR
    #:node-throw                         ; STRUCT
    #:make-node-throw                    ; CONSTRUCTOR
    #:node-throw-expr                    ; ACCESSOR
@@ -113,6 +187,12 @@
    #:make-node-application              ; CONSTRUCTOR
    #:node-application-rator             ; ACCESSOR
    #:node-application-rands             ; ACCESSOR
+   #:node-application-keyword-rands     ; ACCESSOR
+   #:node-application-keyword-arg       ; STRUCT
+   #:make-node-application-keyword-arg  ; CONSTRUCTOR
+   #:node-application-keyword-arg-keyword ; ACCESSOR
+   #:node-application-keyword-arg-value ; ACCESSOR
+   #:node-application-keyword-arg-list  ; TYPE
    #:node-or                            ; STRUCT
    #:make-node-or                       ; CONSTRUCTOR
    #:node-or-nodes                      ; ACCESSOR
@@ -147,33 +227,22 @@
    #:node-do-body-element               ; TYPE
    #:node-body-element-list             ; TYPE
    #:node-do                            ; STRUCT
-   #:node-while                         ; STRUCT
-   #:make-node-while                    ; CONSTRUCTOR
-   #:node-while-label                   ; ACCESSOR
-   #:node-while-expr                    ; ACCESSOR
-   #:node-while-body                    ; ACCESSOR
-   #:node-while-let                     ; STRUCT
-   #:make-node-while-let                ; CONSTRUCTOR
-   #:node-while-let-label               ; ACCESSOR
-   #:node-while-let-pattern             ; ACCESSOR
-   #:node-while-let-expr                ; ACCESSOR
-   #:node-while-let-body                ; ACCESSOR
-   #:node-loop                          ; STRUCT
-   #:make-node-loop                     ; CONSTRUCTOR
-   #:node-loop-body                     ; ACCESSOR
-   #:node-loop-label                    ; ACCESSOR
+   #:node-for                          ; STRUCT
+   #:make-node-for                     ; CONSTRUCTOR
+   #:node-for-bindings                 ; ACCESSOR
+   #:node-for-declares                 ; ACCESSOR
+   #:node-for-returns                  ; ACCESSOR
+   #:node-for-termination-kind         ; ACCESSOR
+   #:node-for-termination-expr         ; ACCESSOR
+   #:node-for-body                     ; ACCESSOR
+   #:node-for-label                    ; ACCESSOR
+   #:node-for-sequential-p             ; ACCESSOR
    #:node-break                         ; STRUCT
    #:make-node-break                    ; CONSTRUCTOR
    #:node-break-label                   ; ACCESSOR
    #:node-continue                      ; STRUCT
    #:make-node-continue                 ; CONSTRUCTOR
    #:node-continue-label                ; ACCESSOR
-   #:node-for                           ; STRUCT
-   #:make-node-for                      ; CONSTRUCTOR
-   #:node-for-label                     ; ACCESSOR
-   #:node-for-pattern                   ; ACCESSOR
-   #:node-for-expr                      ; ACCESSOR
-   #:node-for-body                      ; ACCESSOR
    #:make-node-do                       ; CONSTRUCTOR
    #:node-do-nodes                      ; ACCESSOR
    #:node-do-last-node                  ; ACCESSOR
@@ -181,6 +250,8 @@
    #:parse-expressions                  ; FUNCTION
    #:parse-body                         ; FUNCTION
    #:parse-variable                     ; FUNCTION
+   #:parse-ordinary-variable            ; FUNCTION
+   #:parse-dynamic-variable             ; FUNCTION
    ))
 
 ;;;;
@@ -234,9 +305,11 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;             | node-abstraction
 ;;;;             | node-let
 ;;;;             | node-rec
-;;;;             | node-lisp 
+;;;;             | node-lisp
 ;;;;             | node-match
 ;;;;             | node-progn
+;;;;             | node-type-of
+;;;;             | node-unsafe
 ;;;;             | node-the
 ;;;;             | node-return
 ;;;;             | node-application
@@ -247,6 +320,9 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;             | node-unless
 ;;;;             | node-cond
 ;;;;             | node-do
+;;;;             | node-for
+;;;;             | node-break
+;;;;             | node-continue
 ;;;;
 ;;;; node-bind := "(" "let" pattern "=" expression ")"
 ;;;;
@@ -254,17 +330,22 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;
 ;;;; node-body := node-body-element* expression
 ;;;;
-;;;; node-abstraction := "(" "fn" "(" pattern* ")" node-body ")"
+;;;; node-keyword-param := "(" identifier expression ")"
+;;;; node-abstraction := "(" "fn" "(" pattern* ["&key" node-keyword-param*] ")" node-body ")"
 ;;;;
 ;;;; node-let-binding := "(" identifier expression ")"
 ;;;;
+;;;; node-for-binding := "(" identifier expression [expression] ")"
+;;;;
 ;;;; node-let-declare := "(" "declare" identifier qualified-ty ")"
 ;;;;
-;;;; node-let := "(" "let" "(" (node-let-binding | node-let-declare)+ ")" body ")"
+;;;; node-let := "(" ("let" | "let*") "(" (node-let-binding | node-let-declare)+ ")" body ")"
 ;;;;
 ;;;; node-rec := "(" "rec" (identifier | "(" identifier [qualified-ty] ")" ) "(" (node-let-binding | node-let-declare)+ ")" body ")"
 ;;;;
-;;;; node-lisp := "(" "lisp" ["multiple-values"] type "(" variable* ")" lisp-form+ ")"
+;;;; node-lisp := "(" "lisp" type "(" lisp-variable* ")" lisp-form+ ")"
+;;;;
+;;;; lisp-variable := variable | "(" identifier variable ")"
 ;;;;
 ;;;; node-match-branch := "(" pattern body ")"
 ;;;;
@@ -272,11 +353,15 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;
 ;;;; node-progn := "(" "progn" body ")"
 ;;;;
+;;;; node-type-of := "(" "type-of" expression ")"
+;;;; node-unsafe := "(" "unsafe" body ")"
+;;;;
 ;;;; node-the := "(" "the" type expression ")"
 ;;;;
 ;;;; node-return := "(" "return" expression? ")"
 ;;;;
-;;;; node-application := "(" expression expression* ")"
+;;;; node-keyword-arg := keyword expression
+;;;; node-application := "(" expression expression* [node-keyword-arg*] ")"
 ;;;;
 ;;;; node-or := "(" "or" expression+ ")"
 ;;;;
@@ -299,6 +384,17 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;                       | node-do-bind
 ;;;;
 ;;;; node-do := node-do-body-element* expression
+;;;;
+;;;; label := <a keyword symbol>
+;;;;
+;;;; node-for := "(" ("for" | "for*") label? "(" (node-for-binding | node-let-declare)* ")"
+;;;;                    [":returns" expression]
+;;;;                    [(":while" | ":until" | ":repeat") expression]
+;;;;                    node-body-element* ")"
+;;;;
+;;;; node-break := "(" "break" label? ")"
+;;;;
+;;;; node-continue := "(" "continue" label? ")"
 
 (defstruct (node
             (:constructor nil)
@@ -354,8 +450,17 @@ Rebound to NIL parsing an anonymous FN.")
 (defmethod source:location ((self node-bind))
   (node-bind-location self))
 
+(defstruct (node-values-bind
+            (:copier nil))
+  (patterns (util:required 'patterns)  :type pattern-list    :read-only t)
+  (expr     (util:required 'expr)      :type node            :read-only t)
+  (location (util:required 'location)  :type source:location :read-only t))
+
+(defmethod source:location ((self node-values-bind))
+  (node-values-bind-location self))
+
 (deftype node-body-element ()
-  '(or node node-bind))
+  '(or node node-bind node-values-bind))
 
 (defun node-body-element-p (x)
   (typep x 'node-body-element))
@@ -382,8 +487,27 @@ Rebound to NIL parsing an anonymous FN.")
 (defstruct (node-abstraction
             (:include node)
             (:copier nil))
-  (params (util:required 'params) :type pattern-list :read-only t)
-  (body   (util:required 'body)   :type node-body    :read-only t))
+  (params         (util:required 'params) :type pattern-list       :read-only t)
+  (keyword-params nil                     :type keyword-param-list :read-only t)
+  (body           (util:required 'body)   :type node-body          :read-only t))
+
+(defstruct (keyword-param
+            (:copier nil))
+  (keyword  (util:required 'keyword)  :type keyword-src     :read-only t)
+  (binder   (util:required 'binder)   :type node-variable   :read-only t)
+  (default  (util:required 'default)  :type node            :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self keyword-param))
+  (keyword-param-location self))
+
+(eval-when (:load-toplevel :compile-toplevel :execute)
+  (defun keyword-param-list-p (x)
+    (and (alexandria:proper-list-p x)
+         (every #'keyword-param-p x))))
+
+(deftype keyword-param-list ()
+  '(satisfies keyword-param-list-p))
 
 (defstruct (node-let-binding
             (:copier nil))
@@ -400,6 +524,39 @@ Rebound to NIL parsing an anonymous FN.")
 
 (deftype node-let-binding-list ()
   '(satisfies node-let-binding-list-p))
+
+(defstruct (node-dynamic-binding
+            (:copier nil))
+  (name     (util:required 'name)     :type node-variable   :read-only t)
+  (value    (util:required 'value)    :type node            :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self node-dynamic-binding))
+  (node-dynamic-binding-location self))
+
+(defun node-dynamic-binding-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'node-dynamic-binding-p x)))
+
+(deftype node-dynamic-binding-list ()
+  '(satisfies node-dynamic-binding-list-p))
+
+(defstruct (node-for-binding
+            (:copier nil))
+  (name     (util:required 'name)     :type node-variable   :read-only t)
+  (init     (util:required 'init)     :type node            :read-only t)
+  (step     nil                       :type (or null node)  :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self node-for-binding))
+  (node-for-binding-location self))
+
+(defun node-for-binding-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'node-for-binding-p x)))
+
+(deftype node-for-binding-list ()
+  '(satisfies node-for-binding-list-p))
 
 (defstruct (node-let-declare
             (:copier nil))
@@ -420,15 +577,22 @@ Rebound to NIL parsing an anonymous FN.")
 (defstruct (node-let
             (:include node)
             (:copier nil))
-  (bindings (util:required 'bindings) :type node-let-binding-list :read-only t)
-  (declares (util:required 'declares) :type node-let-declare-list :read-only t)
-  (body     (util:required 'body)     :type node-body             :read-only t))
+  (bindings     (util:required 'bindings) :type node-let-binding-list :read-only t)
+  (declares     (util:required 'declares) :type node-let-declare-list :read-only t)
+  (body         (util:required 'body)     :type node-body             :read-only t)
+  ;; T when parsed from LET*, so later bindings can see earlier ones.
+  (sequential-p nil                       :type boolean               :read-only t))
+
+(defstruct (node-dynamic-let
+            (:include node)
+            (:copier nil))
+  (bindings (util:required 'bindings) :type node-dynamic-binding-list :read-only t)
+  (subexpr  (util:required 'subexpr)  :type node                      :read-only t))
 
 (defstruct (node-lisp
             (:include node)
             (:copier nil))
-  (type      (util:required 'type)      :type ty                 :read-only t)
-  (return-convention ':boxed            :type (member :boxed :values) :read-only t)
+  (output-types (util:required 'output-types) :type (or null ty-list)  :read-only t)
   (vars      (util:required 'vars)      :type node-variable-list :read-only t)
   (var-names (util:required 'var-names) :type util:symbol-list   :read-only t)
   (body      (util:required 'body)      :type t                  :read-only t))
@@ -460,22 +624,140 @@ Rebound to NIL parsing an anonymous FN.")
             (:copier nil))
   (body (util:required 'body) :type node-body :read-only t))
 
+(defstruct (node-type-of
+            (:include node)
+            (:copier nil))
+  (expr (util:required 'expr) :type node :read-only t))
+(defstruct (node-unsafe
+            (:include node)
+            (:copier nil))
+  (body (util:required 'body) :type node-body :read-only t))
+
 (defstruct (node-the
             (:include node)
             (:copier nil))
   (type (util:required 'type) :type ty   :read-only t)
   (expr (util:required 'expr) :type node :read-only t))
 
+(defstruct (node-collection-builder
+            (:include node)
+            (:copier nil))
+  "AST node for collection builder syntax such as `[a b c]`."
+  (elements (util:required 'elements) :type node-list :read-only t))
+
+(defstruct association-entry
+  "AST node for one evaluated key/value entry inside an association builder."
+  (key      (util:required 'key)      :type node             :read-only t)
+  (value    (util:required 'value)    :type node             :read-only t)
+  (location (util:required 'location) :type source:location  :read-only t))
+
+(defmethod source:location ((self association-entry))
+  (association-entry-location self))
+
+(defun association-entry-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'association-entry-p x)))
+
+(deftype association-entry-list ()
+  '(satisfies association-entry-list-p))
+
+(defstruct (node-association-builder
+            (:include node)
+            (:copier nil))
+  "AST node for association builder syntax such as `[a => b c => d]`."
+  (entries (util:required 'entries) :type association-entry-list :read-only t))
+
+(defstruct (builder-clause
+            (:constructor nil)
+            (:copier nil))
+  "Base AST type for builder comprehension clauses."
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self builder-clause))
+  (builder-clause-location self))
+
+(defstruct (builder-with-clause
+            (:include builder-clause)
+            (:copier nil))
+  "AST node for a `:with` clause inside builder comprehension syntax."
+  (binder (util:required 'binder) :type node-variable :read-only t)
+  (expr   (util:required 'expr)   :type node          :read-only t))
+
+(defstruct (builder-for-clause
+            (:include builder-clause)
+            (:copier nil))
+  "AST node for a `:for ... :in ...` clause inside builder comprehension syntax."
+  (binder (util:required 'binder) :type node-variable :read-only t)
+  (expr   (util:required 'expr)   :type node          :read-only t))
+
+(defstruct (builder-below-clause
+            (:include builder-clause)
+            (:copier nil))
+  "AST node for a `:for ... :below ...` clause inside builder comprehension syntax."
+  (binder (util:required 'binder) :type node-variable :read-only t)
+  (expr   (util:required 'expr)   :type node          :read-only t))
+
+(defstruct (builder-when-clause
+            (:include builder-clause)
+            (:copier nil))
+  "AST node for a `:when` filter clause inside builder comprehension syntax."
+  (expr (util:required 'expr) :type node :read-only t))
+
+(defun builder-clause-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'builder-clause-p x)))
+
+(deftype builder-clause-list ()
+  '(satisfies builder-clause-list-p))
+
+(defstruct (node-collection-comprehension
+            (:include node)
+            (:copier nil))
+  "AST node for collection builder comprehension syntax."
+  (head    (util:required 'head)    :type node                :read-only t)
+  (clauses (util:required 'clauses) :type builder-clause-list :read-only t))
+
+(defstruct (node-association-comprehension
+            (:include node)
+            (:copier nil))
+  "AST node for association builder comprehension syntax."
+  (key     (util:required 'key)     :type node                :read-only t)
+  (value   (util:required 'value)   :type node                :read-only t)
+  (clauses (util:required 'clauses) :type builder-clause-list :read-only t))
+
 (defstruct (node-return
             (:include node)
             (:copier nil))
   (expr (util:required 'expr) :type (or null node) :read-only t))
 
+(defstruct (node-values
+            (:include node)
+            (:copier nil))
+  (nodes (util:required 'nodes) :type node-list :read-only t))
+
 (defstruct (node-application
             (:include node)
             (:copier nil))
-  (rator (util:required 'rator) :type node      :read-only t)
-  (rands (util:required 'rands) :type node-list :read-only t))
+  (rator         (util:required 'rator) :type node                           :read-only t)
+  (rands         (util:required 'rands) :type node-list                      :read-only t)
+  (keyword-rands nil                    :type node-application-keyword-arg-list :read-only t))
+
+(defstruct (node-application-keyword-arg
+            (:copier nil))
+  (keyword  (util:required 'keyword)  :type keyword-src     :read-only t)
+  (value    (util:required 'value)    :type node            :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self node-application-keyword-arg))
+  (node-application-keyword-arg-location self))
+
+(eval-when (:load-toplevel :compile-toplevel :execute)
+  (defun node-application-keyword-arg-list-p (x)
+    (and (alexandria:proper-list-p x)
+         (every #'node-application-keyword-arg-p x))))
+
+(deftype node-application-keyword-arg-list ()
+  '(satisfies node-application-keyword-arg-list-p))
 
 (defstruct (node-or
             (:include node)
@@ -537,7 +819,7 @@ Rebound to NIL parsing an anonymous FN.")
   (node-do-bind-location self))
 
 (deftype node-do-body-element ()
-  '(or node node-bind node-do-bind))
+  '(or node node-bind node-values-bind node-do-bind))
 
 (defun node-do-body-element-p (x)
   (typep x 'node-do-body-element))
@@ -555,21 +837,6 @@ Rebound to NIL parsing an anonymous FN.")
   (nodes     (util:required 'nodes)     :type node-do-body-element-list :read-only t)
   (last-node (util:required 'last-node) :type node                      :read-only t))
 
-(defstruct (node-while
-            (:include node)
-            (:copier nil))
-  (label (util:required 'label) :type keyword   :read-only t)
-  (expr  (util:required 'expr)  :type node      :read-only t)
-  (body  (util:required 'body)  :type node-body :read-only t))
-
-(defstruct (node-while-let
-            (:include node)
-            (:copier nil))
-  (label   (util:required 'label)   :type keyword   :read-only t)
-  (pattern (util:required 'pattern) :type pattern   :read-only t)
-  (expr    (util:required 'expr)    :type node      :read-only t)
-  (body    (util:required 'body)    :type node-body :read-only t))
-
 (defstruct (node-break
             (:include node)
             (:copier nil))
@@ -580,19 +847,39 @@ Rebound to NIL parsing an anonymous FN.")
             (:copier nil))
   (label (util:required 'label) :type keyword :read-only t))
 
-(defstruct (node-loop
-            (:include node)
-            (:copier nil))
-  (label (util:required 'label) :type keyword   :read-only t)
-  (body  (util:required 'body)  :type node-body :read-only t))
-
 (defstruct (node-for
             (:include node)
             (:copier nil))
-  (label   (util:required 'label)   :type keyword   :read-only t)
-  (pattern (util:required 'pattern) :type pattern   :read-only t)
-  (expr    (util:required 'expr)    :type node      :read-only t)
-  (body    (util:required 'body)    :type node-body :read-only t))
+  (label            (util:required 'label)            :type keyword                    :read-only t)
+  (bindings         (util:required 'bindings)         :type node-for-binding-list     :read-only t)
+  (declares         (util:required 'declares)         :type node-let-declare-list      :read-only t)
+  (returns          nil                               :type (or null node)             :read-only t)
+  (termination-kind nil                               :type (member nil :while :until :repeat) :read-only t)
+  (termination-expr nil                               :type (or null node)             :read-only t)
+  (body             (util:required 'body)             :type node-body                  :read-only t)
+  ;; T when parsed from FOR*, so init and step bindings are sequential.
+  (sequential-p     nil                               :type boolean                    :read-only t))
+
+(defun check-sequential-binding-duplicates (bindings source context)
+  (declare (type list bindings)
+           (type string context))
+  (let ((seen (make-hash-table :test #'eq)))
+    (dolist (binding bindings)
+      (let* ((name-node
+               (etypecase binding
+                 (node-let-binding (node-let-binding-name binding))
+                 (node-for-binding (node-for-binding-name binding))))
+             (name (node-variable-name name-node))
+             (previous (gethash name seen)))
+        (when previous
+          (parse-error (format nil "Duplicate binding in ~A" context)
+                       (secondary-note source
+                                       (source:location-span (source:location previous))
+                                       "first binding here")
+                       (note source
+                             (source:location-span (source:location name-node))
+                             "second binding here")))
+        (setf (gethash name seen) name-node)))))
 
 (defstruct (node-throw
             (:include node)
@@ -648,6 +935,289 @@ Rebound to NIL parsing an anonymous FN.")
   (expr     (util:required 'expr)     :type node                   :read-only t)
   (branches (util:required 'branches) :type node-catch-branch-list :read-only t))
 
+(defun values-symbol-p (symbol)
+  (declare (type t symbol)
+           (values boolean))
+  (eq 'coalton:values symbol))
+
+(defun values-pattern-form-p (form)
+  (declare (type cst:cst form)
+           (values boolean))
+  (and (cst:consp form)
+       (cst:atom (cst:first form))
+       (values-symbol-p (cst:raw (cst:first form)))))
+
+(defun keyword-name-from-binder (binder-name)
+  (declare (type identifier binder-name)
+           (values keyword &optional))
+  (nth-value 0
+             (intern (symbol-name binder-name) util:+keyword-package+)))
+
+(defun dynamic-variable-form-p (form)
+  (declare (type cst:cst form)
+           (values boolean &optional))
+  (and (cst:atom form)
+       (symbolp (cst:raw form))
+       (util:dynamic-variable-name-p (cst:raw form))))
+
+(defun parse-keyword-param (form source)
+  (declare (type cst:cst form)
+           (values keyword-param &optional))
+  (unless (and (cst:consp form)
+               (cst:proper-list-p form))
+    (parse-error "Malformed function keyword parameter"
+                 (note source form "expected `(name init-expr)`")))
+  (unless (cst:consp (cst:rest form))
+    (parse-error "Malformed function keyword parameter"
+                 (note source form "expected identifier and default expression")))
+  (unless (cst:atom (cst:first form))
+    (parse-error "Malformed function keyword parameter"
+                 (note source (cst:first form) "expected identifier")))
+  (unless (identifierp (cst:raw (cst:first form)))
+    (parse-error "Malformed function keyword parameter"
+                 (note source (cst:first form) "expected identifier")))
+  (when (cst:consp (cst:rest (cst:rest form)))
+    (parse-error "Malformed function keyword parameter"
+                 (note source (cst:third form) "unexpected trailing form")))
+  (let* ((binder-form (cst:first form))
+         (binder (parse-ordinary-variable binder-form source))
+         (keyword-name (keyword-name-from-binder (node-variable-name binder))))
+    (make-keyword-param
+     :keyword (make-keyword-src
+               :name keyword-name
+               :location (form-location source binder-form))
+     :binder binder
+     :default (parse-expression (cst:second form) source)
+     :location (form-location source form))))
+
+(defun check-duplicate-keyword-parameters (keyword-params source)
+  (declare (type keyword-param-list keyword-params))
+  (let ((seen (make-hash-table :test #'eq)))
+    (dolist (param keyword-params)
+      (let* ((keyword (keyword-param-keyword param))
+             (name (keyword-src-name keyword))
+             (prev (gethash name seen)))
+        (when prev
+          (parse-error "Duplicate keyword parameter"
+                       (secondary-note source (source:location-span (source:location prev))
+                                       "first definition here")
+                       (note source (source:location-span (source:location keyword))
+                             "second definition here")))
+        (setf (gethash name seen) keyword)))))
+
+(defun keyword-marker-p (form)
+  (and (cst:atom form)
+       (eq 'coalton:&key (cst:raw form))))
+
+(defun parse-fn-argument-list (form source)
+  (declare (type cst:cst form)
+           (values pattern-list keyword-param-list))
+  (let ((arg-forms form)
+        (params nil)
+        (keyword-params nil)
+        (in-keyword-section nil))
+    (loop :while (cst:consp arg-forms)
+          :for current := (cst:first arg-forms)
+          :do
+             (cond
+               ((keyword-marker-p current)
+                (when in-keyword-section
+                  (parse-error "Malformed function"
+                               (note source current "invalid `&key` placement")))
+                (setf in-keyword-section t))
+               (in-keyword-section
+                (push (parse-keyword-param current source) keyword-params))
+               (t
+                (push (parse-pattern current source) params)))
+             (setf arg-forms (cst:rest arg-forms)))
+    (unless (cst:null arg-forms)
+      (parse-error "Malformed function"
+                   (note source arg-forms "unexpected dotted list")))
+    (setf params (nreverse params)
+          keyword-params (nreverse keyword-params))
+    (check-duplicate-keyword-parameters keyword-params source)
+    (values params keyword-params)))
+
+(defun check-duplicate-call-keywords (keyword-rands source)
+  (declare (type node-application-keyword-arg-list keyword-rands))
+  (let ((seen (make-hash-table :test #'eq)))
+    (dolist (arg keyword-rands)
+      (let* ((keyword (node-application-keyword-arg-keyword arg))
+             (name (keyword-src-name keyword))
+             (prev (gethash name seen)))
+        (when prev
+          (parse-error "Duplicate keyword argument"
+                       (secondary-note source (source:location-span (source:location prev))
+                                       "first argument here")
+                       (note source (source:location-span (source:location keyword))
+                             "second argument here")))
+        (setf (gethash name seen) keyword)))))
+
+(defun parse-application-arguments (forms source)
+  (declare (type cst:cst forms)
+           (values node-list node-application-keyword-arg-list))
+  (unless (cst:proper-list-p forms)
+    (parse-error "Malformed function application"
+                 (note source forms "unexpected dotted list")))
+  (let ((rands nil)
+        (keyword-rands nil)
+        (in-keyword-section nil))
+    (loop :for rest := forms :then (cst:rest rest)
+          :while (cst:consp rest)
+          :for current := (cst:first rest)
+          :do
+             (cond
+               ((and (cst:atom current)
+                     (keywordp (cst:raw current)))
+                (unless (cst:consp (cst:rest rest))
+                  (parse-error "Malformed function application"
+                               (note-end source current "keyword argument value is missing")))
+                (setf in-keyword-section t)
+                (push (make-node-application-keyword-arg
+                       :keyword (make-keyword-src
+                                 :name (cst:raw current)
+                                 :location (form-location source current))
+                       :value (parse-expression (cst:second rest) source)
+                       :location (form-location source current))
+                      keyword-rands)
+                (setf rest (cst:rest rest)))
+               (in-keyword-section
+                (parse-error "Malformed function application"
+                             (note source current "positional argument after keyword argument")))
+               (t
+                (push (parse-expression current source) rands))))
+    (setf rands (nreverse rands)
+          keyword-rands (nreverse keyword-rands))
+    (check-duplicate-call-keywords keyword-rands source)
+    (values rands keyword-rands)))
+
+(defun builder-marker-p (form marker)
+  (and (cst:atom form)
+       (eq (cst:raw form) marker)))
+
+(defun parse-builder-binder (form source context)
+  (unless (and (cst:atom form)
+               (identifierp (cst:raw form)))
+    (parse-error context
+                 (note source form "expected identifier binder")))
+  (if (string= "_" (symbol-name (cst:raw form)))
+      (make-node-variable
+       :name (cst:raw form)
+       :location (form-location source form))
+      (parse-ordinary-variable form source)))
+
+(defun parse-association-entry (form source)
+  (unless (cst:proper-list-p form)
+    (parse-error "Malformed association builder"
+                 (note source form "expected association entry")))
+  (unless (builder-marker-p (cst:first form) (reader:association-entry-marker))
+    (parse-error "Malformed association builder"
+                 (note source form "expected association entry")))
+  (unless (cst:consp (cst:rest form))
+    (parse-error "Malformed association builder"
+                 (note-end source (cst:first form) "expected entry key")))
+  (unless (cst:consp (cst:rest (cst:rest form)))
+    (parse-error "Malformed association builder"
+                 (note-end source (cst:second form) "expected entry value")))
+  (when (cst:consp (cst:nthrest 3 form))
+    (parse-error "Malformed association builder"
+                 (note source (cst:fourth form) "unexpected trailing form")))
+  (make-association-entry
+   :key (parse-expression (cst:second form) source)
+   :value (parse-expression (cst:third form) source)
+   :location (form-location source form)))
+
+(defun parse-binary-builder-clause (form source)
+  "Validate and parse a builder clause that takes a binder and an expression."
+  (unless (cst:consp (cst:rest form))
+    (parse-error "Malformed builder clause"
+                 (note-end source (cst:first form) "expected binder")))
+  (unless (cst:consp (cst:rest (cst:rest form)))
+    (parse-error "Malformed builder clause"
+                 (note-end source (cst:second form) "expected expression")))
+  (when (cst:consp (cst:nthrest 3 form))
+    (parse-error "Malformed builder clause"
+                 (note source (cst:fourth form) "unexpected trailing form")))
+  (values (parse-builder-binder (cst:second form) source "Malformed builder clause")
+          (parse-expression (cst:third form) source)
+          (form-location source form)))
+
+(defun parse-builder-clause (form source)
+  (unless (cst:proper-list-p form)
+    (parse-error "Malformed builder clause"
+                 (note source form "expected builder clause")))
+  (cond
+    ((builder-marker-p (cst:first form) (reader:builder-with-marker))
+     (multiple-value-bind (binder expr location)
+         (parse-binary-builder-clause form source)
+       (make-builder-with-clause
+        :binder binder :expr expr :location location)))
+    ((builder-marker-p (cst:first form) (reader:builder-for-marker))
+     (multiple-value-bind (binder expr location)
+         (parse-binary-builder-clause form source)
+       (make-builder-for-clause
+        :binder binder :expr expr :location location)))
+    ((builder-marker-p (cst:first form) (reader:builder-below-marker))
+     (multiple-value-bind (binder expr location)
+         (parse-binary-builder-clause form source)
+       (make-builder-below-clause
+        :binder binder :expr expr :location location)))
+    ((builder-marker-p (cst:first form) (reader:builder-when-marker))
+     (unless (cst:consp (cst:rest form))
+       (parse-error "Malformed builder clause"
+                    (note-end source (cst:first form) "expected predicate")))
+     (when (cst:consp (cst:nthrest 2 form))
+       (parse-error "Malformed builder clause"
+                    (note source (cst:third form) "unexpected trailing form")))
+     (make-builder-when-clause
+      :expr (parse-expression (cst:second form) source)
+      :location (form-location source form)))
+    (t
+     (parse-error "Malformed builder clause"
+                  (note source form "unknown builder clause")))))
+
+(defun parse-builder-clauses (forms source)
+  (loop :for clauses := forms :then (cst:rest clauses)
+        :while (cst:consp clauses)
+        :collect (parse-builder-clause (cst:first clauses) source)))
+
+(defun show-symbol (name)
+  (declare (type string name)
+           (values (or null symbol) &optional))
+  (let ((package (find-package "COALTON/SHOW")))
+    (and package
+         (find-symbol name package))))
+
+(defun synthetic-node-variable (name location)
+  (declare (type symbol name)
+           (type source:location location)
+           (values node-variable &optional))
+  (make-node-variable
+   :location location
+   :name name))
+
+(defun synthetic-application (rator rands location)
+  (declare (type symbol rator)
+           (type node-list rands)
+           (type source:location location)
+           (values node-application &optional))
+  (make-node-application
+   :location location
+   :rator (synthetic-node-variable rator location)
+   :rands rands
+   :keyword-rands nil))
+
+(defun parse-application-expression (form source)
+  (declare (type cst:cst form)
+           (values node-application &optional))
+  (multiple-value-bind (rands keyword-rands)
+      (parse-application-arguments (cst:rest form) source)
+    (make-node-application
+     :rator (parse-expression (cst:first form) source)
+     :rands rands
+     :keyword-rands keyword-rands
+     :location (form-location source form))))
+
 (defun parse-expression (form source)
   (declare (type cst:cst form)
            (values node &optional))
@@ -684,8 +1254,57 @@ Rebound to NIL parsing an anonymous FN.")
     ;;
 
     ((and (cst:atom (cst:first form))
+          (eq (reader:collection-builder-marker) (cst:raw (cst:first form))))
+     (make-node-collection-builder
+      :location (form-location source form)
+      :elements (loop :for items := (cst:rest form) :then (cst:rest items)
+                      :while (cst:consp items)
+                      :collect (parse-expression (cst:first items) source))))
+
+    ((and (cst:atom (cst:first form))
+          (eq (reader:association-builder-marker) (cst:raw (cst:first form))))
+     (make-node-association-builder
+      :location (form-location source form)
+      :entries (loop :for items := (cst:rest form) :then (cst:rest items)
+                     :while (cst:consp items)
+                     :collect (parse-association-entry (cst:first items) source))))
+
+    ((and (cst:atom (cst:first form))
+          (eq (reader:collection-comprehension-marker) (cst:raw (cst:first form))))
+     (unless (cst:consp (cst:rest form))
+       (parse-error "Malformed collection comprehension"
+                    (note-end source (cst:first form) "expected head expression")))
+     (make-node-collection-comprehension
+      :location (form-location source form)
+      :head (parse-expression (cst:second form) source)
+      :clauses (parse-builder-clauses (cst:nthrest 2 form) source)))
+
+    ((and (cst:atom (cst:first form))
+          (eq (reader:association-comprehension-marker) (cst:raw (cst:first form))))
+     (unless (cst:consp (cst:rest form))
+       (parse-error "Malformed association comprehension"
+                    (note-end source (cst:first form) "expected key expression")))
+     (unless (cst:consp (cst:rest (cst:rest form)))
+       (parse-error "Malformed association comprehension"
+                    (note-end source (cst:second form) "expected value expression")))
+     (make-node-association-comprehension
+      :location (form-location source form)
+      :key (parse-expression (cst:second form) source)
+      :value (parse-expression (cst:third form) source)
+      :clauses (parse-builder-clauses (cst:nthrest 3 form) source)))
+
+    ((and (cst:atom (cst:first form))
+          (values-symbol-p (cst:raw (cst:first form))))
+     (make-node-values
+      :location (form-location source form)
+      :nodes (loop :for values := (cst:rest form) :then (cst:rest values)
+                   :while (cst:consp values)
+                   :collect (parse-expression (cst:first values) source))))
+
+    ((and (cst:atom (cst:first form))
           (eq 'coalton:fn (cst:raw (cst:first form))))
      (let ((params)
+           (keyword-params)
            (body))
 
        ;; (fn)
@@ -713,13 +1332,12 @@ Rebound to NIL parsing an anonymous FN.")
        ;; Bind *LOOP-LABEL-CONTEXT* to NIL to disallow BREAKing from
        ;; or CONTINUING with loops that enclose the FN form.
        (let ((*loop-label-context* nil))
-         (setf params
-               (loop :for vars := (cst:second form) :then (cst:rest vars)
-                     :while (cst:consp vars)
-                     :collect (parse-pattern (cst:first vars) source)))
+         (multiple-value-setq (params keyword-params)
+           (parse-fn-argument-list (cst:second form) source))
          (setf body (parse-body (cst:nthrest 2 form) form source))
          (make-node-abstraction
           :params params
+          :keyword-params keyword-params
           :body body
           :location (form-location source form)))))
 
@@ -809,7 +1427,10 @@ Rebound to NIL parsing an anonymous FN.")
 
 
     ((and (cst:atom (cst:first form))
-          (eq 'coalton:let (cst:raw (cst:first form))))
+          (member (cst:raw (cst:first form))
+                  '(coalton:let coalton:let*)
+                  :test #'eq))
+     (let ((sequential-p (eq 'coalton:let* (cst:raw (cst:first form)))))
 
      ;; (let)
      (unless (cst:consp (cst:rest form))
@@ -840,11 +1461,39 @@ Rebound to NIL parsing an anonymous FN.")
                             :else
                               :collect (parse-let-binding binding source))))
 
+       (when sequential-p
+         (check-sequential-binding-duplicates bindings source "let*"))
+
        (make-node-let
         :bindings bindings
         :declares (nreverse declares)
         :body (parse-body (cst:nthrest 2 form) form source)
-        :location (form-location source form))))
+        :sequential-p sequential-p
+        :location (form-location source form)))))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:dynamic-bind (cst:raw (cst:first form))))
+
+     (unless (cst:consp (cst:rest form))
+       (parse-error "Malformed dynamic-bind"
+                    (note-end source (cst:first form) "expected dynamic binding list")))
+
+     (unless (cst:consp (cst:rest (cst:rest form)))
+       (parse-error "Malformed dynamic-bind"
+                    (note-end source (cst:second form) "expected dynamic-bind body")))
+
+     (unless (cst:proper-list-p (cst:second form))
+       (parse-error "Malformed dynamic-bind"
+                    (note source (cst:second form) "expected binding list")))
+
+     (make-node-dynamic-let
+      :bindings (loop :for bindings := (cst:second form) :then (cst:rest bindings)
+                      :while (cst:consp bindings)
+                      :collect (parse-dynamic-binding (cst:first bindings)
+                                                      source
+                                                      :context "Malformed dynamic binding"))
+      :subexpr (body-forms->node (cst:nthrest 2 form) form source)
+      :location (form-location source form)))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:rec (cst:raw (cst:first form))))
@@ -966,48 +1615,43 @@ Rebound to NIL parsing an anonymous FN.")
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:lisp (cst:raw (cst:first form))))
-     (let* ((args (cst:rest form))
-            (values-directive-p (and (cst:consp args)
-                                     (cst:atom (cst:first args))
-                                     (eq 'coalton:multiple-values (cst:raw (cst:first args)))))
-            (directive-cst (if values-directive-p (cst:first args) nil))
-            ;; Set args to the rest, remembering we have a values
-            ;; directive.
-            (args (if values-directive-p
-                      (cst:rest args)
-                      args))
-            (return-convention (if values-directive-p ':values ':boxed)))
+     (let ((args (cst:rest form)))
 
-       ;; (lisp) or (lisp multiple-values)
+       ;; (lisp)
        (unless (cst:consp args)
          (parse-error "Malformed lisp expression"
                       (note-end source
-                                (or directive-cst (cst:first form))
+                                (cst:first form)
                                 "expected expression type")))
 
        (let ((type-form (cst:first args)))
-         ;; (lisp T) or (lisp multiple-values T)
+         (let ((output-types (parse-lisp-return-type type-form source)))
+           ;; (lisp (-> ...))
          (unless (cst:consp (cst:rest args))
            (parse-error "Malformed lisp expression"
                         (note-end source type-form "expected binding list")))
 
          (let* ((vars-form (cst:second args))
                 (body-form (cst:nthrest 2 args)))
-           ;; (lisp T (...))
+           ;; (lisp (-> ...) (...))
            (unless (cst:consp body-form)
              (parse-error "Malformed lisp expression"
                           (note source form "expected body")))
 
-           (let ((vars (loop :for vars := vars-form :then (cst:rest vars)
-                             :while (cst:consp vars)
-                             :collect (parse-variable (cst:first vars) source))))
+           (let ((vars nil)
+                 (var-names nil))
+             (loop :for vars-cst := vars-form :then (cst:rest vars-cst)
+                   :while (cst:consp vars-cst)
+                   :do (multiple-value-bind (var var-name)
+                           (parse-lisp-variable-binding (cst:first vars-cst) source)
+                         (push var vars)
+                         (push var-name var-names)))
              (make-node-lisp
-              :type (parse-type type-form source)
-              :return-convention return-convention
-              :vars vars
-              :var-names (mapcar #'node-variable-name vars)
+              :output-types output-types
+              :vars (nreverse vars)
+              :var-names (nreverse var-names)
               :body (cst:raw body-form)
-              :location (form-location source form)))))))
+              :location (form-location source form))))))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:match (cst:raw (cst:first form))))
@@ -1027,6 +1671,29 @@ Rebound to NIL parsing an anonymous FN.")
     ((and (cst:atom (cst:first form))
           (eq 'coalton:progn (cst:raw (cst:first form))))
      (make-node-progn
+      :body (parse-body (cst:rest form) (cst:first form) source)
+      :location (form-location source form)))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:type-of (cst:raw (cst:first form))))
+     ;; (type-of)
+     (unless (cst:consp (cst:rest form))
+       (parse-error "Malformed type-of expression"
+                    (note-end source (cst:first form) "expected expression")))
+
+     ;; (type-of a b ...)
+     (when (cst:consp (cst:rest (cst:rest form)))
+       (parse-error "Malformed type-of expression"
+                    (note source (cst:first (cst:rest (cst:rest form)))
+                          "unexpected trailing form")))
+
+     (make-node-type-of
+      :expr (parse-expression (cst:second form) source)
+      :location (form-location source form)))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton++:unsafe (cst:raw (cst:first form))))
+     (make-node-unsafe
       :body (parse-body (cst:rest form) (cst:first form) source)
       :location (form-location source form)))
 
@@ -1154,79 +1821,101 @@ Rebound to NIL parsing an anonymous FN.")
      (parse-do form source))
 
     ((and (cst:atom (cst:first form))
-          (eq 'coalton:while (cst:raw (cst:first form))))
-     (multiple-value-bind (label labelled-body label-cst) (take-label form)
-       ;; (while [label])
-       (unless (cst:consp labelled-body)
-         (parse-error "Malformed while expression"
-                      (note-end source (or label-cst (cst:first form)) "expected condition")))
-       ;; (while [label] condition)
-       (unless (cst:consp (cst:rest labelled-body))
-         (parse-error "Malformed while expression"
-                      (note-end source (cst:first labelled-body) "expected body")))
-       (let ((*loop-label-context*
-               (if label
-                   (list* label const:+default-loop-label+ *loop-label-context*)
-                   (cons const:+default-loop-label+ *loop-label-context*))))
+          (member (cst:raw (cst:first form))
+                  '(coalton:for coalton:for*)
+                  :test #'eq))
+     (let ((sequential-p (eq 'coalton:for* (cst:raw (cst:first form)))))
+       (multiple-value-bind (label labelled-body label-cst) (take-label form)
+         (unless (cst:consp labelled-body)
+           (parse-error "Malformed for expression"
+                        (note-end source (or label-cst (cst:first form)) "expected binding list")))
+         (unless (loop-binding-list-form-p (cst:first labelled-body))
+           (return-from parse-expression
+             (parse-application-expression form source)))
+         (let* ((outer-loop-context *loop-label-context*)
+                (loop-context
+                  (if label
+                      (list* label const:+default-loop-label+ outer-loop-context)
+                      (cons const:+default-loop-label+ outer-loop-context))))
 
-         (make-node-while
-          :location (form-location source form)
-          :label (or label const:+default-loop-label+)
-          :expr (parse-expression (cst:first labelled-body) source)
-          :body (parse-body (cst:rest labelled-body) form source)))))
+           (let* ((binding-list-form (cst:first labelled-body))
+                  (post-bindings (cst:rest labelled-body))
+                  (declares nil)
+                  (bindings
+                    (loop :for clauses := binding-list-form :then (cst:rest clauses)
+                          :while (cst:consp clauses)
+                          :for clause := (cst:first clauses)
+                          :if (and (cst:consp clause)
+                                   (cst:atom (cst:first clause))
+                                   (eq (cst:raw (cst:first clause)) 'coalton:declare))
+                            :do (push (parse-let-declare clause source) declares)
+                          :else
+                            :collect (let ((*loop-label-context* outer-loop-context))
+                                       (parse-loop-binding clause source))))
+                  (returns nil)
+                  (termination-kind nil)
+                  (termination-expr nil))
 
-    ((and (cst:atom (cst:first form))
-          (eq 'coalton:while-let (cst:raw (cst:first form))))
+             (when sequential-p
+               (check-sequential-binding-duplicates bindings source "for*"))
 
-     (multiple-value-bind (label labelled-body label-cst) (take-label form)
-       ;; (while-let [label])
-       (unless (cst:consp labelled-body)
-         (parse-error "Malformed while-let expression"
-                      (note-end source (or label-cst (cst:first form)) "expected pattern")))
+             (when (and (cst:consp post-bindings)
+                        (loop-clause-keyword-p (cst:first post-bindings) "RETURNS"))
+               (unless (cst:consp (cst:rest post-bindings))
+                 (parse-error "Malformed for expression"
+                              (note-end source (cst:first post-bindings) "expected expression after :returns")))
+               (let ((*loop-label-context* outer-loop-context))
+                 (setf returns (parse-expression (cst:second post-bindings) source)))
+               (setf post-bindings (cst:nthrest 2 post-bindings)))
 
-       ;; (while-let [label] pattern)
-       (unless (and (cst:consp (cst:rest labelled-body))
-                    (eq 'coalton:= (cst:raw (cst:second labelled-body))))
-         (parse-error "Malformed while-let expression"
-                      (if (cst:consp (cst:rest labelled-body))
-                          (note source (cst:second labelled-body) "expected =")
-                          (note-end source (cst:first labelled-body) "expected ="))))
+             (cond
+               ((and (cst:consp post-bindings)
+                     (loop-clause-keyword-p (cst:first post-bindings) "WHILE"))
+                (unless (cst:consp (cst:rest post-bindings))
+                  (parse-error "Malformed for expression"
+                               (note-end source (cst:first post-bindings) "expected expression after :while")))
+                (let ((*loop-label-context* outer-loop-context))
+                  (setf termination-expr (parse-expression (cst:second post-bindings) source)))
+                (setf termination-kind :while)
+                (setf post-bindings (cst:nthrest 2 post-bindings)))
+               ((and (cst:consp post-bindings)
+                     (loop-clause-keyword-p (cst:first post-bindings) "UNTIL"))
+                (unless (cst:consp (cst:rest post-bindings))
+                  (parse-error "Malformed for expression"
+                               (note-end source (cst:first post-bindings) "expected expression after :until")))
+                (let ((*loop-label-context* outer-loop-context))
+                  (setf termination-expr (parse-expression (cst:second post-bindings) source)))
+                (setf termination-kind :until)
+                (setf post-bindings (cst:nthrest 2 post-bindings)))
+               ((and (cst:consp post-bindings)
+                     (loop-clause-keyword-p (cst:first post-bindings) "REPEAT"))
+                (unless (cst:consp (cst:rest post-bindings))
+                  (parse-error "Malformed for expression"
+                               (note-end source (cst:first post-bindings) "expected expression after :repeat")))
+                (let ((*loop-label-context* outer-loop-context))
+                  (setf termination-expr (parse-expression (cst:second post-bindings) source)))
+                (setf termination-kind :repeat)
+                (setf post-bindings (cst:nthrest 2 post-bindings))))
 
-       ;; (when-let [label] pattern =)
-       (unless (cst:consp (cst:nthrest 2 labelled-body))
-         (parse-error "Malformed while-let expression"
-                      (note-end source (cst:second labelled-body) "expected expression")))
+             (loop :for remaining := post-bindings :then (cst:rest remaining)
+                   :while (cst:consp remaining)
+                   :for clause := (cst:first remaining)
+                   :when (loop-clause-keyword-p clause "RETURNS")
+                     :do (parse-error "Malformed for expression"
+                                      (note source clause
+                                            ":returns clause must appear immediately after the binding list")))
 
-       ;; (when-let pattern = expr)
-       (unless (cst:consp (cst:nthrest 3 labelled-body))
-         (parse-error "Malformed while-let expression"
-                      (note-end source (cst:third labelled-body) "expected body")))
-       (let* ((*loop-label-context*
-                (if label
-                    (list* label const:+default-loop-label+ *loop-label-context*)
-                    (cons const:+default-loop-label+ *loop-label-context*))))
-         (make-node-while-let
-          :location (form-location source form)
-          :label (or label const:+default-loop-label+)
-          :pattern (parse-pattern (cst:first labelled-body) source)
-          :expr (parse-expression (cst:third labelled-body) source)
-          :body (parse-body (cst:nthrest 3 labelled-body) form source)))))
-
-    ((and (cst:atom (cst:first form))
-          (eq 'coalton:loop (cst:raw (cst:first form))))
-     (multiple-value-bind (label labelled-body label-cst) (take-label form)
-       (unless (cst:consp labelled-body)
-         (parse-error "Malformed loop expression"
-                      (note-end source (or label-cst (cst:first form)) "expected a loop body")))
-
-       (let* ((*loop-label-context*
-                (if label
-                    (list* label const:+default-loop-label+ *loop-label-context*)
-                    (cons const:+default-loop-label+ *loop-label-context*))))
-         (make-node-loop
-          :location (form-location source form)
-          :label (or label const:+default-loop-label+)
-          :body (parse-body labelled-body form source)))))
+             (let ((*loop-label-context* loop-context))
+               (make-node-for
+                :location (form-location source form)
+                :label (or label const:+default-loop-label+)
+                :bindings bindings
+                :declares (nreverse declares)
+                :returns returns
+                :termination-kind termination-kind
+                :termination-expr termination-expr
+                :sequential-p sequential-p
+                :body (parse-loop-body post-bindings source (form-location source form)))))))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:break (cst:raw (cst:first form))))
@@ -1243,11 +1932,11 @@ Rebound to NIL parsing an anonymous FN.")
            (unless (member label *loop-label-context*)
              (parse-error "Invalid label in break"
                           (note source (cst:second form)
-                                "label not found in any enclosing loop")))
+                                "label not found in any enclosing for")))
            (unless *loop-label-context*
              (parse-error "Invalid break"
                           (note source form
-                                "break does not appear in an enclosing loop"))))
+                                "break does not appear in an enclosing for"))))
 
        (make-node-break :location (form-location source form)
                         :label (or label (car *loop-label-context*)))))
@@ -1267,55 +1956,15 @@ Rebound to NIL parsing an anonymous FN.")
            (unless (member label *loop-label-context*)
              (parse-error "Invalid label in continue"
                           (note source (cst:second form)
-                                "label not found in any enclosing loop")))
+                                "label not found in any enclosing for")))
            (unless *loop-label-context*
              (parse-error "Invalid continue"
                           (note source form
-                                "continue does not appear in an enclosing loop"))))
+                                "continue does not appear in an enclosing for"))))
 
        (make-node-continue :location (form-location source form)
                            :label (or label (car *loop-label-context*)))))
 
-
-    ((and (cst:atom (cst:first form))
-          (eq 'coalton:for (cst:raw (cst:first form))))
-
-     (multiple-value-bind (label labelled-body label-cst) (take-label form)
-       ;; (for [label])
-       (unless (cst:consp labelled-body)
-         (parse-error "Malformed for expression"
-                      (note-end source (or label-cst (cst:first form)) "expected pattern")))
-
-       ;; (for [label] pattern)
-       (unless (and (cst:consp (cst:rest labelled-body))
-                    (cst:atom (cst:second labelled-body))
-                    (eq 'coalton:in (cst:raw (cst:second labelled-body))))
-         (parse-error "Malformed for expression"
-                      (if (and (cst:consp (cst:rest labelled-body))
-                               (cst:second labelled-body))
-                          (note source (cst:second labelled-body) "expected in")
-                          (note-end source (cst:first labelled-body) "expected in"))))
-
-       ;; (for [label] pattern in)
-       (unless (cst:consp (cst:nthrest 2 labelled-body))
-         (parse-error "Malformed for expression"
-                      (note-end source form "expected expression")))
-
-       ;; (for [label] pattern in expr)
-       (unless (cst:consp (cst:nthrest 3 labelled-body))
-         (parse-error "Malformed for expression"
-                      (note-end source (cst:third labelled-body) "expected body")))
-
-       (let ((*loop-label-context*
-               (if label
-                   (list* label const:+default-loop-label+ *loop-label-context*)
-                   (cons const:+default-loop-label+ *loop-label-context*))))
-         (make-node-for
-          :location (form-location source form)
-          :label (or label const:+default-loop-label+)
-          :pattern (parse-pattern (cst:first labelled-body) source)
-          :expr (parse-expression (cst:third labelled-body) source)
-          :body (parse-body (cst:nthrest 3 labelled-body) form  source)))))
 
     ;;
     ;; Macros
@@ -1340,13 +1989,7 @@ Rebound to NIL parsing an anonymous FN.")
     ;;
 
     (t
-     (make-node-application
-      :rator (parse-expression (cst:first form) source)
-      :rands (loop :for rands := (cst:rest form) :then (cst:rest rands)
-                   :while (cst:consp rands)
-                   :for rand := (cst:first rands)
-                   :collect (parse-expression rand source))
-      :location (form-location source form)))))
+     (parse-application-expression form source))))
 
 (defun parse-expressions (forms source)
   (declare (type list forms)
@@ -1381,6 +2024,51 @@ Rebound to NIL parsing an anonymous FN.")
   (make-node-variable
    :name (cst:raw form)
    :location (form-location source form)))
+
+(defun parse-ordinary-variable (form source)
+  (declare (type cst:cst form)
+           (values node-variable &optional))
+  (let ((var (parse-variable form source)))
+    (when (util:dynamic-variable-name-p (node-variable-name var))
+      (parse-error "Invalid variable"
+                   (note source form
+                         "ordinary variables cannot use dynamic-variable earmuffs")))
+    var))
+
+(defun parse-dynamic-variable (form source)
+  (declare (type cst:cst form)
+           (values node-variable &optional))
+  (let ((var (parse-variable form source)))
+    (unless (util:dynamic-variable-name-p (node-variable-name var))
+      (parse-error "Invalid dynamic variable"
+                   (note source form
+                         "dynamic variables must begin and end with '*' and contain at least one non-'*' character")))
+    var))
+
+(defun parse-lisp-variable-binding (form source)
+  (declare (type cst:cst form)
+           (values node-variable symbol &optional))
+  (cond
+    ((and (cst:atom form)
+          (identifierp (cst:raw form)))
+     (let ((var (parse-variable form source)))
+       (values var (node-variable-name var))))
+    ((cst:proper-list-p form)
+     (let ((items (cst:listify form)))
+       (unless (= 2 (length items))
+         (parse-error "Invalid lisp binding"
+                      (note source form "expected identifier or (identifier identifier)")))
+       (let ((lisp-name-form (first items))
+             (coalton-name-form (second items)))
+         (unless (and (cst:atom lisp-name-form)
+                      (identifierp (cst:raw lisp-name-form)))
+           (parse-error "Invalid lisp binding"
+                        (note source lisp-name-form "expected identifier")))
+         (values (parse-variable coalton-name-form source)
+                 (cst:raw lisp-name-form)))))
+    (t
+     (parse-error "Invalid lisp binding"
+                  (note source form "expected identifier or (identifier identifier)")))))
 
 (defun parse-accessor (form source)
   (declare (type cst:cst form)
@@ -1425,22 +2113,29 @@ Rebound to NIL parsing an anonymous FN.")
 
   (assert (cst:proper-list-p form))
 
-  (let* (last-node
-
-         (nodes (loop :for nodes := form :then (cst:rest nodes)
-                      :while (cst:consp nodes)
-
-                      ;; Not the last node
-                      :if (cst:consp (cst:rest nodes))
-                        :collect (parse-body-element (cst:first nodes) source)
-
-                      ;; The last node
-                      :else
-                        :do (setf last-node (parse-body-last-node (cst:first nodes) source)))))
-
-    
+  (let ((nodes nil)
+        (last-node nil)
+        (remaining form))
+    (loop :while (cst:consp remaining)
+          :for current := (cst:first remaining)
+          :do
+             (cond
+               ((cst:consp (cst:rest remaining))
+                (cond
+                  ((dynamic-shorthand-let-p current)
+                   (setf last-node
+                         (make-node-dynamic-let
+                          :bindings (list (parse-dynamic-shorthand-binding current source))
+                          :subexpr (body-forms->node (cst:rest remaining) preceding-form source)
+                          :location (form-location source current)))
+                   (return))
+                  (t
+                   (push (parse-body-element current source) nodes))))
+               (t
+                (setf last-node (parse-body-last-node current source))))
+             (setf remaining (cst:rest remaining)))
     (make-node-body
-     :nodes nodes
+     :nodes (nreverse nodes)
      :last-node last-node)))
 
 (defun shorthand-let-p (form)
@@ -1470,20 +2165,78 @@ Rebound to NIL parsing an anonymous FN.")
           (cst:atom (cst:third form))
           (eq (cst:raw (cst:third form)) 'coalton:=)))))
 
+(defun dynamic-shorthand-let-p (form)
+  (declare (type cst:cst form)
+           (values boolean &optional))
+  (and (shorthand-let-p form)
+       (dynamic-variable-form-p (cst:second form))))
+
+(defun parse-dynamic-binding (form source &key (context "Malformed dynamic binding"))
+  (declare (type cst:cst form)
+           (type string context)
+           (values node-dynamic-binding &optional))
+  (when (cst:atom form)
+    (parse-error context
+                 (note source form "expected list")))
+  (unless (cst:proper-list-p form)
+    (parse-error context
+                 (note source form "unexpected dotted list")))
+  (unless (cst:consp (cst:rest form))
+    (parse-error context
+                 (note-end source (cst:first form)
+                           "dynamic bindings must have a value")))
+  (when (cst:consp (cst:rest (cst:rest form)))
+    (parse-error context
+                 (note source (cst:first (cst:rest (cst:rest form)))
+                       "unexpected trailing form")))
+  (make-node-dynamic-binding
+   :name (parse-dynamic-variable (cst:first form) source)
+   :value (parse-expression (cst:second form) source)
+   :location (form-location source form)))
+
+(defun parse-dynamic-shorthand-binding (form source)
+  (declare (type cst:cst form)
+           (values node-dynamic-binding &optional))
+  (when (cst:consp (cst:rest (cst:rest (cst:rest (cst:rest form)))))
+    (parse-error "Malformed shorthand let"
+                 (note source (cst:first (cst:rest (cst:rest (cst:rest (cst:rest form)))))
+                       "unexpected trailing form")))
+  (make-node-dynamic-binding
+   :name (parse-dynamic-variable (cst:second form) source)
+   :value (parse-expression (cst:fourth form) source)
+   :location (form-location source form)))
+
+(defun body-forms->node (forms preceding-form source)
+  (declare (type cst:cst forms)
+           (values node &optional))
+  (make-node-progn
+   :body (parse-body forms preceding-form source)
+   :location (source:make-location source (util:cst-source-range (cst:listify forms)))))
+
 ;; Forms passed to parse-node-bind must be previously verified by `shorthand-let-p'
 (defun parse-node-bind (form source)
   (declare (type cst:cst form)
-           (values node-bind))
+           (values node-body-element))
 
   (when (cst:consp (cst:rest (cst:rest (cst:rest (cst:rest form)))))
     (parse-error "Malformed shorthand let"
                  (note source (cst:first (cst:rest (cst:rest (cst:rest (cst:rest form)))))
                        "unexpected trailing form")))
 
-  (make-node-bind
-   :pattern (parse-pattern (cst:second form) source)
-   :expr (parse-expression (cst:fourth form) source)
-   :location (form-location source form)))
+  (let ((pattern-form (cst:second form))
+        (expr (parse-expression (cst:fourth form) source))
+        (location (form-location source form)))
+    (if (values-pattern-form-p pattern-form)
+        (make-node-values-bind
+         :patterns (loop :for patterns := (cst:rest pattern-form) :then (cst:rest patterns)
+                         :while (cst:consp patterns)
+                         :collect (parse-pattern (cst:first patterns) source))
+         :expr expr
+         :location location)
+        (make-node-bind
+         :pattern (parse-pattern pattern-form source)
+         :expr expr
+         :location location))))
 
 (defun parse-body-element (form source)
   (declare (type cst:cst form)
@@ -1538,9 +2291,44 @@ Rebound to NIL parsing an anonymous FN.")
                        "unexpected trailing form")))
 
   (make-node-let-binding
-   :name (parse-variable (cst:first form) source)
+   :name (parse-ordinary-variable (cst:first form) source)
    :value (parse-expression (cst:second form) source)
    :location (form-location source form)))
+
+(defun parse-loop-binding (form source)
+  (declare (type cst:cst form)
+           (values node-for-binding &optional))
+
+  (when (cst:atom form)
+    (parse-error "Malformed for binding"
+                 (note source form "expected list")))
+
+  (unless (cst:proper-list-p form)
+    (parse-error "Malformed for binding"
+                 (note source form "unexpected dotted list")))
+
+  ;; (x)
+  (unless (cst:consp (cst:rest form))
+    (parse-error "Malformed for binding"
+                 (note-end source (cst:first form)
+                           "for bindings must have an initializer")))
+
+  (let* ((rest2 (cst:rest (cst:rest form)))
+         (step-form (and (cst:consp rest2)
+                         (cst:first rest2))))
+    ;; (x init step ...)
+    (when (and (cst:consp rest2)
+               (cst:consp (cst:rest rest2)))
+      (parse-error "Malformed for binding"
+                   (note source (cst:first (cst:rest rest2))
+                         "unexpected trailing form")))
+
+    (make-node-for-binding
+     :name (parse-ordinary-variable (cst:first form) source)
+     :init (parse-expression (cst:second form) source)
+     :step (and step-form
+                (parse-expression step-form source))
+     :location (form-location source form))))
 
 (defun parse-rec-binding (form source)
   (declare (type cst:cst form)
@@ -1567,7 +2355,7 @@ Rebound to NIL parsing an anonymous FN.")
                        "unexpected trailing form")))
 
   (make-node-let-binding
-   :name (parse-variable (cst:first form) source)
+   :name (parse-ordinary-variable (cst:first form) source)
    :value (parse-expression (cst:second form) source)
    :location (form-location source form)))
 
@@ -1674,6 +2462,43 @@ Rebound to NIL parsing an anonymous FN.")
    :body (parse-body (cst:rest form) (cst:first form) source)
    :location (form-location source form)))
 
+(defun parse-do-forms (forms parent-form source location)
+  (declare (type cst:cst forms parent-form)
+           (type source:location location)
+           (values node-do &optional))
+  (let ((nodes nil)
+        (last-node nil)
+        (remaining forms))
+    (loop :while (cst:consp remaining)
+          :for current := (cst:first remaining)
+          :do
+             (cond
+               ((cst:consp (cst:rest remaining))
+                (cond
+                  ((dynamic-shorthand-let-p current)
+                   (setf last-node
+                         (make-node-dynamic-let
+                          :bindings (list (parse-dynamic-shorthand-binding current source))
+                          :subexpr (parse-do-forms
+                                    (cst:rest remaining)
+                                    parent-form
+                                    source
+                                    (source:make-location
+                                     source
+                                     (util:cst-source-range
+                                      (cst:listify (cst:rest remaining)))))
+                          :location (form-location source current)))
+                   (return))
+                  (t
+                   (push (parse-do-body-element current source) nodes))))
+               (t
+                (setf last-node (parse-do-body-last-node current parent-form source))))
+             (setf remaining (cst:rest remaining)))
+    (make-node-do
+     :nodes (nreverse nodes)
+     :last-node last-node
+     :location location)))
+
 (defun parse-do (form source)
   (declare (type cst:cst form))
 
@@ -1683,23 +2508,10 @@ Rebound to NIL parsing an anonymous FN.")
     (parse-error "Malformed do expression"
                  (note-end source (cst:first form) "expected one or more forms")))
 
-  (let* (last-node
-
-         (nodes (loop :for nodes := (cst:rest form) :then (cst:rest nodes)
-                      :while (cst:consp nodes)
-                      :for node := (cst:first nodes)
-
-                      ;; Not the last node
-                      :if (cst:consp (cst:rest nodes))
-                        :collect (parse-do-body-element node source)
-
-                      :else
-                        :do (setf last-node (parse-do-body-last-node node (cst:first form) source)))))
-
-    (make-node-do
-     :nodes nodes
-     :last-node last-node
-     :location (form-location source form))))
+  (parse-do-forms (cst:rest form)
+                  (cst:first form)
+                  source
+                  (form-location source form)))
 
 (defun do-bind-p (form)
   "Returns t if FORM is in the form of (x <- y+)"
@@ -1789,9 +2601,45 @@ Rebound to NIL parsing an anonymous FN.")
                  (note source (cst:fourth form) "unexpected form")))
 
   (make-node-let-declare
-   :name (parse-variable (cst:second form) source)
+   :name (parse-ordinary-variable (cst:second form) source)
    :type (parse-qualified-type (cst:third form) source)
    :location (form-location source form)))
+
+(defun loop-clause-keyword-p (form name)
+  (declare (type cst:cst form)
+           (type string name)
+           (values boolean &optional))
+  (and (cst:atom form)
+       (keywordp (cst:raw form))
+       (string= (symbol-name (cst:raw form)) name)))
+
+(defun loop-binding-list-form-p (form)
+  (declare (type cst:cst form)
+           (values boolean &optional))
+  (and (cst:proper-list-p form)
+       (loop :for clauses := form :then (cst:rest clauses)
+             :while (cst:consp clauses)
+             :always (let ((clause (cst:first clauses)))
+                       (and (cst:consp clause)
+                            (cst:proper-list-p clause))))))
+
+(defun parse-loop-body (forms source location)
+  (declare (type cst:cst forms)
+           (type source:location location)
+           (values node-body &optional))
+  (when (and (not (cst:null forms))
+             (not (cst:consp forms)))
+    (parse-error "Malformed for expression"
+                 (note source forms "unexpected dotted list")))
+  (make-node-body
+   :nodes (loop :for rest := forms :then (cst:rest rest)
+                :while (cst:consp rest)
+                :collect (parse-body-element (cst:first rest) source))
+   ;; Loop bodies discard every user form, so we append an internal empty
+   ;; values node to reuse the normal body sequencing/scoping machinery.
+   :last-node (make-node-values
+               :nodes nil
+               :location location)))
 
 (defun take-label (form)
   "Takes form (HEAD . (MAYBEKEYWORD . REST)) and returns three values,

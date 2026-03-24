@@ -175,9 +175,13 @@ recompilation, and also maintains a stack of uncompiled candidates."
            (type tc:environment env)
            (values (or compile-candidate null) &optional))
 
-  ;; Only functions with known code are valid candidates
-  (unless (tc:lookup-code env name :no-error t)
-    (return-from valid-candidate-p nil))
+  ;; Only functions with known code are valid candidates.
+  (let ((code (tc:lookup-code env name :no-error t)))
+    (unless code
+      (return-from valid-candidate-p nil))
+    (when (and (node-abstraction-p code)
+               (node-abstraction-keyword-params code))
+      (return-from valid-candidate-p nil)))
 
   (let ((new-args (loop :for node :in args
                     :if (and (node-can-be-propagated node env) (node-free-p node bound-variables))
@@ -243,7 +247,7 @@ recompilation, and also maintains a stack of uncompiled candidates."
                (tc:apply-substitution
                 subs
                 (make-node-abstraction
-                 :type (tc:make-function-type* arg-tys new-type)
+                 :type (tc:prepend-function-input-types arg-tys new-type)
                  :vars new-vars
                  :subexpr subexpr)))
 
@@ -269,14 +273,14 @@ recompilation, and also maintains a stack of uncompiled candidates."
                  (tc:apply-substitution
                   subs
                   (make-node-abstraction
-                   :type (tc:make-function-type*
+                   :type (tc:merge-function-input-types
                           arg-tys
                           new-type)
                    :vars (append new-vars remaining-names)
                    :subexpr (make-node-application
-                             :type (tc:make-function-type*
-                                    (util:drop num-remaining (tc:function-type-arguments new-type))
-                                    (tc:function-return-type new-type))
+                             :type (tc:function-remove-arguments
+                                    new-type
+                                    num-remaining)
                              :properties '()
                              :rator subexpr
                              :rands (loop :for name :in remaining-names
@@ -294,12 +298,12 @@ recompilation, and also maintains a stack of uncompiled candidates."
                                    :subexpr subexpr)))
                    (if (null new-vars)
                        (tc:apply-substitution subs inner-abs)
-                       (tc:apply-substitution
-                        subs
-                        (make-node-abstraction
-                         :vars new-vars
-                         :type (tc:make-function-type* arg-tys new-type)
-                         :subexpr inner-abs))))))
+                        (tc:apply-substitution
+                         subs
+                         (make-node-abstraction
+                          :vars new-vars
+                         :type (tc:prepend-function-input-types arg-tys new-type)
+                          :subexpr inner-abs))))))
 
               (t
                (util:unreachable)))))
@@ -331,10 +335,18 @@ propagate dictionaries that have been moved by the hoister."
            (type package package)
            (type tc:environment env))
   (labels ((validate-candidate (node bound-variables)
+             (when (or (and (node-application-p node)
+                            (node-application-keyword-rands node))
+                       (and (node-direct-application-p node)
+                            (node-direct-application-keyword-rands node)))
+               (return-from validate-candidate nil))
              (let ((name (node-rator-name node))
                    (rands (node-rands node)))
 
                (unless name
+                 (return-from validate-candidate nil))
+
+               (when (util:dynamic-variable-name-p name)
                  (return-from validate-candidate nil))
 
                (let ((candidate
@@ -368,10 +380,18 @@ propagate dictionaries that have been moved by the hoister."
            (values node &optional))
 
   (labels ((apply-candidate (node bound-variables)
+             (when (or (and (node-application-p node)
+                            (node-application-keyword-rands node))
+                       (and (node-direct-application-p node)
+                            (node-direct-application-keyword-rands node)))
+               (return-from apply-candidate nil))
              (let ((name (node-rator-name node))
                    (rands (node-rands node)))
 
                (unless name
+                 (return-from apply-candidate nil))
+
+               (when (util:dynamic-variable-name-p name)
                  (return-from apply-candidate nil))
 
                (let ((candidate (valid-candidate-p
@@ -409,7 +429,7 @@ propagate dictionaries that have been moved by the hoister."
                         :type (node-type node)
                         :properties '()
                         :rator (make-node-variable
-                                :type (tc:make-function-type*
+                                :type (tc:prepend-function-input-types
                                        (reverse arg-tys)
                                        new-type)
                                 :value function-name)

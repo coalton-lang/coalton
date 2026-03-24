@@ -10,8 +10,7 @@
    #:coalton/math/integral
    #:coalton/math/real
    #:coalton/math/complex
-   #:coalton/math/elementary
-   #:coalton/math/dual))
+   #:coalton/math/elementary))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/MATH")

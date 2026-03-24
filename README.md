@@ -39,7 +39,7 @@ Coalton integrates directly into Common Lisp:
     (E*     (Expr :t) (Expr :t)))
 
   ;; The classic `diff` function, in Coalton.
-  (declare diff (Num :t => sym:Symbol -> Expr :t -> Expr :t))
+  (declare diff (Num :t => sym:Symbol * Expr :t -> Expr :t))
   (define (diff x f)
     "Compute the derivative of `f` with respect to `x`."
     (match f
@@ -57,9 +57,9 @@ Coalton integrates directly into Common Lisp:
   (define t (sym:make-symbol "t"))
 
   (declare d/dt (Num :t => Expr :t -> Expr :t))
-  (define d/dt
+  (define (d/dt f)
     "The time derivative operator."
-    (diff t)))
+    (diff t f)))
 ```
 
 It also works directly in the REPL:

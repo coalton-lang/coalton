@@ -59,7 +59,7 @@
          (slice:index-unsafe 1 s)
          (slice:index-unsafe 2 s))
         out)
-       Unit)
+       (values))
      (slice:iter-sliding 3 v))
     
     (is (== (into out)
@@ -86,7 +86,7 @@
        (vector:push!
         (iter:collect! (iter:into-iter s))
         out)
-       Unit)
+       (values))
      (slice:iter-chunked 3 v))
      
     (is (== (into out)
@@ -114,7 +114,7 @@
          (slice:index-unsafe 1 s)
          (slice:index-unsafe 2 s))
         out)
-       Unit)
+       (values))
      (slice:iter-chunked-exact 3 v))
      
     (is (== (into out)

@@ -73,7 +73,6 @@ is true."
         (let ((new-lisp-node (make-node-lisp
                               :type (node-type node)
                               :vars lisp-var-bindings
-                              :return-convention (node-lisp-return-convention node)
                               :form (node-lisp-form node))))
           (if (endp let-bindings)
               new-lisp-node
@@ -93,7 +92,8 @@ is true."
          :properties (node-properties node)
          :rator-type (node-direct-application-rator-type node)
          :rator (node-variable-value (ast-substitution-to res))
-         :rands (node-direct-application-rands node))))
+         :rands (node-direct-application-rands node)
+         :keyword-rands (node-direct-application-keyword-rands node))))
     (action (:traverse node-let node new-subs)
       (loop :for (name . expr) :in (node-let-bindings node)
             :do (when (find name subs :key #'ast-substitution-from)
@@ -120,11 +120,8 @@ is true."
                    (funcall *traverse* node new-subs)))
        :subexpr (funcall *traverse* (node-let-subexpr node) new-subs)))
     (action (:traverse node-values-bind node new-subs)
-      (let* ((tuple-type (node-type (node-values-bind-expr node)))
-             (components (tc:tuple-component-types tuple-type)))
-        (unless components
-          (util:coalton-bug
-           "node-values-bind requires Tuple type, got ~S" tuple-type))
+      (let* ((output-pack-type (node-type (node-values-bind-expr node)))
+             (components (tc:multiple-value-output-types output-pack-type)))
         (loop :for name :in (node-values-bind-vars node)
               :do (when (find name subs :key #'ast-substitution-from)
                     (util:coalton-bug
@@ -146,5 +143,43 @@ is true."
                                   (find name new-subs :key #'ast-substitution-from)))
                                 name))
        :expr (funcall *traverse* (node-values-bind-expr node) new-subs)
-       :body (funcall *traverse* (node-values-bind-body node) new-subs))))
+       :body (funcall *traverse* (node-values-bind-body node) new-subs)))
+    (action (:traverse node-for node new-subs)
+      (let ((loop-subs new-subs))
+        (loop :for binding :in (node-for-bindings node)
+              :for name := (node-for-binding-name binding)
+              :do (when (find name subs :key #'ast-substitution-from)
+                    (util:coalton-bug
+                     "Failure to apply ast substitution on variable ~A to node-for"
+                     name))
+              :do (when rename-bound-variables
+                    (push (make-ast-substitution
+                           :from name
+                           :to (make-node-variable
+                                :type (node-for-binding-type binding)
+                                :value (gensym (symbol-name name))))
+                          loop-subs)))
+        (make-node-for
+         :type (node-type node)
+         :label (node-for-label node)
+         :bindings (loop :for binding :in (node-for-bindings node)
+                         :for name := (node-for-binding-name binding)
+                         :collect (make-node-for-binding
+                                   :name (if rename-bound-variables
+                                             (node-variable-value
+                                              (ast-substitution-to
+                                               (find name loop-subs :key #'ast-substitution-from)))
+                                             name)
+                                   :type (node-for-binding-type binding)
+                                   :init (funcall *traverse* (node-for-binding-init binding) new-subs)
+                                   :step (and (node-for-binding-step binding)
+                                              (funcall *traverse* (node-for-binding-step binding) loop-subs))))
+         :sequential-p (node-for-sequential-p node)
+         :returns (and (node-for-returns node)
+                       (funcall *traverse* (node-for-returns node) loop-subs))
+         :termination-kind (node-for-termination-kind node)
+         :termination-expr (and (node-for-termination-expr node)
+                                (funcall *traverse* (node-for-termination-expr node) loop-subs))
+         :body (funcall *traverse* (node-for-body node) loop-subs))))
+   )
    nil))

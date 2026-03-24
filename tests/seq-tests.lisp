@@ -31,7 +31,7 @@
   (declare legible-seq (UFix -> seq:Seq String))
   (define (legible-seq n)
     (iter:collect!
-     (map (fn (i) (lisp String (i) (cl:format cl:nil "~r" i)))
+     (map (fn (i) (lisp (-> String) (i) (cl:format cl:nil "~r" i)))
           (iter:up-to n)))))
 
 (define-test seq-push-and-pop-implementation ()
@@ -45,7 +45,7 @@
   (is (== seq seq2))
   ;; now test that popped and popped2 are identical - i.e. memory is shared between them
   (let popped2 = (match (seq:pop seq2) ((Some (Tuple _ popped)) popped) (_  (unreachable))))
-  (is (lisp Boolean (popped popped2) (cl:eq popped popped2))))
+  (is (lisp (-> Boolean) (popped popped2) (cl:eq popped popped2))))
 
 
 (define-test seq-concat ()
@@ -105,8 +105,9 @@ edge all have between MIN-BRANCHING and MAX-BRANCHING subnodes."
                 ((seq::RelaxedNode _ _ _ subs)
                  (and (or right-most-edge? (satisfied? (vector:length subs)))
                       (iter:every!
-                       (valid? False)
-                       (map (flip vector:index-unsafe subs)
+                       (fn (subnode) (valid? False subnode))
+                       (map (fn (i)
+                              (vector:index-unsafe i subs))
                             (iter:range-increasing 1 0 (- (vector:length subs) 1))))
                       (valid? True (vector:last-unsafe subs))))))))
       (valid? True seq))))
@@ -172,3 +173,8 @@ edge all have between MIN-BRANCHING and MAX-BRANCHING subnodes."
   (let my-seq = (seq:make "Hello, world!" (into 3)))
   (is (== (Some "Hello, world!") (seq:get my-seq 0)))
   (is (== (Some "3") (seq:get my-seq 1))))
+
+(define-test seq-show ()
+  (is (== "#<Seq [1 2 3]>"
+          (show-as-string (the (seq:Seq Integer)
+                               (seq:make 1 2 3))))))

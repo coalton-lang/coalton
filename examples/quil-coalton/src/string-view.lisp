@@ -7,7 +7,7 @@
 
   (declare make-string-view (String -> StringView))
   (define (make-string-view str)
-    (lisp StringView (str)
+    (lisp (-> StringView) (str)
        (cl:make-array (cl:length (cl:the (cl:vector cl:character) str))
                       :element-type 'cl:character
                       :displaced-to str
@@ -15,7 +15,7 @@
 
   (declare next-char (StringView -> (Optional (Tuple coalton:Char StringView))))
   (define (next-char str)
-       (lisp (Optional (Tuple coalton:Char StringView)) (str)
+       (lisp (-> (Optional (Tuple coalton:Char StringView))) (str)
          (cl:let* ((arr str))
            (cl:declare (cl:type (cl:vector cl:character) arr)
                        ;; Muffle sbcl wanting to optimize aref. This cannot be optimized.
@@ -37,11 +37,11 @@
 
   (declare string-view-get (StringView -> String))
   (define (string-view-get str)
-       (lisp String (str) str))
+       (lisp (-> String) (str) str))
 
   (declare string-view-empty-p (StringView -> Boolean))
   (define (string-view-empty-p str)
-       (lisp Boolean (str)
+       (lisp (-> Boolean) (str)
          (cl:let* ((arr str))
            (cl:declare (cl:type (cl:vector cl:character) arr))
            (cl:if (cl:= 0 (cl:length arr))

@@ -31,14 +31,15 @@ QUICKLISP_HOME = $(HOME)/quicklisp-$(COALTON_NAME)
 LISP_CACHE = $(BLDDIR)
 EXTRA_LOCAL_PROJECTS=$(QUICKLISP_HOME)/local-projects
 QUICKLISP_SETUP=$(QUICKLISP_HOME)/setup.lisp
+REPO_ROOT=$(abspath $(CURDIR))
+LOCAL_SOURCE_REGISTRY=$(REPO_ROOT)//
+TEST_FORMS=--load $(QUICKLISP_SETUP) \
+	--eval "(ql:quickload :coalton/tests)" \
+	--eval "(asdf:test-system :coalton/tests)" \
+	--eval "(asdf:load-system :small-coalton-programs)"
 VERSION=$(shell cat VERSION.txt | tr -d \" )
 ### ****** EXTERNAL LIBRARIES NEEDED ******
-## Official fset repo loads fine on sbcl, ccl, abcl, ecl, clasp (not alisp!)
-## It doesn't pass (asdf:test-system :fset) on any of them.
 FSET_REPO=https://github.com/slburson/fset.git
-## This fork of a previous FSet version seems to work on abcl (though it doesn't
-## pass FSet's self-test on either abcl or ecl).
-# FSET_REPO=https://github.com/c-kloukinas/fset.git
 MISC_EXTENSIONS_REPO=https://gitlab.common-lisp.net/misc-extensions/misc-extensions.git
 NAMED_READTABLES_REPO=https://github.com/melisgl/named-readtables.git
 
@@ -56,6 +57,9 @@ ALLEGRO_COMP=alisp --batch
 CLASP_COMP=clasp --non-interactive --norc
 # # do read ql's setup
 # SBCL_COMP=$(SBCL)
+
+QUICKLISP=env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+	$(SBCL) --load $(QUICKLISP_HOME)/setup.lisp
 
 # deal with synonyms
 ifeq ($(LISP),clozure)
@@ -92,13 +96,17 @@ CLASP=$(shell which -s clasp && echo "$(CLASP_COMP)" || echo "echo $(CLASP_COMP)
 ## COMP is the actual compiler to be used - executable with specific arguments
 COMP=none
 ## How to load a file using COMP - minimal default:
-runOnFileDefault = $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --load $(2)
+runOnFileDefault = env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+                   $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --load $(2)
 ## How to eval an expression using COMP - minimal default:
-runOnExprDefault = $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --eval $(2)
+runOnExprDefault = env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+                   $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --eval $(2)
 ## How to eval and load using COMP - minimal default:
-runOnExprAndFileDefault = $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --eval $(2) --load $(3)
+runOnExprAndFileDefault = env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+                          $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --eval $(2) --load $(3)
 ## How to load and eval using COMP - minimal default:
-runOnFileAndExprDefault = $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --load $(2) --eval $(3)
+runOnFileAndExprDefault = env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+                          $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --load $(2) --eval $(3)
 LISPEXEC=$(LISP)
   runOnFile = cat /dev/null | $(call runOnFileDefault,$(1),$(2))
   runOnExpr = cat /dev/null | $(call runOnExprDefault,$(1),$(2))
@@ -114,10 +122,14 @@ ifeq ($(LISP),sbcl)
 endif
 ifeq ($(LISP),alisp)
   COMP=$(ALLEGRO)
-  runOnFile = cat $(QUICKLISP_HOME)/asdf.lisp $(2) | $(TIME) $(1)
-  runOnExpr = (cat $(QUICKLISP_HOME)/asdf.lisp ; echo $(2)) | $(TIME) $(1)
-  runOnExprAndFile = (cat $(QUICKLISP_HOME)/asdf.lisp ; echo $(2) ; cat $(3)) | $(TIME) $(1) 
-  runOnFileAndExpr = (cat $(QUICKLISP_HOME)/asdf.lisp $(2) ; echo $(3)) | $(TIME) $(1)
+  runOnFile = cat $(QUICKLISP_HOME)/asdf.lisp $(2) | env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+                                                     $(TIME) $(1)
+  runOnExpr = (cat $(QUICKLISP_HOME)/asdf.lisp ; echo $(2)) | env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+                                                              $(TIME) $(1)
+  runOnExprAndFile = (cat $(QUICKLISP_HOME)/asdf.lisp ; echo $(2) ; cat $(3)) | env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+                                                                                $(TIME) $(1) 
+  runOnFileAndExpr = (cat $(QUICKLISP_HOME)/asdf.lisp $(2) ; echo $(3)) | env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+                                                                          $(TIME) $(1)
   LISPEXEC=alisp
 endif
 ifeq ($(LISP),ccl)
@@ -325,31 +337,35 @@ test-release:
 
 .PHONY: docs
 docs:
-	$(SBCL) \
-		 --eval "(load \"$(QUICKLISP_HOME)/setup.lisp\")" \
-		 --eval "(ql:quickload :coalton/doc :silent t)" \
-		 --eval "(coalton/doc:write-stdlib-documentation-to-file \"docs/reference.md\")"
+  env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+	  $(SBCL) \
+		--load "$(QUICKLISP_SETUP)" \
+		--eval "(ql:quickload :coalton/doc :silent t)" \
+		--eval "(coalton/doc:write-stdlib-documentation-to-file \"docs/reference.md\")"
 
 .PHONY: web-docs
 web-docs:
-	$(SBCL) \
-		 --eval "(load \"$(QUICKLISP_HOME)/setup.lisp\")" \
-		 --eval "(ql:quickload :coalton/doc :silent t)" \
-		 --eval "(coalton/doc:write-stdlib-documentation-to-file \"../coalton-website/content/reference.md\" :backend :hugo :revision \"main\")"
+	env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+		$(SBCL) \
+		--load $(QUICKLISP_SETUP) \
+		--eval "(ql:quickload :coalton/doc :silent t)" \
+		--eval "(coalton/doc:write-stdlib-documentation-to-file \"../coalton-website/content/reference.md\" :backend :hugo :revision \"main\")"
 
 
 .PHONY: bench
-bench:	install-libraries
-	COALTON_ENV=release $(SBCL) \
-		 --eval "(load \"$(QUICKLISP_HOME)/setup.lisp\")" \
-		 --eval "(ql:quickload :coalton/benchmarks :silent t)" \
-		 --eval "(sb-ext::without-gcing (coalton-benchmarks:run-benchmarks))"
+	env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+		COALTON_ENV=release \
+		$(SBCL) \
+		--load $(QUICKLISP_SETUP) \
+		--eval "(ql:quickload :coalton/benchmarks :silent t)" \
+		--eval "(sb-ext::without-gcing (coalton-benchmarks:run-benchmarks))"
 
 .PHONY: parser-coverage
 parser-coverage:
 	mkdir -p coverage-report && test -d coverage-report
-	$(SBCL) \
-		--eval "(load \"$(QUICKLISP_HOME)/setup.lisp\")" \
+	env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+		$(SBCL) \
+		--load $(QUICKLISP_SETUP) \
 		--eval "(require :sb-cover)" \
 		--eval "(declaim (optimize sb-cover:store-coverage-data))" \
 		--eval "(asdf:test-system :coalton :force '(:coalton :coalton/tests))" \

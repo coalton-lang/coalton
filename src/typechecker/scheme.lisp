@@ -43,10 +43,141 @@
   (type       (util:required 'type)  :type qualified-ty :read-only t))
 
 (defun ty-scheme= (ty-scheme1 ty-scheme2)
-  (and (equalp (ty-scheme-kinds ty-scheme1)
-               (ty-scheme-kinds ty-scheme2))
-       (qualified-ty= (ty-scheme-type ty-scheme1)
-                      (ty-scheme-type ty-scheme2))))
+  "Check alpha-equivalence of two type schemes.
+
+Uses bidirectional tgen-id mapping to verify that quantified variables can be
+consistently renamed to make both schemes identical. Predicates are compared
+as unordered bags (O(n²) when the tgen map is complete after comparing the
+main type, O(n!) otherwise — but predicate lists are small in practice)."
+  (labels ((kind-bag= (kinds1 kinds2)
+             (labels ((bag= (remaining candidates)
+                        (if (endp remaining)
+                            (endp candidates)
+                            (let ((reduced (remove (first remaining) candidates
+                                                   :test #'equalp :count 1)))
+                              (and (< (length reduced) (length candidates))
+                                   (bag= (rest remaining) reduced))))))
+               (bag= kinds1 kinds2)))
+
+           (bind-tgen (id1 id2 kinds1 kinds2 map12 map21)
+             (let ((entry12 (assoc id1 map12))
+                   (entry21 (assoc id2 map21)))
+               (cond
+                 (entry12
+                  (values (= (cdr entry12) id2) map12 map21))
+                 (entry21
+                  (values nil map12 map21))
+                 ((or (>= id1 (length kinds1))
+                      (>= id2 (length kinds2))
+                      (not (equalp (nth id1 kinds1) (nth id2 kinds2))))
+                  (values nil map12 map21))
+                 (t
+                  (values t (acons id1 id2 map12) (acons id2 id1 map21))))))
+
+           (alpha-children= (children1 children2 kinds1 kinds2 map12 map21)
+             "Compare two lists of types element-wise under the current tgen mapping."
+             (if (/= (length children1) (length children2))
+                 (values nil map12 map21)
+                 (loop :for c1 :in children1
+                       :for c2 :in children2
+                       :do (multiple-value-bind (eq? m12 m21)
+                               (alpha-ty= c1 c2 kinds1 kinds2 map12 map21)
+                             (unless eq? (return (values nil map12 map21)))
+                             (setf map12 m12 map21 m21))
+                       :finally (return (values t map12 map21)))))
+
+           (alpha-ty= (type1 type2 kinds1 kinds2 map12 map21)
+             (cond
+               ;; Leaf types: tyvars and tycons compare structurally
+               ((or (typep type1 'tyvar) (typep type1 'tycon))
+                (values (ty= type1 type2) map12 map21))
+               ;; Quantified variables: check/extend the bijection
+               ((typep type1 'tgen)
+                (if (typep type2 'tgen)
+                    (bind-tgen (tgen-id type1) (tgen-id type2)
+                               kinds1 kinds2 map12 map21)
+                    (values nil map12 map21)))
+               ;; Type application
+               ((typep type1 'tapp)
+                (if (typep type2 'tapp)
+                    (alpha-children= (list (tapp-from type1) (tapp-to type1))
+                                     (list (tapp-from type2) (tapp-to type2))
+                                     kinds1 kinds2 map12 map21)
+                    (values nil map12 map21)))
+               ;; Keyword type entry
+               ((typep type1 'keyword-ty-entry)
+                (if (and (typep type2 'keyword-ty-entry)
+                         (eq (keyword-ty-entry-keyword type1)
+                             (keyword-ty-entry-keyword type2)))
+                    (alpha-ty= (keyword-ty-entry-type type1)
+                               (keyword-ty-entry-type type2)
+                               kinds1 kinds2 map12 map21)
+                    (values nil map12 map21)))
+               ;; Function types
+               ((typep type1 'function-ty)
+                (if (and (typep type2 'function-ty)
+                         (= (length (function-ty-keyword-input-types type1))
+                            (length (function-ty-keyword-input-types type2)))
+                         (eq (function-ty-keyword-open-p type1)
+                             (function-ty-keyword-open-p type2)))
+                    (alpha-children= (append (function-ty-positional-input-types type1)
+                                             (function-ty-keyword-input-types type1)
+                                             (function-ty-output-types type1))
+                                     (append (function-ty-positional-input-types type2)
+                                             (function-ty-keyword-input-types type2)
+                                             (function-ty-output-types type2))
+                                     kinds1 kinds2 map12 map21)
+                    (values nil map12 map21)))
+               ;; Result types
+               ((typep type1 'result-ty)
+                (if (typep type2 'result-ty)
+                    (alpha-children= (result-ty-output-types type1)
+                                     (result-ty-output-types type2)
+                                     kinds1 kinds2 map12 map21)
+                    (values nil map12 map21)))
+               (t
+                (values nil map12 map21))))
+
+           ;; Predicate bag comparison.  When the tgen map is already
+           ;; complete (the common case after comparing the main type),
+           ;; matches are deterministic so we commit to the first hit
+           ;; and avoid backtracking — O(n²) instead of O(n!).  The
+           ;; backtracking path is kept for the rare incomplete-map case.
+           (alpha-pred-bag= (preds1 preds2 kinds1 kinds2 map12 map21)
+             (cond
+               ((endp preds1) (values (endp preds2) map12 map21))
+               ((endp preds2) (values nil map12 map21))
+               (t
+                (let ((complete-map-p (= (length map12) (length kinds1))))
+                  (dolist (p2 preds2 (values nil map12 map21))
+                    (when (and (eq (ty-predicate-class (first preds1))
+                                   (ty-predicate-class p2))
+                               (= (length (ty-predicate-types (first preds1)))
+                                  (length (ty-predicate-types p2))))
+                      (multiple-value-bind (eq? m12 m21)
+                          (alpha-children= (ty-predicate-types (first preds1))
+                                           (ty-predicate-types p2)
+                                           kinds1 kinds2 map12 map21)
+                        (when eq?
+                          (multiple-value-bind (rest-eq? rm12 rm21)
+                              (alpha-pred-bag= (rest preds1)
+                                               (remove p2 preds2 :count 1 :test #'eq)
+                                               kinds1 kinds2 m12 m21)
+                            (when (or rest-eq? complete-map-p)
+                              (return (values rest-eq? rm12 rm21)))))))))))))
+
+    (let ((kinds1 (ty-scheme-kinds ty-scheme1))
+          (kinds2 (ty-scheme-kinds ty-scheme2)))
+      (and (= (length kinds1) (length kinds2))
+           (kind-bag= kinds1 kinds2)
+           (multiple-value-bind (types-eq? map12 map21)
+               (alpha-ty= (qualified-ty-type (ty-scheme-type ty-scheme1))
+                          (qualified-ty-type (ty-scheme-type ty-scheme2))
+                          kinds1 kinds2 nil nil)
+             (and types-eq?
+                  (alpha-pred-bag= (qualified-ty-predicates (ty-scheme-type ty-scheme1))
+                                   (qualified-ty-predicates (ty-scheme-type ty-scheme2))
+                                   kinds1 kinds2 map12 map21)))))))
 
 (defmethod make-load-form ((self ty-scheme) &optional env)
   (make-load-form-saving-slots self :environment env))
@@ -72,9 +203,9 @@
 (defun quantify (tyvars type)
   "Quantify the TYVARS that occur in TYPE, preserving binder metadata.
 
-The resulting scheme keeps the source-name and binding-id carried by
-each quantified variable so later instantiation and pretty printing can
-recover the programmer-written binders."
+The resulting scheme keeps the source-name carried by each quantified
+variable so later instantiation and pretty printing can recover the
+programmer-written binders."
   (declare (type tyvar-list tyvars)
            (type qualified-ty type)
            (values ty-scheme))
@@ -87,8 +218,6 @@ recover the programmer-written binders."
                       :collect (make-substitution
                                 :from var
                                 :to (make-tgen :id id
-                                               :binding-id (or (tyvar-binding-id var)
-                                                               (gensym "BINDER"))
                                                :source-name (tyvar-source-name var))))))
     (make-ty-scheme
      :explicit-p nil
@@ -98,15 +227,12 @@ recover the programmer-written binders."
 (defun ty-scheme-instantiation-types (ty-scheme)
   "Return fresh instantiation variables for TY-SCHEME's quantified binders.
 
-The returned variables preserve each binder's source-name and binding-id
-so fresh-inst, pretty printing, and scoped-forall resolution all see the
-same quantified binder identity."
+The returned variables preserve each binder's source-name so fresh-inst
+and pretty printing can recover the programmer-written binders."
   (declare (type ty-scheme ty-scheme)
            (values tyvar-list &optional))
   (let* ((source-names (make-array (length (ty-scheme-kinds ty-scheme))
                                    :initial-element nil))
-         (binding-ids (make-array (length (ty-scheme-kinds ty-scheme))
-                                  :initial-element nil))
          (scheme-type (ty-scheme-type ty-scheme)))
     (labels ((collect-instantiation-metadata (object)
                (typecase object
@@ -114,13 +240,18 @@ same quantified binder identity."
                   (when (< (tgen-id object) (length source-names))
                     (setf (aref source-names (tgen-id object))
                           (or (aref source-names (tgen-id object))
-                              (tgen-source-name object)))
-                    (setf (aref binding-ids (tgen-id object))
-                          (or (aref binding-ids (tgen-id object))
-                              (tgen-binding-id object)))))
+                              (tgen-source-name object)))))
                  (tapp
                   (collect-instantiation-metadata (tapp-from object))
                   (collect-instantiation-metadata (tapp-to object)))
+                 (keyword-ty-entry
+                  (collect-instantiation-metadata (keyword-ty-entry-type object)))
+                 (function-ty
+                  (collect-instantiation-metadata (function-ty-positional-input-types object))
+                  (collect-instantiation-metadata (function-ty-keyword-input-types object))
+                  (collect-instantiation-metadata (function-ty-output-types object)))
+                 (result-ty
+                  (collect-instantiation-metadata (result-ty-output-types object)))
                  (qualified-ty
                   (collect-instantiation-metadata (qualified-ty-predicates object))
                   (collect-instantiation-metadata (qualified-ty-type object)))
@@ -132,8 +263,7 @@ same quantified binder identity."
       (loop :for kind :in (ty-scheme-kinds ty-scheme)
             :for i :from 0
             :collect (make-variable kind
-                                    (aref source-names i)
-                                    (aref binding-ids i))))))
+                                    (aref source-names i))))))
 
 (defgeneric to-scheme (ty)
   (:method ((ty qualified-ty))
@@ -146,7 +276,7 @@ same quantified binder identity."
     (to-scheme (qualify nil ty))))
 
 (defun fresh-inst (ty-scheme)
-  "Instantiate TY-SCHEME with fresh type variables that preserve binder metadata."
+  "Instantiate TY-SCHEME with fresh type variables that preserve binder names."
   (declare (type ty-scheme ty-scheme)
            (values qualified-ty &optional))
   (let ((types (ty-scheme-instantiation-types ty-scheme)))
@@ -190,8 +320,6 @@ become lexically scoped."
                       :collect (make-substitution
                                 :from var
                                 :to (make-tgen :id id
-                                               :binding-id (or (tyvar-binding-id var)
-                                                               (gensym "BINDER"))
                                                :source-name (tyvar-source-name var))))))
     (make-ty-scheme
      :explicit-p explicit-p
@@ -228,35 +356,3 @@ become lexically scoped."
    :explicit-p (ty-scheme-explicit-p scheme)
    :kinds (ty-scheme-kinds scheme)
    :type (remove-source-info (ty-scheme-type scheme))))
-
-;;;
-;;; Pretty printing
-;;;
-
-(defun pprint-scheme (stream scheme)
-  (declare (type stream stream)
-           (type ty-scheme scheme))
-  (cond
-    ((null (ty-scheme-kinds scheme))
-     (write (ty-scheme-type scheme) :stream stream))
-    (t
-     (with-pprint-variable-context ()
-       (let* ((types (ty-scheme-instantiation-types scheme))
-              (new-type (instantiate types (ty-scheme-type scheme))))
-         (write-string (if settings:*coalton-print-unicode*
-                           "∀"
-                           "FORALL")
-                       stream)
-         (loop :for ty :in types
-               :do (write-char #\space stream)
-                   (write ty :stream stream))
-         (write-string ". " stream)
-         (write new-type :stream stream)))
-     ))
-
-  nil)
-
-(defmethod print-object ((scheme ty-scheme) stream)
-  (if *print-readably*
-      (call-next-method)
-      (pprint-scheme stream scheme)))

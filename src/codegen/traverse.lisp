@@ -101,7 +101,15 @@ nodes."
        :rands (mapcar
                (lambda (node)
                  (apply *traverse* node args))
-               (node-application-rands node))))
+               (node-application-rands node))
+       :keyword-rands (mapcar
+                       (lambda (arg)
+                         (make-node-application-keyword-arg
+                          :keyword (node-application-keyword-arg-keyword arg)
+                          :value (apply *traverse* (node-application-keyword-arg-value arg) args)
+                          :supplied-p (alexandria:when-let ((supplied-p (node-application-keyword-arg-supplied-p arg)))
+                                        (apply *traverse* supplied-p args))))
+                       (node-application-keyword-rands node))))
     (action (:traverse node-direct-application node &rest args)
       (make-node-direct-application
        :type (node-type node)
@@ -111,19 +119,35 @@ nodes."
        :rands (mapcar
                (lambda (node)
                  (apply *traverse* node args))
-               (node-direct-application-rands node))))
+               (node-direct-application-rands node))
+       :keyword-rands (mapcar
+                       (lambda (arg)
+                         (make-node-application-keyword-arg
+                          :keyword (node-application-keyword-arg-keyword arg)
+                          :value (apply *traverse* (node-application-keyword-arg-value arg) args)
+                          :supplied-p (alexandria:when-let ((supplied-p (node-application-keyword-arg-supplied-p arg)))
+                                        (apply *traverse* supplied-p args))))
+                       (node-direct-application-keyword-rands node))))
     (action (:traverse node-abstraction node &rest args)
       (make-node-abstraction
        :type (node-type node)
        :vars (node-abstraction-vars node)
-       :subexpr (apply *traverse* (node-abstraction-subexpr node) args)
-       :return-convention (node-abstraction-return-convention node)))
+       :keyword-params (node-abstraction-keyword-params node)
+       :subexpr (apply *traverse* (node-abstraction-subexpr node) args)))
     (action (:traverse node-let node &rest args)
       (make-node-let
        :type (node-type node)
        :bindings (loop :for (name . node) :in (node-let-bindings node)
                        :collect (cons name (apply *traverse* node args)))
        :subexpr (apply *traverse* (node-let-subexpr node) args)))
+    (action (:traverse node-dynamic-let node &rest args)
+      (make-node-dynamic-let
+       :type (node-type node)
+       :bindings (loop :for binding :in (node-dynamic-let-bindings node)
+                       :collect (make-node-dynamic-binding
+                                 :name (node-dynamic-binding-name binding)
+                                 :value (apply *traverse* (node-dynamic-binding-value binding) args)))
+       :subexpr (apply *traverse* (node-dynamic-let-subexpr node) args)))
     (action (:traverse node-match node &rest args)
       (make-node-match
        :type (node-type node)
@@ -163,24 +187,24 @@ nodes."
                   (node-resumable-branches node))))
 
     
-    (action (:traverse node-while node &rest args)
-      (make-node-while
+    (action (:traverse node-for node &rest args)
+      (make-node-for
        :type (node-type node)
-       :label (node-while-label node)
-       :expr (apply *traverse* (node-while-expr node) args)
-       :body (apply *traverse* (node-while-body node) args)))
-    (action (:traverse node-while-let node &rest args)
-      (make-node-while-let
-       :type (node-type node)
-       :label (node-while-let-label node)
-       :pattern (node-while-let-pattern node)
-       :expr (apply *traverse* (node-while-let-expr node) args)
-       :body (apply *traverse* (node-while-let-body node) args)))
-    (action (:traverse node-loop node &rest args)
-      (make-node-loop
-       :type (node-type node)
-       :label (node-loop-label node)
-       :body (apply *traverse* (node-loop-body node) args)))
+       :label (node-for-label node)
+       :bindings (loop :for binding :in (node-for-bindings node)
+                       :collect (make-node-for-binding
+                                 :name (node-for-binding-name binding)
+                                 :type (node-for-binding-type binding)
+                                 :init (apply *traverse* (node-for-binding-init binding) args)
+                                 :step (and (node-for-binding-step binding)
+                                            (apply *traverse* (node-for-binding-step binding) args))))
+       :sequential-p (node-for-sequential-p node)
+       :returns (and (node-for-returns node)
+                     (apply *traverse* (node-for-returns node) args))
+       :termination-kind (node-for-termination-kind node)
+       :termination-expr (and (node-for-termination-expr node)
+                              (apply *traverse* (node-for-termination-expr node) args))
+       :body (apply *traverse* (node-for-body node) args)))
     (action (:traverse node-seq node &rest args)
       (make-node-seq
        :type (node-type node)
@@ -230,32 +254,17 @@ nodes."
                (lambda (sub)
                  (apply *traverse* sub args))
                (node-values-nodes node))))
-    (action (:traverse node-mv-call node &rest args)
-      (make-node-mv-call
-       :type (node-type node)
-       :expr (apply *traverse* (node-mv-call-expr node) args)))
     (action (:traverse node-values-bind node &rest args)
       (make-node-values-bind
        :type (node-type node)
        :vars (node-values-bind-vars node)
        :expr (apply *traverse* (node-values-bind-expr node) args)
        :body (apply *traverse* (node-values-bind-body node) args)))
-    (action (:traverse node-values-match node &rest args)
-      (make-node-values-match
-       :type (node-type node)
-       :expr (apply *traverse* (node-values-match-expr node) args)
-       :branches (mapcar
-                  (lambda (branch)
-                    (make-match-branch
-                     :pattern (match-branch-pattern branch)
-                     :body (apply *traverse*
-                                  (match-branch-body branch)
-                                  args)))
-                  (node-values-match-branches node))))
     (action (:traverse node-locally node &rest args)
       (make-node-locally
        :type (node-type node)
        :noinline-functions (node-locally-noinline-functions node)
+       :type-check (node-locally-type-check node)
        :subexpr (apply *traverse* (node-locally-subexpr node) args))))
    t))
 
@@ -398,13 +407,19 @@ bound at the given point."
   (load-time-value
    (list
     (action (:traverse node-abstraction node bound-variables)
+      (let ((keyword-bound-variables
+              (loop :for param :in (node-abstraction-keyword-params node)
+                    :append (list (keyword-param-var param)
+                                  (keyword-param-supplied-p-var param)))))
       (make-node-abstraction
        :type (node-type node)
        :vars (node-abstraction-vars node)
-       :return-convention (node-abstraction-return-convention node)
+       :keyword-params (node-abstraction-keyword-params node)
        :subexpr (funcall *traverse*
                          (node-abstraction-subexpr node)
-                         (append (node-abstraction-vars node) bound-variables))))
+                         (append (node-abstraction-vars node)
+                                 keyword-bound-variables
+                                 bound-variables)))))
     (action (:traverse node-let node bound-variables)
       (let ((new-bound-variables (append
                                   (mapcar #'car (node-let-bindings node))
@@ -414,6 +429,16 @@ bound at the given point."
          :bindings (loop :for (name . node) :in (node-let-bindings node)
                          :collect (cons name (funcall *traverse* node new-bound-variables)))
          :subexpr (funcall *traverse* (node-let-subexpr node) new-bound-variables))))
+    (action (:traverse node-dynamic-let node bound-variables)
+      (make-node-dynamic-let
+       :type (node-type node)
+       :bindings (loop :for binding :in (node-dynamic-let-bindings node)
+                       :collect (make-node-dynamic-binding
+                                 :name (node-dynamic-binding-name binding)
+                                 :value (funcall *traverse*
+                                                 (node-dynamic-binding-value binding)
+                                                 bound-variables)))
+       :subexpr (funcall *traverse* (node-dynamic-let-subexpr node) bound-variables)))
     (action (:traverse node-match node bound-variables)
       (make-node-match
        :type (node-type node)
@@ -448,19 +473,26 @@ bound at the given point."
          :vars (node-values-bind-vars node)
          :expr (funcall *traverse* (node-values-bind-expr node) bound-variables)
          :body (funcall *traverse* (node-values-bind-body node) new-bound-variables))))
-    (action (:traverse node-values-match node bound-variables)
-      (make-node-values-match
-       :type (node-type node)
-       :expr (funcall *traverse* (node-values-match-expr node) bound-variables)
-       :branches (mapcar
-                  (lambda (branch)
-                    (make-match-branch
-                     :pattern (match-branch-pattern branch)
-                     :body (funcall *traverse*
-                                    (match-branch-body branch)
-                                    (append (pattern-variables (match-branch-pattern branch))
-                                            bound-variables))))
-                  (node-values-match-branches node)))))
+    (action (:traverse node-for node bound-variables)
+      (let ((new-bound-variables (append (mapcar #'node-for-binding-name (node-for-bindings node))
+                                         bound-variables)))
+        (make-node-for
+         :type (node-type node)
+         :label (node-for-label node)
+         :bindings (loop :for binding :in (node-for-bindings node)
+                         :collect (make-node-for-binding
+                                   :name (node-for-binding-name binding)
+                                   :type (node-for-binding-type binding)
+                                   :init (funcall *traverse* (node-for-binding-init binding) bound-variables)
+                                   :step (and (node-for-binding-step binding)
+                                              (funcall *traverse* (node-for-binding-step binding) new-bound-variables))))
+         :sequential-p (node-for-sequential-p node)
+         :returns (and (node-for-returns node)
+                       (funcall *traverse* (node-for-returns node) new-bound-variables))
+         :termination-kind (node-for-termination-kind node)
+         :termination-expr (and (node-for-termination-expr node)
+                                (funcall *traverse* (node-for-termination-expr node) new-bound-variables))
+         :body (funcall *traverse* (node-for-body node) new-bound-variables)))))
    t))
 
 (defun traverse-with-binding-list (node actions)

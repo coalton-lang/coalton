@@ -13,7 +13,10 @@
    #:codegen-class-definitions)
   (:import-from
    #:coalton-impl/codegen/codegen-expression
-   #:codegen-expression)
+   #:abstraction-lambda-list
+   #:annotate-function-body
+   #:codegen-expression
+   #:node-output-lisp-types)
   (:import-from
    #:coalton-impl/codegen/codegen-type-definition
    #:codegen-type-definition)
@@ -45,6 +48,20 @@ A function bound here will be called with a keyword category, and one or more ad
   :AST name type value
 
     Toplevel definitions, after type checking and before compilation.")
+
+(defun function-type-lambda-list (node env)
+  (declare (type node-abstraction node)
+           (type tc:environment env)
+           (values list &optional))
+  (append
+   (loop :for nil :in (node-abstraction-vars node)
+         :for ty :in (tc:function-type-arguments (node-type node))
+         :collect (tc:lisp-type ty env))
+   (when (node-abstraction-keyword-params node)
+     (list* '&key
+            (loop :for entry :in (tc:function-ty-keyword-input-types (node-type node))
+                  :collect `(,(tc:keyword-ty-entry-keyword entry)
+                             ,(tc:lisp-type (tc:keyword-ty-entry-type entry) env)))))))
 
 ;; The following functions control the output order of compiled
 ;; definitions and interleaved lisp expressions.
@@ -164,6 +181,11 @@ Example:
         (optimize-bindings definitions monomorphize-table inline-p-table *package* env)
 
       (let ((definition-names (mapcar #'car definitions))
+            (block-compile-p
+              (not
+               (loop :for (_ . node) :in definitions
+                     :thereis (and (node-abstraction-p node)
+                                   (/= 1 (tc:function-output-arity (node-type node)))))))
             (sccs (node-binding-sccs definitions))
             (lisp-forms (tc:translation-unit-lisp-forms translation-unit)))
 
@@ -189,7 +211,8 @@ Example:
                        env))))
 
             #+sbcl
-            ,@(when (eq sb-ext:*block-compile-default* :specified)
+            ,@(when (and (eq sb-ext:*block-compile-default* :specified)
+                         block-compile-p)
                 (list
                  `(declaim (sb-ext:start-block ,@definition-names))))
 
@@ -197,7 +220,8 @@ Example:
               ,@(compile-definitions sccs definitions lisp-forms offsets env))
 
             #+sbcl
-            ,@(when (eq sb-ext:*block-compile-default* :specified)
+            ,@(when (and (eq sb-ext:*block-compile-default* :specified)
+                         block-compile-p)
                 (list
                  `(declaim (sb-ext:end-block))))
 
@@ -208,91 +232,101 @@ Example:
             (values))
          env)))))
 
-(defun compile-function (name node env)
+(defun compile-function (name node env &key local-notinline-names)
   (declare (type symbol name)
            (type node-abstraction node)
-           (type tc:environment env))
-  `(defun ,name ,(node-abstraction-vars node)
-     (declare (ignorable ,@(node-abstraction-vars node)))
-     ,(codegen-expression (node-abstraction-subexpr node) env)))
+           (type tc:environment env)
+           (type list local-notinline-names))
+  `(defun ,name ,(abstraction-lambda-list node)
+     (declare (ignorable ,@(loop :for param :in (node-abstraction-keyword-params node)
+                                 :append (list (keyword-param-var param)
+                                               (keyword-param-supplied-p-var param)))
+                         ,@(node-abstraction-vars node))
+              ,@(when local-notinline-names
+                  `((notinline ,@local-notinline-names))))
+     ,(annotate-function-body
+       node
+       (codegen-expression (node-abstraction-subexpr node) env)
+       env)))
 
 (defun compile-scc (bindings env)
   "Compile SCC definitions in a translation unit."
   (declare (type binding-list bindings)
            (type tc:environment env))
-  (append
-   ;; Predeclare symbol macros
-   (loop :for (name . node) :in bindings
-         :collect `(global-lexical:define-global-lexical ,name ,(tc:lisp-type (node-type node) env)))
+  (let ((inline-function-names
+          (loop :for (name . node) :in bindings
+                :when (and (node-abstraction-p node)
+                           (function-declared-inline-p name env))
+                  :collect name)))
+    (append
+     ;; Predeclare ordinary globals and special dynamic variables.
+     (loop :for (name . node) :in bindings
+           :if (util:dynamic-variable-name-p name)
+             :append `((declaim (special ,name))
+                       (defvar ,name))
+           :else
+           :collect `(global-lexical:define-global-lexical ,name ,(tc:lisp-type (node-type node) env)))
 
-   ;; Function declarations
-   ;; They must appear before function definitions to optimize mutual tail-calls.
-   (loop :for (name . node) :in bindings
-         :if (and (node-abstraction-p node)
-                  settings:*emit-type-annotations*)
-         :collect
-         `(declaim
-           (ftype
-            (function
-             (,@(loop :for nil :in (node-abstraction-vars node)
-                      :for ty :in (tc:function-type-arguments (node-type node))
-                      :collect (tc:lisp-type ty env)))
-             (values ,@(let* ((ret-type (node-type (node-abstraction-subexpr node)))
-                              (components (and (eq ':values (node-abstraction-return-convention node))
-                                               (tc:tuple-component-types ret-type))))
-                         (if components
-                             (mapcar (lambda (ty) (tc:lisp-type ty env)) components)
-                             (list (tc:lisp-type ret-type env))))
-                     &optional))
-            ,name)))
+     ;; Function declarations
+     ;; They must appear before function definitions to optimize mutual tail-calls.
+     (loop :for (name . node) :in bindings
+           :if (and (node-abstraction-p node)
+                    settings:*emit-type-annotations*)
+           :collect
+           `(declaim
+             (ftype
+              (function
+               ,(function-type-lambda-list node env)
+               (values ,@(node-output-lisp-types node env)
+                       &optional))
+              ,name)))
 
-   ;; Emit inline declamations for functions declared inline at definition-site
-   (loop :for (name . node) :in bindings
-         :if (and (node-abstraction-p node) (function-declared-inline-p name env))
-         :collect `(declaim (inline ,name)))
+     ;; Compile functions
+     (loop :for (name . node) :in bindings
+           :if (node-abstraction-p node)
+             :append (append
+                     ;; Keep emitted definitions globally inline for Lisp callers,
+                     ;; but stop inline SCC members from recursively inlining each
+                     ;; other while their own bodies are compiled.
+                     (when (function-declared-inline-p name env)
+                       `((declaim (inline ,name))))
+                      (list
+                       (compile-function name
+                                         node
+                                         env
+                                         :local-notinline-names inline-function-names))
+                      (list
+                       `(setf
+                         ,name
+                         ,(rt:construct-function-entry
+                           `#',name (length (node-abstraction-vars node)))))))
 
-   ;; Compile functions
-   (loop :for (name . node) :in bindings
-         :if (node-abstraction-p node)
-           :append (list
-                    (compile-function name node env)
-                    `(setf
-                      ,name
-                      ,(rt:construct-function-entry
-                        `#',name (length (node-abstraction-vars node))))))
+     ;; Compile variables
+     (loop :for (name . node) :in bindings
+           :if (not (node-abstraction-p node))
+             :collect `(setf
+                         ,name
+                         ,(codegen-expression node env)))
 
-  ;; Compile variables
-  (loop :for (name . node) :in bindings
-        :if (not (node-abstraction-p node))
-          :collect `(setf
-                      ,name
-                      ,(codegen-expression node env)))
+     ;; Print types of definitions
+     (when settings:*compile-print-types*
+       (dolist (binding bindings)
+         (let* ((name (car binding))
+                (type (tc:lookup-value-type env name :no-error t)))
+           (unless (null type)
+             (format t "~&;; ~a :: ~a~%"
+                     name
+                     (tc:type-to-string type env))))))
 
-  ;; Print types of definitions
-  (when settings:*compile-print-types*
-    (dolist (binding bindings)
-      (let* ((name (car binding))
-             (type (tc:lookup-value-type env name :no-error t)))
-        (unless (null type)
-          (format t "~&;; ~a :: ~a~%" name type)))))
-
-  ;; Docstrings
-  (loop :for (name . node) :in bindings
-        :for entry := (tc:lookup-name env name :no-error t)
-        :for type := (tc:lookup-value-type env name :no-error t)
-        :for docstring
-          := (cond
-               ((and entry (source:docstring entry) type)
-                (format nil "~A :: ~A~%~A" name type (source:docstring entry)))
-
-               ((and entry (source:docstring entry))
-                (source:docstring entry))
-
-                (type
-                 (format nil "~A :: ~A" name type)))
-        :append (when docstring
-                  (list `(setf (documentation ',name 'variable)
-                               ,docstring)))
-        :append (when (and entry (node-abstraction-p node))
-                  (list `(setf (documentation ',name 'function)
-                               ,docstring))))))
+     ;; Docstrings
+     (loop :for (name . node) :in bindings
+           :for entry := (tc:lookup-name env name :no-error t)
+           :for docstring := (and entry (source:docstring entry))
+           :append (when docstring
+                     (list `(setf (documentation ',name 'variable)
+                                  ,docstring)))
+           :append (when (and docstring
+                              entry
+                              (node-abstraction-p node))
+                     (list `(setf (documentation ',name 'function)
+                                  ,docstring)))))))

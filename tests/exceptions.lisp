@@ -50,14 +50,16 @@
   (declare make-breakfast-for (UFix -> (Vector Egg)))
   (define (make-breakfast-for n)
     (let ((eggs (vector:make))
-          (skip  SkipEgg))              ; can construct outside of resume-to
-      (for i in (iter:up-to n)
+          (skip  SkipEgg))
+      (for ((declare i UFix)
+            (i 0 (1+ i)))
+        :repeat n
         (let moocow = (if (zero? (mod i 5))
                           Xenomorph
                           (Goose False False)))
         (do
          (cooked <- (catch (make-breakfast-with moocow)
-                      ((DeadlyEgg _)    (resume-to skip))
+                      ((DeadlyEgg _)      (resume-to skip))
                       ((UnCracked egg-y)  (resume-to (ServeRaw egg-y)))))
          (pure (vector:push! cooked eggs))))
       eggs))
@@ -107,20 +109,19 @@
 
 (define-test test-catch-all ()
   (let v = (vector:make))
-
-  (for _ in (iter:up-to 1000) 
-    (let n = 
-      (catch (lisp integer () (cl:/ 10 (cl:random 2)))
+  (for ()
+    :repeat 1000
+    (let n =
+      (catch (lisp (-> integer) () (cl:/ 10 (cl:random 2)))
         (_ 0)))
     (vector:push! n v))
   (is (== 1000 (vector:length v)))
   
-  (for _ in (iter:up-to 1000) 
-    (let n = 
-      (catch (lisp integer () (cl:/ 10 (cl:random 2)))
+  (for ()
+    :repeat 1000
+    (let n =
+      (catch (lisp (-> integer) () (cl:/ 10 (cl:random 2)))
         (_ 0)))
     (vector:push! n v))
 
   (is (== 2000 (vector:length v))))
-
-

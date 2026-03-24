@@ -57,7 +57,8 @@
           None)))
 
 (define-test string-substring-finders ()
-  (let find-foo = (string:substring-index "foo"))
+  (let find-foo = (fn (haystack)
+                    (string:substring-index "foo" haystack)))
   (is (== (Some 0) (find-foo "foo")))
   (is (== (Some 0) (find-foo "foo bar")))
   (is (== (Some 4) (find-foo "bar foo")))
@@ -66,11 +67,13 @@
   (is (== None (find-foo "bar")))
   (is (== None (find-foo "bar baz quux")))
 
-  (let find-empty-string = (string:substring-index ""))
+  (let find-empty-string = (fn (haystack)
+                             (string:substring-index "" haystack)))
   (is (== (Some 0) (find-empty-string "")))
   (is (== (Some 0) (find-empty-string "foo")))
 
-  (let has-foo? = (string:substring? "foo"))
+  (let has-foo? = (fn (haystack)
+                    (string:substring? "foo" haystack)))
   (is (has-foo? "foo"))
   (is (has-foo? "foo bar"))
   (is (has-foo? "bar foo"))
@@ -79,7 +82,8 @@
   (is (not (has-foo? "bar")))
   (is (not (has-foo? "bar baz quux")))
 
-  (let has-empty? = (string:substring? ""))
+  (let has-empty? = (fn (haystack)
+                      (string:substring? "" haystack)))
   (is (has-empty? ""))
   (is (has-empty? "foo")))
 

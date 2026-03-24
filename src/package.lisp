@@ -52,7 +52,6 @@
    #:forall
    #:∀
    #:Unit
-   #:Void
    #:Boolean #:True #:False
    #:Char
    #:Bit
@@ -80,26 +79,28 @@
   ;; Primitive Syntax
   (:export
    #:fn #:λ
+   #:&key
    #:match
+   #:type-of
    #:throw
    #:resume-to
    #:resumable
    #:catch
+   #:dynamic-bind
    #:let
+   #:let*
    #:rec
    #:=                                  ; Syntax
    #:lisp
-   #:multiple-values                    ; lisp return-convention directive
    #:<-                                 ; Syntax
    #:_
+   #:values
    #:return
    #:the
-   #:while
-   #:while-let
-   #:loop
+   #:for
+   #:for*
    #:break
    #:continue
-   #:for
    #:in                                 ; Syntax
    )
 
@@ -135,7 +136,6 @@
    #:lookup-type
    #:lookup-runtime-type
    #:lookup-fundeps
-   #:type-of
    #:describe-type-of
    #:describe-type-alias
    #:set-type-printing-mode
@@ -147,3 +147,9 @@
    #:Boolean/True
    #:Boolean/False
    #:Unit/Unit))
+
+(defpackage #:coalton++
+  (:documentation "Experimental features of Coalton.")
+  (:use)
+  (:export
+   #:unsafe))

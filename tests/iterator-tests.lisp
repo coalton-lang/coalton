@@ -72,15 +72,20 @@
 
 (define-test iter-index-of ()
   (is (== (Some 0)
-          (iter:index-of! (== #\a) (iter:into-iter "abcde"))))
+          (iter:index-of! (fn (ch) (== ch #\a))
+                          (iter:into-iter "abcde"))))
   (is (== (Some 4)
-          (iter:index-of! (== #\e) (iter:into-iter "abcde"))))
+          (iter:index-of! (fn (ch) (== ch #\e))
+                          (iter:into-iter "abcde"))))
   (is (== None
-          (iter:index-of! (== #\f) (iter:into-iter "abcde"))))
+          (iter:index-of! (fn (ch) (== ch #\f))
+                          (iter:into-iter "abcde"))))
   (is (== (Some 0)
-          (iter:index-of! (== 0) (iter:count-forever))))
+          (iter:index-of! (fn (x) (== x 0))
+                          (iter:count-forever))))
   (is (== (Some 5)
-          (iter:index-of! (== 5) (iter:count-forever)))))
+          (iter:index-of! (fn (x) (== x 5))
+                          (iter:count-forever)))))
 
 (define-test iter-sum ()
   (is (== 0 (iter:sum! iter:empty)))
@@ -94,9 +99,9 @@
           (iter:sum! (iter:up-through 10)))))
 
 (define-test iter-repeat-item-every ()
-  (is (iter:every! (== "foo")
+  (is (iter:every! (fn (x) (== x "foo"))
                    (iter:repeat-for "foo" 10)))
-  (is (not (iter:any! (/= "foo")
+  (is (not (iter:any! (fn (x) (/= x "foo"))
                       (iter:repeat-for "foo" 10)))))
 
 (define-test iter-downfrom ()
@@ -201,7 +206,7 @@
                            (let v = (vector:with-capacity 6))
                            (iter:for-each! (fn (x)
                                              (vector:push! x v)
-                                             Unit)
+                                             (values))
                                            (iter:up-to 5))
                            v)))
     (is (== (iter:collect! (iter:into-iter (populate-vector)))
@@ -230,10 +235,11 @@
   (define (gh1197)
     ;; A late unification failure occured on this code when run with the
     ;; inliner. This will fail to compile in that case.
-    (for x in (iter:once 1)
-      (is (== 1 x)))))
+    (iter:for-each! (fn (x)
+                      (is (== 1 x)))
+                    (iter:once 1))))
 
-(define-test gh1200-for-loop-type-error ()
+(define-test gh1200-iterator-type-error ()
   ;; Incidentally, the function for testing gh1197 also tests gh1200.
   (gh1197))
 

@@ -9,7 +9,7 @@
 
   (declare incomplete-parse-error (String -> ParseError))
   (define (incomplete-parse-error str)
-    (ParseError (lisp String (str) (cl:format cl:nil "Parser did not complete: ~A" str))))
+    (ParseError (lisp (-> String) (str) (cl:format cl:nil "Parser did not complete: ~A" str))))
 
   (define-type (Parser :a)
     (Parser (StringView -> (Result ParseError (Tuple :a StringView)))))
@@ -19,7 +19,7 @@
     (match p
       ((Parser x) x)))
 
-  (declare run-parser ((Parser :a) -> StringView -> (Result ParseError :a)))
+  (declare run-parser ((Parser :a) * StringView -> Result ParseError :a))
   (define (run-parser p_ str)
     ;; Unwrap Parser function
     (let ((p (get-parser p_)))
@@ -34,11 +34,11 @@
   ;; Error tracking
   ;;
   
-  (declare with-context (String -> (Parser :a) -> (Parser :a)))
+  (declare with-context (String * (Parser :a) -> Parser :a))
   (define (with-context s p)
-    (map-error (Context s) p))
+    (map-error (fn (err) (Context s err)) p))
 
-  (declare map-error ((ParseError -> ParseError) -> (Parser :a) -> (Parser :a)))
+  (declare map-error ((ParseError -> ParseError) * (Parser :a) -> Parser :a))
   (define (map-error f p_)
     (let ((p (get-parser p_)))
       (Parser

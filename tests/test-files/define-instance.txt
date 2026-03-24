@@ -131,6 +131,20 @@
   (define (== _ _) True))
 
 ================================================================================
+12 Define instance method with keyword parameters
+================================================================================
+
+(package coalton-unit-tests/prelude
+  (import coalton-prelude))
+
+(define-class (KeywordInst-di12 :a)
+  (keyword-inst-di12 (:a &key (:offset Integer) -> Integer)))
+
+(define-instance (KeywordInst-di12 Integer)
+  (define (keyword-inst-di12 x &key (offset 1))
+    (+ x offset)))
+
+================================================================================
 100 Malformed method definition
 ================================================================================
 

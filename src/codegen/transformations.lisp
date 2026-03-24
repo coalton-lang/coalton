@@ -31,7 +31,8 @@ specified in `subs`."
        :properties (node-properties node)
        :rator-type (tc:apply-substitution subs (node-direct-application-rator-type node))
        :rator (node-direct-application-rator node)
-       :rands (node-direct-application-rands node)))
+       :rands (node-direct-application-rands node)
+       :keyword-rands (node-direct-application-keyword-rands node)))
     (action (:after node-match node)
       (make-node-match
        :type (node-type node)
@@ -41,24 +42,7 @@ specified in `subs`."
                     (make-match-branch
                      :pattern (tc:apply-substitution subs (match-branch-pattern branch))
                      :body (match-branch-body branch)))
-                  (node-match-branches node))))
-    (action (:after node-values-match node)
-      (make-node-values-match
-       :type (node-type node)
-       :expr (node-values-match-expr node)
-       :branches (mapcar
-                  (lambda (branch)
-                    (make-match-branch
-                     :pattern (tc:apply-substitution subs (match-branch-pattern branch))
-                     :body (match-branch-body branch)))
-                  (node-values-match-branches node))))
-    (action (:after node-while-let node)
-      (make-node-while-let
-       :type (node-type node)
-       :label (node-while-let-label node)
-       :pattern (tc:apply-substitution subs (node-while-let-pattern node))
-       :expr (node-while-let-expr node)
-       :body (node-while-let-body node))))))
+                  (node-match-branches node)))))))
 
 (defmethod tc:type-variables ((node node))
   "Collect all type variables from nodes and patterns in the tree of `node`."
@@ -79,15 +63,6 @@ specified in `subs`."
         (dolist (branch (node-match-branches node))
           (alexandria:unionf tyvars
                              (tc:type-variables (match-branch-pattern branch))))
-        (values))
-      (action (:after node-values-match node)
-        (dolist (branch (node-values-match-branches node))
-          (alexandria:unionf tyvars
-                             (tc:type-variables (match-branch-pattern branch))))
-        (values))
-      (action (:after node-while-let node)
-        (alexandria:unionf tyvars
-                           (tc:type-variables (node-while-let-pattern node)))
         (values))))
     tyvars))
 

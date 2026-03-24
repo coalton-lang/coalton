@@ -25,13 +25,18 @@
    (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
-   (#:tc #:coalton-impl/typechecker/stage-1))
+   (#:tc #:coalton-impl/typechecker/stage-1)
+   (#:type-string #:coalton-impl/typechecker/type-string))
   (:export
    #:toplevel-define-instance           ; FUNCTION
    #:toplevel-typecheck-instance        ; FUNCTION
    ))
 
 (in-package #:coalton-impl/typechecker/define-instance)
+
+(defun type-object-string (object env)
+  (let ((settings:*coalton-print-unicode* nil))
+    (type-string:type-to-string object env)))
 
 (defun instance-scoped-method-substitutions (outer-method-types instance-scoped-tvars)
   (declare (type list outer-method-types)
@@ -206,7 +211,8 @@
           (tc:overlapping-instance-error (e)
             (tc-error "Overlapping instance"
                       (tc-location (parser:toplevel-define-instance-head-location instance)
-                                   "instance overlaps with ~S" (tc:overlapping-instance-error-inst2 e)))))
+                                   "instance overlaps with ~A"
+                                   (type-object-string (tc:overlapping-instance-error-inst2 e) env)))))
 
         (loop :for method-name :in method-names
               :for method-codegen-sym :in method-codegen-syms :do
@@ -254,7 +260,8 @@
                                 :no-error t)
                                (tc-error "Instance missing context"
                                          (tc-location (parser:toplevel-define-instance-head-location unparsed-instance)
-                                                      "No instance for ~S" superclass)))
+                                                      "No instance for ~A"
+                                                      (type-object-string superclass env))))
 
                       :for additional-context
                         := (tc:apply-substitution
@@ -267,9 +274,9 @@
                                 :do (unless (tc:entail env context pred)
                                       (tc-error "Instance missing context"
                                                 (tc-location (parser:toplevel-define-instance-head-location unparsed-instance)
-                                                             "No instance for ~S arising from constraints of superclasses ~S"
-                                                             pred
-                                                             superclass))))))
+                                                             "No instance for ~A arising from constraints of superclasses ~A"
+                                                             (type-object-string pred env)
+                                                             (type-object-string superclass env)))))))
 
     (check-duplicates
      (parser:toplevel-define-instance-methods unparsed-instance)
@@ -309,9 +316,10 @@
                           :for class-method := (gethash name method-table)
                           :for class-method-scheme := (tc:ty-class-method-type class-method)
                           :for class-method-outer-tvars := (tc:ty-class-method-outer-tvars class-method)
+                          :for class-method-explicit-tvars := (tc:ty-class-method-explicit-tvars class-method)
                           :for class-method-explicit-p := (tc:ty-scheme-explicit-p class-method-scheme)
                           :for class-method-tvars := (and class-method-explicit-p
-                                                          (tc:ty-scheme-instantiation-types class-method-scheme))
+                                                          class-method-explicit-tvars)
                           :for class-method-qual-ty
                             := (if class-method-explicit-p
                                    (tc:instantiate class-method-tvars
@@ -356,15 +364,16 @@
                           :for instance-method-env
                             := (tc-env-extend-type-variable-scope
                                 (make-tc-env :env env)
-                                instance-scoped-tvars)
+                                (remove-duplicates
+                                 (append instance-scoped-tvars scoped-method-tvars)
+                                 :test #'tc:ty=))
 
                           :do (multiple-value-bind (preds method subs)
                                   (infer-expl-binding-type method
-                                                           instance-method-scheme
-                                                           (source:location method)
-                                                           nil
-                                                           instance-method-env)
-
+                                                          instance-method-scheme
+                                                          (source:location method)
+                                                          nil
+                                                          instance-method-env)
                                 ;; Deferred predicates should always be null
                                 (unless (null preds)
                                   (util:coalton-bug "Instance definition predicates should not be null."))
@@ -376,13 +385,17 @@
                                       :for node-pred :in (tc:qualified-ty-predicates
                                                           (node-type
                                                            (instance-method-definition-name method)))
-                                      :do (setf subs (tc:compose-substitution-lists
+                                      :do (let ((match-subs
+                                                  (handler-case
                                                       (tc:predicate-match node-pred context-pred instance-subs)
-                                                      subs)))
-
+                                                    (tc:coalton-internal-type-error (e)
+                                                      (error e)))))
+                                            (setf subs (tc:compose-substitution-lists
+                                                        match-subs
+                                                        subs))))
                                 (setf (gethash name table) (tc:apply-substitution subs method)))
 
-                          :finally (return table))))
+	                          :finally (return table))))
 
       (check-bindings-for-invalid-recursion
        (parser:toplevel-define-instance-methods unparsed-instance)
@@ -393,7 +406,8 @@
                  (gethash (parser:node-variable-name (parser:binding-name binding))
                           methods)))
            (and typed-method
-                (or (and (instance-method-definition-params typed-method) t)
+                (or (instance-method-definition-function-syntax-p typed-method)
+                    (and (instance-method-definition-params typed-method) t)
                     (and (null (node-body-nodes (instance-method-definition-body typed-method)))
                          (node-abstraction-p
                           (node-body-last-node (instance-method-definition-body typed-method))))
@@ -416,7 +430,6 @@
     (return-from check-instance-valid))
 
   (let* ((types-package (util:find-package "COALTON/TYPES"))
-
          (runtime-repr (util:find-symbol "RUNTIMEREPR" types-package)))
 
     ;; Instance validation is disabled in the types package

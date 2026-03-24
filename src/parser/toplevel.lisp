@@ -76,7 +76,10 @@
    #:make-toplevel-define                        ; CONSTRUCTOR
    #:toplevel-define-name                        ; ACCESSOR
    #:toplevel-define-params                      ; ACCESSOR
+   #:toplevel-define-keyword-params              ; ACCESSOR
+   #:toplevel-define-function-syntax-p           ; ACCESSOR
    #:toplevel-define-orig-params                 ; ACCESSOR
+   #:toplevel-define-orig-keyword-params         ; ACCESSOR
    #:toplevel-define-body                        ; ACCESSOR
    #:toplevel-define-monomorphize                ; ACCESSOR
    #:toplevel-define-list                        ; TYPE
@@ -104,6 +107,8 @@
    #:make-instance-method-definition             ; CONSTRUCTOR
    #:instance-method-definition-name             ; ACCESSOR
    #:instance-method-definition-params           ; ACCESSOR
+   #:instance-method-definition-keyword-params   ; ACCESSOR
+   #:instance-method-definition-function-syntax-p ; ACCESSOR
    #:instance-method-definition-body             ; ACCESSOR
    #:instance-method-definition-inline           ; ACCESSOR
    #:instance-method-definition-list             ; TYPE
@@ -376,7 +381,10 @@
             (:copier nil))
   (name         (util:required 'name)         :type node-variable                    :read-only t)
   (params       (util:required 'params)       :type pattern-list                     :read-only t)
+  (keyword-params nil                         :type keyword-param-list                :read-only t)
+  (function-syntax-p (util:required 'function-syntax-p) :type boolean                :read-only t)
   (orig-params  (util:required 'orig-params)  :type pattern-list                     :read-only t)
+  (orig-keyword-params nil                    :type keyword-param-list                :read-only t)
   (body         (util:required 'body)         :type node-body                        :read-only t)
   (monomorphize (util:required 'monomorphize) :type (or null attribute-monomorphize) :read-only nil)
   (inline       (util:required 'inline)       :type (or null attribute-inline)       :read-only nil))
@@ -444,6 +452,8 @@
             (:copier nil))
   (name     (util:required 'name)     :type node-variable   :read-only t)
   (params   (util:required 'params)   :type pattern-list    :read-only t)
+  (keyword-params nil                  :type keyword-param-list :read-only t)
+  (function-syntax-p (util:required 'function-syntax-p) :type boolean :read-only t)
   (body     (util:required 'body)     :type node-body       :read-only t)
   (location (util:required 'location) :type source:location :read-only t)
   (inline   (util:required 'inline)   :type (or null attribute-inline) :read-only nil))
@@ -557,6 +567,8 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
          (attributes
            (make-array 0 :adjustable t :fill-pointer t)))
 
+    (install-coalton-reader-syntax eclector.readtable:*readtable*)
+
     (loop :do
       (multiple-value-bind (form presentp eofp)
           (maybe-read-form stream source *coalton-eclector-client*)
@@ -596,6 +608,8 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
          (eclector.readtable:*readtable*
            (eclector.readtable:copy-readtable eclector.readtable:*readtable*)))
 
+    (install-coalton-reader-syntax eclector.readtable:*readtable*)
+
     ;; Read the coalton form
     (multiple-value-bind (form presentp)
         (maybe-read-form stream source *coalton-eclector-client*)
@@ -620,6 +634,8 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
   (let* (;; Setup eclector readtable
          (eclector.readtable:*readtable*
            (eclector.readtable:copy-readtable eclector.readtable:*readtable*)))
+
+    (install-coalton-reader-syntax eclector.readtable:*readtable*)
 
     ;; Read the coalton form
     (multiple-value-bind (form presentp)
@@ -923,6 +939,24 @@ If the attribute is not unique, or a repr attribute is present, signal a parse e
                    (source:note (aref attributes 0) "~A cannot have attributes" toplevel-form-name)
                    (secondary-note source form "when parsing ~A" toplevel-form-name)))))
 
+(defun deferred-coalton-wrapper-macro-p (symbol)
+  "Is SYMBOL a Coalton wrapper macro whose expansion should be parsed without
+the imprecise-source-location :MACRO context?
+
+These macros re-read their body from the original source (via compile-cst-forms
+in reader.lisp), so source locations remain precise and the :MACRO warning
+would be misleading."
+  (and (symbolp symbol)
+       (eq (symbol-package symbol) (find-package "COALTON"))
+       (get symbol 'coalton-wrapper-macro-p)))
+
+;; Register the known wrapper macros.
+(dolist (sym '(coalton:coalton-toplevel
+               coalton:coalton-codegen
+               coalton:coalton-codegen-types
+               coalton:coalton-codegen-ast
+               coalton:coalton))
+  (setf (get sym 'coalton-wrapper-macro-p) t))
 
 ;;; This is the parser for complete toplevel Coalton attributes,
 ;;; declarations and definitions. It selects a sub-parser by examining
@@ -1077,9 +1111,12 @@ consume all attributes")))
        ((and (cst:atom (cst:first form))
              (symbolp (cst:raw (cst:first form)))
              (macro-function (cst:raw (cst:first form))))
-        (source:with-context
-            (:macro "Error occurs within macro context. Source locations may be imprecise")
-          (parse-toplevel-form (expand-macro form source) program attributes source)))
+        (let ((macro-name (cst:raw (cst:first form))))
+          (if (deferred-coalton-wrapper-macro-p macro-name)
+              (parse-toplevel-form (expand-macro form source) program attributes source)
+              (source:with-context
+                  (:macro "Error occurs within macro context. Source locations may be imprecise")
+                (parse-toplevel-form (expand-macro form source) program attributes source)))))
 
        ((parse-error "Invalid toplevel form"
                      (note source (cst:first form) "unknown toplevel form")))))))
@@ -1101,7 +1138,7 @@ consume all attributes")))
     (parse-error "Malformed definition"
                  (note source form "expected value")))
 
-  (multiple-value-bind (name params)
+  (multiple-value-bind (name params keyword-params function-syntax-p)
       (parse-argument-list (cst:second form) source)
 
     (multiple-value-bind (docstring body)
@@ -1110,7 +1147,10 @@ consume all attributes")))
       (make-toplevel-define
        :name name
        :params params
+       :keyword-params keyword-params
+       :function-syntax-p function-syntax-p
        :orig-params params
+       :orig-keyword-params keyword-params
        :docstring docstring
        :body body
        :monomorphize nil
@@ -1791,8 +1831,8 @@ consume all attributes")))
                        "unexpected form")))
 
   (make-toplevel-specialize
-   :from (parse-variable (cst:second form) source)
-   :to (parse-variable (cst:third form) source)
+   :from (parse-ordinary-variable (cst:second form) source)
+   :to (parse-ordinary-variable (cst:third form) source)
    :type (parse-type (cst:fourth form) source)
    :location (form-location source form)))
 
@@ -1850,7 +1890,7 @@ consume all attributes")))
 
       (make-method-definition
        :name (make-identifier-src
-              :name (node-variable-name (parse-variable (cst:first method-form) source))
+              :name (node-variable-name (parse-ordinary-variable (cst:first method-form) source))
               :source-name (source:extract-source-text source (cst:source (cst:first method-form)))
               :location (form-location source (cst:first method-form)))
        :docstring docstring
@@ -1921,26 +1961,24 @@ consume all attributes")))
 
 (defun parse-argument-list (form source)
   (declare (type cst:cst form)
-           (values node-variable pattern-list))
+           (values node-variable pattern-list keyword-param-list boolean))
 
   ;; (define x 1)
   (when (cst:atom form)
-    (return-from parse-argument-list (values (parse-variable form source) nil)))
+    (return-from parse-argument-list (values (parse-variable form source) nil nil nil)))
 
   ;; (define (0.5 x y) ...)
   (unless (identifierp (cst:raw (cst:first form)))
     (parse-error "Malformed function definition"
                  (note source (cst:first form) "expected symbol")))
 
-  (values
-   (parse-variable (cst:first form) source)
-   (if (cst:null (cst:rest form))
-       (list
-        (make-pattern-wildcard
-         :location (form-location source form)))
-       (loop :for vars := (cst:rest form) :then (cst:rest vars)
-             :while (cst:consp vars)
-             :collect (parse-pattern (cst:first vars) source)))))
+  (multiple-value-bind (params keyword-params)
+      (parse-fn-argument-list (cst:rest form) source)
+    (values
+     (parse-ordinary-variable (cst:first form) source)
+     params
+     keyword-params
+     t)))
 
 (defun parse-identifier (form source)
   (declare (type cst:cst form)
@@ -2017,12 +2055,19 @@ consume all attributes")))
                    (note source form "expected definition name")
                    context-note))
 
-    (multiple-value-bind (name params)
+    (multiple-value-bind (name params keyword-params function-syntax-p)
         (parse-argument-list (cst:second form) source)
+      (when (util:dynamic-variable-name-p (node-variable-name name))
+        (parse-error "Malformed method definition"
+                     (note source (cst:second form)
+                           "method names cannot use dynamic-variable earmuffs")
+                     context-note))
 
       (make-instance-method-definition
        :name name
        :params params
+       :keyword-params keyword-params
+       :function-syntax-p function-syntax-p
        :body (parse-body (cst:rest (cst:rest form)) form source)
        :location (form-location source form)
        :inline nil))))

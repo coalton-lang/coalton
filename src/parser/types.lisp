@@ -28,6 +28,19 @@
    #:tapp-p                             ; FUNCTION
    #:tapp-from                          ; ACCESSOR
    #:tapp-to                            ; ACCESSOR
+   #:keyword-ty-entry                   ; STRUCT
+   #:make-keyword-ty-entry              ; CONSTRUCTOR
+   #:keyword-ty-entry-keyword           ; ACCESSOR
+   #:keyword-ty-entry-type              ; ACCESSOR
+   #:keyword-ty-entry-list              ; TYPE
+   #:function-ty                        ; STRUCT
+   #:make-function-ty                   ; CONSTRUCTOR
+   #:function-ty-positional-input-types ; ACCESSOR
+   #:function-ty-keyword-input-types    ; ACCESSOR
+   #:function-ty-output-types           ; ACCESSOR
+   #:result-ty                          ; STRUCT
+   #:make-result-ty                     ; CONSTRUCTOR
+   #:result-ty-output-types             ; ACCESSOR
    #:ty-predicate                       ; STRUCT
    #:make-ty-predicate                  ; CONSTRUCTOR
    #:ty-predicate-class                 ; ACCESSOR
@@ -43,6 +56,7 @@
    #:flatten-type                       ; FUNCTION
    #:parse-qualified-type               ; FUNCTION
    #:parse-type                         ; FUNCTION
+   #:parse-lisp-return-type             ; FUNCTION
    #:parse-predicate                    ; FUNCTION
    ))
 
@@ -56,11 +70,22 @@
 ;;;;
 ;;;; class := <a lisp symbol>
 ;;;;
+;;;; keyword-ty-entry := "(" keyword ty ")"
+;;;;
 ;;;; type-list := ty ty+
-;;;;            | ty+ "->" type-list
+;;;;            | function-input-spec "->" function-output-spec
+;;;;
+;;;; function-input-spec := "Void" | input-elements
+;;;; input-elements := input-element | input-element "*" input-elements
+;;;; input-element := ty
+;;;;               | "&key" keyword-ty-entry+
+;;;;
+;;;; function-output-spec := "Void" | output-elements
+;;;; output-elements := type-list | ty | ty "*" output-elements
 ;;;;
 ;;;; ty := tyvar
 ;;;;     | tycon
+;;;;     | type-list-with-stars ; multi-output pack
 ;;;;     | "(" type-list ")"
 ;;;;
 ;;;; ty-predicate := class ty+
@@ -119,6 +144,32 @@
   (from (util:required 'from) :type ty :read-only t)
   ;; The type argument
   (to   (util:required 'to)   :type ty :read-only t))
+
+(defstruct (keyword-ty-entry
+            (:copier nil))
+  (keyword  (util:required 'keyword)  :type keyword-src     :read-only t)
+  (type     (util:required 'type)     :type ty              :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self keyword-ty-entry))
+  (keyword-ty-entry-location self))
+
+(defun keyword-ty-entry-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'keyword-ty-entry-p x)))
+
+(deftype keyword-ty-entry-list ()
+  '(satisfies keyword-ty-entry-list-p))
+
+(defstruct (function-ty (:include ty)
+                        (:copier nil))
+  (positional-input-types (util:required 'positional-input-types) :type ty-list               :read-only t)
+  (keyword-input-types    (util:required 'keyword-input-types)    :type keyword-ty-entry-list :read-only t)
+  (output-types           (util:required 'output-types)           :type (or null ty-list)     :read-only t))
+
+(defstruct (result-ty (:include ty)
+                      (:copier nil))
+  (output-types (util:required 'output-types) :type (or null ty-list) :read-only t))
 
 (defstruct (ty-predicate
             (:copier nil))
@@ -184,6 +235,281 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
           :finally (push from flattened-type))
     flattened-type))
 
+(defun keyword-marker-p (form)
+  (and (cst:atom form)
+       (eq 'coalton:&key (cst:raw form))))
+
+(defun qualified-type-marker-p (form)
+  (and (cst:atom form)
+       (symbolp (cst:raw form))
+       (string= (symbol-name (cst:raw form)) "=>")))
+
+(defun star-marker-p (form)
+  (and (cst:atom form)
+       (symbolp (cst:raw form))
+       (string= (symbol-name (cst:raw form)) "*")))
+
+(defun empty-input-set-form-p (form)
+  (or (cst:null form)
+      (and (cst:atom form)
+           (null (cst:raw form)))
+      (and (cst:proper-list-p form)
+           (null (cst:listify form)))))
+
+(defun void-type-marker-p (form)
+  (and (cst:atom form)
+       (symbolp (cst:raw form))
+       (string= (symbol-name (cst:raw form)) "VOID")))
+
+(defun arrow-marker-p (form)
+  (and (cst:atom form)
+       (symbolp (cst:raw form))
+       (string= (symbol-name (cst:raw form)) "->")))
+
+(defun star-separated-type-form-p (form)
+  (and (cst:proper-list-p form)
+       (let ((forms (cst:listify form)))
+         (and (find-if #'star-marker-p forms)
+              (not (find-if #'arrow-marker-p forms))))))
+
+(defun convention-wrapper-name (form)
+  (and (cst:consp form)
+       (cst:atom (cst:first form))
+       (identifierp (cst:raw (cst:first form)))
+       (symbol-name (cst:raw (cst:first form)))))
+
+(defun unwrap-input-convention-wrapper (forms source)
+  (declare (type util:cst-list forms)
+           (values util:cst-list &optional))
+  (if (and (= 1 (length forms))
+           (cst:consp (first forms)))
+      (let* ((wrapper (first forms))
+             (wrapper-name (convention-wrapper-name wrapper)))
+        (if wrapper-name
+            (cond
+              ((string= wrapper-name "COALTONFUNCTIONINPUTS")
+               (cst:listify (cst:rest wrapper)))
+              ((string= wrapper-name "COALTONFUNCTIONOUTPUTS")
+               (parse-error "Malformed function type"
+                            (note source wrapper
+                                  "output convention wrapper is not valid on function input side")))
+              (t forms))
+            forms))
+      forms))
+
+(defun unwrap-output-convention-wrapper (forms source)
+  (declare (type util:cst-list forms)
+           (values util:cst-list &optional))
+  (if (and (= 1 (length forms))
+           (cst:consp (first forms)))
+      (let* ((wrapper (first forms))
+             (wrapper-name (convention-wrapper-name wrapper)))
+        (if wrapper-name
+            (cond
+              ((string= wrapper-name "COALTONFUNCTIONOUTPUTS")
+               (cst:listify (cst:rest wrapper)))
+              ((string= wrapper-name "COALTONFUNCTIONINPUTS")
+               (parse-error "Malformed function type"
+                            (note source wrapper
+                                  "input convention wrapper is not valid on function output side")))
+              (t forms))
+            forms))
+      forms))
+
+(defun parse-star-separated-type-list (forms source context allow-empty)
+  (declare (type util:cst-list forms)
+           (values ty-list &optional))
+  (when (and (null forms) (not allow-empty))
+    (parse-error (format nil "Malformed function type: expected one or more types in ~A" context)))
+  (when (null forms)
+    (return-from parse-star-separated-type-list nil))
+  (labels ((segment-location (segment)
+             (source:make-location source
+                                   (cons (car (cst:source (car segment)))
+                                         (cdr (cst:source (car (last segment))))))))
+    (let ((segments nil)
+          (current nil))
+      (loop :for rest := forms :then (cdr rest)
+            :while rest
+            :for form := (car rest)
+            :do
+               (if (star-marker-p form)
+                   (if current
+                       (progn
+                         (push (nreverse current) segments)
+                         (setf current nil))
+                       (parse-error "Malformed function type"
+                                    (note source form "unexpected `*` in ~A" context)))
+                   (push form current)))
+      (unless current
+        (parse-error "Malformed function type"
+                     (note-end source (car (last forms))
+                               "missing type after `*` in ~A" context)))
+      (push (nreverse current) segments)
+      (setf segments (nreverse segments))
+      (loop :for segment :in segments
+            :collect
+               (if (= 1 (length segment))
+                   (parse-type (car segment) source)
+                   (parse-type-list segment (segment-location segment)))))))
+
+(defun parse-keyword-type-entry-list (forms source)
+  (declare (type util:cst-list forms)
+           (values keyword-ty-entry-list &optional))
+  (let ((entries nil)
+        (seen (make-hash-table :test #'eq)))
+    (labels ((record-keyword (keyword-form)
+               (let* ((keyword-name (cst:raw keyword-form))
+                      (prev (gethash keyword-name seen)))
+                 (when prev
+                   (parse-error "Duplicate keyword type entry"
+                                (secondary-note source prev "first entry here")
+                                (note source keyword-form "second entry here")))
+                 (setf (gethash keyword-name seen) keyword-form)
+                 keyword-name))
+             (emit-entry (keyword-form type-form location)
+               (push (make-keyword-ty-entry
+                      :keyword (make-keyword-src
+                                :name (record-keyword keyword-form)
+                                :location (form-location source keyword-form))
+                      :type (parse-type type-form source)
+                      :location location)
+                     entries)))
+      (loop :for rest := forms :then (cdr rest)
+            :while rest
+            :for entry := (car rest)
+            :do
+               (progn
+                 (unless (and (cst:consp entry)
+                              (cst:proper-list-p entry))
+                   (parse-error "Malformed keyword type entry"
+                                (note source entry "expected `(:keyword Type)`")))
+                 (unless (cst:consp (cst:rest entry))
+                   (parse-error "Malformed keyword type entry"
+                                (note source entry "expected key and type")))
+                 (when (cst:consp (cst:rest (cst:rest entry)))
+                   (parse-error "Malformed keyword type entry"
+                                (note source (cst:third entry) "unexpected trailing form")))
+                 (unless (and (cst:atom (cst:first entry))
+                              (keywordp (cst:raw (cst:first entry))))
+                   (parse-error "Malformed keyword type entry"
+                      (note source (cst:first entry) "expected keyword")))
+                 (emit-entry (cst:first entry)
+                             (cst:second entry)
+                             (form-location source entry)))))
+    (sort (nreverse entries)
+          #'string<
+          :key (lambda (entry)
+                 (symbol-name (keyword-src-name
+                               (keyword-ty-entry-keyword entry)))))))
+
+(defun split-input-forms-keyword-tail (forms source)
+  (declare (type util:cst-list forms)
+           (values util:cst-list util:cst-list &optional))
+  (let ((split nil)
+        (tail nil)
+        (saw-keyword-marker nil))
+    (loop :for rest := forms :then (cdr rest)
+          :while rest
+          :for current := (car rest)
+          :do
+             (cond
+               ((keyword-marker-p current)
+                (when saw-keyword-marker
+                  (parse-error "Malformed function type"
+                               (note source current "invalid `&key` placement")))
+                (setf saw-keyword-marker t)
+                (setf split (nreverse split))
+                (setf tail (cdr rest))
+                (return))
+               (t
+                (push current split))))
+    (unless saw-keyword-marker
+      (setf split (nreverse split)))
+    (values split (or tail nil))))
+
+(defun parse-function-output-spec (output-forms-raw source location context)
+  (declare (type util:cst-list output-forms-raw)
+           (type source:location location)
+           (type string context)
+           (values (or null ty-list) &optional))
+  (declare (ignore location))
+  ;; `A -> B -> C` is right-associative in output position and means a function
+  ;; returning a function, not additional positional arguments for the current function.
+  (if (find-if #'arrow-marker-p output-forms-raw)
+      (let* ((recursive-location
+               (source:make-location source
+                                     (cons (car (cst:source (car output-forms-raw)))
+                                           (cdr (cst:source (car (last output-forms-raw)))))))
+             (output-type (parse-type-list output-forms-raw recursive-location)))
+        (list output-type))
+      (let* ((output-forms (unwrap-output-convention-wrapper output-forms-raw source))
+             (empty-output-syntax-p
+               (and (= 1 (length output-forms))
+                    (or (void-type-marker-p (first output-forms))
+                        (empty-input-set-form-p (first output-forms)))))
+             (output-types
+               (if empty-output-syntax-p
+                   (progn
+                     (when (empty-input-set-form-p (first output-forms))
+                       (parse-error "Malformed function type"
+                                    (note source
+                                          (first output-forms)
+                                          "zero-value outputs must be written as `Void`")))
+                     nil)
+                   (parse-star-separated-type-list output-forms source context nil))))
+        output-types)))
+
+(defun parse-lisp-return-type (form source)
+  (declare (type cst:cst form)
+           (values (or null ty-list) &optional))
+  (cond
+    ((and (cst:proper-list-p form)
+          (cst:consp form)
+          (arrow-marker-p (cst:first form)))
+     (let ((output-forms-raw (cst:listify (cst:rest form))))
+       (when (null output-forms-raw)
+         (parse-error "Malformed lisp return type"
+                      (note source (cst:first form)
+                            "missing return type")))
+       (parse-function-output-spec output-forms-raw
+                                   source
+                                   (form-location source form)
+                                   "lisp return type")))
+    ((empty-input-set-form-p form)
+     (parse-error "Malformed lisp return type"
+                  (note source form
+                        "zero-value `lisp` return types must be written as `(-> Void)`")))
+    ((star-separated-type-form-p form)
+     (parse-error "Malformed lisp return type"
+                  (note source form
+                        "use `(-> a * b)` for multi-value `lisp` return types")))
+    ((and (cst:proper-list-p form)
+          (find-if #'arrow-marker-p (cst:listify form)))
+     (parse-error "Malformed lisp return type"
+                  (note source (find-if #'arrow-marker-p (cst:listify form))
+                        "nothing may appear to the left of `->` in a `lisp` return type")))
+    (t
+     (parse-error "Malformed lisp return type"
+                  (note source form
+                        "use `(-> ...)` return type syntax in `lisp` forms")))))
+
+(defun build-fixed-arity-function-type (positional keyword-entries outputs location)
+  (declare (type ty-list positional)
+           (type keyword-ty-entry-list keyword-entries)
+           (type (or null ty-list) outputs)
+           (type source:location location)
+           (values function-ty &optional))
+  (make-function-ty
+   :positional-input-types positional
+   :keyword-input-types (sort (copy-list keyword-entries)
+                              #'string<
+                              :key (lambda (entry)
+                                     (symbol-name (keyword-src-name
+                                                   (keyword-ty-entry-keyword entry)))))
+   :output-types outputs
+   :location location))
+
 (defun parse-qualified-type (form source)
   (declare (type cst:cst form))
 
@@ -240,7 +566,7 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
       (multiple-value-bind (left right)
           (util:take-until (lambda (cst)
                              (and (cst:atom cst)
-                                  (eq (cst:raw cst) 'coalton:=>)))
+                                  (qualified-type-marker-p cst)))
                            (cst:listify form))
         (cond
           ;; no predicates
@@ -353,6 +679,14 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
            (values ty &optional))
 
   (cond
+    ((empty-input-set-form-p form)
+     (parse-error "Malformed type"
+                  (note source form
+                        "zero-value type syntax must be written as `Void`")))
+
+    ((void-type-marker-p form)
+     (make-result-ty :output-types nil :location (form-location source form)))
+
     ((and (cst:atom form)
           (symbolp (cst:raw form))
           (cst:raw form))
@@ -372,6 +706,15 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
      (parse-error "Malformed type"
                   (note source form "unexpected nullary type")))
 
+    ;; Bare keyword tails are only valid as part of a function signature. If the
+    ;; form itself contains an arrow, let PARSE-TYPE-LIST handle it as a nested
+    ;; function type such as `(&key (:x Integer) -> Integer)`.
+    ((and (keyword-marker-p (cst:first form))
+          (not (find-if #'arrow-marker-p (cst:listify form))))
+     (parse-error "Malformed function type"
+                  (note source form
+                        "keyword type tail must appear inside function input before `->`")))
+
     (t
      (parse-type-list (cst:listify form) (form-location source form)))))
 
@@ -382,51 +725,89 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
 
   (assert forms)
 
-  (if (= 1 (length forms))
-      (parse-type (first forms) (source:location-source location))
-      (multiple-value-bind (left right)
-          (util:take-until (lambda (cst)
-                             (and (cst:atom cst)
-                                  (eq (cst:raw cst) 'coalton:->)))
-                           forms)
+  (let* ((source (source:location-source location))
+         (arrow-forms (remove-if-not #'arrow-marker-p forms)))
+    (cond
+      ;; Non-function type application
+      ((null arrow-forms)
+       (cond
+         ((find-if #'star-marker-p forms)
+          (make-result-ty
+           :output-types (parse-star-separated-type-list forms
+                                                        source
+                                                        "output pack"
+                                                        nil)
+           :location location))
+         ((find-if #'keyword-marker-p forms)
+          (parse-error "Malformed function type"
+                       (note source
+                             (find-if #'keyword-marker-p forms)
+                             "`&key` type syntax is only valid in function signatures")))
+         ((= 1 (length forms))
+          (parse-type (first forms) source))
+         (t
+          (let ((left-ty (parse-type (car forms) source)))
+            (loop :for form_ :in (cdr forms)
+                  :for ty_ := (parse-type form_ source)
+                  :do (setf left-ty (make-tapp :from left-ty
+                                               :to ty_
+                                               :location location)))
+            left-ty))))
 
-        ;; (T ... ->)
-        (cond
-          ((and right (null (rest right)))
-           (parse-error "Malformed function type"
-                        (note (source:location-source location) (car right)
-                              "missing return type")))
+      (t
+       (multiple-value-bind (left right)
+           (util:take-until #'arrow-marker-p forms)
 
-          ;; (-> ...)
-          ((and (null left) right)
+         ;; (-> T)
+         (when (null left)
            (parse-error "Malformed function type"
-                        (note (source:location-source location) (car right)
+                        (note source (car right)
                               "invalid function syntax")))
 
-          (t
-           (let ((ty (parse-type (car left) (source:location-source location))))
-             (loop :for form_ :in (cdr left)
-                   :for ty_ := (parse-type form_ (source:location-source location))
-                   :do (setf ty (make-tapp :from ty
-                                           :to ty_
-                                           :location location)))
+         ;; (T ... ->)
+         (when (or (null right) (null (cdr right)))
+           (parse-error "Malformed function type"
+                        (note source (or (car right) (car (last forms)))
+                              "missing return type")))
 
-             (if (null right)
-                 ty
-
-                 (make-tapp
-                  :from (make-tapp
-                         :from (make-tycon
-                                :name 'coalton:Arrow
-                                :location (form-location (source:location-source location)
-                                                                (first right)))
-                         :to ty
-                         :location (source:make-location (source:location-source location)
-                                                         (cons (car (source:location-span (ty-location ty)))
-                                                               (cdr (cst:source (first right))))))
-                  :to (parse-type-list
-                       (cdr right)
-                       (source:make-location (source:location-source location)
-                                             (cons (car (cst:source (first right)))
-                                                   (cdr (cst:source (car (last right)))))))
-                  :location location))))))))
+         (multiple-value-bind (input-forms keyword-forms)
+             (split-input-forms-keyword-tail (unwrap-input-convention-wrapper left source)
+                                             source)
+           (let* ((void-input-syntax-p
+                    (and (= 1 (length input-forms))
+                         (void-type-marker-p (first input-forms))))
+                  (_checked-nullary-input-syntax
+                    (progn
+                      (when (and void-input-syntax-p keyword-forms)
+                        (parse-error "Malformed function type"
+                                     (note source (first input-forms)
+                                           "nullary input syntax `Void` cannot be combined with `&key`")))
+                      (when (find-if #'empty-input-set-form-p input-forms)
+                        (parse-error "Malformed function type"
+                                     (note source
+                                           (find-if #'empty-input-set-form-p input-forms)
+                                           "nullary function inputs must be written as `Void`")))
+                      (when (and (not void-input-syntax-p)
+                                 (find-if #'void-type-marker-p input-forms))
+                        (parse-error "Malformed function type"
+                                     (note source
+                                           (find-if #'void-type-marker-p input-forms)
+                                           "unexpected `Void` in function input")))))
+                  (input-types (if void-input-syntax-p
+                                   nil
+                                   (parse-star-separated-type-list input-forms
+                                                                   source
+                                                                   "function input"
+                                                                   t)))
+                  (keyword-types (parse-keyword-type-entry-list keyword-forms source))
+                  (output-forms-raw (cdr right)))
+             (declare (ignore _checked-nullary-input-syntax))
+             (let ((output-types
+                     (parse-function-output-spec output-forms-raw
+                                                 source
+                                                 location
+                                                 "function output")))
+               (build-fixed-arity-function-type input-types
+                                               keyword-types
+                                               output-types
+                                               location)))))))))

@@ -46,17 +46,11 @@
    #:coalton-impl/codegen/constant-propagation
    #:propagate-constants)
   (:import-from
-   #:coalton-impl/codegen/canonicalizer
-   #:canonicalize)
-  (:import-from
    #:coalton-impl/codegen/inliner
    #:inline-applications)
   (:import-from
    #:coalton-impl/codegen/specializer
    #:apply-specializations)
-  (:import-from
-   #:coalton-impl/codegen/multiple-values
-   #:transform-tuples-to-multiple-values)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
@@ -75,7 +69,8 @@
            (values tc:environment &optional))
   (multiple-value-bind (toplevel-functions toplevel-values)
       (loop :for (name . node) :in bindings
-            :if (node-abstraction-p node)
+            :if (and (node-abstraction-p node)
+                     (not (util:dynamic-variable-name-p name)))
               :collect (cons name (length (node-abstraction-vars node))) :into functions
             :else
               :collect name :into variables
@@ -180,9 +175,6 @@ mapping known function names to their arity."
               (loop :for (name . node) :in bindings
                     :collect (cons name (direct-application node function-table))))
 
-        ;; Rewrite Tuple code to use multiple-value calling conventions
-        (setf bindings (transform-tuples-to-multiple-values bindings env))
-
         ;; Update code db
         (loop :for (name . node) :in bindings
               :do (setf env (tc:set-code env name node)))
@@ -215,7 +207,8 @@ arity. TABLE will be mutated with additional entries."
                       :properties (node-properties node)
                       :rator-type (node-type (node-application-rator node))
                       :rator name
-                      :rands (node-application-rands node)))))))
+                      :rands (node-application-rands node)
+                      :keyword-rands (node-application-keyword-rands node)))))))
 
            (add-local-funs (node)
              (loop :for (name . node) :in (node-let-bindings node)
@@ -267,7 +260,6 @@ ENV. Return a new node which is optimized."
                 (> runs 1))
        (format t "~&;; Optimizing again, attempt #~D~%" runs))
      (setf node (transform-intrinsic-applications node))
-     (setf node (canonicalize node))
      (setf node (match-dynamic-extent-lift node env))
      (setf node (propagate-constants node env))
      (setf node (apply-specializations node env))
@@ -348,6 +340,13 @@ speaking, the following kinds of transformations happen:
       (t
        (return-from pointfree node)))
 
+    ;; If there are no positional parameters left to synthesize, NODE is
+    ;; already a first-class function value. Wrapping it in a nullary thunk is
+    ;; redundant and breaks keyword-bearing nullary functions by forcing an
+    ;; extra application step.
+    (when (zerop num-params)
+      (return-from pointfree node))
+
     (let* ((orig-param-names (tc:lookup-function-source-parameter-names env (node-variable-value function)))
 
            (param-names (loop :for i :from 0 :below num-params
@@ -375,9 +374,9 @@ speaking, the following kinds of transformations happen:
        :type (node-type node)
        :vars param-names
        :subexpr (make-node-application
-                 :type (tc:make-function-type*
-                        (subseq (tc:function-type-arguments (node-type function)) (length new-args))
-                        (tc:function-return-type (node-type node)))
+                 :type (tc:function-remove-arguments
+                        (node-type function)
+                        (length new-args))
                  :properties '()
                  :rator function
                  :rands new-args)))))

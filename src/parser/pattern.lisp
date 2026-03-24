@@ -157,6 +157,10 @@ runtime value and binds it to a variable."
      (when (string= "_" (symbol-name (cst:raw form)))
        (parse-error "Invalid pattern"
                     (note source form "invalid variable name '_'")))
+     (when (util:dynamic-variable-name-p (cst:raw form))
+       (parse-error "Invalid pattern"
+                    (note source form
+                          "pattern variables cannot use dynamic-variable earmuffs")))
      (make-pattern-var
       :name (cst:raw form)
       :orig-name (cst:raw form)

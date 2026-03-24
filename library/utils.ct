@@ -1,0 +1,55 @@
+(defpackage #:coalton/utils
+  (:use
+   #:coalton)
+  (:nicknames
+   #:coalton-library/utils)
+  (:export
+   #:defstdlib-package
+   #:concat-string
+   #:sym))
+
+(in-package #:coalton/utils)
+
+(cl:defmacro defstdlib-package (name cl:&rest args)
+  (cl:let* ((name-string (cl:string-upcase (cl:string name)))
+            (legacy-name (cl:and (cl:<= 8 (cl:length name-string))
+                                 (cl:string= "COALTON/" name-string :end2 8)
+                                 (cl:concatenate 'cl:string "COALTON-LIBRARY/"
+                                                 (cl:subseq name-string 8)))))
+    `(cl:eval-when (:compile-toplevel :load-toplevel)
+       #+sb-package-locks
+       (cl:when (cl:find-package ',name)
+         (sb-ext:unlock-package ',name))
+       (cl:defpackage ,name
+         ,@(cl:if legacy-name
+                  `((:nicknames ,legacy-name))
+                  '())
+         ,@args)
+       #+sb-package-locks
+       (sb-ext:lock-package ',name))))
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(cl:defun %readable-sym (x)
+  (cl:let ((sym (cl:read-from-string x)))
+    (cl:let ((cl:*package* (cl:find-package "KEYWORD")))
+      (cl:prin1-to-string sym))))
+
+;;; XXX: This is a macro because we want *PACKAGE* to be captured at
+;;; its use site. This is so S can print with the right and expected
+;;; package.
+(cl:defmacro sym (readable? s)
+  (cl:assert (cl:stringp s))
+  `(if ,readable?
+       ,(%readable-sym s)
+       ,s))
+
+(coalton-toplevel
+  ;; Concatenation function that doesn't depend on the string
+  ;; library. Used frequently in primitive type class implementations.
+  (inline)
+  (declare concat-string (String * String -> String))
+  (define (concat-string a b)
+    (lisp (-> String) (a b)
+      (cl:concatenate 'cl:string a b))))

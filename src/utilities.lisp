@@ -10,11 +10,10 @@
    (#:cst #:concrete-syntax-tree))
   (:export
    #:+keyword-package+                  ; CONSTANT
+   #:dynamic-variable-name-p           ; FUNCTION
    #:required                           ; FUNCTION
    #:unreachable                        ; MACRO
    #:coalton-bug                        ; FUNCTION
-   #:debug-log                          ; MACRO
-   #:debug-tap                          ; MACRO
    #:runtime-quote                      ; FUNCTION
    #:symbol-list                        ; TYPE
    #:string-list                        ; TYPE
@@ -38,6 +37,17 @@
 (in-package #:coalton-impl/util)
 
 (alexandria:define-constant +keyword-package+ (cl:find-package "KEYWORD") :test #'eq)
+
+(defun dynamic-variable-name-p (name)
+  "Return true when NAME uses Coalton's dynamic-variable earmuff syntax."
+  (declare (type symbol name)
+           (values boolean &optional))
+  (let* ((string (symbol-name name))
+         (length (length string)))
+    (and (>= length 3)
+         (char= (char string 0) #\*)
+         (char= (char string (1- length)) #\*)
+         (not (null (find #\* string :test-not #'char= :start 1 :end (1- length)))))))
 
 (defun symbol-list-p (x)
   (and (alexandria:proper-list-p x)
@@ -66,19 +76,6 @@
   (cons
    (car (cst:source (first csts)))
    (cdr (cst:source (car (last csts))))))
-
-(defmacro debug-log (&rest vars)
-  "Log names and values of VARS to standard output"
-  `(let ((*print-circle* nil))
-     (format t
-             ,(format nil "~&~{~A: ~~A~~%~}" vars)
-             ,@vars)))
-
-(defmacro debug-tap (var)
-  (let ((var-name (gensym)))
-    `(let ((,var-name ,var))
-       (format t ,(format nil "~A: ~~A~~%" var) ,var-name)
-       ,var-name)))
 
 (defun runtime-quote (x)
   `',x)

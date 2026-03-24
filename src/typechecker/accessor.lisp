@@ -4,7 +4,9 @@
    #:coalton-impl/typechecker/base)
   (:local-nicknames
    (#:source #:coalton-impl/source)
+   (#:settings #:coalton-impl/settings)
    (#:tc #:coalton-impl/typechecker/stage-1)
+   (#:type-string #:coalton-impl/typechecker/type-string)
    (#:util #:coalton-impl/util))
   (:export
    #:accessor                           ; STRUCT
@@ -83,6 +85,10 @@
 
     (values accessors subs)))
 
+(defun type-object-string (object env)
+  (let ((settings:*coalton-print-unicode* nil))
+    (type-string:type-to-string object env)))
+
 (defun solve-accessor (accessor env)
   (declare (type accessor accessor)
            (type tc:environment env)
@@ -105,7 +111,9 @@
 
       (unless struct-entry
         (tc-error "Invalid accessor"
-                  (tc-note accessor "struct accessor cannot be applied to a value of type '~S'" (accessor-from accessor))))
+                  (tc-note accessor
+                           "struct accessor cannot be applied to a value of type '~A'"
+                           (type-object-string (accessor-from accessor) env))))
 
       (let ((subs (tc:match struct-ty (accessor-from accessor)))
             (field (tc:get-field struct-entry (accessor-field accessor) :no-error t)))

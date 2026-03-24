@@ -1,0 +1,747 @@
+(in-package #:coalton-native-tests)
+
+(define-test test-inline-return ()
+  ;; See gh #1202
+  (is (== 1 (1+
+             ((fn (x) (return x)) 0)))))
+
+(coalton-toplevel
+  (declare two-arg-double-float-add
+     (Double-Float * Double-Float -> Double-Float))
+  (inline)
+  (define (two-arg-double-float-add x y)
+    (lisp (-> Double-Float) (x y) (cl:+ x y))))
+
+(coalton-toplevel
+  (define (two-arg-double-float-add-caller x y)
+    (two-arg-double-float-add x y))
+  (define two-arg-double-float-add-underapply
+    (fn (x)
+      (two-arg-double-float-add 3.0d0 x)))
+  (define (two-arg-double-float-add-underapply-caller x)
+    (two-arg-double-float-add-underapply x)))
+
+(coalton-toplevel
+  (declare same-tu-inline-double-float-add
+    (Double-Float * Double-Float -> Double-Float))
+  (inline)
+  (define (same-tu-inline-double-float-add x y)
+    (lisp (-> Double-Float) (x y) (cl:+ x y)))
+
+  (declare same-tu-inline-double-float-add-caller
+    (Double-Float * Double-Float -> Double-Float))
+  (define (same-tu-inline-double-float-add-caller x y)
+    (same-tu-inline-double-float-add x y)))
+
+(define-test function-inline ()
+  (is (== 5.0d0 (two-arg-double-float-add-caller 2.0d0 3.0d0)))
+  (is (== 5.0d0 (two-arg-double-float-add-underapply-caller 2.0d0))))
+
+(define-test same-translation-unit-function-inline ()
+  (is (== 5.0d0 (same-tu-inline-double-float-add-caller 2.0d0 3.0d0))))
+
+(coalton-toplevel
+  (define-class (class-for-inline-method-test :a)
+    (method-for-inline-test (:a * :a -> :a)))
+  (define-instance (class-for-inline-method-test Double-Float)
+    (inline)
+    (define (method-for-inline-test x y)
+      (lisp (-> Double-Float) (x y) (cl:+ x y)))))
+
+(coalton-toplevel
+  (declare method-for-inline-test-caller
+    (Double-Float * Double-Float -> Double-Float))
+  (define (method-for-inline-test-caller x y)
+    (method-for-inline-test x y))
+
+  (declare method-for-inline-test-caller-callsite-noinline
+    (Double-Float * Double-Float -> Double-Float))
+  (define (method-for-inline-test-caller-callsite-noinline x y)
+    (noinline (method-for-inline-test x y))))
+
+(define-test method-inline ()
+  (is (== 5.0d0 (method-for-inline-test-caller 2.0d0 3.0d0))))
+
+(coalton-toplevel
+  (declare keyword-nullary-pointfree-target
+    (&key (:offset Integer) -> Integer))
+  (define (keyword-nullary-pointfree-target &key (offset 10))
+    offset)
+
+  (declare keyword-nullary-pointfree-run
+    ((Void -> Integer) -> Integer))
+  (define (keyword-nullary-pointfree-run f)
+    (f))
+
+  (declare keyword-nullary-pointfree-regression Integer)
+  (define keyword-nullary-pointfree-regression
+    (keyword-nullary-pointfree-run keyword-nullary-pointfree-target)))
+
+(define-test keyword-nullary-pointfree-runtime ()
+  (is (== 10 keyword-nullary-pointfree-regression)))
+
+(coalton-toplevel
+  (declare constrained-keyword-nullary-pointfree-target
+    (Num :a => &key (:offset :a) -> :a))
+  (define (constrained-keyword-nullary-pointfree-target &key (offset 10))
+    offset)
+
+  (declare constrained-keyword-nullary-pointfree-run
+    ((Void -> Integer) -> Integer))
+  (define (constrained-keyword-nullary-pointfree-run f)
+    (f))
+
+  (declare constrained-keyword-nullary-pointfree-regression Integer)
+  (define constrained-keyword-nullary-pointfree-regression
+    (constrained-keyword-nullary-pointfree-run
+     constrained-keyword-nullary-pointfree-target)))
+
+(define-test constrained-keyword-nullary-pointfree-runtime ()
+  (is (== 10 constrained-keyword-nullary-pointfree-regression)))
+
+(coalton-toplevel
+  (define-class (nullary-method-alias-inline-class :a)
+    (nullary-method-alias-inline (Void -> :a)))
+
+  (define-instance (nullary-method-alias-inline-class (vector:Vector U8))
+    (define nullary-method-alias-inline vector:new))
+
+  (declare nullary-method-alias-inline-regression
+    (Void -> (vector:Vector U8)))
+  (define (nullary-method-alias-inline-regression)
+    (nullary-method-alias-inline)))
+
+(define-test nullary-method-alias-inline-runtime ()
+  (is (== (the (vector:Vector U8) (vector:new))
+          (nullary-method-alias-inline-regression))))
+
+(coalton-toplevel
+  (inline)
+  (define (generic-for-inline x y)
+    (+ x y))
+
+  (declare num-generic-for-inline (Num :a => :a -> :a))
+  (inline)
+  (define num-generic-for-inline
+    (fn (y)
+      (generic-for-inline 2 y))))
+
+(coalton-toplevel
+  (monomorphize)
+  (declare monomorph-for-inline (Integer -> Integer))
+  (define (monomorph-for-inline y)
+    (num-generic-for-inline y)))
+
+(coalton-toplevel
+  (declare same-tu-specialized-generic-for-inline
+    (Num :a => :a * :a -> :a))
+  (define (same-tu-specialized-generic-for-inline x y)
+    (+ x y))
+
+  (declare same-tu-specialized-double-float-add
+    (Double-Float * Double-Float -> Double-Float))
+  (inline)
+  (define (same-tu-specialized-double-float-add x y)
+    (lisp (-> Double-Float) (x y) (cl:+ x y)))
+
+  (specialize same-tu-specialized-generic-for-inline
+              same-tu-specialized-double-float-add
+              (Double-Float * Double-Float -> Double-Float))
+
+  (declare same-tu-specialized-double-float-add-caller
+    (Double-Float * Double-Float -> Double-Float))
+  (define (same-tu-specialized-double-float-add-caller x y)
+    (same-tu-specialized-generic-for-inline x y))
+
+  (declare local-qualified-application-regression (Integer -> Integer))
+  (define (local-qualified-application-regression x)
+    (let ((declare f (Num :a => :a -> :a))
+          (f id))
+      (f x))))
+
+(coalton-toplevel
+  (declare keyword-call-shape-target
+    (Integer &key (:offset Integer) -> Integer))
+  (define (keyword-call-shape-target x &key (offset 1))
+    (+ x offset))
+
+  (declare keyword-call-shape-regression (Integer -> Integer))
+  (define (keyword-call-shape-regression x)
+    (keyword-call-shape-target x :offset 2)))
+
+(coalton-toplevel
+  (inline)
+  (define (test-fact n)
+    (if (== 0 n)
+        1
+        (test-fact (1- n)))))
+
+(coalton-toplevel
+  (define (test-fact-caller)
+    (test-fact 10)))
+
+(coalton-toplevel
+  (define-class (RecursiveInlineTestClass :a)
+    (test-fact-method (:a -> :a)))
+
+  (define-instance (RecursiveInlineTestClass Integer)
+    (inline)
+    (define (test-fact-method n)
+      (if (== 0 n)
+          1
+          (test-fact-method (1- n))))))
+
+(coalton-toplevel
+  (monomorphize)
+  (define (test-fact-method-caller)
+    (test-fact-method (the Integer 10))))
+
+
+(define-test monomorphize-inline ()
+  (is (== 5 (monomorph-for-inline 3))))
+
+;; gh #1594, not really the inliner, but the constant propagation pass
+(coalton-toplevel
+  (define (f-gh1594)
+    (let ((x (the Integer 10))
+          (y (+ 1 x)))
+      y)))
+
+(define-test test-gh1594 ()
+  (is (== 11 (f-gh1594))))
+
+(define-test sign-runtime ()
+  (is (== (the Bit 0) (math:sign (the Bit 0))))
+  (is (== (the Bit 1) (math:sign (the Bit 1))))
+
+  (is (== (the Integer -1) (math:sign (the Integer -2))))
+  (is (== (the Integer 0) (math:sign (the Integer 0))))
+  (is (== (the Integer 1) (math:sign (the Integer 2))))
+
+  (is (== (the I8 -1) (math:sign (the I8 -2))))
+  (is (== (the I8 0) (math:sign (the I8 0))))
+  (is (== (the I8 1) (math:sign (the I8 2))))
+
+  (is (== (the I16 -1) (math:sign (the I16 -2))))
+  (is (== (the I16 0) (math:sign (the I16 0))))
+  (is (== (the I16 1) (math:sign (the I16 2))))
+
+  (is (== (the I32 -1) (math:sign (the I32 -2))))
+  (is (== (the I32 0) (math:sign (the I32 0))))
+  (is (== (the I32 1) (math:sign (the I32 2))))
+
+  (is (== (the I64 -1) (math:sign (the I64 -2))))
+  (is (== (the I64 0) (math:sign (the I64 0))))
+  (is (== (the I64 1) (math:sign (the I64 2))))
+
+  (is (== (the IFix -1) (math:sign (the IFix -2))))
+  (is (== (the IFix 0) (math:sign (the IFix 0))))
+  (is (== (the IFix 1) (math:sign (the IFix 2))))
+
+  (is (== (the U8 0) (math:sign (the U8 0))))
+  (is (== (the U8 1) (math:sign (the U8 2))))
+
+  (is (== (the U16 0) (math:sign (the U16 0))))
+  (is (== (the U16 1) (math:sign (the U16 2))))
+
+  (is (== (the U32 0) (math:sign (the U32 0))))
+  (is (== (the U32 1) (math:sign (the U32 2))))
+
+  (is (== (the U64 0) (math:sign (the U64 0))))
+  (is (== (the U64 1) (math:sign (the U64 2))))
+
+  (is (== (the Fraction -1) (math:sign (the Fraction -2))))
+  (is (== (the Fraction 0) (math:sign (the Fraction 0))))
+  (is (== (the Fraction 1) (math:sign (the Fraction 2))))
+
+  (is (== -1f0 (math:sign -2f0)))
+  (is (== 0f0 (math:sign 0f0)))
+  (is (== 1f0 (math:sign 2f0)))
+
+  (is (== -1d0 (math:sign -2d0)))
+  (is (== 0d0 (math:sign 0d0)))
+  (is (== 1d0 (math:sign 2d0))))
+
+;; Issue on redefining inlinable functions
+;; https://github.com/coalton-lang/coalton/issues/1499
+;; These functions are used by inliner-tests-1.lisp, which is
+;; loaded after this file.
+
+(coalton-toplevel
+  (inline)
+  (define (test-inlinable-rec-1 n)
+    (if (== n 0)
+        111
+        (test-inlinable-rec-2 (1- n))))
+  (inline)
+  (define (test-inlinable-rec-2 n)
+    (if (== n 0)
+        222
+        (test-inlinable-rec-1 (1- n)))))
+
+;; Callsite inlining
+
+(coalton-toplevel 
+  (declare callsite-inlined-foo (UFix -> UFix))
+  (define (callsite-inlined-foo x)
+    (- (* 23 (+ 2 (* 4 x))) 1)))
+
+(coalton-toplevel
+  (define (callsite-inlined-foo-caller)
+    (callsite-inlined-foo 1))
+  (define (callsite-inlined-foo-inline-caller)
+    (inline (callsite-inlined-foo 1))))
+
+(coalton-toplevel 
+  (declare callsite-noinlined-foo (UFix -> UFix))
+  (inline)
+  (define (callsite-noinlined-foo x)
+    (- (* 23 (+ 2 (* 4 x))) 1)))
+
+(coalton-toplevel
+  (define (callsite-noinlined-foo-caller)
+    (callsite-noinlined-foo 1))
+  (define (callsite-noinlined-foo-noinline-caller)
+    (noinline (callsite-noinlined-foo 1))))
+
+(coalton-toplevel
+  (define (double-callsite-inlined-foo-caller)
+    (callsite-inlined-foo (+ 1 (inline (callsite-inlined-foo 1)))))
+
+  (define (double-callsite-noinlined-foo-caller)
+    (noinline (callsite-inlined-foo (+ 1 (inline (callsite-inlined-foo 1)))))))
+
+;; Regression test for inliner substitutions when argument type
+;; variables are not constrained by return type.
+(coalton-toplevel
+  (declare inliner-subst-test-helper ((Optional :a) * :b -> :b))
+  (inline)
+  (define (inliner-subst-test-helper x y)
+    (match x
+      ((None) y)
+      ((Some _) y)))
+
+  (declare inliner-subst-test-caller ((Optional :a) * :b -> :b))
+  (define (inliner-subst-test-caller x y)
+    (inline (inliner-subst-test-helper x y))))
+
+(define-test polymorphic-inline-substitution-runtime ()
+  (is (== 17 (inliner-subst-test-caller (Some 0) 17)))
+  (is (== "ok" (inliner-subst-test-caller None "ok"))))
+
+
+(in-package #:coalton-tests)
+
+(defun compile-test-program (toplevel-string)
+  (let* ((package-name (format nil "COALTON-INLINE-EMIT-~A" (gensym))))
+    (let ((*package* (make-package package-name
+                                   :use '("COALTON" "COALTON-PRELUDE"))))
+      (unwind-protect
+           (let ((source (source:make-source-string toplevel-string :name package-name)))
+             (with-open-stream (stream (source:source-stream source))
+               (parser:with-reader-context stream
+                 (nth-value 0
+                            (entry:entry-point
+                             (parser:read-program stream source))))))
+        (delete-package *package*)))))
+
+(defun compiled-program-locally-forms (toplevel-string)
+  (let* ((program (compile-test-program toplevel-string))
+         (locally-form (find-if (lambda (form)
+                                  (and (consp form)
+                                       (eq 'locally (car form))))
+                                (rest program))))
+    (is locally-form)
+    (rest locally-form)))
+
+(defun compiled-defun (forms name)
+  (find-if (lambda (form)
+             (and (consp form)
+                  (eq 'defun (car form))
+                  (string= name (symbol-name (second form)))))
+           forms))
+
+(defun declaim-declaration-names (forms declaration-name)
+  (loop :for form :in forms
+        :when (and (consp form)
+                   (eq 'declaim (car form)))
+          :append (loop :for declaration :in (rest form)
+                        :when (and (consp declaration)
+                                   (eq declaration-name (car declaration)))
+                          :collect (mapcar #'symbol-name (rest declaration)))))
+
+(defun defun-declaration-names (defun-form declaration-name)
+  (loop :for form :in (cdddr defun-form)
+        :while (and (consp form)
+                    (eq 'declare (car form)))
+        :append (loop :for declaration :in (rest form)
+                      :when (and (consp declaration)
+                                 (eq declaration-name (car declaration)))
+                        :collect (mapcar #'symbol-name (rest declaration)))))
+
+;; See gh #1293
+(deftest test-inliner-rename-bound-variables ()
+  (check-coalton-types
+   "(declare f (Integer -> Integer))
+    (define (f n)
+      (when (== n 0)
+        (return 0))
+      (when (== n 1)
+        (return 1))
+      (+ (f (- n 1))
+         (f (- n 2))))"))
+
+(deftest function-inline-error ()
+  (signals coalton-impl/parser:parse-error
+    (check-coalton-types
+     "(inline myfun)
+      (define (myfun x) x)")))
+
+(deftest method-inline-error ()
+  (signals coalton-impl/parser:parse-error
+    (check-coalton-types
+     "(define-class (C :a)
+        (m (:a * :a -> :a)))
+      (define-instance (m Double-Float)
+        (inline m)
+        (define (m x y)
+          (lisp (-> Double-Float) (x y) (cl:+ x y))))")))
+
+(deftest function-inline-code ()
+  (is (equal '((cl:+ coalton-native-tests::x coalton-native-tests::y))
+             (ast:node-lisp-form
+              (unwrap-inline-lisp-node
+               (coalton:lookup-code
+                'coalton-native-tests::two-arg-double-float-add-caller))))))
+
+(deftest same-translation-unit-specialization-inline ()
+  (fiasco:skip-unless (not coalton-impl/settings:*coalton-disable-specialization*))
+  (is (= 5.0d0
+         (coalton-native-tests::same-tu-specialized-double-float-add-caller
+          2.0d0
+          3.0d0))))
+
+(deftest same-translation-unit-function-inline-code ()
+  (is (equal '((cl:+ coalton-native-tests::x coalton-native-tests::y))
+             (ast:node-lisp-form
+              (ast:node-let-subexpr
+               (ast:node-abstraction-subexpr
+                (coalton:lookup-code
+                 'coalton-native-tests::same-tu-inline-double-float-add-caller)))))))
+
+(deftest emitted-inline-defuns-use-local-notinline-for-recursive-sccs ()
+  (let* ((forms (compiled-program-locally-forms
+                 "(declare f (Integer -> Integer))
+                  (declare g (Integer -> Integer))
+                  (inline)
+                  (define (f n) (g n))
+                  (inline)
+                  (define (g n) (f n))"))
+         (f-defun (compiled-defun forms "F"))
+         (g-defun (compiled-defun forms "G")))
+    (is f-defun)
+    (is g-defun)
+    (is (null (declaim-declaration-names forms 'notinline)))
+    (is (equal '(("F" "G"))
+               (defun-declaration-names f-defun 'notinline)))
+    (is (equal '(("F" "G"))
+               (defun-declaration-names g-defun 'notinline)))))
+
+(deftest emitted-inline-method-wrappers-do-not-reset-notinline-globally ()
+  (let ((forms (compiled-program-locally-forms
+                "(define-class (C :a)
+                   (m (:a -> :a)))
+                 (define-instance (C Integer)
+                   (inline)
+                   (define (m x)
+                     x))")))
+    (is (null (declaim-declaration-names forms 'notinline)))))
+
+(deftest method-inline-code ()
+  (is (equal '((cl:+ coalton-native-tests::x coalton-native-tests::y))
+             (ast:node-lisp-form
+              (unwrap-inline-lisp-node
+               (coalton:lookup-code
+                'coalton-native-tests::method-for-inline-test-caller))))))
+
+(deftest same-translation-unit-specialization-inline-code ()
+  (fiasco:skip-unless (not coalton-impl/settings:*coalton-disable-specialization*))
+  (is (equal '((cl:+ coalton-native-tests::x coalton-native-tests::y))
+             (ast:node-lisp-form
+              (ast:node-let-subexpr
+               (ast:node-abstraction-subexpr
+                (coalton:lookup-code
+                 'coalton-native-tests::same-tu-specialized-double-float-add-caller)))))))
+
+(deftest local-qualified-application-code ()
+  (let* ((body
+           (ast:node-abstraction-subexpr
+            (coalton:lookup-code
+             'coalton-native-tests::local-qualified-application-regression)))
+         (call
+           (ast:node-let-subexpr body)))
+    (is (typep body 'ast:node-let))
+    (is (typep call 'ast:node-direct-application))
+    (is (= 2 (length (ast:node-direct-application-rands call))))
+    (is (null (ast:node-direct-application-keyword-rands call)))))
+(deftest keyword-call-shape-code ()
+  (let ((call
+          (ast:node-abstraction-subexpr
+           (coalton:lookup-code
+            'coalton-native-tests::keyword-call-shape-regression))))
+    (is (typep call 'ast:node-direct-application))
+    (is (= 1 (length (ast:node-direct-application-rands call))))
+    (is (= 1 (length (ast:node-direct-application-keyword-rands call))))
+    (is (eq :offset
+            (ast:node-application-keyword-arg-keyword
+             (first (ast:node-direct-application-keyword-rands call)))))))
+
+(deftest keyword-nullary-pointfree-code ()
+  (let ((node
+          (coalton:lookup-code
+           'coalton-native-tests::keyword-nullary-pointfree-regression)))
+    (etypecase node
+      ((or ast:node-application ast:node-direct-application)
+       (let ((rand (first (ast:node-rands node))))
+         (is (typep rand 'ast:node-variable))
+         (is (not (typep rand 'ast:node-abstraction)))))
+      (ast:node-let
+       (is (= 1 (length (ast:node-let-bindings node))))
+       (let* ((binding (first (ast:node-let-bindings node)))
+              (bound-value (cdr binding))
+              (call (ast:node-let-subexpr node)))
+         (is (typep bound-value 'ast:node-variable))
+         (is (not (typep bound-value 'ast:node-abstraction)))
+         (is (typep call '(or ast:node-application ast:node-direct-application))))))))
+
+(deftest constrained-keyword-nullary-pointfree-code ()
+  (let ((node
+          (coalton:lookup-code
+           'coalton-native-tests::constrained-keyword-nullary-pointfree-regression)))
+    (etypecase node
+      ((or ast:node-application ast:node-direct-application)
+       (let ((rand (first (ast:node-rands node))))
+         (is (not (typep rand 'ast:node-abstraction)))
+         (is (typep (unwrap-inline-lisp-node rand) 'ast:node-lisp))))
+      (ast:node-let
+       (is (= 1 (length (ast:node-let-bindings node))))
+       (let* ((binding (first (ast:node-let-bindings node)))
+              (bound-value (cdr binding))
+              (call (ast:node-let-subexpr node)))
+         (is (not (typep bound-value 'ast:node-abstraction)))
+         (is (typep (unwrap-inline-lisp-node bound-value) 'ast:node-lisp))
+         (is (typep call '(or ast:node-application ast:node-direct-application))))))))
+
+(deftest nullary-method-alias-inline-code ()
+  (let ((call
+          (ast:node-abstraction-subexpr
+           (coalton:lookup-code
+            'coalton-native-tests::nullary-method-alias-inline-regression))))
+    (is (not (tc:function-type-p (ast:node-type call))))
+    (is (typep call '(or ast:node-let
+                         ast:node-application
+                         ast:node-direct-application)))
+    (is (typep (unwrap-inline-lisp-node call) 'ast:node-lisp))))
+
+(deftest recursive-inline-test ()
+  (check-coalton-types
+   "(inline)
+    (define (factorial-1 n)
+      (if (== n 0)
+          1
+          (* n (factorial-2 (- n 1)))))
+    (inline)
+    (define (factorial-2 n)
+      (if (== n 0)
+          1
+          (* n (factorial-1 (- n 1)))))"))
+
+(deftest recursive-class-constraint-inline-test ()
+  ;; gh #1677
+  (check-coalton-types
+   "(define-class (Foo :t)
+      (bar (:t -> Unit)))
+
+    (define-instance (Foo UFix)
+      (define (bar _x)
+        Unit))
+
+    (define-instance (Foo :t => Foo (Optional :t))
+      (inline)
+      (define (bar x)
+        (match x
+          ((None) Unit)
+          ((Some x) (bar x)))))
+
+    (define (baz)
+      (let x = (Some (Some (the UFix 2))))
+      (bar x)))"
+   '("baz" . "(Void -> Unit)")))
+
+(defun count-let-binding-type-mismatches (let-node)
+  "Count uses of let-bound variables whose node types differ from their binding expression types."
+  (declare (type ast:node-let let-node)
+           (values fixnum &optional))
+  (let ((binding-types (make-hash-table :test #'eq))
+        (mismatch-count 0))
+    (dolist (binding (ast:node-let-bindings let-node))
+      (setf (gethash (car binding) binding-types)
+            (ast:node-type (cdr binding))))
+    (traverse:traverse
+     (ast:node-let-subexpr let-node)
+     (list
+      (traverse:action (:after ast:node-variable node)
+        (let ((expected-type
+                (gethash (ast:node-variable-value node) binding-types)))
+          (when (and expected-type
+                     (not (tc:ty= expected-type (ast:node-type node))))
+            (incf mismatch-count)))
+        (values))))
+    mismatch-count))
+
+(deftest polymorphic-inline-substitution-types-test ()
+  (let* ((caller-node
+           (coalton:lookup-code
+            'coalton-native-tests::inliner-subst-test-caller))
+         (inlined-caller-node
+           (coalton-impl/codegen/inliner:inline-applications
+            caller-node
+            entry:*global-environment*))
+         (caller-subexpr
+           (ast:node-abstraction-subexpr inlined-caller-node)))
+    (is (typep caller-subexpr 'ast:node-let))
+    (is (= 0 (count-let-binding-type-mismatches caller-subexpr)))))
+
+(defun unwrap-inline-lisp-node (node)
+  (labels ((unwrap-leading-abstractions (node)
+             (loop :while (typep node 'ast:node-abstraction)
+                   :do (setf node (ast:node-abstraction-subexpr node))
+                   :finally (return node))))
+    (setf node (unwrap-leading-abstractions node))
+    (when (typep node 'ast:node-application)
+      (setf node
+            (unwrap-leading-abstractions
+             (ast:node-application-rator node))))
+    (when (typep node 'ast:node-let)
+      (setf node (ast:node-let-subexpr node)))
+    (loop :while (typep node 'ast:node-bind)
+          :do (setf node (ast:node-bind-body node)))
+    node))
+
+(defun unroll-limit-test-proc (caller)
+  "The body of limit-unroll-test.  We want to run it twice, before and after
+redefinition."
+  (labels ((unwrap-leading-abstractions (node)
+             (loop :while (typep node 'ast:node-abstraction)
+                   :do (setf node (ast:node-abstraction-subexpr node))
+                   :finally (return node)))
+           (unwrap-abstractions-and-application (node)
+             (setf node (unwrap-leading-abstractions node))
+             (when (typep node 'ast:node-application)
+               (setf node
+                     (unwrap-leading-abstractions
+                      (ast:node-application-rator node))))
+             node)
+           (abstraction-second-branch (node)
+             (second
+              (ast:node-match-branches
+               (ast:node-let-subexpr
+                (unwrap-abstractions-and-application node)))))
+           (branch-second-branch (node)
+             (second
+              (ast:node-match-branches
+               (ast:node-let-subexpr
+                (unwrap-abstractions-and-application
+                 (ast:match-branch-body node))))))
+           (fact-to-locally (node)
+             (unwrap-abstractions-and-application
+              (ast:match-branch-body
+               (branch-second-branch
+                (abstraction-second-branch
+                node))))))
+    (let ((locally-node-1
+            (fact-to-locally
+             (coalton:lookup-code caller)))
+          ;; Same node, but inlined again
+          (locally-node-2
+            (coalton-impl/codegen/inliner:inline-applications
+             (fact-to-locally
+              (coalton:lookup-code caller))
+             entry:*global-environment*)))
+      ;; Make sure a node-locally was emitted.
+      (is (typep locally-node-1 'ast:node-locally))
+      ;; Check that it stops the recursion.
+      (is (member 'coalton-native-tests::test-fact
+                  (ast:node-locally-noinline-functions
+                   locally-node-1)))
+
+      ;; Make sure a node-locally was emitted.
+      (is (typep locally-node-2 'ast:node-locally))
+      ;; Check that it stops the recursion.
+      (is (member 'coalton-native-tests::test-fact
+                  (ast:node-locally-noinline-functions
+                   locally-node-2)))
+
+      ;; Inlining again doesn't add any more nodes to the AST.
+      (is (= (traverse:count-nodes locally-node-1)
+             (traverse:count-nodes locally-node-2))))))
+
+(deftest limit-unroll-test ()
+  "Ensure that we get to a locally node,
+deem the AST fully unrolled, and stop inlining.
+
+Also ensure that running the inliner again does not further
+unroll the node."
+  (unroll-limit-test-proc 'coalton-native-tests::test-fact-caller))
+
+(deftest limit-unroll-method-test ()
+  "Ensure that methods don't keep recursively inlining."
+  (let* ((caller-1
+           (coalton:lookup-code
+            'coalton-native-tests::test-fact-method-caller))
+         (caller-2
+           (coalton-impl/codegen/inliner:inline-applications
+            caller-1
+            entry:*global-environment*))
+         (caller-3
+           (coalton-impl/codegen/inliner:inline-applications
+            caller-2
+            entry:*global-environment*)))
+    (is (= (traverse:count-nodes caller-1)
+           (traverse:count-nodes caller-2)
+           (traverse:count-nodes caller-3)))))
+
+(deftest callsite-inlining-test ()
+  (is (< (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::callsite-noinlined-foo-noinline-caller))
+         (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::callsite-noinlined-foo-caller))))
+  (is (< (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::callsite-inlined-foo-caller))
+         (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::callsite-inlined-foo-inline-caller)))))
+
+(deftest callsite-method-inlining-test ()
+  (let ((caller
+          (ast:node-abstraction-subexpr
+           (coalton:lookup-code
+            'coalton-native-tests::method-for-inline-test-caller)))
+        (noinline-caller
+          (ast:node-abstraction-subexpr
+           (coalton:lookup-code
+            'coalton-native-tests::method-for-inline-test-caller-callsite-noinline))))
+    (is (typep (unwrap-inline-lisp-node caller) 'ast:node-lisp))
+    (is (typep noinline-caller '(or ast:node-application ast:node-direct-application)))
+    (is (getf (ast:node-properties noinline-caller) :noinline))))
+
+(deftest callsite-double-inlining-test ()
+  (is (= (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::double-callsite-noinlined-foo-caller))
+         (traverse:count-nodes
+          (coalton:lookup-code
+           'coalton-native-tests::double-callsite-inlined-foo-caller)))))

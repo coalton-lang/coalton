@@ -225,105 +225,68 @@
 
 ;;; Methods for TO-MARKDOWN
 
-;;; Type printing (modification of pprint-type)
+;;; Type printing
 
-(defmethod to-markdown ((ty tc:tyvar))
-  (html-entities:encode-entities
-   (with-output-to-string (stream)
-     (tc:pprint-ty stream (tc:pprint-tvar ty)))))
+(defun markdown-keyword-name (stream keyword)
+  (write-string
+   (html-entities:encode-entities
+    (format nil ":~(~A~)" (symbol-name keyword)))
+   stream))
 
-(defmethod to-markdown ((ty tc:tycon))
-  (let ((tcon-name (tc:tycon-name ty)))
-    (if (string= "KEYWORD" (package-name (symbol-package tcon-name)))
-        (html-entities:encode-entities (format nil "~S" tcon-name))
-        (format nil "<a href=\"#~A\">~A</a>"
-                (object-aname ty)
-                (html-entities:encode-entities (object-name ty))))))
+(defun write-markdown-tyvar (stream ty)
+  (write-string
+   (html-entities:encode-entities
+    (with-output-to-string (tyvar-stream)
+      (tc:pprint-ty tyvar-stream (tc:pprint-tvar ty))))
+   stream))
 
-(defmethod to-markdown ((ty tc:tapp))
-  (with-output-to-string (stream)
-    (cond
-      ((tc:function-type-p ty) ;; Print function types
-       (write-string "(" stream)
-       (write-string (to-markdown (tc:tapp-to (tc:tapp-from ty))) stream)
-       (write-string (html-entities:encode-entities " → ") stream)
-       ;; Avoid printing extra parentheses on curried functions
-       (labels ((print-subfunction (to)
-                  (cond
-                    ((tc:function-type-p to)
-                     (write-string (to-markdown (tc:tapp-to (tc:tapp-from to))) stream)
-                     (write-string (html-entities:encode-entities " → ") stream)
-                     (print-subfunction (tc:tapp-to to)))
-                    (t
-                     (write-string (to-markdown to) stream)))))
-         (print-subfunction (tc:tapp-to ty)))
-       (write-string ")" stream))
-      (t ;; Print type constructors
-       (let* ((tcon ty)
-              (tcon-args (loop :while (tc:tapp-p tcon)
-                               :collect (tc:tapp-to tcon)
-                               :do (setf tcon (tc:tapp-from tcon)))))
-         (cond
-           ((and (tc:tycon-p tcon)
-                 (tc:simple-kind-p
-                  (tc:tycon-kind tcon))
-                 (<= (length tcon-args)
-                     (tc:kind-arity
-                      (tc:tycon-kind tcon))))
-            (write-string "(" stream)
-            (write-string (to-markdown tcon) stream)
-            (dolist (arg (reverse tcon-args))
-              (write-string " " stream)
-              (write-string (to-markdown arg) stream))
-            (write-string ")" stream))
-           (t
-            (write-string "(" stream)
-            (write-string (to-markdown (tc:tapp-from ty)) stream)
-            (write-string " " stream)
-            (write-string (to-markdown (tc:tapp-to ty)) stream)
-            (write-string ")" stream))))))))
+(defun write-markdown-type-name (stream symbol env)
+  (declare (ignore env))
+  (if (eq (symbol-package symbol) (find-package '#:keyword))
+      (write-string (html-entities:encode-entities (format nil "~S" symbol)) stream)
+      (let ((source-name (lookup-type-source-name symbol)))
+        (format stream "<a href=\"#~A\">~A</a>"
+                (package-qualified-anchor
+                 (symbol-package symbol)
+                 source-name
+                 "type")
+                (html-entities:encode-entities source-name)))))
+
+(defun write-markdown-class-name (stream symbol env)
+  (declare (ignore env))
+  (let ((source-name (lookup-class-source-name symbol)))
+    (format stream "<a href=\"#~A\">~A</a>"
+            (package-qualified-anchor
+             (symbol-package symbol)
+             source-name
+             "class")
+            (html-entities:encode-entities source-name))))
+
+(defun markdown-type-object (object)
+  (tc:with-pprint-variable-context ()
+    (with-output-to-string (stream)
+      (tc:render-type-object stream
+                             object
+                             :env entry:*global-environment*
+                             :type-name-writer #'write-markdown-type-name
+                             :class-name-writer #'write-markdown-class-name
+                             :tyvar-writer #'write-markdown-tyvar
+                             :keyword-name-writer #'markdown-keyword-name
+                             :arrow-string (html-entities:encode-entities " → ")
+                             :implication-string (html-entities:encode-entities " ⇒ ")
+                             :forall-string (html-entities:encode-entities "∀")))))
+
+(defmethod to-markdown ((object tc:ty))
+  (markdown-type-object object))
 
 (defmethod to-markdown ((object tc:qualified-ty))
-  (let ((preds (tc:qualified-ty-predicates object))
-        (qual-type (tc:qualified-ty-type object)))
-    (format nil "~:[~{~A ~}~;~{(~A) ~}~]~:*~:[~*~;~A ~]~A"
-            ;; Get the second element to test if we have more than one predicate
-            (second preds)
-            (mapcar #'to-markdown preds)
-            (html-entities:encode-entities "⇒")
-            (to-markdown qual-type))))
+  (markdown-type-object object))
 
 (defmethod to-markdown ((object tc:ty-scheme))
-  (cond
-    ((null (tc:ty-scheme-kinds object))
-     (to-markdown (tc:ty-scheme-type object)))
-    (t
-     (tc:with-pprint-variable-context ()
-       (let* ((types (tc:ty-scheme-instantiation-types object))
-              (new-type (tc:instantiate
-                         types (tc:ty-scheme-type object))))
-         (format nil "~A~A. ~A"
-                 (html-entities:encode-entities "∀")
-                 (html-entities:encode-entities (format nil "~{ ~S~}" types))
-                 (to-markdown new-type)))))))
+  (markdown-type-object object))
 
 (defmethod to-markdown ((object tc:ty-predicate))
-  (let* ((class-name (tc:ty-predicate-class object))
-         (class-source-name (lookup-class-source-name class-name)))
-    (format nil "<a href=\"#~A\">~A</a>~{ ~A~}"
-            (package-qualified-anchor (symbol-package class-name)
-                                      class-source-name
-                                      "class")
-            (html-entities:encode-entities class-source-name)
-            (mapcar #'to-markdown (tc:ty-predicate-types object)))))
+  (markdown-type-object object))
 
 (defmethod to-markdown ((object tc:ty-class-instance))
-  (let ((ctx (tc:ty-class-instance-constraints object))
-        (pred (tc:ty-class-instance-predicate object)))
-    (tc:with-pprint-variable-context ()
-      (format nil "~:[~{~A ~}~;~{(~A) ~}~]~:*~:[~*~;~A ~]~A"
-              ;; Get the second element to test if we have more than one predicate
-              (second ctx)
-              (mapcar #'to-markdown ctx)
-              (html-entities:encode-entities "⇒")
-              (to-markdown pred)))))
+  (markdown-type-object object))

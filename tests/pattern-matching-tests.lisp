@@ -35,7 +35,7 @@
     (is (== (f Lime)
             (Some Lime))))
 
-  (let ((declare f (Ord -> String))
+  (let ((declare f (Ordering -> String))
         (f (fn (x)
              (match x
                ((LT) "lt")
@@ -180,36 +180,36 @@
     (is (== x tpl))))
 
 (coalton-toplevel
-  (declare mv-match-pair (Integer -> (Tuple Integer Integer)))
-  (define (mv-match-pair x)
+  (declare tuple-match-pair (Integer -> (Tuple Integer Integer)))
+  (define (tuple-match-pair x)
     (Tuple x (1+ x)))
 
-  (declare mv-match-bind-var (Integer -> (Tuple Integer Integer)))
-  (define (mv-match-bind-var x)
-    (match (mv-match-pair x)
+  (declare tuple-match-bind-var (Integer -> (Tuple Integer Integer)))
+  (define (tuple-match-bind-var x)
+    (match (tuple-match-pair x)
       (pair (Tuple (snd pair) (fst pair)))))
 
-  (declare mv-match-bind-constructor (Integer -> (Tuple Integer Integer)))
-  (define (mv-match-bind-constructor x)
-    (match (mv-match-pair x)
+  (declare tuple-match-bind-constructor (Integer -> (Tuple Integer Integer)))
+  (define (tuple-match-bind-constructor x)
+    (match (tuple-match-pair x)
       ((Tuple a b) (Tuple b a))))
 
-  (declare mv-match-wildcard-eligible (Integer -> Integer))
-  (define (mv-match-wildcard-eligible x)
-    (match (mv-match-pair x)
+  (declare tuple-match-wildcard-eligible (Integer -> Integer))
+  (define (tuple-match-wildcard-eligible x)
+    (match (tuple-match-pair x)
       ((Tuple 0 b) b)
       (_ x))))
 
-(define-test test-tuple-multiple-values-match-var ()
+(define-test test-tuple-match-var ()
   (is (== (Tuple 11 10)
-          (mv-match-bind-var 10)))
-  (is (== (mv-match-bind-var 42)
-          (mv-match-bind-constructor 42))))
+          (tuple-match-bind-var 10)))
+  (is (== (tuple-match-bind-var 42)
+          (tuple-match-bind-constructor 42))))
 
-(define-test test-tuple-multiple-values-match-wildcard ()
+(define-test test-tuple-match-wildcard ()
   (is (== 1
-          (mv-match-wildcard-eligible 0)))
+          (tuple-match-wildcard-eligible 0)))
   (is (== 10
-          (mv-match-wildcard-eligible 10)))
-  (is (== (mv-match-wildcard-eligible 42)
-          (fst (mv-match-pair 42)))))
+          (tuple-match-wildcard-eligible 10)))
+  (is (== (tuple-match-wildcard-eligible 42)
+          (fst (tuple-match-pair 42)))))

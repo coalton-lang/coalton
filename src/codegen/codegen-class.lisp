@@ -16,6 +16,55 @@
 
 (in-package #:coalton-impl/codegen/codegen-class)
 
+;;; Method wrapper keyword generation.
+;;;
+;;; These parallel the keyword handling in codegen-expression (abstraction-
+;;; lambda-list, keyword-tail-forms), but operate on class method types
+;;; rather than codegen AST nodes.  They use plists instead of keyword-param
+;;; structs because the specs are generated from type information alone,
+;;; without a parsed AST node.
+
+(defun method-wrapper-keyword-specs (visible-type)
+  (declare (type tc:ty visible-type)
+           (values list &optional))
+  (when (typep visible-type 'tc:function-ty)
+    (loop :for entry :in (tc:function-ty-keyword-input-types visible-type)
+          :collect (list :keyword (tc:keyword-ty-entry-keyword entry)
+                         :var (gensym "KEYWORD-ARG-")
+                         :supplied-p-var (gensym "KEYWORD-SUPPLIED-P-")))))
+
+(defun method-wrapper-lambda-list (positional-params keyword-specs)
+  (declare (type list positional-params keyword-specs)
+           (values list &optional))
+  (append
+   (list 'dict)
+   positional-params
+   (when keyword-specs
+     (list* '&key
+            (loop :for spec :in keyword-specs
+                  :collect `((,(getf spec :keyword) ,(getf spec :var))
+                             nil
+                             ,(getf spec :supplied-p-var)))))))
+
+(defun method-wrapper-call (method-accessor positional-params keyword-specs)
+  (declare (type symbol method-accessor)
+           (type list positional-params keyword-specs)
+           (values t &optional))
+  (cond
+    ((null keyword-specs)
+     (if (null positional-params)
+         `(,method-accessor dict)
+         `(rt:exact-call (,method-accessor dict) ,@positional-params)))
+    (t
+     `(apply #'rt:call-coalton-function
+             (,method-accessor dict)
+             (append
+              (list ,@positional-params)
+              ,@(loop :for spec :in keyword-specs
+                      :collect `(if ,(getf spec :supplied-p-var)
+                                    (list ,(getf spec :keyword) ,(getf spec :var))
+                                    '())))))))
+
 (defun codegen-class-definitions (classes env)
   (declare (type tc:ty-class-list classes)
            (type tc:environment env)
@@ -55,8 +104,12 @@
            (type tc:environment env))
   (let* ((qual-ty
            (tc:fresh-inst (tc:ty-class-method-type method)))
+         (visible-type
+           (tc:qualified-ty-type qual-ty))
          (method-contraint-args
            (length (tc:qualified-ty-predicates qual-ty)))
+         (keyword-specs
+           (method-wrapper-keyword-specs visible-type))
          (arity (+ (tc:function-type-arity (tc:qualified-ty-type qual-ty))
                    method-contraint-args))
          (params
@@ -72,23 +125,20 @@
            (alexandria:format-symbol (symbol-package class-codegen-sym)
                                      "~A-~A" class-codegen-sym method-name)))
     `((declaim (inline ,method-name))
-      (defun ,method-name (dict ,@params)
+      (defun ,method-name ,(method-wrapper-lambda-list params keyword-specs)
         (declare #.settings:*coalton-optimize*)
-        ,(if (null params)
-             `(,method-accessor dict)
-             `(rt:call-coalton-function (,method-accessor dict) ,@params)))
+        (declare (ignorable dict ,@params
+                            ,@(loop :for spec :in keyword-specs
+                                    :append (list (getf spec :var)
+                                                  (getf spec :supplied-p-var)))))
+        ,(method-wrapper-call method-accessor params keyword-specs))
       ;; Generate the wrapper functions
       (global-lexical:define-global-lexical ,method-name rt:function-entry)
       (setf ,method-name
             ;; We need a function of arity + 1 to account for DICT
-            ,(rt:construct-function-entry `#',method-name (+ arity 1))
-            (documentation ',method-name 'variable)
-            ,(format nil "~A :: ~A~@[~%~A~]~%"
-                     method-name
-                     (tc:lookup-value-type env method-name)
-                     method-docstring)
-            (documentation ',method-name 'function)
-            ,(format nil "~A :: ~A~@[~%~A~]~%"
-                     method-name
-                     (tc:lookup-value-type env method-name)
-                     method-docstring)))))
+            ,(rt:construct-function-entry `#',method-name (+ arity 1)))
+      ,@(when method-docstring
+          `((setf (documentation ',method-name 'variable)
+                  ,method-docstring)
+            (setf (documentation ',method-name 'function)
+                  ,method-docstring))))))

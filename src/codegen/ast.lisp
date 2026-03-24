@@ -27,34 +27,58 @@
    #:node-application-properties        ; READER
    #:node-application-rator             ; READER
    #:node-application-rands             ; READER
+   #:node-application-keyword-rands     ; READER
+   #:node-application-keyword-arg       ; STRUCT
+   #:make-node-application-keyword-arg  ; CONSTRUCTOR
+   #:node-application-keyword-arg-keyword ; READER
+   #:node-application-keyword-arg-value ; READER
+   #:node-application-keyword-arg-supplied-p ; READER
+   #:keyword-arg-list                   ; TYPE
    #:node-direct-application            ; STRUCT
    #:make-node-direct-application       ; CONSTRUCTOR
    #:node-direct-application-properties ; READER
    #:node-direct-application-rator-type ; READER
    #:node-direct-application-rator      ; READER
    #:node-direct-application-rands      ; READER
+   #:node-direct-application-keyword-rands ; READER
    #:node-direct-application-p          ; FUNCTION
    #:node-abstraction                   ; STRUCT
    #:make-node-abstraction              ; CONSTRUCTOR
    #:node-abstraction-vars              ; READER
+   #:node-abstraction-keyword-params    ; READER
    #:node-abstraction-subexpr           ; READER
-   #:node-abstraction-return-convention ; READER
    #:node-abstraction-p                 ; FUNCTION
+   #:keyword-param                      ; STRUCT
+   #:make-keyword-param                 ; CONSTRUCTOR
+   #:keyword-param-keyword              ; READER
+   #:keyword-param-var                  ; READER
+   #:keyword-param-supplied-p-var       ; READER
+   #:keyword-param-list                 ; TYPE
    #:node-let                           ; STRUCT
    #:make-node-let                      ; CONSTRUCTOR
    #:node-let-p                         ; FUNCTION
    #:node-let-bindings                  ; READER
    #:node-let-subexpr                   ; READER
+   #:node-dynamic-binding               ; STRUCT
+   #:make-node-dynamic-binding          ; CONSTRUCTOR
+   #:node-dynamic-binding-name          ; READER
+   #:node-dynamic-binding-value         ; READER
+   #:node-dynamic-binding-list          ; TYPE
+   #:node-dynamic-let                   ; STRUCT
+   #:make-node-dynamic-let              ; CONSTRUCTOR
+   #:node-dynamic-let-p                 ; FUNCTION
+   #:node-dynamic-let-bindings          ; READER
+   #:node-dynamic-let-subexpr           ; READER
    #:node-lisp                          ; STRUCT
    #:make-node-lisp                     ; CONSTRUCTOR
    #:node-lisp-p                        ; FUNCTION
    #:node-lisp-vars                     ; READER
-   #:node-lisp-return-convention        ; READER
    #:node-lisp-form                     ; READER
    #:node-locally                       ; STRUCT
    #:make-node-locally                  ; CONSTRUCTOR
    #:node-locally-p                     ; FUNCTION
    #:node-locally-noinline-functions    ; READER
+   #:node-locally-type-check            ; READER
    #:node-locally-subexpr               ; READER
    #:match-branch                       ; STRUCT
    #:make-match-branch                  ; CONSTRUCTOR
@@ -83,21 +107,22 @@
    #:make-node-resumable                ; CONSTRUCTOR
    #:node-resumable-expr                ; READER
    #:node-resumable-branches            ; READER
-   #:node-while                         ; STRUCT
-   #:make-node-while                    ; CONSTRUCTOR
-   #:node-while-label                   ; READER
-   #:node-while-expr                    ; READER
-   #:node-while-body                    ; ACESSOR
-   #:node-while-let                     ; STRUCT
-   #:make-node-while-let                ; CONSTRUCTOR
-   #:node-while-let-label               ; ACESSOR
-   #:node-while-let-pattern             ; READER
-   #:node-while-let-expr                ; READER
-   #:node-while-let-body                ; ACESSOR
-   #:node-loop                          ; STRUCT
-   #:make-node-loop                     ; CONSTRUCTOR
-   #:node-loop-body                     ; READER
-   #:node-loop-label                    ; READER
+   #:node-for-binding                  ; STRUCT
+   #:make-node-for-binding             ; CONSTRUCTOR
+   #:node-for-binding-name             ; READER
+   #:node-for-binding-type             ; READER
+   #:node-for-binding-init             ; READER
+   #:node-for-binding-step             ; READER
+   #:node-for-binding-list             ; TYPE
+   #:node-for                          ; STRUCT
+   #:make-node-for                     ; CONSTRUCTOR
+   #:node-for-bindings                 ; READER
+   #:node-for-sequential-p             ; READER
+   #:node-for-returns                  ; READER
+   #:node-for-termination-kind         ; READER
+   #:node-for-termination-expr         ; READER
+   #:node-for-body                     ; READER
+   #:node-for-label                    ; READER
    #:node-break                         ; STRUCT
    #:make-node-break                    ; CONSTRUCTOR
    #:node-break-label                   ; READER
@@ -140,21 +165,12 @@
    #:make-node-values                   ; CONSTRUCTOR
    #:node-values-p                      ; FUNCTION
    #:node-values-nodes                  ; READER
-   #:node-mv-call                       ; STRUCT
-   #:make-node-mv-call                  ; CONSTRUCTOR
-   #:node-mv-call-p                     ; FUNCTION
-   #:node-mv-call-expr                  ; READER
    #:node-values-bind                   ; STRUCT
    #:make-node-values-bind              ; CONSTRUCTOR
    #:node-values-bind-p                 ; FUNCTION
    #:node-values-bind-vars              ; READER
    #:node-values-bind-expr              ; READER
    #:node-values-bind-body              ; READER
-   #:node-values-match                  ; STRUCT
-   #:make-node-values-match             ; CONSTRUCTOR
-   #:node-values-match-p                ; FUNCTION
-   #:node-values-match-expr             ; READER
-   #:node-values-match-branches         ; READER
    #:node-variables                     ; FUNCTION
    #:node-binding-sccs                  ; FUNCTION
    #:node-free-p                        ; FUNCTION
@@ -241,13 +257,46 @@ coalton symbols (`parser:identifier`)"
   "Variables like x or y"
   (value (util:required 'value) :type parser:identifier :read-only t))
 
+(defstruct keyword-param
+  "A keyword parameter in a compiled lambda list."
+  (keyword        (util:required 'keyword)        :type keyword           :read-only t)
+  (var            (util:required 'var)            :type parser:identifier :read-only t)
+  (supplied-p-var (util:required 'supplied-p-var) :type parser:identifier :read-only t))
+
+(defmethod make-load-form ((self keyword-param) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun keyword-param-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'keyword-param-p x)))
+
+(deftype keyword-param-list ()
+  '(satisfies keyword-param-list-p))
+
+(defstruct node-application-keyword-arg
+  "A keyword argument in a compiled call."
+  (keyword    (util:required 'keyword)    :type keyword            :read-only t)
+  (value      (util:required 'value)      :type node               :read-only t)
+  (supplied-p nil                         :type (or null node)     :read-only t))
+
+(defmethod make-load-form ((self node-application-keyword-arg) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun keyword-arg-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'node-application-keyword-arg-p x)))
+
+(deftype keyword-arg-list ()
+  '(satisfies keyword-arg-list-p))
+
 (defstruct (node-application (:include node))
   "Function application (f x)"
   ;; Extra information for use in optimizer can be stored here.
   ;; Currently its only valid keys are `:inline' and `:noinline'
   (properties (util:required 'properties) :type list      :read-only t)
   (rator      (util:required 'rator)      :type node      :read-only t)
-  (rands      (util:required 'rands)      :type node-list :read-only t))
+  (rands      (util:required 'rands)      :type node-list :read-only t)
+  (keyword-rands nil                      :type keyword-arg-list :read-only t))
 
 (defstruct (node-direct-application (:include node))
   "Fully saturated function application of a known function"
@@ -256,28 +305,49 @@ coalton symbols (`parser:identifier`)"
   (properties (util:required 'properties) :type list              :read-only t)
   (rator-type (util:required 'rator-type) :type tc:ty             :read-only t)
   (rator      (util:required 'rator)      :type parser:identifier :read-only t)
-  (rands      (util:required 'rands)      :type node-list         :read-only t))
+  (rands      (util:required 'rands)      :type node-list         :read-only t)
+  (keyword-rands nil                      :type keyword-arg-list  :read-only t))
 
 (defstruct (node-abstraction (:include node))
   "Lambda literals (fn (x) x)"
-  (vars    (util:required 'vars)    :type parser:identifier-list :read-only t)
-  (subexpr (util:required 'subexpr) :type node                   :read-only t)
-  (return-convention ':boxed        :type (member :boxed :values) :read-only t))
+  (vars           (util:required 'vars) :type parser:identifier-list :read-only t)
+  (keyword-params nil                    :type keyword-param-list    :read-only t)
+  (subexpr        (util:required 'subexpr) :type node               :read-only t))
 
 (defstruct (node-let (:include node))
   "Introduction of local mutually-recursive bindings (let ((x 2)) (+ x x))"
   (bindings (util:required 'bindings) :type binding-list :read-only t)
   (subexpr  (util:required 'subexpr)  :type node         :read-only t))
 
+(defstruct node-dynamic-binding
+  "A special-variable binding used by dynamic-bind."
+  (name  (util:required 'name)  :type parser:identifier :read-only t)
+  (value (util:required 'value) :type node              :read-only t))
+
+(defmethod make-load-form ((self node-dynamic-binding) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun node-dynamic-binding-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'node-dynamic-binding-p x)))
+
+(deftype node-dynamic-binding-list ()
+  '(satisfies node-dynamic-binding-list-p))
+
+(defstruct (node-dynamic-let (:include node))
+  "A dynamic scope wrapper implemented with Common Lisp special bindings."
+  (bindings (util:required 'bindings) :type node-dynamic-binding-list :read-only t)
+  (subexpr  (util:required 'subexpr)  :type node                      :read-only t))
+
 (defstruct (node-lisp (:include node))
   "An embedded lisp form"
   (vars (util:required 'vars) :type lisp-coalton-var-alist    :read-only t)
-  (return-convention ':boxed  :type (member :boxed :values)   :read-only t)
   (form (util:required 'form) :type t                         :read-only t))
 
 (defstruct (node-locally (:include node))
   "Node for the optimizer to use, similar to `cl:locally'."
   (noinline-functions (util:required 'noinline-functions) :type parser:identifier-list :read-only t)
+  (type-check nil :type (or null (integer 0 3)) :read-only t)
   (subexpr            (util:required 'subexpr)            :type node                   :read-only t))
 
 (defstruct match-branch
@@ -342,31 +412,39 @@ coalton symbols (`parser:identifier`)"
   (branches (util:required 'branches) :type resumable-branch-list :read-only t))
 
 
-(defstruct (node-while (:include node))
-  "A looping construct. Executes a body until an expression is false."
-  (label (util:required 'label) :type keyword :read-only t)
-  (expr  (util:required 'expr)  :type node    :read-only t)
-  (body  (util:required 'body)  :type node    :read-only t))
+(defstruct node-for-binding
+  "A single `for` variable with an initializer and optional step expression."
+  (name (util:required 'name) :type parser:identifier :read-only t)
+  (type (util:required 'type) :type tc:ty             :read-only t)
+  (init (util:required 'init) :type node              :read-only t)
+  (step nil                   :type (or null node)    :read-only t))
 
-(defstruct (node-while-let (:include node))
-  "A looping construct. Executes a body until a pattern match fails."
-  (label   (util:required 'label)   :type keyword :read-only t)
-  (pattern (util:required 'pattern) :type pattern :read-only t)
-  (expr    (util:required 'expr)    :type node    :read-only t)
-  (body    (util:required 'body)    :type node    :read-only t))
+(defmethod make-load-form ((self node-for-binding) &optional env)
+  (make-load-form-saving-slots self :environment env))
 
-(defstruct (node-loop (:include node))
-  "A labelled looping construct. Loops forever until broken out of by a
-call to (break)."
-  (label (util:required 'label) :type keyword :read-only t)
-  (body  (util:required 'body)  :type node    :read-only t))
+(defun node-for-binding-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'node-for-binding-p x)))
+
+(deftype node-for-binding-list ()
+  '(satisfies node-for-binding-list-p))
+
+(defstruct (node-for (:include node))
+  "A labelled imperative `for` with explicit bindings and step expressions."
+  (label            (util:required 'label)            :type keyword                         :read-only t)
+  (bindings         (util:required 'bindings)         :type node-for-binding-list          :read-only t)
+  (sequential-p     nil                               :type boolean                         :read-only t)
+  (returns          nil                               :type (or null node)                  :read-only t)
+  (termination-kind nil                               :type (member nil :while :until :repeat) :read-only t)
+  (termination-expr nil                               :type (or null node)                  :read-only t)
+  (body             (util:required 'body)             :type node                            :read-only t))
 
 (defstruct (node-break (:include node))
-  "A break statment used to exit a loop."
+  "A break statement used to exit a `for`."
   (label (util:required 'label) :type keyword :read-only t))
 
 (defstruct (node-continue (:include node))
-  "A continue statment used to skip to the next iteration of a loop."
+  "A continue statement used to skip to the next iteration of a `for`."
   (label (util:required 'label) :type keyword :read-only t))
 
 (defstruct (node-seq (:include node))
@@ -412,20 +490,11 @@ call to (break)."
   "Produce multiple values."
   (nodes (util:required 'nodes) :type node-list :read-only t))
 
-(defstruct (node-mv-call (:include node))
-  "An expression known to already return multiple values."
-  (expr (util:required 'expr) :type node :read-only t))
-
 (defstruct (node-values-bind (:include node))
   "Bind multiple values and evaluate body."
   (vars (util:required 'vars) :type parser:identifier-list :read-only t)
   (expr (util:required 'expr) :type node                   :read-only t)
   (body (util:required 'body) :type node                   :read-only t))
-
-(defstruct (node-values-match (:include node))
-  "Pattern matching on multiple values."
-  (expr     (util:required 'expr)     :type node        :read-only t)
-  (branches (util:required 'branches) :type branch-list :read-only t))
 
 ;;;
 ;;; Functions

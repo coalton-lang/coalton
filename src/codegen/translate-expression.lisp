@@ -24,15 +24,378 @@
   (:export
    #:translate-toplevel                   ; FUNCTION
    #:translate-expression                 ; FUNCTION
+   #:make-keyword-forwarders             ; FUNCTION
+   #:bind-hidden-function-arguments      ; FUNCTION
+   #:physical-callable-type              ; FUNCTION
+   #:physical-callable-argument-types    ; FUNCTION
    ))
 
 (in-package #:coalton-impl/codegen/translate-expression)
 
-(defvar *current-function-name*)
+(defvar *current-function-name* nil)
 (setf (documentation '*current-function* 'variable)
       "The symbol name of the function currently being translated.
 This will be bound for the extent of any TRANSLATE-TOPLEVEL call, or
 TRANSLATE-EXPRESSION when an abstraction is being translated.")
+
+(defun physical-callable-type (type)
+  (declare (type tc:ty type)
+           (values tc:ty &optional))
+  type)
+
+(defun physical-callable-argument-types (type)
+  (declare (type tc:ty type)
+           (values tc:ty-list &optional))
+  (tc:function-type-arguments type))
+
+(defun prepend-codegen-hidden-input-types (hidden-input-types type)
+  "Prepend HIDDEN-INPUT-TYPES to the callable TYPE used by codegen.
+
+Hidden dictionary arguments are part of the same generated callable as the
+source-level parameters, even when the visible Coalton type is explicit-nullary.
+That differs from generic type-level input merging, which sometimes needs to
+preserve a nested function-valued result."
+  (declare (type tc:ty-list hidden-input-types)
+           (type tc:ty type)
+           (values tc:ty &optional))
+  (if (null hidden-input-types)
+      type
+      (typecase type
+        (tc:function-ty
+         (tc:make-function-ty
+          :alias (tc:ty-alias type)
+          :positional-input-types
+          (append hidden-input-types
+                  (tc:function-ty-positional-input-types type))
+          :keyword-input-types (tc:function-ty-keyword-input-types type)
+          :keyword-open-p (tc:function-ty-keyword-open-p type)
+          :output-types (tc:function-ty-output-types type)))
+        (t
+         (tc:make-function-type* hidden-input-types type)))))
+
+(defun make-keyword-forwarders (function-type)
+  (declare (type tc:function-ty function-type)
+           (values keyword-param-list keyword-arg-list &optional))
+  (let ((params nil)
+        (args nil))
+    (dolist (entry (tc:function-ty-keyword-input-types function-type))
+      (let* ((keyword (tc:keyword-ty-entry-keyword entry))
+             (value-var (gensym "KEYWORD-ARG-"))
+             (supplied-p-var (gensym "KEYWORD-SUPPLIED-P-"))
+             (value-node (make-node-variable
+                          :type (tc:keyword-ty-entry-type entry)
+                          :value value-var))
+             (supplied-p-node (make-node-variable
+                               :type tc:*boolean-type*
+                               :value supplied-p-var)))
+        (push (make-keyword-param
+               :keyword keyword
+               :var value-var
+               :supplied-p-var supplied-p-var)
+              params)
+        (push (make-node-application-keyword-arg
+               :keyword keyword
+               :value value-node
+               :supplied-p supplied-p-node)
+              args)))
+    (values (nreverse params) (nreverse args))))
+
+(defun bind-hidden-function-arguments (inner-node visible-type hidden-argument-nodes)
+  "Bind HIDDEN-ARGUMENT-NODES onto INNER-NODE when it denotes a function value."
+  (declare (type node inner-node)
+           (type tc:ty visible-type)
+           (type node-list hidden-argument-nodes)
+           (values node))
+  (if (or (null hidden-argument-nodes)
+          (not (tc:function-type-p visible-type)))
+      inner-node
+      (let* ((function-var (gensym "FUNCTION-ENTRY-"))
+             (hidden-bindings
+               (loop :for hidden-node :in hidden-argument-nodes
+                     :for i :from 0
+                     :collect (cons (gensym (format nil "HIDDEN-~D-" i))
+                                    hidden-node)))
+             (bound-entry
+               (make-node-lisp
+                :type visible-type
+                :vars (cons (cons function-var function-var)
+                            (loop :for binding :in hidden-bindings
+                                  :collect (cons (car binding) (car binding))))
+                :form `((coalton-impl/runtime:bind-function-entry-hidden-arguments
+                         ,function-var
+                         ,@(mapcar #'car hidden-bindings))))))
+        (loop :with inner := bound-entry
+              :for (var . hidden-node) :in (reverse hidden-bindings)
+              :do (setf inner
+                        (make-node-bind
+                         :type visible-type
+                         :name var
+                         :expr hidden-node
+                         :body inner))
+              :finally
+                 (return
+                   (make-node-bind
+                    :type visible-type
+                    :name function-var
+                    :expr inner-node
+                    :body inner))))))
+
+(defun translate-keyword-params (keyword-params)
+  (declare (type tc:keyword-param-list keyword-params)
+           (values keyword-param-list &optional))
+  (mapcar (lambda (param)
+            (make-keyword-param
+             :keyword (tc:keyword-param-keyword param)
+             :var (tc:keyword-param-value-var param)
+             :supplied-p-var (tc:keyword-param-supplied-p-var param)))
+          keyword-params))
+
+(defun translate-keyword-rands (keyword-rands ctx env)
+  (declare (type tc:node-application-keyword-arg-list keyword-rands)
+           (type pred-context ctx)
+           (type tc:environment env)
+           (values keyword-arg-list &optional))
+  (mapcar
+   (lambda (arg)
+     (make-node-application-keyword-arg
+     :keyword (tc:node-application-keyword-arg-keyword arg)
+      :value (apply-dicts (tc:node-application-keyword-arg-value arg) ctx env)))
+   keyword-rands))
+
+(defun make-qualified-variable-application (expr qual-ty result-type rands keyword-rands ctx env)
+  (declare (type tc:node-variable expr)
+           (type tc:qualified-ty qual-ty)
+           (type tc:ty result-type)
+           (type node-list rands)
+           (type keyword-arg-list keyword-rands)
+           (type pred-context ctx)
+           (type tc:environment env)
+           (values node))
+  (let* ((dicts
+           (mapcar
+            (lambda (pred)
+              (resolve-dict pred ctx env))
+            (tc:qualified-ty-predicates qual-ty)))
+         (dict-types (mapcar #'node-type dicts)))
+    (make-node-application
+     :type result-type
+     :properties '()
+     :rator (make-node-variable
+             :type (physical-callable-type
+                    (prepend-codegen-hidden-input-types
+                     dict-types
+                     (tc:qualified-ty-type qual-ty)))
+             :value (tc:node-variable-name expr))
+     :rands (append dicts rands)
+     :keyword-rands keyword-rands)))
+
+(defun binding-codegen-abstraction-type (binding qual-ty preds env last-node)
+  "Build the codegen function type for a translated toplevel binding.
+
+Codegen abstractions bind explicit predicate dictionaries before the
+source-level parameters, so their node type must include those extra
+inputs. The typechecker stores predicates separately on QUAL-TY, so we
+reconstruct the full codegen-visible function type here."
+  (declare (type tc:binding-type binding)
+           (type tc:qualified-ty qual-ty)
+           (type tc:ty-predicate-list preds)
+           (type tc:environment env)
+           (type tc:node last-node)
+           (values tc:ty))
+  (declare (ignore last-node))
+  (let ((dict-types
+          (loop :for pred :in preds
+                :collect (pred-type pred env)))
+        (visible-type (tc:qualified-ty-type qual-ty)))
+    (physical-callable-type
+     (if (or (tc:binding-parameters binding)
+             (tc:binding-keyword-parameters binding)
+             (tc:binding-restricted-p binding))
+         (prepend-codegen-hidden-input-types
+          dict-types
+          visible-type)
+         (tc:merge-function-input-types
+          dict-types
+          visible-type)))))
+
+(defun values-bind-vars (patterns)
+  (declare (type tc:pattern-list patterns)
+           (values list &optional))
+  (loop :for subpattern :in patterns
+        :collect (typecase subpattern
+                   (tc:pattern-var
+                    (tc:pattern-var-name subpattern))
+                   (tc:pattern-wildcard
+                    (gensym "_"))
+                   (t
+                    (util:coalton-bug "Invalid values binding subpattern ~S" subpattern)))))
+
+(defun zero-values-node ()
+  (declare (values node &optional))
+  (make-node-values
+   :type (tc:output-types-result-type nil)
+   :nodes nil))
+
+(defun translate-body-elements-into (body-nodes tail-node ctx env)
+  "Translate BODY-NODES and sequence them in front of TAIL-NODE.
+
+The resulting codegen node preserves the original let-style and
+values-bind scoping of BODY-NODES while reusing TAIL-NODE as the final
+expression."
+  (declare (type tc:node-body-element-list body-nodes)
+           (type node tail-node)
+           (type pred-context ctx)
+           (type tc:environment env)
+           (values node &optional))
+  (loop :with out-node := tail-node
+        :for body-node :in (reverse body-nodes) :do
+          (setf out-node
+                (etypecase body-node
+                  (tc:node-values-bind
+                   (make-node-values-bind
+                    :type (node-type out-node)
+                    :vars (values-bind-vars (tc:node-values-bind-patterns body-node))
+                    :expr (translate-expression (tc:node-values-bind-expr body-node) ctx env)
+                    :body out-node))
+                  (tc:node-bind
+                   (let ((ty (node-type out-node))
+                         (pattern (tc:node-bind-pattern body-node)))
+                     (typecase pattern
+                       (tc:pattern-var
+                        (make-node-bind
+                         :type ty
+                         :name (tc:pattern-var-name pattern)
+                         :expr (translate-expression (tc:node-bind-expr body-node) ctx env)
+                         :body out-node))
+                       (t
+                        (make-node-match
+                         :type ty
+                         :expr (translate-expression (tc:node-bind-expr body-node) ctx env)
+                         :branches (list
+                                    (make-match-branch
+                                     :pattern (translate-pattern pattern)
+                                     :body out-node)))))))
+                  (tc:node
+                   (make-node-seq
+                    :type (node-type out-node)
+                    :nodes (list (translate-expression body-node ctx env)
+                                 out-node)))))
+        :finally (return out-node)))
+
+(defun translate-discarding-body-elements (body-nodes ctx env)
+  "Translate BODY-NODES as a body whose final value is discarded.
+
+This is used for loop bodies and similar contexts where the user forms
+are sequenced for effect and the translated body should end in zero
+values."
+  (declare (type tc:node-body-element-list body-nodes)
+           (type pred-context ctx)
+           (type tc:environment env)
+           (values node &optional))
+  (translate-body-elements-into body-nodes (zero-values-node) ctx env))
+
+(defun specialize-qual-type-to-context (qual-ty ctx)
+  "Specialize QUAL-TY to any uniquely matching predicates in CTX.
+
+This matters for overloaded values that are captured without an
+application site, such as variables passed into `lisp` forms."
+  (declare (type tc:qualified-ty qual-ty)
+           (type pred-context ctx)
+           (values tc:qualified-ty &optional))
+  (let ((subs nil))
+    (dolist (pred (tc:qualified-ty-predicates qual-ty))
+      (let ((matches
+              (loop :for (ctx-pred . nil) :in ctx
+                    :for match
+                      := (and (eq (tc:ty-predicate-class pred)
+                                  (tc:ty-predicate-class ctx-pred))
+                              (handler-case
+                                  (tc:predicate-match pred ctx-pred subs)
+                                (tc:predicate-unification-error ()
+                                  nil)
+                                (tc:coalton-internal-type-error ()
+                                  nil)))
+                    :when match
+                      :collect match)))
+        (when (= 1 (length matches))
+          (setf subs
+                (tc:compose-substitution-lists
+                 (first matches)
+                 subs)))))
+    (if subs
+        (tc:apply-substitution subs qual-ty)
+        qual-ty)))
+
+(defun binding-eta-argument-types (binding qual-ty)
+  "Return extra positional argument types needed to eta-expand BINDING.
+
+Qualified value aliases like `(define lift-to lift)` must still compile to a
+runtime function that accepts the source-level positional inputs after any
+dictionary arguments. When the RHS is not already a lambda, translate-toplevel
+needs to synthesize those trailing parameters explicitly."
+  (declare (type tc:binding-type binding)
+           (type tc:qualified-ty qual-ty)
+           (values tc:ty-list &optional))
+  (let ((type (tc:qualified-ty-type qual-ty)))
+    (if (and (tc:qualified-ty-predicates qual-ty)
+             (not (tc:binding-restricted-p binding))
+             (null (tc:binding-parameters binding))
+             (tc:function-type-p type)
+             (plusp (length (physical-callable-argument-types type))))
+        (physical-callable-argument-types type)
+        nil)))
+
+(defun binding-eta-keyword-forwarders (binding qual-ty)
+  (declare (type tc:binding-type binding)
+           (type tc:qualified-ty qual-ty)
+           (values keyword-param-list keyword-arg-list &optional))
+  (let ((type (tc:qualified-ty-type qual-ty)))
+    (if (and (tc:qualified-ty-predicates qual-ty)
+             (not (tc:binding-restricted-p binding))
+             (null (tc:binding-parameters binding))
+             (null (tc:binding-keyword-parameters binding))
+             (tc:function-type-p type))
+        (make-keyword-forwarders type)
+        (values nil nil))))
+
+(defun maybe-eta-expand-binding-body (binding qual-ty translated-body eta-vars eta-arg-types eta-keyword-rands ctx env)
+  (declare (type tc:binding-type binding)
+           (type tc:qualified-ty qual-ty)
+           (type node translated-body)
+           (type list eta-vars)
+           (type tc:ty-list eta-arg-types)
+           (type keyword-arg-list eta-keyword-rands)
+           (type pred-context ctx)
+           (type tc:environment env)
+           (values node &optional))
+  (let* ((binding-value (tc:binding-value binding))
+         (eta-rands
+           (loop :for var :in eta-vars
+                 :for ty :in eta-arg-types
+                 :collect (make-node-variable
+                           :type ty
+                           :value var))))
+    (cond
+      ((and (typep binding-value 'tc:node-variable)
+            (or eta-rands eta-keyword-rands))
+       (make-qualified-variable-application
+        binding-value
+        (specialize-qual-type-to-context (tc:node-type binding-value) ctx)
+        (tc:function-return-type (tc:qualified-ty-type qual-ty))
+        eta-rands
+        eta-keyword-rands
+        ctx
+        env))
+      ((and (null eta-rands)
+            (null eta-keyword-rands))
+       translated-body)
+      (t
+       (make-node-application
+        :type (tc:function-return-type (tc:qualified-ty-type qual-ty))
+        :properties '()
+        :rator translated-body
+        :rands eta-rands
+        :keyword-rands eta-keyword-rands)))))
 
 (defun translate-toplevel (binding env name &key extra-context)
   (declare (type tc:binding-type binding)
@@ -50,81 +413,137 @@ TRANSLATE-EXPRESSION when an abstraction is being translated.")
 
          (full-ctx (append ctx extra-context))
 
-         (pattern-params nil))
+         (pattern-params nil)
+         (last-node (tc:binding-last-node binding))
+         (eta-arg-types (binding-eta-argument-types binding qual-ty))
+         (eta-vars (loop :repeat (length eta-arg-types)
+                         :collect (gensym "ARG"))))
 
-    (cond
-      ;; If the binding does not have parameters, and the
-      ;; body is a single lambda then generate a function
-      ;; to match the declared type and then translate the
-      ;; lambda.
-      ((and (null (tc:binding-parameters binding)) (tc:binding-restricted-p binding))
-       (make-node-abstraction
-        :type (tc:make-function-type*
-               (append
-                (loop :for pred :in preds
-                      :collect (pred-type pred env))
-                (loop :for param :in (tc:node-abstraction-params (tc:binding-last-node binding))
-                      :collect (tc:qualified-ty-type (tc:pattern-type param))))
-               (tc:function-remove-arguments
-                (tc:qualified-ty-type
-                 (tc:node-type (tc:binding-last-node binding)))
-                (length (tc:node-abstraction-params (tc:binding-last-node binding)))))
+    (multiple-value-bind (eta-keyword-params eta-keyword-rands)
+        (binding-eta-keyword-forwarders binding qual-ty)
 
-        :vars (append
-               (loop :for (pred . name) :in ctx
-                     :collect name)
-               (loop :for param :in (tc:node-abstraction-params (tc:binding-last-node binding))
-                     :if (tc:pattern-var-p param)
-                       :collect (tc:pattern-var-name param)
-                     :else :if (tc:pattern-wildcard-p param)
-                             :collect (gensym "_")
-                     :else
-                       :collect (let ((name (gensym)))
-                                  (push (cons name param) pattern-params)
-                                  name)))
+            (labels ((wrap-qualified-nullary-result (node outer-vars outer-keyword-params)
+               (if (and outer-vars
+                        (null outer-keyword-params)
+                        (null (tc:binding-parameters binding))
+                        (not (tc:binding-restricted-p binding))
+                        (tc:function-type-p (tc:qualified-ty-type qual-ty))
+                        (null (physical-callable-argument-types (tc:qualified-ty-type qual-ty))))
+                   (make-node-abstraction
+                    :type (tc:qualified-ty-type qual-ty)
+                    :vars nil
+                    :keyword-params outer-keyword-params
+                    :subexpr node)
+                   node)))
 
-        :subexpr (let ((*current-function-name* name))
-                   (wrap-in-block
-                    (wrap-with-pattern-params
-                     pattern-params
-                     (translate-expression (tc:node-abstraction-body (tc:binding-last-node binding)) full-ctx env))))))
+      (cond
+        ;; If the binding does not have parameters, and the
+        ;; body is a single lambda then generate a function
+        ;; to match the declared type and then translate the
+        ;; lambda.
+        ((and (null (tc:binding-parameters binding))
+              (tc:binding-restricted-p binding)
+              (typep last-node 'tc:node-abstraction))
+         (let ((vars (append
+                      (loop :for (pred . name) :in ctx
+                            :collect name)
+                      (loop :for param :in (tc:node-abstraction-params last-node)
+                            :if (tc:pattern-var-p param)
+                              :collect (tc:pattern-var-name param)
+                            :else :if (tc:pattern-wildcard-p param)
+                                    :collect (gensym "_")
+                            :else
+                              :collect (let ((name (gensym)))
+                                         (push (cons name param) pattern-params)
+                                         name)))))
+           (make-node-abstraction
+            :type (binding-codegen-abstraction-type binding qual-ty preds env last-node)
+            :vars vars
+            :keyword-params (translate-keyword-params
+                             (tc:node-abstraction-keyword-params last-node))
+            :subexpr (let ((*current-function-name* name))
+                       (wrap-qualified-nullary-result
+                        (wrap-in-block
+                         (wrap-with-pattern-params
+                          pattern-params
+                          (translate-expression (tc:node-abstraction-body last-node) full-ctx env)))
+                        vars
+                        (translate-keyword-params
+                         (tc:node-abstraction-keyword-params last-node)))))))
 
-      ;; If the binding has parameters and/or predicates then wrap the body in a lambda.
-      ((or (tc:binding-parameters binding) preds)
-       (make-node-abstraction
-        :type (tc:make-function-type*
-               (append
-                (loop :for pred :in preds
-                      :collect (pred-type pred env))
-                (loop :for var :in (tc:binding-parameters binding)
-                      :for qual-ty := (tc:pattern-type var)
+        ;; Function-syntax bindings and constrained bindings need an outer lambda.
+        ((or (tc:binding-parameters binding) preds (tc:binding-restricted-p binding))
+         (let ((vars (append
+                      (loop :for (pred . name) :in ctx
+                            :collect name)
+                      (loop :for param :in (tc:binding-parameters binding)
+                            :if (tc:pattern-var-p param)
+                              :collect (tc:pattern-var-name param)
+                            :else :if (tc:pattern-wildcard-p param)
+                                    :collect (gensym "_")
+                            :else
+                              :collect (let ((name (gensym)))
+                                         (push (cons name param) pattern-params)
+                                         name)))))
+           (make-node-abstraction
+           :type (binding-codegen-abstraction-type binding qual-ty preds env last-node)
+           :vars (append vars eta-vars)
+           :keyword-params (append (translate-keyword-params
+                                    (tc:binding-keyword-parameters binding))
+                                    eta-keyword-params)
+            :subexpr (let ((*current-function-name* name))
+                       (wrap-qualified-nullary-result
+                        (wrap-in-block
+                         (wrap-with-pattern-params
+                          pattern-params
+                          (maybe-eta-expand-binding-body
+                           binding
+                           qual-ty
+                           (translate-expression (tc:binding-value binding) full-ctx env)
+                           eta-vars
+                           eta-arg-types
+                           eta-keyword-rands
+                           full-ctx
+                           env)))
+                        (append vars eta-vars)
+                        (append (translate-keyword-params
+                                 (tc:binding-keyword-parameters binding))
+                                eta-keyword-params))))))
 
-                      :do (assert (null (tc:qualified-ty-predicates qual-ty)))
-                      :collect (tc:qualified-ty-type qual-ty)))
-               (tc:qualified-ty-type (tc:node-type (tc:binding-last-node binding))))
+        (t
+         (translate-expression (tc:binding-value binding) full-ctx env)))))))
 
-        :vars (append
-               (loop :for (pred . name) :in ctx
-                     :collect name)
-               (loop :for param :in (tc:binding-parameters binding)
-                     :if (tc:pattern-var-p param)
-                       :collect (tc:pattern-var-name param)
-                     :else :if (tc:pattern-wildcard-p param)
-                             :collect (gensym "_")
-                     :else
-                       :collect (let ((name (gensym)))
-                                  (push (cons name param) pattern-params)
-                                  name)))
+(defun translate-variable-application (expr result-type rands keyword-rands ctx env)
+  "Translate the immediate application of variable EXPR to RANDS.
 
-        :subexpr (let ((*current-function-name* name))
-                   (wrap-in-block
-                    (wrap-with-pattern-params
-                     pattern-params
-                     (translate-expression (tc:binding-value binding) full-ctx env))))))
-
-      (t
-       (translate-expression (tc:binding-value binding) full-ctx env)))))
-
+Qualified variable references used as first-class values still need the
+eta-expansion in APPLY-DICTS so they keep the source-visible arity.
+When the variable is in operator position, however, we can apply any
+resolved dictionaries directly in the same call node. This preserves the
+direct-call shape needed by later tail-call and direct-application passes."
+  (declare (type tc:node-variable expr)
+           (type tc:ty result-type)
+           (type tc:node-list rands)
+           (type list keyword-rands)
+           (type pred-context ctx)
+           (type tc:environment env)
+           (values node &optional))
+  (let* ((qual-ty (specialize-qual-type-to-context
+                   (tc:node-type expr)
+                   ctx))
+         (translated-rands
+           (mapcar
+            (lambda (rand)
+              (apply-dicts rand ctx env))
+            rands)))
+    (make-qualified-variable-application
+     expr
+     qual-ty
+     result-type
+     translated-rands
+     (translate-keyword-rands keyword-rands ctx env)
+     ctx
+     env)))
 
 (defgeneric translate-expression (expr ctx env)
   (:documentation "Translate typechecker AST node EXPR to the codegen AST.
@@ -258,50 +677,52 @@ Returns a `node'.")
     (let ((qual-ty (tc:node-type expr)))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
 
-      (make-node-application
-       :type (tc:qualified-ty-type qual-ty)
-       :properties '()
-       :rator (translate-expression (tc:node-application-rator expr) ctx env)
-       :rands (mapcar
-               (lambda (expr)
-                 (apply-dicts expr ctx env))
-               (tc:node-application-rands expr)))))
+      (let ((rator-expr (tc:node-application-rator expr)))
+        (typecase rator-expr
+          (tc:node-variable
+           (if (util:dynamic-variable-name-p (tc:node-variable-name rator-expr))
+               (make-node-application
+                :type (tc:qualified-ty-type qual-ty)
+                :properties '()
+                :rator (translate-expression rator-expr ctx env)
+                :rands (mapcar
+                        (lambda (rand)
+                          (apply-dicts rand ctx env))
+                        (tc:node-application-rands expr))
+                :keyword-rands (translate-keyword-rands
+                                (tc:node-application-keyword-rands expr)
+                                ctx
+                                env))
+               (translate-variable-application
+                rator-expr
+                (tc:qualified-ty-type qual-ty)
+                (tc:node-application-rands expr)
+                (tc:node-application-keyword-rands expr)
+                ctx
+                env)))
+          (t
+           (make-node-application
+            :type (tc:qualified-ty-type qual-ty)
+            :properties '()
+            :rator (translate-expression rator-expr ctx env)
+            :rands (mapcar
+                    (lambda (rand)
+                      (apply-dicts rand ctx env))
+                    (tc:node-application-rands expr))
+            :keyword-rands (translate-keyword-rands
+                            (tc:node-application-keyword-rands expr)
+                            ctx
+                            env)))))))
 
   (:method ((expr tc:node-body) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)
              (values node))
-
-    (loop :with out-node := (translate-expression (tc:node-body-last-node expr) ctx env)
-          :for body-node :in (reverse (tc:node-body-nodes expr)) :do
-            (setf out-node
-                  (etypecase body-node
-                    (tc:node-bind
-                     (let ((ty (node-type out-node)))
-
-                       (let ((pattern (tc:node-bind-pattern body-node)))
-                         (typecase (tc:node-bind-pattern body-node)
-                           (tc:pattern-var
-                            (make-node-bind
-                             :type ty
-                             :name (tc:pattern-var-name pattern)
-                             :expr (translate-expression (tc:node-bind-expr body-node) ctx env)
-                             :body out-node))
-                           (t
-                            (make-node-match
-                             :type ty
-                             :expr (translate-expression (tc:node-bind-expr body-node) ctx env)
-                             :branches (list
-                                        (make-match-branch
-                                         :pattern (translate-pattern pattern)
-                                         :body out-node))))))))
-
-                    (tc:node
-                     (make-node-seq
-                      :type (node-type out-node)
-                      :nodes (list (translate-expression body-node ctx env)
-                                   out-node)))))
-          :finally (return out-node)))
+    (translate-body-elements-into
+     (tc:node-body-nodes expr)
+     (translate-expression (tc:node-body-last-node expr) ctx env)
+     ctx
+     env))
 
   (:method ((expr tc:node-abstraction) ctx env)
     (declare (type pred-context ctx)
@@ -346,25 +767,49 @@ Returns a `node'.")
 
       (assert (not (some #'tc:static-predicate-p preds)))
 
-      (make-node-abstraction
-       :type (tc:make-function-type* dict-types (tc:qualified-ty-type qual-ty))
-       :vars vars
-       :subexpr (loop :with inner := (translate-expression (tc:node-abstraction-body expr) ctx env)
-
-                      :for (name . pattern) :in (reverse pattern-params)
-                      :do (setf inner
-                                (make-node-match
-                                 :type (node-type inner)
-                                 :expr (make-node-variable
-                                        :type (tc:qualified-ty-type (tc:pattern-type pattern))
-                                        :value name)
-                                 :branches
-                                 (list
-                                  (make-match-branch
-                                   :pattern (translate-pattern pattern)
-                                   :body inner))))
-
-                      :finally (return (wrap-in-block inner))))))
+      (let* ((visible-type (tc:qualified-ty-type qual-ty))
+             (translated-keyword-params
+               (mapcar (lambda (param)
+                         (make-keyword-param
+                          :keyword (tc:keyword-param-keyword param)
+                          :var (tc:keyword-param-value-var param)
+                          :supplied-p-var (tc:keyword-param-supplied-p-var param)))
+                       (tc:node-abstraction-keyword-params expr)))
+             (abstraction-type
+               (physical-callable-type
+                (tc:merge-function-input-types
+                 dict-types
+                 visible-type))))
+        (let ((inner (translate-expression (tc:node-abstraction-body expr) ctx env)))
+          (loop :for (name . pattern) :in (reverse pattern-params)
+                :do (setf inner
+                          (make-node-match
+                           :type (node-type inner)
+                           :expr (make-node-variable
+                                  :type (tc:qualified-ty-type (tc:pattern-type pattern))
+                                  :value name)
+                           :branches
+                           (list
+                            (make-match-branch
+                             :pattern (translate-pattern pattern)
+                             :body inner)))))
+          (setf inner (wrap-in-block inner))
+          (when (and dict-var-names
+                     (tc:function-type-p visible-type)
+                     (null (tc:function-ty-positional-input-types visible-type))
+                     (null (tc:function-ty-keyword-input-types visible-type))
+                     (null translated-keyword-params))
+            (setf inner
+                  (make-node-abstraction
+                   :type visible-type
+                   :vars nil
+                   :keyword-params nil
+                   :subexpr inner)))
+          (make-node-abstraction
+           :type abstraction-type
+           :vars vars
+           :keyword-params translated-keyword-params
+           :subexpr inner)))))
 
   (:method ((expr tc:node-let) ctx env)
     (declare (type pred-context ctx)
@@ -383,7 +828,7 @@ Returns a `node'.")
                        :collect (cons name (translate-toplevel binding env name :extra-context ctx)))
        :subexpr (translate-expression (tc:node-let-body expr) ctx env))))
 
-  (:method ((expr tc:node-lisp) ctx env)
+  (:method ((expr tc:node-dynamic-let) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)
              (values node))
@@ -391,13 +836,48 @@ Returns a `node'.")
     (let ((qual-ty (tc:node-type expr)))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
 
-      (make-node-lisp
+      (make-node-dynamic-let
        :type (tc:qualified-ty-type qual-ty)
-       :vars (loop :for var :in (tc:node-lisp-vars expr)
-                   :for var-name :in (tc:node-lisp-var-names expr)
-                   :collect (cons var-name (tc:node-variable-name var)))
-       :return-convention (tc:node-lisp-return-convention expr)
-       :form (tc:node-lisp-body expr))))
+       :bindings (loop :for binding :in (tc:node-dynamic-let-bindings expr)
+                       :collect (make-node-dynamic-binding
+                                 :name (tc:node-variable-name (tc:node-dynamic-binding-name binding))
+                                 :value (translate-expression
+                                         (tc:node-dynamic-binding-value binding)
+                                         ctx
+                                         env)))
+       :subexpr (translate-expression (tc:node-dynamic-let-subexpr expr) ctx env))))
+
+  (:method ((expr tc:node-lisp) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+
+    (let ((qual-ty (tc:node-type expr)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+      (let ((bindings nil)
+            (lisp-vars nil))
+        (loop :for var :in (tc:node-lisp-vars expr)
+              :for var-name :in (tc:node-lisp-var-names expr)
+              :do (let ((translated-var (apply-dicts var ctx env)))
+                    (typecase translated-var
+                      (node-variable
+                        (push (cons var-name (node-variable-value translated-var))
+                              lisp-vars))
+                      (t
+                        (let ((temp-name (gensym (format nil "~A-" var-name))))
+                          (push (cons temp-name translated-var) bindings)
+                          (push (cons var-name temp-name) lisp-vars))))))
+        (let ((node-lisp
+                (make-node-lisp
+                 :type (tc:qualified-ty-type qual-ty)
+                 :vars (nreverse lisp-vars)
+                 :form (tc:node-lisp-body expr))))
+          (if bindings
+              (make-node-let
+               :type (tc:qualified-ty-type qual-ty)
+               :bindings (nreverse bindings)
+               :subexpr node-lisp)
+              node-lisp)))))
 
   (:method ((expr tc:node-match) ctx env)
     (declare (type pred-context ctx)
@@ -465,6 +945,20 @@ Returns a `node'.")
        :type (tc:qualified-ty-type qual-ty)
        :nodes (list (translate-expression (tc:node-progn-body expr) ctx env)))))
 
+  (:method ((expr tc:node-unsafe) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+
+    (let ((qual-ty (tc:node-type expr)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      (make-node-locally
+       :type (tc:qualified-ty-type qual-ty)
+       :noinline-functions nil
+       :type-check 0
+       :subexpr (translate-expression (tc:node-unsafe-body expr) ctx env))))
+
   (:method ((expr tc:node-return) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)
@@ -473,16 +967,25 @@ Returns a `node'.")
     (let ((qual-ty (tc:node-type expr)))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
 
-      (let ((unit-value (util:find-symbol "UNIT" "COALTON")))
+      (make-node-return-from
+       :type (tc:qualified-ty-type qual-ty)
+       :name *current-function-name*
+       :expr (if (tc:node-return-expr expr)
+                 (translate-expression (tc:node-return-expr expr) ctx env)
+                 (zero-values-node)))))
 
-        (make-node-return-from
-         :type (tc:qualified-ty-type qual-ty)
-         :name *current-function-name*
-         :expr (if (tc:node-return-expr expr)
-                   (translate-expression (tc:node-return-expr expr) ctx env)
-                   (make-node-variable
-                    :type tc:*unit-type*
-                    :value unit-value))))))
+  (:method ((expr tc:node-values) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+
+    (let ((qual-ty (tc:node-type expr)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+      (make-node-values
+       :type (tc:qualified-ty-type qual-ty)
+       :nodes (mapcar (lambda (subexpr)
+                        (translate-expression subexpr ctx env))
+                      (tc:node-values-nodes expr)))))
 
   (:method ((expr tc:node-throw) ctx env)
     (declare (type pred-context ctx)
@@ -620,13 +1123,14 @@ Returns a `node'.")
              (type tc:environment env)
              (values node))
 
-    (let* ((coalton-package (util:find-package "COALTON"))
+    (let* ((qual-ty (tc:node-type expr))
+           (result-ty (tc:qualified-ty-type qual-ty))
+           (coalton-package (util:find-package "COALTON"))
            (true-value (util:find-symbol "TRUE" coalton-package))
-           (false-value (util:find-symbol "FALSE" coalton-package))
-           (unit-value (util:find-symbol "UNIT" coalton-package)))
+           (false-value (util:find-symbol "FALSE" coalton-package)))
 
       (make-node-match
-       :type tc:*unit-type*
+       :type result-ty
        :expr (translate-expression (tc:node-when-expr expr) ctx env)
        :branches (list
                   (make-match-branch
@@ -634,28 +1138,30 @@ Returns a `node'.")
                              :type tc:*boolean-type*
                              :name true-value
                              :patterns nil)
-                   :body (translate-expression (tc:node-when-body expr) ctx env))
+                   :body (make-node-seq
+                          :type result-ty
+                          :nodes (list (translate-expression (tc:node-when-body expr) ctx env)
+                                       (zero-values-node))))
                   (make-match-branch
                    :pattern (make-pattern-constructor
                              :type tc:*boolean-type*
                              :name false-value
                              :patterns nil)
-                   :body (make-node-variable
-                          :type tc:*unit-type*
-                          :value unit-value))))))
+                   :body (zero-values-node))))))
 
   (:method ((expr tc:node-unless) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)
              (values node))
 
-    (let* ((coalton-package (util:find-package "COALTON"))
+    (let* ((qual-ty (tc:node-type expr))
+           (result-ty (tc:qualified-ty-type qual-ty))
+           (coalton-package (util:find-package "COALTON"))
            (true-value (util:find-symbol "TRUE" coalton-package))
-           (false-value (util:find-symbol "FALSE" coalton-package))
-           (unit-value (util:find-symbol "UNIT" coalton-package)))
+           (false-value (util:find-symbol "FALSE" coalton-package)))
 
       (make-node-match
-       :type tc:*unit-type*
+       :type result-ty
        :expr (translate-expression (tc:node-unless-expr expr) ctx env)
        :branches (list
                   (make-match-branch
@@ -663,161 +1169,46 @@ Returns a `node'.")
                              :type tc:*boolean-type*
                              :name true-value
                              :patterns nil)
-                   :body (make-node-variable
-                          :type tc:*unit-type*
-                          :value unit-value))
+                   :body (zero-values-node))
                   (make-match-branch
                    :pattern (make-pattern-constructor
                              :type tc:*boolean-type*
                              :name false-value
                              :patterns nil)
-                   :body (translate-expression (tc:node-unless-body expr) ctx env))))))
-
-  (:method ((expr tc:node-while) ctx env)
-    (declare (type pred-context ctx)
-             (type tc:environment env)
-             (values node))
-
-    (make-node-while
-     :type tc:*unit-type*
-     :label (tc:node-while-label expr)
-     :expr (translate-expression (tc:node-while-expr expr) ctx env)
-     :body (translate-expression (tc:node-while-body expr) ctx env)))
-
-  (:method ((expr tc:node-while-let) ctx env)
-    (declare (type pred-context ctx)
-             (type tc:environment env)
-             (values node))
-    (make-node-while-let
-     :type tc:*unit-type*
-     :pattern (translate-pattern (tc:node-while-let-pattern expr))
-     :label (tc:node-while-let-label expr)
-     :expr (translate-expression (tc:node-while-let-expr expr) ctx env)
-     :body (translate-expression (tc:node-while-let-body expr) ctx env)))
+                   :body (make-node-seq
+                          :type result-ty
+                          :nodes (list (translate-expression (tc:node-unless-body expr) ctx env)
+                                       (zero-values-node))))))))
 
   (:method ((expr tc:node-for) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)
              (values node))
-    (let* ((pat-arg
-             (translate-pattern (tc:node-for-pattern expr)))
-
-           (pat-arg-ty
-             (pattern-type pat-arg))
-
-           (classes-package
-             (util:find-package "COALTON/CLASSES"))
-
-           (some
-             (util:find-symbol "SOME" classes-package))
-
-           (optional
-             (util:find-symbol "OPTIONAL" classes-package))
-
-           (optional-pat-arg-ty
-             (tc:apply-type-argument
-              (tc:make-tycon :name optional
-                             :kind (tc:make-kfun :from tc:+kstar+ :to tc:+kstar+))
-              pat-arg-ty))
-
-           (some-pattern
-             (make-pattern-constructor
-              :type optional-pat-arg-ty
-              :name some
-              :patterns (list pat-arg)))
-
-           (into-iter-arg
-             (translate-expression (tc:node-for-expr expr) ctx env))
-
-           (into-iter-arg-ty
-             (node-type into-iter-arg))
-
-           (iterator-package
-             (util:find-package "COALTON/ITERATOR"))
-
-           (into-iter-method
-             (util:find-symbol "INTO-ITER" iterator-package))
-
-           (intoiter-class
-             (util:find-symbol "INTOITERATOR" iterator-package))
-
-           (iterator
-             (util:find-symbol "ITERATOR" iterator-package))
-
-           (iter-ty
-             (tc:apply-type-argument
-              (tc:make-tycon :name iterator
-                             :kind (tc:make-kfun :from tc:+kstar+ :to tc:+kstar+))
-              pat-arg-ty))
-
-           (intoiterator-pred
-             (tc:make-ty-predicate
-              :class intoiter-class
-              :types (list into-iter-arg-ty pat-arg-ty)
-              :location (source:location expr)))
-
-           (into-iter-node
-             (make-node-application
-              :type iter-ty
-              :properties '()
-              :rator (make-node-variable
-                      :type (tc:make-function-type*
-                             (list (pred-type intoiterator-pred env)
-                                   (node-type into-iter-arg))
-                             iter-ty)
-                      :value into-iter-method)
-              :rands (list
-                      (resolve-dict intoiterator-pred ctx env)
-                      into-iter-arg)))
-
-           (next-method
-             (util:find-symbol "NEXT!" iterator-package))
-
-           (into-iter-binding-var-name
-             (gensym "ITER-"))
-
-           (iter-next-node
-             (make-node-application
-              :type optional-pat-arg-ty
-              :properties '()
-              :rator (make-node-variable
-                      :type (tc:make-function-type*
-                             (list iter-ty)
-                             optional-pat-arg-ty)
-                      :value next-method)
-              :rands (list (make-node-variable
-                            :type iter-ty
-                            :value  into-iter-binding-var-name))))
-
-           (while-let-node
-             (make-node-while-let
-              :type tc:*unit-type*
-              :label (tc:node-for-label expr)
-              :pattern some-pattern
-              :expr iter-next-node
-              :body (translate-expression (tc:node-for-body expr) ctx env))))
-
-      (make-node-bind
-       :type tc:*unit-type*
-       :name into-iter-binding-var-name
-       :expr into-iter-node
-       :body while-let-node)))
-
-  (:method ((expr tc:node-loop) ctx env)
-    (declare (type pred-context ctx)
-             (type tc:environment env)
-             (values node))
-    (make-node-loop
-     :type tc:*unit-type*
-     :label (tc:node-loop-label expr)
-     :body (translate-expression (tc:node-loop-body expr) ctx env)))
+    (make-node-for
+     :type (tc:qualified-ty-type (tc:node-type expr))
+     :label (tc:node-for-label expr)
+     :bindings
+     (loop :for binding :in (tc:node-for-bindings expr)
+           :collect (make-node-for-binding
+                     :name (tc:node-variable-name (tc:node-for-binding-name binding))
+                     :type (tc:qualified-ty-type (tc:node-type (tc:node-for-binding-name binding)))
+                     :init (translate-expression (tc:node-for-binding-init binding) ctx env)
+                     :step (and (tc:node-for-binding-step binding)
+                                (translate-expression (tc:node-for-binding-step binding) ctx env))))
+     :sequential-p (tc:node-for-sequential-p expr)
+     :returns (and (tc:node-for-returns expr)
+                   (translate-expression (tc:node-for-returns expr) ctx env))
+     :termination-kind (tc:node-for-termination-kind expr)
+     :termination-expr (and (tc:node-for-termination-expr expr)
+                            (translate-expression (tc:node-for-termination-expr expr) ctx env))
+     :body (translate-expression (tc:node-for-body expr) ctx env)))
 
   (:method ((expr tc:node-break) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)
              (values node))
     (make-node-break
-     :type tc:*unit-type*
+     :type (tc:qualified-ty-type (tc:node-type expr))
      :label (tc:node-break-label expr)))
 
   (:method ((expr tc:node-continue) ctx env)
@@ -825,7 +1216,7 @@ Returns a `node'.")
              (type tc:environment env)
              (values node))
     (make-node-continue
-     :type tc:*unit-type*
+     :type (tc:qualified-ty-type (tc:node-type expr))
      :label (tc:node-continue-label expr)))
 
   (:method ((expr tc:node-cond) ctx env)
@@ -925,6 +1316,13 @@ Returns a `node'.")
                                           (make-match-branch
                                            :pattern (translate-pattern pattern)
                                            :body out-node)))))))
+
+                        (tc:node-values-bind
+                         (make-node-values-bind
+                          :type (node-type out-node)
+                          :vars (values-bind-vars (tc:node-values-bind-patterns elem))
+                          :expr (translate-expression (tc:node-values-bind-expr elem) ctx env)
+                          :body out-node))
 
 
                         ;; *sad burrito noises*
@@ -1035,7 +1433,6 @@ Returns a `node'.")
        :name (tc:pattern-constructor-name pat)
        :patterns (mapcar #'translate-pattern (tc:pattern-constructor-patterns pat))))))
 
-
 (defun apply-dicts (expr ctx env)
   "If there are predicates on EXPR, then find the typeclass dictionaries
 in the environment and create a NODE-APPLICATION with all required
@@ -1044,7 +1441,7 @@ dictionaries applied."
            (type pred-context ctx)
            (type tc:environment env)
            (values node))
-  (let* ((qual-ty (tc:node-type expr))
+  (let* ((qual-ty (specialize-qual-type-to-context (tc:node-type expr) ctx))
 
          (dicts (mapcar
                  (lambda (pred)
@@ -1053,9 +1450,9 @@ dictionaries applied."
 
          (dict-types (mapcar #'node-type dicts))
 
-         (var-type (tc:make-function-type*
+         (var-type (prepend-codegen-hidden-input-types
                     dict-types
-                    (tc:qualified-ty-type qual-ty)))
+                    (physical-callable-type (tc:qualified-ty-type qual-ty))))
 
          (inner-node
            (typecase expr
@@ -1067,13 +1464,34 @@ dictionaries applied."
               (translate-expression expr ctx env)))))
     (cond
       ((null dicts)
-       inner-node)
-      (t
-       (make-node-application
-        :type (tc:qualified-ty-type qual-ty)
-        :properties '()
+       (if (and (typep expr 'tc:node-variable)
+                (not (util:dynamic-variable-name-p (tc:node-variable-name expr)))
+                (not (tc:function-type-p (tc:qualified-ty-type qual-ty))))
+           (alexandria:if-let ((entry (tc:lookup-function env (tc:node-variable-name expr) :no-error t)))
+             (if (zerop (tc:function-env-entry-arity entry))
+                 (make-node-application
+                  :type (tc:qualified-ty-type qual-ty)
+                  :properties '()
+                  :rator (make-node-variable
+                          :type (tc:make-function-type* nil (tc:qualified-ty-type qual-ty))
+                          :value (tc:node-variable-name expr))
+                  :rands nil
+                  :keyword-rands nil)
+                 inner-node)
+             inner-node)
+           inner-node))
+      ((tc:function-type-p (tc:qualified-ty-type qual-ty))
+       (bind-hidden-function-arguments
+        inner-node
+        (physical-callable-type (tc:qualified-ty-type qual-ty))
+        dicts))
+	      (t
+	       (make-node-application
+	        :type (tc:qualified-ty-type qual-ty)
+	        :properties '()
         :rator inner-node
-        :rands dicts)))))
+        :rands dicts
+        :keyword-rands nil)))))
 
 (defun wrap-with-pattern-params (pattern-params inner)
   "Wrap INNER in nested `NODE-MATCH' expressions to pattern match on PATTERN-PARAMS"

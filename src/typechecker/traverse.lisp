@@ -19,17 +19,22 @@
   (literal            #'identity :type function :read-only t)
   (integer-literal    #'identity :type function :read-only t)
   (bind               #'identity :type function :read-only t)
+  (values-bind        #'identity :type function :read-only t)
   (body               #'identity :type function :read-only t)
   (abstraction        #'identity :type function :read-only t)
   (let-binding        #'identity :type function :read-only t)
+  (dynamic-binding    #'identity :type function :read-only t)
   (let                #'identity :type function :read-only t)
+  (dynamic-let        #'identity :type function :read-only t)
   (lisp               #'identity :type function :read-only t)
   (match-branch       #'identity :type function :read-only t)
   (match              #'identity :type function :read-only t)
   (catch-branch       #'identity :type function :read-only t)
   (catch              #'identity :type function :read-only t)
   (progn              #'identity :type function :read-only t)
+  (unsafe             #'identity :type function :read-only t)
   (return             #'identity :type function :read-only t)
+  (values             #'identity :type function :read-only t)
   (throw              #'identity :type function :read-only t)
   (resume-to          #'identity :type function :read-only t)
   (resumable-branch   #'identity :type function :read-only t)
@@ -42,9 +47,6 @@
   (unless             #'identity :type function :read-only t)
   (cond-clause        #'identity :type function :read-only t)
   (cond               #'identity :type function :read-only t)
-  (while              #'identity :type function :read-only t)
-  (while-let          #'identity :type function :read-only t)
-  (for                #'identity :type function :read-only t)
   (loop               #'identity :type function :read-only t)
   (break              #'identity :type function :read-only t)
   (continue           #'identity :type function :read-only t)
@@ -87,6 +89,17 @@
       :expr (traverse (node-bind-expr node) block)
       :location (source:location node))))
 
+  (:method ((node node-values-bind) block)
+    (declare (type traverse-block block)
+             (values node-values-bind &optional))
+
+    (funcall
+     (traverse-values-bind block)
+     (make-node-values-bind
+      :patterns (node-values-bind-patterns node)
+      :expr (traverse (node-values-bind-expr node) block)
+      :location (source:location node))))
+
   (:method ((node node-body) block)
     (declare (type traverse-block block)
              (values node-body &optional))
@@ -107,6 +120,7 @@
       :type (node-type node)
       :location (source:location node)
       :params (node-abstraction-params node)
+      :keyword-params (node-abstraction-keyword-params node)
       :body (traverse (node-abstraction-body node) block))))
 
   (:method ((node node-let-binding) block)
@@ -120,6 +134,27 @@
       :value (traverse (node-let-binding-value node) block)
       :location (source:location node))))
 
+  (:method ((node node-dynamic-binding) block)
+    (declare (type traverse-block block)
+             (values node-dynamic-binding &optional))
+
+    (funcall
+     (traverse-dynamic-binding block)
+     (make-node-dynamic-binding
+      :name (node-dynamic-binding-name node)
+      :value (traverse (node-dynamic-binding-value node) block)
+      :location (source:location node))))
+
+  (:method ((node node-for-binding) block)
+    (declare (type traverse-block block)
+             (values node-for-binding &optional))
+
+    (make-node-for-binding
+     :name (node-for-binding-name node)
+     :init (traverse (node-for-binding-init node) block)
+     :step (traverse (node-for-binding-step node) block)
+     :location (source:location node)))
+
   (:method ((node node-let) block)
     (declare (type traverse-block block)
              (values node &optional))
@@ -132,6 +167,18 @@
       :bindings (traverse (node-let-bindings node) block)
       :body (traverse (node-let-body node) block))))
 
+  (:method ((node node-dynamic-let) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+
+    (funcall
+     (traverse-dynamic-let block)
+     (make-node-dynamic-let
+      :type (node-type node)
+      :location (source:location node)
+      :bindings (traverse (node-dynamic-let-bindings node) block)
+      :subexpr (traverse (node-dynamic-let-subexpr node) block))))
+
   (:method ((node node-lisp) block)
     (declare (type traverse-block block)
              (values node &optional))
@@ -143,7 +190,6 @@
       :location (source:location node)
       :vars (traverse (node-lisp-vars node) block)
       :var-names (node-lisp-var-names node)
-      :return-convention (node-lisp-return-convention node)
       :body (node-lisp-body node))))
 
   (:method ((node node-match-branch) block)
@@ -227,6 +273,17 @@
       :location (source:location node)
       :body (traverse (node-progn-body node) block))))
 
+  (:method ((node node-unsafe) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+
+    (funcall
+     (traverse-unsafe block)
+     (make-node-unsafe
+      :type (node-type node)
+      :location (source:location node)
+      :body (traverse (node-unsafe-body node) block))))
+
   (:method ((node node-return) block)
     (declare (type traverse-block block)
              (values node &optional))
@@ -235,9 +292,20 @@
      (traverse-return block)
      (make-node-return
       :type (node-type node)
-      :location (source:location node)
-      :expr (traverse (node-return-expr node) block) ; the nil case is handled by the list instance
+     :location (source:location node)
+     :expr (traverse (node-return-expr node) block) ; the nil case is handled by the list instance
       )))
+
+  (:method ((node node-values) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+
+    (funcall
+     (traverse-values block)
+     (make-node-values
+      :type (node-type node)
+      :location (source:location node)
+      :nodes (traverse (node-values-nodes node) block))))
 
   (:method ((node node-throw) block)
     (declare (type traverse-block block)
@@ -269,7 +337,16 @@
       :type (node-type node)
       :location (source:location node)
       :rator (traverse (node-application-rator node) block)
-      :rands (traverse (node-application-rands node) block))))
+      :rands (traverse (node-application-rands node) block)
+      :keyword-rands (traverse (node-application-keyword-rands node) block))))
+
+  (:method ((node node-application-keyword-arg) block)
+    (declare (type traverse-block block)
+             (values node-application-keyword-arg &optional))
+
+    (make-node-application-keyword-arg
+     :keyword (node-application-keyword-arg-keyword node)
+     :value (traverse (node-application-keyword-arg-value node) block)))
 
   (:method ((node node-or) block)
     (declare (type traverse-block block)
@@ -352,54 +429,23 @@
       :location (source:location node)
       :clauses (traverse (node-cond-clauses node) block))))
 
-  (:method ((node node-while) block)
-    (declare (type traverse-block block)
-             (values node &optional))
-    (funcall
-     (traverse-while block)
-     (make-node-while
-      :type (node-type node)
-      :location (source:location node)
-      :label (node-while-label node)
-      :expr (traverse (node-while-expr node) block)
-      :body (traverse (node-while-body node) block))))
-
-  (:method ((node node-while-let) block)
-    (declare (type traverse-block block)
-             (values node &optional))
-    (funcall
-     (traverse-while-let block)
-     (make-node-while-let
-      :type (node-type node)
-      :location (source:location node)
-      :label (node-while-let-label node)
-      :pattern (node-while-let-pattern node)
-      :expr (traverse (node-while-let-expr node) block)
-      :body (traverse (node-while-let-body node) block))))
-
   (:method ((node node-for) block)
     (declare (type traverse-block block)
              (values node &optional))
     (funcall
-     (traverse-for block)
+     (traverse-loop block)
      (make-node-for
       :type (node-type node)
       :location (source:location node)
       :label (node-for-label node)
-      :pattern (node-for-pattern node)
-      :expr (traverse (node-for-expr node) block)
+      :bindings (traverse (node-for-bindings node) block)
+      :sequential-p (node-for-sequential-p node)
+      :returns (and (node-for-returns node)
+                    (traverse (node-for-returns node) block))
+      :termination-kind (node-for-termination-kind node)
+      :termination-expr (and (node-for-termination-expr node)
+                             (traverse (node-for-termination-expr node) block))
       :body (traverse (node-for-body node) block))))
-
-  (:method ((node node-loop) block)
-    (declare (type traverse-block block)
-             (values node &optional))
-    (funcall
-     (traverse-loop block)
-     (make-node-loop
-      :type (node-type node)
-      :location (source:location node)
-      :label (node-loop-label node)
-      :body (traverse (node-loop-body node) block))))
 
   (:method ((node node-break) block)
     (declare (type traverse-block block)

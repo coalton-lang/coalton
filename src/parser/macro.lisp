@@ -8,11 +8,26 @@
    #:coalton-impl/parser/base
    #:parse-error)
   (:local-nicknames
-   (#:cst #:concrete-syntax-tree))
+   (#:cst #:concrete-syntax-tree)
+   (#:source #:coalton-impl/source))
   (:export
+   #:*macro-expansion-form*
+   #:*macro-expansion-source*
    #:expand-macro))
 
 (in-package #:coalton-impl/parser/macro)
+
+(defvar *macro-expansion-form* nil
+  "The CST form currently being macroexpanded by the Coalton parser, if any.
+
+Bound during `expand-macro' so that `compile-forms' (in src/reader.lisp) can
+re-read the macro body from the original source instead of round-tripping
+through PRINT. This preserves precise source locations for error reporting.")
+
+(defvar *macro-expansion-source* nil
+  "The source object associated with `*macro-expansion-form*', if any.
+
+See `*macro-expansion-form*' for motivation.")
 
 (defun expand-macro (form source)
   "Expand the macro in FORM using MACROEXPAND-1, trying our best to preserve source information."
@@ -26,10 +41,14 @@
         (source-table (make-hash-table :test #'eq)))
     (fill-source-table form source-table (make-hash-table :test #'eq))
     (handler-case
-        (rebuild-cst (macroexpand-1 (cst:raw form))
-                     source-table
-                     fallback-source
-                     (make-hash-table :test #'eq))
+        (let ((*macro-expansion-form* form)
+              (*macro-expansion-source* source))
+          (rebuild-cst (macroexpand-1 (cst:raw form))
+                       source-table
+                       fallback-source
+                       (make-hash-table :test #'eq)))
+      (source:source-error (condition)
+        (error condition))
       (error (condition)
         (parse-error "Error during macro expansion"
                      (note source form (princ-to-string condition)))))))

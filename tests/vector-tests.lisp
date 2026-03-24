@@ -4,7 +4,7 @@
   (let vec = (vector:with-capacity 10))
   (iter:for-each! (fn (x)
                     (vector:push! x vec)
-                    Unit)
+                    (values))
                   (iter:up-to 10))
   (is (== (vector:make 0 1 2 3 4 5 6 7 8 9)
           vec))
@@ -19,7 +19,7 @@
   (let vec1 = (vector:make 10 11 12 13 14))
   (iter:for-each! (fn (x)
                     (vector:push! x vec0)
-                    Unit)
+                    (values))
                   (iter:up-to 5))
   (is (== (vector:make 0 1 2 3 4 10 11 12 13 14)
           (vector:append vec0 vec1)))
@@ -85,3 +85,7 @@
   (let v = (vector:make 0 1 2 3 4 5 6))
   (is (== (vector:make 2 3) (vector:subseq v 2 4)))
   (is (== v (vector:subseq v 0 1000))))
+
+(define-test test-vector-show ()
+  (is (== "#<Vector [1 2 3]>"
+          (show-as-string (vector:make 1 2 3)))))

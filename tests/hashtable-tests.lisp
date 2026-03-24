@@ -2,8 +2,10 @@
 
 (define-test simple-hashtable ()
   (let ((ht (the (Hashtable String Integer) (hashtable:new)))
-        (insert! (hashtable:set! ht))
-        (get (hashtable:get ht)))
+        (insert! (fn (key value)
+                   (hashtable:set! ht key value)))
+        (get (fn (key)
+               (hashtable:get ht key))))
     (progn
       (insert! "zero" 0)
       (insert! "one" 1)
@@ -54,12 +56,17 @@
           (hash (hashtable:make (0 "zero") (1 "one")))))
 
   (let ht1 = (hashtable:new))
-  (for x in (iter:up-to 10000)
+  (for ((declare x UFix)
+        (x 0 (1+ x)))
+    :repeat 10000
     (hashtable:set! ht1 x x))
 
   (let ht2 = (hashtable:new))
-  (for x in (iter:down-from 10000)
-    (hashtable:set! ht2 x x))
+  (for ((declare x UFix)
+        (x 10000 (1- x)))
+    :repeat 10000
+    (let y = (1- x))
+    (hashtable:set! ht2 y y))
 
   (is (== (hash ht1) (hash ht2)))
 
@@ -68,3 +75,11 @@
 
   (is (/= (hash (the (Hashtable String String) (hashtable:make)))
           (hash (hashtable:make ("a" "b"))))))
+
+(define-test hashtable-show ()
+  (let ht = (hashtable:new))
+  (is (== "#<HashTable [=>]>"
+          (show-as-string (the (Hashtable String Integer) (hashtable:new)))))
+  (hashtable:set! ht "alpha" 1)
+  (is (== "#<HashTable [\"alpha\" => 1]>"
+          (show-as-string ht))))
