@@ -1,12 +1,17 @@
-# Coalton-Lisp Interoperation
+---
+title: "Lisp Interop"
+description: "Interop guarantees and calling conventions between Coalton and Common Lisp."
+hideMeta: true
+weight: 60
+---
 
 ## Introduction
 
-Coalton is a language embedded in Lisp, and indeed, Coalton compiles to Lisp code. This document describes what Coalton promises for interoperation.
+Coalton is a language embedded in Lisp, and indeed, Coalton compiles to Lisp code. As such, it is relatively easy to have Coalton and Lisp interoperate with one another with little to no overhead. This document describes the guarantees.
 
 ## Interaction Mode
 
-*See [Configuring Coalton](./configuring-coalton.md) for a more in-depth discussion about ways to configure Coalton.*
+*See [Configuring Coalton](/manual/topics/configuring-coalton/) for a broader discussion of compiler modes.*
 
 First and foremost, there are two ways to globally compile Coalton. This is determined by
 an environment variable `COALTON_ENV` which in turn sets a Lisp feature `:coalton-release`
@@ -72,7 +77,7 @@ For the most part, `define-type` will not provide guarantees across interaction 
   (Wrap Integer))
 ```
 
-Depending on the interaction mode, `Wrap` may actually be similar to the `IDENTITY` function, and `Wrapper` may be representation-equivalent to `Integer`.
+Depending on the interaction mode, `Wrap` may actually be similar to the `CL:IDENTITY` function, and `Wrapper` may be representation-equivalent to `Integer`.
 
 Nonetheless, there is one practical guarantee: the existence of Lisp functions for unconstrained constructors. *Unconstrained* means that there are no type class constraints on any type variables present in the type that describes the value. (For instance, in `Num :t => :s -> :t`, we say that `:s` is unconstrained and `:t` is constrained.) Consider the following type:
 
