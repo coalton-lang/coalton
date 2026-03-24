@@ -3,7 +3,7 @@ TIME ?= /bin/time
 ## run tests sequentially (t) or concurrently (nil) ?
 SEQp ?= nil
   # Is package :compatibility being used?
-  ORIGINALp=$(shell grep compat: library/classes.lisp && echo nil || echo t)
+  ORIGINALp=$(shell grep compat: library/classes.ct && echo nil || echo t)
   ifeq ($(ORIGINALp),t)
     COALTON_NAME = original-coalton
     $(warning Using the original Coalton code)
@@ -13,12 +13,12 @@ SEQp ?= nil
   endif
 $(warning         With BLDDIR="$(BLDDIR)")
 $(warning         With QUICKLISP_HOME="$(QUICKLISP_HOME)")
+QUICKLISP_HOME ?= $(HOME)/quicklisp-$(COALTON_NAME)
 COALTON_HOME ?= $(shell test -f ./coalton.asd && pwd || echo $(QUICKLISP_HOME)/local-projects/coalton)
 ## Directory where test output is stored.
 TEMP ?= zz-temp
 TMPDIR ?= $(HOME)/tmp
 BLDDIR = $(HOME)/.cache/$(COALTON_NAME)
-QUICKLISP_HOME = $(HOME)/quicklisp-$(COALTON_NAME)
 
 ## quick - just check these values
 # SEQp = t
@@ -96,17 +96,14 @@ CLASP=$(shell which -s clasp && echo "$(CLASP_COMP)" || echo "echo $(CLASP_COMP)
 ## COMP is the actual compiler to be used - executable with specific arguments
 COMP=none
 ## How to load a file using COMP - minimal default:
-runOnFileDefault = env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
-                   $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --load $(2)
+runOnFileDefault = env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --load $(2)
 ## How to eval an expression using COMP - minimal default:
-runOnExprDefault = env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
-                   $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --eval $(2)
+runOnExprDefault = env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --eval $(2)
 ## How to eval and load using COMP - minimal default:
-runOnExprAndFileDefault = env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
-                          $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --eval $(2) --load $(3)
+runOnExprAndFileDefault = env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --eval $(2) --load $(3)
 ## How to load and eval using COMP - minimal default:
-runOnFileAndExprDefault = env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
-                          $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --load $(2) --eval $(3)
+runOnFileAndExprDefault = env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --load $(2) --eval $(3)
+
 LISPEXEC=$(LISP)
   runOnFile = cat /dev/null | $(call runOnFileDefault,$(1),$(2))
   runOnExpr = cat /dev/null | $(call runOnExprDefault,$(1),$(2))
@@ -122,14 +119,10 @@ ifeq ($(LISP),sbcl)
 endif
 ifeq ($(LISP),alisp)
   COMP=$(ALLEGRO)
-  runOnFile = cat $(QUICKLISP_HOME)/asdf.lisp $(2) | env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
-                                                     $(TIME) $(1)
-  runOnExpr = (cat $(QUICKLISP_HOME)/asdf.lisp ; echo $(2)) | env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
-                                                              $(TIME) $(1)
-  runOnExprAndFile = (cat $(QUICKLISP_HOME)/asdf.lisp ; echo $(2) ; cat $(3)) | env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
-                                                                                $(TIME) $(1) 
-  runOnFileAndExpr = (cat $(QUICKLISP_HOME)/asdf.lisp $(2) ; echo $(3)) | env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
-                                                                          $(TIME) $(1)
+  runOnFile = cat $(QUICKLISP_HOME)/asdf.lisp $(2) | env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1)
+  runOnExpr = (cat $(QUICKLISP_HOME)/asdf.lisp ; echo $(2)) | env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1)
+  runOnExprAndFile = (cat $(QUICKLISP_HOME)/asdf.lisp ; echo $(2) ; cat $(3)) | env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1) 
+  runOnFileAndExpr = (cat $(QUICKLISP_HOME)/asdf.lisp $(2) ; echo $(3)) | env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1)
   LISPEXEC=alisp
 endif
 ifeq ($(LISP),ccl)
@@ -206,7 +199,7 @@ gitPullOrClone = d=`dirname $(1)` ; if [ -f "$(1)" ] ; then $(call gitPull,$${d}
 clone-repos: setup-coalton-sources $(EXTRA_LOCAL_PROJECTS)/fset/fset.asd $(EXTRA_LOCAL_PROJECTS)/misc-extensions/misc-extensions.asd $(EXTRA_LOCAL_PROJECTS)/named-readtables/named-readtables.asd
 
 setup-coalton-sources:
-	cwdir=`pwd` ; cd $(EXTRA_LOCAL_PROJECTS) ; rm -rf coalton* ; cp -rp $${cwdir} coalton/
+	cd $(EXTRA_LOCAL_PROJECTS) ; rm -rf coalton* ; cp -rp $(REPO_ROOT)/. coalton/
 
 $(EXTRA_LOCAL_PROJECTS)/fset/fset.asd:	update-repos~
 	$(call gitPullOrClone,$(EXTRA_LOCAL_PROJECTS)/fset/fset.asd,$(FSET_REPO))
@@ -337,7 +330,7 @@ test-release:
 
 .PHONY: docs
 docs:
-  env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+	env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
 	  $(SBCL) \
 		--load "$(QUICKLISP_SETUP)" \
 		--eval "(ql:quickload :coalton/doc :silent t)" \
