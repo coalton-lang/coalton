@@ -494,7 +494,6 @@ Coalton allows the definition of parametric type aliases. Type aliases can be de
 Parametric type aliases must be fully applied.
 ```lisp
 (coalton-toplevel
-
   (define-type (T :a) (ConstrT (:a Integer)))
   
   (define-type-alias (MyCollection1 :a) (List :a))
@@ -620,7 +619,7 @@ functions.
   (odd 5))
 ```
 
-> [NOTE!]
+> [!NOTE]
 > Since `let` introduces recursive bindings, its generally
 > not allowed for variables to be self-referential, as in
 > `(let ((x (1+ x))) ...)`. Instead, use `let*`.
