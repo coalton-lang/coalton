@@ -12,7 +12,7 @@ error: Ambiguous predicate
   --> test:3:13
    |
  3 |  (define x (0 1))
-   |               ^ Ambiguous predicate COALTON/CLASSES:NUM :A
+   |               ^ Ambiguous predicate Num :A
 
 ================================================================================
 101 Check that you can only call callable things
@@ -29,7 +29,7 @@ error: Argument error
   --> test:4:10
    |
  4 |  (define y (x 1))
-   |            ^^^^^ Unable to call value of type 'INTEGER': it is not a function
+   |            ^^^^^ Unable to call value of type 'Integer': it is not a function
 
 ================================================================================
 102 Declarations cannot be less specific than their associated definition
@@ -46,7 +46,7 @@ error: Declared type is too general
   --> test:4:8
    |
  4 |  (define x Unit)
-   |          ^ Declared type FORALL :A. :A is more general than inferred type UNIT.
+   |          ^ Declared type forall :A. :A is more general than inferred type Unit.
 
 ================================================================================
 103 Missing explicit predicates cannot be defaulted
@@ -63,7 +63,7 @@ error: Explicit type is missing inferred predicate
   --> test:4:8
    |
  4 |  (define x 1)
-   |          ^ Declared type :A is missing inferred predicate COALTON/CLASSES:NUM :A
+   |          ^ Declared type :A is missing inferred predicate Num :A
 
 ================================================================================
 104 Check that constructors are properly typed
@@ -83,7 +83,7 @@ error: Unknown instance
   --> test:7:24
    |
  7 |  (define x (Branch (Leaf 5) (Leaf "string")))
-   |                          ^ Unknown instance COALTON/CLASSES:NUM STRING
+   |                          ^ Unknown instance Num String
 
 ================================================================================
 105 Check that types of kind * cannot be applied to
@@ -146,7 +146,7 @@ error: Ambiguous predicate
   --> test:9:14
    |
  9 |      ((Just 5) 5)
-   |                ^ Ambiguous predicate COALTON/CLASSES:NUM STRING
+   |                ^ Ambiguous predicate Num String
 
 ================================================================================
 108 Match branches must match on constructors
@@ -212,7 +212,7 @@ error: Arity mismatch
  13 |   (define (f a b)
     |  _^
  14 | |    (== a b))
-    | |____________^ Function definition has 2 positional parameters but expected type '((LIST COLOR) -> BOOLEAN)' takes 1
+    | |____________^ Function definition has 2 positional parameters but expected type 'List Color -> Boolean' takes 1
 
 ================================================================================
 Check that polymorphic recursion is not possible without an explicit binding
@@ -267,7 +267,7 @@ error: Explicit type is missing inferred predicate
   --> test:14:9
     |
  14 |  (define (test-f a)
-    |           ^^^^^^ Declared type TEST :A => (:A -> :A) is missing inferred predicate EQ :A
+    |           ^^^^^^ Declared type Test :A => :A -> :A is missing inferred predicate Eq :A
 
 ================================================================================
 Typeclasses methods with additional constraints cannot be called without them,
@@ -296,7 +296,7 @@ error: Explicit type is missing inferred predicate
   --> test:14:9
     |
  14 |  (define (test-generic a)
-    |           ^^^^^^^^^^^^ Declared type TEST :A => (:A -> :A) is missing inferred predicate EQ :A
+    |           ^^^^^^^^^^^^ Declared type Test :A => :A -> :A is missing inferred predicate Eq :A
 
 ================================================================================
 Check than non overlapping instances can be defined
@@ -381,9 +381,9 @@ error: Return type mismatch
   --> test:4:2
    |
  4 |    (return "hello")
-   |    ^^^^^^^^^^^^^^^^ First return is of type 'STRING'
+   |    ^^^^^^^^^^^^^^^^ First return is of type 'String'
  5 |    Unit)
-   |    ^^^^ Second return is of type 'UNIT'
+   |    ^^^^ Second return is of type 'Unit'
 
 ================================================================================
 Return 2
@@ -437,7 +437,7 @@ error: Ambiguous predicate
   --> test:5:9
    |
  5 |    (into (into x)))
-   |           ^^^^ Ambiguous predicate INTO :A :B
+   |           ^^^^ Ambiguous predicate Into :A :B
 
 ================================================================================
 Collection builder elements must be homogeneous
@@ -456,7 +456,7 @@ error: Collection element type mismatch
    |
  5 |    (define x ["x" "y" Nil]))
    |               --- earlier element here
-   |                       ^^^ collection elements must all have the same type; expected 'STRING' but got '(LIST :A)'
+   |                       ^^^ collection elements must all have the same type; expected 'String' but got 'List :A'
 
 ================================================================================
 Association builder values must be homogeneous
@@ -475,7 +475,7 @@ error: Association value type mismatch
    |
  5 |    (define x ["x" => "x" "y" => Nil]))
    |                      --- earlier value here
-   |                                 ^^^ association values must all have the same type; expected 'STRING' but got '(LIST :A)'
+   |                                 ^^^ association values must all have the same type; expected 'String' but got 'List :A'
 
 ================================================================================
 Association builder keys must be homogeneous
@@ -494,7 +494,7 @@ error: Association key type mismatch
    |
  5 |    (define x ["x" => 1 Nil => 2]))
    |               --- earlier key here
-   |                        ^^^ association keys must all have the same type; expected 'STRING' but got '(LIST :A)'
+   |                        ^^^ association keys must all have the same type; expected 'String' but got 'List :A'
 
 ================================================================================
 Collection comprehension iterables must implement IntoIterator
@@ -512,7 +512,7 @@ error: Unknown instance
   --> test:5:43
    |
  5 |    (define x (the (coalton/seq:Seq Integer) [x :for x :in True])))
-   |                                             ^^^^^^^^^^^^^^^^^^^ Unknown instance COALTON/ITERATOR:INTOITERATOR BOOLEAN INTEGER
+   |                                             ^^^^^^^^^^^^^^^^^^^ Unknown instance IntoIterator Boolean Integer
 
 ================================================================================
 Collection comprehension when clauses must be Boolean
@@ -530,7 +530,7 @@ error: Type mismatch
   --> test:5:58
    |
  5 |    (define x [x :for x :in (coalton/iterator:once 1) :when "no"]))
-   |                                                            ^^^^ Expected type 'BOOLEAN' but got 'STRING'
+   |                                                            ^^^^ Expected type 'Boolean' but got 'String'
 
 ================================================================================
 Association comprehension iterables must implement IntoIterator
@@ -548,7 +548,7 @@ error: Unknown instance
   --> test:5:59
    |
  5 |    (define x (the (coalton/seq:Seq (Tuple Integer Integer)) [x => x :for x :in True])))
-   |                                                             ^^^^^^^^^^^^^^^^^^^^^^^^ Unknown instance COALTON/ITERATOR:INTOITERATOR BOOLEAN INTEGER
+   |                                                             ^^^^^^^^^^^^^^^^^^^^^^^^ Unknown instance IntoIterator Boolean Integer
 
 ================================================================================
 Association comprehension when clauses must be Boolean
@@ -566,7 +566,7 @@ error: Type mismatch
   --> test:5:63
    |
  5 |    (define x [x => x :for x :in (coalton/iterator:once 1) :when "no"]))
-   |                                                                 ^^^^ Expected type 'BOOLEAN' but got 'STRING'
+   |                                                                 ^^^^ Expected type 'Boolean' but got 'String'
 
 ================================================================================
 Collection comprehension :below clauses must be numeric
@@ -584,5 +584,5 @@ error: Unknown instance
   --> test:5:13
    |
  5 |    (define x [x :for x :below "no"]))
-   |               ^ Unknown instance NUM STRING
+   |               ^ Unknown instance Num String
  

@@ -25,13 +25,18 @@
    (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util)
    (#:parser #:coalton-impl/parser)
-   (#:tc #:coalton-impl/typechecker/stage-1))
+   (#:tc #:coalton-impl/typechecker/stage-1)
+   (#:type-string #:coalton-impl/typechecker/type-string))
   (:export
    #:toplevel-define-instance           ; FUNCTION
    #:toplevel-typecheck-instance        ; FUNCTION
    ))
 
 (in-package #:coalton-impl/typechecker/define-instance)
+
+(defun type-object-string (object env)
+  (let ((settings:*coalton-print-unicode* nil))
+    (type-string:type-to-string object env)))
 
 (defun instance-scoped-method-substitutions (outer-method-types instance-scoped-tvars)
   (declare (type list outer-method-types)
@@ -206,7 +211,8 @@
           (tc:overlapping-instance-error (e)
             (tc-error "Overlapping instance"
                       (tc-location (parser:toplevel-define-instance-head-location instance)
-                                   "instance overlaps with ~S" (tc:overlapping-instance-error-inst2 e)))))
+                                   "instance overlaps with ~A"
+                                   (type-object-string (tc:overlapping-instance-error-inst2 e) env)))))
 
         (loop :for method-name :in method-names
               :for method-codegen-sym :in method-codegen-syms :do
@@ -254,7 +260,8 @@
                                 :no-error t)
                                (tc-error "Instance missing context"
                                          (tc-location (parser:toplevel-define-instance-head-location unparsed-instance)
-                                                      "No instance for ~S" superclass)))
+                                                      "No instance for ~A"
+                                                      (type-object-string superclass env))))
 
                       :for additional-context
                         := (tc:apply-substitution
@@ -267,9 +274,9 @@
                                 :do (unless (tc:entail env context pred)
                                       (tc-error "Instance missing context"
                                                 (tc-location (parser:toplevel-define-instance-head-location unparsed-instance)
-                                                             "No instance for ~S arising from constraints of superclasses ~S"
-                                                             pred
-                                                             superclass))))))
+                                                             "No instance for ~A arising from constraints of superclasses ~A"
+                                                             (type-object-string pred env)
+                                                             (type-object-string superclass env)))))))
 
     (check-duplicates
      (parser:toplevel-define-instance-methods unparsed-instance)

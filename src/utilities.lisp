@@ -10,6 +10,7 @@
    (#:cst #:concrete-syntax-tree))
   (:export
    #:+keyword-package+                  ; CONSTANT
+   #:dynamic-variable-name-p           ; FUNCTION
    #:required                           ; FUNCTION
    #:unreachable                        ; MACRO
    #:coalton-bug                        ; FUNCTION
@@ -36,6 +37,17 @@
 (in-package #:coalton-impl/util)
 
 (alexandria:define-constant +keyword-package+ (cl:find-package "KEYWORD") :test #'eq)
+
+(defun dynamic-variable-name-p (name)
+  "Return true when NAME uses Coalton's dynamic-variable earmuff syntax."
+  (declare (type symbol name)
+           (values boolean &optional))
+  (let* ((string (symbol-name name))
+         (length (length string)))
+    (and (>= length 3)
+         (char= (char string 0) #\*)
+         (char= (char string (1- length)) #\*)
+         (not (null (find #\* string :test-not #'char= :start 1 :end (1- length)))))))
 
 (defun symbol-list-p (x)
   (and (alexandria:proper-list-p x)

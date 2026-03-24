@@ -81,7 +81,7 @@
          (inline)
          (define (<=> a b)
            (coalton++:unsafe
-             (lisp (-> Ord) (a b)
+             (lisp (-> Ordering) (a b)
                (cl:cond
                  ((cl:< a b)
                   LT)

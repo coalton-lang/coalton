@@ -44,4 +44,4 @@ error: Type mismatch
   --> test:3:18
    |
  3 |  (define x (unless "a" 1))
-   |                    ^^^ Expected type 'BOOLEAN' but got 'STRING'
+   |                    ^^^ Expected type 'Boolean' but got 'String'

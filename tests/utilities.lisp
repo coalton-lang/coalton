@@ -51,7 +51,8 @@
                                    (source (source:make-source-string unparsed-type)))
                                (with-open-stream (stream (source:source-stream source))
                                  (let* ((ast-type (parser:parse-qualified-type
-                                                   (eclector.concrete-syntax-tree:read stream)
+                                                   (parser:with-reader-context stream
+                                                     (eclector.concrete-syntax-tree:read stream))
                                                    source))
                                         (parsed-type (tc:parse-ty-scheme ast-type env)))
                                    (is (tc:ty-scheme=

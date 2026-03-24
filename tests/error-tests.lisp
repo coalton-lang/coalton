@@ -153,11 +153,11 @@ help: message 5
 
 (define (bad x)
   (let ((declare reify (coalton/types:Proxy :item -> :item))
-        (reify (fn (p)
+    (reify (fn (p)
                  (coalton/types:as-proxy-of x p))))
     (reify (coalton/types:proxy-of x))))")))
     (is (search "Declared type is too general" msg))
-    (is (search "COALTON/TYPES:PROXY" msg))
+    (is (search "Proxy" msg))
     (is (search "more general than inferred type" msg))))
 
 (deftest implicit-class-method-binders-do-not-create-scoped-type-variables ()
