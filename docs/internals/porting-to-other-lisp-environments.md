@@ -155,7 +155,8 @@ have discovered the following cases:
   - ECL: `:spinneret`
 
 - Testing fails:
-  - *SBCL*: `:concrete-syntax-tree` (testing it causes sbcl to *crash*)
+  - *SBCL*: `:concrete-syntax-tree` (testing it causes sbcl to *crash* but
+    passes when using --dynamic-space-size 2048)
   - *CCL*: (none)
   - ABCL: `:eclector :yason` (`:eclector` fails its tests but `asdf:test-system` returns `t`)
   - CLASP: `:trivial-garbage :float-features :fset`

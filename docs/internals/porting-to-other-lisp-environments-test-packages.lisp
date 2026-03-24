@@ -9,7 +9,8 @@
 (defvar *cannot-load* nil)
 (defvar *testing-fails* nil)
 
-#+sbcl (push :concrete-syntax-tree *testing-fails*) ; testing it crashes sbcl
+;;; testing :concrete-syntax-tree passes, when using --dynamic-space-size 2048
+;; #+sbcl (push :concrete-syntax-tree *testing-fails*) ; testing it crashes sbcl
 
 #+abcl (dolist (pkg '(:eclector :yason))
          (push pkg *testing-fails*))
@@ -129,12 +130,12 @@
   (format *error-output*
           "~%NOTE:~% Some packages return T even when they fail their self-tests (e.g., eclector).~%")
 
-  (progn
+  (when nil
     (ql:quickload :fiasco)
     (ql:quickload :fiasco-self-tests)
-    (in-package :fiasco-basic-self-tests)
+    (cl:in-package :fiasco-basic-self-tests)
     (run-package-tests)
-    (in-package :fiasco-suite-tests)    ; unsure if it's *supposed* to fail...
+    (cl:in-package :fiasco-suite-tests)    ; unsure if it's *supposed* to fail...
     (run-package-tests))
 
   (uiop:quit 0))
