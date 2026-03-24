@@ -12,7 +12,7 @@
    #:Result #:Ok #:Err
    #:Eq #:==
    #:Hash
-   #:Ord #:LT #:EQ #:GT
+   #:Ord #:Ordering #:LT #:EQ #:GT
    #:<=> #:> #:< #:>= #:<=
    #:max
    #:min
@@ -44,8 +44,6 @@
    #:default #:defaulting-unwrap #:default?))
 
 (in-package #:coalton/classes)
-
-(named-readtables:in-readtable coalton:coalton)
 
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
@@ -131,13 +129,13 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
   ;;
 
   (repr :enum)
-  (define-type Ord
+  (define-type Ordering
     "The result of an ordered comparison."
     LT "Less than"
     EQ "Equal to"
     GT "Greater than")
 
-  (define-instance (Eq Ord)
+  (define-instance (Eq Ordering)
     (define (== a b)
       (match (Tuple a b)
         ((Tuple (LT) (LT)) True)
@@ -145,7 +143,7 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
         ((Tuple (GT) (GT)) True)
         (_                 False))))
 
-  (define-instance (Ord Ord)
+  (define-instance (Ord Ordering)
     (define (<=> a b)
       (match (Tuple a b)
         ((Tuple (LT) (LT)) EQ)
@@ -161,8 +159,8 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
   (define-class (Eq :a => Ord :a)
     "Types whose values can be ordered. Requires `Eq`."
     (<=>
-     "Given two objects, return their comparison (as an `Ord` object)."
-     (:a * :a -> Ord)))
+     "Given two objects, return their comparison (as an `Ordering` object)."
+     (:a * :a -> Ordering)))
 
   (declare > (Ord :a => :a * :a -> Boolean))
   (define (> x y)
