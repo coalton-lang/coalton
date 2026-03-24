@@ -582,6 +582,49 @@ Structs can also be parametric:
     (second :a)))
 ```
 
+## Local Variables: `let` and `let*`
+
+The operators `let` and `let*` are expression forms
+for local bindings. `let` binds its variables recursively and in parallel
+(similar to Scheme's `letrec`), while `let*` binds them left-to-right so each
+initializer can refer to the earlier bindings.
+
+```lisp
+(coalton
+  (let ((x (+ y 1))
+        (y 2))
+    (+ x y)))
+```
+
+```lisp
+(coalton
+  (let* ((x 1)
+         (y (+ x 1)))
+    (+ x y)))
+```
+
+`let*` accepts the same binding syntax and local `declare` forms as `let`.
+
+`let` can also be used to introduce local (possibly recursive)
+functions.
+
+```lisp
+(let ((odd (fn (x)
+             (if (zero? x)
+                 False
+                 (even (1- x)))))
+      (even (fn (x)
+              (if (zero? x)
+                  True
+                  (odd (1- x)))))))
+  (odd 5))
+```
+
+> [NOTE!]
+> Since `let` introduces recursive bindings, its generally
+> not allowed for variables to be self-referential, as in
+> `(let ((x (1+ x))) ...)`. Instead, use `let*`.
+
 ## Looping & Iteration
 
 Coalton offers three main ways to do explicit loops:
@@ -681,28 +724,6 @@ Now it works without any type declarations on use:
 55
 ```
 
-### Local Bindings: `let` and `let*`
-
-Outside flattened-body contexts, ordinary `let` and `let*` are expression forms
-for local bindings. `let` binds its variables recursively and in parallel
-(similar to Scheme's `letrec`), while `let*` binds them left-to-right so each
-initializer can refer to the earlier bindings.
-
-```lisp
-(coalton
-  (let ((x (+ y 1))
-        (y 2))
-    (+ x y)))
-```
-
-```lisp
-(coalton
-  (let* ((x 1)
-         (y (+ x 1)))
-    (+ x y)))
-```
-
-`let*` accepts the same binding syntax and local `declare` forms as `let`.
 
 ### Built-In Looping Constructs
 
