@@ -1,0 +1,540 @@
+(coalton/utils:defstdlib-package #:coalton/classes
+  (:use
+   #:coalton)
+  (:local-nicknames
+   (#:types #:coalton/types))
+  (:export
+   #:Signalable
+   #:error
+   #:Tuple
+   #:Optional #:Some #:None
+   #:Result #:Ok #:Err
+   #:Eq #:==
+   #:Hash
+   #:Ord #:Ordering #:LT #:EQ #:GT
+   #:<=> #:> #:< #:>= #:<=
+   #:max
+   #:min
+   #:Num #:+ #:- #:* #:fromInt
+   #:Semigroup #:<>
+   #:Monoid #:mempty
+   #:Functor #:map
+   #:Applicative #:pure #:liftA2
+   #:Monad #:>>=
+   #:MonadTransformer #:lift
+   #:>> #:join
+   #:MonadFail #:fail
+   #:Alternative #:alt #:empty
+   #:Foldable #:fold #:foldr #:mconcat #:mconcatmap
+   #:mempty? #:mcommute?
+   #:Traversable #:traverse
+   #:Bifunctor #:bimap #:map-fst #:map-snd
+   #:sequence
+   #:FromItemizedCollection #:begin-collection-builder #:adjoin-to-collection-builder #:finalize-collection-builder
+   #:FromItemizedAssociation #:begin-association-builder #:adjoin-to-association-builder #:finalize-association-builder
+   #:FromCollectionComprehension #:begin-collection-comprehension
+   #:adjoin-to-collection-comprehension #:finalize-collection-comprehension
+   #:FromAssociationComprehension #:begin-association-comprehension
+   #:adjoin-to-association-comprehension #:finalize-association-comprehension
+   #:Into
+   #:TryInto
+   #:Iso
+   #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:unwrap-into #:expect #:as-optional
+   #:default #:defaulting-unwrap #:default?))
+
+(in-package #:coalton/classes)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+;;;
+;;; Signaling errors and warnings
+;;;
+
+(coalton-toplevel
+
+ ;;
+ ;; Signalling errors on supported types
+ ;;
+ (define-class (Signalable :a)
+   "Signals errors or warnings by calling their respective lisp conditions."
+   (error "Signal an error with a type-specific error string." (:a -> :b)))
+
+  (define-instance (Signalable String)
+    (define (error str)
+      (lisp (-> :a) (str)
+        (cl:error str)))))
+
+
+(coalton-toplevel
+
+  ;;
+  ;; Base Types
+  ;;
+
+  (define-struct (Tuple :a :b)
+    "A heterogeneous collection of items."
+    (first :a)
+    (second :b))
+
+  (define-type (Result :bad :good)
+    "Represents something that may have failed."
+    ;; We write (Result :bad :good) instead of (Result :good :bad)
+    ;; because of the limitations of how we deal with higher-kinded
+    ;; types; we want to implement Functor on this.
+    (Ok :good)
+    (Err :bad))
+
+  ;;
+  ;; Eq
+  ;;
+
+  (define-class (Eq :a)
+    "Types which have equality defined."
+    (== (:a * :a -> Boolean)))
+
+  (define-instance (Eq types:LispType)
+    (define (== a b)
+      (lisp (-> Boolean) (a b)
+        (cl:equalp a b))))
+
+  (define-class (Eq :a => Num :a)
+    "Types which have numeric operations defined."
+    (+ (:a * :a -> :a))
+    (- (:a * :a -> :a))
+    (* (:a * :a -> :a))
+    (fromInt (Integer -> :a)))
+
+  (define-instance (Eq Unit)
+    (define (== _ _) True))
+
+  ;;
+  ;; Hash
+  ;;
+
+  #+sbcl
+  (repr :native (cl:unsigned-byte 62))
+
+  #+allegro
+  (repr :native (cl:unsigned-byte 0 32))
+
+  ;; https://github.com/Clozure/ccl/blob/ff51228259d9dbc8a9cc7bbb08858ef4aa9fe8d0/level-0/l0-hash.lisp#L1885
+  #+ccl
+  (repr :native (cl:and cl:fixnum cl:unsigned-byte))
+
+  #-(or sbcl allegro ccl)
+  #.(cl:error "hashing is not supported on ~A" (cl:lisp-implementation-type))
+
+  (define-type Hash
+    "Implementation dependent hash code.")
+
+  (define-class (Eq :a => Hash :a)
+    "Types which can be hashed for storage in hash tables.
+
+The hash function must satisfy the invariant that `(== left right)` implies `(== (hash left) (hash right))`."
+    (hash (:a -> Hash)))
+
+  ;;
+  ;; Ord
+  ;;
+
+  (repr :enum)
+  (define-type Ordering
+    "The result of an ordered comparison."
+    LT "Less than"
+    EQ "Equal to"
+    GT "Greater than")
+
+  (define-instance (Eq Ordering)
+    (define (== a b)
+      (match (Tuple a b)
+        ((Tuple (LT) (LT)) True)
+        ((Tuple (EQ) (EQ)) True)
+        ((Tuple (GT) (GT)) True)
+        (_                 False))))
+
+  (define-instance (Ord Ordering)
+    (define (<=> a b)
+      (match (Tuple a b)
+        ((Tuple (LT) (LT)) EQ)
+        ((Tuple (LT) (EQ)) LT)
+        ((Tuple (LT) (GT)) LT)
+        ((Tuple (EQ) (LT)) GT)
+        ((Tuple (EQ) (EQ)) EQ)
+        ((Tuple (EQ) (GT)) LT)
+        ((Tuple (GT) (LT)) GT)
+        ((Tuple (GT) (EQ)) GT)
+        ((Tuple (GT) (GT)) EQ))))
+
+  (define-class (Eq :a => Ord :a)
+    "Types whose values can be ordered. Requires `Eq`."
+    (<=>
+     "Given two objects, return their comparison (as an `Ordering` object)."
+     (:a * :a -> Ordering)))
+
+  (declare > (Ord :a => :a * :a -> Boolean))
+  (define (> x y)
+    "Is `x` greater than `y`?"
+    (== (<=> x y) GT))
+
+  (declare < (Ord :a => :a * :a -> Boolean))
+  (define (< x y)
+    "Is `x` less than `y`?"
+    (== (<=> x y) LT))
+
+  (declare >= (Ord :a => :a * :a -> Boolean))
+  (define (>= x y)
+    "Is `x` greater than or equal to `y`?"
+    (let ((cmp (<=> x y)))
+      (if (== cmp LT)
+          False
+          True)))
+
+  (declare <= (Ord :a => :a * :a -> Boolean))
+  (define (<= x y)
+    "Is `x` less than or equal to `y`?"
+    (let ((cmp (<=> x y)))
+      (if (== cmp GT)
+          False
+          True)))
+
+  (declare max (Ord :a => :a * :a -> :a))
+  (define (max x y)
+    "Returns the greater element of `x` and `y`."
+    (if (> x y)
+        x
+        y))
+
+  (declare min (Ord :a => :a * :a -> :a))
+  (define (min x y)
+    "Returns the lesser element of `x` and `y`."
+    (if (< x y)
+        x
+        y))
+
+  ;;
+  ;; Haskell
+  ;;
+
+  (define-class (Semigroup :a)
+    "Types with an associative binary operation defined."
+    (<> (:a * :a -> :a)))
+
+  (define-class (Semigroup :a => Monoid :a)
+    "Types with an associative binary operation and identity defined."
+    (mempty :a))
+
+  (define-class (Functor :f)
+    "Types which can map an inner type where the mapping adheres to the identity and composition laws."
+    (map ((:a -> :b) * (:f :a) -> (:f :b))))
+
+  (define-class (Functor :f => Applicative :f)
+    "Types which are a functor which can embed pure expressions and sequence operations."
+    (pure (:a -> (:f :a)))
+    (liftA2 ((:a * :b -> :c) * (:f :a) * (:f :b) -> (:f :c))))
+
+  (define-class (Applicative :m => Monad :m)
+    "Types which are monads as defined in Haskell. See https://wiki.haskell.org/Monad for more information."
+    (>>= ((:m :a) * (:a -> :m :b) -> (:m :b))))
+
+  (define-class (MonadTransformer :t)
+    "Types which are monads that wrap another monad, allowing you to use - for example - State and Result
+together."
+    (lift (Monad :m => :m :a -> :t :m :a)))
+
+  (declare >> (Monad :m => (:m :a) * (:m :b) -> (:m :b)))
+  (define (>> a b)
+    "Equivalent to `(>>= a (fn (_) b))`."
+    (>>= a (fn (_) b)))
+
+  (declare join (Monad :m => :m (:m :a) -> :m :a))
+  (define (join m)
+    "Equivalent to `(>>= m id)`."
+    (>>= m (fn (x) x)))
+
+  (define-class (Monad :m => MonadFail :m)
+    (fail (String -> :m :a)))
+
+  (define-class (Applicative :f => Alternative :f)
+    "Types which are monoids on applicative functors."
+    (alt ((:f :a) * (:f :a) -> (:f :a)))
+    (empty (:f :a)))
+
+  (define-class (Foldable :container)
+    "Types which can be folded into a single element."
+    (fold  "A left tail-recursive fold."       ((:accum * :elt -> :accum) * :accum * (:container :elt) -> :accum))
+    (foldr "A right non-tail-recursive fold."  ((:elt * :accum -> :accum) * :accum * (:container :elt) -> :accum)))
+
+  (declare mempty? ((Eq :a) (Monoid :a) => :a -> Boolean))
+  (define (mempty? a)
+    "Does `a` equal `(the Type mempty)`?"
+    (== mempty a))
+
+  (declare mconcat ((Foldable :f) (Monoid :a) => :f :a -> :a))
+  (define (mconcat a)
+    "Fold a container of monoids into a single element."
+    (fold <> mempty a))
+
+  (declare mconcatmap ((Foldable :f) (Monoid :a) => (:b -> :a) * (:f :b) -> :a))
+  (define (mconcatmap f a)
+    "Map a container to a container of monoids, and then fold that container into a single element."
+    (fold (fn (a b) (<> a (f b))) mempty a))
+
+  (declare mcommute? ((Eq :a) (Semigroup :a) => :a * :a -> Boolean))
+  (define (mcommute? a b)
+    "Does `a <> b` equal `b <> a`?"
+    (== (<> a b) (<> b a)))
+
+  (define-class (Traversable :t)
+    (traverse (Applicative :f => (:a -> :f :b) * (:t :a) -> (:f (:t :b)))))
+
+  (declare sequence ((Traversable :t) (Applicative :f) => :t (:f :b) -> :f (:t :b)))
+  (define (sequence x)
+    (traverse (fn (y) y) x))
+
+  (define-class (Bifunctor :f)
+    "Types which take two type arguments and are functors on both."
+    (bimap ((:a -> :b) * (:c -> :d) * (:f :a :c) -> (:f :b :d))))
+
+  (declare map-fst (Bifunctor :f => (:a -> :b) * (:f :a :c) -> (:f :b :c)))
+  (define (map-fst f b)
+    "Map over the first argument of a `Bifunctor`."
+    (bimap f (fn (x) x) b))
+
+  (declare map-snd (Bifunctor :f => (:b -> :c) * (:f :a :b) -> (:f :a :c)))
+  (define (map-snd f b)
+    "Map over the second argument of a `Bifunctor`."
+    (bimap (fn (x) x) f b))
+
+  (define-class (FromItemizedCollection :collection :element :builder
+                                        (:collection -> :element :builder))
+    "Types which can be built from collection builder syntax `[a b c]`, where the
+elements are explicitly and finitely itemized in source.
+
+These methods form an exact indexed builder protocol:
+
+  1. `begin-collection-builder` creates the initial builder state. It receives
+     the exact number of source items in the builder syntax.
+  2. `adjoin-to-collection-builder` is called once per element, left to right,
+     with the zero-based source index of that element.
+  3. `finalize-collection-builder` converts the builder state into the final
+     collection.
+
+Use this class for converting a finite, explicitly itemized sequence of source
+elements into a target collection.
+
+When no concrete type is specified, the compiler defaults to `Seq`."
+    (begin-collection-builder
+     "Return the initial builder state for a builder with exactly SIZE source elements."
+     (types:Proxy :collection * UFix -> :builder))
+    (adjoin-to-collection-builder
+     "Add one evaluated builder element to the builder state. INDEX is the zero-based source position of ITEM."
+     (types:Proxy :collection * :builder * UFix * :element -> :builder))
+    (finalize-collection-builder
+     "Convert the completed builder state into the final collection."
+     (types:Proxy :collection * :builder -> :collection)))
+
+  (define-class (FromItemizedAssociation :association :key :value :builder
+                                         (:association -> :key :value :builder))
+    "Types which can be built from association builder syntax `[k1 => v1 k2 => v2]`,
+where the entries are explicitly and finitely itemized in source.
+
+These methods form an exact indexed builder protocol:
+
+  1. `begin-association-builder` creates the initial builder state. It receives
+     the exact number of source entries in the builder syntax.
+  2. `adjoin-to-association-builder` is called once per key/value pair, left to
+     right, with the zero-based source index of that entry. Duplicate keys
+     should be kept or discarded consistently; the standard instances keep the
+     first occurrence.
+  3. `finalize-association-builder` converts the builder state into the final
+     association.
+
+Use this class for converting a finite, explicitly itemized sequence of source
+entries into a target association.
+
+When no concrete type is specified, the compiler defaults to `Seq (Tuple :key :value)`."
+    (begin-association-builder
+     "Return the initial builder state for a builder with exactly SIZE source entries."
+     (types:Proxy :association * UFix -> :builder))
+    (adjoin-to-association-builder
+     "Add one key/value pair to the builder state. INDEX is the zero-based source position of the entry. Duplicate keys keep the first occurrence."
+     (types:Proxy :association * :builder * UFix * :key * :value -> :builder))
+    (finalize-association-builder
+     "Convert the completed builder state into the final association."
+     (types:Proxy :association * :builder -> :association)))
+
+  (define-class (FromCollectionComprehension :collection :element :builder
+                                             (:collection -> :element :builder))
+    "Types which can be built from collection comprehension syntax like `[expr :for ...]`.
+
+These methods form a streaming builder protocol:
+
+  1. `begin-collection-comprehension` creates the initial builder state. It
+     receives an advisory size hint when the compiler can cheaply determine
+     one.
+  2. `adjoin-to-collection-comprehension` is called once per emitted element,
+     left to right.
+  3. `finalize-collection-comprehension` converts the builder state into the
+     final collection.
+
+When no concrete type is specified, the compiler defaults to `Seq`."
+    (begin-collection-comprehension
+     "Return the initial builder state. SIZE-HINT is an advisory initial capacity hint: `Some n` when the compiler can cheaply approximate a useful starting size, and `None` otherwise."
+     (types:Proxy :collection * Optional UFix -> :builder))
+    (adjoin-to-collection-comprehension
+     "Add one emitted comprehension element to the builder state."
+     (types:Proxy :collection * :builder * :element -> :builder))
+    (finalize-collection-comprehension
+     "Convert the finished builder state into the target collection."
+     (types:Proxy :collection * :builder -> :collection)))
+
+  (define-class (FromAssociationComprehension :association :key :value :builder
+                                              (:association -> :key :value :builder))
+    "Types which can be built from association comprehension syntax like `[key => value :for ...]`.
+
+These methods form a streaming builder protocol:
+
+  1. `begin-association-comprehension` creates the initial builder state. It
+     receives an advisory size hint when the compiler can cheaply determine
+     one.
+  2. `adjoin-to-association-comprehension` is called once per emitted key/value
+     pair, left to right. Duplicate keys should be kept or discarded
+     consistently; the standard association instances keep the first
+     occurrence.
+  3. `finalize-association-comprehension` converts the builder state into the
+     final association.
+
+When no concrete type is specified, the compiler defaults to `Seq (Tuple :key :value)`."
+    (begin-association-comprehension
+     "Return the initial builder state. SIZE-HINT is an advisory initial capacity hint: `Some n` when the compiler can cheaply approximate a useful starting size, and `None` otherwise."
+     (types:Proxy :association * Optional UFix -> :builder))
+    (adjoin-to-association-comprehension
+     "Add one emitted key/value pair to the builder state. Duplicate keys keep the first occurrence."
+     (types:Proxy :association * :builder * :key * :value -> :builder))
+    (finalize-association-comprehension
+     "Convert the finished builder state into the target association."
+     (types:Proxy :association * :builder -> :association)))
+
+  ;;
+  ;; Conversions
+  ;;
+
+  (define-class (Into :a :b)
+    "`Into :a :b` implies *every* element of `:a` can be represented by an element of `:b`. This conversion might not be bijective (i.e., there may be elements in `:b` that don't correspond to any in `:a`)."
+    (into (:a -> :b)))
+
+  (define-class ((Into :a :b) (Into :b :a) => Iso :a :b)
+    "Opting into this marker typeclass implies that the instances for `(Into :a :b)` and `(Into :b :a)` form a bijection.")
+
+  (define-instance (Into :a :a)
+    (define (into x) x))
+
+  (define-class (TryInto :a :b)
+    "`TRY-INTO` implies some elements of `:a` can be represented exactly by an element of `:b`, but sometimes not. Failed conversions return `None`."
+    (tryInto (:a -> (Optional :b))))
+
+  (define-instance (Iso :a :a))
+
+  ;;
+  ;; Unwrappable for fallible unboxing
+  ;;
+
+  (define-class (Unwrappable :container)
+    "Containers which can be unwrapped to get access to their contents.
+
+`(unwrap-or-else succeed fail container)` should invoke the `succeed` continuation on the unwrapped contents of
+`container` when successful, or invoke the `fail` continuation with no arguments (i.e., with `Unit` as an argument)
+when unable to unwrap a value.
+
+The `succeed` continuation will often, but not always, be the identity function. `as-optional` passes `Some` to
+construct an `Optional`.
+
+Typical `fail` continuations are:
+- Return a default value, or
+- Signal an error."
+    (unwrap-or-else ((:elt -> :result)
+                     * (Void -> :result)
+                     * (:container :elt)
+                     -> :result)))
+
+  (define-instance (Unwrappable (Result :a))
+  (define (unwrap-or-else succeed fail res)
+    (match res
+      ((Ok elt) (succeed elt))
+      ((Err _) (fail)))))
+
+  (define-instance (Unwrappable Optional)
+    (define (unwrap-or-else succeed fail opt)
+      (match opt
+        ((Some elt) (succeed elt))
+        ((None) (fail)))))
+
+  (declare expect ((Unwrappable :container) =>
+                   String
+                   * (:container :element)
+                   -> :element))
+  (define (expect reason container)
+    "Unwrap `container`, signaling an error with the description `reason` on failure."
+    (unwrap-or-else (fn (elt) elt)
+                    (fn () (error reason))
+                    container))
+
+  (declare unwrap ((Unwrappable :container) =>
+                   (:container :element)
+                   -> :element))
+  (define (unwrap container)
+    "Unwrap `container`, signaling an error on failure."
+    (unwrap-or-else (fn (elt) elt)
+                    (fn () (error (lisp (-> String) (container)
+                                    (cl:format cl:nil "Unexpected ~a in UNWRAP"
+                                               container))))
+                    container))
+
+  (declare unwrap-into (TryInto :a :b => :a -> :b))
+  (define (unwrap-into x)
+    "Same as `tryInto` followed by `unwrap`."
+    (unwrap (tryinto x)))
+
+  (declare with-default ((Unwrappable :container) =>
+                         :element
+                         * (:container :element)
+                         -> :element))
+  (define (with-default default container)
+    "Unwrap `container`, returning `default` on failure."
+    (unwrap-or-else (fn (elt) elt)
+                    (fn () default)
+                    container))
+
+  (declare as-optional ((Unwrappable :container) => (:container :elt) -> (Optional :elt)))
+  (define (as-optional container)
+    "Convert any Unwrappable container into an `Optional`, constructing Some on a successful unwrap and None on a failed unwrap."
+    (unwrap-or-else Some
+                    (fn () None)
+                    container))
+
+
+  ;;
+  ;; Default
+  ;;
+
+  (define-class (Default :a)
+    "Types which have default values."
+    (default (Void -> :a)))
+
+  (declare defaulting-unwrap ((Unwrappable :container) (Default :element) =>
+                              (:container :element) -> :element))
+  (define (defaulting-unwrap container)
+    "Unwrap an `unwrappable`, returning `(default)` of the wrapped type on failure."
+    (unwrap-or-else (fn (elt) elt)
+                    (fn () (default))
+                    container))
+
+  (declare default? ((Default :a) (Eq :a) => :a -> Boolean))
+  (define (default? x)
+      "Is `x` the default item of its type?"
+      (== x (default))))
+
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/CLASSES")

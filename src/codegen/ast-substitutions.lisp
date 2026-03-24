@@ -174,6 +174,7 @@ is true."
                                    :init (funcall *traverse* (node-for-binding-init binding) new-subs)
                                    :step (and (node-for-binding-step binding)
                                               (funcall *traverse* (node-for-binding-step binding) loop-subs))))
+         :sequential-p (node-for-sequential-p node)
          :returns (and (node-for-returns node)
                        (funcall *traverse* (node-for-returns node) loop-subs))
          :termination-kind (node-for-termination-kind node)

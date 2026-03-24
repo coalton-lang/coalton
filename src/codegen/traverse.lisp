@@ -140,6 +140,14 @@ nodes."
        :bindings (loop :for (name . node) :in (node-let-bindings node)
                        :collect (cons name (apply *traverse* node args)))
        :subexpr (apply *traverse* (node-let-subexpr node) args)))
+    (action (:traverse node-dynamic-let node &rest args)
+      (make-node-dynamic-let
+       :type (node-type node)
+       :bindings (loop :for binding :in (node-dynamic-let-bindings node)
+                       :collect (make-node-dynamic-binding
+                                 :name (node-dynamic-binding-name binding)
+                                 :value (apply *traverse* (node-dynamic-binding-value binding) args)))
+       :subexpr (apply *traverse* (node-dynamic-let-subexpr node) args)))
     (action (:traverse node-match node &rest args)
       (make-node-match
        :type (node-type node)
@@ -190,6 +198,7 @@ nodes."
                                  :init (apply *traverse* (node-for-binding-init binding) args)
                                  :step (and (node-for-binding-step binding)
                                             (apply *traverse* (node-for-binding-step binding) args))))
+       :sequential-p (node-for-sequential-p node)
        :returns (and (node-for-returns node)
                      (apply *traverse* (node-for-returns node) args))
        :termination-kind (node-for-termination-kind node)
@@ -420,6 +429,16 @@ bound at the given point."
          :bindings (loop :for (name . node) :in (node-let-bindings node)
                          :collect (cons name (funcall *traverse* node new-bound-variables)))
          :subexpr (funcall *traverse* (node-let-subexpr node) new-bound-variables))))
+    (action (:traverse node-dynamic-let node bound-variables)
+      (make-node-dynamic-let
+       :type (node-type node)
+       :bindings (loop :for binding :in (node-dynamic-let-bindings node)
+                       :collect (make-node-dynamic-binding
+                                 :name (node-dynamic-binding-name binding)
+                                 :value (funcall *traverse*
+                                                 (node-dynamic-binding-value binding)
+                                                 bound-variables)))
+       :subexpr (funcall *traverse* (node-dynamic-let-subexpr node) bound-variables)))
     (action (:traverse node-match node bound-variables)
       (make-node-match
        :type (node-type node)
@@ -467,6 +486,7 @@ bound at the given point."
                                    :init (funcall *traverse* (node-for-binding-init binding) bound-variables)
                                    :step (and (node-for-binding-step binding)
                                               (funcall *traverse* (node-for-binding-step binding) new-bound-variables))))
+         :sequential-p (node-for-sequential-p node)
          :returns (and (node-for-returns node)
                        (funcall *traverse* (node-for-returns node) new-bound-variables))
          :termination-kind (node-for-termination-kind node)

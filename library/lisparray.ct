@@ -1,0 +1,306 @@
+;;;; lisparray.lisp
+;;;;
+;;;; An interface to Common Lisp rank-1 SIMPLE-ARRAYs.
+
+(coalton/utils:defstdlib-package #:coalton/lisparray
+  (:documentation "Fixed-size one-dimensional Common Lisp arrays for interop and efficient storage.")
+  (:use
+   #:coalton
+   #:coalton/classes)
+  (:local-nicknames
+   (#:types #:coalton/types)
+   (#:complex #:coalton/math/complex)
+   (#:ram #:coalton/randomaccess)
+   (#:show #:coalton/show)
+   (#:utils #:coalton/utils))
+  (:export
+   #:LispArray
+   #:make
+   #:make-uninitialized
+   #:length
+   #:aref
+   #:set!
+   #:copy))
+
+(in-package #:coalton/lisparray)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  ;; The representation of (LispArray :t) is specially dealt with by
+  ;; the compiler in lisp-type.lisp.
+  (define-type (LispArray :t)
+    "A one-dimensional, non-resizable array of elements.
+
+These arrays are represented as possibly specialized `(cl:simple-array <type> (cl:*))` and are meant to be used as a tool either to interface with Lisp code or to implement efficient data structures. One should consult `Vector` or `Seq` for more general sequential data structure needs.
+
+Whether or not the arrays are specialized depends on the underlying Lisp implementation. Consult `cl:upgraded-array-element-type` to determine whether `LispArray` may get specialized.")
+
+  (define-instance (types:RuntimeRepr :t => types:RuntimeRepr (LispArray :t))
+    (define (types:runtime-repr _)
+      (let ((element-type (types:runtime-repr (the (types:Proxy :t) types:Proxy))))
+        (lisp (-> types:LispType) (element-type)
+          `(cl:simple-array ,element-type (cl:*))))))
+
+  (declare make
+    (forall (:t)
+      ((types:RuntimeRepr :t) => UFix * :t -> LispArray :t)))
+  (define (make n x)
+    "Make a new `LispArray` of length `n` initialized to `x`.
+
+If the type of `x` represents a specialized array "
+    ;; FIXME: how can we get this statically?
+    (let ((type (types:runtime-repr (the (types:Proxy :t) types:Proxy))))
+      (lisp (-> (LispArray :t)) (n x type)
+        (cl:make-array n :element-type type :initial-element x))))
+
+  (declare make-uninitialized
+    (forall (:t)
+      ((types:RuntimeRepr :t) => UFix -> LispArray :t)))
+  (define (make-uninitialized n)
+    "Make a new LispArray of length `n` that can store elements of type `:t`.
+
+WARNING: The consequences are undefined if an uninitialized element is read before being set.
+"
+    (let type = (types:runtime-repr (the (types:Proxy :t) types:Proxy)))
+    (lisp (-> (LispArray :t)) (n type)
+      (cl:make-array n :element-type type)))
+
+  (inline)
+  (declare length (LispArray :t -> UFix))
+  (define (length v)
+    "Return the length of the `LispArray` `v`."
+    (lisp (-> UFix) (v)
+      (cl:length v)))
+
+  (inline)
+  (declare aref (LispArray :t * UFix -> :t))
+  (define (aref v i)
+    "Read the `i`th value of the `LispArray` `v`."
+    (lisp (-> :t) (v i)
+      (cl:aref v i)))
+
+  (inline)
+  (declare set! (LispArray :t * UFix * :t -> Void))
+  (define (set! v i x)
+    "Set the `i`th value of the `LispArray` `v` to `x`."
+    (progn
+      (lisp (-> :any) (v i x)
+        (cl:setf (cl:aref v i) x))
+      (values)))
+
+  (inline)
+  (declare copy (LispArray :t -> LispArray :t))
+  (define (copy v)
+    "Make a deep copy of the `LispArray` `v`."
+    (lisp (-> (LispArray :t)) (v)
+      (cl:copy-seq v)))
+
+  (declare builder-growth-capacity (UFix * UFix -> UFix))
+  (define (builder-growth-capacity current-capacity min-needed)
+    (if (== current-capacity 0)
+        (max 4 min-needed)
+        (max min-needed (+ current-capacity current-capacity))))
+
+  (declare resize-copy (types:RuntimeRepr :t => UFix * LispArray :t -> LispArray :t))
+  (define (resize-copy new-size array)
+    (let out = (make-uninitialized new-size))
+    (progn
+      (lisp (-> :any) (out array)
+        (cl:replace out array))
+      out))
+
+  (define-struct (LispArrayBuilder :t)
+    (size UFix)
+    (storage (LispArray :t)))
+
+  (define-instance (types:RuntimeRepr :t =>
+                    FromItemizedCollection (LispArray :t) :t (LispArray :t))
+    (define (begin-collection-builder _ size)
+      (make-uninitialized size))
+    (define (adjoin-to-collection-builder _ array index item)
+      (progn
+        (set! array index item)
+        array))
+    (define (finalize-collection-builder _ array)
+      array))
+
+  (define-instance (types:RuntimeRepr :t =>
+                    FromCollectionComprehension (LispArray :t)
+                                                :t
+                                                (LispArrayBuilder :t))
+    (define (begin-collection-comprehension _ size-hint)
+      (LispArrayBuilder 0
+                        (make-uninitialized (with-default 0 size-hint))))
+    (define (adjoin-to-collection-comprehension _ builder item)
+      (match builder
+        ((LispArrayBuilder size storage)
+         (let capacity = (length storage))
+         (let target = (if (< size capacity)
+                           storage
+                           (resize-copy (builder-growth-capacity capacity (+ size 1))
+                                        storage)))
+         (progn
+           (set! target size item)
+           (LispArrayBuilder (+ size 1) target)))))
+    (define (finalize-collection-comprehension _ builder)
+      (match builder
+        ((LispArrayBuilder size storage)
+         (if (== size (length storage))
+             storage
+             (resize-copy size storage))))))
+
+  (define-instance (types:RuntimeRepr :t => Into (List :t) (LispArray :t))
+    (inline)
+    (define (into xs)
+      (let ((type (types:runtime-repr (the (types:Proxy :t) types:Proxy))))
+        (lisp (-> (LispArray :t)) (xs type)
+          (cl:make-array (cl:length xs) :element-type type :initial-contents xs)))))
+
+  (define-instance (Into (LispArray :t) (List :t))
+    (inline)
+    (define (into v)
+      (let ((len (length v)))
+        (if (== 0 len)
+            Nil
+            (let ((%into (fn (xs i)
+                           (if (== 0 i)
+                               (Cons (aref v 0) xs)
+                               (%into (Cons (aref v i) xs) (- i 1))))))
+              (%into Nil (- len 1)))))))
+
+  (define-instance (types:RuntimeRepr :t => Iso (LispArray :t) (List :t)))
+
+  (define-instance (Foldable LispArray)
+    (define (fold f init v)
+      (let len = (length v))
+      (rec % ((i 0) (acc init))
+        (if (== i len)
+            acc
+            (% (+ 1 i) (f acc (aref v i))))))
+
+    (define (foldr f init v)
+      (let len = (length v))
+      (cond
+        ((== 0 len)
+         init)
+        (True
+         (rec % ((i (- len 1)) (acc init))
+           (if (== i 0)
+               (f (aref v 0) acc)
+               (% (- i 1) (f (aref v i) acc))))))))
+
+  (define-instance (Eq :t => Eq (LispArray :t))
+    (inline)
+    (define (== a b)
+      (let len = (length a))
+      (and
+       (== len (length b)) 
+       (rec % ((i 0))
+         (cond
+           ((== i len)
+            True)
+           ((== (aref a i) (aref b i))
+            (% (+ 1 i)))
+           (True
+            False))))))
+
+  (define-instance (types:RuntimeRepr :t => ram:RandomAccess (LispArray :t) :t)
+    (inline)
+    (define (ram:make n x)
+      (make n x))
+
+    (inline)
+    (define (ram:make-uninitialized n)
+      (make-uninitialized n))
+
+    (inline)
+    (define (ram:length v)
+      (length v))
+
+    (inline)
+    (define (ram:readable? _)
+      True)
+
+    (inline)
+    (define (ram:writable? _)
+      True)
+
+    (inline)
+    (define (ram:unsafe-aref v i)
+      (aref v i))
+
+    (inline)
+    (define (ram:unsafe-set! v i x)
+      (set! v i x)))
+
+  (define-instance (show:Show :a => show:Show (LispArray :a))
+    (define (show:show-to f x)
+      (let l = (length x))
+      (f "#<LispArray [")
+      (rec % ((i 0))
+        (cond
+          ((== i l)
+           (values))
+          ((== i (- l 1))
+           (show:show-to f (aref x i)))
+          (True
+           (show:show-to f (aref x i))
+           (f " ")
+           (% (+ i 1)))))
+      (f "]>")))
+
+  (lisp-toplevel ()
+    (cl:eval-when (:compile-toplevel :load-toplevel)
+      (cl:defmacro define-lisparray-specialization (coalton-type lisp-type)
+        "Specialize lisparray access to known primitive types.  This allows the lisp compiler to inline array access."
+        (cl:let ((mak (cl:intern (cl:format cl:nil "make/~a" coalton-type)))
+                 (mun (cl:intern (cl:format cl:nil "make-uninitialized/~a" coalton-type)))
+                 (ref (cl:intern (cl:format cl:nil "aref/~a" coalton-type)))
+                 (set (cl:intern (cl:format cl:nil "set!/~a" coalton-type))))
+          `(progn
+             (specialize make ,mak (UFix * ,coalton-type -> LispArray ,coalton-type))
+             (inline)
+             (declare ,mak (UFix * ,coalton-type -> LispArray ,coalton-type))
+             (define (,mak n x)
+               (lisp (-> (LispArray ,coalton-type)) (n x)
+                 (cl:make-array n :element-type ',lisp-type :initial-element x)))
+             (specialize make-uninitialized ,mun (UFix -> LispArray ,coalton-type))
+             (inline)
+             (declare ,mun (UFix -> LispArray ,coalton-type))
+             (define (,mun n)
+               (lisp (-> (LispArray ,coalton-type)) (n)
+                 (cl:make-array n :element-type ',lisp-type)))
+             (specialize aref ,ref (LispArray ,coalton-type * UFix -> ,coalton-type))
+             (inline)
+             (declare ,ref (LispArray ,coalton-type * UFix -> ,coalton-type))
+             (define (,ref v i)
+               (lisp (-> ,coalton-type) (v i)
+                 (cl:aref (cl:the (cl:simple-array ,lisp-type (cl:*)) v) i)))
+             (specialize set! ,set (LispArray ,coalton-type * UFix * ,coalton-type -> Void))
+             (inline)
+             (declare ,set (LispArray ,coalton-type * UFix * ,coalton-type -> Void))
+             (define (,set v i x)
+               (progn
+                 (lisp (-> :any) (v i x)
+                   (cl:setf (cl:aref (cl:the (cl:simple-array ,lisp-type (cl:*)) v) i) x))
+                 (values))))))))
+
+  (define-lisparray-specialization F32 cl:single-float)
+  (define-lisparray-specialization F64 cl:double-float)
+  (define-lisparray-specialization (complex:Complex F32) (cl:complex cl:single-float))
+  (define-lisparray-specialization (complex:Complex F64) (cl:complex cl:double-float))
+  (define-lisparray-specialization IFix cl:fixnum)
+  (define-lisparray-specialization UFix (cl:and cl:fixnum cl:unsigned-byte))
+  (define-lisparray-specialization I8 (cl:signed-byte 8))
+  (define-lisparray-specialization U8 (cl:unsigned-byte 8))
+  (define-lisparray-specialization I16 (cl:signed-byte 16))
+  (define-lisparray-specialization U16 (cl:unsigned-byte 16))
+  (define-lisparray-specialization I32 (cl:signed-byte 32))
+  (define-lisparray-specialization U32 (cl:unsigned-byte 32))
+  (define-lisparray-specialization I64 (cl:signed-byte 64))
+  (define-lisparray-specialization U64 (cl:unsigned-byte 64)))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/LISPARRAY")

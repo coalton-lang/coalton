@@ -4,15 +4,93 @@ Coalton is a statically typed language that is embedded in, and compiles to, Com
 
 This document is aimed toward people who are already familiar with functional programming languages. If you are already familiar with Common Lisp, the [glossary](./glossary.md) may be useful.
 
+## Overview
+
+This document will get into all of the details, but the main workflow is this:
+
+1. Add `coalton` as a dependency to your project. (Optionally add `coalton-asdf` if you want `.ct` file support.)
+2. Define a package which `:use`s `#:coalton` and perhaps `#:coalton-prelude`, plus any package-local nicknames for Coalton libraries you want to use.
+3. Write your Coalton code inside of `coalton-toplevel`.
+
+A minimal project might look like this:
+
+```lisp
+;;;; my-project.asd
+
+(defsystem "my-project"
+  :defsystem-depends-on ("coalton-asdf")    ; allows .ct files
+  :depends-on ("coalton")
+  :serial t
+  :components ((:ct-file "my-file")))
+
+
+;;;; my-file.ct
+
+(defpackage #:my-project/my-file
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames (#:str #:coalton/string))
+  (:export #:hello))
+
+(in-package #:my-project/my-file)
+
+(coalton-toplevel
+  (define (hello whom)
+    (str:concat "Hello, " whom)))
+```
+
 ## Systems
 
-### Explicit Component Definition
+A "system" is a Common Lisp library of code that expresses project structure and dependencies. Coalton makes use of the *de facto* standard ASDF and ordinary Common Lisp packages to organize code. If you're starting a new project, add `#:coalton` to your ASD's `:depends-on` list. For special ASDF support, add `#:coalton-asdf` to `:defsystem-depends-on`. For improved error messages, also depend on `#:named-readtables`.
 
-Coalton uses ordinary Common Lisp packages (and ASDF systems) to organize code. If you're starting a new project, add `#:coalton` to your ASD's `:depends-on` list. For improved error messages, also depend on `#:named-readtables`.
+### `.ct` Files and ASDF
+
+Coalton code is often written in ordinary `.lisp` files, but Coalton also
+supports `.ct` files in ASDF definitions. A `.ct` file is still a Lisp source
+file: it contains ordinary Lisp forms such as `defpackage` and `in-package`. Unlike an ordinary `.lisp` file, a `.ct`
+file is already read in Coalton's readtable, so it does not need an explicit
+`named-readtables:in-readtable` form. The main role of the `.ct` file is to
+easily distinguish code that is primarily Coalton code in a project, and to
+make using Coalton a little more ergonomic in such files.
+
+To use `.ct` files in an ASDF system, add `coalton-asdf` to
+`:defsystem-depends-on`, then use `:ct-file` in the component list:
+
+```lisp
+(asdf:defsystem "my-project"
+  :defsystem-depends-on ("coalton-asdf")
+  :depends-on ("coalton")
+  :components ((:file "lisp-functions")   ; .lisp file
+               (:ct-file "core")))        ; .ct file
+```
+
+For example, a preceding Lisp file can define helper functions that `core.ct`
+uses:
+
+```lisp
+;;;; lisp-functions.lisp
+(cl:in-package #:my-package)
+
+(cl:defun native-add1 (x)
+  (cl:1+ x))
+```
+
+```lisp
+;;;; core.ct
+(in-package #:my-package)
+
+(coalton-toplevel
+  (define (add1-through-lisp n)
+    (lisp (-> Integer) (n)
+      (native-add1 n)))))
+```
+
+In other words, `:ct-file` is an ASDF convenience for Coalton-style Lisp source.
+It does not introduce a separate surface language.
+
 
 ### Package Inferred System
 
-For simple projects, you can use the `package-inferred-system` utility to automatically create an ASDF system based on your package structure. However, this project, coalton, does not use these utilities. By this incompatibility, the ASDF loader skips loading `#:coalton-prelude` when using this utility on your own project. Hence, you must explicitly register `coalton-prelude` in your own ASDF system definition before specifying `#:coalton` in your `:depends-on` list.
+For simple projects, you may use the `package-inferred-system` utility to automatically create an ASDF system based on your package structure. However, this project, coalton, does not use these utilities. By this incompatibility, the ASDF loader skips loading `#:coalton-prelude` when using this utility on your own project. Hence, you must explicitly register `coalton-prelude` in your own ASDF system definition before specifying `#:coalton` in your `:depends-on` list.
 
 ```lisp
 ;; In your ASDF system definition; e.g., my-project.asd
@@ -21,7 +99,9 @@ For simple projects, you can use the `package-inferred-system` utility to automa
 
 ## Packages
 
-Unlike Common Lisp, Coalton's standard library is organized as a large collection of packages. For example, string-related functions are in the `#:coalton/string` package. Refer to the [Coalton Reference](https://coalton-lang.github.io/reference) for a complete list of standard library packages.
+A "package" is a Common Lisp namespace of symbols.
+
+Unlike Common Lisp which has one monolithic package called `"COMMON-LISP"`, Coalton's standard library is organized as a large collection of packages. For example, string-related functions are in the `#:coalton/string` package. Refer to the [Coalton Reference](https://coalton-lang.github.io/reference) for a complete list of standard library packages.
 
 When making a new project, you will want to define a new package and establish your standard library imports. *Do not `:use` the `#:cl` or `#:common-lisp` packages!* Instead, you'll want to, at minimum, `:use` both the `#:coalton` package (for core language features) and `#:coalton-prelude` (for extremely common standard library definitions):
 
@@ -78,58 +158,15 @@ After creating your package `#:my-package`, you must switch to it with:
 
 ```lisp
 (in-package #:my-package)
+```
 
+We recommend using `.ct` files, however, if you're writing Coalton in a `.lisp` or `.cl` file, you should also be in the Coalton readtable:
+
+```lisp
 (named-readtables:in-readtable coalton:coalton)
 ```
 
-The `named-readtables:in-readtable` form is optional but encouraged. Using Coalton's reader allows compiler errors to accurately refer to source code and provide correct line numbers.
-
-### `.ct` Files and ASDF
-
-Coalton code is often written in ordinary `.lisp` files, but Coalton also
-supports `.ct` files in ASDF definitions. A `.ct` file is still a Lisp source
-file: it contains ordinary Lisp forms such as `in-package`,
-`coalton-toplevel`, and `coalton`. Unlike an ordinary `.lisp` file, a `.ct`
-file is already read in Coalton's readtable, so it does not need an explicit
-`named-readtables:in-readtable` form. The main role of the `.ct` file is to
-easily distinguish code that is primarily Coalton code in a project, and to
-make using Coalton a little more ergonomic in such files.
-
-To use `.ct` files in an ASDF system, add `coalton-asdf` to
-`:defsystem-depends-on`, then use `:ct-file` in the component list:
-
-```lisp
-(asdf:defsystem "my-project"
-  :depends-on ("coalton")
-  :defsystem-depends-on ("coalton-asdf")
-  :components ((:file "lisp-functions")
-               (:ct-file "core")
-               (:ct-file "algorithms")))
-```
-
-For example, a preceding Lisp file can define helper functions that `core.ct`
-uses:
-
-```lisp
-;;; lisp-functions.lisp
-(cl:in-package #:my-package)
-
-(cl:defun native-add1 (x)
-  (cl:1+ x))
-```
-
-```lisp
-;;; core.ct
-(in-package #:my-package)
-
-(coalton-toplevel
-  (define (add1-through-lisp n)
-    (lisp (-> Integer) (n)
-      (native-add1 n)))))
-```
-
-In other words, `:ct-file` is an ASDF convenience for Coalton-style Lisp source.
-It does not introduce a separate surface language.
+THis is done automatically with `.ct` files. The `named-readtables:in-readtable` form is optional but encouraged. Using Coalton's reader allows compiler errors to accurately refer to source code and provide correct line numbers.
 
 The first primary entry points for Coalton code. Definitions and the like sit in a toplevel-form called `coalton-toplevel`.
 
@@ -139,7 +176,7 @@ The first primary entry points for Coalton code. Definitions and the like sit in
   )
 ```
 
-Currently, in SLIME/SLY, there's no way to `C-c-c` in any finer-grained way than a whole `coalton-toplevel` form.
+Currently, in SLIME/SLY, there's no way to `C-c-c` in any finer-grained way than a whole `coalton-toplevel` form. This may encourage you to define logical sections of functionality in separate `coalton-toplevel` forms.
 
 The second primary entry point is calling Coalton from Lisp. In this case, one uses the `coalton` operator:
 
@@ -154,7 +191,8 @@ Note that one _cannot_ make new definitions in a `coalton` form, only evaluate e
 
 Whereas `coalton-toplevel` expects one or more toplevel definitions or declarations, the `coalton` form takes a single expression, evaluates it relative to the current environment, and returns its (underlying) Lisp value. This can be useful for working with Coalton from a Lisp REPL.
 
-Remember that Coalton packages, including `#:coalton-user`, do *not* `:use` the `#:common-lisp`/`#:cl` package, so you must prepend Common Lisp symbols with `cl:` if you need them.
+> [!IMPORTANT]
+> Remember that Coalton packages, including `#:coalton-user`, do *not* `:use` the `#:common-lisp`/`#:cl` package, so you must prepend Common Lisp symbols with `cl:` if you need them.
 
 
 ## Variables and Functions
@@ -180,7 +218,8 @@ One can get the first element of the tuple `p` defined above from the REPL using
 (coalton (fst p))
 ```
 
-**Note**: It may be tempting to elide the `coalton` form and simply evaluate `(fst p)` directly in a Lisp REPL, but such behavior should not be relied upon!
+> [!IMPORTANT]
+> It may be tempting to elide the `coalton` form and simply evaluate `(fst p)` directly in a Lisp REPL, but such behavior should not be relied upon!
 
 Functions are defined similarly to variables. Unlike Common Lisp, Coalton functions occupy the same namespace as variables. This makes high-order functional programming easier.
 
@@ -199,6 +238,21 @@ Functions are defined similarly to variables. Unlike Common Lisp, Coalton functi
   (define z (map (fn (x) (+ 2 x)) (make-list 1 2 3 4))))
 ```
 
+### Top-Level Type Declarations
+
+Coalton infers all types, but it's often better to express your intent by way of a type declaration. Top-level definitions can have their type declared with `declare`.
+
+```lisp
+(coalton-toplevel
+  (declare add2 (Integer -> Integer))
+  (define (add2 x)
+    (+ 2 x))
+
+  (declare three Integer)
+  (define three (add2 1)))
+```
+
+We will discuss static typing in detail later in this document.
 
 ### Fixed-Arity Functions and Manual Currying
 
@@ -222,7 +276,7 @@ Consider this function:
   (define fma3 (fma 2 3 4))) ; evaluates to 10
 ```
 
-If you want currying or partial application, write it explicitly by returning a function:
+Unlikes other ML-derived languages, Coalton does not "auto-curry" or "partially apply" functions. A function must take exactly the number of inputs it was defined to take. If you want currying or partial application, write it explicitly by returning a function using `fn`:
 
 ```lisp
 (coalton-toplevel
@@ -236,14 +290,38 @@ If you want currying or partial application, write it explicitly by returning a 
   (define fma3 (((make-fma 2) 3) 4)))
 ```
 
-Coalton still optimizes ordinary fixed-arity calls aggressively. A fully applied call like
-`(fma x y z)` compiles as a direct fixed-arity call rather than as a chain of closure
-allocations.
+Here is an example of using an explicitly constructed function to transform a list.
+
+```lisp
+(coalton-toplevel
+  ;; Lists can be created with the make-list macro
+  (define nums (make-list 2 3 4 5))
+
+  (define add2
+    (fn (x)
+      (+ 2 x))))
+
+(coalton
+  (map add2 nums)) ;; 4 5 6 7
+```
+
+Functions may also return multiple values directly. This is distinct from returning a `Tuple`, which is still an ordinary single value.
+
+```lisp
+(coalton-toplevel
+  (declare sum-and-product (Integer * Integer -> Integer * Integer))
+  (define (sum-and-product x y)
+    (values (+ x y) (* x y))))
+
+(coalton
+  (let (values s p) = (sum-and-product 3 4)
+  (+ s p))) ;; 19
+```
+
 
 ### Keyword Arguments
 
-Coalton also supports fixed-arity keyword arguments. Keyword parameters come after all positional
-parameters and are introduced with `&key`:
+Coalton also supports keyword arguments. Keyword arguments come after all positional arguments and are introduced with `&key`:
 
 ```lisp
 (coalton-toplevel
@@ -266,7 +344,7 @@ Calls supply positional arguments first, followed by keyword/value pairs:
 Keyword arguments are optional. If a keyword is omitted, its initial value is used. Once a
 keyword argument appears, no later positional arguments are allowed.
 
-We recommend using the `Optional` type to denote parameters which do not require a value.
+We recommend using the `Optional` type to denote arguments which do not require a value.
 However, an explicit `None` initializer is still required.
 
 Anonymous functions use the same syntax:
@@ -297,34 +375,6 @@ Explicit declarations are exact about which keywords exist. Inferred higher-orde
 may internally remain open to additional keywords for compatibility, but there is no separate
 surface syntax for those open rows.
 
-Here is an example of using an explicitly constructed function to transform a list.
-
-```lisp
-(coalton-toplevel
-  ;; Lists can be created with the make-list macro
-  (define nums (make-list 2 3 4 5))
-
-  (define add2
-    (fn (x)
-      (+ 2 x))))
-
-(coalton
-  (map add2 nums)) ;; 4 5 6 7
-```
-
-Functions may also return multiple values directly. This is distinct from returning a `Tuple`,
-which is still an ordinary single value.
-
-```lisp
-(coalton-toplevel
-  (declare sum-and-product (Integer * Integer -> Integer * Integer))
-  (define (sum-and-product x y)
-    (values (+ x y) (* x y))))
-
-(coalton
-  (let (values s p) = (sum-and-product 3 4)
-  (+ s p))) ;; 19
-```
 
 ### Pipelining Syntax and Function Composition
 
@@ -344,7 +394,8 @@ There are convenient syntaxes for composing functions with the `pipe` and `nest`
 
 These are useful to make code less noisy.
 
-Note that since these are macros (indicated by their variadic arguments), they *cannot* be used as higher-order functions. Consider either an explicit `fn` wrapper or the `compose` function if you're thinking in that direction.
+> [!NOTE]
+> Since these are macros (indicated by their variadic arguments), they *cannot* be used as higher-order functions. Consider either an explicit `fn` wrapper or the `compose` function if you're thinking in that direction.
 
 ### Ignoring Function Parameters
 
@@ -371,104 +422,13 @@ help: prefix the variable with '_' to declare it unused
 
 As suggested, one can replace `y` with `_y`, which tells the Coalton compiler that the parameter might be intentionally unused.
 
-**Note**: Variables prefixed with `_` like `_y` are still normal variables, and can be read. The following is valid Coalton:
+Variables prefixed with `_` like `_y` are still normal variables, and can be read. The following is valid Coalton:
 
 ```lisp
 (define (f _x) _x)
 ```
 
 One should treat underscore prefixed variables as ignored whenever possible, and use a name not prefixed with `_` if it may be used. Reading from underscore-prefixed variables is permitted so that generated code (e.g., using macros or read-conditionals) may avoid unused variable warnings for variables which will be used in some compilation contexts but not others.
-
-## Polymorphism, Mutation, and the Value Restriction
-
-Coalton infers polymorphic types for implicitly typed `define` and `let` bindings using a syntactic ML-style value restriction plus a relaxed variance check. This ensures the Coalton type system is sound in the presence of mutable data structures.
-
-Informally:
-
-- A **non-expansive** expression is syntactically value-like (for example: variables, literals, lambdas, and constructor applications over non-expansive arguments).
-- An **expansive** expression is everything else. In particular, ordinary function application is treated as expansive, even when the call is observationally pure.
-- Expansive bindings introduce **weak** type-variable candidates. Weak variables are generalized only when all observed occurrences are **covariant** and they do not occur in retained predicates (constraints).
-
-This still allows many covariant expansive expressions to remain polymorphic.
-
-At top level, unresolved weak variables are rejected with an error.
-
-A non-expansive constructor expression can still generalize:
-
-```lisp
-(coalton-toplevel
-  (define wrapped-none (Some None)))
-;; wrapped-none : Optional (Optional :a)
-```
-
-An expansive expression can still generalize when the weak variable is only covariant:
-
-```lisp
-(coalton-toplevel
-  (define wrapped-id
-    ((fn (x) x) None)))
-;; wrapped-id : (Optional :a)
-```
-
-Even though this example is an ordinary function application (and thus expansive), `:a` appears covariantly, so it can still be generalized.
-
-But expansive bindings involving invariant or contravariant occurrences (or retained constraints on weak variables) do not generalize. For example, mutable containers such as `Vector` remain monomorphic:
-
-```lisp
-(coalton-toplevel
-  (define wrapped-new
-    (Some (coalton/vector:new))))
-;; error
-```
-
-If you hit this, there are two common fixes:
-
-1. Move the allocation into a function body so each call gets fresh state (often via eta-expansion).
-2. Add an explicit top-level type declaration when you intentionally want a monomorphic mutable value.
-
-For example, this is intentionally monomorphic:
-
-```lisp
-(coalton-toplevel
-  (declare int-vec (Vector Integer))
-  (define int-vec (coalton/vector:new)))
-```
-
-Coalton does not track mutability as an intrinsic quality of every type constructor. For opaque parametric type definitions, variance is assumed to be invariant by default.
-
-References:
-
-- OCaml manual: Polymorphism and its limitations.
-- Jacques Garrigue, "Relaxing the Value Restriction".
-- Andrew K. Wright, "Simple Imperative Polymorphism".
-
-### Variance
-
-Coalton uses type-parameter variance to decide which weak type variables from expansive bindings can still be generalized.
-
-- **Covariant**: the type parameter is only produced (for example, `Optional :a`, `List :a`).
-- **Contravariant**: the type parameter is consumed (for example, function argument position in `:a -> :b`).
-- **Invariant**: both directions are possible, or mutability allows writes (common for mutable containers).
-
-Under the relaxed value restriction, weak variables are generalized only when all observed occurrences are covariant; any invariant or contravariant occurrence keeps them monomorphic.
-
-### Opaque Native Types
-
-For `define-type` forms with no constructors and no alias body (typically used with `repr :native`), Coalton cannot inspect the type's internal structure to infer variance from fields. In those cases, type parameters are treated as invariant by default.
-
-This is conservative by design. For mutable wrappers, invariance is usually required for soundness.
-
-Current parametric opaque stdlib types include:
-
-- `Vector :a`
-- `Cell :a`
-- `Queue :a`
-- `Slice :a`
-- `Hashtable :key :value`
-- `LispArray :t`
-- `FileStream :a`
-
-These are all modeled invariantly; each either exposes mutation directly or mixes read/write capabilities in one type.
 
 ## Data Types
 
@@ -534,7 +494,6 @@ Coalton allows the definition of parametric type aliases. Type aliases can be de
 Parametric type aliases must be fully applied.
 ```lisp
 (coalton-toplevel
-
   (define-type (T :a) (ConstrT (:a Integer)))
   
   (define-type-alias (MyCollection1 :a) (List :a))
@@ -622,6 +581,49 @@ Structs can also be parametric:
     (second :a)))
 ```
 
+## Local Variables: `let` and `let*`
+
+The operators `let` and `let*` are expression forms
+for local bindings. `let` binds its variables recursively and in parallel
+(similar to Scheme's `letrec`), while `let*` binds them left-to-right so each
+initializer can refer to the earlier bindings.
+
+```lisp
+(coalton
+  (let ((x (+ y 1))
+        (y 2))
+    (+ x y)))
+```
+
+```lisp
+(coalton
+  (let* ((x 1)
+         (y (+ x 1)))
+    (+ x y)))
+```
+
+`let*` accepts the same binding syntax and local `declare` forms as `let`.
+
+`let` can also be used to introduce local (possibly recursive)
+functions.
+
+```lisp
+(let ((odd (fn (x)
+             (if (zero? x)
+                 False
+                 (even (1- x)))))
+      (even (fn (x)
+              (if (zero? x)
+                  True
+                  (odd (1- x)))))))
+  (odd 5))
+```
+
+> [!NOTE]
+> Since `let` introduces recursive bindings, its generally
+> not allowed for variables to be self-referential, as in
+> `(let ((x (1+ x))) ...)`. Instead, use `let*`.
+
 ## Looping & Iteration
 
 Coalton offers three main ways to do explicit loops:
@@ -633,6 +635,10 @@ Coalton offers three main ways to do explicit loops:
 ### Tail-Recursion and `rec`
 
 Coalton strives to ensure tail calls are always eliminated. As such, tail recursion is idiomatic in Coalton.
+
+One important exception is `dynamic-bind`: rebinding a dynamic variable around a
+call introduces dynamic scope setup/teardown, so a call inside that
+`dynamic-bind` is not treated as tail-recursive.
 
 ```lisp
 (coalton-toplevel
@@ -717,13 +723,15 @@ Now it works without any type declarations on use:
 55
 ```
 
+
 ### Built-In Looping Constructs
 
 Coalton supports imperative looping, conditional looping, and pattern-based iteration.
 
-#### `for`
+#### `for` and `for*`
 
-The built-in imperative `for` form has the following shape:
+The built-in imperative `for` form and its sequential variant `for*` have the
+following shape:
 
 ```lisp
 (for [label] (<binding-clause>*)
@@ -735,12 +743,15 @@ The built-in imperative `for` form has the following shape:
 ;;                   | (var init-expr [step-expr])
 ```
 
-The binding list is required, but it may be empty: `()`. Initializers are evaluated
-once before the first iteration, and the initializer binding group follows the
-same scoping rules as `let`. Step expressions are evaluated after each completed
-iteration, simultaneously, using the pre-step bindings from that iteration. If
-no termination clause is present, the iteration is infinite unless exited by
-`break`.
+The binding list is required, but it may be empty: `()`. Initializers are
+evaluated once before the first iteration. In `for`, the initializer binding
+group follows the same scoping rules as `let`, and step expressions are
+evaluated simultaneously using the pre-step bindings from that iteration. In
+`for*`, initializers follow `let*`-style left-to-right scoping, and step
+expressions are performed from left to right so later steps can refer to
+earlier updated variables. In that sense, `for*` plays the same role as Common
+Lisp's `do*`. If no termination clause is present, the iteration is infinite
+unless exited by `break`.
 
 You can iterate forever:
 
@@ -763,6 +774,23 @@ You can also use `for` as a counted or state-threading loop:
      (continue))
    (show i)))
 ```
+
+When later loop bindings should build on earlier ones, use `for*`:
+
+```lisp
+(coalton
+ (let ((xs (vector:make 10 20 30)))
+   (for* ((declare i UFix)
+          (declare x Integer)
+          (i 0 (1+ i))
+          (x (vector:index-unsafe i xs) (vector:index-unsafe i xs)))
+     :returns (Tuple i x)
+     :repeat 2
+     Unit)))
+```
+
+Here `x` tracks the current vector element while `i` tracks the index. Because
+this is `for*`, the step for `x` sees the updated value of `i`.
 
 If a `:returns` clause is present, that expression is evaluated once when the `for` exits
 normally or via `break`. If `:returns` is absent, the `for` produces no values.
@@ -1115,14 +1143,12 @@ This is of course unnecessary if the object is inferred to be the desired type.
     (the (Vector Integer) [1 2 3])))
 ```
 
-The same bracket syntax also supports comprehensions:
+Comprehensions on collections and associations are also supported.
 
 ```lisp
 (coalton-toplevel
   (define evens
-    [x
-     :for x :below 10
-     :when (even? x)])
+    [x :for x :below 10 :when (even? x)])
 
   (define scaled
     [y
@@ -1135,9 +1161,18 @@ The same bracket syntax also supports comprehensions:
      :for x :below 10])
 
   (define squares
-    [x => (* x x)
-     :for x :below 5]))
+    [x => (* x x) :for x :below 5]))
 ```
+
+The supported clauses for both are:
+
+- `:for <var> :below <ufix>`: Have a variable range from 0 to below a maximum, incrementing by 1.
+- `:for <var> :in <iter>`: Have a variable iterate through an iterator.
+- `:with <var> = <expr>`: Lexically bind a variable over the remainder of the comprehension.
+- `:when <expr>`: Guard against the truth of `<expr>`.
+
+> [!NOTE]
+> Collection and association comprehensions must be finite. They cannot produce infinite sequences.
 
 Collection comprehensions default to `Seq`, and association comprehensions
 default to `Seq (Tuple :key :value)` in the same way as itemized builders. As
@@ -1190,6 +1225,11 @@ To support comprehensions as well, define a corresponding
 `FromCollectionComprehension` instance. Association syntax works the same way,
 using `FromItemizedAssociation` and `FromAssociationComprehension`.
 
+### Immutable Sequences and Maps
+
+Coalton allows mutability, but encourages writing efficient *immutable* code by offering built-in support for immutable sequence and map types. The two most important, general purpose types are `Seq` (from `coalton/seq`) and `HashMap` (from `coalton/hashmap`). These are backed by efficient data structures that allows logarithmic access and efficient concatenation.
+
+
 ## Static Typing
 
 Coalton code is statically type checked. Types are inferred.
@@ -1197,13 +1237,13 @@ Coalton code is statically type checked. Types are inferred.
 ```lisp
 (coalton-toplevel
   (define (fun x)
-    (map (+ 2) (str:parse-int x))))
+    (map (fn (y) (+ 2 y)) (str:parse-int x))))
 ```
 
-The type of a variable or function can be checked with `coalton:type-of`.
+The type of a variable or function can be checked with the Coalton operator `type-of`.
 
 ```
-COALTON-USER> (type-of 'fun)
+COALTON-USER>  (coalton (type-of fun))
 (STRING -> (OPTIONAL INTEGER)
 ```
 
@@ -1213,10 +1253,11 @@ Type declarations can always be added manually.
 (coalton-toplevel
   (declare fun (String -> (Optional Integer)))
   (define (fun x)
-    (map (+ 2) (str:parse-int x))))
+    (map (fn (y) (+ 2 y)) (str:parse-int x))))
 ```
 
-Type declarations can also be added in `let` expressions
+Type declarations can also be added in `let`, `let*`, `for`, and `for*`
+expressions
 
 ```lisp
 (coalton-toplevel
@@ -1251,10 +1292,10 @@ reuse them:
 (coalton-toplevel
   (declare scoped-id (forall (:item) :item -> :item))
   (define (scoped-id x)
-    (let ((declare keep-item (Unit -> :item))
-          (keep-item (fn (_unit)
+    (let ((declare keep-item (Void -> :item))
+          (keep-item (fn ()
                        (the :item x))))
-      (keep-item Unit))))
+      (keep-item))))
 ```
 
 The same rule applies to local functions declared inside `let`. If a local
@@ -1266,7 +1307,7 @@ local function body, and the local body can also reuse outer scoped binders:
   (declare scoped-local (forall (:item) :item -> :item))
   (define (scoped-local x)
     (let ((declare keep-outer
-                  (forall (:tmp) :item -> :tmp -> :item))
+                  (forall (:tmp) :item * :tmp -> :item))
           (keep-outer (fn (y _z)
                         (the :item y))))
       (keep-outer x Unit))))
@@ -1313,6 +1354,97 @@ The `the`-`into` pattern is so common that Coalton provides a shorthand called `
 The `into` method is used only when a conversion can always be performed from one type to another. If not values of a type can be converted, then another type class `TryInto` with a method `tryInto` is used. The `tryinto` method returns an `Optional` type, yielding `Some` on success and `None` on failure.
 
 **Note that `as` only works for conversions via `into`, i.e., conversions that are total.** There is no corresponding syntax for `tryInto`.
+
+## Polymorphism, Mutation, and the Value Restriction
+
+Coalton infers polymorphic types for implicitly typed `define` and `let` bindings using a syntactic ML-style value restriction plus a relaxed variance check. This ensures the Coalton type system is sound in the presence of mutable data structures.
+
+Informally:
+
+- A **non-expansive** expression is syntactically value-like (for example: variables, literals, lambdas, and constructor applications over non-expansive arguments).
+- An **expansive** expression is everything else. In particular, ordinary function application is treated as expansive, even when the call is observationally pure.
+- Expansive bindings introduce **weak** type-variable candidates. Weak variables are generalized only when all observed occurrences are **covariant** and they do not occur in retained predicates (constraints).
+
+This still allows many covariant expansive expressions to remain polymorphic.
+
+At top level, unresolved weak variables are rejected with an error.
+
+A non-expansive constructor expression can still generalize:
+
+```lisp
+(coalton-toplevel
+  (define wrapped-none (Some None)))
+;; wrapped-none : Optional (Optional :a)
+```
+
+An expansive expression can still generalize when the weak variable is only covariant:
+
+```lisp
+(coalton-toplevel
+  (define wrapped-id
+    ((fn (x) x) None)))
+;; wrapped-id : (Optional :a)
+```
+
+Even though this example is an ordinary function application (and thus expansive), `:a` appears covariantly, so it can still be generalized.
+
+But expansive bindings involving invariant or contravariant occurrences (or retained constraints on weak variables) do not generalize. For example, mutable containers such as `Vector` remain monomorphic:
+
+```lisp
+(coalton-toplevel
+  (define wrapped-new
+    (Some (coalton/vector:new))))
+;; error
+```
+
+If you hit this, there are two common fixes:
+
+1. Move the allocation into a function body so each call gets fresh state (often via eta-expansion).
+2. Add an explicit top-level type declaration when you intentionally want a monomorphic mutable value.
+
+For example, this is intentionally monomorphic:
+
+```lisp
+(coalton-toplevel
+  (declare int-vec (Vector Integer))
+  (define int-vec (coalton/vector:new)))
+```
+
+Coalton does not track mutability as an intrinsic quality of every type constructor. For opaque parametric type definitions, variance is assumed to be invariant by default.
+
+References:
+
+- OCaml manual, "Polymorphism and its limitations".
+- Jacques Garrigue, "Relaxing the Value Restriction".
+- Andrew K. Wright, "Simple Imperative Polymorphism".
+
+### Variance
+
+Coalton uses type-parameter variance to decide which weak type variables from expansive bindings can still be generalized.
+
+- **Covariant**: the type parameter is only produced (for example, `Optional :a`, `List :a`).
+- **Contravariant**: the type parameter is consumed (for example, function argument position in `:a -> :b`).
+- **Invariant**: both directions are possible, or mutability allows writes (common for mutable containers).
+
+Under the relaxed value restriction, weak variables are generalized only when all observed occurrences are covariant; any invariant or contravariant occurrence keeps them monomorphic.
+
+### Opaque Native Types
+
+For `define-type` forms with no constructors and no alias body (typically used with `repr :native`), Coalton cannot inspect the type's internal structure to infer variance from fields. In those cases, type parameters are treated as invariant by default.
+
+This is conservative by design. For mutable wrappers, invariance is usually required for soundness.
+
+Current parametric opaque stdlib types include:
+
+- `Vector :a`
+- `Cell :a`
+- `Queue :a`
+- `Slice :a`
+- `Hashtable :key :value`
+- `LispArray :t`
+- `FileStream :a`
+
+These are all modeled invariantly; each either exposes mutation directly or mixes read/write capabilities in one type.
 
 ## Pattern Matching
 
@@ -1442,7 +1574,8 @@ Coalton has a `coalton:progn` construct similar to lisp.
       (values x y))))
 ```
 
-Coalton's `progn` can have flattened `let` syntax.
+Outside flattened-body contexts, use the ordinary `let` and `let*` forms
+described above. Inside `progn`, Coalton also has flattened `let` syntax.
 
 ```lisp
 (coalton-toplevel
@@ -1495,6 +1628,80 @@ Function definitions create an implicit `progn` block
     (let y_ = (into y))
     (<> x_ y_)))
 ```
+
+## Dynamic Variables
+
+Coalton also supports dynamically scoped variables, similar to Common Lisp
+special variables.
+
+- Dynamic variable names must begin and end with `*`, and must contain at
+  least one non-`*` character, such as `*x*` or `*current-port*`.
+- Ordinary lexical variables cannot use earmuff names.
+- Dynamic variables are defined and declared with the usual `define` and
+  `declare` forms.
+
+```lisp
+(coalton-toplevel
+  (declare *base* Integer)
+  (define *base* 10)
+
+  (define (base-value)
+    *base*))
+```
+
+Referencing a dynamic variable uses the variable name directly:
+
+```lisp
+(coalton
+  *base*)
+```
+
+To rebind one or more dynamic variables, use `dynamic-bind`:
+
+```lisp
+(coalton
+  (dynamic-bind ((*base* 20))
+    (base-value))) ; returns 20
+```
+
+Inside `progn`, function bodies, and similar flattened-body contexts, there is
+also shorthand syntax:
+
+```lisp
+(coalton-toplevel
+  (define (f)
+    (let *base* = 20)
+    (base-value))) ; returns 20
+```
+
+Dynamic bindings are parallel and non-recursive. That means each initializer is
+checked in the outer environment and can refer to the old dynamic value:
+
+```lisp
+(coalton-toplevel
+  (declare *left* Integer)
+  (define *left* 1)
+  (declare *right* Integer)
+  (define *right* 2)
+
+  (define swapped
+    (dynamic-bind ((*left* *right*)
+                   (*right* *left*))
+      (Tuple *left* *right*))))
+```
+
+The type of a dynamic rebinding must preserve the variable's existing type.
+Polymorphic dynamic variables use the same value-restriction and variance checks
+as ordinary inferred bindings, so expansive rebindings are only accepted when
+their weak type variables can be generalized safely.
+
+Dynamic variables may have any ordinary Coalton type, including function types.
+The restriction is on rebinding, not on the declared type: each rebinding must
+preserve the variable's existing type, and polymorphic rebindings remain subject
+to the usual value restriction.
+
+Because `dynamic-bind` establishes and later restores dynamic scope, wrapping a
+recursive call in `dynamic-bind` breaks tail recursion.
 
 ## Unless and When
 
@@ -1858,12 +2065,12 @@ Specialization can be listed in the repl with `print-specializations`.
 
 For more details, see the [glossary](./glossary.md).
 
-# Incomplete Features
+## Incomplete Features
 
 Coalton presently supports these features, but more work remains to be
 done to improve upon them.
 
-## Exception Handling
+### Exception Handling
 
 Coalton includes syntax for defining, signaling, handling and
 resuming from exceptional conditions.  
@@ -1879,7 +2086,7 @@ Briefly, the relevant syntactic forms are:
 
 Coalton's exception handling system is incomplete and evolving. The design has been chosen to allow for experimentation and forward-compatibility as its features mature. See the Caveats section below. 
 
-### Defining, Throwing, and Catching Exceptions
+#### Defining, Throwing, and Catching Exceptions
 
 If you want to catch any exception, including Common Lisp error conditions, you can use a wildcard pattern:
 
@@ -1924,7 +2131,7 @@ More generally
     ((UnCracked _) (Err (UnCracked egg)))))
 ```
 
-### Defining, Invoking, and Handling Resumptions 
+#### Defining, Invoking, and Handling Resumptions 
 
 Resumptions allow the coalton programmer to recover from an error
 without unwinding the call stack.
@@ -1989,7 +2196,7 @@ eggs. `make-breakfast-for` catches that error and resumes to
 handles it.
 
 
-### Caveats 
+#### Caveats 
 
 For the time being, the following caveats apply;
 

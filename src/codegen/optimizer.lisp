@@ -69,7 +69,8 @@
            (values tc:environment &optional))
   (multiple-value-bind (toplevel-functions toplevel-values)
       (loop :for (name . node) :in bindings
-            :if (node-abstraction-p node)
+            :if (and (node-abstraction-p node)
+                     (not (util:dynamic-variable-name-p name)))
               :collect (cons name (length (node-abstraction-vars node))) :into functions
             :else
               :collect name :into variables

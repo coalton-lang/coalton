@@ -60,6 +60,11 @@
    #:node-let-binding-name              ; ACCESSOR
    #:node-let-binding-value             ; ACCESSOR
    #:node-let-binding-list              ; TYPE
+   #:node-dynamic-binding               ; STRUCT
+   #:make-node-dynamic-binding          ; CONSTRUCTOR
+   #:node-dynamic-binding-name          ; ACCESSOR
+   #:node-dynamic-binding-value         ; ACCESSOR
+   #:node-dynamic-binding-list          ; TYPE
    #:node-for-binding                  ; STRUCT
    #:make-node-for-binding             ; CONSTRUCTOR
    #:node-for-binding-name             ; ACCESSOR
@@ -76,6 +81,10 @@
    #:node-let-bindings                  ; ACCESSOR
    #:node-let-declares                  ; ACCESSOR
    #:node-let-body                      ; ACCESSOR
+   #:node-dynamic-let                   ; STRUCT
+   #:make-node-dynamic-let              ; CONSTRUCTOR
+   #:node-dynamic-let-bindings          ; ACCESSOR
+   #:node-dynamic-let-subexpr           ; ACCESSOR
    #:node-lisp                          ; STRUCT
    #:make-node-lisp                     ; CONSTRUCTOR
    #:node-lisp-vars                     ; ACCESSOR
@@ -163,6 +172,7 @@
    #:make-node-for                     ; CONSTRUCTOR
    #:node-for-label                    ; ACCESSOR
    #:node-for-bindings                 ; ACCESSOR
+   #:node-for-sequential-p             ; ACCESSOR
    #:node-for-returns                  ; ACCESSOR
    #:node-for-termination-kind         ; ACCESSOR
    #:node-for-termination-expr         ; ACCESSOR
@@ -315,6 +325,22 @@
 (deftype node-let-binding-list ()
   '(satisfies node-let-binding-list-p))
 
+(defstruct (node-dynamic-binding
+            (:copier nil))
+  (name     (util:required 'name)     :type node-variable   :read-only t)
+  (value    (util:required 'value)    :type node            :read-only t)
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self node-dynamic-binding))
+  (node-dynamic-binding-location self))
+
+(defun node-dynamic-binding-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'node-dynamic-binding-p x)))
+
+(deftype node-dynamic-binding-list ()
+  '(satisfies node-dynamic-binding-list-p))
+
 (defstruct (node-for-binding
             (:copier nil))
   (name     (util:required 'name)     :type node-variable   :read-only t)
@@ -337,6 +363,12 @@
             (:copier nil))
   (bindings (util:required 'bindings) :type node-let-binding-list :read-only t)
   (body     (util:required 'body)     :type node-body             :read-only t))
+
+(defstruct (node-dynamic-let
+            (:include node)
+            (:copier nil))
+  (bindings (util:required 'bindings) :type node-dynamic-binding-list :read-only t)
+  (subexpr  (util:required 'subexpr)  :type node                      :read-only t))
 
 (defstruct (node-lisp
             (:include node)
@@ -501,6 +533,7 @@
             (:copier nil))
   (label            (util:required 'label)            :type keyword                        :read-only t)
   (bindings         (util:required 'bindings)         :type node-for-binding-list         :read-only t)
+  (sequential-p     nil                               :type boolean                        :read-only t)
   (returns          nil                               :type (or null node)                 :read-only t)
   (termination-kind nil                               :type (member nil :while :until :repeat) :read-only t)
   (termination-expr nil                               :type (or null node)                 :read-only t)
@@ -642,6 +675,14 @@
    :value (tc:apply-substitution subs (node-let-binding-value node))
    :location (source:location node)))
 
+(defmethod tc:apply-substitution (subs (node node-dynamic-binding))
+  (declare (type tc:substitution-list subs)
+           (values node-dynamic-binding))
+  (make-node-dynamic-binding
+   :name (tc:apply-substitution subs (node-dynamic-binding-name node))
+   :value (tc:apply-substitution subs (node-dynamic-binding-value node))
+   :location (source:location node)))
+
 (defmethod tc:apply-substitution (subs (node node-for-binding))
   (declare (type tc:substitution-list subs)
            (values node-for-binding))
@@ -659,6 +700,15 @@
    :location (source:location node)
    :bindings (tc:apply-substitution subs (node-let-bindings node))
    :body (tc:apply-substitution subs (node-let-body node))))
+
+(defmethod tc:apply-substitution (subs (node node-dynamic-let))
+  (declare (type tc:substitution-list subs)
+           (values node-dynamic-let))
+  (make-node-dynamic-let
+   :type (tc:apply-substitution subs (node-type node))
+   :location (source:location node)
+   :bindings (tc:apply-substitution subs (node-dynamic-let-bindings node))
+   :subexpr (tc:apply-substitution subs (node-dynamic-let-subexpr node))))
 
 (defmethod tc:apply-substitution (subs (node node-lisp))
   (declare (type tc:substitution-list subs)
@@ -838,6 +888,7 @@
    :location (source:location node)
    :label (node-for-label node)
    :bindings (tc:apply-substitution subs (node-for-bindings node))
+   :sequential-p (node-for-sequential-p node)
    :returns (tc:apply-substitution subs (node-for-returns node))
    :termination-kind (node-for-termination-kind node)
    :termination-expr (tc:apply-substitution subs (node-for-termination-expr node))

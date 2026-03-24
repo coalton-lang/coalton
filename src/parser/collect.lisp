@@ -205,6 +205,10 @@ in expressions. May not include all bound variables."
     (declare (values node-variable-list &optional))
     (collect-variables-generic% (node-let-binding-value node)))
 
+  (:method ((node node-dynamic-binding))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (node-dynamic-binding-value node)))
+
   (:method ((node node-for-binding))
     (declare (values node-variable-list &optional))
     (nconc (collect-variables-generic% (node-for-binding-init node))
@@ -216,6 +220,12 @@ in expressions. May not include all bound variables."
     (nconc
      (mapcan #'collect-variables-generic% (node-let-bindings node))
      (collect-variables-generic% (node-let-body node))))
+
+  (:method ((node node-dynamic-let))
+    (declare (values node-variable-list))
+    (nconc
+     (mapcan #'collect-variables-generic% (node-dynamic-let-bindings node))
+     (collect-variables-generic% (node-dynamic-let-subexpr node))))
 
   (:method ((node node-lisp))
     (declare (values node-variable-list))

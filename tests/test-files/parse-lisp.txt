@@ -63,40 +63,6 @@ error: Malformed lisp return type
    |                  ^^^^^^^ use `(-> ...)` return type syntax in `lisp` forms
 
 ================================================================================
-104 Legacy multiple-values directive rejected
-================================================================================
-
-(package test-package)
-
-(define f (lisp multiple-values Integer ()
-            (cl:values 1)))
-
---------------------------------------------------------------------------------
-
-error: Malformed lisp expression
-  --> test:3:16
-   |
- 3 |  (define f (lisp multiple-values Integer ()
-   |                  ^^^^^^^^^^^^^^^ use `(-> ...)` return types instead of the legacy `multiple-values` directive
-
-================================================================================
-105 Uppercase multiple-values directive rejected
-================================================================================
-
-(package test-package)
-
-(define f (lisp MULTIPLE-VALUES (-> Integer * Integer) ()
-            (cl:values 1 2)))
-
---------------------------------------------------------------------------------
-
-error: Malformed lisp expression
-  --> test:3:16
-   |
- 3 |  (define f (lisp MULTIPLE-VALUES (-> Integer * Integer) ()
-   |                  ^^^^^^^^^^^^^^^ use `(-> ...)` return types instead of the legacy `multiple-values` directive
-
-================================================================================
 106 Single-output lisp arrow return type
 ================================================================================
 

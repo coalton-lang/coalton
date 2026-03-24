@@ -680,13 +680,26 @@ Returns a `node'.")
       (let ((rator-expr (tc:node-application-rator expr)))
         (typecase rator-expr
           (tc:node-variable
-           (translate-variable-application
-            rator-expr
-            (tc:qualified-ty-type qual-ty)
-            (tc:node-application-rands expr)
-            (tc:node-application-keyword-rands expr)
-            ctx
-            env))
+           (if (util:dynamic-variable-name-p (tc:node-variable-name rator-expr))
+               (make-node-application
+                :type (tc:qualified-ty-type qual-ty)
+                :properties '()
+                :rator (translate-expression rator-expr ctx env)
+                :rands (mapcar
+                        (lambda (rand)
+                          (apply-dicts rand ctx env))
+                        (tc:node-application-rands expr))
+                :keyword-rands (translate-keyword-rands
+                                (tc:node-application-keyword-rands expr)
+                                ctx
+                                env))
+               (translate-variable-application
+                rator-expr
+                (tc:qualified-ty-type qual-ty)
+                (tc:node-application-rands expr)
+                (tc:node-application-keyword-rands expr)
+                ctx
+                env)))
           (t
            (make-node-application
             :type (tc:qualified-ty-type qual-ty)
@@ -814,6 +827,25 @@ Returns a `node'.")
 
                        :collect (cons name (translate-toplevel binding env name :extra-context ctx)))
        :subexpr (translate-expression (tc:node-let-body expr) ctx env))))
+
+  (:method ((expr tc:node-dynamic-let) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+
+    (let ((qual-ty (tc:node-type expr)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      (make-node-dynamic-let
+       :type (tc:qualified-ty-type qual-ty)
+       :bindings (loop :for binding :in (tc:node-dynamic-let-bindings expr)
+                       :collect (make-node-dynamic-binding
+                                 :name (tc:node-variable-name (tc:node-dynamic-binding-name binding))
+                                 :value (translate-expression
+                                         (tc:node-dynamic-binding-value binding)
+                                         ctx
+                                         env)))
+       :subexpr (translate-expression (tc:node-dynamic-let-subexpr expr) ctx env))))
 
   (:method ((expr tc:node-lisp) ctx env)
     (declare (type pred-context ctx)
@@ -1163,6 +1195,7 @@ Returns a `node'.")
                      :init (translate-expression (tc:node-for-binding-init binding) ctx env)
                      :step (and (tc:node-for-binding-step binding)
                                 (translate-expression (tc:node-for-binding-step binding) ctx env))))
+     :sequential-p (tc:node-for-sequential-p expr)
      :returns (and (tc:node-for-returns expr)
                    (translate-expression (tc:node-for-returns expr) ctx env))
      :termination-kind (tc:node-for-termination-kind expr)
@@ -1432,6 +1465,7 @@ dictionaries applied."
     (cond
       ((null dicts)
        (if (and (typep expr 'tc:node-variable)
+                (not (util:dynamic-variable-name-p (tc:node-variable-name expr)))
                 (not (tc:function-type-p (tc:qualified-ty-type qual-ty))))
            (alexandria:if-let ((entry (tc:lookup-function env (tc:node-variable-name expr) :no-error t)))
              (if (zerop (tc:function-env-entry-arity entry))

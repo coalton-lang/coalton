@@ -96,6 +96,15 @@
                         (setf (gethash name new-locals) t)))
                     (traverse (parser:node-let-body node) new-locals)))
 
+                 ;; Dynamic binding - initializers and body both see the same
+                 ;; lexical scope because dynamic bindings do not introduce
+                 ;; lexical variables.
+                 (parser:node-dynamic-let
+                  (dolist (binding (parser:node-dynamic-let-bindings node))
+                    (traverse (parser:node-dynamic-binding-value binding)
+                              local-bindings))
+                  (traverse (parser:node-dynamic-let-subexpr node) local-bindings))
+
                  ;; Lambda - parameters shadow
                  (parser:node-abstraction
                   (let ((new-locals (alexandria:copy-hash-table local-bindings)))
@@ -251,21 +260,39 @@
 
                  ;; Loops
                  (parser:node-for
-                  (dolist (binding (parser:node-for-bindings node))
-                    (traverse (parser:node-for-binding-init binding) local-bindings))
-                  (let ((new-locals (alexandria:copy-hash-table local-bindings)))
-                    (dolist (binding (parser:node-for-bindings node))
-                      (setf (gethash (parser:node-variable-name
-                                      (parser:node-for-binding-name binding))
-                                     new-locals)
-                            t)
-                      (when (parser:node-for-binding-step binding)
-                        (traverse (parser:node-for-binding-step binding) new-locals)))
-                    (when (parser:node-for-returns node)
-                      (traverse (parser:node-for-returns node) new-locals))
-                    (when (parser:node-for-termination-expr node)
-                      (traverse (parser:node-for-termination-expr node) new-locals))
-                    (traverse (parser:node-for-body node) new-locals)))
+                  (cond
+                    ((parser:node-for-sequential-p node)
+                     (let ((new-locals (alexandria:copy-hash-table local-bindings)))
+                       (dolist (binding (parser:node-for-bindings node))
+                         (traverse (parser:node-for-binding-init binding) new-locals)
+                         (setf (gethash (parser:node-variable-name
+                                         (parser:node-for-binding-name binding))
+                                        new-locals)
+                               t))
+                       (dolist (binding (parser:node-for-bindings node))
+                         (when (parser:node-for-binding-step binding)
+                           (traverse (parser:node-for-binding-step binding) new-locals)))
+                       (when (parser:node-for-returns node)
+                         (traverse (parser:node-for-returns node) new-locals))
+                       (when (parser:node-for-termination-expr node)
+                         (traverse (parser:node-for-termination-expr node) new-locals))
+                       (traverse (parser:node-for-body node) new-locals)))
+                    (t
+                     (dolist (binding (parser:node-for-bindings node))
+                       (traverse (parser:node-for-binding-init binding) local-bindings))
+                     (let ((new-locals (alexandria:copy-hash-table local-bindings)))
+                       (dolist (binding (parser:node-for-bindings node))
+                         (setf (gethash (parser:node-variable-name
+                                         (parser:node-for-binding-name binding))
+                                        new-locals)
+                               t)
+                         (when (parser:node-for-binding-step binding)
+                           (traverse (parser:node-for-binding-step binding) new-locals)))
+                       (when (parser:node-for-returns node)
+                         (traverse (parser:node-for-returns node) new-locals))
+                       (when (parser:node-for-termination-expr node)
+                         (traverse (parser:node-for-termination-expr node) new-locals))
+                       (traverse (parser:node-for-body node) new-locals)))))
 
                  (parser:node-break
                   nil) ; No expressions

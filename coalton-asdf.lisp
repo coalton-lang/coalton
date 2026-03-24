@@ -12,6 +12,14 @@
 (defclass ct-file (cl-source-file)
   ((type :initform "ct")))
 
+(defmethod perform :around ((o compile-op) (c ct-file))
+  (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton)))
+    (call-next-method)))
+
+(defmethod perform :around ((o load-source-op) (c ct-file))
+  (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton)))
+    (call-next-method)))
+
 
 ;; .coal is a special extension for Coalton files written in native
 ;; Coalton syntax.

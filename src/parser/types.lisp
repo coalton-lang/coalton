@@ -237,8 +237,7 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
 
 (defun keyword-marker-p (form)
   (and (cst:atom form)
-       (symbolp (cst:raw form))
-       (string= (symbol-name (cst:raw form)) "&KEY")))
+       (eq 'coalton:&key (cst:raw form))))
 
 (defun qualified-type-marker-p (form)
   (and (cst:atom form)
@@ -278,12 +277,6 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
        (cst:atom (cst:first form))
        (identifierp (cst:raw (cst:first form)))
        (symbol-name (cst:raw (cst:first form)))))
-
-(defun values-return-type-form-p (form)
-  (and (cst:consp form)
-       (let ((wrapper-name (convention-wrapper-name form)))
-         (and wrapper-name
-              (string= wrapper-name "VALUES")))))
 
 (defun unwrap-input-convention-wrapper (forms source)
   (declare (type util:cst-list forms)
@@ -487,10 +480,6 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
      (parse-error "Malformed lisp return type"
                   (note source form
                         "zero-value `lisp` return types must be written as `(-> Void)`")))
-    ((values-return-type-form-p form)
-     (parse-error "Malformed lisp return type"
-                  (note source form
-                        "use `(-> Void)`, `(-> a)`, or `(-> a * b)` instead of `(values ...)`")))
     ((star-separated-type-form-p form)
      (parse-error "Malformed lisp return type"
                   (note source form

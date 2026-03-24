@@ -119,8 +119,12 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
   (declare (type (or ast:node-application ast:node-direct-application) application)
            (values (or null ast:node-abstraction) &optional))
 
-  (let ((abstraction (tc:lookup-code env (ast:node-rator-name application) :no-error t)))
-    (if (ast:node-abstraction-p abstraction) abstraction nil)))
+  (a:if-let ((name (ast:node-rator-name application)))
+    (if (util:dynamic-variable-name-p name)
+        nil
+        (let ((abstraction (tc:lookup-code env name :no-error t)))
+          (if (ast:node-abstraction-p abstraction) abstraction nil)))
+    nil))
 
 (defun lookup-anonymous-application-body (application)
   "Try to lookup the code of an anonymous application, returns null or abstraction."
@@ -136,7 +140,8 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
            (type tc:environment env)
            (values boolean &optional))
 
-  (a:if-let ((entry (tc:lookup-function env name :no-error t)))
+  (a:if-let ((entry (and (not (util:dynamic-variable-name-p name))
+                         (tc:lookup-function env name :no-error t))))
     (tc:function-env-entry-inline-p entry)
     nil))
 

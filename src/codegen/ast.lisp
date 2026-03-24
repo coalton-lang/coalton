@@ -59,6 +59,16 @@
    #:node-let-p                         ; FUNCTION
    #:node-let-bindings                  ; READER
    #:node-let-subexpr                   ; READER
+   #:node-dynamic-binding               ; STRUCT
+   #:make-node-dynamic-binding          ; CONSTRUCTOR
+   #:node-dynamic-binding-name          ; READER
+   #:node-dynamic-binding-value         ; READER
+   #:node-dynamic-binding-list          ; TYPE
+   #:node-dynamic-let                   ; STRUCT
+   #:make-node-dynamic-let              ; CONSTRUCTOR
+   #:node-dynamic-let-p                 ; FUNCTION
+   #:node-dynamic-let-bindings          ; READER
+   #:node-dynamic-let-subexpr           ; READER
    #:node-lisp                          ; STRUCT
    #:make-node-lisp                     ; CONSTRUCTOR
    #:node-lisp-p                        ; FUNCTION
@@ -107,6 +117,7 @@
    #:node-for                          ; STRUCT
    #:make-node-for                     ; CONSTRUCTOR
    #:node-for-bindings                 ; READER
+   #:node-for-sequential-p             ; READER
    #:node-for-returns                  ; READER
    #:node-for-termination-kind         ; READER
    #:node-for-termination-expr         ; READER
@@ -308,6 +319,26 @@ coalton symbols (`parser:identifier`)"
   (bindings (util:required 'bindings) :type binding-list :read-only t)
   (subexpr  (util:required 'subexpr)  :type node         :read-only t))
 
+(defstruct node-dynamic-binding
+  "A special-variable binding used by dynamic-bind."
+  (name  (util:required 'name)  :type parser:identifier :read-only t)
+  (value (util:required 'value) :type node              :read-only t))
+
+(defmethod make-load-form ((self node-dynamic-binding) &optional env)
+  (make-load-form-saving-slots self :environment env))
+
+(defun node-dynamic-binding-list-p (x)
+  (and (alexandria:proper-list-p x)
+       (every #'node-dynamic-binding-p x)))
+
+(deftype node-dynamic-binding-list ()
+  '(satisfies node-dynamic-binding-list-p))
+
+(defstruct (node-dynamic-let (:include node))
+  "A dynamic scope wrapper implemented with Common Lisp special bindings."
+  (bindings (util:required 'bindings) :type node-dynamic-binding-list :read-only t)
+  (subexpr  (util:required 'subexpr)  :type node                      :read-only t))
+
 (defstruct (node-lisp (:include node))
   "An embedded lisp form"
   (vars (util:required 'vars) :type lisp-coalton-var-alist    :read-only t)
@@ -402,6 +433,7 @@ coalton symbols (`parser:identifier`)"
   "A labelled imperative `for` with explicit bindings and step expressions."
   (label            (util:required 'label)            :type keyword                         :read-only t)
   (bindings         (util:required 'bindings)         :type node-for-binding-list          :read-only t)
+  (sequential-p     nil                               :type boolean                         :read-only t)
   (returns          nil                               :type (or null node)                  :read-only t)
   (termination-kind nil                               :type (member nil :while :until :repeat) :read-only t)
   (termination-expr nil                               :type (or null node)                  :read-only t)

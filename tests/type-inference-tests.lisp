@@ -260,7 +260,8 @@
                             (with-open-stream (stream (source:source-stream source))
                               (tc:parse-ty-scheme
                                (parser:parse-qualified-type
-                                (eclector.concrete-syntax-tree:read stream)
+                                (parser:with-reader-context stream
+                                  (eclector.concrete-syntax-tree:read stream))
                                 source)
                                env)))))
                    (is (tc:ty-scheme=
@@ -895,6 +896,35 @@
           (coalton/cell:read c))))"
 
    '("mk-stash" . "(:a -> :b -> Optional :b)")))
+
+(deftest test-dynamic-variable-types ()
+  (check-coalton-types
+   "(declare *id* (:a -> :a))
+    (define *id* (fn (x) x))
+
+    (define use-id
+      (dynamic-bind ((*id* (fn (x) x)))
+        (Tuple (*id* 1) (*id* True))))"
+
+   '("use-id" . "(Tuple Integer Boolean)"))
+
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(declare *id* (:a -> :a))
+      (define *id* (fn (x) x))
+
+      (define bad-id
+        (dynamic-bind ((*id* (the (String -> String) (fn (x) x))))
+          (*id* \"hello\")))"))
+
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(declare *id* (:a -> :a))
+      (define *id* (fn (x) x))
+
+      (define bad-id
+        (dynamic-bind ((*id* ((fn (f) f) (fn (x) x))))
+          (Tuple (*id* 1) (*id* True))))")))
 
 (deftest test-function-definition-shorthand ()
   (check-coalton-types

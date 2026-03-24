@@ -35,7 +35,7 @@
     (is (== (f Lime)
             (Some Lime))))
 
-  (let ((declare f (Ord -> String))
+  (let ((declare f (Ordering -> String))
         (f (fn (x)
              (match x
                ((LT) "lt")
