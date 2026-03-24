@@ -636,10 +636,6 @@ Coalton offers three main ways to do explicit loops:
 
 Coalton strives to ensure tail calls are always eliminated. As such, tail recursion is idiomatic in Coalton.
 
-One important exception is `dynamic-bind`: rebinding a dynamic variable around a
-call introduces dynamic scope setup/teardown, so a call inside that
-`dynamic-bind` is not treated as tail-recursive.
-
 ```lisp
 (coalton-toplevel
   (define (find-integer predicate limit)
@@ -724,11 +720,9 @@ Now it works without any type declarations on use:
 ```
 
 
-### Built-In Looping Constructs
-
 Coalton supports imperative looping, conditional looping, and pattern-based iteration.
 
-#### `for` and `for*`
+### Conventional Looping: `for` and `for*`
 
 The built-in imperative `for` form and its sequential variant `for*` have the
 following shape:
