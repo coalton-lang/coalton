@@ -158,29 +158,12 @@
                     (codegen:make-function-table env))
                    env))))
 
-            (let* ((tvars
-                     (loop :for i :to (1- (length (remove-duplicates (tc:type-variables qual-ty)
-                                                                     :test #'equalp)))
-                           :collect (tc:make-variable)))
-                   (qual-type (tc:instantiate
-                               tvars
-                               (tc:ty-scheme-type scheme))))
-
-              (tc:tc-error "Unable to codegen"
-                           (tc:tc-note node
-                                       "expression has type ~A~{ ~S~}.~{ (~S)~} => ~S with unresolved constraint~A ~S"
-                                       (if settings:*coalton-print-unicode*
-                                           "∀"
-                                           "FORALL")
-                                       tvars
-                                       (tc:qualified-ty-predicates qual-type)
-                                       (tc:qualified-ty-type qual-type)
-                                       (if (= (length (tc:qualified-ty-predicates qual-type)) 1)
-                                           ""
-                                           "s")
-                                       (tc:qualified-ty-predicates qual-type))
-                           (tc:tc-note node
-                                       "Add a type assertion with THE to resolve ambiguity")))))))))
+            (tc:tc-error "Unable to codegen"
+                         (tc:tc-note node
+                                     "expression has ambiguous type ~A"
+                                     (tc:type-to-string scheme env))
+                         (tc:tc-note node
+                                     "Add a type assertion with THE to resolve ambiguity"))))))))
 
 (defmacro with-environment-updates (updates &body body)
   "Collect environment updates into a vector bound to UPDATES."
