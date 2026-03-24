@@ -1171,7 +1171,7 @@ The supported clauses for both are:
 - `:with <var> = <expr>`: Lexically bind a variable over the remainder of the comprehension.
 - `:when <expr>`: Guard against the truth of `<expr>`.
 
-> [NOTE!]
+> [!NOTE]
 > Collection and association comprehensions must be finite. They cannot produce infinite sequences.
 
 Collection comprehensions default to `Seq`, and association comprehensions
