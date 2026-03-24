@@ -734,7 +734,7 @@ following shape:
   body...)
 
 ;; <binding-clause> := (declare var Type)
-;;                   | (var init-expr [step-expr])
+;;                   | (var init-expr step-expr)
 ```
 
 The binding list is required, but it may be empty: `()`. Initializers are
@@ -746,6 +746,10 @@ expressions are performed from left to right so later steps can refer to
 earlier updated variables. In that sense, `for*` plays the same role as Common
 Lisp's `do*`. If no termination clause is present, the iteration is infinite
 unless exited by `break`.
+
+Each non-`declare` loop binding must include both an initializer and a step
+expression. If a loop variable should stay constant across iterations, repeat it
+as its own step, for example `(x 10 x)`.
 
 You can iterate forever:
 

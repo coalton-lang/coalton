@@ -235,3 +235,21 @@ error: Malformed for expression
    |
  6 |      :returns 1))
    |      ^^^^^^^^ :returns clause must appear immediately after the binding list
+
+================================================================================
+110 Malformed for binding
+================================================================================
+
+(package test-parser)
+
+(define f
+  (for ((x 0))
+    x))
+
+--------------------------------------------------------------------------------
+
+error: Malformed for binding
+  --> test:4:12
+   |
+ 4 |    (for ((x 0))
+   |              ^ for bindings must have a step expression

@@ -335,7 +335,7 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;
 ;;;; node-let-binding := "(" identifier expression ")"
 ;;;;
-;;;; node-for-binding := "(" identifier expression [expression] ")"
+;;;; node-for-binding := "(" identifier expression expression ")"
 ;;;;
 ;;;; node-let-declare := "(" "declare" identifier qualified-ty ")"
 ;;;;
@@ -2313,12 +2313,15 @@ Rebound to NIL parsing an anonymous FN.")
                  (note-end source (cst:first form)
                            "for bindings must have an initializer")))
 
-  (let* ((rest2 (cst:rest (cst:rest form)))
-         (step-form (and (cst:consp rest2)
-                         (cst:first rest2))))
+  ;; (x init)
+  (unless (cst:consp (cst:rest (cst:rest form)))
+    (parse-error "Malformed for binding"
+                 (note-end source (cst:second form)
+                           "for bindings must have a step expression")))
+
+  (let ((rest2 (cst:rest (cst:rest form))))
     ;; (x init step ...)
-    (when (and (cst:consp rest2)
-               (cst:consp (cst:rest rest2)))
+    (when (cst:consp (cst:rest rest2))
       (parse-error "Malformed for binding"
                    (note source (cst:first (cst:rest rest2))
                          "unexpected trailing form")))
@@ -2326,8 +2329,7 @@ Rebound to NIL parsing an anonymous FN.")
     (make-node-for-binding
      :name (parse-ordinary-variable (cst:first form) source)
      :init (parse-expression (cst:second form) source)
-     :step (and step-form
-                (parse-expression step-form source))
+     :step (parse-expression (cst:third form) source)
      :location (form-location source form))))
 
 (defun parse-rec-binding (form source)
