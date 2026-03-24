@@ -681,13 +681,37 @@ Now it works without any type declarations on use:
 55
 ```
 
+### Local Bindings: `let` and `let*`
+
+Outside flattened-body contexts, ordinary `let` and `let*` are expression forms
+for local bindings. `let` binds its variables recursively and in parallel
+(similar to Scheme's `letrec`), while `let*` binds them left-to-right so each
+initializer can refer to the earlier bindings.
+
+```lisp
+(coalton
+  (let ((x (+ y 1))
+        (y 2))
+    (+ x y)))
+```
+
+```lisp
+(coalton
+  (let* ((x 1)
+         (y (+ x 1)))
+    (+ x y)))
+```
+
+`let*` accepts the same binding syntax and local `declare` forms as `let`.
+
 ### Built-In Looping Constructs
 
 Coalton supports imperative looping, conditional looping, and pattern-based iteration.
 
-#### `for`
+#### `for` and `for*`
 
-The built-in imperative `for` form has the following shape:
+The built-in imperative `for` form and its sequential variant `for*` have the
+following shape:
 
 ```lisp
 (for [label] (<binding-clause>*)
@@ -699,12 +723,15 @@ The built-in imperative `for` form has the following shape:
 ;;                   | (var init-expr [step-expr])
 ```
 
-The binding list is required, but it may be empty: `()`. Initializers are evaluated
-once before the first iteration, and the initializer binding group follows the
-same scoping rules as `let`. Step expressions are evaluated after each completed
-iteration, simultaneously, using the pre-step bindings from that iteration. If
-no termination clause is present, the iteration is infinite unless exited by
-`break`.
+The binding list is required, but it may be empty: `()`. Initializers are
+evaluated once before the first iteration. In `for`, the initializer binding
+group follows the same scoping rules as `let`, and step expressions are
+evaluated simultaneously using the pre-step bindings from that iteration. In
+`for*`, initializers follow `let*`-style left-to-right scoping, and step
+expressions are performed from left to right so later steps can refer to
+earlier updated variables. In that sense, `for*` plays the same role as Common
+Lisp's `do*`. If no termination clause is present, the iteration is infinite
+unless exited by `break`.
 
 You can iterate forever:
 
@@ -727,6 +754,23 @@ You can also use `for` as a counted or state-threading loop:
      (continue))
    (show i)))
 ```
+
+When later loop bindings should build on earlier ones, use `for*`:
+
+```lisp
+(coalton
+ (let ((xs (vector:make 10 20 30)))
+   (for* ((declare i UFix)
+          (declare x Integer)
+          (i 0 (1+ i))
+          (x (vector:index-unsafe i xs) (vector:index-unsafe i xs)))
+     :returns (Tuple i x)
+     :repeat 2
+     Unit)))
+```
+
+Here `x` tracks the current vector element while `i` tracks the index. Because
+this is `for*`, the step for `x` sees the updated value of `i`.
 
 If a `:returns` clause is present, that expression is evaluated once when the `for` exits
 normally or via `break`. If `:returns` is absent, the `for` produces no values.
@@ -1192,7 +1236,8 @@ Type declarations can always be added manually.
     (map (fn (y) (+ 2 y)) (str:parse-int x))))
 ```
 
-Type declarations can also be added in `let` and `for` expressions
+Type declarations can also be added in `let`, `let*`, `for`, and `for*`
+expressions
 
 ```lisp
 (coalton-toplevel
@@ -1509,7 +1554,8 @@ Coalton has a `coalton:progn` construct similar to lisp.
       (values x y))))
 ```
 
-Coalton's `progn` can have flattened `let` syntax.
+Outside flattened-body contexts, use the ordinary `let` and `let*` forms
+described above. Inside `progn`, Coalton also has flattened `let` syntax.
 
 ```lisp
 (coalton-toplevel

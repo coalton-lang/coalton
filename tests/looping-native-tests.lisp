@@ -127,6 +127,31 @@
                         89 144 233 377 610 987 1597 2584 4181 6765)
           fibs)))
 
+(define-test test-for*-sequential-bindings ()
+  (let result =
+    (for* ((declare a UFix)
+           (declare b UFix)
+           (a 1 b)
+           (b 1 (+ a b)))
+      :returns (Tuple a b)
+      :repeat 5
+      Unit))
+  (match result
+    ((Tuple a b)
+     (is (== 16 a))
+     (is (== 32 b)))))
+
+(define-test test-for*-init-bindings-are-non-recursive ()
+  (let x = (the UFix 1))
+  (let result =
+    (for* ((declare x UFix)
+           (x (1+ x) (1+ x)))
+      :returns x
+      :repeat 3
+      Unit))
+  (is (== 1 x))
+  (is (== 5 result)))
+
 (define-test test-for-control ()
   ;; These first few just test that escape works at all. Tests will
   ;; hang if it doesn't.

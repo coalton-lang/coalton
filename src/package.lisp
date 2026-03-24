@@ -88,14 +88,17 @@
    #:catch
    #:dynamic-bind
    #:let
+   #:let*
    #:rec
    #:=                                  ; Syntax
    #:lisp
    #:<-                                 ; Syntax
    #:_
+   #:values
    #:return
    #:the
    #:for
+   #:for*
    #:break
    #:continue
    #:in                                 ; Syntax

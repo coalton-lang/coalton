@@ -80,3 +80,40 @@
 
     (is (< (- end start) 1))
     (is (equalp value '(1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0)))))
+
+(deftest sequential-let-star-bindings ()
+  (is (= 1
+         (coalton:coalton
+          (coalton:let* ((a 1)
+                         (b a))
+            b)))))
+
+(deftest sequential-let-star-bindings-are-non-recursive ()
+  (check-coalton-types
+   "(define foo
+      (let ((declare x UFix)
+            (x 1))
+        (let* ((declare x UFix)
+               (x (1+ x)))
+          x)))"
+   '("foo" . "UFix")))
+
+(deftest sequential-let-star-binding-declare-mismatch ()
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(define bad
+        (let* ((declare y String)
+               (x 1)
+               (y x))
+          y))")))
+
+(deftest sequential-let-star-self-reference-without-outer-binding-is-unbound ()
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-let-star-errors
+  (import coalton-prelude))
+
+(define bad
+  (let* ((x (1+ x)))
+    x))")))
+    (is (search "Unknown variable" msg))
+    (is (search "(let* ((x (1+ x)))" msg))))

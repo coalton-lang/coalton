@@ -1595,7 +1595,19 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                  (tc-note second "second definition here"))))
 
     (multiple-value-bind (preds accessors binding-nodes subs)
-        (infer-let-bindings (parser:node-let-bindings node) (parser:node-let-declares node) subs env)
+        (cond
+          ((parser:node-let-sequential-p node)
+           (infer-sequential-let-bindings
+            (parser:node-let-bindings node)
+            (parser:node-let-declares node)
+            subs
+            env))
+          (t
+           (infer-let-bindings
+            (parser:node-let-bindings node)
+            (parser:node-let-declares node)
+            subs
+            env)))
 
       (multiple-value-bind (ty preds_ accessors_ body-node subs)
           (infer-expression-type (parser:node-let-body node)
@@ -1609,11 +1621,17 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
          ty
          preds
          accessors
-         (make-node-let
-          :type (tc:qualify nil ty)
-          :location (source:location node)
-          :bindings binding-nodes
-         :body body-node)
+         (if (parser:node-let-sequential-p node)
+             (nest-sequential-let-bindings
+              binding-nodes
+              body-node
+              ty
+              (source:location node))
+             (make-node-let
+              :type (tc:qualify nil ty)
+              :location (source:location node)
+              :bindings binding-nodes
+              :body body-node))
          subs))))
 
   (:method ((node parser:node-dynamic-let) expected-type subs env)
@@ -2412,14 +2430,50 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                      :collect (parser:make-node-let-binding
                                :name (parser:node-for-binding-name binding)
                                :value (parser:node-for-binding-init binding)
-                               :location (source:location binding)))))
-
-        (multiple-value-bind (preds_ accessors_ binding-init-nodes subs)
-            (infer-bindings-type init-bindings declare-table subs env)
-          (setf preds (append preds preds_))
-          (setf accessors (append accessors accessors_))
-
-          (let ((binding-init-table (make-hash-table :test #'eq)))
+                               :location (source:location binding))))
+             (loop-env
+               (make-tc-env
+                :env (tc-env-env env)
+                :ty-table (alexandria:copy-hash-table (tc-env-ty-table env))
+                :typevar-table (alexandria:copy-hash-table (tc-env-typevar-table env))))
+             (binding-init-nodes
+               (cond
+                 ((parser:node-for-sequential-p node)
+                  (loop :for binding :in (parser:node-for-bindings node)
+                        :append
+                        (let* ((name (parser:node-variable-name (parser:node-for-binding-name binding)))
+                               (binding-declare-table (make-hash-table :test #'eq))
+                               (init-binding
+                                 (parser:make-node-let-binding
+                                  :name (parser:node-for-binding-name binding)
+                                  :value (parser:node-for-binding-init binding)
+                                  :location (source:location binding))))
+                          (when (gethash name declare-table)
+                            (setf (gethash name binding-declare-table)
+                                  (gethash name declare-table)))
+                          (multiple-value-bind (preds_ accessors_ nodes subs_)
+                              (infer-bindings-type (list init-binding) binding-declare-table subs loop-env)
+                            (setf subs subs_)
+                            (setf preds (append preds preds_))
+                            (setf accessors (append accessors accessors_))
+                            nodes))))
+                 (t
+                  (multiple-value-bind (preds_ accessors_ nodes subs_)
+                      (infer-bindings-type init-bindings declare-table subs loop-env)
+                    (setf subs subs_)
+                    (setf preds (append preds preds_))
+                    (setf accessors (append accessors accessors_))
+                    nodes)))))
+        (tc:apply-substitution subs loop-env)
+        (let ((binding-init-table (make-hash-table :test #'eq)))
+          (labels ((typed-init-binding (binding)
+                     (let* ((name (parser:node-variable-name
+                                   (parser:node-for-binding-name binding)))
+                            (typed-binding (gethash name binding-init-table)))
+                       (or typed-binding
+                           (util:coalton-bug
+                            "Missing typed init binding for loop variable ~S"
+                            name)))))
             (loop :for binding :in binding-init-nodes
                   :for name := (node-variable-name (node-let-binding-name binding))
                   :do (setf (gethash name binding-init-table) binding))
@@ -2432,7 +2486,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                        ((:while :until) tc:*boolean-type*)
                        (:repeat tc:*ufix-type*))
                      subs
-                     env)
+                     loop-env)
                     (values nil nil nil nil subs))
               (declare (ignore termination-ty))
               (setf preds (append preds preds_))
@@ -2443,23 +2497,21 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                       (infer-expression-type (parser:node-for-returns node)
                                              (tc:make-variable)
                                              subs
-                                             env)
+                                             loop-env)
                       (values (zero-result-type) nil nil nil subs))
                 (setf preds (append preds preds_))
                 (setf accessors (append accessors accessors_))
 
                 (let ((binding-step-nodes
                         (loop :for binding :in (parser:node-for-bindings node)
-                              :for name := (parser:node-variable-name
-                                            (parser:node-for-binding-name binding))
-                              :for init-binding := (gethash name binding-init-table)
+                              :for init-binding := (typed-init-binding binding)
                               :for qual-type := (node-type (node-let-binding-name init-binding))
                               :collect (and (parser:node-for-binding-step binding)
                                             (multiple-value-bind (step-ty preds_ accessors_ step-node subs_)
                                                 (infer-expression-type (parser:node-for-binding-step binding)
                                                                        (tc:qualified-ty-type qual-type)
                                                                        subs
-                                                                       env)
+                                                                       loop-env)
                                               (declare (ignore step-ty))
                                               (setf subs subs_)
                                               (setf preds (append preds preds_))
@@ -2470,7 +2522,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                       (infer-expression-type (parser:node-for-body node)
                                              (zero-result-type)
                                              subs
-                                             env)
+                                             loop-env)
                     (declare (ignore body-ty))
                     (setf preds (append preds preds_))
                     (setf accessors (append accessors accessors_))
@@ -2488,9 +2540,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                             :label (parser:node-for-label node)
                             :bindings
                             (loop :for binding :in (parser:node-for-bindings node)
-                                  :for name := (parser:node-variable-name
-                                                (parser:node-for-binding-name binding))
-                                  :for init-binding := (gethash name binding-init-table)
+                                  :for init-binding := (typed-init-binding binding)
                                   :for qual-type := (node-type (node-let-binding-name init-binding))
                                   :for step-node :in binding-step-nodes
                                   :collect (make-node-for-binding
@@ -2498,10 +2548,12 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                                    :type qual-type
                                                    :location (source:location
                                                               (parser:node-for-binding-name binding))
-                                                   :name name)
+                                                   :name (parser:node-variable-name
+                                                          (parser:node-for-binding-name binding)))
                                             :init (node-let-binding-value init-binding)
                                             :step step-node
                                             :location (source:location binding)))
+                            :sequential-p (parser:node-for-sequential-p node)
                             :returns returns-node
                             :termination-kind (parser:node-for-termination-kind node)
                             :termination-expr termination-node
@@ -3169,6 +3221,97 @@ printing an implicit weak variable notation."
                   :finally (return table))))
 
       (infer-bindings-type bindings dec-table subs env)))))
+
+(defun infer-sequential-let-bindings (bindings declares subs env)
+  (declare (type parser:node-let-binding-list bindings)
+           (type parser:node-let-declare-list declares)
+           (type tc:substitution-list subs)
+           (type tc-env env)
+           (values tc:ty-predicate-list accessor-list node-let-binding-list tc:substitution-list &optional))
+
+  (with-type-string-environment (env)
+    (let ((def-table (make-hash-table :test #'eq))
+          (dec-table (make-hash-table :test #'eq)))
+      ;; Ensure that there are no duplicate definitions
+      (loop :for binding :in bindings
+            :for name := (parser:node-variable-name (parser:node-let-binding-name binding))
+            :if (gethash name def-table)
+              :do (tc-error "Duplicate binding in let"
+                            (tc-note (parser:node-let-binding-name binding)
+                                     "second definition here")
+                            (tc-note (parser:node-let-binding-name
+                                      (gethash name def-table))
+                                     "first definition here"))
+            :else
+              :do (setf (gethash name def-table) binding))
+
+      ;; Ensure that there are no duplicate declarations
+      (loop :for declare :in declares
+            :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
+            :if (gethash name dec-table)
+              :do (tc-error "Duplicate declaration in let"
+                            (tc-note (parser:node-let-declare-name declare)
+                                     "second declaration here")
+                            (tc-note (parser:node-let-declare-name
+                                      (gethash name dec-table))
+                                     "first declaration here"))
+            :else
+              :do (setf (gethash name dec-table) declare))
+
+      ;; Ensure that each declaration has an associated definition
+      (loop :for declare :in declares
+            :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
+            :unless (gethash name def-table)
+              :do (tc-error "Orphan declare in let"
+                            (tc-note (parser:node-let-declare-name declare)
+                                     "declaration does not have an associated definition")))
+
+      (let ((declare-table
+              (loop :with table := (make-hash-table :test #'eq)
+                    :for declare :in declares
+                    :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
+                    :do (setf (gethash name table) (parser:node-let-declare-type declare))
+                    :finally (return table)))
+            (preds nil)
+            (accessors nil)
+            (binding-nodes nil))
+        (dolist (binding bindings)
+          (let* ((name (parser:node-variable-name (parser:node-let-binding-name binding)))
+                 (binding-declare-table (make-hash-table :test #'eq)))
+            (when (gethash name declare-table)
+              (setf (gethash name binding-declare-table)
+                    (gethash name declare-table)))
+            (multiple-value-bind (preds_ accessors_ nodes subs_)
+                (infer-bindings-type (list binding) binding-declare-table subs env)
+              (setf subs subs_)
+              (setf preds (append preds preds_))
+              (setf accessors (append accessors accessors_))
+              (setf binding-nodes (append binding-nodes nodes)))))
+        (values preds accessors binding-nodes subs)))))
+
+(defun nest-sequential-let-bindings (bindings body ty location)
+  (declare (type node-let-binding-list bindings)
+           (type node-body body)
+           (type tc:ty ty)
+           (type source:location location)
+           (values node-let &optional))
+  (labels ((wrap (bindings)
+             (if (endp bindings)
+                 (make-node-let
+                  :type (tc:qualify nil ty)
+                  :location location
+                  :bindings nil
+                  :body body)
+                 (make-node-let
+                  :type (tc:qualify nil ty)
+                  :location location
+                  :bindings (list (first bindings))
+                  :body (if (endp (rest bindings))
+                            body
+                            (make-node-body
+                             :nodes nil
+                             :last-node (wrap (rest bindings))))))))
+    (wrap bindings)))
 
 
 (defun binding-recursion-context (binding)

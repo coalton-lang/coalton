@@ -229,20 +229,49 @@
     (declare (type algo:immutable-map ctx)
              (values node algo:immutable-map))
 
-    (let* ((new-bindings (make-local-vars (mapcar (alexandria:compose
-                                                   #'node-variable-name
-                                                   #'node-let-binding-name)
-                                                  (node-let-bindings node))))
+    (cond
+      ((node-let-sequential-p node)
+       (let ((current-ctx ctx)
+             (new-bindings nil))
+         (dolist (binding (node-let-bindings node))
+           (multiple-value-bind (value _)
+               (rename-variables-generic% (node-let-binding-value binding) current-ctx)
+             (declare (ignore _))
+             (let* ((name-node (node-let-binding-name binding))
+                    (name (node-variable-name name-node))
+                    (new-name (make-local-var name))
+                    (next-ctx (algo:immutable-map-set current-ctx name new-name)))
+               (push (make-node-let-binding
+                      :name (make-node-variable
+                             :name new-name
+                             :location (source:location name-node))
+                      :value value
+                      :location (source:location binding))
+                     new-bindings)
+               (setf current-ctx next-ctx))))
+         (values
+          (make-node-let
+           :bindings (nreverse new-bindings)
+           :declares (rename-variables-generic% (node-let-declares node) current-ctx)
+           :body (rename-variables-generic% (node-let-body node) current-ctx)
+           :sequential-p t
+           :location (source:location node))
+          ctx)))
+      (t
+       (let* ((new-bindings (make-local-vars (mapcar (alexandria:compose
+                                                      #'node-variable-name
+                                                      #'node-let-binding-name)
+                                                     (node-let-bindings node))))
 
-           (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
+              (new-ctx (algo:immutable-map-set-multiple ctx new-bindings)))
 
-      (values
-       (make-node-let
-        :bindings (rename-variables-generic% (node-let-bindings node) new-ctx)
-        :declares (rename-variables-generic% (node-let-declares node) new-ctx)
-        :body (rename-variables-generic% (node-let-body node) new-ctx)
-        :location (source:location node))
-       ctx)))
+         (values
+          (make-node-let
+           :bindings (rename-variables-generic% (node-let-bindings node) new-ctx)
+           :declares (rename-variables-generic% (node-let-declares node) new-ctx)
+           :body (rename-variables-generic% (node-let-body node) new-ctx)
+           :location (source:location node))
+          ctx)))))
 
   (:method ((node node-dynamic-let) ctx)
     (declare (type algo:immutable-map ctx)
@@ -259,39 +288,81 @@
     (declare (type algo:immutable-map ctx)
              (values node algo:immutable-map))
 
-    (let* ((new-bindings
-             (make-local-vars
-              (mapcar (alexandria:compose
-                       #'node-variable-name
-                       #'node-for-binding-name)
-                      (node-for-bindings node))))
-           (new-ctx
-             (algo:immutable-map-set-multiple ctx new-bindings)))
+    (cond
+      ((node-for-sequential-p node)
+       (let ((current-ctx ctx)
+             (renamed-bindings nil))
+         (dolist (binding (node-for-bindings node))
+           (multiple-value-bind (init _)
+               (rename-variables-generic% (node-for-binding-init binding) current-ctx)
+             (declare (ignore _))
+             (let* ((name-node (node-for-binding-name binding))
+                    (name (node-variable-name name-node))
+                    (new-name (make-local-var name))
+                    (next-ctx (algo:immutable-map-set current-ctx name new-name)))
+               (push (list binding new-name init) renamed-bindings)
+               (setf current-ctx next-ctx))))
+         (values
+          (make-node-for
+           :location (source:location node)
+           :label (node-for-label node)
+           :bindings
+           (loop :for (binding new-name init) :in (nreverse renamed-bindings)
+                 :collect (make-node-for-binding
+                           :name (make-node-variable
+                                  :name new-name
+                                  :location (source:location (node-for-binding-name binding)))
+                           :init init
+                           :step (and (node-for-binding-step binding)
+                                      (rename-variables-generic%
+                                       (node-for-binding-step binding)
+                                       current-ctx))
+                           :location (source:location binding)))
+           :declares (rename-variables-generic% (node-for-declares node) current-ctx)
+           :returns (and (node-for-returns node)
+                         (rename-variables-generic% (node-for-returns node) current-ctx))
+           :termination-kind (node-for-termination-kind node)
+           :termination-expr (and (node-for-termination-expr node)
+                                  (rename-variables-generic%
+                                   (node-for-termination-expr node)
+                                   current-ctx))
+           :body (rename-variables-generic% (node-for-body node) current-ctx)
+           :sequential-p t)
+          ctx)))
+      (t
+       (let* ((new-bindings
+                (make-local-vars
+                 (mapcar (alexandria:compose
+                          #'node-variable-name
+                          #'node-for-binding-name)
+                         (node-for-bindings node))))
+              (new-ctx
+                (algo:immutable-map-set-multiple ctx new-bindings)))
 
-      (values
-       (make-node-for
-        :location (source:location node)
-        :label (node-for-label node)
-        :bindings
-        (loop :for binding :in (node-for-bindings node)
-              :collect (make-node-for-binding
-                        :name (rename-variables-generic% (node-for-binding-name binding) new-ctx)
-                        :init (rename-variables-generic% (node-for-binding-init binding) new-ctx)
-                        :step (and (node-for-binding-step binding)
-                                   (rename-variables-generic%
-                                    (node-for-binding-step binding)
-                                    new-ctx))
-                        :location (source:location binding)))
-        :declares (rename-variables-generic% (node-for-declares node) new-ctx)
-        :returns (and (node-for-returns node)
-                      (rename-variables-generic% (node-for-returns node) new-ctx))
-        :termination-kind (node-for-termination-kind node)
-        :termination-expr (and (node-for-termination-expr node)
-                               (rename-variables-generic%
-                                (node-for-termination-expr node)
-                                new-ctx))
-        :body (rename-variables-generic% (node-for-body node) new-ctx))
-       ctx)))
+         (values
+          (make-node-for
+           :location (source:location node)
+           :label (node-for-label node)
+           :bindings
+           (loop :for binding :in (node-for-bindings node)
+                 :collect (make-node-for-binding
+                           :name (rename-variables-generic% (node-for-binding-name binding) new-ctx)
+                           :init (rename-variables-generic% (node-for-binding-init binding) new-ctx)
+                           :step (and (node-for-binding-step binding)
+                                      (rename-variables-generic%
+                                       (node-for-binding-step binding)
+                                       new-ctx))
+                           :location (source:location binding)))
+           :declares (rename-variables-generic% (node-for-declares node) new-ctx)
+           :returns (and (node-for-returns node)
+                         (rename-variables-generic% (node-for-returns node) new-ctx))
+           :termination-kind (node-for-termination-kind node)
+           :termination-expr (and (node-for-termination-expr node)
+                                  (rename-variables-generic%
+                                   (node-for-termination-expr node)
+                                   new-ctx))
+           :body (rename-variables-generic% (node-for-body node) new-ctx))
+          ctx)))))
 
   (:method ((node node-lisp) ctx)
     (declare (type algo:immutable-map ctx)

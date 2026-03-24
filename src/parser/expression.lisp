@@ -83,6 +83,7 @@
    #:node-let-bindings                  ; ACCESSOR
    #:node-let-declares                  ; ACCESSOR
    #:node-let-body                      ; ACCESSOR
+   #:node-let-sequential-p              ; ACCESSOR
    #:node-dynamic-let                   ; STRUCT
    #:make-node-dynamic-let              ; CONSTRUCTOR
    #:node-dynamic-let-bindings          ; ACCESSOR
@@ -235,6 +236,7 @@
    #:node-for-termination-expr         ; ACCESSOR
    #:node-for-body                     ; ACCESSOR
    #:node-for-label                    ; ACCESSOR
+   #:node-for-sequential-p             ; ACCESSOR
    #:node-break                         ; STRUCT
    #:make-node-break                    ; CONSTRUCTOR
    #:node-break-label                   ; ACCESSOR
@@ -337,7 +339,7 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;
 ;;;; node-let-declare := "(" "declare" identifier qualified-ty ")"
 ;;;;
-;;;; node-let := "(" "let" "(" (node-let-binding | node-let-declare)+ ")" body ")"
+;;;; node-let := "(" ("let" | "let*") "(" (node-let-binding | node-let-declare)+ ")" body ")"
 ;;;;
 ;;;; node-rec := "(" "rec" (identifier | "(" identifier [qualified-ty] ")" ) "(" (node-let-binding | node-let-declare)+ ")" body ")"
 ;;;;
@@ -385,7 +387,7 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;
 ;;;; label := <a keyword symbol>
 ;;;;
-;;;; node-for := "(" "for" label? "(" (node-for-binding | node-let-declare)* ")"
+;;;; node-for := "(" ("for" | "for*") label? "(" (node-for-binding | node-let-declare)* ")"
 ;;;;                    [":returns" expression]
 ;;;;                    [(":while" | ":until" | ":repeat") expression]
 ;;;;                    node-body-element* ")"
@@ -575,9 +577,11 @@ Rebound to NIL parsing an anonymous FN.")
 (defstruct (node-let
             (:include node)
             (:copier nil))
-  (bindings (util:required 'bindings) :type node-let-binding-list :read-only t)
-  (declares (util:required 'declares) :type node-let-declare-list :read-only t)
-  (body     (util:required 'body)     :type node-body             :read-only t))
+  (bindings     (util:required 'bindings) :type node-let-binding-list :read-only t)
+  (declares     (util:required 'declares) :type node-let-declare-list :read-only t)
+  (body         (util:required 'body)     :type node-body             :read-only t)
+  ;; T when parsed from LET*, so later bindings can see earlier ones.
+  (sequential-p nil                       :type boolean               :read-only t))
 
 (defstruct (node-dynamic-let
             (:include node)
@@ -852,7 +856,30 @@ Rebound to NIL parsing an anonymous FN.")
   (returns          nil                               :type (or null node)             :read-only t)
   (termination-kind nil                               :type (member nil :while :until :repeat) :read-only t)
   (termination-expr nil                               :type (or null node)             :read-only t)
-  (body             (util:required 'body)             :type node-body                  :read-only t))
+  (body             (util:required 'body)             :type node-body                  :read-only t)
+  ;; T when parsed from FOR*, so init and step bindings are sequential.
+  (sequential-p     nil                               :type boolean                    :read-only t))
+
+(defun check-sequential-binding-duplicates (bindings source context)
+  (declare (type list bindings)
+           (type string context))
+  (let ((seen (make-hash-table :test #'eq)))
+    (dolist (binding bindings)
+      (let* ((name-node
+               (etypecase binding
+                 (node-let-binding (node-let-binding-name binding))
+                 (node-for-binding (node-for-binding-name binding))))
+             (name (node-variable-name name-node))
+             (previous (gethash name seen)))
+        (when previous
+          (parse-error (format nil "Duplicate binding in ~A" context)
+                       (secondary-note source
+                                       (source:location-span (source:location previous))
+                                       "first binding here")
+                       (note source
+                             (source:location-span (source:location name-node))
+                             "second binding here")))
+        (setf (gethash name seen) name-node)))))
 
 (defstruct (node-throw
             (:include node)
@@ -911,8 +938,7 @@ Rebound to NIL parsing an anonymous FN.")
 (defun values-symbol-p (symbol)
   (declare (type t symbol)
            (values boolean))
-  (and (symbolp symbol)
-       (string= "VALUES" (symbol-name symbol))))
+  (eq 'coalton:values symbol))
 
 (defun values-pattern-form-p (form)
   (declare (type cst:cst form)
@@ -981,8 +1007,7 @@ Rebound to NIL parsing an anonymous FN.")
 
 (defun keyword-marker-p (form)
   (and (cst:atom form)
-       (symbolp (cst:raw form))
-       (string= (symbol-name (cst:raw form)) "&KEY")))
+       (eq 'coalton:&key (cst:raw form))))
 
 (defun parse-fn-argument-list (form source)
   (declare (type cst:cst form)
@@ -1402,7 +1427,10 @@ Rebound to NIL parsing an anonymous FN.")
 
 
     ((and (cst:atom (cst:first form))
-          (eq 'coalton:let (cst:raw (cst:first form))))
+          (member (cst:raw (cst:first form))
+                  '(coalton:let coalton:let*)
+                  :test #'eq))
+     (let ((sequential-p (eq 'coalton:let* (cst:raw (cst:first form)))))
 
      ;; (let)
      (unless (cst:consp (cst:rest form))
@@ -1433,11 +1461,15 @@ Rebound to NIL parsing an anonymous FN.")
                             :else
                               :collect (parse-let-binding binding source))))
 
+       (when sequential-p
+         (check-sequential-binding-duplicates bindings source "let*"))
+
        (make-node-let
         :bindings bindings
         :declares (nreverse declares)
         :body (parse-body (cst:nthrest 2 form) form source)
-        :location (form-location source form))))
+        :sequential-p sequential-p
+        :location (form-location source form)))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:dynamic-bind (cst:raw (cst:first form))))
@@ -1583,20 +1615,7 @@ Rebound to NIL parsing an anonymous FN.")
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:lisp (cst:raw (cst:first form))))
-     (let* ((args (cst:rest form))
-            (legacy-values-directive-p
-              (and (cst:consp args)
-                   (cst:atom (cst:first args))
-                   (let ((raw (cst:raw (cst:first args))))
-                     (and (symbolp raw)
-                          (not (keywordp raw))
-                          (string= "MULTIPLE-VALUES" (symbol-name raw)))))))
-
-       (when legacy-values-directive-p
-         (parse-error "Malformed lisp expression"
-                      (note source
-                            (cst:first args)
-                            "use `(-> ...)` return types instead of the legacy `multiple-values` directive")))
+     (let ((args (cst:rest form)))
 
        ;; (lisp)
        (unless (cst:consp args)
@@ -1802,94 +1821,101 @@ Rebound to NIL parsing an anonymous FN.")
      (parse-do form source))
 
     ((and (cst:atom (cst:first form))
-          (eq 'coalton:for (cst:raw (cst:first form))))
-     (multiple-value-bind (label labelled-body label-cst) (take-label form)
-       (unless (cst:consp labelled-body)
-         (parse-error "Malformed for expression"
-                      (note-end source (or label-cst (cst:first form)) "expected binding list")))
-       (unless (loop-binding-list-form-p (cst:first labelled-body))
-         (return-from parse-expression
-           (parse-application-expression form source)))
-       (let* ((outer-loop-context *loop-label-context*)
-              (loop-context
-                (if label
-                    (list* label const:+default-loop-label+ outer-loop-context)
-                    (cons const:+default-loop-label+ outer-loop-context))))
+          (member (cst:raw (cst:first form))
+                  '(coalton:for coalton:for*)
+                  :test #'eq))
+     (let ((sequential-p (eq 'coalton:for* (cst:raw (cst:first form)))))
+       (multiple-value-bind (label labelled-body label-cst) (take-label form)
+         (unless (cst:consp labelled-body)
+           (parse-error "Malformed for expression"
+                        (note-end source (or label-cst (cst:first form)) "expected binding list")))
+         (unless (loop-binding-list-form-p (cst:first labelled-body))
+           (return-from parse-expression
+             (parse-application-expression form source)))
+         (let* ((outer-loop-context *loop-label-context*)
+                (loop-context
+                  (if label
+                      (list* label const:+default-loop-label+ outer-loop-context)
+                      (cons const:+default-loop-label+ outer-loop-context))))
 
-         (let* ((binding-list-form (cst:first labelled-body))
-                (post-bindings (cst:rest labelled-body))
-                (declares nil)
-                (bindings
-                  (loop :for clauses := binding-list-form :then (cst:rest clauses)
-                        :while (cst:consp clauses)
-                        :for clause := (cst:first clauses)
-                        :if (and (cst:consp clause)
-                                 (cst:atom (cst:first clause))
-                                 (eq (cst:raw (cst:first clause)) 'coalton:declare))
-                          :do (push (parse-let-declare clause source) declares)
-                        :else
-                          :collect (let ((*loop-label-context* outer-loop-context))
-                                     (parse-loop-binding clause source))))
-                (returns nil)
-                (termination-kind nil)
-                (termination-expr nil))
+           (let* ((binding-list-form (cst:first labelled-body))
+                  (post-bindings (cst:rest labelled-body))
+                  (declares nil)
+                  (bindings
+                    (loop :for clauses := binding-list-form :then (cst:rest clauses)
+                          :while (cst:consp clauses)
+                          :for clause := (cst:first clauses)
+                          :if (and (cst:consp clause)
+                                   (cst:atom (cst:first clause))
+                                   (eq (cst:raw (cst:first clause)) 'coalton:declare))
+                            :do (push (parse-let-declare clause source) declares)
+                          :else
+                            :collect (let ((*loop-label-context* outer-loop-context))
+                                       (parse-loop-binding clause source))))
+                  (returns nil)
+                  (termination-kind nil)
+                  (termination-expr nil))
 
-           (when (and (cst:consp post-bindings)
-                      (loop-clause-keyword-p (cst:first post-bindings) "RETURNS"))
-             (unless (cst:consp (cst:rest post-bindings))
-               (parse-error "Malformed for expression"
-                            (note-end source (cst:first post-bindings) "expected expression after :returns")))
-             (let ((*loop-label-context* outer-loop-context))
-               (setf returns (parse-expression (cst:second post-bindings) source)))
-             (setf post-bindings (cst:nthrest 2 post-bindings)))
+             (when sequential-p
+               (check-sequential-binding-duplicates bindings source "for*"))
 
-           (cond
-             ((and (cst:consp post-bindings)
-                   (loop-clause-keyword-p (cst:first post-bindings) "WHILE"))
-              (unless (cst:consp (cst:rest post-bindings))
-                (parse-error "Malformed for expression"
-                             (note-end source (cst:first post-bindings) "expected expression after :while")))
-              (let ((*loop-label-context* outer-loop-context))
-                (setf termination-expr (parse-expression (cst:second post-bindings) source)))
-              (setf termination-kind :while)
-              (setf post-bindings (cst:nthrest 2 post-bindings)))
-             ((and (cst:consp post-bindings)
-                   (loop-clause-keyword-p (cst:first post-bindings) "UNTIL"))
-              (unless (cst:consp (cst:rest post-bindings))
-                (parse-error "Malformed for expression"
-                             (note-end source (cst:first post-bindings) "expected expression after :until")))
-              (let ((*loop-label-context* outer-loop-context))
-                (setf termination-expr (parse-expression (cst:second post-bindings) source)))
-              (setf termination-kind :until)
-              (setf post-bindings (cst:nthrest 2 post-bindings)))
-             ((and (cst:consp post-bindings)
-                   (loop-clause-keyword-p (cst:first post-bindings) "REPEAT"))
-              (unless (cst:consp (cst:rest post-bindings))
-                (parse-error "Malformed for expression"
-                             (note-end source (cst:first post-bindings) "expected expression after :repeat")))
-              (let ((*loop-label-context* outer-loop-context))
-                (setf termination-expr (parse-expression (cst:second post-bindings) source)))
-              (setf termination-kind :repeat)
-              (setf post-bindings (cst:nthrest 2 post-bindings))))
+             (when (and (cst:consp post-bindings)
+                        (loop-clause-keyword-p (cst:first post-bindings) "RETURNS"))
+               (unless (cst:consp (cst:rest post-bindings))
+                 (parse-error "Malformed for expression"
+                              (note-end source (cst:first post-bindings) "expected expression after :returns")))
+               (let ((*loop-label-context* outer-loop-context))
+                 (setf returns (parse-expression (cst:second post-bindings) source)))
+               (setf post-bindings (cst:nthrest 2 post-bindings)))
 
-           (loop :for remaining := post-bindings :then (cst:rest remaining)
-                 :while (cst:consp remaining)
-                 :for clause := (cst:first remaining)
-                 :when (loop-clause-keyword-p clause "RETURNS")
-                   :do (parse-error "Malformed for expression"
-                                    (note source clause
-                                          ":returns clause must appear immediately after the binding list")))
+             (cond
+               ((and (cst:consp post-bindings)
+                     (loop-clause-keyword-p (cst:first post-bindings) "WHILE"))
+                (unless (cst:consp (cst:rest post-bindings))
+                  (parse-error "Malformed for expression"
+                               (note-end source (cst:first post-bindings) "expected expression after :while")))
+                (let ((*loop-label-context* outer-loop-context))
+                  (setf termination-expr (parse-expression (cst:second post-bindings) source)))
+                (setf termination-kind :while)
+                (setf post-bindings (cst:nthrest 2 post-bindings)))
+               ((and (cst:consp post-bindings)
+                     (loop-clause-keyword-p (cst:first post-bindings) "UNTIL"))
+                (unless (cst:consp (cst:rest post-bindings))
+                  (parse-error "Malformed for expression"
+                               (note-end source (cst:first post-bindings) "expected expression after :until")))
+                (let ((*loop-label-context* outer-loop-context))
+                  (setf termination-expr (parse-expression (cst:second post-bindings) source)))
+                (setf termination-kind :until)
+                (setf post-bindings (cst:nthrest 2 post-bindings)))
+               ((and (cst:consp post-bindings)
+                     (loop-clause-keyword-p (cst:first post-bindings) "REPEAT"))
+                (unless (cst:consp (cst:rest post-bindings))
+                  (parse-error "Malformed for expression"
+                               (note-end source (cst:first post-bindings) "expected expression after :repeat")))
+                (let ((*loop-label-context* outer-loop-context))
+                  (setf termination-expr (parse-expression (cst:second post-bindings) source)))
+                (setf termination-kind :repeat)
+                (setf post-bindings (cst:nthrest 2 post-bindings))))
 
-           (let ((*loop-label-context* loop-context))
-             (make-node-for
-              :location (form-location source form)
-              :label (or label const:+default-loop-label+)
-              :bindings bindings
-              :declares (nreverse declares)
-              :returns returns
-              :termination-kind termination-kind
-              :termination-expr termination-expr
-              :body (parse-loop-body post-bindings source (form-location source form))))))))
+             (loop :for remaining := post-bindings :then (cst:rest remaining)
+                   :while (cst:consp remaining)
+                   :for clause := (cst:first remaining)
+                   :when (loop-clause-keyword-p clause "RETURNS")
+                     :do (parse-error "Malformed for expression"
+                                      (note source clause
+                                            ":returns clause must appear immediately after the binding list")))
+
+             (let ((*loop-label-context* loop-context))
+               (make-node-for
+                :location (form-location source form)
+                :label (or label const:+default-loop-label+)
+                :bindings bindings
+                :declares (nreverse declares)
+                :returns returns
+                :termination-kind termination-kind
+                :termination-expr termination-expr
+                :sequential-p sequential-p
+                :body (parse-loop-body post-bindings source (form-location source form)))))))))
 
     ((and (cst:atom (cst:first form))
           (eq 'coalton:break (cst:raw (cst:first form))))

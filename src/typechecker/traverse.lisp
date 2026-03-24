@@ -439,6 +439,7 @@
       :location (source:location node)
       :label (node-for-label node)
       :bindings (traverse (node-for-bindings node) block)
+      :sequential-p (node-for-sequential-p node)
       :returns (and (node-for-returns node)
                     (traverse (node-for-returns node) block))
       :termination-kind (node-for-termination-kind node)
