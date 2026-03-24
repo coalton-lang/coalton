@@ -1,42 +1,15 @@
-# Intro to Coalton
+---
+title: "Whirlwind Tour of Coalton"
+description: "A broad, practical tour of Coalton's core language and workflow."
+hideMeta: true
+weight: 20
+---
 
 Coalton is a statically typed language that is embedded in, and compiles to, Common Lisp.
 
-This document is aimed toward people who are already familiar with functional programming languages. If you are already familiar with Common Lisp, the [glossary](./glossary.md) may be useful.
+This document is aimed toward people who are already familiar with functional programming languages. If you are already familiar with Common Lisp, the [glossary](https://github.com/coalton-lang/coalton/blob/main/docs/glossary.md) may be useful.
 
-## Overview
-
-This document will get into all of the details, but the main workflow is this:
-
-1. Add `coalton` as a dependency to your project. (Optionally add `coalton-asdf` if you want `.ct` file support.)
-2. Define a package which `:use`s `#:coalton` and perhaps `#:coalton-prelude`, plus any package-local nicknames for Coalton libraries you want to use.
-3. Write your Coalton code inside of `coalton-toplevel`.
-
-A minimal project might look like this:
-
-```lisp
-;;;; my-project.asd
-
-(defsystem "my-project"
-  :defsystem-depends-on ("coalton-asdf")    ; allows .ct files
-  :depends-on ("coalton")
-  :serial t
-  :components ((:ct-file "my-file")))
-
-
-;;;; my-file.ct
-
-(defpackage #:my-project/my-file
-  (:use #:coalton #:coalton-prelude)
-  (:local-nicknames (#:str #:coalton/string))
-  (:export #:hello))
-
-(in-package #:my-project/my-file)
-
-(coalton-toplevel
-  (define (hello whom)
-    (str:concat "Hello, " whom)))
-```
+{{<toc>}}
 
 ## Systems
 
@@ -1855,7 +1828,7 @@ Instances of the following classes can be derived:
 
 Currently these are the only derivable classes in the standard library, but more may be added in the future.
 
-Writing custom derivers does not yet have an official API, but for the adventurous, it can be done relatively easily. For guidance, see [derivers.lisp](./../library/derivers.lisp).
+Writing custom derivers does not yet have an official API, but for the adventurous, it can be done relatively easily. For guidance, see [derivers.lisp](https://github.com/coalton-lang/coalton/blob/main/library/derivers.lisp).
 
 ## Do Notation
 
@@ -1939,9 +1912,7 @@ enclosing explicit `forall`:
 Embedded `(coalton ...)` forms inside the raw Lisp body are a separate Coalton
 compilation context. They do not inherit those lexical type-variable bindings.
 
-### Multiple Values Directive `multiple-values`
-
-For example:
+Multiple values may be returned from `lisp` just fine:
 
 ```lisp
 (coalton-toplevel
@@ -1959,8 +1930,6 @@ These values can be destructured with `let (values ...) = ...`:
   (Tuple q r)))
 ```
 
-Non-final expressions in sequencing constructs such as `progn`, `when`, `unless`, and `cond`
-may also produce zero values without requiring an explicit `let (values) = ...`.
 
 ## Inspecting the Coalton System
 
@@ -2061,7 +2030,7 @@ Specialization can be listed in the repl with `print-specializations`.
 * Numerical operators like `+` only take 2 arguments.
 * Negation is done with `negate`. The operator `-` is a fixed-arity subtraction operator.
 
-For more details, see the [glossary](./glossary.md).
+For more details, see the [glossary](https://github.com/coalton-lang/coalton/blob/main/docs/glossary.md).
 
 ## Incomplete Features
 

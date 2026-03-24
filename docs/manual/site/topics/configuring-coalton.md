@@ -1,4 +1,9 @@
-# Configuring Coalton
+---
+title: "Configuring Coalton"
+description: "Configuration options for controlling the Coalton compiler."
+hideMeta: true
+weight: 50
+---
 
 Coalton allows a bit of configuration. **For ordinary development, it is not necessary!** There are a few ways Coalton can be configured, but in this document, we will limit our discussion to configuration through the `:coalton-config` keyword.
 
