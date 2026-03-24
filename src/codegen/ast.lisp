@@ -117,6 +117,7 @@
    #:node-for                          ; STRUCT
    #:make-node-for                     ; CONSTRUCTOR
    #:node-for-bindings                 ; READER
+   #:node-for-sequential-p             ; READER
    #:node-for-returns                  ; READER
    #:node-for-termination-kind         ; READER
    #:node-for-termination-expr         ; READER
@@ -432,6 +433,7 @@ coalton symbols (`parser:identifier`)"
   "A labelled imperative `for` with explicit bindings and step expressions."
   (label            (util:required 'label)            :type keyword                         :read-only t)
   (bindings         (util:required 'bindings)         :type node-for-binding-list          :read-only t)
+  (sequential-p     nil                               :type boolean                         :read-only t)
   (returns          nil                               :type (or null node)                  :read-only t)
   (termination-kind nil                               :type (member nil :while :until :repeat) :read-only t)
   (termination-expr nil                               :type (or null node)                  :read-only t)

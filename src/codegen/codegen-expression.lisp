@@ -72,17 +72,42 @@
                                    ,name)))))
     table))
 
-(defun loop-step-form (bindings env)
+(defun loop-step-form (bindings env &key sequential-p)
   (declare (type node-for-binding-list bindings)
            (type tc:environment env)
            (values (or null list) &optional))
   (let ((assignments
           (loop :for binding :in bindings
                 :when (node-for-binding-step binding)
-                  :append (list (node-for-binding-name binding)
-                                (codegen-expression (node-for-binding-step binding) env)))))
+                  :collect (list (node-for-binding-name binding)
+                                 (codegen-expression (node-for-binding-step binding) env)))))
     (when assignments
-      `(psetq ,@assignments))))
+      (if sequential-p
+          `(setq
+            ,@(loop :for (name expr) :in assignments
+                    :append (list name expr)))
+          `(psetq
+            ,@(loop :for (name expr) :in assignments
+                    :append (list name expr)))))))
+
+(defun codegen-sequential-loop-bindings (bindings env inner-form &optional binding-decl-table)
+  (declare (type node-for-binding-list bindings)
+           (type tc:environment env)
+           (type (or null hash-table) binding-decl-table)
+           (values t &optional))
+  (if (endp bindings)
+      inner-form
+      `(let* ,(loop :for binding :in bindings
+                    :collect (list (node-for-binding-name binding)
+                                   (codegen-expression (node-for-binding-init binding) env)))
+         ,@(let ((decls
+                   (when binding-decl-table
+                     (loop :for binding :in bindings
+                           :append (copy-list (gethash (node-for-binding-name binding)
+                                                       binding-decl-table))))))
+             (when decls
+               `((declare ,@decls))))
+         ,inner-form)))
 
 (defun abstraction-lambda-list (node)
   (declare (type node-abstraction node)
@@ -351,6 +376,7 @@
   (:method ((expr node-for) env)
     (declare (type tc:environment env))
     (let* ((bindings (node-for-bindings expr))
+           (sequential-p (node-for-sequential-p expr))
            (label (node-for-label expr))
            (start-tag (gensym "LOOP-START-"))
            (done-tag (gensym "LOOP-DONE-"))
@@ -365,7 +391,7 @@
            (termination-expr (and (node-for-termination-expr expr)
                                   (codegen-expression (node-for-termination-expr expr) env)))
            (body-expr (codegen-expression (node-for-body expr) env))
-           (step-form (loop-step-form bindings env))
+           (step-form (loop-step-form bindings env :sequential-p sequential-p))
            (returns-expr (and (node-for-returns expr)
                               (codegen-expression (node-for-returns expr) env))))
       (let* ((loop-expr
@@ -408,13 +434,15 @@
                   ,loop-expr
                   ,(or returns-expr '(values))))
              (loop-body loop-form))
-        (codegen-recursive-bindings
-         init-bindings
-         (node-binding-sccs init-bindings)
-         (node-variables expr :variable-namespace-only t)
-         env
-         loop-body
-         binding-decl-table))))
+        (if sequential-p
+            (codegen-sequential-loop-bindings bindings env loop-body binding-decl-table)
+            (codegen-recursive-bindings
+             init-bindings
+             (node-binding-sccs init-bindings)
+             (node-variables expr :variable-namespace-only t)
+             env
+             loop-body
+             binding-decl-table)))))
 
   (:method ((expr node-break) env)
     (declare (type tc:environment env))

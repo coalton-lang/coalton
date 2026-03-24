@@ -172,6 +172,7 @@
    #:make-node-for                     ; CONSTRUCTOR
    #:node-for-label                    ; ACCESSOR
    #:node-for-bindings                 ; ACCESSOR
+   #:node-for-sequential-p             ; ACCESSOR
    #:node-for-returns                  ; ACCESSOR
    #:node-for-termination-kind         ; ACCESSOR
    #:node-for-termination-expr         ; ACCESSOR
@@ -532,6 +533,7 @@
             (:copier nil))
   (label            (util:required 'label)            :type keyword                        :read-only t)
   (bindings         (util:required 'bindings)         :type node-for-binding-list         :read-only t)
+  (sequential-p     nil                               :type boolean                        :read-only t)
   (returns          nil                               :type (or null node)                 :read-only t)
   (termination-kind nil                               :type (member nil :while :until :repeat) :read-only t)
   (termination-expr nil                               :type (or null node)                 :read-only t)
@@ -886,6 +888,7 @@
    :location (source:location node)
    :label (node-for-label node)
    :bindings (tc:apply-substitution subs (node-for-bindings node))
+   :sequential-p (node-for-sequential-p node)
    :returns (tc:apply-substitution subs (node-for-returns node))
    :termination-kind (node-for-termination-kind node)
    :termination-expr (tc:apply-substitution subs (node-for-termination-expr node))
