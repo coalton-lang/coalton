@@ -15,7 +15,7 @@
   (let result =
     (for ((declare a UFix)
           (declare b UFix)
-          (a b)
+          (a b a)
           (b 1 (+ b 1)))
       :returns (Tuple a b)
       :while (< b 10)
@@ -220,7 +220,7 @@
 
 (define-test test-imperative-for-bindings ()
   (let hits = (cell:new 0))
-  (for ((x 10))
+  (for ((x 10 x))
     :repeat x
     (cell:increment! hits))
   (is (== 10 (cell:read hits))))

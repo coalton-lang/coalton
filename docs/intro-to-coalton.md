@@ -636,10 +636,6 @@ Coalton offers three main ways to do explicit loops:
 
 Coalton strives to ensure tail calls are always eliminated. As such, tail recursion is idiomatic in Coalton.
 
-One important exception is `dynamic-bind`: rebinding a dynamic variable around a
-call introduces dynamic scope setup/teardown, so a call inside that
-`dynamic-bind` is not treated as tail-recursive.
-
 ```lisp
 (coalton-toplevel
   (define (find-integer predicate limit)
@@ -724,11 +720,9 @@ Now it works without any type declarations on use:
 ```
 
 
-### Built-In Looping Constructs
-
 Coalton supports imperative looping, conditional looping, and pattern-based iteration.
 
-#### `for` and `for*`
+### Conventional Looping: `for` and `for*`
 
 The built-in imperative `for` form and its sequential variant `for*` have the
 following shape:
@@ -740,7 +734,7 @@ following shape:
   body...)
 
 ;; <binding-clause> := (declare var Type)
-;;                   | (var init-expr [step-expr])
+;;                   | (var init-expr step-expr)
 ```
 
 The binding list is required, but it may be empty: `()`. Initializers are
@@ -752,6 +746,10 @@ expressions are performed from left to right so later steps can refer to
 earlier updated variables. In that sense, `for*` plays the same role as Common
 Lisp's `do*`. If no termination clause is present, the iteration is infinite
 unless exited by `break`.
+
+Each non-`declare` loop binding must include both an initializer and a step
+expression. If a loop variable should stay constant across iterations, repeat it
+as its own step, for example `(x 10 x)`.
 
 You can iterate forever:
 
