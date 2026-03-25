@@ -1,7 +1,3 @@
-;;;; realalgebraic.lisp
-;;;;
-;;;; Real algebraic numbers.
-
 (coalton/utils:defstdlib-package #:coalton/xmath/realalgebraic
   (:documentation "Certified real algebraic numbers.
 
@@ -10,9 +6,9 @@ over Z together with a rational isolating interval certified by Sturm's
 theorem. Arithmetic is implemented via resultant-based elimination, and all
 operations (construction, comparison, root selection) are exact.
 
-Construct values with `root' (single root from polynomial + interval),
-`real-roots' (all roots of a polynomial), `fromInt', or `into'. Extract
-rational values with `tryInto'. Standard numeric type class instances are
+Construct values with `root` (single root from polynomial + interval),
+`real-roots` (all roots of a polynomial), `fromInt`, or `into`. Extract
+rational values with `tryInto`. Standard numeric type class instances are
 provided: Eq, Ord, Num, Reciprocable, Radical, Quantizable, and Real.")
   (:use
    #:coalton
@@ -80,10 +76,6 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
     (ra-lo "Lower endpoint of isolating interval." Fraction)
     (ra-hi "Upper endpoint of isolating interval." Fraction)
     (ra-sturm "Cached Sturm sequence for `ra-poly`." (List (Poly Integer))))
-
-  ;; ------------------------------------------------------------------
-  ;; Native Coalton helpers (phase 1 translation)
-  ;; ------------------------------------------------------------------
 
   (declare %poly-trim-desc (Poly Integer -> Poly Integer))
   (define (%poly-trim-desc p)
