@@ -1,7 +1,3 @@
-;;;; realalgebraic.lisp
-;;;;
-;;;; Real algebraic numbers.
-
 (coalton/utils:defstdlib-package #:coalton/xmath/realalgebraic
   (:documentation "Certified real algebraic numbers.
 
@@ -10,9 +6,9 @@ over Z together with a rational isolating interval certified by Sturm's
 theorem. Arithmetic is implemented via resultant-based elimination, and all
 operations (construction, comparison, root selection) are exact.
 
-Construct values with `root' (single root from polynomial + interval),
-`real-roots' (all roots of a polynomial), `fromInt', or `into'. Extract
-rational values with `tryInto'. Standard numeric type class instances are
+Construct values with `root` (single root from polynomial + interval),
+`real-roots` (all roots of a polynomial), `fromInt`, or `into`. Extract
+rational values with `tryInto`. Standard numeric type class instances are
 provided: Eq, Ord, Num, Reciprocable, Radical, Quantizable, and Real.")
   (:use
    #:coalton
@@ -81,12 +77,8 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
     (ra-hi "Upper endpoint of isolating interval." Fraction)
     (ra-sturm "Cached Sturm sequence for `ra-poly`." (List (Poly Integer))))
 
-  ;; ------------------------------------------------------------------
-  ;; Native Coalton helpers (phase 1 translation)
-  ;; ------------------------------------------------------------------
-
-  (declare %poly-trim-desc (Poly Integer -> Poly Integer))
-  (define (%poly-trim-desc p)
+  (declare poly-trim-desc (Poly Integer -> Poly Integer))
+  (define (poly-trim-desc p)
     "Drop leading zeros from a descending coefficient polynomial."
     (match (coefficients p)
       ((Nil) (Poly (Cons 0 Nil)))
@@ -95,37 +87,37 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
          ((Nil) p)
          (_
           (if (== c 0)
-              (%poly-trim-desc (Poly cs))
+              (poly-trim-desc (Poly cs))
               p))))))
 
-  (declare %poly-degree-desc (Poly Integer -> Integer))
-  (define (%poly-degree-desc p)
+  (declare poly-degree-desc (Poly Integer -> Integer))
+  (define (poly-degree-desc p)
     "Return the algebraic degree of a descending coefficient polynomial."
-    (match (%poly-trim-desc p)
+    (match (poly-trim-desc p)
       ((Poly coeffs)
        (max 0 (- (toInteger (coalton/list:length coeffs)) 1)))))
 
-  (declare %poly-int-zero (Poly Integer))
-  (define %poly-int-zero
+  (declare poly-int-zero (Poly Integer))
+  (define poly-int-zero
     "The zero polynomial in descending representation."
     (Poly (Cons 0 Nil)))
 
-  (declare %poly-int-one (Poly Integer))
-  (define %poly-int-one
+  (declare poly-int-one (Poly Integer))
+  (define poly-int-one
     "The constant-one polynomial in descending representation."
     (Poly (Cons 1 Nil)))
 
-  (declare %to-ufix (Integer -> UFix))
-  (define (%to-ufix n)
+  (declare to-ufix (Integer -> UFix))
+  (define (to-ufix n)
     "Convert a nonnegative `Integer` to `UFix`, erroring on negatives."
     (if (< n 0)
         (error "Internal error: expected nonnegative integer.")
         (fromInt n)))
 
-  (declare %poly-int-zero? (Poly Integer -> Boolean))
-  (define (%poly-int-zero? p)
+  (declare poly-int-zero? (Poly Integer -> Boolean))
+  (define (poly-int-zero? p)
     "Return `True` if an integer polynomial is exactly zero."
-    (match (%poly-trim-desc p)
+    (match (poly-trim-desc p)
       ((Poly coeffs)
        (match coeffs
          ((Cons c rest)
@@ -134,8 +126,8 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
             (_ False)))
          (_ False)))))
 
-  (declare %poly-int-neg (Poly Integer -> Poly Integer))
-  (define (%poly-int-neg p)
+  (declare poly-int-neg (Poly Integer -> Poly Integer))
+  (define (poly-int-neg p)
     "Negate all integer coefficients."
     (match p
       ((Poly coeffs)
@@ -146,17 +138,17 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
             ((Cons c more)
              (Cons (negate c) (go more)))))))))
 
-  (declare %poly-int-leading (Poly Integer -> Integer))
-  (define (%poly-int-leading p)
+  (declare poly-int-leading (Poly Integer -> Integer))
+  (define (poly-int-leading p)
     "Return leading coefficient of a nonzero trimmed polynomial (or 0 for zero)."
-    (match (%poly-trim-desc p)
+    (match (poly-trim-desc p)
       ((Poly (Cons lead _)) lead)
       (_ 0)))
 
-  (declare %poly-int-content (Poly Integer -> Integer))
-  (define (%poly-int-content p)
+  (declare poly-int-content (Poly Integer -> Integer))
+  (define (poly-int-content p)
     "Return gcd of absolute coefficients."
-    (match (%poly-trim-desc p)
+    (match (poly-trim-desc p)
       ((Poly coeffs)
        (rec go ((rest coeffs)
                 (acc 0))
@@ -165,8 +157,8 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
            ((Cons c more)
             (go more (gcd acc (abs c)))))))))
 
-  (declare %poly-int-div-by (Integer * Poly Integer -> Poly Integer))
-  (define (%poly-int-div-by d p)
+  (declare poly-int-div-by (Integer * Poly Integer -> Poly Integer))
+  (define (poly-int-div-by d p)
     "Divide all coefficients by exact integer divisor `d`."
     (if (== d 0)
         (error "Polynomial coefficient division by zero.")
@@ -179,43 +171,45 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
                 ((Cons c more)
                  (Cons (quot c d) (go more))))))))))
 
-  (declare %poly-int-primitive (Poly Integer -> Poly Integer))
-  (define (%poly-int-primitive p)
+  (declare poly-int-primitive (Poly Integer -> Poly Integer))
+  (define (poly-int-primitive p)
     "Normalize to primitive form with positive leading coefficient."
-    (let trimmed = (%poly-trim-desc p))
-    (let content = (%poly-int-content trimmed))
+    (let trimmed = (poly-trim-desc p))
+    (let content = (poly-int-content trimmed))
     (let normalized =
-      (if (or (%poly-int-zero? trimmed)
+      (if (or (poly-int-zero? trimmed)
               (<= content 1))
           trimmed
-          (%poly-int-div-by content trimmed)))
-    (if (%poly-int-zero? normalized)
-        normalized
-        (if (< (%poly-int-leading normalized) 0)
-            (%poly-int-neg normalized)
-            normalized)))
+          (poly-int-div-by content trimmed)))
+    (cond
+      ((poly-int-zero? normalized)
+       normalized)
+      ((negative? (poly-int-leading normalized))
+       (poly-int-neg normalized))
+      (True
+       normalized)))
 
-  (declare %poly-frac-zero (Poly Fraction))
-  (define %poly-frac-zero
+  (declare poly-frac-zero (Poly Fraction))
+  (define poly-frac-zero
     (Poly (Cons 0 Nil)))
 
-  (declare %poly-frac-trim (Poly Fraction -> Poly Fraction))
-  (define (%poly-frac-trim p)
+  (declare poly-frac-trim (Poly Fraction -> Poly Fraction))
+  (define (poly-frac-trim p)
     "Drop leading zeros from a descending fraction polynomial."
     (match (coefficients p)
-      ((Nil) %poly-frac-zero)
+      ((Nil) poly-frac-zero)
       ((Cons c cs)
        (match cs
          ((Nil) p)
          (_
           (if (== c 0)
-              (%poly-frac-trim (Poly cs))
+              (poly-frac-trim (Poly cs))
               p))))))
 
-  (declare %poly-frac-zero? (Poly Fraction -> Boolean))
-  (define (%poly-frac-zero? p)
+  (declare poly-frac-zero? (Poly Fraction -> Boolean))
+  (define (poly-frac-zero? p)
     "Return `True` if a fraction polynomial is exactly zero."
-    (match (%poly-frac-trim p)
+    (match (poly-frac-trim p)
       ((Poly coeffs)
        (match coeffs
          ((Cons c rest)
@@ -224,27 +218,27 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
             (_ False)))
          (_ False)))))
 
-  (declare %poly-frac-degree (Poly Fraction -> Integer))
-  (define (%poly-frac-degree p)
+  (declare poly-frac-degree (Poly Fraction -> Integer))
+  (define (poly-frac-degree p)
     "Return polynomial degree, with deg(0) = 0."
-    (match (%poly-frac-trim p)
+    (match (poly-frac-trim p)
       ((Poly coeffs)
        (max 0 (- (toInteger (coalton/list:length coeffs)) 1)))))
 
-  (declare %poly-frac-leading (Poly Fraction -> Fraction))
-  (define (%poly-frac-leading p)
+  (declare poly-frac-leading (Poly Fraction -> Fraction))
+  (define (poly-frac-leading p)
     "Return leading coefficient (0 for zero polynomial)."
-    (match (%poly-frac-trim p)
+    (match (poly-frac-trim p)
       ((Poly (Cons lead _)) lead)
       (_ 0)))
 
-  (declare %pad-left-frac (UFix * List Fraction -> List Fraction))
-  (define (%pad-left-frac n xs)
+  (declare pad-left-frac (UFix * List Fraction -> List Fraction))
+  (define (pad-left-frac n xs)
     "Prefix a fraction list by `n` zeros."
     (coalton/list:append (coalton/list:repeat n 0) xs))
 
-  (declare %zip-add-frac (List Fraction * List Fraction -> List Fraction))
-  (define (%zip-add-frac xs ys)
+  (declare zip-add-frac (List Fraction * List Fraction -> List Fraction))
+  (define (zip-add-frac xs ys)
     (match xs
       ((Nil)
        (match ys
@@ -255,10 +249,10 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
          ((Nil) (error "Internal error: zip-add length mismatch."))
          ((Cons y yr)
           (Cons (+ x y)
-                (%zip-add-frac xr yr)))))))
+                (zip-add-frac xr yr)))))))
 
-  (declare %poly-frac-neg (Poly Fraction -> Poly Fraction))
-  (define (%poly-frac-neg p)
+  (declare poly-frac-neg (Poly Fraction -> Poly Fraction))
+  (define (poly-frac-neg p)
     "Negate all fraction coefficients."
     (match p
       ((Poly coeffs)
@@ -269,32 +263,32 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
             ((Cons c more)
              (Cons (negate c) (go more)))))))))
 
-  (declare %poly-frac-add (Poly Fraction * Poly Fraction -> Poly Fraction))
-  (define (%poly-frac-add a b)
+  (declare poly-frac-add (Poly Fraction * Poly Fraction -> Poly Fraction))
+  (define (poly-frac-add a b)
     "Add two descending fraction polynomials."
-    (let a0 = (%poly-frac-trim a))
-    (let b0 = (%poly-frac-trim b))
+    (let a0 = (poly-frac-trim a))
+    (let b0 = (poly-frac-trim b))
     (let ac = (coefficients a0))
     (let bc = (coefficients b0))
     (let la = (toInteger (coalton/list:length ac)))
     (let lb = (toInteger (coalton/list:length bc)))
-    (let ax = (if (< la lb) (%pad-left-frac (%to-ufix (- lb la)) ac) ac))
-    (let bx = (if (< lb la) (%pad-left-frac (%to-ufix (- la lb)) bc) bc))
-    (%poly-frac-trim (Poly (%zip-add-frac ax bx))))
+    (let ax = (if (< la lb) (pad-left-frac (to-ufix (- lb la)) ac) ac))
+    (let bx = (if (< lb la) (pad-left-frac (to-ufix (- la lb)) bc) bc))
+    (poly-frac-trim (Poly (zip-add-frac ax bx))))
 
-  (declare %poly-frac-sub (Poly Fraction * Poly Fraction -> Poly Fraction))
-  (define (%poly-frac-sub a b)
+  (declare poly-frac-sub (Poly Fraction * Poly Fraction -> Poly Fraction))
+  (define (poly-frac-sub a b)
     "Subtract two descending fraction polynomials."
-    (%poly-frac-add a (%poly-frac-neg b)))
+    (poly-frac-add a (poly-frac-neg b)))
 
-  (declare %poly-frac-scale (Fraction * Poly Fraction -> Poly Fraction))
-  (define (%poly-frac-scale k p)
+  (declare poly-frac-scale (Fraction * Poly Fraction -> Poly Fraction))
+  (define (poly-frac-scale k p)
     "Scale all coefficients by `k`."
     (if (== k 0)
-        %poly-frac-zero
+        poly-frac-zero
         (match p
           ((Poly coeffs)
-           (%poly-frac-trim
+           (poly-frac-trim
             (Poly
              (rec go ((rest coeffs))
                (match rest
@@ -302,93 +296,95 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
                  ((Cons c more)
                   (Cons (* k c) (go more)))))))))))
 
-  (declare %poly-frac-shift (Poly Fraction * Integer -> Poly Fraction))
-  (define (%poly-frac-shift p power)
+  (declare poly-frac-shift (Poly Fraction * Integer -> Poly Fraction))
+  (define (poly-frac-shift p power)
     "Multiply by x^power in descending representation."
     (if (<= power 0)
-        (%poly-frac-trim p)
-        (match (%poly-frac-trim p)
+        (poly-frac-trim p)
+        (match (poly-frac-trim p)
           ((Poly coeffs)
-           (%poly-frac-trim
+           (poly-frac-trim
             (Poly (coalton/list:append coeffs
-                                       (coalton/list:repeat (%to-ufix power) 0))))))))
+                                       (coalton/list:repeat (to-ufix power) 0))))))))
 
-  (declare %poly-frac-monomial (Fraction * Integer -> Poly Fraction))
-  (define (%poly-frac-monomial coeff power)
+  (declare poly-frac-monomial (Fraction * Integer -> Poly Fraction))
+  (define (poly-frac-monomial coeff power)
     "Construct coeff*x^power in descending representation."
     (if (== coeff 0)
-        %poly-frac-zero
-        (%poly-frac-trim
+        poly-frac-zero
+        (poly-frac-trim
          (Poly (coalton/list:append (Cons coeff Nil)
-                                    (coalton/list:repeat (%to-ufix (max 0 power)) 0))))))
+                                    (coalton/list:repeat (to-ufix (max 0 power)) 0))))))
 
-  (declare %poly-frac-divrem-loop (Poly Fraction
+  (declare poly-frac-divrem-loop (Poly Fraction
                                   * Integer
                                   * Fraction
                                   * Poly Fraction
                                   * Poly Fraction
                                   -> (Tuple (Poly Fraction) (Poly Fraction))))
-  (define (%poly-frac-divrem-loop denominator db lb q r)
+  (define (poly-frac-divrem-loop denominator db lb q r)
     "Tail-recursive long-division loop."
-    (let r0 = (%poly-frac-trim r))
-    (if (%poly-frac-zero? r0)
-        (Tuple (%poly-frac-trim q) %poly-frac-zero)
-        (let ((dr (%poly-frac-degree r0)))
-          (if (< dr db)
-              (Tuple (%poly-frac-trim q) r0)
-              (let ((coeff (/ (%poly-frac-leading r0) lb))
-                    (shift (- dr db)))
-                (let ((term (%poly-frac-shift (%poly-frac-scale coeff denominator) shift)))
-                  (%poly-frac-divrem-loop denominator
-                                          db
-                                          lb
-                                          (%poly-frac-add q (%poly-frac-monomial coeff shift))
-                                          (%poly-frac-sub r0 term))))))))
+    (let r0 = (poly-frac-trim r))
+    (let dr = (poly-frac-degree r0))
+    (cond
+      ((poly-frac-zero? r0)
+       (Tuple (poly-frac-trim q) poly-frac-zero))
+      ((< dr db)
+       (Tuple (poly-frac-trim q) r0))
+      (True
+       (let ((coeff (/ (poly-frac-leading r0) lb))
+             (shift (- dr db)))
+         (let ((term (poly-frac-shift (poly-frac-scale coeff denominator) shift)))
+           (poly-frac-divrem-loop denominator
+                                  db
+                                  lb
+                                  (poly-frac-add q (poly-frac-monomial coeff shift))
+                                  (poly-frac-sub r0 term)))))))
 
-  (declare %poly-frac-divrem (Poly Fraction * Poly Fraction -> (Tuple (Poly Fraction) (Poly Fraction))))
-  (define (%poly-frac-divrem a b)
+  (declare poly-frac-divrem (Poly Fraction * Poly Fraction -> (Tuple (Poly Fraction) (Poly Fraction))))
+  (define (poly-frac-divrem a b)
     "Long division over exact rationals."
-    (let numerator = (%poly-frac-trim a))
-    (let denominator = (%poly-frac-trim b))
-    (let db = (%poly-frac-degree denominator))
-    (let lb = (%poly-frac-leading denominator))
-    (if (%poly-frac-zero? denominator)
+    (let numerator = (poly-frac-trim a))
+    (let denominator = (poly-frac-trim b))
+    (let db = (poly-frac-degree denominator))
+    (let lb = (poly-frac-leading denominator))
+    (if (poly-frac-zero? denominator)
         (error "Polynomial division by zero.")
-        (%poly-frac-divrem-loop denominator db lb %poly-frac-zero numerator)))
+        (poly-frac-divrem-loop denominator db lb poly-frac-zero numerator)))
 
-  (declare %poly-frac-rem (Poly Fraction * Poly Fraction -> Poly Fraction))
-  (define (%poly-frac-rem a b)
+  (declare poly-frac-rem (Poly Fraction * Poly Fraction -> Poly Fraction))
+  (define (poly-frac-rem a b)
     "Remainder from fraction polynomial division."
-    (match (%poly-frac-divrem a b)
+    (match (poly-frac-divrem a b)
       ((Tuple _ r) r)))
 
-  (declare %poly-frac-monic (Poly Fraction -> Poly Fraction))
-  (define (%poly-frac-monic p)
+  (declare poly-frac-monic (Poly Fraction -> Poly Fraction))
+  (define (poly-frac-monic p)
     "Normalize nonzero polynomial to leading coefficient 1."
-    (let p0 = (%poly-frac-trim p))
-    (if (%poly-frac-zero? p0)
+    (let p0 = (poly-frac-trim p))
+    (if (poly-frac-zero? p0)
         p0
-        (%poly-frac-scale (/ 1 (%poly-frac-leading p0))
+        (poly-frac-scale (/ 1 (poly-frac-leading p0))
                           p0)))
 
-  (declare %poly-frac-gcd (Poly Fraction * Poly Fraction -> Poly Fraction))
-  (define (%poly-frac-gcd a b)
+  (declare poly-frac-gcd (Poly Fraction * Poly Fraction -> Poly Fraction))
+  (define (poly-frac-gcd a b)
     "Euclidean gcd in Q[x], normalized to monic."
-    (rec go ((pa (%poly-frac-trim a))
-             (pb (%poly-frac-trim b)))
-      (if (%poly-frac-zero? pb)
-          (%poly-frac-monic pa)
-          (go pb (%poly-frac-rem pa pb)))))
+    (rec go ((pa (poly-frac-trim a))
+             (pb (poly-frac-trim b)))
+      (if (poly-frac-zero? pb)
+          (poly-frac-monic pa)
+          (go pb (poly-frac-rem pa pb)))))
 
-  (declare %poly-frac-derivative (Poly Fraction -> Poly Fraction))
-  (define (%poly-frac-derivative p)
+  (declare poly-frac-derivative (Poly Fraction -> Poly Fraction))
+  (define (poly-frac-derivative p)
     "Formal derivative in descending representation."
-    (let p0 = (%poly-frac-trim p))
+    (let p0 = (poly-frac-trim p))
     (let coeffs = (coefficients p0))
-    (let deg = (%poly-frac-degree p0))
+    (let deg = (poly-frac-degree p0))
     (if (<= deg 0)
-        %poly-frac-zero
-        (%poly-frac-trim
+        poly-frac-zero
+        (poly-frac-trim
          (Poly
           (rec go ((rest coeffs)
                    (pow deg))
@@ -400,8 +396,8 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
                    (Cons (* (fromInt pow) c)
                          (go more (- pow 1)))))))))))
 
-  (declare %poly-int->frac (Poly Integer -> Poly Fraction))
-  (define (%poly-int->frac p)
+  (declare poly-int->frac (Poly Integer -> Poly Fraction))
+  (define (poly-int->frac p)
     "Embed integer coefficients into rationals."
     (match p
       ((Poly coeffs)
@@ -412,10 +408,10 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
             ((Cons c more)
              (Cons (fromInt c) (go more)))))))))
 
-  (declare %poly-frac-clear-denominators (Poly Fraction -> Poly Integer))
-  (define (%poly-frac-clear-denominators p)
+  (declare poly-frac-clear-denominators (Poly Fraction -> Poly Integer))
+  (define (poly-frac-clear-denominators p)
     "Multiply by lcm of denominators to recover integer coefficients."
-    (let p0 = (%poly-frac-trim p))
+    (let p0 = (poly-frac-trim p))
     (let coeffs = (coefficients p0))
     (let lden =
       (rec gather ((rest coeffs)
@@ -424,7 +420,7 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
           ((Nil) acc)
           ((Cons c more)
            (gather more (lcm acc (denominator c)))))))
-    (%poly-trim-desc
+    (poly-trim-desc
      (Poly
       (rec scale ((rest coeffs))
         (match rest
@@ -436,47 +432,51 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
                         (quot lden (denominator c)))
                      (scale more)))))))))
 
-  (declare %poly-int-squarefree-nontrivial (Poly Integer -> (Result String (Poly Integer))))
-  (define (%poly-int-squarefree-nontrivial normalized)
+  (declare poly-int-squarefree-nontrivial (Poly Integer -> (Result String (Poly Integer))))
+  (define (poly-int-squarefree-nontrivial normalized)
     "Square-free normalization for nonzero, nonconstant integer polynomials."
-    (let pf = (%poly-int->frac normalized))
-    (let df = (%poly-frac-derivative pf))
-    (let g = (%poly-frac-gcd pf df))
-    (match (%poly-frac-divrem pf g)
+    (let pf = (poly-int->frac normalized))
+    (let df = (poly-frac-derivative pf))
+    (let g = (poly-frac-gcd pf df))
+    (match (poly-frac-divrem pf g)
       ((Tuple q r)
-       (if (%poly-frac-zero? r)
-           (Ok (%poly-int-primitive (%poly-frac-clear-denominators q)))
+       (if (poly-frac-zero? r)
+           (Ok (poly-int-primitive (poly-frac-clear-denominators q)))
            (Err "Internal error: square-free normalization produced non-zero remainder.")))))
 
-  (declare %poly-int-squarefree-primitive (Poly Integer -> (Result String (Poly Integer))))
-  (define (%poly-int-squarefree-primitive p)
+  (declare poly-int-squarefree-primitive (Poly Integer -> (Result String (Poly Integer))))
+  (define (poly-int-squarefree-primitive p)
     "Return primitive square-free normalization of an integer polynomial."
-    (let normalized = (%poly-int-primitive (%poly-trim-desc p)))
-    (if (%poly-int-zero? normalized)
-        (Err "Zero polynomial has no square-free part.")
-        (if (<= (%poly-degree-desc normalized) 0)
-            (Ok normalized)
-            (%poly-int-squarefree-nontrivial normalized))))
+    (let normalized = (poly-int-primitive (poly-trim-desc p)))
+    (cond
+      ((poly-int-zero? normalized)
+       (Err "Zero polynomial has no square-free part."))
+      ((<= (poly-degree-desc normalized) 0)
+       (Ok normalized))
+      (True
+       (poly-int-squarefree-nontrivial normalized))))
 
-  (declare %poly-int-gcd (Poly Integer * Poly Integer -> Poly Integer))
-  (define (%poly-int-gcd a b)
+  (declare poly-int-gcd (Poly Integer * Poly Integer -> Poly Integer))
+  (define (poly-int-gcd a b)
     "Greatest common divisor over Z[x], normalized to primitive form.
 
 This is implemented by embedding into Q[x], computing monic gcd there,
 then clearing denominators exactly."
-    (let a0 = (%poly-int-primitive (%poly-trim-desc a)))
-    (let b0 = (%poly-int-primitive (%poly-trim-desc b)))
-    (if (%poly-int-zero? a0)
-        b0
-        (if (%poly-int-zero? b0)
-            a0
-            (%poly-int-primitive
-             (%poly-frac-clear-denominators
-              (%poly-frac-gcd (%poly-int->frac a0)
-                              (%poly-int->frac b0)))))))
+    (let a0 = (poly-int-primitive (poly-trim-desc a)))
+    (let b0 = (poly-int-primitive (poly-trim-desc b)))
+    (cond
+      ((poly-int-zero? a0)
+       b0)
+      ((poly-int-zero? b0)
+       a0)
+      (True
+       (poly-int-primitive
+             (poly-frac-clear-denominators
+              (poly-frac-gcd (poly-int->frac a0)
+                             (poly-int->frac b0)))))))
 
-  (declare %poly-eval-desc-fraction (Poly Integer * Fraction -> Fraction))
-  (define (%poly-eval-desc-fraction p x)
+  (declare poly-eval-desc-fraction (Poly Integer * Fraction -> Fraction))
+  (define (poly-eval-desc-fraction p x)
     "Evaluate a descending integer polynomial at rational `x` via Horner's rule."
     (match p
       ((Poly coeffs)
@@ -487,23 +487,23 @@ then clearing denominators exactly."
            ((Cons c more)
             (go more (+ (* acc x) (fromInt c)))))))))
 
-  (declare %fraction-signum (Fraction -> Integer))
-  (define (%fraction-signum x)
+  (declare fraction-signum (Fraction -> Integer))
+  (define (fraction-signum x)
     "Return -1, 0, or 1 based on the sign of `x`."
     (cond
       ((< x 0) -1)
       ((> x 0) 1)
       (True 0)))
 
-  (declare %poly-int-derivative (Poly Integer -> Poly Integer))
-  (define (%poly-int-derivative p)
+  (declare poly-int-derivative (Poly Integer -> Poly Integer))
+  (define (poly-int-derivative p)
     "Formal derivative in descending integer representation."
-    (let p0 = (%poly-trim-desc p))
+    (let p0 = (poly-trim-desc p))
     (let coeffs = (coefficients p0))
-    (let deg = (%poly-degree-desc p0))
+    (let deg = (poly-degree-desc p0))
     (if (<= deg 0)
         (Poly (Cons 0 Nil))
-        (%poly-trim-desc
+        (poly-trim-desc
          (Poly
           (rec go ((rest coeffs)
                    (pow deg))
@@ -515,47 +515,49 @@ then clearing denominators exactly."
                    (Cons (* pow c)
                          (go more (- pow 1)))))))))))
 
-  (declare %poly-int-primitive-preserve-sign (Poly Integer -> Poly Integer))
-  (define (%poly-int-primitive-preserve-sign p)
+  (declare poly-int-primitive-preserve-sign (Poly Integer -> Poly Integer))
+  (define (poly-int-primitive-preserve-sign p)
     "Normalize by integer content only, preserving global sign."
-    (let trimmed = (%poly-trim-desc p))
-    (let content = (%poly-int-content trimmed))
-    (if (or (%poly-int-zero? trimmed)
+    (let trimmed = (poly-trim-desc p))
+    (let content = (poly-int-content trimmed))
+    (if (or (poly-int-zero? trimmed)
             (<= content 1))
         trimmed
-        (%poly-int-div-by content trimmed)))
+        (poly-int-div-by content trimmed)))
 
-  (declare %sturm-next (Poly Integer * Poly Integer -> Poly Integer))
-  (define (%sturm-next prev curr)
+  (declare sturm-next (Poly Integer * Poly Integer -> Poly Integer))
+  (define (sturm-next prev curr)
     "Compute next Sturm polynomial: `-rem(prev, curr)` over Q[x]."
-    (let remf = (%poly-frac-rem (%poly-int->frac prev)
-                                (%poly-int->frac curr)))
-    (if (%poly-frac-zero? remf)
+    (let remf = (poly-frac-rem (poly-int->frac prev)
+                                (poly-int->frac curr)))
+    (if (poly-frac-zero? remf)
         (Poly (Cons 0 Nil))
-        (%poly-int-primitive-preserve-sign
-         (%poly-int-neg (%poly-frac-clear-denominators remf)))))
+        (poly-int-primitive-preserve-sign
+         (poly-int-neg (poly-frac-clear-denominators remf)))))
 
-  (declare %sturm-sequence-desc (Poly Integer -> List (Poly Integer)))
-  (define (%sturm-sequence-desc p)
+  (declare sturm-sequence-desc (Poly Integer -> List (Poly Integer)))
+  (define (sturm-sequence-desc p)
     "Compute a Sturm sequence in descending coefficient form natively."
-    (let p0 = (%poly-int-primitive (%poly-trim-desc p)))
-    (let p1 = (%poly-int-derivative p0))
-    (if (%poly-int-zero? p0)
-        (error "Sturm sequence is undefined for the zero polynomial.")
-        (if (%poly-int-zero? p1)
-            (Cons p0 Nil)
-            (rec go ((prev p0)
-                     (curr p1)
-                     (acc (Cons p1 (Cons p0 Nil))))
-              (let next = (%sturm-next prev curr))
-              (if (%poly-int-zero? next)
-                  (coalton/list:reverse acc)
-                  (go curr
-                      next
-                      (Cons next acc)))))))
+    (let p0 = (poly-int-primitive (poly-trim-desc p)))
+    (let p1 = (poly-int-derivative p0))
+    (cond
+      ((poly-int-zero? p0)
+       (error "Sturm sequence is undefined for the zero polynomial."))
+      ((poly-int-zero? p1)
+       (Cons p0 Nil))
+      (True
+       (rec go ((prev p0)
+                (curr p1)
+                (acc (Cons p1 (Cons p0 Nil))))
+         (let next = (sturm-next prev curr))
+         (if (poly-int-zero? next)
+             (coalton/list:reverse acc)
+             (go curr
+                 next
+                 (Cons next acc)))))))
 
-  (declare %sign-variations-at (List (Poly Integer) * Fraction -> Integer))
-  (define (%sign-variations-at sturm x)
+  (declare sign-variations-at (List (Poly Integer) * Fraction -> Integer))
+  (define (sign-variations-at sturm x)
     "Count sign changes in a Sturm sequence evaluated at `x` (ignoring zeros)."
     (rec go ((rest sturm)
              (prev 0)
@@ -563,7 +565,7 @@ then clearing denominators exactly."
       (match rest
         ((Nil) count)
         ((Cons p more)
-         (let s = (%fraction-signum (%poly-eval-desc-fraction p x)))
+         (let s = (fraction-signum (poly-eval-desc-fraction p x)))
          (if (== s 0)
              (go more prev count)
              (go more
@@ -572,76 +574,84 @@ then clearing denominators exactly."
                      (+ count 1)
                      count)))))))
 
-  (declare %move-endpoint-off-root (Poly Integer * Fraction * Fraction -> Fraction))
-  (define (%move-endpoint-off-root poly endpoint toward)
+  (declare move-endpoint-off-root (Poly Integer * Fraction * Fraction -> Fraction))
+  (define (move-endpoint-off-root poly endpoint toward)
     "If an endpoint is a root, move it inward by bisection until it is not."
-    (if (/= (%poly-eval-desc-fraction poly endpoint) 0)
+    (if (/= (poly-eval-desc-fraction poly endpoint) 0)
         endpoint
         (rec go ((x endpoint))
           (let ((x-next (/ (+ x toward) 2)))
-            (if (/= (%poly-eval-desc-fraction poly x-next) 0)
+            (if (/= (poly-eval-desc-fraction poly x-next) 0)
                 x-next
                 (go x-next))))))
 
-  (declare %nudge-interval (Poly Integer * Fraction * Fraction -> (Tuple Fraction Fraction)))
-  (define (%nudge-interval poly lo hi)
+  (declare nudge-interval (Poly Integer * Fraction * Fraction -> (Tuple Fraction Fraction)))
+  (define (nudge-interval poly lo hi)
     "Adjust both endpoints so the polynomial is nonzero there."
-    (if (>= lo hi)
-        (Tuple lo hi)
-        (let ((l (%move-endpoint-off-root poly lo hi)))
-          (let ((h (%move-endpoint-off-root poly hi l)))
-            (if (>= l h)
-                (error "Interval collapsed while nudging endpoints away from roots.")
-                (Tuple l h))))))
+    (cond
+      ((>= lo hi)
+       (Tuple lo hi))
+      (True
+       (let ((l (move-endpoint-off-root poly lo hi)))
+         (let ((h (move-endpoint-off-root poly hi l)))
+           (cond
+             ((>= l h)
+              (error "Interval collapsed while nudging endpoints away from roots."))
+             (True
+              (Tuple l h))))))))
 
-  (declare %root-count-open (Poly Integer * List (Poly Integer) * Fraction * Fraction -> Integer))
-  (define (%root-count-open poly sturm lo hi)
+  (declare root-count-open (Poly Integer * List (Poly Integer) * Fraction * Fraction -> Integer))
+  (define (root-count-open poly sturm lo hi)
     "Count distinct real roots in `(lo, hi)` using Sturm variations."
     (if (>= lo hi)
         0
-        (match (%nudge-interval poly lo hi)
+        (match (nudge-interval poly lo hi)
           ((Tuple l h)
-           (max 0 (- (%sign-variations-at sturm l)
-                     (%sign-variations-at sturm h)))))))
+           (max 0 (- (sign-variations-at sturm l)
+                     (sign-variations-at sturm h)))))))
 
-  (declare %try-split-denominator (Poly Integer * Fraction * Fraction * Integer * Integer -> (Optional Fraction)))
-  (define (%try-split-denominator poly lo hi n i)
+  (declare try-split-denominator (Poly Integer * Fraction * Fraction * Integer * Integer -> (Optional Fraction)))
+  (define (try-split-denominator poly lo hi n i)
     "Search for a rational split with denominator `n` that is not a root."
-    (if (>= i n)
-        None
-        (let ((left-w (fromInt (- n i)))
-              (right-w (fromInt i))
-              (denom (fromInt n)))
-          (let ((cand (/ (+ (* left-w lo) (* right-w hi)) denom)))
-            (if (/= (%poly-eval-desc-fraction poly cand) 0)
-                (Some cand)
-                (%try-split-denominator poly lo hi n (+ i 1)))))))
+    (cond
+      ((>= i n)
+       None)
+      (True
+       (let ((left-w (fromInt (- n i)))
+             (right-w (fromInt i))
+             (denom (fromInt n)))
+         (let ((cand (/ (+ (* left-w lo) (* right-w hi)) denom)))
+           (cond
+             ((/= (poly-eval-desc-fraction poly cand) 0)
+              (Some cand))
+             (True
+              (try-split-denominator poly lo hi n (+ i 1)))))))))
 
-  (declare %find-nonroot-split (Poly Integer * Fraction * Fraction -> Fraction))
-  (define (%find-nonroot-split poly lo hi)
+  (declare find-nonroot-split (Poly Integer * Fraction * Fraction -> Fraction))
+  (define (find-nonroot-split poly lo hi)
     "Choose a split point in `(lo, hi)` where `poly` is provably nonzero."
     (let mid = (/ (+ lo hi) 2))
-    (if (/= (%poly-eval-desc-fraction poly mid) 0)
+    (if (/= (poly-eval-desc-fraction poly mid) 0)
         mid
         (rec outer ((n 3))
-          (match (%try-split-denominator poly lo hi n 1)
+          (match (try-split-denominator poly lo hi n 1)
             ((Some x) x)
             ((None) (outer (+ n 1)))))))
 
-  (declare %refine-interval-native (Poly Integer * List (Poly Integer) * Fraction * Fraction -> (Tuple Fraction Fraction)))
-  (define (%refine-interval-native poly sturm lo hi)
+  (declare refine-interval-native (Poly Integer * List (Poly Integer) * Fraction * Fraction -> (Tuple Fraction Fraction)))
+  (define (refine-interval-native poly sturm lo hi)
     "Bisect an isolating interval and keep the unique-root half."
-    (let split = (%find-nonroot-split poly lo hi))
-    (let left-count = (%root-count-open poly sturm lo split))
+    (let split = (find-nonroot-split poly lo hi))
+    (let left-count = (root-count-open poly sturm lo split))
     (cond
       ((== left-count 1) (Tuple lo split))
       ((== left-count 0) (Tuple split hi))
       (True (error "Internal error: isolating refinement expected one root."))))
 
-  (declare %root-bound-desc (Poly Integer -> Integer))
-  (define (%root-bound-desc p)
+  (declare root-bound-desc (Poly Integer -> Integer))
+  (define (root-bound-desc p)
     "Compute a Cauchy-style bound B so every real root lies in [-B, B]."
-    (match (%poly-trim-desc p)
+    (match (poly-trim-desc p)
       ((Poly coeffs)
        (match coeffs
          ((Cons lead rest)
@@ -656,102 +666,102 @@ then clearing denominators exactly."
          ((Nil)
           0)))))
 
-  (declare %adjust-lower-bound (Poly Integer * Fraction -> Fraction))
-  (define (%adjust-lower-bound poly lo)
+  (declare adjust-lower-bound (Poly Integer * Fraction -> Fraction))
+  (define (adjust-lower-bound poly lo)
     "Shift lower bound down until it is not an exact root."
-    (if (/= (%poly-eval-desc-fraction poly lo) 0)
+    (if (/= (poly-eval-desc-fraction poly lo) 0)
         lo
-        (%adjust-lower-bound poly (- lo 1))))
+        (adjust-lower-bound poly (- lo 1))))
 
-  (declare %adjust-upper-bound (Poly Integer * Fraction -> Fraction))
-  (define (%adjust-upper-bound poly hi)
+  (declare adjust-upper-bound (Poly Integer * Fraction -> Fraction))
+  (define (adjust-upper-bound poly hi)
     "Shift upper bound up until it is not an exact root."
-    (if (/= (%poly-eval-desc-fraction poly hi) 0)
+    (if (/= (poly-eval-desc-fraction poly hi) 0)
         hi
-        (%adjust-upper-bound poly (+ hi 1))))
+        (adjust-upper-bound poly (+ hi 1))))
 
-  (declare %isolate-intervals-onto (Poly Integer
+  (declare isolate-intervals-onto (Poly Integer
                                     * List (Poly Integer)
                                     * Fraction
                                     * Fraction
                                     * Integer
                                     * List (Tuple Fraction Fraction)
                                     -> List (Tuple Fraction Fraction)))
-  (define (%isolate-intervals-onto poly sturm lo hi count acc)
+  (define (isolate-intervals-onto poly sturm lo hi count acc)
     "Accumulate disjoint single-root isolating intervals in left-to-right order."
     (cond
       ((== count 0) acc)
       ((== count 1) (Cons (Tuple lo hi) acc))
       (True
-       (let ((split (%find-nonroot-split poly lo hi)))
-         (let ((left-count (%root-count-open poly sturm lo split)))
+       (let ((split (find-nonroot-split poly lo hi)))
+         (let ((left-count (root-count-open poly sturm lo split)))
            (let ((right-count (- count left-count)))
-             (%isolate-intervals-onto poly
+             (isolate-intervals-onto poly
                                       sturm
                                       lo
                                       split
                                       left-count
-                                      (%isolate-intervals-onto poly sturm split hi right-count acc))))))))
+                                      (isolate-intervals-onto poly sturm split hi right-count acc))))))))
 
-  (declare %isolate-intervals-native (Poly Integer
+  (declare isolate-intervals-native (Poly Integer
                                       * List (Poly Integer)
                                       * Fraction
                                       * Fraction
                                       * Integer
                                       -> List (Tuple Fraction Fraction)))
-  (define (%isolate-intervals-native poly sturm lo hi count)
+  (define (isolate-intervals-native poly sturm lo hi count)
     "Recursively split `(lo, hi)` into disjoint single-root isolating intervals."
-    (%isolate-intervals-onto poly sturm lo hi count Nil))
+    (isolate-intervals-onto poly sturm lo hi count Nil))
 
-  (declare %make-realalgebraic-certified (Poly Integer
+  (declare make-realalgebraic-certified (Poly Integer
                                           * List (Poly Integer)
                                           * Fraction
                                           * Fraction
                                           -> (Result String RealAlgebraic)))
-  (define (%make-realalgebraic-certified poly sturm lo hi)
+  (define (make-realalgebraic-certified poly sturm lo hi)
     "Construct a `RealAlgebraic` from a normalized polynomial and matching Sturm sequence."
     (cond
-      ((<= (%poly-degree-desc poly) 0)
+      ((<= (poly-degree-desc poly) 0)
        (Err "Defining polynomial must have positive degree."))
       ((>= lo hi)
        (Err "Isolating interval must satisfy lower < upper."))
-      ((== (%poly-eval-desc-fraction poly lo) 0)
+      ((== (poly-eval-desc-fraction poly lo) 0)
        (Err "Lower interval endpoint must not be a root of the defining polynomial."))
-      ((== (%poly-eval-desc-fraction poly hi) 0)
+      ((== (poly-eval-desc-fraction poly hi) 0)
        (Err "Upper interval endpoint must not be a root of the defining polynomial."))
-      ((== (%root-count-open poly sturm lo hi) 1)
+      ((== (root-count-open poly sturm lo hi) 1)
        (Ok (RealAlgebraic poly lo hi sturm)))
       (True
        (Err "Interval must isolate exactly one real root."))))
 
-  (declare %roots-from-intervals (Poly Integer
+  (declare roots-from-intervals (Poly Integer
                                   * List (Poly Integer)
                                   * List (Tuple Fraction Fraction)
                                   -> (Result String (List RealAlgebraic))))
-  (define (%roots-from-intervals poly sturm intervals)
+  (define (roots-from-intervals poly sturm intervals)
     "Construct certified `RealAlgebraic` values from isolating intervals."
     (rec go ((rest intervals)
              (acc Nil))
       (match rest
         ((Nil) (Ok (coalton/list:reverse acc)))
         ((Cons (Tuple lo hi) more)
-         (match (%make-realalgebraic-certified poly sturm lo hi)
+         (match (make-realalgebraic-certified poly sturm lo hi)
            ((Err msg) (Err msg))
            ((Ok r)
             (go more (Cons r acc))))))))
 
-  (declare %refine-native (RealAlgebraic -> RealAlgebraic))
-  (define (%refine-native x)
+  (declare refine-native (RealAlgebraic -> RealAlgebraic))
+  (define (refine-native x)
     "One refinement step that strictly shrinks the isolating interval."
     (let poly = (.ra-poly x))
     (let sturm = (.ra-sturm x))
     (let lo = (.ra-lo x))
     (let hi = (.ra-hi x))
-    (let (Tuple nlo nhi) = (%refine-interval-native poly sturm lo hi))
+    (let (Tuple nlo nhi) = (refine-interval-native poly sturm lo hi))
     (RealAlgebraic poly nlo nhi sturm))
 
-  (declare %approx-eps (UFix -> Fraction))
-  (define (%approx-eps bits)
+  (declare approx-eps (UFix -> Fraction))
+  (define (approx-eps bits)
     "Return 2^-bits exactly as a rational."
     (/ 1 (fromInt (^ 2 bits))))
 
@@ -779,31 +789,31 @@ then clearing denominators exactly."
 COEFFS is a list of integer coefficients in descending degree order. The
 rational interval `(lo, hi)` must isolate exactly one real root of the
 polynomial."
-    (match (%poly-int-squarefree-primitive (%poly-trim-desc (Poly coeffs)))
+    (match (poly-int-squarefree-primitive (poly-trim-desc (Poly coeffs)))
       ((Err msg)
        (Err msg))
       ((Ok normalized)
-       (let sturm = (%sturm-sequence-desc normalized))
-       (%make-realalgebraic-certified normalized sturm lo hi))))
+       (let sturm = (sturm-sequence-desc normalized))
+       (make-realalgebraic-certified normalized sturm lo hi))))
 
   (declare real-roots (List Integer -> (Result String (List RealAlgebraic))))
   (define (real-roots coeffs)
     "Isolate all distinct real roots of a polynomial.
 
 COEFFS is a list of integer coefficients in descending degree order."
-    (match (%poly-int-squarefree-primitive (Poly coeffs))
+    (match (poly-int-squarefree-primitive (Poly coeffs))
       ((Err msg) (Err msg))
       ((Ok normalized)
-       (if (<= (%poly-degree-desc normalized) 0)
+       (if (<= (poly-degree-desc normalized) 0)
            (Ok Nil)
-           (let ((sturm (%sturm-sequence-desc normalized))
-                 (bound (%root-bound-desc normalized)))
-             (let ((lo (%adjust-lower-bound normalized (fromInt (negate bound))))
-                   (hi (%adjust-upper-bound normalized (fromInt bound))))
-               (let ((count (%root-count-open normalized sturm lo hi)))
-                 (%roots-from-intervals normalized
+           (let ((sturm (sturm-sequence-desc normalized))
+                 (bound (root-bound-desc normalized)))
+             (let ((lo (adjust-lower-bound normalized (fromInt (negate bound))))
+                   (hi (adjust-upper-bound normalized (fromInt bound))))
+               (let ((count (root-count-open normalized sturm lo hi)))
+                 (roots-from-intervals normalized
                                         sturm
-                                        (%isolate-intervals-native normalized sturm lo hi count)))))))))
+                                        (isolate-intervals-native normalized sturm lo hi count)))))))))
 
   (declare defining-polynomial (RealAlgebraic -> Poly Integer))
   (define (defining-polynomial x)
@@ -820,56 +830,56 @@ COEFFS is a list of integer coefficients in descending degree order."
     "Return the upper endpoint of the current isolating interval for `x`."
     (.ra-hi x))
 
-  (declare %interval-width-ra (RealAlgebraic -> Fraction))
-  (define (%interval-width-ra x)
+  (declare interval-width-ra (RealAlgebraic -> Fraction))
+  (define (interval-width-ra x)
     "Return width of the current isolating interval."
     (- (upper-bound x)
        (lower-bound x)))
 
-  (declare %refine-wider (RealAlgebraic * RealAlgebraic -> (Tuple RealAlgebraic RealAlgebraic)))
-  (define (%refine-wider x y)
+  (declare refine-wider (RealAlgebraic * RealAlgebraic -> (Tuple RealAlgebraic RealAlgebraic)))
+  (define (refine-wider x y)
     "Refine whichever operand currently has wider isolating interval."
-    (if (> (%interval-width-ra x)
-           (%interval-width-ra y))
-        (Tuple (%refine-native x) y)
-        (Tuple x (%refine-native y))))
+    (if (> (interval-width-ra x)
+           (interval-width-ra y))
+        (Tuple (refine-native x) y)
+        (Tuple x (refine-native y))))
 
-  (declare %zero-ra? (RealAlgebraic -> Boolean))
-  (declare %contains-rational (RealAlgebraic * Fraction -> Boolean))
+  (declare zero-ra? (RealAlgebraic -> Boolean))
+  (declare contains-rational (RealAlgebraic * Fraction -> Boolean))
 
-  (define (%contains-rational x q)
+  (define (contains-rational x q)
     "Return `True` when interval enclosure and defining polynomial certify x = q."
     (and (<= (lower-bound x) q)
          (<= q (upper-bound x))
-         (== (%poly-eval-desc-fraction (defining-polynomial x) q) 0)))
+         (== (poly-eval-desc-fraction (defining-polynomial x) q) 0)))
 
-  (define (%zero-ra? x)
+  (define (zero-ra? x)
     "Return `True` iff `x` is exactly zero."
-    (%contains-rational x 0))
+    (contains-rational x 0))
 
-  (declare %common-root-in-overlap? (Poly Integer
+  (declare common-root-in-overlap? (Poly Integer
                                      * List (Poly Integer)
                                      * RealAlgebraic
                                      * RealAlgebraic
                                      -> Boolean))
-  (define (%common-root-in-overlap? g sturm a b)
+  (define (common-root-in-overlap? g sturm a b)
     "Check whether the interval overlap contains a root of pre-computed gcd polynomial."
     (let lo = (max (lower-bound a) (lower-bound b)))
     (let hi = (min (upper-bound a) (upper-bound b)))
     (if (>= lo hi)
         False
-        (== (%root-count-open g sturm lo hi) 1)))
+        (== (root-count-open g sturm lo hi) 1)))
 
-  (declare %compare-certified (RealAlgebraic * RealAlgebraic -> Ordering))
-  (define (%compare-certified a b)
+  (declare compare-certified (RealAlgebraic * RealAlgebraic -> Ordering))
+  (define (compare-certified a b)
     "Certified comparison in native Coalton.
 
 If intervals overlap, equality is decided rigorously via a gcd+Sturm check.
 Otherwise we refine until disjoint intervals force an order.
 The gcd and its Sturm sequence are computed once and reused across refinements."
-    (let ((g (%poly-int-gcd (defining-polynomial a)
+    (let ((g (poly-int-gcd (defining-polynomial a)
                             (defining-polynomial b))))
-      (if (<= (%poly-degree-desc g) 0)
+      (if (<= (poly-degree-desc g) 0)
           ;; No common factor => not equal, just refine until disjoint.
           (rec go ((x a)
                    (y b))
@@ -877,29 +887,29 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
               ((< (upper-bound x) (lower-bound y)) LT)
               ((< (upper-bound y) (lower-bound x)) GT)
               (True
-               (match (%refine-wider x y)
+               (match (refine-wider x y)
                  ((Tuple nx ny)
                   (go nx ny))))))
           ;; Common factor exists; cache its Sturm sequence.
-          (let ((sturm (%sturm-sequence-desc g)))
+          (let ((sturm (sturm-sequence-desc g)))
             (rec go ((x a)
                      (y b))
               (cond
                 ((< (upper-bound x) (lower-bound y)) LT)
                 ((< (upper-bound y) (lower-bound x)) GT)
-                ((%common-root-in-overlap? g sturm x y) EQ)
+                ((common-root-in-overlap? g sturm x y) EQ)
                 (True
-                 (match (%refine-wider x y)
+                 (match (refine-wider x y)
                    ((Tuple nx ny)
                     (go nx ny))))))))))
 
-  (declare %pad-left-int (UFix * List Integer -> List Integer))
-  (define (%pad-left-int n xs)
+  (declare pad-left-int (UFix * List Integer -> List Integer))
+  (define (pad-left-int n xs)
     "Prefix an integer coefficient list by `n` zeros."
     (coalton/list:append (coalton/list:repeat n 0) xs))
 
-  (declare %zip-add-int (List Integer * List Integer -> List Integer))
-  (define (%zip-add-int xs ys)
+  (declare zip-add-int (List Integer * List Integer -> List Integer))
+  (define (zip-add-int xs ys)
     "Pairwise sum of equal-length integer lists."
     (match xs
       ((Nil)
@@ -911,34 +921,34 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
          ((Nil) (error "Internal error: integer zip-add length mismatch."))
          ((Cons y yr)
           (Cons (+ x y)
-                (%zip-add-int xr yr)))))))
+                (zip-add-int xr yr)))))))
 
-  (declare %poly-int-add (Poly Integer * Poly Integer -> Poly Integer))
-  (define (%poly-int-add a b)
+  (declare poly-int-add (Poly Integer * Poly Integer -> Poly Integer))
+  (define (poly-int-add a b)
     "Add two descending integer polynomials."
-    (let a0 = (%poly-trim-desc a))
-    (let b0 = (%poly-trim-desc b))
+    (let a0 = (poly-trim-desc a))
+    (let b0 = (poly-trim-desc b))
     (let ac = (coefficients a0))
     (let bc = (coefficients b0))
     (let la = (toInteger (coalton/list:length ac)))
     (let lb = (toInteger (coalton/list:length bc)))
-    (let ax = (if (< la lb) (%pad-left-int (%to-ufix (- lb la)) ac) ac))
-    (let bx = (if (< lb la) (%pad-left-int (%to-ufix (- la lb)) bc) bc))
-    (%poly-trim-desc (Poly (%zip-add-int ax bx))))
+    (let ax = (if (< la lb) (pad-left-int (to-ufix (- lb la)) ac) ac))
+    (let bx = (if (< lb la) (pad-left-int (to-ufix (- la lb)) bc) bc))
+    (poly-trim-desc (Poly (zip-add-int ax bx))))
 
-  (declare %poly-int-sub (Poly Integer * Poly Integer -> Poly Integer))
-  (define (%poly-int-sub a b)
+  (declare poly-int-sub (Poly Integer * Poly Integer -> Poly Integer))
+  (define (poly-int-sub a b)
     "Subtract two descending integer polynomials."
-    (%poly-int-add a (%poly-int-neg b)))
+    (poly-int-add a (poly-int-neg b)))
 
-  (declare %poly-int-scale (Integer * Poly Integer -> Poly Integer))
-  (define (%poly-int-scale k p)
+  (declare poly-int-scale (Integer * Poly Integer -> Poly Integer))
+  (define (poly-int-scale k p)
     "Scale an integer polynomial by integer `k`."
     (if (== k 0)
-        %poly-int-zero
+        poly-int-zero
         (match p
           ((Poly coeffs)
-           (%poly-trim-desc
+           (poly-trim-desc
             (Poly
              (rec go ((rest coeffs))
                (match rest
@@ -946,69 +956,69 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
                  ((Cons c more)
                   (Cons (* k c) (go more)))))))))))
 
-  (declare %poly-int-shift (Poly Integer * Integer -> Poly Integer))
-  (define (%poly-int-shift p power)
+  (declare poly-int-shift (Poly Integer * Integer -> Poly Integer))
+  (define (poly-int-shift p power)
     "Multiply by x^power in descending coefficient representation."
     (if (<= power 0)
-        (%poly-trim-desc p)
-        (match (%poly-trim-desc p)
+        (poly-trim-desc p)
+        (match (poly-trim-desc p)
           ((Poly coeffs)
-           (%poly-trim-desc
+           (poly-trim-desc
             (Poly (coalton/list:append coeffs
-                                       (coalton/list:repeat (%to-ufix power) 0))))))))
+                                       (coalton/list:repeat (to-ufix power) 0))))))))
 
-  (declare %poly-int-monomial (Integer * Integer -> Poly Integer))
-  (define (%poly-int-monomial coeff power)
+  (declare poly-int-monomial (Integer * Integer -> Poly Integer))
+  (define (poly-int-monomial coeff power)
     "Construct coeff*x^power in descending coefficient representation."
     (if (== coeff 0)
-        %poly-int-zero
-        (%poly-trim-desc
+        poly-int-zero
+        (poly-trim-desc
          (Poly (coalton/list:append (Cons coeff Nil)
-                                    (coalton/list:repeat (%to-ufix (max 0 power)) 0))))))
+                                    (coalton/list:repeat (to-ufix (max 0 power)) 0))))))
 
-  (declare %poly-int-mul (Poly Integer * Poly Integer -> Poly Integer))
-  (define (%poly-int-mul a b)
+  (declare poly-int-mul (Poly Integer * Poly Integer -> Poly Integer))
+  (define (poly-int-mul a b)
     "Multiply two descending integer polynomials."
-    (let a0 = (%poly-trim-desc a))
-    (let b0 = (%poly-trim-desc b))
-    (let deg-a = (%poly-degree-desc a0))
-    (if (or (%poly-int-zero? a0)
-            (%poly-int-zero? b0))
-        %poly-int-zero
+    (let a0 = (poly-trim-desc a))
+    (let b0 = (poly-trim-desc b))
+    (let deg-a = (poly-degree-desc a0))
+    (if (or (poly-int-zero? a0)
+            (poly-int-zero? b0))
+        poly-int-zero
         (match a0
           ((Poly coeffs)
-           (%poly-trim-desc
+           (poly-trim-desc
             (rec go ((rest coeffs)
                      (pow deg-a)
-                     (acc %poly-int-zero))
+                     (acc poly-int-zero))
               (match rest
                 ((Nil) acc)
                 ((Cons c more)
                  (go more
                      (- pow 1)
-                     (%poly-int-add acc
-                                    (%poly-int-shift (%poly-int-scale c b0) pow)))))))))))
+                     (poly-int-add acc
+                                    (poly-int-shift (poly-int-scale c b0) pow)))))))))))
 
-  (declare %poly-int-expt (Poly Integer * Integer -> Poly Integer))
-  (define (%poly-int-expt p exponent)
+  (declare poly-int-expt (Poly Integer * Integer -> Poly Integer))
+  (define (poly-int-expt p exponent)
     "Exponentiation by squaring for integer polynomials."
     (if (< exponent 0)
         (error "Negative polynomial exponent not supported.")
-        (rec go ((result %poly-int-one)
-                 (base (%poly-trim-desc p))
+        (rec go ((result poly-int-one)
+                 (base (poly-trim-desc p))
                  (e exponent))
           (if (== e 0)
-              (%poly-trim-desc result)
+              (poly-trim-desc result)
               (go (if (== (rem e 2) 1)
-                      (%poly-int-mul result base)
+                      (poly-int-mul result base)
                       result)
-                  (%poly-int-mul base base)
+                  (poly-int-mul base base)
                   (quot e 2))))))
 
-  (declare %poly-frac->int-exact (Poly Fraction -> (Result String (Poly Integer))))
-  (define (%poly-frac->int-exact p)
+  (declare poly-frac->int-exact (Poly Fraction -> (Result String (Poly Integer))))
+  (define (poly-frac->int-exact p)
     "Convert a rational polynomial to integer coefficients, requiring exact integrality."
-    (let p0 = (%poly-frac-trim p))
+    (let p0 = (poly-frac-trim p))
     (match p0
       ((Poly coeffs)
        (match
@@ -1023,32 +1033,32 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
                     (Err "Internal error: non-integer quotient in exact polynomial division.")))))
          ((Err msg) (Err msg))
          ((Ok ints)
-          (Ok (%poly-trim-desc (Poly ints))))))))
+          (Ok (poly-trim-desc (Poly ints))))))))
 
-  (declare %poly-int-div-exact (Poly Integer * Poly Integer -> Poly Integer))
-  (define (%poly-int-div-exact a b)
+  (declare poly-int-div-exact (Poly Integer * Poly Integer -> Poly Integer))
+  (define (poly-int-div-exact a b)
     "Exact division in Z[z], signaling an error if the quotient is not integral."
-    (match (%poly-frac-divrem (%poly-int->frac a)
-                              (%poly-int->frac b))
+    (match (poly-frac-divrem (poly-int->frac a)
+                              (poly-int->frac b))
       ((Tuple q r)
-       (if (%poly-frac-zero? r)
-           (match (%poly-frac->int-exact q)
+       (if (poly-frac-zero? r)
+           (match (poly-frac->int-exact q)
              ((Err msg) (error msg))
              ((Ok qq) qq))
            (error "Internal error: non-exact polynomial division in Bareiss determinant.")))))
 
-  (declare %zconst (Integer -> Poly Integer))
-  (define (%zconst n)
+  (declare zconst (Integer -> Poly Integer))
+  (define (zconst n)
     "Constant polynomial n in Z[z]."
     (Poly (Cons n Nil)))
 
-  (declare %tpoly-zero (Poly (Poly Integer)))
-  (define %tpoly-zero
+  (declare tpoly-zero (Poly (Poly Integer)))
+  (define tpoly-zero
     "Zero polynomial in t with coefficients in Z[z]."
-    (Poly (Cons %poly-int-zero Nil)))
+    (Poly (Cons poly-int-zero Nil)))
 
-  (declare %tpoly-trim (Poly (Poly Integer) -> Poly (Poly Integer)))
-  (define (%tpoly-trim p)
+  (declare tpoly-trim (Poly (Poly Integer) -> Poly (Poly Integer)))
+  (define (tpoly-trim p)
     "Drop leading zero coefficients from a t-polynomial over Z[z]."
     (match p
       ((Poly coeffs)
@@ -1057,52 +1067,52 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
            (match rest
              ((Nil) Nil)
              ((Cons c more)
-              (Cons (%poly-trim-desc c)
+              (Cons (poly-trim-desc c)
                     (normalize more))))))
        (rec drop ((rest normalized))
          (match rest
-           ((Nil) %tpoly-zero)
+           ((Nil) tpoly-zero)
            ((Cons c more)
             (match more
               ((Nil) (Poly (Cons c Nil)))
               (_
-               (if (%poly-int-zero? c)
+               (if (poly-int-zero? c)
                    (drop more)
                    (Poly rest))))))))))
 
-  (declare %tpoly-zero? (Poly (Poly Integer) -> Boolean))
-  (define (%tpoly-zero? p)
+  (declare tpoly-zero? (Poly (Poly Integer) -> Boolean))
+  (define (tpoly-zero? p)
     "Return `True` iff a t-polynomial over Z[z] is identically zero."
-    (match (%tpoly-trim p)
+    (match (tpoly-trim p)
       ((Poly coeffs)
        (match coeffs
          ((Cons c rest)
           (match rest
-            ((Nil) (%poly-int-zero? c))
+            ((Nil) (poly-int-zero? c))
             (_ False)))
          (_ False)))))
 
-  (declare %tpoly-degree (Poly (Poly Integer) -> Integer))
-  (define (%tpoly-degree p)
+  (declare tpoly-degree (Poly (Poly Integer) -> Integer))
+  (define (tpoly-degree p)
     "Return deg(p) for a t-polynomial in descending coefficient form."
-    (match (%tpoly-trim p)
+    (match (tpoly-trim p)
       ((Poly coeffs)
        (max 0 (- (toInteger (coalton/list:length coeffs)) 1)))))
 
-  (declare %tpoly-leading (Poly (Poly Integer) -> Poly Integer))
-  (define (%tpoly-leading p)
+  (declare tpoly-leading (Poly (Poly Integer) -> Poly Integer))
+  (define (tpoly-leading p)
     "Return the leading t-coefficient polynomial in Z[z]."
-    (match (%tpoly-trim p)
+    (match (tpoly-trim p)
       ((Poly (Cons lead _)) lead)
-      (_ %poly-int-zero)))
+      (_ poly-int-zero)))
 
-  (declare %pad-left-zpoly (UFix * List (Poly Integer) -> List (Poly Integer)))
-  (define (%pad-left-zpoly n xs)
+  (declare pad-left-zpoly (UFix * List (Poly Integer) -> List (Poly Integer)))
+  (define (pad-left-zpoly n xs)
     "Prefix a Z[z]-coefficient list by `n` zero coefficients."
-    (coalton/list:append (coalton/list:repeat n %poly-int-zero) xs))
+    (coalton/list:append (coalton/list:repeat n poly-int-zero) xs))
 
-  (declare %zip-add-zpoly (List (Poly Integer) * List (Poly Integer) -> List (Poly Integer)))
-  (define (%zip-add-zpoly xs ys)
+  (declare zip-add-zpoly (List (Poly Integer) * List (Poly Integer) -> List (Poly Integer)))
+  (define (zip-add-zpoly xs ys)
     "Pairwise sum of equal-length Z[z] coefficient lists."
     (match xs
       ((Nil)
@@ -1113,53 +1123,53 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
        (match ys
          ((Nil) (error "Internal error: z-polynomial zip-add length mismatch."))
          ((Cons y yr)
-          (Cons (%poly-int-add x y)
-                (%zip-add-zpoly xr yr)))))))
+          (Cons (poly-int-add x y)
+                (zip-add-zpoly xr yr)))))))
 
-  (declare %tpoly-add (Poly (Poly Integer) * Poly (Poly Integer) -> Poly (Poly Integer)))
-  (define (%tpoly-add a b)
+  (declare tpoly-add (Poly (Poly Integer) * Poly (Poly Integer) -> Poly (Poly Integer)))
+  (define (tpoly-add a b)
     "Add two t-polynomials over Z[z]."
-    (let a0 = (%tpoly-trim a))
-    (let b0 = (%tpoly-trim b))
+    (let a0 = (tpoly-trim a))
+    (let b0 = (tpoly-trim b))
     (let ac = (coefficients a0))
     (let bc = (coefficients b0))
     (let la = (toInteger (coalton/list:length ac)))
     (let lb = (toInteger (coalton/list:length bc)))
-    (let ax = (if (< la lb) (%pad-left-zpoly (%to-ufix (- lb la)) ac) ac))
-    (let bx = (if (< lb la) (%pad-left-zpoly (%to-ufix (- la lb)) bc) bc))
-    (%tpoly-trim (Poly (%zip-add-zpoly ax bx))))
+    (let ax = (if (< la lb) (pad-left-zpoly (to-ufix (- lb la)) ac) ac))
+    (let bx = (if (< lb la) (pad-left-zpoly (to-ufix (- la lb)) bc) bc))
+    (tpoly-trim (Poly (zip-add-zpoly ax bx))))
 
-  (declare %tpoly-neg (Poly (Poly Integer) -> Poly (Poly Integer)))
-  (define (%tpoly-neg p)
+  (declare tpoly-neg (Poly (Poly Integer) -> Poly (Poly Integer)))
+  (define (tpoly-neg p)
     "Negate a t-polynomial over Z[z]."
     (match p
       ((Poly coeffs)
-       (%tpoly-trim
+       (tpoly-trim
         (Poly
          (rec go ((rest coeffs))
            (match rest
              ((Nil) Nil)
              ((Cons c more)
-              (Cons (%poly-int-neg c)
+              (Cons (poly-int-neg c)
                     (go more))))))))))
 
-  (declare %tpoly-sub (Poly (Poly Integer) * Poly (Poly Integer) -> Poly (Poly Integer)))
-  (define (%tpoly-sub a b)
+  (declare tpoly-sub (Poly (Poly Integer) * Poly (Poly Integer) -> Poly (Poly Integer)))
+  (define (tpoly-sub a b)
     "Subtract t-polynomials over Z[z]."
-    (%tpoly-add a (%tpoly-neg b)))
+    (tpoly-add a (tpoly-neg b)))
 
-  (declare %tpoly-monomial (Poly Integer * Integer -> Poly (Poly Integer)))
-  (define (%tpoly-monomial coeff power)
+  (declare tpoly-monomial (Poly Integer * Integer -> Poly (Poly Integer)))
+  (define (tpoly-monomial coeff power)
     "Construct coeff*t^power in descending t-coefficient representation."
-    (if (%poly-int-zero? coeff)
-        %tpoly-zero
-        (%tpoly-trim
-         (Poly (coalton/list:append (Cons (%poly-trim-desc coeff) Nil)
-                                    (coalton/list:repeat (%to-ufix (max 0 power))
-                                                         %poly-int-zero))))))
+    (if (poly-int-zero? coeff)
+        tpoly-zero
+        (tpoly-trim
+         (Poly (coalton/list:append (Cons (poly-trim-desc coeff) Nil)
+                                    (coalton/list:repeat (to-ufix (max 0 power))
+                                                         poly-int-zero))))))
 
-  (declare %binomial (Integer * Integer -> Integer))
-  (define (%binomial n k)
+  (declare binomial (Integer * Integer -> Integer))
+  (define (binomial n k)
     "Compute the exact binomial coefficient C(n, k)."
     (cond
       ((or (< k 0) (> k n)) 0)
@@ -1174,146 +1184,148 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
                  (quot (* acc (+ (- n kk) i))
                        i)))))))
 
-  (declare %int-poly->tpoly (Poly Integer -> Poly (Poly Integer)))
-  (define (%int-poly->tpoly p)
+  (declare int-poly->tpoly (Poly Integer -> Poly (Poly Integer)))
+  (define (int-poly->tpoly p)
     "Lift an integer polynomial to t-polynomial form with constant Z[z] coefficients."
-    (match (%poly-trim-desc p)
+    (match (poly-trim-desc p)
       ((Poly coeffs)
-       (%tpoly-trim
+       (tpoly-trim
         (Poly
          (rec go ((rest coeffs))
            (match rest
              ((Nil) Nil)
              ((Cons c more)
-              (Cons (%zconst c)
+              (Cons (zconst c)
                     (go more))))))))))
 
-  (declare %add-binomial-powers (Boolean * Integer * Integer * Integer * Poly (Poly Integer) -> Poly (Poly Integer)))
-  (define (%add-binomial-powers negate-z coeff pow i acc)
+  (declare add-binomial-powers (Boolean * Integer * Integer * Integer * Poly (Poly Integer) -> Poly (Poly Integer)))
+  (define (add-binomial-powers negate-z coeff pow i acc)
     "Accumulate coeff*(z - t)^pow or coeff*(t - z)^pow into a t-polynomial.
 When NEGATE-Z is False, sign = (-1)^i (z-minus-t).
 When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
     (if (> i pow)
         acc
         (let ((sign (if (== (rem (if negate-z (- pow i) i) 2) 1) -1 1))
-              (choose (%binomial pow i))
+              (choose (binomial pow i))
               (z-power (- pow i)))
           (let ((z-coeff (* coeff (* sign choose))))
-            (%add-binomial-powers negate-z
+            (add-binomial-powers negate-z
                                   coeff
                                   pow
                                   (+ i 1)
-                                  (%tpoly-add acc
-                                              (%tpoly-monomial (%poly-int-monomial z-coeff z-power)
+                                  (tpoly-add acc
+                                              (tpoly-monomial (poly-int-monomial z-coeff z-power)
                                                                i)))))))
 
-  (declare %substitute-linear-combo (Boolean * Poly Integer -> Poly (Poly Integer)))
-  (define (%substitute-linear-combo negate-z poly)
+  (declare substitute-linear-combo (Boolean * Poly Integer -> Poly (Poly Integer)))
+  (define (substitute-linear-combo negate-z poly)
     "Build q(z - t) or q(t - z) as a t-polynomial with coefficients in Z[z]."
-    (let q = (%poly-trim-desc poly))
-    (let deg = (%poly-degree-desc q))
+    (let q = (poly-trim-desc poly))
+    (let deg = (poly-degree-desc q))
     (match q
       ((Poly coeffs)
-       (%tpoly-trim
+       (tpoly-trim
         (rec go ((rest coeffs)
                  (pow deg)
-                 (acc %tpoly-zero))
+                 (acc tpoly-zero))
           (match rest
             ((Nil) acc)
             ((Cons c more)
              (go more
                  (- pow 1)
-                 (%add-binomial-powers negate-z c pow 0 acc)))))))))
+                 (add-binomial-powers negate-z c pow 0 acc)))))))))
 
-  (declare %substitute-z-minus-t (Poly Integer -> Poly (Poly Integer)))
-  (define (%substitute-z-minus-t poly)
+  (declare substitute-z-minus-t (Poly Integer -> Poly (Poly Integer)))
+  (define (substitute-z-minus-t poly)
     "Build q(z - t) as a t-polynomial with coefficients in Z[z]."
-    (%substitute-linear-combo False poly))
+    (substitute-linear-combo False poly))
 
-  (declare %substitute-t-minus-z (Poly Integer -> Poly (Poly Integer)))
-  (define (%substitute-t-minus-z poly)
+  (declare substitute-t-minus-z (Poly Integer -> Poly (Poly Integer)))
+  (define (substitute-t-minus-z poly)
     "Build q(t - z) as a t-polynomial with coefficients in Z[z]."
-    (%substitute-linear-combo True poly))
+    (substitute-linear-combo True poly))
 
-  (declare %substitute-z-over-t-scaled (Poly Integer -> Poly (Poly Integer)))
-  (define (%substitute-z-over-t-scaled poly)
+  (declare substitute-z-over-t-scaled (Poly Integer -> Poly (Poly Integer)))
+  (define (substitute-z-over-t-scaled poly)
     "Build t^n q(z/t) as a t-polynomial with coefficients in Z[z]."
-    (let q = (%poly-trim-desc poly))
-    (let deg = (%poly-degree-desc q))
+    (let q = (poly-trim-desc poly))
+    (let deg = (poly-degree-desc q))
     (match q
       ((Poly coeffs)
-       (%tpoly-trim
+       (tpoly-trim
         (rec go ((rest coeffs)
                  (pow deg)
-                 (acc %tpoly-zero))
+                 (acc tpoly-zero))
           (match rest
             ((Nil) acc)
             ((Cons c more)
              (go more
                  (- pow 1)
-                 (%tpoly-add acc
-                             (%tpoly-monomial (%poly-int-monomial c pow)
+                 (tpoly-add acc
+                             (tpoly-monomial (poly-int-monomial c pow)
                                               (- deg pow)))))))))))
 
-  (declare %substitute-z-times-t (Poly Integer -> Poly (Poly Integer)))
-  (define (%substitute-z-times-t poly)
+  (declare substitute-z-times-t (Poly Integer -> Poly (Poly Integer)))
+  (define (substitute-z-times-t poly)
     "Build p(z*t) as a t-polynomial with coefficients in Z[z]."
-    (let p = (%poly-trim-desc poly))
-    (let deg = (%poly-degree-desc p))
+    (let p = (poly-trim-desc poly))
+    (let deg = (poly-degree-desc p))
     (match p
       ((Poly coeffs)
-       (%tpoly-trim
+       (tpoly-trim
         (rec go ((rest coeffs)
                  (pow deg)
-                 (acc %tpoly-zero))
+                 (acc tpoly-zero))
           (match rest
             ((Nil) acc)
             ((Cons c more)
              (go more
                  (- pow 1)
-                 (%tpoly-add acc
-                             (%tpoly-monomial (%poly-int-monomial c pow)
+                 (tpoly-add acc
+                             (tpoly-monomial (poly-int-monomial c pow)
                                               pow))))))))))
 
   ;; ------------------------------------------------------------------
   ;; Array-based Bareiss determinant (O(n^3) vs O(n^4) list-of-lists)
   ;; ------------------------------------------------------------------
 
-  (declare %arr-get (array:LispArray (Poly Integer) * UFix * UFix * UFix -> Poly Integer))
-  (define (%arr-get mat n i j)
+  (declare arr-get (array:LispArray (Poly Integer) * UFix * UFix * UFix -> Poly Integer))
+  (define (arr-get mat n i j)
     "Read flat-array matrix entry (i, j) with row width N."
     (array:aref mat (+ (* i n) j)))
 
-  (declare %arr-set! (array:LispArray (Poly Integer) * UFix * UFix * UFix * Poly Integer -> Void))
-  (define (%arr-set! mat n i j value)
+  (declare arr-set! (array:LispArray (Poly Integer) * UFix * UFix * UFix * Poly Integer -> Void))
+  (define (arr-set! mat n i j value)
     "Write flat-array matrix entry (i, j) with row width N."
     (array:set! mat (+ (* i n) j) value))
 
-  (declare %arr-swap-rows! (array:LispArray (Poly Integer) * UFix * UFix * UFix -> Void))
-  (define (%arr-swap-rows! mat n i j)
+  (declare arr-swap-rows! (array:LispArray (Poly Integer) * UFix * UFix * UFix -> Void))
+  (define (arr-swap-rows! mat n i j)
     "Swap rows I and J in-place."
     (loops:dotimes (col n)
-      (let tmp = (%arr-get mat n i col))
-      (%arr-set! mat n i col (%arr-get mat n j col))
-      (%arr-set! mat n j col tmp)))
+      (let tmp = (arr-get mat n i col))
+      (arr-set! mat n i col (arr-get mat n j col))
+      (arr-set! mat n j col tmp)))
 
-  (declare %arr-find-nonzero-row (array:LispArray (Poly Integer) * UFix * UFix * UFix -> (Optional UFix)))
-  (define (%arr-find-nonzero-row mat n start col)
+  (declare arr-find-nonzero-row (array:LispArray (Poly Integer) * UFix * UFix * UFix -> (Optional UFix)))
+  (define (arr-find-nonzero-row mat n start col)
     "Find row index >= START with nonzero entry in column COL."
     (rec go ((r start))
-      (if (>= r n)
-          None
-          (if (%poly-int-zero? (%arr-get mat n r col))
-              (go (+ r 1))
-              (Some r)))))
+      (cond
+        ((>= r n)
+         None)
+        ((poly-int-zero? (arr-get mat n r col))
+         (go (+ r 1)))
+        (True
+         (Some r)))))
 
-  (declare %fill-sylvester-block! (array:LispArray (Poly Integer)
+  (declare fill-sylvester-block! (array:LispArray (Poly Integer)
                                     * UFix
                                     * UFix
                                     * UFix
                                     * List (Poly Integer)
                                     -> Void))
-  (define (%fill-sylvester-block! mat n row-start count coeffs)
+  (define (fill-sylvester-block! mat n row-start count coeffs)
     "Fill COUNT shifted Sylvester rows into pre-allocated array."
     (loops:dotimes (shift count)
       (rec go ((rest coeffs)
@@ -1321,145 +1333,145 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
         (match rest
           ((Nil) (values))
           ((Cons c more)
-           (%arr-set! mat n (+ row-start shift) col c)
+           (arr-set! mat n (+ row-start shift) col c)
            (go more (+ col 1)))))))
 
-  (declare %sylvester-matrix-arr (Poly (Poly Integer)
+  (declare sylvester-matrix-arr (Poly (Poly Integer)
                                    * Poly (Poly Integer)
                                    -> (Tuple UFix (array:LispArray (Poly Integer)))))
-  (define (%sylvester-matrix-arr a b)
+  (define (sylvester-matrix-arr a b)
     "Build the Sylvester matrix as a flat array. Returns (size, array)."
-    (let ta = (%tpoly-trim a))
-    (let tb = (%tpoly-trim b))
-    (let m = (%to-ufix (%tpoly-degree ta)))
-    (let nn = (%to-ufix (%tpoly-degree tb)))
+    (let ta = (tpoly-trim a))
+    (let tb = (tpoly-trim b))
+    (let m = (to-ufix (tpoly-degree ta)))
+    (let nn = (to-ufix (tpoly-degree tb)))
     (let size = (+ m nn))
-    (let mat = (array:make (* size size) %poly-int-zero))
-    (%fill-sylvester-block! mat size 0 nn (coefficients ta))
-    (%fill-sylvester-block! mat size nn m (coefficients tb))
+    (let mat = (array:make (* size size) poly-int-zero))
+    (fill-sylvester-block! mat size 0 nn (coefficients ta))
+    (fill-sylvester-block! mat size nn m (coefficients tb))
     (Tuple size mat))
 
-  (declare %bareiss-update-arr! (array:LispArray (Poly Integer)
+  (declare bareiss-update-arr! (array:LispArray (Poly Integer)
                                   * UFix
                                   * UFix
                                   * Poly Integer
                                   * Poly Integer
                                   -> Void))
-  (define (%bareiss-update-arr! mat n k pivot prev)
+  (define (bareiss-update-arr! mat n k pivot prev)
     "One Bareiss elimination step, in-place on flat array."
     (let ((n1 (- n 1)))
       (rec go-i ((i (+ k 1)))
         (when (<= i n1)
-          (let ((a-ik (%arr-get mat n i k)))
+          (let ((a-ik (arr-get mat n i k)))
             (rec go-j ((j (+ k 1)))
               (when (<= j n1)
-                (let ((a-ij (%arr-get mat n i j))
-                      (a-kj (%arr-get mat n k j)))
-                  (let ((num (%poly-int-sub (%poly-int-mul a-ij pivot)
-                                            (%poly-int-mul a-ik a-kj))))
+                (let ((a-ij (arr-get mat n i j))
+                      (a-kj (arr-get mat n k j)))
+                  (let ((num (poly-int-sub (poly-int-mul a-ij pivot)
+                                            (poly-int-mul a-ik a-kj))))
                     (let ((new-val (if (== k 0)
                                       num
-                                      (%poly-int-div-exact num prev))))
-                      (%arr-set! mat n i j new-val)
+                                      (poly-int-div-exact num prev))))
+                      (arr-set! mat n i j new-val)
                       (go-j (+ j 1)))))))
             ;; Zero below pivot in column k
-            (%arr-set! mat n i k %poly-int-zero)
+            (arr-set! mat n i k poly-int-zero)
             (go-i (+ i 1)))))))
 
-  (declare %bareiss-det-zpoly-arr (UFix * array:LispArray (Poly Integer) -> Poly Integer))
-  (define (%bareiss-det-zpoly-arr n mat)
+  (declare bareiss-det-zpoly-arr (UFix * array:LispArray (Poly Integer) -> Poly Integer))
+  (define (bareiss-det-zpoly-arr n mat)
     "Fraction-free Bareiss determinant over Z[z] using flat array."
     (cond
-      ((== n 0) %poly-int-one)
-      ((== n 1) (%arr-get mat n 0 0))
+      ((== n 0) poly-int-one)
+      ((== n 1) (arr-get mat n 0 0))
       (True
        (rec go ((k (the UFix 0))
                 (det-sign 1)
-                (prev %poly-int-one))
+                (prev poly-int-one))
          (cond
            ((>= k (- n 1))
-            (let ((det (%arr-get mat n (- n 1) (- n 1))))
+            (let ((det (arr-get mat n (- n 1) (- n 1))))
               (if (== det-sign 1)
                   det
-                  (%poly-int-neg det))))
+                  (poly-int-neg det))))
            (True
-            (let ((pivot0 (%arr-get mat n k k)))
-              (if (%poly-int-zero? pivot0)
-                  (match (%arr-find-nonzero-row mat n (+ k 1) k)
-                    ((None) %poly-int-zero)
+            (let ((pivot0 (arr-get mat n k k)))
+              (if (poly-int-zero? pivot0)
+                  (match (arr-find-nonzero-row mat n (+ k 1) k)
+                    ((None) poly-int-zero)
                     ((Some swap-row)
-                     (%arr-swap-rows! mat n k swap-row)
+                     (arr-swap-rows! mat n k swap-row)
                      (go k
                          (negate det-sign)
                          prev)))
                   (progn
-                    (%bareiss-update-arr! mat n k pivot0 prev)
+                    (bareiss-update-arr! mat n k pivot0 prev)
                     (go (+ k 1)
                         det-sign
                         pivot0))))))))))
 
-  (declare %resultant-tpoly (Poly (Poly Integer) * Poly (Poly Integer) -> Poly Integer))
-  (define (%resultant-tpoly a b)
+  (declare resultant-tpoly (Poly (Poly Integer) * Poly (Poly Integer) -> Poly Integer))
+  (define (resultant-tpoly a b)
     "Resultant in t, returned as a polynomial in z."
-    (let ta = (%tpoly-trim a))
-    (let tb = (%tpoly-trim b))
-    (let m = (%tpoly-degree ta))
-    (let nn = (%tpoly-degree tb))
-    (if (or (%tpoly-zero? ta)
-            (%tpoly-zero? tb))
-        %poly-int-zero
+    (let ta = (tpoly-trim a))
+    (let tb = (tpoly-trim b))
+    (let m = (tpoly-degree ta))
+    (let nn = (tpoly-degree tb))
+    (if (or (tpoly-zero? ta)
+            (tpoly-zero? tb))
+        poly-int-zero
         (cond
           ((== m 0)
-           (%poly-int-expt (%tpoly-leading ta) nn))
+           (poly-int-expt (tpoly-leading ta) nn))
           ((== nn 0)
-           (%poly-int-expt (%tpoly-leading tb) m))
+           (poly-int-expt (tpoly-leading tb) m))
           (True
-           (match (%sylvester-matrix-arr ta tb)
+           (match (sylvester-matrix-arr ta tb)
              ((Tuple size mat)
-              (%bareiss-det-zpoly-arr size mat)))))))
+              (bareiss-det-zpoly-arr size mat)))))))
 
-  (declare %poly-for-sum (RealAlgebraic * RealAlgebraic -> Poly Integer))
-  (define (%poly-for-sum x y)
+  (declare poly-for-sum (RealAlgebraic * RealAlgebraic -> Poly Integer))
+  (define (poly-for-sum x y)
     "Construct elimination polynomial for x + y."
-    (%poly-int-primitive
-     (%resultant-tpoly (%int-poly->tpoly (defining-polynomial x))
-                       (%substitute-z-minus-t (defining-polynomial y)))))
+    (poly-int-primitive
+     (resultant-tpoly (int-poly->tpoly (defining-polynomial x))
+                       (substitute-z-minus-t (defining-polynomial y)))))
 
-  (declare %poly-for-diff (RealAlgebraic * RealAlgebraic -> Poly Integer))
-  (define (%poly-for-diff x y)
+  (declare poly-for-diff (RealAlgebraic * RealAlgebraic -> Poly Integer))
+  (define (poly-for-diff x y)
     "Construct elimination polynomial for x - y."
-    (%poly-int-primitive
-     (%resultant-tpoly (%int-poly->tpoly (defining-polynomial x))
-                       (%substitute-t-minus-z (defining-polynomial y)))))
+    (poly-int-primitive
+     (resultant-tpoly (int-poly->tpoly (defining-polynomial x))
+                       (substitute-t-minus-z (defining-polynomial y)))))
 
-  (declare %poly-for-prod (RealAlgebraic * RealAlgebraic -> Poly Integer))
-  (define (%poly-for-prod x y)
+  (declare poly-for-prod (RealAlgebraic * RealAlgebraic -> Poly Integer))
+  (define (poly-for-prod x y)
     "Construct elimination polynomial for x * y."
-    (%poly-int-primitive
-     (%resultant-tpoly (%int-poly->tpoly (defining-polynomial x))
-                       (%substitute-z-over-t-scaled (defining-polynomial y)))))
+    (poly-int-primitive
+     (resultant-tpoly (int-poly->tpoly (defining-polynomial x))
+                       (substitute-z-over-t-scaled (defining-polynomial y)))))
 
-  (declare %poly-for-quot (RealAlgebraic * RealAlgebraic -> Poly Integer))
-  (define (%poly-for-quot x y)
+  (declare poly-for-quot (RealAlgebraic * RealAlgebraic -> Poly Integer))
+  (define (poly-for-quot x y)
     "Construct elimination polynomial for x / y."
-    (%poly-int-primitive
-     (%resultant-tpoly (%int-poly->tpoly (defining-polynomial y))
-                       (%substitute-z-times-t (defining-polynomial x)))))
+    (poly-int-primitive
+     (resultant-tpoly (int-poly->tpoly (defining-polynomial y))
+                       (substitute-z-times-t (defining-polynomial x)))))
 
-  (declare %interval-sum (RealAlgebraic * RealAlgebraic -> (Tuple Fraction Fraction)))
-  (define (%interval-sum x y)
+  (declare interval-sum (RealAlgebraic * RealAlgebraic -> (Tuple Fraction Fraction)))
+  (define (interval-sum x y)
     "Sound enclosure for x + y."
     (Tuple (+ (lower-bound x) (lower-bound y))
            (+ (upper-bound x) (upper-bound y))))
 
-  (declare %interval-diff (RealAlgebraic * RealAlgebraic -> (Tuple Fraction Fraction)))
-  (define (%interval-diff x y)
+  (declare interval-diff (RealAlgebraic * RealAlgebraic -> (Tuple Fraction Fraction)))
+  (define (interval-diff x y)
     "Sound enclosure for x - y."
     (Tuple (- (lower-bound x) (upper-bound y))
            (- (upper-bound x) (lower-bound y))))
 
-  (declare %interval-prod (RealAlgebraic * RealAlgebraic -> (Tuple Fraction Fraction)))
-  (define (%interval-prod x y)
+  (declare interval-prod (RealAlgebraic * RealAlgebraic -> (Tuple Fraction Fraction)))
+  (define (interval-prod x y)
     "Sound enclosure for x * y."
     (let a = (lower-bound x))
     (let b = (upper-bound x))
@@ -1472,9 +1484,9 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
     (Tuple (min v1 (min v2 (min v3 v4)))
            (max v1 (max v2 (max v3 v4)))))
 
-  (declare %interval-quot (RealAlgebraic * RealAlgebraic -> (Optional (Tuple Fraction Fraction))))
-  (declare %interval-quot-nonzero (RealAlgebraic * RealAlgebraic -> (Tuple Fraction Fraction)))
-  (define (%interval-quot-nonzero x y)
+  (declare interval-quot (RealAlgebraic * RealAlgebraic -> (Optional (Tuple Fraction Fraction))))
+  (declare interval-quot-nonzero (RealAlgebraic * RealAlgebraic -> (Tuple Fraction Fraction)))
+  (define (interval-quot-nonzero x y)
     "Sound enclosure for x / y assuming denominator interval excludes zero."
     (let a = (lower-bound x))
     (let b = (upper-bound x))
@@ -1487,96 +1499,96 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
     (Tuple (min v1 (min v2 (min v3 v4)))
            (max v1 (max v2 (max v3 v4)))))
 
-  (define (%interval-quot x y)
+  (define (interval-quot x y)
     "Sound enclosure for x / y when denominator interval excludes zero."
     (let c = (lower-bound y))
     (let d = (upper-bound y))
     (if (and (<= c 0) (<= 0 d))
         None
-        (Some (%interval-quot-nonzero x y))))
+        (Some (interval-quot-nonzero x y))))
 
-  (declare %select-operation-root (Poly Integer
+  (declare select-operation-root (Poly Integer
                                    * (RealAlgebraic * RealAlgebraic -> (Optional (Tuple Fraction Fraction)))
                                    * RealAlgebraic
                                    * RealAlgebraic
                                    -> RealAlgebraic))
-  (define (%select-operation-root raw-poly interval-fn x y)
+  (define (select-operation-root raw-poly interval-fn x y)
     "Select the unique arithmetic result root by adaptive refinement."
-    (match (%poly-int-squarefree-primitive raw-poly)
+    (match (poly-int-squarefree-primitive raw-poly)
       ((Err msg) (error msg))
       ((Ok normalized)
-       (let sturm = (%sturm-sequence-desc normalized))
+       (let sturm = (sturm-sequence-desc normalized))
        (rec search ((a x)
                     (b y))
          (match (interval-fn a b)
            ((None)
             ;; Quotient case can fail if denominator enclosure straddles zero.
-            (search a (%refine-native b)))
+            (search a (refine-native b)))
            ((Some (Tuple lo hi))
             (if (>= lo hi)
-                (match (%refine-wider a b)
+                (match (refine-wider a b)
                   ((Tuple na nb)
                    (search na nb)))
-                (match (%nudge-interval normalized lo hi)
+                (match (nudge-interval normalized lo hi)
                   ((Tuple nl nh)
-                   (match (%make-realalgebraic-certified normalized sturm nl nh)
+                   (match (make-realalgebraic-certified normalized sturm nl nh)
                      ((Ok result)
                       result)
                      ((Err _)
-                      (match (%refine-wider a b)
+                      (match (refine-wider a b)
                         ((Tuple na nb)
                          (search na nb))))))))))))))
 
-  (declare %add-certified (RealAlgebraic * RealAlgebraic -> RealAlgebraic))
-  (define (%add-certified x y)
+  (declare add-certified (RealAlgebraic * RealAlgebraic -> RealAlgebraic))
+  (define (add-certified x y)
     "Certified addition."
-    (%select-operation-root (%poly-for-sum x y)
+    (select-operation-root (poly-for-sum x y)
                             (fn (a b)
-                              (Some (%interval-sum a b)))
+                              (Some (interval-sum a b)))
                             x
                             y))
 
-  (declare %sub-certified (RealAlgebraic * RealAlgebraic -> RealAlgebraic))
-  (define (%sub-certified x y)
+  (declare sub-certified (RealAlgebraic * RealAlgebraic -> RealAlgebraic))
+  (define (sub-certified x y)
     "Certified subtraction."
-    (%select-operation-root (%poly-for-diff x y)
+    (select-operation-root (poly-for-diff x y)
                             (fn (a b)
-                              (Some (%interval-diff a b)))
+                              (Some (interval-diff a b)))
                             x
                             y))
 
-  (declare %mul-certified (RealAlgebraic * RealAlgebraic -> RealAlgebraic))
-  (define (%mul-certified x y)
+  (declare mul-certified (RealAlgebraic * RealAlgebraic -> RealAlgebraic))
+  (define (mul-certified x y)
     "Certified multiplication."
-    (%select-operation-root (%poly-for-prod x y)
+    (select-operation-root (poly-for-prod x y)
                             (fn (a b)
-                              (Some (%interval-prod a b)))
+                              (Some (interval-prod a b)))
                             x
                             y))
 
-  (declare %div-certified (RealAlgebraic * RealAlgebraic -> RealAlgebraic))
-  (define (%div-certified x y)
+  (declare div-certified (RealAlgebraic * RealAlgebraic -> RealAlgebraic))
+  (define (div-certified x y)
     "Certified division."
-    (if (%zero-ra? y)
+    (if (zero-ra? y)
         (error "Division by zero algebraic number.")
-        (%select-operation-root (%poly-for-quot x y)
-                                %interval-quot
+        (select-operation-root (poly-for-quot x y)
+                                interval-quot
                                 x
                                 y)))
 
-  (declare %reciprocal-certified (RealAlgebraic -> RealAlgebraic))
-  (define (%reciprocal-certified x)
+  (declare reciprocal-certified (RealAlgebraic -> RealAlgebraic))
+  (define (reciprocal-certified x)
     "Certified reciprocal."
-    (if (%zero-ra? x)
+    (if (zero-ra? x)
         (error "Division by zero: reciprocal of algebraic zero is undefined.")
         (let ((one (from-integer 1)))
-          (%select-operation-root (%poly-for-quot one x)
-                                  %interval-quot
+          (select-operation-root (poly-for-quot one x)
+                                  interval-quot
                                   one
                                   x))))
 
-  (declare %pow-ra-positive (Integer * RealAlgebraic -> RealAlgebraic))
-  (define (%pow-ra-positive n x)
+  (declare pow-ra-positive (Integer * RealAlgebraic -> RealAlgebraic))
+  (define (pow-ra-positive n x)
     "Raise `x` to a nonnegative integer power exactly."
     (if (negative? n)
         (error "Internal error: expected nonnegative exponent.")
@@ -1586,36 +1598,36 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
           (if (== e 0)
               result
               (go (if (== (rem e 2) 1)
-                      (%mul-certified result base)
+                      (mul-certified result base)
                       result)
-                  (%mul-certified base base)
+                  (mul-certified base base)
                   (quot e 2))))))
 
-  (declare %poly-compose-nth-power (Poly Integer * Integer -> Poly Integer))
-  (define (%poly-compose-nth-power p n)
+  (declare poly-compose-nth-power (Poly Integer * Integer -> Poly Integer))
+  (define (poly-compose-nth-power p n)
     "Return q(y) = p(y^n) for integer polynomial `p` and `n > 0`."
     (if (<= n 0)
         (error "Internal error: expected positive nth-root index.")
-        (match (%poly-trim-desc p)
+        (match (poly-trim-desc p)
           ((Poly coeffs)
-           (%poly-trim-desc
+           (poly-trim-desc
             (rec go ((rest coeffs)
-                     (acc %poly-int-zero)
-                     (yn (%poly-int-monomial 1 n)))
+                     (acc poly-int-zero)
+                     (yn (poly-int-monomial 1 n)))
               (match rest
                 ((Nil) acc)
                 ((Cons c more)
                  (go more
-                     (%poly-int-add (%poly-int-mul acc yn)
-                                    (%zconst c))
+                     (poly-int-add (poly-int-mul acc yn)
+                                    (zconst c))
                      yn)))))))))
 
-  (declare %nth-root-certified-positive-index (Integer * RealAlgebraic -> RealAlgebraic))
-  (define (%nth-root-certified-positive-index n x)
+  (declare nth-root-certified-positive-index (Integer * RealAlgebraic -> RealAlgebraic))
+  (define (nth-root-certified-positive-index n x)
     "Certified real nth-root for `n > 0` on a domain where a real root exists.
 
 For even `n`, this selects the principal (nonnegative) root."
-    (let p = (%poly-compose-nth-power (defining-polynomial x) n))
+    (let p = (poly-compose-nth-power (defining-polynomial x) n))
     (match (real-roots (coefficients p))
       ((Err _)
        (error "Internal error: failed to isolate real roots for nth-root."))
@@ -1625,11 +1637,11 @@ For even `n`, this selects the principal (nonnegative) root."
            ((Nil)
            (error "Internal error: no compatible nth-root candidate found."))
            ((Cons r more)
-            (if (and (match (%compare-certified (%pow-ra-positive n r) x)
+            (if (and (match (compare-certified (pow-ra-positive n r) x)
                        ((EQ) True)
                        (_ False))
                      (or (== (rem n 2) 1)
-                         (match (%compare-certified r (from-integer 0))
+                         (match (compare-certified r (from-integer 0))
                            ((LT) False)
                            (_ True))))
                 r
@@ -1643,12 +1655,12 @@ For even `n`, this selects the principal (nonnegative) root."
   (declare degree (RealAlgebraic -> Integer))
   (define (degree x)
     "Return the degree of `x`'s current defining polynomial."
-    (%poly-degree-desc (defining-polynomial x)))
+    (poly-degree-desc (defining-polynomial x)))
 
   (declare refine (RealAlgebraic -> RealAlgebraic))
   (define (refine x)
     "Return a strictly tighter certified isolating interval for `x`."
-    (%refine-native x))
+    (refine-native x))
 
   (declare refine-to-width (Fraction * RealAlgebraic -> RealAlgebraic))
   (define (refine-to-width width x)
@@ -1662,18 +1674,18 @@ For even `n`, this selects the principal (nonnegative) root."
                      (lower-bound current))
                   width)
               current
-              (go (%refine-native current))))))
+              (go (refine-native current))))))
 
   (declare approx (UFix * RealAlgebraic -> Fraction))
   (define (approx bits x)
     "Return a rational approximation `q` such that `|q - x| < 2^-bits`."
-    (let tight = (refine-to-width (%approx-eps bits) x))
+    (let tight = (refine-to-width (approx-eps bits) x))
     (/ (+ (lower-bound tight)
           (upper-bound tight))
        2))
 
-  (declare %integer->string (Integer -> String))
-  (declare %fraction->string (Fraction -> String))
+  (declare integer->string (Integer -> String))
+  (declare fraction->string (Fraction -> String))
 
   (declare show (RealAlgebraic -> String))
   (define (show x)
@@ -1691,42 +1703,42 @@ debugging, proof traces, and serialization diagnostics."
              ((Nil) "0")
              ((Cons c rest)
               (rec go ((xs rest)
-                       (acc (%integer->string c)))
+                       (acc (integer->string c)))
                 (match xs
                   ((Nil) acc)
                   ((Cons y more)
-                   (go more (<> acc (<> " " (%integer->string y))))))))))))
+                   (go more (<> acc (<> " " (integer->string y))))))))))))
       (mconcat (make-list "AlgRoot{poly=("
                           coeffs
                           "), interval=("
-                          (%fraction->string lo)
+                          (fraction->string lo)
                           ", "
-                          (%fraction->string hi)
+                          (fraction->string hi)
                           ")}"))))
 
 
-  (define (%integer->string n)
+  (define (integer->string n)
     "Render an integer to base-10 text."
     (lisp (-> String) (n)
       (cl:format cl:nil "~D" n)))
 
-  (define (%fraction->string q)
+  (define (fraction->string q)
     "Render an exact rational using Common Lisp's canonical ratio syntax."
     (lisp (-> String) (q)
       (cl:format cl:nil "~A" q)))
 
-  (declare %pow10 (UFix -> Integer))
-  (define (%pow10 digits)
+  (declare pow10 (UFix -> Integer))
+  (define (pow10 digits)
     "Compute 10^digits exactly."
     (^ 10 digits))
 
-  (declare %fixed-fractional-digits (UFix * Integer -> String))
-  (define (%fixed-fractional-digits digits value)
+  (declare fixed-fractional-digits (UFix * Integer -> String))
+  (define (fixed-fractional-digits digits value)
     "Render VALUE as exactly DIGITS base-10 digits (with leading zeros)."
     (if (== digits 0)
         ""
         (rec go ((remaining digits)
-                 (place (%pow10 (- digits 1)))
+                 (place (pow10 (- digits 1)))
                  (rest value))
           (if (== remaining 0)
               ""
@@ -1735,20 +1747,20 @@ debugging, proof traces, and serialization diagnostics."
                       (next-place (if (== place 1)
                                       1
                                       (floor/ place 10))))
-                (<> (%integer->string digit)
+                (<> (integer->string digit)
                     (go (- remaining 1)
                         next-place
                         next-rest)))))))
 
-  (declare %rational->fixed-decimal (Fraction * UFix -> String))
-  (define (%rational->fixed-decimal q digits)
+  (declare rational->fixed-decimal (Fraction * UFix -> String))
+  (define (rational->fixed-decimal q digits)
     "Render rational Q in fixed-point decimal with DIGITS places.
 
 Rounding is half-up at the final digit, computed with exact integer arithmetic."
     (let neg = (negative? q))
     (let n = (abs (numerator q)))
     (let d = (denominator q))
-    (let scale = (%pow10 digits))
+    (let scale = (pow10 digits))
     ;; floor(q*10^digits + 1/2) for non-negative q.
     (let scaled-rounded = (floor/ (+ (* 2 (* n scale)) d)
                                   (* 2 d)))
@@ -1756,11 +1768,11 @@ Rounding is half-up at the final digit, computed with exact integer arithmetic."
     (let fractional-part = (- scaled-rounded (* integer-part scale)))
     (let sign-prefix = (if neg "-" ""))
     (if (== digits 0)
-        (<> sign-prefix (%integer->string integer-part))
+        (<> sign-prefix (integer->string integer-part))
         (mconcat (make-list sign-prefix
-                            (%integer->string integer-part)
+                            (integer->string integer-part)
                             "."
-                            (%fixed-fractional-digits digits fractional-part)))))
+                            (fixed-fractional-digits digits fractional-part)))))
 
 
   (declare decimal-string (UFix * RealAlgebraic -> String))
@@ -1769,129 +1781,141 @@ Rounding is half-up at the final digit, computed with exact integer arithmetic."
 
 `digits` is the number of digits after the decimal point. Rounding is half-up
 and computed from exact rational arithmetic."
-    (let scale = (%pow10 (+ digits 2)))
+    (let scale = (pow10 (+ digits 2)))
     (let tight = (refine-to-width (/ 1 (fromInt scale)) x))
     (let q = (/ (+ (lower-bound tight)
                    (upper-bound tight))
                 2))
-    (%rational->fixed-decimal q digits))
+    (rational->fixed-decimal q digits))
 
-  (declare %positive-divisors (Integer -> List Integer))
-  (define (%positive-divisors n)
+  (declare positive-divisors (Integer -> List Integer))
+  (define (positive-divisors n)
     "Enumerate positive divisors of |n|."
     (let n0 = (abs n))
     (let limit = (isqrt n0))
-    (if (== n0 0)
-        Nil
-        (rec go ((k 1)
-                 (small Nil)
-                 (large Nil))
-          (if (> k limit)
-              (coalton/list:append (coalton/list:reverse small) large)
-              (if (== (rem n0 k) 0)
-                  (if (== (quot n0 k) k)
-                      (go (+ k 1) (Cons k small) large)
-                      (go (+ k 1)
-                          (Cons k small)
-                          (Cons (quot n0 k) large)))
-                  (go (+ k 1) small large))))))
+    (cond
+      ((== n0 0)
+       Nil)
+      (True
+       (rec go ((k 1)
+                (small Nil)
+                (large Nil))
+         (cond
+           ((> k limit)
+            (coalton/list:append (coalton/list:reverse small) large))
+           ((/= (rem n0 k) 0)
+            (go (+ k 1) small large))
+           ((== (quot n0 k) k)
+            (go (+ k 1) (Cons k small) large))
+           (True
+            (go (+ k 1)
+                (Cons k small)
+                (Cons (quot n0 k) large))))))))
 
-  (declare %list-last-int-strict (List Integer -> Integer))
-  (define (%list-last-int-strict xs)
+  (declare list-last-int-strict (List Integer -> Integer))
+  (define (list-last-int-strict xs)
     "Return final list element, or raise for empty input."
     (match xs
       ((Nil) (error "Internal error: expected non-empty polynomial coefficients."))
       ((Cons x (Nil)) x)
-      ((Cons _ rest) (%list-last-int-strict rest))))
+      ((Cons _ rest) (list-last-int-strict rest))))
 
-  (declare %candidate-rational-root? (Poly Integer * Fraction * Fraction * Fraction -> Boolean))
-  (define (%candidate-rational-root? p lo hi q)
+  (declare candidate-rational-root? (Poly Integer * Fraction * Fraction * Fraction -> Boolean))
+  (define (candidate-rational-root? p lo hi q)
     "Check whether q is certified to be the represented root."
     (and (<= lo q)
          (<= q hi)
-         (== (%poly-eval-desc-fraction p q) 0)))
+         (== (poly-eval-desc-fraction p q) 0)))
 
-  (declare %try-rational-for-denominator (Poly Integer
+  (declare try-rational-for-denominator (Poly Integer
                                           * Fraction
                                           * Fraction
                                           * Integer
                                           * List Integer
                                           -> (Optional Fraction)))
-  (define (%try-rational-for-denominator p lo hi den nums)
+  (define (try-rational-for-denominator p lo hi den nums)
     "Try p/den candidates for all allowed numerators p."
     (match nums
       ((Nil) None)
       ((Cons n more)
-       (if (/= (gcd n den) 1)
-           (%try-rational-for-denominator p lo hi den more)
-           (let ((q (mkFraction n den)))
-             (if (%candidate-rational-root? p lo hi q)
-                 (Some q)
-                 (let ((nq (negate q)))
-                   (if (%candidate-rational-root? p lo hi nq)
-                       (Some nq)
-                       (%try-rational-for-denominator p lo hi den more)))))))))
+       (cond
+         ((/= (gcd n den) 1)
+          (try-rational-for-denominator p lo hi den more))
+         (True
+          (let ((q (mkFraction n den)))
+            (cond
+              ((candidate-rational-root? p lo hi q)
+               (Some q))
+              (True
+               (let ((nq (negate q)))
+                 (cond
+                   ((candidate-rational-root? p lo hi nq)
+                    (Some nq))
+                   (True
+                    (try-rational-for-denominator p lo hi den more))))))))))))
 
-  (declare %try-rational-candidates (Poly Integer
+  (declare try-rational-candidates (Poly Integer
                                      * Fraction
                                      * Fraction
                                      * List Integer
                                      * List Integer
                                      -> (Optional Fraction)))
-  (define (%try-rational-candidates p lo hi dens nums)
+  (define (try-rational-candidates p lo hi dens nums)
     "Search rational-root-theorem candidates q = p/r with p|a0 and r|an."
     (match dens
       ((Nil) None)
       ((Cons d more)
-       (match (%try-rational-for-denominator p lo hi d nums)
+       (match (try-rational-for-denominator p lo hi d nums)
          ((Some q) (Some q))
-         ((None) (%try-rational-candidates p lo hi more nums))))))
+         ((None) (try-rational-candidates p lo hi more nums))))))
 
-  (declare %linear-rational-root (Poly Integer -> (Optional Fraction)))
-  (define (%linear-rational-root p)
+  (declare linear-rational-root (Poly Integer -> (Optional Fraction)))
+  (define (linear-rational-root p)
     "Extract exact root for a linear polynomial an*x + a0."
-    (match (%poly-trim-desc p)
+    (match (poly-trim-desc p)
       ((Poly (Cons an (Cons a0 (Nil))))
        (if (== an 0)
            None
            (Some (mkFraction (negate a0) an))))
       (_ None)))
 
-  (declare %rational-certificate (RealAlgebraic -> (Optional Fraction)))
-  (define (%rational-certificate x)
+  (declare rational-certificate (RealAlgebraic -> (Optional Fraction)))
+  (define (rational-certificate x)
     "Return a certified exact rational value when one can be proved.
 
 For degree 1 this is direct. For higher degree we apply the rational root
 theorem and certify by exact substitution in the defining polynomial."
-    (let p0 = (%poly-trim-desc (defining-polynomial x)))
+    (let p0 = (poly-trim-desc (defining-polynomial x)))
     (let lo = (lower-bound x))
     (let hi = (upper-bound x))
-    (let deg = (%poly-degree-desc p0))
+    (let deg = (poly-degree-desc p0))
     (cond
       ((<= deg 0)
        None)
       ((== deg 1)
-       (match (%linear-rational-root p0)
+       (match (linear-rational-root p0)
          ((Some q)
-          (if (%candidate-rational-root? p0 lo hi q)
+          (if (candidate-rational-root? p0 lo hi q)
               (Some q)
               None))
          ((None) None)))
       (True
-       (let ((lead (abs (%poly-int-leading p0)))
-             (constant (abs (%list-last-int-strict (coefficients p0)))))
-         (if (== constant 0)
-             (if (%candidate-rational-root? p0 lo hi 0)
-                 (Some 0)
-                 None)
-             (let ((dens (%positive-divisors lead))
-                   (nums (%positive-divisors constant)))
-               (%try-rational-candidates p0 lo hi dens nums)))))))
+       (let ((lead (abs (poly-int-leading p0)))
+             (constant (abs (list-last-int-strict (coefficients p0)))))
+         (cond
+           ((== constant 0)
+            (if (candidate-rational-root? p0 lo hi 0)
+                (Some 0)
+                None))
+           (True
+            (let ((dens (positive-divisors lead))
+                  (nums (positive-divisors constant)))
+              (try-rational-candidates p0 lo hi dens nums))))))))
 
   (declare rational? (RealAlgebraic -> Boolean))
   (define (rational? x)
     "Return `True` when `x` is rational, decided by the rational root theorem."
-    (match (%rational-certificate x)
+    (match (rational-certificate x)
       ((Some _) True)
       ((None) False)))
 
@@ -1900,14 +1924,14 @@ theorem and certify by exact substitution in the defining polynomial."
     "Attempt to extract an exact rational value for `x`.
 
 Returns `None` when `x` is not known to be rational."
-    (match (%rational-certificate x)
+    (match (rational-certificate x)
       ((Some q) (Some q))
       ((None) None)))
 
-  (declare %integer-certificate (RealAlgebraic -> (Optional Integer)))
-  (define (%integer-certificate x)
+  (declare integer-certificate (RealAlgebraic -> (Optional Integer)))
+  (define (integer-certificate x)
     "Return a certified exact integer value when one can be proved."
-    (match (%rational-certificate x)
+    (match (rational-certificate x)
       ((Some q)
        (if (== (denominator q) 1)
            (Some (numerator q))
@@ -1915,10 +1939,10 @@ Returns `None` when `x` is not known to be rational."
       ((None)
        None)))
 
-  (declare %floor-certified (RealAlgebraic -> Integer))
-  (define (%floor-certified x)
+  (declare floor-certified (RealAlgebraic -> Integer))
+  (define (floor-certified x)
     "Certified floor computed by refining until both endpoint floors agree."
-    (match (%integer-certificate x)
+    (match (integer-certificate x)
       ((Some z) z)
       ((None)
        (rec go ((a x))
@@ -1926,12 +1950,12 @@ Returns `None` when `x` is not known to be rational."
                (hi-floor (floor (upper-bound a))))
            (if (== lo-floor hi-floor)
                lo-floor
-               (go (%refine-native a))))))))
+               (go (refine-native a))))))))
 
-  (declare %ceiling-certified (RealAlgebraic -> Integer))
-  (define (%ceiling-certified x)
+  (declare ceiling-certified (RealAlgebraic -> Integer))
+  (define (ceiling-certified x)
     "Certified ceiling computed by refining until both endpoint ceilings agree."
-    (match (%integer-certificate x)
+    (match (integer-certificate x)
       ((Some z) z)
       ((None)
        (rec go ((a x))
@@ -1939,61 +1963,61 @@ Returns `None` when `x` is not known to be rational."
                (hi-ceil (ceiling (upper-bound a))))
            (if (== lo-ceil hi-ceil)
                lo-ceil
-               (go (%refine-native a))))))))
+               (go (refine-native a))))))))
 
-  (declare %truncate-certified (RealAlgebraic -> Integer))
-  (define (%truncate-certified x)
+  (declare truncate-certified (RealAlgebraic -> Integer))
+  (define (truncate-certified x)
     "Certified truncation toward zero."
-    (match (%integer-certificate x)
+    (match (integer-certificate x)
       ((Some z) z)
       ((None)
        (rec go ((a x))
          (cond
            ((< (upper-bound a) 0)
-            (%ceiling-certified a))
+            (ceiling-certified a))
            ((> (lower-bound a) 0)
-           (%floor-certified a))
-           ((%zero-ra? a)
+           (floor-certified a))
+           ((zero-ra? a)
             0)
            (True
-            (go (%refine-native a))))))))
-
-  )
+            (go (refine-native a)))))))))
 
 (coalton-toplevel
   (define-instance (Eq RealAlgebraic)
     (define (== a b)
-      (match (%compare-certified a b)
+      (match (compare-certified a b)
         ((EQ) True)
         (_ False))))
 
   (define-instance (Ord RealAlgebraic)
     (define (<=> a b)
-      (%compare-certified a b)))
+      (compare-certified a b)))
 
   (define-instance (Num RealAlgebraic)
     (define (+ a b)
-      (%add-certified a b))
+      (add-certified a b))
     (define (- a b)
-      (%sub-certified a b))
+      (sub-certified a b))
     (define (* a b)
-      (%mul-certified a b))
+      (mul-certified a b))
     (define (fromInt z)
       (from-integer z)))
 
   (define-instance (Reciprocable RealAlgebraic)
     (define (/ a b)
-      (%div-certified a b))
+      (div-certified a b))
     (define (reciprocal a)
-      (%reciprocal-certified a)))
+      (reciprocal-certified a)))
 
   (define-instance (Radical RealAlgebraic)
     (define (sqrt x)
-      (if (< x 0)
-          (error "Square root of negative real algebraic number is not real.")
-          (if (== x 0)
-              (from-integer 0)
-              (%nth-root-certified-positive-index 2 x))))
+      (cond
+        ((< x 0)
+         (error "Square root of negative real algebraic number is not real."))
+        ((== x 0)
+         (from-integer 0))
+        (True
+         (nth-root-certified-positive-index 2 x))))
     (define (nth-root n x)
       (cond
         ((<= n 0)
@@ -2005,7 +2029,7 @@ Returns `None` when `x` is not known to be rational."
         ((and (== (rem n 2) 0) (< x 0))
          (error "Even root of a negative real algebraic number is not real."))
         (True
-         (%nth-root-certified-positive-index n x)))))
+         (nth-root-certified-positive-index n x)))))
 
   (define-instance (Dividable Integer RealAlgebraic)
     (define (general/ x y)
@@ -2025,11 +2049,11 @@ Returns `None` when `x` is not known to be rational."
 
   (define-instance (Quantizable RealAlgebraic)
     (define (floor x)
-      (%floor-certified x))
+      (floor-certified x))
     (define (ceiling x)
-      (%ceiling-certified x))
+      (ceiling-certified x))
     (define (proper x)
-      (let t = (%truncate-certified x))
+      (let t = (truncate-certified x))
       (values t (- x (fromInt t)))))
 
   (define-instance (Real RealAlgebraic)
