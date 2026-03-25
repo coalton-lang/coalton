@@ -1,42 +1,15 @@
-# Intro to Coalton
+---
+title: "Whirlwind Tour of Coalton"
+description: "A broad, practical tour of Coalton's core language and workflow."
+hideMeta: true
+weight: 20
+---
 
 Coalton is a statically typed language that is embedded in, and compiles to, Common Lisp.
 
-This document is aimed toward people who are already familiar with functional programming languages. If you are already familiar with Common Lisp, the [glossary](./glossary.md) may be useful.
+This document is aimed toward people who are already familiar with functional programming languages. If you are already familiar with Common Lisp, the [glossary](https://github.com/coalton-lang/coalton/blob/main/docs/glossary.md) may be useful.
 
-## Overview
-
-This document will get into all of the details, but the main workflow is this:
-
-1. Add `coalton` as a dependency to your project. (Optionally add `coalton-asdf` if you want `.ct` file support.)
-2. Define a package which `:use`s `#:coalton` and perhaps `#:coalton-prelude`, plus any package-local nicknames for Coalton libraries you want to use.
-3. Write your Coalton code inside of `coalton-toplevel`.
-
-A minimal project might look like this:
-
-```lisp
-;;;; my-project.asd
-
-(defsystem "my-project"
-  :defsystem-depends-on ("coalton-asdf")    ; allows .ct files
-  :depends-on ("coalton")
-  :serial t
-  :components ((:ct-file "my-file")))
-
-
-;;;; my-file.ct
-
-(defpackage #:my-project/my-file
-  (:use #:coalton #:coalton-prelude)
-  (:local-nicknames (#:str #:coalton/string))
-  (:export #:hello))
-
-(in-package #:my-project/my-file)
-
-(coalton-toplevel
-  (define (hello whom)
-    (str:concat "Hello, " whom)))
-```
+{{<toc>}}
 
 ## Systems
 
@@ -189,7 +162,7 @@ The second primary entry point is calling Coalton from Lisp. In this case, one u
 
 Note that one _cannot_ make new definitions in a `coalton` form, only evaluate expressions.
 
-Whereas `coalton-toplevel` expects one or more toplevel definitions or declarations, the `coalton` form takes a single expression, evaluates it relative to the current environment, and returns its (underlying) Lisp value. This can be useful for working with Coalton from a Lisp REPL.
+Whereas `coalton-toplevel` expects one or more toplevel definitions or declarations, the `coalton` form evaluates one or more expressions relative to the current environment and returns the underlying Lisp value of the last expression. Multiple expressions are wrapped in an implicit `progn`. This can be useful for working with Coalton from a Lisp REPL.
 
 > [!IMPORTANT]
 > Remember that Coalton packages, including `#:coalton-user`, do *not* `:use` the `#:common-lisp`/`#:cl` package, so you must prepend Common Lisp symbols with `cl:` if you need them.
@@ -507,7 +480,7 @@ Parametric type aliases must be fully applied.
   (define-type-alias A (T MyCollection2)))
 ```
 
-There are several debugging tools which are useful when working with type aliases. Outside of a Coalton expression, `describe-type-of` can be used to display the type of a symbol, including its aliases, and to return the type. `describe-type-alias` displays the alias along with the aliased type and returns the aliased type. Additionally, Coalton can be configured to display only aliases, only types, or both, when displaying the type associated with a symbol. The preference can be set before compiling Coalton using `(setf (get ':coalton-config ':type-printing-mode) mode)` where `mode` is one of `:types`, `:aliases`, and `:types-and-aliases`. Thereafter, the mode can be changed among those three options using the function `set-type-printing-mode`. The default mode is `:types`.
+There are several debugging tools which are useful when working with type aliases. Outside of a Coalton expression, `describe-type-of` prints the type of a symbol together with its aliases, and `describe-type-alias` prints a diagnostic representation of an alias together with the aliased type. Both are print-only helpers and return no values. For ordinary type display, such as `(coalton (type-of expr))`, Coalton can be configured to display only aliases, only types, or both. The preference can be set before compiling Coalton using `(setf (get ':coalton-config ':type-printing-mode) mode)` where `mode` is one of `:types`, `:aliases`, and `:types-and-aliases`. Thereafter, the mode can be changed among those three options using the function `set-type-printing-mode`. The default mode is `:types`.
 
 ```lisp
 COALTON-USER> (coalton-toplevel
@@ -518,13 +491,13 @@ COALTON-USER> (coalton-toplevel
 COALTON-USER> (set-type-printing-mode :aliases)
 :ALIASES
 
-COALTON-USER> (type-of 'x)
+COALTON-USER> (coalton (type-of x))
 A
 
 COALTON-USER> (set-type-printing-mode :types-and-aliases)
 :TYPES-AND-ALIASES
 
-COALTON-USER> (type-of 'x)
+COALTON-USER> (coalton (type-of x))
 [A := INTEGER]
 
 COALTON-USER> (set-type-printing-mode :types)
@@ -533,14 +506,14 @@ COALTON-USER> (set-type-printing-mode :types)
 COALTON-USER> shifted-coordinate ;; from the example above
 #.(TUPLE 1 0)
 
-COALTON-USER> (type-of 'shifted-coordinate)
+COALTON-USER> (coalton (type-of shifted-coordinate))
 (TUPLE INTEGER INTEGER)
 
 COALTON-USER> (describe-type-of 'shifted-coordinate)
-[(PAIR COORDINATE) := (TUPLE [COORDINATE := INTEGER] [COORDINATE := INTEGER])]
+[PAIR [COORDINATE := INTEGER] := TUPLE [COORDINATE := INTEGER] [COORDINATE := INTEGER]]
 
 COALTON-USER> (describe-type-alias 'Pair)
-[(PAIR :A) := (TUPLE :A :A)]
+; prints a diagnostic representation containing [PAIR :A := TUPLE :A :A]
 ```
 
 ### Structs
@@ -965,7 +938,7 @@ Division is complicated; see the next section. But here are some quick tips.
 
 Why doesn't the `Num` type class have division, i.e., `/`?
 
-Coalton does have a division operator `/`, but it's a separate, slightly more difficult concept. Division is tricky for two reasons:
+Coalton does have a division operator `/`, but division is split into a couple of related concepts. Division is tricky for two reasons:
 
 1. Division can fail if we divide by something like zero,
 
@@ -973,18 +946,22 @@ Coalton does have a division operator `/`, but it's a separate, slightly more di
 
 To address the first concern, division may result in a run-time error. We don't use `Optional` because it is quite cumbersome to use in mathematical contexts. (One may use `safe/` for a variant that does a division-by-zero check and produces an `Optional`.)
 
-To address the second concern, we need to introduce a new type class called `Dividable`. The type expression
+To address the second concern, Coalton separates same-type division from cross-type division.
+
+The operator `/` is the method of the `Reciprocable` type class, so it performs division where the inputs and output all have the same type:
+
+```
+COALTON-USER> (describe-type-of '/)
+∀ :A. RECIPROCABLE :A ⇒ :A * :A → :A
+```
+
+For cross-type division, Coalton provides the `Dividable` type class and its method `general/`. The type expression
 
 ```
 (Dividable :s :t)
 ```
 
-says that division of two items of type `:s` may result in an item of type `:t`. With all of this, we have the final type of `/`.
-
-```
-COALTON-USER> (type-of '/)
-∀ :A :B. DIVIDABLE :A :B ⇒ (:A → :A → :B)
-```
+says that division of two items of type `:s` may result in an item of type `:t`.
 
 Because of [Instance Defaulting](#instance-defaulting), division of `Integer` constants without any additional context defaults to `F64` division:
 
@@ -993,16 +970,16 @@ COALTON-USER> (coalton (/ 1 2))
 0.5d0
 ```
 
-We can inform Coalton that our constants are of another type by constraining them with `the` or relying on type inference. For example, in order to get a non-F64 result from `Integer` inputs, you have to constrain the result type to your desired type (as long as the type has a defined instance of the `Dividable` type class):
+We can inform Coalton that our literals are of another type by constraining them with `the` or relying on type inference. For example, in order to use `/` at a type other than the defaulted `F64`, constrain it to another `Reciprocable` type:
 
 ```
 COALTON-USER> (coalton (the F32 (/ 4 2)))
 2.0
 COALTON-USER> (coalton (the Fraction (/ 4 2)))
-#.(COALTON::%FRACTION 2 1)
+2
 ```
 
-An `Integer` result from division with `/` is not possible, as the instance `Dividable Integer Integer` is not defined:
+An `Integer` result from division with `/` is not possible, because `Integer` does not implement `Reciprocable`:
 
 ```
 COALTON-USER> (coalton (the Integer (/ 4 2)))
@@ -1015,7 +992,7 @@ COALTON-USER> (coalton (the Integer (/ 4 2)))
 ;    [Condition of type COALTON-IMPL/TYPECHECKER/BASE:TC-ERROR]
 ```
 
-Why shouldn't this just be `2`?! The unfortunate answer is because `/` might not *always* produce an integer `2`, and when it doesn't divide exactly, Coalton doesn't force a particular way of rounding. As such, the proper way to do it is divide exactly, then round as you please with `floor`, `ceiling`, or `round`.
+Why shouldn't this just be `2`?! The unfortunate answer is that Coalton keeps integer division choices explicit. If you want exact rational division from integers, use `exact/`; if you want an inexact floating answer, use `inexact/`; and if you want integer division with a particular rounding rule, use `floor/`, `ceiling/`, or `round/`.
 
 ```
 COALTON-USER> (coalton (floor (the Fraction (/ 4 2))))
@@ -1033,7 +1010,7 @@ COALTON-USER> (coalton (round (the Fraction (/ 3 2))))
 2
 ```
 
-All of these cases are sufficiently common that we provide a few shorthands:
+All of these cases are sufficiently common that we provide a few shorthands built on top of `general/`:
 
 - `safe/` to do a division-by-zero check and produce `None` if so,
 
@@ -1555,7 +1532,7 @@ The Boolean operators `and` and `or` (of `coalton`) are actually variadic macros
   (or (cheap 5) True (really-expensive (expt 2 1000000))))
 ```
 
-In this case, `really-expensive` will never get called due to short-circuiting. Also note that both `and` and `or` can take one or more arguments.
+In this case, `really-expensive` will never get called due to short-circuiting. Also note that both `and` and `or` can take zero or more arguments.
 
 
 ## `COALTON:PROGN`
@@ -1768,8 +1745,7 @@ Currently, *all* member functions must be defined for each type class instance.
         ((Tuple (Red) (Red)) True)
         ((Tuple (Blue) (Blue)) True)
         ((Tuple (Green) (Green)) True)
-        (_ False)))
-    (define (/= a b) (not (== a b))))
+        (_ False))))
 
   ;; Type declarations can have constraints
   (declare is-eql (Eq :a => (:a * :a -> String)))
@@ -1838,8 +1814,9 @@ Now you can use the `==` and `hash` methods on `Point` structures:
   (== (Point 1 2) (Point 3 3))
 
   ;; Make a map using `Point' as a key
-  (let map = (the (hashmap:HashMap Point UFix) hashmap:empty))
-  (hashmap:insert map (Point 0 0) 1))
+  (let map = (the (coalton/hashmap:HashMap Point UFix)
+                  coalton/hashmap:empty))
+  (coalton/hashmap:insert map (Point 0 0) 1))
 ```
 
 The instance that is generated will be the "obvious" one in each case. For example, equality will test that every sub-field of each case is equal. This may not be desired for every type, and hence sometimes custom instances are still needed.
@@ -1855,7 +1832,7 @@ Instances of the following classes can be derived:
 
 Currently these are the only derivable classes in the standard library, but more may be added in the future.
 
-Writing custom derivers does not yet have an official API, but for the adventurous, it can be done relatively easily. For guidance, see [derivers.lisp](./../library/derivers.lisp).
+Writing custom derivers does not yet have an official API, but for the adventurous, it can be done relatively easily. For guidance, see [derivers.lisp](https://github.com/coalton-lang/coalton/blob/main/library/derivers.lisp).
 
 ## Do Notation
 
@@ -1939,9 +1916,7 @@ enclosing explicit `forall`:
 Embedded `(coalton ...)` forms inside the raw Lisp body are a separate Coalton
 compilation context. They do not inherit those lexical type-variable bindings.
 
-### Multiple Values Directive `multiple-values`
-
-For example:
+Multiple values may be returned from `lisp` just fine:
 
 ```lisp
 (coalton-toplevel
@@ -1959,20 +1934,18 @@ These values can be destructured with `let (values ...) = ...`:
   (Tuple q r)))
 ```
 
-Non-final expressions in sequencing constructs such as `progn`, `when`, `unless`, and `cond`
-may also produce zero values without requiring an explicit `let (values) = ...`.
 
 ## Inspecting the Coalton System
 
 The `coalton` package defines several debugging functions.
 
-`type-of` and `kind-of` can be used to inspect the types and kinds of definitions.
+The `type-of` Coalton expression and the `kind-of` Common Lisp helper can be used to inspect the types and kinds of definitions.
 
 ```
-COALTON-USER> (type-of 'map)
-∀ :A :B :C. FUNCTOR :C ⇒ ((:A → :B) → (:C :A) → (:C :B))
+COALTON-USER> (coalton (type-of map))
+∀ A B F. FUNCTOR F ⇒ (A → B) * F A → F B
 COALTON-USER> (kind-of 'Result)
-* -> (* -> *)
+* → (* → *)
 ```
 
 The following functions all take an optional package parameter.
@@ -1984,7 +1957,7 @@ The following functions all take an optional package parameter.
 
 ## Instance Defaulting
 
-Coalton has a similar [type defaulting system](https://www.haskell.org/onlinereport/decls.html#sect4.3.4) as Haskell. Type defaulting is invoked on implicitly typed definitions and code compiled with the `coalton` macro. Defaulting is applied to a set of ambiguous predicates, with the goal to resolve an ambiguous type variable to a valid type. Coalton will only default if one or more of the predicates is a numeric type class (`Num`, `Quantizable`, `Reciprocable`, `ComplexComponent`, `Remainder`, `Integral`). Coalton will default an ambiguous variable to either `Integer`, `F32`, or `F64`; taking the first type that is valid for all predicates referencing that type variable. Coalton will not default when one or more of the predicates containing an ambiguous variable is a multi-parameter type class.
+Coalton has a similar [type defaulting system](https://www.haskell.org/onlinereport/decls.html#sect4.3.4) as Haskell. Type defaulting is invoked on implicitly typed definitions and code compiled with the `coalton` macro. Defaulting is applied to a set of ambiguous predicates, with the goal to resolve an ambiguous type variable to a valid type. Coalton defaults ambiguous numeric variables by trying `Integer`, then `F64`, then `F32`, taking the first type that satisfies the relevant predicates. Unlike Haskell 98, Coalton can still default some predicates involving multi-parameter classes or more structured types, provided the ambiguous predicates do not introduce any other type variables.
 
 
 Differences from Haskell 98. Haskell would consider `Num (List :a)` to be ambiguous, Coalton would default it to `Num Integer`. Haskell would consider (`Num :a` `CustomTypeClass :a`) to be ambiguous, Coalton would default to (`Num Integer` `CustomTypeClass Integer`) assuming `CustomTypeClass Integer` was a valid instance.
@@ -2061,7 +2034,7 @@ Specialization can be listed in the repl with `print-specializations`.
 * Numerical operators like `+` only take 2 arguments.
 * Negation is done with `negate`. The operator `-` is a fixed-arity subtraction operator.
 
-For more details, see the [glossary](./glossary.md).
+For more details, see the [glossary](https://github.com/coalton-lang/coalton/blob/main/docs/glossary.md).
 
 ## Incomplete Features
 

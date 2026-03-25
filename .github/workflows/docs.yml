@@ -48,6 +48,12 @@ jobs:
           EOF
           sbcl --noinform --non-interactive --load run-docs.lisp --eval "(main)"
 
+      - name: Sync Manual Content
+        run: |
+          rm -rf /__w/coalton/coalton/coalton-website/content/manual
+          mkdir -p /__w/coalton/coalton/coalton-website/content/manual
+          cp -R /__w/coalton/coalton/coalton/docs/manual/site/. /__w/coalton/coalton/coalton-website/content/manual/
+
       # Create PR in website repository for changes
       - uses: peter-evans/create-pull-request@v4
         if: ${{ github.event_name == 'push' && github.ref_type == 'branch' && github.ref_name == 'main' }}
@@ -57,10 +63,15 @@ jobs:
           branch: "update-docs/${{ github.sha }}"
           base: main
           author: coalton-docs-bot <coalton-docs-bot@users.noreply.github.com>
-          commit-message: "Update Coalton documentation for coalton-lang/coalton@${{ github.sha }}"
-          title: "Update Coalton documentation"
+          commit-message: "Update Coalton website documentation for coalton-lang/coalton@${{ github.sha }}"
+          title: "Update Coalton website documentation"
           body: |
-            Update coalton standard library documentation for coalton-lang/coalton@${{ github.sha }}
+            Update Coalton website documentation for coalton-lang/coalton@${{ github.sha }}
+
+            This includes:
+
+            - the generated standard library reference
+            - the synced Coalton language manual
 
             This action was performed automatically.
           delete-branch: true

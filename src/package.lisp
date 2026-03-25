@@ -101,7 +101,6 @@
    #:for*
    #:break
    #:continue
-   #:in                                 ; Syntax
    )
 
   ;; Macros

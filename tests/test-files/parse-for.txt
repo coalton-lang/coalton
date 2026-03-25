@@ -5,7 +5,7 @@
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(define f
+(define f0
   (for ()
     (break)))
 
@@ -16,7 +16,7 @@
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(define (f n)
+(define (f1 n)
   (for :search ((declare i UFix)
                 (i 0 (1+ i)))
     :returns i
@@ -31,7 +31,7 @@
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(define (f n)
+(define (f2 n)
   (for ((declare i UFix)
         (declare acc UFix)
         (i 0 (1+ i))
@@ -49,7 +49,7 @@
 (package coalton-unit-tests/prelude
   (import coalton-prelude))
 
-(define (f n)
+(define (f3 n)
   (for* ((declare i UFix)
          (declare acc UFix)
          (i 0 (1+ i))
