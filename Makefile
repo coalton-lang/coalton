@@ -44,7 +44,7 @@ MISC_EXTENSIONS_REPO=https://gitlab.common-lisp.net/misc-extensions/misc-extensi
 NAMED_READTABLES_REPO=https://github.com/melisgl/named-readtables.git
 
 ## Supported lisps:
-SBCL_BIN ?= sbcl
+SBCL_BIN ?= sbcl --dynamic-space-size 2048
 SBCL=$(SBCL_BIN) --noinform --non-interactive
 # SBCLCLEAN=$(SBCL)
 SBCLCLEAN=$(SBCL) --no-userinit --no-sysinit
@@ -59,7 +59,7 @@ CLASP_COMP=clasp --non-interactive --norc
 # SBCL_COMP=$(SBCL)
 
 QUICKLISP=env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
-	$(SBCL) --load $(QUICKLISP_HOME)/setup.lisp
+	$(SBCL) --load $(QUICKLISP_SETUP)
 
 # deal with synonyms
 ifeq ($(LISP),clozure)
@@ -170,7 +170,7 @@ all:	install-libraries testall
 
 install-libraries: install-libraries~
 
-install-libraries~:
+install-libraries~: setup-ql
 	@LISP=$(LISP) \
 	  TIME=$(TIME) \
 	  BLDDIR="$(BLDDIR)" \
@@ -213,10 +213,10 @@ $(EXTRA_LOCAL_PROJECTS)/named-readtables/named-readtables.asd:	update-repos~
 update-repos~:
 	touch update-repos~
 
-setup-ql: $(QUICKLISP_HOME)/setup.lisp
+setup-ql: get-ql $(QUICKLISP_SETUP)
 
-$(QUICKLISP_HOME)/setup.lisp:
-	test -f $(QUICKLISP_HOME)/setup.lisp \
+$(QUICKLISP_SETUP):
+	test -f $(QUICKLISP_SETUP) \
 		|| (echo Installing Quicklisp at $(QUICKLISP_HOME) ; \
 		    cd $(QUICKLISP_HOME) ; \
 	            $(SBCL_COMP) --load "quicklisp.lisp" --eval "(quicklisp-quickstart:install :path \"$(QUICKLISP_HOME)/\")")
@@ -227,7 +227,7 @@ get-ql-libs:
 
 test-external-libraries:	install-libraries
 	for f in compat/test-external-libraries/*.lisp ; do \
-	  $(call runOnExprAndFile,$(COMP),"(load \"$(QUICKLISP_HOME)/setup.lisp\")",$${f}) ; \
+	  $(call runOnExprAndFile,$(COMP),"(load \"$(QUICKLISP_SETUP)\")",$${f}) ; \
 	done
 
 test-external-libraries-all:
@@ -261,7 +261,7 @@ clean-blddir:
 	rm -rf $(BLDDIR)/*$(LISP)*
 
 testall:	clean-blddir
-	test -f $(QUICKLISP_HOME)/setup.lisp \
+	test -f $(QUICKLISP_SETUP) \
 		|| QUICKLISP_HOME=$(QUICKLISP_HOME) make install-libraries
 	mkdir -p $(TEMP) && test -d $(TEMP)
 	mkdir -p $(TMPDIR) && test -d $(TMPDIR) ; \
@@ -377,14 +377,14 @@ parser-coverage:
 
 $(TEMP)/cleanql-$(LISP).lisp:	Makefile
 	mkdir -p $(TEMP) && test -d $(TEMP)
-	( echo '(load "'$(QUICKLISP_HOME)/setup.lisp'")' ; \
+	( echo '(load "'$(QUICKLISP_SETUP)'")' ; \
 	  echo '(push (truename "'$(COALTON_HOME)'") asdf:*central-registry*)' ; \
 	  echo '(push (truename "'$(EXTRA_LOCAL_PROJECTS)'") ql:*local-project-directories*)' ; \
 	  echo '(ql-dist:clean (ql-dist:dist "quicklisp"))' ; \
 	  echo '(format t "cleanql-'$(LISP)' asdf:*central-registry*: ~A~%" asdf:*central-registry*)' \
 	) > $(TEMP)/cleanql-$(LISP).lisp
 
-clean-quicklisp: $(TEMP)/cleanql-$(LISP).lisp
+clean-quicklisp: $(TEMP)/cleanql-$(LISP).lisp setup-ql
 	@echo "Cleaning up old projects in Quicklisp"
 	$(call runOnFile,$(COMP),$(TEMP)/cleanql-$(LISP).lisp)
 
