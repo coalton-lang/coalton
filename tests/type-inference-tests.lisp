@@ -121,14 +121,14 @@
         Unit))
 
     (define (repeat-from-binding)
-      (for ((x 10))
+      (for ((x 10 x))
         :repeat x
         (show \"hi\")))
 
     (define (for-init-binding-scope)
       (for ((declare a UFix)
             (declare b UFix)
-            (a b)
+            (a b a)
             (b 1 (+ b 1)))
         :returns b
         :while (< b 10)

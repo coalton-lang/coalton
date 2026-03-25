@@ -158,7 +158,7 @@
   "Monadic return. Wraps VALUE in the current monadic context. Equivalent to calling `pure`.")
 
 (define-coalton-editor-macro coalton:for (&rest header-and-body)
-  "Imperative iteration. Syntax: (for [label] (<binding-clause>*) [:returns expr] [(:while | :until | :repeat) expr] body...). Binding clauses are (declare var type) or (var init [step]). The binding list is required, but it may be empty, and any `:returns` clause must appear immediately after it.")
+  "Imperative iteration. Syntax: (for [label] (<binding-clause>*) [:returns expr] [(:while | :until | :repeat) expr] body...). Binding clauses are (declare var type) or (var init step). Use the variable itself as the step when it should remain constant. The binding list is required, but it may be empty, and any `:returns` clause must appear immediately after it.")
 
 (define-coalton-editor-macro coalton:for* (&rest header-and-body)
   "Imperative iteration with sequential init and step bindings. Syntax matches `for`, but bindings follow `let*`/`do*`-style visibility.")
