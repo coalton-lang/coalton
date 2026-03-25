@@ -5,19 +5,22 @@ hideMeta: true
 weight: 20
 ---
 
-`coalton` evaluates a single Coalton expression from Common Lisp.
+`coalton` evaluates one or more Coalton expressions from Common Lisp.
 
 ## Syntax
 
 ```lisp
-(coalton ⟨expr⟩)
+(coalton ⟨expr⟩ ...)
 ```
 
 ## Semantics
 
 - `coalton` is for expressions, not new definitions.
+- When more than one expression is supplied, they are evaluated as an implicit
+  `progn`.
 - It is especially useful in the REPL.
-- The result is the underlying Lisp value produced by the Coalton expression.
+- The result is the underlying Lisp value produced by the last Coalton
+  expression.
 
 ## Example
 

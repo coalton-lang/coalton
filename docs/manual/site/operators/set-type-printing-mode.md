@@ -5,7 +5,7 @@ hideMeta: true
 weight: 320
 ---
 
-`set-type-printing-mode` changes how debugging helpers render types.
+`set-type-printing-mode` changes how Coalton renders ordinary type displays.
 
 ## Syntax
 
@@ -16,10 +16,11 @@ weight: 320
 ## Semantics
 
 - `mode` must be one of `:types`, `:aliases`, or `:types-and-aliases`.
-- The setting affects functions such as
-  [`type-of`](/manual/operators/type-of/),
-  [`describe-type-of`](/manual/operators/describe-type-of/), and
-  [`describe-type-alias`](/manual/operators/describe-type-alias/).
+- The setting affects displays such as [`type-of`](/manual/operators/type-of/)
+  and other type strings shown by Coalton.
+- [`describe-type-of`](/manual/operators/describe-type-of/) and
+  [`describe-type-alias`](/manual/operators/describe-type-alias/) always print
+  their alias-rich diagnostic view directly.
 - This is a Common Lisp REPL helper for inspection workflows.
 
 ## Example

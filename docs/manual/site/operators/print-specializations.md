@@ -12,12 +12,12 @@ registered.
 
 ```lisp
 (print-specializations)
-(print-specializations '⟨package⟩)
+(print-specializations ⟨package-designator⟩)
 ```
 
 ## Semantics
 
-- The optional package argument narrows the output.
+- The optional package designator narrows the output.
 - Each entry shows the generic function type together with its specialized
   targets.
 - This is mainly useful when checking whether a `specialize` directive was

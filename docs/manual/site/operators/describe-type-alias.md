@@ -16,8 +16,10 @@ weight: 315
 ## Semantics
 
 - `describe-type-alias` is a Common Lisp debugging helper.
-- It prints the aliased type using the current type-printing configuration.
+- It prints a diagnostic representation of the alias together with its aliased
+  type.
 - If the symbol is not known as a type alias, it prints `unknown`.
+- It returns no values.
 
 ## Example
 

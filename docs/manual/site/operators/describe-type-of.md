@@ -18,10 +18,10 @@ environment.
 
 - `describe-type-of` is a Common Lisp debugging helper, not an in-language
   Coalton expression form.
-- It prints the type associated with a symbol, including aliases when the
-  current printing mode requests them.
+- It prints the type associated with a symbol together with its aliases.
 - If the symbol names a macro, it prints `macro`.
 - If the symbol is not known to Coalton, it prints `unknown`.
+- It returns no values.
 
 ## Example
 
