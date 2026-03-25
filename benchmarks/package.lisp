@@ -119,6 +119,15 @@
                     (#:arr  #:coalton/lisparray))
   )
 
+(define-coalton-benchmark cell
+    ()
+  (:use
+   #:coalton
+   #:coalton-prelude
+   #:coalton-library/cell)
+  (:local-nicknames (#:iter #:coalton-library/iterator))
+  )
+
 (define-coalton-benchmark mapping
     ((:local-nicknames
       (#:hashtable #:coalton/hashtable)
