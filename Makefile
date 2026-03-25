@@ -162,13 +162,11 @@ endif
 .PHONY: test test-release test-safe testall
 
 .PHONY: all show-dir lisps-running clean-blddir
-.PHONY: install-libraries get-ql clone-repos setup-ql get-ql-libs clean
+.PHONY: get-ql clone-repos setup-ql clean
 .PHONY: setup-coalton-sources
 .PHONY: test-external-libraries test-external-libraries-all
 
-all:	install-libraries testall
-
-install-libraries: install-libraries~
+all:	install-libraries~ testall
 
 install-libraries~: setup-ql
 	@LISP=$(LISP) \
@@ -182,7 +180,7 @@ install-libraries~: setup-ql
 	  CSAFETY="$(CSAFETY)" \
 	  CDISABLE_SPECIALIZATION="$(CDISABLE_SPECIALIZATION)" \
 	  CHEURISTIC_INLINING="$(CHEURISTIC_INLINING)" \
-	    make get-ql clone-repos setup-ql get-ql-libs
+	    make get-ql clone-repos setup-ql got-ql-libs~
 	@touch install-libraries~
 
 get-ql: $(QUICKLISP_HOME)/quicklisp.lisp
@@ -221,11 +219,12 @@ $(QUICKLISP_SETUP):
 		    cd $(QUICKLISP_HOME) ; \
 	            $(SBCL_COMP) --load "quicklisp.lisp" --eval "(quicklisp-quickstart:install :path \"$(QUICKLISP_HOME)/\")")
 
-get-ql-libs:
+got-ql-libs~:
 	@echo Retrieving further required external libraries for coalton and its tests
 	$(call runOnFileAndExpr,$(COMP),"$(QUICKLISP_SETUP)","(progn (ql:quickload :coalton) (ql:quickload :coalton/tests))")
+	touch got-ql-libs~
 
-test-external-libraries:	install-libraries
+test-external-libraries:	install-libraries~
 	for f in compat/test-external-libraries/*.lisp ; do \
 	  $(call runOnExprAndFile,$(COMP),"(load \"$(QUICKLISP_SETUP)\")",$${f}) ; \
 	done
@@ -260,9 +259,7 @@ test:
 clean-blddir:
 	rm -rf $(BLDDIR)/*$(LISP)*
 
-testall:	clean-blddir
-	test -f $(QUICKLISP_SETUP) \
-		|| QUICKLISP_HOME=$(QUICKLISP_HOME) make install-libraries
+testall:	clean-blddir install-libraries~
 	mkdir -p $(TEMP) && test -d $(TEMP)
 	mkdir -p $(TMPDIR) && test -d $(TMPDIR) ; \
 	export TMPDIR=$(TMPDIR) ; rm $(TMPDIR)/* ; \
