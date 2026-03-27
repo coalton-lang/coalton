@@ -193,35 +193,6 @@
   :components ((:file "package")
                (:file "coalton-native-test-utils")))
 
-(asdf:defsystem "coalton/benchmarks"
-  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
-  :license "MIT"
-  :version (:read-file-form "VERSION.txt")
-  :around-compile (lambda (compile)
-                    (let (#+sbcl (sb-ext:*derive-function-types* t)
-                          #+sbcl (sb-ext:*block-compile-default* :specified))
-                      (funcall compile)))
-
-  :depends-on ("coalton"
-               "coalton/library/big-float"
-               "trivial-benchmark"
-               "yason")
-  :pathname "benchmarks"
-  :serial t
-  :components ((:file "package")
-               (:file "fibonacci")
-               (:file "big-float")
-               (:file "pi")
-               (:file "seq")
-               (:file "matrix")
-               (:file "mapping")
-               (:module "gabriel-benchmarks"
-                :serial t
-                :components ((:file "tak")
-                             (:file "stak")
-                             (:file "takl")
-                             (:file "takr")))))
-
 ;;; we need to inspect the sbcl version in order to decide which version of the hashtable shim to load,
 ;;; because 2.1.12 includes (or will include) a bugfix that allows a cleaner, more maintainable
 ;;; implementation.
