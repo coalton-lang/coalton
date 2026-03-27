@@ -102,13 +102,15 @@ runOnExprDefault = env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1
 ## How to eval and load using COMP - minimal default:
 runOnExprAndFileDefault = env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --eval $(2) --load $(3)
 ## How to load and eval using COMP - minimal default:
-runOnFileAndExprDefault = env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --load $(2) --eval $(3)
+runOnFileAndExprNoEnvDefault = $(TIME) $(1) --load $(QUICKLISP_HOME)/asdf.lisp --load $(2) --eval $(3)
+runOnFileAndExprDefault = env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(call runOnFileAndExprNoEnvDefault,$(1),$(2),$(3))
 
 LISPEXEC=$(LISP)
   runOnFile = cat /dev/null | $(call runOnFileDefault,$(1),$(2))
   runOnExpr = cat /dev/null | $(call runOnExprDefault,$(1),$(2))
   runOnExprAndFile = cat /dev/null | $(call runOnExprAndFileDefault,$(1),$(2),$(3))
   runOnFileAndExpr = cat /dev/null | $(call runOnFileAndExprDefault,$(1),$(2),$(3))
+  runOnFileAndExprNoEnv = cat /dev/null | $(call runOnFileAndExprNoEnvDefault,$(1),$(2),$(3))
 
 ifeq ($(LISP),sbcl)
   COMP=$(SBCLCLEAN)
@@ -116,6 +118,7 @@ ifeq ($(LISP),sbcl)
   runOnExpr = $(call runOnExprDefault,$(1),$(2))
   runOnExprAndFile = $(call runOnExprAndFileDefault,$(1),$(2),$(3))
   runOnFileAndExpr = $(call runOnFileAndExprDefault,$(1),$(2),$(3))
+  runOnFileAndExprNoEnv = $(call runOnFileAndExprNoEnvDefault,$(1),$(2),$(3))
 endif
 ifeq ($(LISP),alisp)
   COMP=$(ALLEGRO)
@@ -123,6 +126,7 @@ ifeq ($(LISP),alisp)
   runOnExpr = (cat $(QUICKLISP_HOME)/asdf.lisp ; echo $(2)) | env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1)
   runOnExprAndFile = (cat $(QUICKLISP_HOME)/asdf.lisp ; echo $(2) ; cat $(3)) | env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1) 
   runOnFileAndExpr = (cat $(QUICKLISP_HOME)/asdf.lisp $(2) ; echo $(3)) | env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1)
+  runOnFileAndExprNoEnv = (cat $(QUICKLISP_HOME)/asdf.lisp $(2) ; echo $(3)) | $(TIME) $(1)
   LISPEXEC=alisp
 endif
 ifeq ($(LISP),ccl)
@@ -139,6 +143,7 @@ ifeq ($(LISP),clasp)
   COMP=$(CLASP)
   runOnExprAndFile = $(call runOnExprAndFileDefault,$(1),$(2),$(3))
   runOnFileAndExpr = $(call runOnFileAndExprDefault,$(1),$(2),$(3))
+  runOnFileAndExprNoEnv = $(call runOnFileAndExprNoEnvDefault,$(1),$(2),$(3))
 endif
 ifeq ($(COMP),none)
   $(warning Lisp choice "$(LISP)" is unknown. Supported choices are:)
@@ -168,19 +173,7 @@ endif
 
 all:	install-libraries~ testall
 
-install-libraries~: setup-ql
-	@LISP=$(LISP) \
-	  TIME=$(TIME) \
-	  BLDDIR="$(BLDDIR)" \
-	  QUICKLISP_HOME="$(QUICKLISP_HOME)" \
-	  SBCL_BIN="$(SBCL_BIN)" \
-	  COALTON_HOME="$(COALTON_HOME)" \
-	  TEMP="$(TEMP)" \
-	  CENV="$(CENV)" \
-	  CSAFETY="$(CSAFETY)" \
-	  CDISABLE_SPECIALIZATION="$(CDISABLE_SPECIALIZATION)" \
-	  CHEURISTIC_INLINING="$(CHEURISTIC_INLINING)" \
-	    make get-ql clone-repos setup-ql got-ql-libs~
+install-libraries~: clean-blddir get-ql setup-ql update-repos~
 	@touch install-libraries~
 
 get-ql: $(QUICKLISP_HOME)/quicklisp.lisp
@@ -209,6 +202,18 @@ $(EXTRA_LOCAL_PROJECTS)/named-readtables/named-readtables.asd:	update-repos~
 	$(call gitPullOrClone,$(EXTRA_LOCAL_PROJECTS)/named-readtables/named-readtables.asd,$(NAMED_READTABLES_REPO))
 
 update-repos~:
+	LISP=$(LISP) \
+	  TIME=$(TIME) \
+	  BLDDIR="$(BLDDIR)" \
+	  QUICKLISP_HOME="$(QUICKLISP_HOME)" \
+	  SBCL_BIN="$(SBCL_BIN)" \
+	  COALTON_HOME="$(COALTON_HOME)" \
+	  TEMP="$(TEMP)" \
+	  CENV="$(CENV)" \
+	  CSAFETY="$(CSAFETY)" \
+	  CDISABLE_SPECIALIZATION="$(CDISABLE_SPECIALIZATION)" \
+	  CHEURISTIC_INLINING="$(CHEURISTIC_INLINING)" \
+	    make clone-repos
 	touch update-repos~
 
 setup-ql: get-ql $(QUICKLISP_SETUP)
@@ -219,9 +224,9 @@ $(QUICKLISP_SETUP):
 		    cd $(QUICKLISP_HOME) ; \
 	            $(SBCL_COMP) --load "quicklisp.lisp" --eval "(quicklisp-quickstart:install :path \"$(QUICKLISP_HOME)/\")")
 
-got-ql-libs~:
+got-ql-libs~: update-repos~
 	@echo Retrieving further required external libraries for coalton and its tests
-	$(call runOnFileAndExpr,$(COMP),"$(QUICKLISP_SETUP)","(progn (ql:quickload :coalton) (ql:quickload :coalton/tests))")
+	$(call runOnFileAndExprNoEnv,$(COMP),"$(QUICKLISP_SETUP)","(progn (ql:quickload :coalton) (ql:quickload :coalton/tests))")
 	touch got-ql-libs~
 
 test-external-libraries:	install-libraries~
@@ -257,11 +262,12 @@ test:
 	make testall
 
 clean-blddir:
-	rm -rf $(BLDDIR)/*$(LISP)*
+	-rm -rf $(BLDDIR)/*$(LISP)* ~/.cache/common-lisp/*
 
 testall:	clean-blddir install-libraries~
 	mkdir -p $(TEMP) && test -d $(TEMP)
 	mkdir -p $(TMPDIR) && test -d $(TMPDIR) ; \
+	export SEQp=$(SEQp) ; \
 	export TMPDIR=$(TMPDIR) ; rm $(TMPDIR)/* ; \
 	  \
 	export COALTON_NAME=$(COALTON_NAME) ; \
@@ -277,6 +283,7 @@ testall:	clean-blddir install-libraries~
 	  test -d $(BLDDIR)/$${caseNow}* \
 	  && echo Which already exists \
 	  || echo Which does not exist already ; \
+	  echo Running in the foreground is ${SEQp} ; \
 	  echo '' > $(TEMP)/z-out-$${caseNow}.txt ; \
 	  $(call runOnFileWithOutput,$(COMP),compat/build-test-configuration.lisp,$(TEMP)/z-out-$${caseNow}.txt) \
 	; done \
@@ -377,6 +384,7 @@ $(TEMP)/cleanql-$(LISP).lisp:	Makefile
 	( echo '(load "'$(QUICKLISP_SETUP)'")' ; \
 	  echo '(push (truename "'$(COALTON_HOME)'") asdf:*central-registry*)' ; \
 	  echo '(push (truename "'$(EXTRA_LOCAL_PROJECTS)'") ql:*local-project-directories*)' ; \
+	  echo '(ql:register-local-projects)' ; \
 	  echo '(ql-dist:clean (ql-dist:dist "quicklisp"))' ; \
 	  echo '(format t "cleanql-'$(LISP)' asdf:*central-registry*: ~A~%" asdf:*central-registry*)' \
 	) > $(TEMP)/cleanql-$(LISP).lisp
