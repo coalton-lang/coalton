@@ -4112,7 +4112,10 @@ as a recursive function rather than a recursive value."
                         (values (or null tc:ty) &optional))
                (let ((value (parser:binding-value binding)))
                  (when (typep value 'parser:node-the)
-                   (parse-type (parser:node-the-type value) (tc-env-env env)))))
+                   ;; `parse-type` also returns kind substitutions; only keep the parsed type.
+                   (nth-value 0
+                              (parse-type (parser:node-the-type value)
+                                          (tc-env-env env))))))
              (add-implicit-binding-type (name binding)
                (declare (type symbol name)
                         (type (or parser:toplevel-define parser:node-let-binding) binding)
