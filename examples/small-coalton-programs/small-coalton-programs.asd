@@ -7,6 +7,5 @@
                (:ct-file "diff")
                (:file "primes")
                (:ct-file "freecalc")
-               (:ct-file "microbench1")
                (:ct-file "brainfold")
                (:file "monads-bank")))
