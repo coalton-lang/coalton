@@ -49,6 +49,8 @@
   (get-env-var-or-default "BLDDIR" "~/.cache/coalton-common-lisp"))
 (defparameter *quicklisp-home*
   (get-var-or-default "QUICKLISP_HOME")) ; no default - the makefile should have set it!
+(defparameter *running-in-the-foreground-p*
+  (equal "t" (get-env-var-or-default "SEQp" "nil")))
 
 ;; Load an updated ASDF.
 (load (concatenate 'string *quicklisp-home* "/asdf"))
@@ -77,10 +79,11 @@
 (defparameter *build-dir-name* (concatenate 'string *build-dir-prefix-name*
                                             "/"
                                             *system-full-name*))
-(defparameter *build-dir* (uiop:truename* *build-dir-name*))
+(defparameter *build-dir* (uiop:parse-unix-namestring *build-dir-name*
+                                                      :type :directory))
 
 ;;; Testing - print out defining characteristics:
-#+nil
+;; #+nil
 (format t
         (concatenate 'string
                      "~&"
@@ -110,11 +113,12 @@
         *build-dir*)
 
 (format *error-output* (concatenate 'string
-                                    "~&This is system ~A~%"
+                                    "~&"
+                                    ;; "This is system ~A~%"
                                     "  Starting with asdf:*source-registry-parameter* ~A~%"
                                     "  Starting with asdf:*central-registry* ~A~%"
                                     "  Starting with build config: ~A~%")
-        *system-full-name*
+        ;; *system-full-name*
         asdf:*source-registry-parameter*
         asdf:*central-registry*
         (asdf/output-translations:output-translations))
@@ -180,6 +184,26 @@
         asdf:*central-registry*
         (asdf/output-translations:output-translations))
 
+(format *error-output*
+        (concatenate 'string
+                     "asdf:*user-cache* is ~A~%"
+                     "  And *build-dir* is ~A~%"
+                     "  And *running-in-the-foreground-p* ~A~%")
+        asdf:*user-cache*
+        *build-dir*
+        *running-in-the-foreground-p*)
+
+(let ((output-dir
+       ;; asdf:*user-cache* ; we're storing fasls elsewhere.
+       *build-dir*))
+  (uiop:delete-directory-tree
+   output-dir
+   :if-does-not-exist ':ignore
+   :validate (if *running-in-the-foreground-p*
+                 (constantly
+                  (y-or-n-p "Delete FASL cache directory ~A?" output-dir))
+                 t)))
+
 ;;; Use the safety level, if possible.
 (when (eq *safety* 3)
   #+sbcl(sb-ext:restrict-compiler-policy 'safety *safety*)
@@ -221,4 +245,10 @@
 ;;; Let's see what's happening
 #+nil(trace load-n-test)
 
-(load-n-test)
+(cl:handler-case
+    (cl:progn
+      (load-n-test)
+      (uiop:quit 0))
+  (cl:error (c)
+    (declare (ignore c))
+    (uiop:quit 1)))
