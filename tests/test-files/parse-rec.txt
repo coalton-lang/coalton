@@ -39,45 +39,48 @@
               (even? (coalton-prelude:1- m)))))))
 
 ================================================================================
-4 Parse rec with type declaration
+4 Parse rec with result type annotation
 ================================================================================
 
 (package coalton-unit-tests)
 
 (define x
-  (rec (f (UFix -> UFix)) ((n 5))
-    (if (coalton-prelude:== n 1)
-        1
-        (coalton-prelude:* n (f (coalton-prelude:1- n))))))
+  (the UFix
+    (rec f ((n 5))
+      (if (coalton-prelude:== n 1)
+          1
+          (coalton-prelude:* n (f (coalton-prelude:1- n)))))))
 
 ================================================================================
-5 Parse rec with type alias declaration
-================================================================================
-
-(package coalton-unit-tests)
-
-(define-type-alias UnaryUfixFunction (UFix -> UFix))
-
-(define x
-  (rec (f UnaryUfixFunction) ((n 5))
-    (if (coalton-prelude:== n 1)
-        1
-        (coalton-prelude:* n (f (coalton-prelude:1- n))))))
-
-================================================================================
-6 Parse rec without type declaration
+5 Parse rec with result type alias annotation
 ================================================================================
 
 (package coalton-unit-tests)
 
+(define-type-alias UFixAlias UFix)
+
 (define x
-  (rec (f) ((n 5))
+  (the UFixAlias
+    (rec f ((n 5))
+      (if (coalton-prelude:== n 1)
+          1
+          (coalton-prelude:* n (f (coalton-prelude:1- n)))))))
+
+================================================================================
+6 Parse rec with declared init bindings
+================================================================================
+
+(package coalton-unit-tests)
+
+(define x
+  (rec f ((declare n UFix)
+          (n 5))
     (if (coalton-prelude:== n 1)
         1
         (coalton-prelude:* n (f (coalton-prelude:1- n))))))
 
 ================================================================================
-7 Parse rec with unexpected empty list
+7 Parse rec with list name
 ================================================================================
 
 (package coalton-unit-tests)
@@ -91,51 +94,44 @@ error: Malformed rec
   --> test:4:7
    |
  4 |    (rec () ((n 5)) n))
-   |         ^^ unexpected empty list
+   |         ^^ expected function name
 
 ================================================================================
-8 Parse rec with dotted list
-================================================================================
-
-(package coalton-unit-tests)
-
-(define-type-alias UnaryUfixFunction (UFix -> UFix))
-
-(define x
-  (rec (f . UnaryUfixFunction) ((n 5)) n))
-
---------------------------------------------------------------------------------
-
-error: Malformed rec
-  --> test:6:12
-   |
- 6 |    (rec (f . UnaryUfixFunction) ((n 5)) n))
-   |              ^^^^^^^^^^^^^^^^^ unexpected dotted list
-
-================================================================================
-9 Parse rec with extra arguments after type declaration
+8 Parse rec with typed name
 ================================================================================
 
 (package coalton-unit-tests)
 
-(define-type-alias UnaryUfixFunction (UFix -> UFix))
-
 (define x
-  (rec (f (UFix -> UFix) g) ((n 5))
-    (if (coalton-prelude:== n 1)
-        1
-        (coalton-prelude:* n (f (coalton-prelude:1- n))))))
+  (rec (f (UFix -> UFix)) ((n 5)) n))
 
 --------------------------------------------------------------------------------
 
 error: Malformed rec
-  --> test:6:24
+  --> test:4:7
    |
- 6 |    (rec (f (UFix -> UFix) g) ((n 5))
-   |                          ^ unexpected trailing form(s)
+ 4 |    (rec (f (UFix -> UFix)) ((n 5)) n))
+   |         ^^^^^^^^^^^^^^^^^^ expected function name
 
 ================================================================================
-10 Parse rec with type declaration
+9 Parse rec with parenthesized bare name
+================================================================================
+
+(package coalton-unit-tests)
+
+(define x
+  (rec (f) ((n 5)) n))
+
+--------------------------------------------------------------------------------
+
+error: Malformed rec
+  --> test:4:7
+   |
+ 4 |    (rec (f) ((n 5)) n))
+   |         ^^^ expected function name
+
+================================================================================
+10 Parse rec with declared init bindings
 ================================================================================
 
 (package coalton-unit-tests)
@@ -187,18 +183,16 @@ error: Malformed rec
 
 (package coalton-unit-tests)
 
-(define-type-alias UnaryUfixFunction (UFix -> UFix))
-
 (define x
-  (rec (f UnaryUfixFunction) hi 0))
+  (rec f hi 0))
 
 --------------------------------------------------------------------------------
 
 error: Malformed rec
-  --> test:6:29
+  --> test:4:9
    |
- 6 |    (rec (f UnaryUfixFunction) hi 0))
-   |                               ^^ expected binding list
+ 4 |    (rec f hi 0))
+   |           ^^ expected binding list
 
 ================================================================================
 14 Parse rec wrong number of arguments
@@ -223,18 +217,16 @@ error: Malformed rec
 
 (package coalton-unit-tests)
 
-(define-type-alias UnaryUfixFunction (UFix -> UFix))
-
 (define x
-  (rec (f UnaryUfixFunction) ((x 0))))
+  (rec f ((x 0))))
 
 --------------------------------------------------------------------------------
 
 error: Malformed rec
-  --> test:6:36
+  --> test:4:16
    |
- 6 |    (rec (f UnaryUfixFunction) ((x 0))))
-   |                                      ^ expected rec body
+ 4 |    (rec f ((x 0))))
+   |                  ^ expected rec body
 
 ================================================================================
 16 Parse rec reusing a symbol

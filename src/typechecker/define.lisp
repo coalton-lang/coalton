@@ -1049,6 +1049,321 @@ Returns four values:
             (tc:quantify (tc:type-variables qual-ty) qual-ty))
            subs))))))
 
+(defun rec-node-bindings-independent-p (node)
+  "Return true when REC's synthetic outer init bindings do not depend on each
+other, so they can be inferred monomorphically before the recursive body."
+  (declare (type parser:node-rec node)
+           (values boolean &optional))
+  (let ((names (mapcar (alexandria:compose #'parser:node-variable-name
+                                           #'parser:node-let-binding-name)
+                       (parser:node-rec-bindings node))))
+    (every (lambda (binding)
+             (null
+              (intersection
+               names
+               (mapcar #'parser:node-variable-name
+                       (parser:collect-variables
+                        (parser:node-let-binding-value binding)))
+               :test #'eq)))
+           (parser:node-rec-bindings node))))
+
+(defun rec-node-inner-binding (node)
+  "Build the parser let-binding for REC's local recursive function."
+  (declare (type parser:node-rec node)
+           (values parser:node-let-binding &optional))
+  (parser:make-node-let-binding
+   :name (parser:node-rec-name node)
+   :value (parser:make-node-abstraction
+           :params (parser:node-rec-params node)
+           :keyword-params nil
+           :body (parser:node-rec-body node)
+           :location (source:location node))
+   :location (source:location node)))
+
+(defun rec-node-declare-table (node)
+  "Validate REC's init bindings and declarations, then return a declare table."
+  (declare (type parser:node-rec node)
+           (values hash-table &optional))
+  (let ((def-table (make-hash-table :test #'eq))
+        (dec-table (make-hash-table :test #'eq)))
+    (loop :for binding :in (parser:node-rec-bindings node)
+          :for name := (parser:node-variable-name (parser:node-let-binding-name binding))
+          :if (gethash name def-table)
+            :do (tc-error "Duplicate binding in rec"
+                          (tc-note (parser:node-let-binding-name binding)
+                                   "second definition here")
+                          (tc-note (parser:node-let-binding-name
+                                    (gethash name def-table))
+                                   "first definition here"))
+          :else
+            :do (setf (gethash name def-table) binding))
+
+    (loop :for declare :in (parser:node-rec-declares node)
+          :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
+          :if (gethash name dec-table)
+            :do (tc-error "Duplicate declaration in rec"
+                          (tc-note (parser:node-let-declare-name declare)
+                                   "second declaration here")
+                          (tc-note (parser:node-let-declare-name
+                                    (gethash name dec-table))
+                                   "first declaration here"))
+          :else
+            :do (setf (gethash name dec-table) declare))
+
+    (loop :for declare :in (parser:node-rec-declares node)
+          :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
+          :unless (gethash name def-table)
+            :do (tc-error "Orphan declare in rec"
+                          (tc-note (parser:node-let-declare-name declare)
+                                   "declaration does not have an associated definition")))
+
+    (loop :with table := (make-hash-table :test #'eq)
+          :for declare :in (parser:node-rec-declares node)
+          :for name := (parser:node-variable-name (parser:node-let-declare-name declare))
+          :do (setf (gethash name table) (parser:node-let-declare-type declare))
+          :finally (return table))))
+
+(defun infer-rec-init-binding-type (binding declared-type subs env)
+  "Infer one REC init binding, preserving init-binding declarations."
+  (declare (type parser:node-let-binding binding)
+           (type (or null parser:qualified-ty) declared-type)
+           (type tc:substitution-list subs)
+           (type tc-env env)
+           (values tc:ty-predicate-list node-let-binding tc:qualified-ty tc:ty-scheme tc:substitution-list))
+  (if declared-type
+      (let ((declared-scheme (parse-ty-scheme declared-type (tc-env-parser-env env))))
+        (multiple-value-bind (binding-preds typed-binding subs_)
+            (infer-expl-binding-type binding
+                                     declared-scheme
+                                     (source:location (parser:node-let-binding-name binding))
+                                     subs
+                                     env)
+          (setf binding-preds (tc:apply-substitution subs_ binding-preds))
+          (setf typed-binding (tc:apply-substitution subs_ typed-binding))
+          (let ((binding-qual-ty (node-type (node-let-binding-name typed-binding))))
+            (values binding-preds
+                    typed-binding
+                    binding-qual-ty
+                    (tc:apply-substitution subs_ declared-scheme)
+                    subs_))))
+
+      (multiple-value-bind (binding-preds binding-accessors typed-binding subs_)
+          (infer-binding-type binding (tc:make-variable) subs env)
+        (setf subs subs_)
+        (setf binding-preds (tc:apply-substitution subs binding-preds))
+        (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) binding-preds subs)))
+        (setf binding-accessors (tc:apply-substitution subs binding-accessors))
+
+        (multiple-value-bind (binding-accessors subs__)
+            (solve-accessors binding-accessors (tc-env-env env))
+          (setf subs (tc:compose-substitution-lists subs subs__))
+
+          (when binding-accessors
+            (tc-error "Ambiguous accessor"
+                      (tc-note (first binding-accessors)
+                               "accessor is ambiguous")))
+
+          (setf binding-preds (tc:apply-substitution subs binding-preds))
+          (setf typed-binding (tc:apply-substitution subs typed-binding))
+          (let* ((binding-name (node-let-binding-name typed-binding))
+                 (binding-type (tc:qualified-ty-type (node-type binding-name)))
+                 (binding-qual-ty (tc:qualify binding-preds binding-type)))
+            (values binding-preds
+                    typed-binding
+                    binding-qual-ty
+                    (tc:to-scheme binding-qual-ty)
+                    subs))))))
+
+(defun lower-rec-node-to-let (node)
+  "Lower REC to the parser nested-let form used before the refactor."
+  (declare (type parser:node-rec node)
+           (values parser:node-let &optional))
+  (let* ((location (source:location node))
+         (inner-binding (rec-node-inner-binding node)))
+    (parser:make-node-let
+     :bindings (parser:node-rec-bindings node)
+     :declares (parser:node-rec-declares node)
+     :body (make-parser-body
+            (parser:make-node-let
+             :bindings (list inner-binding)
+             :declares nil
+             :body (make-parser-body
+                    (parser:make-node-application
+                     :rator (parser:node-rec-name node)
+                     :rands (parser:node-rec-call-args node)
+                     :location location))
+             :location location))
+     :location location)))
+
+(defun infer-rec-node-type (node expected-type subs env)
+  "Infer the type of a parser REC node.
+
+Simple REC forms are handled directly so init binding types can seed the
+recursive parameter types before local accessor solving. More complex forms are
+lowered back to the ordinary nested-let representation and inferred there."
+  (declare (type parser:node-rec node)
+           (type tc:ty expected-type)
+           (type tc:substitution-list subs)
+           (type tc-env env)
+           (values tc:ty tc:ty-predicate-list accessor-list node-let tc:substitution-list))
+
+  (when (not (rec-node-bindings-independent-p node))
+    (return-from infer-rec-node-type
+      (infer-expression-type (lower-rec-node-to-let node)
+                             expected-type
+                             subs
+                             env)))
+
+  (check-duplicates
+   (mapcan #'parser:pattern-variables (parser:node-rec-params node))
+   #'parser:pattern-var-name
+   (lambda (first second)
+     (tc-error "Duplicate definition in rec"
+               (tc-note first "first definition here")
+               (tc-note second "second definition here"))))
+
+  (let ((preds nil)
+        (accessors nil)
+        (init-binding-info nil)
+        (call-env env)
+        (declare-table (rec-node-declare-table node)))
+    ;; `rec` init bindings are only used to seed the immediate recursive call,
+    ;; so keep them monomorphic here instead of routing through ordinary `let`
+    ;; generalization/defaulting.
+    (dolist (binding (parser:node-rec-bindings node))
+      (let ((declared-type
+              (gethash (parser:node-variable-name (parser:node-let-binding-name binding))
+                       declare-table)))
+        (multiple-value-bind (binding-preds typed-binding binding-qual-ty binding-scheme subs_)
+            (infer-rec-init-binding-type binding declared-type subs env)
+          (setf subs subs_)
+          (setf call-env
+                (tc-env-shadow-definition call-env
+                                          (node-variable-name (node-let-binding-name typed-binding))
+                                          binding-scheme))
+          (setf preds (append preds binding-preds))
+          (push (cons typed-binding binding-qual-ty) init-binding-info))))
+
+    (setf init-binding-info (nreverse init-binding-info))
+    (tc:apply-substitution subs call-env)
+
+    (let* ((arg-info
+             (loop :for arg :in (parser:node-rec-call-args node)
+                   :collect
+                     (multiple-value-bind (arg-ty arg-preds)
+                         (tc-env-lookup-value call-env arg)
+                       (setf preds (append preds arg-preds))
+                       (list arg arg-ty arg-preds))))
+           (param-types
+             (loop :for (_arg arg-ty _preds) :in arg-info
+                   :collect (tc:apply-substitution subs arg-ty)))
+           (result-type
+             (tc:make-variable))
+           (rec-function-type
+             (tc:make-function-type* param-types result-type))
+           (rec-name
+             (parser:node-variable-name (parser:node-rec-name node)))
+           (inner-binding
+             (rec-node-inner-binding node))
+           (binding-env
+             (tc-env-shadow-definition call-env rec-name (tc:to-scheme rec-function-type))))
+
+      (multiple-value-bind (binding-preds binding-accessors typed-binding subs)
+          (infer-binding-type inner-binding rec-function-type subs binding-env)
+
+        (tc:apply-substitution subs binding-env)
+
+        ;; The init bindings above determine the recursive parameter types, but
+        ;; class fundeps may still need to fire before accessors are concrete.
+        (setf binding-preds (tc:apply-substitution subs binding-preds))
+        (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) binding-preds subs)))
+        (setf binding-accessors (tc:apply-substitution subs binding-accessors))
+
+        (multiple-value-bind (binding-accessors subs_)
+            (solve-accessors binding-accessors (tc-env-env env))
+          (setf subs (tc:compose-substitution-lists subs subs_))
+
+          (when binding-accessors
+            (tc-error "Ambiguous accessor"
+                      (tc-note (first binding-accessors)
+                               "accessor is ambiguous")))
+
+          (setf binding-preds (tc:apply-substitution subs binding-preds))
+          (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) binding-preds subs)))
+          (tc:apply-substitution subs call-env)
+
+          (handler-case
+              (setf subs (tc:unify subs (tc:apply-substitution subs result-type) expected-type))
+            (tc:coalton-internal-type-error ()
+              (standard-expression-type-mismatch-error node subs expected-type result-type)))
+
+          (setf binding-preds (tc:apply-substitution subs binding-preds))
+          (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) binding-preds subs)))
+
+          (let* ((ty
+                   (tc:apply-substitution subs result-type))
+                 (rec-qual-ty
+                   (tc:qualify binding-preds
+                               (tc:apply-substitution subs rec-function-type)))
+                 (rewrite-table
+                   (let ((table (make-hash-table :test #'eq)))
+                     (setf (gethash rec-name table) rec-qual-ty)
+                     table))
+                 (typed-inner-binding
+                   (rewrite-recursive-calls
+                    (attach-explicit-binding-type
+                     (tc:apply-substitution subs typed-binding)
+                     rec-qual-ty)
+                    rewrite-table))
+                 (typed-rator
+                   (make-node-variable
+                    :type rec-qual-ty
+                    :location (source:location (parser:node-rec-name node))
+                    :name rec-name))
+                 (typed-rands
+                   (loop :for (arg arg-ty arg-preds) :in arg-info
+                         :collect
+                           (make-node-variable
+                            :type (tc:qualify (tc:apply-substitution subs arg-preds)
+                                              (tc:apply-substitution subs arg-ty))
+                            :location (source:location arg)
+                            :name (parser:node-variable-name arg))))
+                 (typed-application
+                   (make-node-application
+                    :type (tc:qualify nil ty)
+                    :location (source:location node)
+                    :rator typed-rator
+                    :rands typed-rands
+                    :keyword-rands nil))
+                 (typed-inner-let
+                   (make-node-let
+                    :type (tc:qualify nil ty)
+                    :location (source:location node)
+                    :bindings (list typed-inner-binding)
+                    :body (make-node-body
+                           :nodes nil
+                           :last-node typed-application)))
+                 (typed-init-bindings
+                   (loop :for (binding . qual-ty) :in init-binding-info
+                         :collect
+                           (attach-explicit-binding-type
+                            (tc:apply-substitution subs binding)
+                            (tc:apply-substitution subs qual-ty)))))
+            (setf preds (tc:apply-substitution subs preds))
+            (setf preds (append preds binding-preds))
+            (values
+             ty
+             preds
+             accessors
+             (make-node-let
+              :type (tc:qualify nil ty)
+              :location (source:location node)
+              :bindings typed-init-bindings
+              :body (make-node-body
+                     :nodes nil
+                     :last-node typed-inner-let))
+             subs)))))))
+
 (defgeneric infer-expression-type (node expected-type subs env)
   (:documentation "Infer the type of NODE and then unify against EXPECTED-TYPE
 
@@ -1578,6 +1893,14 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                        subs))))
                 (tc:coalton-internal-type-error ()
                   (standard-expression-type-mismatch-error node subs effective-expected-type ty)))))))))
+
+  (:method ((node parser:node-rec) expected-type subs env)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (values tc:ty tc:ty-predicate-list accessor-list node-let tc:substitution-list))
+
+    (infer-rec-node-type node expected-type subs env))
 
   (:method ((node parser:node-let) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -3581,6 +3904,13 @@ as a recursive function rather than a recursive value."
       (tc:apply-substitution subs body-env)
 
       (setf accessors (tc:apply-substitution subs accessors))
+      ;; Accessor disambiguation needs any substitutions implied by
+      ;; functional dependencies before the accessor source type is concrete.
+      (setf fresh-preds (tc:apply-substitution subs fresh-preds))
+      (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) fresh-preds subs)))
+      (setf preds (tc:apply-substitution subs preds))
+      (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
+      (setf accessors (tc:apply-substitution subs accessors))
 
       (multiple-value-bind (accessors subs_)
           (solve-accessors accessors (tc-env-env env))
@@ -3797,6 +4127,11 @@ value-restriction and variance logic used for implicit bindings."
         (setf subs subs_)
         (tc:apply-substitution subs env)
 
+        (setf accessors (tc:apply-substitution subs accessors))
+        ;; Solve functional dependencies before accessors so field lookups can
+        ;; see types fixed by class fundeps.
+        (setf preds (tc:apply-substitution subs preds))
+        (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
         (setf accessors (tc:apply-substitution subs accessors))
 
         (multiple-value-bind (accessors subs_)
@@ -4161,6 +4496,11 @@ as a recursive function rather than a recursive value."
 
         (tc:apply-substitution subs env)
 
+        (setf accessors (tc:apply-substitution subs accessors))
+        ;; Solve functional dependencies before accessors so field lookups can
+        ;; see types fixed by class fundeps.
+        (setf preds (tc:apply-substitution subs preds))
+        (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
         (setf accessors (tc:apply-substitution subs accessors))
 
         (multiple-value-bind (accessors subs_)

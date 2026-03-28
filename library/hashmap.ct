@@ -838,8 +838,9 @@ but not in both."
   (declare dump (HashMap :k :v -> Void))
   (define (dump hm)
     "For debugging"
-    (rec (dump-node ((HmNode :k :v) * Integer -> Void))
-         ((node (root hm))
+    (rec dump-node
+         ((declare indent Integer)
+          (node (root hm))
           (indent 0))
       (match node
         ((Leaf entry)
