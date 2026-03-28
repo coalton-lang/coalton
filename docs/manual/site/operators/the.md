@@ -19,6 +19,8 @@ weight: 100
 - It is especially useful around numeric literals, collection builders,
   sequence builders, and conversions.
 - Unlike `declare`, `the` works directly at expression sites.
+- `the` accepts explicit `forall` binders; when present, those type variables
+  are scoped over the enclosed expression.
 
 ## Example
 

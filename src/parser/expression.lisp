@@ -356,7 +356,7 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;; node-type-of := "(" "type-of" expression ")"
 ;;;; node-unsafe := "(" "unsafe" body ")"
 ;;;;
-;;;; node-the := "(" "the" type expression ")"
+;;;; node-the := "(" "the" qualified-ty expression ")"
 ;;;;
 ;;;; node-return := "(" "return" expression? ")"
 ;;;;
@@ -636,8 +636,8 @@ Rebound to NIL parsing an anonymous FN.")
 (defstruct (node-the
             (:include node)
             (:copier nil))
-  (type (util:required 'type) :type ty   :read-only t)
-  (expr (util:required 'expr) :type node :read-only t))
+  (type (util:required 'type) :type qualified-ty :read-only t)
+  (expr (util:required 'expr) :type node         :read-only t))
 
 (defstruct (node-collection-builder
             (:include node)
@@ -1716,7 +1716,7 @@ Rebound to NIL parsing an anonymous FN.")
                           "unexpected trailing form")))
 
      (make-node-the
-      :type (parse-type (cst:second form) source)
+      :type (parse-qualified-type (cst:second form) source)
       :expr (parse-expression (cst:third form) source)
       :location (form-location source form)))
 
