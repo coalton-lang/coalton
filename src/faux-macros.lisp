@@ -21,20 +21,26 @@
 (defmacro define-coalton-toplevel-editor-macro (name lambda-list &optional (docstring ""))
   "Define a macro so that Emacs and SLIME see it nicely, and so the forms indent properly. Not intended for actual use in Lisp code."
   (check-type docstring string)
-  `(defmacro ,name ,lambda-list
-     ,docstring
-     (declare (ignore ,@(remove-if (lambda (sym) (char= #\& (char (symbol-name sym) 0)))
-                                   lambda-list)))
-     (error-coalton-toplevel-only ',name)))
+  `(progn
+     (cl:setf (cl:get ',name ':coalton-operator) ':toplevel
+              (cl:get ',name ':coalton-operator-lambda-list) ',lambda-list)
+     (defmacro ,name ,lambda-list
+       ,docstring
+       (declare (ignore ,@(remove-if (lambda (sym) (char= #\& (char (symbol-name sym) 0)))
+                                     lambda-list)))
+       (error-coalton-toplevel-only ',name))))
 
 (defmacro define-coalton-editor-macro (name lambda-list &optional (docstring ""))
   "Define a macro so that Emacs and SLIME see it nicely, and so the forms indent properly. Not intended for actual use in Lisp code."
   (check-type docstring string)
-  `(defmacro ,name ,lambda-list
-     ,docstring
-     (declare (ignore ,@(remove-if (lambda (sym) (char= #\& (char (symbol-name sym) 0)))
-                                   lambda-list)))
-     (error-coalton-only ',name)))
+  `(progn
+     (cl:setf (cl:get ',name ':coalton-operator) ':expression
+              (cl:get ',name ':coalton-operator-lambda-list) ',lambda-list)
+     (defmacro ,name ,lambda-list
+       ,docstring
+       (declare (ignore ,@(remove-if (lambda (sym) (char= #\& (char (symbol-name sym) 0)))
+                                     lambda-list)))
+       (error-coalton-only ',name))))
 
 
 ;;; Top-Level Forms
@@ -90,6 +96,10 @@
 (defmacro coalton:fn (vars &body form)
   "A lambda abstraction callable within coalton."
   (rt:construct-function-entry `(lambda ,vars ,@form) (length vars)))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (setf (get 'coalton:fn ':coalton-operator) ':expression
+        (get 'coalton:fn ':coalton-operator-lambda-list) '(vars &body form)))
 
 (define-coalton-editor-macro coalton:throw (exception)
     "Throw an exception.")
