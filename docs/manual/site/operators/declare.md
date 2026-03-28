@@ -16,8 +16,8 @@ weight: 30
 ## Semantics
 
 - Top-level `declare` is commonly paired with `define`.
-- Local `declare` also works inside binding lists of `let`, `let*`, `for`, and
-  `for*`.
+- Local `declare` also works inside binding lists of `let`, `let*`, `rec`,
+  `for`, and `for*`.
 - Coalton infers types, but `declare` is the main way to make intent explicit.
 - Using `forall` makes the type variables scoped to the variable's definition.
 

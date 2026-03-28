@@ -14,7 +14,7 @@ an error or or something is unclear, please fix it and submit a PR.
 
 ## Articles
 
-- [Introduction](/manual/topics/introduction/)
+- [Introduction and Getting Started](/manual/topics/introduction/)
 - [Whirlwind Tour of Coalton](/manual/topics/whirlwind-tour/)
 - [Configuring Coalton](/manual/topics/configuring-coalton/)
 - [Lisp Interop](/manual/topics/lisp-interop/)
