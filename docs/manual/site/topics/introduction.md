@@ -5,12 +5,12 @@ weight: 10
 ---
 
 Coalton is a statically typed functional language embedded in Common Lisp. Since
-it's embedded in Lisp, it uses the ordinary Common Lisp toolchain. Here, we describe
-the essentials to getting started.
+it's embedded in Lisp, it uses the ordinary Common Lisp toolchain. Despite that,
+Coalton is a full-fledged programming language with an optimizing compiler.
 
 Here, we assume you'll adopt a standard Lisp development system, which uses Emacs
-and SLIME. *These are not strictly necessary, but improve the development experience
-substantially.*
+and SLIME. *These are not strictly necessary, and make the learning curve steeper,
+but improve the development experience substantially.*
 
 ## Install SBCL
 
