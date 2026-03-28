@@ -1,10 +1,10 @@
 name: Porting (2 abcl, ecl, clasp)
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  # push:
+  #   branches: [ main ]
+  # pull_request:
+  #   branches: [ main ]
 
   workflow_dispatch:
 
@@ -44,8 +44,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-          ## abcl excluded as it fails (ql:quickload :fset) - trying now with abcl from repo
-          ##
           ## clasp excluded as it fails (ql:quickload :serapeum)
         LISP_IMPL: [ "abcl", # "clasp",
                      "ecl" ]

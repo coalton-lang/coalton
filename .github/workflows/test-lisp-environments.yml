@@ -1,10 +1,10 @@
 name: Test Lisp environments (abcl, clasp)
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  # push:
+  #   branches: [ main ]
+  # pull_request:
+  #   branches: [ main ]
 
   workflow_dispatch:
 
@@ -44,8 +44,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # ecl seems to be fine with all external packages
-        LISP_IMPL: [ "abcl", "clasp" #, "ecl"
+        # abcl seems to be fine with *loading* all external packages (fails
+        # self-tests of :eclector & :yason)
+        LISP_IMPL: [
+                     "abcl",
+                     "clasp",
+                     "ecl"
                     ]
     permissions:
       packages: read
@@ -64,7 +68,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Sanity-check for ABCL - fset?
+      - name: Sanity-check for ABCL - yason?
         if: matrix.LISP_IMPL == 'abcl'
         run: |
           cat <<EOF > run-tests.lisp
@@ -73,10 +77,10 @@ jobs:
             (ql:quickload :fiasco) (load "compat/abcl-fiasco-patch")
           (cl:handler-case
             (cl:progn
-              (ql:quickload :fset)
-              (format *error-output* "~%ABCL loads FSet!~%")
-              (asdf:test-system :fset)
-              (format *error-output* "~%ABCL can test FSet!~%")
+              (ql:quickload :yason)
+              (format *error-output* "~%ABCL loads Yason!~%")
+              (asdf:test-system :yason)
+              (format *error-output* "~%ABCL can test Yason!~%")
               (uiop:quit 0))
             (cl:error (c)
               (declare (ignore c))
@@ -84,7 +88,7 @@ jobs:
           EOF
           abcl --noinform --noinit --nosystem --batch --load run-tests.lisp < /dev/null
 
-      - name: Sanity-check for CLASP - serapeum?
+      - name: Sanity-check for CLASP - spinneret?
         if: matrix.LISP_IMPL == 'clasp'
         run: |
           cat <<EOF > run-tests.lisp
@@ -92,9 +96,21 @@ jobs:
           ;; (load "/.clasprc")
             #-quicklisp (load "/root/quicklisp/setup.lisp")
             (setf ql:*local-project-directories* (quote ("/extras" "/lisp")))
-          (ql:quickload :serapeum)
-          (format *error-output* "~%CLASP loads Serapeum!~%")
-          (asdf:test-system :serapeum)
-          (format *error-output* "~%CLASP can test Serapeum!~%")
+          (ql:quickload :spinneret)
+          (format *error-output* "~%CLASP loads Spinneret!~%")
+          (asdf:test-system :spinneret)
+          (format *error-output* "~%CLASP can test Spinneret!~%")
           EOF
           clasp --script run-tests.lisp
+
+      - name: Sanity-check for ECL - spinneret?
+        if: matrix.LISP_IMPL == 'ecl'
+        run: |
+          cat <<EOF > run-tests.lisp
+          (load "/.eclrc")
+          (ql:quickload :spinneret)
+          (format *error-output* "~%ECL loads Spinneret!~%")
+          (asdf:test-system :spinneret)
+          (format *error-output* "~%ECL can test Spinneret!~%")
+          EOF
+          ecl --norc -q --shell run-tests.lisp
