@@ -33,8 +33,3 @@ the exact visible positional arity of a `function-entry`, prepends any bound
 hidden arguments, and forwards Lisp keyword arguments unchanged. When the call
 site is known to have no keywords and the callee is already a `function-entry`,
 the compiler may emit `exact-call` instead.
-
-A small benchmark harness for the current fixed-arity runtime model lives in
-[./function-calls-benchmarks.lisp](./function-calls-benchmarks.lisp). Re-run it
-when the function-entry or application path changes; the old benchmark numbers
-are intentionally omitted here because they age quickly as the runtime evolves.

@@ -221,6 +221,13 @@ in expressions. May not include all bound variables."
      (mapcan #'collect-variables-generic% (node-let-bindings node))
      (collect-variables-generic% (node-let-body node))))
 
+  (:method ((node node-rec))
+    (declare (values node-variable-list))
+    (nconc
+     (mapcan #'collect-variables-generic% (node-rec-bindings node))
+     (mapcan #'collect-variables-generic% (node-rec-call-args node))
+     (collect-variables-generic% (node-rec-body node))))
+
   (:method ((node node-dynamic-let))
     (declare (values node-variable-list))
     (nconc

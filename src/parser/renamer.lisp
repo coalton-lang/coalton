@@ -273,6 +273,42 @@
            :location (source:location node))
           ctx)))))
 
+  (:method ((node node-rec) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+
+    (let* ((outer-bindings
+             (make-local-vars
+              (mapcar (alexandria:compose #'node-variable-name
+                                          #'node-let-binding-name)
+                      (node-rec-bindings node))))
+           (outer-ctx
+             (algo:immutable-map-set-multiple ctx outer-bindings))
+           (rec-name
+             (make-local-var (node-variable-name (node-rec-name node))))
+           (param-bindings
+             (make-local-vars
+              (mapcar #'pattern-var-name
+                      (pattern-variables (node-rec-params node)))))
+           (body-ctx
+             (algo:immutable-map-set-multiple
+              (algo:immutable-map-set ctx
+                                      (node-variable-name (node-rec-name node))
+                                      rec-name)
+              param-bindings)))
+      (values
+       (make-node-rec
+        :name (make-node-variable
+               :name rec-name
+               :location (source:location (node-rec-name node)))
+        :bindings (rename-variables-generic% (node-rec-bindings node) outer-ctx)
+        :declares (rename-variables-generic% (node-rec-declares node) outer-ctx)
+        :params (rename-variables-generic% (node-rec-params node) body-ctx)
+        :call-args (rename-variables-generic% (node-rec-call-args node) outer-ctx)
+        :body (rename-variables-generic% (node-rec-body node) body-ctx)
+        :location (source:location node))
+       ctx)))
+
   (:method ((node node-dynamic-let) ctx)
     (declare (type algo:immutable-map ctx)
              (values node algo:immutable-map))

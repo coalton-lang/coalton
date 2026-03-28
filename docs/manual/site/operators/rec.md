@@ -10,27 +10,37 @@ weight: 180
 ## Syntax
 
 ```lisp
-(rec ⟨name-spec⟩ ((⟨var⟩ ⟨init⟩) ...)
-  ⟨body⟩)
+(rec ⟨name⟩ (⟨binding⟩...)
+  ⟨body⟩...)
 
-;; ⟨name-spec⟩ := ⟨name⟩
-;;              | (⟨name⟩ ⟨type⟩)
+;; ⟨binding⟩ := ⟨declare-form⟩
+;;            | (⟨var⟩ ⟨init⟩)
 ```
 
 ## Semantics
 
-- `rec` is useful for iteration. `⟨name⟩` should name a
-  function to be called tail recursively.
-- The recursive name can optionally carry an explicit type.
-- The names `go` or `%` are often used.
+- `rec` introduces a local recursive function `⟨name⟩` and immediately calls it
+  with the initial values from the binding list.
+- `rec` is useful for iteration. The names `go` and `%` are common.
+- Init bindings may be declared with `declare`, like in `let`, `let*`, `for`,
+  and `for*`.
+- Local `declare` forms in the binding list apply to init variables, which in
+  turn constrain the recursive function's parameters.
+- If you want to constrain the result type of a `rec` expression, wrap the
+  whole form in `the`.
 - Tail recursion is not enforced.
 - `⟨body⟩` has an implicit `progn`.
 
 ## Example
 
 ```lisp
-(rec % ((i n) (acc 0))
-  (if (== i 0)
-      acc
-      (% (1- i) (+ acc i))))
+(the Integer
+  (rec %
+       ((declare i Integer)
+        (declare acc Integer)
+        (i n)
+        (acc 0))
+    (if (== i 0)
+        acc
+        (% (1- i) (+ acc i)))))
 ```

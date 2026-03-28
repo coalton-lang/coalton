@@ -411,6 +411,14 @@
    '("scoped-local-explicit" . "(forall (:outer) (:outer -> :outer))"))
 
   (check-coalton-types
+   "(define the-scoped-forall
+      (the (forall (:item) (:item -> :item))
+        (fn (x)
+          (the :item x))))"
+
+   '("the-scoped-forall" . "(forall (:item) (:item -> :item))"))
+
+  (check-coalton-types
    "(declare scoped-proxy-roundtrip (forall (:item) :item -> :item))
     (define (scoped-proxy-roundtrip x)
       (let ((declare reify (coalton/types:Proxy :item -> :item))

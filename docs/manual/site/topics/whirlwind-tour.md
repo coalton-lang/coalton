@@ -625,19 +625,22 @@ This function can be run for arbitrarily large `limit` without affecting the sta
 COMMON-LISP:T
 ```
 
-Coalton has a special built-in operator `rec` for doing "named-let"-style iteration. It's general syntax is:
+Coalton has a special built-in operator `rec` for doing "named-let"-style iteration. Its general syntax is:
 
 ```lisp
 (rec <name> (<binding>*)
-  <body>)
+  <body>...)
 
-;; <name> := <symbol>
-;;         | (<symbol> <type>)
-;;
-;; <binding> := (<symbol> <value>)
+;; <binding> := <declare-form>
+;;            | (<symbol> <value>)
 ```
 
-The `<name>` is in essence a local (tail-recursive) function in the `<body>`. Optionally, the type of this function can be declared, which is useful to avoid unwanted polymorphism. The `rec` operator does not require the invocation to be in tail position.
+The `<name>` is in essence a local recursive function in the `<body>`, and the
+binding list supplies the arguments for its initial call. Local `declare` forms
+inside the binding list apply to the initial bindings, which in turn constrain
+the recursive function's parameters. If you want to constrain the result type of
+the whole `rec` expression, wrap it in `the`. The `rec` operator does not
+require the invocation to be in tail position.
 
 It is idiomatic in Coalton to choose the name `%` when there is no other reasonable name.
 
@@ -671,18 +674,23 @@ The type is `∀ A B. (NUM B) (NUM A) ⇒ (A → B)` and thus can be used for wh
 55.0
 ```
 
-We can make a monomorphic variant for `Integer` by declaring the type of the recursion.
+We can make a monomorphic variant for `Integer` by declaring the init bindings
+and wrapping the whole `rec` in `the`.
 
 ```lisp
 (define (fib-monomorphic n)
-  (rec (% (Integer * Integer * Integer -> Integer))
-       ((i n)
-        (a 0)
-        (b 1))
-    (cond
-      ((== 0 i) a)
-      ((== 1 i) b)
-      (True (% (- i 1) b (+ a b))))))
+  (the Integer
+    (rec %
+         ((declare i Integer)
+          (declare a Integer)
+          (declare b Integer)
+          (i n)
+          (a 0)
+          (b 1))
+      (cond
+        ((== 0 i) a)
+        ((== 1 i) b)
+        (True (% (- i 1) b (+ a b)))))))
 ```
 
 Now it works without any type declarations on use:
