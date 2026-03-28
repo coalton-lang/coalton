@@ -61,8 +61,6 @@ The IR of this phase is an AST. Each node is a sub-structure of `node`.
 
 Parsing of expressions also occurs in this file.
 
-Some constructions are de-sugared directly in parsing. For example, there is no `node-rec`; it is desugared into a `node-let` immediately.
-
 ### Intermediate representation for types
 
 File: `src/parser/types.lisp`

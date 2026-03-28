@@ -84,6 +84,14 @@
    #:node-let-declares                  ; ACCESSOR
    #:node-let-body                      ; ACCESSOR
    #:node-let-sequential-p              ; ACCESSOR
+   #:node-rec                           ; STRUCT
+   #:make-node-rec                      ; CONSTRUCTOR
+   #:node-rec-name                      ; ACCESSOR
+   #:node-rec-bindings                  ; ACCESSOR
+   #:node-rec-declares                  ; ACCESSOR
+   #:node-rec-params                    ; ACCESSOR
+   #:node-rec-call-args                 ; ACCESSOR
+   #:node-rec-body                      ; ACCESSOR
    #:node-dynamic-let                   ; STRUCT
    #:make-node-dynamic-let              ; CONSTRUCTOR
    #:node-dynamic-let-bindings          ; ACCESSOR
@@ -341,7 +349,7 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;;
 ;;;; node-let := "(" ("let" | "let*") "(" (node-let-binding | node-let-declare)+ ")" body ")"
 ;;;;
-;;;; node-rec := "(" "rec" (identifier | "(" identifier [qualified-ty] ")" ) "(" (node-let-binding | node-let-declare)+ ")" body ")"
+;;;; node-rec := "(" "rec" identifier "(" (node-let-binding | node-let-declare)+ ")" body ")"
 ;;;;
 ;;;; node-lisp := "(" "lisp" type "(" lisp-variable* ")" lisp-form+ ")"
 ;;;;
@@ -356,7 +364,7 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;; node-type-of := "(" "type-of" expression ")"
 ;;;; node-unsafe := "(" "unsafe" body ")"
 ;;;;
-;;;; node-the := "(" "the" type expression ")"
+;;;; node-the := "(" "the" qualified-ty expression ")"
 ;;;;
 ;;;; node-return := "(" "return" expression? ")"
 ;;;;
@@ -583,6 +591,22 @@ Rebound to NIL parsing an anonymous FN.")
   ;; T when parsed from LET*, so later bindings can see earlier ones.
   (sequential-p nil                       :type boolean               :read-only t))
 
+(defstruct (node-rec
+            (:include node)
+            (:copier nil))
+  ;; Name of the recursive function introduced by `rec`.
+  (name      (util:required 'name)      :type node-variable         :read-only t)
+  ;; Non-self init bindings that seed the immediate recursive call.
+  (bindings  (util:required 'bindings)  :type node-let-binding-list :read-only t)
+  ;; Declarations for the init bindings.
+  (declares  (util:required 'declares)  :type node-let-declare-list :read-only t)
+  ;; Parameters of the recursive function, in source order.
+  (params    (util:required 'params)    :type pattern-list          :read-only t)
+  ;; Arguments passed in the implicit immediate call, in source order.
+  (call-args (util:required 'call-args) :type node-variable-list    :read-only t)
+  ;; Body of the recursive function itself.
+  (body      (util:required 'body)      :type node-body             :read-only t))
+
 (defstruct (node-dynamic-let
             (:include node)
             (:copier nil))
@@ -636,8 +660,8 @@ Rebound to NIL parsing an anonymous FN.")
 (defstruct (node-the
             (:include node)
             (:copier nil))
-  (type (util:required 'type) :type ty   :read-only t)
-  (expr (util:required 'expr) :type node :read-only t))
+  (type (util:required 'type) :type qualified-ty :read-only t)
+  (expr (util:required 'expr) :type node         :read-only t))
 
 (defstruct (node-collection-builder
             (:include node)
@@ -1498,7 +1522,7 @@ Rebound to NIL parsing an anonymous FN.")
     ((and (cst:atom (cst:first form))
           (eq 'coalton:rec (cst:raw (cst:first form))))
 
-     (multiple-value-bind (name type rec-bindings body)
+     (multiple-value-bind (name rec-bindings body)
          (cond
            ;; (rec)
            ((not (cst:consp (cst:rest form)))
@@ -1515,37 +1539,21 @@ Rebound to NIL parsing an anonymous FN.")
             (parse-error "Malformed rec"
                          (note-end source (cst:third form)
                                    "expected rec body")))
+           ;; (rec () ...)
            ((cst:null (cst:second form))
             (parse-error "Malformed rec"
                          (note source (cst:second form)
-                               "unexpected empty list")))
+                               "expected function name")))
+           ;; (rec <non-symbol> ...)
+           ((not (cst:atom (cst:second form)))
+            (parse-error "Malformed rec"
+                         (note source (cst:second form)
+                               "expected function name")))
            ;; (rec name bindings ...)
-           ((cst:atom (cst:second form))
-            (values (cst:second form)
-                    nil
-                    (cst:third form)
-                    (cst:nthrest 3 form)))
-           ;; (rec (name qual-ty) bindings ...)
            (t
-            (cond
-              ((cst:null (cst:rest (cst:second form)))
-               (values (cst:first (cst:second form))
-                       nil
-                       (cst:third form)
-                       (cst:nthrest 3 form)))
-              ((cst:consp (cst:rest (cst:second form)))
-               (when (cst:consp (cst:nthrest 2 (cst:second form)))
-                 (parse-error "Malformed rec"
-                              (note-end source (cst:second (cst:second form))
-                                        "unexpected trailing form(s)")))
-               (values (cst:first (cst:second form))
-                       (cst:second (cst:second form))
-                       (cst:third form)
-                       (cst:nthrest 3 form)))
-              (t
-               (parse-error "Malformed rec"
-                            (note source (cst:rest (cst:second form))
-                                  "unexpected dotted list"))))))
+            (values (cst:second form)
+                    (cst:third form)
+                    (cst:nthrest 3 form))))
 
        (unless (cst:proper-list-p rec-bindings)
          (parse-error "Malformed rec"
@@ -1568,49 +1576,24 @@ Rebound to NIL parsing an anonymous FN.")
                  :finally
                     (return (values declares binding-list vars)))
 
-         (make-node-let
+         (make-node-rec
+          :name (parse-variable name source)
           :declares declares
           :bindings
-          ;; Remove recursive bindings
+          ;; Remove trivial self-bindings from the synthetic outer let; their
+          ;; argument comes from the surrounding scope.
           (remove-if
            (lambda (binding)
              (and (typep (node-let-binding-value binding)
                          'node-variable)
-
                   (eq (node-variable-name (node-let-binding-name binding))
                       (node-variable-name (node-let-binding-value binding)))))
            bindings)
-          :body
-          (make-node-body
-           :nodes nil
-           :last-node
-           (make-node-let
-            :declares (if type
-                          (list
-                           (make-node-let-declare
-                            :name (parse-variable name source)
-                            :type (parse-qualified-type type source)
-                            :location (form-location source type)))
-                          nil)
-            :bindings (list (make-node-let-binding
-                             :name (parse-variable name source)
-                             :value
-                             (make-node-abstraction
-                              :params (mapcar (lambda (var)
-                                                (parse-pattern var source))
-                                              vars)
-                              :body (parse-body body form source)
-                              :location (form-location source form))
-                             :location (form-location source form)))
-            :body
-            (make-node-body
-             :nodes nil
-             :last-node
-             (make-node-application
-              :rator (parse-expression name source)
-              :rands (mapcar #'node-let-binding-name bindings)
-              :location (form-location source form)))
-            :location (form-location source form)))
+          :params (mapcar (lambda (var)
+                            (parse-pattern var source))
+                          vars)
+          :call-args (mapcar #'node-let-binding-name bindings)
+          :body (parse-body body form source)
           :location (form-location source form)))))
 
     ((and (cst:atom (cst:first form))
@@ -1716,7 +1699,7 @@ Rebound to NIL parsing an anonymous FN.")
                           "unexpected trailing form")))
 
      (make-node-the
-      :type (parse-type (cst:second form) source)
+      :type (parse-qualified-type (cst:second form) source)
       :expr (parse-expression (cst:third form) source)
       :location (form-location source form)))
 

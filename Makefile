@@ -49,15 +49,6 @@ web-docs:
 		--eval "(coalton/doc:write-stdlib-documentation-to-file \"../coalton-website/content/reference.md\" :backend :hugo :revision \"main\")"
 
 
-.PHONY: bench
-bench:
-	env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
-		COALTON_ENV=release \
-		$(SBCL) \
-		--load $(QUICKLISP_SETUP) \
-		--eval "(ql:quickload :coalton/benchmarks :silent t)" \
-		--eval "(sb-ext::without-gcing (coalton-benchmarks:run-benchmarks))"
-
 .PHONY: parser-coverage
 parser-coverage:
 	mkdir coverage-report || true

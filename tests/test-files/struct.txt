@@ -181,3 +181,55 @@ error: Ambiguous accessor
    |
  8 |    (let ((g (fn (p) (.x p))))
    |                      ^^ accessor is ambiguous
+
+================================================================================
+110 rec-accessors-use-init-binding-types
+================================================================================
+
+(package coalton-unit-tests/struct)
+
+(define-struct Point
+  (x Integer)
+  (y Integer))
+
+(declare f (Point -> Integer))
+(define (f p)
+  (rec % ((x p))
+    (.x x)))
+
+--------------------------------------------------------------------------------
+
+================================================================================
+111 accessor-sees-monadenvironment-fundeps
+================================================================================
+
+(package coalton-unit-tests/struct
+  (import (coalton/monad/environment as env)))
+
+(define-struct Book
+  (title String)
+  (pages Integer))
+
+(declare book-title (env:Env Book String))
+(define book-title
+  (env:asks (fn (book) (.title book))))
+
+--------------------------------------------------------------------------------
+
+================================================================================
+112 rec-accessors-see-init-binding-declares
+================================================================================
+
+(package coalton-unit-tests/struct)
+
+(define-struct Point
+  (x Integer)
+  (y Integer))
+
+(declare f (Point -> Integer))
+(define (f p)
+  (rec % ((declare x Point)
+          (x p))
+    (.x x)))
+
+--------------------------------------------------------------------------------

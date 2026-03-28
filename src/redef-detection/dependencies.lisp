@@ -96,6 +96,30 @@
                         (setf (gethash name new-locals) t)))
                     (traverse (parser:node-let-body node) new-locals)))
 
+                 ;; REC lowers to an outer let for init bindings, plus a local
+                 ;; recursive function and immediate application.
+                 (parser:node-rec
+                  (dolist (binding (parser:node-rec-bindings node))
+                    (traverse (parser:node-let-binding-value binding)
+                              local-bindings))
+                  (let ((outer-locals (alexandria:copy-hash-table local-bindings)))
+                    (dolist (binding (parser:node-rec-bindings node))
+                      (setf (gethash (parser:node-variable-name
+                                      (parser:node-let-binding-name binding))
+                                     outer-locals)
+                            t))
+                    (let ((body-locals (alexandria:copy-hash-table outer-locals)))
+                      (setf (gethash (parser:node-variable-name
+                                      (parser:node-rec-name node))
+                                     body-locals)
+                            t)
+                      (dolist (pvar (parser:pattern-variables
+                                     (parser:node-rec-params node)))
+                        (setf (gethash (parser:pattern-var-name pvar) body-locals) t))
+                      (traverse (parser:node-rec-body node) body-locals))
+                    (dolist (arg (parser:node-rec-call-args node))
+                      (traverse arg outer-locals))))
+
                  ;; Dynamic binding - initializers and body both see the same
                  ;; lexical scope because dynamic bindings do not introduce
                  ;; lexical variables.
