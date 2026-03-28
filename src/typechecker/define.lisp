@@ -81,6 +81,18 @@
     (t
      env)))
 
+(defun parse-the-type-annotation (annotation env)
+  (declare (type parser:qualified-ty annotation)
+           (type tc-env env)
+           (values tc:qualified-ty tc:tyvar-list boolean &optional))
+  (multiple-value-bind (qual-ty explicit-tvars explicit-p)
+      (parse-qualified-type-info annotation (tc-env-parser-env env))
+    (when (tc:qualified-ty-predicates qual-ty)
+      (tc-error "Invalid type annotation"
+                (tc-note annotation
+                         "`the` annotations cannot include predicate contexts")))
+    (values qual-ty explicit-tvars explicit-p)))
+
 (defmacro with-type-string-environment ((env) &body body)
   `(let ((*type-string-environment*
            (or *type-string-environment*
@@ -1981,52 +1993,58 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node tc:substitution-list &optional))
 
-    (let ((declared-ty (parse-type (parser:node-the-type node)
-                                   (tc-env-parser-env env))))
+    (multiple-value-bind (declared-qual-ty explicit-tvars explicit-p)
+        (parse-the-type-annotation (parser:node-the-type node) env)
+      (let* ((declared-ty (tc:qualified-ty-type declared-qual-ty))
+             (expr-env (if explicit-p
+                           (tc-env-extend-type-variable-scope
+                            env
+                            (remove-duplicates explicit-tvars :test #'tc:ty=))
+                           env)))
 
-      (multiple-value-bind (expr-ty preds accessors expr-node subs)
-          (infer-expression-type (parser:node-the-expr node)
-                                 (tc:make-variable)
-                                 subs
-                                 env)
+        (multiple-value-bind (expr-ty preds accessors expr-node subs)
+            (infer-expression-type (parser:node-the-expr node)
+                                   (tc:make-variable)
+                                   subs
+                                   expr-env)
 
-        ;; Ensure subs are applied
-        (setf expr-ty (tc:apply-substitution subs expr-ty))
+          ;; Ensure subs are applied
+          (setf expr-ty (tc:apply-substitution subs expr-ty))
 
-        ;; Check that declared-ty and expr-ty unify
-        (handler-case
-            (setf subs (tc:unify subs declared-ty expr-ty))
-          (tc:coalton-internal-type-error ()
-            (tc-error "Type mismatch"
-                      (tc-note node "Declared type '~A' does not match inferred type '~A'"
-                               (type-object-string (tc:apply-substitution subs declared-ty))
-                               (type-object-string (tc:apply-substitution subs expr-ty))))))
+          ;; Check that declared-ty and expr-ty unify
+          (handler-case
+              (setf subs (tc:unify subs declared-ty expr-ty))
+            (tc:coalton-internal-type-error ()
+              (tc-error "Type mismatch"
+                        (tc-note node "Declared type '~A' does not match inferred type '~A'"
+                                 (type-object-string (tc:apply-substitution subs declared-ty))
+                                 (type-object-string (tc:apply-substitution subs expr-ty))))))
 
-        ;; Check that declared-ty is not more specific than expr-ty
-        (handler-case
-            (tc:match expr-ty declared-ty)
-          (tc:coalton-internal-type-error ()
-            (tc-error "Declared type too general"
-                      (tc-note node "Declared type '~A' is more general than inferred type '~A'"
-                               (type-object-string (tc:apply-substitution subs declared-ty))
-                               (type-object-string (tc:apply-substitution subs expr-ty))))))
+          ;; Check that declared-ty is not more specific than expr-ty
+          (handler-case
+              (tc:match expr-ty declared-ty)
+            (tc:coalton-internal-type-error ()
+              (tc-error "Declared type too general"
+                        (tc-note node "Declared type '~A' is more general than inferred type '~A'"
+                                 (type-object-string (tc:apply-substitution subs declared-ty))
+                                 (type-object-string (tc:apply-substitution subs expr-ty))))))
 
-        ;; SAFETY: If declared-ty and expr-ty unify, and expr-ty is
-        ;; more general than declared-ty then matching should be
-        ;; infallible
-        (setf subs (tc:compose-substitution-lists subs (tc:match expr-ty declared-ty)))
+          ;; SAFETY: If declared-ty and expr-ty unify, and expr-ty is
+          ;; more general than declared-ty then matching should be
+          ;; infallible
+          (setf subs (tc:compose-substitution-lists subs (tc:match expr-ty declared-ty)))
 
-        (handler-case
-            (progn
-              (setf subs (tc:unify subs expr-ty expected-type))
-              (values
-               (tc:apply-substitution subs expr-ty)
-               preds
-               accessors
-               expr-node
-               subs))
-          (tc:coalton-internal-type-error ()
-            (standard-expression-type-mismatch-error node subs expected-type expr-ty))))))
+          (handler-case
+              (progn
+                (setf subs (tc:unify subs expr-ty expected-type))
+                (values
+                 (tc:apply-substitution subs expr-ty)
+                 preds
+                 accessors
+                 expr-node
+                 subs))
+            (tc:coalton-internal-type-error ()
+              (standard-expression-type-mismatch-error node subs expected-type expr-ty)))))))
 
   (:method ((node parser:node-collection-builder) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -4112,10 +4130,9 @@ as a recursive function rather than a recursive value."
                         (values (or null tc:ty) &optional))
                (let ((value (parser:binding-value binding)))
                  (when (typep value 'parser:node-the)
-                   ;; `parse-type` also returns kind substitutions; only keep the parsed type.
-                   (nth-value 0
-                              (parse-type (parser:node-the-type value)
-                                          (tc-env-env env))))))
+                   (tc:qualified-ty-type
+                    (parse-the-type-annotation (parser:node-the-type value)
+                                               env)))))
              (add-implicit-binding-type (name binding)
                (declare (type symbol name)
                         (type (or parser:toplevel-define parser:node-let-binding) binding)
