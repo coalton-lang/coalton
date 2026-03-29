@@ -94,7 +94,7 @@ Coalton is currently used in production to build defense and [quantum computing 
 > [!WARNING]
 > Coalton has **not** reached "1.0" yet. This means that, from time to time, you may have a substandard user experience. While we try to be ANSI-conforming, Coalton is currently only tested on recent versions of SBCL, Allegro CL, and Clozure CL.
 >
-> Coalton will **not** be in Quicklisp until it reaches its first stable version.
+> The version of Coalton that may be in Quicklisp may not be up-to-date.
 
 **Prepare**: Install [SBCL](http://www.sbcl.org/platform-table.html) (on macOS with Homebrew: `brew install sbcl`). Install Quicklisp by following instructions [here](https://www.quicklisp.org/beta/#installation). (The step command involving `gpg` is not needed.) After installing Quicklisp, you should have a `quicklisp` folder which will make installing Coalton easier.
 
