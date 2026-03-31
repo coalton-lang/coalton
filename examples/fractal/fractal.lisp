@@ -30,7 +30,7 @@
                  (ln 2))))
       (- 1 nu)))
 
-  (declare lisp-mandel (UFix -> Fraction -> Fraction -> F32))
+  (declare lisp-mandel (UFix * Fraction * Fraction -> F32))
   (define (lisp-mandel prec x y)
     (bf:set-precision! (+ 64 prec))
     (let ((x-bf (the bf:Big-Float (into x)))
