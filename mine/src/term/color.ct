@@ -1,0 +1,97 @@
+(cl:defpackage #:mine/term/color
+  (:use #:coalton #:coalton-prelude)
+  (:export
+   #:Color
+   #:ColorDefault #:Color16 #:Color256 #:ColorRGB
+   #:Attr
+   #:AttrNone #:AttrBold #:AttrDim #:AttrItalic
+   #:AttrUnderline #:AttrReverse
+   #:Style #:Style
+   #:default-style
+   #:.style-fg #:.style-bg #:.style-attr
+   #:with-fg #:with-bg #:with-attr))
+
+(in-package #:mine/term/color)
+
+(coalton-toplevel
+
+  ;;; Color
+
+  (define-type Color
+    "Terminal color specification."
+    ColorDefault
+    (Color16 UFix)
+    (Color256 UFix)
+    (ColorRGB UFix UFix UFix))
+
+  (define-instance (Eq Color)
+    (define (== a b)
+      (match (Tuple a b)
+        ((Tuple (ColorDefault) (ColorDefault))
+         True)
+        ((Tuple (Color16 x) (Color16 y))
+         (== x y))
+        ((Tuple (Color256 x) (Color256 y))
+         (== x y))
+        ((Tuple (ColorRGB r1 g1 b1) (ColorRGB r2 g2 b2))
+         (and (== r1 r2) (and (== g1 g2) (== b1 b2))))
+        (_ False))))
+
+  ;;; Attr
+
+  (repr :enum)
+  (define-type Attr
+    "Text attribute for terminal rendering."
+    AttrNone
+    AttrBold
+    AttrDim
+    AttrItalic
+    AttrUnderline
+    AttrReverse)
+
+  (define-instance (Eq Attr)
+    (define (== a b)
+      (match (Tuple a b)
+        ((Tuple (AttrNone) (AttrNone)) True)
+        ((Tuple (AttrBold) (AttrBold)) True)
+        ((Tuple (AttrDim) (AttrDim)) True)
+        ((Tuple (AttrItalic) (AttrItalic)) True)
+        ((Tuple (AttrUnderline) (AttrUnderline)) True)
+        ((Tuple (AttrReverse) (AttrReverse)) True)
+        (_ False))))
+
+  ;;; Style
+
+  (define-struct Style
+    "Combined foreground color, background color, and text attribute."
+    (style-fg Color)
+    (style-bg Color)
+    (style-attr Attr))
+
+  (define-instance (Eq Style)
+    (define (== a b)
+      (and (== (.style-fg a) (.style-fg b))
+           (and (== (.style-bg a) (.style-bg b))
+                (== (.style-attr a) (.style-attr b))))))
+
+  ;;; Defaults and helpers
+
+  (declare default-style Style)
+  (define default-style
+    "Style with default foreground and black background."
+    (Style (ColorRGB 255 255 255) (ColorRGB 0 0 0) AttrNone))
+
+  (declare with-fg (Style * Color -> Style))
+  (define (with-fg s c)
+    "Return a new style with the foreground color replaced."
+    (Style c (.style-bg s) (.style-attr s)))
+
+  (declare with-bg (Style * Color -> Style))
+  (define (with-bg s c)
+    "Return a new style with the background color replaced."
+    (Style (.style-fg s) c (.style-attr s)))
+
+  (declare with-attr (Style * Attr -> Style))
+  (define (with-attr s a)
+    "Return a new style with the attribute replaced."
+    (Style (.style-fg s) (.style-bg s) a)))

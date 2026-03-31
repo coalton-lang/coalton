@@ -1,0 +1,265 @@
+(cl:defpackage #:mine/pane/repl
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:screen #:mine/term/screen)
+   (#:color #:mine/term/color)
+   (#:wt #:mine/widget/types)
+   (#:render #:mine/widget/render)
+   (#:cell #:coalton/cell)
+   (#:vec #:coalton/vector)
+   (#:str #:coalton/string)
+   (#:widget-text #:mine/widget/text)
+   (#:widget-input #:mine/widget/input)
+   (#:input #:mine/term/input)
+   (#:ev #:mine/event/types))
+  (:export
+   #:ReplPane
+   #:repl-pane-new
+   #:repl-pane-render
+   #:repl-pane-clear-output!
+   #:repl-pane-append-output!
+   #:repl-pane-get-input
+   #:repl-pane-clear-input!
+   #:repl-pane-handle-key!
+   #:repl-pane-history-up!
+   #:repl-pane-history-down!
+   #:repl-pane-add-history!
+   #:repl-pane-scroll-output-up!
+   #:repl-pane-scroll-output-down!
+   #:repl-pane-output-line-count
+   #:repl-pane-output-scroll
+   #:repl-pane-set-output-scroll!
+   #:repl-pane-start-selection!
+   #:repl-pane-extend-selection!
+   #:repl-pane-clear-selection!
+   #:repl-pane-has-selection?
+   #:repl-pane-copy-selection!
+   #:repl-pane-paste-to-input!))
+
+(in-package #:mine/pane/repl)
+
+(coalton-toplevel
+
+  ;;; ReplPane
+
+  (define-struct ReplPane
+    "An interactive REPL pane with output history and input line."
+    (output        widget-text:TextWidget)
+    (input-widget  widget-input:InputWidget)
+    (history       (Cell (Vector String)))
+    (history-pos   (Cell UFix))
+    (prompt        (Cell String)))
+
+  (declare repl-pane-new (Void -> ReplPane))
+  (define (repl-pane-new)
+    "Create a new REPL pane with the default Coalton prompt."
+    (let prompt-style = (color:Style (color:ColorRGB 114 159 207)
+                                      (color:ColorRGB 37 43 43)
+                                      color:AttrBold))
+    (let text-style = (color:Style (color:ColorRGB 238 238 236)
+                                    (color:ColorRGB 37 43 43)
+                                    color:AttrNone))
+    (let iw = (widget-input:input-widget-new "> " prompt-style text-style))
+    (ReplPane (widget-text:text-widget-new color:default-style)
+              iw
+              (cell:new (vec:new))
+              (cell:new 0)
+              (cell:new "> ")))
+
+  ;;; Output management
+
+  (declare repl-pane-clear-output! (ReplPane -> Void))
+  (define (repl-pane-clear-output! rp)
+    "Clear the REPL output area."
+    (widget-text:text-widget-clear! (.output rp))
+    (values))
+
+  (declare repl-pane-append-output! (ReplPane * String -> Void))
+  (define (repl-pane-append-output! rp text)
+    "Append text to the REPL output area."
+    (widget-text:text-widget-append! (.output rp) text)
+    (widget-text:text-widget-scroll-to-bottom! (.output rp))
+    (values))
+
+  ;;; Input management
+
+  (declare repl-pane-get-input (ReplPane -> String))
+  (define (repl-pane-get-input rp)
+    "Get the current text from the input widget."
+    (widget-input:input-widget-text (.input-widget rp)))
+
+  (declare repl-pane-clear-input! (ReplPane -> Void))
+  (define (repl-pane-clear-input! rp)
+    "Clear the input widget."
+    (widget-input:input-widget-clear! (.input-widget rp))
+    (values))
+
+  ;;; History
+
+  (declare repl-pane-add-history! (ReplPane * String -> Void))
+  (define (repl-pane-add-history! rp text)
+    "Add an entry to the command history."
+    (vec:push! text (cell:read (.history rp)))
+    (cell:write! (.history-pos rp) (vec:length (cell:read (.history rp))))
+    (values))
+
+  (declare repl-pane-history-up! (ReplPane -> Void))
+  (define (repl-pane-history-up! rp)
+    "Navigate to the previous history entry."
+    (let pos = (cell:read (.history-pos rp)))
+    (let hist = (cell:read (.history rp)))
+    (when (> pos 0)
+      (let new-pos = (- pos 1))
+      (cell:write! (.history-pos rp) new-pos)
+      (match (vec:index-unsafe new-pos hist)
+        (entry
+         (widget-input:input-widget-set-text! (.input-widget rp) entry))))
+    (values))
+
+  (declare repl-pane-history-down! (ReplPane -> Void))
+  (define (repl-pane-history-down! rp)
+    "Navigate to the next history entry."
+    (let pos = (cell:read (.history-pos rp)))
+    (let hist = (cell:read (.history rp)))
+    (let hist-len = (vec:length hist))
+    (cond
+      ;; Past the end -- clear input.
+      ((>= (+ pos 1) hist-len)
+       (cell:write! (.history-pos rp) hist-len)
+       (widget-input:input-widget-clear! (.input-widget rp))
+       (values))
+      ;; Show next entry.
+      (True
+       (let new-pos = (+ pos 1))
+       (cell:write! (.history-pos rp) new-pos)
+       (match (vec:index-unsafe new-pos hist)
+         (entry
+          (widget-input:input-widget-set-text! (.input-widget rp) entry)))
+       (values))))
+
+  ;;; Output scrolling
+
+  (declare repl-pane-scroll-output-up! (ReplPane * UFix -> Void))
+  (define (repl-pane-scroll-output-up! rp n)
+    "Scroll the output area up by N lines."
+    (widget-text:text-widget-scroll-up! (.output rp) n)
+    (values))
+
+  (declare repl-pane-scroll-output-down! (ReplPane * UFix -> Void))
+  (define (repl-pane-scroll-output-down! rp n)
+    "Scroll the output area down by N lines."
+    (widget-text:text-widget-scroll-down! (.output rp) n)
+    (values))
+
+  (declare repl-pane-output-line-count (ReplPane -> UFix))
+  (define (repl-pane-output-line-count rp)
+    "Return the number of lines in the output."
+    (widget-text:text-widget-line-count (.output rp)))
+
+  (declare repl-pane-output-scroll (ReplPane -> UFix))
+  (define (repl-pane-output-scroll rp)
+    "Return the current output scroll offset."
+    (cell:read (widget-text:.tw-scroll (.output rp))))
+
+  (declare repl-pane-set-output-scroll! (ReplPane * UFix -> Void))
+  (define (repl-pane-set-output-scroll! rp n)
+    "Set the output scroll offset."
+    (cell:write! (widget-text:.tw-scroll (.output rp)) n)
+    (values))
+
+  ;;; Selection
+
+  (declare repl-pane-start-selection! (ReplPane * UFix * UFix -> Void))
+  (define (repl-pane-start-selection! rp line col)
+    "Start a selection in the output area at (LINE, COL)."
+    (widget-text:text-widget-start-selection! (.output rp) line col)
+    (values))
+
+  (declare repl-pane-extend-selection! (ReplPane * UFix * UFix -> Void))
+  (define (repl-pane-extend-selection! rp line col)
+    "Extend the selection in the output area to (LINE, COL)."
+    (widget-text:text-widget-extend-selection! (.output rp) line col)
+    (values))
+
+  (declare repl-pane-clear-selection! (ReplPane -> Void))
+  (define (repl-pane-clear-selection! rp)
+    "Clear the output selection."
+    (widget-text:text-widget-clear-selection! (.output rp))
+    (values))
+
+  (declare repl-pane-has-selection? (ReplPane -> Boolean))
+  (define (repl-pane-has-selection? rp)
+    "Return True if the output has an active selection."
+    (widget-text:text-widget-has-selection? (.output rp)))
+
+  (declare repl-pane-copy-selection! (ReplPane -> String))
+  (define (repl-pane-copy-selection! rp)
+    "Return the selected text from the output."
+    (widget-text:text-widget-selected-text (.output rp)))
+
+  (declare repl-pane-paste-to-input! (ReplPane * String -> Void))
+  (define (repl-pane-paste-to-input! rp text)
+    "Insert TEXT into the input widget at the cursor position."
+    (let iw = (.input-widget rp))
+    (let cur-text = (cell:read (widget-input:.iw-text iw)))
+    (let cursor = (cell:read (widget-input:.iw-cursor iw)))
+    (let len = (str:length cur-text))
+    (let before = (str:substring cur-text 0 (min cursor len)))
+    (let after = (str:substring cur-text (min cursor len) len))
+    (cell:write! (widget-input:.iw-text iw) (<> before (<> text after)))
+    (cell:write! (widget-input:.iw-cursor iw) (+ cursor (str:length text)))
+    (values))
+
+  ;;; Key handling
+
+  (declare repl-pane-handle-key! (ReplPane * input:Key * input:Modifier -> wt:EventResult))
+  (define (repl-pane-handle-key! rp key modifier)
+    "Handle a key press in the REPL pane."
+    (match (Tuple key modifier)
+      ;; Up arrow -- history up.
+      ((Tuple (input:KeyUp) (input:ModNone))
+       (repl-pane-history-up! rp)
+       wt:Consumed)
+      ;; Down arrow -- history down.
+      ((Tuple (input:KeyDown) (input:ModNone))
+       (repl-pane-history-down! rp)
+       wt:Consumed)
+      ;; Delegate to input widget.
+      (_
+       (widget-input:input-widget-handle-key! (.input-widget rp) key modifier))))
+
+  ;;; Rendering
+
+  (declare repl-pane-render (ReplPane * screen:Screen * wt:Rect -> Void))
+  (define (repl-pane-render rp scr rect)
+    "Render the REPL pane: output takes all but the last row, input takes the last row."
+    (let h = (wt:.rect-height rect))
+    (cond
+      ;; Not enough room -- just draw the input.
+      ((<= h 1)
+       (widget-input:input-widget-render (.input-widget rp) scr rect))
+      ;; Split: output above, input below.
+      (True
+       (let output-rect = (wt:Rect (wt:.rect-x rect)
+                                     (wt:.rect-y rect)
+                                     (wt:.rect-width rect)
+                                     (- h 1)))
+       (let input-rect = (wt:Rect (wt:.rect-x rect)
+                                    (+ (wt:.rect-y rect) (- h 1))
+                                    (wt:.rect-width rect)
+                                    1))
+       (widget-text:text-widget-render (.output rp) scr output-rect)
+       ;; Scrollbar on output area
+       (let total-lines = (widget-text:text-widget-line-count (.output rp)))
+       (let scroll-off = (cell:read (widget-text:.tw-scroll (.output rp))))
+       (let sb-col = (- (+ (wt:.rect-x rect) (wt:.rect-width rect)) 1))
+       (let track-s = (color:Style (color:ColorRGB 60 66 66)
+                                     (color:ColorRGB 46 52 52)
+                                     color:AttrNone))
+       (let thumb-s = (color:Style (color:ColorRGB 186 189 182)
+                                     (color:ColorRGB 46 52 52)
+                                     color:AttrNone))
+       (render:draw-scrollbar scr sb-col (wt:.rect-y rect) (- h 1)
+                               total-lines scroll-off track-s thumb-s)
+       (widget-input:input-widget-render (.input-widget rp) scr input-rect)
+       (values)))))

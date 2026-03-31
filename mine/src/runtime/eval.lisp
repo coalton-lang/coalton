@@ -1,0 +1,141 @@
+;;;; eval.lisp -- Safe evaluation for the runtime server.
+;;;;
+;;;; Provides sandboxed evaluation of forms in specified packages.
+
+(in-package #:mine/runtime/eval)
+
+;;; Helpers
+
+(defun find-or-make-package (package-name)
+  "Find the package named PACKAGE-NAME, creating it if it does not exist."
+  (or (find-package (string-upcase package-name))
+      (make-package (string-upcase package-name) :use '(#:cl))))
+
+(defun coalton-form-p (form)
+  "Return T if FORM is a Coalton toplevel or inline form."
+  (and (consp form)
+       (symbolp (car form))
+       (member (symbol-name (car form))
+               '("COALTON-TOPLEVEL" "COALTON")
+               :test #'string-equal)))
+
+;;; Public API
+
+(defun safe-eval (form-string package-name)
+  "Evaluate FORM-STRING in the package named PACKAGE-NAME.
+Returns (values result-string output-string error-string) where
+error-string is NIL on success."
+  (let ((pkg (find-or-make-package package-name)))
+    (handler-case
+        (let* ((form (let ((*package* pkg)
+                           (*read-eval* nil))
+                       (read-from-string form-string)))
+               (stdout-capture (make-string-output-stream))
+               (stderr-capture (make-string-output-stream))
+               (result-values nil))
+          ;; Evaluate with output capture
+          (setf result-values
+                (handler-case
+                    (let ((*standard-output* (make-broadcast-stream
+                                              *standard-output*
+                                              stdout-capture))
+                          (*error-output* (make-broadcast-stream
+                                           *error-output*
+                                           stderr-capture))
+                          (*trace-output* (make-broadcast-stream
+                                           *trace-output*
+                                           stderr-capture))
+                          (*package* pkg))
+                      (multiple-value-list (eval form)))
+                  (error (c)
+                    (return-from safe-eval
+                      (values nil
+                              (get-output-stream-string stdout-capture)
+                              (format nil "~A" c))))))
+          ;; Format multiple values nicely
+          (let ((result-string
+                  (with-output-to-string (s)
+                    (loop :for val :in result-values
+                          :for i :from 0
+                          :do (when (> i 0) (terpri s))
+                              (let ((*package* pkg))
+                                (write val :stream s))))))
+            (values result-string
+                    (get-output-stream-string stdout-capture)
+                    nil)))
+      ;; Read errors (malformed input)
+      (reader-error (c)
+        (values nil nil (format nil "Read error: ~A" c)))
+      (end-of-file (c)
+        (declare (ignore c))
+        (values nil nil "Read error: unexpected end of input"))
+      (package-error (c)
+        (values nil nil (format nil "Package error: ~A" c)))
+      (error (c)
+        (values nil nil (format nil "Error: ~A" c))))))
+
+(defun debug-eval (form-string package-name)
+  "Evaluate FORM-STRING, letting errors propagate to *debugger-hook*.
+Returns (values result-string output-string) on success.
+Read errors and package errors are signaled directly."
+  (let* ((pkg (find-or-make-package package-name))
+         (form (let ((*package* pkg) (*read-eval* nil))
+                 (read-from-string form-string)))
+         (stdout-capture (make-string-output-stream))
+         (stderr-capture (make-string-output-stream))
+         (result-values
+           (let ((*standard-output* (make-broadcast-stream
+                                      *standard-output* stdout-capture))
+                 (*error-output* (make-broadcast-stream
+                                   *error-output* stderr-capture))
+                 (*trace-output* (make-broadcast-stream
+                                   *trace-output* stderr-capture))
+                 (*package* pkg))
+             (multiple-value-list (eval form))))
+         (all-output (concatenate 'string
+                       (get-output-stream-string stdout-capture)
+                       (get-output-stream-string stderr-capture))))
+    (values (with-output-to-string (s)
+              (loop :for val :in result-values
+                    :for i :from 0
+                    :do (when (> i 0) (terpri s))
+                        (let ((*package* pkg)) (write val :stream s))))
+            all-output)))
+
+(defun eval-in-package (form package-name)
+  "Evaluate an already-read FORM in the context of PACKAGE-NAME.
+Returns (values result-string output-string error-string)."
+  (let ((pkg (find-or-make-package package-name)))
+    (handler-case
+        (let ((stdout-capture (make-string-output-stream))
+              (stderr-capture (make-string-output-stream))
+              (result-values nil))
+          (setf result-values
+                (handler-case
+                    (let ((*standard-output* (make-broadcast-stream
+                                              *standard-output*
+                                              stdout-capture))
+                          (*error-output* (make-broadcast-stream
+                                           *error-output*
+                                           stderr-capture))
+                          (*package* pkg))
+                      (multiple-value-list (eval form)))
+                  (error (c)
+                    (return-from eval-in-package
+                      (values nil
+                              (get-output-stream-string stdout-capture)
+                              (format nil "~A" c))))))
+          (let ((result-string
+                  (with-output-to-string (s)
+                    (loop :for val :in result-values
+                          :for i :from 0
+                          :do (when (> i 0)
+                                (write-string " ; " s)
+                                (terpri s))
+                              (let ((*package* pkg))
+                                (write val :stream s))))))
+            (values result-string
+                    (get-output-stream-string stdout-capture)
+                    nil)))
+      (error (c)
+        (values nil nil (format nil "Error: ~A" c))))))

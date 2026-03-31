@@ -1,0 +1,126 @@
+name: Build mine
+
+on:
+  push:
+    tags:
+      - 'mine-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux-x86_64
+            binary: mine
+          - os: macos-latest
+            name: macos-arm64
+            binary: mine
+          - os: windows-latest
+            name: windows-x86_64
+            binary: mine.exe
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Install SBCL ---
+
+      - name: Install SBCL (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y sbcl
+
+      - name: Install SBCL (macOS)
+        if: runner.os == 'macOS'
+        run: brew install sbcl
+
+      - name: Install SBCL (Windows)
+        if: runner.os == 'Windows'
+        run: choco install sbcl -y
+
+      # --- Install Quicklisp ---
+
+      - name: Install Quicklisp (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          curl -o /tmp/quicklisp.lisp https://beta.quicklisp.org/quicklisp.lisp
+          sbcl --noinform --non-interactive \
+            --load /tmp/quicklisp.lisp \
+            --eval '(quicklisp-quickstart:install)' \
+            --eval '(quit)'
+
+      - name: Install Quicklisp (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://beta.quicklisp.org/quicklisp.lisp -OutFile quicklisp.lisp
+          sbcl --noinform --non-interactive `
+            --load quicklisp.lisp `
+            --eval '(quicklisp-quickstart:install)' `
+            --eval '(quit)'
+
+      # --- Build ---
+
+      - name: Build mine (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd mine
+          CL_SOURCE_REGISTRY="${GITHUB_WORKSPACE}//" \
+            sbcl --noinform --no-userinit --no-sysinit --non-interactive \
+            --dynamic-space-size 4096 \
+            --load "$HOME/quicklisp/setup.lisp" \
+            --eval '(asdf:load-system "mine" :verbose t)' \
+            --eval '(mine/app/mine:build)'
+
+      - name: Build mine (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:CL_SOURCE_REGISTRY = "$env:GITHUB_WORKSPACE//"
+          cd mine
+          sbcl --noinform --no-userinit --no-sysinit --non-interactive `
+            --dynamic-space-size 4096 `
+            --load "$env:USERPROFILE/quicklisp/setup.lisp" `
+            --eval '(asdf:load-system "mine" :verbose t)' `
+            --eval '(mine/app/mine:build)'
+
+      # --- Upload ---
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mine-${{ matrix.name }}
+          path: mine/${{ matrix.binary }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Prepare release files
+        run: |
+          chmod +x mine-linux-x86_64/mine mine-macos-arm64/mine
+          cp mine-linux-x86_64/mine mine-linux-x86_64
+          cp mine-macos-arm64/mine mine-macos-arm64
+          cp mine-windows-x86_64/mine.exe mine-windows-x86_64.exe
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            mine-linux-x86_64
+            mine-macos-arm64
+            mine-windows-x86_64.exe
+          generate_release_notes: true
