@@ -1,0 +1,164 @@
+(cl:defpackage #:mine/edit/operations
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:gap #:mine/buffer/gap)
+   (#:buf #:mine/buffer/buffer)
+   (#:cursor #:mine/edit/cursor)
+   (#:undo #:mine/edit/undo)
+   (#:cell #:coalton/cell)
+   (#:indent #:mine/syntax/indent)
+   (#:str #:coalton/string))
+  (:export
+   #:insert-char!
+   #:insert-string!
+   #:delete-backward!
+   #:delete-forward!
+   #:kill-line!
+   #:newline!))
+
+(in-package #:mine/edit/operations)
+
+(coalton-toplevel
+
+  ;;; Internal helpers
+
+  (declare string-length (String -> UFix))
+  (define (string-length s)
+    "Return the length of a string."
+    (lisp (-> UFix) (s)
+      (cl:length s)))
+
+  ;;; insert-char!
+
+  (declare insert-char! (buf:Buffer * undo:UndoTree * cursor:CursorState
+                          * Char -> Void))
+  (define (insert-char! buffer tree cs ch)
+    "Insert a single character at the cursor position.
+Records the operation for undo and advances the cursor."
+    (let p = (cursor:cursor-position cs))
+    (let gb = (buf:buffer-gap buffer))
+    (gap:gap-insert-char! gb p ch)
+    (buf:buffer-mark-dirty! buffer)
+    (let text = (into ch))
+    (undo:undo-record! tree (undo:OpInsert p text) p (+ p 1))
+    (cursor:cursor-move-right! gb cs))
+
+  ;;; insert-string!
+
+  (declare insert-string! (buf:Buffer * undo:UndoTree * cursor:CursorState
+                            * String -> Void))
+  (define (insert-string! buffer tree cs text)
+    "Insert a string at the cursor position.
+Records the operation for undo and advances the cursor."
+    (let p = (cursor:cursor-position cs))
+    (let gb = (buf:buffer-gap buffer))
+    (let len = (string-length text))
+    (gap:gap-insert-string! gb p text)
+    (buf:buffer-mark-dirty! buffer)
+    (undo:undo-record! tree (undo:OpInsert p text) p (+ p len))
+    ;; Move cursor to end of inserted text.
+    (cursor:cursor-move-to-position! cs (+ p len))
+    (values))
+
+  ;;; delete-backward!
+
+  (declare delete-backward! (buf:Buffer * undo:UndoTree * cursor:CursorState
+                              -> Void))
+  (define (delete-backward! buffer tree cs)
+    "Delete one character before the cursor (backspace).
+Does nothing if the cursor is at position 0."
+    (let p = (cursor:cursor-position cs))
+    (when (> p 0)
+      (let gb = (buf:buffer-gap buffer))
+      (let del-pos = (- p 1))
+      (match (gap:gap-char-at gb del-pos)
+        ((None) (values))
+        ((Some ch)
+         (gap:gap-delete-char! gb del-pos)
+         (buf:buffer-mark-dirty! buffer)
+         (let text = (into ch))
+         (undo:undo-record! tree (undo:OpDelete del-pos text) p del-pos)
+         (cursor:cursor-move-left! gb cs)))))
+
+  ;;; delete-forward!
+
+  (declare delete-forward! (buf:Buffer * undo:UndoTree * cursor:CursorState
+                             -> Void))
+  (define (delete-forward! buffer tree cs)
+    "Delete one character at the cursor position (delete key).
+Does nothing if the cursor is at the end of the buffer."
+    (let p = (cursor:cursor-position cs))
+    (let gb = (buf:buffer-gap buffer))
+    (let len = (gap:gap-length gb))
+    (when (< p len)
+      (match (gap:gap-char-at gb p)
+        ((None) (values))
+        ((Some ch)
+         (gap:gap-delete-char! gb p)
+         (buf:buffer-mark-dirty! buffer)
+         (let text = (into ch))
+         (undo:undo-record! tree (undo:OpDelete p text) p p)
+         (values)))))
+
+  ;;; kill-line!
+
+  (declare kill-line! (buf:Buffer * undo:UndoTree * cursor:CursorState
+                        -> String))
+  (define (kill-line! buffer tree cs)
+    "Delete from cursor to end of line. If cursor is at EOL, delete the newline.
+Returns the deleted text."
+    (let p = (cursor:cursor-position cs))
+    (let gb = (buf:buffer-gap buffer))
+    (let len = (gap:gap-length gb))
+    (cond
+      ((>= p len) "")
+      (True
+       (match (gap:gap-pos-to-line-col gb p)
+         ((Tuple line col)
+          (let line-text = (gap:gap-line-text gb line))
+          (let line-len = (string-length line-text))
+          (cond
+            ;; Cursor is at EOL: delete just the newline
+            ((and (== col line-len) (>= p len))
+             "")
+            ((== col line-len)
+             (gap:gap-delete-char! gb p)
+             (buf:buffer-mark-dirty! buffer)
+             (let deleted = (the String (into #\Newline)))
+             (undo:undo-record! tree (undo:OpDelete p deleted) p p)
+             deleted)
+            ;; Cursor is mid-line: delete from cursor to EOL
+            (True
+             (let line-start = (gap:gap-line-to-pos gb line))
+             (let eol-pos = (+ line-start line-len))
+             (let deleted = (gap:gap-substring gb p eol-pos))
+             (gap:gap-delete-range! gb p eol-pos)
+             (buf:buffer-mark-dirty! buffer)
+             (undo:undo-record! tree (undo:OpDelete p deleted) p p)
+             deleted)))))))
+
+  ;;; newline!
+
+  (declare %make-spaces (UFix -> String))
+  (define (%make-spaces n)
+    "Create a string of N spaces."
+    (lisp (-> String) (n)
+      (cl:make-string n :initial-element #\Space)))
+
+  (declare newline! (buf:Buffer * undo:UndoTree * cursor:CursorState
+                      -> Void))
+  (define (newline! buffer tree cs)
+    "Insert a newline plus auto-indentation at the cursor position."
+    ;; Insert the newline first
+    (insert-char! buffer tree cs #\Newline)
+    ;; Compute indentation for the new line
+    (let gb = (buf:buffer-gap buffer))
+    (let mode = (match (buf:buffer-mode buffer)
+                  ((buf:ModeCoalton) 0)
+                  ((buf:ModeLisp) 1)
+                  (_ 2)))
+    (match (cursor:cursor-line-col cs gb)
+      ((Tuple new-line _col)
+       (let indent-level = (indent:compute-indent gb mode new-line))
+       (when (> indent-level 0)
+         (insert-string! buffer tree cs (%make-spaces indent-level)))))))

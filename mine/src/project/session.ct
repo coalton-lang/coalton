@@ -1,0 +1,27 @@
+(cl:defpackage #:mine/project/session
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:cell #:coalton/cell))
+  (:export
+   #:Session #:Session
+   #:session-new
+   #:.session-root
+   #:.session-system-name))
+
+(in-package #:mine/project/session)
+
+(coalton-toplevel
+
+  ;;; Session
+
+  (define-struct Session
+    "A project session tracking the open project."
+    (session-root        (Cell String))
+    (session-system-name (Cell (Optional String))))
+
+  ;;; Constructor
+
+  (declare session-new (String -> Session))
+  (define (session-new root)
+    "Create a new session rooted at ROOT."
+    (Session (cell:new root) (cell:new None))))

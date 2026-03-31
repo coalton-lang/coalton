@@ -1,0 +1,100 @@
+name: Build mine
+
+on:
+  push:
+    tags:
+      - 'mine-v*'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux-x86_64
+            binary: mine
+          - os: macos-latest
+            name: macos-arm64
+            binary: mine
+          - os: windows-latest
+            name: windows-x86_64
+            binary: mine.exe
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SBCL
+        uses: coalton-lang/coalton-runners/setup-sbcl@main
+
+      # --- Build ---
+
+      - name: Build mine (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd mine
+          CL_SOURCE_REGISTRY="${GITHUB_WORKSPACE}//" \
+            sbcl --dynamic-space-size 4096 \
+            --noinform --non-interactive \
+            --eval '(ql:quickload "mine" :verbose t)' \
+            --eval '(mine/app/mine:build)'
+
+      - name: Build mine (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:CL_SOURCE_REGISTRY = "$env:GITHUB_WORKSPACE//"
+          cd mine
+          sbcl --dynamic-space-size 4096 `
+            --noinform --non-interactive `
+            --eval '(ql:quickload "mine" :verbose t)' `
+            --eval '(mine/app/mine:build)'
+
+      # --- Upload ---
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mine-${{ matrix.name }}
+          path: |
+            mine/${{ matrix.binary }}
+            mine/README.md
+
+  signing-instructions:
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    steps:
+      - name: How to sign and release these artifacts
+        run: |
+          echo "============================================================"
+          echo "  Build artifacts are ready for testing (unsigned)."
+          echo ""
+          echo "  To create a signed release from this build:"
+          echo ""
+          echo "  1. Go to: https://github.com/coalton-lang/mine-build/actions"
+          echo "  2. Select the 'Sign and Release' workflow"
+          echo "  3. Click 'Run workflow' and enter:"
+          echo "       Run ID: ${{ github.run_id }}"
+          echo "       Tag:    (the release tag, e.g. mine-v1.0.0)"
+          echo "============================================================"
+
+  trigger-signing:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Trigger signing in mine-build
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.MINE_BUILD_DISPATCH_TOKEN }}
+          repository: coalton-lang/mine-build
+          event-type: sign-release
+          client-payload: '{"run_id": "${{ github.run_id }}", "tag": "${{ github.ref_name }}", "sha": "${{ github.sha }}"}'

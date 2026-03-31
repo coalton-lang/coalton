@@ -1,0 +1,86 @@
+(cl:defpackage #:mine/project/asdf-model
+  (:use #:coalton #:coalton-prelude)
+  (:export
+   #:ComponentType #:CTFile #:CTModule #:CTCtFile
+   #:Component #:Component
+   #:.component-name #:.component-type #:.component-children
+   #:SystemDef #:SystemDef
+   #:.system-name #:.system-depends-on #:.system-components
+   #:.system-description #:.system-pathname
+   #:system-add-component
+   #:system-add-dependency
+   #:system-has-coalton?))
+
+(in-package #:mine/project/asdf-model)
+
+(coalton-toplevel
+
+  ;;; ComponentType
+
+  (repr :enum)
+  (define-type ComponentType
+    "Type of an ASDF system component."
+    CTFile
+    CTModule
+    CTCtFile)
+
+  (define-instance (Eq ComponentType)
+    (define (== a b)
+      (match (Tuple a b)
+        ((Tuple (CTFile) (CTFile)) True)
+        ((Tuple (CTModule) (CTModule)) True)
+        ((Tuple (CTCtFile) (CTCtFile)) True)
+        (_ False))))
+
+  ;;; Component
+
+  (define-struct Component
+    "A component within an ASDF system definition."
+    (component-name     String)
+    (component-type     ComponentType)
+    (component-children (List Component)))
+
+  ;;; SystemDef
+
+  (define-struct SystemDef
+    "An ASDF system definition."
+    (system-name        String)
+    (system-depends-on  (List String))
+    (system-components  (List Component))
+    (system-description String)
+    (system-pathname    String))
+
+  ;;; Helpers
+
+  (declare system-add-component (SystemDef * Component -> SystemDef))
+  (define (system-add-component sd comp)
+    "Return a new SystemDef with COMP appended to the components."
+    (SystemDef (.system-name sd)
+               (.system-depends-on sd)
+               (append (.system-components sd) (make-list comp))
+               (.system-description sd)
+               (.system-pathname sd)))
+
+  (declare system-add-dependency (SystemDef * String -> SystemDef))
+  (define (system-add-dependency sd dep)
+    "Return a new SystemDef with DEP appended to depends-on."
+    (SystemDef (.system-name sd)
+               (append (.system-depends-on sd) (make-list dep))
+               (.system-components sd)
+               (.system-description sd)
+               (.system-pathname sd)))
+
+  (declare %any-ct-file (List Component -> Boolean))
+  (define (%any-ct-file comps)
+    "Check if any component in the list (or children) is a CTCtFile."
+    (match comps
+      ((Nil) False)
+      ((Cons c rest)
+       (or (== (.component-type c) CTCtFile)
+           (%any-ct-file (.component-children c))
+           (%any-ct-file rest)))))
+
+  (declare system-has-coalton? (SystemDef -> Boolean))
+  (define (system-has-coalton? sd)
+    "Return True if any component in the system is a Coalton file."
+    (%any-ct-file (.system-components sd))))

@@ -1,0 +1,21 @@
+(cl:defpackage #:mine/config/types
+  (:use #:coalton #:coalton-prelude)
+  (:export
+   #:MineConfig #:MineConfig
+   #:.config-structural-editing
+   #:.config-repl-language
+   #:.config-default-package
+   #:.config-repl-init
+   #:.config-project-roots))
+
+(in-package #:mine/config/types)
+
+(coalton-toplevel
+
+  (define-struct MineConfig
+    "Top-level configuration for the mine IDE."
+    (config-structural-editing Boolean)
+    (config-repl-language      String)
+    (config-default-package    String)
+    (config-repl-init          (Optional String))
+    (config-project-roots      (List String))))
