@@ -1,0 +1,70 @@
+(cl:defpackage #:mine/edit/clipboard
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:cell #:coalton/cell)
+   (#:vec #:coalton/vector))
+  (:export
+   #:Clipboard
+   #:clipboard-new
+   #:clipboard-copy!
+   #:clipboard-paste
+   #:clipboard-cut!))
+
+(in-package #:mine/edit/clipboard)
+
+(coalton-toplevel
+
+  ;;; Clipboard
+
+  (define-struct Clipboard
+    "A simple kill ring / circular clipboard."
+    (ring (cell:Cell (vec:Vector String)))
+    (ring-pos (cell:Cell UFix))
+    (max-size UFix))
+
+  ;;; Constructor
+
+  (declare clipboard-new (Void -> Clipboard))
+  (define (clipboard-new)
+    "Create a new empty clipboard with a default ring size of 64."
+    (Clipboard (cell:new (vec:new))
+               (cell:new 0)
+               64))
+
+  ;;; Copy
+
+  (declare clipboard-copy! (Clipboard * String -> Void))
+  (define (clipboard-copy! clip text)
+    "Push text onto the clipboard ring.
+When the ring is full, overwrites the oldest entry."
+    (let v = (cell:read (.ring clip)))
+    (let len = (vec:length v))
+    (cond
+      ;; Ring not full: append
+      ((< len (.max-size clip))
+       (vec:push! text v)
+       (cell:write! (.ring-pos clip) len)
+       (values))
+      ;; Ring full: overwrite at the next position
+      (True
+       (let next = (mod (+ (cell:read (.ring-pos clip)) 1) (.max-size clip)))
+       (vec:set! next text v)
+       (cell:write! (.ring-pos clip) next)
+       (values))))
+
+  ;;; Paste
+
+  (declare clipboard-paste (Clipboard -> (Optional String)))
+  (define (clipboard-paste clip)
+    "Get the most recently added entry from the clipboard ring."
+    (let v = (cell:read (.ring clip)))
+    (if (vec:empty? v)
+        None
+        (vec:index (cell:read (.ring-pos clip)) v)))
+
+  ;;; Cut
+
+  (declare clipboard-cut! (Clipboard * String -> Void))
+  (define (clipboard-cut! clip text)
+    "Push text onto the clipboard ring (same as copy; cutting logic is in the caller)."
+    (clipboard-copy! clip text)))

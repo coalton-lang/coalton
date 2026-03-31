@@ -1,0 +1,158 @@
+(cl:defpackage #:mine/widget/input
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:screen #:mine/term/screen)
+   (#:color #:mine/term/color)
+   (#:wt #:mine/widget/types)
+   (#:render #:mine/widget/render)
+   (#:cell #:coalton/cell)
+   (#:str #:coalton/string)
+   (#:input #:mine/term/input)
+   (#:ev #:mine/event/types))
+  (:export
+   #:InputWidget #:InputWidget
+   #:.iw-text #:.iw-cursor #:.iw-prompt #:.iw-prompt-style #:.iw-text-style
+   #:input-widget-new
+   #:input-widget-render
+   #:input-widget-handle-key!
+   #:input-widget-text
+   #:input-widget-set-text!
+   #:input-widget-clear!))
+
+(in-package #:mine/widget/input)
+
+(coalton-toplevel
+
+  ;;; InputWidget
+
+  (define-struct InputWidget
+    "A single-line text input widget with prompt, cursor, and styles."
+    (iw-text         (Cell String))
+    (iw-cursor       (Cell UFix))
+    (iw-prompt       (Cell String))
+    (iw-prompt-style color:Style)
+    (iw-text-style   color:Style))
+
+  (declare input-widget-new (String * color:Style * color:Style -> InputWidget))
+  (define (input-widget-new prompt prompt-style text-style)
+    "Create a new InputWidget with separate prompt and text styles."
+    (InputWidget (cell:new "")
+                 (cell:new 0)
+                 (cell:new prompt)
+                 prompt-style
+                 text-style))
+
+  (declare input-widget-text (InputWidget -> String))
+  (define (input-widget-text iw)
+    "Get the current text content."
+    (cell:read (.iw-text iw)))
+
+  (declare input-widget-set-text! (InputWidget * String -> Void))
+  (define (input-widget-set-text! iw text)
+    "Set the text content and move cursor to the end."
+    (cell:write! (.iw-text iw) text)
+    (cell:write! (.iw-cursor iw) (str:length text))
+    (values))
+
+  (declare input-widget-clear! (InputWidget -> Void))
+  (define (input-widget-clear! iw)
+    "Clear the text content and reset cursor."
+    (cell:write! (.iw-text iw) "")
+    (cell:write! (.iw-cursor iw) 0)
+    (values))
+
+  ;;; Rendering
+
+  (declare input-widget-render (InputWidget * screen:Screen * wt:Rect -> Void))
+  (define (input-widget-render iw scr rect)
+    "Render the input widget: clear row, then draw prompt + text with cursor.
+Scrolls text horizontally so the cursor is always visible."
+    (let prompt = (cell:read (.iw-prompt iw)))
+    (let text   = (cell:read (.iw-text iw)))
+    (let cursor = (cell:read (.iw-cursor iw)))
+    (let ps     = (.iw-prompt-style iw))
+    (let ts     = (.iw-text-style iw))
+    (let row    = (wt:.rect-y rect))
+    (let x0     = (wt:.rect-x rect))
+    (let plen   = (str:length prompt))
+    (let w      = (wt:.rect-width rect))
+    ;; Available columns for text after prompt
+    (let text-w = (if (>= w plen) (- w plen) 0))
+    ;; Compute scroll offset so cursor is always visible
+    (let scroll = (if (< cursor text-w) 0 (+ 1 (- cursor text-w))))
+    (let visible-text = (str:substring text scroll (min (str:length text) (+ scroll text-w))))
+    ;; Clear the row with text style background
+    (render:fill-rect scr rect #\Space ts)
+    ;; Draw prompt with prompt style
+    (render:draw-text-clipped scr rect prompt row x0 ps)
+    ;; Draw visible portion of text
+    (render:draw-text-clipped scr rect visible-text row (+ x0 plen) ts)
+    ;; Position cursor within visible area
+    (screen:screen-set-cursor scr row (+ x0 (+ plen (- cursor scroll))))
+    (values))
+
+  ;;; Key handling
+
+  (declare delete-char-at (String * UFix -> String))
+  (define (delete-char-at s pos)
+    "Remove the character at POS from string S."
+    (str:concat (str:substring s 0 pos)
+                (str:substring s (+ pos 1) (str:length s))))
+
+  (declare insert-char-at (String * UFix * Char -> String))
+  (define (insert-char-at s pos ch)
+    "Insert CH at POS in string S."
+    (str:concat (str:substring s 0 pos)
+                (str:concat (into ch) (str:substring s pos (str:length s)))))
+
+  (declare input-widget-handle-key! (InputWidget * input:Key * input:Modifier -> wt:EventResult))
+  (define (input-widget-handle-key! iw key _modifier)
+    "Handle a key event. Return Consumed if handled, Ignored otherwise."
+    (let text   = (cell:read (.iw-text iw)))
+    (let cursor = (cell:read (.iw-cursor iw)))
+    (let len    = (str:length text))
+    (match key
+      ;; Character input
+      ((input:KeyChar ch)
+       (cell:write! (.iw-text iw) (insert-char-at text cursor ch))
+       (cell:write! (.iw-cursor iw) (+ cursor 1))
+       wt:Consumed)
+      ;; Backspace: delete character before cursor
+      ((input:KeyBackspace)
+       (cond
+         ((> cursor 0)
+          (cell:write! (.iw-text iw) (delete-char-at text (- cursor 1)))
+          (cell:write! (.iw-cursor iw) (- cursor 1))
+          wt:Consumed)
+         (True wt:Ignored)))
+      ;; Delete: delete character at cursor
+      ((input:KeyDelete)
+       (cond
+         ((< cursor len)
+          (cell:write! (.iw-text iw) (delete-char-at text cursor))
+          wt:Consumed)
+         (True wt:Ignored)))
+      ;; Home: move to start
+      ((input:KeyHome)
+       (cell:write! (.iw-cursor iw) 0)
+       wt:Consumed)
+      ;; End: move to end
+      ((input:KeyEnd)
+       (cell:write! (.iw-cursor iw) len)
+       wt:Consumed)
+      ;; Left arrow: move cursor left
+      ((input:KeyLeft)
+       (cond
+         ((> cursor 0)
+          (cell:write! (.iw-cursor iw) (- cursor 1))
+          wt:Consumed)
+         (True wt:Ignored)))
+      ;; Right arrow: move cursor right
+      ((input:KeyRight)
+       (cond
+         ((< cursor len)
+          (cell:write! (.iw-cursor iw) (+ cursor 1))
+          wt:Consumed)
+         (True wt:Ignored)))
+      ;; Anything else: not handled
+      (_ wt:Ignored))))

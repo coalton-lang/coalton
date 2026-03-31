@@ -1,0 +1,86 @@
+(cl:defpackage #:mine/widget/focus
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:cell #:coalton/cell))
+  (:export
+   #:FocusTarget
+   #:FocusEditor #:FocusRepl #:FocusTree
+   #:FocusMinibuffer #:FocusDebugger #:FocusMenu
+   #:FocusManager #:FocusManager
+   #:.fm-current #:.fm-previous
+   #:focus-new
+   #:focus-current
+   #:focus-switch!
+   #:focus-cycle!
+   #:focus-return!))
+
+(in-package #:mine/widget/focus)
+
+(coalton-toplevel
+
+  ;;; FocusTarget
+
+  (repr :enum)
+  (define-type FocusTarget
+    "Identifies which pane currently has focus."
+    FocusEditor
+    FocusRepl
+    FocusTree
+    FocusMinibuffer
+    FocusDebugger
+    FocusMenu)
+
+  (define-instance (Eq FocusTarget)
+    (define (== a b)
+      (match (Tuple a b)
+        ((Tuple (FocusEditor) (FocusEditor))         True)
+        ((Tuple (FocusRepl) (FocusRepl))             True)
+        ((Tuple (FocusTree) (FocusTree))             True)
+        ((Tuple (FocusMinibuffer) (FocusMinibuffer)) True)
+        ((Tuple (FocusDebugger) (FocusDebugger))     True)
+        ((Tuple (FocusMenu) (FocusMenu))             True)
+        (_ False))))
+
+  ;;; FocusManager
+
+  (define-struct FocusManager
+    "Tracks the currently focused pane and the previously focused pane."
+    (fm-current  (Cell FocusTarget))
+    (fm-previous (Cell FocusTarget)))
+
+  (declare focus-new (Void -> FocusManager))
+  (define (focus-new)
+    "Create a new FocusManager with FocusEditor as the default target."
+    (FocusManager (cell:new FocusEditor)
+                  (cell:new FocusEditor)))
+
+  (declare focus-current (FocusManager -> FocusTarget))
+  (define (focus-current fm)
+    "Return the current focus target."
+    (cell:read (.fm-current fm)))
+
+  (declare focus-switch! (FocusManager * FocusTarget -> Void))
+  (define (focus-switch! fm target)
+    "Save the current target as previous, then set the new current target."
+    (cell:write! (.fm-previous fm) (cell:read (.fm-current fm)))
+    (cell:write! (.fm-current fm) target)
+    (values))
+
+  (declare next-cycle-target (FocusTarget -> FocusTarget))
+  (define (next-cycle-target t)
+    "Return the next target in the cycle: Editor -> Repl -> Tree -> Editor."
+    (match t
+      ((FocusEditor) FocusRepl)
+      ((FocusRepl)   FocusTree)
+      (_             FocusEditor)))
+
+  (declare focus-cycle! (FocusManager -> Void))
+  (define (focus-cycle! fm)
+    "Cycle focus: Editor -> Repl -> Tree -> Editor."
+    (focus-switch! fm (next-cycle-target (focus-current fm))))
+
+  (declare focus-return! (FocusManager -> Void))
+  (define (focus-return! fm)
+    "Switch focus to the previously focused target."
+    (let prev = (cell:read (.fm-previous fm)))
+    (focus-switch! fm prev)))
