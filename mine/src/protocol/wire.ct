@@ -1,0 +1,151 @@
+(cl:defpackage #:mine/protocol/wire
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:cell #:coalton/cell)
+   (#:str #:coalton/string))
+  (:export
+   #:SExpr
+   #:SAtom #:SString #:SInteger #:SList #:SNil
+   #:encode-sexpr
+   #:decode-sexpr
+   #:wire-encode
+   #:wire-decode))
+
+(in-package #:mine/protocol/wire)
+
+(coalton-toplevel
+
+  ;;; SExpr -- wire-format S-expression representation
+
+  (define-type SExpr
+    "S-expression for the protocol wire format."
+    (SAtom String)
+    (SString String)
+    (SInteger Integer)
+    (SList (List SExpr))
+    SNil)
+
+  ;;; Encoding
+
+  (declare encode-sexpr (SExpr -> String))
+  (define (encode-sexpr expr)
+    "Encode an SExpr to its string representation."
+    (match expr
+      ((SAtom s) s)
+      ((SString s) (encode-string-literal s))
+      ((SInteger n)
+       (lisp (-> String) (n)
+         (cl:write-to-string n)))
+      ((SList items) (<> "(" (<> (encode-list-items items) ")")))
+      ((SNil) "nil")))
+
+  (declare encode-string-literal (String -> String))
+  (define (encode-string-literal s)
+    "Encode a string with double-quote delimiters and escaping."
+    (lisp (-> String) (s)
+      (cl:with-output-to-string (out)
+        (cl:write-char #\" out)
+        (cl:loop :for ch :across s :do
+          (cl:case ch
+            (#\\ (cl:write-string "\\\\" out))
+            (#\" (cl:write-string "\\\"" out))
+            (cl:otherwise (cl:write-char ch out))))
+        (cl:write-char #\" out))))
+
+  (declare encode-list-items ((List SExpr) -> String))
+  (define (encode-list-items items)
+    "Encode list items as space-separated strings."
+    (match items
+      ((Nil) "")
+      ((Cons x rest)
+       (let encoded = (encode-sexpr x))
+       (match rest
+         ((Nil) encoded)
+         (_ (<> encoded (<> " " (encode-list-items rest))))))))
+
+  ;;; Decoding
+
+  (declare decode-sexpr (String -> Optional SExpr))
+  (define (decode-sexpr text)
+    "Decode a string into an SExpr using CL's reader."
+    (lisp (-> (Optional SExpr)) (text)
+      (cl:handler-case
+          (cl:let ((result (mine/protocol/wire::parse-sexpr-from-string text)))
+            (cl:if result
+                   (Some result)
+                   None))
+        (cl:error () None))))
+
+  ;;; Wire-level encode/decode (6-byte hex header + payload)
+
+  (declare wire-encode (SExpr -> String))
+  (define (wire-encode expr)
+    "Encode an SExpr with a 6-byte uppercase hex length header."
+    (let payload = (encode-sexpr expr))
+    (lisp (-> String) (payload)
+      (cl:let ((len (cl:length (sb-ext:string-to-octets payload :external-format :utf-8))))
+        (cl:format cl:nil "~6,'0X~A" len payload))))
+
+  (declare wire-decode (String -> Optional SExpr))
+  (define (wire-decode text)
+    "Strip the 6-byte hex header and decode the SExpr payload."
+    (lisp (-> (Optional SExpr)) (text)
+      (cl:handler-case
+          (cl:if (cl:< (cl:length text) 6)
+                 None
+                 (cl:let* ((header (cl:subseq text 0 6))
+                           (_len (cl:parse-integer header :radix 16))
+                           (payload (cl:subseq text 6)))
+                   (cl:declare (cl:ignore _len))
+                   (cl:let ((result (mine/protocol/wire::parse-sexpr-from-string payload)))
+                     (cl:if result
+                            (Some result)
+                            None))))
+        (cl:error () None)))))
+
+;;; CL-side parser: converts CL objects from READ into SExpr values.
+
+(cl:declaim (cl:ftype (cl:function (cl:t) cl:t) cl-obj-to-sexpr))
+
+(cl:defun cl-list-to-sexpr-list (lst)
+  "Convert a CL list of objects into a Coalton (List SExpr)."
+  (cl:if (cl:null lst)
+         Nil
+         (Cons (cl-obj-to-sexpr (cl:car lst))
+               (cl-list-to-sexpr-list (cl:cdr lst)))))
+
+(cl:defun cl-obj-to-sexpr (obj)
+  "Convert a CL object (from READ) into a Coalton SExpr value."
+  (cl:cond
+    ((cl:null obj)
+     SNil)
+    ((cl:integerp obj)
+     (SInteger obj))
+    ((cl:stringp obj)
+     (SString obj))
+    ((cl:symbolp obj)
+     (cl:let ((name (cl:symbol-name obj)))
+       (cl:cond
+         ((cl:keywordp obj)
+          (SAtom (cl:format cl:nil ":~A" name)))
+         ((cl:string-equal name "NIL")
+          SNil)
+         ((cl:string-equal name "T")
+          (SAtom "T"))
+         (cl:t
+          (SAtom name)))))
+    ((cl:consp obj)
+     (SList (cl-list-to-sexpr-list obj)))
+    (cl:t
+     ;; Fallback: print it as an atom
+     (SAtom (cl:princ-to-string obj)))))
+
+(cl:defun parse-sexpr-from-string (str)
+  "Parse STR into an SExpr using CL's READ-FROM-STRING.
+Returns an SExpr or NIL on failure."
+  (cl:handler-case
+      (cl:let* ((cl:*read-eval* cl:nil)
+                (cl:*package* (cl:find-package :keyword))
+                (obj (cl:read-from-string str)))
+        (cl-obj-to-sexpr obj))
+    (cl:error () cl:nil)))

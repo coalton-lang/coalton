@@ -1,0 +1,52 @@
+(cl:defpackage #:mine/pane/output
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:screen #:mine/term/screen)
+   (#:color #:mine/term/color)
+   (#:wt #:mine/widget/types)
+   (#:render #:mine/widget/render)
+   (#:cell #:coalton/cell)
+   (#:widget-text #:mine/widget/text))
+  (:export
+   #:OutputPane
+   #:output-pane-new
+   #:output-pane-render
+   #:output-pane-append!
+   #:output-pane-clear!))
+
+(in-package #:mine/pane/output)
+
+(coalton-toplevel
+
+  ;;; OutputPane
+
+  (define-struct OutputPane
+    "A read-only output pane for compiler messages, notes, and other output."
+    (text-widget widget-text:TextWidget))
+
+  (declare output-pane-new (Void -> OutputPane))
+  (define (output-pane-new)
+    "Create a new empty output pane."
+    (OutputPane (widget-text:text-widget-new color:default-style)))
+
+  ;;; Content management
+
+  (declare output-pane-append! (OutputPane * String -> Void))
+  (define (output-pane-append! op line)
+    "Append a line to the output pane."
+    (widget-text:text-widget-append! (.text-widget op) line)
+    (widget-text:text-widget-scroll-to-bottom! (.text-widget op))
+    (values))
+
+  (declare output-pane-clear! (OutputPane -> Void))
+  (define (output-pane-clear! op)
+    "Clear all output."
+    (widget-text:text-widget-clear! (.text-widget op))
+    (values))
+
+  ;;; Rendering
+
+  (declare output-pane-render (OutputPane * screen:Screen * wt:Rect -> Void))
+  (define (output-pane-render op scr rect)
+    "Render the output pane within RECT."
+    (widget-text:text-widget-render (.text-widget op) scr rect)))

@@ -1,0 +1,496 @@
+(cl:defpackage #:mine/syntax/lexer
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:tok #:mine/syntax/token)
+   (#:cell #:coalton/cell)
+   (#:str #:coalton/string)
+   (#:char #:coalton/char)
+   (#:list #:coalton/list))
+  (:export
+   #:LexerState
+   #:lexer-state-new
+   #:lex-line))
+
+(in-package #:mine/syntax/lexer)
+
+(coalton-toplevel
+
+  ;;; LexerState
+
+  (define-struct LexerState
+    "Persistent state carried across lines for multi-line constructs."
+    (in-block-comment (Cell UFix))
+    (in-string        (Cell Boolean))
+    (lex-mode         UFix))
+
+  (declare lexer-state-new (UFix -> LexerState))
+  (define (lexer-state-new mode)
+    "Create a new lexer state. MODE: 0=coalton, 1=lisp, 2=plain."
+    (LexerState (cell:new 0)
+                (cell:new False)
+                mode))
+
+  ;;; Character predicates
+
+  (declare whitespace-char? (Char -> Boolean))
+  (define (whitespace-char? ch)
+    (or (== ch #\Space) (== ch #\Tab)))
+
+
+  (declare delimiters (List Char))
+  (define delimiters
+    [#\Space #\Tab #\Newline #\Return
+     #\( #\) #\[ #\]
+     #\; #\" #\' #\` #\, ])
+
+  (declare delimiter-char? (Char -> Boolean))
+  (define (delimiter-char? ch)
+    "True if CH is a delimiter (cannot appear in a symbol)."
+    (list:member ch delimiters))
+
+  (declare sym-char? (Char -> Boolean))
+  (define (sym-char? ch)
+    "True if CH can appear in a symbol/identifier."
+    (not (delimiter-char? ch)))
+
+  (declare number-start? (Char * Optional Char -> Boolean))
+  (define (number-start? ch next)
+    "True if CH could begin a number token."
+    (or (char:ascii-digit? ch)
+        (match next
+          ((Some nc)
+           (and (or (== ch #\+) (== ch #\-))
+                (char:ascii-digit? nc)))
+          ((None) False))))
+
+  (declare number-extra-chars (List Char))
+  (define number-extra-chars [#\. #\/ #\+ #\- #\e #\E ])
+
+  (declare number-char? (Char -> Boolean))
+  (define (number-char? ch)
+    "True if CH can appear in a number literal."
+    (or (char:ascii-digit? ch)
+        (list:member ch number-extra-chars)))
+
+  ;;; Keyword detection
+
+  (declare definition-keywords (List String))
+  (define definition-keywords
+    [;; Coalton
+     "define" "define-type" "define-struct" "define-class"
+     "define-instance" "match" "let" "fn" "if" "cond"
+     "when" "unless" "do" "progn" "values" "the" "lisp"
+     "coalton-toplevel" "declare" "repr" "inline"
+     ;; Common Lisp
+     "defun" "defmacro" "defvar" "defparameter" "defconstant"
+     "defclass" "defmethod" "defgeneric" "defstruct" "deftype"
+     "defpackage" "defsetf" "in-package" "declaim" "lambda"])
+
+  (declare coalton-keyword? (String -> Boolean))
+  (define (coalton-keyword? sym)
+    "True if SYM is a definition keyword."
+    (list:member sym definition-keywords))
+
+  ;;; String helpers
+
+  ;; Candidate for Coalton stdlib: find first occurrence of a char in a string.
+  (declare string-find-char (String * Char -> Optional UFix))
+  (define (string-find-char s ch)
+    (%string-find-char-loop s ch 0 (str:length s)))
+
+  (declare %string-find-char-loop (String * Char * UFix * UFix -> Optional UFix))
+  (define (%string-find-char-loop s ch i len)
+    (if (>= i len) None
+        (match (str:ref s i)
+          ((Some c) (if (== c ch) (Some i)
+                        (%string-find-char-loop s ch (+ i 1) len)))
+          ((None) None))))
+
+  ;;; Mutable scanner helpers
+
+  (declare advance! ((Cell UFix) -> Void))
+  (define (advance! i)
+    "Advance position by 1."
+    (cell:write! i (+ (cell:read i) 1))
+    (values))
+
+  (declare advance-by! ((Cell UFix) * UFix -> Void))
+  (define (advance-by! i n)
+    "Advance position by N."
+    (cell:write! i (+ (cell:read i) n))
+    (values))
+
+  (declare scan-while! ((Cell UFix) * String * UFix * (Char -> Boolean) -> Void))
+  (define (scan-while! i text len pred)
+    "Advance I while the character at position satisfies PRED."
+    (when (< (cell:read i) len)
+      (match (str:ref text (cell:read i))
+        ((Some ch)
+         (when (pred ch)
+           (advance! i)
+           (scan-while! i text len pred)))
+        ((None) (values)))))
+
+  ;;; Token emission
+
+  (declare emit! ((Cell (List tok:Token)) * UFix * tok:TokenKind * UFix * UFix -> Void))
+  (define (emit! result line-offset kind start end)
+    "Push a token onto the result list."
+    (cell:write! result
+      (Cons (tok:Token kind (+ line-offset start) (+ line-offset end))
+            (cell:read result)))
+    (values))
+
+  (declare emit-single! ((Cell UFix) * (Cell (List tok:Token)) * UFix * tok:TokenKind * UFix -> Void))
+  (define (emit-single! i result line-offset kind pos)
+    "Advance by 1 and emit a single-character token."
+    (advance! i)
+    (emit! result line-offset kind pos (+ pos 1)))
+
+  ;;; Symbol classification
+
+  (declare classify-symbol (String * String * Char * LexerState -> tok:TokenKind))
+  (define (classify-symbol text text-lower first-ch state)
+    "Classify a symbol string into a TokenKind."
+    (cond
+      ((== text "->")
+       tok:TokArrow)
+      ((and (<= (.lex-mode state) 1)
+            (coalton-keyword? text-lower))
+       tok:TokCoaltonKeyword)
+      ((and (== (.lex-mode state) 0)
+            (char:ascii-alpha? first-ch)
+            (char:ascii-uppercase? first-ch))
+       tok:TokConstructor)
+      ((and (== first-ch #\.)
+            (> (str:length text) 1)
+            (match (str:ref text 1)
+              ((Some c2) (char:ascii-alpha? c2))
+              ((None) False)))
+       tok:TokAccessor)
+      ((and (== first-ch #\*)
+            (> (str:length text) 2)
+            (match (str:ref text (- (str:length text) 1))
+              ((Some last) (== last #\*))
+              ((None) False)))
+       tok:TokDynamic)
+      ((and (<= (str:length text) 3)
+            (not (char:ascii-alpha? first-ch))
+            (not (char:ascii-digit? first-ch))
+            (not (== first-ch #\.))
+            (not (== first-ch #\%))
+            (not (== first-ch #\_)))
+       tok:TokOperator)
+      (True tok:TokSymbol)))
+
+  ;;; Scanning: symbols (including package qualifiers)
+
+  (declare scan-symbol! ((Cell UFix) * String * UFix -> Void))
+  (define (scan-symbol! i text len)
+    "Scan symbol characters including colon-separated package qualifiers."
+    (when (< (cell:read i) len)
+      (match (str:ref text (cell:read i))
+        ((Some ch)
+         (cond
+           ((sym-char? ch)
+            (advance! i)
+            (scan-symbol! i text len))
+           ((== ch #\:)
+            (advance! i)
+            ;; Skip second colon for :: qualifiers
+            (when (< (cell:read i) len)
+              (match (str:ref text (cell:read i))
+                ((Some #\:) (advance! i))
+                (_ (values))))
+            (scan-symbol! i text len))
+           (True (values))))
+        ((None) (values)))))
+
+  ;;; Scanning: block comments (with nesting)
+
+  (declare scan-block-comment! ((Cell UFix) * String * UFix * LexerState -> Void))
+  (define (scan-block-comment! i text len state)
+    "Scan inside a block comment, tracking nesting depth."
+    (when (< (cell:read i) len)
+      (let pos = (cell:read i))
+      (let c1 = (str:ref text pos))
+      (let c2 = (if (< (+ pos 1) len) (str:ref text (+ pos 1)) None))
+      (cond
+        ;; #| opens nested comment
+        ((and (== c1 (Some #\#)) (== c2 (Some #\|)))
+         (cell:write! (.in-block-comment state)
+           (+ (cell:read (.in-block-comment state)) 1))
+         (advance-by! i 2)
+         (scan-block-comment! i text len state))
+        ;; |# closes comment level
+        ((and (== c1 (Some #\|)) (== c2 (Some #\#)))
+         (let depth = (cell:read (.in-block-comment state)))
+         (cell:write! (.in-block-comment state) (- depth 1))
+         (advance-by! i 2)
+         (when (> depth 1)
+           (scan-block-comment! i text len state)))
+        ;; Normal character inside comment
+        (True
+         (advance! i)
+         (scan-block-comment! i text len state)))))
+
+  ;;; Scanning: string literals
+
+  (declare scan-string! ((Cell UFix) * String * UFix * LexerState -> Void))
+  (define (scan-string! i text len state)
+    "Scan inside a string literal, handling backslash escapes."
+    (when (< (cell:read i) len)
+      (match (str:ref text (cell:read i))
+        ((Some #\\)
+         (advance-by! i 2)
+         (scan-string! i text len state))
+        ((Some #\")
+         (advance! i)
+         (cell:write! (.in-string state) False)
+         (values))
+        ((Some _)
+         (advance! i)
+         (scan-string! i text len state))
+        ((None) (values)))))
+
+  ;;; Token handlers
+
+  (declare handle-whitespace! ((Cell UFix) * String * UFix * (Cell (List tok:Token)) * UFix * UFix -> Void))
+  (define (handle-whitespace! i text len result line-offset pos)
+    (advance! i)
+    (scan-while! i text len whitespace-char?)
+    (emit! result line-offset tok:TokWhitespace pos (cell:read i)))
+
+  (declare handle-line-comment! ((Cell UFix) * UFix * (Cell (List tok:Token)) * UFix * UFix -> Void))
+  (define (handle-line-comment! i len result line-offset pos)
+    (cell:write! i len)
+    (emit! result line-offset tok:TokComment pos len))
+
+  (declare handle-string-start! ((Cell UFix) * String * UFix * LexerState * (Cell (List tok:Token)) * UFix * UFix -> Void))
+  (define (handle-string-start! i text len state result line-offset pos)
+    (advance! i)
+    (cell:write! (.in-string state) True)
+    (scan-string! i text len state)
+    (emit! result line-offset tok:TokString pos (cell:read i)))
+
+  (declare handle-comma! ((Cell UFix) * String * UFix * (Cell (List tok:Token)) * UFix * UFix -> Void))
+  (define (handle-comma! i text len result line-offset pos)
+    (cond
+      ((and (< (+ pos 1) len)
+            (== (str:ref text (+ pos 1)) (Some #\@)))
+       (advance-by! i 2)
+       (emit! result line-offset tok:TokCommaAt pos (+ pos 2)))
+      (True
+       (emit-single! i result line-offset tok:TokComma pos))))
+
+  (declare handle-hash! ((Cell UFix) * String * UFix * LexerState * (Cell (List tok:Token)) * UFix * UFix -> Void))
+  (define (handle-hash! i text len state result line-offset pos)
+    (let nc = (if (< (+ pos 1) len) (str:ref text (+ pos 1)) None))
+    (match nc
+      ;; #| block comment
+      ((Some #\|)
+       (cell:write! (.in-block-comment state) 1)
+       (advance-by! i 2)
+       (scan-block-comment! i text len state)
+       (emit! result line-offset tok:TokBlockComment pos (cell:read i)))
+      ;; #' function quote
+      ((Some #\')
+       (advance-by! i 2)
+       (emit! result line-offset tok:TokHashQuote pos (+ pos 2)))
+      ;; #\ character literal
+      ((Some #\\)
+       (handle-hash-backslash! i text len result line-offset pos))
+      ;; #: uninterned symbol
+      ((Some #\:)
+       (handle-hash-colon! i text len state result line-offset pos))
+      ;; #x #o #b numeric literals
+      ((Some nc-ch)
+       (cond
+         ((list:member nc-ch [#\x #\X #\o #\O #\b #\B ])
+          (advance-by! i 2)
+          (scan-while! i text len char:ascii-alphanumeric?)
+          (emit! result line-offset tok:TokNumber pos (cell:read i)))
+         (True
+          (emit-single! i result line-offset tok:TokSharpSign pos))))
+      ;; Bare #
+      ((None)
+       (emit-single! i result line-offset tok:TokSharpSign pos))))
+
+  (declare handle-hash-backslash! ((Cell UFix) * String * UFix * (Cell (List tok:Token)) * UFix * UFix -> Void))
+  (define (handle-hash-backslash! i text len result line-offset pos)
+    "Handle #\\ character literal."
+    (advance-by! i 2)
+    (when (< (cell:read i) len)
+      (advance! i)
+      (scan-while! i text len char:ascii-alphanumeric?))
+    (emit! result line-offset tok:TokChar pos (cell:read i)))
+
+  (declare handle-hash-colon! ((Cell UFix) * String * UFix * LexerState * (Cell (List tok:Token)) * UFix * UFix -> Void))
+  (define (handle-hash-colon! i text len state result line-offset pos)
+    "Handle #: uninterned symbol prefix."
+    (advance-by! i 2)
+    (let prefix-end = (cell:read i))
+    (scan-symbol! i text len)
+    (emit! result line-offset tok:TokPackagePrefix pos prefix-end)
+    (when (> (cell:read i) prefix-end)
+      (let sym-text = (str:substring text prefix-end (cell:read i)))
+      (let sym-lower = (str:downcase sym-text))
+      (match (str:ref sym-text 0)
+        ((Some first-ch)
+         (emit! result line-offset
+           (classify-symbol sym-text sym-lower first-ch state)
+           prefix-end (cell:read i)))
+        ((None) (values)))))
+
+  (declare handle-keyword! ((Cell UFix) * String * UFix * LexerState * (Cell (List tok:Token)) * UFix * UFix -> Void))
+  (define (handle-keyword! i text len state result line-offset pos)
+    "Handle :keyword or :x type-variable tokens."
+    (advance! i)
+    (scan-while! i text len sym-char?)
+    (let kw-text = (str:substring text (+ pos 1) (cell:read i)))
+    (let kw-len = (str:length kw-text))
+    (if (and (== (.lex-mode state) 0)
+             (== kw-len 1)
+             (match (str:ref kw-text 0)
+               ((Some c) (char:ascii-lowercase? c))
+               ((None) False)))
+        (emit! result line-offset tok:TokTypeVariable pos (cell:read i))
+        (emit! result line-offset tok:TokKeyword pos (cell:read i))))
+
+  (declare handle-number! ((Cell UFix) * String * UFix * (Cell (List tok:Token)) * UFix * UFix * Char -> Void))
+  (define (handle-number! i text len result line-offset pos ch)
+    "Handle numeric literal tokens."
+    (when (or (== ch #\+) (== ch #\-))
+      (advance! i))
+    (when (== (cell:read i) pos)
+      (advance! i))
+    (scan-while! i text len number-char?)
+    (emit! result line-offset tok:TokNumber pos (cell:read i)))
+
+  (declare handle-symbol! ((Cell UFix) * String * UFix * LexerState * (Cell (List tok:Token)) * UFix * UFix -> Void))
+  (define (handle-symbol! i text len state result line-offset pos)
+    "Handle symbol/identifier tokens, including package-qualified ones."
+    (advance! i)
+    (scan-symbol! i text len)
+    (let sym-text = (str:substring text pos (cell:read i)))
+    (let sym-lower = (str:downcase sym-text))
+    (cond
+      ((== sym-text "->")
+       (emit! result line-offset tok:TokArrow pos (cell:read i)))
+      ((match (string-find-char sym-text #\:)
+         ((Some _) True)
+         ((None) False))
+       (handle-pkg-qualified! sym-text state result line-offset pos i))
+      (True
+       (match (str:ref sym-text 0)
+         ((Some first-ch)
+          (emit! result line-offset
+            (classify-symbol sym-text sym-lower first-ch state)
+            pos (cell:read i)))
+         ((None) (values))))))
+
+  (declare handle-pkg-qualified! (String * LexerState * (Cell (List tok:Token)) * UFix * UFix * (Cell UFix) -> Void))
+  (define (handle-pkg-qualified! sym-text state result line-offset pos i)
+    "Handle a package-qualified symbol like pkg:sym or pkg::sym."
+    (match (string-find-char sym-text #\:)
+      ((None) (values))
+      ((Some colon-pos)
+       (let prefix-end =
+         (if (and (< (+ colon-pos 1) (str:length sym-text))
+                  (== (str:ref sym-text (+ colon-pos 1)) (Some #\:)))
+             (+ colon-pos 2)
+             (+ colon-pos 1)))
+       (let sym-after = (str:substring sym-text prefix-end (str:length sym-text)))
+       (let sym-after-lower = (str:downcase sym-after))
+       (let sym-end = (cell:read i))
+       (let split-pos = (+ pos prefix-end))
+       (emit! result line-offset tok:TokPackagePrefix pos split-pos)
+       (when (> (str:length sym-after) 0)
+         (match (str:ref sym-after 0)
+           ((Some first-ch)
+            (emit! result line-offset
+              (classify-symbol sym-after sym-after-lower first-ch state)
+              split-pos sym-end))
+           ((None) (values)))))))
+
+  ;;; Main dispatch
+
+  (declare lex-normal-token! (LexerState * String * UFix * UFix * (Cell (List tok:Token)) * (Cell UFix) * UFix -> Void))
+  (define (lex-normal-token! state text line-offset len result i pos)
+    "Dispatch a single normal token starting at POS."
+    (match (str:ref text pos)
+      ((None) (values))
+      ((Some ch)
+       (cond
+         ((whitespace-char? ch)
+          (handle-whitespace! i text len result line-offset pos))
+         ((== ch #\;)
+          (handle-line-comment! i len result line-offset pos))
+         ((== ch #\")
+          (handle-string-start! i text len state result line-offset pos))
+         ((== ch #\()
+          (emit-single! i result line-offset tok:TokOpenParen pos))
+         ((== ch #\))
+          (emit-single! i result line-offset tok:TokCloseParen pos))
+         ((== ch #\[)
+          (emit-single! i result line-offset tok:TokOpenBracket pos))
+         ((== ch #\])
+          (emit-single! i result line-offset tok:TokCloseBracket pos))
+         ((== ch #\')
+          (emit-single! i result line-offset tok:TokQuote pos))
+         ((== ch #\`)
+          (emit-single! i result line-offset tok:TokBackquote pos))
+         ((== ch #\,)
+          (handle-comma! i text len result line-offset pos))
+         ((== ch #\#)
+          (handle-hash! i text len state result line-offset pos))
+         ((== ch #\:)
+          (handle-keyword! i text len state result line-offset pos))
+         ((number-start? ch (if (< (+ pos 1) len) (str:ref text (+ pos 1)) None))
+          (handle-number! i text len result line-offset pos ch))
+         ;; Dot followed by alpha = accessor like .foo
+         ((and (== ch #\.)
+               (match (if (< (+ pos 1) len) (str:ref text (+ pos 1)) None)
+                 ((Some nc) (char:ascii-alpha? nc))
+                 ((None) False)))
+          (handle-symbol! i text len state result line-offset pos))
+         ((== ch #\.)
+          (emit-single! i result line-offset tok:TokDot pos))
+         ((sym-char? ch)
+          (handle-symbol! i text len state result line-offset pos))
+         (True
+          (emit-single! i result line-offset tok:TokUnknown pos))))))
+
+  ;;; Main scan loop
+
+  (declare lex-line-impl! (LexerState * String * UFix * UFix * (Cell (List tok:Token)) * (Cell UFix) -> Void))
+  (define (lex-line-impl! state text line-offset len result i)
+    "Main lexer scan loop."
+    (when (< (cell:read i) len)
+      (let pos = (cell:read i))
+      (cond
+        ;; Continuing block comment
+        ((> (cell:read (.in-block-comment state)) 0)
+         (scan-block-comment! i text len state)
+         (emit! result line-offset tok:TokBlockComment pos (cell:read i)))
+        ;; Continuing string
+        ((cell:read (.in-string state))
+         (scan-string! i text len state)
+         (emit! result line-offset tok:TokString pos (cell:read i)))
+        ;; Normal tokenization
+        (True
+         (lex-normal-token! state text line-offset len result i pos)))
+      (lex-line-impl! state text line-offset len result i)))
+
+  ;;; Public API
+
+  (declare lex-line (LexerState * String * UFix -> List tok:Token))
+  (define (lex-line state line-text line-offset)
+    "Tokenize LINE-TEXT starting at LINE-OFFSET. Mutates STATE for
+multi-line constructs (block comments, strings). Returns tokens
+with absolute buffer positions."
+    (let line-len = (str:length line-text))
+    (let result = (cell:new (the (List tok:Token) Nil)))
+    (let i = (cell:new (the UFix 0)))
+    (lex-line-impl! state line-text line-offset line-len result i)
+    (reverse (cell:read result))))
