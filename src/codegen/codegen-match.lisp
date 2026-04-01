@@ -74,9 +74,12 @@ the match is exhaustive and settings demand it."
 
         ;; Case #2:
         ;;
-        ;; Don't emit a fallback branch if match is exhaustive and
-        ;; Coalton is in release mode.
+        ;; Don't emit a fallback branch for exhaustive release-mode
+        ;; matches unless type annotations are disabled. Without
+        ;; annotations, the explicit fallback keeps CL from inferring
+        ;; an implicit NIL return path.
         (and (settings:coalton-release-p)
+             settings:*emit-type-annotations*
              (match-exhaustive-p match env)))))
 
 (defun match-emit-branchless-p (match env)
