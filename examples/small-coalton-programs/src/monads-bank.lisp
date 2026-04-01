@@ -93,18 +93,6 @@
     (minimum-balance      "Minimum balance that must be floated by an account."                          Balance)
     (overdraft-protection "If True, prevents an account from being withdrawn below the minimum balance." Boolean))
 
-  ;; Workaround for:
-  ;; https://github.com/coalton-lang/coalton/issues/1656
-  (declare minimum-balance_ (Configuration -> Balance))
-  (define (minimum-balance_ conf)
-    (.minimum-balance conf))
-
-  ;; Workaround for:
-  ;; https://github.com/coalton-lang/coalton/issues/1656
-  (declare overdraft-protection_ (Configuration -> Boolean))
-  (define (overdraft-protection_ conf)
-    (.overdraft-protection conf))
-
   (declare without-overdraft-protection (Configuration -> Configuration))
   (define (without-overdraft-protection conf)
     (Configuration (.minimum-balance conf) False))
@@ -222,7 +210,7 @@ the computation."
   (declare check-account-is-valid (Account -> BankM (BankResult Account)))
   (define (check-account-is-valid account)
     (do
-     (minimum-balance <- (asks minimum-balance_))
+     (minimum-balance <- (asks .minimum-balance))
      (if (>= (.balance account) minimum-balance)
          (pure (Ok account))
          (pure (Err (InvalidAccountBalance (.name account) (.balance account)))))))
@@ -287,8 +275,8 @@ the computation."
   (define (withdraw account-name amount)
     "Withdraw AMOUNT from account with ACCOUNT-NAME, returning the Account for convenience."
     (do
-      (protection? <- (asks overdraft-protection_))
-      (minimum <- (asks minimum-balance_))
+      (protection? <- (asks .overdraft-protection))
+      (minimum <- (asks .minimum-balance))
       (do-resultT
         (err-ifM (< amount 0) (InvalidWithdrawal amount))
         (acc <- (get-accountM account-name))
