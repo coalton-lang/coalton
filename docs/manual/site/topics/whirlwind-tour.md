@@ -139,7 +139,7 @@ We recommend using `.ct` files, however, if you're writing Coalton in a `.lisp` 
 (named-readtables:in-readtable coalton:coalton)
 ```
 
-THis is done automatically with `.ct` files. The `named-readtables:in-readtable` form is optional but encouraged. Using Coalton's reader allows compiler errors to accurately refer to source code and provide correct line numbers.
+This is done automatically with `.ct` files. The `named-readtables:in-readtable` form is optional but encouraged. Using Coalton's reader allows compiler errors to accurately refer to source code and provide correct line numbers.
 
 The first primary entry points for Coalton code. Definitions and the like sit in a toplevel-form called `coalton-toplevel`.
 

@@ -125,7 +125,7 @@ file:
   :defsystem-depends-on ("coalton-asdf")
   :depends-on ("coalton")
   :serial t
-  :components ((:file "hello")))
+  :components ((:ct-file "hello")))
 ```
 
 Save that file, and open `hello.ct`:
