@@ -514,9 +514,12 @@ Automatically returns the lisp condition if one is thrown."
 (cl:defun %read-sequence-completely (v s n)
   "Read N elements of the stream S into the sequence V."
   (cl:loop
-    :with begin := 0
-    :while (cl:< begin n)
-    :do (cl:incf begin (cl:read-sequence v s :start begin))
+    :with pos := 0
+    :while (cl:< pos n)
+    :do (cl:let ((new-pos (cl:read-sequence v s :start pos :end n)))
+          (cl:when (cl:= new-pos pos)
+            (cl:error 'cl:end-of-file :stream s))
+          (cl:setf pos new-pos))
     :finally (cl:return v)))
 
 (coalton-toplevel
