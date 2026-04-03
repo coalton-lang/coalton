@@ -6,8 +6,8 @@
    (:l #:coalton/list)
    (:it #:coalton/iterator))
   (:import-from #:coalton/experimental/do-control-core
-   #:Terminator
-   #:ended?
+   #:Truthlike
+   #:true?
    #:Yielder
    #:yield)
   (:export
@@ -33,14 +33,14 @@
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
-  (declare loop-while ((Monad :m) (Terminator :t) => :m :t -> :m Unit))
+  (declare loop-while ((Monad :m) (Truthlike :t) => :m :t -> :m Unit))
   (define (loop-while m-operation)
-    "Repeat M-OPERATION until it returns a terminated value. Returns Unit."
+    "Run M-OPERATION. If it returns a true-like value, repeat. Otherwise stop."
     (do
      (res <- m-operation)
-     (if (ended? res)
-         (pure Unit)
-         (loop-while m-operation))))
+     (if (true? res)
+         (loop-while m-operation)
+         (pure Unit))))
 
   (declare loop-while-valM ((Monad :m) (Yielder :y) => :m (:y :a) * (:a -> :m :b) -> :m Unit))
   (define (loop-while-valM m-operation f)
@@ -56,17 +56,17 @@ Returns Unit."
        ((None)
         (pure Unit)))))
 
-  (declare loop-do-while ((Monad :m) (Terminator :t) => :m :t * :m :a -> :m Unit))
+  (declare loop-do-while ((Monad :m) (Truthlike :t) => :m :t * :m :a -> :m Unit))
   (define (loop-do-while m-term? body)
-    "Before each iteration, evaluate M-TERM?. If it indicates completion, stop; otherwise run BODY.
-Returns Unit."
+    "Before each iteration, evaluate M-TERM?. If it returns a true-like value, run BODY.
+Otherwise, stop."
     (do
      (term? <- m-term?)
-     (if (ended? term?)
-         (pure Unit)
+     (if (true? term?)
          (do
           body
-          (loop-do-while m-term? body)))))
+          (loop-do-while m-term? body))
+         (pure Unit))))
 
   (declare loop-times (Monad :m => UFix * (UFix -> :m :a) -> :m Unit))
   (define (loop-times n m-operation)
