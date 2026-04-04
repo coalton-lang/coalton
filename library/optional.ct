@@ -3,9 +3,6 @@
    #:coalton
    #:coalton/builtin
    #:coalton/classes)
-  (:local-nicknames
-   (#:cell #:coalton/cell)
-   (#:iter #:coalton/iterator))
   (:export
    #:from-some
    #:some?
@@ -28,6 +25,7 @@
       ((Some x) x)
       ((None) (error str))))
 
+  (inline)
   (declare some? ((Optional :a) -> Boolean))
   (define (some? x)
     "Is X Some?"
@@ -35,6 +33,7 @@
       ((Some _) True)
       ((None) False)))
 
+  (inline)
   (declare none? ((Optional :a) -> Boolean))
   (define (none? x)
     "Is X None?"
@@ -111,38 +110,6 @@
       (match opt
         ((Some a) (map Some (fa->mb a)))
         ((None) (pure None)))))
-
-  (define-instance (iter:IntoIterator (Optional :a) :a)
-    (define (iter:into-iter opt)
-      (match opt
-        ((Some x)
-         (let cell = (cell:new True))
-         (iter:with-size
-             (fn ()
-               (unless (cell:read cell)
-                 (return None))
-
-               (cell:write! cell False)
-               opt)
-           1))
-        ((None)
-         iter:empty))))
-
-  (define-instance (iter:FromIterator :container :elt => iter:FromIterator (Optional :container) (Optional :elt))
-    (define (iter:collect! iter)
-      (let error = (cell:new False))
-      (let out =
-        (iter:collect!
-         (iter:map-while! (fn (x)
-                             (match x
-                               ((Some _) x)
-                               ((None)
-                                (cell:write! error True)
-                                None)))
-                           iter)))
-      (if (cell:read error)
-          None
-          (Some out))))
 
   (define-instance (Default (Optional :a))
     (define (default) None)))

@@ -91,6 +91,7 @@
 
   ;; List is an early type
 
+  (inline)
   (declare head (List :a -> Optional :a))
   (define (head l)
     "Returns the first element of a list."
@@ -98,6 +99,7 @@
       ((Cons x _) (Some x))
       ((Nil) None)))
 
+  (inline)
   (declare tail (List :a -> Optional (List :a)))
   (define (tail l)
     "Returns every element except the first in a list."
@@ -112,6 +114,7 @@
       ((Cons x _) x)
       ((Nil) (error "there is no first element"))))
 
+  (inline)
   (declare cdr (List :a -> List :a))
   (define (cdr xs)
     "Return the traditional cdr of a list."
@@ -133,6 +136,7 @@
     (lisp (-> (List :a)) (l)
       (cl:butlast l)))
 
+  (inline)
   (declare null? (List :a -> Boolean))
   (define (null? xs)
     "Returns TRUE if XS is an empty list."
