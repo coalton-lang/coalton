@@ -1168,6 +1168,296 @@ other, so they can be inferred monomorphically before the recursive body."
           :do (setf (gethash name table) (parser:node-let-declare-type declare))
           :finally (return table))))
 
+(defun rec-node-tail-violation (node)
+  "Return the first non-tail use of REC's recursive operator, or NIL."
+  (declare (type parser:node-rec node)
+           (values (or null parser:node) &optional))
+  (let ((rec-name (parser:node-variable-name (parser:node-rec-name node))))
+    (labels
+        ((check-keyword-param (param)
+           (declare (type parser:keyword-param param)
+                    (values (or null parser:node) &optional))
+           (check-node (parser:keyword-param-default param) nil))
+
+         (check-body-element (elem tailp)
+           (declare (type parser:node-body-element elem)
+                    (type boolean tailp)
+                    (values (or null parser:node) &optional))
+           (typecase elem
+             (parser:node-bind
+              (check-node (parser:node-bind-expr elem) nil))
+             (parser:node-values-bind
+              (check-node (parser:node-values-bind-expr elem) nil))
+             (parser:node
+              (check-node elem tailp))))
+
+         (check-body (body tailp)
+           (declare (type parser:node-body body)
+                    (type boolean tailp)
+                    (values (or null parser:node) &optional))
+           (or (loop :for elem :in (parser:node-body-nodes body)
+                     :for bad := (check-body-element elem nil)
+                     :when bad :return bad)
+               (check-node (parser:node-body-last-node body) tailp)))
+
+         (check-association-entry (entry)
+           (declare (type parser:association-entry entry)
+                    (values (or null parser:node) &optional))
+           (or (check-node (parser:association-entry-key entry) nil)
+               (check-node (parser:association-entry-value entry) nil)))
+
+         (check-builder-clause (clause)
+           (declare (type parser:builder-clause clause)
+                    (values (or null parser:node) &optional))
+           (etypecase clause
+             (parser:builder-with-clause
+              (check-node (parser:builder-with-clause-expr clause) nil))
+             (parser:builder-for-clause
+              (check-node (parser:builder-for-clause-expr clause) nil))
+             (parser:builder-below-clause
+              (check-node (parser:builder-below-clause-expr clause) nil))
+             (parser:builder-when-clause
+              (check-node (parser:builder-when-clause-expr clause) nil))))
+
+         (check-variable-ref (var)
+           (declare (type parser:node-variable var)
+                    (values (or null parser:node-variable) &optional))
+           (and (eq rec-name (parser:node-variable-name var))
+                var))
+
+         (check-node (node tailp)
+           (declare (type parser:node node)
+                    (type boolean tailp)
+                    (values (or null parser:node) &optional))
+           (typecase node
+             ((or parser:node-accessor
+                  parser:node-literal
+                  parser:node-integer-literal
+                  parser:node-break
+                  parser:node-continue)
+              nil)
+
+             (parser:node-variable
+              (check-variable-ref node))
+
+             (parser:node-type-of
+              (check-node (parser:node-type-of-expr node) nil))
+
+             (parser:node-abstraction
+              (or (loop :for param :in (parser:node-abstraction-keyword-params node)
+                        :for bad := (check-keyword-param param)
+                        :when bad :return bad)
+                  (check-body (parser:node-abstraction-body node) nil)))
+
+             (parser:node-let
+              (or (loop :for binding :in (parser:node-let-bindings node)
+                        :for bad := (check-node (parser:node-let-binding-value binding) nil)
+                        :when bad :return bad)
+                  (check-body (parser:node-let-body node) tailp)))
+
+             (parser:node-rec
+              (or (loop :for binding :in (parser:node-rec-bindings node)
+                        :for bad := (check-node (parser:node-let-binding-value binding) nil)
+                        :when bad :return bad)
+                  (loop :for arg :in (parser:node-rec-call-args node)
+                        :for bad := (check-variable-ref arg)
+                        :when bad :return bad)
+                  (check-body (parser:node-rec-body node) nil)))
+
+             (parser:node-dynamic-let
+              (or (loop :for binding :in (parser:node-dynamic-let-bindings node)
+                        :for bad := (check-node (parser:node-dynamic-binding-value binding) nil)
+                        :when bad :return bad)
+                  (check-node (parser:node-dynamic-let-subexpr node) tailp)))
+
+             (parser:node-lisp
+              (loop :for var :in (parser:node-lisp-vars node)
+                    :for bad := (check-variable-ref var)
+                    :when bad :return bad))
+
+             (parser:node-match
+              (or (check-node (parser:node-match-expr node) nil)
+                  (loop :for branch :in (parser:node-match-branches node)
+                        :for bad := (check-body (parser:node-match-branch-body branch) tailp)
+                        :when bad :return bad)))
+
+             (parser:node-catch
+              (or (check-node (parser:node-catch-expr node) nil)
+                  (loop :for branch :in (parser:node-catch-branches node)
+                        :for bad := (check-body (parser:node-catch-branch-body branch) tailp)
+                        :when bad :return bad)))
+
+             (parser:node-resumable
+              (or (check-node (parser:node-resumable-expr node) nil)
+                  (loop :for branch :in (parser:node-resumable-branches node)
+                        :for bad := (check-body (parser:node-resumable-branch-body branch) tailp)
+                        :when bad :return bad)))
+
+             (parser:node-progn
+              (check-body (parser:node-progn-body node) tailp))
+
+             (parser:node-unsafe
+              (check-body (parser:node-unsafe-body node) tailp))
+
+             (parser:node-the
+              (check-node (parser:node-the-expr node) tailp))
+
+             (parser:node-collection-builder
+              (loop :for elem :in (parser:node-collection-builder-elements node)
+                    :for bad := (check-node elem nil)
+                    :when bad :return bad))
+
+             (parser:node-association-builder
+              (loop :for entry :in (parser:node-association-builder-entries node)
+                    :for bad := (check-association-entry entry)
+                    :when bad :return bad))
+
+             (parser:node-collection-comprehension
+              (or (check-node (parser:node-collection-comprehension-head node) nil)
+                  (loop :for clause :in (parser:node-collection-comprehension-clauses node)
+                        :for bad := (check-builder-clause clause)
+                        :when bad :return bad)))
+
+             (parser:node-association-comprehension
+              (or (check-node (parser:node-association-comprehension-key node) nil)
+                  (check-node (parser:node-association-comprehension-value node) nil)
+                  (loop :for clause :in (parser:node-association-comprehension-clauses node)
+                        :for bad := (check-builder-clause clause)
+                        :when bad :return bad)))
+
+             (parser:node-block
+              (check-body (parser:node-block-body node) tailp))
+
+             (parser:node-return
+              (and (parser:node-return-expr node)
+                   (check-node (parser:node-return-expr node) nil)))
+
+             (parser:node-return-from
+              (check-node (parser:node-return-from-expr node) nil))
+
+             (parser:node-values
+              (loop :for subnode :in (parser:node-values-nodes node)
+                    :for bad := (check-node subnode nil)
+                    :when bad :return bad))
+
+             (parser:node-throw
+              (and (parser:node-throw-expr node)
+                   (check-node (parser:node-throw-expr node) nil)))
+
+             (parser:node-resume-to
+              (and (parser:node-resume-to-expr node)
+                   (check-node (parser:node-resume-to-expr node) nil)))
+
+             (parser:node-application
+              (let ((rator (parser:node-application-rator node)))
+                (if (and tailp
+                         (typep rator 'parser:node-variable)
+                         (eq rec-name (parser:node-variable-name rator)))
+                    (or (loop :for rand :in (parser:node-application-rands node)
+                              :for bad := (check-node rand nil)
+                              :when bad :return bad)
+                        (loop :for arg :in (parser:node-application-keyword-rands node)
+                              :for bad := (check-node (parser:node-application-keyword-arg-value arg) nil)
+                              :when bad :return bad))
+                    (or (check-node rator nil)
+                        (loop :for rand :in (parser:node-application-rands node)
+                              :for bad := (check-node rand nil)
+                              :when bad :return bad)
+                        (loop :for arg :in (parser:node-application-keyword-rands node)
+                              :for bad := (check-node (parser:node-application-keyword-arg-value arg) nil)
+                              :when bad :return bad)))))
+
+             (parser:node-or
+              (loop :for rest :on (parser:node-or-nodes node)
+                    :for subnode := (car rest)
+                    :for bad := (check-node subnode (and tailp (null (cdr rest))))
+                    :when bad :return bad))
+
+             (parser:node-and
+              (loop :for rest :on (parser:node-and-nodes node)
+                    :for subnode := (car rest)
+                    :for bad := (check-node subnode (and tailp (null (cdr rest))))
+                    :when bad :return bad))
+
+             (parser:node-if
+              (or (check-node (parser:node-if-expr node) nil)
+                  (check-node (parser:node-if-then node) tailp)
+                  (check-node (parser:node-if-else node) tailp)))
+
+             (parser:node-when
+              (or (check-node (parser:node-when-expr node) nil)
+                  (check-body (parser:node-when-body node) tailp)))
+
+             (parser:node-unless
+              (or (check-node (parser:node-unless-expr node) nil)
+                  (check-body (parser:node-unless-body node) tailp)))
+
+             (parser:node-cond
+              (loop :for clause :in (parser:node-cond-clauses node)
+                    :for bad := (or (check-node (parser:node-cond-clause-expr clause) nil)
+                                     (check-body (parser:node-cond-clause-body clause) tailp))
+                    :when bad :return bad))
+
+             (parser:node-for
+              (or (loop :for binding :in (parser:node-for-bindings node)
+                        :for bad := (or (check-node (parser:node-for-binding-init binding) nil)
+                                        (and (parser:node-for-binding-step binding)
+                                             (check-node (parser:node-for-binding-step binding) nil)))
+                        :when bad :return bad)
+                  (and (parser:node-for-returns node)
+                       (check-node (parser:node-for-returns node) nil))
+                  (and (parser:node-for-termination-expr node)
+                       (check-node (parser:node-for-termination-expr node) nil))
+                  (check-body (parser:node-for-body node) nil)))
+
+             (parser:node-do-bind
+              (check-node (parser:node-do-bind-expr node) nil))
+
+             (parser:node-do
+              (or (loop :for elem :in (parser:node-do-nodes node)
+                        :for bad := (etypecase elem
+                                      (parser:node
+                                       (check-node elem nil))
+                                      (parser:node-bind
+                                       (check-node (parser:node-bind-expr elem) nil))
+                                      (parser:node-values-bind
+                                       (check-node (parser:node-values-bind-expr elem) nil))
+                                      (parser:node-do-bind
+                                       (check-node (parser:node-do-bind-expr elem) nil)))
+                        :when bad :return bad)
+                  (check-node (parser:node-do-last-node node) tailp))))))
+
+      (check-body (parser:node-rec-body node) t))))
+
+(defun rec-node-display-name (node)
+  "Return REC's source-visible operator name for diagnostics."
+  (declare (type parser:node-rec node)
+           (values t &optional))
+  (let* ((name-node (parser:node-rec-name node))
+         (location (source:location name-node))
+         (source (source:location-source location)))
+    (or (source:extract-source-text source (source:location-span location))
+        (parser:node-variable-name name-node))))
+
+(defun check-rec-node-tail-calls (node)
+  "Signal an error if REC's recursive operator is used outside a direct tail call."
+  (declare (type parser:node-rec node)
+           (values null))
+  (let* ((rec-name (rec-node-display-name node))
+         (bad-node (rec-node-tail-violation node)))
+    (when bad-node
+      (tc-error "Invalid rec"
+                (tc-note bad-node
+                         "this use of recursive operator ~A is not a direct tail call"
+                         rec-name)
+                (tc-secondary-note (parser:node-rec-name node)
+                                   "`rec` binds ~A here"
+                                   rec-name)
+                (source:help (source:location bad-node)
+                             #'identity
+                             "Use `let` + `fn` instead if you need non-tail recursion or want to pass the recursive function around."))))
+  nil)
+
 (defun infer-rec-init-binding-type (binding declared-type subs env)
   "Infer one REC init binding, preserving init-binding declarations."
   (declare (type parser:node-let-binding binding)
@@ -1266,6 +1556,8 @@ lowered back to the ordinary nested-let representation and inferred there."
      (tc-error "Duplicate definition in rec"
                (tc-note first "first definition here")
                (tc-note second "second definition here"))))
+
+  (check-rec-node-tail-calls node)
 
   (let ((preds nil)
         (accessors nil)
