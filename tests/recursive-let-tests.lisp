@@ -54,6 +54,20 @@
         (loop-times 100)))"
    '("foo" . "Void")))
 
+(deftest rec-does-not-capture-return ()
+  (with-coalton-compilation (:package #:coalton-tests/recursive-let-tests)
+    (coalton-toplevel
+      (declare rec-return-regression (UFix -> UFix))
+      (define (rec-return-regression n)
+        (+ 100
+           (rec go ((i 0))
+             (if (>= i n)
+                 (return i)
+                 (go (+ i 1))))))))
+  (is (= 5
+         (eval '(coalton:coalton
+                 (coalton-tests/recursive-let-tests::rec-return-regression 5))))))
+
 (deftest recursive-let-constant-propagation ()
   "Test that constant let bindings are propagated to the other bindings. See GitHub issue #1442."
   (check-coalton-types

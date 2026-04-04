@@ -44,24 +44,12 @@
 
 (in-package #:coalton-impl/typechecker/define)
 
-(declaim (type (member :toplevel :lambda :do) *return-status*))
-(defparameter *return-status* :toplevel)
+(defstruct (return-block-info
+            (:constructor make-return-block-info (&key type first-return)))
+  (type (util:required 'type) :type tc:ty              :read-only t)
+  (first-return nil            :type (or null cons)    :read-only nil))
 
-(deftype node-return-info ()
-  '(cons source:location tc:ty))
-
-(defun node-return-info-p (x)
-  (typep x 'node-return-info))
-
-(defun node-return-info-list-p (x)
-  (and (alexandria:proper-list-p x)
-       (every #'node-return-info-p x)))
-
-(deftype node-return-info-list ()
-  '(satisfies node-return-info-list-p))
-
-(declaim (type node-return-info-list *returns*))
-(defparameter *returns* nil)
+(defparameter *return-blocks* nil)
 
 (declaim (type (or null parser:node) *direct-values-node*))
 (defparameter *direct-values-node* nil)
@@ -104,6 +92,12 @@
     (type-string:type-to-string object
                                 (or (%type-string-environment env)
                                     *type-string-environment*))))
+
+(defun return-block-info (name)
+  (declare (type symbol name)
+           (values return-block-info &optional))
+  (or (cdr (assoc name *return-blocks* :test #'eq))
+      (util:coalton-bug "Unknown return target ~S during type inference" name)))
 
 (defun error-ambiguous-pred (pred)
   (declare (type tc:ty-predicate pred))
@@ -627,6 +621,45 @@ determined and must not be widened."
                  (tc:type-variables scheme))
         (tc-env-replace-type env name (tc:to-scheme type)))))
   nil)
+
+(defun body-return-block-node (body)
+  "Return BODY's outer return block when BODY is exactly a single block wrapper.
+
+BODY may be either a parser NODE-BODY or a typed NODE-BODY."
+  (declare (type (or parser:node-body node-body) body)
+           (values (or null parser:node-block node-block) &optional))
+  (etypecase body
+    (parser:node-body
+     (and (null (parser:node-body-nodes body))
+          (typep (parser:node-body-last-node body) 'parser:node-block)
+          (parser:node-body-last-node body)))
+    (node-body
+     (and (null (node-body-nodes body))
+          (typep (node-body-last-node body) 'node-block)
+          (node-body-last-node body)))))
+
+(defun merge-keyword-prefix-nodes-into-body (prefix-nodes body)
+  (declare (type list prefix-nodes)
+           (type node-body body)
+           (values node-body &optional))
+  (if (null prefix-nodes)
+      body
+      (let ((outer-block (body-return-block-node body)))
+        (if outer-block
+            (let ((inner-body (node-block-body outer-block)))
+              (make-node-body
+               :nodes nil
+               :last-node
+               (make-node-block
+                :type (node-type outer-block)
+                :location (source:location outer-block)
+                :name (node-block-name outer-block)
+                :body (make-node-body
+                       :nodes (append prefix-nodes (node-body-nodes inner-body))
+                       :last-node (node-body-last-node inner-body)))))
+            (make-node-body
+             :nodes (append prefix-nodes (node-body-nodes body))
+             :last-node (node-body-last-node body))))))
 
 (defun infer-keyword-params (keyword-params expected-keyword-table subs env)
   "Infer types for keyword parameters and their defaults.
@@ -1814,8 +1847,15 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                            (type-object-string effective-expected-type)
                            (tc:function-input-arity effective-expected-type))))
 
-      (let* ((*return-status* :lambda)
-             (*returns* nil)
+      (let* ((body-return-block
+               (body-return-block-node (parser:node-abstraction-body node)))
+             (body-result-ty (tc:make-variable))
+             (*return-blocks*
+               (if body-return-block
+                   (acons (parser:node-block-name body-return-block)
+                          body-result-ty
+                          *return-blocks*)
+                   *return-blocks*))
              (expected-function-type (and (tc:function-type-p effective-expected-type)
                                           effective-expected-type))
              (expected-keyword-table (make-hash-table :test #'eq))
@@ -1846,51 +1886,22 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
           (multiple-value-bind (body-ty preds accessors body-node subs)
               (infer-expression-type (parser:node-abstraction-body node)
-                                     (tc:make-variable)
+                                     body-result-ty
                                      subs
                                      env)
             (setf preds (append default-preds preds))
             (setf accessors (append default-accessors accessors))
-            (loop :with returns := (reverse *returns*)
-                  :for (s1 . ty1) :in returns
-                  :for (s2 . ty2) :in (cdr returns)
-                  :do (handler-case
-                          (setf subs (tc:unify subs ty1 ty2))
-                        (tc:coalton-internal-type-error ()
-                          (tc-error "Return type mismatch"
-                                    (tc-note s1
-                                             "First return is of type '~A'"
-                                             (type-object-string (tc:apply-substitution subs ty1)))
-                                    (tc-note s2
-                                             "Second return is of type '~A'"
-                                             (type-object-string (tc:apply-substitution subs ty2)))))))
-
-            (when *returns*
-              (handler-case
-                  (setf subs (tc:unify subs (cdr (first *returns*)) body-ty))
-                (tc:coalton-internal-type-error ()
-                  (tc-error "Return type mismatch"
-                            (tc-note (car (first *returns*))
-                                     "First return is of type '~A'"
-                                     (type-object-string (tc:apply-substitution subs (cdr (first *returns*)))))
-                            (tc-note (parser:node-body-last-node (parser:node-abstraction-body node))
-                                     "Second return is of type '~A'"
-                                     (type-object-string (tc:apply-substitution subs body-ty)))))))
-
             (let* ((body-ty (tc:apply-substitution subs body-ty))
-                   (output-types (inferred-node-output-types body-ty body-node))
+                   (typed-body
+                     (merge-keyword-prefix-nodes-into-body
+                      (nreverse keyword-prefix-nodes)
+                      body-node))
+                   (output-types (inferred-node-output-types body-ty typed-body))
                    (ty (tc:make-function-ty
                         :positional-input-types positional-arg-tys
                         :keyword-input-types (normalize-keyword-entries (nreverse keyword-entry-types))
                         :keyword-open-p nil
-                        :output-types output-types))
-                   (typed-body
-                     (if keyword-prefix-nodes
-                         (make-node-body
-                          :nodes (append (nreverse keyword-prefix-nodes)
-                                         (node-body-nodes body-node))
-                          :last-node (node-body-last-node body-node))
-                         body-node)))
+                        :output-types output-types)))
               (handler-case
                   (progn
                     (let ((effective-expected-type (tc:apply-substitution subs expected-type)))
@@ -2321,8 +2332,55 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
        (make-node-unsafe
         :type (tc:qualify nil body-ty)
         :location (source:location node)
-        :body body-node)
+       :body body-node)
        subs)))
+
+  (:method ((node parser:node-block) expected-type subs env)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (values tc:ty tc:ty-predicate-list accessor-list node-block tc:substitution-list))
+
+    (let* ((block-type (tc:make-variable))
+           (block-info (make-return-block-info :type block-type)))
+      (multiple-value-bind (body-ty preds accessors body-node subs)
+          (let ((*return-blocks*
+                  (acons (parser:node-block-name node)
+                         block-info
+                         *return-blocks*)))
+            (infer-expression-type (parser:node-block-body node)
+                                   block-type
+                                   subs
+                                   env))
+        (let ((first-return
+                (return-block-info-first-return block-info)))
+        (when first-return
+          (handler-case
+              (setf subs (tc:unify subs (cdr first-return) body-ty))
+            (tc:coalton-internal-type-error ()
+              (tc-error "Return type mismatch"
+                        (tc-note (car first-return)
+                                 "First return is of type '~A'"
+                                 (type-object-string (tc:apply-substitution subs (cdr first-return))))
+                        (tc-note (parser:node-body-last-node (parser:node-block-body node))
+                                 "Second return is of type '~A'"
+                                 (type-object-string (tc:apply-substitution subs body-ty)))))))
+        (handler-case
+            (progn
+              (setf subs (tc:unify subs block-type expected-type))
+              (let ((type (tc:apply-substitution subs block-type)))
+                (values
+                 type
+                 preds
+                 accessors
+                 (make-node-block
+                  :type (tc:qualify nil type)
+                 :location (source:location node)
+                  :name (parser:node-block-name node)
+                  :body body-node)
+                 subs)))
+          (tc:coalton-internal-type-error ()
+            (standard-expression-type-mismatch-error node subs expected-type body-ty)))))))
 
   (:method ((node parser:node-the) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -2432,39 +2490,49 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
              (type tc-env env)
-             (values tc:ty tc:ty-predicate-list accessor-list node-return tc:substitution-list))
+             (values tc:ty tc:ty-predicate-list accessor-list node tc:substitution-list))
 
-    ;; Returns must be inside a lambda
-    (when (eq *return-status* :toplevel)
-      (tc-error "Unexpected return"
-                (tc-note node "returns must be inside a lambda")))
+    (declare (ignore expected-type subs env))
+    (util:coalton-bug "Unexpected parser:node-return after control-flow resolution: ~S" node))
 
-    ;; Returns cannot be in a do expression
-    (when (eq *return-status* :do)
-      (tc-error "Invalid return"
-                (tc-note node "returns cannot be in a do expression")))
+  (:method ((node parser:node-return-from) expected-type subs env)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (values tc:ty tc:ty-predicate-list accessor-list node-return-from tc:substitution-list))
 
-    (multiple-value-bind (ty preds accessors expr-node subs)
-        (infer-expression-type (or (parser:node-return-expr node)
-                                   (parser:make-node-values
-                                    :location (source:location node)
-                                    :nodes nil))
-                               (tc:make-variable)
-                               subs
-                               env)
-
-      ;; Add node the the list of returns
-      (push (cons (source:location node) ty) *returns*)
-
-      (values
-       expected-type
-       preds
-       accessors
-       (make-node-return
-        :type (tc:qualify nil expected-type)
-        :location (source:location node)
-        :expr expr-node)
-       subs)))
+    (let ((block-info (return-block-info (parser:node-return-from-name node))))
+      (multiple-value-bind (expr-ty preds accessors expr-node subs)
+          (infer-expression-type (parser:node-return-from-expr node)
+                                 (tc:make-variable)
+                                 subs
+                                 env)
+        (let ((first-return (return-block-info-first-return block-info)))
+          (if first-return
+              (handler-case
+                  (setf subs (tc:unify subs expr-ty (cdr first-return)))
+                (tc:coalton-internal-type-error ()
+                  (tc-error "Return type mismatch"
+                            (tc-note (car first-return)
+                                     "First return is of type '~A'"
+                                     (type-object-string (tc:apply-substitution subs (cdr first-return))))
+                            (tc-note node
+                                     "Second return is of type '~A'"
+                                     (type-object-string (tc:apply-substitution subs expr-ty))))))
+              (setf (return-block-info-first-return block-info)
+                    (cons (source:location node)
+                          (tc:apply-substitution subs expr-ty)))))
+        (let ((type (tc:apply-substitution subs expected-type)))
+          (values
+           type
+           preds
+           accessors
+           (make-node-return-from
+            :type (tc:qualify nil type)
+            :location (source:location node)
+            :name (parser:node-return-from-name node)
+            :expr expr-node)
+           subs)))))
 
   (:method ((node parser:node-throw) expected-type subs env)
     (declare (type tc:ty expected-type)
@@ -3039,38 +3107,36 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node-do-bind tc:substitution-list))
 
-    (let ((*return-status* :do))
+    (multiple-value-bind (expr-ty preds accessors expr-node subs)
+        (infer-expression-type (parser:node-do-bind-expr node)
+                               expected-type ; unify here so that expr-ty is in the form "m a"
+                               subs
+                               env)
 
-      (multiple-value-bind (expr-ty preds accessors expr-node subs)
-          (infer-expression-type (parser:node-do-bind-expr node)
-                                 expected-type ; unify here so that expr-ty is in the form "m a"
-                                 subs
-                                 env)
+      (multiple-value-bind (ty_ pattern subs)
+          (infer-pattern-type (parser:node-do-bind-pattern node)
+                              (tc:tapp-to (tc:apply-substitution subs expr-ty)) ; this should never fail
+                              subs
+                              env)
+        (declare (ignore ty_))
 
-        (multiple-value-bind (ty_ pattern subs)
-            (infer-pattern-type (parser:node-do-bind-pattern node)
-                                (tc:tapp-to (tc:apply-substitution subs expr-ty)) ; this should never fail
-                                subs
-                                env)
-          (declare (ignore ty_))
-
-          (handler-case
-              (progn
-                (setf subs (tc:unify subs expr-ty expected-type))
-                (values
-                 expr-ty
-                 preds
-                 accessors
-                 (make-node-do-bind
-                  :pattern pattern
-                  :expr expr-node
-                  :location (source:location node))
-                 subs))
-            (tc:coalton-internal-type-error ()
-              (tc-error "Type mismatch"
-                        (tc-note node "Expected type '~A' but got '~A'"
-                                 (type-object-string (tc:apply-substitution subs expected-type))
-                                 (type-object-string (tc:apply-substitution subs expr-ty))))))))))
+        (handler-case
+            (progn
+              (setf subs (tc:unify subs expr-ty expected-type))
+              (values
+               expr-ty
+               preds
+               accessors
+               (make-node-do-bind
+                :pattern pattern
+                :expr expr-node
+                :location (source:location node))
+               subs))
+          (tc:coalton-internal-type-error ()
+            (tc-error "Type mismatch"
+                      (tc-note node "Expected type '~A' but got '~A'"
+                               (type-object-string (tc:apply-substitution subs expected-type))
+                               (type-object-string (tc:apply-substitution subs expr-ty)))))))))
 
   (:method ((node parser:node-do) expected-type subs env)
     (declare (type tc:ty expected-type)

@@ -4,6 +4,7 @@
    #:coalton-impl/typechecker/base
    #:coalton-impl/typechecker/pattern
    #:coalton-impl/typechecker/expression
+   #:coalton-impl/typechecker/control-flow
    #:coalton-impl/typechecker/traverse
    #:coalton-impl/typechecker/toplevel
    #:coalton-impl/typechecker/binding
