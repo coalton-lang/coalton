@@ -50,7 +50,7 @@
       :print-unicode                    ; [boolean] print unicode?
       :type-printing-mode               ; [member :types :aliases :types-and-aliases] type printing mode
       :perform-specialization           ; [boolean] use specializations?
-      :perform-inlining                 ; [boolean] automatic inlining?
+      :perform-heuristic-inlining       ; [boolean] automatic inlining?
       :emit-type-annotations            ; [boolean] emit type annotations?
       :print-types                      ; [boolean] print types when compiling?
       :print-rewrites                   ; [boolean] print rewriting that occurs (specialization/inlining)?
@@ -122,7 +122,7 @@ or by pushing `:coalton-release' into `*features*'. Any of these must be done be
            :test #'string-equal)
      t)
     (t
-     (config ':perform-inlining :default nil))))
+     (config ':perform-heuristic-inlining :default nil))))
 
 (declaim (type boolean *emit-type-annotations*))
 (defvar *emit-type-annotations* (config ':emit-type-annotations :default t)

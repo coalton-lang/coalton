@@ -12,14 +12,14 @@ Coalton allows a bit of configuration. **For ordinary development, it is not nec
 The `:coalton-config` keyword's symbol-plist is inspected just before the Coalton system is compiled. Therefore, the easiest is to add configure Coalton is to add configuration options to your Lisp system's init file (such as SBCL's `.sbclrc`). Here is an example configuration that one might use for day-to-day development:
 
 ```
-(let ((config '((:compiler-mode              "development")
-                (:print-unicode              t)
-                (:perform-specialization     nil)
-                (:perform-inlining           nil)
-                (:emit-type-annotations      nil)
-                (:print-types                t)
-                (:print-rewrites             nil)
-                (:auto-continue-redefinition t))))
+(let ((config '((:compiler-mode                   "development")
+                (:print-unicode                   t)
+                (:perform-specialization          nil)
+                (:perform-heuristic-inlining      nil)
+                (:emit-type-annotations           nil)
+                (:print-types                     t)
+                (:print-rewrites                  nil)
+                (:auto-continue-redefinition      t))))
   (setf (symbol-plist ':coalton-config) nil)
   (loop :for (key value) :in config
         :do (setf (get ':coalton-config key) value)))
@@ -28,13 +28,13 @@ The `:coalton-config` keyword's symbol-plist is inspected just before the Coalto
 This ensures Coalton is in development mode, turns off various optimizations, but enables printing of Coalton types when your code is being compiled. Here is another example configuration that one might use for working on high-performance code:
 
 ```
-(let ((config '((:compiler-mode          "release")
-                (:print-unicode          t)
-                (:perform-specialization t)
-                (:perform-inlining       t)
-                (:emit-type-annotations  t)
-                (:print-types            t)
-                (:print-rewrites         t))))
+(let ((config '((:compiler-mode                 "release")
+                (:print-unicode                 t)
+                (:perform-specialization        t)
+                (:perform-heuristic-inlining    t)
+                (:emit-type-annotations         t)
+                (:print-types                   t)
+                (:print-rewrites                t))))
   (setf (symbol-plist ':coalton-config) nil)
   (loop :for (key value) :in config
         :do (setf (get ':coalton-config key) value)))
@@ -68,7 +68,7 @@ Allowed options:
 - `t`: Allow Coalton to specialize function calls.
 - `nil`: Don't.
 
-### `:perform-inlining`
+### `:perform-heuristic-inlining`
 
 This controls whether *heuristic* inlining is performed. Heuristic inlining allows Coalton to decide what and when to inline. Coalton will respect `(inline)` directives regardless of this configuration option. This option may significantly increase compile time or code size.
 
