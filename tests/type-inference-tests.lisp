@@ -698,6 +698,14 @@
     (declare test-bare-testtype (TestType -> TestType))
     (define test-bare-testtype test-bare)")
 
+  (check-coalton-types
+   "(declare lifted (Integer -> Integer))
+    (define lifted
+      (map (fn (x) (+ x 1))
+           (fn (x) x)))"
+
+   '("lifted" . "(Integer -> Integer)"))
+
   ;; Check that it works with functional dependencies
   (check-coalton-types
    "(define-type (Box :a)
