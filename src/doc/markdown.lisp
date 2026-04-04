@@ -104,7 +104,8 @@
       (write-section 'coalton-struct "Structs")
       (write-section 'coalton-class "Classes")
       (write-section 'coalton-value "Values")
-      (write-section 'coalton-macro "Macros"))))
+      (write-section 'coalton-macro "Macros")
+      (write-section 'coalton-operator "Operators"))))
 
 (defun write-instances (backend object)
   (let ((instances (object-instances object)))
@@ -221,6 +222,11 @@
 ;;; coalton-macro
 
 (defmethod write-object-body ((backend markdown-backend) (object coalton-macro))
+  (write-doc backend object))
+
+;;; coalton-operator
+
+(defmethod write-object-body ((backend markdown-backend) (object coalton-operator))
   (write-doc backend object))
 
 ;;; Methods for TO-MARKDOWN

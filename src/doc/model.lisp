@@ -61,6 +61,10 @@
    #:coalton-macro
    #:coalton-macro-name
 
+   #:coalton-operator
+   #:coalton-operator-name
+   #:coalton-operator-kind
+
    #:coalton-package
    #:package-objects
    #:sort-objects
@@ -390,12 +394,13 @@
       (tc:type-entry-name type-entry)))
 
 (defun stdlib-p (symbol)
-  "A standard library package is any package with the exact name 'coalton' or whose name starts with 'coalton/'."
+  "A standard library package is any package with the exact name 'coalton', 'coalton-prelude', or whose name starts with 'coalton/'."
   (let ((pkg (symbol-package symbol)))
     (if (null pkg)
         nil
         (let ((name (package-name pkg)))
           (or (string-equal name "COALTON")
+              (string-equal name "COALTON-PRELUDE")
               (eql 0 (search "COALTON/" name)))))))
 
 ;;; class coalton-macro
@@ -484,6 +489,65 @@
      (lookup-type-source-name tcon-name)
      "type")))
 
+;;; class coalton-operator
+
+(defclass coalton-operator (coalton-object)
+  ((name :initarg :name :reader coalton-operator-name)
+   (kind :initarg :kind :reader coalton-operator-kind
+         :documentation "Either :TOPLEVEL or :EXPRESSION.")))
+
+(defun symbol-names-coalton-operator-p (s)
+  (get s ':coalton-operator))
+
+(defun find-operators (&key (package nil package-provided-p))
+  (let ((operators nil))
+    (cond
+      ((not package-provided-p)
+       (do-all-symbols (v operators)
+         (when (and (symbol-exported-p v)
+                    (symbol-names-coalton-operator-p v))
+           (push (make-instance 'coalton-operator
+                   :name v
+                   :kind (get v ':coalton-operator))
+                 operators))))
+      (t
+       (do-external-symbols (v package operators)
+         (when (symbol-names-coalton-operator-p v)
+           (push (make-instance 'coalton-operator
+                   :name v
+                   :kind (get v ':coalton-operator))
+                 operators)))))))
+
+(defun has-operators-p (package)
+  (do-external-symbols (v package nil)
+    (when (symbol-names-coalton-operator-p v)
+      (return-from has-operators-p t))))
+
+(defmethod object-name ((x coalton-operator))
+  (let ((*print-pretty* nil)
+        (*print-circle* nil))
+    (with-output-to-string (s)
+      (format s "~A " (coalton-operator-name x))
+      (print-lambda-list s (get (coalton-operator-name x) ':coalton-operator-lambda-list)))))
+
+(defmethod object-type ((x coalton-operator))
+  (if (eq (coalton-operator-kind x) ':toplevel)
+      "TOPLEVEL OPERATOR"
+      "OPERATOR"))
+
+(defmethod object-location ((x coalton-operator))
+  nil)
+
+(defmethod object-docstring ((x coalton-operator))
+  (documentation (coalton-operator-name x) 'function))
+
+(defmethod object-aname ((x coalton-operator))
+  (substitute
+   #\- #\/
+   (format nil "~(~A-~A-operator~)"
+           (package-name (symbol-package (coalton-operator-name x)))
+           (symbol-name (coalton-operator-name x)))))
+
 ;;; Public API
 
 (defun has-values-p (package)
@@ -527,24 +591,78 @@
   (or (has-types-p package)
       (has-values-p package)
       (has-classes-p package)
-      (has-macros-p package)))
+      (has-macros-p package)
+      (has-operators-p package)))
 
 (defun find-objects (&key package reexported-symbols)
-  "Find all Coalton OBJECTS, optionally retstricting to objects defined in PACKAGE."
+  "Find all Coalton objects, optionally restricting to objects defined in PACKAGE."
   (append (find-types :package package :reexported-symbols reexported-symbols)
           (find-values :package package :reexported-symbols reexported-symbols)
           (find-classes :package package :reexported-symbols reexported-symbols)
-          (find-macros :package package)))
+          (find-macros :package package)
+          (find-operators :package package)))
+
+(defun symbols-covered-by-p (impl umbrella)
+  "Return T if every external symbol of IMPL is also external in UMBRELLA."
+  (do-external-symbols (sym impl t)
+    (multiple-value-bind (found status)
+        (find-symbol (symbol-name sym) umbrella)
+      (unless (and (eq found sym) (eq status ':external))
+        (return-from symbols-covered-by-p nil)))))
+
+(defun stdlib-package-p (package)
+  "T if PACKAGE is a standard library package."
+  (let ((name (package-name package)))
+    (or (string-equal name "COALTON")
+        (eql 0 (search "COALTON/" name)))))
+
+(defun find-umbrella-packages ()
+  "Return an alist of (umbrella-package . covered-packages) for user-facing umbrella packages."
+  (let ((result nil))
+    (dolist (name '("COALTON-PRELUDE" "COALTON/MATH"))
+      (let ((umbrella (find-package name)))
+        (when umbrella
+          (let ((covered nil))
+            ;; Find implementation packages whose symbols are fully re-exported
+            (dolist (pkg (list-all-packages))
+              (when (and (not (eq pkg umbrella))
+                         (stdlib-package-p pkg)
+                         (has-objects-p pkg)
+                         (symbols-covered-by-p pkg umbrella))
+                (push pkg covered)))
+            (push (cons umbrella covered) result)))))
+    result))
 
 (defun find-packages ()
-  "Return the list of packages in the standard library."
-  (let ((packages nil))
+  "Return the list of packages in the standard library.
+
+Prefers user-facing umbrella packages (COALTON-PRELUDE, COALTON/MATH) over
+their implementation sub-packages when the umbrella fully re-exports a
+sub-package's symbols."
+  (let* ((umbrella-alist (find-umbrella-packages))
+         (covered (mapcan #'copy-list (mapcar #'cdr umbrella-alist)))
+         (packages nil))
+    ;; Add umbrella packages with reexported-symbols enabled
+    (dolist (entry umbrella-alist)
+      (let ((umbrella (car entry)))
+        (when (has-objects-p umbrella)
+          (push (make-coalton-package umbrella :reexported-symbols t) packages))))
+    ;; Add remaining stdlib packages that aren't covered by an umbrella
     (do-all-symbols (symbol)
       (when (stdlib-p symbol)
-        (pushnew (symbol-package symbol) packages)))
-    (sort-objects
-     (mapcar #'make-coalton-package
-             (remove-if-not #'has-objects-p packages)))))
+        (let ((pkg (symbol-package symbol)))
+          (unless (or (member pkg covered :test #'eq)
+                      (assoc pkg umbrella-alist :test #'eq))
+            (pushnew pkg packages :test (lambda (a b)
+                                          (if (typep b 'coalton-package)
+                                              (eq a (lisp-package b))
+                                              (eq a b))))))))
+    ;; Convert remaining raw packages to coalton-package objects
+    (setf packages
+          (mapcar (lambda (p)
+                    (if (typep p 'coalton-package) p (make-coalton-package p)))
+                  packages))
+    (sort-objects (remove-if-not (lambda (p) (has-objects-p (lisp-package p))) packages))))
 
 ;;; Source-name lookup utilities
 
