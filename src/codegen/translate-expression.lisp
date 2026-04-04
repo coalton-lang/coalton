@@ -32,12 +32,6 @@
 
 (in-package #:coalton-impl/codegen/translate-expression)
 
-(defvar *current-function-name* nil)
-(setf (documentation '*current-function* 'variable)
-      "The symbol name of the function currently being translated.
-This will be bound for the extent of any TRANSLATE-TOPLEVEL call, or
-TRANSLATE-EXPRESSION when an abstraction is being translated.")
-
 (defun physical-callable-type (type)
   (declare (type tc:ty type)
            (values tc:ty &optional))
@@ -422,96 +416,96 @@ needs to synthesize those trailing parameters explicitly."
     (multiple-value-bind (eta-keyword-params eta-keyword-rands)
         (binding-eta-keyword-forwarders binding qual-ty)
 
-            (labels ((wrap-qualified-nullary-result (node outer-vars outer-keyword-params)
-               (if (and outer-vars
-                        (null outer-keyword-params)
-                        (null (tc:binding-parameters binding))
-                        (not (tc:binding-restricted-p binding))
-                        (tc:function-type-p (tc:qualified-ty-type qual-ty))
-                        (null (physical-callable-argument-types (tc:qualified-ty-type qual-ty))))
-                   (make-node-abstraction
-                    :type (tc:qualified-ty-type qual-ty)
-                    :vars nil
-                    :keyword-params outer-keyword-params
-                    :subexpr node)
-                   node)))
+      (labels ((wrap-qualified-nullary-result (node outer-vars outer-keyword-params)
+                 (if (and outer-vars
+                          (null outer-keyword-params)
+                          (null (tc:binding-parameters binding))
+                          (not (tc:binding-restricted-p binding))
+                          (tc:function-type-p (tc:qualified-ty-type qual-ty))
+                          (null (physical-callable-argument-types
+                                 (tc:qualified-ty-type qual-ty))))
+                     (make-node-abstraction
+                      :type (tc:qualified-ty-type qual-ty)
+                      :vars nil
+                      :keyword-params outer-keyword-params
+                      :subexpr node)
+                     node)))
 
-      (cond
-        ;; If the binding does not have parameters, and the
-        ;; body is a single lambda then generate a function
-        ;; to match the declared type and then translate the
-        ;; lambda.
-        ((and (null (tc:binding-parameters binding))
-              (tc:binding-restricted-p binding)
-              (typep last-node 'tc:node-abstraction))
-         (let ((vars (append
-                      (loop :for (pred . name) :in ctx
-                            :collect name)
-                      (loop :for param :in (tc:node-abstraction-params last-node)
-                            :if (tc:pattern-var-p param)
-                              :collect (tc:pattern-var-name param)
-                            :else :if (tc:pattern-wildcard-p param)
-                                    :collect (gensym "_")
-                            :else
-                              :collect (let ((name (gensym)))
-                                         (push (cons name param) pattern-params)
-                                         name)))))
-           (make-node-abstraction
-            :type (binding-codegen-abstraction-type binding qual-ty preds env last-node)
-            :vars vars
-            :keyword-params (translate-keyword-params
-                             (tc:node-abstraction-keyword-params last-node))
-            :subexpr (let ((*current-function-name* name))
-                       (wrap-qualified-nullary-result
-                        (wrap-in-block
-                         (wrap-with-pattern-params
-                          pattern-params
-                          (translate-expression (tc:node-abstraction-body last-node) full-ctx env)))
+        (cond
+          ;; If the binding does not have parameters, and the
+          ;; body is a single lambda then generate a function
+          ;; to match the declared type and then translate the
+          ;; lambda.
+          ((and (null (tc:binding-parameters binding))
+                (tc:binding-restricted-p binding)
+                (typep last-node 'tc:node-abstraction))
+           (let ((vars (append
+                        (loop :for (pred . name) :in ctx
+                              :collect name)
+                        (loop :for param :in (tc:node-abstraction-params last-node)
+                              :if (tc:pattern-var-p param)
+                                :collect (tc:pattern-var-name param)
+                              :else :if (tc:pattern-wildcard-p param)
+                                      :collect (gensym "_")
+                              :else
+                                :collect (let ((name (gensym)))
+                                           (push (cons name param) pattern-params)
+                                           name)))))
+             (make-node-abstraction
+              :type (binding-codegen-abstraction-type binding qual-ty preds env last-node)
+              :vars vars
+              :keyword-params (translate-keyword-params
+                               (tc:node-abstraction-keyword-params last-node))
+              :subexpr (wrap-qualified-nullary-result
+                        (wrap-with-pattern-params
+                         pattern-params
+                         (translate-expression
+                          (tc:node-abstraction-body last-node)
+                          full-ctx
+                          env))
                         vars
                         (translate-keyword-params
-                         (tc:node-abstraction-keyword-params last-node)))))))
+                         (tc:node-abstraction-keyword-params last-node))))))
 
-        ;; Function-syntax bindings and constrained bindings need an outer lambda.
-        ((or (tc:binding-parameters binding) preds (tc:binding-restricted-p binding))
-         (let ((vars (append
-                      (loop :for (pred . name) :in ctx
-                            :collect name)
-                      (loop :for param :in (tc:binding-parameters binding)
-                            :if (tc:pattern-var-p param)
-                              :collect (tc:pattern-var-name param)
-                            :else :if (tc:pattern-wildcard-p param)
-                                    :collect (gensym "_")
-                            :else
-                              :collect (let ((name (gensym)))
-                                         (push (cons name param) pattern-params)
-                                         name)))))
-           (make-node-abstraction
-           :type (binding-codegen-abstraction-type binding qual-ty preds env last-node)
-           :vars (append vars eta-vars)
-           :keyword-params (append (translate-keyword-params
-                                    (tc:binding-keyword-parameters binding))
-                                    eta-keyword-params)
-            :subexpr (let ((*current-function-name* name))
-                       (wrap-qualified-nullary-result
-                        (wrap-in-block
-                         (wrap-with-pattern-params
-                          pattern-params
-                          (maybe-eta-expand-binding-body
-                           binding
-                           qual-ty
-                           (translate-expression (tc:binding-value binding) full-ctx env)
-                           eta-vars
-                           eta-arg-types
-                           eta-keyword-rands
-                           full-ctx
-                           env)))
+          ;; Function-syntax bindings and constrained bindings need an outer lambda.
+          ((or (tc:binding-parameters binding) preds (tc:binding-restricted-p binding))
+           (let ((vars (append
+                        (loop :for (pred . name) :in ctx
+                              :collect name)
+                        (loop :for param :in (tc:binding-parameters binding)
+                              :if (tc:pattern-var-p param)
+                                :collect (tc:pattern-var-name param)
+                              :else :if (tc:pattern-wildcard-p param)
+                                      :collect (gensym "_")
+                              :else
+                                :collect (let ((name (gensym)))
+                                           (push (cons name param) pattern-params)
+                                           name)))))
+             (make-node-abstraction
+              :type (binding-codegen-abstraction-type binding qual-ty preds env last-node)
+              :vars (append vars eta-vars)
+              :keyword-params (append (translate-keyword-params
+                                       (tc:binding-keyword-parameters binding))
+                                      eta-keyword-params)
+              :subexpr (wrap-qualified-nullary-result
+                        (wrap-with-pattern-params
+                         pattern-params
+                         (maybe-eta-expand-binding-body
+                          binding
+                          qual-ty
+                          (translate-expression (tc:binding-value binding) full-ctx env)
+                          eta-vars
+                          eta-arg-types
+                          eta-keyword-rands
+                          full-ctx
+                          env))
                         (append vars eta-vars)
                         (append (translate-keyword-params
                                  (tc:binding-keyword-parameters binding))
-                                eta-keyword-params))))))
+                                eta-keyword-params)))))
 
-        (t
-         (translate-expression (tc:binding-value binding) full-ctx env)))))))
+          (t
+           (translate-expression (tc:binding-value binding) full-ctx env)))))))
 
 (defun translate-variable-application (expr result-type rands keyword-rands ctx env)
   "Translate the immediate application of variable EXPR to RANDS.
@@ -729,9 +723,7 @@ Returns a `node'.")
              (type tc:environment env)
              (values node))
 
-    (let* ((*current-function-name* '@@local)
-
-           (qual-ty (tc:node-type expr))
+    (let* ((qual-ty (tc:node-type expr))
 
            (preds (tc:qualified-ty-predicates qual-ty))
 
@@ -790,10 +782,9 @@ Returns a `node'.")
                                   :value name)
                            :branches
                            (list
-                            (make-match-branch
-                             :pattern (translate-pattern pattern)
-                             :body inner)))))
-          (setf inner (wrap-in-block inner))
+                           (make-match-branch
+                            :pattern (translate-pattern pattern)
+                            :body inner)))))
           (when (and dict-var-names
                      (tc:function-type-p visible-type)
                      (null (tc:function-ty-positional-input-types visible-type))
@@ -825,7 +816,13 @@ Returns a `node'.")
                        :for name := (tc:node-variable-name (tc:node-let-binding-name binding))
                        :for var := (tc:node-let-binding-name binding)
 
-                       :collect (cons name (translate-toplevel binding env name :extra-context ctx)))
+                       :collect
+                         (cons name
+                               (translate-toplevel
+                                binding
+                                env
+                                name
+                                :extra-context ctx)))
        :subexpr (translate-expression (tc:node-let-body expr) ctx env))))
 
   (:method ((expr tc:node-dynamic-let) ctx env)
@@ -959,7 +956,23 @@ Returns a `node'.")
        :type-check 0
        :subexpr (translate-expression (tc:node-unsafe-body expr) ctx env))))
 
-  (:method ((expr tc:node-return) ctx env)
+  (:method ((expr tc:node-block) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+
+    (let ((qual-ty (tc:node-type expr)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      (let ((body (translate-expression (tc:node-block-body expr) ctx env)))
+        (if (block-return-target-used-p body (tc:node-block-name expr))
+            (make-node-block
+             :type (tc:qualified-ty-type qual-ty)
+             :name (tc:node-block-name expr)
+             :body body)
+            body))))
+
+  (:method ((expr tc:node-return-from) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)
              (values node))
@@ -969,10 +982,8 @@ Returns a `node'.")
 
       (make-node-return-from
        :type (tc:qualified-ty-type qual-ty)
-       :name *current-function-name*
-       :expr (if (tc:node-return-expr expr)
-                 (translate-expression (tc:node-return-expr expr) ctx env)
-                 (zero-values-node)))))
+       :name (tc:node-return-from-name expr)
+       :expr (translate-expression (tc:node-return-from-expr expr) ctx env))))
 
   (:method ((expr tc:node-values) ctx env)
     (declare (type pred-context ctx)
@@ -1513,29 +1524,19 @@ dictionaries applied."
 
         :finally (return inner)))
 
-(defun wrap-in-block (inner)
-  "Check whether INNER contains any return statements which need a
-block. If so, wrap INNER in a block named for the current function.
-Otherwise, return INNER unchanged.
-
-There is currently no way for any return node to jump outside its
-function's block, but this traversal handles the most general case by
-checking for any return nodes targeting *CURRENT-FUNCTION-NAME* which
-don't occur in an already existing block with a matching label."
+(defun block-return-target-used-p (inner target)
+  "Return true when INNER contains a return targeting TARGET outside a matching block."
   (declare (type node inner)
-           (values node &optional))
+           (type symbol target)
+           (values boolean &optional))
   (traverse
    inner
    (list
     (action (:traverse node-block node)
-      (unless (eq *current-function-name* (node-block-name node))
+      (unless (eq target (node-block-name node))
         (funcall *traverse* (node-block-body node)))
       (values))
     (action (:before node-return-from node)
-      (when (eq *current-function-name* (node-return-from-name node))
-        (return-from wrap-in-block
-          (make-node-block
-           :type (node-type inner)
-           :name *current-function-name*
-           :body inner))))))
-  inner)
+      (when (eq target (node-return-from-name node))
+        (return-from block-return-target-used-p t)))))
+  nil)

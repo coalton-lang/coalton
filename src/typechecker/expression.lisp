@@ -123,13 +123,18 @@
    #:node-unsafe                        ; STRUCT
    #:make-node-unsafe                   ; CONSTRUCTOR
    #:node-unsafe-body                   ; ACCESSOR
+   #:node-block                         ; STRUCT
+   #:make-node-block                    ; CONSTRUCTOR
+   #:node-block-name                    ; ACCESSOR
+   #:node-block-body                    ; ACCESSOR
    #:node-the                           ; STRUCT
    #:make-node-the                      ; CONSTRUCTOR
    #:node-the-type                      ; ACCESSOR
    #:node-the-expr                      ; ACCESSOR
-   #:node-return                        ; STRUCT
-   #:make-node-return                   ; CONSTRUCTOR
-   #:node-return-expr                   ; ACCESSOR
+   #:node-return-from                   ; STRUCT
+   #:make-node-return-from              ; CONSTRUCTOR
+   #:node-return-from-name              ; ACCESSOR
+   #:node-return-from-expr              ; ACCESSOR
    #:node-values                        ; STRUCT
    #:make-node-values                   ; CONSTRUCTOR
    #:node-values-nodes                  ; ACCESSOR
@@ -411,11 +416,19 @@
 
 ;; node-the does not exist in this AST!
 
-(defstruct (node-return
+(defstruct (node-block
             (:include node)
             (:copier nil))
-  ;; Either the returned expression or null in the case of "(return)"
-  (expr (util:required 'expr) :type (or null node) :read-only t))
+  (name (util:required 'name) :type symbol    :read-only t)
+  (body (util:required 'body) :type node-body :read-only t))
+
+(defstruct (node-return-from
+            (:include node)
+            (:copier nil))
+  (name (util:required 'name) :type symbol :read-only t)
+  ;; Bare (return) is rewritten to a zero-value NODE-VALUES during
+  ;; control-flow resolution, so the returned expression is always explicit.
+  (expr (util:required 'expr) :type node   :read-only t))
 
 (defstruct (node-values
             (:include node)
@@ -787,13 +800,23 @@
    :location (source:location node)
    :body (tc:apply-substitution subs (node-unsafe-body node))))
 
-(defmethod tc:apply-substitution (subs (node node-return))
+(defmethod tc:apply-substitution (subs (node node-block))
   (declare (type tc:substitution-list subs)
-           (values node-return))
-  (make-node-return
+           (values node-block))
+  (make-node-block
    :type (tc:apply-substitution subs (node-type node))
    :location (source:location node)
-   :expr (tc:apply-substitution subs (node-return-expr node))))
+   :name (node-block-name node)
+   :body (tc:apply-substitution subs (node-block-body node))))
+
+(defmethod tc:apply-substitution (subs (node node-return-from))
+  (declare (type tc:substitution-list subs)
+           (values node-return-from))
+  (make-node-return-from
+   :type (tc:apply-substitution subs (node-type node))
+   :location (source:location node)
+   :name (node-return-from-name node)
+   :expr (tc:apply-substitution subs (node-return-from-expr node))))
 
 (defmethod tc:apply-substitution (subs (node node-values))
   (declare (type tc:substitution-list subs)

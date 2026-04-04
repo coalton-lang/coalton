@@ -34,6 +34,11 @@
 
         (env *global-environment*))
 
+    (setf (parser:program-defines program)
+          (tc:resolve-control-flow (parser:program-defines program)))
+    (setf (parser:program-instances program)
+          (tc:resolve-control-flow (parser:program-instances program)))
+
     (multiple-value-bind (type-definitions instances env)
         (tc:toplevel-define-type (parser:program-types program)
                                  (parser:program-structs program)
@@ -116,7 +121,8 @@
   (let ((env *global-environment*))
 
     (multiple-value-bind (ty preds accessors node subs)
-        (tc:infer-expression-type (parser:rename-variables node)
+        (tc:infer-expression-type (tc:resolve-control-flow
+                                   (parser:rename-variables node))
                                   (tc:make-variable)
                                   nil
                                   (tc:make-tc-env :env env))
