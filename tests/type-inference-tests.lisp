@@ -88,6 +88,45 @@
      "(declare impossible (Void -> Integer))
       (define (impossible _x) 1)"))
 
+  ;; Void (zero values) cannot be bound to a variable
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(define (f)
+        (let b = (values))
+        b)"))
+
+  ;; Result of a Void function cannot be bound to a variable
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(define (g) (values))
+      (define (f)
+        (let b = (g))
+        b)"))
+
+  ;; Result of when (which is Void) cannot be bound to a variable
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(define (f b)
+        (let r = (when b 1))
+        r)"))
+
+  ;; Multiple values cannot be bound to a single variable
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(define (f)
+        (let b = (values 1 2))
+        b)"))
+
+  ;; Result of a multi-value function cannot be bound to a single variable
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(declare two-vals (Void -> Integer * Integer))
+      (define (two-vals)
+        (values 1 2))
+      (define (f)
+        (let b = (two-vals))
+        b)"))
+
   (check-coalton-types
    "(define (when-zero-values b)
       (when b

@@ -1671,6 +1671,20 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                subs
                                env)
 
+      ;; A let-bound variable requires exactly one value.  Void (zero
+      ;; values) and multi-value results cannot be bound to a variable
+      ;; -- use `let (values ...) = ...` instead.
+      ;; Wildcard patterns (`let _ = ...`) are exempt: the programmer
+      ;; is explicitly discarding the result.
+      (let ((resolved-ty (tc:apply-substitution subs expr-ty)))
+        (when (and (typep resolved-ty 'tc:result-ty)
+                   (not (typep (parser:node-bind-pattern node)
+                               'parser:pattern-wildcard)))
+          (tc-error "Cannot bind to variable"
+                    (tc-note node
+                             "expression produces ~A but a let binding requires a single value"
+                             (type-object-string resolved-ty)))))
+
       (multiple-value-bind (pat-ty pat-node subs)
           (infer-pattern-type (parser:node-bind-pattern node)
                               expr-ty   ; unify against expr-ty
@@ -4825,6 +4839,22 @@ as a recursive function rather than a recursive value."
                       :location (source:location (parser:binding-name binding))
                       :name (parser:node-variable-name (parser:binding-name binding))))
                    (typed-binding (build-typed-binding binding name-node value-node nil nil)))
+              ;; A let-bound variable requires exactly one value.  Void
+              ;; (zero values) and multi-value results cannot be bound
+              ;; to a let variable -- use `let (values ...) = ...` instead.
+              ;; Top-level defines are allowed to have Void type for
+              ;; side-effect initialization.
+              (when (and (typep type 'tc:result-ty)
+                         (typep binding 'parser:node-let-binding))
+                (tc-error "Cannot bind to variable"
+                          (tc-note (parser:binding-name binding)
+                                   "cannot bind ~A to a variable; use 'let (values ~A) = ...' for multiple values"
+                                   (type-object-string type)
+                                   (if (null (tc:result-ty-output-types type))
+                                       "_"
+                                       (format nil "~{~A~^ ~}"
+                                               (loop :for _ :in (tc:result-ty-output-types type)
+                                                     :collect "_"))))))
               (values preds accessors typed-binding subs_)))))))
 
 ;;;

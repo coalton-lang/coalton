@@ -2585,10 +2585,19 @@ Rebound to NIL parsing an anonymous FN.")
     (parse-error "Malformed declare"
                  (note source (cst:fourth form) "unexpected form")))
 
-  (make-node-let-declare
-   :name (parse-ordinary-variable (cst:second form) source)
-   :type (parse-qualified-type (cst:third form) source)
-   :location (form-location source form)))
+  (let ((qualified-type (parse-qualified-type (cst:third form) source)))
+    (when (typep (qualified-ty-type qualified-type) 'result-ty)
+      (parse-error "Malformed declaration"
+                   (note source (cst:third form)
+                         "cannot declare a binding as ~A; declarations must have a single-value or function type"
+                         (if (null (result-ty-output-types
+                                    (qualified-ty-type qualified-type)))
+                             "Void"
+                             "a multi-value type"))))
+    (make-node-let-declare
+     :name (parse-ordinary-variable (cst:second form) source)
+     :type qualified-type
+     :location (form-location source form))))
 
 (defun loop-clause-keyword-p (form name)
   (declare (type cst:cst form)
