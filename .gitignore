@@ -13,3 +13,5 @@ coverage-report/
 benchmarks/benchmarks-game/pidigits
 
 bench.json
+dependency-audit.png
+dependency-audit-all.png

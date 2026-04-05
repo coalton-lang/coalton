@@ -331,14 +331,14 @@ a new entry."
   (declare count (HashMap :k :v -> Integer))
   (define (count hm)
     "Returns the number of entries in HM."
-    (into
-     (rec walk ((node (root hm)))
-       (match node
-         ((Leaf _) 1)
-         ((Bud _ _) 2)
-         ((Chain lis) (list:length lis))
-         ((Tree _ array)
-          (fold (fn (sum elt) (+ sum (walk elt))) 0 array))))))
+    (let ((walk (fn (node)
+                  (match node
+                    ((Leaf _) 1)
+                    ((Bud _ _) 2)
+                    ((Chain lis) (list:length lis))
+                    ((Tree _ array)
+                     (fold (fn (sum elt) (+ sum (walk elt))) 0 array))))))
+      (into (walk (root hm)))))
 
   ;; API
   (declare lookup (Hash :k => HashMap :k :v * :k -> Optional :v))
@@ -838,41 +838,40 @@ but not in both."
   (declare dump (HashMap :k :v -> Void))
   (define (dump hm)
     "For debugging"
-    (rec dump-node
-         ((declare indent Integer)
-          (node (root hm))
-          (indent 0))
-      (match node
-        ((Leaf entry)
-         (lisp (-> Void) (entry indent)
-           (cl:progn
-             (cl:format cl:t "~vALeaf: ~W~%"
-                        indent #\space entry)
-             (cl:values))))
-        ((Bud entry1 entry2)
-         (lisp (-> Void) (entry1 entry2 indent)
-           (cl:progn
-             (cl:format cl:t "~vABud: ~W~%"
-                        indent #\space (cl:list entry1 entry2))
-             (cl:values))))
-        ((Chain entries)
-         (lisp (-> Void) (entries indent)
-           (cl:progn
-             (cl:format cl:t "~vAChain: ~W~%"
-                        indent #\space entries)
-             (cl:values))))
-        ((Tree mask arr)
-         (lisp (-> Void) (mask indent arr)
-           (cl:progn
-             (cl:format cl:t "~vATree[~D]: ~32,'0B~%"
-                        indent #\space (arr:length arr) mask)
-             (cl:values)))
-         (dotimes (i max-arity)
-           (when (tree-has-entry? mask i)
-             (let ((pos (index->pos mask i)))
-               (lisp (-> Void) (i indent)
-                 (cl:progn
-                   (cl:format cl:t "~vA~2d:~%" indent #\space i)
-                   (cl:values)))
-               (dump-node (arr:aref arr pos) (+ indent 2)))))))))
+    (let ((dump-node
+            (fn (node indent)
+              (match node
+                ((Leaf entry)
+                 (lisp (-> Void) (entry indent)
+                   (cl:progn
+                     (cl:format cl:t "~vALeaf: ~W~%"
+                                indent #\space entry)
+                     (cl:values))))
+                ((Bud entry1 entry2)
+                 (lisp (-> Void) (entry1 entry2 indent)
+                   (cl:progn
+                     (cl:format cl:t "~vABud: ~W~%"
+                                indent #\space (cl:list entry1 entry2))
+                     (cl:values))))
+                ((Chain entries)
+                 (lisp (-> Void) (entries indent)
+                   (cl:progn
+                     (cl:format cl:t "~vAChain: ~W~%"
+                                indent #\space entries)
+                     (cl:values))))
+                ((Tree mask arr)
+                 (lisp (-> Void) (mask indent arr)
+                   (cl:progn
+                     (cl:format cl:t "~vATree[~D]: ~32,'0B~%"
+                                indent #\space (arr:length arr) mask)
+                     (cl:values)))
+                 (dotimes (i max-arity)
+                   (when (tree-has-entry? mask i)
+                     (let ((pos (index->pos mask i)))
+                       (lisp (-> Void) (i indent)
+                         (cl:progn
+                           (cl:format cl:t "~vA~2d:~%" indent #\space i)
+                           (cl:values)))
+                       (dump-node (arr:aref arr pos) (+ indent 2))))))))))
+      (dump-node (root hm) 0)))
   )

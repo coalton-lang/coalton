@@ -7,6 +7,9 @@
    #:coalton
    #:coalton/classes
    #:coalton/math/arith)
+  (:local-nicknames
+   (#:iter #:coalton/iterator)
+   (#:l #:coalton/list))
   (:export
    #:repeat
    #:dotimes
@@ -17,6 +20,7 @@
    #:collecttimes
    #:besttimes
    #:argbesttimes
+   #:doiter
    #:dolist
    #:dolists
    #:dolist-enumerated
@@ -36,65 +40,59 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
   (declare %repeat (UFix * (Void -> Void) -> Void))
   (define (%repeat n func)
     "Do `func` `n` times."
-    (rec % ((i 0))
-      (cond
-        ((== i n)
-         (values))
-        (True
-         (func)
-         (% (1+ i))))))
+    (for ()
+      :repeat n
+      (func)))
 
   (inline)
   (declare %dotimes (UFix * (UFix -> Void) -> Void))
   (define (%dotimes n func)
     "Apply `func` to every `UFix` in `[0, n)`."
-    (rec % ((i 0))
-      (cond
-        ((== i n)
-         (values))
-        (True
-         (func i)
-         (% (1+ i))))))
+    (for ((declare i UFix)
+          (i 0 (1+ i)))
+      :while (< i n)
+      (func i)))
 
   (inline)
   (declare %everytimes (UFix * (UFix -> Boolean) -> Boolean))
   (define (%everytimes n pred)
     "Is `pred` `True` for all `UFix`s in `[0, n)`? Returns `True` for `n = 0`."
-    (rec % ((i 0))
-      (if (== i n)
-          True
-          (if (pred i)
-              (% (1+ i))
-              False))))
+    (for ((declare i UFix)
+          (i 0 (1+ i))
+          (result True (pred i)))
+      :returns result
+      :while (and result (< i n))))
 
   (inline)
   (declare %sometimes (UFix * (UFix -> Boolean) -> Boolean))
   (define (%sometimes n pred)
     "Is `pred` `True` for some `UFix` in `[0, n)`? Returns `False` for `n = 0`."
-    (rec % ((i 0))
-      (if (== i n)
-          False
-          (if (pred i)
-              True
-              (% (1+ i))))))
+    (for ((declare i UFix)
+          (i 0 (1+ i))
+          (result False (pred i)))
+      :returns result
+      :while (and (== result False)
+                  (< i n))))
 
   (inline)
   (declare %sumtimes (Num :t => UFix * (UFix -> :t) -> :t))
   (define (%sumtimes n func)
     "Sum the evaluations of `func` applied to every `UFix` in `[0, n)`. Returns 0 for `n = 0`."
-    (rec % ((i 0) (acc 0))
-      (if (== i n)
-          acc
-          (% (1+ i) (+ acc (func i))))))
+    (for ((declare i UFix)
+          (i 0 (1+ i))
+          (acc 0 (+ acc (func i))))
+      :returns acc
+      :while (< i n)))
 
   (inline)
   (declare %prodtimes (Num :t => UFix * (UFix -> :t) -> :t))
   (define (%prodtimes n func)
     "Multiply the evaluations of `func` applied to every `UFix` in `[0, n)`. Returns 1 for `n = 0`."
-    (rec % ((i 0) (acc 1))
-      (if (== i n)
-          acc
-          (% (1+ i) (* acc (func i))))))
+    (for ((declare i UFix)
+          (i 0 (1+ i))
+          (acc 1 (* acc (func i))))
+      :returns acc
+      :while (< i n)))
 
   (inline)
   (declare %reverse! (List :t -> List :t))
@@ -107,10 +105,11 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
   (declare %collecttimes (UFix * (UFix -> :t) -> List :t))
   (define (%collecttimes n func)
     "Collect the applications of `func` to every `UFix` in `[0, n)` as a `List`."
-    (rec % ((i 0) (acc Nil))
-      (if (== i n)
-          (%reverse! acc)
-          (% (1+ i) (Cons (func i) acc)))))
+    (for ((declare i UFix)
+          (i 0 (1+ i))
+          (acc Nil (Cons (func i) acc)))
+      :returns (%reverse! acc)
+      :while (< i n)))
 
   ;; The following functions are not used because it seems, for now
   ;; method which uses %reverse!  seems to be more performant. However,
@@ -144,6 +143,13 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
   ;;            (% (1+ i) new-last)))))))
 
   (inline)
+  (declare %better-of ((:t * :t -> Boolean) * :t * :t -> :t))
+  (define (%better-of better? best candidate)
+    (if (better? candidate best)
+        candidate
+        best))
+
+  (inline)
   (declare %besttimes (UFix * (:t * :t -> Boolean) * (UFix -> :t) -> :t))
   (define (%besttimes n better? func)
     "Of the applications of `func` to every `UFix` in `[0, n)`, find the one that is `better?` than the rest."
@@ -151,15 +157,11 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
       ((zero? n)
        (error "`n` must be strictly greater than zero."))
       (True
-       (rec % ((i 1) (best (func 0)))
-         (cond
-           ((== i n)
-            best)
-           (True
-            (let ((candidate (func i)))
-              (if (better? candidate best)
-                  (% (1+ i) candidate)
-                  (% (1+ i) best)))))))))
+       (for ((declare i UFix)
+             (i 1 (1+ i))
+             (best (func 0) (%better-of better? best (func i))))
+         :returns best
+         :until (== i n)))))
 
   (inline)
   (declare %argbesttimes (UFix * (:t * :t -> Boolean) * (UFix -> :t) -> UFix))
@@ -180,28 +182,34 @@ Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these 
                   (% (1+ i) argbest best)))))))))
 
   (inline)
+  (declare %doiter ((iter:IntoIterator :container :elt) => :container * (:elt -> Void) -> Void))
+  (define (%doiter iterable func)
+    "Apply `func` to every element produced by `iterable`."
+    (iter:for-each! func (iter:into-iter iterable)))
+
+  (inline)
   (declare %dolist ((List :t1) * (:t1 -> Void) -> Void))
   (define (%dolist lis func)
     "Apply `func` to every element of `lis`."
-    (rec % ((xs lis))
+    (for ((xs lis (l:cdr xs)))
       (match xs
+        ((Cons x _)
+         (func x))
         ((Nil)
-         (values))
-        ((Cons x xs)
-         (func x)
-         (% xs)))))
+         (break)))))
 
   (inline)
   (declare %dolist-enumerated ((List :t1) * (UFix * :t1 -> Void) -> Void))
   (define (%dolist-enumerated lis func)
     "Apply `func` to every element of `lis` and its index, as `(func index element)`."
-    (rec % ((i 0) (xs lis))
+    (for ((declare i UFix)
+          (i 0 (1+ i))
+          (xs lis (l:cdr xs)))
       (match xs
+        ((Cons x _)
+         (func i x))
         ((Nil)
-         (values))
-        ((Cons x xs)
-         (func i x)
-         (% (1+ i) xs)))))
+         (break)))))
 
   (inline)
   (declare %dorange ((Ord :t1) (Num :t1) => :t1 * :t1 * :t1 * (:t1 -> Void) -> Void))
@@ -227,21 +235,9 @@ COALTON::UNIT/UNIT
 "
     (cond
       ((positive? step)
-       (rec % ((i from))
-         (cond
-           ((< i to)
-            (func i)
-            (% (+ step i)))
-           (True
-            (values)))))
+       (%dorange-increasing. from to step func))
       ((negative? step)
-       (rec % ((i from))
-         (cond
-           ((> i to)
-            (func i)
-            (% (+ step i)))
-           (True
-            (values)))))
+       (%dorange-decreasing. from to step func))
       (True
        (values))))
 
@@ -249,13 +245,9 @@ COALTON::UNIT/UNIT
   (declare %dorange-increasing. ((Ord :t1) (Num :t1) => :t1 * :t1 * :t1 * (:t1 -> Void) -> Void))
   (define (%dorange-increasing. from to step func)
     "Unsafe. Apply `func` to every number in `[from, to)` in increments of `step`."
-    (rec % ((i from))
-      (cond
-        ((< i to)
-         (func i)
-         (% (+ step i)))
-        (True
-         (values)))))
+    (for ((i from (+ step i)))
+      :while (< i to)
+      (func i)))
 
   (inline)
   (declare %dorange-increasing ((Ord :t1) (Num :t1) => :t1 * :t1 * :t1 * (:t1 -> Void) -> Void))
@@ -271,13 +263,9 @@ COALTON::UNIT/UNIT
   (declare %dorange-decreasing. ((Ord :t1) (Num :t1) => :t1 * :t1 * :t1 * (:t1 -> Void) -> Void))
   (define (%dorange-decreasing. from to step func)
     "Apply `func` to every number in `(to, from]`, starting with `from`, in decrements of `step`."
-    (rec % ((i from))
-      (cond
-        ((> i to)
-         (func i)
-         (% (+ step i)))
-        (True
-         (values)))))
+    (for ((i from (+ step i)))
+      :while (> i to)
+      (func i)))
 
   (inline)
   (declare %dorange-decreasing ((Ord :t1) (Num :t1) => :t1 * :t1 * :t1 * (:t1 -> Void) -> Void))
@@ -324,6 +312,10 @@ COALTON::UNIT/UNIT
 (defmacro argbesttimes ((variable count better?) cl:&body body)
   "The `UFix` in [0, `count`) which, when `variable` is bound to it, results in the evaluation of `body` which is better than the same for the rest of the `UFix`s in [0, `count`)."
   `(%argbesttimes ,count ,better? (fn (,variable) ,@body)))
+
+(defmacro doiter ((variable iterable) cl:&body body)
+  "Perform `body` with `variable` bound to every element produced by `iterable`."
+  `(%doiter ,iterable (fn (,variable) ,@body (values))))
 
 (defmacro dolist ((variable lis) cl:&body body)
   "Perform `body` with `variable` bound to every element of `lis`."

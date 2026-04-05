@@ -1,0 +1,211 @@
+================================================================================
+1 Void expression can appear in non-tail position
+================================================================================
+
+(package coalton-unit-tests/void-bind
+  (import coalton-prelude))
+
+(define (side-effect-ok)
+  (values)
+  42)
+
+================================================================================
+2 Void function can be called for side effects
+================================================================================
+
+(package coalton-unit-tests/void-bind
+  (import coalton-prelude))
+
+(declare void-fn (Void -> Void))
+(define (void-fn)
+  (values))
+
+(define (caller)
+  (void-fn)
+  42)
+
+================================================================================
+3 Multiple-value bind is still allowed
+================================================================================
+
+(package coalton-unit-tests/void-bind
+  (import coalton-prelude))
+
+(declare two-values (Void -> Integer * Integer))
+(define (two-values)
+  (values 1 2))
+
+(define (consumer)
+  (let (values a b) = (two-values))
+  (+ a b))
+
+================================================================================
+100 Cannot bind Void to a variable
+================================================================================
+
+(package coalton-unit-tests/void-bind)
+
+(define (f)
+  (let b = (values))
+  b)
+
+--------------------------------------------------------------------------------
+
+error: Cannot bind to variable
+  --> test:4:2
+   |
+ 4 |    (let b = (values))
+   |    ^^^^^^^^^^^^^^^^^^ expression produces Void but a let binding requires a single value
+
+================================================================================
+101 Cannot bind result of Void function to a variable
+================================================================================
+
+(package coalton-unit-tests/void-bind)
+
+(declare void-fn (Void -> Void))
+(define (void-fn)
+  (values))
+
+(define (f)
+  (let b = (void-fn))
+  b)
+
+--------------------------------------------------------------------------------
+
+error: Cannot bind to variable
+  --> test:8:2
+   |
+ 8 |    (let b = (void-fn))
+   |    ^^^^^^^^^^^^^^^^^^^ expression produces Void but a let binding requires a single value
+
+================================================================================
+102 Cannot bind result of when to a variable
+================================================================================
+
+(package coalton-unit-tests/void-bind
+  (import coalton-prelude))
+
+(define (f b)
+  (let r = (when b 1))
+  r)
+
+--------------------------------------------------------------------------------
+
+error: Cannot bind to variable
+  --> test:5:2
+   |
+ 5 |    (let r = (when b 1))
+   |    ^^^^^^^^^^^^^^^^^^^^ expression produces Void but a let binding requires a single value
+
+================================================================================
+103 Cannot bind result of unless to a variable
+================================================================================
+
+(package coalton-unit-tests/void-bind
+  (import coalton-prelude))
+
+(define (f b)
+  (let r = (unless b 1))
+  r)
+
+--------------------------------------------------------------------------------
+
+error: Cannot bind to variable
+  --> test:5:2
+   |
+ 5 |    (let r = (unless b 1))
+   |    ^^^^^^^^^^^^^^^^^^^^^^ expression produces Void but a let binding requires a single value
+
+================================================================================
+104 Cannot bind inline multiple values to a variable
+================================================================================
+
+(package coalton-unit-tests/void-bind)
+
+(define (f)
+  (let b = (values 1 2))
+  b)
+
+--------------------------------------------------------------------------------
+
+error: Cannot bind to variable
+  --> test:4:2
+   |
+ 4 |    (let b = (values 1 2))
+   |    ^^^^^^^^^^^^^^^^^^^^^^ expression produces :A * :B but a let binding requires a single value
+
+================================================================================
+105 Cannot bind result of multi-value function to a variable
+================================================================================
+
+(package coalton-unit-tests/void-bind
+  (import coalton-prelude))
+
+(declare two-vals (Void -> Integer * Integer))
+(define (two-vals)
+  (values 1 2))
+
+(define (f)
+  (let b = (two-vals))
+  b)
+
+--------------------------------------------------------------------------------
+
+error: Cannot bind to variable
+  --> test:9:2
+   |
+ 9 |    (let b = (two-vals))
+   |    ^^^^^^^^^^^^^^^^^^^^ expression produces Integer * Integer but a let binding requires a single value
+
+================================================================================
+200 Cannot declare a binding as Void
+================================================================================
+
+(package coalton-unit-tests/void-bind)
+
+(declare f Void)
+(define f (values))
+
+--------------------------------------------------------------------------------
+
+error: Malformed declaration
+  --> test:3:11
+   |
+ 3 |  (declare f Void)
+   |             ^^^^ cannot declare a binding as Void; declarations must have a single-value or function type
+
+================================================================================
+201 Cannot declare a binding as a multi-value type
+================================================================================
+
+(package coalton-unit-tests/void-bind)
+
+(declare f (Integer * Integer))
+(define f (values 1 2))
+
+--------------------------------------------------------------------------------
+
+error: Malformed declaration
+  --> test:3:11
+   |
+ 3 |  (declare f (Integer * Integer))
+   |             ^^^^^^^^^^^^^^^^^^^ cannot declare a binding as a multi-value type; declarations must have a single-value or function type
+
+================================================================================
+202 Void cannot appear as a component of a multi-value type
+================================================================================
+
+(package coalton-unit-tests/void-bind)
+
+(declare f (Void -> Void * Integer))
+(define (f)
+  (values 1 2))
+
+--------------------------------------------------------------------------------
+
+error: Malformed type
+  --> test:3:20
+   |
+ 3 |  (declare f (Void -> Void * Integer))
+   |                      ^^^^ Void and multi-value types cannot appear as components of a multi-value type

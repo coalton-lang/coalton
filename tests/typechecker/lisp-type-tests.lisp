@@ -229,6 +229,92 @@
     (is (coalton-impl/typechecker:ty= left right))
     (is (= 1 (length (coalton-impl/typechecker:ty-scheme-kinds scheme))))))
 
+(deftest test-unary-function-types-match-arrow-applications ()
+  (let* ((functor-var (coalton-impl/typechecker:make-tyvar
+                       :id 1000
+                       :kind (coalton-impl/typechecker:make-kfun
+                              :from coalton-impl/typechecker:+kstar+
+                              :to coalton-impl/typechecker:+kstar+)
+                       :source-name :f))
+         (result-var (coalton-impl/typechecker:make-tyvar
+                      :id 1001
+                      :kind coalton-impl/typechecker:+kstar+
+                      :source-name :result))
+         (expected
+           (nth-value 0
+             (coalton-impl/typechecker:apply-type-argument functor-var result-var)))
+         (actual
+           (coalton-impl/typechecker:make-function-type
+            coalton-impl/typechecker:*integer-type*
+            coalton-impl/typechecker:*boolean-type*))
+         (subs (coalton-impl/typechecker:match expected actual))
+         (arrow-partial
+           (nth-value 0
+             (coalton-impl/typechecker:apply-type-argument
+              coalton-impl/typechecker:*arrow-type*
+              coalton-impl/typechecker:*integer-type*))))
+    (is (coalton-impl/typechecker:ty=
+         (coalton-impl/typechecker:apply-substitution subs functor-var)
+         arrow-partial))
+    (is (coalton-impl/typechecker:ty=
+         (coalton-impl/typechecker:apply-substitution subs result-var)
+         coalton-impl/typechecker:*boolean-type*))))
+
+(deftest test-arrow-matching-rejects-zero-output-functions ()
+  (let* ((functor-var (coalton-impl/typechecker:make-tyvar
+                       :id 1002
+                       :kind (coalton-impl/typechecker:make-kfun
+                              :from coalton-impl/typechecker:+kstar+
+                              :to coalton-impl/typechecker:+kstar+)
+                       :source-name :f))
+         (result-var (coalton-impl/typechecker:make-tyvar
+                      :id 1003
+                      :kind coalton-impl/typechecker:+kstar+
+                      :source-name :result))
+         (expected
+           (nth-value 0
+             (coalton-impl/typechecker:apply-type-argument functor-var result-var)))
+         (actual
+           (coalton-impl/typechecker:make-function-ty
+            :positional-input-types (list coalton-impl/typechecker:*integer-type*)
+            :keyword-input-types nil
+            :keyword-open-p nil
+            :output-types nil)))
+    (handler-case
+        (progn
+          (coalton-impl/typechecker:match expected actual)
+          (is nil))
+      (coalton-impl/typechecker/type-errors:unification-error ()
+        (is t)))))
+
+(deftest test-arrow-matching-rejects-multi-output-functions ()
+  (let* ((functor-var (coalton-impl/typechecker:make-tyvar
+                       :id 1004
+                       :kind (coalton-impl/typechecker:make-kfun
+                              :from coalton-impl/typechecker:+kstar+
+                              :to coalton-impl/typechecker:+kstar+)
+                       :source-name :f))
+         (result-var (coalton-impl/typechecker:make-tyvar
+                      :id 1005
+                      :kind coalton-impl/typechecker:+kstar+
+                      :source-name :result))
+         (expected
+           (nth-value 0
+             (coalton-impl/typechecker:apply-type-argument functor-var result-var)))
+         (actual
+           (coalton-impl/typechecker:make-function-ty
+            :positional-input-types (list coalton-impl/typechecker:*integer-type*)
+            :keyword-input-types nil
+            :keyword-open-p nil
+            :output-types (list coalton-impl/typechecker:*boolean-type*
+                                coalton-impl/typechecker:*string-type*))))
+    (handler-case
+        (progn
+          (coalton-impl/typechecker:match expected actual)
+          (is nil))
+      (coalton-impl/typechecker/type-errors:unification-error ()
+        (is t)))))
+
 (deftest test-scoped-forall-dictionary-resolution ()
   (is (coalton:lookup-code 'coalton-native-tests::explicit-rec-eq-integer))
   (is (coalton:lookup-code 'coalton-native-tests::scoped-dict-method-integer)))

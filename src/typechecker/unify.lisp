@@ -33,6 +33,20 @@
            (values (or null keyword-ty-entry) &optional))
   (find keyword entries :key #'keyword-ty-entry-keyword :test #'eq))
 
+(defun unary-function-type-as-arrow-type (type)
+  "Return TYPE as a fully applied `Arrow` type when that encoding exists."
+  (declare (type function-ty type)
+           (values (or null tapp) &optional))
+  (when (and (= 1 (length (function-ty-positional-input-types type)))
+             (= 1 (length (function-ty-output-types type)))
+             (null (function-ty-keyword-input-types type))
+             (not (function-ty-keyword-open-p type)))
+    (make-tapp
+     :from (make-tapp
+            :from *arrow-type*
+            :to (first (function-ty-positional-input-types type)))
+     :to (output-types-result-type (function-ty-output-types type)))))
+
 (defun ensure-compatible-function-types (type1 type2 condition)
   "Verify that two function types have compatible structure for unification.
 
@@ -191,6 +205,16 @@ to the zero-result type."
            (s2 (mgu (apply-substitution s1 (tapp-to type1))
                     (apply-substitution s1 (tapp-to type2)))))
       (compose-substitution-lists s2 s1)))
+  (:method ((type1 tapp) (type2 function-ty))
+    (let ((arrow-type2 (unary-function-type-as-arrow-type type2)))
+      (if arrow-type2
+          (mgu type1 arrow-type2)
+          (error 'unification-error :type1 type1 :type2 type2))))
+  (:method ((type1 function-ty) (type2 tapp))
+    (let ((arrow-type1 (unary-function-type-as-arrow-type type1)))
+      (if arrow-type1
+          (mgu arrow-type1 type2)
+          (error 'unification-error :type1 type1 :type2 type2))))
   (:method ((type1 function-ty) (type2 function-ty))
     (ensure-compatible-function-types type1 type2 'unification-error)
     (mgu-keyword-function-types type1 type2))
@@ -230,6 +254,16 @@ apply s type1 == type2")
     (let ((s1 (match (tapp-from type1) (tapp-from type2)))
           (s2 (match (tapp-to type1) (tapp-to type2))))
       (merge-substitution-lists s1 s2)))
+  (:method ((type1 tapp) (type2 function-ty))
+    (let ((arrow-type2 (unary-function-type-as-arrow-type type2)))
+      (if arrow-type2
+          (match type1 arrow-type2)
+          (error 'unification-error :type1 type1 :type2 type2))))
+  (:method ((type1 function-ty) (type2 tapp))
+    (let ((arrow-type1 (unary-function-type-as-arrow-type type1)))
+      (if arrow-type1
+          (match arrow-type1 type2)
+          (error 'unification-error :type1 type1 :type2 type2))))
   (:method ((type1 function-ty) (type2 function-ty))
     (ensure-compatible-function-types type1 type2 'unification-error)
     (match-keyword-function-types type1 type2))

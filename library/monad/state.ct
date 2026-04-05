@@ -2,16 +2,27 @@
   (:use
    #:coalton
    #:coalton/builtin
-   #:coalton/classes)
+   #:coalton/classes
+   #:coalton/monad/classes)
   (:export
    #:ST
-   #:put
-   #:get
-   #:modify
+   #:run
+
+   ;; ST specializations of MonadState fuctions
+   #:put-state
+   #:get-state
+   #:modify-state
+
+   ;; ST unique functions
    #:modify-get
    #:swap
    #:modify-swap
-   #:run))
+
+   ;; Re-export MonadState
+   #:MonadState
+   #:get
+   #:put
+   #:modify))
 
 (in-package #:coalton/monad/state)
 
@@ -30,14 +41,14 @@ Represented as a closure from initial state to updated state and value."
     (ST (:state -> (Tuple :state :value))))
 
   (inline)
-  (declare put (:state -> ST :state Unit))
-  (define (put state)
+  (declare put-state (:state -> ST :state Unit))
+  (define (put-state state)
     "A StatefulComputation with state set to be the given state. The returned value is Unit."
     (ST (fn (_) (Tuple state Unit))))
 
   (inline)
-  (declare get (ST :state :state))
-  (define get
+  (declare get-state (ST :state :state))
+  (define get-state
     "A StatefulComputation which returns the current state as the value."
     (ST (fn (state) (Tuple state state))))
 
@@ -50,8 +61,8 @@ Represented as a closure from initial state to updated state and value."
        (fstate state))))
 
   (inline)
-  (declare modify ((:state -> :state) -> ST :state Unit))
-  (define (modify fs->s)
+  (declare modify-state ((:state -> :state) -> ST :state Unit))
+  (define (modify-state fs->s)
     "Modify the state in a StatefulComputation, discarding the old state."
     (ST (fn (state)
           (Tuple (fs->s state) Unit))))
@@ -115,7 +126,12 @@ Represented as a closure from initial state to updated state and value."
            ((Tuple state2 a)
             ;; Use the a to compute the mb,
             ;; and apply the state from ma to the mb
-            (run (fa->scb a) state2))))))))
+            (run (fa->scb a) state2)))))))
+
+  (define-instance (MonadState :s (ST :s))
+    (define get get-state)
+    (define put put-state)
+    (define modify modify-state)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/MONAD/STATE")

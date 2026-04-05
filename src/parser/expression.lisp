@@ -179,9 +179,17 @@
    #:node-association-comprehension-key ; ACCESSOR
    #:node-association-comprehension-value ; ACCESSOR
    #:node-association-comprehension-clauses ; ACCESSOR
+   #:node-block                         ; STRUCT
+   #:make-node-block                    ; CONSTRUCTOR
+   #:node-block-name                    ; ACCESSOR
+   #:node-block-body                    ; ACCESSOR
    #:node-return                        ; STRUCT
    #:make-node-return                   ; CONSTRUCTOR
    #:node-return-expr                   ; ACCESSOR
+   #:node-return-from                   ; STRUCT
+   #:make-node-return-from              ; CONSTRUCTOR
+   #:node-return-from-name              ; ACCESSOR
+   #:node-return-from-expr              ; ACCESSOR
    #:node-values                        ; STRUCT
    #:make-node-values                   ; CONSTRUCTOR
    #:node-values-nodes                  ; ACCESSOR
@@ -749,10 +757,28 @@ Rebound to NIL parsing an anonymous FN.")
   (value   (util:required 'value)   :type node                :read-only t)
   (clauses (util:required 'clauses) :type builder-clause-list :read-only t))
 
+(defstruct (node-block
+            (:include node)
+            (:copier nil))
+  "Internal control-flow node introducing a named return target."
+  (name (util:required 'name) :type symbol    :read-only t)
+  (body (util:required 'body) :type node-body :read-only t))
+
 (defstruct (node-return
             (:include node)
             (:copier nil))
+  "A Coalton `return` as written by the user.
+
+This node is rewritten to NODE-RETURN-FROM by TC:RESOLVE-CONTROL-FLOW
+after variable renaming and before type inference."
   (expr (util:required 'expr) :type (or null node) :read-only t))
+
+(defstruct (node-return-from
+            (:include node)
+            (:copier nil))
+  "Internal control-flow node returning from a named enclosing block."
+  (name (util:required 'name) :type symbol :read-only t)
+  (expr (util:required 'expr) :type node   :read-only t))
 
 (defstruct (node-values
             (:include node)
@@ -2585,10 +2611,19 @@ Rebound to NIL parsing an anonymous FN.")
     (parse-error "Malformed declare"
                  (note source (cst:fourth form) "unexpected form")))
 
-  (make-node-let-declare
-   :name (parse-ordinary-variable (cst:second form) source)
-   :type (parse-qualified-type (cst:third form) source)
-   :location (form-location source form)))
+  (let ((qualified-type (parse-qualified-type (cst:third form) source)))
+    (when (typep (qualified-ty-type qualified-type) 'result-ty)
+      (parse-error "Malformed declaration"
+                   (note source (cst:third form)
+                         "cannot declare a binding as ~A; declarations must have a single-value or function type"
+                         (if (null (result-ty-output-types
+                                    (qualified-ty-type qualified-type)))
+                             "Void"
+                             "a multi-value type"))))
+    (make-node-let-declare
+     :name (parse-ordinary-variable (cst:second form) source)
+     :type qualified-type
+     :location (form-location source form))))
 
 (defun loop-clause-keyword-p (form name)
   (declare (type cst:cst form)

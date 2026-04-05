@@ -8,7 +8,7 @@
   (rec f ((n 5))
     (if (coalton-prelude:== n 1)
         1
-        (coalton-prelude:* n (f (coalton-prelude:1- n))))))
+        (f (coalton-prelude:1- n)))))
 
 ================================================================================
 2 Parse rec
@@ -30,13 +30,13 @@
 (package coalton-unit-tests)
 
 (define x
-  (rec even? ((n 5))
+  (rec outer ((n 5))
     (if (coalton-prelude:== n 0)
-        True
-        (rec odd? ((m (coalton-prelude:1- n)))
+        0
+        (rec inner ((m n))
           (if (coalton-prelude:== m 0)
-              False
-              (even? (coalton-prelude:1- m)))))))
+              n
+              (inner (coalton-prelude:1- m)))))))
 
 ================================================================================
 4 Parse rec with result type annotation
@@ -49,7 +49,7 @@
     (rec f ((n 5))
       (if (coalton-prelude:== n 1)
           1
-          (coalton-prelude:* n (f (coalton-prelude:1- n)))))))
+          (f (coalton-prelude:1- n))))))
 
 ================================================================================
 5 Parse rec with result type alias annotation
@@ -64,7 +64,7 @@
     (rec f ((n 5))
       (if (coalton-prelude:== n 1)
           1
-          (coalton-prelude:* n (f (coalton-prelude:1- n)))))))
+          (f (coalton-prelude:1- n))))))
 
 ================================================================================
 6 Parse rec with declared init bindings
@@ -77,7 +77,7 @@
           (n 5))
     (if (coalton-prelude:== n 1)
         1
-        (coalton-prelude:* n (f (coalton-prelude:1- n))))))
+        (f (coalton-prelude:1- n)))))
 
 ================================================================================
 7 Parse rec with list name
@@ -141,7 +141,7 @@ error: Malformed rec
           (n 5))
     (if (coalton-prelude:== n 1)
         1
-        (coalton-prelude:* n (f (coalton-prelude:1- n))))))
+        (f (coalton-prelude:1- n)))))
 
 ================================================================================
 11 Parse rec wrong number of arguments

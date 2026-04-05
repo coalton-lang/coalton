@@ -29,6 +29,13 @@
   (is (experimental:everytimes (i 10) (< i 10)))
   (is (not (experimental:everytimes (i 11) (< i 10)))))
 
+(define-test experimental-loops-everytimes-short-circuit-test ()
+  (let ((calls (cell:new 0)))
+    (is (not (experimental:everytimes (i 10)
+               (cell:increment! calls)
+               (< i 3))))
+    (is (== 4 (cell:read calls)))))
+
 (define-test experimental-loops-sometimes-test ()
   (is (not (experimental:sometimes (i 0) False)))
   (is (not (experimental:sometimes (i 0) True)))
@@ -37,6 +44,13 @@
 
   (is (not (experimental:sometimes (i 10) (>= i 10))))
   (is (experimental:sometimes (i 11) (>= i 10))))
+
+(define-test experimental-loops-sometimes-short-circuit-test ()
+  (let ((calls (cell:new 0)))
+    (is (experimental:sometimes (i 10)
+          (cell:increment! calls)
+          (== i 3)))
+    (is (== 4 (cell:read calls)))))
 
 (define-test experimental-loops-sumtimes-test ()
   (is (zero? (experimental:sumtimes (i 0) 10)))
@@ -56,9 +70,54 @@
   (is (== 10 (experimental:besttimes (i 11 >) i)))
   (is (== 100 (experimental:besttimes (i 11 >) (* i i)))))
 
+(define-test experimental-loops-besttimes-evaluation-test ()
+  (let ((func-calls (cell:new 0))
+        (better-calls (cell:new 0)))
+    (is (== 4
+            (experimental:besttimes
+              (i 5
+                 (fn (x y)
+                   (cell:increment! better-calls)
+                   (> x y)))
+              (cell:increment! func-calls)
+              i)))
+    (is (== 5 (cell:read func-calls)))
+    (is (== 4 (cell:read better-calls)))))
+
 (define-test experimental-loops-argbesttimes-test ()
   (is (== 10 (experimental:argbesttimes (i 11 >) i)))
   (is (== 10 (experimental:argbesttimes (i 11 >) (* i i)))))
+
+(define-test experimental-loops-argbesttimes-evaluation-test ()
+  (let ((func-calls (cell:new 0))
+        (better-calls (cell:new 0)))
+    (is (== 4
+            (experimental:argbesttimes
+              (i 5
+                 (fn (x y)
+                   (cell:increment! better-calls)
+                   (> x y)))
+              (cell:increment! func-calls)
+              i)))
+    (is (== 5 (cell:read func-calls)))
+    (is (== 4 (cell:read better-calls)))))
+
+(define-test experimental-loops-doiter-list-test ()
+  (let ((sum (cell:new 0)))
+    (experimental:doiter (x (make-list 0 1 2 3 4))
+      (cell:update! (fn (acc) (+ x acc)) sum))
+    (is (== 10 (cell:read sum)))))
+
+(define-test experimental-loops-doiter-iterator-test ()
+  (let ((iterator-expr-calls (cell:new 0))
+        (sum (cell:new 0))
+        (make-iterator (fn ()
+                         (cell:increment! iterator-expr-calls)
+                         (iter:up-to 5))))
+    (experimental:doiter (x (make-iterator))
+      (cell:update! (fn (acc) (+ x acc)) sum))
+    (is (== 1 (cell:read iterator-expr-calls)))
+    (is (== 10 (cell:read sum)))))
 
 (define-test experimental-loops-dolist-test ()
   (let ((xs (make-list 0 1 2 3 4))
