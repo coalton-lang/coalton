@@ -123,7 +123,7 @@
     (multiple-value-bind (ty preds accessors node subs)
         (tc:infer-expression-type (tc:resolve-control-flow
                                    (parser:rename-variables node))
-                                  (tc:make-variable)
+                                  (tc:make-variable :kind tc:+kstar+ :allow-result-p t)
                                   nil
                                   (tc:make-tc-env :env env))
 

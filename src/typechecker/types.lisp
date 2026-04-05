@@ -15,6 +15,7 @@
    #:tyvar-id                           ; ACCESSOR
    #:tyvar-kind                         ; ACCESSOR
    #:tyvar-source-name                  ; ACCESSOR
+   #:tyvar-allow-result-p               ; ACCESSOR
    #:tyvar-p                            ; FUNCTION
    #:tyvar-list                         ; TYPE
    #:tycon                              ; STRUCT
@@ -45,6 +46,7 @@
    #:make-tgen                          ; CONSTRUCTOR
    #:tgen-id                            ; ACCESSOR
    #:tgen-source-name                   ; ACCESSOR
+   #:tgen-allow-result-p                ; ACCESSOR
    #:tgen-p                             ; FUNCTION
    #:make-variable                      ; FUNCTION
    #:ensure-next-variable-id-at-least   ; FUNCTION
@@ -165,6 +167,9 @@
 (defstruct (tyvar (:include ty))
   (id          (util:required 'id)      :type fixnum             :read-only t)
   (kind        (util:required 'kind)    :type kind               :read-only t)
+  ;; True when this variable may unify with a result pack (Void or
+  ;; multiple values). Ordinary value variables leave this false.
+  (allow-result-p nil                   :type boolean            :read-only t)
   ;; The original programmer-written name, if this type variable originated
   ;; from source rather than anonymous inference state.
   (source-name nil                      :type (or null symbol)   :read-only t))
@@ -209,6 +214,9 @@
 
 (defstruct (tgen (:include ty))
   (id          (util:required 'id)      :type fixnum             :read-only t)
+  ;; Preserve whether this quantified variable may unify with result
+  ;; packs when re-instantiated later.
+  (allow-result-p nil                   :type boolean            :read-only t)
   ;; Preserve source binder names across quantification so fresh
   ;; instantiation and printing can recover them later.
   (source-name nil                      :type (or null symbol)   :read-only t))
@@ -225,10 +233,15 @@
 #+sbcl
 (declaim (sb-ext:always-bound *next-variable-id*))
 
-(declaim (ftype (function (&optional kind (or null symbol)) tyvar) make-variable))
+(declaim (ftype (function (&key
+                           (:kind kind)
+                           (:source-name (or null symbol))
+                           (:allow-result-p boolean))
+                          tyvar)
+                make-variable))
 (declaim (inline make-variable))
-(defun make-variable (&optional (kind +kstar+) source-name)
-  "Create a fresh type variable with KIND and optional source metadata.
+(defun make-variable (&key (kind +kstar+) source-name (allow-result-p nil))
+  "Create a fresh type variable with optional KIND and source metadata.
 
 SOURCE-NAME preserves the programmer-written binder for later pretty
 printing and documentation.
@@ -237,6 +250,7 @@ Each call returns a variable with a globally unique inference ID, even
 when KIND and SOURCE-NAME are the same."
   (prog1 (make-tyvar :id *next-variable-id*
                      :kind kind
+                     :allow-result-p allow-result-p
                      :source-name source-name)
     (incf *next-variable-id*)))
 
@@ -267,8 +281,9 @@ Example usage in scheme instantiation:
 The function preserves the kind of the original variable, so if TYVAR has kind
 * -> *, the returned variable will also have kind * -> *. It also preserves
 TYVAR's SOURCE-NAME metadata."
-  (make-variable (kind-of tyvar)
-                 (tyvar-source-name tyvar)))
+  (make-variable :kind (kind-of tyvar)
+                 :source-name (tyvar-source-name tyvar)
+                 :allow-result-p (tyvar-allow-result-p tyvar)))
 
 ;;;
 ;;; Methods
@@ -362,6 +377,7 @@ Throws an error if applied to a malformed type application.")
    :alias (mapcar (lambda (alias) (apply-ksubstitution subs alias)) (ty-alias type))
    :id (tyvar-id type)
    :kind (apply-ksubstitution subs (tyvar-kind type))
+   :allow-result-p (tyvar-allow-result-p type)
    :source-name (tyvar-source-name type)))
 
 (defmethod apply-ksubstitution (subs (type tycon))
@@ -471,6 +487,8 @@ Examples:
   (:method ((type1 tyvar) (type2 tyvar))
     (and (equalp (tyvar-id type1)
                  (tyvar-id type2))
+         (eq (tyvar-allow-result-p type1)
+             (tyvar-allow-result-p type2))
          (equalp (tyvar-kind type1)
                  (tyvar-kind type2))))
 
@@ -519,8 +537,10 @@ Examples:
                 (result-ty-output-types type2))))
 
   (:method ((type1 tgen) (type2 tgen))
-    (equalp (tgen-id type1)
-            (tgen-id type2)))
+    (and (equalp (tgen-id type1)
+                 (tgen-id type2))
+         (eq (tgen-allow-result-p type1)
+             (tgen-allow-result-p type2))))
 
   (:method (type1 type2)
     (declare (ignore type1 type2))

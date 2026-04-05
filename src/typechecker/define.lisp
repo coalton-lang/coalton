@@ -539,10 +539,13 @@
   (cond
     ((eq node *direct-values-node*)
      (values t *direct-values-output-types*))
-    ((zero-result-type-p expected-type)
-     (values t nil))
     (t
-     (values nil nil))))
+     ;; Preserve the surrounding expression's full output context when
+     ;; resolving an unknown callee type.  This allows local recursive
+     ;; functions and other tyvar-valued operators to retain Void and
+     ;; multi-value returns instead of collapsing back to an ordinary
+     ;; single-value placeholder.
+     (values t (tc:multiple-value-output-types expected-type)))))
 
 (defun function-keyword-entry (type keyword)
   (declare (type tc:function-ty type)
@@ -738,6 +741,7 @@ function type matching the call site shape and unify it with the operator."
            (values tc:function-ty tc:substitution-list &optional))
   (multiple-value-bind (has-output-context-p output-types)
       (direct-call-output-context node (tc:apply-substitution subs expected-type))
+    (declare (ignore has-output-context-p))
     (let* ((new-froms (loop :repeat (length positional-rands)
                             :collect (tc:make-variable)))
            (new-keywords (loop :for arg :in keyword-rands
@@ -752,15 +756,11 @@ function type matching the call site shape and unify it with the operator."
            ;; function-value coercion can accept callee values carrying
            ;; additional optional keywords without requiring exact match.
            (keyword-open-p (consp keyword-rands))
-           (new-to (and (not has-output-context-p)
-                        (tc:make-variable)))
            (new-ty (tc:make-function-ty
                     :positional-input-types new-froms
                     :keyword-input-types (normalize-keyword-entries new-keywords)
                     :keyword-open-p keyword-open-p
-                    :output-types (if has-output-context-p
-                                      output-types
-                                      (list new-to)))))
+                    :output-types output-types)))
       (setf subs (tc:unify subs fun-ty new-ty))
       (values (tc:apply-substitution subs new-ty) subs))))
 
@@ -1072,7 +1072,7 @@ Returns four values:
            (values tc:ty-scheme tc:substitution-list &optional))
   (multiple-value-bind (ty preds accessors _ subs)
       (infer-expression-type node
-                             (tc:make-variable)
+                             (tc:make-variable :kind tc:+kstar+ :allow-result-p t)
                              subs
                              env)
     (declare (ignore _))
@@ -1595,7 +1595,7 @@ lowered back to the ordinary nested-let representation and inferred there."
              (loop :for (_arg arg-ty _preds) :in arg-info
                    :collect (tc:apply-substitution subs arg-ty)))
            (result-type
-             (tc:make-variable))
+             (tc:make-variable :kind tc:+kstar+ :allow-result-p t))
            (rec-function-type
              (tc:make-function-type* param-types result-type))
            (rec-name
@@ -1992,7 +1992,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
     (multiple-value-bind (expr-ty preds accessors expr-node subs)
         (infer-expression-type (parser:node-bind-expr node)
-                               (tc:make-variable)
+                               (tc:make-variable :kind tc:+kstar+ :allow-result-p t)
                                subs
                                env)
 
@@ -2096,7 +2096,10 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
            (body-nodes
              (loop :for node_ :in (parser:node-body-nodes node)
                    :collect (multiple-value-bind (node_ty_ preds_ accessors_ node_ subs_)
-                                (infer-expression-type node_ (tc:make-variable) subs env)
+                                (infer-expression-type node_
+                                                       (tc:make-variable :kind tc:+kstar+ :allow-result-p t)
+                                                       subs
+                                                       env)
                               (declare (ignore node_ty_))
                               (setf subs subs_)
                               (setf preds (append preds preds_))
@@ -2141,7 +2144,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
       (let* ((body-return-block
                (body-return-block-node (parser:node-abstraction-body node)))
-             (body-result-ty (tc:make-variable))
+             (body-result-ty (tc:make-variable :kind tc:+kstar+ :allow-result-p t))
              (*return-blocks*
                (if body-return-block
                    (acons (parser:node-block-name body-return-block)
@@ -2333,9 +2336,17 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
     (let ((declared-ty
             (tc:output-types-result-type
-             (mapcar (lambda (output-type)
-                       (parse-type output-type (tc-env-parser-env env)))
-                     (parser:node-lisp-output-types node)))))
+             (let ((output-types (parser:node-lisp-output-types node)))
+               (cond
+                 ((null output-types)
+                  nil)
+                 ((null (cdr output-types))
+                  (list (parse-output-slot-type (first output-types)
+                                                (tc-env-parser-env env))))
+                 (t
+                  (mapcar (lambda (output-type)
+                            (parse-type output-type (tc-env-parser-env env)))
+                          output-types)))))))
 
       (handler-case
           (progn
@@ -2388,7 +2399,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                 (setf subs subs_)
                                 pat-node)))
 
-             (ret-ty (tc:make-variable))
+             (ret-ty (tc:make-variable :kind tc:+kstar+ :allow-result-p t))
 
              ;; Infer the type of each branch, unifying against ret-ty
              (branch-body-nodes
@@ -2633,7 +2644,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node-block tc:substitution-list))
 
-    (let* ((block-type (tc:make-variable))
+    (let* ((block-type (tc:make-variable :kind tc:+kstar+ :allow-result-p t))
            (block-info (make-return-block-info :type block-type)))
       (multiple-value-bind (body-ty preds accessors body-node subs)
           (let ((*return-blocks*
@@ -2691,7 +2702,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
         (multiple-value-bind (expr-ty preds accessors expr-node subs)
             (infer-expression-type (parser:node-the-expr node)
-                                   (tc:make-variable)
+                                   (tc:make-variable :kind tc:+kstar+ :allow-result-p t)
                                    subs
                                    expr-env)
 
@@ -2796,7 +2807,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (let ((block-info (return-block-info (parser:node-return-from-name node))))
       (multiple-value-bind (expr-ty preds accessors expr-node subs)
           (infer-expression-type (parser:node-return-from-expr node)
-                                 (tc:make-variable)
+                                 (tc:make-variable :kind tc:+kstar+ :allow-result-p t)
                                  subs
                                  env)
         (let ((first-return (return-block-info-first-return block-info)))
@@ -3026,7 +3037,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
       (multiple-value-bind (body-ty preds_ accessors_ body-node subs)
           (infer-expression-type (parser:node-when-body node)
-                                 (tc:make-variable)
+                                 (tc:make-variable :kind tc:+kstar+ :allow-result-p t)
                                  subs
                                  env)
         (declare (ignore body-ty))
@@ -3065,7 +3076,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
       (multiple-value-bind (body-ty preds_ accessors_ body-node subs)
           (infer-expression-type (parser:node-unless-body node)
-                                 (tc:make-variable)
+                                 (tc:make-variable :kind tc:+kstar+ :allow-result-p t)
                                  subs
                                  env)
         (declare (ignore body-ty))
@@ -3210,7 +3221,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
               (multiple-value-bind (result-ty preds_ accessors_ returns-node subs)
                   (if (parser:node-for-returns node)
                       (infer-expression-type (parser:node-for-returns node)
-                                             (tc:make-variable)
+                                             (tc:make-variable :kind tc:+kstar+ :allow-result-p t)
                                              subs
                                              loop-env)
                       (values (zero-result-type) nil nil nil subs))
@@ -3362,7 +3373,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
     (let* ((preds nil)
            (accessors nil)
 
-           (ret-ty (tc:make-variable))
+           (ret-ty (tc:make-variable :kind tc:+kstar+ :allow-result-p t))
 
            (clause-nodes
              (loop :for clause :in (parser:node-cond-clauses node)
@@ -3437,7 +3448,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (values tc:ty tc:ty-predicate-list accessor-list node-do tc:substitution-list))
 
     (let* (;; m-type is the type of the monad and has kind "* -> *"
-           (m-type (tc:make-variable (tc:make-kfun :from tc:+kstar+ :to tc:+kstar+)))
+           (m-type (tc:make-variable :kind (tc:make-kfun :from tc:+kstar+ :to tc:+kstar+)))
 
            (monad-symbol (util:find-symbol "MONAD" "COALTON/CLASSES"))
 
@@ -4856,7 +4867,10 @@ as a recursive function rather than a recursive value."
                                             :type (tc:qualify nil annotated-ty)))
                     annotated-ty)
                    (t
-                    (tc-env-add-variable env name))))))
+                    (tc-env-add-variable env
+                                         name
+                                         :allow-result-p
+                                         (typep binding 'parser:toplevel-define)))))))
 
       (let* (;; track variables bound before typechecking
              (bound-variables (tc-env-bound-variables env))
