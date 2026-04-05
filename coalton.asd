@@ -221,6 +221,7 @@
                (:file "hash-table" :if-feature (:not :sbcl))
                (:file "impl-custom" :if-feature (:not :sbcl))))
 
+#+(or sbcl ccl)
 (asdf:defsystem "coalton/doc"
   :description "Documentation generator for Coalton"
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
