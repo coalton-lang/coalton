@@ -209,3 +209,81 @@ error: Malformed type
    |
  3 |  (declare f (Void -> Void * Integer))
    |                      ^^^^ Void and multi-value types cannot appear as components of a multi-value type
+
+================================================================================
+203 Void cannot be used as a type argument
+================================================================================
+
+(package coalton-unit-tests/void-bind
+  (import coalton-prelude
+          (coalton/monad/identity as m-id)))
+
+(declare void-identity (Void -> m-id:Identity Void))
+(define (void-identity)
+  (pure (values)))
+
+--------------------------------------------------------------------------------
+
+error: Malformed type
+  --> test:5:46
+   |
+ 5 |  (declare void-identity (Void -> m-id:Identity Void))
+   |                                                ^^^^ Void and multi-value types cannot be used as type arguments
+
+================================================================================
+204 Multi-value type cannot be used as a type argument
+================================================================================
+
+(package coalton-unit-tests/void-bind
+  (import coalton-prelude))
+
+(declare f (List (Integer * Integer)))
+(define f (make-list (values 1 2)))
+
+--------------------------------------------------------------------------------
+
+error: Malformed type
+  --> test:4:17
+   |
+ 4 |  (declare f (List (Integer * Integer)))
+   |                   ^^^^^^^^^^^^^^^^^^^ Void and multi-value types cannot be used as type arguments
+
+================================================================================
+205 Void value cannot be passed as an ordinary argument
+================================================================================
+
+(package coalton-unit-tests/void-bind
+  (import coalton-prelude))
+
+(define (f x) 1)
+
+(define (g)
+  (f (values)))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:7:5
+   |
+ 7 |    (f (values)))
+   |       ^^^^^^^^ Expected type ':A' but got 'Void'
+
+================================================================================
+206 Void value cannot be lifted into a monad as a first-class value
+================================================================================
+
+(package coalton-unit-tests/void-bind
+  (import coalton-prelude))
+
+(define bad
+  (do
+    (pure (values))
+    (pure 1)))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:6:10
+   |
+ 6 |      (pure (values))
+   |            ^^^^^^^^ Expected type ':A' but got 'Void'

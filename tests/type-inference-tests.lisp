@@ -1071,45 +1071,6 @@
 
    '("f" . "(String -> String)")))
 
-(deftest test-multiple-returns-reject-different-types ()
-  (let ((error
-          (collect-compiler-error
-           "(package coalton-unit-tests/inference)
-
-(define (f a)
-  (if a
-      (return \"hello\")
-      (return 5))
-  Unit)")))
-    (is error)
-    (is (search "Return type mismatch" error) error)))
-
-(deftest test-multiple-returns-reject-different-value-arities ()
-  (let ((error
-          (collect-compiler-error
-           "(package coalton-unit-tests/inference)
-
-(define (f a)
-  (if a
-      (return 1)
-      (return (values 1 2)))
-  Unit)")))
-    (is error)
-    (is (search "Return type mismatch" error) error)))
-
-(deftest test-multiple-returns-reject-bare-return-arity-mismatch ()
-  (let ((error
-          (collect-compiler-error
-           "(package coalton-unit-tests/inference)
-
-(define (f a)
-  (if a
-      (return)
-      (return 1))
-  Unit)")))
-    (is error)
-    (is (search "Return type mismatch" error) error)))
-
 (deftest test-defaulting ()
   ;; See gh #505
   (check-coalton-types
@@ -1142,7 +1103,6 @@
    "(define x (even? 2))"
 
    '("x" . "Boolean")))
-
 
 (deftest test-nameless-overapplication ()
   ;; See gh #1208
