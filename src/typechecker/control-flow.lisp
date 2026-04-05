@@ -216,18 +216,26 @@ FORM must be a renamed parser AST fragment."
              :location (source:location node)))
 
            (parser:node-abstraction
-            (let* ((label (gensym "RETURN-BLOCK-"))
-                   (scope-ctx (make-control-context :return-target label
-                                                    :return-status :lambda)))
-              (parser:make-node-abstraction
-               :params (parser:node-abstraction-params node)
-               :keyword-params
-               (resolve-keyword-params (parser:node-abstraction-keyword-params node) scope-ctx)
-               :body (wrap-body-in-return-block
-                      (resolve-body (parser:node-abstraction-body node) scope-ctx)
-                      label
-                      (source:location node))
-               :location (source:location node))))
+            (if (parser:node-abstraction-introduces-return-scope-p node)
+                (let* ((label (gensym "RETURN-BLOCK-"))
+                       (scope-ctx (make-control-context :return-target label
+                                                        :return-status :lambda)))
+                  (parser:make-node-abstraction
+                   :params (parser:node-abstraction-params node)
+                   :keyword-params
+                   (resolve-keyword-params (parser:node-abstraction-keyword-params node) scope-ctx)
+                   :body (wrap-body-in-return-block
+                          (resolve-body (parser:node-abstraction-body node) scope-ctx)
+                          label
+                          (source:location node))
+                   :location (source:location node)))
+                (parser:make-node-abstraction
+                 :params (parser:node-abstraction-params node)
+                 :keyword-params
+                 (resolve-keyword-params (parser:node-abstraction-keyword-params node) ctx)
+                 :body (resolve-body (parser:node-abstraction-body node) ctx)
+                 :introduces-return-scope-p nil
+                 :location (source:location node))))
 
            (parser:node-let
             (parser:make-node-let
