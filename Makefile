@@ -33,6 +33,9 @@ EXTRA_LOCAL_PROJECTS=$(QUICKLISP_HOME)/local-projects
 QUICKLISP_SETUP=$(QUICKLISP_HOME)/setup.lisp
 REPO_ROOT=$(abspath $(CURDIR))
 LOCAL_SOURCE_REGISTRY=$(REPO_ROOT)//
+DEPENDENCY_AUDIT_OUTPUT ?= dependency-audit.png
+DEPENDENCY_AUDIT_ALL_OUTPUT ?= dependency-audit-all.png
+DEPENDENCY_AUDIT_SYSTEMS ?= coalton
 TEST_FORMS=--load $(QUICKLISP_SETUP) \
 	--eval "(ql:quickload :coalton/tests)" \
 	--eval "(asdf:test-system :coalton/tests)" \
@@ -347,6 +350,32 @@ web-docs:
 		--load $(QUICKLISP_SETUP) \
 		--eval "(ql:quickload :coalton/doc :silent t)" \
 		--eval "(coalton/doc:write-stdlib-documentation-to-file \"../coalton-website/content/reference.md\" :backend :hugo :revision \"main\")"
+
+.PHONY: dependency-audit
+dependency-audit:
+	@set -e; \
+		tmp_dot="$$(mktemp -t coalton-dependency-audit.XXXXXX.dot)"; \
+		trap 'rm -f "$$tmp_dot"' EXIT INT TERM; \
+		env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+			QUICKLISP_HOME="$(QUICKLISP_HOME)" \
+			XDG_CACHE_HOME="/tmp/coalton-dependency-audit-cache" \
+			scripts/dependency-audit.lisp \
+			$(DEPENDENCY_AUDIT_SYSTEMS) > "$$tmp_dot"; \
+		dot -Tpng "$$tmp_dot" -o "$(abspath $(DEPENDENCY_AUDIT_OUTPUT))"; \
+		echo "wrote $(abspath $(DEPENDENCY_AUDIT_OUTPUT))"
+
+.PHONY: dependency-audit-all
+dependency-audit-all:
+	@set -e; \
+		tmp_dot="$$(mktemp -t coalton-dependency-audit-all.XXXXXX.dot)"; \
+		trap 'rm -f "$$tmp_dot"' EXIT INT TERM; \
+		env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
+			QUICKLISP_HOME="$(QUICKLISP_HOME)" \
+			XDG_CACHE_HOME="/tmp/coalton-dependency-audit-cache" \
+			scripts/dependency-audit.lisp \
+			--all-local > "$$tmp_dot"; \
+		dot -Tpng "$$tmp_dot" -o "$(abspath $(DEPENDENCY_AUDIT_ALL_OUTPUT))"; \
+		echo "wrote $(abspath $(DEPENDENCY_AUDIT_ALL_OUTPUT))"
 
 
 .PHONY: parser-coverage

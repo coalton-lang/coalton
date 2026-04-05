@@ -6,6 +6,11 @@
   (:local-nicknames
    (:l #:coalton/list)
    (:ct #:coalton/experimental/do-control-core))
+  (:import-from #:coalton/experimental/do-control-core
+   #:Truthlike
+   #:true?
+   #:Yielder
+   #:yield)
   (:import-from #:coalton/monad/environment
    #:MonadEnvironment
    #:ask
@@ -187,32 +192,32 @@ break, or produced a value."
        ((Break%) (pure Unit))
        (_ (loop_ body)))))
 
-  (declare loop-while ((Monad :m) (ct::Terminator :t) => LoopT :m :t -> :m Unit))
+  (declare loop-while ((Monad :m) (Truthlike :t) => LoopT :m :t -> :m Unit))
   (define (loop-while body)
-    "Run BODY repeatedly until it returns a terminated value. Returns Unit."
+    "Run BODY. If it returns a true-like value, repeat. Otherwise stop."
     (do
      (r <- (unwrap-loop body))
      (match r
        ((Break%) (pure Unit))
        ((Continue%) (loop-while body))
        ((Value% t)
-        (if (ct::ended? t)
-            (pure Unit)
-            (loop-while body))))))
+        (if (true? t)
+            (loop-while body)
+            (pure Unit))))))
 
-  (declare loop-do-while ((Monad :m) (ct::Terminator :t) => :m :t * LoopT :m :a -> :m Unit))
+  (declare loop-do-while ((Monad :m) (Truthlike :t) => :m :t * LoopT :m :a -> :m Unit))
   (define (loop-do-while m-term? body)
-    "Before each iteration, evaluate M-TERM?. If it indicates completion, stop; otherwise run BODY.
-Respects break and continue within BODY. Returns Unit."
+    "Before each iteration, evaluate M-TERM?. If it returns a true-like value, run BODY.
+Otherwise, stop."
     (do
      (term? <- m-term?)
-     (if (ct::ended? term?)
-         (pure Unit)
+     (if (true? term?)
          (do
           (r <- (unwrap-loop body))
           (match r
             ((Break%) (pure Unit))
-            (_ (loop-do-while m-term? body)))))))
+            (_ (loop-do-while m-term? body))))
+         (pure Unit))))
 
   (declare loop-times (Monad :m => UFix * (UFix -> LoopT :m :a) -> :m Unit))
   (define (loop-times n body)
@@ -241,7 +246,7 @@ Stops when BODY breaks. Continues skip the rest of the iteration. Returns the co
          ((Value% val)
           (% (Cons val result)))))))
 
-  (declare collect-val ((Monad :m) (ct::Yielder :y) => LoopT :m (:y :a) -> :m (List :a)))
+  (declare collect-val ((Monad :m) (Yielder :y) => LoopT :m (:y :a) -> :m (List :a)))
   (define (collect-val body)
     "Run BODY in a loop, adding each available value it yields to a list.
 Stops when BODY yields no value or breaks. Continue skips the rest of the iteration.
@@ -253,7 +258,7 @@ Returns the collected list."
          ((Break%) (pure (l:reverse result)))
          ((Continue%) (% result))
          ((Value% val?)
-          (match (ct::yield val?)
+          (match (yield val?)
             ((Some x)
              (% (Cons x result)))
             ((None)

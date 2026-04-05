@@ -347,11 +347,21 @@ the list (T1 T2 T3 T4 ...). Otherwise, return (LIST TYPE)."
                                "missing type after `*` in ~A" context)))
       (push (nreverse current) segments)
       (setf segments (nreverse segments))
-      (loop :for segment :in segments
-            :collect
-               (if (= 1 (length segment))
-                   (parse-type (car segment) source)
-                   (parse-type-list segment (segment-location segment)))))))
+      (let ((types
+              (loop :for segment :in segments
+                    :collect
+                       (if (= 1 (length segment))
+                           (parse-type (car segment) source)
+                           (parse-type-list segment (segment-location segment))))))
+        ;; Each component of a multi-value type must be a single value.
+        ;; Void and nested multi-value packs are not valid components.
+        (loop :for ty :in types
+              :for segment :in segments
+              :when (result-ty-p ty)
+                :do (parse-error "Malformed type"
+                                 (note source (car segment)
+                                       "Void and multi-value types cannot appear as components of a multi-value type")))
+        types))))
 
 (defun parse-keyword-type-entry-list (forms source)
   (declare (type util:cst-list forms)

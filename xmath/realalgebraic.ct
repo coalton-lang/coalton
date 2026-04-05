@@ -131,12 +131,7 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
     "Negate all integer coefficients."
     (match p
       ((Poly coeffs)
-       (Poly
-        (rec go ((rest coeffs))
-          (match rest
-            ((Nil) Nil)
-            ((Cons c more)
-             (Cons (negate c) (go more)))))))))
+       (Poly (map negate coeffs)))))
 
   (declare poly-int-leading (Poly Integer -> Integer))
   (define (poly-int-leading p)
@@ -164,12 +159,7 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
         (error "Polynomial coefficient division by zero.")
         (match p
           ((Poly coeffs)
-           (Poly
-            (rec go ((rest coeffs))
-              (match rest
-                ((Nil) Nil)
-                ((Cons c more)
-                 (Cons (quot c d) (go more))))))))))
+           (Poly (map (fn (c) (quot c d)) coeffs))))))
 
   (declare poly-int-primitive (Poly Integer -> Poly Integer))
   (define (poly-int-primitive p)
@@ -256,12 +246,7 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
     "Negate all fraction coefficients."
     (match p
       ((Poly coeffs)
-       (Poly
-        (rec go ((rest coeffs))
-          (match rest
-            ((Nil) Nil)
-            ((Cons c more)
-             (Cons (negate c) (go more)))))))))
+       (Poly (map negate coeffs)))))
 
   (declare poly-frac-add (Poly Fraction * Poly Fraction -> Poly Fraction))
   (define (poly-frac-add a b)
@@ -289,12 +274,7 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
         (match p
           ((Poly coeffs)
            (poly-frac-trim
-            (Poly
-             (rec go ((rest coeffs))
-               (match rest
-                 ((Nil) Nil)
-                 ((Cons c more)
-                  (Cons (* k c) (go more)))))))))))
+            (Poly (map (fn (c) (* k c)) coeffs)))))))
 
   (declare poly-frac-shift (Poly Fraction * Integer -> Poly Fraction))
   (define (poly-frac-shift p power)
@@ -387,26 +367,23 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
         (poly-frac-trim
          (Poly
           (rec go ((rest coeffs)
-                   (pow deg))
+                   (pow deg)
+                   (acc Nil))
             (match rest
-              ((Nil) Nil)
+              ((Nil) (coalton/list:reverse acc))
               ((Cons c more)
                (if (<= pow 0)
-                   Nil
-                   (Cons (* (fromInt pow) c)
-                         (go more (- pow 1)))))))))))
+                   (coalton/list:reverse acc)
+                   (go more
+                       (- pow 1)
+                       (Cons (* (fromInt pow) c) acc))))))))))
 
   (declare poly-int->frac (Poly Integer -> Poly Fraction))
   (define (poly-int->frac p)
     "Embed integer coefficients into rationals."
     (match p
       ((Poly coeffs)
-       (Poly
-        (rec go ((rest coeffs))
-          (match rest
-            ((Nil) Nil)
-            ((Cons c more)
-             (Cons (fromInt c) (go more)))))))))
+       (Poly (map fromInt coeffs)))))
 
   (declare poly-frac-clear-denominators (Poly Fraction -> Poly Integer))
   (define (poly-frac-clear-denominators p)
@@ -422,15 +399,17 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
            (gather more (lcm acc (denominator c)))))))
     (poly-trim-desc
      (Poly
-      (rec scale ((rest coeffs))
+      (rec scale ((rest coeffs)
+                  (acc Nil))
         (match rest
-          ((Nil) Nil)
+          ((Nil) (coalton/list:reverse acc))
           ((Cons c more)
            (if (/= (rem lden (denominator c)) 0)
                (error "Internal error: failed to clear polynomial denominators.")
-               (Cons (* (numerator c)
-                        (quot lden (denominator c)))
-                     (scale more)))))))))
+               (scale more
+                      (Cons (* (numerator c)
+                               (quot lden (denominator c)))
+                            acc)))))))))
 
   (declare poly-int-squarefree-nontrivial (Poly Integer -> (Result String (Poly Integer))))
   (define (poly-int-squarefree-nontrivial normalized)
@@ -506,14 +485,16 @@ then clearing denominators exactly."
         (poly-trim-desc
          (Poly
           (rec go ((rest coeffs)
-                   (pow deg))
+                   (pow deg)
+                   (acc Nil))
             (match rest
-              ((Nil) Nil)
+              ((Nil) (coalton/list:reverse acc))
               ((Cons c more)
                (if (<= pow 0)
-                   Nil
-                   (Cons (* pow c)
-                         (go more (- pow 1)))))))))))
+                   (coalton/list:reverse acc)
+                   (go more
+                       (- pow 1)
+                       (Cons (* pow c) acc))))))))))
 
   (declare poly-int-primitive-preserve-sign (Poly Integer -> Poly Integer))
   (define (poly-int-primitive-preserve-sign p)
@@ -948,13 +929,7 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
         poly-int-zero
         (match p
           ((Poly coeffs)
-           (poly-trim-desc
-            (Poly
-             (rec go ((rest coeffs))
-               (match rest
-                 ((Nil) Nil)
-                 ((Cons c more)
-                  (Cons (* k c) (go more)))))))))))
+           (poly-trim-desc (Poly (map (fn (c) (* k c)) coeffs)))))))
 
   (declare poly-int-shift (Poly Integer * Integer -> Poly Integer))
   (define (poly-int-shift p power)
@@ -1021,19 +996,15 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
     (let p0 = (poly-frac-trim p))
     (match p0
       ((Poly coeffs)
-       (match
-           (rec go ((rest coeffs))
-             (match rest
-               ((Nil) (Ok Nil))
-               ((Cons c more)
-                (if (== (denominator c) 1)
-                    (match (go more)
-                      ((Err msg) (Err msg))
-                      ((Ok tail) (Ok (Cons (numerator c) tail))))
-                    (Err "Internal error: non-integer quotient in exact polynomial division.")))))
-         ((Err msg) (Err msg))
-         ((Ok ints)
-          (Ok (poly-trim-desc (Poly ints))))))))
+       (rec go ((rest coeffs)
+                (acc Nil))
+         (match rest
+           ((Nil)
+            (Ok (poly-trim-desc (Poly (coalton/list:reverse acc)))))
+           ((Cons c more)
+            (if (== (denominator c) 1)
+                (go more (Cons (numerator c) acc))
+                (Err "Internal error: non-integer quotient in exact polynomial division."))))))))
 
   (declare poly-int-div-exact (Poly Integer * Poly Integer -> Poly Integer))
   (define (poly-int-div-exact a b)
@@ -1062,23 +1033,23 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
     "Drop leading zero coefficients from a t-polynomial over Z[z]."
     (match p
       ((Poly coeffs)
-       (let normalized =
-         (rec normalize ((rest coeffs))
+       (let ((normalize (fn (rest)
+                          (match rest
+                            ((Nil) Nil)
+                            ((Cons c more)
+                             (Cons (poly-trim-desc c)
+                                   (normalize more))))))
+             (normalized (normalize coeffs)))
+         (rec drop ((rest normalized))
            (match rest
-             ((Nil) Nil)
+             ((Nil) tpoly-zero)
              ((Cons c more)
-              (Cons (poly-trim-desc c)
-                    (normalize more))))))
-       (rec drop ((rest normalized))
-         (match rest
-           ((Nil) tpoly-zero)
-           ((Cons c more)
-            (match more
-              ((Nil) (Poly (Cons c Nil)))
-              (_
-               (if (poly-int-zero? c)
-                   (drop more)
-                   (Poly rest))))))))))
+              (match more
+                ((Nil) (Poly (Cons c Nil)))
+                (_
+                 (if (poly-int-zero? c)
+                     (drop more)
+                     (Poly rest)))))))))))
 
   (declare tpoly-zero? (Poly (Poly Integer) -> Boolean))
   (define (tpoly-zero? p)
@@ -1144,14 +1115,7 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
     "Negate a t-polynomial over Z[z]."
     (match p
       ((Poly coeffs)
-       (tpoly-trim
-        (Poly
-         (rec go ((rest coeffs))
-           (match rest
-             ((Nil) Nil)
-             ((Cons c more)
-              (Cons (poly-int-neg c)
-                    (go more))))))))))
+       (tpoly-trim (Poly (map poly-int-neg coeffs))))))
 
   (declare tpoly-sub (Poly (Poly Integer) * Poly (Poly Integer) -> Poly (Poly Integer)))
   (define (tpoly-sub a b)
@@ -1189,14 +1153,7 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
     "Lift an integer polynomial to t-polynomial form with constant Z[z] coefficients."
     (match (poly-trim-desc p)
       ((Poly coeffs)
-       (tpoly-trim
-        (Poly
-         (rec go ((rest coeffs))
-           (match rest
-             ((Nil) Nil)
-             ((Cons c more)
-              (Cons (zconst c)
-                    (go more))))))))))
+       (tpoly-trim (Poly (map zconst coeffs))))))
 
   (declare add-binomial-powers (Boolean * Integer * Integer * Integer * Poly (Poly Integer) -> Poly (Poly Integer)))
   (define (add-binomial-powers negate-z coeff pow i acc)
@@ -1735,22 +1692,26 @@ debugging, proof traces, and serialization diagnostics."
   (declare fixed-fractional-digits (UFix * Integer -> String))
   (define (fixed-fractional-digits digits value)
     "Render VALUE as exactly DIGITS base-10 digits (with leading zeros)."
-    (if (== digits 0)
-        ""
-        (rec go ((remaining digits)
-                 (place (pow10 (- digits 1)))
-                 (rest value))
-          (if (== remaining 0)
-              ""
-                (let ((digit (floor/ rest place))
-                      (next-rest (- rest (* (floor/ rest place) place)))
-                      (next-place (if (== place 1)
-                                      1
-                                      (floor/ place 10))))
-                (<> (integer->string digit)
-                    (go (- remaining 1)
-                        next-place
-                        next-rest)))))))
+    (cond
+      ((== digits 0) "")
+      (True
+       (let (values consume extract) = (coalton/show:make-string-builder))
+       (rec go ((remaining digits)
+                (place (pow10 (- digits 1)))
+                (rest value))
+         (cond
+           ((== remaining 0)
+            (extract))
+           (True
+            (let ((digit (floor/ rest place))
+                  (next-rest (- rest (* digit place)))
+                  (next-place (if (== place 1)
+                                  1
+                                  (floor/ place 10))))
+              (consume (integer->string digit))
+              (go (- remaining 1)
+                  next-place
+                  next-rest))))))))
 
   (declare rational->fixed-decimal (Fraction * UFix -> String))
   (define (rational->fixed-decimal q digits)

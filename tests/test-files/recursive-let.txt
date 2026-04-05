@@ -126,3 +126,56 @@ error: Invalid recursive bindings
    |             -- with definition
  8 |                  (func (fn () lp)))
    |                   ^^^^ function can not be defined recursively with variables
+
+================================================================================
+106 rec requires direct tail calls
+================================================================================
+
+(package coalton-unit-tests/recursive-let)
+
+(define (bad n)
+  (rec go ((i 0))
+    (if (>= i n)
+        i
+        (+ 1 (go (+ i 1))))))
+
+--------------------------------------------------------------------------------
+
+error: Invalid rec
+  --> test:7:14
+   |
+ 4 |    (rec go ((i 0))
+   |         -- `rec` binds go here
+ 5 |      (if (>= i n)
+ 6 |          i
+ 7 |          (+ 1 (go (+ i 1))))))
+   |                ^^ this use of recursive operator go is not a direct tail call
+help: Use `let` + `fn` instead if you need non-tail recursion or want to pass the recursive function around.
+ 7 |         (+ 1 (go (+ i 1))))))
+   |               --
+
+================================================================================
+107 rec operator cannot escape as a value
+================================================================================
+
+(package coalton-unit-tests/recursive-let)
+
+(define (bad n)
+  (rec go ((i 0))
+    (let ((f go))
+      (if (>= i n)
+          i
+          (f (+ i 1))))))
+
+--------------------------------------------------------------------------------
+
+error: Invalid rec
+  --> test:5:13
+   |
+ 4 |    (rec go ((i 0))
+   |         -- `rec` binds go here
+ 5 |      (let ((f go))
+   |               ^^ this use of recursive operator go is not a direct tail call
+help: Use `let` + `fn` instead if you need non-tail recursion or want to pass the recursive function around.
+ 5 |     (let ((f go))
+   |              --

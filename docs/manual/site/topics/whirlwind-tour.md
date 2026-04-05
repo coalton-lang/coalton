@@ -639,8 +639,12 @@ The `<name>` is in essence a local recursive function in the `<body>`, and the
 binding list supplies the arguments for its initial call. Local `declare` forms
 inside the binding list apply to the initial bindings, which in turn constrain
 the recursive function's parameters. If you want to constrain the result type of
-the whole `rec` expression, wrap it in `the`. The `rec` operator does not
-require the invocation to be in tail position.
+the whole `rec` expression, wrap it in `the`.
+
+Recursive uses of `<name>` must be direct tail calls. This makes `rec` a good
+fit for iteration and accumulator-passing style loops. If you want more
+flexible local recursion, or you want to treat the recursive function as a
+first-class value, use `let` together with `fn` instead.
 
 It is idiomatic in Coalton to choose the name `%` when there is no other reasonable name.
 
