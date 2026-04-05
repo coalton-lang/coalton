@@ -469,6 +469,31 @@ error: Return type mismatch
    |        ^^^^^^^^^^ Second return is of type ':A'
 
 ================================================================================
+Return in transparent dotimes contributes to enclosing return type
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(define (never _)
+  False)
+
+(define (f)
+  (coalton/experimental/loops:dotimes (i 10)
+    (when (never i)
+      (return "hello")))
+  (return True))
+
+--------------------------------------------------------------------------------
+
+error: Return type mismatch
+  --> test:9:6
+    |
+ 9  |        (return "hello")))
+    |        ^^^^^^^^^^^^^^^^ First return is of type 'String'
+ 10 |    (return True))
+    |    ^^^^^^^^^^^^^ Second return is of type 'Boolean'
+
+================================================================================
 Check that the monomorphism restriction still applies to defaulted bindings
 ================================================================================
 

@@ -49,6 +49,7 @@
    #:node-abstraction-params            ; ACCESSOR
    #:node-abstraction-keyword-params    ; ACCESSOR
    #:node-abstraction-body              ; ACCESSOR
+   #:node-abstraction-introduces-return-scope-p ; ACCESSOR
    #:node-abstraction-p                 ; FUNCTION
    #:keyword-param                      ; STRUCT
    #:make-keyword-param                 ; CONSTRUCTOR
@@ -347,7 +348,7 @@ Rebound to NIL parsing an anonymous FN.")
 ;;;; node-body := node-body-element* expression
 ;;;;
 ;;;; node-keyword-param := "(" identifier expression ")"
-;;;; node-abstraction := "(" "fn" "(" pattern* ["&key" node-keyword-param*] ")" node-body ")"
+;;;; node-abstraction := "(" "fn" [":transparent-to-return"] "(" pattern* ["&key" node-keyword-param*] ")" node-body ")"
 ;;;;
 ;;;; node-let-binding := "(" identifier expression ")"
 ;;;;
@@ -503,9 +504,16 @@ Rebound to NIL parsing an anonymous FN.")
 (defstruct (node-abstraction
             (:include node)
             (:copier nil))
-  (params         (util:required 'params) :type pattern-list       :read-only t)
-  (keyword-params nil                     :type keyword-param-list :read-only t)
-  (body           (util:required 'body)   :type node-body          :read-only t))
+  (params                    (util:required 'params) :type pattern-list       :read-only t)
+  (keyword-params            nil                     :type keyword-param-list :read-only t)
+  (body                      (util:required 'body)   :type node-body          :read-only t)
+  ;; Internal-only marker for compiler-generated lambdas that should
+  ;; leave RETURN bound to the next enclosing returnable context.
+  ;; This is so we can implement the `:TRANSPARENT-TO-RETURN` option
+  ;; for `fn`. It is a band-aid fix so that one can write macros which
+  ;; use `fn` internally, but don't capture any enclosing `return`.
+  ;; This should not be relied upon or used extensively.
+  (introduces-return-scope-p t                       :type boolean            :read-only t))
 
 (defstruct (keyword-param
             (:copier nil))
@@ -1355,27 +1363,43 @@ after variable renaming and before type inference."
           (eq 'coalton:fn (cst:raw (cst:first form))))
      (let ((params)
            (keyword-params)
-           (body))
+           (body)
+           (introduces-return-scope-p t)
+           (argument-form)
+           (body-forms)
+           (tail (cst:rest form)))
+
+       (when (and (cst:consp tail)
+                  (cst:atom (cst:first tail))
+                  (eq ':transparent-to-return (cst:raw (cst:first tail))))
+         (setf introduces-return-scope-p nil)
+         (setf tail (cst:rest tail)))
 
        ;; (fn)
-       (unless (cst:consp (cst:rest form))
+       (unless (cst:consp tail)
          (parse-error "Malformed function"
-                      (note-end source (cst:first form) "expected function arguments")))
+                      (note-end source (if introduces-return-scope-p
+                                           (cst:first form)
+                                           (cst:second form))
+                                "expected function arguments")))
+
+       (setf argument-form (cst:first tail))
+       (setf body-forms (cst:rest tail))
 
        ;; (fn (...))
-       (unless (cst:consp (cst:rest (cst:rest form)))
+       (unless (cst:consp body-forms)
          (parse-error "Malformed function"
-                      (note-end source (cst:second form) "expected function body")))
+                      (note-end source argument-form "expected function body")))
 
        ;; (fn x ...)
        ;;
        ;; NOTE: (fn () ...) is allowed
-       (when (and (cst:atom (cst:second form))
-                  (not (null (cst:raw (cst:second form)))))
+       (when (and (cst:atom argument-form)
+                  (not (null (cst:raw argument-form))))
          (parse-error "Malformed function"
-                      (note source (cst:second form)
+                      (note source argument-form
                             "malformed argument list")
-                      (help source (cst:second form)
+                      (help source argument-form
                             (lambda (existing)
                               (concatenate 'string "(" existing ")"))
                             "add parentheses")))
@@ -1383,12 +1407,13 @@ after variable renaming and before type inference."
        ;; or CONTINUING with loops that enclose the FN form.
        (let ((*loop-label-context* nil))
          (multiple-value-setq (params keyword-params)
-           (parse-fn-argument-list (cst:second form) source))
-         (setf body (parse-body (cst:nthrest 2 form) form source))
+           (parse-fn-argument-list argument-form source))
+         (setf body (parse-body body-forms form source))
          (make-node-abstraction
           :params params
           :keyword-params keyword-params
           :body body
+          :introduces-return-scope-p introduces-return-scope-p
           :location (form-location source form)))))
 
     ((and (cst:atom (cst:first form))

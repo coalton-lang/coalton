@@ -27,7 +27,7 @@
    #:dorange)
   (:documentation "A Coalton package of loop macros.
 
-Note: `(return)`, `(break)`, and `(continue)` do not work inside _any_ of these loop macros."))
+Note: `(break)` and `(continue)` do not work inside these loop macros. `(return)` refers to the enclosing function, not the macro's hidden callback."))
 
 (in-package #:coalton/experimental/loops)
 
@@ -279,47 +279,47 @@ COALTON::UNIT/UNIT
 
 (defmacro repeat ((count) cl:&body body)
   "Perform `body` `count` times."
-  `(%repeat ,count (fn () ,@body (values))))
+  `(%repeat ,count (fn :transparent-to-return () ,@body (values))))
 
 (defmacro dotimes ((variable count) cl:&body body)
   "Perform `body` with `variable` bound to every `UFix` in [0, `count`) sequentially."
-  `(%dotimes ,count (fn (,variable) ,@body (values))))
+  `(%dotimes ,count (fn :transparent-to-return (,variable) ,@body (values))))
 
 (defmacro everytimes ((variable count) cl:&body body)
   "Does `body` evaluate to `True` for `variable` bound to every `UFix` in [0, `count`). Returns `True` if `(zero? count)`."
-  `(%everytimes ,count (fn (,variable) ,@body)))
+  `(%everytimes ,count (fn :transparent-to-return (,variable) ,@body)))
 
 (defmacro sometimes ((variable count) cl:&body body)
   "Does `body` evaluate to `True` for `variable` bound to some `UFix` in [0, `count`). Returns `False` if `(zero? count)`."
-  `(%sometimes ,count (fn (,variable) ,@body)))
+  `(%sometimes ,count (fn :transparent-to-return (,variable) ,@body)))
 
 (defmacro sumtimes ((variable count) cl:&body body)
   "The sum of `body` for `variable` bound to every `UFix` in [0, `count`)."
-  `(%sumtimes ,count (fn (,variable) ,@body)))
+  `(%sumtimes ,count (fn :transparent-to-return (,variable) ,@body)))
 
 (defmacro prodtimes ((variable count) cl:&body body)
   "The product of `body` for `variable` bound to every `UFix` in [0, `count`)."
-  `(%prodtimes ,count (fn (,variable) ,@body)))
+  `(%prodtimes ,count (fn :transparent-to-return (,variable) ,@body)))
 
 (defmacro collecttimes ((variable count) cl:&body body)
   "Collect the results of evaluating `body` for `variable` bound to every `UFix` in [0, `count`) as a `List`."
-  `(%collecttimes ,count (fn (,variable) ,@body)))
+  `(%collecttimes ,count (fn :transparent-to-return (,variable) ,@body)))
 
 (defmacro besttimes ((variable count better?) cl:&body body)
   "The result of evaluating `body` with `variable` bound to a `UFix` in [0, `count`) that is `better?` than the result of evaluating `body` with `variable` bound to the rest of the `UFix`s in [0, `count`)."
-  `(%besttimes ,count ,better? (fn (,variable) ,@body)))
+  `(%besttimes ,count ,better? (fn :transparent-to-return (,variable) ,@body)))
 
 (defmacro argbesttimes ((variable count better?) cl:&body body)
   "The `UFix` in [0, `count`) which, when `variable` is bound to it, results in the evaluation of `body` which is better than the same for the rest of the `UFix`s in [0, `count`)."
-  `(%argbesttimes ,count ,better? (fn (,variable) ,@body)))
+  `(%argbesttimes ,count ,better? (fn :transparent-to-return (,variable) ,@body)))
 
 (defmacro doiter ((variable iterable) cl:&body body)
   "Perform `body` with `variable` bound to every element produced by `iterable`."
-  `(%doiter ,iterable (fn (,variable) ,@body (values))))
+  `(%doiter ,iterable (fn :transparent-to-return (,variable) ,@body (values))))
 
 (defmacro dolist ((variable lis) cl:&body body)
   "Perform `body` with `variable` bound to every element of `lis`."
-  `(%dolist ,lis (fn (,variable) ,@body (values))))
+  `(%dolist ,lis (fn :transparent-to-return (,variable) ,@body (values))))
 
 (defmacro dolists (variables-and-lists cl:&body body)
   "Perform `body` with the variables bound to the elements of the lists. See the example below.
@@ -359,13 +359,13 @@ COALTON::UNIT/UNIT
                           ((Cons ,x ,xs)
                            ,(populate-body (cl:rest remaining-variables)
                                            (cl:rest remaining-xss)))))))))
-      `(let ((,func (fn (,@variables) ,@body (values))))
+      `(let ((,func (fn :transparent-to-return (,@variables) ,@body (values))))
          (rec ,% (,@(cl:mapcar (cl:lambda (xs lis) (cl:list xs lis)) xss lists))
            ,(populate-body variables xss))))))
 
 (defmacro dolist-enumerated ((index-variable element-variable lis) cl:&body body)
   "Perform `body` with `element-variable` bound to the elements of `lis` and `index-variable` bound to their indices."
-  `(%dolist-enumerated ,lis (fn (,index-variable ,element-variable) ,@body (values))))
+  `(%dolist-enumerated ,lis (fn :transparent-to-return (,index-variable ,element-variable) ,@body (values))))
 
 (defmacro dorange ((variable start-or-stop cl:&optional stop step) cl:&body body)
   "Perform `body` with `variable` bound to elements of a discrete range.
@@ -412,7 +412,7 @@ COALTON::UNIT/UNIT
 COALTON::UNIT/UNIT
 ```
 "
-  (cl:let ((func `(fn (,variable) ,@body (values))))
+  (cl:let ((func `(fn :transparent-to-return (,variable) ,@body (values))))
     (cl:cond
       ((cl:null stop)
        (cl:cond
