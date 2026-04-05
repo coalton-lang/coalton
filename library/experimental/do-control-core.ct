@@ -49,25 +49,25 @@
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
-  (define-class (Terminator :a)
-    "Represents a value that terminates a control flow."
-    (ended? (:a -> Boolean)))
+  (define-class (Truthlike :a)
+    "Represents a value that can be true/false for control flow."
+    (true? (:a -> Boolean)))
 
-  (define-instance (Terminator Boolean)
+  (define-instance (Truthlike Boolean)
     (inline)
-    (define ended? id))
+    (define true? id))
 
-  (define-instance (Terminator (Optional :a))
+  (define-instance (Truthlike (Optional :a))
     (inline)
-    (define ended? opt:none?))
+    (define true? opt:none?))
 
-  (define-instance (Terminator (Result :e :a))
+  (define-instance (Truthlike (Result :e :a))
     (inline)
-    (define ended? rst:err?))
+    (define true? rst:err?))
 
-  (define-instance (Terminator (List :a))
+  (define-instance (Truthlike (List :a))
     (inline)
-    (define ended? l:null?))
+    (define true? l:null?))
 
   (define-class (Traversable :y => Yielder :y)
     "A data type that can terminate or yield a value into control flow."
@@ -112,21 +112,20 @@
   ;;
 
   (inline)
-  (declare when_ ((Monad :m) (Terminator :t) => :t * :m :z -> :m Unit))
-  (define (when_ term? m)
-    "Run the monadic operation M when the terminator TERM? indicates completion,
-or do nothing."
-    (if (ended? term?)
+  (declare when_ ((Monad :m) (Truthlike :t) => :t * :m :z -> :m Unit))
+  (define (when_ val m)
+    "Run the monadic operation M when the value VAL is true-like. Otherwise do nothing."
+    (if (true? val)
         (do m (pure Unit))
         (pure Unit)))
 
   (inline)
-  (declare whenM ((Monad :m) (Terminator :t) => :m :t * :m :z -> :m Unit))
-  (define (whenM mterm? mop)
-    "Evaluate MTERM?, and if it indicates completion, run MOP, or do nothing."
+  (declare whenM ((Monad :m) (Truthlike :t) => :m :t * :m :z -> :m Unit))
+  (define (whenM mval mop)
+    "Evaluate MVAL, and if returns a true-like value, run MOP. Otherwise do nothing."
     (do
-     (term? <- mterm?)
-     (when_ term? mop)))
+     (val <- mval)
+     (when_ val mop)))
 
   (inline)
   (declare when-val ((Monad :m) (Yielder :y) => :y :a * (:a -> :m :z) -> :m Unit))
@@ -149,11 +148,11 @@ or do nothing."
      (when-val val? f->m)))
 
   (inline)
-  (declare if* ((Monad :m) (Terminator :t) => :t * :m :b * :m :b -> :m :b))
+  (declare if* ((Monad :m) (Truthlike :t) => :t * :m :b * :m :b -> :m :b))
   (define (if* val? m-true m-false)
-    "Choose between M-TRUE and M-FALSE based on VAL?. If (ended? VAL?) is true, run M-TRUE,
-else run M-FALSE."
-    (if (ended? val?)
+    "Choose between M-TRUE and M-FALSE based on VAL?. If VAL? is true-like, run M-TRUE,
+otherwise run M-FALSE."
+    (if (true? val?)
         m-true
         m-false))
 
@@ -214,7 +213,7 @@ over the value."
      (flatmap-success val? f->mval?b))))
 
 (cl:defmacro do-when (b cl:&body body)
-  "Run BODY (as a 'do' block) only when B indicates completion per Terminator semantics."
+  "Run BODY (as a 'do' block) only when B indicates completion per Truthlike semantics."
   `(when_ ,b
     (do
      ,@body)))

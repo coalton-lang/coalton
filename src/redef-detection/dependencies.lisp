@@ -343,9 +343,15 @@
                         (setf (gethash (parser:pattern-var-name pvar) new-locals) t))
                       (traverse (parser:node-resumable-branch-body branch) new-locals))))
 
+                 (parser:node-block
+                  (traverse (parser:node-block-body node) local-bindings))
+
                  (parser:node-return
                   (when (parser:node-return-expr node)
                     (traverse (parser:node-return-expr node) local-bindings)))
+
+                 (parser:node-return-from
+                  (traverse (parser:node-return-from-expr node) local-bindings))
 
                  (parser:node-throw
                   (traverse (parser:node-throw-expr node) local-bindings))

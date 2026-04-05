@@ -33,7 +33,8 @@
   (catch              #'identity :type function :read-only t)
   (progn              #'identity :type function :read-only t)
   (unsafe             #'identity :type function :read-only t)
-  (return             #'identity :type function :read-only t)
+  (block-node         #'identity :type function :read-only t)
+  (return-from-node   #'identity :type function :read-only t)
   (values             #'identity :type function :read-only t)
   (throw              #'identity :type function :read-only t)
   (resume-to          #'identity :type function :read-only t)
@@ -284,17 +285,29 @@
       :location (source:location node)
       :body (traverse (node-unsafe-body node) block))))
 
-  (:method ((node node-return) block)
+  (:method ((node node-block) block)
     (declare (type traverse-block block)
              (values node &optional))
 
     (funcall
-     (traverse-return block)
-     (make-node-return
+     (traverse-block-node block)
+     (make-node-block
       :type (node-type node)
-     :location (source:location node)
-     :expr (traverse (node-return-expr node) block) ; the nil case is handled by the list instance
-      )))
+      :location (source:location node)
+      :name (node-block-name node)
+      :body (traverse (node-block-body node) block))))
+
+  (:method ((node node-return-from) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+
+    (funcall
+     (traverse-return-from-node block)
+     (make-node-return-from
+      :type (node-type node)
+      :location (source:location node)
+      :name (node-return-from-name node)
+      :expr (traverse (node-return-from-expr node) block))))
 
   (:method ((node node-values) block)
     (declare (type traverse-block block)

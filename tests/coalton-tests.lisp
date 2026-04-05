@@ -54,6 +54,7 @@
   (%run-tests "type-inference.txt")
   (%run-tests "unicode.txt")
   (%run-tests "unused-variables.txt")
+  (%run-tests "void-bind.txt")
   (%run-tests "parse-throw.txt")
   (%run-tests "parse-resume-to.txt")
   (%run-tests "parse-catch.txt")

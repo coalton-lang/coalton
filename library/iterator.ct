@@ -516,17 +516,17 @@ This operation could be called `length!`, but `count!` emphasizes the fact that 
 afterwards, ITER will be exhausted."
     (sum! (map (const 1) iter)))
 
+  (inline)
   (declare for-each! ((:elt -> Void) * Iterator :elt -> Void))
   (define (for-each! thunk iter)
     "Call THUNK on each element of ITER in order for side effects.
 Discard values returned by THUNK."
-    (progn
-      (fold! (fn (u elt)
-               (thunk elt)
-               u)
-             Unit
-             iter)
-      (values)))
+    (for ((item? (next! iter) (next! iter)))
+      (match item?
+        ((Some elt)
+         (thunk elt))
+        ((None)
+         (break)))))
 
   (declare find! ((:elt -> Boolean) * Iterator :elt -> Optional :elt))
   (define (find! this? iter)
@@ -657,7 +657,40 @@ The empty iterator will hash as 0."
   ;;
 
   (define-class (FromIterator :container :elt (:container -> :elt))
-    (collect! (Iterator :elt -> :container))))
+    (collect! (Iterator :elt -> :container)))
+
+  (define-instance (IntoIterator (Optional :a) :a)
+    (define (into-iter opt)
+      (match opt
+        ((Some _)
+         (let cell = (cell:new True))
+         (with-size
+             (fn ()
+               (unless (cell:read cell)
+                 (return None))
+
+               (cell:write! cell False)
+               opt)
+           1))
+        ((None)
+         empty))))
+
+  (define-instance (FromIterator :container :elt => FromIterator (Optional :container) (Optional :elt))
+    (define (collect! iter)
+      (let error = (cell:new False))
+      (let out =
+        (collect!
+         (map-while! (fn
+                       (x)
+                       (match x
+                         ((Some _) x)
+                         ((None)
+                          (cell:write! error True)
+                          None)))
+                     iter)))
+      (if (cell:read error)
+          None
+          (Some out)))))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/ITERATOR")

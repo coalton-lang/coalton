@@ -88,6 +88,45 @@
      "(declare impossible (Void -> Integer))
       (define (impossible _x) 1)"))
 
+  ;; Void (zero values) cannot be bound to a variable
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(define (f)
+        (let b = (values))
+        b)"))
+
+  ;; Result of a Void function cannot be bound to a variable
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(define (g) (values))
+      (define (f)
+        (let b = (g))
+        b)"))
+
+  ;; Result of when (which is Void) cannot be bound to a variable
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(define (f b)
+        (let r = (when b 1))
+        r)"))
+
+  ;; Multiple values cannot be bound to a single variable
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(define (f)
+        (let b = (values 1 2))
+        b)"))
+
+  ;; Result of a multi-value function cannot be bound to a single variable
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(declare two-vals (Void -> Integer * Integer))
+      (define (two-vals)
+        (values 1 2))
+      (define (f)
+        (let b = (two-vals))
+        b)"))
+
   (check-coalton-types
    "(define (when-zero-values b)
       (when b
@@ -698,6 +737,14 @@
     (declare test-bare-testtype (TestType -> TestType))
     (define test-bare-testtype test-bare)")
 
+  (check-coalton-types
+   "(declare lifted (Integer -> Integer))
+    (define lifted
+      (map (fn (x) (+ x 1))
+           (fn (x) x)))"
+
+   '("lifted" . "(Integer -> Integer)"))
+
   ;; Check that it works with functional dependencies
   (check-coalton-types
    "(define-type (Box :a)
@@ -1023,6 +1070,45 @@
       a)"
 
    '("f" . "(String -> String)")))
+
+(deftest test-multiple-returns-reject-different-types ()
+  (let ((error
+          (collect-compiler-error
+           "(package coalton-unit-tests/inference)
+
+(define (f a)
+  (if a
+      (return \"hello\")
+      (return 5))
+  Unit)")))
+    (is error)
+    (is (search "Return type mismatch" error) error)))
+
+(deftest test-multiple-returns-reject-different-value-arities ()
+  (let ((error
+          (collect-compiler-error
+           "(package coalton-unit-tests/inference)
+
+(define (f a)
+  (if a
+      (return 1)
+      (return (values 1 2)))
+  Unit)")))
+    (is error)
+    (is (search "Return type mismatch" error) error)))
+
+(deftest test-multiple-returns-reject-bare-return-arity-mismatch ()
+  (let ((error
+          (collect-compiler-error
+           "(package coalton-unit-tests/inference)
+
+(define (f a)
+  (if a
+      (return)
+      (return 1))
+  Unit)")))
+    (is error)
+    (is (search "Return type mismatch" error) error)))
 
 (deftest test-defaulting ()
   ;; See gh #505

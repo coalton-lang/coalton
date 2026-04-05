@@ -325,11 +325,19 @@ in expressions. May not include all bound variables."
            (collect-variables-generic% (node-association-comprehension-value node))
            (mapcan #'collect-variables-generic% (node-association-comprehension-clauses node))))
 
+  (:method ((node node-block))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (node-block-body node)))
+
   (:method ((node node-return))
     (declare (values node-variable-list &optional))
     ;; node-return's return expression may be null (and default to zero values)
     (when (node-return-expr node)
       (collect-variables-generic% (node-return-expr node))))
+
+  (:method ((node node-return-from))
+    (declare (values node-variable-list &optional))
+    (collect-variables-generic% (node-return-from-expr node)))
 
   (:method ((node node-values))
     (declare (values node-variable-list &optional))

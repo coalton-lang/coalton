@@ -28,7 +28,10 @@ weight: 180
   turn constrain the recursive function's parameters.
 - If you want to constrain the result type of a `rec` expression, wrap the
   whole form in `the`.
-- Tail recursion is not enforced.
+- Recursive uses of `⟨name⟩` must be direct tail calls.
+- `rec` is intended for iteration. If you need more flexible local recursion,
+  or want to pass the recursive function around as a value, use `let` together
+  with `fn` instead.
 - `⟨body⟩` has an implicit `progn`.
 
 ## Example

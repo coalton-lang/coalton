@@ -1185,15 +1185,26 @@ consume all attributes")))
                  (note source (cst:second form)
                        "expected symbol")))
 
-  (make-toplevel-declare
-   :name (make-identifier-src
-          :name (cst:raw (cst:second form))
-          :source-name (source:extract-source-text source (cst:source (cst:second form)))
-          :location (form-location source (cst:second form)))
-   :type (parse-qualified-type (cst:third form) source)
-   :monomorphize nil
-   :location (form-location source form)
-   :inline nil))
+  (let ((qualified-type (parse-qualified-type (cst:third form) source)))
+    ;; A declaration must declare a single-value type or a function type.
+    ;; Void and multi-value types are not valid as standalone declarations.
+    (when (typep (qualified-ty-type qualified-type) 'result-ty)
+      (parse-error "Malformed declaration"
+                   (note source (cst:third form)
+                         "cannot declare a binding as ~A; declarations must have a single-value or function type"
+                         (if (null (result-ty-output-types
+                                    (qualified-ty-type qualified-type)))
+                             "Void"
+                             "a multi-value type"))))
+    (make-toplevel-declare
+     :name (make-identifier-src
+            :name (cst:raw (cst:second form))
+            :source-name (source:extract-source-text source (cst:source (cst:second form)))
+            :location (form-location source (cst:second form)))
+     :type qualified-type
+     :monomorphize nil
+     :location (form-location source form)
+     :inline nil)))
 
 (defun parse-define-type (form source &key (definition-category "type") (exception-p nil))
   (declare (type cst:cst form)

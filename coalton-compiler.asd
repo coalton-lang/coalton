@@ -82,6 +82,7 @@
                              (:file "stage-1")
                              (:file "pattern")
                              (:file "expression")
+                             (:file "control-flow")
                              (:file "traverse")
                              (:file "toplevel")
                              (:file "binding")
