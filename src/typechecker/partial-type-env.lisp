@@ -35,7 +35,7 @@
   (ty-table    (make-hash-table :test #'eq) :type hash-table     :read-only t)
   (class-table (make-hash-table :test #'eq) :type hash-table     :read-only t))
 
-(defun partial-type-env-add-var (env var &optional (source-name var))
+(defun partial-type-env-add-var (env var &optional (source-name var) (allow-result-p nil))
   "Add a fresh type variable binding for VAR to ENV.
 
 SOURCE-NAME preserves the programmer-written binder name for later
@@ -45,9 +45,11 @@ type variable and overwrites any existing binding for VAR."
            (type symbol var)
            (values tc:tyvar))
   (setf (gethash var (partial-type-env-ty-table env))
-        (tc:make-variable (tc:make-kvariable) source-name)))
+        (tc:make-variable :kind (tc:make-kvariable)
+                          :source-name source-name
+                          :allow-result-p allow-result-p)))
 
-(defun partial-type-env-ensure-var (env var &optional (source-name var))
+(defun partial-type-env-ensure-var (env var &optional (source-name var) (allow-result-p nil))
   "Return the existing type variable for VAR in ENV, or create one.
 
 SOURCE-NAME is only used when a new variable must be created. This is
@@ -57,7 +59,7 @@ binder share a single type variable."
            (type symbol var)
            (values tc:tyvar))
   (or (gethash var (partial-type-env-ty-table env))
-      (partial-type-env-add-var env var source-name)))
+      (partial-type-env-add-var env var source-name allow-result-p)))
 
 (defun partial-type-env-lookup-var (env var source)
   (declare (type partial-type-env env)
