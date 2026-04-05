@@ -255,7 +255,7 @@
   :depends-on ("coalton"
                "coalton/library/big-float"
                "coalton/library/algorithms"
-               "coalton/doc"
+               #+(or sbcl ccl) "coalton/doc"
                "coalton/xmath"
                "coalton/testing"
                "fiasco"
@@ -281,7 +281,7 @@
                (:file "entry-tests")
                (:file "codegen-pattern-tests")
                (:file "toplevel-tests")
-               (:file "doc-tests")
+               #+(or sbcl ccl) (:file "doc-tests")
                (:file "type-inference-tests")
                (:file "fundep-tests")
                (:file "fundep-fib-test")
