@@ -1,10 +1,10 @@
-name: CI
+name: Porting (2 abcl, ecl, clasp)
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  # push:
+  #   branches: [ main ]
+  # pull_request:
+  #   branches: [ main ]
 
   workflow_dispatch:
 
@@ -44,24 +44,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        LISP_IMPL: ["sbcl", "allegro", "ccl"]
+          ## clasp excluded as it fails (ql:quickload :serapeum)
+        LISP_IMPL: [ "abcl", "clasp",
+                     "ecl" ]
         COALTON_ENV: ["release", "development"]
         SAFETY: ["0", "3"]
         DISABLE_SPECIALIZATION: ["1", "0"]
         HEURISTIC_INLINING: ["1", "0"]
         exclude:
-          # Since we don't have a way of switching safety on allegro or ccl, we can
+          # Since we don't have a way of switching safety on clasp or ecl, we can
           # just ignore high safety tests.
-          - LISP_IMPL: "allegro"
-            # SAFETY: "3" # un-comment this line once the allegro license is renewed.
-          - LISP_IMPL: "ccl"
+          # - LISP_IMPL: "clasp"
+          #   SAFETY: "3"
+          - LISP_IMPL: "ecl"
             SAFETY: "3"
 
     permissions:
       packages: read
 
     container:
-      image: ghcr.io/${{ needs.check-image.outputs.image_repo_name }}/${{ matrix.LISP_IMPL }}-base
+      image: ghcr.io/${{ needs.check-image.outputs.image_repo_name }}/${{ matrix.LISP_IMPL }}-port
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -73,37 +75,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - name: Run SBCL tests
-        if: matrix.LISP_IMPL == 'sbcl'
-        env:
-          COALTON_ENV: ${{ matrix.COALTON_ENV }}
-          COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
-          COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
-        run: |
-          cat <<EOF > run-tests.lisp
-          (sb-ext:restrict-compiler-policy 'safety ${{ matrix.SAFETY }})
-          (ql:quickload :coalton/tests)
-          (asdf:test-system :coalton/tests)
-          ; TODO: Remove this or add tests for these programs.
-          (asdf:load-system :small-coalton-programs)
-          EOF
-          sbcl --dynamic-space-size 2048 --non-interactive --load run-tests.lisp
-      - name: Run Allegro CL tests
-        if: matrix.LISP_IMPL == 'allegro'
-        env:
-          COALTON_ENV: ${{ matrix.COALTON_ENV }}
-          COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
-          COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
-        run: |
-          cat <<EOF > run-tests.lisp
-          (ql:quickload :coalton/tests)
-          (asdf:test-system :coalton/tests)
-          ; TODO: Remove this or add tests for these programs.
-          (asdf:load-system :small-coalton-programs)
-          EOF
-          cat run-tests.lisp | alisp --batch
-      - name: Run Clozure CL tests
-        if: matrix.LISP_IMPL == 'ccl'
+
+      - name: Run ABCL tests
+        if: matrix.LISP_IMPL == 'abcl'
         env:
           COALTON_ENV: ${{ matrix.COALTON_ENV }}
           COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
@@ -112,15 +86,58 @@ jobs:
           cat <<EOF > run-tests.lisp
           (cl:handler-case
             (cl:progn
-          ;; This must be set before loading Coalton.
-          (setf (get :coalton-config :emit-type-annotations) nil)
-          (ql:quickload :coalton/tests)
-          (asdf:test-system :coalton/tests)
-          ; TODO: Remove this or add tests for these programs.
-          (asdf:load-system :small-coalton-programs)
+              (load "/.abclrc")
+                ;; Ensure fiasco is patched in abcl
+                (ql:quickload :fiasco) (load "compat/abcl-fiasco-patch")
+              (setq system:*safety* ${{ matrix.SAFETY }})
+              (ql:quickload :coalton/tests)
+              (asdf:test-system :coalton/tests)
+              ; TODO: Remove this or add tests for these programs.
+              (asdf:load-system :small-coalton-programs)
               (uiop:quit 0))
             (cl:error (c)
               (declare (ignore c))
               (uiop:quit 1)))
           EOF
-          ccl64-wrapped.sh --batch --load run-tests.lisp
+          echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
+          ls ${CL_SOURCE_REGISTRY}/coalton.asd
+          abcl --noinform --nosystem --batch --load run-tests.lisp
+
+      - name: Run Clasp tests
+        if: matrix.LISP_IMPL == 'clasp'
+        env:
+          COALTON_ENV: ${{ matrix.COALTON_ENV }}
+          COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
+          COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
+        run: |
+          cat <<EOF > run-tests.lisp
+          ;;; Clasp cannot find /.clasprc - copy its code here instead.
+          ;; (load "/.clasprc")
+            #-quicklisp (load "/root/quicklisp/setup.lisp")
+            (setf ql:*local-project-directories* (quote ("/extras" "/lisp")))
+          (ql:quickload :coalton/tests)
+          (asdf:test-system :coalton/tests)
+          ; TODO: Remove this or add tests for these programs.
+          (asdf:load-system :small-coalton-programs)
+          EOF
+          echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
+          ls ${CL_SOURCE_REGISTRY}/coalton.asd
+          clasp --script run-tests.lisp
+
+      - name: Run ECL tests
+        if: matrix.LISP_IMPL == 'ecl'
+        env:
+          COALTON_ENV: ${{ matrix.COALTON_ENV }}
+          COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
+          COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
+        run: |
+          cat <<EOF > run-tests.lisp
+          (load "/.eclrc")
+          (ql:quickload :coalton/tests)
+          (asdf:test-system :coalton/tests)
+          ; TODO: Remove this or add tests for these programs.
+          (asdf:load-system :small-coalton-programs)
+          EOF
+          echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
+          ls ${CL_SOURCE_REGISTRY}/coalton.asd
+          ecl --norc -q --shell run-tests.lisp

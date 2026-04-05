@@ -17,7 +17,8 @@
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
   :in-order-to ((asdf:test-op (asdf:test-op #:coalton/tests)))
-  :depends-on ("coalton-compiler"
+  :depends-on ("coalton-compatibility"
+               "coalton-compiler"
                "coalton/library"))
 
 (asdf:defsystem "coalton/library"
@@ -35,7 +36,8 @@
                           (*features* (cons ':coalton-lisp-toplevel *features*)))
                       (funcall compile)))
   :defsystem-depends-on ("coalton-asdf")
-  :depends-on ("coalton-compiler"
+  :depends-on ("coalton-compatibility"
+               "coalton-compiler"
                "coalton/hashtable-shim"
                "trivial-garbage"
                "alexandria")
@@ -190,7 +192,8 @@
                "fiasco")
   :pathname "src/testing/"
   :serial t
-  :components ((:file "package")
+  :components (#+abcl(:file "compat/abcl-fiasco-patch")
+               (:file "package")
                (:file "coalton-native-test-utils")))
 
 ;;; we need to inspect the sbcl version in order to decide which version of the hashtable shim to load,
@@ -218,6 +221,7 @@
                (:file "hash-table" :if-feature (:not :sbcl))
                (:file "impl-custom" :if-feature (:not :sbcl))))
 
+#+(or sbcl ccl)
 (asdf:defsystem "coalton/doc"
   :description "Documentation generator for Coalton"
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
@@ -251,7 +255,7 @@
   :depends-on ("coalton"
                "coalton/library/big-float"
                "coalton/library/algorithms"
-               "coalton/doc"
+               #+(or sbcl ccl) "coalton/doc"
                "coalton/xmath"
                "coalton/testing"
                "fiasco"
@@ -262,7 +266,8 @@
                            (error "Tests failed")))
   :pathname "tests/"
   :serial t
-  :components ((:file "package")
+  :components (#+abcl(:file "compat/abcl-fiasco-patch")
+               (:file "package")
                (:file "loader")
                (:file "utilities")
                (:file "source-tests")
@@ -276,7 +281,7 @@
                (:file "entry-tests")
                (:file "codegen-pattern-tests")
                (:file "toplevel-tests")
-               (:file "doc-tests")
+               #+(or sbcl ccl) (:file "doc-tests")
                (:file "type-inference-tests")
                (:file "fundep-tests")
                (:file "fundep-fib-test")
@@ -316,7 +321,7 @@
                (:file "looping-native-tests")
                (:ct-file "monomorphizer-tests")
                (:ct-file "inliner-tests")
-               (:file "inliner-tests-1") ; must come after inliner-tests
+               #-abcl(:file "inliner-tests-1") ; must come after inliner-tests
                (:ct-file "deriver-tests")
                (:ct-file "file-tests")
                (:ct-file "experimental-tests")
