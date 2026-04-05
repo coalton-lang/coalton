@@ -402,6 +402,73 @@ error: Unexpected return
    |            ^^^^^^^^^^^^^^^^ returns must be inside a lambda
 
 ================================================================================
+Return branches must agree on type
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(define (f a)
+  (if a
+      (return "hello")
+      (return 5))
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Return type mismatch
+  --> test:5:6
+   |
+ 5 |        (return "hello")
+   |        ^^^^^^^^^^^^^^^^ First return is of type 'String'
+ 6 |        (return 5))
+ 7 |    Unit)
+   |    ^^^^ Second return is of type 'Unit'
+
+================================================================================
+Return branches must agree on value arity
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(define (f a)
+  (if a
+      (return 1)
+      (return (values 1 2)))
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Return type mismatch
+  --> test:5:6
+   |
+ 5 |        (return 1)
+   |        ^^^^^^^^^^ First return is of type ':A'
+ 6 |        (return (values 1 2)))
+   |        ^^^^^^^^^^^^^^^^^^^^^ Second return is of type ':A * :B'
+
+================================================================================
+Bare return must agree with valued return arity
+================================================================================
+
+(package coalton-unit-tests/inference)
+
+(define (f a)
+  (if a
+      (return)
+      (return 1))
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Return type mismatch
+  --> test:5:6
+   |
+ 5 |        (return)
+   |        ^^^^^^^^ First return is of type 'Void'
+ 6 |        (return 1))
+   |        ^^^^^^^^^^ Second return is of type ':A'
+
+================================================================================
 Check that the monomorphism restriction still applies to defaulted bindings
 ================================================================================
 
