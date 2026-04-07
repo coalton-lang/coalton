@@ -91,6 +91,21 @@
   (is (eval '(coalton:coalton
               (coalton-tests/recursive-let-tests::rec-tail-under-or 5)))))
 
+(deftest rec-catch-tail-calls-are-allowed ()
+  (with-coalton-compilation (:package #:coalton-tests/recursive-let-tests)
+    (coalton-toplevel
+      (declare rec-tail-under-catch (UFix -> UFix * UFix))
+      (define (rec-tail-under-catch n)
+        (rec go ((i 0))
+          (catch (if (>= i n)
+                     (values i (* i i))
+                     (go (+ i 1)))
+            (_ (values 0 0)))))))
+  (is (equal '(5 25)
+             (multiple-value-list
+              (eval '(coalton:coalton
+                      (coalton-tests/recursive-let-tests::rec-tail-under-catch 5)))))))
+
 (deftest recursive-let-constant-propagation ()
   "Test that constant let bindings are propagated to the other bindings. See GitHub issue #1442."
   (check-coalton-types
