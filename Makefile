@@ -402,7 +402,7 @@ parser-coverage:
 
 $(TEMP)/cleanql-$(LISP).lisp:	Makefile
 	mkdir -p $(TEMP) && test -d $(TEMP)
-	( echo '(load "'$(QUICKLISP_SETUP)'")' ; \
+	( echo '#-quicklisp (load "'$(QUICKLISP_SETUP)'")' ; \
 	  echo '(push (truename "'$(COALTON_HOME)'") asdf:*central-registry*)' ; \
 	  echo '(push (truename "'$(EXTRA_LOCAL_PROJECTS)'") ql:*local-project-directories*)' ; \
 	  echo '(ql:register-local-projects)' ; \
