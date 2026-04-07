@@ -218,6 +218,7 @@ programmer-written binders."
                       :collect (make-substitution
                                 :from var
                                 :to (make-tgen :id id
+                                               :allow-result-p (tyvar-allow-result-p var)
                                                :source-name (tyvar-source-name var))))))
     (make-ty-scheme
      :explicit-p nil
@@ -233,6 +234,8 @@ and pretty printing can recover the programmer-written binders."
            (values tyvar-list &optional))
   (let* ((source-names (make-array (length (ty-scheme-kinds ty-scheme))
                                    :initial-element nil))
+         (allow-result-flags (make-array (length (ty-scheme-kinds ty-scheme))
+                                         :initial-element nil))
          (scheme-type (ty-scheme-type ty-scheme)))
     (labels ((collect-instantiation-metadata (object)
                (typecase object
@@ -240,7 +243,10 @@ and pretty printing can recover the programmer-written binders."
                   (when (< (tgen-id object) (length source-names))
                     (setf (aref source-names (tgen-id object))
                           (or (aref source-names (tgen-id object))
-                              (tgen-source-name object)))))
+                              (tgen-source-name object)))
+                    (setf (aref allow-result-flags (tgen-id object))
+                          (or (aref allow-result-flags (tgen-id object))
+                              (tgen-allow-result-p object)))))
                  (tapp
                   (collect-instantiation-metadata (tapp-from object))
                   (collect-instantiation-metadata (tapp-to object)))
@@ -262,8 +268,9 @@ and pretty printing can recover the programmer-written binders."
       (collect-instantiation-metadata scheme-type)
       (loop :for kind :in (ty-scheme-kinds ty-scheme)
             :for i :from 0
-            :collect (make-variable kind
-                                    (aref source-names i))))))
+            :collect (make-variable :kind kind
+                                    :source-name (aref source-names i)
+                                    :allow-result-p (aref allow-result-flags i))))))
 
 (defgeneric to-scheme (ty)
   (:method ((ty qualified-ty))
@@ -320,6 +327,7 @@ become lexically scoped."
                       :collect (make-substitution
                                 :from var
                                 :to (make-tgen :id id
+                                               :allow-result-p (tyvar-allow-result-p var)
                                                :source-name (tyvar-source-name var))))))
     (make-ty-scheme
      :explicit-p explicit-p

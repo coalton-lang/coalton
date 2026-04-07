@@ -237,6 +237,27 @@ to the zero-result type."
     ((and (tyvar-p type)
           (ty= type tyvar))
      nil)
+    ((and (typep type 'result-ty)
+          (not (tyvar-allow-result-p tyvar)))
+     (error 'unification-error :type1 tyvar :type2 type))
+    ((tyvar-p type)
+     (when (not (equalp (kind-of tyvar)
+                        (kind-of type)))
+       (error 'kind-mismatch-error
+              :type tyvar
+              :kind (kind-of type)))
+     ;; Preserve the stricter representative when only one side may
+     ;; unify with result packs, so ordinary value variables never
+     ;; widen into result-pack variables through indirection.
+     (cond
+       ((and (not (tyvar-allow-result-p tyvar))
+             (tyvar-allow-result-p type))
+        (list (make-substitution :from type :to tyvar)))
+       ((and (tyvar-allow-result-p tyvar)
+             (not (tyvar-allow-result-p type)))
+        (list (make-substitution :from tyvar :to type)))
+       (t
+        (list (make-substitution :from tyvar :to type)))))
     ((find tyvar (type-variables type))
      (error 'infinite-type-unification-error :type type))
     ((not (equalp (kind-of tyvar)
@@ -271,9 +292,18 @@ apply s type1 == type2")
     (ensure-compatible-result-types type1 type2 'unification-error)
     (match-result-types type1 type2))
   (:method ((type1 tyvar) (type2 ty))
-    (if (equalp (kind-of type1) (kind-of type2))
-        (list (make-substitution :from type1 :to type2))
-        (error 'type-kind-mismatch-error :type1 type1 :type2 type2)))
+    (cond
+      ((not (equalp (kind-of type1) (kind-of type2)))
+       (error 'type-kind-mismatch-error :type1 type1 :type2 type2))
+      ((and (not (tyvar-allow-result-p type1))
+            (typep type2 'result-ty))
+       (error 'unification-error :type1 type1 :type2 type2))
+      ((and (not (tyvar-allow-result-p type1))
+            (tyvar-p type2)
+            (tyvar-allow-result-p type2))
+       (error 'unification-error :type1 type1 :type2 type2))
+      (t
+       (list (make-substitution :from type1 :to type2)))))
   (:method ((type1 tycon) (type2 tycon))
     (if (ty= type1 type2)
         nil
