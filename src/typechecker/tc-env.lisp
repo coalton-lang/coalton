@@ -91,7 +91,7 @@ type variables instead of re-instantiating the declared scheme."
                  :ty-table ty-table
                  :typevar-table (tc-env-typevar-table env))))
 
-(defun tc-env-add-variable (env name)
+(defun tc-env-add-variable (env name &key (allow-result-p nil))
   "Add a variable named NAME to ENV and return the scheme."
   (declare (type tc-env env)
            (type symbol name)
@@ -100,7 +100,11 @@ type variables instead of re-instantiating the declared scheme."
   (when (gethash name (tc-env-ty-table env))
     (util:coalton-bug "Attempt to add already defined variable with name ~S." name))
 
-  (tc:qualified-ty-type (tc:fresh-inst (setf (gethash name (tc-env-ty-table env)) (tc:to-scheme (tc:make-variable))))))
+  (tc:qualified-ty-type
+   (tc:fresh-inst
+    (setf (gethash name (tc-env-ty-table env))
+          (tc:to-scheme (tc:make-variable :kind tc:+kstar+
+                                          :allow-result-p allow-result-p))))))
 
 (defun tc-env-suggest-value (env name)
   "If value lookup failed, generate suggestions for what to do, if anything."

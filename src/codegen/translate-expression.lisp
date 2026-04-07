@@ -288,33 +288,52 @@ values."
            (values node &optional))
   (translate-body-elements-into body-nodes (zero-values-node) ctx env))
 
-(defun specialize-qual-type-to-context (qual-ty ctx)
+(defun reachable-context-predicates (pred env)
+  "Return PRED plus any predicates reachable from it through superclasses."
+  (declare (type tc:ty-predicate pred)
+           (type tc:environment env)
+           (values tc:ty-predicate-list &optional))
+  (labels ((walk (pred)
+             (let* ((class (tc:lookup-class env (tc:ty-predicate-class pred)))
+                    (subs (tc:predicate-match (tc:ty-class-predicate class) pred))
+                    (supers (tc:apply-substitution subs (tc:ty-class-superclasses class))))
+               (cons pred
+                     (mapcan #'walk supers)))))
+    (walk pred)))
+
+(defun specialize-qual-type-to-context (qual-ty ctx env)
   "Specialize QUAL-TY to any uniquely matching predicates in CTX.
 
 This matters for overloaded values that are captured without an
 application site, such as variables passed into `lisp` forms."
   (declare (type tc:qualified-ty qual-ty)
            (type pred-context ctx)
+           (type tc:environment env)
            (values tc:qualified-ty &optional))
   (let ((subs nil))
     (dolist (pred (tc:qualified-ty-predicates qual-ty))
       (let ((matches
-              (loop :for (ctx-pred . nil) :in ctx
-                    :for match
-                      := (and (eq (tc:ty-predicate-class pred)
-                                  (tc:ty-predicate-class ctx-pred))
-                              (handler-case
-                                  (tc:predicate-match pred ctx-pred subs)
-                                (tc:predicate-unification-error ()
-                                  nil)
-                                (tc:coalton-internal-type-error ()
-                                  nil)))
-                    :when match
-                      :collect match)))
+              (remove-duplicates
+               (loop :for (ctx-pred . nil) :in ctx
+                     :append (loop :for reachable-pred :in (reachable-context-predicates ctx-pred env)
+                                   :for match
+                                     := (and (eq (tc:ty-predicate-class pred)
+                                                 (tc:ty-predicate-class reachable-pred))
+                                             (handler-case
+                                                 (tc:predicate-match pred reachable-pred subs)
+                                               (tc:predicate-unification-error ()
+                                                 nil)
+                                               (tc:coalton-internal-type-error ()
+                                                 nil)))
+                                   :when match
+                                     :collect (cons (tc:apply-substitution match pred)
+                                                    match)))
+               :test #'tc:type-predicate=
+               :key #'car)))
         (when (= 1 (length matches))
           (setf subs
                 (tc:compose-substitution-lists
-                 (first matches)
+                 (cdar matches)
                  subs)))))
     (if subs
         (tc:apply-substitution subs qual-ty)
@@ -374,7 +393,7 @@ needs to synthesize those trailing parameters explicitly."
             (or eta-rands eta-keyword-rands))
        (make-qualified-variable-application
         binding-value
-        (specialize-qual-type-to-context (tc:node-type binding-value) ctx)
+        (specialize-qual-type-to-context (tc:node-type binding-value) ctx env)
         (tc:function-return-type (tc:qualified-ty-type qual-ty))
         eta-rands
         eta-keyword-rands
@@ -524,7 +543,8 @@ direct-call shape needed by later tail-call and direct-application passes."
            (values node &optional))
   (let* ((qual-ty (specialize-qual-type-to-context
                    (tc:node-type expr)
-                   ctx))
+                   ctx
+                   env))
          (translated-rands
            (mapcar
             (lambda (rand)
@@ -1452,7 +1472,7 @@ dictionaries applied."
            (type pred-context ctx)
            (type tc:environment env)
            (values node))
-  (let* ((qual-ty (specialize-qual-type-to-context (tc:node-type expr) ctx))
+  (let* ((qual-ty (specialize-qual-type-to-context (tc:node-type expr) ctx env))
 
          (dicts (mapcar
                  (lambda (pred)

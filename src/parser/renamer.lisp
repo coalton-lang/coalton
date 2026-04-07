@@ -178,6 +178,7 @@
             :params (rename-variables-generic% (node-abstraction-params node) positional-ctx)
             :keyword-params keyword-params
             :body (rename-variables-generic% (node-abstraction-body node) body-ctx)
+            :introduces-return-scope-p (node-abstraction-introduces-return-scope-p node)
             :location (source:location node))
            ctx)))))
 
