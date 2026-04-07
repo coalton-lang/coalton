@@ -11,6 +11,11 @@
 ;;; The asdf extension in turn requires access to the compiler. so
 ;;; coalton-asdf and coalton-compiler live in their own .asd files.
 
+;; coalton/doc uses packages that only work on sbcl/ccl
+#+(or sbcl ccl) (pushnew :coalton-with-doc *features*)
+;; abcl offers no TCE
+#-abcl (pushnew :coalton-env-has-tce *features*)
+
 (asdf:defsystem "coalton"
   :description "An efficient, statically typed functional programming language that supercharges Common Lisp. "
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
@@ -221,7 +226,7 @@
                (:file "hash-table" :if-feature (:not :sbcl))
                (:file "impl-custom" :if-feature (:not :sbcl))))
 
-#+(or sbcl ccl)
+#+coalton-with-doc
 (asdf:defsystem "coalton/doc"
   :description "Documentation generator for Coalton"
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
@@ -255,7 +260,7 @@
   :depends-on ("coalton"
                "coalton/library/big-float"
                "coalton/library/algorithms"
-               #+(or sbcl ccl) "coalton/doc"
+               #+coalton-with-doc "coalton/doc"
                "coalton/xmath"
                "coalton/testing"
                "fiasco"
@@ -281,7 +286,7 @@
                (:file "entry-tests")
                (:file "codegen-pattern-tests")
                (:file "toplevel-tests")
-               #+(or sbcl ccl) (:file "doc-tests")
+               #+coalton-with-doc (:file "doc-tests")
                (:file "type-inference-tests")
                (:file "fundep-tests")
                (:file "fundep-fib-test")
@@ -321,7 +326,7 @@
                (:file "looping-native-tests")
                (:ct-file "monomorphizer-tests")
                (:ct-file "inliner-tests")
-               #-abcl(:file "inliner-tests-1") ; must come after inliner-tests
+               #+coalton-env-has-tce (:file "inliner-tests-1") ; must come after inliner-tests
                (:ct-file "deriver-tests")
                (:ct-file "file-tests")
                (:ct-file "experimental-tests")
