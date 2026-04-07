@@ -69,3 +69,13 @@ help: add parentheses
 (define f-parse21
   (fn (x &key)
     x))
+
+================================================================================
+22 Function with transparent return modifier
+================================================================================
+
+(package coalton-unit-tests)
+
+(define f-parse22
+  (fn :transparent-to-return (x)
+    x))

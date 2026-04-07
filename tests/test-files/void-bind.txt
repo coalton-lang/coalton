@@ -43,7 +43,7 @@
 100 Cannot bind Void to a variable
 ================================================================================
 
-(package coalton-unit-tests/void-bind)
+(package coalton-unit-tests/void-bind-plain)
 
 (define (f)
   (let b = (values))
@@ -61,7 +61,7 @@ error: Cannot bind to variable
 101 Cannot bind result of Void function to a variable
 ================================================================================
 
-(package coalton-unit-tests/void-bind)
+(package coalton-unit-tests/void-bind-plain)
 
 (declare void-fn (Void -> Void))
 (define (void-fn)
@@ -121,7 +121,7 @@ error: Cannot bind to variable
 104 Cannot bind inline multiple values to a variable
 ================================================================================
 
-(package coalton-unit-tests/void-bind)
+(package coalton-unit-tests/void-bind-plain)
 
 (define (f)
   (let b = (values 1 2))
@@ -162,7 +162,7 @@ error: Cannot bind to variable
 200 Cannot declare a binding as Void
 ================================================================================
 
-(package coalton-unit-tests/void-bind)
+(package coalton-unit-tests/void-bind-plain)
 
 (declare f Void)
 (define f (values))
@@ -179,7 +179,7 @@ error: Malformed declaration
 201 Cannot declare a binding as a multi-value type
 ================================================================================
 
-(package coalton-unit-tests/void-bind)
+(package coalton-unit-tests/void-bind-plain)
 
 (declare f (Integer * Integer))
 (define f (values 1 2))
@@ -196,7 +196,7 @@ error: Malformed declaration
 202 Void cannot appear as a component of a multi-value type
 ================================================================================
 
-(package coalton-unit-tests/void-bind)
+(package coalton-unit-tests/void-bind-plain)
 
 (declare f (Void -> Void * Integer))
 (define (f)
@@ -209,3 +209,81 @@ error: Malformed type
    |
  3 |  (declare f (Void -> Void * Integer))
    |                      ^^^^ Void and multi-value types cannot appear as components of a multi-value type
+
+================================================================================
+203 Void cannot be used as a type argument
+================================================================================
+
+(package coalton-unit-tests/void-bind-identity
+  (import coalton-prelude
+          (coalton/monad/identity as m-id)))
+
+(declare void-identity (Void -> m-id:Identity Void))
+(define (void-identity)
+  (pure (values)))
+
+--------------------------------------------------------------------------------
+
+error: Malformed type
+  --> test:5:46
+   |
+ 5 |  (declare void-identity (Void -> m-id:Identity Void))
+   |                                                ^^^^ Void and multi-value types cannot be used as type arguments
+
+================================================================================
+204 Multi-value type cannot be used as a type argument
+================================================================================
+
+(package coalton-unit-tests/void-bind
+  (import coalton-prelude))
+
+(declare f (List (Integer * Integer)))
+(define f (make-list (values 1 2)))
+
+--------------------------------------------------------------------------------
+
+error: Malformed type
+  --> test:4:17
+   |
+ 4 |  (declare f (List (Integer * Integer)))
+   |                   ^^^^^^^^^^^^^^^^^^^ Void and multi-value types cannot be used as type arguments
+
+================================================================================
+205 Void value cannot be passed as an ordinary argument
+================================================================================
+
+(package coalton-unit-tests/void-bind
+  (import coalton-prelude))
+
+(define (f x) 1)
+
+(define (g)
+  (f (values)))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:7:5
+   |
+ 7 |    (f (values)))
+   |       ^^^^^^^^ Expected type ':A' but got 'Void'
+
+================================================================================
+206 Void value cannot be lifted into a monad as a first-class value
+================================================================================
+
+(package coalton-unit-tests/void-bind
+  (import coalton-prelude))
+
+(define bad
+  (do
+    (pure (values))
+    (pure 1)))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:6:10
+   |
+ 6 |      (pure (values))
+   |            ^^^^^^^^ Expected type ':A' but got 'Void'

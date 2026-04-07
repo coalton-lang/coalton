@@ -172,9 +172,9 @@
     "Takes and stores a character as an ascii code at the pointer."
     (do
      (bfs <- state:get)
-     (pure (vec:set! (cell:read (.pointer bfs))
-                     (into (char:char-code (prompt-char)))
-                     (.memory bfs)))
+     (let _ = (vec:set! (cell:read (.pointer bfs))
+                        (into (char:char-code (prompt-char)))
+                        (.memory bfs)))
       (state:put bfs))))
 
 ;;;

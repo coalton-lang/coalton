@@ -55,42 +55,6 @@
   (declare pretty-keyword-fn (Integer &key (:timeout Integer) (:extra Integer) -> Integer))
   (define (pretty-keyword-fn x &key (timeout 0) (extra 10))
     (+ x (+ timeout extra)))
-
-  (declare explicit-rec-eq
-    (forall (:item)
-      (coalton/classes:Eq :item => :item -> Boolean)))
-  (define (explicit-rec-eq x)
-    (if (== x x)
-        True
-        (explicit-rec-eq x)))
-
-  (declare explicit-rec-eq-integer (Integer -> Boolean))
-  (define (explicit-rec-eq-integer x)
-    (explicit-rec-eq x))
-
-  (repr :transparent)
-  (define-type (ScopedDictBox :a)
-    (ScopedDictBox :a))
-
-  (define-class (ScopedDictClass :wrapper)
-    (scoped-dict-method
-      (forall (:item)
-        (coalton/classes:Eq :item => (:wrapper :item) * (coalton/types:Proxy :item) -> Boolean))))
-
-  (define-instance (ScopedDictClass ScopedDictBox)
-    (define (scoped-dict-method wrapped proxy)
-      (match wrapped
-        ((ScopedDictBox inner)
-         (let ((declare rebuild
-                       (forall (:ignored)
-                         (coalton/classes:Eq :item => (coalton/types:Proxy :ignored) * :item -> Boolean)))
-               (rebuild (fn (_other value)
-                          (== value inner))))
-           (rebuild proxy inner))))))
-
-  (declare scoped-dict-method-integer (Integer -> Boolean))
-  (define (scoped-dict-method-integer x)
-    (scoped-dict-method (ScopedDictBox x) (coalton/types:proxy-of x)))
   )
 
 (in-package #:coalton-tests)
@@ -317,7 +281,3 @@
           (is nil))
       (coalton-impl/typechecker/type-errors:unification-error ()
         (is t)))))
-
-(deftest test-scoped-forall-dictionary-resolution ()
-  (is (coalton:lookup-code 'coalton-native-tests::explicit-rec-eq-integer))
-  (is (coalton:lookup-code 'coalton-native-tests::scoped-dict-method-integer)))

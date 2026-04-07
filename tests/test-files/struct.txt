@@ -203,7 +203,7 @@ error: Ambiguous accessor
 111 accessor-sees-monadenvironment-fundeps
 ================================================================================
 
-(package coalton-unit-tests/struct
+(package coalton-unit-tests/struct-env
   (import (coalton/monad/environment as env)))
 
 (define-struct Book
