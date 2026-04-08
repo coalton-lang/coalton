@@ -144,6 +144,47 @@
    '("bare-return" . "(Void -> Void)"))
 
   (check-coalton-types
+   "(define-exception CatchResultError
+      (CatchPayload Integer))
+
+    (define (catch-pair x)
+      (catch (values x (1+ x))
+        ((CatchPayload y) (values y (1+ y)))
+        (_ (values 0 0))))
+
+    (define (catch-pair-bind x)
+      (let (values a b) = (catch (throw (CatchPayload x))
+                            ((CatchPayload y) (values y (1+ y)))
+                            (_ (values 0 0))))
+      (+ a b))
+
+    (define (catch-void b)
+      (catch (when b 1)
+        ((CatchPayload _) (values))
+        (_ (values))))"
+
+   '("catch-pair" . "(Integer -> Integer * Integer)")
+   '("catch-pair-bind" . "(Integer -> Integer)")
+   '("catch-void" . "(Boolean -> Void)"))
+
+  (check-coalton-types
+   "(define-exception TestException
+      (TestException Integer))
+
+    (declare foo (Void -> Void))
+    (define (foo)
+      (values))
+
+    (declare bar (Void -> Void))
+    (define (bar)
+      (catch (foo)
+        ((TestException _) (values)))
+      (values))"
+
+   '("foo" . "(Void -> Void)")
+   '("bar" . "(Void -> Void)"))
+
+  (check-coalton-types
    "(define (count-down n)
       (rec loop ((i n))
         (unless (== i 0)
