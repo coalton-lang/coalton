@@ -3,6 +3,7 @@
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:algo #:coalton-impl/algorithm)
+   (#:avl #:coalton-impl/algorithm/avl-tree)
    (#:tc #:coalton-impl/typechecker)
    (#:entry #:coalton-impl/entry)))
 
@@ -17,7 +18,7 @@
   (let ((env entry:*global-environment*)
         (sorted-by-package (make-hash-table)))
     ;; Sort the entires by package
-    (fset:do-map (sym entry (algo:immutable-map-data (tc:environment-value-environment env)))
+    (algo:do-immutable-map (sym entry (tc:environment-value-environment env))
       (push (cons sym entry) (gethash (symbol-package sym) sorted-by-package)))
 
     ;; Print out the entries for each package
@@ -43,7 +44,7 @@
   (let ((env entry:*global-environment*)
         (sorted-by-package (make-hash-table)))
     ;; Sort the entires by package
-    (fset:do-map (sym entry (algo:immutable-map-data (tc:environment-type-environment env)))
+    (algo:do-immutable-map (sym entry (tc:environment-type-environment env))
       (push (cons sym entry) (gethash (symbol-package sym) sorted-by-package)))
 
     ;; Print out the entries for each package
@@ -68,7 +69,7 @@
   (let ((env entry:*global-environment*)
         (sorted-by-package (make-hash-table)))
     ;; Sort the entires by package
-    (fset:do-map (sym entry (algo:immutable-map-data (tc:environment-class-environment env)))
+    (algo:do-immutable-map (sym entry (tc:environment-class-environment env))
       (push (cons sym entry) (gethash (symbol-package sym) sorted-by-package)))
 
     ;; Print out the entries for each package
@@ -102,7 +103,7 @@
   (let ((env entry:*global-environment*)
         (sorted-by-package (make-hash-table)))
     ;; Sort the entires by package
-    (fset:do-map (sym entry (algo:immutable-map-data (tc:environment-class-environment env)))
+    (algo:do-immutable-map (sym entry (tc:environment-class-environment env))
       (push (cons entry (tc:lookup-class-instances env sym :no-error t))
             (gethash (symbol-package sym) sorted-by-package)))
 
@@ -122,7 +123,7 @@
                                      (tc:ty-predicate-types class-pred)
                                      (mapcar #'tc:kind-of (tc:ty-predicate-types class-pred)))))
 
-                         (fset:do-seq (instance instances)
+                         (dolist (instance instances)
                            (format t "    ")
                            ;; Generate type variable substitutions from instance constraints
                            (tc:with-pprint-variable-context ()
@@ -156,7 +157,7 @@
   (check-type package (or null package-designator) "package designator")
   (let ((env entry:*global-environment*)
         (sorted-by-package (make-hash-table)))
-    (fset:do-map (sym entry (algo:immutable-listmap-data (tc:environment-specialization-environment env)))
+    (avl:do-avl (sym entry (algo:immutable-listmap-data (tc:environment-specialization-environment env)))
       (push (cons sym entry) (gethash (symbol-package sym) sorted-by-package)))
 
     (labels ((print-package (package entries)
@@ -164,7 +165,7 @@
                (loop :for (name . specs) :in entries
                      :do (progn
                            (format t "  ~A :: ~A~%" name (tc:lookup-value-type env name))
-                           (fset:do-seq (spec specs)
+                           (dolist (spec specs)
                              (format t "    ~A :: ~A~%"
                                      (tc:specialization-entry-to spec)
                                      (tc:specialization-entry-to-ty spec)))
