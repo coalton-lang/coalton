@@ -276,6 +276,7 @@
                (:file "source-tests")
                (:file "preserve-case-tests")
                (:file "tarjan-scc-tests")
+               (:file "avl-tree-tests")
                (:file "reader-tests")
                (:file "error-tests")
                (:module "parser"
