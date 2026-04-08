@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'mine-v*'
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -30,40 +31,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # --- Install SBCL ---
-
-      - name: Install SBCL (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y sbcl
-
-      - name: Install SBCL (macOS)
-        if: runner.os == 'macOS'
-        run: brew install sbcl
-
-      - name: Install SBCL (Windows)
-        if: runner.os == 'Windows'
-        run: choco install sbcl -y
-
-      # --- Install Quicklisp ---
-
-      - name: Install Quicklisp (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          curl -o /tmp/quicklisp.lisp https://beta.quicklisp.org/quicklisp.lisp
-          sbcl --noinform --non-interactive \
-            --load /tmp/quicklisp.lisp \
-            --eval '(quicklisp-quickstart:install)' \
-            --eval '(quit)'
-
-      - name: Install Quicklisp (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Invoke-WebRequest -Uri https://beta.quicklisp.org/quicklisp.lisp -OutFile quicklisp.lisp
-          sbcl --noinform --non-interactive `
-            --load quicklisp.lisp `
-            --eval '(quicklisp-quickstart:install)' `
-            --eval '(quit)'
+      - name: Setup SBCL
+        uses: coalton-lang/coalton-runners/setup-sbcl@main
 
       # --- Build ---
 
@@ -72,10 +41,9 @@ jobs:
         run: |
           cd mine
           CL_SOURCE_REGISTRY="${GITHUB_WORKSPACE}//" \
-            sbcl --noinform --no-userinit --no-sysinit --non-interactive \
-            --dynamic-space-size 4096 \
-            --load "$HOME/quicklisp/setup.lisp" \
-            --eval '(asdf:load-system "mine" :verbose t)' \
+            sbcl --dynamic-space-size 4096 \
+            --noinform --non-interactive \
+            --eval '(ql:quickload "mine" :verbose t)' \
             --eval '(mine/app/mine:build)'
 
       - name: Build mine (Windows)
@@ -84,10 +52,9 @@ jobs:
         run: |
           $env:CL_SOURCE_REGISTRY = "$env:GITHUB_WORKSPACE//"
           cd mine
-          sbcl --noinform --no-userinit --no-sysinit --non-interactive `
-            --dynamic-space-size 4096 `
-            --load "$env:USERPROFILE/quicklisp/setup.lisp" `
-            --eval '(asdf:load-system "mine" :verbose t)' `
+          sbcl --dynamic-space-size 4096 `
+            --noinform --non-interactive `
+            --eval '(ql:quickload "mine" :verbose t)' `
             --eval '(mine/app/mine:build)'
 
       # --- Upload ---
@@ -96,7 +63,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mine-${{ matrix.name }}
-          path: mine/${{ matrix.binary }}
+          path: |
+            mine/${{ matrix.binary }}
+            mine/README.md
 
   release:
     needs: build
@@ -112,15 +81,19 @@ jobs:
       - name: Prepare release files
         run: |
           chmod +x mine-linux-x86_64/mine mine-macos-arm64/mine
-          cp mine-linux-x86_64/mine mine-linux-x86_64
-          cp mine-macos-arm64/mine mine-macos-arm64
-          cp mine-windows-x86_64/mine.exe mine-windows-x86_64.exe
+          for platform in linux-x86_64 macos-arm64 windows-x86_64; do
+            mkdir -p "mine-${platform}/mine"
+            mv mine-${platform}/* "mine-${platform}/mine/" 2>/dev/null || true
+            cd "mine-${platform}"
+            zip -r "../mine-${platform}.zip" mine/
+            cd ..
+          done
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            mine-linux-x86_64
-            mine-macos-arm64
-            mine-windows-x86_64.exe
+            mine-linux-x86_64.zip
+            mine-macos-arm64.zip
+            mine-windows-x86_64.zip
           generate_release_notes: true
