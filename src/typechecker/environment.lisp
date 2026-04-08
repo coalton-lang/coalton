@@ -25,6 +25,7 @@
    #:generic-closure
    #:+fundep-max-depth+)
   (:local-nicknames
+   (#:avl #:coalton-impl/algorithm/avl-tree)
    (#:util #:coalton-impl/util)
    (#:source #:coalton-impl/source)
    (#:parser #:coalton-impl/parser))
@@ -257,13 +258,11 @@
 (declaim (sb-ext:freeze-type value-environment))
 
 (defmethod apply-substitution (subst-list (env value-environment))
-  (make-value-environment :data (fset:image (lambda (key value)
-                  (values key (apply-substitution subst-list value)))
-                (immutable-map-data env))))
+  (immutable-map-image (lambda (value) (apply-substitution subst-list value)) env #'make-value-environment))
 
 (defmethod type-variables ((env value-environment))
   (let ((out nil))
-    (fset:do-map (name type (immutable-map-data env))
+    (do-immutable-map (name type env)
       (declare (ignore name))
       (setf out (append (type-variables type) out)))
     (remove-duplicates out :test #'ty=)))
@@ -344,7 +343,7 @@
 (defun make-default-type-environment ()
   "Create a TYPE-ENVIRONMENT containing early types."
   (make-type-environment
-   :data (fset:map
+   :data (avl:make-avl-map
           ;; Early Types
           ('coalton:Boolean
            (make-type-entry
@@ -537,7 +536,7 @@
 (defun make-default-constructor-environment ()
   "Create a TYPE-ENVIRONMENT containing early constructors"
   (make-constructor-environment
-   :data (fset:map
+   :data (avl:make-avl-map
           ;; Early Constructors
           ('coalton:True
            (make-constructor-entry
@@ -1174,11 +1173,11 @@ unrelated substitutions to alias each other."
                  (specialization-entry
                   (scan (specialization-entry-to-ty object)))
                  (immutable-map
-                  (fset:do-map (_ value (immutable-map-data object))
+                  (do-immutable-map (_ value object)
                     (declare (ignore _))
                     (scan value)))
                  (immutable-listmap
-                  (fset:do-map (_ value (immutable-listmap-data object))
+                  (avl:do-avl (_ value (immutable-listmap-data object))
                     (declare (ignore _))
                     (scan value)))
                  (environment
@@ -1474,7 +1473,7 @@ Signals a coalton-bug error if the type is not found and NO-ERROR is false (the 
 (defun lookup-class-instances (env class &key no-error)
   (declare (type environment env)
            (type symbol class)
-           (values fset:seq &optional))
+           (values list &optional))
   (immutable-listmap-lookup (instance-environment-instances (environment-instance-environment env)) class :no-error no-error))
 
 (defun synthesized-class-instance-constraints (pred)
@@ -1506,7 +1505,7 @@ Returns two values:
   (declare (type environment env))
   (let* ((pred-class (ty-predicate-class pred))
          (instances (lookup-class-instances env pred-class :no-error no-error)))
-    (fset:do-seq (instance instances)
+    (dolist (instance instances)
       (handler-case
           (let ((subs (predicate-match (ty-class-instance-predicate instance) pred)))
             (return-from lookup-class-instance (values instance subs)))
@@ -1563,7 +1562,9 @@ Returns two values:
   (unless (lookup-class env class)
     (error "Class ~S does not exist." class))
 
-  (fset:do-seq (inst (lookup-class-instances env class :no-error t) :index index)
+  (loop :for inst :in (lookup-class-instances env class :no-error t)
+        :for index :from 0
+        :do
     (when (handler-case (or (predicate-mgu (ty-class-instance-predicate value)
                                            (ty-class-instance-predicate inst))
                             t)
@@ -1664,7 +1665,9 @@ Returns two values:
          (to-scheme (quantify (type-variables to-ty)
                               (qualify nil to-ty))))
 
-    (fset:do-seq (elem (immutable-listmap-lookup (environment-specialization-environment env) from :no-error t) :index index)
+    (loop :for elem :in (immutable-listmap-lookup (environment-specialization-environment env) from :no-error t)
+          :for index :from 0
+          :do
       (let* ((type (specialization-entry-to-ty elem))
              (scheme (quantify (type-variables type)
                                (qualify nil type))))
@@ -1702,7 +1705,7 @@ Returns two values:
            (type symbol from)
            (type symbol to)
            (values (or null specialization-entry) &optional))
-  (fset:do-seq (elem (immutable-listmap-lookup (environment-specialization-environment env) from :no-error no-error))
+  (dolist (elem (immutable-listmap-lookup (environment-specialization-environment env) from :no-error no-error))
     (when (eq to (specialization-entry-to elem))
       (return-from lookup-specialization elem)))
 
@@ -1714,7 +1717,7 @@ Returns two values:
            (type symbol from)
            (type ty ty)
            (values (or null specialization-entry) &optional))
-  (fset:do-seq (elem (immutable-listmap-lookup (environment-specialization-environment env) from :no-error no-error))
+  (dolist (elem (immutable-listmap-lookup (environment-specialization-environment env) from :no-error no-error))
     (handler-case
         (progn
           (match (specialization-entry-to-ty elem) ty)
@@ -1875,7 +1878,7 @@ This function will return the single functional dependency
                           pred-tys)
           :do (block update-block
                 ;; Try to find a matching relation for the current fundep
-                (fset:do-seq (s state)
+                (dolist (s state)
                   ;; If the left side matches checking either direction
                   (when (or (handler-case
                                 (progn
@@ -1942,7 +1945,7 @@ This function will return the single functional dependency
 
          (new-pred (make-ty-predicate :class class-name :types vars :location (source:location pred))))
 
-    (fset:do-seq (inst (lookup-class-instances env class-name))
+    (dolist (inst (lookup-class-instances env class-name))
       (handler-case
           (progn
             (predicate-mgu new-pred (ty-class-instance-predicate inst))
@@ -2137,7 +2140,7 @@ predicates with all substitutions applied and the new substitutions."
 
 (defun generate-fundep-subs-for-pred% (pred state class-variables fundep subs)
   (declare (type ty-predicate pred)
-           (type fset:seq state)
+           (type list state)
            (type util:symbol-list class-variables)
            (type fundep fundep)
            (type substitution-list subs)
@@ -2152,7 +2155,7 @@ predicates with all substitutions applied and the new substitutions."
                     class-variables
                     (ty-predicate-types pred))))
 
-    (fset:do-seq (entry state)
+    (dolist (entry state)
       (handler-case
           (let* ((fresh-entry (fresh-fundep-entry entry))
                  (left-subs (match-list from-tys (fundep-entry-from fresh-entry)))
