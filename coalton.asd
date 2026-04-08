@@ -197,8 +197,7 @@
                "fiasco")
   :pathname "src/testing/"
   :serial t
-  :components (#+abcl(:file "compat/abcl-fiasco-patch")
-               (:file "package")
+  :components ((:file "package")
                (:file "coalton-native-test-utils")))
 
 ;;; we need to inspect the sbcl version in order to decide which version of the hashtable shim to load,
@@ -271,8 +270,7 @@
                            (error "Tests failed")))
   :pathname "tests/"
   :serial t
-  :components (#+abcl(:file "compat/abcl-fiasco-patch")
-               (:file "package")
+  :components ((:file "package")
                (:file "loader")
                (:file "utilities")
                (:file "source-tests")
