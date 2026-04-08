@@ -5,7 +5,8 @@
    #:coalton-impl/codegen/ast)
   (:import-from
    #:coalton-impl/algorithm
-   #:immutable-map-data)
+   #:immutable-map-data
+   #:do-immutable-map)
   (:import-from
    #:coalton-impl/codegen/typecheck-node
    #:typecheck-node)
@@ -97,7 +98,7 @@ mapping known function names to their arity."
            (values hash-table &optional))
   (let ((table (make-hash-table))
         (fun-env (tc:environment-function-environment env)))
-    (fset:do-map (name entry (immutable-map-data fun-env))
+    (do-immutable-map (name entry fun-env)
       (setf (gethash name table) (tc:function-env-entry-arity entry)))
     table))
 
