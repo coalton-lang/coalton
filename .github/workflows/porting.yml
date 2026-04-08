@@ -87,8 +87,6 @@ jobs:
           (cl:handler-case
             (cl:progn
               (load "/.abclrc")
-                ;; Ensure fiasco is patched in abcl
-                (ql:quickload :fiasco) (load "compat/abcl-fiasco-patch")
               (setq system:*safety* ${{ matrix.SAFETY }})
               (ql:quickload :coalton/tests)
               (asdf:test-system :coalton/tests)
