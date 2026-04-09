@@ -7,6 +7,22 @@
 (in-package #:mine/app/executable)
 
 (defun build ()
+  ;; Load SBCL contrib modules so they are available in the saved image.
+  ;; sb-alien is part of core SBCL and is always available.
+  ;; sb-perf is Linux-only; sb-simd is x86-64-only.
+  (let ((modules '("sb-bsd-sockets" "sb-cltl2"
+                    "sb-concurrency" "sb-cover" "sb-introspect"
+                    "sb-md5" "sb-posix" "sb-queue"
+                    "sb-rotate-byte" "sb-sprof"
+                    #+x86-64 "sb-simd"
+                    #+linux  "sb-perf")))
+    (dolist (name modules)
+      (require name))
+    ;; Register each with ASDF as immutable now, since `require' may
+    ;; bypass ASDF and the modules wouldn't be caught by the
+    ;; immutability loop below.
+    (dolist (name modules)
+      (asdf:register-immutable-system name)))
   ;; Reset platform state that won't survive the image save
   (mine/bindings/terminal:terminal-reset-for-image-save)
   ;; Remove Quicklisp from the image so the runtime can detect whether
