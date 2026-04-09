@@ -15,4 +15,5 @@ mine:
 		--eval '(mine/app/mine:build)'
 
 clean:
+	find . -type f -name '*.fasl' -print -delete
 	rm -f mine
