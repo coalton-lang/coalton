@@ -256,19 +256,25 @@ Returns (event next-pos)."
         ;; SGR mouse sequence
         (match (parse-csi-params buf start)
           ((Tuple3 params final-byte next)
-           (match params
-             ((Cons btn (Cons col1 (Cons row1 _)))
-              (let col = (if (> col1 0) (- col1 1) 0))
-              (let row = (if (> row1 0) (- row1 1) 0))
-              (Tuple (IEvMouse (decode-mouse-action btn final-byte)
-                               (decode-mouse-button btn)
-                               col row)
-                     next))
-             (_ (Tuple (IEvKey (KeyUnknown 91) ModNone) next)))))
+           (if (== final-byte 0)
+               ;; Incomplete sequence -- preserve bytes for next read
+               (Tuple IEvNone (- start 2))
+               (match params
+                 ((Cons btn (Cons col1 (Cons row1 _)))
+                  (let col = (if (> col1 0) (- col1 1) 0))
+                  (let row = (if (> row1 0) (- row1 1) 0))
+                  (Tuple (IEvMouse (decode-mouse-action btn final-byte)
+                                   (decode-mouse-button btn)
+                                   col row)
+                         next))
+                 (_ (Tuple (IEvKey (KeyUnknown 91) ModNone) next))))))
         ;; Regular CSI sequence
         (match (parse-csi-params buf start)
           ((Tuple3 params final-byte next)
-           (Tuple (dispatch-csi-final params final-byte) next)))))
+           (if (== final-byte 0)
+               ;; Incomplete sequence -- preserve bytes for next read
+               (Tuple IEvNone (- start 2))
+               (Tuple (dispatch-csi-final params final-byte) next))))))
 
   (declare dispatch-csi-final ((List UFix) * UFix -> InputEvent))
   (define (dispatch-csi-final params final-byte)
