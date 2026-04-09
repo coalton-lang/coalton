@@ -11,6 +11,7 @@ mine:
 	env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
 		$(SBCL) \
 		--load $(QUICKLISP_SETUP) \
+		--eval '(pushnew :coalton-portable-bigfloat *features*)' \
 		--eval '(asdf:load-system "mine" :verbose t)' \
 		--eval '(mine/app/executable:build)'
 
