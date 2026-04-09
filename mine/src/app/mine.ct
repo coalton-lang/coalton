@@ -391,6 +391,75 @@
     ;; Cursor is already positioned by input-widget-render
     (values))
 
+;;; Welcome screen
+
+  (declare render-welcome (screen:Screen * wt:Rect -> Void))
+  (define (render-welcome scr rect)
+    "Render the welcome screen when no file is open."
+    (let rx = (wt:.rect-x rect))
+    (let ry = (wt:.rect-y rect))
+    (let rw = (wt:.rect-width rect))
+    (let rh = (wt:.rect-height rect))
+    (let bold-blue = (color:Style color:sky-blue color:ColorDefault color:AttrBold))
+    (let bold = (color:Style color:text-fg color:ColorDefault color:AttrBold))
+    (let dim = (color:Style color:text-dim-fg color:ColorDefault color:AttrNone))
+    ;; Check if ~/.mine exists
+    (let has-config = (lisp (-> Boolean) ()
+                       (cl:if (cl:probe-file
+                               (cl:merge-pathnames ".mine" (cl:user-homedir-pathname)))
+                              cl:t cl:nil)))
+    ;; Line count: welcome + blank + 4 keys = 6, or welcome + setup + blank + 4 keys = 7
+    (let line-count = (if has-config 6 7))
+    (let cy = (if (> rh line-count)
+                  (+ ry (lisp (-> UFix) (rh line-count) (cl:floor (cl:- rh line-count) 2)))
+                  ry))
+    ;; Row 0: "Welcome to mine."
+    (let welcome-prefix = "Welcome to ")
+    (let welcome-name = "mine")
+    (let welcome-suffix = ".")
+    (let welcome-w = (+ (str:length welcome-prefix)
+                        (+ (str:length welcome-name)
+                           (str:length welcome-suffix))))
+    (let cx = (if (> rw welcome-w)
+                  (+ rx (lisp (-> UFix) (rw welcome-w) (cl:floor (cl:- rw welcome-w) 2)))
+                  rx))
+    (render:draw-text scr cy cx welcome-prefix dim)
+    (render:draw-text scr cy (+ cx (str:length welcome-prefix)) welcome-name bold-blue)
+    (render:draw-text scr cy (+ cx (+ (str:length welcome-prefix) (str:length welcome-name)))
+                      welcome-suffix dim)
+    ;; Optional setup wizard line
+    (when (not has-config)
+      (let setup-pre = "Run ")
+      (let setup-key = "F6:Site > Setup Wizard")
+      (let setup-post = " to configure.")
+      (let setup-w = (+ (str:length setup-pre)
+                        (+ (str:length setup-key) (str:length setup-post))))
+      (let setup-x = (if (> rw setup-w)
+                         (+ rx (lisp (-> UFix) (rw setup-w) (cl:floor (cl:- rw setup-w) 2)))
+                         rx))
+      (render:draw-text scr (+ cy 1) setup-x setup-pre dim)
+      (render:draw-text scr (+ cy 1) (+ setup-x (str:length setup-pre)) setup-key bold)
+      (render:draw-text scr (+ cy 1) (+ setup-x (+ (str:length setup-pre) (str:length setup-key)))
+                        setup-post dim))
+    ;; Keybinding lines (offset by 2 if config exists, 3 if setup line shown)
+    (let key-y = (+ cy (if has-config 2 3)))
+    (let draw-key-line =
+      (fn (row key desc)
+        (let line-w = (+ (str:length key) (+ 1 (str:length desc))))
+        (let lx = (if (> rw line-w)
+                      (+ rx (lisp (-> UFix) (rw line-w) (cl:floor (cl:- rw line-w) 2)))
+                      rx))
+        (render:draw-text scr row lx key bold)
+        (render:draw-text scr row (+ lx (str:length key))
+                          (str:concat " " desc) dim)))
+    (draw-key-line key-y       "Ctrl+R" "to start a REPL")
+    (draw-key-line (+ key-y 1) "Ctrl+O" "to open a file")
+    (draw-key-line (+ key-y 2) "Ctrl+H" "for help and keybindings")
+    (draw-key-line (+ key-y 3) "Ctrl+Q" "to quit")
+    (values))
+
+;;; Editor pane
+
   (declare render-editor-pane (MineState * screen:Screen * wt:Rect -> Void))
   (define (render-editor-pane st scr editor-rect)
     "Render the editor pane into the given rect."
@@ -426,7 +495,8 @@
        (editor:%editor-scrollbar scr editor-rect (buf:buffer-gap buf)
                                  (editor:editor-pane-scroll-row (.ms-editor st))))
       ((None)
-       (render:fill-rect scr editor-rect #\Space color:default-style))))
+       (render:fill-rect scr editor-rect #\Space color:default-style)
+       (render-welcome scr editor-rect))))
 
   (declare render-editor-cursor (MineState * screen:Screen -> Void))
   (define (render-editor-cursor st scr)
@@ -3874,6 +3944,9 @@ Render-app is NOT called here; the main loop handles rendering."
                          (_ (handle-key st term key mod))))))
               ((input:KeyCtrl #\q)
                (try-quit! st term))
+              ;; Ctrl+H: help screen
+              ((input:KeyCtrl #\h)
+               (help:show-help! term))
               ;; Ctrl+G: refresh terminal (force full redraw)
               ((input:KeyCtrl #\g)
                (screen:screen-invalidate-all! (term:.terminal-screen term)))
