@@ -5129,6 +5129,26 @@ Directories get a trailing /."
     (cl:delete-package "QUICKLISP-CLIENT"))
   (cl:when (cl:find-package "QUICKLISP")
     (cl:delete-package "QUICKLISP"))
+  ;; Clear ASDF state that contains build-machine paths.  Without this,
+  ;; *central-registry* keeps the builder's Quicklisp path and the
+  ;; output-translations point at the builder's FASL cache, causing
+  ;; errors (e.g. trying to create /home/runner/) on the end-user's
+  ;; machine.  The runtime re-populates these from the user's config.
+  (cl:setf asdf:*central-registry* cl:nil)
+  (asdf:clear-output-translations)
+  (asdf:clear-source-registry)
+  ;; Mark all loaded systems as immutable so ASDF never tries to
+  ;; recompile them or probe their (now stale) source paths.  Remove
+  ;; unloaded systems entirely — their source won't exist on the
+  ;; user's machine.
+  (cl:let ((to-remove cl:nil))
+    (asdf:map-systems
+     (cl:lambda (s)
+       (cl:if (asdf:component-loaded-p s)
+              (asdf:register-immutable-system (asdf:component-name s))
+              (cl:push (asdf:component-name s) to-remove))))
+    (cl:dolist (name to-remove)
+      (asdf:clear-system name)))
   (sb-ext:save-lisp-and-die
    #+win32 "mine.exe" #-win32 "mine"
    :toplevel (cl:lambda ()
