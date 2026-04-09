@@ -211,20 +211,20 @@ Prompt is shown on the first visible line; continuation lines are indented."
     (let nlines = (+ 1 (%count-newlines text)))
     ;; Draw each visible line
     (let text-w = (if (>= w plen) (- w plen) 0))
-    (%render-lines iw scr x0 y0 w h scroll nlines text prompt plen text-w ps ts)
+    ;; Horizontal scroll for the cursor's line
+    (let cursor-line-scroll = (if (< ccol text-w) 0 (+ 1 (- ccol text-w))))
+    (%render-lines iw scr x0 y0 w h scroll nlines text prompt plen text-w crow cursor-line-scroll ps ts)
     ;; Position cursor
     (let cursor-screen-row = (+ y0 (- crow scroll)))
-    ;; Compute horizontal scroll for the cursor's line
-    (let line-scroll = (if (< ccol text-w) 0 (+ 1 (- ccol text-w))))
-    (screen:screen-set-cursor scr cursor-screen-row (+ x0 (+ plen (- ccol line-scroll))))
+    (screen:screen-set-cursor scr cursor-screen-row (+ x0 (+ plen (- ccol cursor-line-scroll))))
     (values))
 
   (declare %render-lines
     (InputWidget * screen:Screen * UFix * UFix * UFix * UFix * UFix * UFix
-     * String * String * UFix * UFix * color:Style * color:Style -> Void))
-  (define (%render-lines _iw scr x0 y0 _w h scroll nlines text prompt plen text-w ps ts)
+     * String * String * UFix * UFix * UFix * UFix * color:Style * color:Style -> Void))
+  (define (%render-lines _iw scr x0 y0 _w h scroll nlines text prompt plen text-w crow cursor-line-scroll ps ts)
     "Render visible lines of the input widget."
-    (lisp (-> Void) (scr x0 y0 h scroll nlines text prompt plen text-w ps ts)
+    (lisp (-> Void) (scr x0 y0 h scroll nlines text prompt plen text-w crow cursor-line-scroll ps ts)
       (cl:dotimes (vi h)
         (cl:let* ((line-idx (cl:+ scroll vi))
                   (row (cl:+ y0 vi)))
@@ -237,10 +237,12 @@ Prompt is shown on the first visible line; continuation lines are indented."
             ;; Get line text
             (cl:let* ((line-text (mine/widget/input::%get-line text line-idx))
                       (line-len (cl:length line-text))
-                      ;; Horizontal scroll per line (only scroll the line the cursor is on)
-                      (line-scroll (cl:if (cl:> line-len text-w)
-                                          (cl:max 0 (cl:- line-len text-w))
-                                          0))
+                      ;; Use cursor-aware scroll for the cursor's line
+                      (line-scroll (cl:if (cl:= line-idx crow)
+                                          cursor-line-scroll
+                                          (cl:if (cl:> line-len text-w)
+                                                 (cl:max 0 (cl:- line-len text-w))
+                                                 0)))
                       (visible (cl:subseq line-text
                                           (cl:min line-scroll line-len)
                                           (cl:min (cl:+ line-scroll text-w) line-len))))
