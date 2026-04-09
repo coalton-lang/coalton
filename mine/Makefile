@@ -12,7 +12,7 @@ mine:
 		$(SBCL) \
 		--load $(QUICKLISP_SETUP) \
 		--eval '(asdf:load-system "mine" :verbose t)' \
-		--eval '(mine/app/mine:build)'
+		--eval '(mine/app/executable:build)'
 
 clean:
 	find . -type f -name '*.fasl' -print -delete

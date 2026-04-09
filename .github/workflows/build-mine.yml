@@ -44,7 +44,7 @@ jobs:
             sbcl --dynamic-space-size 4096 \
             --noinform --non-interactive \
             --eval '(ql:quickload "mine" :verbose t)' \
-            --eval '(mine/app/mine:build)'
+            --eval '(mine/app/executable:build)'
 
       - name: Build mine (Windows)
         if: runner.os == 'Windows'
@@ -55,7 +55,7 @@ jobs:
           sbcl --dynamic-space-size 4096 `
             --noinform --non-interactive `
             --eval '(ql:quickload "mine" :verbose t)' `
-            --eval '(mine/app/mine:build)'
+            --eval '(mine/app/executable:build)'
 
       # --- Upload ---
 

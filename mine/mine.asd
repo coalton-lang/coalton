@@ -146,4 +146,5 @@
     :components ((:ct-file "commands")
                  (:ct-file "setup")
                  (:ct-file "help")
-                 (:ct-file "mine")))))
+                 (:ct-file "mine")
+                 (:file "executable")))))
