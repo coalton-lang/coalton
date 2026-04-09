@@ -3,7 +3,7 @@
 ;;; Runtime server (no terminal dependency)
 (asdf:defsystem "mine/runtime"
   :description "Runtime server for the mine IDE."
-  :depends-on ("coalton")
+  :depends-on ("coalton" "coalton/xmath")
   :defsystem-depends-on ("coalton-asdf")
   :pathname "src/"
   :serial t
