@@ -15,6 +15,8 @@
 #+(or sbcl ccl) (pushnew :coalton-with-doc *features*)
 ;; abcl offers no TCE
 #-abcl (pushnew :coalton-env-has-tce *features*)
+;; ecl offers TCE but it is slow - github run times out
+#-ecl (pushnew :coalton-with-slow-tce-tests *features*)
 
 (asdf:defsystem "coalton"
   :description "An efficient, statically typed functional programming language that supercharges Common Lisp. "
