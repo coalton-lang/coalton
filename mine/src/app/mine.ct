@@ -67,6 +67,8 @@
 (cl:defvar *diagnostics-table* (cl:make-hash-table :test 'cl:equal)
   "Hash table: filepath (string) -> list of (line severity message).")
 (cl:defvar *hint-result* "" "Cached hint string for status bar.")
+(cl:defvar *heap-info-result* "" "Cached heap info string from runtime server.")
+(cl:defvar *heap-info-last-time* 0 "Internal-real-time of last heap-info request.")
 (cl:defvar *restart-into-setup* nil
   "When set to T by the Setup Wizard menu action, mine-main reruns the setup wizard.")
 
@@ -511,14 +513,8 @@
 
   (declare %heap-info (Void -> String))
   (define (%heap-info)
-    "Get heap usage as a string like '1.2/4.0 GB (30%)'."
-    (lisp (-> String) ()
-      (cl:let* ((used (sb-kernel:dynamic-usage))
-                (total (sb-ext:dynamic-space-size))
-                (used-gb (cl:/ used 1073741824.0d0))
-                (total-gb (cl:/ total 1073741824.0d0))
-                (pct (cl:if (cl:> total 0) (cl:round (cl:* 100 (cl:/ used total))) 0)))
-        (cl:format cl:nil "~,1F/~,1F GB (~D%)" used-gb total-gb pct))))
+    "Return cached heap info from the runtime server."
+    (lisp (-> String) () *heap-info-result*))
 
   (declare render-repl-status (MineState * screen:Screen * wt:Rect -> Void))
   (define (render-repl-status st scr rect)
@@ -563,7 +559,8 @@
       (screen:screen-set-string scr y col3 "Timing: " label-style)
       (screen:screen-set-string scr y (+ col3 8) timing val-style))
     (let col4 = (+ col3 (if (> (str:length timing) 0) (+ 8 (+ (the UFix (into (str:length timing))) 2)) 0)))
-    ;; Heap
+    ;; Heap (async from runtime server, throttled to every 2s)
+    (lisp (-> Unit) (st) (%request-heap-info st) Unit)
     (let heap = (%heap-info))
     (screen:screen-set-string scr y col4 "Heap: " label-style)
     (screen:screen-set-string scr y (+ col4 6) heap val-style)
@@ -647,19 +644,72 @@
                         cl:t cl:nil))
                cl:nil))))
 
+  (declare %cl-package-symbol? (String * String -> Boolean))
+  (define (%cl-package-symbol? input pkg-name)
+    "True if INPUT is a symbol (possibly package-qualified) whose home
+package :USEs CL.  Handles both bare names and pkg:sym / pkg::sym."
+    (lisp (-> Boolean) (input pkg-name)
+      (cl:let ((trimmed (cl:string-trim '(#\Space #\Tab #\Newline) input)))
+        (cl:if (cl:or (cl:zerop (cl:length trimmed))
+                      (cl:char= (cl:char trimmed 0) #\())
+               cl:nil
+               (cl:let ((colon-pos (cl:position #\: trimmed)))
+                 (cl:if colon-pos
+                        ;; Package-qualified: parse pkg:sym or pkg::sym
+                        (cl:let* ((pkg-str (cl:string-upcase
+                                            (cl:subseq trimmed 0 colon-pos)))
+                                  (name-start
+                                   (cl:if (cl:and (cl:< (cl:1+ colon-pos)
+                                                        (cl:length trimmed))
+                                                  (cl:char= (cl:char trimmed
+                                                               (cl:1+ colon-pos))
+                                                             #\:))
+                                          (cl:+ colon-pos 2)
+                                          (cl:1+ colon-pos)))
+                                  (sym-name (cl:string-upcase
+                                             (cl:subseq trimmed name-start)))
+                                  (pkg (cl:find-package pkg-str)))
+                          (cl:if pkg
+                                 (cl:multiple-value-bind (sym status)
+                                     (cl:find-symbol sym-name pkg)
+                                   (cl:declare (cl:ignore status))
+                                   (cl:if (cl:and sym (cl:symbol-package sym)
+                                                 (cl:member
+                                                  (cl:find-package "CL")
+                                                  (cl:package-use-list
+                                                   (cl:symbol-package sym))))
+                                          cl:t cl:nil))
+                                 cl:nil))
+                        ;; Bare symbol: look up in REPL package
+                        (cl:let ((pkg (cl:find-package pkg-name)))
+                          (cl:if (cl:null pkg)
+                                 cl:nil
+                                 (cl:multiple-value-bind (sym status)
+                                     (cl:find-symbol (cl:string-upcase trimmed)
+                                                     pkg)
+                                   (cl:declare (cl:ignore status))
+                                   (cl:if (cl:and sym (cl:symbol-package sym)
+                                                 (cl:member
+                                                  (cl:find-package "CL")
+                                                  (cl:package-use-list
+                                                   (cl:symbol-package sym))))
+                                          cl:t cl:nil))))))))))
+
   (declare %wrap-coalton-input (MineState * String -> String))
   (define (%wrap-coalton-input st input)
     "If in Coalton mode, wrap appropriately:
 - definitions -> (coalton-toplevel ...)
 - expressions -> (coalton ...)
 - already-toplevel forms -> verbatim
-- forms with a non-Coalton package prefix -> verbatim (CL escape)"
+- forms with a non-Coalton package prefix -> verbatim (CL escape)
+- bare symbols from CL-using packages -> verbatim"
     (if (== (cell:read (.ms-repl-lang st)) "Coalton")
         (cond
           ((%coalton-toplevel-form? input) input)
           ((%non-coalton-package-form? input) input)
           ((%coalton-definition-form? input)
            (<> "(coalton-toplevel " (<> input ")")))
+          ((%cl-package-symbol? input (cell:read (.ms-repl-package st))) input)
           (True (<> "(coalton " (<> input ")"))))
         input))
 
@@ -4969,9 +5019,11 @@ Directories get a trailing /."
     rid))
 
 (cl:defun %send-to-subprocess (st msg)
-  "Send a protocol message MSG (a list) to the subprocess. Returns T on success."
-  (cl:let ((stream (%native-box-value (mine/app/mine::get-conn-stream st))))
-    (cl:when (cl:and stream (cl:open-stream-p stream))
+  "Send a protocol message MSG (a list) to the subprocess. Returns T on success.
+Handles the debugger state where conn-stream is (msg-id . stream)."
+  (cl:let* ((raw (%native-box-value (mine/app/mine::get-conn-stream st)))
+            (stream (cl:if (cl:consp raw) (cl:cdr raw) raw)))
+    (cl:when (cl:and (cl:streamp stream) (cl:open-stream-p stream))
       (cl:handler-case
           (mine/protocol/server::write-message stream msg)
         (cl:error () cl:nil)))))
@@ -5028,6 +5080,33 @@ Directories get a trailing /."
              (cl:setf *hint-result* "")))))
 
 ;;; Async jump-to-definition
+
+;;; Async runtime heap info
+
+(cl:defun %request-heap-info (st)
+  "Send a :heap-info request to the runtime subprocess if enough time has passed."
+  (cl:let ((now (cl:get-internal-real-time))
+           (interval (cl:* 2 cl:internal-time-units-per-second)))
+    (cl:when (cl:> (cl:- now *heap-info-last-time*) interval)
+      (cl:setf *heap-info-last-time* now)
+      (cl:let ((rid (%next-request-id-cl st)))
+        (%register-pending-request rid
+          (cl:lambda (st payload)
+            (cl:declare (cl:ignore st))
+            (cl:when (cl:and (cl:consp payload) (cl:eq (cl:first payload) :ok))
+              (cl:let ((pair (cl:second payload)))
+                (cl:when (cl:consp pair)
+                  (cl:let* ((used  (cl:car pair))
+                            (total (cl:cdr pair))
+                            (used-gb  (cl:/ used 1073741824.0d0))
+                            (total-gb (cl:/ total 1073741824.0d0))
+                            (pct (cl:if (cl:> total 0)
+                                        (cl:round (cl:* 100 (cl:/ used total)))
+                                        0)))
+                    (cl:setf *heap-info-result*
+                      (cl:format cl:nil "~,1F/~,1F GB (~D%)"
+                                 used-gb total-gb pct))))))))
+        (%send-to-subprocess st (cl:list :heap-info rid))))))
 
 (cl:defvar *pending-jump-source* nil "(filepath . position) for jump-back stack.")
 

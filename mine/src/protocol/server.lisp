@@ -72,6 +72,12 @@ Returns :quit if the server should shut down, T otherwise."
        (let ((id (second msg)))
          (write-message stream `(:return ,id (:ok :pong)))))
 
+      (:heap-info
+       (let* ((id (second msg))
+              (used (sb-kernel:dynamic-usage))
+              (total (sb-ext:dynamic-space-size)))
+         (write-message stream `(:return ,id (:ok ,(cons used total))))))
+
       (:quit
        (let ((id (second msg)))
          (write-message stream `(:return ,id (:ok :goodbye)))
@@ -234,7 +240,7 @@ Returns the symbol or NIL."
                          (write-message stream
                            `(:notify (:output ,(format nil ";; ~A" line)))))))
                  (error () nil)))))
-        (let ((*error-output* (make-broadcast-stream *error-output* stderr-capture)))
+        (let ((*error-output* stderr-capture))
           (restart-case
               (handler-case
                   (multiple-value-bind (result output)
