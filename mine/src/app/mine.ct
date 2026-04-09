@@ -4044,6 +4044,7 @@ Render-app is NOT called here; the main loop handles rendering."
     (let rp = (repl:repl-pane-new))
     (let fm = (focus:focus-new))
     (let rm = (lifecycle:runtime-manager-new))
+    (lifecycle:runtime-set-heap-size! rm (cfgt:.config-repl-heap-size config))
     (let tp = (tree:tree-pane-new))
     (let st = (MineState (menubar:menubar-new) (status:statusbar-new)
                          ep bm cs rp tp fm rm
