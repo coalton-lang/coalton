@@ -77,6 +77,11 @@
     :serial t
     :components ((:ct-file "file-system")))
 
+   ;; Undo tree (no buffer dependency; loaded early so Buffer can embed it)
+   (:module "edit-undo"
+    :pathname "edit"
+    :components ((:ct-file "undo")))
+
    ;; Text buffer
    (:module "buffer"
     :serial t
@@ -97,7 +102,6 @@
    (:module "edit"
     :serial t
     :components ((:ct-file "cursor")
-                 (:ct-file "undo")
                  (:ct-file "operations")
                  (:ct-file "clipboard")))
 
