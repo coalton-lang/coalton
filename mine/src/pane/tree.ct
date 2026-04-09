@@ -26,6 +26,7 @@
    #:tree-pane-selected-is-dir?
    #:tree-pane-add-open-file!
    #:tree-pane-remove-open-file!
+   #:tree-pane-remove-open-files-under!
    #:tree-pane-open-files
    #:tree-pane-selected-index
    #:tree-pane-set-selected!
@@ -175,6 +176,26 @@ When a project tree exists, returns a fixed height so the tree never shifts."
                (>= (cell:read (.open-selected tp)) new-count))
       (cell:write! (.open-selected tp) (if (> new-count 0) (- new-count 1) 0)))
     ;; If open files empty and in open section, switch to tree
+    (when (and (cell:read (.in-open-sec tp)) (== new-count 0))
+      (cell:write! (.in-open-sec tp) False))
+    (values))
+
+  (declare tree-pane-remove-open-files-under! (TreePane * String -> Void))
+  (define (tree-pane-remove-open-files-under! tp dir-prefix)
+    "Remove open files whose path starts with DIR-PREFIX."
+    (cell:write! (.open-files tp)
+      (list:filter (fn (entry)
+                     (let p = (snd entry))
+                     (lisp (-> Boolean) (p dir-prefix)
+                       (cl:let ((plen (cl:length dir-prefix)))
+                         (cl:if (cl:and (cl:<= plen (cl:length p))
+                                        (cl:string= p dir-prefix :end1 plen))
+                                False True))))
+                   (cell:read (.open-files tp))))
+    (let new-count = (length (cell:read (.open-files tp))))
+    (when (and (> (cell:read (.open-selected tp)) 0)
+               (>= (cell:read (.open-selected tp)) new-count))
+      (cell:write! (.open-selected tp) (if (> new-count 0) (- new-count 1) 0)))
     (when (and (cell:read (.in-open-sec tp)) (== new-count 0))
       (cell:write! (.in-open-sec tp) False))
     (values))

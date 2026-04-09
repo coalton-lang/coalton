@@ -16,6 +16,7 @@
    #:bufmgr-save!
    #:bufmgr-close!
    #:bufmgr-force-close!
+   #:bufmgr-close-under-path!
    #:bufmgr-find-by-path
    #:bufmgr-get
    #:bufmgr-current
@@ -135,6 +136,35 @@ Returns True if closed successfully."
             (cell:write! (.current mgr) None)
             (values)))
          ((None) (values))))))
+
+  (declare bufmgr-close-under-path! (BufferManager * String -> Void))
+  (define (bufmgr-close-under-path! mgr dir-prefix)
+    "Close all buffers whose file path starts with DIR-PREFIX."
+    (let tbl = (cell:read (.buffers mgr)))
+    (let limit = (cell:read (.next-id mgr)))
+    (%close-under-path tbl mgr dir-prefix 0 limit)
+    (values))
+
+  (declare %close-under-path (ht:HashTable UFix buf:Buffer * BufferManager * String * UFix * UFix -> Void))
+  (define (%close-under-path tbl mgr prefix i limit)
+    (when (< i limit)
+      (match (ht:get tbl i)
+        ((Some b)
+         (when (%path-starts-with? b prefix)
+           (bufmgr-force-close! mgr (buf:BufferId i))))
+        ((None) (values)))
+      (%close-under-path tbl mgr prefix (+ i 1) limit)))
+
+  (declare %path-starts-with? (buf:Buffer * String -> Boolean))
+  (define (%path-starts-with? b prefix)
+    (match (buf:buffer-path b)
+      ((None) False)
+      ((Some p)
+       (lisp (-> Boolean) (p prefix)
+         (cl:let ((plen (cl:length prefix)))
+           (cl:if (cl:and (cl:<= plen (cl:length p))
+                          (cl:string= p prefix :end1 plen))
+                  True False))))))
 
   ;;; Lookup
 
