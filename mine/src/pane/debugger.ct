@@ -81,7 +81,7 @@
          ((>= y max-y) y)
          (True
           (let label = (<> "  " (<> (into idx) (<> ": " desc))))
-          (let style = (color:with-fg color:default-style (color:ColorRGB 252 175 62)))
+          (let style = (color:with-fg color:default-style color:warning-fg))
           (screen:screen-set-string scr y x label style)
           (render-restarts scr rest (+ y 1) x max-y))))))
 
@@ -120,7 +120,7 @@ Shows the condition at the top, followed by restarts and stack frames."
     (let w = (wt:.rect-width rect))
     (let max-y = (+ (wt:.rect-y rect) (wt:.rect-height rect)))
     (let header-style = (color:with-attr
-                          (color:with-fg color:default-style (color:ColorRGB 239 41 41))
+                          (color:with-fg color:default-style color:error-fg)
                           color:AttrBold))
     ;; Clear the pane.
     (render:fill-rect scr rect #\Space color:default-style)

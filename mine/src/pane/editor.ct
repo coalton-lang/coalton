@@ -175,9 +175,9 @@ Shows line numbers in the gutter and highlights the current line."
                           (- (wt:.rect-width rect) gw)
                           1))
     ;; Gutter style.
-    (let gutter-style = (color:with-fg color:default-style (color:ColorRGB 85 87 83)))
+    (let gutter-style = (color:with-fg color:default-style color:gutter-fg))
     ;; Highlight style for the current line.
-    (let hl-style = (color:with-bg color:default-style (color:ColorRGB 54 60 60)))
+    (let hl-style = (color:with-bg color:default-style color:current-line-bg))
     ;; Extract rect fields and convert booleans before entering lisp form
     (let rect-x0 = (wt:.rect-x rect))
     (let rect-y0 = (wt:.rect-y rect))
@@ -232,18 +232,18 @@ Shows line numbers in the gutter and highlights the current line."
                                         (cl:cond
                                           ((cl:eq diag-sev :error)
                                            (mine/term/color::Style
-                                             (mine/term/color::ColorRGB 239 41 41)
-                                             (mine/term/color::ColorRGB 0 0 0)
+                                             mine/term/color::error-fg
+                                             mine/term/color::black
                                              mine/term/color::AttrBold))
                                           ((cl:eq diag-sev :warning)
                                            (mine/term/color::Style
-                                             (mine/term/color::ColorRGB 252 175 62)
-                                             (mine/term/color::ColorRGB 0 0 0)
+                                             mine/term/color::warning-fg
+                                             mine/term/color::black
                                              mine/term/color::AttrNone))
                                           (cl:t
                                            (mine/term/color::Style
-                                             (mine/term/color::ColorRGB 252 233 79)
-                                             (mine/term/color::ColorRGB 0 0 0)
+                                             mine/term/color::info-fg
+                                             mine/term/color::black
                                              mine/term/color::AttrNone)))))
                                (render-line-number scr y (cl:1+ line-idx) rect-x0 gw diag-style))
                              (render-line-number scr y (cl:1+ line-idx) rect-x0 gw gutter-style))))
@@ -272,11 +272,11 @@ Shows line numbers in the gutter and highlights the current line."
   (declare %editor-scrollbar (screen:Screen * wt:Rect * gap:GapBuffer * UFix -> Void))
   (define (%editor-scrollbar scr rect gb scroll-row)
     (let sb-col = (- (+ (wt:.rect-x rect) (wt:.rect-width rect)) 1))
-    (let track-s = (color:Style (color:ColorRGB 60 66 66)
-                                 (color:ColorRGB 46 52 52)
+    (let track-s = (color:Style color:scrollbar-track-fg
+                                 color:scrollbar-track-bg
                                  color:AttrNone))
-    (let thumb-s = (color:Style (color:ColorRGB 186 189 182)
-                                 (color:ColorRGB 46 52 52)
+    (let thumb-s = (color:Style color:scrollbar-thumb-fg
+                                 color:scrollbar-track-bg
                                  color:AttrNone))
     (render:draw-scrollbar scr sb-col (wt:.rect-y rect) (wt:.rect-height rect)
                            (gap:gap-line-count gb) scroll-row
@@ -292,9 +292,9 @@ Shows line numbers in the gutter and highlights the current line."
 
 (coalton-toplevel
 
-  (define selection-bg   (color:ColorRGB 72 61 139))
-  (define search-bg      (color:ColorRGB 161 105 18))
-  (define search-current-bg (color:ColorRGB 214 138 22))
+  (define selection-bg   color:selection-bg)
+  (define search-bg      color:search-match-bg)
+  (define search-current-bg color:search-current-bg)
 
   (declare %build-vcol-map (String * UFix -> (Vector UFix)))
   (define (%build-vcol-map text tab-w)
@@ -344,8 +344,8 @@ Shows line numbers in the gutter and highlights the current line."
                                 line-buf-offset sel-start sel-end tab-w)
     "Draw characters TEXT[CHAR-START..CHAR-END) with tab expansion."
     (let sel-style = (color:Style (color:.style-fg style) selection-bg (color:.style-attr style)))
-    (let search-style = (color:Style (color:ColorRGB 0 0 0) search-bg color:AttrNone))
-    (let search-cur-style = (color:Style (color:ColorRGB 0 0 0) search-current-bg color:AttrBold))
+    (let search-style = (color:Style color:black search-bg color:AttrNone))
+    (let search-cur-style = (color:Style color:black search-current-bg color:AttrBold))
     (let vm-len = (vec:length vcol-map))
     (let end = (min char-end (if (> vm-len 0) (- vm-len 1) 0)))
     (lisp (-> Void) (scr y text-x text char-start end style

@@ -53,11 +53,11 @@
   (declare repl-pane-new (Void -> ReplPane))
   (define (repl-pane-new)
     "Create a new REPL pane with the default Coalton prompt."
-    (let prompt-style = (color:Style (color:ColorRGB 114 159 207)
-                                      (color:ColorRGB 37 43 43)
+    (let prompt-style = (color:Style color:accent-fg
+                                      color:repl-bg
                                       color:AttrBold))
-    (let text-style = (color:Style (color:ColorRGB 238 238 236)
-                                    (color:ColorRGB 37 43 43)
+    (let text-style = (color:Style color:text-fg
+                                    color:repl-bg
                                     color:AttrNone))
     (let iw = (widget-input:input-widget-new "> " prompt-style text-style))
     (ReplPane (widget-text:text-widget-new color:default-style)
@@ -253,11 +253,11 @@
        (let total-lines = (widget-text:text-widget-line-count (.output rp)))
        (let scroll-off = (cell:read (widget-text:.tw-scroll (.output rp))))
        (let sb-col = (- (+ (wt:.rect-x rect) (wt:.rect-width rect)) 1))
-       (let track-s = (color:Style (color:ColorRGB 60 66 66)
-                                     (color:ColorRGB 46 52 52)
+       (let track-s = (color:Style color:scrollbar-track-fg
+                                     color:scrollbar-track-bg
                                      color:AttrNone))
-       (let thumb-s = (color:Style (color:ColorRGB 186 189 182)
-                                     (color:ColorRGB 46 52 52)
+       (let thumb-s = (color:Style color:scrollbar-thumb-fg
+                                     color:scrollbar-track-bg
                                      color:AttrNone))
        (render:draw-scrollbar scr sb-col (wt:.rect-y rect) (- h 1)
                                total-lines scroll-off track-s thumb-s)
