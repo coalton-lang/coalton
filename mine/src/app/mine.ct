@@ -2479,6 +2479,10 @@ Handles terminal resize by calling REDRAW-FN."
                 (paredit:paredit-open-paren! (buf:buffer-gap buf) (.ms-undo st) (.ms-cursor st)))
                ((== ch #\))
                 (paredit:paredit-close-paren! (buf:buffer-gap buf) (.ms-undo st) (.ms-cursor st)))
+               ((== ch #\[)
+                (paredit:paredit-open-bracket! (buf:buffer-gap buf) (.ms-undo st) (.ms-cursor st)))
+               ((== ch #\])
+                (paredit:paredit-close-bracket! (buf:buffer-gap buf) (.ms-undo st) (.ms-cursor st)))
                ((== ch #\")
                 (paredit:paredit-doublequote! (buf:buffer-gap buf) (.ms-undo st) (.ms-cursor st)))
                (True
