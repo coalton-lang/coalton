@@ -400,7 +400,7 @@
     (let ry = (wt:.rect-y rect))
     (let rw = (wt:.rect-width rect))
     (let rh = (wt:.rect-height rect))
-    (let bold-blue = (color:Style color:sky-blue color:ColorDefault color:AttrBold))
+    (let bold-blue = (color:Style color:baby-blue color:ColorDefault color:AttrBold))
     (let bold = (color:Style color:text-fg color:ColorDefault color:AttrBold))
     (let dim = (color:Style color:text-dim-fg color:ColorDefault color:AttrNone))
     ;; Check if ~/.mine exists
@@ -3745,7 +3745,9 @@ Stores match positions in editor search state. Returns the total count."
   (define (dispatch-menu-action! st term action)
     "Execute a menu action."
     (match action
-      ((menubar:ActionHelp) (help:show-help! term))
+      ((menubar:ActionHelp)
+       (when (help:show-help! term)
+         (try-quit! st term)))
       ((menubar:ActionAbout) (show-about! st term))
       ((menubar:ActionQuit) (try-quit! st term))
       ((menubar:ActionNewProject)
@@ -3946,7 +3948,8 @@ Render-app is NOT called here; the main loop handles rendering."
                (try-quit! st term))
               ;; Ctrl+H: help screen
               ((input:KeyCtrl #\h)
-               (help:show-help! term))
+               (when (help:show-help! term)
+                 (try-quit! st term)))
               ;; Ctrl+G: refresh terminal (force full redraw)
               ((input:KeyCtrl #\g)
                (screen:screen-invalidate-all! (term:.terminal-screen term)))
