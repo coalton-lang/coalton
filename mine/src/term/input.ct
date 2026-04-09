@@ -309,6 +309,23 @@ Returns (event next-pos)."
             ((== p 24) (IEvKey (KeyF 12) modifier))
             (True (IEvKey (KeyUnknown p) ModNone))))
          (_ (IEvKey (KeyUnknown 126) ModNone))))
+      ;; CSI u (progressive keyboard enhancement)
+      ((== final-byte 117)
+       (match params
+         ((Cons codepoint _)
+          (cond
+            ((== codepoint 13) (IEvKey KeyEnter modifier))
+            ((== codepoint 9)  (IEvKey KeyTab modifier))
+            ((== codepoint 27) (IEvKey KeyEscape modifier))
+            ((== codepoint 127) (IEvKey KeyBackspace modifier))
+            ;; Ctrl+letter: emit KeyCtrl to match legacy key bindings
+            ((and (== modifier ModCtrl)
+                  (and (>= codepoint 97) (<= codepoint 122)))
+             (IEvKey (KeyCtrl (ufix-to-char codepoint)) ModCtrl))
+            ((and (>= codepoint 32) (<= codepoint 126))
+             (IEvKey (KeyChar (ufix-to-char codepoint)) modifier))
+            (True (IEvKey (KeyUnknown codepoint) modifier))))
+         (_ (IEvKey (KeyUnknown 117) ModNone))))
       ;; Unknown
       (True (IEvKey (KeyUnknown final-byte) ModNone))))
 
@@ -358,6 +375,9 @@ Returns (event next-pos)."
                (True
                 (let fb = (vec-ref buf (+ pos 2)))
                 (Tuple (dispatch-ss3 fb) (+ pos 3)))))
+            ;; ESC + Enter -> Alt+Enter
+            ((or (== next-byte 13) (== next-byte 10))
+             (Tuple (IEvKey KeyEnter ModAlt) (+ pos 2)))
             ;; ESC + printable -> Alt+key
             ((and (>= next-byte 32) (<= next-byte 126))
              (Tuple (IEvKey (KeyChar (ufix-to-char next-byte)) ModAlt)

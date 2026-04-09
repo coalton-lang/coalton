@@ -713,6 +713,30 @@ package :USEs CL.  Handles both bare names and pkg:sym / pkg::sym."
           (True (<> "(coalton " (<> input ")"))))
         input))
 
+  (declare %append-input-to-output! (MineState * String * String -> Void))
+  (define (%append-input-to-output! st prefix input-text)
+    "Append input text to REPL output, splitting multi-line input into separate lines.
+First line gets PREFIX, continuation lines get spaces of the same width."
+    (let rp = (.ms-repl st))
+    (let plen = (str:length prefix))
+    (let cont = (lisp (-> String) (plen)
+                  (cl:make-string plen :initial-element #\Space)))
+    (lisp (-> Void) (rp prefix cont input-text)
+      (cl:let ((start 0)
+               (len (cl:length input-text))
+               (first-line cl:t))
+        (cl:loop
+          (cl:when (cl:>= start len) (cl:return))
+          (cl:let* ((nl (cl:position #\Newline input-text :start start))
+                    (end (cl:or nl len))
+                    (line (cl:subseq input-text start end))
+                    (pfx (cl:if first-line prefix cont)))
+            (mine/pane/repl:repl-pane-append-output!
+              rp (cl:concatenate 'cl:string pfx line))
+            (cl:setf first-line cl:nil)
+            (cl:setf start (cl:if nl (cl:1+ nl) len))))))
+    (values))
+
   (declare repl-eval! (MineState -> Void))
   (define (repl-eval! st)
     "Take the current REPL input. If it starts with comma, dispatch as a command.
@@ -728,12 +752,12 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
     ;; Check for comma commands
     (cond
       ((match (str:ref input-text 0) ((Some #\,) True) (_ False))
-       (repl:repl-pane-append-output! (.ms-repl st) (<> "> " input-text))
+       (%append-input-to-output! st "> " input-text)
        (repl-command! st (str:substring input-text 1 (str:length input-text))))
       (True
        ;; Display input in output area
        (let prompt-str = (<> (cell:read (.ms-repl-package st)) "> "))
-       (repl:repl-pane-append-output! (.ms-repl st) (<> prompt-str input-text))
+       (%append-input-to-output! st prompt-str input-text)
        ;; Detect in-package and update local state (also updates lang)
        (%detect-in-package st input-text)
        ;; Send to runtime (non-blocking)
@@ -3734,15 +3758,24 @@ Render-app is NOT called here; the main loop handles rendering."
                ;; Ctrl+G: refresh terminal (force full redraw)
                ((input:KeyCtrl #\g)
                 (screen:screen-invalidate-all! (term:.terminal-screen term)))
-               ;; Enter in REPL -> async eval (or debugger key)
+               ;; Enter in REPL -> eval if complete, else insert newline
                ((input:KeyEnter)
-                (match (focus:focus-current (.ms-focus st))
-                  ((focus:FocusRepl)
+                (match (Tuple (focus:focus-current (.ms-focus st)) mod)
+                  ;; Shift+Enter or Alt+Enter in REPL -> always insert newline
+                  ((Tuple (focus:FocusRepl) (input:ModShift))
+                   (repl:repl-pane-insert-newline! (.ms-repl st)))
+                  ((Tuple (focus:FocusRepl) (input:ModAlt))
+                   (repl:repl-pane-insert-newline! (.ms-repl st)))
+                  ;; Unmodified Enter in REPL
+                  ((Tuple (focus:FocusRepl) _)
                    (cond
                      ((cell:read (.ms-debugger-active st))
                       (handle-debugger-key! st key mod))
+                     ;; Input complete -> eval; incomplete -> insert newline
+                     ((repl:repl-pane-input-complete? (.ms-repl st))
+                      (repl-eval! st))
                      (True
-                      (repl-eval! st))))
+                      (repl:repl-pane-insert-newline! (.ms-repl st)))))
                   (_
                    (handle-key st term key mod))))
                (_
