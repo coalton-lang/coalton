@@ -14,6 +14,7 @@
    #:.tw-sel-anchor #:.tw-sel-end
    #:text-widget-new
    #:text-widget-append!
+   #:text-widget-append-system!
    #:text-widget-clear!
    #:text-widget-render
    #:text-widget-scroll-up!
@@ -35,6 +36,7 @@
   (define-struct TextWidget
     "A read-only scrollable text display widget."
     (tw-lines       (Cell (vec:Vector String)))
+    (tw-flags       (Cell (vec:Vector Boolean)))
     (tw-scroll      (Cell UFix))
     (tw-style       color:Style)
     (tw-sel-anchor  (Cell (Optional (Tuple UFix UFix))))
@@ -45,6 +47,7 @@
   (define (text-widget-new style)
     "Create a new empty TextWidget with the given style."
     (TextWidget (cell:new (vec:new))
+                (cell:new (vec:new))
                 (cell:new 0)
                 style
                 (cell:new None)
@@ -60,12 +63,21 @@
   (define (text-widget-append! tw line)
     "Append a line to the text widget."
     (vec:push! line (cell:read (.tw-lines tw)))
+    (vec:push! False (cell:read (.tw-flags tw)))
+    (values))
+
+  (declare text-widget-append-system! (TextWidget * String -> Void))
+  (define (text-widget-append-system! tw line)
+    "Append a system/info line (rendered in dim italic)."
+    (vec:push! line (cell:read (.tw-lines tw)))
+    (vec:push! True (cell:read (.tw-flags tw)))
     (values))
 
   (declare text-widget-clear! (TextWidget -> Void))
   (define (text-widget-clear! tw)
     "Clear all lines and reset scroll."
     (cell:write! (.tw-lines tw) (vec:new))
+    (cell:write! (.tw-flags tw) (vec:new))
     (cell:write! (.tw-scroll tw) 0)
     (values))
 
@@ -176,18 +188,24 @@
   ;;; Rendering
 
   (declare %text-render-rows
-    ((vec:Vector String) * screen:Screen * wt:Rect * UFix * UFix * color:Style * UFix * UFix -> Void))
-  (define (%text-render-rows lines scr rect scroll h style count i)
+    ((vec:Vector String) * (vec:Vector Boolean) * screen:Screen * wt:Rect * UFix * UFix * color:Style * UFix * UFix -> Void))
+  (define (%text-render-rows lines flags scr rect scroll h style count i)
     "Render text widget rows starting at index I."
     (when (< i h)
       (let line-idx = (+ scroll i))
       (when (< line-idx count)
-        (render:draw-text-clipped scr rect
-                                  (vec:index-unsafe line-idx lines)
+        (let line = (vec:index-unsafe line-idx lines))
+        (let is-system = (vec:index-unsafe line-idx flags))
+        (let line-style = (if is-system
+                              (color:with-attr
+                                (color:with-fg style color:text-dimmer-fg)
+                                color:AttrItalic)
+                              style))
+        (render:draw-text-clipped scr rect line
                                   (+ (wt:.rect-y rect) i)
                                   (wt:.rect-x rect)
-                                  style))
-      (%text-render-rows lines scr rect scroll h style count (+ i 1))))
+                                  line-style))
+      (%text-render-rows lines flags scr rect scroll h style count (+ i 1))))
 
   (declare %render-selection-highlight
     (screen:Screen * wt:Rect * (vec:Vector String) * UFix * UFix *
@@ -237,8 +255,9 @@
     (cell:write! (.tw-vis-height tw) h)
     ;; Clear the entire area first so old text doesn't bleed through
     (render:fill-rect scr rect #\Space style)
+    (let flags  = (cell:read (.tw-flags tw)))
     (let count  = (vec:length lines))
-    (%text-render-rows lines scr rect scroll h style count 0)
+    (%text-render-rows lines flags scr rect scroll h style count 0)
     ;; Overlay selection highlight if active
     (match (Tuple (cell:read (.tw-sel-anchor tw)) (cell:read (.tw-sel-end tw)))
       ((Tuple (Some anchor) (Some end))
