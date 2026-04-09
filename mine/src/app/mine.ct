@@ -195,6 +195,17 @@
     (cell:write! (.ms-next-req-id st) (+ id 1))
     (msg:RequestId id))
 
+;;; Tree width helper
+
+  (declare %tree-width (MineState * UFix -> UFix))
+  (define (%tree-width st cols)
+    "Compute tree pane width. Full when focused, 1-column when collapsed, 0 when hidden."
+    (cond
+      ((not (tree:tree-pane-visible? (.ms-tree st))) 0)
+      ((== (focus:focus-current (.ms-focus st)) focus:FocusTree)
+       (min 30 (lisp (-> UFix) (cols) (cl:floor cols 4))))
+      (True 1)))
+
 ;;; Render
 
   (declare render-app (MineState * term:Terminal -> Void))
@@ -214,19 +225,26 @@
     (let middle-h = (if (> rows 2) (- rows 2) 1))
     ;; Determine tree pane width and content x/width
     (let tree-vis = (tree:tree-pane-visible? (.ms-tree st)))
-    (let tree-w = (if tree-vis (min 30 (lisp (-> UFix) (cols) (cl:floor cols 4))) 0))
+    (let tree-focused = (== (focus:focus-current (.ms-focus st)) focus:FocusTree))
+    (let tree-w = (%tree-width st cols))
     (let content-x = (if tree-vis (+ tree-w 1) 0))
     (cell:write! (.ms-content-x st) content-x)
-    (let content-w = (cond
-                       (tree-vis
-                        (if (> cols (+ tree-w 1)) (- cols (+ tree-w 1)) 1))
-                       (True cols)))
+    (let content-w = (if (> cols content-x) (- cols content-x) 1))
     ;; Render tree pane if visible
     (when tree-vis
-      (let tree-rect = (wt:Rect 0 1 tree-w middle-h))
-      (let tree-focused = (== (focus:focus-current (.ms-focus st)) focus:FocusTree))
-      (tree:tree-pane-render (.ms-tree st) scr tree-rect tree-focused
-                             (fn (fpath) (mgr:bufmgr-path-dirty? (.ms-bufmgr st) fpath)))
+      (cond
+        (tree-focused
+         ;; Expanded: full tree pane
+         (let tree-rect = (wt:Rect 0 1 tree-w middle-h))
+         (tree:tree-pane-render (.ms-tree st) scr tree-rect True
+                                (fn (fpath) (mgr:bufmgr-path-dirty? (.ms-bufmgr st) fpath))))
+        (True
+         ;; Collapsed: number strip
+         (let strip-rect = (wt:Rect 0 1 1 middle-h))
+         (let current-path = (match (mgr:bufmgr-current (.ms-bufmgr st))
+                               ((Some b) (buf:buffer-path b))
+                               ((None) None)))
+         (tree:tree-pane-render-collapsed (.ms-tree st) scr strip-rect current-path)))
       ;; Draw vertical separator
       (render-tree-separator st scr tree-w 1 middle-h))
     ;; Split middle into editor and optional REPL
@@ -1783,7 +1801,10 @@ Handles terminal resize by calling REDRAW-FN."
       ((Ok buf)
        (mgr:bufmgr-switch! (.ms-bufmgr st) (buf:buffer-id buf))
        (editor:editor-pane-set-buffer! (.ms-editor st) (buf:buffer-id buf))
-       (cursor:cursor-move-to-position! (.ms-cursor st) 0))
+       (cursor:cursor-move-to-position! (.ms-cursor st) 0)
+       (let display-name = (lisp (-> String) (main-file)
+                             (cl:file-namestring (cl:pathname main-file))))
+       (tree:tree-pane-add-open-file! (.ms-tree st) display-name main-file))
       ((Err _msg) (values)))
     (status:statusbar-set-message! (.ms-status st)
                                    (<> "Created project: " name)))
@@ -2794,37 +2815,74 @@ Handles terminal resize by calling REDRAW-FN."
          ((Err msg)
           (status:statusbar-set-message! (.ms-status st) msg))))))
 
+;;; Ctrl+digit buffer switching
+
+  (declare %ctrl-digit? (input:Key * input:Modifier -> (Optional UFix)))
+  (define (%ctrl-digit? key mod)
+    "Check if key+mod is Ctrl+1 through Ctrl+9 (CSI u). Returns 0-based index."
+    (if (== mod input:ModCtrl)
+        (match key
+          ((input:KeyChar #\1) (Some 0))
+          ((input:KeyChar #\2) (Some 1))
+          ((input:KeyChar #\3) (Some 2))
+          ((input:KeyChar #\4) (Some 3))
+          ((input:KeyChar #\5) (Some 4))
+          ((input:KeyChar #\6) (Some 5))
+          ((input:KeyChar #\7) (Some 6))
+          ((input:KeyChar #\8) (Some 7))
+          ((input:KeyChar #\9) (Some 8))
+          (_ None))
+        None))
+
+  (declare %jump-to-buffer-by-index! (MineState * UFix -> Void))
+  (define (%jump-to-buffer-by-index! st idx)
+    "Jump to the Nth open file (0-based index)."
+    (let files = (tree:tree-pane-open-files (.ms-tree st)))
+    (when (< idx (length files))
+      (let entry = (list:nth idx files))
+      (match entry
+        ((Tuple _name fpath)
+         (%switch-to-open-file! st fpath)
+         (when (== (focus:focus-current (.ms-focus st)) focus:FocusTree)
+           (focus:focus-switch! (.ms-focus st) focus:FocusEditor))
+         (values)))))
+
 ;;; Event handling -- top-level key dispatch
 
   (declare handle-key (MineState * term:Terminal * input:Key * input:Modifier -> Void))
   (define (handle-key st term key mod)
     "Handle a key event, routing by global bindings then focus."
-    (match key
-      ;; F1 -> help screen (handled in make-handler, not here)
-      ((input:KeyF 1) (values))
+    ;; Ctrl+1-9: jump to open file by number
+    (match (%ctrl-digit? key mod)
+      ((Some idx)
+       (%jump-to-buffer-by-index! st idx))
+      ((None)
+       (match key
+         ;; F1 -> help screen (handled in make-handler, not here)
+         ((input:KeyF 1) (values))
 
-      ;; Ctrl+Q -> handled in make-handler (needs term for rendering)
-      ((input:KeyCtrl #\q) (values))
+         ;; Ctrl+Q -> handled in make-handler (needs term for rendering)
+         ((input:KeyCtrl #\q) (values))
 
-      ;; F2 -> save (always)
-      ((input:KeyF 2) (save-current-file! st))
+         ;; F2 -> save (always)
+         ((input:KeyF 2) (save-current-file! st))
 
-      ;; F6 -> toggle REPL
-      ((input:KeyCtrl #\r) (toggle-repl! st))
+         ;; F6 -> toggle REPL
+         ((input:KeyCtrl #\r) (toggle-repl! st))
 
-      ;; Ctrl+P -> toggle structural editing
-      ((input:KeyCtrl #\p) (toggle-structural! st))
+         ;; Ctrl+P -> toggle structural editing
+         ((input:KeyCtrl #\p) (toggle-structural! st))
 
-      ;; Ctrl+T -> toggle open files pane
-      ((input:KeyCtrl #\t) (toggle-open-files! st))
+         ;; Ctrl+T -> toggle open files pane
+         ((input:KeyCtrl #\t) (toggle-open-files! st))
 
-      ;; Route to focused pane
-      (_
-       (match (focus:focus-current (.ms-focus st))
-         ((focus:FocusEditor) (handle-editor-key st key mod))
-         ((focus:FocusRepl)   (handle-repl-key st key mod))
-         ((focus:FocusTree)   (handle-tree-key st term key mod))
-         (_                   (handle-editor-key st key mod))))))
+         ;; Route to focused pane
+         (_
+          (match (focus:focus-current (.ms-focus st))
+            ((focus:FocusEditor) (handle-editor-key st key mod))
+            ((focus:FocusRepl)   (handle-repl-key st key mod))
+            ((focus:FocusTree)   (handle-tree-key st term key mod))
+            (_                   (handle-editor-key st key mod))))))))
 
 ;;; Undo helpers
 
@@ -2901,7 +2959,7 @@ Handles terminal resize by calling REDRAW-FN."
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
     (let tree-vis = (tree:tree-pane-visible? (.ms-tree st)))
-    (let tree-w = (if tree-vis (min 30 (lisp (-> UFix) (cols) (cl:floor cols 4))) 0))
+    (let tree-w = (%tree-width st cols))
     (let middle-h = (if (> rows 2) (- rows 2) 1))
     (let repl-vis = (cell:read (.ms-repl-visible st)))
     (let repl-h = (if repl-vis
@@ -2910,9 +2968,10 @@ Handles terminal resize by calling REDRAW-FN."
     (let editor-status-h = (if (> repl-h 0) 1 0))
     (let editor-h = (- middle-h (+ repl-h editor-status-h)))
     (let repl-start = (+ 1 (+ editor-h editor-status-h)))
+    (let tree-focused = (== (focus:focus-current (.ms-focus st)) focus:FocusTree))
     (cond
-      ;; Scroll in tree pane
-      ((and tree-vis (< col tree-w))
+      ;; Scroll in tree pane (only when expanded/focused)
+      ((and tree-vis (and tree-focused (< col tree-w)))
        (let pane-h = (if (> rows 2) (- rows 2) 1))
        (let tree-row = (if (< _row 1) 0 (- _row 1)))
        (tree:tree-pane-scroll-delta! (.ms-tree st) tree-row delta pane-h))
@@ -2961,13 +3020,14 @@ Handles terminal resize by calling REDRAW-FN."
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
     (let tree-vis = (tree:tree-pane-visible? (.ms-tree st)))
-    (let tree-w = (if tree-vis (min 30 (lisp (-> UFix) (cols) (cl:floor cols 4))) 0))
+    (let tree-w = (%tree-width st cols))
+    (let tree-focused = (== (focus:focus-current (.ms-focus st)) focus:FocusTree))
     (let right-edge = (- cols 1))
     (let status-y = (if (> rows 0) (- rows 1) 0))
     (let middle-h = (if (> rows 2) (- rows 2) 1))
     (cond
-      ;; Tree scrollbar: rightmost column of tree area
-      ((and tree-vis (> tree-w 0) (== col (- tree-w 1)) (> row 0) (< row status-y))
+      ;; Tree scrollbar: rightmost column of tree area (only when expanded)
+      ((and tree-vis (and tree-focused (and (> tree-w 0) (and (== col (- tree-w 1)) (and (> row 0) (< row status-y))))))
        (let pane-row = (- row 1))
        (tree:tree-pane-scrollbar-drag-at! (.ms-tree st) pane-row middle-h)
        True)
@@ -3011,7 +3071,8 @@ Handles terminal resize by calling REDRAW-FN."
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
     (let tree-vis = (tree:tree-pane-visible? (.ms-tree st)))
-    (let tree-w = (if tree-vis (min 30 (lisp (-> UFix) (cols) (cl:floor cols 4))) 0))
+    (let tree-w = (%tree-width st cols))
+    (let tree-focused = (== (focus:focus-current (.ms-focus st)) focus:FocusTree))
     (let content-x = (if tree-vis (+ tree-w 1) 0))
     (let status-y = (if (> rows 0) (- rows 1) 0))
     (cond
@@ -3023,8 +3084,12 @@ Handles terminal resize by calling REDRAW-FN."
           (focus:focus-switch! (.ms-focus st) focus:FocusMenu))
          ((None) (values))))
       ((>= row status-y) (values))
-      ;; Click in tree area
-      ((and tree-vis (< col tree-w))
+      ;; Click on collapsed strip -> expand tree
+      ((and tree-vis (and (not tree-focused) (< col tree-w)))
+       (tree:tree-pane-switch-to-open-section! (.ms-tree st))
+       (focus:focus-switch! (.ms-focus st) focus:FocusTree))
+      ;; Click in expanded tree area
+      ((and tree-vis (and tree-focused (< col tree-w)))
        (focus:focus-switch! (.ms-focus st) focus:FocusTree)
        (let pane-row = (if (< row 1) 0 (- row 1)))
        (let pane-h = (if (> rows 2) (- rows 2) 1))
@@ -3514,7 +3579,10 @@ Stores match positions in editor search state. Returns the total count."
                ((Ok buf)
                 (mgr:bufmgr-switch! (.ms-bufmgr st) (buf:buffer-id buf))
                 (editor:editor-pane-set-buffer! (.ms-editor st) (buf:buffer-id buf))
-                (cursor:cursor-move-to-position! (.ms-cursor st) 0))
+                (cursor:cursor-move-to-position! (.ms-cursor st) 0)
+                (let display-name = (lisp (-> String) (fpath)
+                                      (cl:file-namestring (cl:pathname fpath))))
+                (tree:tree-pane-add-open-file! (.ms-tree st) display-name fpath))
                ((Err msg)
                 (status:statusbar-set-message! (.ms-status st) msg))))
             ((None) (values)))
@@ -4021,7 +4089,10 @@ Render-app is NOT called here; the main loop handles rendering."
                   ((Ok buf)
                    (mgr:bufmgr-switch! bm (buf:buffer-id buf))
                    (editor:editor-pane-set-buffer! ep (buf:buffer-id buf))
-                   (cursor:cursor-move-to-position! cs 0))
+                   (cursor:cursor-move-to-position! cs 0)
+                   (let display-name = (lisp (-> String) (fpath)
+                                         (cl:file-namestring (cl:pathname fpath))))
+                   (tree:tree-pane-add-open-file! tp display-name fpath))
                   ((Err msg)
                    (status:statusbar-set-message! (.ms-status st) msg))))
                ((None) (values))))

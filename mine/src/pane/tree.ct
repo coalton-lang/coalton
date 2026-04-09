@@ -39,7 +39,9 @@
    #:tree-pane-switch-to-open-section!
    #:tree-pane-click-at!
    #:tree-pane-scroll-delta!
-   #:tree-pane-scrollbar-drag-at!))
+   #:tree-pane-scrollbar-drag-at!
+   #:tree-pane-render-collapsed
+   #:tree-pane-open-file-count))
 
 (in-package #:mine/pane/tree)
 
@@ -236,8 +238,20 @@ When a project tree exists, returns a fixed height so the tree never shifts."
 
   (declare %flatten-open-files ((List (Tuple String String)) -> (List FlatRow)))
   (define (%flatten-open-files files)
-    "Convert open files list to FlatRows at depth 0."
-    (map (fn (entry) (FlatRow 0 (fst entry) False False (snd entry) False)) files))
+    "Convert open files list to FlatRows at depth 0, with number prefixes 1-9."
+    (%flatten-open-files-aux files 1))
+
+  (declare %flatten-open-files-aux ((List (Tuple String String)) * UFix -> (List FlatRow)))
+  (define (%flatten-open-files-aux files num)
+    (match files
+      ((Nil) Nil)
+      ((Cons (Tuple name path) rest)
+       (let prefix = (if (<= num 9)
+                         (lisp (-> String) (num name)
+                           (cl:format cl:nil "~D: ~A" num name))
+                         name))
+       (Cons (FlatRow 0 prefix False False path False)
+             (%flatten-open-files-aux rest (+ num 1))))))
 
   ;;; Navigation (legacy accessors — kept for compatibility)
 
@@ -730,4 +744,63 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
                                             (cl:max 1 (cl:1- tree-h))))))
       (cell:write! (.scroll tp) new-scroll)
       (cell:write! (.selected tp) new-scroll))
+    (values))
+
+;;; Collapsed strip rendering
+
+  (declare tree-pane-open-file-count (TreePane -> UFix))
+  (define (tree-pane-open-file-count tp)
+    (length (cell:read (.open-files tp))))
+
+  (declare %find-current-file-index
+    ((List (Tuple String String)) * (Optional String) * UFix -> (Optional UFix)))
+  (define (%find-current-file-index files current-path idx)
+    "Find the 0-based index of CURRENT-PATH in the open files list."
+    (match current-path
+      ((None) None)
+      ((Some path)
+       (match files
+         ((Nil) None)
+         ((Cons (Tuple _ fpath) rest)
+          (if (== fpath path)
+              (Some idx)
+              (%find-current-file-index rest (Some path) (+ idx 1))))))))
+
+  (declare %draw-strip-numbers
+    (screen:Screen * UFix * UFix * UFix * (Optional UFix) * UFix -> Void))
+  (define (%draw-strip-numbers scr x y show-count current-idx num)
+    "Draw digit characters vertically for the collapsed strip."
+    (when (< num show-count)
+      (let is-current = (match current-idx
+                          ((Some idx) (== idx num))
+                          ((None) False)))
+      (let digit-char = (lisp (-> Char) (num) (cl:code-char (cl:+ 49 num))))
+      (let style = (if is-current
+                       (color:with-attr color:default-style color:AttrReverse)
+                       (color:with-attr color:default-style color:AttrDim)))
+      (screen:screen-set-cell scr (+ y num) x digit-char style)
+      (%draw-strip-numbers scr x y show-count current-idx (+ num 1))))
+
+  (declare tree-pane-render-collapsed
+    (TreePane * screen:Screen * wt:Rect * (Optional String) -> Void))
+  (define (tree-pane-render-collapsed tp scr rect current-path)
+    "Render a collapsed 1-column strip with file numbers 1-9 and T indicator."
+    (render:fill-rect scr rect #\Space color:default-style)
+    (let files = (cell:read (.open-files tp)))
+    (let file-count = (length files))
+    (let show-count = (min 9 file-count))
+    (let current-idx = (%find-current-file-index files current-path 0))
+    ;; Draw numbers
+    (%draw-strip-numbers scr (wt:.rect-x rect) (wt:.rect-y rect)
+                         show-count current-idx 0)
+    ;; Draw T indicator below numbers
+    (when (< show-count (wt:.rect-height rect))
+      (let t-y = (+ (wt:.rect-y rect) show-count))
+      (let t-highlighted = (match current-idx
+                             ((Some idx) (>= idx 9))
+                             ((None) (> file-count 0))))
+      (let t-style = (if t-highlighted
+                         (color:with-attr color:default-style color:AttrReverse)
+                         (color:with-attr color:default-style color:AttrDim)))
+      (screen:screen-set-cell scr t-y (wt:.rect-x rect) #\T t-style))
     (values)))
