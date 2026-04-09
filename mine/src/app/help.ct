@@ -38,14 +38,14 @@
   (declare %draw-help-content (screen:Screen * UFix * UFix * UFix -> Void))
   (define (%draw-help-content scr cols rows scroll)
     "Draw the help screen content with SCROLL offset."
-    (let bg = (color:Style (color:ColorRGB 238 238 236)
-                            (color:ColorRGB 46 52 52)
+    (let bg = (color:Style color:text-fg
+                            color:panel-bg
                             color:AttrNone))
-    (let heading = (color:Style (color:ColorRGB 114 159 207)
-                                 (color:ColorRGB 46 52 52)
+    (let heading = (color:Style color:accent-fg
+                                 color:panel-bg
                                  color:AttrBold))
-    (let key-s = (color:Style (color:ColorRGB 252 233 79)
-                               (color:ColorRGB 46 52 52)
+    (let key-s = (color:Style color:info-fg
+                               color:panel-bg
                                color:AttrBold))
     (let desc-s = bg)
     ;; Clear screen with background
@@ -118,7 +118,7 @@
     (let footer-y = (if (> rows 1) (- rows 1) 0))
     (render:fill-rect scr (wt:Rect 0 footer-y cols 1) #\Space bg)
     (screen:screen-set-string scr footer-y 3 "Up/Down to scroll, Enter to close"
-      (color:Style (color:ColorRGB 136 138 133) (color:ColorRGB 46 52 52) color:AttrItalic))
+      (color:Style color:text-dimmer-fg color:panel-bg color:AttrItalic))
     (values))
 
   ;;; Scroll loop

@@ -21,45 +21,45 @@
 
   (declare style-normal color:Style)
   (define style-normal
-    (color:Style (color:ColorRGB 255 255 255) (color:ColorRGB 0 0 0) color:AttrNone))
+    (color:Style color:white color:black color:AttrNone))
 
   (declare style-bold color:Style)
   (define style-bold
-    (color:Style (color:ColorRGB 255 255 255) (color:ColorRGB 0 0 0) color:AttrBold))
+    (color:Style color:white color:black color:AttrBold))
 
   (declare style-dim color:Style)
   (define style-dim
-    (color:Style (color:ColorRGB 160 160 160) (color:ColorRGB 0 0 0) color:AttrNone))
+    (color:Style (color:ColorRGB 160 160 160) color:black color:AttrNone))
 
   (declare style-selected color:Style)
   (define style-selected
-    (color:Style (color:ColorRGB 0 0 0) (color:ColorRGB 255 255 255) color:AttrNone))
+    (color:Style color:black color:white color:AttrNone))
 
   ;;; Wizard art styles
 
   (declare style-wiz-star color:Style)
   (define style-wiz-star
-    (color:Style (color:Color256 228) (color:ColorRGB 0 0 0) color:AttrNone))
+    (color:Style (color:Color256 228) color:black color:AttrNone))
 
   (declare style-wiz-hat color:Style)
   (define style-wiz-hat
-    (color:Style (color:Color256 180) (color:ColorRGB 0 0 0) color:AttrNone))
+    (color:Style (color:Color256 180) color:black color:AttrNone))
 
   (declare style-wiz-eye color:Style)
   (define style-wiz-eye
-    (color:Style (color:Color256 220) (color:ColorRGB 0 0 0) color:AttrBold))
+    (color:Style (color:Color256 220) color:black color:AttrBold))
 
   (declare style-wiz-wand color:Style)
   (define style-wiz-wand
-    (color:Style (color:Color256 130) (color:ColorRGB 0 0 0) color:AttrBold))
+    (color:Style (color:Color256 130) color:black color:AttrBold))
 
   (declare style-wiz-vest color:Style)
   (define style-wiz-vest
-    (color:Style (color:Color256 33) (color:ColorRGB 0 0 0) color:AttrBold))
+    (color:Style (color:Color256 33) color:black color:AttrBold))
 
   (declare style-wiz-feet color:Style)
   (define style-wiz-feet
-    (color:Style (color:Color256 180) (color:ColorRGB 0 0 0) color:AttrNone))
+    (color:Style (color:Color256 180) color:black color:AttrNone))
 
   ;;; Wizard art drawing
 
@@ -101,7 +101,7 @@
     ;; Label -- centered under wizard (art is 13 wide, label is 15)
     (let label-col = (if (> col 1) (- col 1) 0))
     (screen:screen-set-string scr (+ row 7) label-col "Ore, the Wizard"
-      (color:Style (color:Color256 243) (color:ColorRGB 0 0 0) color:AttrItalic)))
+      (color:Style (color:Color256 243) color:black color:AttrItalic)))
 
   ;;; Resize handling
 
@@ -505,7 +505,7 @@
                           scr row margin truncated
                           (mine/term/color:Style
                            (mine/term/color:Color256 243)
-                           (mine/term/color:ColorRGB 0 0 0)
+                           mine/term/color:black
                            mine/term/color:AttrNone))
                          (cl:incf row)))))
       (cl:values)))

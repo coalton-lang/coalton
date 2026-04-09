@@ -353,14 +353,14 @@
     (let x = (the UFix (lisp (-> UFix) (cols w) (cl:floor (cl:- cols w) 2))))
     (let y = (the UFix (lisp (-> UFix) (rows) (cl:floor rows 3))))
     (let h = (min (+ 3 comp-rows) (- rows y)))
-    (let border-style = (color:Style (color:ColorRGB 186 189 182)
-                                      (color:ColorRGB 46 52 52)
+    (let border-style = (color:Style color:text-dim-fg
+                                      color:panel-bg
                                       color:AttrNone))
-    (let input-style = (color:Style (color:ColorRGB 238 238 236)
-                                     (color:ColorRGB 46 52 52)
+    (let input-style = (color:Style color:text-fg
+                                     color:panel-bg
                                      color:AttrNone))
-    (let comp-style = (color:Style (color:ColorRGB 186 189 182)
-                                    (color:ColorRGB 46 52 52)
+    (let comp-style = (color:Style color:text-dim-fg
+                                    color:panel-bg
                                     color:AttrNone))
     ;; Draw box
     (render:draw-box scr (wt:Rect x y (+ w 2) h) border-style)
@@ -440,11 +440,11 @@
     "Render the editor status line: mode, filename, modified, line:col."
     (let y = (wt:.rect-y rect))
     (let x = (wt:.rect-x rect))
-    (let style = (color:Style (color:ColorRGB 187 187 188)
-                               (color:ColorRGB 34 34 34)
+    (let style = (color:Style color:silver
+                               color:onyx
                                color:AttrNone))
-    (let val-style = (color:Style (color:ColorRGB 238 238 236)
-                                   (color:ColorRGB 34 34 34)
+    (let val-style = (color:Style color:text-fg
+                                   color:onyx
                                    color:AttrNone))
     (render:fill-rect scr rect #\Space style)
     (match (mgr:bufmgr-current (.ms-bufmgr st))
@@ -521,14 +521,14 @@
     "Render the REPL status line."
     (let y = (wt:.rect-y rect))
     (let x = (wt:.rect-x rect))
-    (let style = (color:Style (color:ColorRGB 187 187 188)
-                               (color:ColorRGB 34 34 34)
+    (let style = (color:Style color:silver
+                               color:onyx
                                color:AttrNone))
-    (let label-style = (color:Style (color:ColorRGB 136 138 133)
-                                     (color:ColorRGB 34 34 34)
+    (let label-style = (color:Style color:text-dimmer-fg
+                                     color:onyx
                                      color:AttrNone))
-    (let val-style = (color:Style (color:ColorRGB 238 238 236)
-                                   (color:ColorRGB 34 34 34)
+    (let val-style = (color:Style color:text-fg
+                                   color:onyx
                                    color:AttrNone))
     (render:fill-rect scr rect #\Space style)
     ;; Package
@@ -546,8 +546,8 @@
     (screen:screen-set-string scr y col2 "Status: " label-style)
     (cond
       (busy
-       (let busy-s = (color:Style (color:ColorRGB 252 233 79)
-                                   (color:ColorRGB 34 34 34)
+       (let busy-s = (color:Style color:info-fg
+                                   color:onyx
                                    color:AttrBold))
        (screen:screen-set-string scr y (+ col2 8) "Busy..." busy-s))
       (True
@@ -1307,21 +1307,21 @@ Handles terminal resize by calling REDRAW-FN."
     (let scr = (term:.terminal-screen term))
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
-    (let bg = (color:Style (color:ColorRGB 238 238 236)
-                            (color:ColorRGB 46 52 52)
+    (let bg = (color:Style color:text-fg
+                            color:panel-bg
                             color:AttrNone))
-    (let brand = (color:Style (color:ColorRGB 135 206 250)
-                               (color:ColorRGB 46 52 52)
+    (let brand = (color:Style color:baby-blue
+                               color:panel-bg
                                color:AttrBold))
-    (let dim = (color:Style (color:ColorRGB 136 138 133)
-                             (color:ColorRGB 46 52 52)
+    (let dim = (color:Style color:text-dimmer-fg
+                             color:panel-bg
                              color:AttrItalic))
     (let box-w = 36)
     (let box-h = 12)
     (let bx = (lisp (-> UFix) (cols box-w) (cl:max 0 (cl:floor (cl:- cols box-w) 2))))
     (let by = (lisp (-> UFix) (rows box-h) (cl:max 0 (cl:floor (cl:- rows box-h) 2))))
-    (let border-style = (color:Style (color:ColorRGB 85 87 83)
-                                      (color:ColorRGB 46 52 52)
+    (let border-style = (color:Style color:border-fg
+                                      color:panel-bg
                                       color:AttrNone))
     (screen:screen-clear scr)
     (render:draw-box scr (wt:Rect bx by box-w box-h) border-style)
@@ -1368,17 +1368,17 @@ Handles terminal resize by calling REDRAW-FN."
     (let scr = (term:.terminal-screen term))
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
-    (let bg = (color:Style (color:ColorRGB 238 238 236)
-                            (color:ColorRGB 46 52 52)
+    (let bg = (color:Style color:text-fg
+                            color:panel-bg
                             color:AttrNone))
-    (let border-s = (color:Style (color:ColorRGB 85 87 83)
-                                  (color:ColorRGB 46 52 52)
+    (let border-s = (color:Style color:border-fg
+                                  color:panel-bg
                                   color:AttrNone))
-    (let btn-s = (color:Style (color:ColorRGB 46 52 52)
-                               (color:ColorRGB 136 138 133)
+    (let btn-s = (color:Style color:panel-bg
+                               color:text-dimmer-fg
                                color:AttrBold))
-    (let btn-sel = (color:Style (color:ColorRGB 46 52 52)
-                                 (color:ColorRGB 238 238 236)
+    (let btn-sel = (color:Style color:panel-bg
+                                 color:text-fg
                                  color:AttrBold))
     (let msg-len = (the UFix (lisp (-> UFix) (message) (cl:length message))))
     (let yes-len = (the UFix (lisp (-> UFix) (btn-yes) (cl:length btn-yes))))
@@ -1424,7 +1424,7 @@ Handles terminal resize by calling REDRAW-FN."
     (screen:screen-set-string scr (+ by 2) msg-x message bg)
     ;; Help text (if any)
     (%render-help-lines scr help-lines bx box-w (+ by 4)
-      (color:Style (color:ColorRGB 186 189 182) (color:ColorRGB 46 52 52) color:AttrItalic))
+      (color:Style color:text-dim-fg color:panel-bg color:AttrItalic))
     ;; Buttons: [ Yes ] [ No ] with selection highlight
     (let yes-style = (if (== selected 0) btn-sel btn-s))
     (let no-style = (if (== selected 1) btn-sel btn-s))
@@ -1521,20 +1521,20 @@ Handles terminal resize by calling REDRAW-FN."
     (let scr = (term:.terminal-screen term))
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
-    (let bg = (color:Style (color:ColorRGB 238 238 236)
-                            (color:ColorRGB 46 52 52) color:AttrNone))
-    (let border-s = (color:Style (color:ColorRGB 85 87 83)
-                                  (color:ColorRGB 46 52 52) color:AttrNone))
-    (let label-s = (color:Style (color:ColorRGB 186 189 182)
-                                 (color:ColorRGB 46 52 52) color:AttrNone))
-    (let field-s = (color:Style (color:ColorRGB 238 238 236)
-                                 (color:ColorRGB 32 36 36) color:AttrNone))
-    (let active-s = (color:Style (color:ColorRGB 252 233 79)
-                                  (color:ColorRGB 32 36 36) color:AttrBold))
-    (let btn-s = (color:Style (color:ColorRGB 186 189 182)
-                               (color:ColorRGB 46 52 52) color:AttrNone))
-    (let btn-sel = (color:Style (color:ColorRGB 238 238 236)
-                                 (color:ColorRGB 114 159 207) color:AttrBold))
+    (let bg = (color:Style color:text-fg
+                            color:panel-bg color:AttrNone))
+    (let border-s = (color:Style color:border-fg
+                                  color:panel-bg color:AttrNone))
+    (let label-s = (color:Style color:text-dim-fg
+                                 color:panel-bg color:AttrNone))
+    (let field-s = (color:Style color:text-fg
+                                 color:field-bg color:AttrNone))
+    (let active-s = (color:Style color:info-fg
+                                  color:field-bg color:AttrBold))
+    (let btn-s = (color:Style color:text-dim-fg
+                               color:panel-bg color:AttrNone))
+    (let btn-sel = (color:Style color:text-fg
+                                 color:accent-fg color:AttrBold))
     (let box-w = (min 60 (- cols 4)))
     (let box-h = 9)
     (let bx = (lisp (-> UFix) (cols box-w) (cl:max 0 (cl:floor (cl:- cols box-w) 2))))
@@ -1571,7 +1571,7 @@ Handles terminal resize by calling REDRAW-FN."
     (render:fill-rect scr (wt:Rect (+ bx 1) (+ by 1) inner-w (- box-h 2)) #\Space bg)
     ;; Title
     (screen:screen-set-string scr (+ by 1) (+ bx 3) "New Project"
-      (color:Style (color:ColorRGB 114 159 207) (color:ColorRGB 46 52 52) color:AttrBold))
+      (color:Style color:accent-fg color:panel-bg color:AttrBold))
     ;; Labels
     (screen:screen-set-string scr (+ by 3) (+ bx 2) "Project name:" label-s)
     (screen:screen-set-string scr (+ by 4) (+ bx 2) "Location:    " label-s)
@@ -1777,20 +1777,20 @@ Handles terminal resize by calling REDRAW-FN."
     (let scr = (term:.terminal-screen term))
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
-    (let bg = (color:Style (color:ColorRGB 238 238 236)
-                            (color:ColorRGB 46 52 52) color:AttrNone))
-    (let border-s = (color:Style (color:ColorRGB 85 87 83)
-                                  (color:ColorRGB 46 52 52) color:AttrNone))
-    (let label-s = (color:Style (color:ColorRGB 186 189 182)
-                                 (color:ColorRGB 46 52 52) color:AttrNone))
-    (let field-s = (color:Style (color:ColorRGB 238 238 236)
-                                 (color:ColorRGB 32 36 36) color:AttrNone))
-    (let active-s = (color:Style (color:ColorRGB 252 233 79)
-                                  (color:ColorRGB 32 36 36) color:AttrNone))
-    (let btn-s = (color:Style (color:ColorRGB 186 189 182)
-                               (color:ColorRGB 46 52 52) color:AttrNone))
-    (let btn-sel = (color:Style (color:ColorRGB 238 238 236)
-                                 (color:ColorRGB 114 159 207) color:AttrBold))
+    (let bg = (color:Style color:text-fg
+                            color:panel-bg color:AttrNone))
+    (let border-s = (color:Style color:border-fg
+                                  color:panel-bg color:AttrNone))
+    (let label-s = (color:Style color:text-dim-fg
+                                 color:panel-bg color:AttrNone))
+    (let field-s = (color:Style color:text-fg
+                                 color:field-bg color:AttrNone))
+    (let active-s = (color:Style color:info-fg
+                                  color:field-bg color:AttrNone))
+    (let btn-s = (color:Style color:text-dim-fg
+                               color:panel-bg color:AttrNone))
+    (let btn-sel = (color:Style color:text-fg
+                                 color:accent-fg color:AttrBold))
     (let box-w = (min 70 (- cols 4)))
     (let box-h = 12)
     (let bx = (lisp (-> UFix) (cols box-w) (cl:max 0 (cl:floor (cl:- cols box-w) 2))))
@@ -1832,7 +1832,7 @@ Handles terminal resize by calling REDRAW-FN."
     (render:fill-rect scr (wt:Rect (+ bx 1) (+ by 1) inner-w (- box-h 2)) #\Space bg)
     ;; Title
     (screen:screen-set-string scr (+ by 1) (+ bx 3) "Build Executable"
-      (color:Style (color:ColorRGB 114 159 207) (color:ColorRGB 46 52 52) color:AttrBold))
+      (color:Style color:accent-fg color:panel-bg color:AttrBold))
     ;; Labels
     (screen:screen-set-string scr (+ by 3) (+ bx 2) "Project .asd:" label-s)
     (screen:screen-set-string scr (+ by 4) (+ bx 2) "Output file: " label-s)
@@ -2060,14 +2060,14 @@ Handles terminal resize by calling REDRAW-FN."
     (let by = (lisp (-> UFix) (rows box-h) (cl:max 0 (cl:floor (cl:- rows box-h) 2))))
     (let inner-w = (- box-w 2))
     (let inner-h = (- box-h 4))
-    (let bg = (color:Style (color:ColorRGB 238 238 236)
-                            (color:ColorRGB 32 36 36) color:AttrNone))
-    (let border-s = (color:Style (color:ColorRGB 85 87 83)
-                                  (color:ColorRGB 46 52 52) color:AttrNone))
-    (let text-s = (color:Style (color:ColorRGB 186 189 182)
-                                (color:ColorRGB 32 36 36) color:AttrNone))
-    (let title-s = (color:Style (color:ColorRGB 114 159 207)
-                                 (color:ColorRGB 46 52 52) color:AttrBold))
+    (let bg = (color:Style color:text-fg
+                            color:field-bg color:AttrNone))
+    (let border-s = (color:Style color:border-fg
+                                  color:panel-bg color:AttrNone))
+    (let text-s = (color:Style color:text-dim-fg
+                                color:field-bg color:AttrNone))
+    (let title-s = (color:Style color:accent-fg
+                                 color:panel-bg color:AttrBold))
     (render:draw-box scr (wt:Rect bx by box-w box-h) border-s)
     (render:fill-rect scr (wt:Rect (+ bx 1) (+ by 1) inner-w (- box-h 2)) #\Space bg)
     (let title = (if done "Build Complete" "Building..."))
@@ -2079,7 +2079,7 @@ Handles terminal resize by calling REDRAW-FN."
     (screen:screen-hide-cursor scr)
     (when done
       (screen:screen-set-string scr (+ by (- box-h 2)) (+ bx 2) "Press any key to close"
-        (color:Style (color:ColorRGB 136 138 133) (color:ColorRGB 32 36 36) color:AttrItalic)))
+        (color:Style color:text-dimmer-fg color:field-bg color:AttrItalic)))
     (term:terminal-flush term)
     (cond
       (done
@@ -3877,18 +3877,18 @@ Render-app is NOT called here; the main loop handles rendering."
     (let scr = (term:.terminal-screen term))
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
-    (let bg = (color:Style (color:ColorRGB 238 238 236)
-                            (color:ColorRGB 140 0 0)
+    (let bg = (color:Style color:text-fg
+                            color:error-dialog-bg
                             color:AttrNone))
-    (let dim = (color:Style (color:ColorRGB 200 200 200)
-                             (color:ColorRGB 140 0 0)
+    (let dim = (color:Style color:light-grey
+                             color:error-dialog-bg
                              color:AttrNone))
     (let box-w = (min (- cols 4) 60))
     (let box-h = 7)
     (let bx = (lisp (-> UFix) (cols box-w) (cl:max 0 (cl:floor (cl:- cols box-w) 2))))
     (let by = (lisp (-> UFix) (rows box-h) (cl:max 0 (cl:floor (cl:- rows box-h) 2))))
-    (let border-style = (color:Style (color:ColorRGB 200 60 60)
-                                      (color:ColorRGB 140 0 0)
+    (let border-style = (color:Style color:coral
+                                      color:error-dialog-bg
                                       color:AttrNone))
     (screen:screen-clear scr)
     (render:draw-box scr (wt:Rect bx by box-w box-h) border-style)
