@@ -862,7 +862,7 @@
     (show-tip terminal)
 
     ;; Write config and show result
-    (let config = (cfg:MineConfig se lang pkg init project-roots))
+    (let config = (cfg:MineConfig se lang pkg init 4096 project-roots))
     (let _ok = (write-config! config))
     (show-done terminal)
 

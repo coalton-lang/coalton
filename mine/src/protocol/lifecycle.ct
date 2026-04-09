@@ -10,7 +10,8 @@
    #:runtime-stop!
    #:runtime-interrupt!
    #:runtime-connection
-   #:runtime-ensure-connection!))
+   #:runtime-ensure-connection!
+   #:runtime-set-heap-size!))
 
 (in-package #:mine/protocol/lifecycle)
 
@@ -20,7 +21,8 @@
   (connection (cl:the cl:t (cl:or)) :type cl:t)
   (process    (cl:the cl:t (cl:or)) :type cl:t)
   (port       0      :type cl:fixnum)
-  (running    (cl:the cl:t (cl:or))  :type cl:t))
+  (running    (cl:the cl:t (cl:or))  :type cl:t)
+  (heap-size  4096   :type cl:fixnum))
 
 ;;; CL-side functions for subprocess management.
 ;;; These need cl:nil which the Coalton reader rejects inside coalton-toplevel.
@@ -32,9 +34,12 @@
                 (abspath (cl:handler-case
                              (cl:namestring (cl:truename (cl:pathname argv0)))
                            (cl:error () argv0)))
+                (heap-mb (%runtime-manager-heap-size mgr))
                 (proc (mine/bindings/process:spawn-subprocess
                        abspath
-                       (cl:list "--runtime-server")))
+                       (cl:list "--dynamic-space-size"
+                                (cl:write-to-string heap-mb)
+                                "--runtime-server")))
                 (stdout (sb-ext:process-output proc)))
         (cl:setf (%runtime-manager-process mgr) proc)
         (cl:setf (%runtime-manager-running mgr) cl:t)
@@ -154,6 +159,15 @@
     "Get the current connection to the runtime, if any."
     (lisp (-> (Optional client:Connection)) (mgr)
       (%runtime-get-connection mgr)))
+
+  ;;; Heap size
+
+  (declare runtime-set-heap-size! (RuntimeManager * UFix -> Void))
+  (define (runtime-set-heap-size! mgr mb)
+    "Set the dynamic space size (in megabytes) for the next subprocess start."
+    (lisp (-> Void) (mgr mb)
+      (cl:setf (%runtime-manager-heap-size mgr) mb)
+      (cl:values)))
 
   ;;; Ensure connection
 

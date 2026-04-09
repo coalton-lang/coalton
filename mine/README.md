@@ -113,6 +113,7 @@ Whitespace is arbitrary; add as many spaces and newlines as you please. The poss
     - Examples: `(defvar *repl-started* t)` 
 - `:project-roots` [`<string>`, `(<string> ...)`]: A string or a list of strings which are root directories where projects are subdirectories. This is where `mine` will search for projects.
     - Examples: `"c:/projects/"`, `("/projects/" "/my/other-projects/)`
+- `:repl-heap-size-megabytes` `<integer>`: The number of megabytes of memory the REPL should get. Defaults to 4096 MiB.
 
 ## License
 

@@ -13,7 +13,7 @@
   (declare default-config (Void -> cfg:MineConfig))
   (define (default-config)
     "Return the default configuration."
-    (cfg:MineConfig True "coalton" "COALTON-USER" None Nil))
+    (cfg:MineConfig True "coalton" "COALTON-USER" None 4096 Nil))
 
   (declare load-config (String -> (Result String cfg:MineConfig)))
   (define (load-config path)
@@ -25,7 +25,7 @@ If the file does not exist, returns defaults. If malformed, returns Err."
                           (cl:user-homedir-pathname))))
         (cl:cond
           ((cl:not (cl:probe-file resolved))
-           (Ok (cfg:MineConfig cl:t "coalton" "COALTON-USER" None Nil)))
+           (Ok (cfg:MineConfig cl:t "coalton" "COALTON-USER" None 4096 Nil)))
           (cl:t
            (cl:handler-case
                (cl:with-open-file (in resolved :direction :input)
@@ -34,6 +34,7 @@ If the file does not exist, returns defaults. If malformed, returns Err."
                            (rl  (cl:getf plist ':repl-language "coalton"))
                            (rp  (cl:getf plist ':default-package "COALTON-USER"))
                            (init (cl:getf plist ':repl-init cl:nil))
+                           (heap-raw (cl:getf plist ':repl-heap-size-megabytes 4096))
                            (asdf-raw (cl:getf plist ':project-roots cl:nil)))
                    (cl:unless (cl:listp plist)
                      (cl:error "Config file must contain a plist"))
@@ -55,6 +56,7 @@ If the file does not exist, returns defaults. If malformed, returns Err."
                                          (cl:if init
                                                 (Some (cl:write-to-string init))
                                                 None)
+                                         (cl:max 256 (cl:truncate heap-raw))
                                          project-roots)))))
              (cl:error (c)
                (Err (cl:format cl:nil "~A: ~A"
