@@ -19,7 +19,9 @@
    ;; Mouse
    #:enable-mouse-tracking #:disable-mouse-tracking
    ;; Bracketed paste
-   #:enable-bracketed-paste #:disable-bracketed-paste))
+   #:enable-bracketed-paste #:disable-bracketed-paste
+   ;; Keyboard enhancement
+   #:enable-keyboard-enhancement #:disable-keyboard-enhancement))
 
 (in-package #:mine/term/escape)
 
@@ -227,4 +229,17 @@
   (declare disable-bracketed-paste (Void -> String))
   (define (disable-bracketed-paste)
     "Disable bracketed paste mode."
-    (csi-seq "?2004l")))
+    (csi-seq "?2004l"))
+
+  ;;; Keyboard enhancement (progressive, level 1 = disambiguate)
+
+  (declare enable-keyboard-enhancement (Void -> String))
+  (define (enable-keyboard-enhancement)
+    "Enable progressive keyboard enhancement (CSI u, level 1).
+Terminals that support this will report Shift+Enter etc. as CSI sequences."
+    (csi-seq ">1u"))
+
+  (declare disable-keyboard-enhancement (Void -> String))
+  (define (disable-keyboard-enhancement)
+    "Pop the keyboard enhancement stack."
+    (csi-seq "<u")))

@@ -34,7 +34,10 @@
    #:repl-pane-clear-selection!
    #:repl-pane-has-selection?
    #:repl-pane-copy-selection!
-   #:repl-pane-paste-to-input!))
+   #:repl-pane-paste-to-input!
+   #:repl-pane-insert-newline!
+   #:repl-pane-input-complete?
+   #:repl-pane-input-line-count))
 
 (in-package #:mine/pane/repl)
 
@@ -60,6 +63,7 @@
                                     color:repl-bg
                                     color:AttrNone))
     (let iw = (widget-input:input-widget-new "> " prompt-style text-style))
+    (widget-input:input-widget-set-hint! iw "Shift+Enter for newline")
     (ReplPane (widget-text:text-widget-new color:default-style)
               iw
               (cell:new (vec:new))
@@ -93,6 +97,69 @@
     "Clear the input widget."
     (widget-input:input-widget-clear! (.input-widget rp))
     (values))
+
+  (declare repl-pane-insert-newline! (ReplPane -> Void))
+  (define (repl-pane-insert-newline! rp)
+    "Insert a newline into the input widget at the cursor."
+    (widget-input:input-widget-insert-newline! (.input-widget rp))
+    (values))
+
+  (declare repl-pane-input-line-count (ReplPane -> UFix))
+  (define (repl-pane-input-line-count rp)
+    "Return the number of lines in the REPL input."
+    (widget-input:input-widget-line-count (.input-widget rp)))
+
+  ;;; Balance check
+
+  (declare repl-pane-input-complete? (ReplPane -> Boolean))
+  (define (repl-pane-input-complete? rp)
+    "Return True if the REPL input has balanced parens, brackets, and strings.
+Handles line comments (;) and character literals (#\\)."
+    (let text = (widget-input:input-widget-text (.input-widget rp)))
+    (%input-complete? text))
+
+  (declare %input-complete? (String -> Boolean))
+  (define (%input-complete? text)
+    "Check if TEXT has balanced delimiters."
+    (lisp (-> Boolean) (text)
+      (cl:let ((len (cl:length text))
+               (depth 0)
+               (in-string cl:nil)
+               (i 0))
+        (cl:loop
+          (cl:when (cl:>= i len) (cl:return))
+          (cl:let ((ch (cl:char text i)))
+            (cl:cond
+              ;; Inside a string
+              (in-string
+               (cl:cond
+                 ;; Backslash escape -- skip next char
+                 ((cl:char= ch #\\)
+                  (cl:incf i))
+                 ;; End of string
+                 ((cl:char= ch #\")
+                  (cl:setf in-string cl:nil))))
+              ;; Line comment -- skip to end of line
+              ((cl:char= ch #\;)
+               (cl:let ((nl (cl:position #\Newline text :start i)))
+                 (cl:setf i (cl:if nl nl (cl:1- len)))))
+              ;; Character literal -- skip #\x
+              ((cl:and (cl:char= ch #\#)
+                       (cl:< (cl:1+ i) len)
+                       (cl:char= (cl:char text (cl:1+ i)) #\\))
+               (cl:incf i (cl:if (cl:< (cl:+ i 2) len) 2 1)))
+              ;; Open delimiter
+              ((cl:or (cl:char= ch #\() (cl:char= ch #\[))
+               (cl:incf depth))
+              ;; Close delimiter
+              ((cl:or (cl:char= ch #\)) (cl:char= ch #\]))
+               (cl:decf depth))
+              ;; Start of string
+              ((cl:char= ch #\")
+               (cl:setf in-string cl:t))))
+          (cl:incf i))
+        (cl:if (cl:and (cl:<= depth 0) (cl:not in-string))
+               True False))))
 
   ;;; History
 
@@ -200,30 +267,31 @@
   (declare repl-pane-paste-to-input! (ReplPane * String -> Void))
   (define (repl-pane-paste-to-input! rp text)
     "Insert TEXT into the input widget at the cursor position."
-    (let iw = (.input-widget rp))
-    (let cur-text = (cell:read (widget-input:.iw-text iw)))
-    (let cursor = (cell:read (widget-input:.iw-cursor iw)))
-    (let len = (str:length cur-text))
-    (let before = (str:substring cur-text 0 (min cursor len)))
-    (let after = (str:substring cur-text (min cursor len) len))
-    (cell:write! (widget-input:.iw-text iw) (<> before (<> text after)))
-    (cell:write! (widget-input:.iw-cursor iw) (+ cursor (str:length text)))
+    (widget-input:input-widget-insert-string! (.input-widget rp) text)
     (values))
 
   ;;; Key handling
 
   (declare repl-pane-handle-key! (ReplPane * input:Key * input:Modifier -> wt:EventResult))
   (define (repl-pane-handle-key! rp key modifier)
-    "Handle a key press in the REPL pane."
+    "Handle a key press in the REPL pane.
+Up/Down navigate within multi-line input first; fall through to history
+only when at the first/last line."
     (match (Tuple key modifier)
-      ;; Up arrow -- history up.
+      ;; Up arrow -- try moving within input first, then history.
       ((Tuple (input:KeyUp) (input:ModNone))
-       (repl-pane-history-up! rp)
-       wt:Consumed)
-      ;; Down arrow -- history down.
+       (match (widget-input:input-widget-handle-key! (.input-widget rp) key modifier)
+         ((wt:Consumed) wt:Consumed)
+         ((wt:Ignored)
+          (repl-pane-history-up! rp)
+          wt:Consumed)))
+      ;; Down arrow -- try moving within input first, then history.
       ((Tuple (input:KeyDown) (input:ModNone))
-       (repl-pane-history-down! rp)
-       wt:Consumed)
+       (match (widget-input:input-widget-handle-key! (.input-widget rp) key modifier)
+         ((wt:Consumed) wt:Consumed)
+         ((wt:Ignored)
+          (repl-pane-history-down! rp)
+          wt:Consumed)))
       ;; Delegate to input widget.
       (_
        (widget-input:input-widget-handle-key! (.input-widget rp) key modifier))))
@@ -232,22 +300,28 @@
 
   (declare repl-pane-render (ReplPane * screen:Screen * wt:Rect -> Void))
   (define (repl-pane-render rp scr rect)
-    "Render the REPL pane: output takes all but the last row, input takes the last row."
+    "Render the REPL pane: output takes top area, input takes bottom.
+Input area grows dynamically based on line count, up to half the pane height."
     (let h = (wt:.rect-height rect))
+    (let input-lines = (widget-input:input-widget-line-count (.input-widget rp)))
+    ;; Input height: at least 1, at most half the pane
+    (let max-input-h = (max 1 (lisp (-> UFix) (h) (cl:floor h 2))))
+    (let input-h = (max 1 (min input-lines max-input-h)))
     (cond
       ;; Not enough room -- just draw the input.
       ((<= h 1)
        (widget-input:input-widget-render (.input-widget rp) scr rect))
       ;; Split: output above, input below.
       (True
+       (let output-h = (- h input-h))
        (let output-rect = (wt:Rect (wt:.rect-x rect)
                                      (wt:.rect-y rect)
                                      (wt:.rect-width rect)
-                                     (- h 1)))
+                                     output-h))
        (let input-rect = (wt:Rect (wt:.rect-x rect)
-                                    (+ (wt:.rect-y rect) (- h 1))
+                                    (+ (wt:.rect-y rect) output-h)
                                     (wt:.rect-width rect)
-                                    1))
+                                    input-h))
        (widget-text:text-widget-render (.output rp) scr output-rect)
        ;; Scrollbar on output area
        (let total-lines = (widget-text:text-widget-line-count (.output rp)))
@@ -259,7 +333,7 @@
        (let thumb-s = (color:Style color:scrollbar-thumb-fg
                                      color:scrollbar-track-bg
                                      color:AttrNone))
-       (render:draw-scrollbar scr sb-col (wt:.rect-y rect) (- h 1)
+       (render:draw-scrollbar scr sb-col (wt:.rect-y rect) output-h
                                total-lines scroll-off track-s thumb-s)
        (widget-input:input-widget-render (.input-widget rp) scr input-rect)
        (values)))))
