@@ -126,27 +126,39 @@
 
   ;;; Scroll loop
 
-  (declare %help-scroll-loop (term:Terminal * UFix -> Void))
+  (declare %help-scroll-loop (term:Terminal * UFix -> Boolean))
   (define (%help-scroll-loop term scroll)
-    "Handle scrolling input for the help screen."
+    "Handle scrolling input for the help screen. Returns True if user wants to quit."
     (let scr = (term:.terminal-screen term))
     (screen:screen-hide-cursor scr)
     (term:terminal-flush term)
     (let ev = (term:terminal-wait-for-key term))
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
+    (let max-scroll = (if (> 68 rows) (- 68 rows) 0))
     (match ev
-      ((input:IEvKey (input:KeyEnter) _) (values))
+      ((input:IEvKey (input:KeyEnter) _) False)
+      ((input:IEvKey (input:KeyChar #\q) _) False)
+      ((input:IEvKey (input:KeyCtrl #\q) _) True)
       ((input:IEvKey (input:KeyUp) _)
        (let new-scroll = (if (> scroll 0) (- scroll 1) 0))
        (%draw-help-content scr cols rows new-scroll)
        (%help-scroll-loop term new-scroll))
       ((input:IEvKey (input:KeyDown) _)
-       (let max-scroll = (if (> 68 rows) (- 68 rows) 0))
        (let new-scroll = (if (< scroll max-scroll) (+ scroll 1) scroll))
        (%draw-help-content scr cols rows new-scroll)
        (%help-scroll-loop term new-scroll))
-      ((input:IEvKey (input:KeyChar #\q) _) (values))
+      ((input:IEvMouse (input:MousePress) btn _ _)
+       (match btn
+         ((input:MouseScrollUp)
+          (let new-scroll = (if (>= scroll 3) (- scroll 3) 0))
+          (%draw-help-content scr cols rows new-scroll)
+          (%help-scroll-loop term new-scroll))
+         ((input:MouseScrollDown)
+          (let new-scroll = (min max-scroll (+ scroll 3)))
+          (%draw-help-content scr cols rows new-scroll)
+          (%help-scroll-loop term new-scroll))
+         (_ (%help-scroll-loop term scroll))))
       ((input:IEvResize _ _)
        (term:terminal-update-size! term)
        (screen:screen-resize (term:.terminal-screen term)
@@ -155,18 +167,14 @@
        (%draw-help-content (term:.terminal-screen term)
                            (term:terminal-cols term) (term:terminal-rows term) scroll)
        (%help-scroll-loop term scroll))
-      ((input:IEvMouse (input:MouseRelease) _ _ _)
-       (%help-scroll-loop term scroll))
-      ((input:IEvMouse (input:MouseDrag) _ _ _)
-       (%help-scroll-loop term scroll))
       (_ (%help-scroll-loop term scroll))))
 
   ;;; Entry point
 
-  (declare show-help! (term:Terminal -> Void))
+  (declare show-help! (term:Terminal -> Boolean))
   (define (show-help! term)
-    "Show keybindings help overlay, scrollable, dismiss on Enter."
+    "Show keybindings help overlay, scrollable, dismiss on Enter.
+Returns True if the user pressed Ctrl+Q to quit."
     (let scr = (term:.terminal-screen term))
     (%draw-help-content scr (term:terminal-cols term) (term:terminal-rows term) 0)
-    (%help-scroll-loop term 0)
-    (values)))
+    (%help-scroll-loop term 0)))
