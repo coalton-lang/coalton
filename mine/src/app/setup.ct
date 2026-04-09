@@ -751,6 +751,13 @@
     "Run the interactive TUI setup wizard."
     (let terminal = (term:terminal-init))
 
+    ;; Disable mouse tracking -- setup is keyboard-only
+    (lisp (-> Void) ()
+      (mine/bindings/terminal:terminal-write-string
+       (mine/term/escape:disable-mouse-tracking))
+      (mine/bindings/terminal:terminal-flush)
+      (cl:values))
+
     ;; Welcome
     (show-welcome terminal)
 
