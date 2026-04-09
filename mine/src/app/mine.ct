@@ -44,8 +44,6 @@
    (#:help #:mine/app/help))
   (:export
    #:mine-main
-   #:mine-build
-   #:build
    #:ProtoMsg #:ProtoReturn #:ProtoOutput #:ProtoDebug #:ProtoConnectionLost
    #:get-status-bar #:get-editor-pane #:get-bufmgr #:get-cursor-state
    #:get-repl-pane #:get-focus-mgr #:get-repl-package-cell
@@ -4118,12 +4116,7 @@ Render-app is NOT called here; the main loop handles rendering."
 
   ;;; Build
 
-  (declare mine-build (Void -> Void))
-  (define (mine-build)
-    "Build a standalone mine executable."
-    (lisp (-> Void) ()
-      (mine/app/mine::build)
-      (cl:values))))
+)
 
 ;; CL-side input reader thread.
 ;; Reads raw bytes from the terminal, parses them into InputEvents,
@@ -4407,8 +4400,6 @@ If no colon, returns (values buf-pkg name)."
                 (cl:return (sb-introspect:function-lambda-list sym)))))))
     (cl:error () cl:nil)))
 
-;; CL-side build function. save-lisp-and-die terminates the process,
-;; so it cannot be wrapped in Coalton's type system cleanly.
 ;;; Jump-to-definition
 
 
@@ -5234,57 +5225,3 @@ Handles the debugger state where conn-stream is (msg-id . stream)."
            (cl:second (cl:first notes))
            "")))
 
-(cl:defun build ()
-  ;; Reset platform state that won't survive the image save
-  (mine/bindings/terminal:terminal-reset-for-image-save)
-  ;; Remove Quicklisp from the image so the runtime can detect whether
-  ;; the *user* has it installed, rather than always finding the
-  ;; build-time copy.
-  (cl:setf cl:*features* (cl:remove :quicklisp cl:*features*))
-  (cl:when (cl:find-package "QUICKLISP-CLIENT")
-    (cl:delete-package "QUICKLISP-CLIENT"))
-  (cl:when (cl:find-package "QUICKLISP")
-    (cl:delete-package "QUICKLISP"))
-  ;; Clear ASDF state that contains build-machine paths.  Without this,
-  ;; *central-registry* keeps the builder's Quicklisp path and the
-  ;; output-translations point at the builder's FASL cache, causing
-  ;; errors (e.g. trying to create /home/runner/) on the end-user's
-  ;; machine.  The runtime re-populates these from the user's config.
-  (cl:setf asdf:*central-registry* cl:nil)
-  (asdf:clear-output-translations)
-  (asdf:clear-source-registry)
-  ;; Mark all loaded systems as immutable so ASDF never tries to
-  ;; recompile them or probe their (now stale) source paths.  Remove
-  ;; unloaded systems entirely — their source won't exist on the
-  ;; user's machine.
-  (cl:let ((to-remove cl:nil))
-    (asdf:map-systems
-     (cl:lambda (s)
-       (cl:if (asdf:component-loaded-p s)
-              (asdf:register-immutable-system (asdf:component-name s))
-              (cl:push (asdf:component-name s) to-remove))))
-    (cl:dolist (name to-remove)
-      (asdf:clear-system name)))
-  (sb-ext:save-lisp-and-die
-   #+win32 "mine.exe" #-win32 "mine"
-   :toplevel (cl:lambda ()
-               (cl:handler-bind
-                   ((cl:error
-                      (cl:lambda (c)
-                        ;; Write error + backtrace to log file before unwinding
-                        (cl:ignore-errors
-                          (cl:with-open-file (f "mine-error.log"
-                                               :direction ':output
-                                               :if-exists ':supersede
-                                               :if-does-not-exist ':create)
-                            (cl:format f "MINE ERROR: ~A~%~%Backtrace:~%" c)
-                            (sb-debug:print-backtrace :stream f :count 30)))
-                        ;; Restore terminal and print to stdout
-                        (cl:ignore-errors
-                          (mine/bindings/terminal:terminal-disable-raw-mode))
-                        (cl:format cl:t "~&MINE ERROR: ~A~%Written to mine-error.log~%" c)
-                        (sb-ext:exit :code 1))))
-                 (mine/app/mine::mine-main))
-               (sb-ext:exit))
-   :executable cl:t
-   :purify cl:t))
