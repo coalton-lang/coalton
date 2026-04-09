@@ -2,6 +2,7 @@
   (:use #:coalton #:coalton-prelude)
   (:local-nicknames
    (#:gap #:mine/buffer/gap)
+   (#:undo #:mine/edit/undo)
    (#:cell #:coalton/cell)
    (#:str #:coalton/string)
    (#:list #:coalton/list))
@@ -12,7 +13,7 @@
    #:Buffer
    #:buffer-new #:buffer-new-file #:buffer-from-file
    #:buffer-id #:buffer-name #:buffer-path
-   #:buffer-gap #:buffer-dirty? #:buffer-mode
+   #:buffer-gap #:buffer-undo #:buffer-dirty? #:buffer-mode
    #:buffer-mark-dirty! #:buffer-mark-clean!
    #:buffer-set-mode!
    #:detect-mode))
@@ -72,6 +73,7 @@
     (name     (Cell String))
     (path     (Cell (Optional String)))
     (gap      gap:GapBuffer)
+    (undo     undo:UndoTree)
     (dirty    (Cell Boolean))
     (readonly (Cell Boolean))
     (mode     (Cell BufferMode))
@@ -86,6 +88,7 @@
             (cell:new bname)
             (cell:new None)
             (gap:gap-new)
+            (undo:undo-tree-new)
             (cell:new False)
             (cell:new False)
             (cell:new ModePlainText)
@@ -101,6 +104,7 @@
             (cell:new bname)
             (cell:new (Some fpath))
             (gap:gap-new)
+            (undo:undo-tree-new)
             (cell:new False)
             (cell:new False)
             (cell:new m)
@@ -133,6 +137,7 @@
             (cell:new bname)
             (cell:new (Some fpath))
             gb
+            (undo:undo-tree-new)
             (cell:new False)
             (cell:new False)
             (cell:new m)
@@ -155,6 +160,10 @@
   (declare buffer-gap (Buffer -> gap:GapBuffer))
   (define (buffer-gap buf)
     (.gap buf))
+
+  (declare buffer-undo (Buffer -> undo:UndoTree))
+  (define (buffer-undo buf)
+    (.undo buf))
 
   (declare buffer-dirty? (Buffer -> Boolean))
   (define (buffer-dirty? buf)

@@ -93,8 +93,7 @@
     (ms-editor            editor:EditorPane)        ;; 2
     (ms-bufmgr            mgr:BufferManager)        ;; 3
     (ms-cursor            cursor:CursorState)       ;; 4
-    (ms-undo              undo:UndoTree)            ;; 5
-    (ms-repl              repl:ReplPane)            ;; 6
+    (ms-repl              repl:ReplPane)            ;; 5
     (ms-tree              tree:TreePane)            ;; 7
     (ms-focus             focus:FocusManager)       ;; 8
     (ms-runtime           lifecycle:RuntimeManager) ;; 9
@@ -2255,7 +2254,7 @@ Handles terminal resize by calling REDRAW-FN."
             (clipboard-copy! text)
             (gap:gap-delete-range! gb sel-start sel-end)
             (buf:buffer-mark-dirty! buf)
-            (undo:undo-record! (.ms-undo st)
+            (undo:undo-record! (buf:buffer-undo buf)
                                (undo:OpDelete sel-start text) cur sel-start)
             (cursor:cursor-move-to-position! (.ms-cursor st) sel-start)
             (cursor:cursor-clear-selection! (.ms-cursor st))
@@ -2269,16 +2268,16 @@ Handles terminal resize by calling REDRAW-FN."
     (when (> (str:length text) 0)
       (match (mgr:bufmgr-current (.ms-bufmgr st))
         ((Some buf)
-         (ops:insert-string! buf (.ms-undo st) (.ms-cursor st) text))
+         (ops:insert-string! buf (buf:buffer-undo buf) (.ms-cursor st) text))
         ((None) (values)))))
 
-  (declare %paredit-if-lisp (MineState * (gap:GapBuffer -> Void) -> Void))
+  (declare %paredit-if-lisp (MineState * (gap:GapBuffer * undo:UndoTree -> Void) -> Void))
   (define (%paredit-if-lisp st action)
-    "Run ACTION on the current buffer's gap buffer if structural editing is active."
+    "Run ACTION on the current buffer's gap buffer and undo tree if structural editing is active."
     (match (mgr:bufmgr-current (.ms-bufmgr st))
       ((Some buf)
        (when (%structural-edit? st buf)
-         (action (buf:buffer-gap buf))))
+         (action (buf:buffer-gap buf) (buf:buffer-undo buf))))
       ((None) (values))))
 
   (declare %lisp-mode? (buf:Buffer -> Boolean))
@@ -2384,7 +2383,7 @@ Handles terminal resize by calling REDRAW-FN."
        (cond
          ((== mod input:ModCtrl)
           (%paredit-if-lisp st
-                            (fn (gb) (paredit:paredit-forward-slurp! gb (.ms-undo st) (.ms-cursor st)))))
+                            (fn (gb ut) (paredit:paredit-forward-slurp! gb ut (.ms-cursor st)))))
          (True
           (match (mgr:bufmgr-current (.ms-bufmgr st))
             ((Some buf) (cursor:cursor-move-right! (buf:buffer-gap buf) (.ms-cursor st)))
@@ -2393,7 +2392,7 @@ Handles terminal resize by calling REDRAW-FN."
        (cond
          ((== mod input:ModCtrl)
           (%paredit-if-lisp st
-                            (fn (gb) (paredit:paredit-forward-barf! gb (.ms-undo st) (.ms-cursor st)))))
+                            (fn (gb ut) (paredit:paredit-forward-barf! gb ut (.ms-cursor st)))))
          (True
           (match (mgr:bufmgr-current (.ms-bufmgr st))
             ((Some buf) (cursor:cursor-move-left! (buf:buffer-gap buf) (.ms-cursor st)))
@@ -2402,7 +2401,7 @@ Handles terminal resize by calling REDRAW-FN."
        (cond
          ((== mod input:ModCtrl)
           (%paredit-if-lisp st
-                            (fn (gb) (paredit:paredit-splice! gb (.ms-undo st) (.ms-cursor st)))))
+                            (fn (gb ut) (paredit:paredit-splice! gb ut (.ms-cursor st)))))
          (True
           (match (mgr:bufmgr-current (.ms-bufmgr st))
             ((Some buf) (cursor:cursor-move-up! (buf:buffer-gap buf) (.ms-cursor st)))
@@ -2448,9 +2447,9 @@ Handles terminal resize by calling REDRAW-FN."
          ((Some buf)
           (cond
             ((%structural-edit? st buf)
-             (paredit:paredit-backspace! (buf:buffer-gap buf) (.ms-undo st) (.ms-cursor st)))
+             (paredit:paredit-backspace! (buf:buffer-gap buf) (buf:buffer-undo buf) (.ms-cursor st)))
             (True
-             (ops:delete-backward! buf (.ms-undo st) (.ms-cursor st)))))
+             (ops:delete-backward! buf (buf:buffer-undo buf) (.ms-cursor st)))))
          ((None) (values))))
       ;; Delete: use paredit in Lisp/Coalton modes
       ((input:KeyDelete)
@@ -2458,14 +2457,14 @@ Handles terminal resize by calling REDRAW-FN."
          ((Some buf)
           (cond
             ((%structural-edit? st buf)
-             (paredit:paredit-delete! (buf:buffer-gap buf) (.ms-undo st) (.ms-cursor st)))
+             (paredit:paredit-delete! (buf:buffer-gap buf) (buf:buffer-undo buf) (.ms-cursor st)))
             (True
-             (ops:delete-forward! buf (.ms-undo st) (.ms-cursor st)))))
+             (ops:delete-forward! buf (buf:buffer-undo buf) (.ms-cursor st)))))
          ((None) (values))))
       ;; Enter
       ((input:KeyEnter)
        (match (mgr:bufmgr-current (.ms-bufmgr st))
-         ((Some buf) (ops:newline! buf (.ms-undo st) (.ms-cursor st)))
+         ((Some buf) (ops:newline! buf (buf:buffer-undo buf) (.ms-cursor st)))
          ((None) (values))))
       ;; Tab
       ((input:KeyTab)
@@ -2473,9 +2472,9 @@ Handles terminal resize by calling REDRAW-FN."
          ((Some buf)
           (cond
             ((%structural-edit? st buf)
-             (reindent-line! buf (.ms-undo st) (.ms-cursor st)))
+             (reindent-line! buf (buf:buffer-undo buf) (.ms-cursor st)))
             (True
-             (ops:insert-string! buf (.ms-undo st) (.ms-cursor st) "  "))))
+             (ops:insert-string! buf (buf:buffer-undo buf) (.ms-cursor st) "  "))))
          ((None) (values))))
 
       ;; Printable characters
@@ -2497,19 +2496,19 @@ Handles terminal resize by calling REDRAW-FN."
               ((%structural-edit? st buf)
                (cond
                  ((== ch #\()
-                  (paredit:paredit-open-paren! (buf:buffer-gap buf) (.ms-undo st) (.ms-cursor st)))
+                  (paredit:paredit-open-paren! (buf:buffer-gap buf) (buf:buffer-undo buf) (.ms-cursor st)))
                  ((== ch #\))
-                  (paredit:paredit-close-paren! (buf:buffer-gap buf) (.ms-undo st) (.ms-cursor st)))
+                  (paredit:paredit-close-paren! (buf:buffer-gap buf) (buf:buffer-undo buf) (.ms-cursor st)))
                  ((== ch #\[)
-                  (paredit:paredit-open-bracket! (buf:buffer-gap buf) (.ms-undo st) (.ms-cursor st)))
+                  (paredit:paredit-open-bracket! (buf:buffer-gap buf) (buf:buffer-undo buf) (.ms-cursor st)))
                  ((== ch #\])
-                  (paredit:paredit-close-bracket! (buf:buffer-gap buf) (.ms-undo st) (.ms-cursor st)))
+                  (paredit:paredit-close-bracket! (buf:buffer-gap buf) (buf:buffer-undo buf) (.ms-cursor st)))
                  ((== ch #\")
-                  (paredit:paredit-doublequote! (buf:buffer-gap buf) (.ms-undo st) (.ms-cursor st)))
+                  (paredit:paredit-doublequote! (buf:buffer-gap buf) (buf:buffer-undo buf) (.ms-cursor st)))
                  (True
-                  (ops:insert-char! buf (.ms-undo st) (.ms-cursor st) ch))))
+                  (ops:insert-char! buf (buf:buffer-undo buf) (.ms-cursor st) ch))))
               (True
-               (ops:insert-char! buf (.ms-undo st) (.ms-cursor st) ch))))
+               (ops:insert-char! buf (buf:buffer-undo buf) (.ms-cursor st) ch))))
            ((None) (values)))))
 
       ;; Ctrl+C -> copy selection to clipboard
@@ -2526,10 +2525,10 @@ Handles terminal resize by calling REDRAW-FN."
 
       ;; Ctrl+Z -> undo
       ((input:KeyCtrl #\z)
-       (match (undo:undo-undo! (.ms-undo st))
-         ((Some (undo:UndoEntry entry-ops entry-cursor-before _))
-          (match (mgr:bufmgr-current (.ms-bufmgr st))
-            ((Some buf)
+       (match (mgr:bufmgr-current (.ms-bufmgr st))
+         ((Some buf)
+          (match (undo:undo-undo! (buf:buffer-undo buf))
+            ((Some (undo:UndoEntry entry-ops entry-cursor-before _))
              (apply-undo-ops (buf:buffer-gap buf) entry-ops)
              (cursor:cursor-move-to-position! (.ms-cursor st) entry-cursor-before))
             ((None) (values))))
@@ -2615,16 +2614,16 @@ Handles terminal resize by calling REDRAW-FN."
     (match ch
       ;; Alt+R -> raise
       (#\r (%paredit-if-lisp st
-                             (fn (gb) (paredit:paredit-raise! gb (.ms-undo st) (.ms-cursor st)))))
+                             (fn (gb ut) (paredit:paredit-raise! gb ut (.ms-cursor st)))))
       ;; Alt+W -> wrap
       (#\w (%paredit-if-lisp st
-                             (fn (gb) (paredit:paredit-wrap-round! gb (.ms-undo st) (.ms-cursor st)))))
+                             (fn (gb ut) (paredit:paredit-wrap-round! gb ut (.ms-cursor st)))))
       ;; Alt+F -> forward sexp
       (#\f (%paredit-if-lisp st
-                             (fn (gb) (paredit:paredit-forward-sexp! gb (.ms-cursor st)))))
+                             (fn (gb _ut) (paredit:paredit-forward-sexp! gb (.ms-cursor st)))))
       ;; Alt+B -> backward sexp
       (#\b (%paredit-if-lisp st
-                             (fn (gb) (paredit:paredit-backward-sexp! gb (.ms-cursor st)))))
+                             (fn (gb _ut) (paredit:paredit-backward-sexp! gb (.ms-cursor st)))))
       ;; Alt+K -> compile and load file
       (#\k (compile-file! st))
       ;; Alt+C -> compile form at cursor
@@ -3958,14 +3957,13 @@ Render-app is NOT called here; the main loop handles rendering."
     ;; Create application state
     (let bm = (mgr:bufmgr-new))
     (let cs = (cursor:cursor-new))
-    (let ut = (undo:undo-tree-new))
     (let ep = (editor:editor-pane-new))
     (let rp = (repl:repl-pane-new))
     (let fm = (focus:focus-new))
     (let rm = (lifecycle:runtime-manager-new))
     (let tp = (tree:tree-pane-new))
     (let st = (MineState (menubar:menubar-new) (status:statusbar-new)
-                         ep bm cs ut rp tp fm rm
+                         ep bm cs rp tp fm rm
                          (cell:new 0) (cell:new False) (cell:new 0)
                          (cell:new (cfgt:.config-default-package config)) (cell:new False)
                          (cell:new "")
