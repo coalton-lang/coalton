@@ -72,6 +72,11 @@
                  (:ct-file "queue")
                  (:ct-file "loop")))
 
+   ;; Utilities and bindings
+   (:module "utils"
+    :serial t
+    :components ((:ct-file "file-system")))
+
    ;; Text buffer
    (:module "buffer"
     :serial t

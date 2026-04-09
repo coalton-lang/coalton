@@ -6,7 +6,8 @@
    (#:cell #:coalton/cell)
    (#:ht #:coalton/hashtable)
    (#:iter #:coalton/iterator)
-   (#:file #:coalton/file))
+   (#:file #:coalton/file)
+   (#:fs #:mine/utils/file-system))
   (:export
    #:BufferManager
    #:bufmgr-new
@@ -65,16 +66,20 @@
   (define (bufmgr-open-file! mgr fpath)
     "Open a file, create a buffer, and register it.
 If the file does not exist, creates an empty buffer with that path (not written to disk until saved)."
-    (let file-exists = (lisp (-> Boolean) (fpath)
-                         (cl:if (cl:probe-file fpath) True False)))
-    (let bid = (%alloc-id mgr))
-    (let b = (match file-exists
-               ((True) (buf:buffer-from-file bid fpath))
-               ((False) (buf:buffer-new-file bid fpath))))
-    (match bid
-      ((buf:BufferId n)
-       (ht:set! (cell:read (.buffers mgr)) n b)))
-    (Ok b))
+    (cond
+      ((fs:directory? fpath)
+       (Err (<> "Not a file: " fpath)))
+      (True
+       (let file-exists = (lisp (-> Boolean) (fpath)
+                            (cl:if (cl:probe-file fpath) True False)))
+       (let bid = (%alloc-id mgr))
+       (let b = (if file-exists
+                    (buf:buffer-from-file bid fpath)
+                    (buf:buffer-new-file bid fpath)))
+       (match bid
+         ((buf:BufferId n)
+          (ht:set! (cell:read (.buffers mgr)) n b)))
+       (Ok b))))
 
   ;;; Save
 
