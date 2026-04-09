@@ -1764,13 +1764,13 @@ Handles terminal resize by calling REDRAW-FN."
                  (cl:format out "(coalton-toplevel~%~%")
                  (cl:format out "  (declare main (Void -> Void))~%")
                  (cl:format out "  (define (main)~%")
-                 (cl:format out "    (values)))~%"))
+                 (cl:format out "    (print \"Hello!\")))~%"))
                (cl:progn
                  (cl:format out "(defpackage #:~A~%" name)
                  (cl:format out "  (:use #:cl))~%~%")
                  (cl:format out "(in-package #:~A)~%~%" name)
                  (cl:format out "(defun main ()~%")
-                 (cl:format out "  (values))~%"))))
+                 (cl:format out "  (write-line \"Hello!\"))~%"))))
       (cl:values))
     ;; Build SystemDef and write .asd
     (let comp-type = (if is-coalton model:CTCtFile model:CTFile))
@@ -2144,19 +2144,18 @@ Handles terminal resize by calling REDRAW-FN."
 
 ;;; Build Executable entry point
 
-  (declare %guess-entry-point (String -> String))
-  (define (%guess-entry-point system-name)
-    "If a symbol named MAIN exists in the system's package, return it qualified. Otherwise \"\"."
-    (lisp (-> String) (system-name)
-      (cl:let* ((pkg-name (cl:string-upcase system-name))
-                (pkg (cl:find-package pkg-name)))
-        (cl:if pkg
-               (cl:multiple-value-bind (sym status)
-                   (cl:find-symbol "MAIN" pkg)
-                 (cl:if (cl:and sym (cl:not (cl:null status)))
-                        (cl:format cl:nil "~A::~A" pkg-name "MAIN")
-                        ""))
-               ""))))
+  (declare %guess-entry-point (String * String -> String))
+  (define (%guess-entry-point asd-path system-name)
+    "If the project defines main in the system's package, return system-name::main. Otherwise \"\"."
+    (match (parser:parse-asd-file asd-path)
+      ((Some sd)
+       (let src-sub = (model:.system-pathname sd))
+       (lisp (-> String) (asd-path src-sub system-name)
+         (cl:if (cl:eq (%project-has-main-p asd-path src-sub system-name)
+                        coalton:True)
+                (cl:concatenate 'cl:string system-name "::" "main")
+                "")))
+      ((None) "")))
 
   (declare %write-build-script (String * String * String -> String))
   (define (%write-build-script asd-path output-path entry-point)
@@ -2172,7 +2171,7 @@ Handles terminal resize by calling REDRAW-FN."
     (let system-name = (match (cell:read (.ms-project-system st))
                          ((Some s) s) ((None) "")))
     (let log-path = "/tmp/mine-build.log")
-    (let default-entry = (%guess-entry-point system-name))
+    (let default-entry = (%guess-entry-point asd-path system-name))
     (render-app st term)
     (match (%build-form-dialog term asd-path system-name log-path default-entry "2048")
       ((Some (Tuple (Tuple asd output) (Tuple logf (Tuple entry heap))))
@@ -4175,6 +4174,40 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
       (cl:error (c)
         (cl:format cl:*error-output* "~&;; Error: ~A~%" c)
         (sb-ext:exit :code 2)))))
+
+;;; CL-side: check if project defines main in the system's package
+
+(cl:defun %project-has-main-p (asd-path src-subdir system-name)
+  "Check if any source file under ASD-PATH/SRC-SUBDIR defines MAIN
+in a package matching SYSTEM-NAME."
+  (cl:handler-case
+      (cl:let* ((project-dir (cl:make-pathname :name cl:nil :type cl:nil
+                                                :defaults (cl:truename asd-path)))
+                (src-path (cl:if (cl:string= src-subdir "")
+                                 project-dir
+                                 (cl:merge-pathnames src-subdir project-dir)))
+                (pkg-pats (cl:list
+                           (cl:format cl:nil "in-package #:~A)" system-name)
+                           (cl:format cl:nil "in-package :~A)" system-name)
+                           (cl:format cl:nil "in-package \"~A\")" system-name))))
+        (cl:dolist (ext '("lisp" "ct"))
+          (cl:dolist (file (cl:directory
+                             (cl:merge-pathnames
+                               (cl:make-pathname :directory '(:relative :wild-inferiors)
+                                                  :name :wild :type ext)
+                               src-path)))
+            (cl:handler-case
+                (cl:let ((text (uiop:read-file-string file)))
+                  (cl:when (cl:and
+                            (cl:some (cl:lambda (pat)
+                                       (cl:search pat text :test #'cl:char-equal))
+                                     pkg-pats)
+                            (cl:or (cl:search "(defun main" text :test #'cl:char-equal)
+                                   (cl:search "(define (main" text :test #'cl:char-equal)))
+                    (cl:return-from %project-has-main-p coalton:True)))
+              (cl:error () cl:nil))))
+        coalton:False)
+    (cl:error () coalton:False)))
 
 ;;; CL-side: generate a build script
 
