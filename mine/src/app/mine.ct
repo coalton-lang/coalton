@@ -1157,26 +1157,67 @@ First reloads the .asd to pick up any changes, then loads the system."
                                       (cl:let* ((plist (cl:read in cl:nil cl:nil))
                                                 (form (cl:getf plist :repl-init))
                                                 (asdf-raw (cl:getf plist :project-roots)))
-                                        ;; Build ASDF registration forms
+                                        ;; Build ASDF source-registry and immutability forms.
+                                        ;;
+                                        ;; The REPL subprocess inherits the mine image, which has
+                                        ;; coalton, coalton-compiler, etc. already loaded.  We need
+                                        ;; the user's :project-roots to be searchable (via :tree) so
+                                        ;; that ASDF can find NEW systems there, but we must never
+                                        ;; recompile the systems baked into the image.
+                                        ;;
+                                        ;; Complication: ASDF resolves secondary systems (e.g.
+                                        ;; "coalton/library/big-float") by reading the PRIMARY
+                                        ;; system's .asd file via (operate define-op).  But
+                                        ;; register-immutable-system puts the primary system into
+                                        ;; *immutable-systems*, which is unconditionally merged into
+                                        ;; force-not for every plan.  action-status then returns
+                                        ;; +good-bits+ for forced-not actions, so define-op's
+                                        ;; perform method is never called, the .asd is never read,
+                                        ;; and secondary systems are never discovered.
+                                        ;;
+                                        ;; Workaround: after marking image systems immutable and
+                                        ;; rebuilding the source registry, we directly cl:load the
+                                        ;; .asd files for primary systems whose paths appear in the
+                                        ;; new registry.  This bypasses ASDF's operate/plan gate
+                                        ;; while still evaluating the defsystem forms (registering
+                                        ;; secondary systems).  Any defsystem-depends-on clauses
+                                        ;; trigger load-systems*, but those deps are already
+                                        ;; immutable, so the calls are no-ops.
                                         (cl:let* ((project-roots
                                                     (cl:cond
                                                       ((cl:stringp asdf-raw) (cl:list asdf-raw))
                                                       ((cl:listp asdf-raw) asdf-raw)
                                                       (cl:t cl:nil)))
-                                                  (asdf-forms
+                                                  (expanded-roots
                                                     (cl:mapcar
                                                      (cl:lambda (p)
-                                                       (cl:let ((expanded
-                                                                  (cl:if (cl:and (cl:>= (cl:length p) 2)
-                                                                                 (cl:string= p "~/" :end1 2))
-                                                                         (cl:namestring
-                                                                          (cl:merge-pathnames (cl:subseq p 2)
-                                                                                              (cl:user-homedir-pathname)))
-                                                                         p)))
-                                                         (cl:format cl:nil
-                                                                    "(let ((p #P~S)) (ensure-directories-exist p) (pushnew p asdf:*central-registry* :test #'equal))"
-                                                                    expanded)))
+                                                       (cl:if (cl:and (cl:>= (cl:length p) 2)
+                                                                      (cl:string= p "~/" :end1 2))
+                                                              (cl:namestring
+                                                               (cl:merge-pathnames (cl:subseq p 2)
+                                                                                   (cl:user-homedir-pathname)))
+                                                              p))
                                                      project-roots))
+                                                  (asdf-forms
+                                                    (cl:when expanded-roots
+                                                      (cl:list
+                                                       (cl:format cl:nil
+                                                        "(let ((loaded (asdf:already-loaded-systems)))
+                                                           (dolist (s loaded) (asdf:register-immutable-system s))
+                                                           (asdf:initialize-source-registry
+                                                             '(:source-registry~{ (:tree #P~S)~} :inherit-configuration))
+                                                           (maphash
+                                                             (lambda (name path)
+                                                               (when (and (not (find #\\/ name))
+                                                                          (member name loaded :test #'string-equal))
+                                                                 (handler-case
+                                                                   (let ((*package* (find-package :asdf-user))
+                                                                         (*default-pathname-defaults*
+                                                                           (uiop:pathname-directory-pathname path)))
+                                                                     (load path))
+                                                                   (error () nil))))
+                                                             asdf/source-registry::*source-registry*))"
+                                                        expanded-roots))))
                                                   (init-str (cl:when form (cl:write-to-string form)))
                                                   (all-forms (cl:append asdf-forms
                                                                         (cl:when init-str (cl:list init-str)))))
