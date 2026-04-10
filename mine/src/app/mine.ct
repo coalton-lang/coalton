@@ -928,15 +928,21 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
 
   (declare %append-result-lines! (MineState * String -> Void))
   (define (%append-result-lines! st text)
-    "Append result text to the REPL, prefixing each line with =>."
+    "Append result text to the REPL. Single value gets => prefix;
+multiple values get 1>, 2>, etc."
     (lisp (-> Void) (st text)
-      (cl:loop :for start = 0 :then (cl:1+ end)
-         :for end = (cl:position #\Newline text :start start)
-         :do (repl:repl-pane-append-output!
-              (mine/app/mine::get-repl-pane st)
-              (cl:concatenate 'cl:string "=> "
-                              (cl:subseq text start (cl:or end (cl:length text)))))
-         :while end)
+      (cl:let ((n-values (cl:1+ (cl:count #\Newline text)))
+               (repl (mine/app/mine::get-repl-pane st)))
+        (cl:loop :for start = 0 :then (cl:1+ end)
+           :for end = (cl:position #\Newline text :start start)
+           :for i :from 1
+           :for line = (cl:subseq text start (cl:or end (cl:length text)))
+           :for prefix = (cl:if (cl:= n-values 1)
+                                "=> "
+                                (cl:format cl:nil "~D> " i))
+           :do (repl:repl-pane-append-output!
+                repl (cl:concatenate 'cl:string prefix line))
+           :while end))
       (cl:values)))
 
   (declare %append-error-lines! (MineState * String -> Void))
@@ -963,6 +969,8 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
        (cond
          (is-error
           (%append-error-lines! st text))
+         ((== (str:length text) 0)
+          (repl:repl-pane-append-system! (.ms-repl st) ";; No values returned"))
          (True
           (%append-result-lines! st text)))
        ;; Record timing
