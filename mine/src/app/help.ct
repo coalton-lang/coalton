@@ -139,6 +139,7 @@
     (match ev
       ((input:IEvKey (input:KeyEnter) _) False)
       ((input:IEvKey (input:KeyChar #\q) _) False)
+      ((input:IEvKey (input:KeyCtrl #\h) _) False)
       ((input:IEvKey (input:KeyCtrl #\q) _) True)
       ((input:IEvKey (input:KeyUp) _)
        (let new-scroll = (if (> scroll 0) (- scroll 1) 0))
