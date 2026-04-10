@@ -1,0 +1,128 @@
+(cl:defpackage #:mine/app/completion
+  (:use #:coalton #:coalton-prelude)
+  (:export
+   #:complete-file-path))
+
+(in-package #:mine/app/completion)
+
+(coalton-toplevel
+
+;;; File path completion
+
+  (declare complete-file-path (String -> (Tuple String (List String))))
+  (define (complete-file-path text)
+    "Tab-complete a file path. Returns (completed-text, candidates)."
+    (lisp (-> (Tuple String (List String))) (text)
+      (%complete-file-path-impl text)))
+
+) ;; coalton-toplevel
+
+;;; CL implementation
+
+(cl:defun %complete-file-path-impl (text)
+  "Complete a file path. Returns (Tuple completed-text candidates-list).
+Expands ~ to home directory. Lists directory entries matching prefix."
+  (cl:handler-case
+      (cl:let* (;; Expand ~ to home directory
+                (expanded (cl:if (cl:and (cl:plusp (cl:length text))
+                                         (cl:char= (cl:char text 0) #\~))
+                                 (cl:let ((home (cl:namestring
+                                                 (cl:user-homedir-pathname))))
+                                   (cl:concatenate 'cl:string
+                                     (cl:string-right-trim "/" home)
+                                     (cl:subseq text 1)))
+                                 text))
+                ;; Split into directory and prefix parts
+                (dir-end (cl:or (cl:position #\/ expanded :from-end cl:t) -1))
+                (dir-part (cl:if (cl:>= dir-end 0)
+                                 (cl:subseq expanded 0 (cl:1+ dir-end))
+                                 ""))
+                (prefix (cl:if (cl:>= dir-end 0)
+                               (cl:subseq expanded (cl:1+ dir-end))
+                               expanded))
+                ;; List the directory
+                (search-dir (cl:if (cl:string= dir-part "")
+                                   (cl:namestring (cl:truename "."))
+                                   dir-part))
+                (entries (%list-directory search-dir))
+                ;; Filter by prefix
+                (matches (cl:remove-if-not
+                          (cl:lambda (name)
+                            (cl:and (cl:>= (cl:length name) (cl:length prefix))
+                                    (cl:string= prefix name
+                                                :end2 (cl:length prefix))))
+                          entries))
+                ;; Sort matches
+                (sorted (cl:sort (cl:copy-list matches) #'cl:string<)))
+        ;; Compute common prefix of all matches
+        (cl:if (cl:null sorted)
+               (Tuple text coalton:Nil)
+               (cl:let* ((common (%common-prefix sorted))
+                         (completed (cl:concatenate 'cl:string dir-part common))
+                         ;; Re-insert ~ if we expanded it
+                         (display-completed
+                          (cl:if (cl:and (cl:plusp (cl:length text))
+                                         (cl:char= (cl:char text 0) #\~))
+                                 (cl:let ((home (cl:namestring
+                                                 (cl:user-homedir-pathname))))
+                                   (cl:if (cl:and (cl:>= (cl:length completed)
+                                                          (cl:length home))
+                                                  (cl:string= home completed
+                                                              :end2 (cl:length home)))
+                                          (cl:concatenate 'cl:string "~/"
+                                            (cl:subseq completed (cl:length home)))
+                                          completed))
+                                 completed))
+                         ;; Build Coalton list of display names
+                         (cands (%strings-to-coalton-list sorted)))
+                 (Tuple display-completed
+                        (cl:if (cl:= (cl:length sorted) 1)
+                               coalton:Nil
+                               cands)))))
+    (cl:error ()
+      (Tuple text coalton:Nil))))
+
+(cl:defun %list-directory (dir-path)
+  "List file/directory names in DIR-PATH. Returns a list of name strings.
+Directories get a trailing /."
+  (cl:handler-case
+      (cl:let* ((dir (cl:pathname dir-path))
+                (wild (cl:make-pathname :name :wild :type :wild :defaults dir))
+                (entries (cl:directory wild :resolve-symlinks cl:nil)))
+        (cl:remove cl:nil
+          (cl:mapcar
+           (cl:lambda (entry)
+             (cl:handler-case
+                 (cl:let* ((name (cl:file-namestring entry)))
+                   (cl:if (cl:string= name "")
+                          ;; Directory entry — extract the last dir component
+                          (cl:let ((dirs (cl:pathname-directory entry)))
+                            (cl:if (cl:and dirs (cl:consp dirs))
+                                   (cl:let ((last-dir (cl:car (cl:last dirs))))
+                                     (cl:if (cl:stringp last-dir)
+                                            (cl:concatenate 'cl:string last-dir "/")
+                                            cl:nil))
+                                   cl:nil))
+                          name))
+               (cl:error () cl:nil)))
+           entries)))
+    (cl:error () cl:nil)))
+
+(cl:defun %common-prefix (strings)
+  "Return the longest common prefix of a list of strings."
+  (cl:if (cl:null strings) ""
+         (cl:let ((first (cl:first strings)))
+           (cl:loop :for i :from 0 :below (cl:length first)
+                    :while (cl:every
+                            (cl:lambda (s)
+                              (cl:and (cl:< i (cl:length s))
+                                      (cl:char= (cl:char first i)
+                                                 (cl:char s i))))
+                            strings)
+                    :finally (cl:return (cl:subseq first 0 i))))))
+
+(cl:defun %strings-to-coalton-list (strings)
+  "Convert a CL list of strings to a Coalton (List String)."
+  (cl:if (cl:null strings)
+         coalton:Nil
+         (Cons (cl:first strings) (%strings-to-coalton-list (cl:rest strings)))))

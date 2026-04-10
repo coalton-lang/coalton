@@ -1,0 +1,149 @@
+(cl:defpackage #:mine/app/build
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:parser #:mine/project/asdf-parser)
+   (#:model #:mine/project/asdf-model))
+  (:export
+   #:guess-entry-point
+   #:write-build-script
+   #:run-lisp-script))
+
+(in-package #:mine/app/build)
+
+(coalton-toplevel
+
+  ;;; Build Executable entry point
+
+  (declare guess-entry-point (String * String -> String))
+  (define (guess-entry-point asd-path system-name)
+    "If the project defines main in the system's package, return system-name::main. Otherwise \"\"."
+    (match (parser:parse-asd-file asd-path)
+      ((Some sd)
+       (let src-sub = (model:.system-pathname sd))
+       (lisp (-> String) (asd-path src-sub system-name)
+         (cl:if (cl:eq (mine/app/build::%project-has-main-p asd-path src-sub system-name)
+                        coalton:True)
+                (cl:concatenate 'cl:string system-name "::" "main")
+                "")))
+      ((None) "")))
+
+  (declare write-build-script (String * String * String -> String))
+  (define (write-build-script asd-path output-path entry-point)
+    "Generate a build script and return its path."
+    (lisp (-> String) (asd-path output-path entry-point)
+      (mine/app/build::%write-build-script-cl asd-path output-path entry-point))))
+
+;;; CL-side: run a Lisp script (used for build worker and general scripting)
+
+(cl:defun run-lisp-script ()
+  "Load and execute a Lisp script from the --run-lisp-script argument."
+  (cl:let* ((args sb-ext:*posix-argv*)
+            (pos (cl:position "--run-lisp-script" args :test #'cl:string=))
+            (script-path (cl:and pos (cl:nth (cl:1+ pos) args))))
+    (cl:unless script-path
+      (cl:format cl:*error-output* "Usage: mine --run-lisp-script <script.lisp>~%")
+      (sb-ext:exit :code 1))
+    (cl:handler-case
+        (cl:load script-path)
+      (cl:error (c)
+        (cl:format cl:*error-output* "~&;; Error: ~A~%" c)
+        (sb-ext:exit :code 2)))))
+
+;;; CL-side: check if project defines main in the system's package
+
+(cl:defun %project-has-main-p (asd-path src-subdir system-name)
+  "Check if any source file under ASD-PATH/SRC-SUBDIR defines MAIN
+in a package matching SYSTEM-NAME."
+  (cl:handler-case
+      (cl:let* ((project-dir (cl:make-pathname :name cl:nil :type cl:nil
+                                                :defaults (cl:truename asd-path)))
+                (src-path (cl:if (cl:string= src-subdir "")
+                                 project-dir
+                                 (cl:merge-pathnames src-subdir project-dir)))
+                (pkg-pats (cl:list
+                           (cl:format cl:nil "in-package #:~A)" system-name)
+                           (cl:format cl:nil "in-package :~A)" system-name)
+                           (cl:format cl:nil "in-package \"~A\")" system-name))))
+        (cl:dolist (ext '("lisp" "ct"))
+          (cl:dolist (file (cl:directory
+                             (cl:merge-pathnames
+                               (cl:make-pathname :directory '(:relative :wild-inferiors)
+                                                  :name :wild :type ext)
+                               src-path)))
+            (cl:handler-case
+                (cl:let ((text (uiop:read-file-string file)))
+                  (cl:when (cl:and
+                            (cl:some (cl:lambda (pat)
+                                       (cl:search pat text :test #'cl:char-equal))
+                                     pkg-pats)
+                            (cl:or (cl:search "(defun main" text :test #'cl:char-equal)
+                                   (cl:search "(define (main" text :test #'cl:char-equal)))
+                    (cl:return-from %project-has-main-p coalton:True)))
+              (cl:error () cl:nil))))
+        coalton:False)
+    (cl:error () coalton:False)))
+
+;;; CL-side: generate a build script
+
+(cl:defun %write-build-script-cl (asd-path output-path entry-point)
+  "Write a Lisp build script to /tmp/mine-build-script.lisp. Returns the path."
+  (cl:let ((path (cl:format cl:nil "~Amine-build-~A-~A.lisp"
+                            (uiop:temporary-directory)
+                            (cl:get-universal-time)
+                            (cl:random 1000000)))
+           (pkg-names '("MINE/APP/MINE" "MINE/PANE/EDITOR" "MINE/PANE/MENUBAR"
+                         "MINE/PANE/MINIBUFFER" "MINE/PANE/REPL" "MINE/PANE/TREE"
+                         "MINE/PANE/STATUS" "MINE/TERM/TERMINAL" "MINE/TERM/SCREEN"
+                         "MINE/TERM/INPUT" "MINE/TERM/COLOR"
+                         "MINE/WIDGET/TYPES" "MINE/WIDGET/RENDER" "MINE/WIDGET/FOCUS"
+                         "MINE/WIDGET/INPUT"
+                         "MINE/EDIT/CURSOR" "MINE/EDIT/OPERATIONS" "MINE/EDIT/UNDO"
+                         "MINE/EDIT/PAREDIT"
+                         "MINE/SYNTAX/TOKEN" "MINE/SYNTAX/LEXER" "MINE/SYNTAX/HIGHLIGHT"
+                         "MINE/SYNTAX/INDENT"
+                         "MINE/BUFFER/BUFFER" "MINE/BUFFER/GAP" "MINE/BUFFER/MANAGER"
+                         "MINE/PROTOCOL/CLIENT" "MINE/PROTOCOL/SERVER"
+                         "MINE/PROTOCOL/MESSAGE" "MINE/PROTOCOL/LIFECYCLE"
+                         "MINE/RUNTIME/SERVER-MAIN"
+                         "MINE/BINDINGS/PROCESS" "MINE/BINDINGS/SOCKET"
+                         "MINE/BINDINGS/TERMINAL"
+                         "MINE/EVENT/TYPES")))
+    (cl:with-open-file (out path :direction :output
+                                 :if-exists :supersede
+                                 :if-does-not-exist :create)
+      (cl:write-line "(in-package :cl-user)" out)
+      (cl:terpri out)
+      (cl:format out "(let* ((asd-path ~S)~%" asd-path)
+      (cl:format out "       (output-path ~S)~%" output-path)
+      (cl:format out "       (entry-point ~S)~%" entry-point)
+      (cl:write-line "       (project-root (namestring" out)
+      (cl:write-line "                       (make-pathname :name nil :type nil" out)
+      (cl:write-line "                                      :defaults (truename asd-path))))" out)
+      (cl:write-line "       (system-name (pathname-name asd-path)))" out)
+      (cl:write-line "  (format t \"~&;; Build worker starting~%\")" out)
+      (cl:write-line "  (format t \";; Project: ~A~%\" asd-path)" out)
+      (cl:write-line "  (format t \";; System:  ~A~%\" system-name)" out)
+      (cl:write-line "  (format t \";; Output:  ~A~%\" output-path)" out)
+      (cl:write-line "  (format t \";; Entry:   ~A~%\" entry-point)" out)
+      (cl:write-line "  (force-output)" out)
+      (cl:write-line "  (asdf:initialize-source-registry" out)
+      (cl:write-line "    `(:source-registry (:tree ,project-root) :inherit-configuration))" out)
+      (cl:write-line "  (format t \";; Deleting editor packages...~%\")" out)
+      (cl:write-line "  (force-output)" out)
+      (cl:format out "  (dolist (pkg-name '~S)~%" pkg-names)
+      (cl:write-line "    (let ((pkg (find-package pkg-name)))" out)
+      (cl:write-line "      (when pkg (handler-case (delete-package pkg) (error () nil)))))" out)
+      (cl:write-line "  ;; Mark all pre-loaded systems as immutable so ASDF won't recompile them" out)
+      (cl:write-line "  (dolist (name (asdf:registered-systems))" out)
+      (cl:write-line "    (asdf:register-immutable-system name))" out)
+      (cl:write-line "  (format t \";; Loading system ~A...~%\" system-name)" out)
+      (cl:write-line "  (force-output)" out)
+      (cl:write-line "  (asdf:load-system system-name :verbose t)" out)
+      (cl:write-line "  (format t \";; Saving executable to ~A...~%\" output-path)" out)
+      (cl:write-line "  (force-output)" out)
+      (cl:write-line "  (sb-ext:save-lisp-and-die output-path" out)
+      (cl:write-line "    :toplevel (fdefinition (read-from-string entry-point))" out)
+      (cl:write-line "    :executable t" out)
+      (cl:write-line "    :save-runtime-options t" out)
+      (cl:write-line "    :compression nil))" out))
+    path))

@@ -1,0 +1,693 @@
+(cl:defpackage #:mine/app/dialogs
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:cell #:coalton/cell)
+   (#:term #:mine/term/terminal)
+   (#:screen #:mine/term/screen)
+   (#:input #:mine/term/input)
+   (#:color #:mine/term/color)
+   (#:wt #:mine/widget/types)
+   (#:render #:mine/widget/render)
+   (#:widget-input #:mine/widget/input)
+   (#:cfgt #:mine/config/types))
+  (:export
+   #:handle-dialog-resize!
+   #:wait-for-dismiss
+   #:show-about!
+   #:confirm-dialog
+   #:new-project-default-location
+   #:new-project-dialog
+   #:build-form-dialog))
+
+(in-package #:mine/app/dialogs)
+
+(coalton-toplevel
+
+;;; Resize helper
+
+  (declare handle-dialog-resize! (term:Terminal -> Void))
+  (define (handle-dialog-resize! term)
+    "Update terminal and screen size after a resize event."
+    (term:terminal-update-size! term)
+    (screen:screen-resize (term:.terminal-screen term)
+                          (term:terminal-cols term)
+                          (term:terminal-rows term))
+    (values))
+
+;;; Mode check
+
+  (declare wait-for-dismiss (term:Terminal * (term:Terminal -> Void) -> Void))
+  (define (wait-for-dismiss term redraw-fn)
+    "Wait for a key press or mouse press, ignoring mouse release/drag events.
+Handles terminal resize by calling REDRAW-FN."
+    (let ev = (term:terminal-wait-for-key term))
+    (match ev
+      ((input:IEvMouse (input:MouseRelease) _ _ _) (wait-for-dismiss term redraw-fn))
+      ((input:IEvMouse (input:MouseDrag) _ _ _) (wait-for-dismiss term redraw-fn))
+      ((input:IEvResize _ _)
+       (handle-dialog-resize! term)
+       (redraw-fn term)
+       (term:terminal-flush term)
+       (wait-for-dismiss term redraw-fn))
+      (_ (values))))
+
+;;; About dialog
+
+  (declare %draw-about (term:Terminal -> Void))
+  (define (%draw-about term)
+    "Draw the About dialog content."
+    (let scr = (term:.terminal-screen term))
+    (let cols = (term:terminal-cols term))
+    (let rows = (term:terminal-rows term))
+    (let bg = (color:Style color:text-fg
+                           color:panel-bg
+                           color:AttrNone))
+    (let brand = (color:Style color:baby-blue
+                              color:panel-bg
+                              color:AttrBold))
+    (let dim = (color:Style color:text-dimmer-fg
+                            color:panel-bg
+                            color:AttrItalic))
+    (let box-w = 36)
+    (let box-h = 12)
+    (let bx = (lisp (-> UFix) (cols box-w) (cl:max 0 (cl:floor (cl:- cols box-w) 2))))
+    (let by = (lisp (-> UFix) (rows box-h) (cl:max 0 (cl:floor (cl:- rows box-h) 2))))
+    (let border-style = (color:Style color:border-fg
+                                     color:panel-bg
+                                     color:AttrNone))
+    (screen:screen-clear scr)
+    (render:draw-box scr (wt:Rect bx by box-w box-h) border-style)
+    (render:fill-rect scr (wt:Rect (+ bx 1) (+ by 1) (- box-w 2) (- box-h 2)) #\Space bg)
+    (screen:screen-set-string scr (+ by 2) (+ bx 16) "mine" brand)
+    (screen:screen-set-string scr (+ by 4) (+ bx 7) "An IDE for Coalton and" bg)
+    (screen:screen-set-string scr (+ by 5) (+ bx 13) "Common Lisp" bg)
+    (screen:screen-set-string scr (+ by 7) (+ bx 11) "by Robert Smith" dim)
+    (screen:screen-set-string scr (+ by 9) (+ bx 8) "www.stylewarning.com" dim)
+    (screen:screen-hide-cursor scr)
+    (values))
+
+  (declare show-about! (term:Terminal -> Void))
+  (define (show-about! term)
+    "Show the About dialog, dismiss on any key."
+    (%draw-about term)
+    (term:terminal-flush term)
+    (wait-for-dismiss term %draw-about)
+    (values))
+
+;;; Confirm dialog
+
+  (declare %max-string-len ((List String) -> UFix))
+  (define (%max-string-len lines)
+    (match lines
+      ((Nil) 0)
+      ((Cons s rest)
+       (let len = (the UFix (lisp (-> UFix) (s) (cl:length s))))
+       (max len (%max-string-len rest)))))
+
+  (declare %render-help-lines (screen:Screen * (List String) * UFix * UFix * UFix * color:Style -> Void))
+  (define (%render-help-lines scr lines bx box-w start-row style)
+    (match lines
+      ((Nil) (values))
+      ((Cons line rest)
+       (let len = (the UFix (lisp (-> UFix) (line) (cl:length line))))
+       (let hx = (+ bx (lisp (-> UFix) (box-w len) (cl:max 1 (cl:floor (cl:- box-w len) 2)))))
+       (screen:screen-set-string scr start-row hx line style)
+       (%render-help-lines scr rest bx box-w (+ start-row 1) style))))
+
+  (declare confirm-dialog (term:Terminal * String * String * String * (List String) * (term:Terminal -> Void) -> Boolean))
+  (define (confirm-dialog term message btn-yes btn-no help-lines bg-fn)
+    "Show a modal confirm dialog. Returns True if the user chose yes."
+    (let scr = (term:.terminal-screen term))
+    (let cols = (term:terminal-cols term))
+    (let rows = (term:terminal-rows term))
+    (let bg = (color:Style color:text-fg
+                           color:panel-bg
+                           color:AttrNone))
+    (let border-s = (color:Style color:border-fg
+                                 color:panel-bg
+                                 color:AttrNone))
+    (let btn-s = (color:Style color:panel-bg
+                              color:text-dimmer-fg
+                              color:AttrBold))
+    (let btn-sel = (color:Style color:panel-bg
+                                color:text-fg
+                                color:AttrBold))
+    (let msg-len = (the UFix (lisp (-> UFix) (message) (cl:length message))))
+    (let yes-len = (the UFix (lisp (-> UFix) (btn-yes) (cl:length btn-yes))))
+    (let no-len = (the UFix (lisp (-> UFix) (btn-no) (cl:length btn-no))))
+    (let help-max = (%max-string-len help-lines))
+    (let help-count = (length help-lines))
+    ;; Box dimensions: padding around message and buttons
+    (let btn-area = (+ yes-len (+ 4 (+ no-len 4))))
+    (let inner-w = (max (+ msg-len 4) (max (+ btn-area 4) (+ help-max 6))))
+    (let box-w = (+ inner-w 2))
+    (let box-h = (+ 7 help-count))
+    (let bx = (lisp (-> UFix) (cols box-w) (cl:max 0 (cl:floor (cl:- cols box-w) 2))))
+    (let by = (lisp (-> UFix) (rows box-h) (cl:max 0 (cl:floor (cl:- rows box-h) 2))))
+    ;; Button positions (inside box)
+    (let btn-start = (+ bx (lisp (-> UFix) (inner-w btn-area) (cl:max 1 (cl:floor (cl:- inner-w btn-area) 2)))))
+    (let yes-x = (+ btn-start 1))
+    (let no-x = (+ yes-x (+ yes-len 5)))
+    (let btn-y = (+ by (+ 5 help-count)))
+    ;; Render and wait in a loop
+    (%confirm-dialog-loop term scr bx by box-w box-h
+                          message btn-yes btn-no
+                          yes-x no-x btn-y yes-len no-len
+                          bg border-s btn-sel btn-s help-lines bg-fn 1))
+
+  (declare %confirm-dialog-loop
+           (term:Terminal * screen:Screen *
+                          UFix * UFix * UFix * UFix *
+                          String * String * String *
+                          UFix * UFix * UFix * UFix * UFix *
+                          color:Style * color:Style * color:Style * color:Style *
+                          (List String) * (term:Terminal -> Void) * UFix -> Boolean))
+  (define (%confirm-dialog-loop term scr bx by box-w box-h
+                                message btn-yes btn-no
+                                yes-x no-x btn-y yes-len no-len
+                                bg border-s btn-sel btn-s
+                                help-lines bg-fn selected)
+    ;; Draw box
+    (render:draw-box scr (wt:Rect bx by box-w box-h) border-s)
+    (render:fill-rect scr (wt:Rect (+ bx 1) (+ by 1) (- box-w 2) (- box-h 2)) #\Space bg)
+    ;; Message centered
+    (let msg-len = (the UFix (lisp (-> UFix) (message) (cl:length message))))
+    (let msg-x = (+ bx (lisp (-> UFix) (box-w msg-len) (cl:max 1 (cl:floor (cl:- box-w msg-len) 2)))))
+    (screen:screen-set-string scr (+ by 2) msg-x message bg)
+    ;; Help text (if any)
+    (%render-help-lines scr help-lines bx box-w (+ by 4)
+                        (color:Style color:text-dim-fg color:panel-bg color:AttrItalic))
+    ;; Buttons: [ Yes ] [ No ] with selection highlight
+    (let yes-style = (if (== selected 0) btn-sel btn-s))
+    (let no-style = (if (== selected 1) btn-sel btn-s))
+    (screen:screen-set-string scr btn-y yes-x (<> " " (<> btn-yes " ")) yes-style)
+    (screen:screen-set-string scr btn-y no-x (<> " " (<> btn-no " ")) no-style)
+    (screen:screen-hide-cursor scr)
+    (term:terminal-flush term)
+    ;; Wait for input
+    (let ev = (term:terminal-wait-for-key term))
+    (match ev
+      ;; Enter confirms current selection
+      ((input:IEvKey (input:KeyEnter) _)
+       (== selected 0))
+      ;; Left/Right or Tab toggle selection
+      ((input:IEvKey (input:KeyLeft) _)
+       (%confirm-dialog-loop term scr bx by box-w box-h
+                             message btn-yes btn-no yes-x no-x btn-y yes-len no-len
+                             bg border-s btn-sel btn-s help-lines bg-fn 0))
+      ((input:IEvKey (input:KeyRight) _)
+       (%confirm-dialog-loop term scr bx by box-w box-h
+                             message btn-yes btn-no yes-x no-x btn-y yes-len no-len
+                             bg border-s btn-sel btn-s help-lines bg-fn 1))
+      ((input:IEvKey (input:KeyTab) _)
+       (%confirm-dialog-loop term scr bx by box-w box-h
+                             message btn-yes btn-no yes-x no-x btn-y yes-len no-len
+                             bg border-s btn-sel btn-s help-lines bg-fn (if (== selected 0) 1 0)))
+      ;; y/Y = yes
+      ((input:IEvKey (input:KeyChar #\y) _) True)
+      ((input:IEvKey (input:KeyChar #\Y) _) True)
+      ;; n/N = no
+      ((input:IEvKey (input:KeyChar #\n) _) False)
+      ((input:IEvKey (input:KeyChar #\N) _) False)
+      ;; Escape = cancel (no)
+      ((input:IEvKey (input:KeyEscape) _) False)
+      ;; Mouse click on buttons
+      ((input:IEvMouse (input:MousePress) _ click-col click-row)
+       (cond
+         ;; Click on yes button
+         ((and (== click-row btn-y)
+               (and (>= click-col yes-x) (< click-col (+ yes-x (+ yes-len 2)))))
+          True)
+         ;; Click on no button
+         ((and (== click-row btn-y)
+               (and (>= click-col no-x) (< click-col (+ no-x (+ no-len 2)))))
+          False)
+         ;; Click outside box -> cancel (no)
+         ((or (< click-col bx) (>= click-col (+ bx box-w)))
+          False)
+         ((or (< click-row by) (>= click-row (+ by box-h)))
+          False)
+         ;; Click elsewhere inside box -> ignore
+         (True
+          (%confirm-dialog-loop term scr bx by box-w box-h
+                                message btn-yes btn-no yes-x no-x btn-y yes-len no-len
+                                bg border-s btn-sel btn-s help-lines bg-fn selected))))
+      ;; Resize — repaint background then recompute dialog layout
+      ((input:IEvResize _ _)
+       (handle-dialog-resize! term)
+       (bg-fn term)
+       (confirm-dialog term message btn-yes btn-no help-lines bg-fn))
+      ;; Anything else - ignore
+      (_ (%confirm-dialog-loop term scr bx by box-w box-h
+                               message btn-yes btn-no yes-x no-x btn-y yes-len no-len
+                               bg border-s btn-sel btn-s help-lines bg-fn selected))))
+
+;;; New Project dialog
+
+  (declare new-project-default-location (cfgt:MineConfig -> String))
+  (define (new-project-default-location config)
+    "Return the first project root from config, or cwd."
+    (let roots = (cfgt:.config-project-roots config))
+    (match roots
+      ((Cons first _)
+       ;; Expand ~/ and ensure trailing /
+       (lisp (-> String) (first)
+         (cl:let* ((expanded (cl:if (cl:and (cl:>= (cl:length first) 2)
+                                            (cl:string= first "~/" :end1 2))
+                                    (cl:namestring
+                                     (cl:merge-pathnames (cl:subseq first 2)
+                                                         (cl:user-homedir-pathname)))
+                                    first))
+                   (len (cl:length expanded)))
+           (cl:if (cl:and (cl:> len 0)
+                          (cl:char= (cl:char expanded (cl:1- len)) #\/))
+                  expanded
+                  (cl:concatenate 'cl:string expanded "/")))))
+      ((Nil)
+       (lisp (-> String) () (cl:namestring (cl:truename "."))))))
+
+  (declare new-project-dialog
+           (term:Terminal * cfgt:MineConfig -> Optional (Tuple String (Tuple String Boolean))))
+  (define (new-project-dialog term config)
+    "Show a 3-field form for New Project. Returns (name, (location, is-coalton?)) or None."
+    (let scr = (term:.terminal-screen term))
+    (let cols = (term:terminal-cols term))
+    (let rows = (term:terminal-rows term))
+    (let bg = (color:Style color:text-fg
+                           color:panel-bg color:AttrNone))
+    (let border-s = (color:Style color:border-fg
+                                 color:panel-bg color:AttrNone))
+    (let label-s = (color:Style color:text-dim-fg
+                                color:panel-bg color:AttrNone))
+    (let field-s = (color:Style color:text-fg
+                                color:field-bg color:AttrNone))
+    (let active-s = (color:Style color:info-fg
+                                 color:field-bg color:AttrBold))
+    (let btn-s = (color:Style color:text-dim-fg
+                              color:panel-bg color:AttrNone))
+    (let btn-sel = (color:Style color:text-fg
+                                color:accent-fg color:AttrBold))
+    (let box-w = (min 60 (- cols 4)))
+    (let box-h = 9)
+    (let bx = (lisp (-> UFix) (cols box-w) (cl:max 0 (cl:floor (cl:- cols box-w) 2))))
+    (let by = (lisp (-> UFix) (rows box-h) (cl:max 0 (cl:floor (cl:- rows box-h) 2))))
+    ;; Input widgets for name and location
+    (let iw-name = (widget-input:input-widget-new "" label-s field-s))
+    (let iw-loc = (widget-input:input-widget-new "" label-s field-s))
+    ;; Pre-fill location from config
+    (widget-input:input-widget-set-text! iw-loc (new-project-default-location config))
+    ;; Language toggle: True = Coalton, False = Common Lisp
+    (let is-coalton = (cell:new True))
+    ;; field-idx: 0 = name, 1 = location, 2 = language toggle,
+    ;;            3 = Create button, 4 = Cancel button
+    (%new-project-loop term scr bx by box-w box-h
+                       iw-name iw-loc is-coalton
+                       bg border-s label-s field-s active-s btn-s btn-sel
+                       0))
+
+  (declare %new-project-render
+           (screen:Screen * UFix * UFix * UFix * UFix *
+                          widget-input:InputWidget * widget-input:InputWidget * (cell:Cell Boolean) *
+                          color:Style * color:Style * color:Style * color:Style * color:Style *
+                          color:Style * color:Style * UFix -> Void))
+  (define (%new-project-render scr bx by box-w box-h
+                               iw-name iw-loc is-coalton
+                               bg border-s label-s field-s active-s btn-s btn-sel
+                               field-idx)
+    (let inner-w = (- box-w 2))
+    (let label-w = 14)
+    (let field-w = (- inner-w label-w))
+    (let fx = (+ bx (+ 1 label-w)))
+    ;; Box and fill
+    (render:draw-box scr (wt:Rect bx by box-w box-h) border-s)
+    (render:fill-rect scr (wt:Rect (+ bx 1) (+ by 1) inner-w (- box-h 2)) #\Space bg)
+    ;; Title
+    (screen:screen-set-string scr (+ by 1) (+ bx 3) "New Project"
+                              (color:Style color:accent-fg color:panel-bg color:AttrBold))
+    ;; Labels
+    (screen:screen-set-string scr (+ by 3) (+ bx 2) "Project name:" label-s)
+    (screen:screen-set-string scr (+ by 4) (+ bx 2) "Location:    " label-s)
+    (screen:screen-set-string scr (+ by 5) (+ bx 2) "Language:    " label-s)
+    ;; Text field backgrounds
+    (render:fill-rect scr (wt:Rect fx (+ by 3) field-w 1) #\Space (if (== field-idx 0) active-s field-s))
+    (render:fill-rect scr (wt:Rect fx (+ by 4) field-w 1) #\Space (if (== field-idx 1) active-s field-s))
+    ;; Render text fields
+    (widget-input:input-widget-render iw-name scr (wt:Rect fx (+ by 3) field-w 1))
+    (widget-input:input-widget-render iw-loc scr (wt:Rect fx (+ by 4) field-w 1))
+    ;; Re-render active text field so its cursor wins
+    (match field-idx
+      (0 (widget-input:input-widget-render iw-name scr (wt:Rect fx (+ by 3) field-w 1)))
+      (1 (widget-input:input-widget-render iw-loc scr (wt:Rect fx (+ by 4) field-w 1)))
+      (_ (values)))
+    ;; Language selector (no background fill — just the toggle text)
+    (let lang-text = (if (cell:read is-coalton) "< Coalton >" "< Common Lisp >"))
+    (let lang-style = (if (== field-idx 2) active-s label-s))
+    (screen:screen-set-string scr (+ by 5) fx lang-text lang-style)
+    ;; Buttons
+    (let btn-y = (+ by 7))
+    (let btn-area-start = (+ bx (lisp (-> UFix) (inner-w)
+                                  (cl:max 1 (cl:floor (cl:- inner-w 20) 2)))))
+    (screen:screen-set-string scr btn-y btn-area-start " Create "
+                              (if (== field-idx 3) btn-sel btn-s))
+    (screen:screen-set-string scr btn-y (+ btn-area-start 11) " Cancel "
+                              (if (== field-idx 4) btn-sel btn-s))
+    ;; Hide cursor when not on a text field
+    (when (>= field-idx 2)
+      (screen:screen-hide-cursor scr))
+    (values))
+
+  (declare %new-project-loop
+           (term:Terminal * screen:Screen * UFix * UFix * UFix * UFix *
+                          widget-input:InputWidget * widget-input:InputWidget * (cell:Cell Boolean) *
+                          color:Style * color:Style * color:Style * color:Style * color:Style *
+                          color:Style * color:Style * UFix
+                          -> Optional (Tuple String (Tuple String Boolean))))
+  (define (%new-project-loop term scr bx by box-w box-h
+                             iw-name iw-loc is-coalton
+                             bg border-s label-s field-s active-s btn-s btn-sel
+                             field-idx)
+    (%new-project-render scr bx by box-w box-h
+                         iw-name iw-loc is-coalton
+                         bg border-s label-s field-s active-s btn-s btn-sel
+                         field-idx)
+    (term:terminal-flush term)
+    (let ev = (term:terminal-wait-for-key term))
+    (let next-field = (if (< field-idx 4) (+ field-idx 1) 0))
+    (let recur =
+      (fn (fi)
+        (%new-project-loop term scr bx by box-w box-h
+                           iw-name iw-loc is-coalton
+                           bg border-s label-s field-s active-s btn-s btn-sel
+                           fi)))
+    (let result =
+      (fn ()
+        (Some (Tuple (widget-input:input-widget-text iw-name)
+                     (Tuple (widget-input:input-widget-text iw-loc)
+                            (cell:read is-coalton))))))
+    (match ev
+      ;; Escape -> cancel
+      ((input:IEvKey (input:KeyEscape) _) None)
+      ;; Tab -> next field
+      ((input:IEvKey (input:KeyTab) _) (recur next-field))
+      ;; Down -> next field (within fields)
+      ((input:IEvKey (input:KeyDown) _)
+       (if (< field-idx 3) (recur (+ field-idx 1)) (recur field-idx)))
+      ;; Up -> prev field
+      ((input:IEvKey (input:KeyUp) _)
+       (if (and (> field-idx 0) (<= field-idx 3)) (recur (- field-idx 1)) (recur field-idx)))
+      ;; Enter
+      ((input:IEvKey (input:KeyEnter) _)
+       (cond
+         ;; On a field or Create button -> submit
+         ((<= field-idx 3) (result))
+         ;; On Cancel button -> cancel
+         (True None)))
+      ;; Keys on language toggle field
+      ((input:IEvKey key mod)
+       (cond
+         ;; Language toggle: Left/Right/Space toggles
+         ((== field-idx 2)
+          (match key
+            ((input:KeyLeft) (cell:write! is-coalton (not (cell:read is-coalton))) (recur 2))
+            ((input:KeyRight) (cell:write! is-coalton (not (cell:read is-coalton))) (recur 2))
+            ((input:KeyChar #\Space) (cell:write! is-coalton (not (cell:read is-coalton))) (recur 2))
+            (_ (recur field-idx))))
+         ;; Text fields: delegate to active widget
+         ((< field-idx 2)
+          (match field-idx
+            (0 (widget-input:input-widget-handle-key! iw-name key mod))
+            (_ (widget-input:input-widget-handle-key! iw-loc key mod)))
+          (recur field-idx))
+         ;; Buttons: Left/Right switch
+         (True
+          (match key
+            ((input:KeyLeft) (recur 3))
+            ((input:KeyRight) (recur 4))
+            (_ (recur field-idx))))))
+      ;; Mouse clicks
+      ((input:IEvMouse (input:MousePress) _ click-col click-row)
+       (let inner-w = (- box-w 2))
+       (let label-w = 14)
+       (let fx = (+ bx (+ 1 label-w)))
+       (let field-w = (- inner-w label-w))
+       (let btn-y = (+ by 7))
+       (let btn-area-start = (+ bx (lisp (-> UFix) (inner-w)
+                                     (cl:max 1 (cl:floor (cl:- inner-w 20) 2)))))
+       (cond
+         ;; Click on fields
+         ((and (>= click-col fx) (< click-col (+ fx field-w))
+               (and (>= click-row (+ by 3)) (<= click-row (+ by 5))))
+          (recur (- click-row (+ by 3))))
+         ;; Click on Create button
+         ((and (== click-row btn-y)
+               (and (>= click-col btn-area-start) (< click-col (+ btn-area-start 8))))
+          (result))
+         ;; Click on Cancel button
+         ((and (== click-row btn-y)
+               (and (>= click-col (+ btn-area-start 11)) (< click-col (+ btn-area-start 19))))
+          None)
+         ;; Click outside box -> cancel
+         ((or (< click-col bx) (>= click-col (+ bx box-w)))
+          None)
+         ((or (< click-row by) (>= click-row (+ by box-h)))
+          None)
+         ;; Click elsewhere inside box -> ignore
+         (True (recur field-idx))))
+      ;; Resize
+      ((input:IEvResize _ _)
+       (handle-dialog-resize! term)
+       (let nc = (term:terminal-cols term))
+       (let nr = (term:terminal-rows term))
+       (let new-box-w = (min 60 (- nc 4)))
+       (let new-box-h = 9)
+       (let new-bx = (lisp (-> UFix) (nc new-box-w) (cl:max 0 (cl:floor (cl:- nc new-box-w) 2))))
+       (let new-by = (lisp (-> UFix) (nr new-box-h) (cl:max 0 (cl:floor (cl:- nr new-box-h) 2))))
+       (screen:screen-clear (term:.terminal-screen term))
+       (%new-project-loop term (term:.terminal-screen term) new-bx new-by new-box-w new-box-h
+                          iw-name iw-loc is-coalton
+                          bg border-s label-s field-s active-s btn-s btn-sel
+                          field-idx))
+      ;; Ignore other events
+      (_ (recur field-idx))))
+
+;;; Build Executable dialog
+
+  (declare build-form-dialog
+           (term:Terminal * String * String * String * String * String
+                          -> Optional (Tuple (Tuple String String) (Tuple String (Tuple String String)))))
+  (define (build-form-dialog term init-asd init-output init-log init-entry init-heap)
+    "Show a 5-field form for Build Executable. Returns field values or None on cancel."
+    (let scr = (term:.terminal-screen term))
+    (let cols = (term:terminal-cols term))
+    (let rows = (term:terminal-rows term))
+    (let bg = (color:Style color:text-fg
+                           color:panel-bg color:AttrNone))
+    (let border-s = (color:Style color:border-fg
+                                 color:panel-bg color:AttrNone))
+    (let label-s = (color:Style color:text-dim-fg
+                                color:panel-bg color:AttrNone))
+    (let field-s = (color:Style color:text-fg
+                                color:field-bg color:AttrNone))
+    (let active-s = (color:Style color:info-fg
+                                 color:field-bg color:AttrNone))
+    (let btn-s = (color:Style color:text-dim-fg
+                              color:panel-bg color:AttrNone))
+    (let btn-sel = (color:Style color:text-fg
+                                color:accent-fg color:AttrBold))
+    (let box-w = (min 70 (- cols 4)))
+    (let box-h = 12)
+    (let bx = (lisp (-> UFix) (cols box-w) (cl:max 0 (cl:floor (cl:- cols box-w) 2))))
+    (let by = (lisp (-> UFix) (rows box-h) (cl:max 0 (cl:floor (cl:- rows box-h) 2))))
+    ;; Create 4 input widgets
+    (let iw0 = (widget-input:input-widget-new "" label-s field-s))
+    (let iw1 = (widget-input:input-widget-new "" label-s field-s))
+    (let iw2 = (widget-input:input-widget-new "" label-s field-s))
+    (let iw3 = (widget-input:input-widget-new "" label-s field-s))
+    (let iw4 = (widget-input:input-widget-new "" label-s field-s))
+    (widget-input:input-widget-set-text! iw0 init-asd)
+    (widget-input:input-widget-set-text! iw1 init-output)
+    (widget-input:input-widget-set-text! iw2 init-log)
+    (widget-input:input-widget-set-text! iw3 init-entry)
+    (widget-input:input-widget-set-text! iw4 init-heap)
+    ;; field-idx: 0-4 = text fields, 5 = Build button, 6 = Cancel button
+    (%build-form-loop term scr bx by box-w box-h
+                      iw0 iw1 iw2 iw3 iw4
+                      bg border-s label-s field-s active-s btn-s btn-sel
+                      0))
+
+  (declare %build-form-render
+           (screen:Screen * UFix * UFix * UFix * UFix *
+                          widget-input:InputWidget * widget-input:InputWidget *
+                          widget-input:InputWidget * widget-input:InputWidget *
+                          widget-input:InputWidget *
+                          color:Style * color:Style * color:Style * color:Style * color:Style *
+                          color:Style * color:Style * UFix -> Void))
+  (define (%build-form-render scr bx by box-w box-h
+                              iw0 iw1 iw2 iw3 iw4
+                              bg border-s label-s field-s active-s btn-s btn-sel
+                              field-idx)
+    (let inner-w = (- box-w 2))
+    (let label-w = 14)
+    (let field-w = (- inner-w label-w))
+    (let fx = (+ bx (+ 1 label-w)))
+    ;; Draw box and fill
+    (render:draw-box scr (wt:Rect bx by box-w box-h) border-s)
+    (render:fill-rect scr (wt:Rect (+ bx 1) (+ by 1) inner-w (- box-h 2)) #\Space bg)
+    ;; Title
+    (screen:screen-set-string scr (+ by 1) (+ bx 3) "Build Executable"
+                              (color:Style color:accent-fg color:panel-bg color:AttrBold))
+    ;; Labels
+    (screen:screen-set-string scr (+ by 3) (+ bx 2) "Project .asd:" label-s)
+    (screen:screen-set-string scr (+ by 4) (+ bx 2) "Output file: " label-s)
+    (screen:screen-set-string scr (+ by 5) (+ bx 2) "Build log:   " label-s)
+    (screen:screen-set-string scr (+ by 6) (+ bx 2) "Entry point: " label-s)
+    (screen:screen-set-string scr (+ by 7) (+ bx 2) "Heap (MB):   " label-s)
+    ;; Field backgrounds
+    (render:fill-rect scr (wt:Rect fx (+ by 3) field-w 1) #\Space (if (== field-idx 0) active-s field-s))
+    (render:fill-rect scr (wt:Rect fx (+ by 4) field-w 1) #\Space (if (== field-idx 1) active-s field-s))
+    (render:fill-rect scr (wt:Rect fx (+ by 5) field-w 1) #\Space (if (== field-idx 2) active-s field-s))
+    (render:fill-rect scr (wt:Rect fx (+ by 6) field-w 1) #\Space (if (== field-idx 3) active-s field-s))
+    (render:fill-rect scr (wt:Rect fx (+ by 7) field-w 1) #\Space (if (== field-idx 4) active-s field-s))
+    ;; Render each field's text
+    (widget-input:input-widget-render iw0 scr (wt:Rect fx (+ by 3) field-w 1))
+    (widget-input:input-widget-render iw1 scr (wt:Rect fx (+ by 4) field-w 1))
+    (widget-input:input-widget-render iw2 scr (wt:Rect fx (+ by 5) field-w 1))
+    (widget-input:input-widget-render iw3 scr (wt:Rect fx (+ by 6) field-w 1))
+    (widget-input:input-widget-render iw4 scr (wt:Rect fx (+ by 7) field-w 1))
+    ;; Re-render active field last so its cursor position wins
+    (when (< field-idx 5)
+      (match field-idx
+        (0 (widget-input:input-widget-render iw0 scr (wt:Rect fx (+ by 3) field-w 1)))
+        (1 (widget-input:input-widget-render iw1 scr (wt:Rect fx (+ by 4) field-w 1)))
+        (2 (widget-input:input-widget-render iw2 scr (wt:Rect fx (+ by 5) field-w 1)))
+        (3 (widget-input:input-widget-render iw3 scr (wt:Rect fx (+ by 6) field-w 1)))
+        (_ (widget-input:input-widget-render iw4 scr (wt:Rect fx (+ by 7) field-w 1)))))
+    ;; Buttons
+    (let btn-y = (+ by 9))
+    (let build-label = " Build ")
+    (let cancel-label = " Cancel ")
+    (let btn-area-start = (+ bx (lisp (-> UFix) (inner-w)
+                                  (cl:max 1 (cl:floor (cl:- inner-w 20) 2)))))
+    (screen:screen-set-string scr btn-y btn-area-start build-label
+                              (if (== field-idx 5) btn-sel btn-s))
+    (screen:screen-set-string scr btn-y (+ btn-area-start 10) cancel-label
+                              (if (== field-idx 6) btn-sel btn-s))
+    ;; Hide cursor if on a button
+    (when (>= field-idx 5)
+      (screen:screen-hide-cursor scr))
+    (values))
+
+  (declare %build-form-loop
+           (term:Terminal * screen:Screen * UFix * UFix * UFix * UFix *
+                          widget-input:InputWidget * widget-input:InputWidget *
+                          widget-input:InputWidget * widget-input:InputWidget *
+                          widget-input:InputWidget *
+                          color:Style * color:Style * color:Style * color:Style * color:Style *
+                          color:Style * color:Style * UFix
+                          -> Optional (Tuple (Tuple String String) (Tuple String (Tuple String String)))))
+  (define (%build-form-loop term scr bx by box-w box-h
+                            iw0 iw1 iw2 iw3 iw4
+                            bg border-s label-s field-s active-s btn-s btn-sel
+                            field-idx)
+    (%build-form-render scr bx by box-w box-h
+                        iw0 iw1 iw2 iw3 iw4
+                        bg border-s label-s field-s active-s btn-s btn-sel
+                        field-idx)
+    (term:terminal-flush term)
+    (let ev = (term:terminal-wait-for-key term))
+    (let next-field = (if (< field-idx 6) (+ field-idx 1) 0))
+    (let recur =
+      (fn (fi)
+        (%build-form-loop term scr bx by box-w box-h
+                          iw0 iw1 iw2 iw3 iw4
+                          bg border-s label-s field-s active-s btn-s btn-sel
+                          fi)))
+    (let result =
+      (fn ()
+        (Some (Tuple (Tuple (widget-input:input-widget-text iw0)
+                            (widget-input:input-widget-text iw1))
+                     (Tuple (widget-input:input-widget-text iw2)
+                            (Tuple (widget-input:input-widget-text iw3)
+                                   (widget-input:input-widget-text iw4)))))))
+    (match ev
+      ;; Escape -> cancel
+      ((input:IEvKey (input:KeyEscape) _) None)
+      ;; Tab -> next field
+      ((input:IEvKey (input:KeyTab) _) (recur next-field))
+      ;; Down -> next field
+      ((input:IEvKey (input:KeyDown) _)
+       (if (< field-idx 5) (recur (+ field-idx 1)) (recur field-idx)))
+      ;; Up -> prev field
+      ((input:IEvKey (input:KeyUp) _)
+       (if (and (> field-idx 0) (<= field-idx 5)) (recur (- field-idx 1)) (recur field-idx)))
+      ;; Enter
+      ((input:IEvKey (input:KeyEnter) _)
+       (cond
+         ;; On a text field or Build button -> submit
+         ((<= field-idx 5) (result))
+         ;; On Cancel button -> cancel
+         (True None)))
+      ;; Text editing keys -> delegate to active widget if on a text field
+      ((input:IEvKey key mod)
+       (cond
+         ((< field-idx 5)
+          (match field-idx
+            (0 (widget-input:input-widget-handle-key! iw0 key mod))
+            (1 (widget-input:input-widget-handle-key! iw1 key mod))
+            (2 (widget-input:input-widget-handle-key! iw2 key mod))
+            (3 (widget-input:input-widget-handle-key! iw3 key mod))
+            (_ (widget-input:input-widget-handle-key! iw4 key mod)))
+          (recur field-idx))
+         ;; On buttons, Left/Right switch between them
+         (True
+          (match key
+            ((input:KeyLeft) (recur 5))
+            ((input:KeyRight) (recur 6))
+            (_ (recur field-idx))))))
+      ;; Mouse clicks
+      ((input:IEvMouse (input:MousePress) _ click-col click-row)
+       (let inner-w = (- box-w 2))
+       (let label-w = 14)
+       (let fx = (+ bx (+ 1 label-w)))
+       (let field-w = (- inner-w label-w))
+       (let btn-y = (+ by 9))
+       (let btn-area-start = (+ bx (lisp (-> UFix) (inner-w)
+                                     (cl:max 1 (cl:floor (cl:- inner-w 20) 2)))))
+       (cond
+         ;; Click on text fields
+         ((and (>= click-col fx) (< click-col (+ fx field-w))
+               (and (>= click-row (+ by 3)) (<= click-row (+ by 7))))
+          (recur (- click-row (+ by 3))))
+         ;; Click on Build button
+         ((and (== click-row btn-y)
+               (and (>= click-col btn-area-start) (< click-col (+ btn-area-start 7))))
+          (result))
+         ;; Click on Cancel button
+         ((and (== click-row btn-y)
+               (and (>= click-col (+ btn-area-start 10)) (< click-col (+ btn-area-start 18))))
+          None)
+         ;; Click outside box -> cancel
+         ((or (< click-col bx) (>= click-col (+ bx box-w)))
+          None)
+         ((or (< click-row by) (>= click-row (+ by box-h)))
+          None)
+         ;; Click elsewhere inside box -> ignore
+         (True (recur field-idx))))
+      ;; Resize — recompute layout
+      ((input:IEvResize _ _)
+       (handle-dialog-resize! term)
+       (let nc = (term:terminal-cols term))
+       (let nr = (term:terminal-rows term))
+       (let new-box-w = (min 70 (- nc 4)))
+       (let new-box-h = 12)
+       (let new-bx = (lisp (-> UFix) (nc new-box-w) (cl:max 0 (cl:floor (cl:- nc new-box-w) 2))))
+       (let new-by = (lisp (-> UFix) (nr new-box-h) (cl:max 0 (cl:floor (cl:- nr new-box-h) 2))))
+       (screen:screen-clear (term:.terminal-screen term))
+       (%build-form-loop term (term:.terminal-screen term) new-bx new-by new-box-w new-box-h
+                         iw0 iw1 iw2 iw3 iw4
+                         bg border-s label-s field-s active-s btn-s btn-sel
+                         field-idx))
+      ;; Ignore other events
+      (_ (recur field-idx))))
+
+) ;; end coalton-toplevel
