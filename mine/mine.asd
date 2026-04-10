@@ -147,5 +147,10 @@
     :serial t
     :components ((:ct-file "setup")
                  (:ct-file "help")
+                 (:ct-file "clipboard")
+                 (:ct-file "completion")
+                 (:ct-file "dialogs")
+                 (:ct-file "find")
+                 (:ct-file "build")
                  (:ct-file "mine")
                  (:file "executable")))))
