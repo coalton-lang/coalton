@@ -2092,10 +2092,15 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       ((input:KeyCtrl #\f) (start-find! st))
       ;; Ctrl+O -> open file
       ((input:KeyCtrl #\o)
-       (let cwd = (lisp (-> String) ()
-                    (cl:namestring (cl:truename "."))))
+       (let start-dir = (match (mgr:bufmgr-current (.ms-bufmgr st))
+                          ((Some b)
+                           (match (buf:buffer-path b)
+                             ((Some p) (lisp (-> String) (p)
+                                         (cl:namestring (cl:make-pathname :name cl:nil :type cl:nil :defaults p))))
+                             ((None) (lisp (-> String) () (cl:namestring (cl:truename "."))))))
+                          ((None) (lisp (-> String) () (cl:namestring (cl:truename "."))))))
        (mini:minibuffer-prompt-with-completion! (.ms-minibuffer st)
-                                                "Open File: " cwd
+                                                "Open File: " start-dir
                                                 (fn (path) (open-loose-file! st path))
                                                 complete:complete-file-path))
 
@@ -3126,10 +3131,15 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       ((menubar:ActionBuildExecutable)
        (build-executable! st term))
       ((menubar:ActionOpenFile)
-       (let cwd = (lisp (-> String) ()
-                    (cl:namestring (cl:truename "."))))
+       (let start-dir = (match (mgr:bufmgr-current (.ms-bufmgr st))
+                          ((Some b)
+                           (match (buf:buffer-path b)
+                             ((Some p) (lisp (-> String) (p)
+                                         (cl:namestring (cl:make-pathname :name cl:nil :type cl:nil :defaults p))))
+                             ((None) (lisp (-> String) () (cl:namestring (cl:truename "."))))))
+                          ((None) (lisp (-> String) () (cl:namestring (cl:truename "."))))))
        (mini:minibuffer-prompt-with-completion! (.ms-minibuffer st)
-                                                "Open File: " cwd
+                                                "Open File: " start-dir
                                                 (fn (path) (open-loose-file! st path))
                                                 complete:complete-file-path))
       ((menubar:ActionSave) (save-current-file! st))
