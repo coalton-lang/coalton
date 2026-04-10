@@ -19,12 +19,24 @@
                '("COALTON-TOPLEVEL" "COALTON")
                :test #'string-equal)))
 
+(defun %format-result-values (values package)
+  "Render VALUES for transport to the TUI as one printed string per value."
+  (loop :for val :in values
+        :collect (with-output-to-string (s)
+                   (let ((*package* package))
+                     (write val :stream s)))))
+
+(defun %encode-result-values (values package)
+  "Encode VALUES for transport to the TUI while preserving value boundaries."
+  (prin1-to-string (list :values (%format-result-values values package))))
+
 ;;; Public API
 
 (defun safe-eval (form-string package-name)
   "Evaluate FORM-STRING in the package named PACKAGE-NAME.
 Returns (values result-string output-string error-string) where
-error-string is NIL on success."
+RESULT-STRING encodes the printed values list and ERROR-STRING is NIL on
+success."
   (let ((pkg (find-or-make-package package-name)))
     (handler-case
         (let* ((form (let ((*package* pkg)
@@ -52,14 +64,7 @@ error-string is NIL on success."
                       (values nil
                               (get-output-stream-string stdout-capture)
                               (format nil "~A" c))))))
-          ;; Format multiple values nicely
-          (let ((result-string
-                  (with-output-to-string (s)
-                    (loop :for val :in result-values
-                          :for i :from 0
-                          :do (when (> i 0) (terpri s))
-                              (let ((*package* pkg))
-                                (write val :stream s))))))
+          (let ((result-string (%encode-result-values result-values pkg)))
             (values result-string
                     (get-output-stream-string stdout-capture)
                     nil)))
@@ -118,11 +123,7 @@ Returns (values result-string output-string) on success."
     (let ((all-output (concatenate 'string
                         (get-output-stream-string stdout-capture)
                         (get-output-stream-string stderr-capture))))
-      (values (with-output-to-string (s)
-                (loop :for val :in result-values
-                      :for i :from 0
-                      :do (when (> i 0) (terpri s))
-                          (let ((*package* pkg)) (write val :stream s))))
+      (values (%encode-result-values result-values pkg)
               all-output))))
 
 (defun debug-compile-string (form-string package-name &optional wire-stream msg-id)
@@ -172,11 +173,7 @@ return expression values (load returns T)."
     (let ((all-output (concatenate 'string
                         (get-output-stream-string stdout-capture)
                         (get-output-stream-string stderr-capture))))
-      (values (with-output-to-string (s)
-                (loop :for val :in result-values
-                      :for i :from 0
-                      :do (when (> i 0) (terpri s))
-                          (let ((*package* pkg)) (write val :stream s))))
+      (values (%encode-result-values result-values pkg)
               all-output))))
 
 (defun eval-in-package (form package-name)
@@ -202,15 +199,7 @@ Returns (values result-string output-string error-string)."
                       (values nil
                               (get-output-stream-string stdout-capture)
                               (format nil "~A" c))))))
-          (let ((result-string
-                  (with-output-to-string (s)
-                    (loop :for val :in result-values
-                          :for i :from 0
-                          :do (when (> i 0)
-                                (write-string " ; " s)
-                                (terpri s))
-                              (let ((*package* pkg))
-                                (write val :stream s))))))
+          (let ((result-string (%encode-result-values result-values pkg)))
             (values result-string
                     (get-output-stream-string stdout-capture)
                     nil)))
