@@ -10,7 +10,7 @@
 - Single, static, zero-dependency binary
 - Cross-platform on Windows, Mac, and Linux
 - Common Lisp (via SBCL) and Coalton built-in
-- Syntax highlighting
+- Syntax highlighting and tab completion
 - Support for interactive development with a REPL
 - Structural editing and canonical indentation
 - Native support for projects via ASDF

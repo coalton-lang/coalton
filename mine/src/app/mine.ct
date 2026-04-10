@@ -132,7 +132,8 @@
     (ms-config             cfgt:MineConfig) ;; 34 -- loaded configuration
     (ms-io-request-active  (Cell Boolean))  ;; 35 -- waiting for IO input from user?
     (ms-io-request-data    NativeBox)       ;; 36 -- (msg-id . stream) for IO response
-    (ms-repl-maximized     (Cell Boolean))) ;; 37 -- REPL pane maximized?
+    (ms-repl-maximized     (Cell Boolean))  ;; 37 -- REPL pane maximized?
+    (ms-completion         complete:CompletionState)) ;; 38 -- inline completion popup
 
 ;;; Named accessors for CL interop (avoids fragile numeric indices)
 
@@ -192,6 +193,15 @@
 
   (declare get-io-request-data (MineState -> NativeBox))
   (define (get-io-request-data st) (.ms-io-request-data st))
+
+  (declare get-repl-maximized-cell (MineState -> (Cell Boolean)))
+  (define (get-repl-maximized-cell st) (.ms-repl-maximized st))
+
+  (declare get-completion (MineState -> complete:CompletionState))
+  (define (get-completion st) (.ms-completion st))
+
+  (declare get-content-x-cell (MineState -> (Cell UFix)))
+  (define (get-content-x-cell st) (.ms-content-x st))
 
 ;;; Request ID allocation
 
@@ -360,6 +370,9 @@
        ;; Place cursor at end of REPL input line
        (values))
       (_ (screen:screen-hide-cursor scr)))
+    ;; Render completion popup overlay
+    (when (complete:completion-active? (.ms-completion st))
+      (complete:completion-render (.ms-completion st) scr cols rows))
     ;; Render dropdown menu overlay (on top of everything)
     (when (menubar:menubar-open? (.ms-menu st))
       (menubar:menubar-render-dropdown (.ms-menu st) scr cols rows)
@@ -2012,13 +2025,22 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (match (mgr:bufmgr-current (.ms-bufmgr st))
          ((Some buf) (ops:newline! buf (buf:buffer-undo buf) (.ms-cursor st)))
          ((None) (values))))
-      ;; Tab
+      ;; Tab: trigger completion if mid-symbol, else indent
       ((input:KeyTab)
        (match (mgr:bufmgr-current (.ms-bufmgr st))
          ((Some buf)
+          (let prefix = (complete:extract-symbol-prefix
+                          (buf:buffer-gap buf)
+                          (cursor:cursor-position (.ms-cursor st))))
           (cond
+            ;; Non-empty prefix and not plain text: try completion
+            ((and (> (str:length prefix) 0)
+                  (not (== (buf:buffer-mode buf) buf:ModePlainText)))
+             (%trigger-completion! st))
+            ;; Structural editing: reindent
             ((%structural-edit? st buf)
              (reindent-line! buf (buf:buffer-undo buf) (.ms-cursor st)))
+            ;; Otherwise: insert spaces
             (True
              (ops:insert-string! buf (buf:buffer-undo buf) (.ms-cursor st) "  "))))
          ((None) (values))))
@@ -2211,6 +2233,17 @@ Uses the preceding (in-package ...) form to determine the compilation package."
           (let text = (clipboard:clipboard-paste))
           (repl:repl-pane-paste-to-input! (.ms-repl st) text)
           (values))
+         ;; Tab -> trigger completion if mid-symbol
+         ((input:KeyTab)
+          (let text = (repl:repl-pane-get-input (.ms-repl st)))
+          (let cursor = (repl:repl-pane-input-cursor (.ms-repl st)))
+          (let prefix = (complete:extract-symbol-prefix-input text cursor))
+          (cond
+            ((> (str:length prefix) 0)
+             (%trigger-completion! st))
+            (True
+             (repl:repl-pane-handle-key! (.ms-repl st) key mod)
+             (values))))
          (_
           ;; Delegate everything else to the REPL pane's own key handler
           (repl:repl-pane-handle-key! (.ms-repl st) key mod)
@@ -2375,6 +2408,91 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          (when (== (focus:focus-current (.ms-focus st)) focus:FocusTree)
            (focus:focus-switch! (.ms-focus st) focus:FocusEditor))
          (values)))))
+
+;;; Event handling -- completion popup keys
+
+  (declare handle-completion-key! (MineState * term:Terminal * input:Key * input:Modifier -> Void))
+  (define (handle-completion-key! st term key mod)
+    "Handle keys while the completion popup is active."
+    (let comp = (.ms-completion st))
+    (match key
+      ;; Tab: cycle down
+      ((input:KeyTab)
+       (cond
+         ((== mod input:ModShift)
+          (complete:completion-cycle-up! comp))
+         (True
+          (complete:completion-cycle-down! comp))))
+      ;; Enter: accept highlighted candidate
+      ((input:KeyEnter)
+       (match (complete:completion-selected-name comp)
+         ((Some name)
+          (%completion-accept! st name)
+          (complete:completion-dismiss! comp))
+         ((None)
+          (complete:completion-dismiss! comp))))
+      ;; Escape / Ctrl+G: dismiss
+      ((input:KeyEscape)
+       (complete:completion-dismiss! comp))
+      ((input:KeyCtrl #\g)
+       (complete:completion-dismiss! comp))
+      ;; Printable chars: insert normally, re-filter
+      ((input:KeyChar _ch)
+       ;; Insert the character via normal handler
+       (handle-key st term key mod)
+       ;; Re-filter with updated prefix
+       (%completion-refilter! st))
+      ;; Backspace: delete normally, re-filter
+      ((input:KeyBackspace)
+       (handle-key st term key mod)
+       (%completion-refilter! st))
+      ;; Anything else: dismiss and process normally
+      (_ (complete:completion-dismiss! comp)
+         (handle-key st term key mod))))
+
+  (declare %completion-refilter! (MineState -> Void))
+  (define (%completion-refilter! st)
+    "Re-filter the completion list based on the current prefix at cursor."
+    (let new-prefix =
+      (match (focus:focus-current (.ms-focus st))
+        ((focus:FocusEditor)
+         (match (mgr:bufmgr-current (.ms-bufmgr st))
+           ((Some buf)
+            (complete:extract-symbol-prefix
+              (buf:buffer-gap buf)
+              (cursor:cursor-position (.ms-cursor st))))
+           ((None) "")))
+        ((focus:FocusRepl)
+         (let text = (repl:repl-pane-get-input (.ms-repl st)))
+         (let cursor = (repl:repl-pane-input-cursor (.ms-repl st)))
+         (complete:extract-symbol-prefix-input text cursor))
+        (_ "")))
+    (complete:completion-filter! (.ms-completion st) new-prefix))
+
+  (declare %completion-accept! (MineState * String -> Void))
+  (define (%completion-accept! st name)
+    "Replace the current prefix in the buffer with NAME."
+    (let prefix = (cell:read (complete:.cs-prefix (.ms-completion st))))
+    (let suffix = (lisp (-> String) (name prefix)
+                    (cl:if (cl:>= (cl:length name) (cl:length prefix))
+                           (cl:subseq name (cl:length prefix))
+                           "")))
+    (match (focus:focus-current (.ms-focus st))
+      ((focus:FocusEditor)
+       (match (mgr:bufmgr-current (.ms-bufmgr st))
+         ((Some buf)
+          (ops:insert-string! buf (buf:buffer-undo buf) (.ms-cursor st) suffix))
+         ((None) (values))))
+      ((focus:FocusRepl)
+       (repl:repl-pane-paste-to-input! (.ms-repl st) suffix))
+      (_ (values))))
+
+  (declare %trigger-completion! (MineState -> Void))
+  (define (%trigger-completion! st)
+    "Extract prefix and package, send completion request to the runtime server."
+    (lisp (-> Void) (st)
+      (%request-completion st)
+      (cl:values)))
 
 ;;; Event handling -- top-level key dispatch
 
@@ -3277,6 +3395,12 @@ Render-app is NOT called here; the main loop handles rendering."
                  ((None) (values))))
               (_ (values))))
            (_ (values))))
+        ;; Completion popup active: intercept keys
+        ((complete:completion-active? (.ms-completion st))
+         (match event
+           ((ev:EvKey key mod)
+            (handle-completion-key! st term key mod))
+           (_ (complete:completion-dismiss! (.ms-completion st)))))
         ;; Normal dispatch
         (True
          (match event
@@ -3540,7 +3664,8 @@ Render-app is NOT called here; the main loop handles rendering."
                          config
                          (cell:new False)
                          (native-box-new)
-                         (cell:new False)))
+                         (cell:new False)
+                         (complete:completion-new)))
     ;; Open a file if given on the command line
     (let file-args = (filter (fn (a) (not (str:substring? "--" a))) (list:cdr args)))
     (match file-args
@@ -4382,6 +4507,190 @@ Handles the debugger state where conn-stream is (msg-id . stream)."
 (cl:defun %status-msg (st text)
   (mine/pane/status::statusbar-set-message!
    (mine/app/mine::get-status-bar st) text))
+
+;;; Async symbol completion
+
+(cl:defun %request-completion (st)
+  "Send a :complete request to the subprocess based on current focus context.
+Sends the raw prefix and buffer package to the server, which handles all
+package resolution including local nicknames."
+  (cl:let* ((focus (mine/widget/focus:focus-current (mine/app/mine::get-focus-mgr st)))
+            (repl-focus-p (cl:eq focus mine/widget/focus:FocusRepl)))
+    (cl:multiple-value-bind (prefix pkg-name cursor-pos)
+        (cl:if repl-focus-p
+               (%completion-context-repl st)
+               (%completion-context-editor st))
+      (cl:when (cl:and prefix (cl:plusp (cl:length prefix)))
+        (cl:let ((rid (%next-request-id-cl st))
+                 (saved-prefix prefix)
+                 (saved-cursor cursor-pos)
+                 (is-repl repl-focus-p))
+          (%register-pending-request rid
+            (cl:lambda (st payload)
+              (%handle-completion-response st payload saved-prefix saved-cursor is-repl)))
+          (%send-to-subprocess st
+            (cl:list :complete rid prefix pkg-name)))))))
+
+(cl:defun %completion-context-editor (st)
+  "Return (values prefix pkg-name cursor-pos) for the editor."
+  (cl:let* ((bufmgr (mine/app/mine::get-bufmgr st))
+            (buf (mine/buffer/manager:bufmgr-current bufmgr)))
+    ;; Coalton Optional Buffer is nil for None, Buffer for Some
+    (cl:if buf
+           (cl:let* ((gb (mine/buffer/buffer:buffer-gap buf))
+                     (cs (mine/app/mine::get-cursor-state st))
+                     (cur-pos (mine/edit/cursor:cursor-position cs))
+                     (prefix (mine/app/completion:extract-symbol-prefix gb cur-pos))
+                     (buf-text (mine/buffer/gap:gap-to-string gb))
+                     (default-pkg (coalton/cell:read (mine/app/mine::get-repl-package-cell st)))
+                     (pkg (%detect-buffer-package buf-text default-pkg)))
+             (cl:values prefix pkg cur-pos))
+           (cl:values nil "CL-USER" 0))))
+
+(cl:defun %completion-context-repl (st)
+  "Return (values prefix pkg-name cursor-pos) for the REPL input."
+  (cl:let* ((rp (mine/app/mine::get-repl-pane st))
+            (text (mine/pane/repl:repl-pane-get-input rp))
+            (cursor (mine/pane/repl:repl-pane-input-cursor rp))
+            (prefix (mine/app/completion:extract-symbol-prefix-input text cursor))
+            (pkg (coalton/cell:read (mine/app/mine::get-repl-package-cell st))))
+    (cl:values prefix pkg cursor)))
+
+(cl:defun %handle-completion-response (st payload saved-prefix saved-cursor is-repl)
+  "Process the :complete response: build candidates, compute common prefix,
+insert the unambiguous part, and open the popup.
+Server returns names already qualified (e.g. \"vec:push-extend\")."
+  (cl:declare (cl:ignore saved-cursor))
+  ;; Ignore if a completion popup is already active (duplicate request)
+  (cl:when (mine/app/completion:completion-active? (mine/app/mine::get-completion st))
+    (cl:return-from %handle-completion-response))
+  (cl:when (cl:and (cl:consp payload) (cl:eq (cl:first payload) :ok))
+    (cl:let ((raw-matches (cl:second payload)))
+      (cl:when (cl:and raw-matches (cl:consp raw-matches))
+        (cl:let* ((candidates (%build-candidate-list raw-matches))
+                  (n (cl:length raw-matches)))
+          ;; Compute common prefix of all candidate names
+          (cl:let* ((cp (mine/app/completion:common-prefix candidates))
+                    (cp-len (cl:length cp))
+                    (prefix-len (cl:length saved-prefix))
+                    (comp-state (mine/app/mine::get-completion st)))
+            ;; Insert unambiguous extension into buffer
+            (cl:when (cl:> cp-len prefix-len)
+              (cl:let ((extension (cl:subseq cp prefix-len)))
+                (cl:if is-repl
+                       (mine/pane/repl:repl-pane-paste-to-input!
+                         (mine/app/mine::get-repl-pane st)
+                         extension)
+                       (cl:let ((buf (mine/buffer/manager:bufmgr-current (mine/app/mine::get-bufmgr st))))
+                         (cl:when buf
+                           (mine/edit/operations:insert-string!
+                             buf
+                             (mine/buffer/buffer:buffer-undo buf)
+                             (mine/app/mine::get-cursor-state st)
+                             extension))))))
+            ;; Open popup if multiple candidates remain
+            (cl:when (cl:> n 1)
+              ;; Compute anchor screen position (approximate)
+              (cl:let ((anchor-col (%completion-anchor-col st is-repl saved-prefix))
+                       (anchor-row (%completion-anchor-row st is-repl))
+                       (new-prefix (cl:if (cl:> cp-len prefix-len) cp saved-prefix)))
+                (mine/app/completion:completion-open!
+                  comp-state new-prefix candidates anchor-col anchor-row)))))))))
+
+(cl:defun %build-candidate-list (raw-matches)
+  "Convert server response list of (name kind type-sig) into Coalton Candidate list.
+Names are already qualified by the server."
+  (cl:if (cl:null raw-matches)
+         Nil
+         (cl:let ((entry (cl:first raw-matches)))
+           (cl:if (cl:consp entry)
+                  ;; Annotated: (name kind type-sig)
+                  (cl:let ((name (cl:or (cl:first entry) ""))
+                           (kind (cl:or (cl:second entry) ""))
+                           (type-sig (cl:or (cl:third entry) "")))
+                    (Cons (mine/app/completion:Candidate
+                            (cl:if (cl:stringp name) name (cl:princ-to-string name))
+                            (cl:if (cl:stringp kind) kind (cl:princ-to-string kind))
+                            (cl:if (cl:stringp type-sig) type-sig (cl:princ-to-string type-sig)))
+                          (%build-candidate-list (cl:rest raw-matches))))
+                  ;; Plain string fallback
+                  (Cons (mine/app/completion:Candidate
+                          (cl:princ-to-string entry) "" "")
+                        (%build-candidate-list (cl:rest raw-matches)))))))
+
+
+
+(cl:defun %completion-anchor-col (st is-repl prefix)
+  "Compute the screen column for the completion popup anchor."
+  (cl:if is-repl
+         ;; REPL: approximate from input widget
+         (cl:let* ((rp (mine/app/mine::get-repl-pane st))
+                   (cursor (mine/pane/repl:repl-pane-input-cursor rp))
+                   (prompt-len (mine/text/width:string-cell-width-cl
+                                 (mine/pane/repl:repl-pane-prompt-text rp)))
+                   (text (mine/pane/repl:repl-pane-get-input rp))
+                   (text-before (cl:subseq text 0 (cl:min cursor (cl:length text))))
+                   (vcol (mine/text/width:string-cell-width-cl text-before))
+                   (content-x (coalton/cell:read (mine/app/mine::get-content-x-cell st))))
+           (cl:+ content-x prompt-len
+                 (cl:max 0 (cl:- vcol (cl:length prefix)))))
+         ;; Editor: from cursor position
+         (cl:let* ((cs (mine/app/mine::get-cursor-state st))
+                   (buf (mine/buffer/manager:bufmgr-current (mine/app/mine::get-bufmgr st))))
+           (cl:if buf
+                  (cl:let* ((gb (mine/buffer/buffer:buffer-gap buf))
+                            (ep (mine/app/mine::get-editor-pane st))
+                            (lc (mine/edit/cursor:cursor-line-col cs gb))
+                            (cur-col (coalton-prelude:snd lc))
+                            (line (coalton-prelude:fst lc))
+                            (line-text (mine/buffer/gap:gap-line-text gb line))
+                            (tab-w mine/buffer/gap::*tab-width*)
+                            (vcol (mine/buffer/gap:visual-col line-text cur-col tab-w))
+                            (sc (mine/pane/editor:editor-pane-scroll-col ep))
+                            (gw (mine/pane/editor:editor-pane-gutter-width ep gb))
+                            (content-x (coalton/cell:read (mine/app/mine::get-content-x-cell st))))
+                    (cl:+ content-x gw (cl:max 0 (cl:- vcol sc (cl:length prefix)))))
+                  0))))
+
+(cl:defun %completion-anchor-row (st is-repl)
+  "Compute the screen row for the completion popup anchor (the cursor line)."
+  (cl:if is-repl
+         ;; REPL: match the layout in render-app
+         (cl:let* ((rp (mine/app/mine::get-repl-pane st))
+                   (text (mine/pane/repl:repl-pane-get-input rp))
+                   (cursor (mine/pane/repl:repl-pane-input-cursor rp))
+                   (cursor-row (cl:count #\Newline text :end (cl:min cursor (cl:length text))))
+                   (rows (mine/bindings/terminal:terminal-get-size))
+                   (middle-h (cl:max 1 (cl:- rows 2)))
+                   (maximized (coalton/cell:read
+                                (mine/app/mine::get-repl-maximized-cell st)))
+                   (repl-h (cl:if maximized
+                                  (cl:max 1 (cl:- middle-h 1))
+                                  (cl:max 3 (cl:floor middle-h 3))))
+                   ;; repl-y: menu(1) + editor-h + editor-status(1)
+                   (repl-y (cl:if maximized
+                                  1
+                                  (cl:- middle-h repl-h)))
+                   ;; Input position within REPL pane (output above, input below)
+                   (input-lines (mine/pane/repl:repl-pane-input-line-count rp))
+                   (max-input-h (cl:max 1 (cl:floor repl-h 2)))
+                   (input-h (cl:max 1 (cl:min input-lines max-input-h)))
+                   (output-h (cl:- repl-h input-h))
+                   ;; Input starts at repl-y + output-h
+                   (input-y (cl:+ repl-y output-h)))
+           (cl:+ input-y cursor-row))
+         ;; Editor: cursor line on screen
+         (cl:let* ((cs (mine/app/mine::get-cursor-state st))
+                   (buf (mine/buffer/manager:bufmgr-current (mine/app/mine::get-bufmgr st))))
+           (cl:if buf
+                  (cl:let* ((gb (mine/buffer/buffer:buffer-gap buf))
+                            (lc (mine/edit/cursor:cursor-line-col cs gb))
+                            (cur-line (coalton-prelude:fst lc))
+                            (ep (mine/app/mine::get-editor-pane st))
+                            (sr (mine/pane/editor:editor-pane-scroll-row ep)))
+                    ;; +1 for menu bar row
+                    (cl:+ 1 (cl:- cur-line sr)))
+                  1))))
 
 ;;; Diagnostics storage
 
