@@ -9,6 +9,29 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (require :sb-introspect))
 
+;;; Uninteresting warnings
+;;;
+;;; SBCL signals style-warnings (REDEFINITION-WITH-DEFUN, etc.) that are
+;;; noisy but harmless during normal ASDF compile-file + load cycles.
+;;; SLIME/SWANK silences these globally via swank-asdf; ASDF's own
+;;; compile-file* / load* muffle them when *uninteresting-conditions* is
+;;; set.  We muffle the same set at the compiler level (declaim) and
+;;; skip them in our handler-bind so they never reach the REPL.
+
+(declaim (sb-ext:muffle-conditions sb-kernel:redefinition-with-defun
+                                   sb-kernel:redefinition-with-defgeneric
+                                   sb-kernel:redefinition-with-defmethod
+                                   sb-kernel::redefinition-with-defmacro
+                                   sb-kernel:uninteresting-redefinition
+                                   sb-ext:implicit-generic-function-warning
+                                   sb-int:package-at-variance))
+
+(defun %uninteresting-warning-p (w)
+  "Return T if W is a warning that ASDF/SWANK would normally muffle."
+  (typep w '(or sb-kernel:redefinition-warning
+                sb-ext:implicit-generic-function-warning
+                sb-int:package-at-variance)))
+
 ;;; Wire format
 
 (defun read-message (stream)
@@ -91,7 +114,7 @@ Returns :quit if the server should shut down, T otherwise."
        (destructuring-bind (id string buffer-name package-name position)
            (rest msg)
          (declare (ignore buffer-name position))
-         (handle-eval id string package-name stream)))
+         (handle-compile-string id string package-name stream)))
 
       (:compile-file
        (destructuring-bind (id filename load-p) (rest msg)
@@ -233,13 +256,16 @@ Returns the symbol or NIL."
                  (%enter-debugger id condition stream))))
            (warning
              (lambda (w)
-               (handler-case
-                   (let ((text (format nil "~A" w)))
-                     (dolist (line (split-string-by-newline text))
-                       (when (plusp (length line))
-                         (write-message stream
-                           `(:notify (:output ,(format nil ";; ~A" line)))))))
-                 (error () nil)))))
+               (unless (%uninteresting-warning-p w)
+                 (handler-case
+                     (let* ((class-name (string-downcase
+                                         (class-name (class-of w))))
+                            (text (format nil "~A" w)))
+                       (write-message stream
+                         `(:notify (:output ,(format nil ";; ~A: ~A"
+                                                     class-name
+                                                     (string-trim '(#\Newline #\Space) text))))))
+                   (error () nil))))))
         (let ((*error-output* stderr-capture))
           (restart-case
               (handler-case
@@ -262,6 +288,55 @@ Returns the symbol or NIL."
             (continue ()
               :report "Continue, returning NIL"
               (write-message stream `(:return ,id (:ok "NIL"))))))))))
+
+(defun handle-compile-string (id form-string package-name stream)
+  "Handle a :compile-string request with interactive debugger support.
+Uses compile-file + load for correct eval-when toplevel semantics."
+  (let ((stderr-capture (make-string-output-stream)))
+    (catch '%debugger-abort
+      (handler-bind
+          ((serious-condition
+             (lambda (condition)
+               (unless (or (typep condition 'reader-error)
+                           (typep condition 'end-of-file)
+                           (typep condition 'package-error))
+                 (%flush-stderr-capture stderr-capture stream)
+                 (%enter-debugger id condition stream))))
+           (warning
+             (lambda (w)
+               (unless (%uninteresting-warning-p w)
+                 (handler-case
+                     (let* ((class-name (string-downcase
+                                         (class-name (class-of w))))
+                            (text (format nil "~A" w)))
+                       (write-message stream
+                         `(:notify (:output ,(format nil ";; ~A: ~A"
+                                                     class-name
+                                                     (string-trim '(#\Newline #\Space) text))))))
+                   (error () nil))))))
+        (let ((*error-output* stderr-capture))
+          (restart-case
+              (handler-case
+                  (multiple-value-bind (result output)
+                      (mine/runtime/eval:debug-compile-string
+                       form-string package-name)
+                    (when (and output (plusp (length output)))
+                      (dolist (line (split-string-by-newline output))
+                        (write-message stream `(:notify (:output ,line)))))
+                    (write-message stream `(:return ,id (:ok ,(or result "T")))))
+                (reader-error (c)
+                  (write-message stream `(:return ,id (:error ,(format nil "Read error: ~A" c)))))
+                (end-of-file (c)
+                  (declare (ignore c))
+                  (write-message stream `(:return ,id (:error "Read error: unexpected end of input"))))
+                (package-error (c)
+                  (write-message stream `(:return ,id (:error ,(format nil "Package error: ~A" c))))))
+            (abort ()
+              :report "Abort compilation and return to REPL"
+              (write-message stream `(:return ,id (:error "Aborted."))))
+            (continue ()
+              :report "Continue, returning NIL"
+              (write-message stream `(:return ,id (:ok "T"))))))))))
 
 (defun %ct-file-p (filename)
   "Return T if FILENAME has a .ct extension."
