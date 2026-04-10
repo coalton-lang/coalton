@@ -17,8 +17,6 @@
    #:tree-pane-set-root!
    #:tree-pane-clear-root!
    #:tree-pane-render
-   #:tree-pane-visible?
-   #:tree-pane-toggle-visible!
    #:tree-pane-move-up!
    #:tree-pane-move-down!
    #:tree-pane-toggle-expand!
@@ -62,7 +60,6 @@
     (root          (Cell (Optional TreeNode)))
     (selected      (Cell UFix))                          ; tree section selection
     (scroll        (Cell UFix))                          ; tree section scroll
-    (visible       (Cell Boolean))
     (open-files    (Cell (List (Tuple String String))))   ; (display-name, path)
     (preview-path  (Cell (Optional String)))
     (open-selected (Cell UFix))                          ; open files section selection
@@ -71,27 +68,15 @@
 
   (declare tree-pane-new (Void -> TreePane))
   (define (tree-pane-new)
-    "Create a new tree pane with no root and hidden by default."
+    "Create a new tree pane with no root and empty open-files state."
     (TreePane (cell:new None)
               (cell:new 0)
               (cell:new 0)
-              (cell:new False)
               (cell:new Nil)
               (cell:new None)
               (cell:new 0)
               (cell:new 0)
               (cell:new False)))
-
-  ;;; Visibility
-
-  (declare tree-pane-visible? (TreePane -> Boolean))
-  (define (tree-pane-visible? tp)
-    (cell:read (.visible tp)))
-
-  (declare tree-pane-toggle-visible! (TreePane -> Void))
-  (define (tree-pane-toggle-visible! tp)
-    (cell:write! (.visible tp) (not (cell:read (.visible tp))))
-    (values))
 
   ;;; Root management
 

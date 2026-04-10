@@ -77,38 +77,74 @@
 (cl:defvar *restart-into-setup* nil
   "When set to T by the Setup Wizard menu action, mine-main reruns the setup wizard.")
 
-(coalton-toplevel
+	(coalton-toplevel
 
 ;;; NativeBox -- opaque wrapper for CL-side objects
 
-  (repr :native %native-box)
+	  (repr :native %native-box)
   (define-type NativeBox
     "Opaque container for CL-side native objects (mailboxes, threads, streams).")
 
   (declare native-box-new (Void -> NativeBox))
-  (define (native-box-new)
-    "Create an empty NativeBox."
-    (lisp (-> NativeBox) ()
-      (make-%native-box)))
+	  (define (native-box-new)
+	    "Create an empty NativeBox."
+	    (lisp (-> NativeBox) ()
+	      (make-%native-box)))
+
+;;; Layout state
+
+	  (repr :enum)
+	  (define-type TreeLayout
+	    TreeHidden
+	    TreeVisible)
+
+	  (define-instance (Eq TreeLayout)
+	    (define (== a b)
+	      (match (Tuple a b)
+	        ((Tuple (TreeHidden) (TreeHidden)) True)
+	        ((Tuple (TreeVisible) (TreeVisible)) True)
+	        (_ False))))
+
+	  (repr :enum)
+	  (define-type CenterLayout
+	    CenterEditor
+	    CenterEditorFull
+	    CenterEditorFullReplRow
+	    CenterEditorReplSplit
+	    CenterReplFull)
+
+	  (define-instance (Eq CenterLayout)
+	    (define (== a b)
+	      (match (Tuple a b)
+	        ((Tuple (CenterEditor) (CenterEditor)) True)
+	        ((Tuple (CenterEditorFull) (CenterEditorFull)) True)
+	        ((Tuple (CenterEditorFullReplRow) (CenterEditorFullReplRow)) True)
+	        ((Tuple (CenterEditorReplSplit) (CenterEditorReplSplit)) True)
+	        ((Tuple (CenterReplFull) (CenterReplFull)) True)
+	        (_ False))))
+
+	  (define-struct MineLayout
+	    (ml-tree   TreeLayout)
+	    (ml-center CenterLayout))
 
 ;;; Application state
 
-  (define-struct MineState
-    "Top-level mutable application state."
+	  (define-struct MineState
+	    "Top-level mutable application state."
     (ms-menu              menubar:MenuBar)          ;; 0
     (ms-status            status:StatusBar)         ;; 1
     (ms-editor            editor:EditorPane)        ;; 2
     (ms-bufmgr            mgr:BufferManager)        ;; 3
     (ms-cursor            cursor:CursorState)       ;; 4
     (ms-repl              repl:ReplPane)            ;; 5
-    (ms-tree              tree:TreePane)            ;; 7
-    (ms-focus             focus:FocusManager)       ;; 8
-    (ms-runtime           lifecycle:RuntimeManager) ;; 9
-    (ms-next-req-id       (Cell UFix))              ;; 10
-    (ms-repl-visible      (Cell Boolean))           ;; 11
-    (ms-content-x         (Cell UFix))              ;; 12
-    (ms-repl-package      (Cell String))            ;; 13
-    (ms-repl-busy         (Cell Boolean))           ;; 14
+	    (ms-tree              tree:TreePane)            ;; 7
+	    (ms-focus             focus:FocusManager)       ;; 8
+	    (ms-runtime           lifecycle:RuntimeManager) ;; 9
+	    (ms-next-req-id       (Cell UFix))              ;; 10
+	    (ms-layout            (Cell MineLayout))        ;; 11
+	    (ms-content-x         (Cell UFix))              ;; 12
+	    (ms-repl-package      (Cell String))            ;; 13
+	    (ms-repl-busy         (Cell Boolean))           ;; 14
     (ms-repl-timing       (Cell String))            ;; 15
     (ms-proto-mailbox     NativeBox) ;; 16 -- sb-concurrency mailbox (value = mailbox or nil)
     (ms-proto-thread      NativeBox) ;; 17 -- reader thread handle (value = thread or nil)
@@ -128,12 +164,11 @@
     (ms-diagnostics       NativeBox) ;; 30 -- CL hash table: filepath -> list of (line severity message)
     (ms-find-needle       (Cell String)) ;; 31 -- current search string (empty = no search)
     (ms-find-matches      NativeBox) ;; 32 -- CL simple-vector of match positions (UFix), or nil
-    (ms-structural-editing (Cell Boolean)) ;; 33 -- structural editing enabled?
-    (ms-config             cfgt:MineConfig) ;; 34 -- loaded configuration
-    (ms-io-request-active  (Cell Boolean))  ;; 35 -- waiting for IO input from user?
-    (ms-io-request-data    NativeBox)       ;; 36 -- (msg-id . stream) for IO response
-    (ms-repl-maximized     (Cell Boolean))  ;; 37 -- REPL pane maximized?
-    (ms-completion         complete:CompletionState)) ;; 38 -- inline completion popup
+	    (ms-structural-editing (Cell Boolean)) ;; 33 -- structural editing enabled?
+	    (ms-config             cfgt:MineConfig) ;; 34 -- loaded configuration
+	    (ms-io-request-active  (Cell Boolean))  ;; 35 -- waiting for IO input from user?
+	    (ms-io-request-data    NativeBox)       ;; 36 -- (msg-id . stream) for IO response
+	    (ms-completion         complete:CompletionState)) ;; 37 -- inline completion popup
 
 ;;; Named accessors for CL interop (avoids fragile numeric indices)
 
@@ -194,14 +229,126 @@
   (declare get-io-request-data (MineState -> NativeBox))
   (define (get-io-request-data st) (.ms-io-request-data st))
 
-  (declare get-repl-maximized-cell (MineState -> (Cell Boolean)))
-  (define (get-repl-maximized-cell st) (.ms-repl-maximized st))
+  (declare get-layout-cell (MineState -> (Cell MineLayout)))
+  (define (get-layout-cell st) (.ms-layout st))
 
   (declare get-completion (MineState -> complete:CompletionState))
   (define (get-completion st) (.ms-completion st))
 
   (declare get-content-x-cell (MineState -> (Cell UFix)))
   (define (get-content-x-cell st) (.ms-content-x st))
+
+;;; Layout helpers
+
+  (declare %layout-tree-visible? (MineLayout -> Boolean))
+  (define (%layout-tree-visible? layout)
+    (== (.ml-tree layout) TreeVisible))
+
+  (declare %layout-repl-visible? (MineLayout -> Boolean))
+  (define (%layout-repl-visible? layout)
+    (match (.ml-center layout)
+      ((CenterEditor) False)
+      ((CenterEditorFull) False)
+      (_ True)))
+
+  (declare %layout-editor-full? (MineLayout -> Boolean))
+  (define (%layout-editor-full? layout)
+    (match (.ml-center layout)
+      ((CenterEditorFull) True)
+      ((CenterEditorFullReplRow) True)
+      (_ False)))
+
+  (declare %layout-editor-full-repl-row? (MineLayout -> Boolean))
+  (define (%layout-editor-full-repl-row? layout)
+    (== (.ml-center layout) CenterEditorFullReplRow))
+
+  (declare %layout-repl-full? (MineLayout -> Boolean))
+  (define (%layout-repl-full? layout)
+    (== (.ml-center layout) CenterReplFull))
+
+  (declare %layout-split? (MineLayout -> Boolean))
+  (define (%layout-split? layout)
+    (== (.ml-center layout) CenterEditorReplSplit))
+
+  (declare %tree-visible? (MineState -> Boolean))
+  (define (%tree-visible? st)
+    (%layout-tree-visible? (cell:read (.ms-layout st))))
+
+  (declare %repl-visible? (MineState -> Boolean))
+  (define (%repl-visible? st)
+    (%layout-repl-visible? (cell:read (.ms-layout st))))
+
+  (declare %center-layout (MineState -> CenterLayout))
+  (define (%center-layout st)
+    (.ml-center (cell:read (.ms-layout st))))
+
+  (declare %set-center-layout! (MineState * CenterLayout -> Void))
+  (define (%set-center-layout! st center)
+    (let layout = (cell:read (.ms-layout st)))
+    (cell:write! (.ms-layout st) (MineLayout (.ml-tree layout) center))
+    (values))
+
+  (declare %set-tree-layout! (MineState * TreeLayout -> Void))
+  (define (%set-tree-layout! st tree-layout)
+    (let layout = (cell:read (.ms-layout st)))
+    (cell:write! (.ms-layout st) (MineLayout tree-layout (.ml-center layout)))
+    (values))
+
+  (declare %show-tree! (MineState -> Void))
+  (define (%show-tree! st)
+    (%set-tree-layout! st TreeVisible))
+
+  (declare %hide-tree! (MineState -> Void))
+  (define (%hide-tree! st)
+    (%set-tree-layout! st TreeHidden))
+
+  (declare %center-open-repl (CenterLayout -> CenterLayout))
+  (define (%center-open-repl center)
+    (match center
+      ((CenterEditor) CenterEditorReplSplit)
+      ((CenterEditorFull) CenterEditorFullReplRow)
+      (_ center)))
+
+  (declare %center-focus-repl (CenterLayout -> CenterLayout))
+  (define (%center-focus-repl center)
+    (match center
+      ((CenterReplFull) CenterReplFull)
+      (_ CenterEditorReplSplit)))
+
+  (declare %center-hide-repl (CenterLayout -> CenterLayout))
+  (define (%center-hide-repl center)
+    (match center
+      ((CenterEditorFullReplRow) CenterEditorFull)
+      ((CenterEditorReplSplit) CenterEditor)
+      ((CenterReplFull) CenterEditor)
+      (_ center)))
+
+  (declare %center-focus-editor (CenterLayout -> CenterLayout))
+  (define (%center-focus-editor center)
+    (match center
+      ((CenterReplFull) CenterEditorReplSplit)
+      (_ center)))
+
+  (declare %center-toggle-editor-full (CenterLayout -> CenterLayout))
+  (define (%center-toggle-editor-full center)
+    (match center
+      ((CenterEditor) CenterEditorFull)
+      ((CenterEditorFull) CenterEditor)
+      ((CenterEditorFullReplRow) CenterEditorReplSplit)
+      ((CenterEditorReplSplit) CenterEditorFullReplRow)
+      ((CenterReplFull) CenterEditorReplSplit)))
+
+  (declare %focus-repl! (MineState -> Void))
+  (define (%focus-repl! st)
+    (%set-center-layout! st (%center-focus-repl (%center-layout st)))
+    (focus:focus-switch! (.ms-focus st) focus:FocusRepl)
+    (values))
+
+  (declare %show-editor! (MineState -> Void))
+  (define (%show-editor! st)
+    (%set-center-layout! st (%center-focus-editor (%center-layout st)))
+    (focus:focus-switch! (.ms-focus st) focus:FocusEditor)
+    (values))
 
 ;;; Request ID allocation
 
@@ -218,10 +365,32 @@
   (define (%tree-width st cols)
     "Compute tree pane width. Full when focused, 1-column when collapsed, 0 when hidden."
     (cond
-      ((not (tree:tree-pane-visible? (.ms-tree st))) 0)
+      ((not (%tree-visible? st)) 0)
       ((== (focus:focus-current (.ms-focus st)) focus:FocusTree)
        (min 30 (lisp (-> UFix) (cols) (cl:floor cols 4))))
       (True 1)))
+
+  (declare render-repl-focus-strip (screen:Screen * wt:Rect -> Void))
+  (define (render-repl-focus-strip scr rect)
+    "Render the one-line REPL focus strip used by fullscreen editor mode."
+    (when (> (wt:.rect-height rect) 0)
+      (let y = (wt:.rect-y rect))
+      (let x = (wt:.rect-x rect))
+      (let bg-style = (color:Style color:text-dimmer-fg
+                                   color:repl-bg
+                                   color:AttrNone))
+      (let prompt-style = (color:Style color:accent-fg
+                                       color:repl-bg
+                                       color:AttrBold))
+      (let hint-style = (color:Style color:text-dimmer-fg
+                                     color:repl-bg
+                                     color:AttrItalic))
+      (render:fill-rect scr rect #\Space bg-style)
+      (screen:screen-set-string scr y x "> " prompt-style)
+      (screen:screen-set-string scr y (+ x 2)
+                                "Click here or press Ctrl+R to focus the REPL."
+                                hint-style)
+      (values)))
 
 ;;; Render
 
@@ -241,7 +410,8 @@
     ;; Middle area: between menu bar and status bar
     (let middle-h = (if (> rows 2) (- rows 2) 1))
     ;; Determine tree pane width and content x/width
-    (let tree-vis = (tree:tree-pane-visible? (.ms-tree st)))
+    (let layout = (cell:read (.ms-layout st)))
+    (let tree-vis = (%layout-tree-visible? layout))
     (let tree-focused = (== (focus:focus-current (.ms-focus st)) focus:FocusTree))
     (let tree-w = (%tree-width st cols))
     (let content-x = (if tree-vis (+ tree-w 1) 0))
@@ -258,62 +428,69 @@
         (True
          ;; Collapsed: number strip
          (let strip-rect = (wt:Rect 0 1 1 middle-h))
-         (let current-path = (match (mgr:bufmgr-current (.ms-bufmgr st))
-                               ((Some b) (buf:buffer-path b))
-                               ((None) None)))
-         (tree:tree-pane-render-collapsed (.ms-tree st) scr strip-rect current-path)))
-      ;; Draw vertical separator
-      (render-tree-separator st scr tree-w 1 middle-h))
-    ;; Split middle into editor and optional REPL
-    (cond
-      ;; REPL maximized: only REPL + REPL status
-      ((and (cell:read (.ms-repl-visible st)) (cell:read (.ms-repl-maximized st)))
-       (let repl-h = (if (> middle-h 1) (- middle-h 1) 1))
-       (let repl-status-y = (+ 1 repl-h))
-       (let repl-rect = (wt:Rect content-x 1 content-w repl-h))
-       (let repl-status-rect = (wt:Rect content-x repl-status-y content-w 1))
-       (cond
-         ((cell:read (.ms-debugger-active st))
-          (render-debugger-in-repl st scr repl-rect))
-         (True
-          (repl:repl-pane-render (.ms-repl st) scr repl-rect)))
-       (render-repl-status st scr repl-status-rect)
-       (values))
-      ((cell:read (.ms-repl-visible st))
-       ;; REPL visible: editor + editor status, REPL + REPL status
-       (let repl-h = (max 3 (lisp (-> UFix) (middle-h) (cl:floor middle-h 3))))
-       ;; Reserve 1 row each for editor status and REPL status
-       (let editor-h = (if (> middle-h (+ repl-h 2))
-                           (- middle-h (+ repl-h 2))
-                           1))
-       (let ed-status-y = (+ 1 editor-h))
-       (let repl-y = (+ ed-status-y 1))
-       (let repl-status-y = (+ repl-y repl-h))
-       (let editor-rect = (wt:Rect content-x 1 content-w editor-h))
-       (let ed-status-rect = (wt:Rect content-x ed-status-y content-w 1))
-       (let repl-rect = (wt:Rect content-x repl-y content-w repl-h))
-       (let repl-status-rect = (wt:Rect content-x repl-status-y content-w 1))
-       (render-editor-pane st scr editor-rect)
-       (render-editor-status st scr ed-status-rect)
-       (cond
-         ((cell:read (.ms-debugger-active st))
-          (render-debugger-in-repl st scr repl-rect))
-         (True
-          (repl:repl-pane-render (.ms-repl st) scr repl-rect)))
-       (render-repl-status st scr repl-status-rect)
-       (values))
-      (True
-       ;; REPL hidden: editor + editor status
-       (let editor-h = (if (> middle-h 1) (- middle-h 1) 1))
-       (let ed-status-y = (+ 1 editor-h))
-       (let editor-rect = (wt:Rect content-x 1 content-w editor-h))
-       (let ed-status-rect = (wt:Rect content-x ed-status-y content-w 1))
-       (render-editor-pane st scr editor-rect)
-       (render-editor-status st scr ed-status-rect)))
-    ;; Update status bar fields
-    (let cur-gb = (match (mgr:bufmgr-current (.ms-bufmgr st))
-                    ((Some buf) (buf:buffer-gap buf))
-                    ((None) (gap:gap-new))))
+	         (let current-path = (match (mgr:bufmgr-current (.ms-bufmgr st))
+	                               ((Some b) (buf:buffer-path b))
+	                               ((None) None)))
+	         (tree:tree-pane-render-collapsed (.ms-tree st) scr strip-rect current-path)))
+	      ;; Draw vertical separator
+	      (render-tree-separator st scr tree-w 1 middle-h))
+	    ;; Split middle according to the current layout.
+	    (match (.ml-center layout)
+	      ((CenterReplFull)
+	       (let repl-h = (if (> middle-h 1) (- middle-h 1) 1))
+	       (let repl-status-y = (+ 1 repl-h))
+	       (let repl-rect = (wt:Rect content-x 1 content-w repl-h))
+	       (let repl-status-rect = (wt:Rect content-x repl-status-y content-w 1))
+	       (cond
+	         ((cell:read (.ms-debugger-active st))
+	          (render-debugger-in-repl st scr repl-rect))
+	         (True
+	          (repl:repl-pane-render (.ms-repl st) scr repl-rect)))
+	       (render-repl-status st scr repl-status-rect)
+	       (values))
+	      ((CenterEditorReplSplit)
+	       (let repl-h = (max 3 (lisp (-> UFix) (middle-h) (cl:floor middle-h 3))))
+	       (let editor-h = (if (> middle-h (+ repl-h 2))
+	                           (- middle-h (+ repl-h 2))
+	                           1))
+	       (let ed-status-y = (+ 1 editor-h))
+	       (let repl-y = (+ ed-status-y 1))
+	       (let repl-status-y = (+ repl-y repl-h))
+	       (let editor-rect = (wt:Rect content-x 1 content-w editor-h))
+	       (let ed-status-rect = (wt:Rect content-x ed-status-y content-w 1))
+	       (let repl-rect = (wt:Rect content-x repl-y content-w repl-h))
+	       (let repl-status-rect = (wt:Rect content-x repl-status-y content-w 1))
+	       (render-editor-pane st scr editor-rect)
+	       (render-editor-status st scr ed-status-rect)
+	       (cond
+	         ((cell:read (.ms-debugger-active st))
+	          (render-debugger-in-repl st scr repl-rect))
+	         (True
+	          (repl:repl-pane-render (.ms-repl st) scr repl-rect)))
+	       (render-repl-status st scr repl-status-rect)
+	       (values))
+	      ((CenterEditor)
+	       (let editor-h = (if (> middle-h 1) (- middle-h 1) 1))
+	       (let ed-status-y = (+ 1 editor-h))
+	       (let editor-rect = (wt:Rect content-x 1 content-w editor-h))
+	       (let ed-status-rect = (wt:Rect content-x ed-status-y content-w 1))
+	       (render-editor-pane st scr editor-rect)
+	       (render-editor-status st scr ed-status-rect))
+	      ((CenterEditorFull)
+	       (let editor-rect = (wt:Rect content-x 1 content-w middle-h))
+	       (render-editor-pane st scr editor-rect))
+	      ((CenterEditorFullReplRow)
+	       (let editor-h = (if (> middle-h 1) (- middle-h 1) middle-h))
+	       (let editor-rect = (wt:Rect content-x 1 content-w editor-h))
+	       (render-editor-pane st scr editor-rect)
+	       (when (> middle-h editor-h)
+	         (let repl-strip-rect = (wt:Rect content-x (+ 1 editor-h) content-w 1))
+	         (render-repl-focus-strip scr repl-strip-rect))
+	       (values)))
+	    ;; Update status bar fields
+	    (let cur-gb = (match (mgr:bufmgr-current (.ms-bufmgr st))
+	                    ((Some buf) (buf:buffer-gap buf))
+	                    ((None) (gap:gap-new))))
     (match (cursor:cursor-line-col (.ms-cursor st) cur-gb)
       ((Tuple cur-line cur-col)
        (let fname =
@@ -1040,7 +1217,7 @@ multiple values get 1>, 2>, etc."
          (cl:values))
        (repl:repl-pane-append-output! (.ms-repl st)
                                       (<> ";; Debugger: " cond-text))
-       (focus:focus-switch! (.ms-focus st) focus:FocusRepl))
+       (%focus-repl! st))
       ((ProtoIORequest prompt-text io-data)
        (cell:write! (.ms-io-request-active st) True)
        (lisp (-> Void) (st io-data)
@@ -1053,13 +1230,13 @@ multiple values get 1>, 2>, etc."
                                        prompt-text))
        (repl:repl-pane-append-system! (.ms-repl st) ";; Waiting for input...")
        (ensure-repl-visible! st)
-       (focus:focus-switch! (.ms-focus st) focus:FocusRepl))
+       (%focus-repl! st))
       ((ProtoConnectionLost)
        (repl:repl-pane-append-output! (.ms-repl st) "[connection lost]")
        (cell:write! (.ms-repl-busy st) False)
        (when (cell:read (.ms-debugger-active st))
          (cell:write! (.ms-debugger-active st) False)
-         (focus:focus-switch! (.ms-focus st) focus:FocusEditor))
+         (%show-editor! st))
        (when (cell:read (.ms-io-request-active st))
          (%deactivate-io-request! st))
        (lisp (-> Void) (st)
@@ -1316,8 +1493,7 @@ First reloads the .asd to pick up any changes, then loads the system."
   (declare ensure-repl-visible! (MineState -> Void))
   (define (ensure-repl-visible! st)
     "Make sure the REPL pane is visible."
-    (when (not (cell:read (.ms-repl-visible st)))
-      (cell:write! (.ms-repl-visible st) True)))
+    (%set-center-layout! st (%center-open-repl (%center-layout st))))
 
   (declare %send-repl-init! (MineState * client:Connection -> Void))
   (define (%send-repl-init! st conn)
@@ -1546,6 +1722,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
 
 ;;; Create project on disk
 
+  (declare open-project-at-path! (MineState * String -> Void))
   (declare create-new-project! (MineState * String * String * Boolean -> Void))
   (define (create-new-project! st name location is-coalton)
     "Create a new project directory, .asd, and skeleton files, then open it."
@@ -2312,7 +2489,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                                                   complete:complete-file-path)))
       ;; Escape: return focus to editor
       ((input:KeyEscape)
-       (focus:focus-switch! (.ms-focus st) focus:FocusEditor)
+       (%show-editor! st)
        (values))
       ;; Everything else -> ignore
       (_ (values))))
@@ -2405,9 +2582,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       (match entry
         ((Tuple _name fpath)
          (%switch-to-open-file! st fpath)
-         (when (== (focus:focus-current (.ms-focus st)) focus:FocusTree)
-           (focus-editor! st))
-         (%show-editor-if-repl-maximized! st)))))
+         (%show-editor! st)))))
 
 ;;; Event handling -- completion popup keys
 
@@ -2517,7 +2692,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          ;; Ctrl+R -> toggle REPL
          ((input:KeyCtrl #\r) (toggle-repl! st))
 
-         ;; Ctrl+E -> focus editor
+         ;; Ctrl+E -> focus editor / toggle fullscreen editor
          ((input:KeyCtrl #\e) (focus-editor! st))
 
          ;; Ctrl+P -> toggle structural editing
@@ -2608,18 +2783,24 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     "Handle mouse scroll wheel. DELTA is negative for up, positive for down."
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
-    (let tree-vis = (tree:tree-pane-visible? (.ms-tree st)))
+    (let layout = (cell:read (.ms-layout st)))
+    (let tree-vis = (%layout-tree-visible? layout))
     (let tree-w = (%tree-width st cols))
     (let middle-h = (if (> rows 2) (- rows 2) 1))
-    (let repl-vis = (cell:read (.ms-repl-visible st)))
-    (let repl-max = (and repl-vis (cell:read (.ms-repl-maximized st))))
-    (let repl-h = (cond
-                    ((not repl-vis) 0)
-                    (repl-max middle-h)
-                    (True (max 3 (lisp (-> UFix) (middle-h) (cl:floor middle-h 3))))))
-    (let editor-status-h = (if (and repl-vis (not repl-max)) 1 0))
-    (let editor-h = (- middle-h (+ repl-h editor-status-h)))
-    (let repl-start = (+ 1 (+ editor-h editor-status-h)))
+    (let center = (.ml-center layout))
+    (let split-repl-h = (max 3 (lisp (-> UFix) (middle-h) (cl:floor middle-h 3))))
+    (let editor-h = (match center
+                      ((CenterEditor)
+                       (if (> middle-h 1) (- middle-h 1) 1))
+                      ((CenterEditorFull) middle-h)
+                      ((CenterEditorFullReplRow)
+                       (if (> middle-h 1) (- middle-h 1) middle-h))
+                      ((CenterEditorReplSplit)
+                       (if (> middle-h (+ split-repl-h 2))
+                           (- middle-h (+ split-repl-h 2))
+                           1))
+                      ((CenterReplFull) 0)))
+    (let split-repl-start = (+ 1 (+ editor-h 1)))
     (let tree-focused = (== (focus:focus-current (.ms-focus st)) focus:FocusTree))
     (cond
       ;; Scroll in tree pane (only when expanded/focused)
@@ -2628,14 +2809,20 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (let tree-row = (if (< _row 1) 0 (- _row 1)))
        (tree:tree-pane-scroll-delta! (.ms-tree st) tree-row delta pane-h))
       ;; Scroll in REPL output area
-      ((and repl-vis (>= _row repl-start))
+      ((or
+         (and (== center CenterReplFull)
+              (> _row 0)
+              (< _row (+ 1 middle-h)))
+         (and (== center CenterEditorReplSplit)
+              (>= _row split-repl-start)
+              (< _row (+ split-repl-start split-repl-h))))
        (if (< delta 0)
            (repl:repl-pane-scroll-output-up! (.ms-repl st)
                                              (lisp (-> UFix) (delta) (cl:- delta)))
            (repl:repl-pane-scroll-output-down! (.ms-repl st)
                                                (lisp (-> UFix) (delta) delta))))
       ;; Scroll in editor
-      (True
+      ((> editor-h 0)
        (let cur = (editor:editor-pane-scroll-row (.ms-editor st)))
        (match (mgr:bufmgr-current (.ms-bufmgr st))
          ((Some buf)
@@ -2664,19 +2851,35 @@ Uses the preceding (in-package ...) form to determine the compilation package."
              (cell:write! (cursor:.pos (.ms-cursor st)) (+ tgt-start (min cur-col tgt-len)))
              (values))
             (True (values))))
-         ((None) (values))))))
+         ((None) (values))))
+      (True (values))))
 
   (declare scrollbar-drag! (MineState * term:Terminal * UFix * UFix -> Boolean))
   (define (scrollbar-drag! st term col row)
     "Handle a scrollbar click/drag. Returns True if consumed."
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
-    (let tree-vis = (tree:tree-pane-visible? (.ms-tree st)))
+    (let layout = (cell:read (.ms-layout st)))
+    (let tree-vis = (%layout-tree-visible? layout))
     (let tree-w = (%tree-width st cols))
     (let tree-focused = (== (focus:focus-current (.ms-focus st)) focus:FocusTree))
     (let right-edge = (- cols 1))
     (let status-y = (if (> rows 0) (- rows 1) 0))
     (let middle-h = (if (> rows 2) (- rows 2) 1))
+    (let center = (.ml-center layout))
+    (let split-repl-h = (max 3 (lisp (-> UFix) (middle-h) (cl:floor middle-h 3))))
+    (let editor-h = (match center
+                      ((CenterEditor)
+                       (if (> middle-h 1) (- middle-h 1) 1))
+                      ((CenterEditorFull) middle-h)
+                      ((CenterEditorFullReplRow)
+                       (if (> middle-h 1) (- middle-h 1) middle-h))
+                      ((CenterEditorReplSplit)
+                       (if (> middle-h (+ split-repl-h 2))
+                           (- middle-h (+ split-repl-h 2))
+                           1))
+                      ((CenterReplFull) 0)))
+    (let split-repl-start = (+ editor-h 1))
     (cond
       ;; Tree scrollbar: rightmost column of tree area (only when expanded)
       ((and tree-vis (and tree-focused (and (> tree-w 0) (and (== col (- tree-w 1)) (and (> row 0) (< row status-y))))))
@@ -2685,37 +2888,41 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        True)
       ;; Right edge column: editor or REPL scrollbar
       ((and (== col right-edge) (> row 0) (< row status-y))
-       (let repl-vis = (cell:read (.ms-repl-visible st)))
-       (let repl-max = (and repl-vis (cell:read (.ms-repl-maximized st))))
-       (let repl-h = (cond
-                       ((not repl-vis) 0)
-                       (repl-max middle-h)
-                       (True (max 3 (lisp (-> UFix) (middle-h) (cl:floor middle-h 3))))))
-       (let editor-status-h = (if (and repl-vis (not repl-max)) 1 0))
-       (let editor-h = (- middle-h (+ repl-h editor-status-h)))
        (let rel-y = (- row 1))
-       (let repl-start = (+ editor-h editor-status-h))
-       (let repl-output-h = (if (> repl-h 1) (- repl-h 1) 0))
        (cond
          ;; Click in editor scrollbar area
-         ((< rel-y editor-h)
+         ((and (> editor-h 0) (< rel-y editor-h))
           (match (mgr:bufmgr-current (.ms-bufmgr st))
             ((Some buf)
              (let gb = (buf:buffer-gap buf))
              (let total = (gap:gap-line-count gb))
              (when (> total editor-h)
-               (editor:editor-pane-set-scroll-row! (.ms-editor st)
-                                                   (%scrollbar-compute-offset rel-y total editor-h))))
+              (editor:editor-pane-set-scroll-row! (.ms-editor st)
+                                                  (%scrollbar-compute-offset rel-y total editor-h))))
             ((None) (values)))
           True)
-         ;; Click in REPL scrollbar area
-         ((and repl-vis (>= rel-y repl-start) (< rel-y (+ repl-start repl-output-h)))
-          (let repl-rel-y = (- rel-y repl-start))
-          (let total = (repl:repl-pane-output-line-count (.ms-repl st)))
-          (when (> total repl-output-h)
-            (repl:repl-pane-set-output-scroll! (.ms-repl st)
-                                               (%scrollbar-compute-offset repl-rel-y total repl-output-h)))
-          True)
+         ((== center CenterEditorReplSplit)
+          (let repl-output-h = (if (> split-repl-h 1) (- split-repl-h 1) 0))
+          (if (and (>= rel-y split-repl-start) (< rel-y (+ split-repl-start repl-output-h)))
+              (progn
+                (let repl-rel-y = (- rel-y split-repl-start))
+                (let total = (repl:repl-pane-output-line-count (.ms-repl st)))
+                (when (> total repl-output-h)
+                  (repl:repl-pane-set-output-scroll! (.ms-repl st)
+                                                     (%scrollbar-compute-offset repl-rel-y total repl-output-h)))
+                True)
+              False))
+         ((== center CenterReplFull)
+          (let repl-h = (if (> middle-h 1) (- middle-h 1) 1))
+          (let repl-output-h = (if (> repl-h 1) (- repl-h 1) 0))
+          (if (and (>= rel-y 0) (< rel-y repl-output-h))
+              (progn
+                (let total = (repl:repl-pane-output-line-count (.ms-repl st)))
+                (when (> total repl-output-h)
+                  (repl:repl-pane-set-output-scroll! (.ms-repl st)
+                                                     (%scrollbar-compute-offset rel-y total repl-output-h)))
+                True)
+              False))
          (True False)))
       (True False)))
 
@@ -2724,11 +2931,15 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     "Handle a mouse click at (col, row). Switch focus to the clicked pane."
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
-    (let tree-vis = (tree:tree-pane-visible? (.ms-tree st)))
+    (let layout = (cell:read (.ms-layout st)))
+    (let tree-vis = (%layout-tree-visible? layout))
     (let tree-w = (%tree-width st cols))
     (let tree-focused = (== (focus:focus-current (.ms-focus st)) focus:FocusTree))
     (let content-x = (if tree-vis (+ tree-w 1) 0))
     (let status-y = (if (> rows 0) (- rows 1) 0))
+    (let middle-h = (if (> rows 2) (- rows 2) 1))
+    (let center = (.ml-center layout))
+    (let split-repl-h = (max 3 (lisp (-> UFix) (middle-h) (cl:floor middle-h 3))))
     (cond
       ;; Click on menu bar -> open menu if title hit
       ((== row 0)
@@ -2753,43 +2964,44 @@ Uses the preceding (in-package ...) form to determine the compilation package."
             ;; Click in open files section: show in editor
             ((tree:tree-pane-in-open-section? (.ms-tree st))
              (%switch-to-open-file! st hit-path)
-             (%show-editor-if-repl-maximized! st))
+             (%show-editor! st))
             ;; Directory: toggle expand
             ((== hit-path "") (tree:tree-pane-toggle-expand! (.ms-tree st)))
             ;; Tree file: open
-            (True
-             (tree-open-file! st hit-path)
-             (when (cell:read (.ms-repl-maximized st))
-               (%commit-preview! st))
-             (%show-editor-if-repl-maximized! st))))
+            (True (tree-open-file! st hit-path))))
          ((None) (values))))
       ;; Click in content area -> editor or REPL?
       ((>= col content-x)
-       (cond
-         ((cell:read (.ms-repl-visible st))
-          ;; REPL visible: check if click is in editor or REPL portion
-          (let middle-h = (if (> rows 2) (- rows 2) 1))
-          (let repl-max = (cell:read (.ms-repl-maximized st)))
-          (let repl-h = (if repl-max
-                            (if (> middle-h 1) (- middle-h 1) 1)
-                            (max 3 (lisp (-> UFix) (middle-h) (cl:floor middle-h 3)))))
-          (let editor-status-h = (if repl-max 0 1))
-          (let editor-h = (if repl-max
-                              0
-                              (if (> middle-h (+ repl-h (+ editor-status-h 1)))
-                                  (- middle-h (+ repl-h (+ editor-status-h 1)))
-                                  1)))
-          (let repl-y = (+ 1 (+ editor-h editor-status-h)))
-          (let repl-input-y = (+ repl-y (- repl-h 1)))
+       (match center
+         ((CenterReplFull)
+          (let repl-h = (if (> middle-h 1) (- middle-h 1) 1))
+          (let repl-input-y = (+ 1 (- repl-h 1)))
           (cond
-            ;; Click on REPL input line -> focus REPL, position cursor
             ((>= row repl-input-y)
-             (focus:focus-switch! (.ms-focus st) focus:FocusRepl)
+             (%focus-repl! st)
              (repl:repl-pane-clear-selection! (.ms-repl st))
              (values))
-            ;; Click in REPL output area -> focus REPL, start selection
+            ((>= row 1)
+             (%focus-repl! st)
+             (let scroll = (repl:repl-pane-output-scroll (.ms-repl st)))
+             (let line = (+ scroll (- row 1)))
+             (let rcol = (if (>= col content-x) (- col content-x) 0))
+             (repl:repl-pane-start-selection! (.ms-repl st) line rcol)
+             (values))
+            (True (values))))
+         ((CenterEditorReplSplit)
+          (let editor-h = (if (> middle-h (+ split-repl-h 2))
+                              (- middle-h (+ split-repl-h 2))
+                              1))
+          (let repl-y = (+ 1 (+ editor-h 1)))
+          (let repl-input-y = (+ repl-y (- split-repl-h 1)))
+          (cond
+            ((>= row repl-input-y)
+             (%focus-repl! st)
+             (repl:repl-pane-clear-selection! (.ms-repl st))
+             (values))
             ((>= row repl-y)
-             (focus:focus-switch! (.ms-focus st) focus:FocusRepl)
+             (%focus-repl! st)
              (let scroll = (repl:repl-pane-output-scroll (.ms-repl st)))
              (let line = (+ scroll (- row repl-y)))
              (let rcol = (if (>= col content-x) (- col content-x) 0))
@@ -2797,12 +3009,19 @@ Uses the preceding (in-package ...) form to determine the compilation package."
              (values))
             (True
              (%commit-preview! st)
-             (focus:focus-switch! (.ms-focus st) focus:FocusEditor)
+             (%show-editor! st)
              (click-to-cursor! st col row content-x))))
-         (True
-          ;; No REPL -> editor
+         ((CenterEditorFullReplRow)
+          (let editor-h = (if (> middle-h 1) (- middle-h 1) middle-h))
+          (if (and (> middle-h editor-h) (== row (+ 1 editor-h)))
+              (%focus-repl! st)
+              (progn
+                (%commit-preview! st)
+                (%show-editor! st)
+                (click-to-cursor! st col row content-x))))
+         (_
           (%commit-preview! st)
-          (focus:focus-switch! (.ms-focus st) focus:FocusEditor)
+          (%show-editor! st)
           (click-to-cursor! st col row content-x))))
       (True (values))))
 
@@ -2835,48 +3054,41 @@ Uses the preceding (in-package ...) form to determine the compilation package."
 
   (declare toggle-repl! (MineState -> Void))
   (define (toggle-repl! st)
-    "Ctrl+R: open REPL if closed, focus REPL if open, toggle maximize if focused."
-    (let vis = (cell:read (.ms-repl-visible st)))
+    "Ctrl+R: open/focus the REPL, maximize it when already focused."
+    (let center = (%center-layout st))
     (cond
-      ;; Focused on REPL -> toggle maximize
-      ((and vis (== (focus:focus-current (.ms-focus st)) focus:FocusRepl))
-       (cell:write! (.ms-repl-maximized st)
-                    (not (cell:read (.ms-repl-maximized st))))
+      ((and (== center CenterReplFull)
+            (== (focus:focus-current (.ms-focus st)) focus:FocusRepl))
+       (%set-center-layout! st CenterEditorReplSplit)
        (values))
-      ;; REPL visible but not focused -> switch to it
-      (vis
-       (focus:focus-switch! (.ms-focus st) focus:FocusRepl)
+      ((and (== center CenterEditorReplSplit)
+            (== (focus:focus-current (.ms-focus st)) focus:FocusRepl))
+       (%set-center-layout! st CenterReplFull)
        (values))
-      ;; REPL not visible -> open and focus
       (True
-       (cell:write! (.ms-repl-visible st) True)
-       (focus:focus-switch! (.ms-focus st) focus:FocusRepl)
-       ;; Ensure the runtime is started on first REPL open
+       (%focus-repl! st)
        (let _conn = (ensure-runtime! st))
        (values))))
 
   (declare close-repl! (MineState -> Void))
   (define (close-repl! st)
     "Close the REPL pane."
-    (when (cell:read (.ms-repl-visible st))
-      (cell:write! (.ms-repl-visible st) False)
-      (cell:write! (.ms-repl-maximized st) False)
+    (when (%repl-visible? st)
+      (%set-center-layout! st (%center-hide-repl (%center-layout st)))
       (when (== (focus:focus-current (.ms-focus st)) focus:FocusRepl)
-        (focus:focus-switch! (.ms-focus st) focus:FocusEditor)))
+        (%show-editor! st)))
     (values))
 
   (declare focus-editor! (MineState -> Void))
   (define (focus-editor! st)
-    "Ctrl+E: focus editor, restore REPL size if maximized."
-    (cell:write! (.ms-repl-maximized st) False)
-    (focus:focus-switch! (.ms-focus st) focus:FocusEditor)
+    "Ctrl+E: focus editor; if already focused, toggle fullscreen editor mode."
+    (let cur = (focus:focus-current (.ms-focus st)))
+    (cond
+      ((== cur focus:FocusEditor)
+       (%set-center-layout! st (%center-toggle-editor-full (%center-layout st))))
+      (True
+       (%show-editor! st)))
     (values))
-
-  (declare %show-editor-if-repl-maximized! (MineState -> Void))
-  (define (%show-editor-if-repl-maximized! st)
-    "Reveal the editor when a file-open action happens under maximized REPL."
-    (when (cell:read (.ms-repl-maximized st))
-      (focus-editor! st)))
 
   (declare toggle-open-files! (MineState -> Void))
   (define (toggle-open-files! st)
@@ -2885,30 +3097,29 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     (cond
       ;; Already in tree open section -> back to editor
       ((and (== cur focus:FocusTree) (tree:tree-pane-in-open-section? (.ms-tree st)))
-       (focus:focus-switch! (.ms-focus st) focus:FocusEditor)
+       (%show-editor! st)
        (values))
       ;; Otherwise -> show tree and switch to open files section
       (True
-       (when (not (tree:tree-pane-visible? (.ms-tree st)))
-         (tree:tree-pane-toggle-visible! (.ms-tree st)))
+       (%show-tree! st)
        (tree:tree-pane-switch-to-open-section! (.ms-tree st))
        (focus:focus-switch! (.ms-focus st) focus:FocusTree)
        (values))))
 
   (declare toggle-tree! (MineState -> Void))
   (define (toggle-tree! st)
-    (let tvis = (tree:tree-pane-visible? (.ms-tree st)))
+    (let tvis = (%tree-visible? st))
     (cond
       (tvis
        (match (focus:focus-current (.ms-focus st))
          ((focus:FocusTree)
-          (focus:focus-switch! (.ms-focus st) focus:FocusEditor)
+          (%show-editor! st)
           (values))
          (_
           (focus:focus-switch! (.ms-focus st) focus:FocusTree)
           (values))))
       (True
-       (tree:tree-pane-toggle-visible! (.ms-tree st))
+       (%show-tree! st)
        (focus:focus-switch! (.ms-focus st) focus:FocusTree)
        (values))))
 
@@ -3125,16 +3336,14 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                                (cl:file-namestring (cl:pathname path))))
          (tree:tree-pane-add-open-file! (.ms-tree st) display-name path)
          ;; Show tree if hidden
-         (when (not (tree:tree-pane-visible? (.ms-tree st)))
-           (tree:tree-pane-toggle-visible! (.ms-tree st)))
-         (focus-editor! st)
+         (%show-tree! st)
+         (%show-editor! st)
          (status:statusbar-set-message! (.ms-status st) (<> "Opened " display-name)))
         ((Err msg)
          (status:statusbar-set-message! (.ms-status st) msg)))))
 
 ;;; Open project from path
 
-  (declare open-project-at-path! (MineState * String -> Void))
   (define (open-project-at-path! st path)
     "Open a project .asd file at PATH."
     (cond
@@ -3145,8 +3354,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (match (parser:parse-asd-to-tree path)
          ((Some root-node)
           (tree:tree-pane-set-root! (.ms-tree st) root-node)
-          (when (not (tree:tree-pane-visible? (.ms-tree st)))
-            (tree:tree-pane-toggle-visible! (.ms-tree st)))
+          (%show-tree! st)
           (focus:focus-switch! (.ms-focus st) focus:FocusTree)
           ;; Store absolute path and system name
           (let abs-path = (lisp (-> String) (path)
@@ -3254,7 +3462,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
           (cell:write! (.ms-preview-path st) None)
           (tree:tree-pane-set-preview-path! (.ms-tree st) None)
           (tree:tree-pane-clear-root! (.ms-tree st))
-          (focus:focus-switch! (.ms-focus st) focus:FocusEditor)
+          (%show-editor! st)
           (status:statusbar-set-message! (.ms-status st) "Project closed"))
          ((None) (values))))
       ((menubar:ActionBuildExecutable)
@@ -3309,7 +3517,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (let has-work = (or (match (mgr:bufmgr-current (.ms-bufmgr st))
                              ((Some _) True)
                              ((None) False))
-                           (cell:read (.ms-repl-visible st))))
+                           (%repl-visible? st)))
        (when (or (not has-work)
                  (progn
                    (render-app st term)
@@ -3342,7 +3550,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
              (let display-name = (lisp (-> String) (asd-path)
                                    (cl:file-namestring (cl:pathname asd-path))))
              (tree:tree-pane-add-open-file! (.ms-tree st) display-name asd-path)
-             (focus-editor! st))
+             (%show-editor! st))
             ((Err msg)
              (status:statusbar-set-message! (.ms-status st) msg))))))))
 
@@ -3484,9 +3692,15 @@ Render-app is NOT called here; the main loop handles rendering."
                   ;; Extend REPL output selection with auto-scroll
                   (let r = (term:terminal-rows term))
                   (let mid-h = (if (> r 2) (- r 2) 1))
-                  (let rh = (max 3 (lisp (-> UFix) (mid-h) (cl:floor mid-h 3))))
-                  (let eh = (if (> mid-h (+ rh 2)) (- mid-h (+ rh 2)) 1))
-                  (let repl-y = (+ 1 (+ eh 1)))
+                  (let layout = (cell:read (.ms-layout st)))
+                  (let center = (.ml-center layout))
+                  (let rh = (if (== center CenterReplFull)
+                                (if (> mid-h 1) (- mid-h 1) 1)
+                                (max 3 (lisp (-> UFix) (mid-h) (cl:floor mid-h 3)))))
+                  (let split-eh = (if (> mid-h (+ rh 2)) (- mid-h (+ rh 2)) 1))
+                  (let repl-y = (if (== center CenterReplFull)
+                                    1
+                                    (+ 1 (+ split-eh 1))))
                   (let repl-output-h = (if (> rh 1) (- rh 1) 1))
                   (let scroll = (repl:repl-pane-output-scroll (.ms-repl st)))
                   (let cx = (cell:read (.ms-content-x st)))
@@ -3654,7 +3868,7 @@ Render-app is NOT called here; the main loop handles rendering."
     (let tp = (tree:tree-pane-new))
     (let st = (MineState (menubar:menubar-new) (status:statusbar-new)
                          ep bm cs rp tp fm rm
-                         (cell:new 0) (cell:new False) (cell:new 0)
+                         (cell:new 0) (cell:new (MineLayout TreeHidden CenterEditor)) (cell:new 0)
                          (cell:new (cfgt:.config-default-package config)) (cell:new False)
                          (cell:new "")
                          (native-box-new) (native-box-new)
@@ -3675,7 +3889,6 @@ Render-app is NOT called here; the main loop handles rendering."
                          config
                          (cell:new False)
                          (native-box-new)
-                         (cell:new False)
                          (complete:completion-new)))
     ;; Open a file if given on the command line
     (let file-args = (filter (fn (a) (not (str:substring? "--" a))) (list:cdr args)))
@@ -3687,7 +3900,7 @@ Render-app is NOT called here; the main loop handles rendering."
           (match (parser:parse-asd-to-tree path)
             ((Some root-node)
              (tree:tree-pane-set-root! tp root-node)
-             (tree:tree-pane-toggle-visible! tp)
+             (%show-tree! st)
              (focus:focus-switch! fm focus:FocusTree)
              ;; Store the system name and absolute asd path for F5
              (let abs-path = (lisp (-> String) (path)
@@ -3726,8 +3939,7 @@ Render-app is NOT called here; the main loop handles rendering."
              (let display-name = (lisp (-> String) (abs-path)
                                    (cl:file-namestring (cl:pathname abs-path))))
              (tree:tree-pane-add-open-file! tp display-name abs-path)
-             (when (not (tree:tree-pane-visible? tp))
-               (tree:tree-pane-toggle-visible! tp))
+             (%show-tree! st)
              (focus:focus-switch! fm focus:FocusEditor))
             ((Err msg)
              (status:statusbar-set-message! (.ms-status st) msg))))))
@@ -3960,7 +4172,7 @@ If no colon, returns (values buf-pkg name)."
             (mine/buffer/manager::bufmgr-switch! bm bid)
             (mine/pane/editor::editor-pane-set-buffer! ep bid)
             (mine/edit/cursor::cursor-move-to-position! cs char-offset)
-            (mine/app/mine::focus-editor! st)
+            (mine/app/mine::%show-editor! st)
             (mine/pane/status::statusbar-set-message!
              (mine/app/mine::get-status-bar st)
              (cl:format cl:nil "Jumped to ~A" (cl:file-namestring filepath))))))
@@ -4671,15 +4883,21 @@ Names are already qualified by the server."
                    (cursor-row (cl:count #\Newline text :end (cl:min cursor (cl:length text))))
                    (rows (mine/bindings/terminal:terminal-get-size))
                    (middle-h (cl:max 1 (cl:- rows 2)))
-                   (maximized (coalton/cell:read
-                                (mine/app/mine::get-repl-maximized-cell st)))
-                   (repl-h (cl:if maximized
+                   (layout (coalton/cell:read
+                             (mine/app/mine::get-layout-cell st)))
+                   (repl-full (mine/app/mine::%layout-repl-full? layout))
+                   (repl-h (cl:if repl-full
                                   (cl:max 1 (cl:- middle-h 1))
                                   (cl:max 3 (cl:floor middle-h 3))))
+                   (editor-h (cl:if repl-full
+                                    0
+                                    (cl:if (cl:> middle-h (cl:+ repl-h 2))
+                                           (cl:- middle-h (cl:+ repl-h 2))
+                                           1)))
                    ;; repl-y: menu(1) + editor-h + editor-status(1)
-                   (repl-y (cl:if maximized
+                   (repl-y (cl:if repl-full
                                   1
-                                  (cl:- middle-h repl-h)))
+                                  (cl:+ 1 editor-h 1)))
                    ;; Input position within REPL pane (output above, input below)
                    (input-lines (mine/pane/repl:repl-pane-input-line-count rp))
                    (max-input-h (cl:max 1 (cl:floor repl-h 2)))
