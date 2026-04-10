@@ -24,7 +24,9 @@
    #:paredit-raise!
    #:paredit-wrap-round!
    #:paredit-forward-sexp!
-   #:paredit-backward-sexp!))
+   #:paredit-backward-sexp!
+   #:scan-matching-open-paren
+   #:scan-matching-open-bracket))
 
 (in-package #:mine/syntax/paredit)
 
