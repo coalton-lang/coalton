@@ -163,6 +163,18 @@
        (screen:screen-set-string scr row (+ center-col 3) opt style)
        (draw-options scr (+ row 1) center-col rest (- selected 1)))))
 
+  ;;; Exit keys
+
+  (declare %exit-key? (input:InputEvent -> Boolean))
+  (define (%exit-key? ev)
+    "True if the event is Ctrl+C, Ctrl+D, Ctrl+Q, or Ctrl+G."
+    (match ev
+      ((input:IEvKey (input:KeyCtrl #\c) _) True)
+      ((input:IEvKey (input:KeyCtrl #\d) _) True)
+      ((input:IEvKey (input:KeyCtrl #\q) _) True)
+      ((input:IEvKey (input:KeyCtrl #\g) _) True)
+      (_ False)))
+
   ;;; Selection loop
 
   (declare select-loop (term:Terminal * screen:Screen * String * (List String)
@@ -170,45 +182,51 @@
   (define (select-loop terminal scr title description options row center-col selected n)
     "Read keys and update selection until Enter is pressed. Redraws on resize."
     (let ev = (%read-event terminal))
-    (match ev
-      ((input:IEvResize _ _)
-       (%handle-resize! terminal)
-       (let new-row = (draw-question-screen scr title description options selected))
-       (let cols = (cell:read (screen:.screen-width scr)))
-       (let max-opt-len = (%max-string-length options))
-       (let new-col = (if (> (+ max-opt-len 3) cols) 0
-                          (lisp (-> UFix) (cols max-opt-len)
-                            (cl:floor (cl:- cols (cl:+ max-opt-len 3)) 2))))
-       (screen:screen-hide-cursor scr)
-       (term:terminal-flush terminal)
-       (select-loop terminal scr title description options new-row new-col selected n))
-      ((input:IEvKey (input:KeyUp) _)
-       (let new-sel = (if (> selected 0) (- selected 1) selected))
-       (draw-options scr row center-col options new-sel)
-       (screen:screen-hide-cursor scr)
-       (term:terminal-flush terminal)
-       (select-loop terminal scr title description options row center-col new-sel n))
-      ((input:IEvKey (input:KeyDown) _)
-       (let new-sel = (if (< selected (- n 1)) (+ selected 1) selected))
-       (draw-options scr row center-col options new-sel)
-       (screen:screen-hide-cursor scr)
-       (term:terminal-flush terminal)
-       (select-loop terminal scr title description options row center-col new-sel n))
-      ((input:IEvKey (input:KeyEnter) _)
-       selected)
-      ((input:IEvKey (input:KeyChar #\k) _)
-       (let new-sel = (if (> selected 0) (- selected 1) selected))
-       (draw-options scr row center-col options new-sel)
-       (screen:screen-hide-cursor scr)
-       (term:terminal-flush terminal)
-       (select-loop terminal scr title description options row center-col new-sel n))
-      ((input:IEvKey (input:KeyChar #\j) _)
-       (let new-sel = (if (< selected (- n 1)) (+ selected 1) selected))
-       (draw-options scr row center-col options new-sel)
-       (screen:screen-hide-cursor scr)
-       (term:terminal-flush terminal)
-       (select-loop terminal scr title description options row center-col new-sel n))
-      (_ (select-loop terminal scr title description options row center-col selected n))))
+    (cond
+      ((%exit-key? ev)
+       (term:terminal-shutdown terminal)
+       ;; Return type is a fiction — sb-ext:exit never returns
+       (lisp (-> UFix) () (sb-ext:exit :code 0)))
+      (True
+       (match ev
+         ((input:IEvResize _ _)
+          (%handle-resize! terminal)
+          (let new-row = (draw-question-screen scr title description options selected))
+          (let cols = (cell:read (screen:.screen-width scr)))
+          (let max-opt-len = (%max-string-length options))
+          (let new-col = (if (> (+ max-opt-len 3) cols) 0
+                             (lisp (-> UFix) (cols max-opt-len)
+                               (cl:floor (cl:- cols (cl:+ max-opt-len 3)) 2))))
+          (screen:screen-hide-cursor scr)
+          (term:terminal-flush terminal)
+          (select-loop terminal scr title description options new-row new-col selected n))
+         ((input:IEvKey (input:KeyUp) _)
+          (let new-sel = (if (> selected 0) (- selected 1) selected))
+          (draw-options scr row center-col options new-sel)
+          (screen:screen-hide-cursor scr)
+          (term:terminal-flush terminal)
+          (select-loop terminal scr title description options row center-col new-sel n))
+         ((input:IEvKey (input:KeyDown) _)
+          (let new-sel = (if (< selected (- n 1)) (+ selected 1) selected))
+          (draw-options scr row center-col options new-sel)
+          (screen:screen-hide-cursor scr)
+          (term:terminal-flush terminal)
+          (select-loop terminal scr title description options row center-col new-sel n))
+         ((input:IEvKey (input:KeyEnter) _)
+          selected)
+         ((input:IEvKey (input:KeyChar #\k) _)
+          (let new-sel = (if (> selected 0) (- selected 1) selected))
+          (draw-options scr row center-col options new-sel)
+          (screen:screen-hide-cursor scr)
+          (term:terminal-flush terminal)
+          (select-loop terminal scr title description options row center-col new-sel n))
+         ((input:IEvKey (input:KeyChar #\j) _)
+          (let new-sel = (if (< selected (- n 1)) (+ selected 1) selected))
+          (draw-options scr row center-col options new-sel)
+          (screen:screen-hide-cursor scr)
+          (term:terminal-flush terminal)
+          (select-loop terminal scr title description options row center-col new-sel n))
+         (_ (select-loop terminal scr title description options row center-col selected n))))))
 
   ;;; Screen builders
 
@@ -414,58 +432,64 @@
     (term:terminal-flush terminal)
     (let len = (lisp (-> UFix) (text) (cl:length text)))
     (let ev = (%read-event terminal))
-    (if in-buttons
-        ;; Button navigation
-        (match ev
-          ((input:IEvKey (input:KeyEnter) _)
-           (if (== button 0) text ""))
-          ((input:IEvKey (input:KeyEscape) _) "")
-          ((input:IEvKey (input:KeyLeft) _)
-           (%text-input-loop terminal title description text cursor-pos True 0 Nil))
-          ((input:IEvKey (input:KeyRight) _)
-           (%text-input-loop terminal title description text cursor-pos True 1 Nil))
-          ((input:IEvKey (input:KeyUp) _)
-           (%text-input-loop terminal title description text cursor-pos False button Nil))
-          ((input:IEvResize _ _)
-           (%handle-resize! terminal)
-           (%text-input-loop terminal title description text cursor-pos True button Nil))
-          (_ (%text-input-loop terminal title description text cursor-pos True button Nil)))
-        ;; Text input
-        (match ev
-          ((input:IEvKey (input:KeyEnter) _) text)
-          ((input:IEvKey (input:KeyEscape) _) "")
-          ((input:IEvKey (input:KeyTab) _)
-           (match (%complete-dir text)
-             ((Tuple completed new-cands)
-              (let new-len = (lisp (-> UFix) (completed) (cl:length completed)))
+    (cond
+      ((%exit-key? ev)
+       (term:terminal-shutdown terminal)
+       ;; Return type is a fiction — sb-ext:exit never returns
+       (lisp (-> String) () (sb-ext:exit :code 0)))
+      (True
+       (if in-buttons
+           ;; Button navigation
+           (match ev
+             ((input:IEvKey (input:KeyEnter) _)
+              (if (== button 0) text ""))
+             ((input:IEvKey (input:KeyEscape) _) "")
+             ((input:IEvKey (input:KeyLeft) _)
+              (%text-input-loop terminal title description text cursor-pos True 0 Nil))
+             ((input:IEvKey (input:KeyRight) _)
+              (%text-input-loop terminal title description text cursor-pos True 1 Nil))
+             ((input:IEvKey (input:KeyUp) _)
+              (%text-input-loop terminal title description text cursor-pos False button Nil))
+             ((input:IEvResize _ _)
+              (%handle-resize! terminal)
+              (%text-input-loop terminal title description text cursor-pos True button Nil))
+             (_ (%text-input-loop terminal title description text cursor-pos True button Nil)))
+           ;; Text input
+           (match ev
+             ((input:IEvKey (input:KeyEnter) _) text)
+             ((input:IEvKey (input:KeyEscape) _) "")
+             ((input:IEvKey (input:KeyTab) _)
+              (match (%complete-dir text)
+                ((Tuple completed new-cands)
+                 (let new-len = (lisp (-> UFix) (completed) (cl:length completed)))
+                 (%text-input-loop terminal title description
+                                   completed new-len False 0 new-cands))))
+             ((input:IEvKey (input:KeyDown) _)
+              (%text-input-loop terminal title description text cursor-pos True 0 Nil))
+             ((input:IEvKey (input:KeyBackspace) _)
+              (if (> cursor-pos 0)
+                (%text-input-loop terminal title description
+                                  (%str-delete-char text cursor-pos)
+                                  (- cursor-pos 1) False 0 Nil)
+                (%text-input-loop terminal title description text cursor-pos False 0 Nil)))
+             ((input:IEvKey (input:KeyLeft) _)
+              (%text-input-loop terminal title description text
+                                (if (> cursor-pos 0) (- cursor-pos 1) 0) False 0 Nil))
+             ((input:IEvKey (input:KeyRight) _)
+              (%text-input-loop terminal title description text
+                                (if (< cursor-pos len) (+ cursor-pos 1) cursor-pos) False 0 Nil))
+             ((input:IEvKey (input:KeyHome) _)
+              (%text-input-loop terminal title description text 0 False 0 Nil))
+             ((input:IEvKey (input:KeyEnd) _)
+              (%text-input-loop terminal title description text len False 0 Nil))
+             ((input:IEvKey (input:KeyChar c) _)
               (%text-input-loop terminal title description
-                                completed new-len False 0 new-cands))))
-          ((input:IEvKey (input:KeyDown) _)
-           (%text-input-loop terminal title description text cursor-pos True 0 Nil))
-          ((input:IEvKey (input:KeyBackspace) _)
-           (if (> cursor-pos 0)
-             (%text-input-loop terminal title description
-                               (%str-delete-char text cursor-pos)
-                               (- cursor-pos 1) False 0 Nil)
-             (%text-input-loop terminal title description text cursor-pos False 0 Nil)))
-          ((input:IEvKey (input:KeyLeft) _)
-           (%text-input-loop terminal title description text
-                             (if (> cursor-pos 0) (- cursor-pos 1) 0) False 0 Nil))
-          ((input:IEvKey (input:KeyRight) _)
-           (%text-input-loop terminal title description text
-                             (if (< cursor-pos len) (+ cursor-pos 1) cursor-pos) False 0 Nil))
-          ((input:IEvKey (input:KeyHome) _)
-           (%text-input-loop terminal title description text 0 False 0 Nil))
-          ((input:IEvKey (input:KeyEnd) _)
-           (%text-input-loop terminal title description text len False 0 Nil))
-          ((input:IEvKey (input:KeyChar c) _)
-           (%text-input-loop terminal title description
-                             (%str-insert-char text cursor-pos c)
-                             (+ cursor-pos 1) False 0 Nil))
-          ((input:IEvResize _ _)
-           (%handle-resize! terminal)
-           (%text-input-loop terminal title description text cursor-pos False 0 Nil))
-          (_ (%text-input-loop terminal title description text cursor-pos False 0 Nil)))))
+                                (%str-insert-char text cursor-pos c)
+                                (+ cursor-pos 1) False 0 Nil))
+             ((input:IEvResize _ _)
+              (%handle-resize! terminal)
+              (%text-input-loop terminal title description text cursor-pos False 0 Nil))
+             (_ (%text-input-loop terminal title description text cursor-pos False 0 Nil)))))))
 
   (declare ask-text (term:Terminal * String * (List String) * String -> String))
   (define (ask-text terminal title description default-text)
@@ -748,16 +772,22 @@
   (define (%wait-key-only terminal draw-fn)
     "Wait for a keyboard key, ignoring mouse events. Redraws on resize."
     (let ev = (%read-event terminal))
-    (match ev
-      ((input:IEvResize _ _)
-       (%handle-resize! terminal)
-       (draw-fn (term:.terminal-screen terminal))
-       (screen:screen-hide-cursor (term:.terminal-screen terminal))
-       (term:terminal-flush terminal)
-       (%wait-key-only terminal draw-fn))
-      ((input:IEvMouse _ _ _ _)
-       (%wait-key-only terminal draw-fn))
-      (_ (values))))
+    (cond
+      ((%exit-key? ev)
+       (term:terminal-shutdown terminal)
+       ;; Return type is a fiction — sb-ext:exit never returns
+       (lisp (-> Void) () (sb-ext:exit :code 0)))
+      (True
+       (match ev
+         ((input:IEvResize _ _)
+          (%handle-resize! terminal)
+          (draw-fn (term:.terminal-screen terminal))
+          (screen:screen-hide-cursor (term:.terminal-screen terminal))
+          (term:terminal-flush terminal)
+          (%wait-key-only terminal draw-fn))
+         ((input:IEvMouse _ _ _ _)
+          (%wait-key-only terminal draw-fn))
+         (_ (values))))))
 
   ;;; Main entry point
 
