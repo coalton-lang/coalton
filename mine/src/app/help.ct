@@ -57,7 +57,7 @@
     (screen:screen-set-string scr (%scroll-row 4 scroll) 3 "Global" heading)
     (help-line scr (%scroll-row 5 scroll) key-s desc-s "F1-F6" "Open menus (Mine, File, Editor, REPL, Project, Site)")
     (help-line scr (%scroll-row 6 scroll) key-s desc-s "Ctrl+R" "Open/focus REPL, maximize when focused")
-    (help-line scr (%scroll-row 7 scroll) key-s desc-s "Ctrl+E" "Focus editor, restore REPL size")
+    (help-line scr (%scroll-row 7 scroll) key-s desc-s "Ctrl+E" "Focus editor, toggle fullscreen when focused")
     (help-line scr (%scroll-row 8 scroll) key-s desc-s "Ctrl+T" "Expand file tree / open files panel")
     (help-line scr (%scroll-row 9 scroll) key-s desc-s "Ctrl+1-9" "Switch to open file by number")
     (help-line scr (%scroll-row 10 scroll) key-s desc-s "Ctrl+Q" "Quit")

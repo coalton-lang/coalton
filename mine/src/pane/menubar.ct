@@ -128,7 +128,7 @@
       (MenuItem "Beam Form"           "Alt+C" ActionBeamForm)
       (MenuItem "Jump to Definition" "Alt+." ActionJumpToDefinition)
       (MenuItem "Jump Back"          "Alt+," ActionJumpBack)
-      (MenuItem "Show/Focus Editor" "Ctrl+E" ActionFocusEditor))))
+      (MenuItem "Focus/Fullscreen Editor" "Ctrl+E" ActionFocusEditor))))
 
   (declare %repl-menu (Void -> MenuDef))
   (define (%repl-menu)
@@ -510,4 +510,3 @@
          (screen:screen-set-string scr y kb-x kb-display ks))
        (%render-items rest scr x (+ y 1) w (+ idx 1) selected
                       bg sel-style key-style sel-key-style)))))
-
