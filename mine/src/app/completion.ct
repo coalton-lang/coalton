@@ -13,6 +13,7 @@
    (#:cellw #:mine/text/width))
   (:export
    #:complete-file-path
+   #:complete-project-path
    #:Candidate #:.cand-name #:.cand-kind #:.cand-type-sig
    #:cand-name #:cand-kind #:cand-type-sig
    #:CompletionState
@@ -213,6 +214,12 @@ Scans backward from cursor until a non-symbol character is found."
     (lisp (-> (Tuple String (List String))) (text)
       (%complete-file-path-impl text)))
 
+  (declare complete-project-path (String -> (Tuple String (List String))))
+  (define (complete-project-path text)
+    "Tab-complete a project path. Only directories and .asd files are candidates."
+    (lisp (-> (Tuple String (List String))) (text)
+      (%complete-project-path-impl text)))
+
 ) ;; coalton-toplevel
 
 ;;; CL implementations
@@ -392,19 +399,55 @@ Scans backward from cursor until a non-symbol character is found."
 
 ;;; File path completion (preserved from original)
 
-(cl:defun %complete-file-path-impl (text)
-  "Complete a file path. Returns (Tuple completed-text candidates-list).
-Expands ~ to home directory. Lists directory entries matching prefix."
+(cl:defun %expand-user-path (text)
+  "Expand a leading ~ in TEXT to the user's home directory."
+  (cl:if (cl:and (cl:plusp (cl:length text))
+                 (cl:char= (cl:char text 0) #\~))
+         (cl:let ((home (cl:namestring (cl:user-homedir-pathname))))
+           (cl:concatenate 'cl:string
+             (cl:string-right-trim "/" home)
+             (cl:subseq text 1)))
+         text))
+
+(cl:defun %restore-user-path (original-text completed)
+  "Re-insert a leading ~ when ORIGINAL-TEXT used it."
+  (cl:if (cl:and (cl:plusp (cl:length original-text))
+                 (cl:char= (cl:char original-text 0) #\~))
+         (cl:let ((home (cl:namestring (cl:user-homedir-pathname))))
+           (cl:if (cl:and (cl:>= (cl:length completed) (cl:length home))
+                          (cl:string= home completed
+                                      :end2 (cl:length home)))
+                  (cl:concatenate 'cl:string "~/"
+                    (cl:subseq completed (cl:length home)))
+                  completed))
+         completed))
+
+(cl:defun %directory-entry-p (name)
+  "Return T when NAME is a directory entry display name."
+  (cl:and (cl:plusp (cl:length name))
+          (cl:char= (cl:char name (cl:1- (cl:length name))) #\/)))
+
+(cl:defun %asd-entry-p (name)
+  "Return T when NAME is an .asd file display name."
+  (cl:and (cl:not (%directory-entry-p name))
+          (cl:>= (cl:length name) 4)
+          (cl:string-equal ".asd"
+                           (cl:subseq name (cl:- (cl:length name) 4)))))
+
+(cl:defun %allow-any-path-entry-p (_name)
+  "Allow any path entry during completion."
+  (cl:declare (cl:ignore _name))
+  cl:t)
+
+(cl:defun %allow-project-path-entry-p (name)
+  "Allow only directories and .asd files during project completion."
+  (cl:or (%directory-entry-p name)
+         (%asd-entry-p name)))
+
+(cl:defun %complete-path-impl (text entry-allowed-p)
+  "Complete TEXT using ENTRY-ALLOWED-P to filter directory entries."
   (cl:handler-case
-      (cl:let* (;; Expand ~ to home directory
-                (expanded (cl:if (cl:and (cl:plusp (cl:length text))
-                                         (cl:char= (cl:char text 0) #\~))
-                                 (cl:let ((home (cl:namestring
-                                                 (cl:user-homedir-pathname))))
-                                   (cl:concatenate 'cl:string
-                                     (cl:string-right-trim "/" home)
-                                     (cl:subseq text 1)))
-                                 text))
+      (cl:let* ((expanded (%expand-user-path text))
                 ;; Split into directory and prefix parts
                 (dir-end (cl:or (cl:position #\/ expanded :from-end cl:t) -1))
                 (dir-part (cl:if (cl:>= dir-end 0)
@@ -423,7 +466,8 @@ Expands ~ to home directory. Lists directory entries matching prefix."
                           (cl:lambda (name)
                             (cl:and (cl:>= (cl:length name) (cl:length prefix))
                                     (cl:string= prefix name
-                                                :end2 (cl:length prefix))))
+                                                :end2 (cl:length prefix))
+                                    (cl:funcall entry-allowed-p name)))
                           entries))
                 ;; Sort matches
                 (sorted (cl:sort (cl:copy-list matches) #'cl:string<)))
@@ -432,20 +476,7 @@ Expands ~ to home directory. Lists directory entries matching prefix."
                (Tuple text coalton:Nil)
                (cl:let* ((common (%file-common-prefix sorted))
                          (completed (cl:concatenate 'cl:string dir-part common))
-                         ;; Re-insert ~ if we expanded it
-                         (display-completed
-                          (cl:if (cl:and (cl:plusp (cl:length text))
-                                         (cl:char= (cl:char text 0) #\~))
-                                 (cl:let ((home (cl:namestring
-                                                 (cl:user-homedir-pathname))))
-                                   (cl:if (cl:and (cl:>= (cl:length completed)
-                                                          (cl:length home))
-                                                  (cl:string= home completed
-                                                              :end2 (cl:length home)))
-                                          (cl:concatenate 'cl:string "~/"
-                                            (cl:subseq completed (cl:length home)))
-                                          completed))
-                                 completed))
+                         (display-completed (%restore-user-path text completed))
                          ;; Build Coalton list of display names
                          (cands (%strings-to-coalton-list sorted)))
                  (Tuple display-completed
@@ -454,6 +485,14 @@ Expands ~ to home directory. Lists directory entries matching prefix."
                                cands)))))
     (cl:error ()
       (Tuple text coalton:Nil))))
+
+(cl:defun %complete-file-path-impl (text)
+  "Complete a file path. Returns (Tuple completed-text candidates-list)."
+  (%complete-path-impl text #'%allow-any-path-entry-p))
+
+(cl:defun %complete-project-path-impl (text)
+  "Complete a project path. Only directories and .asd files are candidates."
+  (%complete-path-impl text #'%allow-project-path-entry-p))
 
 (cl:defun %list-directory (dir-path)
   "List file/directory names in DIR-PATH. Returns a list of name strings.
