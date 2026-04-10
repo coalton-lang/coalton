@@ -601,24 +601,176 @@ Returns (((:file . path) (:offset . n))) or NIL."
                 (:offset . ,char-offset))))
           sources))
 
-(defun handle-complete (id prefix package-name stream)
-  "Handle a :complete request for symbol completion."
+(defun %coalton-env ()
+  "Return the Coalton global environment."
+  coalton-impl/entry:*global-environment*)
+
+(defun %symbol-kind-tag (sym)
+  "Return a short kind tag for SYM."
+  (let ((env (%coalton-env)))
+    (cond
+      ((coalton-impl/typechecker/environment:lookup-type env sym :no-error t)        "type")
+      ((coalton-impl/typechecker/environment:lookup-class env sym :no-error t)       "class")
+      ((coalton-impl/typechecker/environment:lookup-constructor env sym :no-error t)  "ctor")
+      ((coalton-impl/typechecker/environment:lookup-value-type env sym :no-error t)   "fn")
+      ((and (fboundp sym) (macro-function sym))             "mac")
+      ((and (fboundp sym) (special-operator-p sym))         "sf")
+      ((and (fboundp sym) (typep (fdefinition sym) 'generic-function)) "gen")
+      ((fboundp sym)                                        "fn")
+      ((find-class sym nil)                                 "type")
+      ((constantp sym)                                      "const")
+      ((boundp sym)                                         "var")
+      (t                                                    "sym"))))
+
+(defun %symbol-type-sig (sym)
+  "Return a Coalton type string for SYM, or CL arglist, or empty string."
+  (let* ((env (%coalton-env))
+         (ty (coalton-impl/typechecker/environment:lookup-value-type env sym :no-error t)))
+    (cond
+      (ty (coalton-impl/typechecker/type-string:type-to-string ty env))
+      ((fboundp sym) (or (ignore-errors (mine/runtime/introspect::%get-arglist sym)) ""))
+      (t ""))))
+
+(defun %coalton-known-p (sym)
+  "True if SYM is known to the Coalton type environment."
+  (let ((env (%coalton-env)))
+    (or (coalton-impl/typechecker/environment:lookup-value-type env sym :no-error t)
+        (coalton-impl/typechecker/environment:lookup-type env sym :no-error t)
+        (coalton-impl/typechecker/environment:lookup-class env sym :no-error t))))
+
+(defun %coalton-package-p (pkg)
+  "True if PKG is a Coalton package.
+Matches \"COALTON\" itself, any \"COALTON/...\" stdlib package, or packages that use COALTON."
+  (let ((name (package-name pkg)))
+    (or (string-equal "COALTON" name)
+        (and (>= (length name) 8)
+             (string-equal "COALTON/" name :end2 8))
+        (let ((coalton-pkg (find-package "COALTON")))
+          (and coalton-pkg
+               (member coalton-pkg (package-use-list pkg)))))))
+
+(defun %symbol-defined-p (sym pkg)
+  "True if SYM has a useful definition.
+Coalton-known symbols always pass.  Coalton macros/special forms (fboundp in a
+Coalton home package) also pass.  CL-only symbols pass only in non-Coalton packages."
+  (or (%coalton-known-p sym)
+      (and (macro-function sym)
+           (let ((home (symbol-package sym)))
+             (and home (%coalton-package-p home))))
+      (and (not (%coalton-package-p pkg))
+           (or (fboundp sym)
+               (boundp sym)
+               (find-class sym nil)
+               (constantp sym)))))
+
+(defun %parse-prefix-qualifier (raw-prefix buffer-package-name)
+  "Parse RAW-PREFIX for a package qualifier, resolving local nicknames.
+Returns (values symbol-prefix lookup-package name-qualifier) where:
+  - SYMBOL-PREFIX is the part after the colon (upcase)
+  - LOOKUP-PACKAGE is the resolved package object
+  - NAME-QUALIFIER is the original qualifier string to prepend to results
+E.g. (\"vec:push\" \"FRACTAL\") -> (values \"PUSH\" #<PKG COALTON/VECTOR> \"vec:\")
+     (\"push\" \"FRACTAL\")     -> (values \"PUSH\" #<PKG FRACTAL> \"\")"
+  (let* ((colon-pos (position #\: raw-prefix :from-end t))
+         ;; Bind *package* to buffer package so find-package resolves local nicknames
+         (buf-pkg (find-package (string-upcase buffer-package-name)))
+         (*package* (or buf-pkg *package*)))
+    (if colon-pos
+        (let* ((sym-part (string-upcase (subseq raw-prefix (1+ colon-pos))))
+               (qualifier-str (subseq raw-prefix 0 (1+ colon-pos)))
+               (pkg-part (string-trim ":" qualifier-str))
+               (pkg (find-package (string-upcase pkg-part))))
+          (values sym-part (or pkg buf-pkg) qualifier-str))
+        (values (string-upcase raw-prefix) buf-pkg ""))))
+
+(defun %matching-package-names (prefix buf-pkg)
+  "Return completion entries for package names/nicknames matching PREFIX.
+Checks local nicknames of BUF-PKG, then global package names and nicknames.
+Each entry is (name-with-colon \"pkg\" \"\")."
+  (let* ((upprefix (string-upcase prefix))
+         (len (length upprefix))
+         (seen (make-hash-table :test 'equal))
+         (matches nil))
+    ;; Local nicknames first
+    (when buf-pkg
+      (dolist (pair (sb-ext:package-local-nicknames buf-pkg))
+        (let ((nick (string-downcase (car pair))))
+          (when (and (>= (length nick) len)
+                     (string-equal upprefix nick :end2 len)
+                     (not (gethash nick seen)))
+            (setf (gethash nick seen) t)
+            (push (list (concatenate 'string nick ":")
+                        "pkg" "")
+                  matches)))))
+    ;; Global packages: name and nicknames
+    (dolist (pkg (list-all-packages))
+      (dolist (name (cons (package-name pkg) (package-nicknames pkg)))
+        (let ((lname (string-downcase name)))
+          (when (and (>= (length lname) len)
+                     (string-equal upprefix lname :end2 len)
+                     (not (gethash lname seen)))
+            (setf (gethash lname seen) t)
+            (push (list (concatenate 'string lname ":")
+                        "pkg" "")
+                  matches)))))
+    matches))
+
+(defun handle-complete (id raw-prefix buffer-package-name stream)
+  "Handle a :complete request for symbol completion.
+RAW-PREFIX may contain a package qualifier (e.g. \"vec:push\").
+BUFFER-PACKAGE-NAME is the package context for resolving local nicknames.
+Returns annotated results: each match is (qualified-name kind type-sig).
+When no colon in prefix, also completes package names/nicknames."
   (handler-case
-      (let* ((pkg (find-package (string-upcase package-name)))
-             (upcase-prefix (string-upcase prefix))
-             (matches nil))
-        (when pkg
-          ;; do-symbols iterates all accessible symbols (own + inherited)
-          (do-symbols (sym pkg)
-            (when (and (>= (length (symbol-name sym))
-                           (length upcase-prefix))
-                       (string= upcase-prefix (symbol-name sym)
-                                :end2 (length upcase-prefix)))
-              (pushnew (string-downcase (symbol-name sym)) matches
-                       :test #'string=))))
-        (write-message stream
-                       `(:return ,id
-                         (:ok ,(sort matches #'string<)))))
+      (multiple-value-bind (sym-prefix pkg qualifier)
+          (%parse-prefix-qualifier raw-prefix buffer-package-name)
+        (let ((matches nil)
+              (has-qualifier (plusp (length qualifier))))
+          ;; Symbol completions
+          (when pkg
+            (flet ((%prefix-matches-p (sym)
+                     (and (%symbol-defined-p sym pkg)
+                          (>= (length (symbol-name sym))
+                               (length sym-prefix))
+                          (string= sym-prefix (symbol-name sym)
+                                   :end2 (length sym-prefix)))))
+              (cond
+                (has-qualifier
+                 ;; Qualified: own-package symbols first, then inherited
+                 (let ((own nil) (inherited nil))
+                   (do-symbols (sym pkg)
+                     (when (%prefix-matches-p sym)
+                       (let* ((name (concatenate 'string qualifier
+                                      (string-downcase (symbol-name sym))))
+                              (entry (list name
+                                          (%symbol-kind-tag sym)
+                                          (%symbol-type-sig sym))))
+                         (cond
+                           ((eq (symbol-package sym) pkg)
+                            (unless (find name own :key #'first :test #'string=)
+                              (push entry own)))
+                           (t
+                            (unless (find name inherited :key #'first :test #'string=)
+                              (push entry inherited)))))))
+                   (setf matches (nconc (sort own #'string< :key #'first)
+                                        (sort inherited #'string< :key #'first)))))
+                (t
+                 ;; Unqualified: all accessible symbols, sorted alphabetically
+                 (do-symbols (sym pkg)
+                   (when (%prefix-matches-p sym)
+                     (let ((name (string-downcase (symbol-name sym))))
+                       (unless (find name matches :key #'first :test #'string=)
+                         (push (list name
+                                     (%symbol-kind-tag sym)
+                                     (%symbol-type-sig sym))
+                               matches)))))
+                 (setf matches (sort matches #'string< :key #'first))))))
+          ;; Package name completions (only when no qualifier present)
+          (unless has-qualifier
+            (setf matches
+                  (nconc matches (%matching-package-names raw-prefix pkg))))
+          (write-message stream
+                         `(:return ,id (:ok ,matches)))))
     (error (c)
       (write-message stream
                      `(:return ,id

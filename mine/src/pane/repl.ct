@@ -35,11 +35,13 @@
    #:repl-pane-clear-selection!
    #:repl-pane-has-selection?
    #:repl-pane-copy-selection!
+   #:repl-pane-input-cursor
    #:repl-pane-paste-to-input!
    #:repl-pane-insert-newline!
    #:repl-pane-input-complete?
    #:repl-pane-input-line-count
-   #:repl-pane-set-prompt!))
+   #:repl-pane-set-prompt!
+   #:repl-pane-prompt-text))
 
 (in-package #:mine/pane/repl)
 
@@ -101,6 +103,11 @@
     "Get the current text from the input widget."
     (widget-input:input-widget-text (.input-widget rp)))
 
+  (declare repl-pane-input-cursor (ReplPane -> UFix))
+  (define (repl-pane-input-cursor rp)
+    "Get the current cursor position in the input widget."
+    (cell:read (widget-input:.iw-cursor (.input-widget rp))))
+
   (declare repl-pane-clear-input! (ReplPane -> Void))
   (define (repl-pane-clear-input! rp)
     "Clear the input widget."
@@ -118,6 +125,11 @@
     "Set the REPL input prompt string."
     (cell:write! (widget-input:.iw-prompt (.input-widget rp)) text)
     (values))
+
+  (declare repl-pane-prompt-text (ReplPane -> String))
+  (define (repl-pane-prompt-text rp)
+    "Return the current prompt string."
+    (cell:read (widget-input:.iw-prompt (.input-widget rp))))
 
   (declare repl-pane-input-line-count (ReplPane -> UFix))
   (define (repl-pane-input-line-count rp)
