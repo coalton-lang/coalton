@@ -104,7 +104,11 @@ Returns (values SOURCE-PATHNAME COMPILED-PATHNAME)."
                                     (progn
                                       (format t "~%;; Allowing redefinition and continuing.~%")
                                       (invoke-restart 'continue))
-                                    (signal c)))))
+                                    (signal c))))
+                            ;; Test-file suites intentionally reuse package and
+                            ;; type names across cases, which can trigger
+                            ;; incidental redefinition style warnings on SBCL.
+                            (style-warning #'muffle-warning))
                (entry:compile source)
                nil)
            (source:source-warning (c)

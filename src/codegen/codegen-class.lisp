@@ -96,12 +96,11 @@
                            :class))
 
         :append (mapcan (lambda (m)
-                          (make-method-fun m package class env))
+                          (make-method-fun m package class))
                         (tc:ty-class-unqualified-methods class))))
 
-(defun make-method-fun (method package class env)
-  (declare (type tc:ty-class-method method)
-           (type tc:environment env))
+(defun make-method-fun (method package class)
+  (declare (type tc:ty-class-method method))
   (let* ((qual-ty
            (tc:fresh-inst (tc:ty-class-method-type method)))
          (visible-type
