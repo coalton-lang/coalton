@@ -414,6 +414,7 @@ needs to synthesize those trailing parameters explicitly."
   (declare (type tc:binding-type binding)
            (type tc:environment env)
            (type symbol name)
+           (ignorable name)
            (type pred-context extra-context))
 
   (let* ((qual-ty (tc:binding-type binding))
