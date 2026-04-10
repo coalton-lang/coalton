@@ -3549,6 +3549,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       ((menubar:ActionGotoLine)
        (status:statusbar-set-message! (.ms-status st) "Go to Line: not yet implemented"))
       ((menubar:ActionClearCache)
+       (render-app st term)
        (when (dialogs:confirm-dialog term "Empty the FASL cache?" "Empty" "Cancel"
                               (make-list "FASLs are pre-compiled files, and are cached"
                                          "to make compilation faster. They can sometimes"
