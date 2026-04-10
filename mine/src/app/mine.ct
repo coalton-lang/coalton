@@ -1071,7 +1071,7 @@ First reloads the .asd to pick up any changes, then loads the system."
     (cell:write! (.ms-debugger-active st) False)
     (repl:repl-pane-append-output! (.ms-repl st)
                                    (<> ";; Invoked restart " (into restart-idx)))
-    (focus:focus-switch! (.ms-focus st) focus:FocusEditor)
+    (focus:focus-return! (.ms-focus st))
     (values))
 
   (declare dbg-abort! (MineState -> Void))
@@ -1089,7 +1089,7 @@ First reloads the .asd to pick up any changes, then loads the system."
       (cl:values))
     (cell:write! (.ms-debugger-active st) False)
     (repl:repl-pane-append-system! (.ms-repl st) ";; Aborted.")
-    (focus:focus-switch! (.ms-focus st) focus:FocusEditor)
+    (focus:focus-return! (.ms-focus st))
     (values))
 
 ;;; Debugger key dispatch
