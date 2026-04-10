@@ -1738,6 +1738,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
 
 ;;; Create project on disk
 
+  (declare open-project-selection! (MineState * String -> Void))
   (declare open-project-at-path! (MineState * String -> Void))
   (declare create-new-project! (MineState * String * String * Boolean -> Void))
   (define (create-new-project! st name location is-coalton)
@@ -3362,6 +3363,17 @@ Uses the preceding (in-package ...) form to determine the compilation package."
 
 ;;; Open project from path
 
+  (define (open-project-selection! st path)
+    "Open a project selection, resolving directories with a single .asd file."
+    (match (lisp (-> (Tuple UFix String)) (path)
+             (%resolve-project-selection-impl path))
+      ((Tuple code payload)
+       (cond
+         ((== code 2)
+          (status:statusbar-set-message! (.ms-status st) payload))
+         (True
+          (open-project-at-path! st payload))))))
+
   (define (open-project-at-path! st path)
     "Open a project .asd file at PATH."
     (cond
@@ -3462,8 +3474,8 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (let default-dir = (dialogs:new-project-default-location (.ms-config st)))
        (mini:minibuffer-prompt-with-completion! (.ms-minibuffer st)
                                                 "Open Project (.asd): " default-dir
-                                                (fn (path) (open-project-at-path! st path))
-                                                complete:complete-file-path))
+                                                (fn (path) (open-project-selection! st path))
+                                                complete:complete-project-path))
       ((menubar:ActionBeamSystem) (load-project-system! st))
       ((menubar:ActionRefreshProject) (refresh-project! st))
       ((menubar:ActionCloseProject)
@@ -4934,8 +4946,48 @@ Names are already qualified by the server."
                             (ep (mine/app/mine::get-editor-pane st))
                             (sr (mine/pane/editor:editor-pane-scroll-row ep)))
                     ;; +1 for menu bar row
-                    (cl:+ 1 (cl:- cur-line sr)))
+                  (cl:+ 1 (cl:- cur-line sr)))
                   1))))
+
+(cl:defun %expand-project-input-path (text)
+  "Expand a leading ~ in TEXT to the user's home directory."
+  (cl:if (cl:and (cl:plusp (cl:length text))
+                 (cl:char= (cl:char text 0) #\~))
+         (cl:let ((home (cl:namestring (cl:user-homedir-pathname))))
+           (cl:concatenate 'cl:string
+                           (cl:string-right-trim "/" home)
+                           (cl:subseq text 1)))
+         text))
+
+(cl:defun %resolve-project-selection-impl (text)
+  "Return (Tuple code payload) for an Open Project selection.
+Code 0/1 => payload is the path to open. Code 2 => payload is an error message."
+  (cl:handler-case
+      (cl:let* ((expanded (%expand-project-input-path text))
+                (dir (uiop:directory-exists-p expanded)))
+        (cl:if dir
+               (cl:let* ((dir-path (uiop:ensure-directory-pathname dir))
+                         (wild (cl:make-pathname :name :wild :type :wild
+                                                 :defaults dir-path))
+                         (entries (cl:directory wild :resolve-symlinks cl:nil))
+                         (asd-files (cl:sort
+                                     (cl:remove-if-not
+                                      (cl:lambda (entry)
+                                        (cl:let ((type (cl:pathname-type entry)))
+                                          (cl:and type (cl:string-equal type "asd"))))
+                                      entries)
+                                     #'cl:string<
+                                     :key #'cl:namestring)))
+                 (cl:cond
+                   ((cl:null asd-files)
+                    (Tuple 2 (cl:format cl:nil "No .asd file found in: ~A" text)))
+                   ((cl:null (cl:rest asd-files))
+                    (Tuple 1 (cl:namestring (cl:first asd-files))))
+                   (cl:t
+                    (Tuple 2 (cl:format cl:nil "Multiple .asd files found in: ~A" text)))))
+               (Tuple 0 expanded)))
+    (cl:error ()
+      (Tuple 0 text))))
 
 ;;; Diagnostics storage
 
