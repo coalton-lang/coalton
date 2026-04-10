@@ -67,7 +67,8 @@
   (:use #:cl)
   (:export
    #:start-server
-   #:stop-server))
+   #:stop-server
+   #:tui-input-stream))
 
 ;;; Runtime packages (CL side)
 

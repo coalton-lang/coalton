@@ -38,7 +38,8 @@
    #:repl-pane-paste-to-input!
    #:repl-pane-insert-newline!
    #:repl-pane-input-complete?
-   #:repl-pane-input-line-count))
+   #:repl-pane-input-line-count
+   #:repl-pane-set-prompt!))
 
 (in-package #:mine/pane/repl)
 
@@ -110,6 +111,12 @@
   (define (repl-pane-insert-newline! rp)
     "Insert a newline into the input widget at the cursor."
     (widget-input:input-widget-insert-newline! (.input-widget rp))
+    (values))
+
+  (declare repl-pane-set-prompt! (ReplPane * String -> Void))
+  (define (repl-pane-set-prompt! rp text)
+    "Set the REPL input prompt string."
+    (cell:write! (widget-input:.iw-prompt (.input-widget rp)) text)
     (values))
 
   (declare repl-pane-input-line-count (ReplPane -> UFix))

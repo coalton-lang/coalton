@@ -74,9 +74,11 @@ error-string is NIL on success."
       (error (c)
         (values nil nil (format nil "Error: ~A" c))))))
 
-(defun debug-eval (form-string package-name)
+(defun debug-eval (form-string package-name &optional wire-stream msg-id)
   "Evaluate FORM-STRING in PACKAGE-NAME via plain EVAL for interactive use.
 Lets errors propagate to the caller's handler-bind (for debugger support).
+When WIRE-STREAM and MSG-ID are provided, binds *standard-input*, *query-io*,
+and *terminal-io* to a TUI input stream so interactive reads work.
 Returns (values result-string output-string) on success."
   (let* ((pkg (find-or-make-package package-name))
          (form (let ((*package* pkg)
@@ -84,14 +86,27 @@ Returns (values result-string output-string) on success."
                  (read-from-string form-string)))
          (stdout-capture (make-string-output-stream))
          (stderr-capture (make-string-output-stream))
+         (tis (when wire-stream
+                (make-instance 'mine/protocol/server::tui-input-stream
+                  :wire-stream wire-stream :msg-id msg-id
+                  :stdout-capture stdout-capture)))
          (result-values
-           (let ((*standard-output* (make-broadcast-stream
-                                      *standard-output* stdout-capture))
-                 (*error-output* (make-broadcast-stream
-                                   *error-output* stderr-capture))
-                 (*trace-output* (make-broadcast-stream
-                                   *trace-output* stderr-capture))
-                 (*package* pkg))
+           (let* ((*standard-output* (if tis
+                                         stdout-capture
+                                         (make-broadcast-stream
+                                           *standard-output* stdout-capture)))
+                  (*error-output* (make-broadcast-stream
+                                    *error-output* stderr-capture))
+                  (*trace-output* (make-broadcast-stream
+                                    *trace-output* stderr-capture))
+                  (*standard-input* (if tis tis *standard-input*))
+                  (*query-io* (if tis
+                                  (make-two-way-stream tis *standard-output*)
+                                  *query-io*))
+                  (*terminal-io* (if tis
+                                     (make-two-way-stream tis *standard-output*)
+                                     *terminal-io*))
+                  (*package* pkg))
              (multiple-value-list (eval form)))))
     (let ((all-output (concatenate 'string
                         (get-output-stream-string stdout-capture)
@@ -103,15 +118,21 @@ Returns (values result-string output-string) on success."
                           (let ((*package* pkg)) (write val :stream s))))
               all-output))))
 
-(defun debug-compile-string (form-string package-name)
+(defun debug-compile-string (form-string package-name &optional wire-stream msg-id)
   "Compile FORM-STRING via compile-file + load for correct eval-when semantics.
 Lets errors propagate to the caller's handler-bind (for debugger support).
+When WIRE-STREAM and MSG-ID are provided, binds *standard-input*, *query-io*,
+and *terminal-io* to a TUI input stream so interactive reads work.
 Returns (values result-string output-string) on success.
 Unlike debug-eval, this preserves toplevel form semantics but does not
 return expression values (load returns T)."
   (let* ((pkg (find-or-make-package package-name))
          (stdout-capture (make-string-output-stream))
          (stderr-capture (make-string-output-stream))
+         (tis (when wire-stream
+                (make-instance 'mine/protocol/server::tui-input-stream
+                  :wire-stream wire-stream :msg-id msg-id
+                  :stdout-capture stdout-capture)))
          (result-values nil))
     (uiop:with-temporary-file (:stream tmp-stream
                                 :pathname tmp-path
@@ -120,13 +141,22 @@ return expression values (load returns T)."
       (format tmp-stream "(in-package ~S)~%" (package-name pkg))
       (write-string form-string tmp-stream)
       :close-stream
-      (let ((*standard-output* (make-broadcast-stream
-                                 *standard-output* stdout-capture))
-            (*error-output* (make-broadcast-stream
-                              *error-output* stderr-capture))
-            (*trace-output* (make-broadcast-stream
-                              *trace-output* stderr-capture))
-            (*package* pkg))
+      (let* ((*standard-output* (if tis
+                                     stdout-capture
+                                     (make-broadcast-stream
+                                       *standard-output* stdout-capture)))
+              (*error-output* (make-broadcast-stream
+                                *error-output* stderr-capture))
+              (*trace-output* (make-broadcast-stream
+                                *trace-output* stderr-capture))
+              (*standard-input* (if tis tis *standard-input*))
+              (*query-io* (if tis
+                              (make-two-way-stream tis *standard-output*)
+                              *query-io*))
+              (*terminal-io* (if tis
+                                 (make-two-way-stream tis *standard-output*)
+                                 *terminal-io*))
+              (*package* pkg))
         (let ((fasl (compile-file tmp-path)))
           (when fasl
             (unwind-protect

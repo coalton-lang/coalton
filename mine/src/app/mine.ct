@@ -49,7 +49,7 @@
    (#:cellw #:mine/text/width))
   (:export
    #:mine-main
-   #:ProtoMsg #:ProtoReturn #:ProtoOutput #:ProtoDebug #:ProtoConnectionLost
+   #:ProtoMsg #:ProtoReturn #:ProtoOutput #:ProtoDebug #:ProtoIORequest #:ProtoConnectionLost
    #:get-status-bar #:get-editor-pane #:get-bufmgr #:get-cursor-state
    #:get-repl-pane #:get-focus-mgr #:get-repl-package-cell
    #:get-proto-mailbox #:get-proto-thread
@@ -129,7 +129,9 @@
     (ms-find-needle       (Cell String)) ;; 31 -- current search string (empty = no search)
     (ms-find-matches      NativeBox) ;; 32 -- CL simple-vector of match positions (UFix), or nil
     (ms-structural-editing (Cell Boolean)) ;; 33 -- structural editing enabled?
-    (ms-config             cfgt:MineConfig)) ;; 34 -- loaded configuration
+    (ms-config             cfgt:MineConfig) ;; 34 -- loaded configuration
+    (ms-io-request-active  (Cell Boolean))  ;; 35 -- waiting for IO input from user?
+    (ms-io-request-data    NativeBox))      ;; 36 -- (msg-id . stream) for IO response
 
 ;;; Named accessors for CL interop (avoids fragile numeric indices)
 
@@ -186,6 +188,9 @@
 
   (declare get-next-req-id-cell (MineState -> (Cell UFix)))
   (define (get-next-req-id-cell st) (.ms-next-req-id st))
+
+  (declare get-io-request-data (MineState -> NativeBox))
+  (define (get-io-request-data st) (.ms-io-request-data st))
 
 ;;; Request ID allocation
 
@@ -629,15 +634,24 @@
     (let col2 = (+ col1 (+ 6 (+ (cellw:string-cell-width lang) 2))))
     ;; Status
     (let busy = (cell:read (.ms-repl-busy st)))
+    (let io-req = (cell:read (.ms-io-request-active st)))
     (screen:screen-set-string scr y col2 "Status: " label-style)
     (cond
+      (io-req
+       (let query-s = (color:Style color:accent-fg
+                                   color:onyx
+                                   color:AttrBold))
+       (screen:screen-set-string scr y (+ col2 8) "Query" query-s))
       (busy
        (let busy-s = (color:Style color:info-fg
                                   color:onyx
                                   color:AttrBold))
        (screen:screen-set-string scr y (+ col2 8) "Busy..." busy-s))
       (True
-       (screen:screen-set-string scr y (+ col2 8) "Ready" val-style)))
+       (let ready-s = (color:Style color:chameleon
+                                   color:onyx
+                                   color:AttrNone))
+       (screen:screen-set-string scr y (+ col2 8) "Ready" ready-s)))
     (let col3 = (+ col2 15))
     ;; Timing
     (let timing = (cell:read (.ms-repl-timing st)))
@@ -907,6 +921,7 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
     (ProtoReturn String Boolean) ;; result-text, is-error?
     (ProtoOutput String)         ;; output text
     (ProtoDebug String NativeBox) ;; condition-text, opaque CL debug data
+    (ProtoIORequest String NativeBox) ;; prompt-text, opaque (msg-id . stream)
     ProtoConnectionLost)
 
   (declare %drain-mailbox (MineState -> (List ProtoMsg)))
@@ -999,12 +1014,27 @@ multiple values get 1>, 2>, etc."
        (repl:repl-pane-append-output! (.ms-repl st)
                                       (<> ";; Debugger: " cond-text))
        (focus:focus-switch! (.ms-focus st) focus:FocusRepl))
+      ((ProtoIORequest prompt-text io-data)
+       (cell:write! (.ms-io-request-active st) True)
+       (lisp (-> Void) (st io-data)
+         (%install-io-request-data st io-data)
+         (cl:values))
+       ;; Change REPL input prompt to indicate input mode
+       (repl:repl-pane-set-prompt! (.ms-repl st)
+                                   (if (== (str:length prompt-text) 0)
+                                       "[input] "
+                                       prompt-text))
+       (repl:repl-pane-append-system! (.ms-repl st) ";; Waiting for input...")
+       (ensure-repl-visible! st)
+       (focus:focus-switch! (.ms-focus st) focus:FocusRepl))
       ((ProtoConnectionLost)
        (repl:repl-pane-append-output! (.ms-repl st) "[connection lost]")
        (cell:write! (.ms-repl-busy st) False)
        (when (cell:read (.ms-debugger-active st))
          (cell:write! (.ms-debugger-active st) False)
          (focus:focus-switch! (.ms-focus st) focus:FocusEditor))
+       (when (cell:read (.ms-io-request-active st))
+         (%deactivate-io-request! st))
        (lisp (-> Void) (st)
          (cl:setf (%native-box-value (mine/app/mine::get-proto-mailbox st)) cl:nil)
          (cl:setf (%native-box-value (mine/app/mine::get-proto-thread st)) cl:nil)
@@ -1107,6 +1137,43 @@ First reloads the .asd to pick up any changes, then loads the system."
     (repl:repl-pane-append-system! (.ms-repl st) ";; Aborted.")
     (focus:focus-return! (.ms-focus st))
     (values))
+
+;;; IO request response functions
+
+  (declare %deactivate-io-request! (MineState -> Void))
+  (define (%deactivate-io-request! st)
+    "Reset IO request state and restore normal REPL prompt."
+    (cell:write! (.ms-io-request-active st) False)
+    (repl:repl-pane-set-prompt! (.ms-repl st) "> ")
+    (repl:repl-pane-clear-input! (.ms-repl st))
+    (values))
+
+  (declare io-send-response! (MineState * String -> Void))
+  (define (io-send-response! st text)
+    "Send IO response text to the runtime and deactivate IO request mode."
+    (lisp (-> Void) (st text)
+      (cl:let ((sp (%native-box-value (mine/app/mine::get-io-request-data st))))
+        (cl:when (cl:consp sp)
+          (cl:handler-case
+              (mine/protocol/server::write-message (cl:cdr sp)
+                `(:io-response ,(cl:car sp) ,text))
+            (cl:error () cl:nil))))
+      (cl:values))
+    (%deactivate-io-request! st))
+
+  (declare io-abort! (MineState -> Void))
+  (define (io-abort! st)
+    "Send IO abort to runtime and deactivate IO request mode."
+    (lisp (-> Void) (st)
+      (cl:let ((sp (%native-box-value (mine/app/mine::get-io-request-data st))))
+        (cl:when (cl:consp sp)
+          (cl:handler-case
+              (mine/protocol/server::write-message (cl:cdr sp)
+                `(:io-abort ,(cl:car sp)))
+            (cl:error () cl:nil))))
+      (cl:values))
+    (%deactivate-io-request! st)
+    (repl:repl-pane-append-system! (.ms-repl st) ";; IO cancelled."))
 
 ;;; Debugger key dispatch
 
@@ -2097,6 +2164,13 @@ Uses the preceding (in-package ...) form to determine the compilation package."
   (define (handle-repl-key st key mod)
     "Handle a key event when the REPL pane is focused."
     (cond
+      ;; IO request active: Escape to cancel, delegate typing to input widget
+      ((cell:read (.ms-io-request-active st))
+       (match key
+         ((input:KeyEnter) (values)) ;; handled in make-handler
+         ((input:KeyEscape) (io-abort! st))
+         (_ (repl:repl-pane-handle-key! (.ms-repl st) key mod)
+            (values))))
       ;; Debugger active: route keys to debugger handler
       ((cell:read (.ms-debugger-active st))
        (handle-debugger-key! st key mod))
@@ -3191,6 +3265,12 @@ Render-app is NOT called here; the main loop handles rendering."
                  ;; Unmodified Enter in REPL
                  ((Tuple (focus:FocusRepl) _)
                   (cond
+                    ;; IO request active -> send input as response
+                    ((cell:read (.ms-io-request-active st))
+                     (let text = (repl:repl-pane-get-input (.ms-repl st)))
+                     (repl:repl-pane-append-system! (.ms-repl st)
+                                                   (<> ";; Input received: " text))
+                     (io-send-response! st text))
                     ((cell:read (.ms-debugger-active st))
                      (handle-debugger-key! st key mod))
                     ;; Input complete -> eval; incomplete -> insert newline
@@ -3410,7 +3490,9 @@ Render-app is NOT called here; the main loop handles rendering."
                          (cell:new "")
                          (native-box-new)
                          (cell:new (cfgt:.config-structural-editing config))
-                         config))
+                         config
+                         (cell:new False)
+                         (native-box-new)))
     ;; Open a file if given on the command line
     (let file-args = (filter (fn (a) (not (str:substring? "--" a))) (list:cdr args)))
     (match file-args
@@ -3962,6 +4044,11 @@ Returns a Coalton List of ProtoMsg."
        ;; Pack all debug data into a NativeBox for the Coalton side to install
        (mine/app/mine:ProtoDebug cond-text
          (mine/app/mine::make-%native-box :value msg))))
+    ((cl:and (cl:consp msg) (cl:eq (cl:first msg) :io-request))
+     (cl:let ((prompt (cl:or (cl:third msg) "")))
+       (mine/app/mine:ProtoIORequest
+         (cl:format cl:nil "~A" prompt)
+         (mine/app/mine::make-%native-box :value msg))))
     (cl:t cl:nil)))
 
 (cl:defun %install-debugger-data (st debug-data)
@@ -3991,6 +4078,18 @@ Returns a Coalton List of ProtoMsg."
       (cl:when stream
         (cl:setf (%native-box-value (mine/app/mine::get-conn-stream st))
                  (cl:cons msg-id stream))))))
+
+;;; IO request helpers (thin CL — only NativeBox access)
+
+(cl:defun %install-io-request-data (st io-data)
+  "Install IO request state from the packed NativeBox.
+Pairs the message ID with the raw socket stream for sending :io-response."
+  (cl:let* ((msg (%native-box-value io-data))
+            (msg-id (cl:second msg))
+            (stream (%native-box-value (mine/app/mine::get-conn-stream st))))
+    (cl:when stream
+      (cl:setf (%native-box-value (mine/app/mine::get-io-request-data st))
+               (cl:cons msg-id (cl:if (cl:consp stream) (cl:cdr stream) stream))))))
 
 ;;; Debugger helpers (thin CL — only NativeBox access)
 
