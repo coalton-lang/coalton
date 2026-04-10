@@ -22,6 +22,8 @@
    #:minibuffer-render
    #:minibuffer-render-completions
    #:minibuffer-completions
+   #:minibuffer-footer-hint
+   #:minibuffer-set-footer-hint!
    #:minibuffer-handle-key!
    #:minibuffer-cancel!
    #:minibuffer-has-complete-fn?
@@ -38,6 +40,7 @@
     (active        (Cell Boolean))
     (callback      (Cell (Optional (String -> Void))))
     (completions   (Cell (List String)))
+    (footer-hint   (Cell String))
     (complete-fn   (Cell (Optional (String -> (Tuple String (List String))))))
     (on-change     (Cell (Optional (String -> Void))))
     (on-repeat-key (Cell (Optional input:Key)))
@@ -51,6 +54,7 @@
                 (cell:new False)
                 (cell:new None)
                 (cell:new Nil)
+                (cell:new "")
                 (cell:new None)
                 (cell:new None)
                 (cell:new None)
@@ -66,6 +70,15 @@
   (define (minibuffer-completions mb)
     (cell:read (.completions mb)))
 
+  (declare minibuffer-footer-hint (Minibuffer -> String))
+  (define (minibuffer-footer-hint mb)
+    (cell:read (.footer-hint mb)))
+
+  (declare minibuffer-set-footer-hint! (Minibuffer * String -> Void))
+  (define (minibuffer-set-footer-hint! mb text)
+    (cell:write! (.footer-hint mb) text)
+    (values))
+
   (declare minibuffer-has-complete-fn? (Minibuffer -> Boolean))
   (define (minibuffer-has-complete-fn? mb)
     (match (cell:read (.complete-fn mb))
@@ -79,6 +92,7 @@
     (cell:write! (.active mb) True)
     (cell:write! (.callback mb) (Some cb))
     (cell:write! (.completions mb) Nil)
+    (cell:write! (.footer-hint mb) "")
     (cell:write! (.complete-fn mb) None)
     (values))
 
@@ -91,6 +105,7 @@
     (cell:write! (.active mb) True)
     (cell:write! (.callback mb) (Some cb))
     (cell:write! (.completions mb) Nil)
+    (cell:write! (.footer-hint mb) "")
     (cell:write! (.complete-fn mb) (Some cfn))
     (values))
 
@@ -105,6 +120,7 @@ ON-NEXT-FN/ON-PREV-FN fire on Down/Up. Enter/Ctrl+G dismiss."
     (cell:write! (.active mb) True)
     (cell:write! (.callback mb) None)
     (cell:write! (.completions mb) Nil)
+    (cell:write! (.footer-hint mb) "")
     (cell:write! (.complete-fn mb) None)
     (cell:write! (.on-change mb) (Some on-change-fn))
     (cell:write! (.on-repeat-key mb) (Some repeat-key))
@@ -118,6 +134,7 @@ ON-NEXT-FN/ON-PREV-FN fire on Down/Up. Enter/Ctrl+G dismiss."
     (cell:write! (.active mb) False)
     (cell:write! (.callback mb) None)
     (cell:write! (.completions mb) Nil)
+    (cell:write! (.footer-hint mb) "")
     (cell:write! (.complete-fn mb) None)
     (cell:write! (.on-change mb) None)
     (cell:write! (.on-repeat-key mb) None)
