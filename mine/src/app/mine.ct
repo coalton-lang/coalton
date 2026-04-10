@@ -399,9 +399,9 @@
     (let ry = (wt:.rect-y rect))
     (let rw = (wt:.rect-width rect))
     (let rh = (wt:.rect-height rect))
-    (let bold-blue = (color:Style color:baby-blue color:ColorDefault color:AttrBold))
-    (let bold = (color:Style color:text-fg color:ColorDefault color:AttrBold))
-    (let dim = (color:Style color:text-dim-fg color:ColorDefault color:AttrNone))
+    (let bold-blue = (color:Style color:baby-blue color:black color:AttrBold))
+    (let bold = (color:Style color:text-fg color:black color:AttrBold))
+    (let dim = (color:Style color:text-dim-fg color:black color:AttrNone))
     ;; Check if ~/.mine exists
     (let has-config = (lisp (-> Boolean) ()
                        (cl:if (cl:probe-file
