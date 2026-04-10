@@ -75,11 +75,12 @@ error-string is NIL on success."
         (values nil nil (format nil "Error: ~A" c))))))
 
 (defun debug-eval (form-string package-name)
-  "Evaluate FORM-STRING, letting errors propagate to *debugger-hook*.
-Returns (values result-string output-string) on success.
-Read errors and package errors are signaled directly."
+  "Evaluate FORM-STRING in PACKAGE-NAME via plain EVAL for interactive use.
+Lets errors propagate to the caller's handler-bind (for debugger support).
+Returns (values result-string output-string) on success."
   (let* ((pkg (find-or-make-package package-name))
-         (form (let ((*package* pkg) (*read-eval* nil))
+         (form (let ((*package* pkg)
+                     (*read-eval* nil))
                  (read-from-string form-string)))
          (stdout-capture (make-string-output-stream))
          (stderr-capture (make-string-output-stream))
@@ -91,16 +92,55 @@ Read errors and package errors are signaled directly."
                  (*trace-output* (make-broadcast-stream
                                    *trace-output* stderr-capture))
                  (*package* pkg))
-             (multiple-value-list (eval form))))
-         (all-output (concatenate 'string
-                       (get-output-stream-string stdout-capture)
-                       (get-output-stream-string stderr-capture))))
-    (values (with-output-to-string (s)
-              (loop :for val :in result-values
-                    :for i :from 0
-                    :do (when (> i 0) (terpri s))
-                        (let ((*package* pkg)) (write val :stream s))))
-            all-output)))
+             (multiple-value-list (eval form)))))
+    (let ((all-output (concatenate 'string
+                        (get-output-stream-string stdout-capture)
+                        (get-output-stream-string stderr-capture))))
+      (values (with-output-to-string (s)
+                (loop :for val :in result-values
+                      :for i :from 0
+                      :do (when (> i 0) (terpri s))
+                          (let ((*package* pkg)) (write val :stream s))))
+              all-output))))
+
+(defun debug-compile-string (form-string package-name)
+  "Compile FORM-STRING via compile-file + load for correct eval-when semantics.
+Lets errors propagate to the caller's handler-bind (for debugger support).
+Returns (values result-string output-string) on success.
+Unlike debug-eval, this preserves toplevel form semantics but does not
+return expression values (load returns T)."
+  (let* ((pkg (find-or-make-package package-name))
+         (stdout-capture (make-string-output-stream))
+         (stderr-capture (make-string-output-stream))
+         (result-values nil))
+    (uiop:with-temporary-file (:stream tmp-stream
+                                :pathname tmp-path
+                                :type "lisp"
+                                :direction :output)
+      (format tmp-stream "(in-package ~S)~%" (package-name pkg))
+      (write-string form-string tmp-stream)
+      :close-stream
+      (let ((*standard-output* (make-broadcast-stream
+                                 *standard-output* stdout-capture))
+            (*error-output* (make-broadcast-stream
+                              *error-output* stderr-capture))
+            (*trace-output* (make-broadcast-stream
+                              *trace-output* stderr-capture))
+            (*package* pkg))
+        (let ((fasl (compile-file tmp-path)))
+          (when fasl
+            (unwind-protect
+                 (setf result-values (multiple-value-list (load fasl)))
+              (ignore-errors (delete-file fasl)))))))
+    (let ((all-output (concatenate 'string
+                        (get-output-stream-string stdout-capture)
+                        (get-output-stream-string stderr-capture))))
+      (values (with-output-to-string (s)
+                (loop :for val :in result-values
+                      :for i :from 0
+                      :do (when (> i 0) (terpri s))
+                          (let ((*package* pkg)) (write val :stream s))))
+              all-output))))
 
 (defun eval-in-package (form package-name)
   "Evaluate an already-read FORM in the context of PACKAGE-NAME.

@@ -82,7 +82,8 @@
   (:export
    #:safe-eval
    #:eval-in-package
-   #:debug-eval))
+   #:debug-eval
+   #:debug-compile-string))
 
 (defpackage #:mine/runtime/introspect
   (:use #:cl)
