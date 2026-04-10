@@ -107,7 +107,14 @@ Returns (values result-string output-string) on success."
                                      (make-two-way-stream tis *standard-output*)
                                      *terminal-io*))
                   (*package* pkg))
-             (multiple-value-list (eval form)))))
+             ;; Shift form history (+ is always updated)
+             (setf +++ ++ ++ + + form)
+             (let ((vals (multiple-value-list (eval form))))
+               ;; Update value history only when at least one value was produced
+               (when vals
+                 (setf *** ** ** * * (first vals)
+                       /// // // / / vals))
+               vals))))
     (let ((all-output (concatenate 'string
                         (get-output-stream-string stdout-capture)
                         (get-output-stream-string stderr-capture))))
