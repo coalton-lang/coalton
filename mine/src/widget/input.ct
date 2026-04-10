@@ -192,7 +192,8 @@ Prompt is shown on the first visible line; continuation lines are indented."
     (let w      = (wt:.rect-width rect))
     (let h      = (wt:.rect-height rect))
     (let prompt = (cell:read (.iw-prompt iw)))
-    (let plen   = (str:length prompt))
+    (let plen   = (lisp (-> UFix) (prompt)
+                    (mine/term/screen::%string-display-width prompt)))
     ;; Clear entire input area
     (render:fill-rect scr rect #\Space ts)
     ;; If empty, show hint
@@ -207,7 +208,15 @@ Prompt is shown on the first visible line; continuation lines are indented."
     (%ensure-cursor-visible! iw h)
     (let scroll = (cell:read (.iw-scroll iw)))
     (let crow = (%cursor-row text cursor))
-    (let ccol = (%cursor-col text cursor))
+    ;; Compute visual column (display width) for cursor position
+    (let ccol = (lisp (-> UFix) (text cursor)
+                  (cl:let* ((len (cl:length text))
+                            (line-start (cl:1+ (cl:or (cl:position #\Newline text
+                                                        :end (cl:min cursor len)
+                                                        :from-end cl:t)
+                                                      -1))))
+                    (mine/term/screen::%string-display-width
+                      text line-start (cl:min cursor len)))))
     (let nlines = (+ 1 (%count-newlines text)))
     ;; Draw each visible line
     (let text-w = (if (>= w plen) (- w plen) 0))

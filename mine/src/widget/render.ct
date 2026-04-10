@@ -53,14 +53,16 @@
     ;; Only draw if the row is within the rect
     (when (and (>= row ry)
               (< row (+ ry rh)))
-      (let text-len = (str:length text))
       ;; Compute visible portion
       (let start = (if (< col rx) (- rx col) 0))
       (let draw-col = (if (< col rx) rx col))
       (let max-col = (+ rx rw))
       (let avail = (if (> max-col draw-col) (- max-col draw-col) 0))
-      (let visible-len = (min (if (> text-len start) (- text-len start) 0)
-                              avail))
+      ;; Find how many characters from START fit in AVAIL columns,
+      ;; accounting for wide (CJK) characters that take 2 columns.
+      (let visible-len
+        = (lisp (-> UFix) (text start avail)
+            (mine/term/screen::%string-chars-fitting text start avail)))
       (when (> visible-len 0)
         (let clipped = (str:substring text start (+ start visible-len)))
         (screen:screen-set-string scr row draw-col clipped style)))
