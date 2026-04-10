@@ -18,7 +18,7 @@
    #:ActionOpenFile #:ActionSave #:ActionSaveAll #:ActionCloseFile
    #:ActionFind #:ActionBeamFile #:ActionBeamForm
    #:ActionJumpToDefinition #:ActionJumpBack #:ActionGotoLine
-   #:ActionShowRepl #:ActionHideRepl #:ActionInterruptRepl #:ActionClearRepl #:ActionRestartRepl
+   #:ActionShowRepl #:ActionFocusEditor #:ActionHideRepl #:ActionInterruptRepl #:ActionClearRepl #:ActionRestartRepl
    #:ActionClearCache
    #:ActionSetupWizard
    #:ActionToggleStructural
@@ -63,6 +63,7 @@
     ActionJumpToDefinition
     ActionJumpBack
     ActionShowRepl
+    ActionFocusEditor
     ActionHideRepl
     ActionInterruptRepl
     ActionClearRepl
@@ -126,12 +127,13 @@
       (MenuItem "Beam File"           "Alt+K" ActionBeamFile)
       (MenuItem "Beam Form"           "Alt+C" ActionBeamForm)
       (MenuItem "Jump to Definition" "Alt+." ActionJumpToDefinition)
-      (MenuItem "Jump Back"          "Alt+," ActionJumpBack))))
+      (MenuItem "Jump Back"          "Alt+," ActionJumpBack)
+      (MenuItem "Show/Focus Editor" "Ctrl+E" ActionFocusEditor))))
 
   (declare %repl-menu (Void -> MenuDef))
   (define (%repl-menu)
     (MenuDef "REPL" (make-list
-      (MenuItem "Show/Focus" "Ctrl+R" ActionShowRepl)
+      (MenuItem "Show/Maximize" "Ctrl+R" ActionShowRepl)
       (MenuItem "Hide"       "" ActionHideRepl)
       (MenuItem "Interrupt"  "" ActionInterruptRepl)
       (MenuItem "Clear"      "" ActionClearRepl)
