@@ -2326,20 +2326,6 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          ((None)
           (status:statusbar-set-message! (.ms-status st) "No file open"))))
       ((input:KeyCtrl #\f) (start-find! st))
-      ;; Ctrl+O -> open file
-      ((input:KeyCtrl #\o)
-       (let start-dir = (match (mgr:bufmgr-current (.ms-bufmgr st))
-                          ((Some b)
-                           (match (buf:buffer-path b)
-                             ((Some p) (lisp (-> String) (p)
-                                         (cl:namestring (cl:make-pathname :name cl:nil :type cl:nil :defaults p))))
-                             ((None) (lisp (-> String) () (cl:namestring (cl:truename "."))))))
-                          ((None) (lisp (-> String) () (cl:namestring (cl:truename "."))))))
-       (mini:minibuffer-prompt-with-completion! (.ms-minibuffer st)
-                                                "Open File: " start-dir
-                                                (fn (path) (open-loose-file! st path))
-                                                complete:complete-file-path))
-
       ;; Everything else -> ignore
       (_ (values))))
 
@@ -2738,6 +2724,9 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          ;; Ctrl+T -> toggle open files pane
          ((input:KeyCtrl #\t) (toggle-open-files! st))
 
+         ;; Ctrl+O -> open file
+         ((input:KeyCtrl #\o) (prompt-open-file! st))
+
          ;; Route to focused pane
          (_
           (match (focus:focus-current (.ms-focus st))
@@ -3088,6 +3077,21 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          ((Err msg) (status:statusbar-set-message! (.ms-status st) msg))))
       ((None)
        (status:statusbar-set-message! (.ms-status st) "No file open"))))
+
+  (declare prompt-open-file! (MineState -> Void))
+  (define (prompt-open-file! st)
+    "Prompt for a file path and open the chosen file."
+    (let start-dir = (match (mgr:bufmgr-current (.ms-bufmgr st))
+                       ((Some b)
+                        (match (buf:buffer-path b)
+                          ((Some p) (lisp (-> String) (p)
+                                      (cl:namestring (cl:make-pathname :name cl:nil :type cl:nil :defaults p))))
+                          ((None) (lisp (-> String) () (cl:namestring (cl:truename "."))))))
+                       ((None) (lisp (-> String) () (cl:namestring (cl:truename "."))))))
+    (mini:minibuffer-prompt-with-completion! (.ms-minibuffer st)
+                                             "Open File: " start-dir
+                                             (fn (path) (open-loose-file! st path))
+                                             complete:complete-file-path))
 
   (declare toggle-repl! (MineState -> Void))
   (define (toggle-repl! st)
@@ -3518,17 +3522,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       ((menubar:ActionBuildExecutable)
        (build-executable! st term))
       ((menubar:ActionOpenFile)
-       (let start-dir = (match (mgr:bufmgr-current (.ms-bufmgr st))
-                          ((Some b)
-                           (match (buf:buffer-path b)
-                             ((Some p) (lisp (-> String) (p)
-                                         (cl:namestring (cl:make-pathname :name cl:nil :type cl:nil :defaults p))))
-                             ((None) (lisp (-> String) () (cl:namestring (cl:truename "."))))))
-                          ((None) (lisp (-> String) () (cl:namestring (cl:truename "."))))))
-       (mini:minibuffer-prompt-with-completion! (.ms-minibuffer st)
-                                                "Open File: " start-dir
-                                                (fn (path) (open-loose-file! st path))
-                                                complete:complete-file-path))
+       (prompt-open-file! st))
       ((menubar:ActionSave) (save-current-file! st))
       ((menubar:ActionSaveAll)
        (status:statusbar-set-message! (.ms-status st) "Save All: not yet implemented"))
