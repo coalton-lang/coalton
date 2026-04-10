@@ -563,6 +563,8 @@
     "Render the minibuffer as a centered dialog box with completions."
     (let w = (min 60 (- cols 4)))
     (let candidates = (mini:minibuffer-completions (.ms-minibuffer st)))
+    (let footer = (mini:minibuffer-footer-hint (.ms-minibuffer st)))
+    (let footer-rows = (if (> (str:length footer) 0) 1 0))
     (let n-cands = (list:length candidates))
     (let has-complete-fn = (match (mini:minibuffer-has-complete-fn? (.ms-minibuffer st))
                              ((True) 1)
@@ -577,7 +579,7 @@
                              (cl:ceiling n-cands cols-per-row)))))
     (let x = (the UFix (lisp (-> UFix) (cols w) (cl:floor (cl:- cols w) 2))))
     (let y = (the UFix (lisp (-> UFix) (rows) (cl:floor rows 3))))
-    (let h = (min (+ 3 comp-rows) (- rows y)))
+    (let h = (min (+ (+ 3 comp-rows) footer-rows) (- rows y)))
     (let border-style = (color:Style color:text-dim-fg
                                      color:panel-bg
                                      color:AttrNone))
@@ -587,6 +589,9 @@
     (let comp-style = (color:Style color:text-dim-fg
                                    color:panel-bg
                                    color:AttrNone))
+    (let footer-style = (color:Style color:text-dimmer-fg
+                                     color:panel-bg
+                                     color:AttrItalic))
     ;; Draw box
     (render:draw-box scr (wt:Rect x y (+ w 2) h) border-style)
     ;; Fill interior
@@ -597,7 +602,18 @@
     ;; Render completions or hint below input
     (when (> comp-rows 0)
       (mini:minibuffer-render-completions (.ms-minibuffer st) scr
-                                          (+ x 2) (+ y 2) (- w 1) (- (+ y h) 2) comp-style))
+                                          (+ x 2) (+ y 2) (- w 1)
+                                          (if (> footer-rows 0)
+                                              (- (+ y h) 3)
+                                              (- (+ y h) 2))
+                                          comp-style))
+    (when (> footer-rows 0)
+      (render:draw-text-clipped scr
+                                (wt:Rect (+ x 2) (+ y (- h 2)) (- w 1) 1)
+                                footer
+                                (+ y (- h 2))
+                                (+ x 2)
+                                footer-style))
     ;; Cursor is already positioned by input-widget-render
     (values))
 
@@ -3185,7 +3201,9 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                                            (%find-do-search! st needle (+ (cursor:cursor-position (.ms-cursor st)) 1)))
                                          ;; on-prev (Up): previous match
                                          (fn (needle)
-                                           (%find-do-prev! st needle))))
+                                           (%find-do-prev! st needle)))
+    (mini:minibuffer-set-footer-hint! (.ms-minibuffer st)
+                                      "Ctrl+F for next match, Enter to dismiss"))
 
 ;;; Close current file
 
