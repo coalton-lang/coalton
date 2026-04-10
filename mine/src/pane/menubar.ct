@@ -8,6 +8,7 @@
    (#:input #:mine/term/input)
    (#:cell #:coalton/cell)
    (#:str #:coalton/string)
+   (#:cellw #:mine/text/width)
    (#:list #:coalton/list))
   (:export
    #:MenuAction
@@ -170,7 +171,7 @@
       ((Cons menu rest)
        ;; Format: " Fn:Title " = title + 5 (" F" + digit + ":" + title + " ")
        (let fkey-len = (str:length (the String (into (+ idx 1)))))
-       (let title-len = (+ (+ (str:length (.md-title menu)) 3) fkey-len))
+       (let title-len = (+ (+ (cellw:string-cell-width (.md-title menu)) 3) fkey-len))
        (Cons (Tuple col (+ col title-len))
              (%compute-title-cols rest (+ (+ col title-len) 1) (+ idx 1))))))
 
@@ -369,8 +370,8 @@
     (match items
       ((Nil) (+ current-max 4))
       ((Cons item rest)
-       (let label-len = (str:length (.mi-label item)))
-       (let key-len = (str:length (.mi-key item)))
+       (let label-len = (cellw:string-cell-width (.mi-label item)))
+       (let key-len = (cellw:string-cell-width (.mi-key item)))
        (let total = (+ label-len (if (> key-len 0) (+ key-len 2) 0)))
        (%max-item-width rest (max current-max total)))))
 
@@ -430,7 +431,7 @@
                              (if is-active active-style title-style))))
        (when (< start max-col)
          (screen:screen-set-string scr row start prefix prefix-style)
-         (screen:screen-set-string scr row (+ start (str:length prefix))
+         (screen:screen-set-string scr row (+ start (cellw:string-cell-width prefix))
                                    title name-style))
        (%render-titles mrest crest open-idx (+ idx 1)
                        scr row max-col bar-style title-style active-style
@@ -503,7 +504,7 @@
        (let kb = (.mi-key item))
        (when (> (str:length kb) 0)
          (let kb-display = (<> kb " "))
-         (let kb-x = (- (+ x w) (str:length kb-display)))
+         (let kb-x = (- (+ x w) (cellw:string-cell-width kb-display)))
          (screen:screen-set-string scr y kb-x kb-display ks))
        (%render-items rest scr x (+ y 1) w (+ idx 1) selected
                       bg sel-style key-style sel-key-style)))))

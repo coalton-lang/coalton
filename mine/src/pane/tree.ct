@@ -8,7 +8,8 @@
    (#:cell #:coalton/cell)
    (#:vec #:coalton/vector)
    (#:list #:coalton/list)
-   (#:str #:coalton/string))
+   (#:str #:coalton/string)
+   (#:cellw #:mine/text/width))
   (:export
    #:TreeNode #:TreeDir #:TreeFile
    #:TreePane
@@ -309,8 +310,8 @@ When a project tree exists, returns a fixed height so the tree never shifts."
       ((.fr-separator row) None)
       (True
        (let indent-x = (* (.fr-depth row) 2))
-       (let name-len = (str:length (.fr-name row)))
-       (let text-end = (+ indent-x (+ 2 (the UFix (into name-len)))))
+       (let name-len = (cellw:string-cell-width (.fr-name row)))
+       (let text-end = (+ indent-x (+ 2 name-len)))
        (if (< col text-end)
            (if (.fr-is-dir row)
                (Some "")
@@ -616,13 +617,17 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
                          (color:with-attr color:default-style color:AttrReverse)
                          (color:with-fg color:default-style color:error-fg)))
                    ;; Draw marker + name
+                   (let name-x = (+ x 2))
+                   (let name-avail = (if (> (+ (wt:.rect-x rect) (wt:.rect-width rect)) name-x)
+                                         (- (+ (wt:.rect-x rect) (wt:.rect-width rect)) name-x)
+                                         0))
                    (cond
                      ((and dirty (not (== flat-idx sel)))
                       (screen:screen-set-string scr y x dirty-marker dirty-style)
-                      (screen:screen-set-string scr y (+ x 2) name row-style))
+                      (render:draw-text-clipped scr (wt:Rect name-x y name-avail 1) name y name-x row-style))
                      (True
                       (screen:screen-set-string scr y x dir-marker row-style)
-                      (screen:screen-set-string scr y (+ x 2) name row-style)))
+                      (render:draw-text-clipped scr (wt:Rect name-x y name-avail 1) name y name-x row-style)))
                    (%draw-tree-rows rest scr rect height scr-off2 sel
                                     (+ row-idx 1) (+ flat-idx 1) dirty-fn preview-p))))))))))
 
@@ -640,7 +645,7 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
   (declare %draw-titled-sep (screen:Screen * UFix * UFix * UFix * String * color:Style -> Void))
   (define (%draw-titled-sep scr x y w title style)
     "Draw ─ Title ────── across width W starting at (x, y)."
-    (let title-len = (str:length title))
+    (let title-len = (cellw:string-cell-width title))
     (cond
       ((>= w (+ title-len 4))
        (screen:screen-set-cell scr y x #\─ style)

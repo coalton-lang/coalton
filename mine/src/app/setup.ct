@@ -7,6 +7,7 @@
    (#:input #:mine/term/input)
    (#:color #:mine/term/color)
    (#:esc #:mine/term/escape)
+   (#:cellw #:mine/text/width)
    (#:render #:mine/widget/render)
    (#:wt #:mine/widget/types)
    (#:cfg #:mine/config/types))
@@ -144,7 +145,7 @@
   (define (draw-centered scr row text style)
     "Draw TEXT horizontally centered on ROW."
     (let cols = (cell:read (screen:.screen-width scr)))
-    (let len = (lisp (-> UFix) (text) (cl:length text)))
+    (let len = (cellw:string-cell-width text))
     (let col = (if (> len cols) 0
                    (lisp (-> UFix) (cols len)
                      (cl:floor (cl:- cols len) 2))))
@@ -262,7 +263,7 @@
     (match strs
       ((Nil) 0)
       ((Cons s rest)
-       (let len = (lisp (-> UFix) (s) (cl:length s)))
+       (let len = (cellw:string-cell-width s))
        (max len (%max-string-length rest)))))
 
   ;;; Directory path tab completion
@@ -280,7 +281,7 @@
     (match items
       ((Nil) acc)
       ((Cons s rest)
-       (let len = (lisp (-> UFix) (s) (cl:length s)))
+       (let len = (cellw:string-cell-width s))
        (%max-cand-len rest (max acc len)))))
 
   (declare %render-cand-items
@@ -292,8 +293,16 @@
        (let row-idx = (lisp (-> UFix) (idx cols-per-row) (cl:floor idx cols-per-row)))
        (let col-idx = (lisp (-> UFix) (idx cols-per-row) (cl:mod idx cols-per-row)))
        (when (< row-idx max-rows)
-         (screen:screen-set-string scr (+ base-row row-idx)
-                                    (+ base-col (* col-idx col-w)) item style-dim)
+         (render:draw-text-clipped
+           scr
+           (wt:Rect (+ base-col (* col-idx col-w))
+                    (+ base-row row-idx)
+                    col-w
+                    1)
+           item
+           (+ base-row row-idx)
+           (+ base-col (* col-idx col-w))
+           style-dim)
          (values))
        (%render-cand-items rest scr base-row base-col col-w cols-per-row
                             (+ idx 1) max-rows))))
@@ -366,7 +375,13 @@
     ;; Cursor in input field, or hide if buttons focused
     (if in-buttons
         (screen:screen-hide-cursor scr)
-        (screen:screen-set-cursor scr input-row (+ label-col (+ 6 cursor-pos))))
+        (screen:screen-set-cursor
+          scr input-row
+          (+ label-col
+             (+ 6
+                (lisp (-> UFix) (text cursor-pos)
+                  (mine/text/width:string-cell-width-cl
+                    (cl:subseq text 0 (cl:min cursor-pos (cl:length text)))))))))
     ;; Completion candidates
     (let avail-w = (if (> cols (+ label-col 2)) (- cols (+ label-col 2)) cols))
     (let cand-rows = (%draw-completions scr (+ input-row 1) label-col avail-w candidates))
