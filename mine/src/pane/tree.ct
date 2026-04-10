@@ -776,7 +776,7 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
                           ((None) False)))
       (let digit-char = (lisp (-> Char) (num) (cl:code-char (cl:+ 49 num))))
       (let style = (if is-current
-                       (color:with-attr color:default-style color:AttrReverse)
+                       (color:with-bg color:default-style color:panel-bg)
                        (color:with-attr color:default-style color:AttrDim)))
       (screen:screen-set-cell scr (+ y num) x digit-char style)
       (%draw-strip-numbers scr x y show-count current-idx (+ num 1))))
@@ -800,7 +800,7 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
                              ((Some idx) (>= idx 9))
                              ((None) (> file-count 0))))
       (let t-style = (if t-highlighted
-                         (color:with-attr color:default-style color:AttrReverse)
+                         (color:with-bg color:default-style color:panel-bg)
                          (color:with-attr color:default-style color:AttrDim)))
       (screen:screen-set-cell scr t-y (wt:.rect-x rect) #\T t-style))
     (values)))
