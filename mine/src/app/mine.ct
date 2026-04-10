@@ -1164,24 +1164,41 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
        (handle-proto-msg! st msg)
        (process-proto-list! st rest))))
 
-  (declare %append-result-lines! (MineState * String -> Void))
-  (define (%append-result-lines! st text)
-    "Append result text to the REPL. Single value gets => prefix;
+  (declare %append-result-lines! (MineState * (List String) -> Void))
+  (define (%append-result-lines! st texts)
+    "Append result values to the REPL. Single value gets => prefix;
 multiple values get 1>, 2>, etc."
-    (lisp (-> Void) (st text)
-      (cl:let ((n-values (cl:1+ (cl:count #\Newline text)))
-               (repl (mine/app/mine::get-repl-pane st)))
-        (cl:loop :for start = 0 :then (cl:1+ end)
-           :for end = (cl:position #\Newline text :start start)
-           :for i :from 1
-           :for line = (cl:subseq text start (cl:or end (cl:length text)))
-           :for prefix = (cl:if (cl:= n-values 1)
-                                "=> "
-                                (cl:format cl:nil "~D> " i))
-           :do (repl:repl-pane-append-output!
-                repl (cl:concatenate 'cl:string prefix line))
-           :while end))
+    (lisp (-> Void) (st texts)
+      (cl:labels
+          ((append-prefixed-block (repl text first-prefix rest-prefix)
+             (cl:let ((first cl:t))
+               (cl:loop :for start := 0 :then (cl:1+ end)
+                        :for end := (cl:position #\Newline text :start start)
+                        :for line := (cl:subseq text start (cl:or end (cl:length text)))
+                        :for prefix := (cl:if first first-prefix rest-prefix)
+                        :do (repl:repl-pane-append-output!
+                             repl (cl:concatenate 'cl:string prefix line))
+                            (cl:setf first cl:nil)
+                        :while end))))
+        (cl:let ((repl (mine/app/mine::get-repl-pane st))
+                 (n-values (cl:length texts)))
+          (cl:cond
+            ((cl:= n-values 1)
+             (append-prefixed-block repl (cl:first texts) "=> " "  "))
+            (cl:t
+             (cl:loop :for text :in texts
+                      :for i :from 1
+                      :for prefix := (cl:format cl:nil "~D> " i)
+                      :for rest-prefix := (cl:make-string (cl:length prefix)
+                                                          :initial-element #\Space)
+                      :do (append-prefixed-block repl text prefix rest-prefix))))))
       (cl:values)))
+
+  (declare %decode-result-values (String -> (List String)))
+  (define (%decode-result-values text)
+    "Decode the runtime's result payload into a list of printed values."
+    (lisp (-> (List String)) (text)
+      (%decode-result-values-cl text)))
 
   (declare %append-error-lines! (MineState * String -> Void))
   (define (%append-error-lines! st text)
@@ -1204,13 +1221,16 @@ multiple values get 1>, 2>, etc."
   (define (handle-proto-msg! st msg)
     (match msg
       ((ProtoReturn text is-error)
+       (let texts = (%decode-result-values text))
        (cond
          (is-error
-          (%append-error-lines! st text))
-         ((== (str:length text) 0)
+          (match texts
+            ((Cons err-text _) (%append-error-lines! st err-text))
+            ((Nil) (%append-error-lines! st ""))))
+         ((== (list:length texts) 0)
           (repl:repl-pane-append-system! (.ms-repl st) ";; No values returned"))
          (True
-          (%append-result-lines! st text)))
+          (%append-result-lines! st texts)))
        ;; Record timing
        (let start-time = (cell:read (.ms-eval-start-time st)))
        (let elapsed = (lisp (-> String) (start-time)
@@ -4474,6 +4494,28 @@ Returns a Coalton List of ProtoMsg."
          (cl:format cl:nil "~A" prompt)
          (mine/app/mine::make-%native-box :value msg))))
     (cl:t cl:nil)))
+
+(cl:defun %decode-result-values-cl (text)
+  "Decode TEXT into a Coalton list of printed value strings."
+  (cl:cond
+    ((cl:null text)
+     cl:nil)
+    (cl:t
+     (cl:handler-case
+         (cl:let ((cl:*read-eval* cl:nil))
+           (cl:multiple-value-bind (payload pos)
+               (cl:read-from-string text)
+             (cl:if (cl:and (cl:consp payload)
+                            (cl:eq (cl:first payload) :values)
+                            (cl:consp (cl:rest payload))
+                            (cl:null (cl:cddr payload))
+                            (cl:listp (cl:second payload))
+                            (cl:= pos (cl:length text))
+                            (cl:every #'cl:stringp (cl:second payload)))
+                    (cl:second payload)
+                    (cl:list text))))
+       (cl:error ()
+         (cl:list text))))))
 
 (cl:defun %install-debugger-data (st debug-data)
   "Install debugger state from the packed debug data NativeBox."
