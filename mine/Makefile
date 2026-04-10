@@ -12,6 +12,7 @@ mine:
 		$(SBCL) \
 		--load $(QUICKLISP_SETUP) \
 		--eval '(pushnew :coalton-portable-bigfloat *features*)' \
+		--load coalton-config.lisp \
 		--eval '(asdf:load-system "mine" :verbose t)' \
 		--eval '(mine/app/executable:build)'
 

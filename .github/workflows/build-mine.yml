@@ -43,6 +43,7 @@ jobs:
           CL_SOURCE_REGISTRY="${GITHUB_WORKSPACE}//" \
             sbcl --dynamic-space-size 4096 \
             --noinform --non-interactive \
+            --load coalton-config.lisp \
             --eval '(ql:quickload "mine" :verbose t)' \
             --eval '(mine/app/executable:build)'
 
@@ -54,6 +55,7 @@ jobs:
           cd mine
           sbcl --dynamic-space-size 4096 `
             --noinform --non-interactive `
+            --load coalton-config.lisp `
             --eval '(ql:quickload "mine" :verbose t)' `
             --eval '(mine/app/executable:build)'
 
