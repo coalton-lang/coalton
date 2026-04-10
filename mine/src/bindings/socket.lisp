@@ -80,42 +80,6 @@ Returns a bivalent stream for the connection."
         (error 'socket-error
                :message (format nil "Connect to port ~D failed: ~A" port c))))))
 
-(defun socket-read-byte (stream)
-  "Read a single byte from STREAM.
-Returns the byte as an integer, or NIL on EOF."
-  (handler-case
-      (read-byte stream nil nil)
-    (error () nil)))
-
-(defun socket-read-line (stream)
-  "Read a newline-terminated line from STREAM.
-Since the stream is binary, we accumulate bytes until we see LF (10).
-Returns the line as a string (without the newline), or NIL on EOF."
-  (let ((bytes (make-array 128 :element-type '(unsigned-byte 8)
-                               :adjustable t
-                               :fill-pointer 0)))
-    (loop
-      (let ((b (handler-case (read-byte stream nil nil)
-                 (error () nil))))
-        (cond ((null b)
-               ;; EOF -- return accumulated data or NIL
-               (return (if (plusp (length bytes))
-                           (sb-ext:octets-to-string bytes :external-format :utf-8)
-                           nil)))
-              ((= b 10) ; LF
-               (return (sb-ext:octets-to-string bytes :external-format :utf-8)))
-              ((= b 13) ; CR -- skip, the LF follows on most protocols
-               nil)
-              (t
-               (vector-push-extend b bytes)))))))
-
-(defun socket-write-bytes (stream bytes)
-  "Write the byte vector BYTES to STREAM."
-  (declare (type (simple-array (unsigned-byte 8) (*)) bytes))
-  (write-sequence bytes stream)
-  (force-output stream)
-  (values))
-
 (defun socket-write-string (stream string)
   "Write STRING to STREAM as UTF-8 encoded bytes."
   (declare (type string string))
@@ -143,6 +107,3 @@ Useful when the socket was bound with port 0 (OS-assigned)."
     (declare (ignore address))
     port))
 
-(defun socket-fd (socket)
-  "Return the file descriptor of SOCKET."
-  (sb-bsd-sockets:socket-file-descriptor socket))

@@ -9,8 +9,6 @@
    (#:char #:coalton/char)
    (#:list #:coalton/list))
   (:export
-   #:scan-forward-sexp
-   #:scan-backward-sexp
    #:find-enclosing-open
    #:find-matching-close
    #:paredit-open-paren!

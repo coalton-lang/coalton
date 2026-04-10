@@ -12,8 +12,6 @@
    #:cursor-move-to-line-start!
    #:cursor-move-to-line-end!
    #:cursor-move-to-position!
-   #:cursor-move-word-left!
-   #:cursor-move-word-right!
    #:cursor-move-page-up!
    #:cursor-move-page-down!
    #:cursor-selection-anchor
@@ -80,12 +78,6 @@
     "Return the length of a string."
     (lisp (-> UFix) (s)
       (cl:length s)))
-
-  (declare whitespace? (Char -> Boolean))
-  (define (whitespace? ch)
-    "True if character is whitespace."
-    (lisp (-> Boolean) (ch)
-      (cl:not (cl:null (cl:member (cl:char-code ch) '(32 9 10 13))))))
 
   ;;; Horizontal movement
 
@@ -171,57 +163,6 @@ Note: caller should clamp new-pos to buffer length."
     ;; Cannot update target-col without a gap buffer, so set to 0.
     ;; Callers who have the gap buffer should follow with update-target-col.
     (set-target-col! cs 0))
-
-  ;;; Word movement
-
-  (declare cursor-move-word-left! (gap:GapBuffer * CursorState -> Void))
-  (define (cursor-move-word-left! gb cs)
-    "Move cursor one word to the left.
-Skip whitespace backward, then skip non-whitespace backward."
-    (let p = (cursor-position cs))
-    ;; Skip whitespace backward
-    (let p1 = (skip-backward-while gb p whitespace?))
-    ;; Skip non-whitespace backward
-    (let p2 = (skip-backward-while gb p1 (fn (ch) (not (whitespace? ch)))))
-    (set-pos! cs p2)
-    (update-target-col-from-pos! cs gb))
-
-  (declare cursor-move-word-right! (gap:GapBuffer * CursorState -> Void))
-  (define (cursor-move-word-right! gb cs)
-    "Move cursor one word to the right.
-Skip non-whitespace forward, then skip whitespace forward."
-    (let p = (cursor-position cs))
-    (let len = (gap:gap-length gb))
-    ;; Skip non-whitespace forward
-    (let p1 = (skip-forward-while gb p len (fn (ch) (not (whitespace? ch)))))
-    ;; Skip whitespace forward
-    (let p2 = (skip-forward-while gb p1 len whitespace?))
-    (set-pos! cs p2)
-    (update-target-col-from-pos! cs gb))
-
-  (declare skip-backward-while (gap:GapBuffer * UFix * (Char -> Boolean) -> UFix))
-  (define (skip-backward-while gb p pred)
-    "Walk backward while predicate holds, returning the new position."
-    (if (== p 0)
-        0
-        (match (gap:gap-char-at gb (- p 1))
-          ((None) p)
-          ((Some ch)
-           (if (pred ch)
-               (skip-backward-while gb (- p 1) pred)
-               p)))))
-
-  (declare skip-forward-while (gap:GapBuffer * UFix * UFix * (Char -> Boolean) -> UFix))
-  (define (skip-forward-while gb p len pred)
-    "Walk forward while predicate holds, returning the new position."
-    (if (>= p len)
-        len
-        (match (gap:gap-char-at gb p)
-          ((None) p)
-          ((Some ch)
-           (if (pred ch)
-               (skip-forward-while gb (+ p 1) len pred)
-               p)))))
 
   ;;; Page movement
 

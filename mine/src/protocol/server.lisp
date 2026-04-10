@@ -427,48 +427,20 @@ runs during macroexpansion and needs the full runtime environment."
   "Look up Coalton source location for SYM.
 Returns (((:file . path) (:offset . n))) or NIL."
   (handler-case
-      (let* ((env-pkg (find-package '#:coalton-impl/entry))
-             (env-sym (when env-pkg
-                        (find-symbol "*GLOBAL-ENVIRONMENT*" env-pkg)))
-             (env (when (and env-sym (boundp env-sym))
-                    (symbol-value env-sym)))
-             (entry (when env
-                      (handler-case
-                          (let ((lookup-pkg (find-package
-                                             '#:coalton-impl/typechecker/environment)))
-                            (when lookup-pkg
-                              (let ((fn (find-symbol "LOOKUP-NAME" lookup-pkg)))
-                                (when (and fn (fboundp fn))
-                                  (funcall fn env sym)))))
-                        (error () nil)))))
+      (let* ((env coalton-impl/entry:*global-environment*)
+             (entry (coalton-impl/typechecker/environment:lookup-name env sym)))
         (when entry
-          (let ((loc (handler-case
-                         (slot-value entry
-                           (find-symbol "LOCATION"
-                             "COALTON-IMPL/TYPECHECKER/ENVIRONMENT"))
-                       (error () nil))))
-            (when loc
-              (let ((source (handler-case
-                                (funcall (find-symbol "LOCATION-SOURCE"
-                                           "COALTON-IMPL/SOURCE") loc)
-                              (error () nil)))
-                    (span (handler-case
-                              (funcall (find-symbol "LOCATION-SPAN"
-                                         "COALTON-IMPL/SOURCE") loc)
-                            (error () nil))))
-                (when (and source (consp span)
-                           (typep source
-                             (find-symbol "SOURCE-FILE"
-                               "COALTON-IMPL/SOURCE")))
-                  (let ((filepath (handler-case
-                                      (slot-value source
-                                        (intern "NAME" "COALTON-IMPL/SOURCE"))
-                                    (error () nil)))
-                        (char-offset (car span)))
-                    (when (and filepath (numberp char-offset))
-                      (list (list (cons ':file filepath)
-                                  (cons ':form-path nil)
-                                  (cons ':offset char-offset)))))))))))
+          (let* ((loc (slot-value entry 'coalton-impl/typechecker/environment::location))
+                 (source (coalton-impl/source:location-source loc))
+                 (span (coalton-impl/source:location-span loc)))
+            (when (and (typep source 'coalton-impl/source::source-file)
+                       (consp span))
+              (let ((filepath (slot-value source 'coalton-impl/source::name))
+                    (char-offset (car span)))
+                (when (and filepath (numberp char-offset))
+                  (list (list (cons ':file filepath)
+                              (cons ':form-path nil)
+                              (cons ':offset char-offset)))))))))
     (error () nil)))
 
 (defun handle-find-definition (id symbol-name package-name stream)

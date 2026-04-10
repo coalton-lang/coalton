@@ -6,9 +6,7 @@
    (#:list #:coalton/list))
   (:export
    #:EventQueue
-   #:eventqueue-new
    #:eventqueue-push!
-   #:eventqueue-pop-wait!
    #:eventqueue-pop-timeout!
    #:eventqueue-drain!))
 
@@ -29,12 +27,6 @@
   (define-type EventQueue
     "Thread-safe FIFO event queue backed by a CL list, mutex, and waitqueue.")
 
-  (declare eventqueue-new (Void -> EventQueue))
-  (define (eventqueue-new)
-    "Create a new empty event queue."
-    (lisp (-> EventQueue) ()
-      (make-%event-queue)))
-
   (declare eventqueue-push! (EventQueue * ev:Event -> Void))
   (define (eventqueue-push! q event)
     "Push EVENT onto the tail of Q and signal any waiting thread."
@@ -44,17 +36,6 @@
                  (cl:append (%event-queue-items q) (cl:list event)))
         (sb-thread:condition-notify (%event-queue-waitq q)))
       (cl:values)))
-
-  (declare eventqueue-pop-wait! (EventQueue -> ev:Event))
-  (define (eventqueue-pop-wait! q)
-    "Block until an event is available, then pop and return it."
-    (lisp (-> ev:Event) (q)
-      (sb-thread:with-mutex ((%event-queue-mutex q))
-        (cl:loop :while (cl:null (%event-queue-items q))
-                 :do (sb-thread:condition-wait
-                      (%event-queue-waitq q)
-                      (%event-queue-mutex q)))
-        (cl:pop (%event-queue-items q)))))
 
   (declare eventqueue-pop-timeout! (EventQueue * UFix -> Optional ev:Event))
   (define (eventqueue-pop-timeout! q ms)

@@ -102,21 +102,6 @@ Keys: :name, :package, :type, :documentation, :arglist, :value, :coalton-type."
             (push (cons ':coalton-type ct) info)))
         (nreverse info)))))
 
-(defun package-symbols (package-name &optional (external-only t))
-  "Return a list of symbol name strings in PACKAGE-NAME.
-If EXTERNAL-ONLY is true, only external symbols are returned."
-  (let ((pkg (find-package (string-upcase package-name))))
-    (when pkg
-      (let ((result nil))
-        (cond
-          (external-only
-           (do-external-symbols (sym pkg)
-             (push (symbol-name sym) result)))
-          (t
-           (do-symbols (sym pkg)
-             (push (symbol-name sym) result))))
-        (sort result #'string<)))))
-
 (defun function-arglist (function-name package-name)
   "Return the arglist of FUNCTION-NAME as a string.
 Looks up the symbol in PACKAGE-NAME, then queries sb-introspect.

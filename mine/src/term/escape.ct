@@ -4,14 +4,12 @@
    (#:color #:mine/term/color))
   (:export
    ;; Cursor
-   #:cursor-to #:cursor-up #:cursor-down
-   #:cursor-forward #:cursor-back
-   #:cursor-save #:cursor-restore
+   #:cursor-to
    #:cursor-show #:cursor-hide
    ;; Screen
-   #:clear-screen #:clear-line #:clear-to-eol
+   #:clear-screen
    ;; Scroll
-   #:scroll-up #:scroll-down #:set-scroll-region
+   #:scroll-up #:scroll-down
    ;; Attributes
    #:sgr-reset #:style-to-sgr
    ;; Alt screen
@@ -57,36 +55,6 @@
     "Move cursor to the given row and column (1-based)."
     (csi-nn row col "H"))
 
-  (declare cursor-up (UFix -> String))
-  (define (cursor-up n)
-    "Move cursor up by N rows."
-    (csi-n n "A"))
-
-  (declare cursor-down (UFix -> String))
-  (define (cursor-down n)
-    "Move cursor down by N rows."
-    (csi-n n "B"))
-
-  (declare cursor-forward (UFix -> String))
-  (define (cursor-forward n)
-    "Move cursor forward by N columns."
-    (csi-n n "C"))
-
-  (declare cursor-back (UFix -> String))
-  (define (cursor-back n)
-    "Move cursor back by N columns."
-    (csi-n n "D"))
-
-  (declare cursor-save (Void -> String))
-  (define (cursor-save)
-    "Save the current cursor position."
-    (csi-seq "s"))
-
-  (declare cursor-restore (Void -> String))
-  (define (cursor-restore)
-    "Restore the saved cursor position."
-    (csi-seq "u"))
-
   (declare cursor-show (Void -> String))
   (define (cursor-show)
     "Show the cursor."
@@ -104,16 +72,6 @@
     "Clear the entire screen."
     (csi-seq "2J"))
 
-  (declare clear-line (Void -> String))
-  (define (clear-line)
-    "Clear the entire current line."
-    (csi-seq "2K"))
-
-  (declare clear-to-eol (Void -> String))
-  (define (clear-to-eol)
-    "Clear from cursor to end of line."
-    (csi-seq "0K"))
-
   ;;; Scrolling
 
   (declare scroll-up (UFix -> String))
@@ -125,11 +83,6 @@
   (define (scroll-down n)
     "Scroll the screen down by N lines."
     (csi-n n "T"))
-
-  (declare set-scroll-region (UFix * UFix -> String))
-  (define (set-scroll-region top bot)
-    "Set the scrolling region to rows TOP through BOT."
-    (csi-nn top bot "r"))
 
   ;;; SGR (Select Graphic Rendition)
 

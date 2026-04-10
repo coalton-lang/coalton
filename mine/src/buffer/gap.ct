@@ -4,8 +4,7 @@
    (#:vec #:coalton/vector)
    (#:cell #:coalton/cell)
    (#:str #:coalton/string)
-   (#:char #:coalton/char)
-   (#:iter #:coalton/iterator))
+   (#:char #:coalton/char))
   (:export
    #:GapBuffer
    #:gap-new #:gap-from-string
@@ -16,7 +15,6 @@
    #:gap-line-count
    #:gap-line-to-pos #:gap-pos-to-line-col
    #:gap-line-text
-   #:gap-chars
    #:visual-col #:char-for-vcol))
 
 (in-package #:mine/buffer/gap)
@@ -425,18 +423,4 @@ VCOL-TARGET (without exceeding it), expanding tabs with TAB-W."
               (cl:return i))
             (cl:setf vcol next-vcol))))))
 
-  ;;; Iterator
-
-  (declare gap-chars (GapBuffer -> iter:Iterator Char))
-  (define (gap-chars gb)
-    "Iterate over all characters in the buffer."
-    (let pos = (cell:new 0))
-    (let n = (cell:read (.len gb)))
-    (iter:new
-     (fn ()
-       (let p = (cell:read pos))
-       (cond
-         ((>= p n) None)
-         (True
-          (cell:increment! pos)
-          (gap-char-at gb p)))))))
+)

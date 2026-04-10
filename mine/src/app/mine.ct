@@ -12,7 +12,6 @@
    (#:esc #:mine/term/escape)
    (#:ev #:mine/event/types)
    (#:queue #:mine/event/queue)
-   (#:loop #:mine/event/loop)
    (#:gap #:mine/buffer/gap)
    (#:buf #:mine/buffer/buffer)
    (#:mgr #:mine/buffer/manager)
@@ -173,12 +172,6 @@
 
   (declare get-jump-stack (MineState -> NativeBox))
   (define (get-jump-stack st) (.ms-jump-stack st))
-
-  (declare get-project-system (MineState -> (Cell (Optional String))))
-  (define (get-project-system st) (.ms-project-system st))
-
-  (declare get-project-asd-path (MineState -> (Cell (Optional String))))
-  (define (get-project-asd-path st) (.ms-project-asd-path st))
 
   (declare get-quit-cell (MineState -> (Cell Boolean)))
   (define (get-quit-cell st) (.ms-quit st))
@@ -2717,16 +2710,8 @@ Handles terminal resize by calling REDRAW-FN."
            (cl:if (cl:and sym-name (cl:plusp (cl:length sym-name)))
                   (cl:multiple-value-bind (resolved-pkg resolved-sym)
                       (%resolve-qualified-name sym-name buf-pkg)
-                    ;; Try local first, then subprocess
-                    (cl:let ((loc (%find-definition-source sym-name buf-pkg)))
-                      (cl:if loc
-                             (cl:progn
-                               (cl:when (cl:plusp (cl:length cur-path))
-                                 (%jump-stack-push st cur-path cur-pos))
-                               (%jump-to-file st (cl:car loc) (cl:cdr loc)))
-                             ;; Fall back to subprocess
-                             (%request-remote-definition st resolved-sym resolved-pkg
-                                                         cur-path cur-pos))))
+                    (%request-remote-definition st resolved-sym resolved-pkg
+                                                cur-path cur-pos))
                   (mine/pane/status::statusbar-set-message!
                    (mine/app/mine::get-status-bar st)
                    "No symbol at cursor")))
@@ -4485,21 +4470,6 @@ in a package matching SYSTEM-NAME."
           (%read-symbol-after gb (cl:1+ paren-pos) len)))
     (cl:error () cl:nil)))
 
-;; CL-side: find the head symbol of the nearest enclosing form and look up its type.
-(cl:defun %lookup-enclosing-symbol-info (gb cursor-pos buf-text default-pkg)
-  "Scan backward in gap buffer GB from CURSOR-POS to find the nearest
-enclosing open paren, read the symbol after it, and return its
-Coalton type or CL arglist as a string. Returns \"\" if not found."
-  (cl:handler-case
-      (cl:let* ((len (mine/buffer/gap:gap-length gb))
-                (paren-pos (%find-enclosing-open-paren gb cursor-pos))
-                (sym-name (cl:when paren-pos
-                            (%read-symbol-after gb (cl:1+ paren-pos) len)))
-                (buf-pkg (%detect-buffer-package buf-text default-pkg)))
-        (cl:if (cl:and sym-name (cl:plusp (cl:length sym-name)))
-               (%symbol-type-string sym-name buf-pkg)
-               ""))
-    (cl:error () "")))
 
 (cl:defun %find-enclosing-open-paren (gb pos)
   "Scan backward from POS for the nearest unmatched open paren. Returns position or NIL."
@@ -4579,61 +4549,6 @@ If no colon, returns (values buf-pkg name)."
                     (cl:values prefix sym-part)))
            (cl:values buf-pkg name))))
 
-(cl:defun %symbol-type-string (name buf-pkg)
-  "Look up the Coalton type or CL arglist for symbol NAME. Returns a string."
-  (cl:multiple-value-bind (resolved-pkg sym-name)
-      (%resolve-qualified-name name buf-pkg)
-    (cl:let ((coalton-type (%try-coalton-type sym-name resolved-pkg)))
-      (cl:if coalton-type
-             (cl:format cl:nil "~A :: ~A" name coalton-type)
-             (cl:let ((arglist (%try-cl-arglist sym-name resolved-pkg)))
-               (cl:if arglist
-                      (cl:format cl:nil "(~A~{ ~A~})" name arglist)
-                      ""))))))
-
-(cl:defun %try-coalton-type (name buf-pkg)
-  "Look up the Coalton type of NAME. Searches the buffer's package and its used packages."
-  (cl:handler-case
-      (cl:let* ((env-pkg (cl:find-package '#:coalton-impl/entry))
-                (env-sym (cl:when env-pkg
-                           (cl:find-symbol "*GLOBAL-ENVIRONMENT*" env-pkg)))
-                (env (cl:when (cl:and env-sym (cl:boundp env-sym))
-                       (cl:symbol-value env-sym)))
-                (lookup-pkg (cl:find-package '#:coalton-impl/typechecker/environment))
-                (lookup-fn (cl:when lookup-pkg
-                             (cl:find-symbol "LOOKUP-VALUE-TYPE" lookup-pkg))))
-        (cl:when (cl:and env lookup-fn (cl:fboundp lookup-fn))
-          ;; Build list of packages to search: buffer package + its used packages
-          (cl:let* ((primary-pkg (cl:find-package (cl:string-upcase buf-pkg)))
-                    (pkgs-to-search
-                      (cl:if primary-pkg
-                             (cl:cons primary-pkg (cl:package-use-list primary-pkg))
-                             (cl:list (cl:find-package "COALTON-USER")))))
-            (cl:dolist (pkg pkgs-to-search)
-              (cl:when pkg
-                (cl:let ((sym (cl:find-symbol (cl:string-upcase name) pkg)))
-                  (cl:when sym
-                    (cl:handler-case
-                        (cl:let ((ty (cl:funcall lookup-fn env sym)))
-                          (cl:return
-                           (coalton-impl/typechecker/type-string:type-to-string ty env)))
-                      (cl:error () cl:nil)))))))))
-    (cl:error () cl:nil)))
-
-(cl:defun %try-cl-arglist (name buf-pkg)
-  "Try to get the CL arglist for symbol NAME in the buffer's package context."
-  (cl:handler-case
-      (cl:let* ((primary-pkg (cl:find-package (cl:string-upcase buf-pkg)))
-                (pkgs (cl:if primary-pkg
-                             (cl:cons primary-pkg (cl:package-use-list primary-pkg))
-                             (cl:list (cl:find-package "COMMON-LISP")))))
-        (cl:dolist (pkg pkgs)
-          (cl:when pkg
-            (cl:let ((sym (cl:find-symbol (cl:string-upcase name) pkg)))
-              (cl:when (cl:and sym (cl:fboundp sym))
-                (cl:return (sb-introspect:function-lambda-list sym)))))))
-    (cl:error () cl:nil)))
-
 ;;; Jump-to-definition
 
 
@@ -4684,62 +4599,6 @@ Returns a string or NIL."
         (cl:if (cl:> end start)
                (mine/buffer/gap:gap-substring gb start end)
                cl:nil)))))
-
-(cl:defun %find-definition-source (sym-name buf-pkg)
-  "Find the source location for SYM-NAME. Returns (filepath . char-offset) or NIL."
-  (cl:handler-case
-      (cl:multiple-value-bind (resolved-pkg resolved-sym)
-          (%resolve-qualified-name sym-name buf-pkg)
-        (cl:let* ((pkg (cl:find-package (cl:string-upcase resolved-pkg)))
-                  (sym (cl:when pkg (cl:find-symbol (cl:string-upcase resolved-sym) pkg))))
-          (cl:when sym
-            ;; Try Coalton source first
-            (cl:let ((coalton-loc (%try-coalton-source sym)))
-              (cl:if coalton-loc
-                     coalton-loc
-                     ;; Try sb-introspect
-                     (%try-sbcl-source sym))))))
-    (cl:error () cl:nil)))
-
-(cl:defun %try-coalton-source (sym)
-  "Look up Coalton source location for SYM. Returns (filepath . char-offset) or NIL."
-  (cl:handler-case
-      (cl:let* ((env (cl:when (cl:boundp 'coalton-impl/entry:*global-environment*)
-                       (cl:symbol-value 'coalton-impl/entry:*global-environment*)))
-                (entry (cl:when env
-                         (cl:handler-case
-                             (coalton-impl/typechecker/environment:lookup-name env sym)
-                           (cl:error () cl:nil)))))
-        (cl:when entry
-          (cl:let ((loc (cl:slot-value entry 'coalton-impl/typechecker/environment::location)))
-            (cl:when loc
-              (cl:let ((source (coalton-impl/source:location-source loc))
-                       (span (coalton-impl/source:location-span loc)))
-                (cl:when (cl:and (cl:typep source 'coalton-impl/source::source-file)
-                                 (cl:consp span))
-                  (cl:let ((filepath (cl:slot-value source 'coalton-impl/source::name))
-                           (char-offset (cl:car span)))
-                    (cl:when (cl:and filepath (cl:numberp char-offset))
-                      (cl:cons filepath char-offset)))))))))
-    (cl:error () cl:nil)))
-
-(cl:defun %try-sbcl-source (sym)
-  "Look up SBCL source location for SYM. Returns (filepath . char-offset) or NIL."
-  (cl:handler-case
-      (cl:let ((sources cl:nil))
-        (cl:dolist (type '(:function :variable :type :method-combination
-                           :class :compiler-macro :structure))
-          (cl:handler-case
-              (cl:let ((s (sb-introspect:find-definition-sources-by-name sym type)))
-                (cl:setf sources (cl:nconc sources s)))
-            (cl:error () cl:nil)))
-        (cl:when sources
-          (cl:let* ((src (cl:first sources))
-                    (pathname (sb-introspect:definition-source-pathname src))
-                    (char-offset (sb-introspect:definition-source-character-offset src)))
-            (cl:when pathname
-              (cl:cons (cl:namestring pathname) (cl:or char-offset 0))))))
-    (cl:error () cl:nil)))
 
 (cl:defun %jump-stack-push (st filepath position)
   "Push (filepath . position) onto the jump stack."

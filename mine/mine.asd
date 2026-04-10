@@ -33,7 +33,6 @@
     :serial t
     :components ((:file "eval")
                  (:file "introspect")
-                 (:file "debug")
                  (:file "asdf")
                  (:file "server-main")))))
 
@@ -69,8 +68,7 @@
    (:module "event"
     :serial t
     :components ((:ct-file "types")
-                 (:ct-file "queue")
-                 (:ct-file "loop")))
+                 (:ct-file "queue")))
 
    ;; Utilities and bindings
    (:module "utils"
@@ -102,8 +100,7 @@
    (:module "edit"
     :serial t
     :components ((:ct-file "cursor")
-                 (:ct-file "operations")
-                 (:ct-file "clipboard")))
+                 (:ct-file "operations")))
 
    ;; Paredit (depends on edit/cursor, edit/undo)
    (:module "syntax-paredit"
@@ -115,7 +112,6 @@
    (:module "widget"
     :serial t
     :components ((:ct-file "types")
-                 (:ct-file "layout")
                  (:ct-file "focus")
                  (:ct-file "render")
                  (:ct-file "text")
@@ -128,7 +124,6 @@
                  (:ct-file "tree")
                  (:ct-file "editor")
                  (:ct-file "repl")
-                 (:ct-file "output")
                  (:ct-file "status")
                  (:ct-file "debugger")
                  (:ct-file "minibuffer")))
@@ -138,9 +133,7 @@
     :serial t
     :components ((:ct-file "asdf-model")
                  (:ct-file "asdf-parser")
-                 (:ct-file "asdf-writer")
-                 (:ct-file "tree-model")
-                 (:ct-file "session")))
+                 (:ct-file "asdf-writer")))
 
    ;; Configuration
    (:module "config"
@@ -152,8 +145,7 @@
    ;; Application entry point
    (:module "app"
     :serial t
-    :components ((:ct-file "commands")
-                 (:ct-file "setup")
+    :components ((:ct-file "setup")
                  (:ct-file "help")
                  (:ct-file "mine")
                  (:file "executable")))))

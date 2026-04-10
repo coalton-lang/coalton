@@ -14,9 +14,7 @@
    #:buffer-new #:buffer-new-file #:buffer-from-file
    #:buffer-id #:buffer-name #:buffer-path
    #:buffer-gap #:buffer-undo #:buffer-dirty? #:buffer-mode
-   #:buffer-mark-dirty! #:buffer-mark-clean!
-   #:buffer-set-mode!
-   #:detect-mode))
+   #:buffer-mark-dirty! #:buffer-mark-clean!))
 
 (in-package #:mine/buffer/buffer)
 
@@ -185,7 +183,4 @@
     (cell:write! (.dirty buf) False)
     (values))
 
-  (declare buffer-set-mode! (Buffer * BufferMode -> Void))
-  (define (buffer-set-mode! buf m)
-    (cell:write! (.mode buf) m)
-    (values)))
+)

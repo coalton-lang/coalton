@@ -13,7 +13,6 @@
    #:insert-string!
    #:delete-backward!
    #:delete-forward!
-   #:kill-line!
    #:newline!))
 
 (in-package #:mine/edit/operations)
@@ -99,43 +98,6 @@ Does nothing if the cursor is at the end of the buffer."
          (let text = (into ch))
          (undo:undo-record! tree (undo:OpDelete p text) p p)
          (values)))))
-
-  ;;; kill-line!
-
-  (declare kill-line! (buf:Buffer * undo:UndoTree * cursor:CursorState
-                        -> String))
-  (define (kill-line! buffer tree cs)
-    "Delete from cursor to end of line. If cursor is at EOL, delete the newline.
-Returns the deleted text."
-    (let p = (cursor:cursor-position cs))
-    (let gb = (buf:buffer-gap buffer))
-    (let len = (gap:gap-length gb))
-    (cond
-      ((>= p len) "")
-      (True
-       (match (gap:gap-pos-to-line-col gb p)
-         ((Tuple line col)
-          (let line-text = (gap:gap-line-text gb line))
-          (let line-len = (string-length line-text))
-          (cond
-            ;; Cursor is at EOL: delete just the newline
-            ((and (== col line-len) (>= p len))
-             "")
-            ((== col line-len)
-             (gap:gap-delete-char! gb p)
-             (buf:buffer-mark-dirty! buffer)
-             (let deleted = (the String (into #\Newline)))
-             (undo:undo-record! tree (undo:OpDelete p deleted) p p)
-             deleted)
-            ;; Cursor is mid-line: delete from cursor to EOL
-            (True
-             (let line-start = (gap:gap-line-to-pos gb line))
-             (let eol-pos = (+ line-start line-len))
-             (let deleted = (gap:gap-substring gb p eol-pos))
-             (gap:gap-delete-range! gb p eol-pos)
-             (buf:buffer-mark-dirty! buffer)
-             (undo:undo-record! tree (undo:OpDelete p deleted) p p)
-             deleted)))))))
 
   ;;; newline!
 
