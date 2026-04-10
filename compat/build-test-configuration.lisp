@@ -218,10 +218,7 @@
 ;; (load (concatenate 'string *quicklisp-home* "/setup"))
 
 ;;; Fiasco is broken on abcl - see https://github.com/appleby/fiasco/tree/fix-define-test-package-for-abcl
-;; So, (1/2) load fiasco.
-#+abcl (asdf:load-system :fiasco)
-;; (2/2) patch fiasco.
-#+abcl (load "abcl-fiasco-patch.lisp")
+;; So, make sure you're using that fork (same for ecl !!!)
 
 (defun load-n-test ()
   ; (ql:quickload :coalton/tests)
