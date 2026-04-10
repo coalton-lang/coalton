@@ -3736,6 +3736,8 @@ Stores match positions in editor search state. Returns the total count."
       ((menubar:ActionAbout) (show-about! st term))
       ((menubar:ActionQuit) (try-quit! st term))
       ((menubar:ActionNewProject)
+       (render-app st term)
+       (term:terminal-flush term)
        (match (%new-project-dialog term (.ms-config st))
          ((Some (Tuple name (Tuple location is-coalton)))
           (if (== (str:length name) 0)
