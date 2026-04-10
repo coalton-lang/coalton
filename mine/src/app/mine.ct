@@ -2280,7 +2280,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
           (match (tree:tree-pane-selected-path (.ms-tree st))
             ((Some fpath)
              (%switch-to-open-file! st fpath)
-             (focus:focus-switch! (.ms-focus st) focus:FocusEditor))
+             (focus-editor! st))
             ((None) (values))))
          ;; In tree section: directory -> toggle, file -> open permanently
          ((tree:tree-pane-selected-is-dir? (.ms-tree st))
@@ -2290,7 +2290,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
             ((Some fpath)
              (tree-open-file! st fpath)
              (%commit-preview! st)
-             (focus:focus-switch! (.ms-focus st) focus:FocusEditor))
+             (focus-editor! st))
             ((None) (values))))))
       ;; Open files section keys: c=close, s=save, r=refresh
       ((input:KeyChar #\c)
@@ -2406,8 +2406,8 @@ Uses the preceding (in-package ...) form to determine the compilation package."
         ((Tuple _name fpath)
          (%switch-to-open-file! st fpath)
          (when (== (focus:focus-current (.ms-focus st)) focus:FocusTree)
-           (focus:focus-switch! (.ms-focus st) focus:FocusEditor))
-         (values)))))
+           (focus-editor! st))
+         (%show-editor-if-repl-maximized! st)))))
 
 ;;; Event handling -- completion popup keys
 
@@ -2752,11 +2752,16 @@ Uses the preceding (in-package ...) form to determine the compilation package."
           (cond
             ;; Click in open files section: show in editor
             ((tree:tree-pane-in-open-section? (.ms-tree st))
-             (%switch-to-open-file! st hit-path))
+             (%switch-to-open-file! st hit-path)
+             (%show-editor-if-repl-maximized! st))
             ;; Directory: toggle expand
             ((== hit-path "") (tree:tree-pane-toggle-expand! (.ms-tree st)))
             ;; Tree file: open
-            (True (tree-open-file! st hit-path))))
+            (True
+             (tree-open-file! st hit-path)
+             (when (cell:read (.ms-repl-maximized st))
+               (%commit-preview! st))
+             (%show-editor-if-repl-maximized! st))))
          ((None) (values))))
       ;; Click in content area -> editor or REPL?
       ((>= col content-x)
@@ -2866,6 +2871,12 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     (cell:write! (.ms-repl-maximized st) False)
     (focus:focus-switch! (.ms-focus st) focus:FocusEditor)
     (values))
+
+  (declare %show-editor-if-repl-maximized! (MineState -> Void))
+  (define (%show-editor-if-repl-maximized! st)
+    "Reveal the editor when a file-open action happens under maximized REPL."
+    (when (cell:read (.ms-repl-maximized st))
+      (focus-editor! st)))
 
   (declare toggle-open-files! (MineState -> Void))
   (define (toggle-open-files! st)
@@ -3116,7 +3127,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          ;; Show tree if hidden
          (when (not (tree:tree-pane-visible? (.ms-tree st)))
            (tree:tree-pane-toggle-visible! (.ms-tree st)))
-         (focus:focus-switch! (.ms-focus st) focus:FocusEditor)
+         (focus-editor! st)
          (status:statusbar-set-message! (.ms-status st) (<> "Opened " display-name)))
         ((Err msg)
          (status:statusbar-set-message! (.ms-status st) msg)))))
@@ -3331,7 +3342,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
              (let display-name = (lisp (-> String) (asd-path)
                                    (cl:file-namestring (cl:pathname asd-path))))
              (tree:tree-pane-add-open-file! (.ms-tree st) display-name asd-path)
-             (focus:focus-switch! (.ms-focus st) focus:FocusEditor))
+             (focus-editor! st))
             ((Err msg)
              (status:statusbar-set-message! (.ms-status st) msg))))))))
 
@@ -3949,9 +3960,7 @@ If no colon, returns (values buf-pkg name)."
             (mine/buffer/manager::bufmgr-switch! bm bid)
             (mine/pane/editor::editor-pane-set-buffer! ep bid)
             (mine/edit/cursor::cursor-move-to-position! cs char-offset)
-            (mine/widget/focus::focus-switch!
-             (mine/app/mine::get-focus-mgr st)
-             'mine/widget/focus::focustarget/focuseditor)
+            (mine/app/mine::focus-editor! st)
             (mine/pane/status::statusbar-set-message!
              (mine/app/mine::get-status-bar st)
              (cl:format cl:nil "Jumped to ~A" (cl:file-namestring filepath))))))
@@ -4766,4 +4775,3 @@ Sets *compile-file-remap* and returns the temporary file path string."
     (cl:if notes
            (cl:second (cl:first notes))
            "")))
-
