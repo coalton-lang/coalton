@@ -7,6 +7,7 @@
    (#:render #:mine/widget/render)
    (#:cell #:coalton/cell)
    (#:str #:coalton/string)
+   (#:cellw #:mine/text/width)
    (#:list #:coalton/list)
    (#:widget-input #:mine/widget/input)
    (#:input #:mine/term/input)
@@ -263,7 +264,7 @@ ON-NEXT-FN/ON-PREV-FN fire on Down/Up. Enter/Ctrl+G dismiss."
   (define (%max-str-len items acc)
     (match items
       ((Nil) acc)
-      ((Cons s rest) (%max-str-len rest (max acc (str:length s))))))
+      ((Cons s rest) (%max-str-len rest (max acc (cellw:string-cell-width s))))))
 
   (declare %render-comp-items ((List String) * screen:Screen * UFix * UFix * UFix * color:Style * UFix * UFix * UFix * UFix -> Void))
   (define (%render-comp-items items scr x y max-w style col col-w cols-per-row max-y)
@@ -274,6 +275,5 @@ ON-NEXT-FN/ON-PREV-FN fire on Down/Up. Enter/Ctrl+G dismiss."
        (let cur-y = (if (>= col cols-per-row) (+ y 1) y))
        (when (<= cur-y max-y)
          (let cx = (+ x (* cur-col col-w)))
-         (let display = (str:substring item 0 (min (str:length item) col-w)))
-         (screen:screen-set-string scr cur-y cx display style)
+         (render:draw-text-clipped scr (wt:Rect cx cur-y col-w 1) item cur-y cx style)
          (%render-comp-items rest scr x cur-y max-w style (+ cur-col 1) col-w cols-per-row max-y))))))

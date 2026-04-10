@@ -7,6 +7,7 @@
    (#:render #:mine/widget/render)
    (#:cell #:coalton/cell)
    (#:str #:coalton/string)
+   (#:cellw #:mine/text/width)
    (#:input #:mine/term/input)
    (#:ev #:mine/event/types))
   (:export
@@ -120,10 +121,27 @@
 
   (declare %cursor-col (String * UFix -> UFix))
   (define (%cursor-col s cursor)
-    "Return the column (0-based) within the current line."
+    "Return the display column (0-based) within the current line."
     (let row = (%cursor-row s cursor))
     (let start = (%line-start s row))
-    (if (>= cursor start) (- cursor start) 0))
+    (lisp (-> UFix) (s start cursor)
+      (cl:if (cl:>= cursor start)
+             (mine/text/width:string-cell-width-cl
+               (cl:subseq s start (cl:min cursor (cl:length s))))
+             0)))
+
+  (declare %char-for-col (String * UFix -> UFix))
+  (define (%char-for-col s target-col)
+    "Return the character index whose display column is closest to TARGET-COL."
+    (lisp (-> UFix) (s target-col)
+      (cl:let ((vcol 0)
+               (len (cl:length s)))
+        (cl:dotimes (i len len)
+          (cl:let* ((span (mine/text/width:char-cell-width-cl (cl:char s i)))
+                    (next-vcol (cl:+ vcol span)))
+            (cl:when (cl:> next-vcol target-col)
+              (cl:return i))
+            (cl:setf vcol next-vcol))))))
 
   (declare input-widget-cursor-row (InputWidget -> UFix))
   (define (input-widget-cursor-row iw)
@@ -192,8 +210,7 @@ Prompt is shown on the first visible line; continuation lines are indented."
     (let w      = (wt:.rect-width rect))
     (let h      = (wt:.rect-height rect))
     (let prompt = (cell:read (.iw-prompt iw)))
-    (let plen   = (lisp (-> UFix) (prompt)
-                    (mine/term/screen::%string-display-width prompt)))
+    (let plen   = (cellw:string-cell-width prompt))
     ;; Clear entire input area
     (render:fill-rect scr rect #\Space ts)
     ;; If empty, show hint
@@ -209,19 +226,12 @@ Prompt is shown on the first visible line; continuation lines are indented."
     (let scroll = (cell:read (.iw-scroll iw)))
     (let crow = (%cursor-row text cursor))
     ;; Compute visual column (display width) for cursor position
-    (let ccol = (lisp (-> UFix) (text cursor)
-                  (cl:let* ((len (cl:length text))
-                            (line-start (cl:1+ (cl:or (cl:position #\Newline text
-                                                        :end (cl:min cursor len)
-                                                        :from-end cl:t)
-                                                      -1))))
-                    (mine/term/screen::%string-display-width
-                      text line-start (cl:min cursor len)))))
+    (let ccol = (%cursor-col text cursor))
     (let nlines = (+ 1 (%count-newlines text)))
     ;; Draw each visible line
     (let text-w = (if (>= w plen) (- w plen) 0))
     ;; Horizontal scroll for the cursor's line
-    (let cursor-line-scroll = (if (< ccol text-w) 0 (+ 1 (- ccol text-w))))
+    (let cursor-line-scroll = (if (or (== text-w 0) (< ccol text-w)) 0 (+ 1 (- ccol text-w))))
     (%render-lines iw scr x0 y0 w h scroll nlines text prompt plen text-w crow cursor-line-scroll ps ts)
     ;; Position cursor
     (let cursor-screen-row = (+ y0 (- crow scroll)))
@@ -245,17 +255,27 @@ Prompt is shown on the first visible line; continuation lines are indented."
                      (cl:make-string plen :initial-element #\Space) ts))
             ;; Get line text
             (cl:let* ((line-text (mine/widget/input::%get-line text line-idx))
-                      (line-len (cl:length line-text))
+                      (line-len (mine/text/width:string-cell-width-cl line-text))
                       ;; Use cursor-aware scroll for the cursor's line
                       (line-scroll (cl:if (cl:= line-idx crow)
                                           cursor-line-scroll
                                           (cl:if (cl:> line-len text-w)
                                                  (cl:max 0 (cl:- line-len text-w))
                                                  0)))
-                      (visible (cl:subseq line-text
-                                          (cl:min line-scroll line-len)
-                                          (cl:min (cl:+ line-scroll text-w) line-len))))
-              (screen:screen-set-string scr row (cl:+ x0 plen) visible ts)))))
+                      (text-x (cl:+ x0 plen))
+                      (max-col (cl:+ text-x text-w))
+                      (vcol 0))
+              (cl:loop :for ch :across line-text :do
+                (cl:let* ((span (mine/text/width:char-cell-width-cl ch))
+                          (draw-col (cl:+ text-x (cl:- vcol line-scroll)))
+                          (end-col (cl:+ draw-col span)))
+                  (cl:when (cl:and (cl:plusp span)
+                                   (cl:>= draw-col text-x)
+                                   (cl:<= end-col max-col))
+                    (screen:screen-set-cell scr row draw-col ch ts))
+                  (cl:incf vcol span)
+                  (cl:when (cl:>= vcol (cl:+ line-scroll text-w))
+                    (cl:return))))))))
       (cl:values)))
 
   ;;; Key handling
@@ -330,9 +350,8 @@ Prompt is shown on the first visible line; continuation lines are indented."
          ((> row 0)
           (let col = (%cursor-col text cursor))
           (let prev-start = (%line-start text (- row 1)))
-          (let prev-end = (%line-end text (- row 1)))
-          (let prev-len = (- prev-end prev-start))
-          (cell:write! (.iw-cursor iw) (+ prev-start (min col prev-len)))
+          (let prev-text = (%get-line text (- row 1)))
+          (cell:write! (.iw-cursor iw) (+ prev-start (%char-for-col prev-text col)))
           wt:Consumed)
          (True wt:Ignored)))
       ;; Down arrow: move to next line, or Ignored if on last line
@@ -343,9 +362,8 @@ Prompt is shown on the first visible line; continuation lines are indented."
          ((< (+ row 1) nlines)
           (let col = (%cursor-col text cursor))
           (let next-start = (%line-start text (+ row 1)))
-          (let next-end = (%line-end text (+ row 1)))
-          (let next-len = (- next-end next-start))
-          (cell:write! (.iw-cursor iw) (+ next-start (min col next-len)))
+          (let next-text = (%get-line text (+ row 1)))
+          (cell:write! (.iw-cursor iw) (+ next-start (%char-for-col next-text col)))
           wt:Consumed)
          (True wt:Ignored)))
       ;; Anything else: not handled

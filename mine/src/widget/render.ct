@@ -4,6 +4,7 @@
    (#:screen #:mine/term/screen)
    (#:color #:mine/term/color)
    (#:wt #:mine/widget/types)
+   (#:cellw #:mine/text/width)
    (#:str #:coalton/string))
   (:export
    #:fill-rect
@@ -53,19 +54,22 @@
     ;; Only draw if the row is within the rect
     (when (and (>= row ry)
               (< row (+ ry rh)))
-      ;; Compute visible portion
-      (let start = (if (< col rx) (- rx col) 0))
-      (let draw-col = (if (< col rx) rx col))
       (let max-col = (+ rx rw))
-      (let avail = (if (> max-col draw-col) (- max-col draw-col) 0))
-      ;; Find how many characters from START fit in AVAIL columns,
-      ;; accounting for wide (CJK) characters that take 2 columns.
-      (let visible-len
-        = (lisp (-> UFix) (text start avail)
-            (mine/term/screen::%string-chars-fitting text start avail)))
-      (when (> visible-len 0)
-        (let clipped = (str:substring text start (+ start visible-len)))
-        (screen:screen-set-string scr row draw-col clipped style)))
+      (lisp (-> Void) (scr text row col style rx max-col)
+        (cl:let ((cursor col)
+                 (len (cl:length text)))
+          (cl:dotimes (i len)
+            (cl:let* ((ch (cl:char text i))
+                      (span (mine/text/width:char-cell-width-cl ch))
+                      (end (cl:+ cursor span)))
+              (cl:when (cl:and (cl:plusp span)
+                               (cl:>= cursor rx)
+                               (cl:<= end max-col))
+                (screen:screen-set-cell scr row cursor ch style))
+              (cl:incf cursor span)
+              (cl:when (cl:>= cursor max-col)
+                (cl:return)))))
+        (cl:values)))
     (values))
 
   ;;; draw-hline

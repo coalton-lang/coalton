@@ -45,7 +45,8 @@
    (#:complete #:mine/app/completion)
    (#:find #:mine/app/find)
    (#:dialogs #:mine/app/dialogs)
-   (#:build #:mine/app/build))
+   (#:build #:mine/app/build)
+   (#:cellw #:mine/text/width))
   (:export
    #:mine-main
    #:ProtoMsg #:ProtoReturn #:ProtoOutput #:ProtoDebug #:ProtoConnectionLost
@@ -356,7 +357,7 @@
                              ((True) 1)
                              ((False) 0)))
     ;; Compute completion rows needed (columnar layout, matching render logic)
-    (let max-item-len = (fold (fn (acc s) (max acc (str:length s))) 0 candidates))
+    (let max-item-len = (fold (fn (acc s) (max acc (cellw:string-cell-width s))) 0 candidates))
     (let comp-rows = (if (== n-cands 0) has-complete-fn
                          (lisp (-> UFix) (n-cands max-item-len w)
                            (cl:let* ((render-w (cl:- w 1))
@@ -547,7 +548,7 @@
           (let cur-text = (gap:gap-line-text gb cur-line))
           (let cur-vcol = (gap:visual-col cur-text cur-col tab-w))
           (let pos-str = (<> "Ln " (<> (into (+ cur-line 1)) (<> " Col " (<> (into (+ cur-vcol 1)) " ")))))
-          (let pos-len = (the UFix (into (str:length pos-str))))
+          (let pos-len = (cellw:string-cell-width pos-str))
           (let w = (wt:.rect-width rect))
           (when (> w pos-len)
             (screen:screen-set-string scr y (+ x (- w pos-len)) pos-str style)))))
@@ -618,12 +619,12 @@
     (let pkg = (cell:read (.ms-repl-package st)))
     (screen:screen-set-string scr y x " Package: " label-style)
     (screen:screen-set-string scr y (+ x 10) pkg val-style)
-    (let col1 = (+ x (+ 10 (+ (the UFix (into (str:length pkg))) 2))))
+    (let col1 = (+ x (+ 10 (+ (cellw:string-cell-width pkg) 2))))
     ;; Lang
     (let lang = (cell:read (.ms-repl-lang st)))
     (screen:screen-set-string scr y col1 "Lang: " label-style)
     (screen:screen-set-string scr y (+ col1 6) lang val-style)
-    (let col2 = (+ col1 (+ 6 (+ (the UFix (into (str:length lang))) 2))))
+    (let col2 = (+ col1 (+ 6 (+ (cellw:string-cell-width lang) 2))))
     ;; Status
     (let busy = (cell:read (.ms-repl-busy st)))
     (screen:screen-set-string scr y col2 "Status: " label-style)
@@ -641,7 +642,7 @@
     (when (> (str:length timing) 0)
       (screen:screen-set-string scr y col3 "Timing: " label-style)
       (screen:screen-set-string scr y (+ col3 8) timing val-style))
-    (let col4 = (+ col3 (if (> (str:length timing) 0) (+ 8 (+ (the UFix (into (str:length timing))) 2)) 0)))
+    (let col4 = (+ col3 (if (> (str:length timing) 0) (+ 8 (+ (cellw:string-cell-width timing) 2)) 0)))
     ;; Heap (async from runtime server, throttled to every 2s)
     (lisp (-> Unit) (st) (%request-heap-info st) Unit)
     (let heap = (%heap-info))

@@ -3,6 +3,7 @@
   (:local-nicknames
    (#:color #:mine/term/color)
    (#:esc #:mine/term/escape)
+   (#:cellw #:mine/text/width)
    (#:vec #:coalton/vector)
    (#:cell #:coalton/cell))
   (:export
@@ -18,39 +19,6 @@
 
 (in-package #:mine/term/screen)
 
-;;; Wide character detection via SBCL's Unicode database
-
-(cl:eval-when (:compile-toplevel :load-toplevel :execute)
-  (cl:defun %char-wide-p (ch)
-    "Return T if CH takes 2 terminal columns (East Asian Wide/Fullwidth)."
-    (cl:declare (cl:type cl:character ch))
-    (cl:let ((eaw (sb-unicode:east-asian-width ch)))
-      (cl:or (cl:eq eaw :w) (cl:eq eaw :f))))
-
-  (cl:declaim (cl:inline %char-width))
-  (cl:defun %char-width (ch)
-    "Return the number of terminal columns CH occupies (1 or 2)."
-    (cl:if (%char-wide-p ch) 2 1))
-
-  (cl:defun %string-display-width (s cl:&optional (start 0) (end cl:nil))
-    "Return the display width of S[START..END) in terminal columns."
-    (cl:let ((e (cl:or end (cl:length s)))
-             (w 0))
-      (cl:loop :for i :from start :below e
-               :do (cl:incf w (%char-width (cl:char s i))))
-      w))
-
-  (cl:defun %string-chars-fitting (s start columns)
-    "Return the number of chars from S[START..] that fit in COLUMNS terminal columns."
-    (cl:let ((len (cl:length s))
-             (cols 0)
-             (count 0))
-      (cl:loop :for i :from start :below len
-               :for cw := (%char-width (cl:char s i))
-               :while (cl:<= (cl:+ cols cw) columns)
-               :do (cl:incf cols cw) (cl:incf count))
-      count)))
-
 (coalton-toplevel
 
   ;;; ScreenCell
@@ -58,7 +26,8 @@
   (define-struct ScreenCell
     "A single cell in the terminal screen buffer."
     (screen-cell-ch Char)
-    (screen-cell-style color:Style))
+    (screen-cell-style color:Style)
+    (screen-cell-span UFix))
 
   ;;; Screen
 
@@ -77,7 +46,7 @@
   (declare default-cell (Void -> ScreenCell))
   (define (default-cell)
     "A blank screen cell with default style."
-    (ScreenCell #\Space color:default-style))
+    (ScreenCell #\Space color:default-style 1))
 
   (declare make-buffer (UFix -> (vec:Vector ScreenCell)))
   (define (make-buffer size)
@@ -89,7 +58,7 @@
     "Allocate a buffer of sentinel cells that won't match any real content.
 Used for the front buffer after resize to force a full re-render."
     (let nul = (lisp (-> Char) () (cl:code-char 0)))
-    (vec:with-initial-element size (ScreenCell nul color:default-style)))
+    (vec:with-initial-element size (ScreenCell nul color:default-style 1)))
 
   ;;; Constructor
 
@@ -133,43 +102,37 @@ Uses a dirty front buffer to force the next flush to re-emit every cell."
 
   (declare screen-set-cell (Screen * UFix * UFix * Char * color:Style -> Void))
   (define (screen-set-cell scr row col ch style)
-    "Set a cell in the back buffer at (row, col)."
+    "Set a cell in the back buffer at (row, col). Handles wide characters."
     (let w = (screen-w scr))
     (let h = (screen-h scr))
     (when (and (< row h) (< col w))
-      (let idx = (+ (* row w) col))
-      (let buf = (cell:read (.screen-back scr)))
-      (vec:set! idx (ScreenCell ch style) buf))
+      (let span = (cellw:char-cell-width ch))
+      (when (and (> span 0) (<= (+ col span) w))
+        (let idx = (+ (* row w) col))
+        (let buf = (cell:read (.screen-back scr)))
+        (vec:set! idx (ScreenCell ch style span) buf)
+        (when (== span 2)
+          (vec:set! (+ idx 1) (ScreenCell #\Space style 0) buf))))
     (values))
 
   (declare screen-set-string (Screen * UFix * UFix * String * color:Style -> Void))
   (define (screen-set-string scr row col text style)
     "Write a string to the back buffer starting at (row, col)."
-    (let w = (screen-w scr))
     (let h = (screen-h scr))
-    (let buf = (cell:read (.screen-back scr)))
     (when (< row h)
-      (lisp (-> Void) (buf row col text style w)
-        (cl:let ((text-len (cl:length text))
-                 (c col))
+      (lisp (-> Void) (scr row col text style)
+        (cl:let ((cursor col)
+                 (text-len (cl:length text)))
           (cl:dotimes (i text-len)
-            (cl:when (cl:>= c w) (cl:return))
             (cl:let* ((ch (cl:char text i))
-                      (idx (cl:+ (cl:* row w) c)))
+                      (span (mine/text/width:char-cell-width-cl ch)))
               (cl:cond
-                ((%char-wide-p ch)
-                 (cl:cond
-                   ((cl:< (cl:1+ c) w)
-                    (cl:setf (cl:aref buf idx) (ScreenCell ch style))
-                    (cl:setf (cl:aref buf (cl:1+ idx))
-                             (ScreenCell (cl:code-char #xE000) style)))
-                   (cl:t
-                    ;; Wide char at last column — no room for right half
-                    (cl:setf (cl:aref buf idx) (ScreenCell #\Space style))))
-                 (cl:incf c 2))
+                ((cl:zerop span))
+                ((cl:<= (cl:+ cursor span) (screen-w scr))
+                 (screen-set-cell scr row cursor ch style)
+                 (cl:incf cursor span))
                 (cl:t
-                 (cl:setf (cl:aref buf idx) (ScreenCell ch style))
-                 (cl:incf c))))))
+                 (cl:return))))))
         (cl:values)))
     (values))
 
@@ -243,7 +206,7 @@ Uses a dirty front buffer to force the next flush to re-emit every cell."
     (let front = (cell:read (.screen-front scr)))
     (let size = (* (screen-w scr) (screen-h scr)))
     (let nul = (lisp (-> Char) () (cl:code-char 0)))
-    (let dirty = (ScreenCell nul color:default-style))
+    (let dirty = (ScreenCell nul color:default-style 1))
     (lisp (-> Void) (front size dirty)
       (cl:dotimes (i size)
         (cl:setf (cl:aref front i) dirty))
@@ -300,38 +263,32 @@ Uses synchronized output (DEC mode 2026) for flicker-free rendering."
     ;; Diff back vs front, emitting only changed cells
     (cl:dotimes (i size)
       (cl:let* ((bc (cl:aref back i))
-                (b-ch (screencell/screencell-_0 bc)))
-        ;; Skip continuation cells (right half of wide characters)
-        (cl:unless (cl:char= b-ch (cl:code-char #xE000))
-          (cl:let* ((fc (cl:aref front i))
-                    (b-style (screencell/screencell-_1 bc))
-                    (b-key   (%style-key b-style)))
-            ;; Skip unchanged cells (compare content, not identity)
-            (cl:unless (cl:and (cl:char= b-ch (screencell/screencell-_0 fc))
-                               (cl:= b-key (%style-key (screencell/screencell-_1 fc))))
-              (cl:let ((row (cl:floor i w))
-                       (col (cl:mod i w)))
-                ;; Move cursor if not already at the right position
-                (cl:unless (cl:and (cl:= row last-row)
-                                   (cl:= col last-col))
-                  (%write-cursor-to out (cl:1+ row) (cl:1+ col)))
-                ;; Emit SGR if style changed from the last emitted style
-                (cl:unless (cl:= b-key last-style-key)
-                  (%append-string out (%style-sgr b-style))
-                  (cl:setf last-style-key b-key))
-                ;; Emit the character — replace control chars with space to
-                ;; prevent terminal cursor misalignment (e.g. tabs jump to
-                ;; next tab stop, throwing off all subsequent positions)
-                (cl:vector-push-extend
-                  (cl:if (cl:< (cl:char-code b-ch) 32) #\Space b-ch)
-                  out)
-                ;; Track cursor position — wide chars advance by 2 columns
-                (cl:setf last-row row
-                         last-col (cl:+ col (%char-width b-ch)))
-                ;; Reset SGR after last column to prevent bg color bleed
-                (cl:when (cl:>= last-col w)
-                  (%write-csi out "0m")
-                  (cl:setf last-style-key -1))))))))
+                (b-ch (screencell/screencell-_0 bc))
+                (b-style (screencell/screencell-_1 bc))
+                (b-span (screencell/screencell-_2 bc))
+                (b-key (%style-key b-style)))
+        ;; Skip unchanged cells
+        (cl:unless (cl:and (cl:char= b-ch (screencell/screencell-_0 (cl:aref front i)))
+                           (cl:= b-key (%style-key (screencell/screencell-_1 (cl:aref front i))))
+                           (cl:= b-span (screencell/screencell-_2 (cl:aref front i))))
+          ;; Skip continuation cells (span=0)
+          (cl:unless (cl:zerop b-span)
+            (cl:let ((row (cl:floor i w))
+                     (col (cl:mod i w)))
+              (cl:unless (cl:and (cl:= row last-row)
+                                 (cl:= col last-col))
+                (%write-cursor-to out (cl:1+ row) (cl:1+ col)))
+              (cl:unless (cl:= b-key last-style-key)
+                (%append-string out (%style-sgr b-style))
+                (cl:setf last-style-key b-key))
+              (cl:vector-push-extend
+               (cl:if (cl:< (cl:char-code b-ch) 32) #\Space b-ch)
+               out)
+              (cl:setf last-row row
+                       last-col (cl:+ col b-span))
+              (cl:when (cl:= last-col w)
+                (%write-csi out "0m")
+                (cl:setf last-style-key -1)))))))
     ;; Reset SGR
     (%write-csi out "0m")
     ;; Position and show/hide cursor

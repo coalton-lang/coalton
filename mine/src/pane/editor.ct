@@ -10,6 +10,7 @@
    (#:gap #:mine/buffer/gap)
    (#:cursor #:mine/edit/cursor)
    (#:str #:coalton/string)
+   (#:cellw #:mine/text/width)
    (#:tok #:mine/syntax/token)
    (#:lexer #:mine/syntax/lexer)
    (#:hl #:mine/syntax/highlight)
@@ -341,7 +342,7 @@ Shows line numbers in the gutter and highlights the current line."
           (cl:if (cl:char= ch #\Tab)
                  (coalton/cell:write! vc (cl:* (cl:1+ (cl:floor (coalton/cell:read vc) tab-w)) tab-w))
                  (coalton/cell:write! vc (cl:+ (coalton/cell:read vc)
-                                               (mine/term/screen::%char-width ch))))))
+                                               (mine/text/width:char-cell-width-cl ch))))))
       (vec:push! (coalton/cell:read vc) v)
       (cl:values))
     v)
@@ -401,6 +402,7 @@ Shows line numbers in the gutter and highlights the current line."
         :do
         (cl:let* ((ch (cl:char text ci))
                   (ch-vcol (vec:index-unsafe ci vcol-map))
+                  (ch-width (mine/text/width:char-cell-width-cl ch))
                   (abs-pos (cl:+ line-buf-offset ci))
                   (s (mine/pane/editor::%pick-style
                       abs-pos sel-start sel-end style
@@ -413,15 +415,12 @@ Shows line numbers in the gutter and highlights the current line."
                                   (mine/term/screen:screen-set-cell
                                    scr y (cl:+ text-x (cl:- v scroll-vcol))
                                    #\Space s))))
-                 (cl:when (cl:and (cl:>= ch-vcol scroll-vcol)
-                                  (cl:< ch-vcol vis-vcol-end))
-                   (cl:let ((scr-col (cl:+ text-x (cl:- ch-vcol scroll-vcol))))
-                     (mine/term/screen:screen-set-cell scr y scr-col ch s)
-                     (cl:when (cl:and (mine/term/screen::%char-wide-p ch)
-                                      (cl:< (cl:1+ ch-vcol) vis-vcol-end))
-                       (mine/term/screen:screen-set-cell
-                        scr y (cl:1+ scr-col)
-                        (cl:code-char #xE000) s)))))))
+                 (cl:when (cl:and (cl:plusp ch-width)
+                                  (cl:>= ch-vcol scroll-vcol)
+                                  (cl:<= (cl:+ ch-vcol ch-width) vis-vcol-end))
+                   (mine/term/screen:screen-set-cell
+                    scr y (cl:+ text-x (cl:- ch-vcol scroll-vcol))
+                    ch s)))))
       (cl:values)))
 
   (declare draw-highlighted-line

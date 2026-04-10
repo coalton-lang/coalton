@@ -6,7 +6,8 @@
    (#:wt #:mine/widget/types)
    (#:render #:mine/widget/render)
    (#:cell #:coalton/cell)
-   (#:str #:coalton/string))
+   (#:str #:coalton/string)
+   (#:cellw #:mine/text/width))
   (:export
    #:StatusBar
    #:statusbar-new
@@ -98,15 +99,13 @@ Format: [MODE] filename [*] Ln:N Col:N [package]"
         ((Some msg) (<> mode-str msg))
         ((None) mode-str)))
     ;; Draw left-aligned text.
-    (let left-len = (lisp (-> UFix) (display-left)
-                      (mine/term/screen::%string-display-width display-left)))
+    (let left-len = (cellw:string-cell-width display-left))
     (screen:screen-set-string scr y (wt:.rect-x rect) display-left style)
     ;; Draw symbol info after the left portion
     (let sym = (cell:read (.symbol-info sb)))
     (when (> (str:length sym) 0)
       (let sym-display = (<> " " sym))
-      (let sym-width = (lisp (-> UFix) (sym-display)
-                          (mine/term/screen::%string-display-width sym-display)))
+      (let sym-width = (cellw:string-cell-width sym-display))
       (let sym-style = (color:Style color:text-fg
                                      color:status-bar-bg
                                      color:AttrNone))

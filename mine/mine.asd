@@ -55,6 +55,11 @@
                  (:file "terminal")
                  (:file "signal")))
 
+   ;; Shared text layout helpers
+   (:module "text"
+    :serial t
+    :components ((:ct-file "width")))
+
    ;; Terminal abstraction
    (:module "term"
     :serial t
