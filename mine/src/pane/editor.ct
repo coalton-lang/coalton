@@ -13,6 +13,7 @@
    (#:tok #:mine/syntax/token)
    (#:lexer #:mine/syntax/lexer)
    (#:hl #:mine/syntax/highlight)
+   (#:paredit #:mine/syntax/paredit)
    (#:vec #:coalton/vector))
   (:export
    #:EditorPane
@@ -42,6 +43,10 @@
   "Current buffer filepath for diagnostics lookup.")
 (cl:defvar *diag-fn* cl:nil
   "Function (filepath line) -> severity-keyword-or-nil. Set by app before render.")
+(cl:defvar *paren-match-a* cl:nil
+  "Buffer position of the close bracket to highlight, or nil for none.")
+(cl:defvar *paren-match-b* cl:nil
+  "Buffer position of the matching open bracket to highlight, or nil for none.")
 
 (coalton-toplevel
 
@@ -192,6 +197,33 @@ Shows line numbers in the gutter and highlights the current line."
     (let sel-end = (match sel-anchor
                      ((Some a) (max a cur-pos))
                      ((None) 99999999)))
+    ;; Compute matching bracket positions
+    (let paren-match =
+      (if (> cur-pos 0)
+          (match (gap:gap-char-at gb (- cur-pos 1))
+            ((Some #\))
+             (match (paredit:scan-matching-open-paren gb (- cur-pos 1))
+               ((Some open-pos) (Some (Tuple (- cur-pos 1) open-pos)))
+               ((None) None)))
+            ((Some #\])
+             (match (paredit:scan-matching-open-bracket gb (- cur-pos 1))
+               ((Some open-pos) (Some (Tuple (- cur-pos 1) open-pos)))
+               ((None) None)))
+            (_ None))
+          None))
+    (match paren-match
+      ((Some pair)
+       (let a = (fst pair))
+       (let b = (snd pair))
+       (lisp (-> Void) (a b)
+         (cl:setf *paren-match-a* a)
+         (cl:setf *paren-match-b* b)
+         (cl:values)))
+      ((None)
+       (lisp (-> Void) ()
+         (cl:setf *paren-match-a* cl:nil)
+         (cl:setf *paren-match-b* cl:nil)
+         (cl:values))))
     ;; Clear the pane area.
     (render:fill-rect scr rect #\Space color:default-style)
     ;; Compute cursor screen position using visual column (tab-aware)
@@ -328,12 +360,22 @@ Shows line numbers in the gutter and highlights the current line."
                       :finally (cl:return 0))
              0)))
 
+  (declare %paren-match? (UFix -> Boolean))
+  (define (%paren-match? abs-pos)
+    "True if ABS-POS is one of the matched bracket positions."
+    (lisp (-> Boolean) (abs-pos)
+      (cl:if (cl:or (cl:and *paren-match-a* (cl:= abs-pos *paren-match-a*))
+                    (cl:and *paren-match-b* (cl:= abs-pos *paren-match-b*)))
+             True False)))
+
   (declare %pick-style
     (UFix * UFix * UFix * color:Style * color:Style * color:Style * color:Style -> color:Style))
   (define (%pick-style abs-pos sel-start sel-end style sel-style search-style search-cur-style)
-    "Choose the style for a character based on selection and search state."
+    "Choose the style for a character based on selection, bracket match, and search state."
     (cond
       ((and (>= abs-pos sel-start) (< abs-pos sel-end)) sel-style)
+      ((%paren-match? abs-pos)
+       (color:Style (color:.style-fg style) color:match-paren-bg color:AttrBold))
       ((== (%search-hit-kind abs-pos) 2) search-cur-style)
       ((== (%search-hit-kind abs-pos) 1) search-style)
       (True style)))

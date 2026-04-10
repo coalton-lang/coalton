@@ -30,7 +30,7 @@
    ;; Non-Tango
    #:dark-slate-blue #:brown #:gold
    ;; Semantic - backgrounds
-   #:selection-bg #:search-match-bg #:search-current-bg #:highlight-bg
+   #:selection-bg #:search-match-bg #:search-current-bg #:highlight-bg #:match-paren-bg
    #:panel-bg #:repl-bg #:current-line-bg #:field-bg
    #:status-bar-bg #:accent-bg #:error-dialog-bg
    ;; Semantic - foregrounds
@@ -188,9 +188,10 @@
   (define search-match-bg   brown)
   (define search-current-bg gold)
   (define highlight-bg      sky-blue)
+  (define match-paren-bg   (ColorRGB 52 101 164))
   (define panel-bg          aluminium-6)
   (define repl-bg           charcoal)
-  (define current-line-bg   slate)
+  (define current-line-bg   charcoal)
   (define field-bg          jet)
   (define status-bar-bg     aluminium-5)
   (define accent-bg         dark-blue)
