@@ -4,8 +4,7 @@
    (#:input #:mine/term/input))
   (:export
    #:KeyBinding #:KeyBinding
-   #:.keybinding-key #:.keybinding-command
-   #:default-keybindings))
+   #:.keybinding-key #:.keybinding-command))
 
 (in-package #:mine/config/keys)
 
@@ -18,9 +17,4 @@
     (keybinding-key     input:Key)
     (keybinding-command String))
 
-  ;;; TODO: default-keybindings
-
-  (declare default-keybindings (Void -> List KeyBinding))
-  (define (default-keybindings)
-    "Return the default set of key bindings."
-    Nil))
+)

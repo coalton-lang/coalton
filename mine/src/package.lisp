@@ -33,13 +33,9 @@
    #:socket-listen
    #:socket-accept
    #:socket-connect
-   #:socket-read-byte
-   #:socket-read-line
-   #:socket-write-bytes
    #:socket-write-string
    #:socket-close
    #:socket-local-port
-   #:socket-fd
    #:+socket-error+))
 
 (defpackage #:mine/bindings/process
@@ -50,7 +46,7 @@
    #:process-kill
    #:process-wait
    #:process-exit-code
-   #:process-handle))
+))
 
 (defpackage #:mine/bindings/thread
   (:use #:cl)
@@ -60,11 +56,9 @@
    #:with-mutex
    #:make-waitqueue
    #:condition-wait
-   #:condition-wait-timeout
    #:condition-notify
    #:thread-alive-p
    #:current-thread
-   #:thread-yield
    #:thread-name))
 
 ;;; Protocol server (CL side)
@@ -89,22 +83,12 @@
   (:use #:cl)
   (:export
    #:symbol-info
-   #:package-symbols
    #:function-arglist))
-
-(defpackage #:mine/runtime/debug
-  (:use #:cl)
-  (:export
-   #:with-debugger
-   #:list-restarts
-   #:invoke-restart-by-index))
 
 (defpackage #:mine/runtime/asdf
   (:use #:cl)
   (:export
-   #:load-system
-   #:system-dependencies
-   #:system-files))
+   #:load-system))
 
 (defpackage #:mine/runtime/server-main
   (:use #:cl)

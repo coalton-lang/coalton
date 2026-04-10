@@ -12,13 +12,11 @@
    #:BufferManager
    #:bufmgr-new
    #:bufmgr-open-file!
-   #:bufmgr-new-buffer!
    #:bufmgr-save!
    #:bufmgr-close!
    #:bufmgr-force-close!
    #:bufmgr-close-under-path!
    #:bufmgr-find-by-path
-   #:bufmgr-get
    #:bufmgr-current
    #:bufmgr-switch!
    #:bufmgr-path-dirty?
@@ -52,16 +50,6 @@
     (buf:BufferId n))
 
   ;;; Creating buffers
-
-  (declare bufmgr-new-buffer! (BufferManager * String -> buf:Buffer))
-  (define (bufmgr-new-buffer! mgr bname)
-    "Create a new empty buffer with NAME and register it."
-    (let bid = (%alloc-id mgr))
-    (let b = (buf:buffer-new bid bname))
-    (match bid
-      ((buf:BufferId n)
-       (ht:set! (cell:read (.buffers mgr)) n b)))
-    b)
 
   (declare bufmgr-open-file! (BufferManager * String -> Result String buf:Buffer))
   (define (bufmgr-open-file! mgr fpath)

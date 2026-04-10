@@ -38,11 +38,6 @@ Returns the sb-ext:process object."
       nil
       (sb-ext:process-exit-code process)))
 
-(defun process-handle (process)
-  "Return the raw sb-ext:process object.  Identity accessor for use
-from Coalton where we need to pass the opaque handle through."
-  process)
-
 ;;; Control -- process-kill is in process-unix.lisp / process-win32.lisp
 
 (defun process-wait (process)

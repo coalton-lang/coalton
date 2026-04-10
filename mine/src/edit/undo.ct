@@ -8,8 +8,7 @@
    #:UndoTree
    #:undo-tree-new
    #:undo-record!
-   #:undo-undo! #:undo-redo!
-   #:undo-begin-group! #:undo-end-group!))
+   #:undo-undo!))
 
 (in-package #:mine/edit/undo)
 
@@ -98,40 +97,4 @@ The caller is responsible for applying the reversed operations to the buffer."
        (cell:push! (.redo-stack tree) rev)
        (Some entry))))
 
-  (declare undo-redo! (UndoTree -> (Optional UndoEntry)))
-  (define (undo-redo! tree)
-    "Pop the top redo entry, push its reverse onto undo, and return it.
-The caller is responsible for applying the reversed operations to the buffer."
-    (match (cell:pop! (.redo-stack tree))
-      ((None) None)
-      ((Some entry)
-       (let rev = (reverse-entry entry))
-       (cell:push! (.undo-stack tree) rev)
-       (Some entry))))
-
-  ;;; Grouping
-
-  (declare undo-begin-group! (UndoTree * UFix -> Void))
-  (define (undo-begin-group! tree cursor-pos)
-    "Start grouping subsequent operations into a single undo entry."
-    (cell:write! (.current-group tree) (Some Nil))
-    (cell:write! (.group-cursor-start tree) cursor-pos)
-    (values))
-
-  (declare undo-end-group! (UndoTree * UFix -> Void))
-  (define (undo-end-group! tree cursor-pos)
-    "End grouping and flush accumulated operations as one undo entry.
-Does nothing if no group was started or the group is empty."
-    (match (cell:read (.current-group tree))
-      ((None) (values))
-      ((Some ops-so-far)
-       (cell:write! (.current-group tree) None)
-       (match ops-so-far
-         ;; Empty group: nothing to record
-         ((Nil) (values))
-         (_
-          (let entry = (UndoEntry (reverse ops-so-far)
-                                  (cell:read (.group-cursor-start tree))
-                                  cursor-pos))
-          (cell:push! (.undo-stack tree) entry)
-          (values)))))))
+)

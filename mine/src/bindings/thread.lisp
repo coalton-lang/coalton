@@ -44,13 +44,6 @@ Must be called while holding MUTEX."
   (sb-thread:condition-wait waitqueue mutex)
   (values))
 
-(defun condition-wait-timeout (waitqueue mutex timeout-seconds)
-  "Like CONDITION-WAIT, but with a timeout.
-TIMEOUT-SECONDS is a non-negative real number.
-Returns T if the waitqueue was signaled, NIL if the timeout expired."
-  (declare (type real timeout-seconds))
-  (sb-thread:condition-wait waitqueue mutex :timeout timeout-seconds))
-
 (defun condition-notify (waitqueue)
   "Wake one thread waiting on WAITQUEUE."
   (sb-thread:condition-notify waitqueue)
@@ -65,12 +58,6 @@ Returns T if the waitqueue was signaled, NIL if the timeout expired."
 (defun current-thread ()
   "Return the current thread object."
   sb-thread:*current-thread*)
-
-(defun thread-yield ()
-  "Hint to the scheduler that this thread is willing to yield.
-Uses SLEEP 0 which releases the CPU briefly."
-  (sleep 0)
-  (values))
 
 (defun thread-name (thread)
   "Return the name string of THREAD, or NIL if unnamed."
