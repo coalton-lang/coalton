@@ -305,9 +305,11 @@ Shows line numbers in the gutter and highlights the current line."
     (lisp (-> Void) (text text-len v vc tab-w)
       (cl:dotimes (i text-len)
         (vec:push! (coalton/cell:read vc) v)
-        (cl:if (cl:char= (cl:char text i) #\Tab)
-               (coalton/cell:write! vc (cl:* (cl:1+ (cl:floor (coalton/cell:read vc) tab-w)) tab-w))
-               (coalton/cell:write! vc (cl:1+ (coalton/cell:read vc)))))
+        (cl:let ((ch (cl:char text i)))
+          (cl:if (cl:char= ch #\Tab)
+                 (coalton/cell:write! vc (cl:* (cl:1+ (cl:floor (coalton/cell:read vc) tab-w)) tab-w))
+                 (coalton/cell:write! vc (cl:+ (coalton/cell:read vc)
+                                               (mine/term/screen::%char-width ch))))))
       (vec:push! (coalton/cell:read vc) v)
       (cl:values))
     v)
@@ -371,9 +373,13 @@ Shows line numbers in the gutter and highlights the current line."
                                    #\Space s))))
                  (cl:when (cl:and (cl:>= ch-vcol scroll-vcol)
                                   (cl:< ch-vcol vis-vcol-end))
-                   (mine/term/screen:screen-set-cell
-                    scr y (cl:+ text-x (cl:- ch-vcol scroll-vcol))
-                    ch s)))))
+                   (cl:let ((scr-col (cl:+ text-x (cl:- ch-vcol scroll-vcol))))
+                     (mine/term/screen:screen-set-cell scr y scr-col ch s)
+                     (cl:when (cl:and (mine/term/screen::%char-wide-p ch)
+                                      (cl:< (cl:1+ ch-vcol) vis-vcol-end))
+                       (mine/term/screen:screen-set-cell
+                        scr y (cl:1+ scr-col)
+                        (cl:code-char #xE000) s)))))))
       (cl:values)))
 
   (declare draw-highlighted-line

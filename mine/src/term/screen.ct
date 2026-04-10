@@ -18,6 +18,39 @@
 
 (in-package #:mine/term/screen)
 
+;;; Wide character detection via SBCL's Unicode database
+
+(cl:eval-when (:compile-toplevel :load-toplevel :execute)
+  (cl:defun %char-wide-p (ch)
+    "Return T if CH takes 2 terminal columns (East Asian Wide/Fullwidth)."
+    (cl:declare (cl:type cl:character ch))
+    (cl:let ((eaw (sb-unicode:east-asian-width ch)))
+      (cl:or (cl:eq eaw :w) (cl:eq eaw :f))))
+
+  (cl:declaim (cl:inline %char-width))
+  (cl:defun %char-width (ch)
+    "Return the number of terminal columns CH occupies (1 or 2)."
+    (cl:if (%char-wide-p ch) 2 1))
+
+  (cl:defun %string-display-width (s cl:&optional (start 0) (end cl:nil))
+    "Return the display width of S[START..END) in terminal columns."
+    (cl:let ((e (cl:or end (cl:length s)))
+             (w 0))
+      (cl:loop :for i :from start :below e
+               :do (cl:incf w (%char-width (cl:char s i))))
+      w))
+
+  (cl:defun %string-chars-fitting (s start columns)
+    "Return the number of chars from S[START..] that fit in COLUMNS terminal columns."
+    (cl:let ((len (cl:length s))
+             (cols 0)
+             (count 0))
+      (cl:loop :for i :from start :below len
+               :for cw := (%char-width (cl:char s i))
+               :while (cl:<= (cl:+ cols cw) columns)
+               :do (cl:incf cols cw) (cl:incf count))
+      count)))
+
 (coalton-toplevel
 
   ;;; ScreenCell
@@ -117,13 +150,26 @@ Uses a dirty front buffer to force the next flush to re-emit every cell."
     (let buf = (cell:read (.screen-back scr)))
     (when (< row h)
       (lisp (-> Void) (buf row col text style w)
-        (cl:let ((text-len (cl:length text)))
+        (cl:let ((text-len (cl:length text))
+                 (c col))
           (cl:dotimes (i text-len)
-            (cl:let ((c (cl:+ col i)))
-              (cl:when (cl:< c w)
-                (cl:let ((idx (cl:+ (cl:* row w) c)))
-                  (cl:setf (cl:aref buf idx)
-                           (ScreenCell (cl:char text i) style)))))))
+            (cl:when (cl:>= c w) (cl:return))
+            (cl:let* ((ch (cl:char text i))
+                      (idx (cl:+ (cl:* row w) c)))
+              (cl:cond
+                ((%char-wide-p ch)
+                 (cl:cond
+                   ((cl:< (cl:1+ c) w)
+                    (cl:setf (cl:aref buf idx) (ScreenCell ch style))
+                    (cl:setf (cl:aref buf (cl:1+ idx))
+                             (ScreenCell (cl:code-char #xE000) style)))
+                   (cl:t
+                    ;; Wide char at last column — no room for right half
+                    (cl:setf (cl:aref buf idx) (ScreenCell #\Space style))))
+                 (cl:incf c 2))
+                (cl:t
+                 (cl:setf (cl:aref buf idx) (ScreenCell ch style))
+                 (cl:incf c))))))
         (cl:values)))
     (values))
 
@@ -254,36 +300,38 @@ Uses synchronized output (DEC mode 2026) for flicker-free rendering."
     ;; Diff back vs front, emitting only changed cells
     (cl:dotimes (i size)
       (cl:let* ((bc (cl:aref back i))
-                (fc (cl:aref front i))
-                (b-ch    (screencell/screencell-_0 bc))
-                (b-style (screencell/screencell-_1 bc))
-                (b-key   (%style-key b-style)))
-        ;; Skip unchanged cells (compare content, not identity)
-        (cl:unless (cl:and (cl:char= b-ch (screencell/screencell-_0 fc))
-                           (cl:= b-key (%style-key (screencell/screencell-_1 fc))))
-          (cl:let ((row (cl:floor i w))
-                   (col (cl:mod i w)))
-            ;; Move cursor if not already at the right position
-            (cl:unless (cl:and (cl:= row last-row)
-                               (cl:= col last-col))
-              (%write-cursor-to out (cl:1+ row) (cl:1+ col)))
-            ;; Emit SGR if style changed from the last emitted style
-            (cl:unless (cl:= b-key last-style-key)
-              (%append-string out (%style-sgr b-style))
-              (cl:setf last-style-key b-key))
-            ;; Emit the character — replace control chars with space to
-            ;; prevent terminal cursor misalignment (e.g. tabs jump to
-            ;; next tab stop, throwing off all subsequent positions)
-            (cl:vector-push-extend
-              (cl:if (cl:< (cl:char-code b-ch) 32) #\Space b-ch)
-              out)
-            ;; Track cursor position
-            (cl:setf last-row row
-                     last-col (cl:1+ col))
-            ;; Reset SGR after last column to prevent bg color bleed
-            (cl:when (cl:= last-col w)
-              (%write-csi out "0m")
-              (cl:setf last-style-key -1))))))
+                (b-ch (screencell/screencell-_0 bc)))
+        ;; Skip continuation cells (right half of wide characters)
+        (cl:unless (cl:char= b-ch (cl:code-char #xE000))
+          (cl:let* ((fc (cl:aref front i))
+                    (b-style (screencell/screencell-_1 bc))
+                    (b-key   (%style-key b-style)))
+            ;; Skip unchanged cells (compare content, not identity)
+            (cl:unless (cl:and (cl:char= b-ch (screencell/screencell-_0 fc))
+                               (cl:= b-key (%style-key (screencell/screencell-_1 fc))))
+              (cl:let ((row (cl:floor i w))
+                       (col (cl:mod i w)))
+                ;; Move cursor if not already at the right position
+                (cl:unless (cl:and (cl:= row last-row)
+                                   (cl:= col last-col))
+                  (%write-cursor-to out (cl:1+ row) (cl:1+ col)))
+                ;; Emit SGR if style changed from the last emitted style
+                (cl:unless (cl:= b-key last-style-key)
+                  (%append-string out (%style-sgr b-style))
+                  (cl:setf last-style-key b-key))
+                ;; Emit the character — replace control chars with space to
+                ;; prevent terminal cursor misalignment (e.g. tabs jump to
+                ;; next tab stop, throwing off all subsequent positions)
+                (cl:vector-push-extend
+                  (cl:if (cl:< (cl:char-code b-ch) 32) #\Space b-ch)
+                  out)
+                ;; Track cursor position — wide chars advance by 2 columns
+                (cl:setf last-row row
+                         last-col (cl:+ col (%char-width b-ch)))
+                ;; Reset SGR after last column to prevent bg color bleed
+                (cl:when (cl:>= last-col w)
+                  (%write-csi out "0m")
+                  (cl:setf last-style-key -1))))))))
     ;; Reset SGR
     (%write-csi out "0m")
     ;; Position and show/hide cursor
