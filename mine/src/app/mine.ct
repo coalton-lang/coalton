@@ -69,6 +69,8 @@
 ;;; CL state referenced by lisp escapes in the Coalton code below.
 (cl:defvar *diagnostics-table* (cl:make-hash-table :test 'cl:equal)
   "Hash table: filepath (string) -> list of (line severity message).")
+(cl:defvar *compile-file-remap* nil
+  "When non-nil, a cons (temp-path . real-path) for remapping compiler notes.")
 (cl:defvar *hint-result* "" "Cached hint string for status bar.")
 (cl:defvar *heap-info-result* "" "Cached heap info string from runtime server.")
 (cl:defvar *heap-info-last-time* 0 "Internal-real-time of last heap-info request.")
@@ -1334,7 +1336,8 @@ First reloads the .asd to pick up any changes, then loads the system."
 
   (declare compile-file! (MineState -> Void))
   (define (compile-file! st)
-    "Compile and load the current file (Alt+K)."
+    "Compile and load the current file (Alt+K).
+If the buffer has unsaved changes, writes to a temp file for compilation."
     (ensure-repl-visible! st)
     (match (mgr:bufmgr-current (.ms-bufmgr st))
       ((None)
@@ -1344,8 +1347,23 @@ First reloads the .asd to pick up any changes, then loads the system."
          ((None)
           (repl:repl-pane-append-system! (.ms-repl st) ";; Buffer has no file path"))
          ((Some fpath)
+          ;; If dirty, write buffer contents to a temp file for compilation
+          (let dirty = (buf:buffer-dirty? buf))
+          (let compile-path =
+            (cond
+              (dirty
+               (let buf-text = (gap:gap-to-string (buf:buffer-gap buf)))
+               (lisp (-> String) (buf-text fpath)
+                 (%write-temp-for-compile buf-text fpath)))
+              (True
+               (lisp (-> Void) ()
+                 (cl:setf *compile-file-remap* cl:nil)
+                 (cl:values))
+               fpath)))
           (repl:repl-pane-append-output! (.ms-repl st)
-                                         (<> ";; Compiling " fpath))
+                                         (if dirty
+                                             (<> ";; Compiling (unsaved) " fpath)
+                                             (<> ";; Compiling " fpath)))
           ;; Clear previous diagnostics for this file
           (lisp (-> Void) (fpath)
             (%clear-diagnostics-for-file fpath)
@@ -1358,7 +1376,7 @@ First reloads the .asd to pick up any changes, then loads the system."
                           (lisp (-> UFix) () (cl:get-internal-real-time)))
              (start-proto-reader! st conn)
              (let req-id = (next-request-id! st))
-             (let req = (msg:ReqCompileFile req-id fpath True))
+             (let req = (msg:ReqCompileFile req-id compile-path True))
              (client:connection-send! conn req))))))))
 
   (declare %truncate-line (String * UFix -> String))
@@ -4224,20 +4242,41 @@ Handles the debugger state where conn-stream is (msg-id . stream)."
   "Clear all diagnostics for a file before a new compile."
   (cl:remhash filepath *diagnostics-table*))
 
+(cl:defun %write-temp-for-compile (text original-path)
+  "Write TEXT to a temporary file preserving the extension of ORIGINAL-PATH.
+Sets *compile-file-remap* and returns the temporary file path string."
+  (cl:let* ((ext (cl:pathname-type (cl:pathname original-path)))
+            (base (cl:pathname-name (cl:pathname original-path)))
+            (tmp-path (cl:merge-pathnames
+                       (cl:make-pathname :name (cl:format nil "mine-beam-~A" base) :type ext)
+                       (uiop:temporary-directory))))
+    (cl:with-open-file (s tmp-path :direction :output
+                                    :if-exists :supersede
+                                    :external-format :utf-8)
+      (cl:write-string text s))
+    (cl:setf *compile-file-remap* (cl:cons (cl:namestring tmp-path) original-path))
+    (cl:namestring tmp-path)))
+
 (cl:defun %store-compiler-note (plist)
   "Store a compiler note from the protocol. PLIST is (:severity S :message M :file F :position P :line L)."
-  (cl:let* ((filepath (cl:getf plist :file))
+  (cl:let* ((raw-filepath (cl:getf plist :file))
             (severity (cl:getf plist :severity))
             (message (cl:getf plist :message))
             (position (cl:getf plist :position))
-            (line (cl:getf plist :line)))
+            (line (cl:getf plist :line))
+            ;; Remap temp path to real path for diagnostics storage
+            (filepath (cl:if (cl:and *compile-file-remap*
+                                     (cl:string= raw-filepath (cl:car *compile-file-remap*)))
+                             (cl:cdr *compile-file-remap*)
+                             raw-filepath)))
     (cl:when filepath
       ;; Try to compute line from position if line is nil
+      ;; Use raw-filepath (temp file) for reading since it has the actual content
       (cl:let ((diag-line (cl:or line
                                   (cl:when position
                                     ;; Convert file position to line number
                                     (cl:handler-case
-                                        (cl:with-open-file (s filepath)
+                                        (cl:with-open-file (s raw-filepath)
                                           (cl:loop :for ch = (cl:read-char s cl:nil)
                                                    :for i :from 0
                                                    :for line-num = 1 :then (cl:if (cl:eql ch #\Newline) (cl:1+ line-num) line-num)
