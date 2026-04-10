@@ -131,7 +131,8 @@
     (ms-structural-editing (Cell Boolean)) ;; 33 -- structural editing enabled?
     (ms-config             cfgt:MineConfig) ;; 34 -- loaded configuration
     (ms-io-request-active  (Cell Boolean))  ;; 35 -- waiting for IO input from user?
-    (ms-io-request-data    NativeBox))      ;; 36 -- (msg-id . stream) for IO response
+    (ms-io-request-data    NativeBox)       ;; 36 -- (msg-id . stream) for IO response
+    (ms-repl-maximized     (Cell Boolean))) ;; 37 -- REPL pane maximized?
 
 ;;; Named accessors for CL interop (avoids fragile numeric indices)
 
@@ -255,6 +256,19 @@
       (render-tree-separator st scr tree-w 1 middle-h))
     ;; Split middle into editor and optional REPL
     (cond
+      ;; REPL maximized: only REPL + REPL status
+      ((and (cell:read (.ms-repl-visible st)) (cell:read (.ms-repl-maximized st)))
+       (let repl-h = (if (> middle-h 1) (- middle-h 1) 1))
+       (let repl-status-y = (+ 1 repl-h))
+       (let repl-rect = (wt:Rect content-x 1 content-w repl-h))
+       (let repl-status-rect = (wt:Rect content-x repl-status-y content-w 1))
+       (cond
+         ((cell:read (.ms-debugger-active st))
+          (render-debugger-in-repl st scr repl-rect))
+         (True
+          (repl:repl-pane-render (.ms-repl st) scr repl-rect)))
+       (render-repl-status st scr repl-status-rect)
+       (values))
       ((cell:read (.ms-repl-visible st))
        ;; REPL visible: editor + editor status, REPL + REPL status
        (let repl-h = (max 3 (lisp (-> UFix) (middle-h) (cl:floor middle-h 3))))
@@ -2377,8 +2391,11 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          ;; F2 -> save (always)
          ((input:KeyF 2) (save-current-file! st))
 
-         ;; F6 -> toggle REPL
+         ;; Ctrl+R -> toggle REPL
          ((input:KeyCtrl #\r) (toggle-repl! st))
+
+         ;; Ctrl+E -> focus editor
+         ((input:KeyCtrl #\e) (focus-editor! st))
 
          ;; Ctrl+P -> toggle structural editing
          ((input:KeyCtrl #\p) (toggle-structural! st))
@@ -2472,10 +2489,12 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     (let tree-w = (%tree-width st cols))
     (let middle-h = (if (> rows 2) (- rows 2) 1))
     (let repl-vis = (cell:read (.ms-repl-visible st)))
-    (let repl-h = (if repl-vis
-                      (max 3 (lisp (-> UFix) (middle-h) (cl:floor middle-h 3)))
-                      0))
-    (let editor-status-h = (if (> repl-h 0) 1 0))
+    (let repl-max = (and repl-vis (cell:read (.ms-repl-maximized st))))
+    (let repl-h = (cond
+                    ((not repl-vis) 0)
+                    (repl-max middle-h)
+                    (True (max 3 (lisp (-> UFix) (middle-h) (cl:floor middle-h 3))))))
+    (let editor-status-h = (if (and repl-vis (not repl-max)) 1 0))
     (let editor-h = (- middle-h (+ repl-h editor-status-h)))
     (let repl-start = (+ 1 (+ editor-h editor-status-h)))
     (let tree-focused = (== (focus:focus-current (.ms-focus st)) focus:FocusTree))
@@ -2544,10 +2563,12 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       ;; Right edge column: editor or REPL scrollbar
       ((and (== col right-edge) (> row 0) (< row status-y))
        (let repl-vis = (cell:read (.ms-repl-visible st)))
-       (let repl-h = (if repl-vis
-                         (max 3 (lisp (-> UFix) (middle-h) (cl:floor middle-h 3)))
-                         0))
-       (let editor-status-h = (if (> repl-h 0) 1 0))
+       (let repl-max = (and repl-vis (cell:read (.ms-repl-maximized st))))
+       (let repl-h = (cond
+                       ((not repl-vis) 0)
+                       (repl-max middle-h)
+                       (True (max 3 (lisp (-> UFix) (middle-h) (cl:floor middle-h 3))))))
+       (let editor-status-h = (if (and repl-vis (not repl-max)) 1 0))
        (let editor-h = (- middle-h (+ repl-h editor-status-h)))
        (let rel-y = (- row 1))
        (let repl-start = (+ editor-h editor-status-h))
@@ -2620,11 +2641,16 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          ((cell:read (.ms-repl-visible st))
           ;; REPL visible: check if click is in editor or REPL portion
           (let middle-h = (if (> rows 2) (- rows 2) 1))
-          (let repl-h = (max 3 (lisp (-> UFix) (middle-h) (cl:floor middle-h 3))))
-          (let editor-status-h = 1)
-          (let editor-h = (if (> middle-h (+ repl-h (+ editor-status-h 1)))
-                              (- middle-h (+ repl-h (+ editor-status-h 1)))
-                              1))
+          (let repl-max = (cell:read (.ms-repl-maximized st)))
+          (let repl-h = (if repl-max
+                            (if (> middle-h 1) (- middle-h 1) 1)
+                            (max 3 (lisp (-> UFix) (middle-h) (cl:floor middle-h 3)))))
+          (let editor-status-h = (if repl-max 0 1))
+          (let editor-h = (if repl-max
+                              0
+                              (if (> middle-h (+ repl-h (+ editor-status-h 1)))
+                                  (- middle-h (+ repl-h (+ editor-status-h 1)))
+                                  1)))
           (let repl-y = (+ 1 (+ editor-h editor-status-h)))
           (let repl-input-y = (+ repl-y (- repl-h 1)))
           (cond
@@ -2681,12 +2707,13 @@ Uses the preceding (in-package ...) form to determine the compilation package."
 
   (declare toggle-repl! (MineState -> Void))
   (define (toggle-repl! st)
-    "Ctrl+R: open REPL if closed, switch to REPL if open, switch to editor if focused on REPL."
+    "Ctrl+R: open REPL if closed, focus REPL if open, toggle maximize if focused."
     (let vis = (cell:read (.ms-repl-visible st)))
     (cond
-      ;; Focused on REPL -> switch back to editor
+      ;; Focused on REPL -> toggle maximize
       ((and vis (== (focus:focus-current (.ms-focus st)) focus:FocusRepl))
-       (focus:focus-switch! (.ms-focus st) focus:FocusEditor)
+       (cell:write! (.ms-repl-maximized st)
+                    (not (cell:read (.ms-repl-maximized st))))
        (values))
       ;; REPL visible but not focused -> switch to it
       (vis
@@ -2705,8 +2732,16 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     "Close the REPL pane."
     (when (cell:read (.ms-repl-visible st))
       (cell:write! (.ms-repl-visible st) False)
+      (cell:write! (.ms-repl-maximized st) False)
       (when (== (focus:focus-current (.ms-focus st)) focus:FocusRepl)
         (focus:focus-switch! (.ms-focus st) focus:FocusEditor)))
+    (values))
+
+  (declare focus-editor! (MineState -> Void))
+  (define (focus-editor! st)
+    "Ctrl+E: focus editor, restore REPL size if maximized."
+    (cell:write! (.ms-repl-maximized st) False)
+    (focus:focus-switch! (.ms-focus st) focus:FocusEditor)
     (values))
 
   (declare toggle-open-files! (MineState -> Void))
@@ -3108,6 +3143,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       ((menubar:ActionJumpToDefinition) (jump-to-definition! st))
       ((menubar:ActionJumpBack) (jump-back! st))
       ((menubar:ActionShowRepl) (toggle-repl! st))
+      ((menubar:ActionFocusEditor) (focus-editor! st))
       ((menubar:ActionHideRepl) (close-repl! st))
       ((menubar:ActionInterruptRepl)
        (cond
@@ -3244,6 +3280,7 @@ Render-app is NOT called here; the main loop handles rendering."
                   (focus:focus-switch! (.ms-focus st) focus:FocusMenu))
                  (True (match key
                          ((input:KeyCtrl #\r) (toggle-repl! st))
+                         ((input:KeyCtrl #\e) (focus-editor! st))
                          (_ (handle-key st term key mod))))))
               ((input:KeyCtrl #\q)
                (try-quit! st term))
@@ -3492,7 +3529,8 @@ Render-app is NOT called here; the main loop handles rendering."
                          (cell:new (cfgt:.config-structural-editing config))
                          config
                          (cell:new False)
-                         (native-box-new)))
+                         (native-box-new)
+                         (cell:new False)))
     ;; Open a file if given on the command line
     (let file-args = (filter (fn (a) (not (str:substring? "--" a))) (list:cdr args)))
     (match file-args
