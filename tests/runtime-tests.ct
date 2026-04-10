@@ -589,8 +589,6 @@
   (is (== (Tuple 20 10) (dynamic-runtime-swap)))
   (is (== 6 (dynamic-runtime-call 5))))
 
-#+coalton-with-slow-tce-tests
-(cl:progn
 (cl:defpackage #:tail-call-elimination-tests
   (:use #:coalton #:coalton-prelude)
   (:export
@@ -617,7 +615,6 @@
 
   (define (foo1 x)
     (bar1 (1+ x))))
-)
 
 (cl:in-package #:coalton-native-tests)
 
