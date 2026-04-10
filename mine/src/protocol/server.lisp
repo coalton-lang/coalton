@@ -82,6 +82,93 @@ Returns the parsed S-expression, or NIL on EOF/error."
         t)
     (error () nil)))
 
+;;; TUI input stream (Gray stream for interactive IO)
+
+(defclass tui-input-stream (sb-gray:fundamental-character-input-stream)
+  ((wire-stream    :initarg :wire-stream    :accessor tis-wire-stream)
+   (msg-id         :initarg :msg-id         :accessor tis-msg-id)
+   (stdout-capture :initarg :stdout-capture :accessor tis-stdout-capture)
+   (buffer         :initform ""             :accessor tis-buffer)
+   (buffer-pos     :initform 0             :accessor tis-buffer-pos))
+  (:documentation
+   "A Gray stream that routes reads through the wire protocol to the TUI.
+When CL code calls READ-LINE or READ on this stream, it sends an :io-request
+message to the TUI and blocks until the user provides input."))
+
+(defun %request-input-from-tui (tis prompt)
+  "Send :io-request to TUI and block until :io-response or :io-abort.
+Flushes any pending captured output first so the user sees it.
+Returns the input text string, or NIL for EOF/abort."
+  (let ((wire (tis-wire-stream tis))
+        (id   (tis-msg-id tis))
+        (capture (tis-stdout-capture tis)))
+    ;; Flush pending output (e.g., y-or-n-p prompt text) before requesting input
+    (when capture
+      (let ((text (get-output-stream-string capture)))
+        (when (plusp (length text))
+          (dolist (line (split-string-by-newline text))
+            (when (plusp (length line))
+              (write-message wire `(:notify (:output ,line))))))))
+    (write-message wire `(:io-request ,id ,(or prompt "")))
+    (loop
+      (let ((msg (read-message wire)))
+        (cond
+          ((null msg) (return nil))
+          ((and (consp msg) (eq (first msg) :io-response))
+           (return (third msg)))
+          ((and (consp msg) (eq (first msg) :io-abort))
+           (return nil)))))))
+
+(defmethod sb-gray:stream-read-line ((stream tui-input-stream))
+  "Read a line from the TUI. Returns (values string eof-p)."
+  (let ((text (%request-input-from-tui stream "")))
+    (if text
+        (values text nil)
+        (values "" t))))
+
+(defmethod sb-gray:stream-read-char ((stream tui-input-stream))
+  "Read a single character, requesting a new line from TUI when buffer is exhausted.
+Non-empty responses are buffered as-is (no trailing newline) so that
+single-char readers like y-or-n-p don't see a phantom newline.
+Empty responses (user pressed Enter with no text) return #\\Newline,
+which serves as a token delimiter for READ."
+  (let ((buf (tis-buffer stream))
+        (pos (tis-buffer-pos stream)))
+    (if (< pos (length buf))
+        ;; Dispense from buffer
+        (prog1 (char buf pos)
+          (setf (tis-buffer-pos stream) (1+ pos)))
+        ;; Buffer exhausted -- request a new line
+        (let ((text (%request-input-from-tui stream "")))
+          (cond
+            ((null text) :eof)
+            ((zerop (length text))
+             ;; Empty response = Enter key = newline delimiter
+             (setf (tis-buffer stream) "")
+             (setf (tis-buffer-pos stream) 0)
+             #\Newline)
+            (t
+             (setf (tis-buffer stream) text)
+             (setf (tis-buffer-pos stream) 1)
+             (char text 0)))))))
+
+(defmethod sb-gray:stream-unread-char ((stream tui-input-stream) char)
+  "Push back a character by decrementing the buffer position."
+  (declare (ignore char))
+  (when (> (tis-buffer-pos stream) 0)
+    (decf (tis-buffer-pos stream)))
+  nil)
+
+(defmethod sb-gray:stream-listen ((stream tui-input-stream))
+  "Return T if there are buffered characters available."
+  (< (tis-buffer-pos stream) (length (tis-buffer stream))))
+
+(defmethod sb-gray:stream-clear-input ((stream tui-input-stream))
+  "Discard any buffered input."
+  (setf (tis-buffer stream) "")
+  (setf (tis-buffer-pos stream) 0)
+  nil)
+
 ;;; Message dispatch
 
 (defun dispatch-message (msg stream)
@@ -270,7 +357,8 @@ Returns the symbol or NIL."
           (restart-case
               (handler-case
                   (multiple-value-bind (result output)
-                      (mine/runtime/eval:debug-eval form-string package-name)
+                      (mine/runtime/eval:debug-eval form-string package-name
+                                                    stream id)
                     (when (and output (plusp (length output)))
                       (dolist (line (split-string-by-newline output))
                         (write-message stream `(:notify (:output ,line)))))
@@ -319,7 +407,7 @@ Uses compile-file + load for correct eval-when toplevel semantics."
               (handler-case
                   (multiple-value-bind (result output)
                       (mine/runtime/eval:debug-compile-string
-                       form-string package-name)
+                       form-string package-name stream id)
                     (when (and output (plusp (length output)))
                       (dolist (line (split-string-by-newline output))
                         (write-message stream `(:notify (:output ,line)))))
@@ -348,8 +436,13 @@ Uses compile-file + load for correct eval-when toplevel semantics."
 (defun handle-compile-file (id filename load-p stream)
   "Handle a :compile-file request. Captures compiler notes with source locations.
 For .ct files, uses LOAD instead of COMPILE-FILE since Coalton's compiler
-runs during macroexpansion and needs the full runtime environment."
-  (let ((notes nil))
+runs during macroexpansion and needs the full runtime environment.
+Binds IO streams so interactive reads (y-or-n-p, read, etc.) work via the TUI."
+  (let* ((notes nil)
+         (stdout-capture (make-string-output-stream))
+         (tis (make-instance 'tui-input-stream
+                :wire-stream stream :msg-id id
+                :stdout-capture stdout-capture)))
     (handler-case
         (handler-bind
             ((warning
@@ -359,16 +452,25 @@ runs during macroexpansion and needs the full runtime environment."
              (sb-ext:compiler-note
                (lambda (n)
                  (push (%make-compiler-note n filename) notes))))
-          (let ((path (pathname filename)))
-            (if (%ct-file-p filename)
-                ;; .ct files: bind the Coalton readtable (as coalton-asdf does)
-                ;; and load source directly
-                (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton)))
-                  (load path))
-                ;; .lisp files: compile then optionally load the FASL
-                (let ((output-file (compile-file path)))
-                  (when (and load-p output-file)
-                    (load output-file)))))
+          (let* ((*standard-output* stdout-capture)
+                 (*standard-input* tis)
+                 (*query-io* (make-two-way-stream tis *standard-output*))
+                 (*terminal-io* (make-two-way-stream tis *standard-output*)))
+            (let ((path (pathname filename)))
+              (if (%ct-file-p filename)
+                  ;; .ct files: bind the Coalton readtable (as coalton-asdf does)
+                  ;; and load source directly
+                  (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton)))
+                    (load path))
+                  ;; .lisp files: compile then optionally load the FASL
+                  (let ((output-file (compile-file path)))
+                    (when (and load-p output-file)
+                      (load output-file))))))
+          ;; Send any captured output
+          (let ((output (get-output-stream-string stdout-capture)))
+            (when (plusp (length output))
+              (dolist (line (split-string-by-newline output))
+                (write-message stream `(:notify (:output ,line))))))
           ;; Send notes as notifications
           (dolist (note (nreverse notes))
             (write-message stream `(:notify (:compiler-note ,@note))))
@@ -377,6 +479,11 @@ runs during macroexpansion and needs the full runtime environment."
                            (:ok ,(format nil "Compiled ~A (~D note~:P)"
                                         filename (length notes))))))
       (error (c)
+        ;; Send any captured output even on error
+        (let ((output (get-output-stream-string stdout-capture)))
+          (when (plusp (length output))
+            (dolist (line (split-string-by-newline output))
+              (write-message stream `(:notify (:output ,line))))))
         ;; Send accumulated notes even on error
         (dolist (note (nreverse notes))
           (write-message stream `(:notify (:compiler-note ,@note))))
