@@ -815,7 +815,8 @@
                         "parentheses. This is the more efficient editing"
                         "mode preferred by Lisp programmers."
                         ""
-                        "You can toggle this at any time with Ctrl+P.")
+                        "You can toggle this at any time with Ctrl+P."
+                        "Try the built-in lessons: Editor > Structural Lessons.")
                        (make-list "Yes" "No")
                        0))
     (let se = (== se-idx 0))

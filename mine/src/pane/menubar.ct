@@ -12,7 +12,7 @@
    (#:list #:coalton/list))
   (:export
    #:MenuAction
-   #:ActionHelp #:ActionAbout #:ActionQuit
+   #:ActionHelp #:ActionLesson #:ActionAbout #:ActionQuit
    #:ActionOpenProject #:ActionBeamSystem #:ActionRefreshProject #:ActionCloseProject
    #:ActionBuildExecutable
    #:ActionOpenFile #:ActionSave #:ActionSaveAll #:ActionCloseFile
@@ -45,6 +45,7 @@
 
   (define-type MenuAction
     ActionHelp
+    ActionLesson
     ActionAbout
     ActionQuit
     ActionOpenProject
@@ -95,9 +96,9 @@
   (declare %mine-menu (Void -> MenuDef))
   (define (%mine-menu)
     (MenuDef "mine" (make-list
-      (MenuItem "Help"  "" ActionHelp)
-      (MenuItem "About" "" ActionAbout)
-      (MenuItem "Quit"  "Ctrl+Q" ActionQuit))))
+      (MenuItem "Help"      "" ActionHelp)
+      (MenuItem "About"     "" ActionAbout)
+      (MenuItem "Quit"      "Ctrl+Q" ActionQuit))))
 
   (declare %project-menu (Void -> MenuDef))
   (define (%project-menu)
@@ -117,8 +118,7 @@
       (MenuItem "Save"     "Ctrl+S" ActionSave)
       (MenuItem "Save All" "" ActionSaveAll)
       (MenuItem "Close"    "" ActionCloseFile)
-      (MenuItem "Focus Tree"         "Ctrl+T" ActionOpenFiles)
-      (MenuItem "Toggle Structural" "Ctrl+P" ActionToggleStructural))))
+      (MenuItem "Focus Tree"         "Ctrl+T" ActionOpenFiles))))
 
   (declare %edit-menu (Void -> MenuDef))
   (define (%edit-menu)
@@ -128,7 +128,9 @@
       (MenuItem "Beam Form"           "Alt+C" ActionBeamForm)
       (MenuItem "Jump to Definition" "Alt+." ActionJumpToDefinition)
       (MenuItem "Jump Back"          "Alt+," ActionJumpBack)
-      (MenuItem "Focus/Fullscreen Editor" "Ctrl+E" ActionFocusEditor))))
+      (MenuItem "Focus/Maximize Editor" "Ctrl+E" ActionFocusEditor)
+      (MenuItem "Toggle Structural"  "Ctrl+P" ActionToggleStructural)
+      (MenuItem "Structural Lessons"  "" ActionLesson))))
 
   (declare %repl-menu (Void -> MenuDef))
   (define (%repl-menu)
