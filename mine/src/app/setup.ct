@@ -32,6 +32,10 @@
   (define style-dim
     (color:Style (color:ColorRGB 160 160 160) color:black color:AttrNone))
 
+  (declare style-italic color:Style)
+  (define style-italic
+    (color:Style (color:ColorRGB 160 160 160) color:black color:AttrItalic))
+
   (declare style-selected color:Style)
   (define style-selected
     (color:Style color:black color:white color:AttrNone))
@@ -263,7 +267,7 @@
 
     ;; Hint
     (let hint-row = (+ opt-row (+ opt-lines 1)))
-    (draw-centered scr hint-row "Arrow keys to select, Enter to confirm" style-dim)
+    (draw-centered scr hint-row "Arrow keys to select, Enter to confirm" style-italic)
 
     opt-row)
 
@@ -400,11 +404,13 @@
                 (lisp (-> UFix) (text cursor-pos)
                   (mine/text/width:string-cell-width-cl
                     (cl:subseq text 0 (cl:min cursor-pos (cl:length text)))))))))
+    ;; Tab hint (right under input box)
+    (screen:screen-set-string scr (+ input-row 1) label-col "Tab to autocomplete path." style-italic)
     ;; Completion candidates
     (let avail-w = (if (> cols (+ label-col 2)) (- cols (+ label-col 2)) cols))
-    (let cand-rows = (%draw-completions scr (+ input-row 1) label-col avail-w candidates))
+    (let cand-rows = (%draw-completions scr (+ input-row 2) label-col avail-w candidates))
     ;; Accept / Skip buttons
-    (let btn-row = (+ input-row (+ cand-rows 2)))
+    (let btn-row = (+ input-row (+ cand-rows 3)))
     (let btn-total = 22)
     (let btn-col = (if (> btn-total cols) 0
                        (lisp (-> UFix) (cols btn-total)
@@ -419,8 +425,6 @@
       (True style-normal)))
     (screen:screen-set-string scr btn-row btn-col "[ Accept ]" accept-style)
     (screen:screen-set-string scr btn-row (+ btn-col 14) "[ Skip ]" skip-style)
-    ;; Hint
-    (draw-centered scr (+ btn-row 2) "Tab to complete path" style-dim)
     (values))
 
   (declare %text-input-loop
@@ -668,7 +672,7 @@
     (draw-centered scr (- mid 1) "You can always re-run this setup process." style-dim)
     (draw-centered scr (+ mid 1) "Please note this is software in development and has not been" style-dim)
     (draw-centered scr (+ mid 2) "extensively battle tested. Save often and always make backups." style-dim)
-    (draw-centered scr (+ mid 4) "Press any key." style-dim))
+    (draw-centered scr (+ mid 4) "Press any key." style-italic))
 
   (declare show-done (term:Terminal -> Void))
   (define (show-done terminal)
@@ -712,25 +716,24 @@
       "text! But you can also just use a keyboard." style-dim)
     ;; Paragraph 2
     (let r6 = (+ r2 4))
-    (draw-centered scr r6
-      "Make sure your terminal is configured to accept" style-dim)
-    (let line-alt = "Alt correctly. Check out the F1:mine > Help")
-    (draw-centered scr (+ r6 1) line-alt style-dim)
-    (%overlay-bold scr (+ r6 1) line-alt 0 "Alt")
-    (%overlay-bold scr (+ r6 1) line-alt 29 "F1:mine > Help")
-    (draw-centered scr (+ r6 2)
-      "menu for a complete list of keybindings." style-dim)
+    (let line-help = "Check out F1:mine > Help for a complete list")
+    (draw-centered scr r6 line-help style-dim)
+    (%overlay-bold scr r6 line-help 10 "F1:mine > Help")
+    (draw-centered scr (+ r6 1) "of keybindings." style-dim)
     ;; Paragraph 3
-    (let r10 = (+ r6 4))
-    (draw-centered scr r10
-      "For macOS users, note that copying and pasting is" style-dim)
-    (let line-ctrl = "done with Ctrl+C and Ctrl+V, and not the usual")
-    (draw-centered scr (+ r10 1) line-ctrl style-dim)
-    (%overlay-bold scr (+ r10 1) line-ctrl 10 "Ctrl+C")
-    (%overlay-bold scr (+ r10 1) line-ctrl 21 "Ctrl+V")
-    (draw-centered scr (+ r10 2) "Command key." style-dim)
+    (let r10 = (+ r6 3))
+    (let line-opt = "For macOS: configure the Option key to act as")
+    (draw-centered scr r10 line-opt style-dim)
+    (%overlay-bold scr r10 line-opt 25 "Option")
+    (let line-alt = "Alt in your terminal's settings. Copy and paste")
+    (draw-centered scr (+ r10 1) line-alt style-dim)
+    (%overlay-bold scr (+ r10 1) line-alt 0 "Alt")
+    (let line-ctrl = "use Ctrl+C and Ctrl+V, not the Command key.")
+    (draw-centered scr (+ r10 2) line-ctrl style-dim)
+    (%overlay-bold scr (+ r10 2) line-ctrl 4 "Ctrl+C")
+    (%overlay-bold scr (+ r10 2) line-ctrl 15 "Ctrl+V")
     ;; Hint
-    (draw-centered scr (+ r10 4) "Press any key." style-dim))
+    (draw-centered scr (+ r10 4) "Press any key." style-italic))
 
   (declare show-tip (term:Terminal -> Void))
   (define (show-tip terminal)
@@ -753,7 +756,7 @@
     (draw-centered scr (- mid 1) "mine Setup Wizard" style-bold)
     (draw-centered scr (+ mid 1) "This short wizard will help you configure mine." style-dim)
     (draw-centered scr (+ mid 2) "Your terminal will need true color support and a good Unicode font." style-dim)
-    (draw-centered scr (+ mid 4) "Press any key to continue." style-dim)
+    (draw-centered scr (+ mid 4) "Press any key to continue." style-italic)
     ;; Draw wizard art centered below
     (when (>= cols 50)
       (let wiz-col = (+ 11 (lisp (-> UFix) (cols) (cl:floor (cl:- cols 13) 2))))

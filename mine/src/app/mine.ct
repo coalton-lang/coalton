@@ -3893,26 +3893,50 @@ Render-app is NOT called here; the main loop handles rendering."
 
 ;;; Entry point
 
+  (declare %print-kitty-required-and-abort (Void -> Void))
+  (define (%print-kitty-required-and-abort)
+    "Print a message explaining that the terminal lacks kitty keyboard support."
+    (lisp (-> Void) ()
+      (cl:format cl:*error-output* "~&Sorry! mine requires a terminal with kitty keyboard protocol support.~2%")
+      (cl:format cl:*error-output* "Suggestions:~%")
+      (cl:format cl:*error-output* "  Mac:     iTerm2 (3.5+)     https://iterm2.com/~%")
+      (cl:format cl:*error-output* "           Ghostty           https://ghostty.org/~%")
+      (cl:format cl:*error-output* "           kitty             https://sw.kovidgoyal.net/kitty/~%")
+      (cl:format cl:*error-output* "           WezTerm           https://wezfurlong.org/wezterm/~%")
+      (cl:format cl:*error-output* "~%")
+      (cl:format cl:*error-output* "  Linux:   Ghostty           https://ghostty.org/~%")
+      (cl:format cl:*error-output* "           kitty             https://sw.kovidgoyal.net/kitty/~%")
+      (cl:format cl:*error-output* "           WezTerm           https://wezfurlong.org/wezterm/~%")
+      (cl:format cl:*error-output* "           Alacritty (0.14+) https://alacritty.org/~%")
+      (cl:format cl:*error-output* "~%")
+      (cl:format cl:*error-output* "  Windows: Windows Terminal  built into Windows 11~%")
+      (cl:format cl:*error-output* "           WezTerm           https://wezfurlong.org/wezterm/~2%")
+      (sb-ext:exit :code 1)
+      (cl:values)))
+
   (declare mine-main (Void -> Void))
   (define (mine-main)
     "Entry point for the mine IDE."
     (let args = (lisp (-> (List String)) ()
                   (cl:mapcar #'cl:identity sb-ext:*posix-argv*)))
     (cond
-      ((any (fn (a) (== a "--setup")) args)
-       ;; Setup wizard, then launch editor
-       (setup:run-setup)
-       (%tui-loop (filter (fn (a) (/= a "--setup")) args)))
       ((any (fn (a) (== a "--runtime-server")) args)
-       ;; Runtime server mode
+       ;; Runtime server mode (no TUI)
        (lisp (-> Void) ()
          (mine/runtime/server-main:main)
          (cl:values)))
       ((any (fn (a) (== a "--run-lisp-script")) args)
-       ;; Run a Lisp script in this image
+       ;; Run a Lisp script in this image (no TUI)
        (lisp (-> Void) ()
          (mine/app/build:run-lisp-script)
          (cl:values)))
+      ;; TUI modes require kitty keyboard protocol
+      ((not (term:probe-kitty-keyboard))
+       (%print-kitty-required-and-abort))
+      ((any (fn (a) (== a "--setup")) args)
+       ;; Setup wizard, then launch editor
+       (setup:run-setup)
+       (%tui-loop (filter (fn (a) (/= a "--setup")) args)))
       (True
        ;; TUI mode
        (%tui-loop args))))
