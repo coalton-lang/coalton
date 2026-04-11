@@ -756,6 +756,12 @@
     (draw-centered scr (- mid 1) "mine Setup Wizard" style-bold)
     (draw-centered scr (+ mid 1) "This short wizard will help you configure mine." style-dim)
     (draw-centered scr (+ mid 2) "Your terminal will need true color support and a good Unicode font." style-dim)
+    ;; Best-effort warning
+    (let best = (term:best-effort?))
+    (when best
+      (draw-centered scr (+ mid 3)
+        "--best-effort enabled, some features may not work."
+        (color:Style color:error-fg color:black color:AttrBold)))
     (draw-centered scr (+ mid 4) "Press any key to continue." style-italic)
     ;; Draw wizard art centered below
     (when (>= cols 50)
