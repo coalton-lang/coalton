@@ -120,7 +120,8 @@
                  (:ct-file "focus")
                  (:ct-file "render")
                  (:ct-file "text")
-                 (:ct-file "input")))
+                 (:ct-file "input")
+                 (:ct-file "spinner")))
 
    ;; Pane implementations (depends on syntax/lexer, syntax/highlight)
    (:module "pane"
