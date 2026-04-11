@@ -1016,22 +1016,37 @@ package :USEs CL.  Handles both bare names and pkg:sym / pkg::sym."
                                                     (cl:symbol-package sym))))
                                           cl:t cl:nil))))))))))
 
-  (declare %wrap-coalton-input (MineState * String -> String))
-  (define (%wrap-coalton-input st input)
-    "If in Coalton mode, wrap appropriately:
+  (declare %coalton-package? (String -> Boolean))
+  (define (%coalton-package? pkg-name)
+    "True if PKG-NAME names a Coalton package (uses the COALTON package)."
+    (lisp (-> Boolean) (pkg-name)
+      (cl:let ((pkg (cl:find-package (cl:string-upcase pkg-name))))
+        (cl:if (cl:and pkg (mine/protocol/server::%coalton-package-p pkg))
+               cl:t cl:nil))))
+
+  (declare %wrap-coalton (String * String -> String))
+  (define (%wrap-coalton input pkg-name)
+    "If PKG-NAME is a Coalton package, wrap INPUT appropriately:
 - definitions -> (coalton-toplevel ...)
 - expressions -> (coalton ...)
 - already-toplevel forms -> verbatim
 - forms with a non-Coalton package prefix -> verbatim (CL escape)
 - bare symbols from CL-using packages -> verbatim"
-    (if (== (cell:read (.ms-repl-lang st)) "Coalton")
+    (if (%coalton-package? pkg-name)
         (cond
           ((%coalton-toplevel-form? input) input)
           ((%non-coalton-package-form? input) input)
           ((%coalton-definition-form? input)
            (<> "(coalton-toplevel " (<> input ")")))
-          ((%cl-package-symbol? input (cell:read (.ms-repl-package st))) input)
+          ((%cl-package-symbol? input pkg-name) input)
           (True (<> "(coalton " (<> input ")"))))
+        input))
+
+  (declare %wrap-coalton-input (MineState * String -> String))
+  (define (%wrap-coalton-input st input)
+    "If in Coalton REPL mode, wrap appropriately."
+    (if (== (cell:read (.ms-repl-lang st)) "Coalton")
+        (%wrap-coalton input (cell:read (.ms-repl-package st)))
         input))
 
   (declare %append-input-to-output! (MineState * String * String -> Void))
@@ -1753,7 +1768,8 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                           (lisp (-> UFix) () (cl:get-internal-real-time)))
              (start-proto-reader! st conn)
              (let req-id = (next-request-id! st))
-             (let req = (msg:ReqEval req-id form-text pkg))
+             (let eval-text = (%wrap-coalton form-text pkg))
+             (let req = (msg:ReqEval req-id eval-text pkg))
              (client:connection-send! conn req))))))))
 
 ;;; Create project on disk
