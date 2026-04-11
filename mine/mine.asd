@@ -152,6 +152,7 @@
     :serial t
     :components ((:ct-file "setup")
                  (:ct-file "help")
+                 (:ct-file "tutorial")
                  (:ct-file "clipboard")
                  (:ct-file "completion")
                  (:ct-file "dialogs")

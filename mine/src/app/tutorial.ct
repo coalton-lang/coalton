@@ -1,0 +1,721 @@
+(cl:defpackage #:mine/app/tutorial
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:cell #:coalton/cell)
+   (#:str #:coalton/string)
+   (#:term #:mine/term/terminal)
+   (#:screen #:mine/term/screen)
+   (#:input #:mine/term/input)
+   (#:color #:mine/term/color)
+   (#:render #:mine/widget/render)
+   (#:wt #:mine/widget/types)
+   (#:gap #:mine/buffer/gap)
+   (#:buf #:mine/buffer/buffer)
+   (#:cursor #:mine/edit/cursor)
+   (#:ops #:mine/edit/operations)
+   (#:paredit #:mine/syntax/paredit)
+   (#:cellw #:mine/text/width))
+  (:export
+   #:run-tutorial!))
+
+(in-package #:mine/app/tutorial)
+
+;;; Tutorial data loading (compile-time)
+
+(cl:eval-when (:compile-toplevel :load-toplevel :execute)
+  (cl:defvar *tutorial-modules* cl:nil)
+  (cl:defvar *tutorial-names*
+    (cl:vector "Introduction" "Parentheses" "Deletion" "Slurp" "Barf"
+               "Splice" "Cleave" "Easy Challenges" "Hard Challenges" "Congratulations"))
+  (cl:let* ((asd-dir (uiop:pathname-directory-pathname
+                      (asdf:system-source-file "mine")))
+            (tut-dir (cl:merge-pathnames "lessons/" asd-dir)))
+    (cl:setf *tutorial-modules*
+      (cl:coerce
+       (cl:loop :for i :from 0 :below 10
+                :for name :in '("intro" "parens" "delete" "slurp" "barf"
+                                 "splice" "cleave" "easy" "hard" "finish")
+                :collect
+                (cl:let ((path (cl:merge-pathnames
+                                (cl:format cl:nil "~2,'0D-~A.lisp" i name)
+                                tut-dir)))
+                  (cl:with-open-file (s path)
+                    (cl:read s))))
+       'cl:vector))))
+
+;;; CL accessor functions
+
+(cl:defun %tut-module-count ()
+  (cl:length *tutorial-modules*))
+
+(cl:defun %tut-intro (mod-idx)
+  (cl:car (cl:aref *tutorial-modules* mod-idx)))
+
+(cl:defun %tut-module-name (mod-idx)
+  (cl:aref *tutorial-names* mod-idx))
+
+(cl:defun %tut-challenge-count (mod-idx)
+  (cl:length (cl:cdr (cl:aref *tutorial-modules* mod-idx))))
+
+(cl:defun %tut-start (mod-idx ch-idx)
+  (cl:car (cl:nth ch-idx (cl:cdr (cl:aref *tutorial-modules* mod-idx)))))
+
+(cl:defun %tut-end (mod-idx ch-idx)
+  (cl:cdr (cl:nth ch-idx (cl:cdr (cl:aref *tutorial-modules* mod-idx)))))
+
+;;; S-expression comparison
+
+(cl:defun %read-all-forms (s)
+  "Read all top-level S-expressions from string S."
+  (cl:let ((forms cl:nil) (pos 0) (len (cl:length s)))
+    (cl:loop
+      (cl:loop :while (cl:and (cl:< pos len)
+                               (cl:member (cl:char s pos) '(#\Space #\Tab #\Newline)))
+               :do (cl:incf pos))
+      (cl:when (cl:>= pos len) (cl:return (cl:nreverse forms)))
+      (cl:multiple-value-bind (form new-pos)
+          (cl:read-from-string s cl:nil :eof :start pos)
+        (cl:when (cl:eq form :eof) (cl:return (cl:nreverse forms)))
+        (cl:push form forms)
+        (cl:setf pos new-pos)))))
+
+(cl:defun %sexp-equal-p (s1 s2)
+  "Compare two strings as sequences of S-expressions, ignoring whitespace."
+  (cl:handler-case
+      (cl:equal (%read-all-forms s1) (%read-all-forms s2))
+    (cl:error () cl:nil)))
+
+;;; Word wrapping and text drawing
+
+(cl:defun %word-wrap-line (line width)
+  "Wrap a single LINE to fit within WIDTH. Returns list of lines."
+  (cl:if (cl:<= (cl:length line) width)
+         (cl:list line)
+         (cl:let ((result cl:nil) (current "") (pos 0) (len (cl:length line)))
+           (cl:loop
+             (cl:when (cl:>= pos len) (cl:return))
+             (cl:loop :while (cl:and (cl:< pos len)
+                                      (cl:char= (cl:char line pos) #\Space))
+                      :do (cl:incf pos))
+             (cl:when (cl:>= pos len) (cl:return))
+             (cl:let ((word-start pos))
+               (cl:loop :while (cl:and (cl:< pos len)
+                                        (cl:char/= (cl:char line pos) #\Space))
+                        :do (cl:incf pos))
+               (cl:let ((word (cl:subseq line word-start pos)))
+                 (cl:if (cl:zerop (cl:length current))
+                        (cl:setf current word)
+                        (cl:if (cl:<= (cl:+ (cl:length current) 1 (cl:length word)) width)
+                               (cl:setf current (cl:concatenate 'cl:string current " " word))
+                               (cl:progn
+                                 (cl:push current result)
+                                 (cl:setf current word)))))))
+           (cl:unless (cl:zerop (cl:length current))
+             (cl:push current result))
+           (cl:nreverse result))))
+
+(cl:defvar *arrow-str*
+  (cl:format cl:nil " ~C " (cl:code-char #x2192)))
+
+(cl:defun %split-by-arrow (line)
+  "Split LINE by \" --> \" delimiters. Returns a list of strings."
+  (cl:loop :with pos = 0
+           :with len = (cl:length line)
+           :collect (cl:let ((found (cl:search " --> " line :start2 pos)))
+                      (cl:if found
+                             (cl:prog1 (cl:subseq line pos found)
+                               (cl:setf pos (cl:+ found 5)))
+                             (cl:prog1 (cl:subseq line pos)
+                               (cl:setf pos len))))
+           :while (cl:< pos len)))
+
+(cl:defun %press-part-p (s)
+  "Does S start with \"press \"?"
+  (cl:and (cl:>= (cl:length s) 6)
+          (cl:string= "press " s :end2 6)))
+
+(cl:defun %draw-motion-line (scr row margin line
+                             label-style key-style bold-style normal-style)
+  "Draw a Motion: line with unicode arrows and alternating bold segments.
+LABEL-STYLE for \"Motion:\", KEY-STYLE for \"press ...\" segments."
+  (cl:let* ((parts (%split-by-arrow line))
+            (col margin))
+    ;; First part: "Motion: rest"
+    (cl:let* ((first-part (cl:first parts))
+              (prefix "Motion:")
+              (plen (cl:length prefix)))
+      ;; Draw "Motion:" in label style (blue)
+      (mine/term/screen:screen-set-string scr row col prefix label-style)
+      (cl:incf col plen)
+      ;; Draw rest of first part normal (includes leading space)
+      (cl:let ((rest-text (cl:subseq first-part plen)))
+        (mine/term/screen:screen-set-string scr row col rest-text normal-style)
+        (cl:incf col (cl:length rest-text))))
+    ;; Remaining parts: arrow then segment
+    (cl:loop :for part :in (cl:rest parts)
+             :for idx :from 1
+             :do (cl:progn
+                   (mine/term/screen:screen-set-string scr row col
+                     *arrow-str* normal-style)
+                   (cl:incf col (cl:length *arrow-str*))
+                   (cl:let ((style (cl:cond
+                                     ((%press-part-p part) key-style)
+                                     ((cl:oddp idx) bold-style)
+                                     (cl:t normal-style))))
+                     (mine/term/screen:screen-set-string scr row col part style)
+                     (cl:incf col (cl:length part)))))))
+
+(cl:defun %motion-line-p (line)
+  (cl:and (cl:>= (cl:length line) 7)
+          (cl:string= "Motion:" line :end2 7)))
+
+(cl:defun %draw-wrapped-text (scr start-row margin text width
+                              style bold-style label-style key-style max-row)
+  "Draw word-wrapped TEXT starting at START-ROW with MARGIN. Stops before MAX-ROW.
+Returns the next row after all drawn lines."
+  (cl:let ((row start-row))
+    ;; Split by newlines
+    (cl:let ((lines cl:nil) (start 0) (len (cl:length text)))
+      (cl:dotimes (i len)
+        (cl:when (cl:char= (cl:char text i) #\Newline)
+          (cl:push (cl:subseq text start i) lines)
+          (cl:setf start (cl:1+ i))))
+      (cl:push (cl:subseq text start len) lines)
+      (cl:setf lines (cl:nreverse lines))
+      ;; Word-wrap and draw each line
+      (cl:dolist (line lines)
+        (cl:when (cl:>= row max-row) (cl:return-from %draw-wrapped-text row))
+        (cl:cond
+          ((cl:zerop (cl:length line))
+           (cl:incf row))
+          ((%motion-line-p line)
+           (%draw-motion-line scr row margin line label-style key-style bold-style style)
+           (cl:incf row))
+          (cl:t
+           (cl:dolist (wrapped (%word-wrap-line line width))
+             (cl:when (cl:>= row max-row)
+               (cl:return-from %draw-wrapped-text row))
+             (mine/term/screen:screen-set-string scr row margin wrapped style)
+             (cl:incf row))))))
+    row))
+
+;;; Coalton implementation
+
+(coalton-toplevel
+
+  ;;; Styles
+
+  (define style-bg
+    (color:Style color:text-fg color:panel-bg color:AttrNone))
+
+  (define style-heading
+    (color:Style color:accent-fg color:panel-bg color:AttrBold))
+
+  (define style-bold
+    (color:Style color:text-fg color:panel-bg color:AttrBold))
+
+  (define style-key
+    (color:Style color:info-fg color:panel-bg color:AttrBold))
+
+  (define style-dim
+    (color:Style color:text-dimmer-fg color:panel-bg color:AttrItalic))
+
+  (define style-input-bg
+    (color:Style color:text-fg color:aluminium-5 color:AttrNone))
+
+  (define style-prompt
+    (color:Style color:accent-fg color:aluminium-5 color:AttrBold))
+
+  (define style-goal
+    (color:Style color:info-fg color:panel-bg color:AttrNone))
+
+  (define style-correct
+    (color:Style (color:Color256 46) color:panel-bg color:AttrBold))
+
+  (define style-wrong
+    (color:Style (color:Color256 196) color:panel-bg color:AttrNone))
+
+  (define style-btn
+    (color:Style color:text-dimmer-fg color:panel-bg color:AttrNone))
+
+  (define style-btn-focus
+    (color:Style color:panel-bg color:text-fg color:AttrBold))
+
+  ;;; Unicode strings
+
+  (define str-em-dash
+    (lisp (-> String) () (cl:string (cl:code-char #x2014))))
+
+  (define str-check
+    (lisp (-> String) () (cl:concatenate 'cl:string (cl:string (cl:code-char #x2713)) " ")))
+
+  (define str-cross
+    (lisp (-> String) () (cl:concatenate 'cl:string (cl:string (cl:code-char #x2717)) " ")))
+
+  (define str-arrows
+    (lisp (-> String) ()
+      (cl:concatenate 'cl:string
+        (cl:string (cl:code-char #x2190)) "/" (cl:string (cl:code-char #x2192)))))
+
+  ;;; Data access
+
+  (declare module-count (Void -> UFix))
+  (define (module-count)
+    (lisp (-> UFix) () (%tut-module-count)))
+
+  (declare module-intro (UFix -> String))
+  (define (module-intro idx)
+    (lisp (-> String) (idx) (%tut-intro idx)))
+
+  (declare module-name (UFix -> String))
+  (define (module-name idx)
+    (lisp (-> String) (idx) (%tut-module-name idx)))
+
+  (declare challenge-count (UFix -> UFix))
+  (define (challenge-count idx)
+    (lisp (-> UFix) (idx) (%tut-challenge-count idx)))
+
+  (declare challenge-start (UFix * UFix -> String))
+  (define (challenge-start mod-idx ch-idx)
+    (lisp (-> String) (mod-idx ch-idx) (%tut-start mod-idx ch-idx)))
+
+  (declare challenge-end (UFix * UFix -> String))
+  (define (challenge-end mod-idx ch-idx)
+    (lisp (-> String) (mod-idx ch-idx) (%tut-end mod-idx ch-idx)))
+
+  (declare sexp-equal? (String * String -> Boolean))
+  (define (sexp-equal? s1 s2)
+    (lisp (-> Boolean) (s1 s2)
+      (cl:if (%sexp-equal-p s1 s2) True False)))
+
+  ;;; Buffer management
+
+  (declare make-tutorial-buffer (Void -> buf:Buffer))
+  (define (make-tutorial-buffer)
+    "Create a Lisp-mode buffer for the tutorial input."
+    (buf:buffer-new-file (buf:BufferId 9999) "/tmp/tutorial.lisp"))
+
+  (declare reset-buffer! (buf:Buffer * cursor:CursorState * String -> Void))
+  (define (reset-buffer! buffer cs text)
+    "Clear the buffer and populate with TEXT, cursor at end."
+    (let gb = (buf:buffer-gap buffer))
+    (let len = (gap:gap-length gb))
+    (when (> len 0)
+      (gap:gap-delete-range! gb 0 len)
+      (values))
+    (gap:gap-insert-string! gb 0 text)
+    (cursor:cursor-move-to-position! cs (gap:gap-length gb)))
+
+  (declare buffer-text (buf:Buffer -> String))
+  (define (buffer-text buffer)
+    (gap:gap-to-string (buf:buffer-gap buffer)))
+
+  ;;; Drawing helpers
+
+  (declare make-rule (UFix -> String))
+  (define (make-rule n)
+    (lisp (-> String) (n)
+      (cl:make-string n :initial-element (cl:code-char #x2500))))
+
+  (declare draw-wrapped! (screen:Screen * UFix * UFix * String * UFix
+                          * color:Style * color:Style * color:Style * color:Style * UFix -> UFix))
+  (define (draw-wrapped! scr start-row margin text width
+                          style bold-style label-style key-style max-row)
+    "Draw word-wrapped text. Returns the next row after drawn lines."
+    (lisp (-> UFix) (scr start-row margin text width style bold-style label-style key-style max-row)
+      (%draw-wrapped-text scr start-row margin text width style bold-style label-style key-style max-row)))
+
+  ;;; Button drawing
+
+  (declare %draw-buttons (screen:Screen * UFix * UFix * (List String) * UFix * UFix -> Void))
+  (define (%draw-buttons scr row col buttons first-focus focus)
+    "Draw buttons. first-focus is the focus value of the first button."
+    (match buttons
+      ((Nil) (values))
+      ((Cons label rest)
+       (let style = (if (== focus first-focus) style-btn-focus style-btn))
+       (let text = (<> " " (<> label " ")))
+       (screen:screen-set-string scr row col text style)
+       (let next-col = (+ col (+ (cellw:string-cell-width text) 2)))
+       (%draw-buttons scr row next-col rest (+ first-focus 1) focus))))
+
+  (declare %hit-test-buttons (UFix * UFix * (List String) * UFix -> (Optional UFix)))
+  (define (%hit-test-buttons click-col col buttons first-focus)
+    "Return the focus value of the button at CLICK-COL, or None."
+    (match buttons
+      ((Nil) None)
+      ((Cons label rest)
+       (let text = (<> " " (<> label " ")))
+       (let btn-end = (+ col (cellw:string-cell-width text)))
+       (cond
+         ((and (>= click-col col) (< click-col btn-end))
+          (Some first-focus))
+         (True
+          (%hit-test-buttons click-col (+ btn-end 2) rest (+ first-focus 1)))))))
+
+  ;;; Main screen drawing
+
+  (declare %draw-screen
+    (screen:Screen * UFix * UFix * UFix * UFix * UFix * UFix
+     * buf:Buffer * cursor:CursorState * (Optional Boolean) -> Void))
+  (define (%draw-screen scr cols rows mod-idx ch-idx focus
+                         n-challenges buffer cs status)
+    (let margin = (the UFix 3))
+    (let text-width = (if (> cols 6) (- cols 6) 1))
+    ;; Clear
+    (render:fill-rect scr (wt:Rect 0 0 cols rows) #\Space style-bg)
+    ;; Title bar
+    (let counter = (<> (into (+ mod-idx 1)) (<> "/" (<> (into (module-count)) ")"))))
+    (let title = (<> "Structural Editing Lesson "
+                     (<> str-em-dash
+                         (<> " " (<> (module-name mod-idx) (<> " (" counter))))))
+    (screen:screen-set-string scr 1 margin title style-heading)
+    (screen:screen-set-string scr 2 margin
+      (make-rule (min (cellw:string-cell-width title) text-width)) style-bg)
+    ;; Compute layout limits
+    (let btn-row = (if (> rows 3) (- rows 3) 0))
+    (let hint-row = (if (> rows 1) (- rows 1) 0))
+    (let max-text-row = (if (> n-challenges 0) (- btn-row 8) (- btn-row 2)))
+    ;; Intro text
+    (let intro-end = (draw-wrapped! scr 4 margin (module-intro mod-idx)
+                                     text-width style-bg style-bold
+                                     style-heading style-key max-text-row))
+    ;; Challenge section
+    (cond
+      ((> n-challenges 0)
+       (let instr-row = (+ intro-end 1))
+       (screen:screen-set-string scr instr-row margin
+         "Using structural editing, replicate the goals below. Press Enter when you got it." style-bg)
+       (let goal-row = (+ instr-row 2))
+       ;; Goal N/M: ...
+       (let goal-label = (<> "Goal " (<> (into (+ ch-idx 1))
+                                          (<> "/" (<> (into n-challenges) ":")))))
+       (screen:screen-set-string scr goal-row margin goal-label style-heading)
+       (let goal = (challenge-end mod-idx ch-idx))
+       (let goal-col = (+ margin (+ (cellw:string-cell-width goal-label) 1)))
+       (cond
+         ((== (str:length goal) 0)
+          (screen:screen-set-string scr goal-row goal-col "empty" style-dim))
+         (True
+          (screen:screen-set-string scr goal-row goal-col goal style-goal)))
+       ;; Input line
+       (let input-row = (+ goal-row 2))
+       (let plen = (the UFix 2))
+       (render:fill-rect scr (wt:Rect margin input-row (- cols margin) 1)
+                          #\Space style-input-bg)
+       (screen:screen-set-string scr input-row margin "> " style-prompt)
+       (let buf-text = (buffer-text buffer))
+       (screen:screen-set-string scr input-row (+ margin plen) buf-text style-input-bg)
+       ;; Cursor positioning
+       (let cursor-pos = (cursor:cursor-position cs))
+       (let text-before = (str:substring buf-text 0 (min cursor-pos (str:length buf-text))))
+       (let cursor-display = (cellw:string-cell-width text-before))
+       (cond
+         ((== focus 0)
+          (screen:screen-set-cursor scr input-row (+ margin (+ plen cursor-display))))
+         (True
+          (screen:screen-hide-cursor scr)))
+       ;; Status
+       (let status-row = (+ input-row 2))
+       (match status
+         ((Some correct?)
+          (cond
+            (correct?
+             (screen:screen-set-string scr status-row margin
+               (<> str-check "Correct! Press any key to continue...") style-correct))
+            (True
+             (screen:screen-set-string scr status-row margin
+               (<> str-cross "Not quite, try again") style-wrong))))
+         ((None) (values)))
+       ;; Buttons
+       (%draw-buttons scr btn-row margin
+                       (make-list "Reset" "Skip" "Next Lesson" "Exit")
+                       1 focus)
+       ;; Hint
+       (let hint = (if (== focus 0)
+                       "Tab: buttons  Enter: check answer  Escape: exit"
+                       (<> str-arrows ": navigate  Enter: activate  Tab: back to input")))
+       (screen:screen-set-string scr hint-row margin hint style-dim))
+      ;; No challenges
+      (True
+       (let has-next = (< mod-idx (- (module-count) 1)))
+       (cond
+         (has-next
+          (%draw-buttons scr btn-row margin
+                          (make-list "Next Lesson" "Exit") 3 focus))
+         (True
+          (%draw-buttons scr btn-row margin
+                          (make-list "Exit") 4 focus)))
+       (screen:screen-set-string scr hint-row margin
+         (<> str-arrows ": navigate  Enter: activate  Escape: exit") style-dim)
+       (screen:screen-hide-cursor scr)))
+    (values))
+
+  ;;; Input key handling (paredit)
+
+  (declare %handle-input-key! (buf:Buffer * cursor:CursorState * input:Key * input:Modifier -> Void))
+  (define (%handle-input-key! buffer cs key mod)
+    (let gb = (buf:buffer-gap buffer))
+    (match key
+      ;; Arrow keys
+      ((input:KeyRight)
+       (cond
+         ((== mod input:ModAlt)
+          (paredit:paredit-forward-slurp! buffer cs))
+         ((== mod input:ModCtrl)
+          (cursor:cursor-move-word-right! gb cs))
+         (True
+          (cursor:cursor-move-right! gb cs))))
+      ((input:KeyLeft)
+       (cond
+         ((== mod input:ModAlt)
+          (paredit:paredit-forward-barf! buffer cs))
+         ((== mod input:ModCtrl)
+          (cursor:cursor-move-word-left! gb cs))
+         (True
+          (cursor:cursor-move-left! gb cs))))
+      ((input:KeyUp)
+       (when (== mod input:ModAlt)
+         (paredit:paredit-splice! buffer cs)))
+      ((input:KeyDown)
+       (when (== mod input:ModAlt)
+         (paredit:paredit-cleave! buffer cs)))
+      ;; Home / End
+      ((input:KeyHome)
+       (cursor:cursor-move-to-line-start! gb cs))
+      ((input:KeyEnd)
+       (cursor:cursor-move-to-line-end! gb cs))
+      ;; Balanced delete
+      ((input:KeyBackspace)
+       (cond
+         ((== mod input:ModCtrl)
+          (ops:delete-backward-word! buffer (buf:buffer-undo buffer) cs))
+         (True
+          (paredit:paredit-backspace! buffer cs))))
+      ((input:KeyDelete)
+       (paredit:paredit-delete! buffer cs))
+      ;; Character input
+      ((input:KeyChar ch)
+       (cond
+         ;; Alt key combinations
+         ((== mod input:ModAlt)
+          (cond
+            ((== ch #\f) (paredit:paredit-forward-sexp! gb cs))
+            ((== ch #\b) (paredit:paredit-backward-sexp! gb cs))
+            (True (values))))
+         ;; Balanced insert
+         ((== ch #\() (paredit:paredit-open-paren! buffer cs))
+         ((== ch #\)) (paredit:paredit-close-paren! buffer cs))
+         ((== ch #\[) (paredit:paredit-open-bracket! buffer cs))
+         ((== ch #\]) (paredit:paredit-close-bracket! buffer cs))
+         ((== ch #\") (paredit:paredit-doublequote! buffer cs))
+         ;; Regular character
+         (True
+          (ops:insert-string! buffer (buf:buffer-undo buffer) cs (into ch)))))
+      (_ (values))))
+
+  ;;; Navigation helpers
+
+  (declare %advance-module
+    (term:Terminal * buf:Buffer * cursor:CursorState * UFix -> Boolean))
+  (define (%advance-module term buffer cs mod-idx)
+    "Advance to module MOD-IDX."
+    (cond
+      ((>= mod-idx (module-count)) False)
+      ((> (challenge-count mod-idx) 0)
+       (reset-buffer! buffer cs (challenge-start mod-idx 0))
+       (%tutorial-loop term buffer cs mod-idx 0 0 None))
+      (True
+       (%tutorial-loop term buffer cs mod-idx 0 3 None))))
+
+  (declare %advance-challenge
+    (term:Terminal * buf:Buffer * cursor:CursorState * UFix * UFix -> Boolean))
+  (define (%advance-challenge term buffer cs mod-idx ch-idx)
+    "Advance past challenge CH-IDX in module MOD-IDX."
+    (let next-ch = (+ ch-idx 1))
+    (cond
+      ((< next-ch (challenge-count mod-idx))
+       (reset-buffer! buffer cs (challenge-start mod-idx next-ch))
+       (%tutorial-loop term buffer cs mod-idx next-ch 0 None))
+      (True
+       (%advance-module term buffer cs (+ mod-idx 1)))))
+
+  ;;; Button activation
+
+  (declare %activate-button
+    (term:Terminal * buf:Buffer * cursor:CursorState * UFix * UFix * UFix -> Boolean))
+  (define (%activate-button term buffer cs mod-idx ch-idx focus)
+    (cond
+      ;; Reset (1)
+      ((== focus 1)
+       (reset-buffer! buffer cs (challenge-start mod-idx ch-idx))
+       (%tutorial-loop term buffer cs mod-idx ch-idx 0 None))
+      ;; Skip (2)
+      ((== focus 2)
+       (%advance-challenge term buffer cs mod-idx ch-idx))
+      ;; Next Module (3)
+      ((== focus 3)
+       (%advance-module term buffer cs (+ mod-idx 1)))
+      ;; Exit (4)
+      (True False)))
+
+  ;;; Main event loop
+
+  (declare %tutorial-loop
+    (term:Terminal * buf:Buffer * cursor:CursorState
+     * UFix * UFix * UFix * (Optional Boolean) -> Boolean))
+  (define (%tutorial-loop term buffer cs mod-idx ch-idx focus status)
+    "Main tutorial event loop. Returns True if user pressed Ctrl+Q."
+    (let scr = (term:.terminal-screen term))
+    (let cols = (term:terminal-cols term))
+    (let rows = (term:terminal-rows term))
+    (let n-ch = (challenge-count mod-idx))
+    ;; Draw
+    (%draw-screen scr cols rows mod-idx ch-idx focus n-ch buffer cs status)
+    (term:terminal-flush term)
+    ;; Wait for event
+    (let ev = (term:terminal-wait-for-key term))
+    (match ev
+      ;; Resize
+      ((input:IEvResize _ _)
+       (term:terminal-update-size! term)
+       (screen:screen-resize scr (term:terminal-cols term) (term:terminal-rows term))
+       (%tutorial-loop term buffer cs mod-idx ch-idx focus status))
+      ;; Ctrl+Q: quit app
+      ((input:IEvKey (input:KeyCtrl #\q) _) True)
+      ;; Escape: exit tutorial
+      ((input:IEvKey (input:KeyEscape) _) False)
+      ;; Mouse click on buttons
+      ((input:IEvMouse (input:MousePress) (input:MouseLeft) click-col click-row)
+       (let margin = (the UFix 3))
+       (let btn-row = (if (> rows 3) (- rows 3) 0))
+       (cond
+         ((/= click-row btn-row)
+          (%tutorial-loop term buffer cs mod-idx ch-idx focus status))
+         ((> n-ch 0)
+          (match (%hit-test-buttons click-col margin
+                   (make-list "Reset" "Skip" "Next Lesson" "Exit") 1)
+            ((Some btn-focus)
+             (%activate-button term buffer cs mod-idx ch-idx btn-focus))
+            ((None)
+             (%tutorial-loop term buffer cs mod-idx ch-idx focus status))))
+         (True
+          (let has-next = (< mod-idx (- (module-count) 1)))
+          (let btns = (if has-next
+                          (make-list "Next Lesson" "Exit")
+                          (make-list "Exit")))
+          (let first-f = (if has-next 3 4))
+          (match (%hit-test-buttons click-col margin btns first-f)
+            ((Some btn-focus)
+             (%activate-button term buffer cs mod-idx ch-idx btn-focus))
+            ((None)
+             (%tutorial-loop term buffer cs mod-idx ch-idx focus status))))))
+      ;; Other mouse: ignore
+      ((input:IEvMouse _ _ _ _)
+       (%tutorial-loop term buffer cs mod-idx ch-idx focus status))
+      ;; Keys
+      ((input:IEvKey key mod)
+       (cond
+         ;; No challenges: navigate buttons only
+         ((== n-ch 0)
+          (%handle-text-only-key term buffer cs mod-idx focus key))
+         ;; Focus on input
+         ((== focus 0)
+          (match key
+            ;; Tab -> buttons
+            ((input:KeyTab)
+             (%tutorial-loop term buffer cs mod-idx ch-idx 1 None))
+            ;; Enter -> check answer
+            ((input:KeyEnter)
+             (let current = (buffer-text buffer))
+             (let goal = (challenge-end mod-idx ch-idx))
+             (cond
+               ((sexp-equal? current goal)
+                ;; Correct! Show green check and wait
+                (%draw-screen scr cols rows mod-idx ch-idx focus n-ch
+                               buffer cs (Some True))
+                (term:terminal-flush term)
+                (let ev2 = (term:terminal-wait-for-key term))
+                (match ev2
+                  ((input:IEvKey (input:KeyCtrl #\q) _) True)
+                  ((input:IEvKey (input:KeyEscape) _) False)
+                  (_ (%advance-challenge term buffer cs mod-idx ch-idx))))
+               (True
+                (%tutorial-loop term buffer cs mod-idx ch-idx 0 (Some False)))))
+            ;; Other: edit input
+            (_ (%handle-input-key! buffer cs key mod)
+               (%tutorial-loop term buffer cs mod-idx ch-idx 0 None))))
+         ;; Focus on buttons
+         (True
+          (match key
+            ;; Tab -> back to input
+            ((input:KeyTab)
+             (%tutorial-loop term buffer cs mod-idx ch-idx 0 None))
+            ;; Enter -> activate
+            ((input:KeyEnter)
+             (%activate-button term buffer cs mod-idx ch-idx focus))
+            ;; Left -> previous button
+            ((input:KeyLeft)
+             (let new-f = (if (> focus 1) (- focus 1) 4))
+             (%tutorial-loop term buffer cs mod-idx ch-idx new-f None))
+            ;; Right -> next button
+            ((input:KeyRight)
+             (let new-f = (if (< focus 4) (+ focus 1) 1))
+             (%tutorial-loop term buffer cs mod-idx ch-idx new-f None))
+            ;; Character key -> switch to input and handle
+            ((input:KeyChar _)
+             (%handle-input-key! buffer cs key mod)
+             (%tutorial-loop term buffer cs mod-idx ch-idx 0 None))
+            (_ (%tutorial-loop term buffer cs mod-idx ch-idx focus None))))))
+      ;; Other events
+      (_ (%tutorial-loop term buffer cs mod-idx ch-idx focus status))))
+
+  ;;; Key handling for text-only modules (no challenges)
+
+  (declare %handle-text-only-key
+    (term:Terminal * buf:Buffer * cursor:CursorState * UFix * UFix * input:Key -> Boolean))
+  (define (%handle-text-only-key term buffer cs mod-idx focus key)
+    (let has-next = (< mod-idx (- (module-count) 1)))
+    (match key
+      ((input:KeyEnter)
+       (cond
+         ((and (== focus 3) has-next)
+          (%advance-module term buffer cs (+ mod-idx 1)))
+         (True False)))
+      ((input:KeyLeft)
+       (cond
+         ((and (== focus 4) has-next)
+          (%tutorial-loop term buffer cs mod-idx 0 3 None))
+         (True
+          (%tutorial-loop term buffer cs mod-idx 0 focus None))))
+      ((input:KeyRight)
+       (cond
+         ((and (== focus 3) has-next)
+          (%tutorial-loop term buffer cs mod-idx 0 4 None))
+         (True
+          (%tutorial-loop term buffer cs mod-idx 0 focus None))))
+      ((input:KeyTab)
+       (cond
+         ((and (== focus 3) has-next)
+          (%tutorial-loop term buffer cs mod-idx 0 4 None))
+         ((and (== focus 4) has-next)
+          (%tutorial-loop term buffer cs mod-idx 0 3 None))
+         (True
+          (%tutorial-loop term buffer cs mod-idx 0 focus None))))
+      (_ (%tutorial-loop term buffer cs mod-idx 0 focus None))))
+
+  ;;; Entry point
+
+  (declare run-tutorial! (term:Terminal -> Boolean))
+  (define (run-tutorial! term)
+    "Run the structural editing tutorial.
+Returns True if the user pressed Ctrl+Q to quit the app."
+    (let buffer = (make-tutorial-buffer))
+    (let cs = (cursor:cursor-new))
+    (let n-ch = (challenge-count 0))
+    (cond
+      ((> n-ch 0)
+       (reset-buffer! buffer cs (challenge-start 0 0))
+       (%tutorial-loop term buffer cs 0 0 0 None))
+      (True
+       (%tutorial-loop term buffer cs 0 0 3 None)))))

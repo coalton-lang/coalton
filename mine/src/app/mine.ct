@@ -41,6 +41,7 @@
    (#:cfgt #:mine/config/types)
    (#:setup #:mine/app/setup)
    (#:help #:mine/app/help)
+   (#:tutorial #:mine/app/tutorial)
    (#:clipboard #:mine/app/clipboard)
    (#:complete #:mine/app/completion)
    (#:find #:mine/app/find)
@@ -2392,12 +2393,6 @@ Uses the preceding (in-package ...) form to determine the compilation package."
   (define (handle-alt-key! st ch)
     "Handle an Alt+key combination in the editor."
     (match ch
-      ;; Alt+R -> raise
-      (#\r (%paredit-if-lisp st
-                             (fn (buffer) (paredit:paredit-raise! buffer (.ms-cursor st)))))
-      ;; Alt+W -> wrap
-      (#\w (%paredit-if-lisp st
-                             (fn (buffer) (paredit:paredit-wrap-round! buffer (.ms-cursor st)))))
       ;; Alt+F -> forward sexp
       (#\f (%paredit-if-lisp st
                              (fn (buffer) (paredit:paredit-forward-sexp! (buf:buffer-gap buffer) (.ms-cursor st)))))
@@ -3492,6 +3487,9 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     (match action
       ((menubar:ActionHelp)
        (when (help:show-help! term)
+         (try-quit! st term)))
+      ((menubar:ActionLesson)
+       (when (tutorial:run-tutorial! term)
          (try-quit! st term)))
       ((menubar:ActionAbout) (dialogs:show-about! term))
       ((menubar:ActionQuit) (try-quit! st term))
