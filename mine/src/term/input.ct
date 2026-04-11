@@ -359,11 +359,11 @@ Returns (event next-pos)."
     (let len = (vec-length buf))
     (let b = (vec-ref buf pos))
     (cond
-      ;; ESC (byte 27)
+      ;; ESC (byte 27) — always a CSI/SS3 lead-in with kitty protocol
       ((== b 27)
        (cond
          ((>= (+ pos 1) len)
-          ;; Bare ESC at end of buffer -- incomplete, return IEvNone
+          ;; Incomplete sequence — wait for more bytes
           (Tuple IEvNone pos))
          (True
           (let next-byte = (vec-ref buf (+ pos 1)))
@@ -381,16 +381,9 @@ Returns (event next-pos)."
                (True
                 (let fb = (vec-ref buf (+ pos 2)))
                 (Tuple (dispatch-ss3 fb) (+ pos 3)))))
-            ;; ESC + Enter -> Alt+Enter
-            ((or (== next-byte 13) (== next-byte 10))
-             (Tuple (IEvKey KeyEnter ModAlt) (+ pos 2)))
-            ;; ESC + printable -> Alt+key
-            ((and (>= next-byte 32) (<= next-byte 126))
-             (Tuple (IEvKey (KeyChar (ufix-to-char next-byte)) ModAlt)
-                    (+ pos 2)))
-            ;; ESC + other
+            ;; Unexpected byte after ESC (kitty handles ESC key via CSI 27 u)
             (True
-             (Tuple (IEvKey KeyEscape ModNone) (+ pos 1)))))))
+             (Tuple (IEvKey (KeyUnknown 27) ModNone) (+ pos 1)))))))
       ;; Tab (byte 9)
       ((== b 9)
        (Tuple (IEvKey KeyTab ModNone) (+ pos 1)))

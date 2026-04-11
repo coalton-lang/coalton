@@ -9,6 +9,7 @@
    (#:cell #:coalton/cell))
   (:export
    #:Terminal
+   #:probe-kitty-keyboard
    #:terminal-init #:terminal-shutdown
    #:.terminal-screen
    #:terminal-cols #:terminal-rows #:terminal-update-size!
@@ -30,6 +31,15 @@
     (terminal-input-buf (cell:Cell (Vector UFix)))
     (terminal-cols-cell (cell:Cell UFix))
     (terminal-rows-cell (cell:Cell UFix)))
+
+  ;;; Kitty keyboard protocol probe
+
+  (declare probe-kitty-keyboard (Void -> Boolean))
+  (define (probe-kitty-keyboard)
+    "Probe whether the terminal supports the kitty keyboard protocol.
+Returns True if the terminal responds to the CSI ? u query."
+    (lisp (-> Boolean) ()
+      (cl:if (%probe-kitty-keyboard) True False)))
 
   ;;; Init
 
@@ -248,3 +258,88 @@ Returns a Coalton-compatible (Vector UFix)."
         ;; No data — empty vector
         (cl:make-array 0 :fill-pointer 0 :adjustable cl:t
                          :element-type cl:t))))
+
+(cl:defun %digit-byte-p (b)
+  (cl:and (cl:>= b 48) (cl:<= b 57)))
+
+(cl:defun %primary-device-attributes-response-p (resp)
+  "Return T if RESP contains a primary device attributes response."
+  (cl:let ((len (cl:length resp)))
+    (cl:loop :for i :from 0 :below len
+             :when (cl:and (cl:<= (cl:+ i 1) (cl:1- len))
+                           (cl:= (cl:aref resp i) 27)
+                           (cl:= (cl:aref resp (cl:+ i 1)) 91))
+               :do (cl:loop :for j :from (cl:+ i 2) :below len
+                            :for b = (cl:aref resp j)
+                            :do (cl:cond
+                                  ((cl:or (%digit-byte-p b)
+                                          (cl:= b 59)
+                                          (cl:= b 63))
+                                   nil)
+                                  ((cl:= b 99)
+                                   (cl:return-from %primary-device-attributes-response-p cl:t))
+                                  (cl:t
+                                   (cl:return)))))
+    cl:nil))
+
+(cl:defun %query-progressive-enhancement-flags (resp)
+  "Return the queried kitty progressive enhancement flags from RESP.
+Returns NIL if no query response is present."
+  (cl:let ((len (cl:length resp)))
+    (cl:loop :for i :from 0 :below len
+             :when (cl:and (cl:<= (cl:+ i 2) (cl:1- len))
+                           (cl:= (cl:aref resp i) 27)
+                           (cl:= (cl:aref resp (cl:+ i 1)) 91)
+                           (cl:= (cl:aref resp (cl:+ i 2)) 63))
+               :do (cl:let ((value 0)
+                            (saw-digit cl:nil))
+                     (cl:loop :for j :from (cl:+ i 3) :below len
+                              :for b = (cl:aref resp j)
+                              :do (cl:cond
+                                    ((%digit-byte-p b)
+                                     (cl:setf saw-digit cl:t
+                                               value (cl:+ (cl:* value 10)
+                                                            (cl:- b 48))))
+                                    ((cl:= b 117)
+                                     (cl:return-from %query-progressive-enhancement-flags
+                                       (cl:if saw-digit value 0)))
+                                    (cl:t
+                                     (cl:return))))))
+    cl:nil))
+
+(cl:defun %probe-kitty-keyboard ()
+  "Probe whether the terminal supports the kitty keyboard protocol.
+Enables disambiguation, queries the active flags, and waits for
+primary device attributes as the fence. Returns T only if the query
+reply reports that flag 1 is active."
+  (mine/bindings/terminal:terminal-enable-raw-mode)
+  (cl:unwind-protect
+      (cl:progn
+        ;; Request disambiguation, query active flags, then use primary
+        ;; device attributes as the fence as recommended by the spec.
+        (mine/bindings/terminal:terminal-write-string
+         (cl:format cl:nil
+                    "~c[>1u~c[?u~c[c"
+                    (cl:code-char 27)
+                    (cl:code-char 27)
+                    (cl:code-char 27)))
+        (mine/bindings/terminal:terminal-flush)
+        ;; Collect response bytes, stop at the primary DA response or timeout.
+        (cl:let ((resp (cl:make-array 0 :fill-pointer 0 :adjustable cl:t
+                                       :element-type '(cl:unsigned-byte 8))))
+          (cl:dotimes (_ 10)  ; up to 10 x 100ms = 1s
+            (cl:multiple-value-bind (bytes count)
+                (mine/bindings/terminal:terminal-read-bytes 100)
+              (cl:declare (cl:ignore count))
+              (cl:when (cl:and bytes (cl:plusp (cl:length bytes)))
+                (cl:loop :for b :across bytes
+                         :do (cl:vector-push-extend b resp))
+                (cl:when (%primary-device-attributes-response-p resp)
+                  (cl:return)))))
+          (cl:let ((flags (%query-progressive-enhancement-flags resp)))
+            (cl:and flags (cl:logtest 1 flags)))))
+    (cl:ignore-errors
+      (mine/bindings/terminal:terminal-write-string
+       (cl:format cl:nil "~c[<u" (cl:code-char 27)))
+      (mine/bindings/terminal:terminal-flush))
+    (mine/bindings/terminal:terminal-disable-raw-mode)))
