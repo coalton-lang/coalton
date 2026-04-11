@@ -961,11 +961,8 @@ Inside strings, parens are treated as normal characters."
                  (let tail-start = (%skip-ws-back gb close-pos))
                  (let next-start = (%skip-ws-fwd gb (+ close-pos 1) buf-len))
                  (let moved-text = (gap:gap-substring gb next-start after-next))
-                 (let left-inner = (if (> tail-start (+ open-pos 1))
-                                       (gap:gap-char-at gb (- tail-start 1))
-                                       None))
-                 (let right-moved = (gap:gap-char-at gb next-start))
-                 (let separator = (if (%needs-space-between? left-inner right-moved) " " ""))
+                 ;; Keep one space between existing list content and the slurped sexp.
+                 (let separator = (if (> tail-start (+ open-pos 1)) " " ""))
                  (let replacement = (<> separator (<> moved-text close-str)))
                  ;; Replace the old tail with the slurped sexp plus the new close delimiter.
                  (record-delete! buffer tail-start after-next p)
@@ -1078,7 +1075,7 @@ Inside strings, parens are treated as normal characters."
                       (let split-end = (%skip-ws-fwd gb p buf-len))
                       (when (and (> split-start open-pos) (<= split-end close-pos))
                         (record-delete! buffer split-start split-end p)
-                        (record-insert! buffer split-start (<> close-str open-str) p)
+                        (record-insert! buffer split-start (<> close-str (<> " " open-str)) p)
                         (cell:write! (cursor:.pos cs) (+ split-start 1)))
                       (values))))
               (values))))))))
