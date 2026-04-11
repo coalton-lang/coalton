@@ -3695,6 +3695,9 @@ Render-app is NOT called here; the main loop handles rendering."
                          (_ (handle-key st term key mod))))))
               ((input:KeyCtrl #\q)
                (try-quit! st term))
+              ;; Ctrl+W: close current file
+              ((input:KeyCtrl #\w)
+               (close-current-file! st term))
               ;; Ctrl+H: help screen
               ((input:KeyCtrl #\h)
                (when (help:show-help! term)
