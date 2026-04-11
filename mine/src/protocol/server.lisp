@@ -200,8 +200,8 @@ Returns :quit if the server should shut down, T otherwise."
       (:compile-string
        (destructuring-bind (id string buffer-name package-name position)
            (rest msg)
-         (declare (ignore buffer-name position))
-         (handle-compile-string id string package-name stream)))
+         (declare (ignore position))
+         (handle-compile-string id string buffer-name package-name stream)))
 
       (:compile-file
        (destructuring-bind (id filename load-p) (rest msg)
@@ -358,7 +358,9 @@ Returns the symbol or NIL."
               (handler-case
                   (multiple-value-bind (result output)
                       (mine/runtime/eval:debug-eval form-string package-name
-                                                    stream id)
+                                                    stream id
+                                                    (let ((pkg (find-package (string-upcase package-name))))
+                                                      (and pkg (%coalton-package-p pkg))))
                     (when (and output (plusp (length output)))
                       (dolist (line (split-string-by-newline output))
                         (write-message stream `(:notify (:output ,line)))))
@@ -377,7 +379,7 @@ Returns the symbol or NIL."
               :report "Continue, returning NIL"
               (write-message stream `(:return ,id (:ok "NIL"))))))))))
 
-(defun handle-compile-string (id form-string package-name stream)
+(defun handle-compile-string (id form-string buffer-name package-name stream)
   "Handle a :compile-string request with interactive debugger support.
 Uses compile-file + load for correct eval-when toplevel semantics."
   (let ((stderr-capture (make-string-output-stream)))
@@ -407,7 +409,8 @@ Uses compile-file + load for correct eval-when toplevel semantics."
               (handler-case
                   (multiple-value-bind (result output)
                       (mine/runtime/eval:debug-compile-string
-                       form-string package-name stream id)
+                       form-string package-name stream id
+                       (%ct-file-p buffer-name))
                     (when (and output (plusp (length output)))
                       (dolist (line (split-string-by-newline output))
                         (write-message stream `(:notify (:output ,line)))))
@@ -431,7 +434,6 @@ Uses compile-file + load for correct eval-when toplevel semantics."
   (let ((len (length filename)))
     (and (> len 3)
          (string-equal ".ct" filename :start2 (- len 3)))))
-
 
 (defun handle-compile-file (id filename load-p stream)
   "Handle a :compile-file request. Captures compiler notes with source locations.
