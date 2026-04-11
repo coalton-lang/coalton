@@ -50,15 +50,18 @@ Records the operation for undo and advances the cursor."
   (define (insert-string! buffer tree cs text)
     "Insert a string at the cursor position.
 Records the operation for undo and advances the cursor."
-    (let p = (cursor:cursor-position cs))
-    (let gb = (buf:buffer-gap buffer))
-    (let len = (string-length text))
-    (gap:gap-insert-string! gb p text)
-    (buf:buffer-mark-dirty! buffer)
-    (undo:undo-record! tree (undo:OpInsert p text) p (+ p len))
-    ;; Move cursor to end of inserted text.
-    (cursor:cursor-move-to-position! cs (+ p len))
-    (values))
+    (undo:with-undo-group! tree
+      (fn () (cursor:cursor-position cs))
+      (fn ()
+        (let p = (cursor:cursor-position cs))
+        (let gb = (buf:buffer-gap buffer))
+        (let len = (string-length text))
+        (gap:gap-insert-string! gb p text)
+        (buf:buffer-mark-dirty! buffer)
+        (undo:undo-record! tree (undo:OpInsert p text) p (+ p len))
+        ;; Move cursor to end of inserted text.
+        (cursor:cursor-move-to-position! cs (+ p len))
+        (values))))
 
   ;;; delete-backward!
 
@@ -127,16 +130,21 @@ Does nothing if the cursor is at the end of the buffer."
                       -> Void))
   (define (newline! buffer tree cs)
     "Insert a newline plus auto-indentation at the cursor position."
-    ;; Insert the newline first
-    (insert-char! buffer tree cs #\Newline)
-    ;; Compute indentation for the new line
-    (let gb = (buf:buffer-gap buffer))
-    (let mode = (match (buf:buffer-mode buffer)
-                  ((buf:ModeCoalton) 0)
-                  ((buf:ModeLisp) 1)
-                  (_ 2)))
-    (match (cursor:cursor-line-col cs gb)
-      ((Tuple new-line _col)
-       (let indent-level = (indent:compute-indent gb mode new-line))
-       (when (> indent-level 0)
-         (insert-string! buffer tree cs (%make-spaces indent-level)))))))
+    (undo:with-undo-group! tree
+      (fn () (cursor:cursor-position cs))
+      (fn ()
+        ;; Insert the newline first
+        (insert-char! buffer tree cs #\Newline)
+        ;; Compute indentation for the new line
+        (let gb = (buf:buffer-gap buffer))
+        (let mode = (match (buf:buffer-mode buffer)
+                      ((buf:ModeCoalton) 0)
+                      ((buf:ModeLisp) 1)
+                      (_ 2)))
+        (match (cursor:cursor-line-col cs gb)
+          ((Tuple new-line _col)
+           (let indent-level = (indent:compute-indent gb mode new-line))
+           (when (> indent-level 0)
+             (insert-string! buffer tree cs (%make-spaces indent-level))))))))
+
+)

@@ -7,6 +7,9 @@
    #:UndoEntry #:UndoEntry
    #:UndoTree
    #:undo-tree-new
+   #:undo-begin-group!
+   #:undo-end-group!
+   #:with-undo-group!
    #:undo-record!
    #:undo-undo!))
 
@@ -36,7 +39,8 @@
     (undo-stack (cell:Cell (List UndoEntry)))
     (redo-stack (cell:Cell (List UndoEntry)))
     (current-group (cell:Cell (Optional (List EditOp))))
-    (group-cursor-start (cell:Cell UFix)))
+    (group-cursor-start (cell:Cell UFix))
+    (group-depth (cell:Cell UFix)))
 
   ;;; Constructor
 
@@ -46,6 +50,7 @@
     (UndoTree (cell:new Nil)
               (cell:new Nil)
               (cell:new None)
+              (cell:new 0)
               (cell:new 0)))
 
   ;;; Internal helpers
@@ -65,6 +70,50 @@
                (.cursor-before entry)))
 
   ;;; Recording
+
+  (declare undo-begin-group! (UndoTree * UFix -> Void))
+  (define (undo-begin-group! tree cursor-start)
+    "Begin recording a grouped undo step starting at CURSOR-START."
+    (let depth = (cell:read (.group-depth tree)))
+    (when (== depth 0)
+      (cell:write! (.current-group tree) (Some Nil))
+      (cell:write! (.group-cursor-start tree) cursor-start))
+    (cell:write! (.group-depth tree) (+ depth 1))
+    (values))
+
+  (declare undo-end-group! (UndoTree * UFix -> Void))
+  (define (undo-end-group! tree cursor-end)
+    "Finish the current grouped undo step at CURSOR-END."
+    (let depth = (cell:read (.group-depth tree)))
+    (cond
+      ((== depth 0) (values))
+      ((== depth 1)
+       (match (cell:read (.current-group tree))
+         ((Some ops)
+          (match ops
+            ((Nil) (values))
+            (_
+             (let entry = (UndoEntry ops
+                                     (cell:read (.group-cursor-start tree))
+                                     cursor-end))
+             (cell:push! (.undo-stack tree) entry)
+             (values))))
+         ((None) (values)))
+       (cell:write! (.current-group tree) None)
+       (cell:write! (.group-depth tree) 0)
+       (values))
+      (True
+       (cell:write! (.group-depth tree) (- depth 1))
+       (values))))
+
+  (inline)
+  (declare with-undo-group! (UndoTree * (Void -> UFix) * (Void -> Void) -> Void))
+  (define (with-undo-group! tree get-cursor action)
+    "Run ACTION so all recorded edits become a single undo step."
+    (undo-begin-group! tree (get-cursor))
+    (action)
+    (undo-end-group! tree (get-cursor))
+    (values))
 
   (declare undo-record! (UndoTree * EditOp * UFix * UFix -> Void))
   (define (undo-record! tree op cbefore cafter)
