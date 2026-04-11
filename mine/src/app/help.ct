@@ -61,7 +61,7 @@
     (help-line scr (%scroll-row 8 scroll) key-s desc-s "Ctrl+T" "Expand file tree / open files panel")
     (help-line scr (%scroll-row 9 scroll) key-s desc-s "Ctrl+1-9" "Switch to open file by number")
     (help-line scr (%scroll-row 10 scroll) key-s desc-s "Ctrl+Q" "Quit")
-    (help-line scr (%scroll-row 11 scroll) key-s desc-s "Ctrl+G" "Cancel / refresh terminal")
+    (help-line scr (%scroll-row 11 scroll) key-s desc-s "Esc / Ctrl+G" "Cancel / refresh terminal")
     (help-line scr (%scroll-row 12 scroll) key-s desc-s "Mouse click" "Switch pane focus")
     ;; Editor
     (screen:screen-set-string scr (%scroll-row 14 scroll) 3 "Editor" heading)
@@ -142,6 +142,7 @@
     (let max-scroll = (if (> 70 rows) (- 70 rows) 0))
     (match ev
       ((input:IEvKey (input:KeyEnter) _) False)
+      ((input:IEvKey (input:KeyEscape) _) False)
       ((input:IEvKey (input:KeyChar #\q) _) False)
       ((input:IEvKey (input:KeyCtrl #\h) _) False)
       ((input:IEvKey (input:KeyCtrl #\q) _) True)
