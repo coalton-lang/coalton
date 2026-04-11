@@ -30,6 +30,10 @@
   "Encode VALUES for transport to the TUI while preserving value boundaries."
   (prin1-to-string (list :values (%format-result-values values package))))
 
+(defun %coalton-readtable ()
+  "Return the Coalton named-readtable."
+  (named-readtables:ensure-readtable 'coalton:coalton))
+
 ;;; Public API
 
 (defun safe-eval (form-string package-name)
@@ -79,15 +83,17 @@ success."
       (error (c)
         (values nil nil (format nil "Error: ~A" c))))))
 
-(defun debug-eval (form-string package-name &optional wire-stream msg-id)
+(defun debug-eval (form-string package-name &optional wire-stream msg-id coalton-p)
   "Evaluate FORM-STRING in PACKAGE-NAME via plain EVAL for interactive use.
 Lets errors propagate to the caller's handler-bind (for debugger support).
 When WIRE-STREAM and MSG-ID are provided, binds *standard-input*, *query-io*,
 and *terminal-io* to a TUI input stream so interactive reads work.
+When COALTON-P is true, binds the Coalton readtable during reading.
 Returns (values result-string output-string) on success."
   (let* ((pkg (find-or-make-package package-name))
          (form (let ((*package* pkg)
-                     (*read-eval* nil))
+                     (*read-eval* nil)
+                     (*readtable* (if coalton-p (%coalton-readtable) *readtable*)))
                  (read-from-string form-string)))
          (stdout-capture (make-string-output-stream))
          (stderr-capture (make-string-output-stream))
@@ -126,11 +132,12 @@ Returns (values result-string output-string) on success."
       (values (%encode-result-values result-values pkg)
               all-output))))
 
-(defun debug-compile-string (form-string package-name &optional wire-stream msg-id)
+(defun debug-compile-string (form-string package-name &optional wire-stream msg-id coalton-p)
   "Compile FORM-STRING via compile-file + load for correct eval-when semantics.
 Lets errors propagate to the caller's handler-bind (for debugger support).
 When WIRE-STREAM and MSG-ID are provided, binds *standard-input*, *query-io*,
 and *terminal-io* to a TUI input stream so interactive reads work.
+When COALTON-P is true, binds the Coalton readtable during compilation.
 Returns (values result-string output-string) on success.
 Unlike debug-eval, this preserves toplevel form semantics but does not
 return expression values (load returns T)."
@@ -144,7 +151,7 @@ return expression values (load returns T)."
          (result-values nil))
     (uiop:with-temporary-file (:stream tmp-stream
                                 :pathname tmp-path
-                                :type "lisp"
+                                :type (if coalton-p "ct" "lisp")
                                 :direction :output)
       (format tmp-stream "(in-package ~S)~%" (package-name pkg))
       (write-string form-string tmp-stream)
@@ -164,7 +171,8 @@ return expression values (load returns T)."
               (*terminal-io* (if tis
                                  (make-two-way-stream tis *standard-output*)
                                  *terminal-io*))
-              (*package* pkg))
+              (*package* pkg)
+              (*readtable* (if coalton-p (%coalton-readtable) *readtable*)))
         (let ((fasl (compile-file tmp-path)))
           (when fasl
             (unwind-protect
