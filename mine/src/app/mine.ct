@@ -1168,7 +1168,7 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
   (declare %append-result-lines! (MineState * (List String) -> Void))
   (define (%append-result-lines! st texts)
     "Append result values to the REPL. Single value gets => prefix;
-multiple values get 1>, 2>, etc."
+multiple values get 0>, 1>, etc."
     (lisp (-> Void) (st texts)
       (cl:labels
           ((append-prefixed-block (repl text first-prefix rest-prefix)
@@ -1188,7 +1188,7 @@ multiple values get 1>, 2>, etc."
              (append-prefixed-block repl (cl:first texts) "=> " "  "))
             (cl:t
              (cl:loop :for text :in texts
-                      :for i :from 1
+                      :for i :from 0
                       :for prefix := (cl:format cl:nil "~D> " i)
                       :for rest-prefix := (cl:make-string (cl:length prefix)
                                                           :initial-element #\Space)
