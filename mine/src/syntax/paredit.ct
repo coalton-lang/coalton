@@ -863,6 +863,15 @@ Inside strings, parens are treated as normal characters."
       ((Some #\") "\"")
       (_ ")")))
 
+  (declare %needs-space-between? (Optional Char * Optional Char -> Boolean))
+  (define (%needs-space-between? left-ch right-ch)
+    "True when adjacent characters would merge two sexps without a space."
+    (match (Tuple left-ch right-ch)
+      ((Tuple (Some left) (Some right))
+       (and (not (delimiter? left))
+            (not (delimiter? right))))
+      (_ False)))
+
   (declare paredit-forward-slurp! (buf:Buffer * cursor:CursorState -> Void))
   (define (paredit-forward-slurp! buffer cs)
     "Move the closing delimiter of the enclosing form past the next sexp."
@@ -879,11 +888,21 @@ Inside strings, parens are treated as normal characters."
             ((None) (values))
             ((Some after-next)
              (let close-str = (%close-str-for gb open-pos))
-             ;; Delete the close delimiter
-             (record-delete! buffer close-pos (+ close-pos 1) p)
-             ;; Insert it after the next sexp (adjust for deletion)
-             (let new-insert = (- after-next 1))
-             (record-insert! buffer new-insert close-str p)
+             (let buf-len = (gap:gap-length gb))
+             (let tail-start = (%skip-ws-back gb close-pos))
+             (let next-start = (%skip-ws-fwd gb (+ close-pos 1) buf-len))
+             (let moved-text = (gap:gap-substring gb next-start after-next))
+             (let left-inner = (if (> tail-start (+ open-pos 1))
+                                   (gap:gap-char-at gb (- tail-start 1))
+                                   None))
+             (let right-moved = (gap:gap-char-at gb next-start))
+             (let separator = (if (%needs-space-between? left-inner right-moved) " " ""))
+             (let replacement = (<> separator (<> moved-text close-str)))
+             ;; Replace the old tail with the slurped sexp plus the new close delimiter.
+             (record-delete! buffer tail-start after-next p)
+             (record-insert! buffer tail-start replacement p)
+             (when (> p tail-start)
+               (cell:write! (cursor:.pos cs) (+ tail-start (str:length separator))))
              (values))))))))
 
   (declare paredit-forward-barf! (buf:Buffer * cursor:CursorState -> Void))
@@ -901,15 +920,19 @@ Inside strings, parens are treated as normal characters."
           (match (scan-backward-sexp gb close-pos)
             ((None) (values))
             ((Some before-last)
-             (let close-str = (%close-str-for gb open-pos))
-             ;; Delete the close delimiter
-             (record-delete! buffer close-pos (+ close-pos 1) p)
-             ;; Insert it before the last sexp
-             (record-insert! buffer before-last close-str p)
-             ;; If cursor was past new close, move it back
-             (when (> (cursor:cursor-position cs) before-last)
-               (cell:write! (cursor:.pos cs) before-last))
-             (values))))))))
+             (match (scan-forward-sexp gb before-last)
+               ((None) (values))
+               ((Some after-last)
+                (let close-str = (%close-str-for gb open-pos))
+                (let eject-start = (%skip-ws-back gb before-last))
+                (let last-text = (gap:gap-substring gb before-last after-last))
+                ;; Replace the old trailing region with ") sexp" (or "] sexp").
+                (record-delete! buffer eject-start (+ close-pos 1) p)
+                (record-insert! buffer eject-start (<> close-str (<> " " last-text)) p)
+                ;; If cursor was past new close, move it back.
+                (when (> (cursor:cursor-position cs) eject-start)
+                  (cell:write! (cursor:.pos cs) eject-start))
+                (values))))))))))
 
   (declare paredit-splice! (buf:Buffer * cursor:CursorState -> Void))
   (define (paredit-splice! buffer cs)
@@ -922,16 +945,33 @@ Inside strings, parens are treated as normal characters."
        (match (%matching-close-for gb open-pos)
          ((None) (values))
          ((Some close-pos)
-          ;; Delete close delimiter first (so positions stay valid)
-          (record-delete! buffer close-pos (+ close-pos 1) p)
-          ;; Delete open delimiter
-          (record-delete! buffer open-pos (+ open-pos 1) p)
-          ;; Adjust cursor
-          (let removed-before =
-            (+ (if (> p open-pos) 1 0)
-               (if (> p close-pos) 1 0)))
-          (let new-p = (- p removed-before))
-          (cell:write! (cursor:.pos cs) new-p)
+          (let buf-len = (gap:gap-length gb))
+          (let inner-start = (+ open-pos 1))
+          (let inner-text = (gap:gap-substring gb inner-start close-pos))
+          (let left-outer = (if (> open-pos 0)
+                                (gap:gap-char-at gb (- open-pos 1))
+                                None))
+          (let right-outer = (if (< (+ close-pos 1) buf-len)
+                                 (gap:gap-char-at gb (+ close-pos 1))
+                                 None))
+          (let inner-len = (str:length inner-text))
+          (if (== inner-len 0)
+              (progn
+                (let replacement = (if (%needs-space-between? left-outer right-outer) " " ""))
+                (record-delete! buffer open-pos (+ close-pos 1) p)
+                (record-insert! buffer open-pos replacement p)
+                (cell:write! (cursor:.pos cs) (+ open-pos (str:length replacement)))
+                (values))
+              (progn
+                (let left-inner = (gap:gap-char-at gb inner-start))
+                (let right-inner = (gap:gap-char-at gb (- close-pos 1)))
+                (let left-pad = (if (%needs-space-between? left-outer left-inner) " " ""))
+                (let right-pad = (if (%needs-space-between? right-inner right-outer) " " ""))
+                (let replacement = (<> left-pad (<> inner-text right-pad)))
+                (record-delete! buffer open-pos (+ close-pos 1) p)
+                (record-insert! buffer open-pos replacement p)
+                (cell:write! (cursor:.pos cs) (+ (- p 1) (str:length left-pad)))
+                (values)))
           (values))))))
 
   (declare paredit-cleave! (buf:Buffer * cursor:CursorState -> Void))
@@ -939,6 +979,7 @@ Inside strings, parens are treated as normal characters."
     "Split the current delimiter at point into two sibling forms."
     (let gb = (buf:buffer-gap buffer))
     (let p = (cursor:cursor-position cs))
+    (let buf-len = (gap:gap-length gb))
     (match (%current-delimiter-open gb p)
       ((None) (values))
       ((Some (Tuple open-pos open-ch))
@@ -947,9 +988,21 @@ Inside strings, parens are treated as normal characters."
          ((Some close-pos)
           (when (and (> p open-pos) (<= p close-pos))
             (let close-str = (%close-str-for gb open-pos))
-            (record-insert! buffer p close-str p)
-            (record-insert! buffer (+ p 1) (%open-str-for open-ch) p)
-            (cell:write! (cursor:.pos cs) (+ p 1)))
+            (let open-str = (%open-str-for open-ch))
+            (if (== open-ch #\")
+                (progn
+                  (record-insert! buffer p close-str p)
+                  (record-insert! buffer (+ p 1) open-str p)
+                  (cell:write! (cursor:.pos cs) (+ p 1))
+                  (values))
+                (progn
+                  (let split-start = (%skip-ws-back gb p))
+                  (let split-end = (%skip-ws-fwd gb p buf-len))
+                  (when (and (> split-start open-pos) (<= split-end close-pos))
+                    (record-delete! buffer split-start split-end p)
+                    (record-insert! buffer split-start (<> close-str open-str) p)
+                    (cell:write! (cursor:.pos cs) (+ split-start 1)))
+                  (values))))
           (values))))))
 
   (declare paredit-raise! (buf:Buffer * cursor:CursorState -> Void))
