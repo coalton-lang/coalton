@@ -1,0 +1,45 @@
+(cl:defpackage #:mine/widget/spinner
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:cell #:coalton/cell))
+  (:export
+   #:Spinner
+   #:spinner-new
+   #:spinner-tick!
+   #:spinner-char))
+
+(in-package #:mine/widget/spinner)
+
+(coalton-toplevel
+
+  ;;; Braille spinner — a single-cell animated indicator using U+2800..U+28FF.
+  ;;; Each Braille character encodes an 8-dot (2x4) pattern as an 8-bit value.
+  ;;; Each tick, two randomly chosen dots are flipped.
+
+  (define-struct Spinner
+    "A one-cell Braille spinner. Internal state is an 8-bit dot pattern."
+    (state (Cell UFix)))
+
+  (declare spinner-new (Void -> Spinner))
+  (define (spinner-new)
+    "Create a new spinner with an empty pattern."
+    (Spinner (cell:new 0)))
+
+  (declare spinner-tick! (Spinner -> Void))
+  (define (spinner-tick! sp)
+    "Advance the spinner by flipping two random dots."
+    (let c = (.state sp))
+    (lisp (-> Void) (c)
+      (cl:let* ((state (cell:read c))
+                (a (cl:random 8))
+                (b (cl:loop :for x = (cl:random 8)
+                            :when (cl:/= x a) :return x)))
+        (cell:write! c (cl:logxor state (cl:ash 1 a) (cl:ash 1 b)))
+        (cl:values))))
+
+  (declare spinner-char (Spinner -> Char))
+  (define (spinner-char sp)
+    "Return the current Braille character for this spinner."
+    (let v = (cell:read (.state sp)))
+    (lisp (-> Char) (v)
+      (cl:code-char (cl:+ #x2800 (cl:logand v #xFF))))))

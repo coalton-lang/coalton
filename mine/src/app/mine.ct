@@ -47,7 +47,8 @@
    (#:find #:mine/app/find)
    (#:dialogs #:mine/app/dialogs)
    (#:build #:mine/app/build)
-   (#:cellw #:mine/text/width))
+   (#:cellw #:mine/text/width)
+   (#:spinner #:mine/widget/spinner))
   (:export
    #:mine-main
    #:ProtoMsg #:ProtoReturn #:ProtoOutput #:ProtoDebug #:ProtoIORequest #:ProtoConnectionLost
@@ -56,7 +57,8 @@
    #:get-proto-mailbox #:get-proto-thread
    #:get-debugger-condition-cell #:get-debugger-items
    #:get-debugger-selected-cell #:get-conn-stream #:get-diagnostics
-   #:get-jump-stack #:get-quit-cell #:get-next-req-id-cell))
+   #:get-jump-stack #:get-quit-cell #:get-next-req-id-cell
+   #:get-runtime-mgr))
 
 (in-package #:mine/app/mine)
 
@@ -78,74 +80,84 @@
 (cl:defvar *restart-into-setup* nil
   "When set to T by the Setup Wizard menu action, mine-main reruns the setup wizard.")
 
-	(coalton-toplevel
+(cl:defun %format-elapsed (secs)
+  "Format SECS (a non-negative integer) as a human-readable duration string."
+  (cl:if (cl:< secs 60)
+         (cl:format cl:nil "~Ds" secs)
+         (cl:let ((m (cl:floor secs 60))
+                  (s (cl:mod secs 60)))
+           (cl:if (cl:zerop s)
+                  (cl:format cl:nil "~Dm" m)
+                  (cl:format cl:nil "~Dm ~Ds" m s)))))
+
+(coalton-toplevel
 
 ;;; NativeBox -- opaque wrapper for CL-side objects
 
-	  (repr :native %native-box)
+  (repr :native %native-box)
   (define-type NativeBox
     "Opaque container for CL-side native objects (mailboxes, threads, streams).")
 
   (declare native-box-new (Void -> NativeBox))
-	  (define (native-box-new)
-	    "Create an empty NativeBox."
-	    (lisp (-> NativeBox) ()
-	      (make-%native-box)))
+  (define (native-box-new)
+    "Create an empty NativeBox."
+    (lisp (-> NativeBox) ()
+      (make-%native-box)))
 
 ;;; Layout state
 
-	  (repr :enum)
-	  (define-type TreeLayout
-	    TreeHidden
-	    TreeVisible)
+  (repr :enum)
+  (define-type TreeLayout
+    TreeHidden
+    TreeVisible)
 
-	  (define-instance (Eq TreeLayout)
-	    (define (== a b)
-	      (match (Tuple a b)
-	        ((Tuple (TreeHidden) (TreeHidden)) True)
-	        ((Tuple (TreeVisible) (TreeVisible)) True)
-	        (_ False))))
+  (define-instance (Eq TreeLayout)
+    (define (== a b)
+      (match (Tuple a b)
+	((Tuple (TreeHidden) (TreeHidden)) True)
+	((Tuple (TreeVisible) (TreeVisible)) True)
+	(_ False))))
 
-	  (repr :enum)
-	  (define-type CenterLayout
-	    CenterEditor
-	    CenterEditorFull
-	    CenterEditorFullReplRow
-	    CenterEditorReplSplit
-	    CenterReplFull)
+  (repr :enum)
+  (define-type CenterLayout
+    CenterEditor
+    CenterEditorFull
+    CenterEditorFullReplRow
+    CenterEditorReplSplit
+    CenterReplFull)
 
-	  (define-instance (Eq CenterLayout)
-	    (define (== a b)
-	      (match (Tuple a b)
-	        ((Tuple (CenterEditor) (CenterEditor)) True)
-	        ((Tuple (CenterEditorFull) (CenterEditorFull)) True)
-	        ((Tuple (CenterEditorFullReplRow) (CenterEditorFullReplRow)) True)
-	        ((Tuple (CenterEditorReplSplit) (CenterEditorReplSplit)) True)
-	        ((Tuple (CenterReplFull) (CenterReplFull)) True)
-	        (_ False))))
+  (define-instance (Eq CenterLayout)
+    (define (== a b)
+      (match (Tuple a b)
+	((Tuple (CenterEditor) (CenterEditor)) True)
+	((Tuple (CenterEditorFull) (CenterEditorFull)) True)
+	((Tuple (CenterEditorFullReplRow) (CenterEditorFullReplRow)) True)
+	((Tuple (CenterEditorReplSplit) (CenterEditorReplSplit)) True)
+	((Tuple (CenterReplFull) (CenterReplFull)) True)
+	(_ False))))
 
-	  (define-struct MineLayout
-	    (ml-tree   TreeLayout)
-	    (ml-center CenterLayout))
+  (define-struct MineLayout
+    (ml-tree   TreeLayout)
+    (ml-center CenterLayout))
 
 ;;; Application state
 
-	  (define-struct MineState
-	    "Top-level mutable application state."
-    (ms-menu              menubar:MenuBar)          ;; 0
-    (ms-status            status:StatusBar)         ;; 1
-    (ms-editor            editor:EditorPane)        ;; 2
-    (ms-bufmgr            mgr:BufferManager)        ;; 3
-    (ms-cursor            cursor:CursorState)       ;; 4
-    (ms-repl              repl:ReplPane)            ;; 5
-	    (ms-tree              tree:TreePane)            ;; 7
-	    (ms-focus             focus:FocusManager)       ;; 8
-	    (ms-runtime           lifecycle:RuntimeManager) ;; 9
-	    (ms-next-req-id       (Cell UFix))              ;; 10
-	    (ms-layout            (Cell MineLayout))        ;; 11
-	    (ms-content-x         (Cell UFix))              ;; 12
-	    (ms-repl-package      (Cell String))            ;; 13
-	    (ms-repl-busy         (Cell Boolean))           ;; 14
+  (define-struct MineState
+    "Top-level mutable application state."
+    (ms-menu              menubar:MenuBar)         ;; 0
+    (ms-status            status:StatusBar)        ;; 1
+    (ms-editor            editor:EditorPane)       ;; 2
+    (ms-bufmgr            mgr:BufferManager)       ;; 3
+    (ms-cursor            cursor:CursorState)      ;; 4
+    (ms-repl              repl:ReplPane)           ;; 5
+    (ms-tree              tree:TreePane)           ;; 7
+    (ms-focus             focus:FocusManager)      ;; 8
+    (ms-runtime           lifecycle:RuntimeManager) ;; 9
+    (ms-next-req-id       (Cell UFix))              ;; 10
+    (ms-layout            (Cell MineLayout))        ;; 11
+    (ms-content-x         (Cell UFix))              ;; 12
+    (ms-repl-package      (Cell String))            ;; 13
+    (ms-repl-busy         (Cell Boolean))           ;; 14
     (ms-repl-timing       (Cell String))            ;; 15
     (ms-proto-mailbox     NativeBox) ;; 16 -- sb-concurrency mailbox (value = mailbox or nil)
     (ms-proto-thread      NativeBox) ;; 17 -- reader thread handle (value = thread or nil)
@@ -158,18 +170,19 @@
     (ms-project-system    (Cell (Optional String))) ;; 24 -- ASDF system name if opened from .asd
     (ms-project-asd-path  (Cell (Optional String))) ;; 25 -- path to .asd file
     (ms-quit              (Cell Boolean))           ;; 25
-    (ms-eval-start-time   (Cell UFix))     ;; 26 -- internal-real-time
+    (ms-eval-start-time   (Cell UFix))    ;; 26 -- internal-real-time
     (ms-minibuffer        mini:Minibuffer) ;; 27
     (ms-repl-lang         (Cell String)) ;; 28 -- "Coalton" or "Lisp"
     (ms-preview-path      (Cell (Optional String))) ;; 29 -- path of previewed (unpinned) file
     (ms-diagnostics       NativeBox) ;; 30 -- CL hash table: filepath -> list of (line severity message)
     (ms-find-needle       (Cell String)) ;; 31 -- current search string (empty = no search)
     (ms-find-matches      NativeBox) ;; 32 -- CL simple-vector of match positions (UFix), or nil
-	    (ms-structural-editing (Cell Boolean)) ;; 33 -- structural editing enabled?
-	    (ms-config             cfgt:MineConfig) ;; 34 -- loaded configuration
-	    (ms-io-request-active  (Cell Boolean))  ;; 35 -- waiting for IO input from user?
-	    (ms-io-request-data    NativeBox)       ;; 36 -- (msg-id . stream) for IO response
-	    (ms-completion         complete:CompletionState)) ;; 37 -- inline completion popup
+    (ms-structural-editing (Cell Boolean)) ;; 33 -- structural editing enabled?
+    (ms-config             cfgt:MineConfig) ;; 34 -- loaded configuration
+    (ms-io-request-active  (Cell Boolean)) ;; 35 -- waiting for IO input from user?
+    (ms-io-request-data    NativeBox) ;; 36 -- (msg-id . stream) for IO response
+    (ms-completion         complete:CompletionState) ;; 37 -- inline completion popup
+    (ms-spinner           spinner:Spinner)) ;; 38 -- status bar busy spinner
 
 ;;; Named accessors for CL interop (avoids fragile numeric indices)
 
@@ -196,6 +209,12 @@
 
   (declare get-repl-lang-cell (MineState -> (Cell String)))
   (define (get-repl-lang-cell st) (.ms-repl-lang st))
+
+  (declare get-runtime-mgr (MineState -> lifecycle:RuntimeManager))
+  (define (get-runtime-mgr st) (.ms-runtime st))
+
+  (declare get-eval-start-time-cell (MineState -> (Cell UFix)))
+  (define (get-eval-start-time-cell st) (.ms-eval-start-time st))
 
   (declare get-proto-mailbox (MineState -> NativeBox))
   (define (get-proto-mailbox st) (.ms-proto-mailbox st))
@@ -429,69 +448,69 @@
         (True
          ;; Collapsed: number strip
          (let strip-rect = (wt:Rect 0 1 1 middle-h))
-	         (let current-path = (match (mgr:bufmgr-current (.ms-bufmgr st))
-	                               ((Some b) (buf:buffer-path b))
-	                               ((None) None)))
-	         (tree:tree-pane-render-collapsed (.ms-tree st) scr strip-rect current-path)))
-	      ;; Draw vertical separator
-	      (render-tree-separator st scr tree-w 1 middle-h))
-	    ;; Split middle according to the current layout.
-	    (match (.ml-center layout)
-	      ((CenterReplFull)
-	       (let repl-h = (if (> middle-h 1) (- middle-h 1) 1))
-	       (let repl-status-y = (+ 1 repl-h))
-	       (let repl-rect = (wt:Rect content-x 1 content-w repl-h))
-	       (let repl-status-rect = (wt:Rect content-x repl-status-y content-w 1))
-	       (cond
-	         ((cell:read (.ms-debugger-active st))
-	          (render-debugger-in-repl st scr repl-rect))
-	         (True
-	          (repl:repl-pane-render (.ms-repl st) scr repl-rect)))
-	       (render-repl-status st scr repl-status-rect)
-	       (values))
-	      ((CenterEditorReplSplit)
-	       (let repl-h = (max 3 (lisp (-> UFix) (middle-h) (cl:floor middle-h 3))))
-	       (let editor-h = (if (> middle-h (+ repl-h 2))
-	                           (- middle-h (+ repl-h 2))
-	                           1))
-	       (let ed-status-y = (+ 1 editor-h))
-	       (let repl-y = (+ ed-status-y 1))
-	       (let repl-status-y = (+ repl-y repl-h))
-	       (let editor-rect = (wt:Rect content-x 1 content-w editor-h))
-	       (let ed-status-rect = (wt:Rect content-x ed-status-y content-w 1))
-	       (let repl-rect = (wt:Rect content-x repl-y content-w repl-h))
-	       (let repl-status-rect = (wt:Rect content-x repl-status-y content-w 1))
-	       (render-editor-pane st scr editor-rect)
-	       (render-editor-status st scr ed-status-rect)
-	       (cond
-	         ((cell:read (.ms-debugger-active st))
-	          (render-debugger-in-repl st scr repl-rect))
-	         (True
-	          (repl:repl-pane-render (.ms-repl st) scr repl-rect)))
-	       (render-repl-status st scr repl-status-rect)
-	       (values))
-	      ((CenterEditor)
-	       (let editor-h = (if (> middle-h 1) (- middle-h 1) 1))
-	       (let ed-status-y = (+ 1 editor-h))
-	       (let editor-rect = (wt:Rect content-x 1 content-w editor-h))
-	       (let ed-status-rect = (wt:Rect content-x ed-status-y content-w 1))
-	       (render-editor-pane st scr editor-rect)
-	       (render-editor-status st scr ed-status-rect))
-	      ((CenterEditorFull)
-	       (let editor-rect = (wt:Rect content-x 1 content-w middle-h))
-	       (render-editor-pane st scr editor-rect))
-	      ((CenterEditorFullReplRow)
-	       (let editor-h = (if (> middle-h 1) (- middle-h 1) middle-h))
-	       (let editor-rect = (wt:Rect content-x 1 content-w editor-h))
-	       (render-editor-pane st scr editor-rect)
-	       (when (> middle-h editor-h)
-	         (let repl-strip-rect = (wt:Rect content-x (+ 1 editor-h) content-w 1))
-	         (render-repl-focus-strip scr repl-strip-rect))
-	       (values)))
-	    ;; Update status bar fields
-	    (let cur-gb = (match (mgr:bufmgr-current (.ms-bufmgr st))
-	                    ((Some buf) (buf:buffer-gap buf))
-	                    ((None) (gap:gap-new))))
+	 (let current-path = (match (mgr:bufmgr-current (.ms-bufmgr st))
+	                       ((Some b) (buf:buffer-path b))
+	                       ((None) None)))
+	 (tree:tree-pane-render-collapsed (.ms-tree st) scr strip-rect current-path)))
+      ;; Draw vertical separator
+      (render-tree-separator st scr tree-w 1 middle-h))
+    ;; Split middle according to the current layout.
+    (match (.ml-center layout)
+      ((CenterReplFull)
+       (let repl-h = (if (> middle-h 1) (- middle-h 1) 1))
+       (let repl-status-y = (+ 1 repl-h))
+       (let repl-rect = (wt:Rect content-x 1 content-w repl-h))
+       (let repl-status-rect = (wt:Rect content-x repl-status-y content-w 1))
+       (cond
+	 ((cell:read (.ms-debugger-active st))
+	  (render-debugger-in-repl st scr repl-rect))
+	 (True
+	  (repl:repl-pane-render (.ms-repl st) scr repl-rect)))
+       (render-repl-status st scr repl-status-rect)
+       (values))
+      ((CenterEditorReplSplit)
+       (let repl-h = (max 3 (lisp (-> UFix) (middle-h) (cl:floor middle-h 3))))
+       (let editor-h = (if (> middle-h (+ repl-h 2))
+	                   (- middle-h (+ repl-h 2))
+	                   1))
+       (let ed-status-y = (+ 1 editor-h))
+       (let repl-y = (+ ed-status-y 1))
+       (let repl-status-y = (+ repl-y repl-h))
+       (let editor-rect = (wt:Rect content-x 1 content-w editor-h))
+       (let ed-status-rect = (wt:Rect content-x ed-status-y content-w 1))
+       (let repl-rect = (wt:Rect content-x repl-y content-w repl-h))
+       (let repl-status-rect = (wt:Rect content-x repl-status-y content-w 1))
+       (render-editor-pane st scr editor-rect)
+       (render-editor-status st scr ed-status-rect)
+       (cond
+	 ((cell:read (.ms-debugger-active st))
+	  (render-debugger-in-repl st scr repl-rect))
+	 (True
+	  (repl:repl-pane-render (.ms-repl st) scr repl-rect)))
+       (render-repl-status st scr repl-status-rect)
+       (values))
+      ((CenterEditor)
+       (let editor-h = (if (> middle-h 1) (- middle-h 1) 1))
+       (let ed-status-y = (+ 1 editor-h))
+       (let editor-rect = (wt:Rect content-x 1 content-w editor-h))
+       (let ed-status-rect = (wt:Rect content-x ed-status-y content-w 1))
+       (render-editor-pane st scr editor-rect)
+       (render-editor-status st scr ed-status-rect))
+      ((CenterEditorFull)
+       (let editor-rect = (wt:Rect content-x 1 content-w middle-h))
+       (render-editor-pane st scr editor-rect))
+      ((CenterEditorFullReplRow)
+       (let editor-h = (if (> middle-h 1) (- middle-h 1) middle-h))
+       (let editor-rect = (wt:Rect content-x 1 content-w editor-h))
+       (render-editor-pane st scr editor-rect)
+       (when (> middle-h editor-h)
+	 (let repl-strip-rect = (wt:Rect content-x (+ 1 editor-h) content-w 1))
+	 (render-repl-focus-strip scr repl-strip-rect))
+       (values)))
+    ;; Update status bar fields
+    (let cur-gb = (match (mgr:bufmgr-current (.ms-bufmgr st))
+	            ((Some buf) (buf:buffer-gap buf))
+	            ((None) (gap:gap-new))))
     (match (cursor:cursor-line-col (.ms-cursor st) cur-gb)
       ((Tuple cur-line cur-col)
        (let fname =
@@ -632,9 +651,9 @@
     (let dim = (color:Style color:text-dim-fg color:black color:AttrNone))
     ;; Check if ~/.mine exists
     (let has-config = (lisp (-> Boolean) ()
-                       (cl:if (cl:probe-file
-                               (cl:merge-pathnames ".mine" (cl:user-homedir-pathname)))
-                              cl:t cl:nil)))
+                        (cl:if (cl:probe-file
+                                (cl:merge-pathnames ".mine" (cl:user-homedir-pathname)))
+                               cl:t cl:nil)))
     ;; Line count: welcome + blank + 4 keys = 6, or welcome + setup + blank + 4 keys = 7
     (let line-count = (if has-config 6 7))
     (let cy = (if (> rh line-count)
@@ -857,7 +876,16 @@
     (let busy = (cell:read (.ms-repl-busy st)))
     (let io-req = (cell:read (.ms-io-request-active st)))
     (screen:screen-set-string scr y col2 "Status: " label-style)
+    (let has-conn = (match (lifecycle:runtime-connection (.ms-runtime st))
+                      ((Some _) True)
+                      ((None) False)))
     (cond
+      ((and (not has-conn) (not (lifecycle:runtime-process-alive? (.ms-runtime st)))
+            (not busy))
+       (let dead-s = (color:Style color:error-fg
+                                  color:onyx
+                                  color:AttrBold))
+       (screen:screen-set-string scr y (+ col2 8) "Dead" dead-s))
       (io-req
        (let query-s = (color:Style color:accent-fg
                                    color:onyx
@@ -867,15 +895,26 @@
        (let busy-s = (color:Style color:info-fg
                                   color:onyx
                                   color:AttrBold))
-       (screen:screen-set-string scr y (+ col2 8) "Busy..." busy-s))
+       (spinner:spinner-tick! (.ms-spinner st))
+       (let spin-str = (into (spinner:spinner-char (.ms-spinner st))))
+       (screen:screen-set-string scr y (+ col2 8) (<> "Busy " spin-str) busy-s))
       (True
        (let ready-s = (color:Style color:chameleon
                                    color:onyx
                                    color:AttrNone))
        (screen:screen-set-string scr y (+ col2 8) "Ready" ready-s)))
     (let col3 = (+ col2 15))
-    ;; Timing
-    (let timing = (cell:read (.ms-repl-timing st)))
+    ;; Timing (live while busy, final result when done)
+    (let timing =
+      (if busy
+          (lisp (-> String) (st)
+            (cl:let ((start (cell:read (mine/app/mine::get-eval-start-time-cell st))))
+              (cl:if (cl:and (cl:numberp start) (cl:plusp start))
+                     (%format-elapsed
+                      (cl:round (cl:/ (cl:- (cl:get-internal-real-time) start)
+                                      cl:internal-time-units-per-second)))
+                     "")))
+          (cell:read (.ms-repl-timing st))))
     (when (> (str:length timing) 0)
       (screen:screen-set-string scr y col3 "Timing: " label-style)
       (screen:screen-set-string scr y (+ col3 8) timing val-style))
@@ -1113,7 +1152,9 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
           ;; Return immediately -- response will arrive via mailbox
           (values))
          ((None)
-          (repl:repl-pane-append-output! (.ms-repl st) "[not connected]"))))))
+          (if (lifecycle:runtime-process-alive? (.ms-runtime st))
+              (repl:repl-pane-append-system! (.ms-repl st) ";; Not connected to REPL process")
+              (repl:repl-pane-append-system! (.ms-repl st) ";; No REPL process. Type ,restart to start one.")))))))
 
   (declare start-proto-reader! (MineState * client:Connection -> Void))
   (define (start-proto-reader! st conn)
@@ -1189,13 +1230,13 @@ multiple values get 0>, 1>, etc."
           ((append-prefixed-block (repl text first-prefix rest-prefix)
              (cl:let ((first cl:t))
                (cl:loop :for start := 0 :then (cl:1+ end)
-                        :for end := (cl:position #\Newline text :start start)
-                        :for line := (cl:subseq text start (cl:or end (cl:length text)))
-                        :for prefix := (cl:if first first-prefix rest-prefix)
-                        :do (repl:repl-pane-append-output!
-                             repl (cl:concatenate 'cl:string prefix line))
-                            (cl:setf first cl:nil)
-                        :while end))))
+                  :for end := (cl:position #\Newline text :start start)
+                  :for line := (cl:subseq text start (cl:or end (cl:length text)))
+                  :for prefix := (cl:if first first-prefix rest-prefix)
+                  :do (repl:repl-pane-append-output!
+                       repl (cl:concatenate 'cl:string prefix line))
+                      (cl:setf first cl:nil)
+                  :while end))))
         (cl:let ((repl (mine/app/mine::get-repl-pane st))
                  (n-values (cl:length texts)))
           (cl:cond
@@ -1203,11 +1244,11 @@ multiple values get 0>, 1>, etc."
              (append-prefixed-block repl (cl:first texts) "=> " "  "))
             (cl:t
              (cl:loop :for text :in texts
-                      :for i :from 0
-                      :for prefix := (cl:format cl:nil "~D> " i)
-                      :for rest-prefix := (cl:make-string (cl:length prefix)
-                                                          :initial-element #\Space)
-                      :do (append-prefixed-block repl text prefix rest-prefix))))))
+                :for i :from 0
+                :for prefix := (cl:format cl:nil "~D> " i)
+                :for rest-prefix := (cl:make-string (cl:length prefix)
+                                                    :initial-element #\Space)
+                :do (append-prefixed-block repl text prefix rest-prefix))))))
       (cl:values)))
 
   (declare %decode-result-values (String -> (List String)))
@@ -1251,10 +1292,10 @@ multiple values get 0>, 1>, etc."
        (let start-time = (cell:read (.ms-eval-start-time st)))
        (let elapsed = (lisp (-> String) (start-time)
                         (cl:let ((end-time (cl:get-internal-real-time)))
-                          (cl:if (cl:numberp start-time)
-                                 (cl:format cl:nil "~,3Fs"
-                                            (cl:/ (cl:- end-time start-time)
-                                                  cl:internal-time-units-per-second))
+                          (cl:if (cl:and (cl:numberp start-time) (cl:plusp start-time))
+                                 (%format-elapsed
+                                  (cl:round (cl:/ (cl:- end-time start-time)
+                                                  cl:internal-time-units-per-second)))
                                  ""))))
        (cell:write! (.ms-repl-timing st) elapsed)
        (cell:write! (.ms-repl-busy st) False)
@@ -1284,7 +1325,9 @@ multiple values get 0>, 1>, etc."
        (ensure-repl-visible! st)
        (%focus-repl! st))
       ((ProtoConnectionLost)
-       (repl:repl-pane-append-output! (.ms-repl st) "[connection lost]")
+       (if (lifecycle:runtime-process-alive? (.ms-runtime st))
+           (repl:repl-pane-append-system! (.ms-repl st) ";; Connection to REPL process lost")
+           (repl:repl-pane-append-system! (.ms-repl st) ";; REPL process ended. Type ,restart to start a new one."))
        (cell:write! (.ms-repl-busy st) False)
        (when (cell:read (.ms-debugger-active st))
          (cell:write! (.ms-debugger-active st) False)
@@ -1294,6 +1337,11 @@ multiple values get 0>, 1>, etc."
        (lisp (-> Void) (st)
          (cl:setf (%native-box-value (mine/app/mine::get-proto-mailbox st)) cl:nil)
          (cl:setf (%native-box-value (mine/app/mine::get-proto-thread st)) cl:nil)
+         ;; Deactivate the connection so the status bar sees it as gone
+         (cl:let ((mgr (mine/app/mine::get-runtime-mgr st)))
+           (cl:let ((conn (mine/protocol/lifecycle::%runtime-manager-connection mgr)))
+             (cl:when conn
+               (cl:setf (mine/protocol/client::%connection-active conn) cl:nil))))
          (cl:values)))))
 
 ;;; Debugger key handling (when REPL focused and debugger active)
@@ -1412,7 +1460,7 @@ First reloads the .asd to pick up any changes, then loads the system."
         (cl:when (cl:consp sp)
           (cl:handler-case
               (mine/protocol/server::write-message (cl:cdr sp)
-                `(:io-response ,(cl:car sp) ,text))
+                                                   `(:io-response ,(cl:car sp) ,text))
             (cl:error () cl:nil))))
       (cl:values))
     (%deactivate-io-request! st))
@@ -1425,7 +1473,7 @@ First reloads the .asd to pick up any changes, then loads the system."
         (cl:when (cl:consp sp)
           (cl:handler-case
               (mine/protocol/server::write-message (cl:cdr sp)
-                `(:io-abort ,(cl:car sp)))
+                                                   `(:io-abort ,(cl:car sp)))
             (cl:error () cl:nil))))
       (cl:values))
     (%deactivate-io-request! st)
@@ -1603,7 +1651,7 @@ First reloads the .asd to pick up any changes, then loads the system."
                                                     (cl:when expanded-roots
                                                       (cl:list
                                                        (cl:format cl:nil
-                                                        "(let ((loaded (asdf:already-loaded-systems)))
+                                                                  "(let ((loaded (asdf:already-loaded-systems)))
                                                            (dolist (s loaded) (asdf:register-immutable-system s))
                                                            (asdf:initialize-source-registry
                                                              '(:source-registry~{ (:tree #P~S)~} :inherit-configuration))
@@ -1618,7 +1666,7 @@ First reloads the .asd to pick up any changes, then loads the system."
                                                                      (load path))
                                                                    (error () nil))))
                                                              asdf/source-registry::*source-registry*))"
-                                                        expanded-roots))))
+                                                                  expanded-roots))))
                                                   (init-str (cl:when form (cl:write-to-string form)))
                                                   (all-forms (cl:append asdf-forms
                                                                         (cl:when init-str (cl:list init-str)))))
@@ -1999,7 +2047,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       ((has-dirty-buffers? (.ms-bufmgr st))
        (render-app st term)
        (when (dialogs:confirm-dialog term "You have unsaved changes." "Quit" "Cancel" Nil
-                              (fn (t) (render-app st t)))
+                                     (fn (t) (render-app st t)))
          (cell:write! (.ms-quit st) True)
          (values)))
       (True
@@ -2176,7 +2224,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       ;; Arrow keys: Ctrl+Left/Right -> word motion, Alt+arrows -> paredit
       ((input:KeyRight)
        (cond
-        ((== mod input:ModAlt)
+         ((== mod input:ModAlt)
           (%paredit-if-lisp st
                             (fn (buffer) (paredit:paredit-forward-slurp! buffer (.ms-cursor st)))))
          ((== mod input:ModCtrl)
@@ -2189,7 +2237,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
             ((None) (values))))))
       ((input:KeyLeft)
        (cond
-        ((== mod input:ModAlt)
+         ((== mod input:ModAlt)
           (%paredit-if-lisp st
                             (fn (buffer) (paredit:paredit-forward-barf! buffer (.ms-cursor st)))))
          ((== mod input:ModCtrl)
@@ -2202,7 +2250,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
             ((None) (values))))))
       ((input:KeyUp)
        (cond
-        ((== mod input:ModAlt)
+         ((== mod input:ModAlt)
           (%paredit-if-lisp st
                             (fn (buffer) (paredit:paredit-splice! buffer (.ms-cursor st)))))
          (True
@@ -2211,7 +2259,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
             ((None) (values))))))
       ((input:KeyDown)
        (cond
-        ((== mod input:ModAlt)
+         ((== mod input:ModAlt)
           (%paredit-if-lisp st
                             (fn (buffer) (paredit:paredit-cleave! buffer (.ms-cursor st)))))
          (True
@@ -2285,8 +2333,8 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (match (mgr:bufmgr-current (.ms-bufmgr st))
          ((Some buf)
           (let prefix = (complete:extract-symbol-prefix
-                          (buf:buffer-gap buf)
-                          (cursor:cursor-position (.ms-cursor st))))
+                         (buf:buffer-gap buf)
+                         (cursor:cursor-position (.ms-cursor st))))
           (cond
             ;; Non-empty prefix and not plain text: try completion
             ((and (> (str:length prefix) 0)
@@ -2318,15 +2366,15 @@ Uses the preceding (in-package ...) form to determine the compilation package."
             (cond
               ((%structural-edit? st buf)
                (cond
-                ((== ch #\()
+                 ((== ch #\()
                   (paredit:paredit-open-paren! buf (.ms-cursor st)))
-                ((== ch #\))
+                 ((== ch #\))
                   (paredit:paredit-close-paren! buf (.ms-cursor st)))
-                ((== ch #\[)
+                 ((== ch #\[)
                   (paredit:paredit-open-bracket! buf (.ms-cursor st)))
-                ((== ch #\])
+                 ((== ch #\])
                   (paredit:paredit-close-bracket! buf (.ms-cursor st)))
-                ((== ch #\")
+                 ((== ch #\")
                   (paredit:paredit-doublequote! buf (.ms-cursor st)))
                  (True
                   (ops:insert-char! buf (buf:buffer-undo buf) (.ms-cursor st) ch))))
@@ -2692,8 +2740,8 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          (match (mgr:bufmgr-current (.ms-bufmgr st))
            ((Some buf)
             (complete:extract-symbol-prefix
-              (buf:buffer-gap buf)
-              (cursor:cursor-position (.ms-cursor st))))
+             (buf:buffer-gap buf)
+             (cursor:cursor-position (.ms-cursor st))))
            ((None) "")))
         ((focus:FocusRepl)
          (let text = (repl:repl-pane-get-input (.ms-repl st)))
@@ -2871,12 +2919,12 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (tree:tree-pane-scroll-delta! (.ms-tree st) tree-row delta pane-h))
       ;; Scroll in REPL output area
       ((or
-         (and (== center CenterReplFull)
-              (> _row 0)
-              (< _row (+ 1 middle-h)))
-         (and (== center CenterEditorReplSplit)
-              (>= _row split-repl-start)
-              (< _row (+ split-repl-start split-repl-h))))
+        (and (== center CenterReplFull)
+             (> _row 0)
+             (< _row (+ 1 middle-h)))
+        (and (== center CenterEditorReplSplit)
+             (>= _row split-repl-start)
+             (< _row (+ split-repl-start split-repl-h))))
        (if (< delta 0)
            (repl:repl-pane-scroll-output-up! (.ms-repl st)
                                              (lisp (-> UFix) (delta) (cl:- delta)))
@@ -2958,8 +3006,8 @@ Uses the preceding (in-package ...) form to determine the compilation package."
              (let gb = (buf:buffer-gap buf))
              (let total = (gap:gap-line-count gb))
              (when (> total editor-h)
-              (editor:editor-pane-set-scroll-row! (.ms-editor st)
-                                                  (%scrollbar-compute-offset rel-y total editor-h))))
+               (editor:editor-pane-set-scroll-row! (.ms-editor st)
+                                                   (%scrollbar-compute-offset rel-y total editor-h))))
             ((None) (values)))
           True)
          ((== center CenterEditorReplSplit)
@@ -3293,7 +3341,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          ((buf:buffer-dirty? buf)
           (render-app st term)
           (when (dialogs:confirm-dialog term "File has unsaved changes." "Discard" "Cancel" Nil
-                                 (fn (t) (render-app st t)))
+                                        (fn (t) (render-app st t)))
             (%do-close-buffer! st buf)))
          (True
           (%do-close-buffer! st buf))))))
@@ -3325,7 +3373,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
             ((buf:buffer-dirty? buf)
              (render-app st term)
              (when (dialogs:confirm-dialog term "File has unsaved changes." "Discard" "Cancel" Nil
-                                    (fn (t) (render-app st t)))
+                                           (fn (t) (render-app st t)))
                (%do-close-buffer! st buf)))
             (True
              (%do-close-buffer! st buf))))
@@ -3359,7 +3407,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
             ((buf:buffer-dirty? buf)
              (render-app st term)
              (when (dialogs:confirm-dialog term "Discard changes and reload?" "Reload" "Cancel" Nil
-                                    (fn (t) (render-app st t)))
+                                           (fn (t) (render-app st t)))
                (%do-refresh-file! st fpath)))
             (True
              (%do-refresh-file! st fpath))))
@@ -3589,10 +3637,10 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       ((menubar:ActionClearCache)
        (render-app st term)
        (when (dialogs:confirm-dialog term "Empty the FASL cache?" "Empty" "Cancel"
-                              (make-list "FASLs are pre-compiled files, and are cached"
-                                         "to make compilation faster. They can sometimes"
-                                         "go stale undetected and cause confusing errors.")
-                              (fn (t) (render-app st t)))
+                                     (make-list "FASLs are pre-compiled files, and are cached"
+                                                "to make compilation faster. They can sometimes"
+                                                "go stale undetected and cause confusing errors.")
+                                     (fn (t) (render-app st t)))
          (clean-cache!)
          (status:statusbar-set-message! (.ms-status st) "FASL cache emptied")))
       ((menubar:ActionSetupWizard)
@@ -3605,11 +3653,11 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                  (progn
                    (render-app st term)
                    (dialogs:confirm-dialog term
-                                    "Start the Setup Wizard?"
-                                    "Yes, proceed" "No, cancel"
-                                    (make-list "This will restart mine and you will lose"
-                                               "any work in progress.")
-                                    (fn (t) (render-app st t)))))
+                                           "Start the Setup Wizard?"
+                                           "Yes, proceed" "No, cancel"
+                                           (make-list "This will restart mine and you will lose"
+                                                      "any work in progress.")
+                                           (fn (t) (render-app st t)))))
          (lisp (-> Void) ()
            (cl:setf *restart-into-setup* cl:t)
            (cl:values))
@@ -3745,7 +3793,7 @@ Render-app is NOT called here; the main loop handles rendering."
                     ((cell:read (.ms-io-request-active st))
                      (let text = (repl:repl-pane-get-input (.ms-repl st)))
                      (repl:repl-pane-append-system! (.ms-repl st)
-                                                   (<> ";; Input received: " text))
+                                                    (<> ";; Input received: " text))
                      (io-send-response! st text))
                     ((cell:read (.ms-debugger-active st))
                      (handle-debugger-key! st key mod))
@@ -3975,7 +4023,8 @@ Render-app is NOT called here; the main loop handles rendering."
                          config
                          (cell:new False)
                          (native-box-new)
-                         (complete:completion-new)))
+                         (complete:completion-new)
+                         (spinner:spinner-new)))
     ;; Open a file if given on the command line
     (let file-args = (filter (fn (a) (not (str:substring? "--" a))) (list:cdr args)))
     (match file-args

@@ -11,7 +11,8 @@
    #:runtime-interrupt!
    #:runtime-connection
    #:runtime-ensure-connection!
-   #:runtime-set-heap-size!))
+   #:runtime-set-heap-size!
+   #:runtime-process-alive?))
 
 (in-package #:mine/protocol/lifecycle)
 
@@ -169,6 +170,16 @@
     (lisp (-> Void) (mgr mb)
       (cl:setf (%runtime-manager-heap-size mgr) mb)
       (cl:values)))
+
+  ;;; Process liveness
+
+  (declare runtime-process-alive? (RuntimeManager -> Boolean))
+  (define (runtime-process-alive? mgr)
+    "True if the runtime subprocess exists and is still running."
+    (lisp (-> Boolean) (mgr)
+      (cl:let ((proc (%runtime-manager-process mgr)))
+        (cl:if (cl:and proc (sb-ext:process-alive-p proc))
+               cl:t cl:nil))))
 
   ;;; Ensure connection
 
