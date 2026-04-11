@@ -37,7 +37,8 @@
                 (heap-mb (%runtime-manager-heap-size mgr))
                 (proc (mine/bindings/process:spawn-subprocess
                        abspath
-                       (cl:list "--dynamic-space-size"
+                       (cl:list "--disable-ldb"
+                                "--dynamic-space-size"
                                 (cl:write-to-string heap-mb)
                                 "--runtime-server")))
                 (stdout (sb-ext:process-output proc)))
