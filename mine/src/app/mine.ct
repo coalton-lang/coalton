@@ -2024,15 +2024,18 @@ Uses the preceding (in-package ...) form to determine the compilation package."
           (let sel-start = (min anchor cur))
           (let sel-end = (max anchor cur))
           (when (> sel-end sel-start)
-            (let text = (gap:gap-substring gb sel-start sel-end))
-            (clipboard:clipboard-copy! text)
-            (gap:gap-delete-range! gb sel-start sel-end)
-            (buf:buffer-mark-dirty! buf)
-            (undo:undo-record! (buf:buffer-undo buf)
-                               (undo:OpDelete sel-start text) cur sel-start)
-            (cursor:cursor-move-to-position! (.ms-cursor st) sel-start)
-            (cursor:cursor-clear-selection! (.ms-cursor st))
-            (status:statusbar-set-message! (.ms-status st) "Cut")))
+            (undo:with-undo-group! (buf:buffer-undo buf)
+              (fn () (cursor:cursor-position (.ms-cursor st)))
+              (fn ()
+                (let text = (gap:gap-substring gb sel-start sel-end))
+                (clipboard:clipboard-copy! text)
+                (gap:gap-delete-range! gb sel-start sel-end)
+                (buf:buffer-mark-dirty! buf)
+                (undo:undo-record! (buf:buffer-undo buf)
+                                   (undo:OpDelete sel-start text) cur sel-start)
+                (cursor:cursor-move-to-position! (.ms-cursor st) sel-start)
+                (cursor:cursor-clear-selection! (.ms-cursor st))
+                (status:statusbar-set-message! (.ms-status st) "Cut")))))
          ((None) (values))))))
 
   (declare paste-clipboard! (MineState -> Void))
@@ -2100,36 +2103,39 @@ Uses the preceding (in-package ...) form to determine the compilation package."
   (declare reindent-line! (buf:Buffer * undo:UndoTree * cursor:CursorState -> Void))
   (define (reindent-line! buffer tree cs)
     "Reindent the current line to the canonical indentation level."
-    (let gb = (buf:buffer-gap buffer))
-    (let mode = (match (buf:buffer-mode buffer)
-                  ((buf:ModeCoalton) 0)
-                  ((buf:ModeLisp) 1)
-                  (_ 2)))
-    (match (cursor:cursor-line-col cs gb)
-      ((Tuple line _col)
-       (let target-indent = (indent:compute-indent gb mode line))
-       (let line-text = (gap:gap-line-text gb line))
-       (let current-indent = (%count-leading-spaces line-text))
-       (when (not (== target-indent current-indent))
-         ;; Replace leading whitespace
-         (let line-start = (gap:gap-line-to-pos gb line))
-         ;; Delete existing leading spaces
-         (when (> current-indent 0)
-           (gap:gap-delete-range! gb line-start (+ line-start current-indent))
-           (buf:buffer-mark-dirty! buffer)
-           (undo:undo-record! tree
-                              (undo:OpDelete line-start (%make-spaces current-indent))
-                              (cursor:cursor-position cs) line-start))
-         ;; Insert new indentation
-         (when (> target-indent 0)
-           (let spaces = (%make-spaces target-indent))
-           (gap:gap-insert-string! gb line-start spaces)
-           (buf:buffer-mark-dirty! buffer)
-           (undo:undo-record! tree
-                              (undo:OpInsert line-start spaces)
-                              line-start (+ line-start target-indent)))
-         ;; Move cursor to end of new indentation
-         (cursor:cursor-move-to-position! cs (+ (gap:gap-line-to-pos gb line) target-indent))))))
+    (undo:with-undo-group! tree
+      (fn () (cursor:cursor-position cs))
+      (fn ()
+        (let gb = (buf:buffer-gap buffer))
+        (let mode = (match (buf:buffer-mode buffer)
+                      ((buf:ModeCoalton) 0)
+                      ((buf:ModeLisp) 1)
+                      (_ 2)))
+        (match (cursor:cursor-line-col cs gb)
+          ((Tuple line _col)
+           (let target-indent = (indent:compute-indent gb mode line))
+           (let line-text = (gap:gap-line-text gb line))
+           (let current-indent = (%count-leading-spaces line-text))
+           (when (not (== target-indent current-indent))
+             ;; Replace leading whitespace
+             (let line-start = (gap:gap-line-to-pos gb line))
+             ;; Delete existing leading spaces
+             (when (> current-indent 0)
+               (gap:gap-delete-range! gb line-start (+ line-start current-indent))
+               (buf:buffer-mark-dirty! buffer)
+               (undo:undo-record! tree
+                                  (undo:OpDelete line-start (%make-spaces current-indent))
+                                  (cursor:cursor-position cs) line-start))
+             ;; Insert new indentation
+             (when (> target-indent 0)
+               (let spaces = (%make-spaces target-indent))
+               (gap:gap-insert-string! gb line-start spaces)
+               (buf:buffer-mark-dirty! buffer)
+               (undo:undo-record! tree
+                                  (undo:OpInsert line-start spaces)
+                                  line-start (+ line-start target-indent)))
+             ;; Move cursor to end of new indentation
+             (cursor:cursor-move-to-position! cs (+ (gap:gap-line-to-pos gb line) target-indent))))))))
 
 ;;; Event handling -- editor keys
 
@@ -2233,10 +2239,14 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (match (mgr:bufmgr-current (.ms-bufmgr st))
          ((Some buf)
           (cond
+            ((== mod input:ModCtrl)
+             (cond
+               ((%structural-edit? st buf)
+                (paredit:paredit-backspace-word! buf (.ms-cursor st)))
+               (True
+                (ops:delete-backward-word! buf (buf:buffer-undo buf) (.ms-cursor st)))))
             ((%structural-edit? st buf)
              (paredit:paredit-backspace! buf (.ms-cursor st)))
-            ((== mod input:ModCtrl)
-             (ops:delete-backward-word! buf (buf:buffer-undo buf) (.ms-cursor st)))
             (True
              (ops:delete-backward! buf (buf:buffer-undo buf) (.ms-cursor st)))))
          ((None) (values))))

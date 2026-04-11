@@ -489,7 +489,7 @@ Returns the next row after all drawn lines."
       ((input:KeyBackspace)
        (cond
          ((== mod input:ModCtrl)
-          (ops:delete-backward-word! buffer (buf:buffer-undo buffer) cs))
+          (paredit:paredit-backspace-word! buffer cs))
          (True
           (paredit:paredit-backspace! buffer cs))))
       ((input:KeyDelete)
