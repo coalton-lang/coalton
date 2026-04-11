@@ -429,7 +429,7 @@ Returns the next row after all drawn lines."
          ((None) (values)))
        ;; Buttons
        (%draw-buttons scr btn-row margin
-                       (make-list "Reset" "Skip" "Next Lesson" "Exit")
+                       (make-list "Reset" "Skip Goal" "Next Lesson" "Exit")
                        1 focus)
        ;; Hint
        (let hint = (if (== focus 0)
@@ -594,7 +594,7 @@ Returns the next row after all drawn lines."
           (%tutorial-loop term buffer cs mod-idx ch-idx focus status))
          ((> n-ch 0)
           (match (%hit-test-buttons click-col margin
-                   (make-list "Reset" "Skip" "Next Lesson" "Exit") 1)
+                   (make-list "Reset" "Skip Goal" "Next Lesson" "Exit") 1)
             ((Some btn-focus)
              (%activate-button term buffer cs mod-idx ch-idx btn-focus))
             ((None)
@@ -636,11 +636,12 @@ Returns the next row after all drawn lines."
                                buffer cs (Some True))
                 (term:terminal-flush term)
                 (let ev2 = (term:terminal-wait-for-key term))
-                (match ev2
+               (match ev2
                   ((input:IEvKey (input:KeyCtrl #\q) _) True)
                   ((input:IEvKey (input:KeyEscape) _) False)
                   (_ (%advance-challenge term buffer cs mod-idx ch-idx))))
                (True
+                (reset-buffer! buffer cs (challenge-start mod-idx ch-idx))
                 (%tutorial-loop term buffer cs mod-idx ch-idx 0 (Some False)))))
             ;; Other: edit input
             (_ (%handle-input-key! buffer cs key mod)

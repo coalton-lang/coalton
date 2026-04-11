@@ -6,4 +6,4 @@
  ("((a b c d))" . "(a) (b) (c) (d)")
  ("(a b c d)" . "(a (b c) d)")
  ("(a b c d)" . "((a b) (c d))")
- ("define (f) y (* x) y" . "(define (f x y) (* x x))"))
+ ("define (f) y (* x) y" . "(define (f x y) (* x y))"))
