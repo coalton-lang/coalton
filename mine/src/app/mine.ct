@@ -1744,7 +1744,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                             (<> "... [" (<> (into nlines) " lines]"))
                             ""))
           (repl:repl-pane-append-output! (.ms-repl st)
-                                         (<> ";; Compiling in " (<> pkg (<> ": " (<> preview suffix)))))
+                                         (<> ";; Eval in " (<> pkg (<> ": " (<> preview suffix)))))
           (match (ensure-runtime! st)
             ((None) (values))
             ((Some conn)
@@ -1753,8 +1753,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                           (lisp (-> UFix) () (cl:get-internal-real-time)))
              (start-proto-reader! st conn)
              (let req-id = (next-request-id! st))
-             (let buf-name = (buf:buffer-name buf))
-             (let req = (msg:ReqCompileString req-id form-text buf-name pkg form-start))
+             (let req = (msg:ReqEval req-id form-text pkg))
              (client:connection-send! conn req))))))))
 
 ;;; Create project on disk
