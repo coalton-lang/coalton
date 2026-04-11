@@ -8,6 +8,7 @@
    #:cursor-new
    #:cursor-position #:cursor-line-col
    #:cursor-move-left! #:cursor-move-right!
+   #:cursor-move-word-left! #:cursor-move-word-right!
    #:cursor-move-up! #:cursor-move-down!
    #:cursor-move-to-line-start!
    #:cursor-move-to-line-end!
@@ -79,6 +80,47 @@
     (lisp (-> UFix) (s)
       (cl:length s)))
 
+  (declare word-char? (Char -> Boolean))
+  (define (word-char? ch)
+    "True if CH should be treated as part of a word/token for editor motion."
+    (lisp (-> Boolean) (ch)
+      (cl:if (cl:member ch '(#\Space #\Tab #\Newline #\Return
+                             #\( #\) #\[ #\]
+                             #\; #\" #\' #\` #\,)
+                        :test #'cl:char=)
+             False
+             True)))
+
+  (declare %word-char-at? (gap:GapBuffer * UFix -> Boolean))
+  (define (%word-char-at? gb pos)
+    (match (gap:gap-char-at gb pos)
+      ((Some ch) (word-char? ch))
+      ((None) False)))
+
+  (declare %skip-non-word-left (gap:GapBuffer * UFix -> UFix))
+  (define (%skip-non-word-left gb pos)
+    (if (and (> pos 0) (not (%word-char-at? gb (- pos 1))))
+        (%skip-non-word-left gb (- pos 1))
+        pos))
+
+  (declare %skip-word-left (gap:GapBuffer * UFix -> UFix))
+  (define (%skip-word-left gb pos)
+    (if (and (> pos 0) (%word-char-at? gb (- pos 1)))
+        (%skip-word-left gb (- pos 1))
+        pos))
+
+  (declare %skip-non-word-right (gap:GapBuffer * UFix * UFix -> UFix))
+  (define (%skip-non-word-right gb pos len)
+    (if (and (< pos len) (not (%word-char-at? gb pos)))
+        (%skip-non-word-right gb (+ pos 1) len)
+        pos))
+
+  (declare %skip-word-right (gap:GapBuffer * UFix * UFix -> UFix))
+  (define (%skip-word-right gb pos len)
+    (if (and (< pos len) (%word-char-at? gb pos))
+        (%skip-word-right gb (+ pos 1) len)
+        pos))
+
   ;;; Horizontal movement
 
   (declare cursor-move-left! (gap:GapBuffer * CursorState -> Void))
@@ -99,6 +141,23 @@
     (let len = (gap:gap-length gb))
     (when (< p len)
       (set-pos! cs (+ p 1)))
+    (update-target-col-from-pos! cs gb))
+
+  (declare cursor-move-word-left! (gap:GapBuffer * CursorState -> Void))
+  (define (cursor-move-word-left! gb cs)
+    "Move cursor left to the previous word boundary."
+    (let p = (cursor-position cs))
+    (let new-p = (%skip-word-left gb (%skip-non-word-left gb p)))
+    (set-pos! cs new-p)
+    (update-target-col-from-pos! cs gb))
+
+  (declare cursor-move-word-right! (gap:GapBuffer * CursorState -> Void))
+  (define (cursor-move-word-right! gb cs)
+    "Move cursor right to the next word boundary."
+    (let p = (cursor-position cs))
+    (let len = (gap:gap-length gb))
+    (let new-p = (%skip-word-right gb (%skip-non-word-right gb p len) len))
+    (set-pos! cs new-p)
     (update-target-col-from-pos! cs gb))
 
   ;;; Vertical movement

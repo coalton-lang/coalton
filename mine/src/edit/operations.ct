@@ -12,6 +12,7 @@
    #:insert-char!
    #:insert-string!
    #:delete-backward!
+   #:delete-backward-word!
    #:delete-forward!
    #:newline!))
 
@@ -78,6 +79,21 @@ Does nothing if the cursor is at position 0."
          (let text = (into ch))
          (undo:undo-record! tree (undo:OpDelete del-pos text) p del-pos)
          (cursor:cursor-move-left! gb cs)))))
+
+  (declare delete-backward-word! (buf:Buffer * undo:UndoTree * cursor:CursorState
+                                   -> Void))
+  (define (delete-backward-word! buffer tree cs)
+    "Delete backward to the previous word boundary."
+    (let old-pos = (cursor:cursor-position cs))
+    (when (> old-pos 0)
+      (let gb = (buf:buffer-gap buffer))
+      (cursor:cursor-move-word-left! gb cs)
+      (let new-pos = (cursor:cursor-position cs))
+      (when (< new-pos old-pos)
+        (let text = (gap:gap-delete-range! gb new-pos old-pos))
+        (buf:buffer-mark-dirty! buffer)
+        (undo:undo-record! tree (undo:OpDelete new-pos text) old-pos new-pos)
+        (values))))
 
   ;;; delete-forward!
 
