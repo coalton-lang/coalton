@@ -2044,13 +2044,13 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          (ops:insert-string! buf (buf:buffer-undo buf) (.ms-cursor st) text))
         ((None) (values)))))
 
-  (declare %paredit-if-lisp (MineState * (gap:GapBuffer * undo:UndoTree -> Void) -> Void))
+  (declare %paredit-if-lisp (MineState * (buf:Buffer -> Void) -> Void))
   (define (%paredit-if-lisp st action)
-    "Run ACTION on the current buffer's gap buffer and undo tree if structural editing is active."
+    "Run ACTION on the current buffer if structural editing is active."
     (match (mgr:bufmgr-current (.ms-bufmgr st))
       ((Some buf)
        (when (%structural-edit? st buf)
-         (action (buf:buffer-gap buf) (buf:buffer-undo buf))))
+         (action buf)))
       ((None) (values))))
 
   (declare %lisp-mode? (buf:Buffer -> Boolean))
@@ -2151,38 +2151,51 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       (_ (cursor:cursor-clear-selection! (.ms-cursor st))
          (%commit-preview! st)))
     (match key
-      ;; Arrow keys: Ctrl+arrow -> paredit, plain -> cursor movement
+      ;; Arrow keys: Ctrl+Left/Right -> word motion, Alt+arrows -> paredit
       ((input:KeyRight)
        (cond
-         ((== mod input:ModCtrl)
+        ((== mod input:ModAlt)
           (%paredit-if-lisp st
-                            (fn (gb ut) (paredit:paredit-forward-slurp! gb ut (.ms-cursor st)))))
+                            (fn (buffer) (paredit:paredit-forward-slurp! buffer (.ms-cursor st)))))
+         ((== mod input:ModCtrl)
+          (match (mgr:bufmgr-current (.ms-bufmgr st))
+            ((Some buf) (cursor:cursor-move-word-right! (buf:buffer-gap buf) (.ms-cursor st)))
+            ((None) (values))))
          (True
           (match (mgr:bufmgr-current (.ms-bufmgr st))
             ((Some buf) (cursor:cursor-move-right! (buf:buffer-gap buf) (.ms-cursor st)))
             ((None) (values))))))
       ((input:KeyLeft)
        (cond
-         ((== mod input:ModCtrl)
+        ((== mod input:ModAlt)
           (%paredit-if-lisp st
-                            (fn (gb ut) (paredit:paredit-forward-barf! gb ut (.ms-cursor st)))))
+                            (fn (buffer) (paredit:paredit-forward-barf! buffer (.ms-cursor st)))))
+         ((== mod input:ModCtrl)
+          (match (mgr:bufmgr-current (.ms-bufmgr st))
+            ((Some buf) (cursor:cursor-move-word-left! (buf:buffer-gap buf) (.ms-cursor st)))
+            ((None) (values))))
          (True
           (match (mgr:bufmgr-current (.ms-bufmgr st))
             ((Some buf) (cursor:cursor-move-left! (buf:buffer-gap buf) (.ms-cursor st)))
             ((None) (values))))))
       ((input:KeyUp)
        (cond
-         ((== mod input:ModCtrl)
+        ((== mod input:ModAlt)
           (%paredit-if-lisp st
-                            (fn (gb ut) (paredit:paredit-splice! gb ut (.ms-cursor st)))))
+                            (fn (buffer) (paredit:paredit-splice! buffer (.ms-cursor st)))))
          (True
           (match (mgr:bufmgr-current (.ms-bufmgr st))
             ((Some buf) (cursor:cursor-move-up! (buf:buffer-gap buf) (.ms-cursor st)))
             ((None) (values))))))
       ((input:KeyDown)
-       (match (mgr:bufmgr-current (.ms-bufmgr st))
-         ((Some buf) (cursor:cursor-move-down! (buf:buffer-gap buf) (.ms-cursor st)))
-         ((None) (values))))
+       (cond
+        ((== mod input:ModAlt)
+          (%paredit-if-lisp st
+                            (fn (buffer) (paredit:paredit-cleave! buffer (.ms-cursor st)))))
+         (True
+          (match (mgr:bufmgr-current (.ms-bufmgr st))
+            ((Some buf) (cursor:cursor-move-down! (buf:buffer-gap buf) (.ms-cursor st)))
+            ((None) (values))))))
       ((input:KeyHome)
        (match (mgr:bufmgr-current (.ms-bufmgr st))
          ((Some buf) (cursor:cursor-move-to-line-start! (buf:buffer-gap buf) (.ms-cursor st)))
@@ -2220,7 +2233,9 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          ((Some buf)
           (cond
             ((%structural-edit? st buf)
-             (paredit:paredit-backspace! (buf:buffer-gap buf) (buf:buffer-undo buf) (.ms-cursor st)))
+             (paredit:paredit-backspace! buf (.ms-cursor st)))
+            ((== mod input:ModCtrl)
+             (ops:delete-backward-word! buf (buf:buffer-undo buf) (.ms-cursor st)))
             (True
              (ops:delete-backward! buf (buf:buffer-undo buf) (.ms-cursor st)))))
          ((None) (values))))
@@ -2230,7 +2245,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          ((Some buf)
           (cond
             ((%structural-edit? st buf)
-             (paredit:paredit-delete! (buf:buffer-gap buf) (buf:buffer-undo buf) (.ms-cursor st)))
+             (paredit:paredit-delete! buf (.ms-cursor st)))
             (True
              (ops:delete-forward! buf (buf:buffer-undo buf) (.ms-cursor st)))))
          ((None) (values))))
@@ -2277,16 +2292,16 @@ Uses the preceding (in-package ...) form to determine the compilation package."
             (cond
               ((%structural-edit? st buf)
                (cond
-                 ((== ch #\()
-                  (paredit:paredit-open-paren! (buf:buffer-gap buf) (buf:buffer-undo buf) (.ms-cursor st)))
-                 ((== ch #\))
-                  (paredit:paredit-close-paren! (buf:buffer-gap buf) (buf:buffer-undo buf) (.ms-cursor st)))
-                 ((== ch #\[)
-                  (paredit:paredit-open-bracket! (buf:buffer-gap buf) (buf:buffer-undo buf) (.ms-cursor st)))
-                 ((== ch #\])
-                  (paredit:paredit-close-bracket! (buf:buffer-gap buf) (buf:buffer-undo buf) (.ms-cursor st)))
-                 ((== ch #\")
-                  (paredit:paredit-doublequote! (buf:buffer-gap buf) (buf:buffer-undo buf) (.ms-cursor st)))
+                ((== ch #\()
+                  (paredit:paredit-open-paren! buf (.ms-cursor st)))
+                ((== ch #\))
+                  (paredit:paredit-close-paren! buf (.ms-cursor st)))
+                ((== ch #\[)
+                  (paredit:paredit-open-bracket! buf (.ms-cursor st)))
+                ((== ch #\])
+                  (paredit:paredit-close-bracket! buf (.ms-cursor st)))
+                ((== ch #\")
+                  (paredit:paredit-doublequote! buf (.ms-cursor st)))
                  (True
                   (ops:insert-char! buf (buf:buffer-undo buf) (.ms-cursor st) ch))))
               (True
@@ -2379,16 +2394,16 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     (match ch
       ;; Alt+R -> raise
       (#\r (%paredit-if-lisp st
-                             (fn (gb ut) (paredit:paredit-raise! gb ut (.ms-cursor st)))))
+                             (fn (buffer) (paredit:paredit-raise! buffer (.ms-cursor st)))))
       ;; Alt+W -> wrap
       (#\w (%paredit-if-lisp st
-                             (fn (gb ut) (paredit:paredit-wrap-round! gb ut (.ms-cursor st)))))
+                             (fn (buffer) (paredit:paredit-wrap-round! buffer (.ms-cursor st)))))
       ;; Alt+F -> forward sexp
       (#\f (%paredit-if-lisp st
-                             (fn (gb _ut) (paredit:paredit-forward-sexp! gb (.ms-cursor st)))))
+                             (fn (buffer) (paredit:paredit-forward-sexp! (buf:buffer-gap buffer) (.ms-cursor st)))))
       ;; Alt+B -> backward sexp
       (#\b (%paredit-if-lisp st
-                             (fn (gb _ut) (paredit:paredit-backward-sexp! gb (.ms-cursor st)))))
+                             (fn (buffer) (paredit:paredit-backward-sexp! (buf:buffer-gap buffer) (.ms-cursor st)))))
       ;; Alt+K -> compile and load file
       (#\k (compile-file! st))
       ;; Alt+C -> compile form at cursor
