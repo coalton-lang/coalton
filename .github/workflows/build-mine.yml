@@ -40,6 +40,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           cd mine
+          COALTON_PORTABLE_BIGFLOAT=1 \
           CL_SOURCE_REGISTRY="${GITHUB_WORKSPACE}//" \
             sbcl --dynamic-space-size 4096 \
             --noinform --non-interactive \
@@ -51,6 +52,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $env:COALTON_PORTABLE_BIGFLOAT = "1"
           $env:CL_SOURCE_REGISTRY = "$env:GITHUB_WORKSPACE//"
           cd mine
           sbcl --dynamic-space-size 4096 `
