@@ -9,6 +9,7 @@
    (#:cell #:coalton/cell))
   (:export
    #:Terminal
+   #:best-effort? #:set-best-effort!
    #:probe-kitty-keyboard
    #:terminal-init #:terminal-shutdown
    #:.terminal-screen
@@ -21,6 +22,21 @@
 (in-package #:mine/term/terminal)
 
 (coalton-toplevel
+
+  ;;; Best-effort mode
+
+  (define %best-effort-cell (cell:new False))
+
+  (declare best-effort? (Void -> Boolean))
+  (define (best-effort?)
+    "True if mine is running in best-effort mode (no kitty keyboard protocol)."
+    (cell:read %best-effort-cell))
+
+  (declare set-best-effort! (Void -> Void))
+  (define (set-best-effort!)
+    "Enable best-effort mode."
+    (cell:write! %best-effort-cell True)
+    (values))
 
   ;;; Terminal
 
@@ -307,11 +323,44 @@ Returns NIL if no query response is present."
                                      (cl:return))))))
     cl:nil))
 
+(cl:defun %version>= (version-str major minor patch)
+  "Return T if VERSION-STR (e.g. \"0.21.0\") is >= MAJOR.MINOR.PATCH."
+  (cl:ignore-errors
+    (cl:let* ((parts (cl:loop :for start = 0 :then (cl:1+ dot)
+                              :for dot = (cl:position #\. version-str :start start)
+                              :collect (cl:parse-integer
+                                        version-str :start start
+                                        :end (cl:or dot (cl:length version-str))
+                                        :junk-allowed cl:t)
+                              :while dot))
+              (v-major (cl:or (cl:first parts) 0))
+              (v-minor (cl:or (cl:second parts) 0))
+              (v-patch (cl:or (cl:third parts) 0)))
+      (cl:or (cl:> v-major major)
+             (cl:and (cl:= v-major major)
+                     (cl:or (cl:> v-minor minor)
+                            (cl:and (cl:= v-minor minor)
+                                    (cl:>= v-patch patch))))))))
+
+(cl:defun %kitty-too-old-p ()
+  "Return T if we're running inside kitty with a version too old for
+reliable keyboard protocol support.  Kitty 0.20.0 introduced the
+protocol but had a regression that sent incorrect bytes for F1-F4
+\(kovidgoyal/kitty#3586, fixed in 0.21.0\)."
+  (cl:let ((term-program (sb-ext:posix-getenv "TERM_PROGRAM")))
+    (cl:when (cl:and term-program (cl:string-equal term-program "kitty"))
+      (cl:let ((version-str (sb-ext:posix-getenv "TERM_PROGRAM_VERSION")))
+        (cl:or (cl:null version-str)
+               (cl:not (%version>= version-str 0 21 0)))))))
+
 (cl:defun %probe-kitty-keyboard ()
   "Probe whether the terminal supports the kitty keyboard protocol.
 Enables disambiguation, queries the active flags, and waits for
 primary device attributes as the fence. Returns T only if the query
-reply reports that flag 1 is active."
+reply reports that flag 1 is active.
+Rejects kitty < 0.21.0 which has broken F1-F4 encoding."
+  (cl:when (%kitty-too-old-p)
+    (cl:return-from %probe-kitty-keyboard cl:nil))
   (mine/bindings/terminal:terminal-enable-raw-mode)
   (cl:unwind-protect
       (cl:progn

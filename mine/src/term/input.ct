@@ -20,6 +20,9 @@
 
 (in-package #:mine/term/input)
 
+(cl:defun %digit-byte-p (b)
+  (cl:and (cl:>= b 48) (cl:<= b 57)))
+
 (coalton-toplevel
 
   ;;; Key
@@ -165,6 +168,14 @@ Returns (params final-byte next-pos)."
                ((cl:= b 59)
                 (cl:push 0 params)
                 (cl:incf pos))
+               ;; colon sub-parameter separator — keep first sub-param,
+               ;; skip remaining digits and colons in this group
+               ((cl:= b 58)
+                (cl:incf pos)
+                (cl:loop :while (cl:< pos len)
+                         :for bb = (cl:aref buf pos)
+                         :while (cl:or (%digit-byte-p bb) (cl:= bb 58))
+                         :do (cl:incf pos)))
                ;; final byte (letter or ~)
                ((cl:and (cl:>= b 64) (cl:<= b 126))
                 (cl:go loop-done))
@@ -279,13 +290,17 @@ Returns (event next-pos)."
   (declare dispatch-csi-final ((List UFix) * UFix -> InputEvent))
   (define (dispatch-csi-final params final-byte)
     "Map CSI final byte and parameters to an InputEvent."
+    ;; Modifier is encoded as 1 + bitmask (Shift=1, Alt=2, Ctrl=4).
+    ;; Extract bits and pick highest-priority single modifier.
     (let modifier = (match params
                       ((Cons _ (Cons m _))
-                       (cond
-                         ((== m 2) ModShift)
-                         ((== m 3) ModAlt)
-                         ((== m 5) ModCtrl)
-                         (True ModNone)))
+                       (lisp (-> Modifier) (m)
+                         (cl:let ((bits (cl:if (cl:> m 1) (cl:1- m) 0)))
+                           (cl:cond
+                             ((cl:logbitp 2 bits) ModCtrl)
+                             ((cl:logbitp 1 bits) ModAlt)
+                             ((cl:logbitp 0 bits) ModShift)
+                             (cl:t ModNone)))))
                       (_ ModNone)))
     (cond
       ;; Arrows
@@ -296,6 +311,13 @@ Returns (event next-pos)."
       ;; Home/End
       ((== final-byte 72) (IEvKey KeyHome modifier))
       ((== final-byte 70) (IEvKey KeyEnd modifier))
+      ;; F1-F4 (CSI encoding: xterm sends CSI 1;modifier P/Q/R/S
+      ;; with modifiers; kitty protocol sends CSI P/Q/S bare but
+      ;; uses CSI 13 ~ for F3 to avoid the CSI R / CPR conflict).
+      ((== final-byte 80) (IEvKey (KeyF 1) modifier))
+      ((== final-byte 81) (IEvKey (KeyF 2) modifier))
+      ((== final-byte 82) (IEvKey (KeyF 3) modifier))
+      ((== final-byte 83) (IEvKey (KeyF 4) modifier))
       ;; Tilde sequences
       ((== final-byte 126)
        (match params
@@ -305,6 +327,10 @@ Returns (event next-pos)."
             ((== p 3) (IEvKey KeyDelete modifier))
             ((== p 5) (IEvKey KeyPageUp modifier))
             ((== p 6) (IEvKey KeyPageDown modifier))
+            ((== p 11) (IEvKey (KeyF 1) modifier))
+            ((== p 12) (IEvKey (KeyF 2) modifier))
+            ((== p 13) (IEvKey (KeyF 3) modifier))
+            ((== p 14) (IEvKey (KeyF 4) modifier))
             ((== p 15) (IEvKey (KeyF 5) modifier))
             ((== p 17) (IEvKey (KeyF 6) modifier))
             ((== p 18) (IEvKey (KeyF 7) modifier))
@@ -324,6 +350,20 @@ Returns (event next-pos)."
             ((== codepoint 9)  (IEvKey KeyTab modifier))
             ((== codepoint 27) (IEvKey KeyEscape modifier))
             ((== codepoint 127) (IEvKey KeyBackspace modifier))
+            ;; Navigation keys (CSI u codepoints from private use area)
+            ((== codepoint 57348) (IEvKey KeyInsert modifier))
+            ((== codepoint 57349) (IEvKey KeyDelete modifier))
+            ((== codepoint 57350) (IEvKey KeyLeft modifier))
+            ((== codepoint 57351) (IEvKey KeyRight modifier))
+            ((== codepoint 57352) (IEvKey KeyUp modifier))
+            ((== codepoint 57353) (IEvKey KeyDown modifier))
+            ((== codepoint 57354) (IEvKey KeyPageUp modifier))
+            ((== codepoint 57355) (IEvKey KeyPageDown modifier))
+            ((== codepoint 57356) (IEvKey KeyHome modifier))
+            ((== codepoint 57357) (IEvKey KeyEnd modifier))
+            ;; Function keys F1-F12 (CSI u codepoints 57364-57375)
+            ((and (>= codepoint 57364) (<= codepoint 57375))
+             (IEvKey (KeyF (+ 1 (- codepoint 57364))) modifier))
             ;; Ctrl+letter: emit KeyCtrl to match legacy key bindings
             ((and (== modifier ModCtrl)
                   (and (>= codepoint 97) (<= codepoint 122)))
@@ -349,6 +389,15 @@ Returns (event next-pos)."
       ((== final-byte 70) (IEvKey KeyEnd ModNone))
       (True (IEvKey (KeyUnknown final-byte) ModNone))))
 
+  ;;; Helpers
+
+  (declare %apply-alt (InputEvent -> InputEvent))
+  (define (%apply-alt ev)
+    "Set the modifier to Alt on key events (for ESC-prefix encoding)."
+    (match ev
+      ((IEvKey key _) (IEvKey key ModAlt))
+      (_ ev)))
+
   ;;; Main parser
 
   (declare parse-one
@@ -359,11 +408,11 @@ Returns (event next-pos)."
     (let len = (vec-length buf))
     (let b = (vec-ref buf pos))
     (cond
-      ;; ESC (byte 27) — always a CSI/SS3 lead-in with kitty protocol
+      ;; ESC (byte 27) — CSI/SS3 lead-in, or Alt prefix in best-effort mode
       ((== b 27)
        (cond
          ((>= (+ pos 1) len)
-          ;; Incomplete sequence — wait for more bytes
+          ;; Bare ESC at end of buffer -- incomplete, return IEvNone
           (Tuple IEvNone pos))
          (True
           (let next-byte = (vec-ref buf (+ pos 1)))
@@ -381,9 +430,39 @@ Returns (event next-pos)."
                (True
                 (let fb = (vec-ref buf (+ pos 2)))
                 (Tuple (dispatch-ss3 fb) (+ pos 3)))))
-            ;; Unexpected byte after ESC (kitty handles ESC key via CSI 27 u)
+            ;; ESC ESC -> Alt prefix (Option-as-Meta sends ESC before sequences)
+            ((== next-byte 27)
+             (cond
+               ((>= (+ pos 2) len)
+                (Tuple IEvNone pos))
+               ;; ESC ESC [ -> Alt + CSI sequence
+               ((== (vec-ref buf (+ pos 2)) 91)
+                (if (>= (+ pos 3) len)
+                    (Tuple IEvNone pos)
+                    (match (dispatch-csi buf (+ pos 3))
+                      ((Tuple ev next)
+                       (Tuple (%apply-alt ev) next)))))
+               ;; ESC ESC O -> Alt + SS3 sequence
+               ((== (vec-ref buf (+ pos 2)) 79)
+                (cond
+                  ((>= (+ pos 3) len)
+                   (Tuple IEvNone pos))
+                  (True
+                   (let fb = (vec-ref buf (+ pos 3)))
+                   (Tuple (%apply-alt (dispatch-ss3 fb)) (+ pos 4)))))
+               ;; ESC ESC + other -> just ESC
+               (True
+                (Tuple (IEvKey KeyEscape ModNone) (+ pos 1)))))
+            ;; ESC + Enter -> Alt+Enter
+            ((or (== next-byte 13) (== next-byte 10))
+             (Tuple (IEvKey KeyEnter ModAlt) (+ pos 2)))
+            ;; ESC + printable -> Alt+key
+            ((and (>= next-byte 32) (<= next-byte 126))
+             (Tuple (IEvKey (KeyChar (ufix-to-char next-byte)) ModAlt)
+                    (+ pos 2)))
+            ;; ESC + other
             (True
-             (Tuple (IEvKey (KeyUnknown 27) ModNone) (+ pos 1)))))))
+             (Tuple (IEvKey KeyEscape ModNone) (+ pos 1)))))))
       ;; Tab (byte 9)
       ((== b 9)
        (Tuple (IEvKey KeyTab ModNone) (+ pos 1)))
