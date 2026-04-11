@@ -655,7 +655,9 @@
                                 (cl:merge-pathnames ".mine" (cl:user-homedir-pathname)))
                                cl:t cl:nil)))
     ;; Line count: welcome + blank + 4 keys = 6, or welcome + setup + blank + 4 keys = 7
-    (let line-count = (if has-config 6 7))
+    ;; Add 2 for best-effort warning (blank + warning line)
+    (let base-count = (if has-config 6 7))
+    (let line-count = (if (term:best-effort?) (+ base-count 2) base-count))
     (let cy = (if (> rh line-count)
                   (+ ry (lisp (-> UFix) (rh line-count) (cl:floor (cl:- rh line-count) 2)))
                   ry))
@@ -702,6 +704,15 @@
     (draw-key-line (+ key-y 1) "Ctrl+O" "to open a file")
     (draw-key-line (+ key-y 2) "Ctrl+H" "for help and keybindings")
     (draw-key-line (+ key-y 3) "Ctrl+Q" "to quit")
+    ;; Best-effort warning
+    (when (term:best-effort?)
+      (let warn = "--best-effort enabled, some features may not work.")
+      (let warn-w = (str:length warn))
+      (let warn-x = (if (> rw warn-w)
+                        (+ rx (lisp (-> UFix) (rw warn-w) (cl:floor (cl:- rw warn-w) 2)))
+                        rx))
+      (render:draw-text scr (+ key-y 5) warn-x warn
+        (color:Style color:error-fg color:black color:AttrBold)))
     (values))
 
 ;;; Editor pane
@@ -3911,6 +3922,7 @@ Render-app is NOT called here; the main loop handles rendering."
       (cl:format cl:*error-output* "~%")
       (cl:format cl:*error-output* "  Windows: Windows Terminal  built into Windows 11~%")
       (cl:format cl:*error-output* "           WezTerm           https://wezfurlong.org/wezterm/~2%")
+      (cl:format cl:*error-output* "Or run with --best-effort to skip this check (some features may not work).~%")
       (sb-ext:exit :code 1)
       (cl:values)))
 
@@ -3919,6 +3931,7 @@ Render-app is NOT called here; the main loop handles rendering."
     "Entry point for the mine IDE."
     (let args = (lisp (-> (List String)) ()
                   (cl:mapcar #'cl:identity sb-ext:*posix-argv*)))
+    (let best-effort = (any (fn (a) (== a "--best-effort")) args))
     (cond
       ((any (fn (a) (== a "--runtime-server")) args)
        ;; Runtime server mode (no TUI)
@@ -3930,16 +3943,18 @@ Render-app is NOT called here; the main loop handles rendering."
        (lisp (-> Void) ()
          (mine/app/build:run-lisp-script)
          (cl:values)))
-      ;; TUI modes require kitty keyboard protocol
-      ((not (term:probe-kitty-keyboard))
+      ;; TUI modes require kitty keyboard protocol (unless --best-effort)
+      ((and (not best-effort) (not (term:probe-kitty-keyboard)))
        (%print-kitty-required-and-abort))
-      ((any (fn (a) (== a "--setup")) args)
-       ;; Setup wizard, then launch editor
-       (setup:run-setup)
-       (%tui-loop (filter (fn (a) (/= a "--setup")) args)))
       (True
-       ;; TUI mode
-       (%tui-loop args))))
+       (when best-effort
+         (term:set-best-effort!))
+       (cond
+         ((any (fn (a) (== a "--setup")) args)
+          (setup:run-setup)
+          (%tui-loop (filter (fn (a) (and (/= a "--setup") (/= a "--best-effort"))) args)))
+         (True
+          (%tui-loop (filter (fn (a) (/= a "--best-effort")) args)))))))
 
   (declare %tui-loop ((List String) -> Void))
   (define (%tui-loop args)

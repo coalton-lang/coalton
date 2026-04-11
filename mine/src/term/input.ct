@@ -305,6 +305,10 @@ Returns (event next-pos)."
             ((== p 3) (IEvKey KeyDelete modifier))
             ((== p 5) (IEvKey KeyPageUp modifier))
             ((== p 6) (IEvKey KeyPageDown modifier))
+            ((== p 11) (IEvKey (KeyF 1) modifier))
+            ((== p 12) (IEvKey (KeyF 2) modifier))
+            ((== p 13) (IEvKey (KeyF 3) modifier))
+            ((== p 14) (IEvKey (KeyF 4) modifier))
             ((== p 15) (IEvKey (KeyF 5) modifier))
             ((== p 17) (IEvKey (KeyF 6) modifier))
             ((== p 18) (IEvKey (KeyF 7) modifier))
@@ -349,6 +353,15 @@ Returns (event next-pos)."
       ((== final-byte 70) (IEvKey KeyEnd ModNone))
       (True (IEvKey (KeyUnknown final-byte) ModNone))))
 
+  ;;; Helpers
+
+  (declare %apply-alt (InputEvent -> InputEvent))
+  (define (%apply-alt ev)
+    "Set the modifier to Alt on key events (for ESC-prefix encoding)."
+    (match ev
+      ((IEvKey key _) (IEvKey key ModAlt))
+      (_ ev)))
+
   ;;; Main parser
 
   (declare parse-one
@@ -359,11 +372,11 @@ Returns (event next-pos)."
     (let len = (vec-length buf))
     (let b = (vec-ref buf pos))
     (cond
-      ;; ESC (byte 27) — always a CSI/SS3 lead-in with kitty protocol
+      ;; ESC (byte 27) — CSI/SS3 lead-in, or Alt prefix in best-effort mode
       ((== b 27)
        (cond
          ((>= (+ pos 1) len)
-          ;; Incomplete sequence — wait for more bytes
+          ;; Bare ESC at end of buffer -- incomplete, return IEvNone
           (Tuple IEvNone pos))
          (True
           (let next-byte = (vec-ref buf (+ pos 1)))
@@ -381,9 +394,39 @@ Returns (event next-pos)."
                (True
                 (let fb = (vec-ref buf (+ pos 2)))
                 (Tuple (dispatch-ss3 fb) (+ pos 3)))))
-            ;; Unexpected byte after ESC (kitty handles ESC key via CSI 27 u)
+            ;; ESC ESC -> Alt prefix (Option-as-Meta sends ESC before sequences)
+            ((== next-byte 27)
+             (cond
+               ((>= (+ pos 2) len)
+                (Tuple IEvNone pos))
+               ;; ESC ESC [ -> Alt + CSI sequence
+               ((== (vec-ref buf (+ pos 2)) 91)
+                (if (>= (+ pos 3) len)
+                    (Tuple IEvNone pos)
+                    (match (dispatch-csi buf (+ pos 3))
+                      ((Tuple ev next)
+                       (Tuple (%apply-alt ev) next)))))
+               ;; ESC ESC O -> Alt + SS3 sequence
+               ((== (vec-ref buf (+ pos 2)) 79)
+                (cond
+                  ((>= (+ pos 3) len)
+                   (Tuple IEvNone pos))
+                  (True
+                   (let fb = (vec-ref buf (+ pos 3)))
+                   (Tuple (%apply-alt (dispatch-ss3 fb)) (+ pos 4)))))
+               ;; ESC ESC + other -> just ESC
+               (True
+                (Tuple (IEvKey KeyEscape ModNone) (+ pos 1)))))
+            ;; ESC + Enter -> Alt+Enter
+            ((or (== next-byte 13) (== next-byte 10))
+             (Tuple (IEvKey KeyEnter ModAlt) (+ pos 2)))
+            ;; ESC + printable -> Alt+key
+            ((and (>= next-byte 32) (<= next-byte 126))
+             (Tuple (IEvKey (KeyChar (ufix-to-char next-byte)) ModAlt)
+                    (+ pos 2)))
+            ;; ESC + other
             (True
-             (Tuple (IEvKey (KeyUnknown 27) ModNone) (+ pos 1)))))))
+             (Tuple (IEvKey KeyEscape ModNone) (+ pos 1)))))))
       ;; Tab (byte 9)
       ((== b 9)
        (Tuple (IEvKey KeyTab ModNone) (+ pos 1)))

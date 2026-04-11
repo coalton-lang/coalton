@@ -9,6 +9,7 @@
    (#:cell #:coalton/cell))
   (:export
    #:Terminal
+   #:best-effort? #:set-best-effort!
    #:probe-kitty-keyboard
    #:terminal-init #:terminal-shutdown
    #:.terminal-screen
@@ -21,6 +22,21 @@
 (in-package #:mine/term/terminal)
 
 (coalton-toplevel
+
+  ;;; Best-effort mode
+
+  (define %best-effort-cell (cell:new False))
+
+  (declare best-effort? (Void -> Boolean))
+  (define (best-effort?)
+    "True if mine is running in best-effort mode (no kitty keyboard protocol)."
+    (cell:read %best-effort-cell))
+
+  (declare set-best-effort! (Void -> Void))
+  (define (set-best-effort!)
+    "Enable best-effort mode."
+    (cell:write! %best-effort-cell True)
+    (values))
 
   ;;; Terminal
 
