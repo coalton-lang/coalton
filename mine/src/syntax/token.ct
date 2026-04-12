@@ -1,0 +1,97 @@
+(cl:defpackage #:mine/syntax/token
+  (:use #:coalton #:coalton-prelude)
+  (:export
+   #:TokenKind
+   #:TokWhitespace #:TokComment #:TokBlockComment
+   #:TokString #:TokChar #:TokNumber
+   #:TokOpenParen #:TokCloseParen
+   #:TokOpenBracket #:TokCloseBracket
+   #:TokQuote #:TokBackquote #:TokComma #:TokCommaAt
+   #:TokHashQuote #:TokSharpSign #:TokDot
+   #:TokSymbol #:TokKeyword #:TokPackagePrefix #:TokPackageQualified
+   #:TokCoaltonKeyword #:TokTypeVariable #:TokConstructor
+   #:TokAccessor #:TokDynamic
+   #:TokArrow #:TokOperator
+   #:TokUnknown
+   #:Token #:Token
+   #:.token-kind #:.token-start #:.token-end))
+
+(in-package #:mine/syntax/token)
+
+(coalton-toplevel
+
+  ;;; TokenKind
+
+  (define-type TokenKind
+    "Classification of a lexical token."
+    TokWhitespace
+    TokComment
+    TokBlockComment
+    TokString
+    TokChar
+    TokNumber
+    TokOpenParen
+    TokCloseParen
+    TokOpenBracket
+    TokCloseBracket
+    TokQuote
+    TokBackquote
+    TokComma
+    TokCommaAt
+    TokHashQuote
+    TokSharpSign
+    TokDot
+    TokSymbol
+    TokKeyword
+    TokPackagePrefix
+    TokPackageQualified
+    TokCoaltonKeyword
+    TokTypeVariable
+    TokConstructor
+    TokAccessor
+    TokDynamic
+    TokArrow
+    TokOperator
+    TokUnknown)
+
+  (define-instance (Eq TokenKind)
+    (define (== a b)
+      (match (Tuple a b)
+        ((Tuple (TokWhitespace) (TokWhitespace)) True)
+        ((Tuple (TokComment) (TokComment)) True)
+        ((Tuple (TokBlockComment) (TokBlockComment)) True)
+        ((Tuple (TokString) (TokString)) True)
+        ((Tuple (TokChar) (TokChar)) True)
+        ((Tuple (TokNumber) (TokNumber)) True)
+        ((Tuple (TokOpenParen) (TokOpenParen)) True)
+        ((Tuple (TokCloseParen) (TokCloseParen)) True)
+        ((Tuple (TokOpenBracket) (TokOpenBracket)) True)
+        ((Tuple (TokCloseBracket) (TokCloseBracket)) True)
+        ((Tuple (TokQuote) (TokQuote)) True)
+        ((Tuple (TokBackquote) (TokBackquote)) True)
+        ((Tuple (TokComma) (TokComma)) True)
+        ((Tuple (TokCommaAt) (TokCommaAt)) True)
+        ((Tuple (TokHashQuote) (TokHashQuote)) True)
+        ((Tuple (TokSharpSign) (TokSharpSign)) True)
+        ((Tuple (TokDot) (TokDot)) True)
+        ((Tuple (TokSymbol) (TokSymbol)) True)
+        ((Tuple (TokKeyword) (TokKeyword)) True)
+        ((Tuple (TokPackagePrefix) (TokPackagePrefix)) True)
+        ((Tuple (TokPackageQualified) (TokPackageQualified)) True)
+        ((Tuple (TokCoaltonKeyword) (TokCoaltonKeyword)) True)
+        ((Tuple (TokTypeVariable) (TokTypeVariable)) True)
+        ((Tuple (TokConstructor) (TokConstructor)) True)
+        ((Tuple (TokAccessor) (TokAccessor)) True)
+        ((Tuple (TokDynamic) (TokDynamic)) True)
+        ((Tuple (TokArrow) (TokArrow)) True)
+        ((Tuple (TokOperator) (TokOperator)) True)
+        ((Tuple (TokUnknown) (TokUnknown)) True)
+        (_ False))))
+
+  ;;; Token
+
+  (define-struct Token
+    "A lexical token with kind and absolute buffer positions."
+    (token-kind  TokenKind)
+    (token-start UFix)
+    (token-end   UFix)))

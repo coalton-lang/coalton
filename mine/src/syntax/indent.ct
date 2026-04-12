@@ -1,0 +1,207 @@
+(cl:defpackage #:mine/syntax/indent
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:gap #:mine/buffer/gap)
+   (#:str #:coalton/string)
+   (#:char #:coalton/char)
+   (#:cell #:coalton/cell))
+  (:export
+   #:compute-indent))
+
+(in-package #:mine/syntax/indent)
+
+(coalton-toplevel
+
+  ;;; Body-form detection
+
+  (declare is-body-form? (String -> Boolean))
+  (define (is-body-form? sym)
+    "True if SYM names a form whose subforms should be body-indented (+2)."
+    (lisp (-> Boolean) (sym)
+      (cl:let ((lower (cl:string-downcase sym)))
+        (cl:if (cl:member lower
+                          '("define" "define-type" "define-struct"
+                            "define-class" "define-instance"
+                            "let" "fn" "match" "do"
+                            "when" "unless" "coalton-toplevel" "progn"
+                            "defun" "defmacro" "defmethod" "defvar"
+                            "defparameter" "defstruct" "defclass"
+                            "lambda" "with-open-file" "handler-case"
+                            "block" "tagbody" "flet" "labels"
+                            "macrolet" "symbol-macrolet"
+                            "multiple-value-bind" "destructuring-bind"
+                            "loop" "dotimes" "dolist" "with-slots"
+                            "define-condition" "cond" "if"
+                            "handler-bind" "restart-case"
+                            "eval-when" "locally")
+                          :test #'cl:string=)
+               cl:t cl:nil))))
+
+  ;;; Helpers
+
+  (declare char-at-pos (gap:GapBuffer * UFix -> Optional Char))
+  (define (char-at-pos gb pos)
+    "Get character at logical position POS."
+    (gap:gap-char-at gb pos))
+
+  ;;; Forward-scanning paren finder (handles strings and comments correctly)
+
+  (declare %fwd-scan (gap:GapBuffer * (Cell (List UFix)) * UFix * UFix -> Void))
+  (define (%fwd-scan gb stack p limit)
+    "Forward-scan from P to LIMIT, tracking paren nesting.
+STACK is a cell holding a list of open-paren positions (innermost first).
+Correctly skips string literals and ;-comments."
+    (when (< p limit)
+      (match (char-at-pos gb p)
+        ((Some #\;)
+         ;; Line comment: skip to end of line
+         (%fwd-scan gb stack (%skip-to-eol gb (+ p 1) limit) limit))
+        ((Some #\")
+         ;; String literal: skip to closing quote
+         (%fwd-scan gb stack (%skip-str-fwd gb (+ p 1) limit) limit))
+        ((Some #\()
+         (cell:write! stack (Cons p (cell:read stack)))
+         (%fwd-scan gb stack (+ p 1) limit))
+        ((Some #\))
+         (match (cell:read stack)
+           ((Cons _ rest)
+            (cell:write! stack rest)
+            (values))
+           ((Nil) (values)))
+         (%fwd-scan gb stack (+ p 1) limit))
+        (_ (%fwd-scan gb stack (+ p 1) limit)))))
+
+  (declare %skip-to-eol (gap:GapBuffer * UFix * UFix -> UFix))
+  (define (%skip-to-eol gb p limit)
+    "Skip forward to the character after the next newline."
+    (if (>= p limit)
+        limit
+        (match (char-at-pos gb p)
+          ((Some #\Newline) (+ p 1))
+          (_ (%skip-to-eol gb (+ p 1) limit)))))
+
+  (declare %skip-str-fwd (gap:GapBuffer * UFix * UFix -> UFix))
+  (define (%skip-str-fwd gb p limit)
+    "Skip forward past a string literal (starting after the opening quote).
+Returns the position after the closing quote."
+    (if (>= p limit)
+        limit
+        (match (char-at-pos gb p)
+          ((Some #\\)
+           ;; Escaped character: skip next char too
+           (%skip-str-fwd gb (+ p 2) limit))
+          ((Some #\")
+           ;; Closing quote: return position after it
+           (+ p 1))
+          (_ (%skip-str-fwd gb (+ p 1) limit)))))
+
+  (declare find-enclosing-paren (gap:GapBuffer * UFix -> Optional (Tuple UFix UFix)))
+  (define (find-enclosing-paren gb pos)
+    "Find the position and column of the innermost unclosed open paren
+before POS. Returns (position, column) or None.
+Uses a forward scan so strings and comments are handled correctly."
+    (let stack = (cell:new (the (List UFix) Nil)))
+    (%fwd-scan gb stack 0 pos)
+    (match (cell:read stack)
+      ((Cons paren-pos _)
+       (match (gap:gap-pos-to-line-col gb paren-pos)
+         ((Tuple _line col) (Some (Tuple paren-pos col)))))
+      ((Nil) None)))
+
+  (declare %skip-ws (gap:GapBuffer * UFix * UFix -> UFix))
+  (define (%skip-ws gb p buf-len)
+    "Skip whitespace characters forward."
+    (if (>= p buf-len)
+        p
+        (match (char-at-pos gb p)
+          ((Some #\Space) (%skip-ws gb (+ p 1) buf-len))
+          ((Some #\Tab) (%skip-ws gb (+ p 1) buf-len))
+          (_ p))))
+
+  (declare %read-sym-chars (gap:GapBuffer * (Cell UFix) * UFix -> Void))
+  (define (%read-sym-chars gb sym-end buf-len)
+    "Read symbol characters, advancing sym-end cell."
+    (let p = (cell:read sym-end))
+    (when (< p buf-len)
+      (match (char-at-pos gb p)
+        ((Some sc)
+         (when (and (not (== sc #\Space))
+                     (and (not (== sc #\Tab))
+                          (and (not (== sc #\Newline))
+                               (and (not (== sc #\())
+                                    (not (== sc #\)))))))
+           (cell:write! sym-end (+ p 1))
+           (%read-sym-chars gb sym-end buf-len)))
+        (_ (values)))))
+
+  (declare first-symbol-after (gap:GapBuffer * UFix -> Optional String))
+  (define (first-symbol-after gb pos)
+    "Get the text of the first symbol after position POS.
+Skips whitespace, returns None if end of buffer or non-symbol found."
+    (let buf-len = (gap:gap-length gb))
+    (let start = (%skip-ws gb (+ pos 1) buf-len))
+    (if (>= start buf-len)
+        None
+        (match (char-at-pos gb start)
+          ((Some #\() None)
+          ((Some #\)) None)
+          ((Some #\") None)
+          ((Some #\;) None)
+          ((Some _ch)
+           (let sym-end = (cell:new start))
+           (%read-sym-chars gb sym-end buf-len)
+           (let e = (cell:read sym-end))
+           (if (== e start)
+               None
+               (Some (gap:gap-substring gb start e))))
+          ((None) None))))
+
+  ;;; compute-indent
+
+  (declare %find-arg-on-line (gap:GapBuffer * UFix * UFix -> (Optional UFix)))
+  (define (%find-arg-on-line gb p buf-len)
+    "Find the first non-whitespace character on the same line after position P."
+    (if (>= p buf-len)
+        None
+        (match (char-at-pos gb p)
+          ((Some #\Newline) None)
+          ((Some #\Space) (%find-arg-on-line gb (+ p 1) buf-len))
+          ((Some #\Tab) (%find-arg-on-line gb (+ p 1) buf-len))
+          ((Some _)
+           ;; Found argument on same line
+           (match (gap:gap-pos-to-line-col gb p)
+             ((Tuple _line col) (Some col))))
+          ((None) None))))
+
+  (declare compute-indent (gap:GapBuffer * UFix * UFix -> UFix))
+  (define (compute-indent gb _mode line)
+    "Compute the indentation for LINE. MODE: 0=coalton, 1=lisp.
+Returns the number of spaces to indent."
+    (cond
+      ((== line 0) 0)
+      (True
+       ;; Find the start position of this line
+       (let line-start = (gap:gap-line-to-pos gb line))
+       ;; Find the enclosing open paren
+       (match (find-enclosing-paren gb line-start)
+         ;; No enclosing paren: indent 0
+         ((None) 0)
+         ((Some (Tuple paren-pos paren-col))
+          ;; Get the first symbol after the paren
+          (match (first-symbol-after gb paren-pos)
+            ;; No symbol: indent +1 from paren
+            ((None) (+ paren-col 1))
+            ((Some sym)
+             (cond
+               ((is-body-form? sym)
+                ;; Body form: indent +2 from paren column
+                (+ paren-col 2))
+               (True
+                ;; Function call: look for argument on same line
+                (let sym-end-pos = (+ (+ paren-pos 1) (str:length sym)))
+                (let buf-len = (gap:gap-length gb))
+                (match (%find-arg-on-line gb sym-end-pos buf-len)
+                  ;; Align with first argument
+                  ((Some arg-col) arg-col)
+                  ;; No argument on same line: indent +2 from paren
+                  ((None) (+ paren-col 2)))))))))))))

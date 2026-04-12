@@ -1,0 +1,186 @@
+(cl:defpackage #:mine/app/help
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:screen #:mine/term/screen)
+   (#:color #:mine/term/color)
+   (#:term #:mine/term/terminal)
+   (#:input #:mine/term/input)
+   (#:render #:mine/widget/render)
+   (#:wt #:mine/widget/types))
+  (:export
+   #:show-help!))
+
+(in-package #:mine/app/help)
+
+(coalton-toplevel
+
+  ;;; Helpers
+
+  (declare %scroll-row (UFix * UFix -> UFix))
+  (define (%scroll-row row scroll)
+    "Subtract scroll from row, returning a large value on underflow."
+    (if (>= row scroll) (- row scroll) 99999))
+
+  (declare help-line (screen:Screen * UFix * color:Style * color:Style * String * String -> Void))
+  (define (help-line scr row key-s desc-s key desc)
+    (screen:screen-set-string scr row 5 key key-s)
+    (screen:screen-set-string scr row 30 desc desc-s)
+    (values))
+
+  (declare make-rule-string (UFix -> String))
+  (define (make-rule-string n)
+    "A thin horizontal rule."
+    (lisp (-> String) (n)
+      (cl:make-string n :initial-element (cl:code-char #x2500))))
+
+  ;;; Drawing
+
+  (declare %draw-help-content (screen:Screen * UFix * UFix * UFix -> Void))
+  (define (%draw-help-content scr cols rows scroll)
+    "Draw the help screen content with SCROLL offset."
+    (let bg = (color:Style color:text-fg
+                            color:panel-bg
+                            color:AttrNone))
+    (let heading = (color:Style color:accent-fg
+                                 color:panel-bg
+                                 color:AttrBold))
+    (let key-s = (color:Style color:info-fg
+                               color:panel-bg
+                               color:AttrBold))
+    (let desc-s = bg)
+    ;; Clear screen with background
+    (render:fill-rect scr (wt:Rect 0 0 cols rows) #\Space bg)
+    ;; Title
+    (screen:screen-set-string scr (%scroll-row 1 scroll) 3 "Keybindings" heading)
+    (screen:screen-set-string scr (%scroll-row 2 scroll) 3 (make-rule-string 11) bg)
+    ;; Global
+    (screen:screen-set-string scr (%scroll-row 4 scroll) 3 "Global" heading)
+    (help-line scr (%scroll-row 5 scroll) key-s desc-s "F1-F6" "Open menus (Mine, File, Editor, REPL, Project, Site)")
+    (help-line scr (%scroll-row 6 scroll) key-s desc-s "Ctrl+R" "Open/focus REPL, maximize when focused")
+    (help-line scr (%scroll-row 7 scroll) key-s desc-s "Ctrl+E" "Focus editor, maximize when focused")
+    (help-line scr (%scroll-row 8 scroll) key-s desc-s "Ctrl+T" "Expand file tree / open files panel")
+    (help-line scr (%scroll-row 9 scroll) key-s desc-s "Ctrl+1-9" "Switch to open file by number")
+    (help-line scr (%scroll-row 10 scroll) key-s desc-s "Ctrl+Q" "Quit")
+    (help-line scr (%scroll-row 11 scroll) key-s desc-s "Esc / Ctrl+G" "Cancel / refresh terminal")
+    (help-line scr (%scroll-row 12 scroll) key-s desc-s "Mouse click" "Switch pane focus")
+    ;; Editor
+    (screen:screen-set-string scr (%scroll-row 14 scroll) 3 "Editor" heading)
+    (help-line scr (%scroll-row 15 scroll) key-s desc-s "Arrows" "Move cursor")
+    (help-line scr (%scroll-row 16 scroll) key-s desc-s "Home / End" "Line start / end")
+    (help-line scr (%scroll-row 17 scroll) key-s desc-s "PgUp / PgDn" "Scroll half screen")
+    (help-line scr (%scroll-row 18 scroll) key-s desc-s "Enter" "Newline + auto-indent")
+    (help-line scr (%scroll-row 19 scroll) key-s desc-s "Tab" "Reindent line (Lisp/Coalton)")
+    (help-line scr (%scroll-row 20 scroll) key-s desc-s "Ctrl+O" "New/open file")
+    (help-line scr (%scroll-row 21 scroll) key-s desc-s "Ctrl+S" "Save file")
+    (help-line scr (%scroll-row 22 scroll) key-s desc-s "Ctrl+W" "Close file")
+    (help-line scr (%scroll-row 23 scroll) key-s desc-s "Ctrl+F" "Find in file")
+    (help-line scr (%scroll-row 24 scroll) key-s desc-s "Ctrl+C" "Copy selection")
+    (help-line scr (%scroll-row 25 scroll) key-s desc-s "Ctrl+X" "Cut selection")
+    (help-line scr (%scroll-row 26 scroll) key-s desc-s "Ctrl+V" "Paste clipboard")
+    (help-line scr (%scroll-row 27 scroll) key-s desc-s "Ctrl+Z" "Undo")
+    (help-line scr (%scroll-row 28 scroll) key-s desc-s "Ctrl+Space" "Toggle selection")
+    (help-line scr (%scroll-row 29 scroll) key-s desc-s "Alt+K" "Beam file to REPL")
+    (help-line scr (%scroll-row 30 scroll) key-s desc-s "Alt+C" "Beam form at cursor")
+    (help-line scr (%scroll-row 31 scroll) key-s desc-s "Alt+." "Jump to definition")
+    (help-line scr (%scroll-row 32 scroll) key-s desc-s "Alt+," "Jump back")
+    (help-line scr (%scroll-row 33 scroll) key-s desc-s "Ctrl+P" "Toggle structural editing")
+    ;; Structural Editing
+    (screen:screen-set-string scr (%scroll-row 35 scroll) 3 "Structural Editing" heading)
+    (screen:screen-set-string scr (%scroll-row 36 scroll) 5
+      "Try the built-in lessons! Go to Editor > Structural Lessons."
+      (color:Style color:text-dimmer-fg color:panel-bg color:AttrItalic))
+    (help-line scr (%scroll-row 37 scroll) key-s desc-s "( ) \"" "Balanced insert")
+    (help-line scr (%scroll-row 38 scroll) key-s desc-s "Backspace" "Balanced delete")
+    (help-line scr (%scroll-row 39 scroll) key-s desc-s "Ctrl+Left / Ctrl+Right" "Backward / forward word")
+    (help-line scr (%scroll-row 40 scroll) key-s desc-s "Ctrl+Backspace" "Backward word delete")
+    (help-line scr (%scroll-row 41 scroll) key-s desc-s "Alt+F / Alt+B" "Forward / backward sexp")
+    (help-line scr (%scroll-row 42 scroll) key-s desc-s "Alt+Left / Alt+Right" "Forward barf / slurp")
+    (help-line scr (%scroll-row 43 scroll) key-s desc-s "Alt+Up / Alt+Down" "Splice / cleave")
+    ;; Tree
+    (screen:screen-set-string scr (%scroll-row 45 scroll) 3 "File Tree" heading)
+    (help-line scr (%scroll-row 46 scroll) key-s desc-s "Up / Down" "Navigate (previews file)")
+    (help-line scr (%scroll-row 47 scroll) key-s desc-s "Left / Right" "Collapse / expand directory")
+    (help-line scr (%scroll-row 48 scroll) key-s desc-s "Enter" "Open file / toggle dir")
+    ;; Open Files
+    (screen:screen-set-string scr (%scroll-row 50 scroll) 3 "Open Files" heading)
+    (help-line scr (%scroll-row 51 scroll) key-s desc-s "Enter" "Go to file in editor")
+    (help-line scr (%scroll-row 52 scroll) key-s desc-s "c" "Close file")
+    (help-line scr (%scroll-row 53 scroll) key-s desc-s "s" "Save file")
+    (help-line scr (%scroll-row 54 scroll) key-s desc-s "r" "Refresh from disk")
+    (help-line scr (%scroll-row 55 scroll) key-s desc-s "o" "Open file dialog")
+    ;; REPL
+    (screen:screen-set-string scr (%scroll-row 57 scroll) 3 "REPL" heading)
+    (help-line scr (%scroll-row 58 scroll) key-s desc-s "Enter" "Evaluate")
+    (help-line scr (%scroll-row 59 scroll) key-s desc-s "Up / Down" "History")
+    (help-line scr (%scroll-row 60 scroll) key-s desc-s ",restart" "Restart runtime (clean slate)")
+    (help-line scr (%scroll-row 61 scroll) key-s desc-s ",clear" "Clear REPL output")
+    (help-line scr (%scroll-row 62 scroll) key-s desc-s ",coalton" "Switch to Coalton mode")
+    (help-line scr (%scroll-row 63 scroll) key-s desc-s ",lisp" "Switch to Lisp mode")
+    (help-line scr (%scroll-row 64 scroll) key-s desc-s ",help" "List comma commands")
+    ;; Debugger
+    (screen:screen-set-string scr (%scroll-row 66 scroll) 3 "Debugger" heading)
+    (help-line scr (%scroll-row 67 scroll) key-s desc-s "0-9" "Invoke restart")
+    (help-line scr (%scroll-row 68 scroll) key-s desc-s "q / a" "Abort")
+    ;; Footer (fixed at bottom)
+    (let footer-y = (if (> rows 1) (- rows 1) 0))
+    (render:fill-rect scr (wt:Rect 0 footer-y cols 1) #\Space bg)
+    (screen:screen-set-string scr footer-y 3 "Up/Down to scroll, Enter to close"
+      (color:Style color:text-dimmer-fg color:panel-bg color:AttrItalic))
+    (values))
+
+  ;;; Scroll loop
+
+  (declare %help-scroll-loop (term:Terminal * UFix -> Boolean))
+  (define (%help-scroll-loop term scroll)
+    "Handle scrolling input for the help screen. Returns True if user wants to quit."
+    (let scr = (term:.terminal-screen term))
+    (screen:screen-hide-cursor scr)
+    (term:terminal-flush term)
+    (let ev = (term:terminal-wait-for-key term))
+    (let cols = (term:terminal-cols term))
+    (let rows = (term:terminal-rows term))
+    (let max-scroll = (if (> 70 rows) (- 70 rows) 0))
+    (match ev
+      ((input:IEvKey (input:KeyEnter) _) False)
+      ((input:IEvKey (input:KeyEscape) _) False)
+      ((input:IEvKey (input:KeyChar #\q) _) False)
+      ((input:IEvKey (input:KeyCtrl #\h) _) False)
+      ((input:IEvKey (input:KeyCtrl #\q) _) True)
+      ((input:IEvKey (input:KeyUp) _)
+       (let new-scroll = (if (> scroll 0) (- scroll 1) 0))
+       (%draw-help-content scr cols rows new-scroll)
+       (%help-scroll-loop term new-scroll))
+      ((input:IEvKey (input:KeyDown) _)
+       (let new-scroll = (if (< scroll max-scroll) (+ scroll 1) scroll))
+       (%draw-help-content scr cols rows new-scroll)
+       (%help-scroll-loop term new-scroll))
+      ((input:IEvMouse (input:MousePress) btn _ _)
+       (match btn
+         ((input:MouseScrollUp)
+          (let new-scroll = (if (>= scroll 3) (- scroll 3) 0))
+          (%draw-help-content scr cols rows new-scroll)
+          (%help-scroll-loop term new-scroll))
+         ((input:MouseScrollDown)
+          (let new-scroll = (min max-scroll (+ scroll 3)))
+          (%draw-help-content scr cols rows new-scroll)
+          (%help-scroll-loop term new-scroll))
+         (_ (%help-scroll-loop term scroll))))
+      ((input:IEvResize _ _)
+       (term:terminal-update-size! term)
+       (screen:screen-resize (term:.terminal-screen term)
+                             (term:terminal-cols term)
+                             (term:terminal-rows term))
+       (%draw-help-content (term:.terminal-screen term)
+                           (term:terminal-cols term) (term:terminal-rows term) scroll)
+       (%help-scroll-loop term scroll))
+      (_ (%help-scroll-loop term scroll))))
+
+  ;;; Entry point
+
+  (declare show-help! (term:Terminal -> Boolean))
+  (define (show-help! term)
+    "Show keybindings help overlay, scrollable, dismiss on Enter.
+Returns True if the user pressed Ctrl+Q to quit."
+    (let scr = (term:.terminal-screen term))
+    (%draw-help-content scr (term:terminal-cols term) (term:terminal-rows term) 0)
+    (%help-scroll-loop term 0)))

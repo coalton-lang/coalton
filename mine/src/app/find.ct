@@ -1,0 +1,108 @@
+(cl:defpackage #:mine/app/find
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:str #:coalton/string)
+   (#:vec #:coalton/vector)
+   (#:gap #:mine/buffer/gap))
+  (:export
+   #:find-all-matches
+   #:find-match-index
+   #:find-next-from
+   #:find-prev-from
+   #:clear-search!
+   #:set-search-current!
+   #:find-prompt-string))
+
+(in-package #:mine/app/find)
+
+(coalton-toplevel
+
+;;; Search engine
+
+  (declare find-all-matches (gap:GapBuffer * String -> UFix))
+  (define (find-all-matches gb needle)
+    "Find all occurrences of NEEDLE in GB (case-insensitive).
+Stores match positions in editor search state. Returns the total count."
+    (let nlen = (str:length needle))
+    (cond
+      ((== nlen 0)
+       (clear-search!)
+       0)
+      (True
+       (let text = (gap:gap-to-string gb))
+       (let matches = (vec:new))
+       (lisp (-> Void) (needle text matches)
+         (cl:let ((pos 0))
+           (cl:loop
+             (cl:let ((found (cl:search needle text :start2 pos :test #'cl:char-equal)))
+               (cl:unless found (cl:return))
+               (vec:push! found matches)
+               (cl:setf pos (cl:1+ found)))))
+         (cl:values))
+       (let count = (vec:length matches))
+       (lisp (-> Void) (matches nlen)
+         (cl:setf mine/pane/editor::*search-matches*
+                  (cl:coerce matches 'cl:simple-vector))
+         (cl:setf mine/pane/editor::*search-needle-len* nlen)
+         (cl:values))
+       count)))
+
+  (declare find-match-index (UFix -> UFix))
+  (define (find-match-index cur-pos)
+    "Return the 1-based index of the match at CUR-POS, or 0 if not found."
+    (lisp (-> UFix) (cur-pos)
+      (cl:if mine/pane/editor::*search-matches*
+             (cl:let ((idx (cl:position cur-pos mine/pane/editor::*search-matches*)))
+               (cl:if idx (cl:1+ idx) 0))
+             0)))
+
+  (declare find-next-from (UFix -> Optional UFix))
+  (define (find-next-from start-pos)
+    "Find the next match position at or after START-POS, wrapping around."
+    (lisp (-> (Optional UFix)) (start-pos)
+      (cl:if (cl:or (cl:null mine/pane/editor::*search-matches*)
+                    (cl:zerop (cl:length mine/pane/editor::*search-matches*)))
+             None
+             (cl:let ((vec mine/pane/editor::*search-matches*))
+               (cl:or (cl:loop :for i :from 0 :below (cl:length vec)
+                         :when (cl:>= (cl:aref vec i) start-pos)
+                           :return (Some (cl:aref vec i)))
+                      (Some (cl:aref vec 0)))))))
+
+  (declare find-prev-from (UFix -> Optional UFix))
+  (define (find-prev-from start-pos)
+    "Find the previous match position before START-POS, wrapping around."
+    (lisp (-> (Optional UFix)) (start-pos)
+      (cl:if (cl:or (cl:null mine/pane/editor::*search-matches*)
+                    (cl:zerop (cl:length mine/pane/editor::*search-matches*)))
+             None
+             (cl:let ((vec mine/pane/editor::*search-matches*)
+                      (len (cl:length mine/pane/editor::*search-matches*)))
+               (cl:or (cl:loop :for i :from (cl:1- len) :downto 0
+                         :when (cl:< (cl:aref vec i) start-pos)
+                           :return (Some (cl:aref vec i)))
+                      (Some (cl:aref vec (cl:1- len))))))))
+
+  (declare clear-search! (Void -> Void))
+  (define (clear-search!)
+    "Clear search highlight state."
+    (lisp (-> Void) ()
+      (cl:setf mine/pane/editor::*search-matches* cl:nil)
+      (cl:setf mine/pane/editor::*search-needle-len* 0)
+      (cl:setf mine/pane/editor::*search-current-pos* cl:nil)
+      (cl:values)))
+
+  (declare set-search-current! (UFix -> Void))
+  (define (set-search-current! pos)
+    "Set the current match position for bright highlighting."
+    (lisp (-> Void) (pos)
+      (cl:setf mine/pane/editor::*search-current-pos* pos)
+      (cl:values)))
+
+  (declare find-prompt-string (UFix * UFix -> String))
+  (define (find-prompt-string idx total)
+    "Build the find prompt string with match count."
+    (lisp (-> String) (idx total)
+      (cl:if (cl:zerop total)
+             "Find: "
+             (cl:format cl:nil "Find (~D/~D): " idx total)))))

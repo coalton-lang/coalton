@@ -1,0 +1,484 @@
+(cl:defpackage #:mine/pane/editor
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:screen #:mine/term/screen)
+   (#:color #:mine/term/color)
+   (#:wt #:mine/widget/types)
+   (#:render #:mine/widget/render)
+   (#:cell #:coalton/cell)
+   (#:buf #:mine/buffer/buffer)
+   (#:gap #:mine/buffer/gap)
+   (#:cursor #:mine/edit/cursor)
+   (#:str #:coalton/string)
+   (#:cellw #:mine/text/width)
+   (#:tok #:mine/syntax/token)
+   (#:lexer #:mine/syntax/lexer)
+   (#:hl #:mine/syntax/highlight)
+   (#:paredit #:mine/syntax/paredit)
+   (#:vec #:coalton/vector))
+  (:export
+   #:EditorPane
+   #:editor-pane-new
+   #:editor-pane-set-buffer!
+   #:editor-pane-render
+   #:editor-pane-ensure-visible!
+   #:editor-pane-scroll-row
+   #:editor-pane-scroll-col
+   #:editor-pane-set-scroll-row!
+   #:editor-pane-gutter-width
+   #:*lexer-mode*
+   #:*editor-filepath*
+   #:*diag-fn*
+   #:*search-matches*
+   #:*search-needle-len*
+   #:*search-current-pos*
+   #:%editor-scrollbar))
+
+(in-package #:mine/pane/editor)
+
+;;; CL state used by lisp escapes in the Coalton render code below.
+(cl:defvar *lexer-state* cl:nil)
+(cl:defvar *lexer-mode* 0
+  "Buffer mode: 0=coalton, 1=lisp, 2=plain.")
+(cl:defvar *editor-filepath* cl:nil
+  "Current buffer filepath for diagnostics lookup.")
+(cl:defvar *diag-fn* cl:nil
+  "Function (filepath line) -> severity-keyword-or-nil. Set by app before render.")
+(cl:defvar *paren-match-a* cl:nil
+  "Buffer position of the close bracket to highlight, or nil for none.")
+(cl:defvar *paren-match-b* cl:nil
+  "Buffer position of the matching open bracket to highlight, or nil for none.")
+
+(coalton-toplevel
+
+  ;;; EditorPane
+
+  (define-struct EditorPane
+    "The main source-code editing pane."
+    (buffer-id            (Cell (Optional buf:BufferId)))
+    (scroll-row           (Cell UFix))
+    (scroll-col           (Cell UFix))
+    (show-line-numbers    (Cell Boolean))
+    (highlight-current-line (Cell Boolean)))
+
+  (declare editor-pane-new (Void -> EditorPane))
+  (define (editor-pane-new)
+    "Create a new editor pane with no buffer attached."
+    (EditorPane (cell:new None)
+                (cell:new 0)
+                (cell:new 0)
+                (cell:new True)
+                (cell:new True)))
+
+  ;;; Buffer binding
+
+  (declare editor-pane-set-buffer! (EditorPane * buf:BufferId -> Void))
+  (define (editor-pane-set-buffer! ep id)
+    "Attach a buffer to this editor pane."
+    (cell:write! (.buffer-id ep) (Some id))
+    (cell:write! (.scroll-row ep) 0)
+    (cell:write! (.scroll-col ep) 0)
+    (values))
+
+  ;;; Scroll accessors
+
+  (declare editor-pane-scroll-row (EditorPane -> UFix))
+  (define (editor-pane-scroll-row ep)
+    "Return the current vertical scroll offset."
+    (cell:read (.scroll-row ep)))
+
+  (declare editor-pane-set-scroll-row! (EditorPane * UFix -> Void))
+  (define (editor-pane-set-scroll-row! ep row)
+    (cell:write! (.scroll-row ep) row)
+    (values))
+
+  (declare editor-pane-scroll-col (EditorPane -> UFix))
+  (define (editor-pane-scroll-col ep)
+    "Return the current horizontal scroll offset."
+    (cell:read (.scroll-col ep)))
+
+  (declare editor-pane-gutter-width (EditorPane * gap:GapBuffer -> UFix))
+  (define (editor-pane-gutter-width ep gb)
+    "Return the gutter width for the current buffer."
+    (if (cell:read (.show-line-numbers ep))
+        (gutter-width (gap:gap-line-count gb))
+        0))
+
+  ;;; Gutter width
+
+  (declare %count-digits (UFix * UFix -> UFix))
+  (define (%count-digits n acc)
+    "Count decimal digits in N."
+    (if (< n 10) (+ acc 1)
+        (%count-digits (lisp (-> UFix) (n) (cl:floor n 10))
+                       (+ acc 1))))
+
+  (declare gutter-width (UFix -> UFix))
+  (define (gutter-width line-count)
+    "Compute the gutter width needed for LINE-COUNT lines.
+Returns the number of digits plus one for a separator space."
+    (+ (%count-digits (max 1 line-count) 0) 1))
+
+  ;;; Ensure cursor visible
+
+  (declare editor-pane-ensure-visible! (EditorPane * cursor:CursorState * gap:GapBuffer * wt:Rect -> Void))
+  (define (editor-pane-ensure-visible! ep cs gb rect)
+    "Adjust scroll offsets so the cursor is visible within RECT.
+Scroll-col is in visual columns (tab-expanded)."
+    (let lc = (cursor:cursor-line-col cs gb))
+    (let cur-line = (fst lc))
+    (let cur-col = (snd lc))
+    (let line-count = (gap:gap-line-count gb))
+    (let gw = (if (cell:read (.show-line-numbers ep))
+                  (gutter-width line-count)
+                  0))
+    (let view-height = (wt:.rect-height rect))
+    (let view-width = (if (> (wt:.rect-width rect) gw)
+                          (- (wt:.rect-width rect) gw)
+                          1))
+    (let sr = (cell:read (.scroll-row ep)))
+    (let sc = (cell:read (.scroll-col ep)))
+    ;; Vertical scroll adjustment.
+    (when (< cur-line sr)
+      (cell:write! (.scroll-row ep) cur-line))
+    (when (>= cur-line (+ sr view-height))
+      (cell:write! (.scroll-row ep) (+ 1 (- cur-line view-height))))
+    ;; Horizontal scroll adjustment (visual columns).
+    (let tab-w = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
+    (let cur-text = (gap:gap-line-text gb cur-line))
+    (let cur-vcol = (gap:visual-col cur-text cur-col tab-w))
+    (when (< cur-vcol sc)
+      (cell:write! (.scroll-col ep) cur-vcol))
+    (when (>= cur-vcol (+ sc view-width))
+      (cell:write! (.scroll-col ep) (+ 1 (- cur-vcol view-width))))
+    (values))
+
+  ;;; Rendering
+
+  (declare render-line-number (screen:Screen * UFix * UFix * UFix * UFix * color:Style -> Void))
+  (define (render-line-number scr screen-y line-num x gw style)
+    "Render a right-aligned LINE-NUM at screen row SCREEN-Y, column X, within gutter width GW."
+    (let num-str = (into line-num))
+    (let padding = (- (- gw 1) (the UFix (into (str:length num-str)))))
+    (screen:screen-set-string scr screen-y (+ x padding) num-str style)
+    (values))
+
+  (declare editor-pane-render (EditorPane * screen:Screen * wt:Rect * gap:GapBuffer * cursor:CursorState -> Void))
+  (define (editor-pane-render ep scr rect gb cs)
+    "Render the visible portion of the gap buffer within RECT.
+Shows line numbers in the gutter and highlights the current line."
+    (let sr = (cell:read (.scroll-row ep)))
+    (let sc = (cell:read (.scroll-col ep)))
+    (let show-ln = (cell:read (.show-line-numbers ep)))
+    (let hl-cur = (cell:read (.highlight-current-line ep)))
+    (let line-count = (gap:gap-line-count gb))
+    (let cur-lc = (cursor:cursor-line-col cs gb))
+    (let cur-line = (fst cur-lc))
+    (let gw = (if show-ln (gutter-width line-count) 0))
+    (let height = (wt:.rect-height rect))
+    (let text-x = (+ (wt:.rect-x rect) gw))
+    (let text-width = (if (> (wt:.rect-width rect) gw)
+                          (- (wt:.rect-width rect) gw)
+                          1))
+    ;; Gutter style.
+    (let gutter-style = (color:with-fg color:default-style color:gutter-fg))
+    ;; Highlight style for the current line.
+    (let hl-style = (color:with-bg color:default-style color:current-line-bg))
+    ;; Extract rect fields and convert booleans before entering lisp form
+    (let rect-x0 = (wt:.rect-x rect))
+    (let rect-y0 = (wt:.rect-y rect))
+    (let show-ln-cl = (lisp (-> UFix) (show-ln) (cl:if (cl:eq show-ln True) 1 0)))
+    (let hl-cur-cl = (lisp (-> UFix) (hl-cur) (cl:if (cl:eq hl-cur True) 1 0)))
+    ;; Selection range (sel-start <= sel-end, both buffer positions, or both max for no selection)
+    (let cur-pos = (cursor:cursor-position cs))
+    (let sel-anchor = (cursor:cursor-selection-anchor cs))
+    (let sel-start = (match sel-anchor
+                       ((Some a) (min a cur-pos))
+                       ((None) 99999999)))
+    (let sel-end = (match sel-anchor
+                     ((Some a) (max a cur-pos))
+                     ((None) 99999999)))
+    ;; Compute matching bracket positions
+    (let paren-match =
+      (if (> cur-pos 0)
+          (match (gap:gap-char-at gb (- cur-pos 1))
+            ((Some #\))
+             (match (paredit:scan-matching-open-paren gb (- cur-pos 1))
+               ((Some open-pos) (Some (Tuple (- cur-pos 1) open-pos)))
+               ((None) None)))
+            ((Some #\])
+             (match (paredit:scan-matching-open-bracket gb (- cur-pos 1))
+               ((Some open-pos) (Some (Tuple (- cur-pos 1) open-pos)))
+               ((None) None)))
+            (_ None))
+          None))
+    (match paren-match
+      ((Some pair)
+       (let a = (fst pair))
+       (let b = (snd pair))
+       (lisp (-> Void) (a b)
+         (cl:setf *paren-match-a* a)
+         (cl:setf *paren-match-b* b)
+         (cl:values)))
+      ((None)
+       (lisp (-> Void) ()
+         (cl:setf *paren-match-a* cl:nil)
+         (cl:setf *paren-match-b* cl:nil)
+         (cl:values))))
+    ;; Clear the pane area.
+    (render:fill-rect scr rect #\Space color:default-style)
+    ;; Compute cursor screen position using visual column (tab-aware)
+    (let cur-col = (snd cur-lc))
+    (let tab-w = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
+    (let cur-text = (gap:gap-line-text gb cur-line))
+    (let cur-vcol = (gap:visual-col cur-text cur-col tab-w))
+    (let cursor-scr-y = (+ rect-y0 (- cur-line sr)))
+    (let cursor-scr-x = (+ text-x (- cur-vcol sc)))
+    ;; Draw each visible row using lisp loop to avoid recursive lambda
+    ;; sc is now in visual columns (set by ensure-visible)
+    (lisp (-> Void) (scr gb sr sc show-ln-cl hl-cur-cl cur-line
+                     line-count height text-x text-width gw
+                     gutter-style hl-style rect-x0 rect-y0
+                     cursor-scr-y cursor-scr-x sel-start sel-end)
+      ;; Reset lexer state for each render pass
+      (cl:setf *lexer-state* (mine/syntax/lexer:lexer-state-new *lexer-mode*))
+      ;; Lex lines from buffer start to scroll position to build correct state
+      (cl:dotimes (pre-line sr)
+        (cl:when (cl:< pre-line line-count)
+          (mine/syntax/lexer:lex-line *lexer-state* (mine/buffer/gap:gap-line-text gb pre-line) 0)))
+      (cl:dotimes (view-row height)
+        (cl:let* ((line-idx (cl:+ sr view-row))
+                  (y (cl:+ rect-y0 view-row)))
+          (cl:if (cl:>= line-idx line-count)
+                 ;; Past end of buffer -- draw tilde in gutter.
+                 (cl:when (cl:plusp show-ln-cl)
+                   (screen:screen-set-string scr y rect-x0 "~" gutter-style))
+                 ;; Within buffer.
+                 (cl:let* ((is-current (cl:and (cl:plusp hl-cur-cl) (cl:= line-idx cur-line)))
+                           (line-style (cl:if is-current hl-style color:default-style)))
+                   ;; Draw gutter line number, with diagnostic marker if applicable.
+                   (cl:when (cl:plusp show-ln-cl)
+                     (cl:let ((diag-sev (cl:when (cl:and *editor-filepath* *diag-fn*)
+                                          (cl:funcall *diag-fn* *editor-filepath* (cl:1+ line-idx)))))
+                       (cl:if diag-sev
+                             (cl:let ((diag-style
+                                        (cl:cond
+                                          ((cl:eq diag-sev :error)
+                                           (mine/term/color::Style
+                                             mine/term/color::error-fg
+                                             mine/term/color::black
+                                             mine/term/color::AttrBold))
+                                          ((cl:eq diag-sev :warning)
+                                           (mine/term/color::Style
+                                             mine/term/color::warning-fg
+                                             mine/term/color::black
+                                             mine/term/color::AttrNone))
+                                          (cl:t
+                                           (mine/term/color::Style
+                                             mine/term/color::info-fg
+                                             mine/term/color::black
+                                             mine/term/color::AttrNone)))))
+                               (render-line-number scr y (cl:1+ line-idx) rect-x0 gw diag-style))
+                             (render-line-number scr y (cl:1+ line-idx) rect-x0 gw gutter-style))))
+                   ;; Draw the text content.
+                   (cl:let* ((text (gap:gap-line-text gb line-idx))
+                             (text-len (cl:length text))
+                             (tw mine/buffer/gap::*tab-width*))
+                     ;; Fill the current line highlight if needed.
+                     (cl:when is-current
+                       (render:fill-rect scr
+                                         (wt:Rect text-x y text-width 1)
+                                         #\Space hl-style))
+                     ;; Draw with syntax highlighting + selection.
+                     ;; sc is a visual column; find the char index where visible area starts
+                     (cl:let ((line-buf-offset (mine/buffer/gap:gap-line-to-pos gb line-idx))
+                              (char-start (mine/buffer/gap:char-for-vcol text sc tw)))
+                       (cl:when (cl:< char-start text-len)
+                         (mine/pane/editor::draw-highlighted-line
+                          scr y text-x text-width sc text
+                          line-style
+                          sel-start sel-end line-buf-offset tw))))))))
+      ;; Place the screen cursor at the editing position.
+      (mine/term/screen:screen-set-cursor scr cursor-scr-y cursor-scr-x)
+      (cl:values)))
+
+  (declare %editor-scrollbar (screen:Screen * wt:Rect * gap:GapBuffer * UFix -> Void))
+  (define (%editor-scrollbar scr rect gb scroll-row)
+    (let sb-col = (- (+ (wt:.rect-x rect) (wt:.rect-width rect)) 1))
+    (let track-s = (color:Style color:scrollbar-track-fg
+                                 color:scrollbar-track-bg
+                                 color:AttrNone))
+    (let thumb-s = (color:Style color:scrollbar-thumb-fg
+                                 color:scrollbar-track-bg
+                                 color:AttrNone))
+    (render:draw-scrollbar scr sb-col (wt:.rect-y rect) (wt:.rect-height rect)
+                           (gap:gap-line-count gb) scroll-row
+                           track-s thumb-s)))
+
+;;; Search highlight state: set by mine.ct, read by draw loop.
+
+(cl:defvar *search-matches* cl:nil)
+(cl:defvar *search-needle-len* 0)
+(cl:defvar *search-current-pos* cl:nil)
+
+;;; Coalton drawing helpers for syntax highlighting, selection, and tab expansion.
+
+(coalton-toplevel
+
+  (define selection-bg   color:selection-bg)
+  (define search-bg      color:search-match-bg)
+  (define search-current-bg color:search-current-bg)
+
+  (declare %build-vcol-map (String * UFix -> (Vector UFix)))
+  (define (%build-vcol-map text tab-w)
+    "Build a visual-column map: for each char index, its visual column."
+    (let text-len = (str:length text))
+    (let v = (vec:new))
+    (let vc = (cell:new 0))
+    (lisp (-> Void) (text text-len v vc tab-w)
+      (cl:dotimes (i text-len)
+        (vec:push! (coalton/cell:read vc) v)
+        (cl:let ((ch (cl:char text i)))
+          (cl:if (cl:char= ch #\Tab)
+                 (coalton/cell:write! vc (cl:* (cl:1+ (cl:floor (coalton/cell:read vc) tab-w)) tab-w))
+                 (coalton/cell:write! vc (cl:+ (coalton/cell:read vc)
+                                               (mine/text/width:char-cell-width-cl ch))))))
+      (vec:push! (coalton/cell:read vc) v)
+      (cl:values))
+    v)
+
+  (declare %search-hit-kind (UFix -> UFix))
+  (define (%search-hit-kind abs-pos)
+    "Return 0=no match, 1=other match, 2=current match."
+    (lisp (-> UFix) (abs-pos)
+      (cl:if (cl:and *search-matches* (cl:> *search-needle-len* 0))
+             (cl:loop :for m :across *search-matches*
+                      :when (cl:and (cl:>= abs-pos m)
+                                    (cl:< abs-pos (cl:+ m *search-needle-len*)))
+                        :return (cl:if (cl:and *search-current-pos*
+                                              (cl:= m *search-current-pos*))
+                                       2 1)
+                      :finally (cl:return 0))
+             0)))
+
+  (declare %paren-match? (UFix -> Boolean))
+  (define (%paren-match? abs-pos)
+    "True if ABS-POS is one of the matched bracket positions."
+    (lisp (-> Boolean) (abs-pos)
+      (cl:if (cl:or (cl:and *paren-match-a* (cl:= abs-pos *paren-match-a*))
+                    (cl:and *paren-match-b* (cl:= abs-pos *paren-match-b*)))
+             True False)))
+
+  (declare %pick-style
+    (UFix * UFix * UFix * color:Style * color:Style * color:Style * color:Style -> color:Style))
+  (define (%pick-style abs-pos sel-start sel-end style sel-style search-style search-cur-style)
+    "Choose the style for a character based on selection, bracket match, and search state."
+    (cond
+      ((and (>= abs-pos sel-start) (< abs-pos sel-end)) sel-style)
+      ((%paren-match? abs-pos)
+       (color:Style (color:.style-fg style) color:match-paren-bg color:AttrBold))
+      ((== (%search-hit-kind abs-pos) 2) search-cur-style)
+      ((== (%search-hit-kind abs-pos) 1) search-style)
+      (True style)))
+
+  (declare draw-chars-with-tabs
+    (screen:Screen * UFix * UFix * String * UFix * UFix * color:Style *
+     (Vector UFix) * UFix * UFix * UFix * UFix * UFix * UFix -> Void))
+  (define (draw-chars-with-tabs scr y text-x text char-start char-end style
+                                vcol-map scroll-vcol vis-vcol-end
+                                line-buf-offset sel-start sel-end tab-w)
+    "Draw characters TEXT[CHAR-START..CHAR-END) with tab expansion."
+    (let sel-style = (color:Style (color:.style-fg style) selection-bg (color:.style-attr style)))
+    (let search-style = (color:Style color:black search-bg color:AttrNone))
+    (let search-cur-style = (color:Style color:black search-current-bg color:AttrBold))
+    (let vm-len = (vec:length vcol-map))
+    (let end = (min char-end (if (> vm-len 0) (- vm-len 1) 0)))
+    (lisp (-> Void) (scr y text-x text char-start end style
+                     sel-style search-style search-cur-style
+                     vcol-map scroll-vcol vis-vcol-end
+                     line-buf-offset sel-start sel-end tab-w)
+      (cl:loop
+        :for ci :from char-start :below end
+        :do
+        (cl:let* ((ch (cl:char text ci))
+                  (ch-vcol (vec:index-unsafe ci vcol-map))
+                  (ch-width (mine/text/width:char-cell-width-cl ch))
+                  (abs-pos (cl:+ line-buf-offset ci))
+                  (s (mine/pane/editor::%pick-style
+                      abs-pos sel-start sel-end style
+                      sel-style search-style search-cur-style)))
+          (cl:if (cl:char= ch #\Tab)
+                 (cl:let ((next-vcol (cl:* (cl:1+ (cl:floor ch-vcol tab-w)) tab-w)))
+                   (cl:loop :for v :from ch-vcol :below next-vcol
+                            :do (cl:when (cl:and (cl:>= v scroll-vcol)
+                                                 (cl:< v vis-vcol-end))
+                                  (mine/term/screen:screen-set-cell
+                                   scr y (cl:+ text-x (cl:- v scroll-vcol))
+                                   #\Space s))))
+                 (cl:when (cl:and (cl:plusp ch-width)
+                                  (cl:>= ch-vcol scroll-vcol)
+                                  (cl:<= (cl:+ ch-vcol ch-width) vis-vcol-end))
+                   (mine/term/screen:screen-set-cell
+                    scr y (cl:+ text-x (cl:- ch-vcol scroll-vcol))
+                    ch s)))))
+      (cl:values)))
+
+  (declare draw-highlighted-line
+    (screen:Screen * UFix * UFix * UFix * UFix *
+     String * color:Style * UFix * UFix * UFix * UFix -> Void))
+  (define (draw-highlighted-line scr y text-x text-width scroll-vcol
+                                 text default-style
+                                 sel-start sel-end line-buf-offset tab-w)
+    "Draw TEXT with syntax highlighting, selection, and tab expansion."
+    (lisp (-> Void) ()
+      (cl:when (cl:or (cl:null *lexer-state*)
+                      (cl:/= (mine/syntax/lexer::lexerstate/lexerstate-_2 *lexer-state*)
+                             *lexer-mode*))
+        (cl:setf *lexer-state* (mine/syntax/lexer:lexer-state-new *lexer-mode*)))
+      (cl:values))
+    (let text-len = (str:length text))
+    (let vcol-map = (%build-vcol-map text tab-w))
+    (let vis-vcol-end = (+ scroll-vcol text-width))
+    (let def-bg = (color:.style-bg default-style))
+    (let tokens = (lisp (-> (List tok:Token)) (text)
+                    (cl:if (cl:= *lexer-mode* 2)
+                           Nil
+                           (mine/syntax/lexer:lex-line *lexer-state* text 0))))
+    (match tokens
+      ((Nil)
+       (draw-chars-with-tabs scr y text-x text 0 text-len default-style
+                             vcol-map scroll-vcol vis-vcol-end
+                             line-buf-offset sel-start sel-end tab-w))
+      (_
+       (%draw-hl-tokens tokens scr y text-x text text-len default-style def-bg
+                        vcol-map scroll-vcol vis-vcol-end
+                        line-buf-offset sel-start sel-end tab-w))))
+
+  (declare %draw-hl-tokens
+    ((List tok:Token) * screen:Screen * UFix * UFix * String * UFix *
+     color:Style * color:Color * (Vector UFix) * UFix * UFix *
+     UFix * UFix * UFix * UFix -> Void))
+  (define (%draw-hl-tokens tokens scr y text-x text text-len
+                           default-style def-bg vcol-map scroll-vcol vis-vcol-end
+                           line-buf-offset sel-start sel-end tab-w)
+    "Draw tokens with syntax highlighting."
+    (match tokens
+      ((Nil) (values))
+      ((Cons tok rest)
+       (let tok-start = (tok:.token-start tok))
+       (let tok-end = (tok:.token-end tok))
+       (let tok-kind = (tok:.token-kind tok))
+       (when (and (< tok-start text-len)
+                  (< (vec:index-unsafe tok-start vcol-map) vis-vcol-end)
+                  (> (vec:index-unsafe (min tok-end text-len) vcol-map) scroll-vcol))
+         (let style = (hl:token-style 0 tok-kind))
+         (let final-style =
+           (if (== def-bg color:ColorDefault)
+               style
+               (color:Style (color:.style-fg style) def-bg (color:.style-attr style))))
+         (draw-chars-with-tabs scr y text-x text tok-start tok-end
+                               final-style vcol-map scroll-vcol vis-vcol-end
+                               line-buf-offset sel-start sel-end tab-w))
+       (%draw-hl-tokens rest scr y text-x text text-len
+                        default-style def-bg vcol-map scroll-vcol vis-vcol-end
+                        line-buf-offset sel-start sel-end tab-w)))))

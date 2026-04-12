@@ -1,0 +1,514 @@
+(cl:defpackage #:mine/pane/menubar
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:screen #:mine/term/screen)
+   (#:color #:mine/term/color)
+   (#:wt #:mine/widget/types)
+   (#:render #:mine/widget/render)
+   (#:input #:mine/term/input)
+   (#:cell #:coalton/cell)
+   (#:str #:coalton/string)
+   (#:cellw #:mine/text/width)
+   (#:list #:coalton/list))
+  (:export
+   #:MenuAction
+   #:ActionHelp #:ActionLesson #:ActionAbout #:ActionQuit
+   #:ActionOpenProject #:ActionBeamSystem #:ActionRefreshProject #:ActionCloseProject
+   #:ActionBuildExecutable
+   #:ActionOpenFile #:ActionSave #:ActionSaveAll #:ActionCloseFile
+   #:ActionFind #:ActionBeamFile #:ActionBeamForm
+   #:ActionJumpToDefinition #:ActionJumpBack #:ActionGotoLine
+   #:ActionShowRepl #:ActionFocusEditor #:ActionHideRepl #:ActionInterruptRepl #:ActionClearRepl #:ActionRestartRepl
+   #:ActionClearCache
+   #:ActionSetupWizard
+   #:ActionToggleStructural
+   #:ActionOpenFiles
+   #:ActionNewProject
+   #:ActionAddFile #:ActionAddDependency
+   #:ActionEditProject
+   #:MenuBar
+   #:menubar-new
+   #:menubar-render
+   #:menubar-render-dropdown
+   #:menubar-open?
+   #:menubar-open!
+   #:menubar-close!
+   #:menubar-handle-key!
+   #:menubar-handle-mouse!
+   #:menubar-title-hit-test))
+
+(in-package #:mine/pane/menubar)
+
+(coalton-toplevel
+
+  ;;; MenuAction
+
+  (define-type MenuAction
+    ActionHelp
+    ActionLesson
+    ActionAbout
+    ActionQuit
+    ActionOpenProject
+    ActionBeamSystem
+    ActionRefreshProject
+    ActionCloseProject
+    ActionBuildExecutable
+    ActionOpenFile
+    ActionSave
+    ActionSaveAll
+    ActionCloseFile
+    ActionFind
+    ActionGotoLine
+    ActionBeamFile
+    ActionBeamForm
+    ActionJumpToDefinition
+    ActionJumpBack
+    ActionShowRepl
+    ActionFocusEditor
+    ActionHideRepl
+    ActionInterruptRepl
+    ActionClearRepl
+    ActionRestartRepl
+    ActionClearCache
+    ActionSetupWizard
+    ActionToggleStructural
+    ActionOpenFiles
+    ActionNewProject
+    ActionAddFile
+    ActionAddDependency
+    ActionEditProject)
+
+  ;;; MenuItem
+
+  (define-struct MenuItem
+    (mi-label  String)
+    (mi-key    String)
+    (mi-action MenuAction))
+
+  ;;; MenuDef
+
+  (define-struct MenuDef
+    (md-title String)
+    (md-items (List MenuItem)))
+
+  ;;; Menu definitions
+
+  (declare %mine-menu (Void -> MenuDef))
+  (define (%mine-menu)
+    (MenuDef "mine" (make-list
+      (MenuItem "Help"      "" ActionHelp)
+      (MenuItem "About"     "" ActionAbout)
+      (MenuItem "Quit"      "Ctrl+Q" ActionQuit))))
+
+  (declare %project-menu (Void -> MenuDef))
+  (define (%project-menu)
+    (MenuDef "Project" (make-list
+      (MenuItem "New Project..."   "" ActionNewProject)
+      (MenuItem "Open Project..."  "" ActionOpenProject)
+      (MenuItem "Edit Project"     "" ActionEditProject)
+      (MenuItem "Beam Project"     "" ActionBeamSystem)
+      (MenuItem "Refresh Project"  "" ActionRefreshProject)
+      (MenuItem "Close Project"    "" ActionCloseProject)
+      (MenuItem "Build Executable" "" ActionBuildExecutable))))
+
+  (declare %file-menu (Void -> MenuDef))
+  (define (%file-menu)
+    (MenuDef "File" (make-list
+      (MenuItem "New/Open..."  "Ctrl+O" ActionOpenFile)
+      (MenuItem "Save"     "Ctrl+S" ActionSave)
+      (MenuItem "Save All" "" ActionSaveAll)
+      (MenuItem "Close"    "" ActionCloseFile)
+      (MenuItem "Focus Tree"         "Ctrl+T" ActionOpenFiles))))
+
+  (declare %edit-menu (Void -> MenuDef))
+  (define (%edit-menu)
+    (MenuDef "Editor" (make-list
+      (MenuItem "Find"               "Ctrl+F" ActionFind)
+      (MenuItem "Beam File"           "Alt+K" ActionBeamFile)
+      (MenuItem "Beam Form"           "Alt+C" ActionBeamForm)
+      (MenuItem "Jump to Definition" "Alt+." ActionJumpToDefinition)
+      (MenuItem "Jump Back"          "Alt+," ActionJumpBack)
+      (MenuItem "Focus/Maximize Editor" "Ctrl+E" ActionFocusEditor)
+      (MenuItem "Toggle Structural"  "Ctrl+P" ActionToggleStructural)
+      (MenuItem "Structural Lessons"  "" ActionLesson))))
+
+  (declare %repl-menu (Void -> MenuDef))
+  (define (%repl-menu)
+    (MenuDef "REPL" (make-list
+      (MenuItem "Show/Maximize" "Ctrl+R" ActionShowRepl)
+      (MenuItem "Hide"       "" ActionHideRepl)
+      (MenuItem "Interrupt"  "" ActionInterruptRepl)
+      (MenuItem "Clear"      "" ActionClearRepl)
+      (MenuItem "Restart"    "" ActionRestartRepl))))
+
+  (declare %site-menu (Void -> MenuDef))
+  (define (%site-menu)
+    (MenuDef "Site" (make-list
+      (MenuItem "Empty FASL Cache" "" ActionClearCache)
+      (MenuItem "Setup Wizard"     "" ActionSetupWizard))))
+
+  ;;; MenuBar
+
+  (define-struct MenuBar
+    (mb-menus      (List MenuDef))
+    (mb-open-index (Cell (Optional UFix)))
+    (mb-selected   (Cell UFix))
+    (mb-title-cols (List (Tuple UFix UFix))))
+
+  (declare menubar-new (Void -> MenuBar))
+  (define (menubar-new)
+    "Create a menu bar with the standard menus."
+    (let menus = (make-list (%mine-menu) (%file-menu) (%edit-menu)
+                            (%repl-menu) (%project-menu) (%site-menu)))
+    (let cols = (%compute-title-cols menus 1 0))
+    (MenuBar menus
+             (cell:new None)
+             (cell:new 0)
+             cols))
+
+  ;;; Precompute title column ranges for hit testing
+
+  (declare %compute-title-cols ((List MenuDef) * UFix * UFix -> (List (Tuple UFix UFix))))
+  (define (%compute-title-cols menus col idx)
+    (match menus
+      ((Nil) Nil)
+      ((Cons menu rest)
+       ;; Format: " Fn:Title " = title + 5 (" F" + digit + ":" + title + " ")
+       (let fkey-len = (str:length (the String (into (+ idx 1)))))
+       (let title-len = (+ (+ (cellw:string-cell-width (.md-title menu)) 3) fkey-len))
+       (Cons (Tuple col (+ col title-len))
+             (%compute-title-cols rest (+ (+ col title-len) 1) (+ idx 1))))))
+
+  ;;; State queries
+
+  (declare menubar-open? (MenuBar -> Boolean))
+  (define (menubar-open? mb)
+    (match (cell:read (.mb-open-index mb))
+      ((Some _) True)
+      ((None) False)))
+
+  (declare menubar-open! (MenuBar * UFix -> Void))
+  (define (menubar-open! mb idx)
+    (cell:write! (.mb-open-index mb) (Some idx))
+    (cell:write! (.mb-selected mb) 0)
+    (values))
+
+  (declare menubar-close! (MenuBar -> Void))
+  (define (menubar-close! mb)
+    (cell:write! (.mb-open-index mb) None)
+    (values))
+
+  ;;; Title bar hit test
+
+  (declare menubar-title-hit-test (MenuBar * UFix -> (Optional UFix)))
+  (define (menubar-title-hit-test mb col)
+    "Return the menu index if COL falls on a title, or None."
+    (%hit-test-cols (.mb-title-cols mb) col 0))
+
+  (declare %hit-test-cols ((List (Tuple UFix UFix)) * UFix * UFix -> (Optional UFix)))
+  (define (%hit-test-cols ranges col idx)
+    (match ranges
+      ((Nil) None)
+      ((Cons (Tuple start end) rest)
+       (if (and (>= col start) (< col end))
+           (Some idx)
+           (%hit-test-cols rest col (+ idx 1))))))
+
+  ;;; Nth menu helper
+
+  (declare %nth-menu (MenuBar * UFix -> MenuDef))
+  (define (%nth-menu mb idx)
+    (list:nth idx (.mb-menus mb)))
+
+  (declare %menu-item-count (MenuBar * UFix -> UFix))
+  (define (%menu-item-count mb idx)
+    (list:length (.md-items (%nth-menu mb idx))))
+
+  (declare %selected-action (MenuBar -> (Optional MenuAction)))
+  (define (%selected-action mb)
+    (match (cell:read (.mb-open-index mb))
+      ((None) None)
+      ((Some idx)
+       (let menu = (%nth-menu mb idx))
+       (let sel = (cell:read (.mb-selected mb)))
+       (let items = (.md-items menu))
+       (if (< sel (list:length items))
+           (Some (.mi-action (list:nth sel items)))
+           None))))
+
+  ;;; Key handling
+
+  (declare menubar-handle-key! (MenuBar * input:Key * input:Modifier -> (Optional MenuAction)))
+  (define (menubar-handle-key! mb key _mod)
+    (match key
+      ((input:KeyUp)
+       (let sel = (cell:read (.mb-selected mb)))
+       (cond
+         ((== sel 0)
+          (match (cell:read (.mb-open-index mb))
+            ((Some idx)
+             (let count = (%menu-item-count mb idx))
+             (cell:write! (.mb-selected mb) (- count 1))
+             (values))
+            ((None) (values))))
+         (True (cell:write! (.mb-selected mb) (- sel 1)) (values)))
+       None)
+      ((input:KeyDown)
+       (let sel = (cell:read (.mb-selected mb)))
+       (match (cell:read (.mb-open-index mb))
+         ((Some idx)
+          (let count = (%menu-item-count mb idx))
+          (cell:write! (.mb-selected mb)
+            (if (>= (+ sel 1) count) 0 (+ sel 1)))
+          (values))
+         ((None) (values)))
+       None)
+      ((input:KeyLeft)
+       (match (cell:read (.mb-open-index mb))
+         ((Some idx)
+          (let new-idx = (if (== idx 0) 5 (- idx 1)))
+          (cell:write! (.mb-open-index mb) (Some new-idx))
+          (cell:write! (.mb-selected mb) 0)
+          (values))
+         ((None) (values)))
+       None)
+      ((input:KeyRight)
+       (match (cell:read (.mb-open-index mb))
+         ((Some idx)
+          (let new-idx = (if (>= idx 5) 0 (+ idx 1)))
+          (cell:write! (.mb-open-index mb) (Some new-idx))
+          (cell:write! (.mb-selected mb) 0)
+          (values))
+         ((None) (values)))
+       None)
+      ((input:KeyEnter)
+       (let action = (%selected-action mb))
+       (menubar-close! mb)
+       action)
+      ((input:KeyEscape)
+       (menubar-close! mb)
+       None)
+      ((input:KeyCtrl #\g)
+       (menubar-close! mb)
+       None)
+      ;; F1-F6 switch menus
+      ((input:KeyF n)
+       (cond
+         ((and (>= n 1) (<= n 6))
+          (menubar-open! mb (- n 1))
+          None)
+         (True
+          (menubar-close! mb)
+          None)))
+      ;; Anything else closes the menu
+      (_ (menubar-close! mb)
+         None)))
+
+  ;;; Mouse handling
+
+  (declare menubar-handle-mouse! (MenuBar * UFix * UFix * UFix * UFix -> (Optional MenuAction)))
+  (define (menubar-handle-mouse! mb col row _cols _rows)
+    ;; Click on title bar (row 0)
+    (if (== row 0)
+        (match (menubar-title-hit-test mb col)
+          ((Some idx)
+           ;; Toggle: if same menu, close; otherwise switch
+           (match (cell:read (.mb-open-index mb))
+             ((Some cur)
+              (if (== cur idx)
+                  (menubar-close! mb)
+                  (menubar-open! mb idx)))
+             ((None) (menubar-open! mb idx)))
+           None)
+          ((None)
+           (menubar-close! mb)
+           None))
+        ;; Click in dropdown area?
+        (match (cell:read (.mb-open-index mb))
+          ((None)
+           (menubar-close! mb)
+           None)
+          ((Some idx)
+           (let dd = (%dropdown-rect mb idx))
+           (let dx = (wt:.rect-x dd))
+           (let dy = (+ (wt:.rect-y dd) 1))
+           (let dw = (wt:.rect-width dd))
+           (let dh = (wt:.rect-height dd))
+           (cond
+             ((and (>= col dx) (and (< col (+ dx dw))
+                      (and (>= row dy) (< row (+ dy dh)))))
+              ;; Click inside dropdown: select and execute
+              (let item-idx = (- row dy))
+              (cond
+                ((< item-idx (%menu-item-count mb idx))
+                 (cell:write! (.mb-selected mb) item-idx)
+                 (let action = (%selected-action mb))
+                 (menubar-close! mb)
+                 action)
+                (True
+                 (menubar-close! mb)
+                 None)))
+             (True
+              ;; Click outside
+              (menubar-close! mb)
+              None))))))
+
+  ;;; Dropdown geometry
+
+  (declare %dropdown-rect (MenuBar * UFix -> wt:Rect))
+  (define (%dropdown-rect mb idx)
+    "Compute the content rect of the dropdown (excluding border)."
+    (let x = (match (list:nth idx (.mb-title-cols mb))
+               ((Tuple start _) start)))
+    (let count = (%menu-item-count mb idx))
+    (let w = (%dropdown-width mb idx))
+    (wt:Rect x 1 w count))
+
+  (declare %dropdown-width (MenuBar * UFix -> UFix))
+  (define (%dropdown-width mb idx)
+    "Compute the width of the dropdown content."
+    (%max-item-width (.md-items (%nth-menu mb idx)) 0))
+
+  (declare %max-item-width ((List MenuItem) * UFix -> UFix))
+  (define (%max-item-width items current-max)
+    (match items
+      ((Nil) (+ current-max 4))
+      ((Cons item rest)
+       (let label-len = (cellw:string-cell-width (.mi-label item)))
+       (let key-len = (cellw:string-cell-width (.mi-key item)))
+       (let total = (+ label-len (if (> key-len 0) (+ key-len 2) 0)))
+       (%max-item-width rest (max current-max total)))))
+
+  ;;; Rendering: title bar
+
+  (declare menubar-render (MenuBar * screen:Screen * wt:Rect -> Void))
+  (define (menubar-render mb scr rect)
+    "Render the menu title bar."
+    (let row = (wt:.rect-y rect))
+    (let max-col = (+ (wt:.rect-x rect) (wt:.rect-width rect)))
+    ;; Bar style: Aluminium 3 on Aluminium 5
+    (let bar-style = (color:Style color:text-dim-fg
+                                   color:status-bar-bg
+                                   color:AttrNone))
+    ;; Active title: bright on Sky Blue 2
+    (let active-style = (color:Style color:text-fg
+                                      color:accent-bg
+                                      color:AttrBold))
+    ;; Normal title: bold on bar bg
+    (let title-style = (color:Style color:text-fg
+                                     color:status-bar-bg
+                                     color:AttrBold))
+    ;; Fill the bar
+    (render:fill-rect scr rect #\Space bar-style)
+    ;; Brand style: bright baby blue bold for "mine" title
+    (let brand-style = (color:Style color:baby-blue
+                                     color:status-bar-bg
+                                     color:AttrBold))
+    (let active-brand = (color:Style color:accent-fg
+                                      color:accent-bg
+                                      color:AttrBold))
+    ;; Draw titles
+    (let open-idx = (cell:read (.mb-open-index mb)))
+    (%render-titles (.mb-menus mb) (.mb-title-cols mb) open-idx 0
+                    scr row max-col bar-style title-style active-style
+                    brand-style active-brand))
+
+  (declare %render-titles
+    ((List MenuDef) * (List (Tuple UFix UFix)) * (Optional UFix) * UFix *
+     screen:Screen * UFix * UFix * color:Style * color:Style * color:Style *
+     color:Style * color:Style -> Void))
+  (define (%render-titles menus cols open-idx idx
+                          scr row max-col bar-style title-style active-style
+                          brand-style active-brand)
+    (match (Tuple menus cols)
+      ((Tuple (Cons menu mrest) (Cons (Tuple start _end) crest))
+       (let is-active = (== open-idx (Some idx)))
+       (let fkey = (into (+ idx 1)))
+       (let prefix = (<> " F" (<> fkey ":")))
+       (let title = (<> (.md-title menu) " "))
+       ;; Draw prefix in bar/active style, title in brand style for F1
+       (let prefix-style = (if is-active active-style bar-style))
+       (let name-style = (cond
+                            ((== idx 0)
+                             (if is-active active-brand brand-style))
+                            (True
+                             (if is-active active-style title-style))))
+       (when (< start max-col)
+         (screen:screen-set-string scr row start prefix prefix-style)
+         (screen:screen-set-string scr row (+ start (cellw:string-cell-width prefix))
+                                   title name-style))
+       (%render-titles mrest crest open-idx (+ idx 1)
+                       scr row max-col bar-style title-style active-style
+                       brand-style active-brand))
+      (_ (values))))
+
+  ;;; Rendering: dropdown overlay
+
+  (declare menubar-render-dropdown (MenuBar * screen:Screen * UFix * UFix -> Void))
+  (define (menubar-render-dropdown mb scr cols _rows)
+    "Render the dropdown if a menu is open. Call after all other rendering."
+    (match (cell:read (.mb-open-index mb))
+      ((None) (values))
+      ((Some idx)
+       (let menu = (%nth-menu mb idx))
+       (let content = (%dropdown-rect mb idx))
+          (let cx = (wt:.rect-x content))
+          (let cy = (wt:.rect-y content))
+          (let cw = (wt:.rect-width content))
+          (let ch = (wt:.rect-height content))
+          ;; Border rect (1 char padding around content)
+          (let bx = (if (> cx 0) (- cx 1) 0))
+          (let by = cy)
+          (let bw = (+ cw 2))
+          (let bh = (+ ch 2))
+          ;; Clamp to screen
+          (let bx2 = (if (> (+ bx bw) cols) (- cols bw) bx))
+          (let cx2 = (+ bx2 1))
+          ;; Styles
+          (let bg = (color:Style color:text-fg
+                                  color:panel-bg
+                                  color:AttrNone))
+          (let sel-style = (color:Style color:text-fg
+                                         color:accent-bg
+                                         color:AttrNone))
+          (let key-style = (color:Style color:text-dimmer-fg
+                                         color:panel-bg
+                                         color:AttrNone))
+          (let sel-key-style = (color:Style color:text-dim-fg
+                                             color:accent-bg
+                                             color:AttrNone))
+          (let border-style = (color:Style color:border-fg
+                                            color:panel-bg
+                                            color:AttrNone))
+          ;; Draw border
+          (render:draw-box scr (wt:Rect bx2 by bw bh) border-style)
+          ;; Fill content area
+          (render:fill-rect scr (wt:Rect cx2 (+ cy 1) cw ch) #\Space bg)
+          ;; Draw items
+          (let selected = (cell:read (.mb-selected mb)))
+          (%render-items (.md-items menu) scr cx2 (+ cy 1) cw 0 selected
+                         bg sel-style key-style sel-key-style)
+          ;; Hide cursor while menu is open
+          (screen:screen-hide-cursor scr))))
+
+  (declare %render-items ((List MenuItem) * screen:Screen * UFix * UFix * UFix * UFix * UFix * color:Style * color:Style * color:Style * color:Style -> Void))
+  (define (%render-items items scr x y w idx selected bg sel-style key-style sel-key-style)
+    (match items
+      ((Nil) (values))
+      ((Cons item rest)
+       (let is-sel = (== idx selected))
+       (let style = (if is-sel sel-style bg))
+       (let ks = (if is-sel sel-key-style key-style))
+       ;; Fill the row background
+       (render:fill-rect scr (wt:Rect x y w 1) #\Space style)
+       ;; Draw label
+       (let label = (<> " " (.mi-label item)))
+       (screen:screen-set-string scr y x label style)
+       ;; Draw keybinding right-aligned
+       (let kb = (.mi-key item))
+       (when (> (str:length kb) 0)
+         (let kb-display = (<> kb " "))
+         (let kb-x = (- (+ x w) (cellw:string-cell-width kb-display)))
+         (screen:screen-set-string scr y kb-x kb-display ks))
+       (%render-items rest scr x (+ y 1) w (+ idx 1) selected
+                      bg sel-style key-style sel-key-style)))))

@@ -1,0 +1,198 @@
+(cl:defpackage #:mine/term/escape
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:color #:mine/term/color))
+  (:export
+   ;; Cursor
+   #:cursor-to
+   #:cursor-show #:cursor-hide
+   ;; Screen
+   #:clear-screen
+   ;; Scroll
+   #:scroll-up #:scroll-down
+   ;; Attributes
+   #:sgr-reset #:style-to-sgr
+   ;; Alt screen
+   #:enter-alt-screen #:leave-alt-screen
+   ;; Mouse
+   #:enable-mouse-tracking #:disable-mouse-tracking
+   ;; Bracketed paste
+   #:enable-bracketed-paste #:disable-bracketed-paste
+   ;; Keyboard enhancement
+   #:enable-keyboard-enhancement #:disable-keyboard-enhancement))
+
+(in-package #:mine/term/escape)
+
+(coalton-toplevel
+
+  ;;; CSI prefix helper
+
+  (declare csi (Void -> String))
+  (define (csi)
+    "The CSI (Control Sequence Introducer) escape prefix."
+    (lisp (-> String) ()
+      (cl:format cl:nil "~c[" (cl:code-char 27))))
+
+  (declare csi-seq (String -> String))
+  (define (csi-seq suffix)
+    "Build a CSI escape sequence with the given suffix."
+    (<> (csi) suffix))
+
+  (declare csi-n (UFix * String -> String))
+  (define (csi-n n suffix)
+    "Build a CSI escape sequence with a numeric parameter."
+    (<> (csi) (<> (into n) suffix)))
+
+  (declare csi-nn (UFix * UFix * String -> String))
+  (define (csi-nn a b suffix)
+    "Build a CSI escape sequence with two numeric parameters."
+    (<> (csi) (<> (into a) (<> ";" (<> (into b) suffix)))))
+
+  ;;; Cursor movement
+
+  (declare cursor-to (UFix * UFix -> String))
+  (define (cursor-to row col)
+    "Move cursor to the given row and column (1-based)."
+    (csi-nn row col "H"))
+
+  (declare cursor-show (Void -> String))
+  (define (cursor-show)
+    "Show the cursor."
+    (csi-seq "?25h"))
+
+  (declare cursor-hide (Void -> String))
+  (define (cursor-hide)
+    "Hide the cursor."
+    (csi-seq "?25l"))
+
+  ;;; Screen clearing
+
+  (declare clear-screen (Void -> String))
+  (define (clear-screen)
+    "Clear the entire screen."
+    (csi-seq "2J"))
+
+  ;;; Scrolling
+
+  (declare scroll-up (UFix -> String))
+  (define (scroll-up n)
+    "Scroll the screen up by N lines."
+    (csi-n n "S"))
+
+  (declare scroll-down (UFix -> String))
+  (define (scroll-down n)
+    "Scroll the screen down by N lines."
+    (csi-n n "T"))
+
+  ;;; SGR (Select Graphic Rendition)
+
+  (declare sgr-reset (Void -> String))
+  (define (sgr-reset)
+    "Reset all graphic attributes to default."
+    (csi-seq "0m"))
+
+  (declare fg-sgr (color:Color -> String))
+  (define (fg-sgr c)
+    "Produce the SGR escape string for a foreground color."
+    (match c
+      ((color:ColorDefault) (csi-seq "39m"))
+      ((color:Color16 n)
+       (if (< n 8)
+           (csi-n (+ 30 n) "m")
+           (csi-n (+ 82 n) "m")))
+      ((color:Color256 n)
+       (<> (csi) (<> "38;5;" (<> (into n) "m"))))
+      ((color:ColorRGB r g b)
+       (<> (csi) (<> "38;2;"
+                     (<> (into r) (<> ";"
+                                      (<> (into g) (<> ";"
+                                                       (<> (into b) "m"))))))))))
+
+  (declare bg-sgr (color:Color -> String))
+  (define (bg-sgr c)
+    "Produce the SGR escape string for a background color."
+    (match c
+      ((color:ColorDefault) (csi-seq "49m"))
+      ((color:Color16 n)
+       (if (< n 8)
+           (csi-n (+ 40 n) "m")
+           (csi-n (+ 92 n) "m")))
+      ((color:Color256 n)
+       (<> (csi) (<> "48;5;" (<> (into n) "m"))))
+      ((color:ColorRGB r g b)
+       (<> (csi) (<> "48;2;"
+                     (<> (into r) (<> ";"
+                                      (<> (into g) (<> ";"
+                                                       (<> (into b) "m"))))))))))
+
+  (declare attr-sgr (color:Attr -> String))
+  (define (attr-sgr a)
+    "Produce the SGR escape string for a text attribute."
+    (match a
+      ((color:AttrNone) "")
+      ((color:AttrBold) (csi-seq "1m"))
+      ((color:AttrDim) (csi-seq "2m"))
+      ((color:AttrItalic) (csi-seq "3m"))
+      ((color:AttrUnderline) (csi-seq "4m"))
+      ((color:AttrReverse) (csi-seq "7m"))))
+
+  (declare style-to-sgr (color:Style -> String))
+  (define (style-to-sgr s)
+    "Produce the full SGR escape string for a style (reset + fg + bg + attr)."
+    (<> (sgr-reset)
+        (<> (fg-sgr (color:.style-fg s))
+            (<> (bg-sgr (color:.style-bg s))
+                (attr-sgr (color:.style-attr s))))))
+
+  ;;; Alt screen
+
+  (declare enter-alt-screen (Void -> String))
+  (define (enter-alt-screen)
+    "Enter the alternate screen buffer."
+    (csi-seq "?1049h"))
+
+  (declare leave-alt-screen (Void -> String))
+  (define (leave-alt-screen)
+    "Leave the alternate screen buffer."
+    (csi-seq "?1049l"))
+
+  ;;; Mouse tracking
+
+  (declare enable-mouse-tracking (Void -> String))
+  (define (enable-mouse-tracking)
+    "Enable SGR mouse tracking (press + drag + SGR encoding)."
+    (<> (csi-seq "?1000h")
+        (<> (csi-seq "?1002h")
+            (csi-seq "?1006h"))))
+
+  (declare disable-mouse-tracking (Void -> String))
+  (define (disable-mouse-tracking)
+    "Disable SGR mouse tracking."
+    (<> (csi-seq "?1000l")
+        (<> (csi-seq "?1002l")
+            (csi-seq "?1006l"))))
+
+  ;;; Bracketed paste
+
+  (declare enable-bracketed-paste (Void -> String))
+  (define (enable-bracketed-paste)
+    "Enable bracketed paste mode."
+    (csi-seq "?2004h"))
+
+  (declare disable-bracketed-paste (Void -> String))
+  (define (disable-bracketed-paste)
+    "Disable bracketed paste mode."
+    (csi-seq "?2004l"))
+
+  ;;; Keyboard enhancement (progressive, level 1 = disambiguate)
+
+  (declare enable-keyboard-enhancement (Void -> String))
+  (define (enable-keyboard-enhancement)
+    "Enable progressive keyboard enhancement (CSI u, level 1).
+Terminals that support this will report Shift+Enter etc. as CSI sequences."
+    (csi-seq ">1u"))
+
+  (declare disable-keyboard-enhancement (Void -> String))
+  (define (disable-keyboard-enhancement)
+    "Pop the keyboard enhancement stack."
+    (csi-seq "<u")))

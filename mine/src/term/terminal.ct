@@ -1,0 +1,361 @@
+(cl:defpackage #:mine/term/terminal
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:color #:mine/term/color)
+   (#:esc #:mine/term/escape)
+   (#:screen #:mine/term/screen)
+   (#:input #:mine/term/input)
+   (#:vec #:coalton/vector)
+   (#:cell #:coalton/cell))
+  (:export
+   #:Terminal
+   #:best-effort? #:set-best-effort!
+   #:probe-kitty-keyboard
+   #:terminal-init #:terminal-shutdown
+   #:.terminal-screen
+   #:terminal-cols #:terminal-rows #:terminal-update-size!
+   #:terminal-flush
+   #:terminal-clear-screen
+   #:terminal-read-input
+   #:terminal-wait-for-key))
+
+(in-package #:mine/term/terminal)
+
+(coalton-toplevel
+
+  ;;; Best-effort mode
+
+  (define %best-effort-cell (cell:new False))
+
+  (declare best-effort? (Void -> Boolean))
+  (define (best-effort?)
+    "True if mine is running in best-effort mode (no kitty keyboard protocol)."
+    (cell:read %best-effort-cell))
+
+  (declare set-best-effort! (Void -> Void))
+  (define (set-best-effort!)
+    "Enable best-effort mode."
+    (cell:write! %best-effort-cell True)
+    (values))
+
+  ;;; Terminal
+
+  (define-struct Terminal
+    "Top-level terminal handle with screen and running state."
+    (terminal-screen screen:Screen)
+    (terminal-running (cell:Cell Boolean))
+    (terminal-input-buf (cell:Cell (Vector UFix)))
+    (terminal-cols-cell (cell:Cell UFix))
+    (terminal-rows-cell (cell:Cell UFix)))
+
+  ;;; Kitty keyboard protocol probe
+
+  (declare probe-kitty-keyboard (Void -> Boolean))
+  (define (probe-kitty-keyboard)
+    "Probe whether the terminal supports the kitty keyboard protocol.
+Returns True if the terminal responds to the CSI ? u query."
+    (lisp (-> Boolean) ()
+      (cl:if (%probe-kitty-keyboard) True False)))
+
+  ;;; Init
+
+  (declare terminal-init (Void -> Terminal))
+  (define (terminal-init)
+    "Initialize the terminal.
+Enables raw mode, enters the alternate screen, enables mouse tracking,
+queries the terminal size, and returns a new Terminal with a fresh Screen."
+    ;; Enable raw mode
+    (lisp (-> Void) ()
+      (mine/bindings/terminal:terminal-enable-raw-mode)
+      (cl:values))
+    ;; Enter alt screen, enable mouse, hide cursor
+    (let setup = (<> (esc:enter-alt-screen)
+                     (<> (esc:enable-mouse-tracking)
+                         (<> (esc:enable-bracketed-paste)
+                             (<> (esc:enable-keyboard-enhancement)
+                                 (esc:cursor-hide))))))
+    (lisp (-> Void) (setup)
+      (mine/bindings/terminal:terminal-write-string setup)
+      (mine/bindings/terminal:terminal-flush)
+      (cl:values))
+    ;; Get terminal size and create screen
+    (let cols = (lisp (-> UFix) ()
+                  (cl:multiple-value-bind (r c)
+                      (mine/bindings/terminal:terminal-get-size)
+                    (cl:declare (cl:ignore r)) c)))
+    (let rows = (lisp (-> UFix) ()
+                  (cl:multiple-value-bind (r c)
+                      (mine/bindings/terminal:terminal-get-size)
+                    (cl:declare (cl:ignore c)) r)))
+    (Terminal (screen:screen-new cols rows)
+             (cell:new True)
+             (cell:new (%make-input-buf))
+             (cell:new cols)
+             (cell:new rows)))
+
+  ;;; Shutdown
+
+  (declare terminal-shutdown (Terminal -> Void))
+  (define (terminal-shutdown term)
+    "Shut down the terminal.
+Disables mouse tracking, leaves the alternate screen, restores the
+cursor, and disables raw mode."
+    (cell:write! (.terminal-running term) False)
+    (let teardown = (<> (esc:disable-keyboard-enhancement)
+                        (<> (esc:disable-bracketed-paste)
+                            (<> (esc:disable-mouse-tracking)
+                                (<> (esc:cursor-show)
+                                    (<> (esc:sgr-reset)
+                                        (esc:leave-alt-screen)))))))
+    (lisp (-> Void) (teardown)
+      (mine/bindings/terminal:terminal-write-string teardown)
+      (mine/bindings/terminal:terminal-flush)
+      (mine/bindings/terminal:terminal-disable-raw-mode)
+      (cl:values)))
+
+  ;;; Size accessors
+
+  (declare terminal-cols (Terminal -> UFix))
+  (define (terminal-cols term)
+    "Get the cached terminal width in columns."
+    (cell:read (.terminal-cols-cell term)))
+
+  (declare terminal-rows (Terminal -> UFix))
+  (define (terminal-rows term)
+    "Get the cached terminal height in rows."
+    (cell:read (.terminal-rows-cell term)))
+
+  (declare terminal-update-size! (Terminal -> Void))
+  (define (terminal-update-size! term)
+    "Re-query the terminal size and update cached values."
+    (let cols-cell = (.terminal-cols-cell term))
+    (let rows-cell = (.terminal-rows-cell term))
+    (lisp (-> Void) (cols-cell rows-cell)
+      (cl:multiple-value-bind (r c)
+          (mine/bindings/terminal:terminal-get-size)
+        (coalton/cell:write! cols-cell c)
+        (coalton/cell:write! rows-cell r)
+        (cl:values))))
+
+  ;;; Flush
+
+  (declare terminal-flush (Terminal -> Void))
+  (define (terminal-flush term)
+    "Flush the screen to the terminal."
+    (screen:screen-flush (.terminal-screen term))
+    (values))
+
+  (declare terminal-clear-screen (Terminal -> Void))
+  (define (terminal-clear-screen _term)
+    "Clear the physical terminal screen."
+    (let s = (esc:clear-screen))
+    (lisp (-> Void) (s)
+      (mine/bindings/terminal:terminal-write-string s)
+      (mine/bindings/terminal:terminal-flush)
+      (cl:values)))
+
+  ;;; Input reading (via byte reads + input parser)
+
+  (declare %make-input-buf (Void -> (Vector UFix)))
+  (define (%make-input-buf)
+    "Create a fresh input buffer."
+    (lisp (-> (Vector UFix)) ()
+      (cl:make-array 0 :fill-pointer 0 :adjustable cl:t
+                       :element-type cl:t)))
+
+  (declare terminal-read-input (Terminal -> (List input:InputEvent)))
+  (define (terminal-read-input term)
+    "Read available input from the terminal.
+Reads raw bytes with a 50ms timeout, appends to the internal buffer,
+and parses all available input events."
+    (let prev-buf = (cell:read (.terminal-input-buf term)))
+    ;; Read bytes from the terminal
+    (let new-bytes = (lisp (-> (Vector UFix)) ()
+                      (%read-terminal-bytes 50)))
+    ;; Append new bytes to leftover buffer
+    (let full-buf = (%concat-bufs prev-buf new-bytes))
+    ;; Parse events
+    (match (input:parse-input full-buf)
+      ((Tuple events remainder)
+       ;; Save any unparsed remainder for the next call
+       (cell:write! (.terminal-input-buf term) remainder)
+       ;; Check for resize — poll terminal size
+       (%maybe-inject-resize term events))))
+
+  (declare %concat-bufs ((Vector UFix) * (Vector UFix) -> (Vector UFix)))
+  (define (%concat-bufs a b)
+    "Concatenate two byte vectors."
+    (lisp (-> (Vector UFix)) (a b)
+      (cl:let* ((alen (cl:length a))
+                (blen (cl:length b))
+                (total (cl:+ alen blen))
+                (result (cl:make-array total :fill-pointer total
+                                             :adjustable cl:t
+                                             :element-type cl:t)))
+        (cl:dotimes (i alen) (cl:setf (cl:aref result i) (cl:aref a i)))
+        (cl:dotimes (i blen) (cl:setf (cl:aref result (cl:+ alen i))
+                                       (cl:aref b i)))
+        result)))
+
+  (declare %maybe-inject-resize (Terminal * (List input:InputEvent) -> (List input:InputEvent)))
+  (define (%maybe-inject-resize term events)
+    "Poll the terminal size and prepend an IEvResize event if it changed."
+    (let old-cols = (cell:read (.terminal-cols-cell term)))
+    (let old-rows = (cell:read (.terminal-rows-cell term)))
+    (let new-cols = (lisp (-> UFix) ()
+                     (cl:multiple-value-bind (r c)
+                         (mine/bindings/terminal:terminal-get-size)
+                       (cl:declare (cl:ignore r)) c)))
+    (let new-rows = (lisp (-> UFix) ()
+                     (cl:multiple-value-bind (r c)
+                         (mine/bindings/terminal:terminal-get-size)
+                       (cl:declare (cl:ignore c)) r)))
+    (cond
+      ((or (/= old-cols new-cols) (/= old-rows new-rows))
+       (cell:write! (.terminal-cols-cell term) new-cols)
+       (cell:write! (.terminal-rows-cell term) new-rows)
+       (Cons (input:IEvResize new-cols new-rows) events))
+      (True events)))
+
+  ;;; Blocking key read (for modal dialogs)
+
+  (declare terminal-wait-for-key (Terminal -> input:InputEvent))
+  (define (terminal-wait-for-key term)
+    "Block until a key or mouse event is received."
+    (let prev-buf = (cell:read (.terminal-input-buf term)))
+    ;; If there are buffered bytes, try parsing first
+    (match (input:parse-input prev-buf)
+      ((Tuple (Cons ev _rest) remainder)
+       ;; Got an event from the buffer
+       (cell:write! (.terminal-input-buf term) remainder)
+       ev)
+      (_
+       ;; Nothing in the buffer — poll with a long timeout, loop
+       (%wait-key-loop term))))
+
+  (declare %wait-key-loop (Terminal -> input:InputEvent))
+  (define (%wait-key-loop term)
+    "Polling loop for terminal-wait-for-key.
+Checks for terminal resize on each iteration."
+    (let bytes = (lisp (-> (Vector UFix)) ()
+                   (%read-terminal-bytes 100)))
+    (let prev = (cell:read (.terminal-input-buf term)))
+    (let full = (%concat-bufs prev bytes))
+    (match (input:parse-input full)
+      ((Tuple (Cons ev _rest) remainder)
+       (cell:write! (.terminal-input-buf term) remainder)
+       ev)
+      ((Tuple (Nil) remainder)
+       ;; No complete event yet — check for resize, then retry
+       (cell:write! (.terminal-input-buf term) remainder)
+       (match (%maybe-inject-resize term Nil)
+         ((Cons resize-ev _) resize-ev)
+         ((Nil) (%wait-key-loop term)))))))
+
+;;; CL helper: read raw bytes from the terminal binding layer.
+
+(cl:in-package #:mine/term/terminal)
+
+(cl:defun %read-terminal-bytes (timeout-ms)
+  "Read available bytes from stdin via the platform layer.
+Returns a Coalton-compatible (Vector UFix)."
+  (cl:multiple-value-bind (byte-vec count)
+      (mine/bindings/terminal:terminal-read-bytes timeout-ms)
+    (cl:declare (cl:ignore count))
+    (cl:if (cl:and byte-vec (cl:plusp (cl:length byte-vec)))
+        ;; Convert (unsigned-byte 8) vector to Coalton (Vector UFix)
+        (cl:let* ((len (cl:length byte-vec))
+                  (result (cl:make-array len :fill-pointer len
+                                             :adjustable cl:t
+                                             :element-type cl:t)))
+          (cl:dotimes (i len)
+            (cl:setf (cl:aref result i) (cl:aref byte-vec i)))
+          result)
+        ;; No data — empty vector
+        (cl:make-array 0 :fill-pointer 0 :adjustable cl:t
+                         :element-type cl:t))))
+
+(cl:defun %digit-byte-p (b)
+  (cl:and (cl:>= b 48) (cl:<= b 57)))
+
+(cl:defun %primary-device-attributes-response-p (resp)
+  "Return T if RESP contains a primary device attributes response."
+  (cl:let ((len (cl:length resp)))
+    (cl:loop :for i :from 0 :below len
+             :when (cl:and (cl:<= (cl:+ i 1) (cl:1- len))
+                           (cl:= (cl:aref resp i) 27)
+                           (cl:= (cl:aref resp (cl:+ i 1)) 91))
+               :do (cl:loop :for j :from (cl:+ i 2) :below len
+                            :for b = (cl:aref resp j)
+                            :do (cl:cond
+                                  ((cl:or (%digit-byte-p b)
+                                          (cl:= b 59)
+                                          (cl:= b 63))
+                                   nil)
+                                  ((cl:= b 99)
+                                   (cl:return-from %primary-device-attributes-response-p cl:t))
+                                  (cl:t
+                                   (cl:return)))))
+    cl:nil))
+
+(cl:defun %query-progressive-enhancement-flags (resp)
+  "Return the queried kitty progressive enhancement flags from RESP.
+Returns NIL if no query response is present."
+  (cl:let ((len (cl:length resp)))
+    (cl:loop :for i :from 0 :below len
+             :when (cl:and (cl:<= (cl:+ i 2) (cl:1- len))
+                           (cl:= (cl:aref resp i) 27)
+                           (cl:= (cl:aref resp (cl:+ i 1)) 91)
+                           (cl:= (cl:aref resp (cl:+ i 2)) 63))
+               :do (cl:let ((value 0)
+                            (saw-digit cl:nil))
+                     (cl:loop :for j :from (cl:+ i 3) :below len
+                              :for b = (cl:aref resp j)
+                              :do (cl:cond
+                                    ((%digit-byte-p b)
+                                     (cl:setf saw-digit cl:t
+                                               value (cl:+ (cl:* value 10)
+                                                            (cl:- b 48))))
+                                    ((cl:= b 117)
+                                     (cl:return-from %query-progressive-enhancement-flags
+                                       (cl:if saw-digit value 0)))
+                                    (cl:t
+                                     (cl:return))))))
+    cl:nil))
+
+(cl:defun %probe-kitty-keyboard ()
+  "Probe whether the terminal supports the kitty keyboard protocol.
+Enables disambiguation, queries the active flags, and waits for
+primary device attributes as the fence. Returns T only if the query
+reply reports that flag 1 is active."
+  (mine/bindings/terminal:terminal-enable-raw-mode)
+  (cl:unwind-protect
+      (cl:progn
+        ;; Request disambiguation, query active flags, then use primary
+        ;; device attributes as the fence as recommended by the spec.
+        (mine/bindings/terminal:terminal-write-string
+         (cl:format cl:nil
+                    "~c[>1u~c[?u~c[c"
+                    (cl:code-char 27)
+                    (cl:code-char 27)
+                    (cl:code-char 27)))
+        (mine/bindings/terminal:terminal-flush)
+        ;; Collect response bytes, stop at the primary DA response or timeout.
+        (cl:let ((resp (cl:make-array 0 :fill-pointer 0 :adjustable cl:t
+                                       :element-type '(cl:unsigned-byte 8))))
+          (cl:dotimes (_ 10)  ; up to 10 x 100ms = 1s
+            (cl:multiple-value-bind (bytes count)
+                (mine/bindings/terminal:terminal-read-bytes 100)
+              (cl:declare (cl:ignore count))
+              (cl:when (cl:and bytes (cl:plusp (cl:length bytes)))
+                (cl:loop :for b :across bytes
+                         :do (cl:vector-push-extend b resp))
+                (cl:when (%primary-device-attributes-response-p resp)
+                  (cl:return)))))
+          (cl:let ((flags (%query-progressive-enhancement-flags resp)))
+            (cl:and flags (cl:logtest 1 flags)))))
+    (cl:ignore-errors
+      (mine/bindings/terminal:terminal-write-string
+       (cl:format cl:nil "~c[<u" (cl:code-char 27)))
+      (mine/bindings/terminal:terminal-flush))
+    (mine/bindings/terminal:terminal-disable-raw-mode)))

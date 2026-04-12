@@ -1,0 +1,60 @@
+(cl:defpackage #:mine/event/queue
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:ev #:mine/event/types)
+   (#:cell #:coalton/cell)
+   (#:list #:coalton/list))
+  (:export
+   #:EventQueue
+   #:eventqueue-push!
+   #:eventqueue-pop-timeout!
+   #:eventqueue-drain!))
+
+(in-package #:mine/event/queue)
+
+;;; CL-side struct holding queue internals behind a mutex.
+
+(cl:defstruct %event-queue
+  (items  cl:nil :type cl:list)
+  (mutex  (sb-thread:make-mutex :name "event-queue") :type sb-thread:mutex)
+  (waitq  (sb-thread:make-waitqueue :name "event-queue") :type sb-thread:waitqueue))
+
+(coalton-toplevel
+
+  ;;; EventQueue
+
+  (repr :native %event-queue)
+  (define-type EventQueue
+    "Thread-safe FIFO event queue backed by a CL list, mutex, and waitqueue.")
+
+  (declare eventqueue-push! (EventQueue * ev:Event -> Void))
+  (define (eventqueue-push! q event)
+    "Push EVENT onto the tail of Q and signal any waiting thread."
+    (lisp (-> Void) (q event)
+      (sb-thread:with-mutex ((%event-queue-mutex q))
+        (cl:setf (%event-queue-items q)
+                 (cl:append (%event-queue-items q) (cl:list event)))
+        (sb-thread:condition-notify (%event-queue-waitq q)))
+      (cl:values)))
+
+  (declare eventqueue-pop-timeout! (EventQueue * UFix -> Optional ev:Event))
+  (define (eventqueue-pop-timeout! q ms)
+    "Try to pop an event within MS milliseconds. Return None on timeout."
+    (lisp (-> (Optional ev:Event)) (q ms)
+      (sb-thread:with-mutex ((%event-queue-mutex q))
+        (cl:when (cl:null (%event-queue-items q))
+          (sb-thread:condition-wait
+           (%event-queue-waitq q)
+           (%event-queue-mutex q)
+           :timeout (cl:/ ms 1000.0d0)))
+        (cl:if (cl:null (%event-queue-items q))
+               None
+               (Some (cl:pop (%event-queue-items q)))))))
+
+  (declare eventqueue-drain! (EventQueue -> List ev:Event))
+  (define (eventqueue-drain! q)
+    "Remove and return all queued events at once."
+    (lisp (-> (List ev:Event)) (q)
+      (sb-thread:with-mutex ((%event-queue-mutex q))
+        (cl:prog1 (%event-queue-items q)
+          (cl:setf (%event-queue-items q) cl:nil))))))

@@ -1,0 +1,271 @@
+(cl:defpackage #:mine/widget/text
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:screen #:mine/term/screen)
+   (#:color #:mine/term/color)
+   (#:wt #:mine/widget/types)
+   (#:render #:mine/widget/render)
+   (#:cell #:coalton/cell)
+   (#:vec #:coalton/vector)
+   (#:str #:coalton/string))
+  (:export
+   #:TextWidget #:TextWidget
+   #:.tw-lines #:.tw-scroll #:.tw-style
+   #:.tw-sel-anchor #:.tw-sel-end
+   #:text-widget-new
+   #:text-widget-append!
+   #:text-widget-append-system!
+   #:text-widget-clear!
+   #:text-widget-render
+   #:text-widget-scroll-up!
+   #:text-widget-scroll-down!
+   #:text-widget-scroll-to-bottom!
+   #:text-widget-line-count
+   #:text-widget-start-selection!
+   #:text-widget-extend-selection!
+   #:text-widget-clear-selection!
+   #:text-widget-has-selection?
+   #:text-widget-selected-text))
+
+(in-package #:mine/widget/text)
+
+(coalton-toplevel
+
+  ;;; TextWidget
+
+  (define-struct TextWidget
+    "A read-only scrollable text display widget."
+    (tw-lines       (Cell (vec:Vector String)))
+    (tw-flags       (Cell (vec:Vector Boolean)))
+    (tw-scroll      (Cell UFix))
+    (tw-style       color:Style)
+    (tw-sel-anchor  (Cell (Optional (Tuple UFix UFix))))
+    (tw-sel-end     (Cell (Optional (Tuple UFix UFix))))
+    (tw-vis-height  (Cell UFix)))
+
+  (declare text-widget-new (color:Style -> TextWidget))
+  (define (text-widget-new style)
+    "Create a new empty TextWidget with the given style."
+    (TextWidget (cell:new (vec:new))
+                (cell:new (vec:new))
+                (cell:new 0)
+                style
+                (cell:new None)
+                (cell:new None)
+                (cell:new 20)))
+
+  (declare text-widget-line-count (TextWidget -> UFix))
+  (define (text-widget-line-count tw)
+    "Return the number of lines in the text widget."
+    (vec:length (cell:read (.tw-lines tw))))
+
+  (declare text-widget-append! (TextWidget * String -> Void))
+  (define (text-widget-append! tw line)
+    "Append a line to the text widget."
+    (vec:push! line (cell:read (.tw-lines tw)))
+    (vec:push! False (cell:read (.tw-flags tw)))
+    (values))
+
+  (declare text-widget-append-system! (TextWidget * String -> Void))
+  (define (text-widget-append-system! tw line)
+    "Append a system/info line (rendered in dim italic)."
+    (vec:push! line (cell:read (.tw-lines tw)))
+    (vec:push! True (cell:read (.tw-flags tw)))
+    (values))
+
+  (declare text-widget-clear! (TextWidget -> Void))
+  (define (text-widget-clear! tw)
+    "Clear all lines and reset scroll."
+    (cell:write! (.tw-lines tw) (vec:new))
+    (cell:write! (.tw-flags tw) (vec:new))
+    (cell:write! (.tw-scroll tw) 0)
+    (values))
+
+  (declare text-widget-scroll-up! (TextWidget * UFix -> Void))
+  (define (text-widget-scroll-up! tw n)
+    "Scroll up by N lines (decrease scroll offset)."
+    (let cur = (cell:read (.tw-scroll tw)))
+    (cell:write! (.tw-scroll tw) (if (> cur n) (- cur n) 0))
+    (values))
+
+  (declare text-widget-scroll-down! (TextWidget * UFix -> Void))
+  (define (text-widget-scroll-down! tw n)
+    "Scroll down by N lines (increase scroll offset)."
+    (let cur    = (cell:read (.tw-scroll tw)))
+    (let count  = (text-widget-line-count tw))
+    (let new-scroll = (+ cur n))
+    (cell:write! (.tw-scroll tw) (if (> count 0)
+                                    (min new-scroll (- count 1))
+                                    0))
+    (values))
+
+  (declare text-widget-scroll-to-bottom! (TextWidget -> Void))
+  (define (text-widget-scroll-to-bottom! tw)
+    "Scroll so the newest lines are visible."
+    (let count = (text-widget-line-count tw))
+    (let visible = (cell:read (.tw-vis-height tw)))
+    (cell:write! (.tw-scroll tw)
+      (if (> count visible) (- count visible) 0))
+    (values))
+
+  ;;; Selection
+
+  (declare text-widget-start-selection! (TextWidget * UFix * UFix -> Void))
+  (define (text-widget-start-selection! tw line col)
+    "Start a selection at (LINE, COL)."
+    (let pos = (Tuple line col))
+    (cell:write! (.tw-sel-anchor tw) (Some pos))
+    (cell:write! (.tw-sel-end tw) (Some pos))
+    (values))
+
+  (declare text-widget-extend-selection! (TextWidget * UFix * UFix -> Void))
+  (define (text-widget-extend-selection! tw line col)
+    "Extend the selection to (LINE, COL)."
+    (cell:write! (.tw-sel-end tw) (Some (Tuple line col)))
+    (values))
+
+  (declare text-widget-clear-selection! (TextWidget -> Void))
+  (define (text-widget-clear-selection! tw)
+    "Clear the selection."
+    (cell:write! (.tw-sel-anchor tw) None)
+    (cell:write! (.tw-sel-end tw) None)
+    (values))
+
+  (declare text-widget-has-selection? (TextWidget -> Boolean))
+  (define (text-widget-has-selection? tw)
+    "Return True if there is an active selection."
+    (match (cell:read (.tw-sel-anchor tw))
+      ((Some _) True)
+      ((None) False)))
+
+  (declare %sel-ordered
+    ((Tuple UFix UFix) * (Tuple UFix UFix) -> (Tuple (Tuple UFix UFix) (Tuple UFix UFix))))
+  (define (%sel-ordered a b)
+    "Return (start, end) with start <= end."
+    (match (Tuple a b)
+      ((Tuple (Tuple al ac) (Tuple bl bc))
+       (cond
+         ((< al bl) (Tuple a b))
+         ((> al bl) (Tuple b a))
+         ((<= ac bc) (Tuple a b))
+         (True (Tuple b a))))))
+
+  (declare text-widget-selected-text (TextWidget -> String))
+  (define (text-widget-selected-text tw)
+    "Return the selected text as a string."
+    (match (Tuple (cell:read (.tw-sel-anchor tw)) (cell:read (.tw-sel-end tw)))
+      ((Tuple (Some anchor) (Some end))
+       (match (%sel-ordered anchor end)
+         ((Tuple (Tuple sl sc) (Tuple el ec))
+          (let lines = (cell:read (.tw-lines tw)))
+          (let count = (vec:length lines))
+          (cond
+            ((>= sl count) "")
+            ((== sl el)
+             (let line = (vec:index-unsafe sl lines))
+             (let len = (str:length line))
+             (let csc = (min sc len))
+             (let cec = (min ec len))
+             (if (>= csc cec) ""
+                 (str:substring line csc cec)))
+            (True
+             (lisp (-> String) (lines sl sc el ec count)
+               (cl:with-output-to-string (out)
+                 (cl:loop :for i :from sl :to (cl:min el (cl:1- count)) :do
+                   (cl:let* ((line (vec:index-unsafe i lines))
+                             (len (cl:length line)))
+                     (cl:cond
+                       ((cl:= i sl)
+                        (cl:write-string line out :start (cl:min sc len))
+                        (cl:terpri out))
+                       ((cl:= i el)
+                        (cl:write-string line out :end (cl:min ec len)))
+                       (cl:t
+                        (cl:write-string line out)
+                        (cl:terpri out))))))))))))
+      (_ "")))
+
+  ;;; Rendering
+
+  (declare %text-render-rows
+    ((vec:Vector String) * (vec:Vector Boolean) * screen:Screen * wt:Rect * UFix * UFix * color:Style * UFix * UFix -> Void))
+  (define (%text-render-rows lines flags scr rect scroll h style count i)
+    "Render text widget rows starting at index I."
+    (when (< i h)
+      (let line-idx = (+ scroll i))
+      (when (< line-idx count)
+        (let line = (vec:index-unsafe line-idx lines))
+        (let is-system = (vec:index-unsafe line-idx flags))
+        (let line-style = (if is-system
+                              (color:with-attr
+                                (color:with-fg style color:text-dimmer-fg)
+                                color:AttrItalic)
+                              style))
+        (render:draw-text-clipped scr rect line
+                                  (+ (wt:.rect-y rect) i)
+                                  (wt:.rect-x rect)
+                                  line-style))
+      (%text-render-rows lines flags scr rect scroll h style count (+ i 1))))
+
+  (declare %render-selection-highlight
+    (screen:Screen * wt:Rect * (vec:Vector String) * UFix * UFix *
+     (Tuple UFix UFix) * (Tuple UFix UFix) * color:Style -> Void))
+  (define (%render-selection-highlight scr rect lines scroll h sel-start sel-end hl-style)
+    "Overlay selection highlight on rendered text."
+    (match (Tuple sel-start sel-end)
+      ((Tuple (Tuple sl sc) (Tuple el ec))
+       (let rx = (wt:.rect-x rect))
+       (let ry = (wt:.rect-y rect))
+       (let rw = (wt:.rect-width rect))
+       (let count = (vec:length lines))
+       (lisp (-> Void) (scr lines scroll h sl sc el ec rx ry rw count hl-style)
+         (cl:loop :for i :from 0 :below h :do
+           (cl:let ((line-idx (cl:+ scroll i)))
+             (cl:when (cl:and (cl:< line-idx count)
+                              (cl:>= line-idx sl)
+                              (cl:<= line-idx el))
+               (cl:let* ((line (vec:index-unsafe line-idx lines))
+                         (len (cl:length line))
+                         (col-start (cl:if (cl:= line-idx sl) (cl:min sc len) 0))
+                         (col-end (cl:if (cl:= line-idx el) (cl:min ec len) len))
+                         ;; For full-line selection (middle lines), extend to fill width
+                         (draw-end (cl:if (cl:and (cl:/= line-idx el) (cl:< len rw))
+                                          rw col-end)))
+                 (cl:when (cl:> draw-end col-start)
+                   ;; Draw the selected text portion with highlight
+                   (cl:let ((sub (cl:subseq line col-start (cl:min col-end len))))
+                     (cl:when (cl:> (cl:length sub) 0)
+                       (screen:screen-set-string scr (cl:+ ry i) (cl:+ rx col-start)
+                                                 sub hl-style)))
+                   ;; Fill trailing space on full-line selections
+                   (cl:when (cl:> draw-end (cl:max col-end len))
+                     (cl:loop :for c :from (cl:+ rx (cl:max col-end len))
+                              :below (cl:+ rx (cl:min draw-end rw)) :do
+                       (screen:screen-set-cell scr (cl:+ ry i) c #\Space hl-style))))))))
+         (cl:values)))))
+
+  (declare text-widget-render (TextWidget * screen:Screen * wt:Rect -> Void))
+  (define (text-widget-render tw scr rect)
+    "Render visible lines within RECT, respecting scroll offset."
+    (let lines  = (cell:read (.tw-lines tw)))
+    (let scroll = (cell:read (.tw-scroll tw)))
+    (let h      = (wt:.rect-height rect))
+    (let style  = (.tw-style tw))
+    ;; Track visible height for scroll-to-bottom
+    (cell:write! (.tw-vis-height tw) h)
+    ;; Clear the entire area first so old text doesn't bleed through
+    (render:fill-rect scr rect #\Space style)
+    (let flags  = (cell:read (.tw-flags tw)))
+    (let count  = (vec:length lines))
+    (%text-render-rows lines flags scr rect scroll h style count 0)
+    ;; Overlay selection highlight if active
+    (match (Tuple (cell:read (.tw-sel-anchor tw)) (cell:read (.tw-sel-end tw)))
+      ((Tuple (Some anchor) (Some end))
+       (let hl-style = (color:Style color:panel-bg
+                                     color:highlight-bg
+                                     color:AttrNone))
+       (match (%sel-ordered anchor end)
+         ((Tuple sel-start sel-end)
+          (%render-selection-highlight scr rect lines scroll h
+                                       sel-start sel-end hl-style))))
+      (_ (values)))))
