@@ -2453,6 +2453,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                  ret-ty
                                  subs
                                  env)
+        (declare (ignore expr-ty))
 
         (let* (;; Infer type of each pattern, ensuring it is an exception type
                (branch-pat-nodes
@@ -2495,7 +2496,6 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                              :pattern pat-node
                              :body branch-body-node
                              :location (source:location branch)))))
-          (declare (ignore expr-ty))
           (handler-case
               (progn
                 (setf subs (tc:unify subs ret-ty expected-type))
