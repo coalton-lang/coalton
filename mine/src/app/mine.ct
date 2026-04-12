@@ -11,7 +11,6 @@
    (#:color #:mine/term/color)
    (#:esc #:mine/term/escape)
    (#:ev #:mine/event/types)
-   (#:queue #:mine/event/queue)
    (#:gap #:mine/buffer/gap)
    (#:buf #:mine/buffer/buffer)
    (#:mgr #:mine/buffer/manager)
@@ -4121,14 +4120,14 @@ Render-app is NOT called here; the main loop handles rendering."
     ;; Initial render
     (render-app st term)
     (term:terminal-flush term)
-    ;; Main loop: poll terminal directly on the main thread
+    ;; Main loop: consume terminal events and protocol replies on the main thread
     (let handler = (make-handler st term))
     (main-loop st term handler)
     ;; Shutdown: stop the runtime server if running
     (lifecycle:runtime-stop! (.ms-runtime st))
     (term:terminal-shutdown term))
 
-;;; Main loop (single-threaded, polls terminal directly)
+;;; Main loop (single-threaded, consumes queued terminal input)
 
   (declare main-loop (MineState * term:Terminal * (ev:Event -> Void) -> Void))
   (define (main-loop st term handler)
@@ -4175,39 +4174,9 @@ Render-app is NOT called here; the main loop handles rendering."
        (Some (ev:EvResize cols rows)))
       ((input:IEvNone) None)))
 
-  (declare enqueue-input-events (queue:EventQueue * (List input:InputEvent) -> Void))
-  (define (enqueue-input-events q events)
-    "Convert and enqueue a list of input events."
-    (match events
-      ((Nil) (values))
-      ((Cons iev rest)
-       (match (input-event-to-event iev)
-         ((Some ev) (queue:eventqueue-push! q ev))
-         ((None) (values)))
-       (enqueue-input-events q rest))))
-
-  (declare start-input-thread (term:Terminal * queue:EventQueue -> Void))
-  (define (start-input-thread term q)
-    "Start a background thread that reads terminal input and enqueues events."
-    (lisp (-> Void) (term q)
-      (mine/app/mine::start-input-thread-cl term q)
-      (cl:values)))
-
 ;;; Build
 
   )
-
-;; CL-side input reader thread.
-;; Reads raw bytes from the terminal, parses them into InputEvents,
-;; wraps each as an Event, and pushes to the queue.
-(cl:defun start-input-thread-cl (term queue)
-  (mine/bindings/thread:make-thread
-   "mine-input"
-   (cl:lambda ()
-     (cl:loop
-       (cl:let ((ievs (mine/term/terminal::terminal-read-input term)))
-         (mine/app/mine::enqueue-input-events queue ievs))
-       (cl:sleep 0.01)))))
 
 ;;; CL-side: spawn build subprocess
 

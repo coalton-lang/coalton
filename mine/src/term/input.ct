@@ -341,6 +341,16 @@ Returns (event next-pos)."
             ((== p 24) (IEvKey (KeyF 12) modifier))
             (True (IEvKey (KeyUnknown p) ModNone))))
          (_ (IEvKey (KeyUnknown 126) ModNone))))
+      ;; CSI 8;rows;cols t — resize notification from mine-app
+      ((== final-byte 116)
+       (match params
+         ((Cons 8 (Cons rows (Cons cols (Nil))))
+          (progn
+            (lisp (-> Void) (rows cols)
+              (mine/bindings/terminal:terminal-set-pipe-size rows cols)
+              (cl:values))
+            IEvNone))
+         (_ (IEvKey (KeyUnknown 116) ModNone))))
       ;; CSI u (progressive keyboard enhancement)
       ((== final-byte 117)
        (match params
@@ -507,8 +517,15 @@ Returns a tuple of (parsed-events remaining-bytes)."
     (if (>= pos len)
         (Tuple (reverse acc) (vec-new))
         (match (parse-one buf pos)
-          ((Tuple (IEvNone) _)
-           ;; Incomplete sequence -- return what we have plus remaining bytes
-           (Tuple (reverse acc) (vec-from-offset buf pos)))
+          ((Tuple (IEvNone) next-pos)
+           ;; TODO: Add parser regression tests for:
+           ;; - ESC[8;40;120t is fully consumed with no remainder.
+           ;; - ESC[8;40;120t followed by `a` still yields the `a` key event.
+           ;; - A partial resize sequence remains in the remainder until completed.
+           (if (> next-pos pos)
+               ;; Fully consumed internal control sequence (for example, resize).
+               (parse-loop buf next-pos len acc)
+               ;; Incomplete sequence -- return what we have plus remaining bytes.
+               (Tuple (reverse acc) (vec-from-offset buf pos))))
           ((Tuple ev next-pos)
            (parse-loop buf next-pos len (Cons ev acc)))))))

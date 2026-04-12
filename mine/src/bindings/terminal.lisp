@@ -10,6 +10,7 @@
    #:terminal-enable-raw-mode
    #:terminal-disable-raw-mode
    #:terminal-get-size
+   #:terminal-set-pipe-size
    #:terminal-read-bytes
    #:terminal-write-string
    #:terminal-flush
@@ -34,6 +35,10 @@
 (defun terminal-get-size ()
   "Return (VALUES rows cols)."
   (mine/bindings/platform:platform-get-size))
+
+(defun terminal-set-pipe-size (rows cols)
+  "Set pipe-mode terminal size (used on Windows when running under mine-app)."
+  (mine/bindings/platform:platform-set-pipe-size rows cols))
 
 ;;; Input
 
