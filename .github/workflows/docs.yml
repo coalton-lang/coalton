@@ -27,11 +27,11 @@ jobs:
 
     steps:
       # Check out coalton and coalton-website
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
         with:
           repository: "coalton-lang/coalton"
           path: coalton
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
         with:
           repository: "coalton-lang/coalton-website"
           path: coalton-website
