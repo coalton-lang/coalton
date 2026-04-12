@@ -84,8 +84,6 @@ the `sbcl` path with the correct one on the line with `; ***`.
 (show-paren-mode 1)
 
 (slime-setup '(slime-fancy
-               slime-autodoc
-               slime-indentation
                slime-company
                slime-coalton))
 
