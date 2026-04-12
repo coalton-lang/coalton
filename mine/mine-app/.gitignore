@@ -1,0 +1,6 @@
+node_modules/
+dist/fonts/*.woff2
+dist/xterm.mjs
+dist/xterm.css
+dist/fit.mjs
+dist/canvas.mjs

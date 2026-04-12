@@ -71,8 +71,104 @@ jobs:
             mine/${{ matrix.binary }}
             mine/README.md
 
-  signing-instructions:
+  build-app:
     needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: macos-arm64
+            mine-artifact: mine-macos-arm64
+            mine-binary: mine
+            sidecar: mine-aarch64-apple-darwin
+            bundles: app
+            app-path: mine/mine-app/src-tauri/target/release/bundle/macos/mine.dmg
+          - os: windows-latest
+            name: windows-x86_64
+            mine-artifact: mine-windows-x86_64
+            mine-binary: mine.exe
+            sidecar: mine-x86_64-pc-windows-msvc.exe
+            bundles: nsis
+            app-path: mine/mine-app/src-tauri/target/release/bundle/nsis/*.exe
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download mine binary
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.mine-artifact }}
+          path: mine-binary
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install npm dependencies
+        working-directory: mine/mine-app
+        run: npm install
+
+      - name: Download Iosevka Fixed Slab fonts
+        shell: bash
+        run: |
+          mkdir -p mine/mine-app/dist/fonts
+          curl -L -o /tmp/iosevka.zip \
+            "https://github.com/be5invis/Iosevka/releases/download/v34.3.0/PkgWebFont-IosevkaFixedSlab-34.3.0.zip"
+          unzip -o -j /tmp/iosevka.zip \
+            "WOFF2/IosevkaFixedSlab-Extended.woff2" \
+            "WOFF2/IosevkaFixedSlab-ExtendedBold.woff2" \
+            "WOFF2/IosevkaFixedSlab-ExtendedItalic.woff2" \
+            "WOFF2/IosevkaFixedSlab-ExtendedBoldItalic.woff2" \
+            -d mine/mine-app/dist/fonts
+
+      - name: Copy mine sidecar binary
+        shell: bash
+        run: |
+          mkdir -p mine/mine-app/src-tauri/binaries
+          cp mine-binary/${{ matrix.mine-binary }} mine/mine-app/src-tauri/binaries/${{ matrix.sidecar }}
+          chmod +x mine/mine-app/src-tauri/binaries/${{ matrix.sidecar }}
+
+      - name: Resolve app version
+        id: app-version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/mine-v* ]]; then
+            echo "tauri_config={\"version\":\"${GITHUB_REF_NAME#mine-v}\"}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build mine-app
+        working-directory: mine/mine-app
+        env:
+          TAURI_CONFIG: ${{ steps.app-version.outputs.tauri_config }}
+        run: npx tauri build --bundles ${{ matrix.bundles }}
+
+      - name: Create DMG (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p /tmp/mine-dmg
+          cp -R mine/mine-app/src-tauri/target/release/bundle/macos/mine.app /tmp/mine-dmg/
+          cp mine-binary/README.md /tmp/mine-dmg/
+          hdiutil create -volname "mine" \
+            -srcfolder /tmp/mine-dmg \
+            -ov -format UDZO \
+            mine/mine-app/src-tauri/target/release/bundle/macos/mine.dmg
+          rm -rf /tmp/mine-dmg
+
+      - name: Upload app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mine-app-${{ matrix.name }}
+          path: ${{ matrix.app-path }}
+
+  signing-instructions:
+    needs: [build, build-app]
     runs-on: ubuntu-latest
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     steps:
@@ -91,7 +187,7 @@ jobs:
           echo "============================================================"
 
   trigger-signing:
-    needs: build
+    needs: [build, build-app]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:

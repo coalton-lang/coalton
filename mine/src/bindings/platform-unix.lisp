@@ -67,6 +67,11 @@ output post-processing.  Sets VMIN=0, VTIME=0 for non-blocking reads."
 
 ;;; ---- Terminal size ----
 
+(defun platform-set-pipe-size (rows cols)
+  "No-op on Unix (pipe size is only used on Windows under mine-app)."
+  (declare (ignore rows cols))
+  (values))
+
 (defun platform-get-size ()
   "Return (VALUES rows cols) via ioctl TIOCGWINSZ.
 Falls back to 24x80 if the ioctl fails."

@@ -1,0 +1,24 @@
+[package]
+name = "mine-app"
+version = "0.0.0"
+description = "mine IDE — a TUI-based IDE for Coalton and Common Lisp"
+authors = ["Coalton contributors"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.6", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+tauri = { version = "2.10.3", features = [] }
+dirs = "6"
+
+[target.'cfg(unix)'.dependencies]
+portable-pty = "0.8"

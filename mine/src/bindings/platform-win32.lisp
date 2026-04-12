@@ -81,6 +81,8 @@
 (defvar *saved-output-mode* 0 "Original console output mode.")
 (defvar *read-buf* nil       "Persistent read buffer (alien array).")
 (defvar *bytes-read-buf* nil "Persistent DWORD buffer for ReadFile.")
+(defvar *pipe-rows* nil      "Pipe-mode terminal rows (set by resize escape sequence).")
+(defvar *pipe-cols* nil      "Pipe-mode terminal cols (set by resize escape sequence).")
 
 ;;; ---- Raw mode ----
 
@@ -120,9 +122,24 @@
 
 ;;; ---- Terminal size ----
 
+(defun platform-set-pipe-size (rows cols)
+  "Set pipe-mode terminal size (called from input parser on CSI 8;rows;cols t)."
+  (setf *pipe-rows* rows
+        *pipe-cols* cols)
+  (values))
+
 (defun platform-get-size ()
-  "Return (VALUES rows cols) from GetConsoleScreenBufferInfo.
-Falls back to 24x80 on error."
+  "Return (VALUES rows cols).
+Priority: pipe globals > COLUMNS/LINES env vars > GetConsoleScreenBufferInfo > 24x80."
+  ;; 1. Pipe globals (set by resize escape sequence from mine-app)
+  (when (and *pipe-rows* *pipe-cols*)
+    (return-from platform-get-size (values *pipe-rows* *pipe-cols*)))
+  ;; 2. COLUMNS/LINES env vars (initial size from mine-app)
+  (let ((env-cols (parse-integer (or (sb-ext:posix-getenv "COLUMNS") "") :junk-allowed t))
+        (env-lines (parse-integer (or (sb-ext:posix-getenv "LINES") "") :junk-allowed t)))
+    (when (and env-cols env-lines (plusp env-cols) (plusp env-lines))
+      (return-from platform-get-size (values env-lines env-cols))))
+  ;; 3. GetConsoleScreenBufferInfo
   ;; CONSOLE_SCREEN_BUFFER_INFO is 22 bytes:
   ;;   offset  0: COORD  dwSize              (4 bytes: SHORT X, SHORT Y)
   ;;   offset  4: COORD  dwCursorPosition    (4 bytes)
@@ -144,6 +161,7 @@ Falls back to 24x80 on error."
                      (bottom (sb-sys:sap-ref-16 sap 16)))
                  (values (max 1 (1+ (- bottom top)))
                          (max 1 (1+ (- right left))))))
+             ;; 4. Fallback
              (values 24 80))
       (sb-alien:free-alien info))))
 
@@ -220,5 +238,7 @@ on timeout or error."
         *stdin-handle* nil
         *stdout-handle* nil
         *read-buf* nil
-        *bytes-read-buf* nil)
+        *bytes-read-buf* nil
+        *pipe-rows* nil
+        *pipe-cols* nil)
   (values))

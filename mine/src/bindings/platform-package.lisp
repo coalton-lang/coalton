@@ -8,6 +8,7 @@
    #:platform-enable-raw-mode
    #:platform-disable-raw-mode
    #:platform-get-size
+   #:platform-set-pipe-size
    #:platform-read-bytes
    #:platform-write-string
    #:platform-flush

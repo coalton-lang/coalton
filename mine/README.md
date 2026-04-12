@@ -7,7 +7,7 @@
 
 ## Features
 
-- Single, static, zero-dependency binary
+- "Just Works" application based on a single, static, zero-dependency terminal binary
 - Cross-platform on Windows, Mac, and Linux
 - Common Lisp (via SBCL) and Coalton built-in
 - Syntax highlighting and tab completion
@@ -23,49 +23,40 @@
 
 There are also anti-features:
 
-- Not Emacs
+- No ads, no telemetry
 - No plugins, themes, extensions
 - No support for other languages
 - No Git integration, no AI
-- No ads, no telemetry
+- Not Emacs
 
 ## Downloading, Installing, and Running mine
 
-`mine` can be downloaded from the GitHub releases page.
+`mine` can be downloaded from the [GitHub releases page](https://github.com/coalton-lang/coalton/releases).
 
-**Windows**: `mine` comes with an installer. It just installs a single executable that's registered with your system. Once installed, `mine` will be accessible through your Windows menu, as well as the command line with the `mine` command.
+**Windows**: Download the `mine-app` installer and run it. This will install the `mine` application onto your computer.
 
-**Linux/Mac**: `mine` does not need to be installed; it can run as a standalone executable. Nonetheless, you may want to put `mine` somewhere that your system's path can see it, like `/usr/local/bin/` on UNIXes.
+**Mac**: Download the `mine-app` dmg file, open it, and install `mine` into your Applications folder.
 
-Once installed to your liking, setup mine with either `mine --setup` or opening `mine` and going to F6:Site > Setup Wizard. It will fill out a configuration file for you.
+**Linux**: Download `mine-core`, unzip it, and put `mine` somewhere your PATH can see.
+
+> [!NOTE]
+> For Windows and Mac, the `mine-app` comes with everything you need, there are zero dependencies. We recommend this in order to have the smoothest experience possible. If you wish to use your own terminal, or you want to run `mine` over remote SSH connections, you can instead optionally download the `mine-core` variant, which is a single, statically linked executable.
+
+Once installed, open `mine` and proceed to **F6:Site > Setup Wizard** to get setup!
 
 > [!IMPORTANT]
-> We really recommend running `mine --setup` or F6:Site > Setup Wizard before proceeding!
+> We really recommend running F6:Site > Setup Wizard (or `mine --setup`) before proceeding!
 
-To run `mine`, you just run the executable. On Windows, just double click `mine.exe`. On other platforms,  open a terminal and execute `mine`.
-
-You can open files directly with
-
-```
-mine <filename>
-```
-
-or open Lisp ASDF projects with
-
-```
-mine <project.asd>
-```
-
-Quit `mine` with the F1:mine menu or press Ctrl+Q.
+Quit `mine` with **F1:mine > Quit** menu or press **Ctrl+Q**.
 
 ## Layout of `mine`
 
 `mine` has a fixed layout:
 
-- The **Open Files** pane: lists the current open files. You can switch to (Enter), close (c), and save (s) files here.
+- The **Open Files** pane: lists the current open files. It automatically collapses when editing. Switch to it with Ctrl+T. You can switch to (Enter), close (c), and save (s) files here.
 - The **Project Tree**: lists all of the files in your `.asd` project. You can open files from this tree.
-- The **Editor** pane: where you do all your editing.
-- The **REPL** pane: where you interact with your program.
+- The **Editor** pane: where you do all your editing. Switch to it with Ctrl+E.
+- The **REPL** pane: where you interact with your program. Switch to it with Ctrl+R.
 - The **Status Line**: shows recent actions, as well as context-sensitive information about your program.
 
 Everything is clickable with your mouse, or accessible with keyboard shortcuts.
@@ -114,6 +105,8 @@ Whitespace is arbitrary; add as many spaces and newlines as you please. The poss
 - `:project-roots` [`<string>`, `(<string> ...)`]: A string or a list of strings which are root directories where projects are subdirectories. This is where `mine` will search for projects.
     - Examples: `"c:/projects/"`, `("/projects/" "/my/other-projects/)`
 - `:repl-heap-size-megabytes` `<integer>`: The number of megabytes of memory the REPL should get. Defaults to 4096 MiB.
+- `:app-font-family` `<string>`: The font family to use in the mine desktop app. Defaults to `"Iosevka Fixed Slab Extended"` which comes pre-installed with the app.
+- `:app-font-size` `<integer>`: The font size in pixels to use in the mine desktop app. Defaults to `14`.
 
 ## License
 
