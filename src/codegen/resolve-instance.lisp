@@ -116,7 +116,12 @@
            (foundp
             dict)
            (t
-            (tc:lookup-class-instance env pred))))))))
+            (if (tc:lookup-class-instances
+                 env
+                 (tc:ty-predicate-class pred)
+                 :no-error t)
+                (error "Unknown instance for predicate ~S" pred)
+                (error "Undefined key ~a" (tc:ty-predicate-class pred))))))))))
 
 
 (defun superclass-accessors (pred ctx-pred env)
