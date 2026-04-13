@@ -901,6 +901,11 @@
                                    color:onyx
                                    color:AttrBold))
        (screen:screen-set-string scr y (+ col2 8) "Query" query-s))
+      ((cell:read (.ms-debugger-active st))
+       (let debug-s = (color:Style color:warning-fg
+                                   color:onyx
+                                   color:AttrBold))
+       (screen:screen-set-string scr y (+ col2 8) "Debug" debug-s))
       (busy
        (let busy-s = (color:Style color:info-fg
                                   color:onyx
