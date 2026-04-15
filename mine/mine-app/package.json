@@ -13,6 +13,6 @@
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/cli": "^2.10.1",
     "@xterm/addon-canvas": "^0.8.0-beta.48",
-    "@xterm/xterm": "^6.1.0-beta.197"
+    "@xterm/xterm": "6.1.0-beta.197"
   }
 }

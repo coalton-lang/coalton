@@ -53,31 +53,43 @@
            (push (asdf:component-name s) to-remove))))
     (dolist (name to-remove)
       (asdf:clear-system name)))
-  (sb-ext:save-lisp-and-die
-   #+win32 "mine.exe" #-win32 "mine"
-   :toplevel (lambda ()
-               ;; The build bypasses uiop:dump-image, so UIOP's image
-               ;; restore hooks haven't run.  Call them now to recompute
-               ;; *user-cache* (and other state) from the runtime user's
-               ;; environment instead of the build machine's.
-               (uiop:call-image-restore-hook)
-               (handler-bind
-                   ((error
-                      (lambda (c)
-                        ;; Write error + backtrace to log file before unwinding
-                        (ignore-errors
-                          (with-open-file (f "mine-error.log"
-                                             :direction :output
-                                             :if-exists :supersede
-                                             :if-does-not-exist :create)
-                            (format f "MINE ERROR: ~A~%~%Backtrace:~%" c)
-                            (sb-debug:print-backtrace :stream f :count 30)))
-                        ;; Restore terminal and print to stdout
-                        (ignore-errors
-                          (mine/bindings/terminal:terminal-disable-raw-mode))
-                        (format t "~&MINE ERROR: ~A~%Written to mine-error.log~%" c)
-                        (sb-ext:exit :code 1))))
-                 (mine/app/mine:mine-main))
-               (sb-ext:exit))
-   :executable t
-   :purify t))
+  (let ((toplevel (lambda ()
+                    ;; The build bypasses uiop:dump-image, so UIOP's image
+                    ;; restore hooks haven't run.  Call them now to recompute
+                    ;; *user-cache* (and other state) from the runtime user's
+                    ;; environment instead of the build machine's.
+                    (uiop:call-image-restore-hook)
+                    (handler-bind
+                        ((error
+                           (lambda (c)
+                             ;; Write error + backtrace to log file before unwinding
+                             (ignore-errors
+                               (with-open-file (f "mine-error.log"
+                                                   :direction :output
+                                                   :if-exists :supersede
+                                                   :if-does-not-exist :create)
+                                 (format f "MINE ERROR: ~A~%~%Backtrace:~%" c)
+                                 (sb-debug:print-backtrace :stream f :count 30)))
+                             ;; Restore terminal and print to stdout
+                             (ignore-errors
+                               (mine/bindings/terminal:terminal-disable-raw-mode))
+                             (format t "~&MINE ERROR: ~A~%Written to mine-error.log~%" c)
+                             (sb-ext:exit :code 1))))
+                      (mine/app/mine:mine-main))
+                    (sb-ext:exit))))
+    ;; When MINE_SAVE_CORE is set, save a bare core image instead of a
+    ;; standalone executable.  The build script then embeds the core
+    ;; into a proper Mach-O / PE section via
+    ;; make-embedded-core-executable.lisp, producing a binary that can
+    ;; be code-signed (Apple notarization, Windows Authenticode).
+    ;; The build scripts set this env var when SBCL_SRC_DIR points to an
+    ;; SBCL source tree containing the embedding tool.
+    (if (uiop:getenvp "MINE_SAVE_CORE")
+        (progn
+          (format t "~&;; Saving mine.core for embedded-core linking~%")
+          (sb-ext:save-lisp-and-die "mine.core" :toplevel toplevel :purify t))
+        (sb-ext:save-lisp-and-die
+         #+win32 "mine.exe" #-win32 "mine"
+         :toplevel toplevel
+         :executable t
+         :purify t))))

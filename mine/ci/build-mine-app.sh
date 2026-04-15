@@ -42,14 +42,26 @@ chmod +x "$APP_ROOT/src-tauri/binaries/$MINE_SIDECAR_NAME" || true
 cd "$APP_ROOT"
 npm install
 
-if [[ -n "${MINE_VERSION:-}" ]]; then
-  export TAURI_CONFIG
-  TAURI_CONFIG=$(printf '{"version":"%s"}' "$MINE_VERSION")
-else
-  unset TAURI_CONFIG || true
+# Build TAURI_CONFIG JSON from optional env vars:
+#   MINE_VERSION      → sets top-level "version"
+#   MINE_SIGN_COMMAND → sets bundle.windows.signCommand (Tauri calls
+#                       this for every signable binary + the installer)
+CONFIG_JSON="{}"
+if [ -n "${MINE_VERSION:-}" ]; then
+  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq --arg v "$MINE_VERSION" '.version = $v')
+fi
+if [ -n "${MINE_SIGN_COMMAND:-}" ]; then
+  CONFIG_JSON=$(echo "$CONFIG_JSON" | jq --arg s "$MINE_SIGN_COMMAND" '.bundle.windows.signCommand = $s')
 fi
 
-npx tauri build --bundles "$MINE_APP_BUNDLES"
+if [ "$CONFIG_JSON" != "{}" ]; then
+  CONFIG_FILE="$TMPDIR_ROOT/tauri-config-override.json"
+  echo "$CONFIG_JSON" > "$CONFIG_FILE"
+  echo "Tauri config override: $(cat "$CONFIG_FILE")"
+  npx tauri build --bundles "$MINE_APP_BUNDLES" --config "$CONFIG_FILE"
+else
+  npx tauri build --bundles "$MINE_APP_BUNDLES"
+fi
 
 if [[ "${MINE_CREATE_DMG:-0}" == "1" ]]; then
   mkdir -p "$TMPDIR_ROOT/mine-dmg"
