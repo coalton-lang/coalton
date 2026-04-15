@@ -22,7 +22,7 @@ IOSEVKA_URL := https://github.com/be5invis/Iosevka/releases/download/v$(IOSEVKA_
 
 mine-app: mine mine-app-fonts
 	mkdir -p mine-app/src-tauri/binaries
-	cp mine mine-app/src-tauri/binaries/mine-$(TAURI_TARGET_TRIPLE)
+	cp mine mine-app/src-tauri/binaries/mine-core-$(TAURI_TARGET_TRIPLE)
 	cd mine-app && npx tauri build
 	mkdir -p /tmp/mine-dmg
 	cp -R mine-app/src-tauri/target/release/bundle/macos/mine.app /tmp/mine-dmg/

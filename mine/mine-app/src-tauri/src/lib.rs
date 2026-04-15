@@ -49,7 +49,7 @@ fn spawn_pty(app: AppHandle, state: State<PtyState>, rows: u16, cols: u16) -> Re
         .map_err(|e| e.to_string())?
         .parent()
         .ok_or("no parent directory")?
-        .join(if cfg!(windows) { "mine.exe" } else { "mine" });
+        .join(if cfg!(windows) { "mine-core.exe" } else { "mine-core" });
 
     #[cfg(unix)]
     let (reader, writer, resizer): (Box<dyn Read + Send>, Box<dyn Write + Send>, Box<dyn PtyResizer>) = {

@@ -62,7 +62,7 @@ jobs:
             name: macos-arm64
             mine-artifact: mine-macos-arm64
             mine-binary: mine
-            sidecar: mine-aarch64-apple-darwin
+            sidecar: mine-core-aarch64-apple-darwin
             bundles: app
             create-dmg: "1"
             app-path: mine/mine-app/src-tauri/target/release/bundle/macos/mine.dmg
@@ -70,7 +70,7 @@ jobs:
             name: windows-x86_64
             mine-artifact: mine-windows-x86_64
             mine-binary: mine.exe
-            sidecar: mine-x86_64-pc-windows-msvc.exe
+            sidecar: mine-core-x86_64-pc-windows-msvc.exe
             bundles: nsis
             create-dmg: "0"
             app-path: mine/mine-app/src-tauri/target/release/bundle/nsis/*.exe
