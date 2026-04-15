@@ -88,7 +88,7 @@ Nonetheless, there is one practical guarantee: the existence of Lisp functions f
   ...)
 ```
 
-**PROMISE**: For each unconstrained constructor function (e.g., `Ctor1`), there will be a corresponding Lisp function function-bound to the constructor's name. This function will have the same arity as specified.
+**PROMISE**: For each unconstrained constructor function (e.g., `Ctor1`), there will be a corresponding Lisp function that is fbound to the constructor's name. This function will have the same arity as specified.
 
 **PROMISE**: For each unconstrained nullary constructor (e.g., `Ctor2`), there will be a corresponding Lisp value bound to the constructor's name.
 
