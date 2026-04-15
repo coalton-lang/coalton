@@ -200,12 +200,15 @@ Returns :quit if the server should shut down, T otherwise."
       (:compile-string
        (destructuring-bind (id string buffer-name package-name position)
            (rest msg)
-         (declare (ignore position))
-         (handle-compile-string id string buffer-name package-name stream)))
+         (handle-compile-string id string buffer-name package-name position stream)))
 
       (:compile-file
        (destructuring-bind (id filename load-p) (rest msg)
          (handle-compile-file id filename load-p stream)))
+
+      (:beam-system
+       (destructuring-bind (id system-name asd-path) (rest msg)
+         (handle-beam-system id system-name asd-path stream)))
 
       (:type-of
        (destructuring-bind (id symbol-name package-name) (rest msg)
@@ -328,6 +331,139 @@ Returns the symbol or NIL."
               (write-message stream `(:notify (:output ,line)))))))
     (error () nil)))
 
+(defun %muffle-warning-if-possible (warning)
+  "Muffle WARNING when a MUFFLE-WARNING restart is available."
+  (declare (ignore warning))
+  (let ((restart (find-restart 'muffle-warning)))
+    (when restart
+      (invoke-restart restart))))
+
+(defun %emit-diagnostics (stream diagnostics)
+  "Emit normalized diagnostic plists as protocol notifications."
+  (dolist (diagnostic diagnostics)
+    (write-message stream `(:notify (:diagnostic ,@diagnostic)))))
+
+(defun %make-diagnostic-state ()
+  "Return mutable diagnostic state: #(items next-group seen-source-conditions authoritative-error-summaries)."
+  (vector nil 0 (make-hash-table :test #'eq) nil))
+
+(defun %diagnostic-items (state)
+  (svref state 0))
+
+(defun %diagnostic-seen-source-conditions (state)
+  (svref state 2))
+
+(defun %diagnostic-authoritative-error-summaries (state)
+  (svref state 3))
+
+(defun %diagnostic-count (state)
+  (length (%diagnostic-items state)))
+
+(defun %coalton-source-condition-p (condition)
+  (or (typep condition 'coalton-impl/source:source-error)
+      (typep condition 'coalton-impl/source:source-warning)))
+
+(defun %coalton-source-condition (condition)
+  (cond
+    ((%coalton-source-condition-p condition)
+     condition)
+    (t nil)))
+
+(defun %seen-source-condition-p (state source-condition)
+  (and source-condition
+       (gethash source-condition (%diagnostic-seen-source-conditions state))))
+
+(defun %remember-source-condition! (state source-condition)
+  (when source-condition
+    (setf (gethash source-condition (%diagnostic-seen-source-conditions state)) t)))
+
+(defun %authoritative-error-summary-match-p (state summary)
+  (and (stringp summary)
+       (plusp (length summary))
+       (loop :for authoritative :in (%diagnostic-authoritative-error-summaries state)
+             :thereis (or (search authoritative summary :test #'char-equal)
+                          (search summary authoritative :test #'char-equal)))))
+
+(defun %record-authoritative-error-summaries! (state items)
+  (dolist (item items)
+    (let ((summary (getf item ':summary)))
+      (when (and (eq (getf item ':severity) ':error)
+                 (stringp summary)
+                 (plusp (length summary)))
+        (pushnew summary
+                 (svref state 3)
+                 :test #'string=)))))
+
+(defun %shadowed-by-authoritative-source-error-p (state condition items)
+  (and (%diagnostic-authoritative-error-summaries state)
+       (not (%coalton-source-condition condition))
+       (every (lambda (item)
+                (and (eq (getf item ':severity) ':error)
+                     (%authoritative-error-summary-match-p state
+                                                          (getf item ':summary))))
+              items)))
+
+(defun %collect-diagnostics (condition request-id state
+                               &key file-override (offset-base 0) (synthetic-prefix 0))
+  "Normalize CONDITION and append any diagnostics into STATE."
+  (handler-case
+      (let ((source-condition (%coalton-source-condition condition)))
+        (unless (%seen-source-condition-p state source-condition)
+          (let* ((group (svref state 1))
+                 (items (mine/protocol/diagnostics:condition-diagnostics
+                         condition
+                         :request request-id
+                         :group group
+                         :file-override file-override
+                         :offset-base offset-base
+                         :synthetic-prefix synthetic-prefix)))
+            (when (and items
+                       (not (%shadowed-by-authoritative-source-error-p
+                             state condition items)))
+              (when source-condition
+                (%remember-source-condition! state source-condition)
+                (%record-authoritative-error-summaries! state items))
+              (incf (svref state 1))
+              (setf (svref state 0)
+                    (nconc (svref state 0) items))))))
+    (error () nil)))
+
+(defun %flush-diagnostics (stream state)
+  "Emit and clear all queued diagnostics."
+  (let ((diagnostics (%diagnostic-items state)))
+    (when diagnostics
+      (%emit-diagnostics stream diagnostics)
+      (setf (svref state 0) nil))))
+
+(defun %diagnostic-error-summary (state)
+  "Return the first error-level diagnostic summary from STATE, or NIL."
+  (loop :for diagnostic :in (%diagnostic-items state)
+        :for severity = (getf diagnostic ':severity)
+        :for summary = (getf diagnostic ':summary)
+        :when (and (eq severity ':error)
+                   (stringp summary)
+                   (plusp (length summary)))
+          :return summary))
+
+(defun %source-diagnostic-hook (request-id state &key file-override (offset-base 0) (synthetic-prefix 0))
+  "Return a Coalton source diagnostic hook that feeds directly into STATE."
+  (lambda (condition)
+    (%collect-diagnostics condition request-id state
+                          :file-override file-override
+                          :offset-base offset-base
+                          :synthetic-prefix synthetic-prefix)))
+
+(defun %compile-string-prefix-length (form-string)
+  "Return the length of any synthetic wrapper prefix used for Beam Form."
+  (cond
+    ((and (>= (length form-string) 18)
+          (string-equal "(coalton-toplevel " form-string :end2 18))
+     18)
+    ((and (>= (length form-string) 9)
+          (string-equal "(coalton " form-string :end2 9))
+     9)
+    (t 0)))
+
 (defun handle-eval (id form-string package-name stream)
   "Handle an :eval request with interactive debugger support."
   (let ((stderr-capture (make-string-output-stream)))
@@ -379,10 +515,13 @@ Returns the symbol or NIL."
               :report "Continue, returning NIL"
               (write-message stream `(:return ,id (:ok "NIL"))))))))))
 
-(defun handle-compile-string (id form-string buffer-name package-name stream)
+(defun handle-compile-string (id form-string buffer-name package-name position stream)
   "Handle a :compile-string request with interactive debugger support.
 Uses compile-file + load for correct eval-when toplevel semantics."
-  (let ((stderr-capture (make-string-output-stream)))
+  (let ((stderr-capture (make-string-output-stream))
+        (diag-state (%make-diagnostic-state))
+        (file-override (and (stringp buffer-name) (plusp (length buffer-name)) buffer-name))
+        (synthetic-prefix (%compile-string-prefix-length form-string)))
     (catch '%debugger-abort
       (handler-bind
           ((serious-condition
@@ -390,43 +529,75 @@ Uses compile-file + load for correct eval-when toplevel semantics."
                (unless (or (typep condition 'reader-error)
                            (typep condition 'end-of-file)
                            (typep condition 'package-error))
+                 (%collect-diagnostics condition id diag-state
+                                       :file-override file-override
+                                       :offset-base position
+                                       :synthetic-prefix synthetic-prefix)
                  (%flush-stderr-capture stderr-capture stream)
+                 (%flush-diagnostics stream diag-state)
                  (%enter-debugger id condition stream))))
+           (sb-ext:compiler-note
+             (lambda (n)
+               (%collect-diagnostics n id diag-state
+                                     :file-override file-override
+                                     :offset-base position
+                                     :synthetic-prefix synthetic-prefix)))
            (warning
              (lambda (w)
                (unless (%uninteresting-warning-p w)
-                 (handler-case
-                     (let* ((class-name (string-downcase
-                                         (class-name (class-of w))))
-                            (text (format nil "~A" w)))
-                       (write-message stream
-                         `(:notify (:output ,(format nil ";; ~A: ~A"
-                                                     class-name
-                                                     (string-trim '(#\Newline #\Space) text))))))
-                   (error () nil))))))
-        (let ((*error-output* stderr-capture))
+                 (%collect-diagnostics w id diag-state
+                                       :file-override file-override
+                                       :offset-base position
+                                       :synthetic-prefix synthetic-prefix)
+                 (%muffle-warning-if-possible w)))))
+        (let ((*error-output* stderr-capture)
+              (coalton-impl/source:*source-diagnostic-hook*
+                (%source-diagnostic-hook id diag-state
+                                         :file-override file-override
+                                         :offset-base position
+                                         :synthetic-prefix synthetic-prefix)))
           (restart-case
               (handler-case
                   (multiple-value-bind (result output)
                       (mine/runtime/eval:debug-compile-string
                        form-string package-name stream id
-                       (%ct-file-p buffer-name))
+                       (let ((pkg (find-package (string-upcase package-name))))
+                         (and pkg (%coalton-package-p pkg))))
                     (when (and output (plusp (length output)))
                       (dolist (line (split-string-by-newline output))
                         (write-message stream `(:notify (:output ,line)))))
+                    (%flush-diagnostics stream diag-state)
                     (write-message stream `(:return ,id (:ok ,(or result "T")))))
                 (reader-error (c)
+                  (%collect-diagnostics c id diag-state
+                                        :file-override file-override
+                                        :offset-base position
+                                        :synthetic-prefix synthetic-prefix)
+                  (%flush-stderr-capture stderr-capture stream)
+                  (%flush-diagnostics stream diag-state)
                   (write-message stream `(:return ,id (:error ,(format nil "Read error: ~A" c)))))
                 (end-of-file (c)
                   (declare (ignore c))
+                  (%flush-stderr-capture stderr-capture stream)
+                  (%flush-diagnostics stream diag-state)
                   (write-message stream `(:return ,id (:error "Read error: unexpected end of input"))))
                 (package-error (c)
+                  (%collect-diagnostics c id diag-state
+                                        :file-override file-override
+                                        :offset-base position
+                                        :synthetic-prefix synthetic-prefix)
+                  (%flush-stderr-capture stderr-capture stream)
+                  (%flush-diagnostics stream diag-state)
                   (write-message stream `(:return ,id (:error ,(format nil "Package error: ~A" c))))))
             (abort ()
               :report "Abort compilation and return to REPL"
+              (%flush-stderr-capture stderr-capture stream)
+              (%flush-diagnostics stream diag-state)
               (write-message stream `(:return ,id (:error "Aborted."))))
             (continue ()
               :report "Continue, returning NIL"
+              (%flush-stderr-capture stderr-capture stream)
+              (%flush-diagnostics stream diag-state)
               (write-message stream `(:return ,id (:ok "T"))))))))))
 
 (defun %ct-file-p (filename)
@@ -436,11 +607,11 @@ Uses compile-file + load for correct eval-when toplevel semantics."
          (string-equal ".ct" filename :start2 (- len 3)))))
 
 (defun handle-compile-file (id filename load-p stream)
-  "Handle a :compile-file request. Captures compiler notes with source locations.
+  "Handle a :compile-file request. Captures structured diagnostics.
 For .ct files, uses LOAD instead of COMPILE-FILE since Coalton's compiler
 runs during macroexpansion and needs the full runtime environment.
 Binds IO streams so interactive reads (y-or-n-p, read, etc.) work via the TUI."
-  (let* ((notes nil)
+  (let* ((diag-state (%make-diagnostic-state))
          (stdout-capture (make-string-output-stream))
          (tis (make-instance 'tui-input-stream
                 :wire-stream stream :msg-id id
@@ -449,74 +620,145 @@ Binds IO streams so interactive reads (y-or-n-p, read, etc.) work via the TUI."
         (handler-bind
             ((warning
                (lambda (w)
-                 (push (%make-compiler-note w filename) notes)
-                 (muffle-warning w)))
+                 (unless (%uninteresting-warning-p w)
+                   (%collect-diagnostics w id diag-state)
+                   (%muffle-warning-if-possible w))))
              (sb-ext:compiler-note
                (lambda (n)
-                 (push (%make-compiler-note n filename) notes))))
+                 (%collect-diagnostics n id diag-state)))
+             (sb-c:compiler-error
+               (lambda (c)
+                 (%collect-diagnostics c id diag-state)))
+             (error
+               (lambda (c)
+                 (%collect-diagnostics c id diag-state))))
           (let* ((*standard-output* stdout-capture)
                  (*standard-input* tis)
                  (*query-io* (make-two-way-stream tis *standard-output*))
-                 (*terminal-io* (make-two-way-stream tis *standard-output*)))
+                 (*terminal-io* (make-two-way-stream tis *standard-output*))
+                 (coalton-impl/source:*source-diagnostic-hook*
+                   (%source-diagnostic-hook id diag-state)))
             (let ((path (pathname filename)))
-              (if (%ct-file-p filename)
-                  ;; .ct files: bind the Coalton readtable (as coalton-asdf does)
-                  ;; and load source directly
-                  (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton)))
-                    (load path))
-                  ;; .lisp files: compile then optionally load the FASL
-                  (let ((output-file (compile-file path)))
-                    (when (and load-p output-file)
-                      (load output-file))))))
+              (cond
+                ((%ct-file-p filename)
+                 ;; .ct files: bind the Coalton readtable (as coalton-asdf does)
+                 ;; and load source directly
+                 (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton)))
+                   (load path)))
+                (t
+                 ;; .lisp files: compile then optionally load the FASL
+                 (let ((output-file (compile-file path)))
+                   (when (and load-p output-file)
+                     (load output-file)))))))
           ;; Send any captured output
           (let ((output (get-output-stream-string stdout-capture)))
             (when (plusp (length output))
               (dolist (line (split-string-by-newline output))
                 (write-message stream `(:notify (:output ,line))))))
-          ;; Send notes as notifications
-          (dolist (note (nreverse notes))
-            (write-message stream `(:notify (:compiler-note ,@note))))
-          (write-message stream
-                         `(:return ,id
-                           (:ok ,(format nil "Compiled ~A (~D note~:P)"
-                                        filename (length notes))))))
+          (let ((diagnostic-count (%diagnostic-count diag-state)))
+            (%flush-diagnostics stream diag-state)
+            (write-message stream
+                           `(:return ,id
+                             (:ok ,(format nil "Compiled ~A (~D diagnostic~:P)"
+                                           filename diagnostic-count))))))
+      (sb-c:compiler-error (c)
+        (let ((output (get-output-stream-string stdout-capture)))
+          (when (plusp (length output))
+            (dolist (line (split-string-by-newline output))
+              (write-message stream `(:notify (:output ,line))))))
+        (%flush-diagnostics stream diag-state)
+        (write-message stream
+                       `(:return ,id
+                         (:error ,(format nil "~A" c)))))
       (error (c)
         ;; Send any captured output even on error
         (let ((output (get-output-stream-string stdout-capture)))
           (when (plusp (length output))
             (dolist (line (split-string-by-newline output))
               (write-message stream `(:notify (:output ,line))))))
-        ;; Send accumulated notes even on error
-        (dolist (note (nreverse notes))
-          (write-message stream `(:notify (:compiler-note ,@note))))
+        (%flush-diagnostics stream diag-state)
         (write-message stream
                        `(:return ,id
                          (:error ,(format nil "~A" c))))))))
 
-(defun %make-compiler-note (condition filename)
-  "Extract source location from a compiler condition. Returns a plist."
-  (let* ((severity (typecase condition
-                     (style-warning :style-warning)
-                     (warning :warning)
-                     (error :error)
-                     (t :note)))
-         (message (handler-case (format nil "~A" condition)
-                    (error () "[unprintable condition]")))
-         (position nil)
-         (line nil))
-    ;; Try to extract source location from SBCL internals
-    (handler-case
-        (let ((context (sb-c::find-error-context nil)))
-          (when context
-            (let ((src (sb-c::compiler-error-context-original-source-path context)))
-              (when (and src (consp src) (integerp (first src)))
-                (setf position (first src))))))
-      (error () nil))
-    (list ':severity severity
-          ':message message
-          ':file filename
-          ':position position
-          ':line line)))
+(defun handle-beam-system (id system-name asd-path stream)
+  "Handle a :beam-system request with structured diagnostics and debugger support."
+  (let ((stderr-capture (make-string-output-stream))
+        (diag-state (%make-diagnostic-state)))
+    (catch '%debugger-abort
+      (handler-bind
+          ((serious-condition
+             (lambda (condition)
+               (unless (or (typep condition 'reader-error)
+                           (typep condition 'end-of-file)
+                           (typep condition 'package-error))
+                 (%collect-diagnostics condition id diag-state)
+                 (%flush-stderr-capture stderr-capture stream)
+                 (%flush-diagnostics stream diag-state)
+                 (%enter-debugger id condition stream))))
+           (sb-c:compiler-error
+             (lambda (c)
+               (%collect-diagnostics c id diag-state)))
+           (sb-ext:compiler-note
+             (lambda (n)
+               (%collect-diagnostics n id diag-state)))
+           (warning
+             (lambda (w)
+               (unless (%uninteresting-warning-p w)
+                 (%collect-diagnostics w id diag-state)
+                 (%muffle-warning-if-possible w)))))
+        (let ((*standard-output* stderr-capture)
+              (*error-output* stderr-capture)
+              (*trace-output* stderr-capture)
+              (coalton-impl/source:*source-diagnostic-hook*
+                (%source-diagnostic-hook id diag-state)))
+          (restart-case
+              (handler-case
+                  (multiple-value-bind (ok err)
+                      (mine/runtime/asdf:beam-system
+                       system-name
+                       (and (stringp asd-path) (plusp (length asd-path)) asd-path))
+                    (let ((output (get-output-stream-string stderr-capture))
+                          (diagnostic-error (%diagnostic-error-summary diag-state)))
+                      (when (plusp (length output))
+                        (dolist (line (split-string-by-newline output))
+                          (write-message stream `(:notify (:output ,line)))))
+                      (%flush-diagnostics stream diag-state)
+                      (cond
+                        (ok
+                         (write-message stream
+                                        `(:return ,id (:ok ,(format nil "Loaded system ~A" system-name)))))
+                        (t
+                         (write-message stream
+                                        `(:return ,id
+                                          (:error ,(or diagnostic-error
+                                                       err
+                                                       (format nil "Failed to load system ~A" system-name)))))))))
+                (reader-error (c)
+                  (%collect-diagnostics c id diag-state)
+                  (%flush-stderr-capture stderr-capture stream)
+                  (%flush-diagnostics stream diag-state)
+                  (write-message stream `(:return ,id (:error ,(format nil "Read error: ~A" c)))))
+                (end-of-file (c)
+                  (declare (ignore c))
+                  (%flush-stderr-capture stderr-capture stream)
+                  (%flush-diagnostics stream diag-state)
+                  (write-message stream `(:return ,id (:error "Read error: unexpected end of input"))))
+                (package-error (c)
+                  (%collect-diagnostics c id diag-state)
+                  (%flush-stderr-capture stderr-capture stream)
+                  (%flush-diagnostics stream diag-state)
+                  (write-message stream `(:return ,id (:error ,(format nil "Package error: ~A" c))))))
+            (abort ()
+              :report "Abort system load and return to REPL"
+              (%flush-stderr-capture stderr-capture stream)
+              (%flush-diagnostics stream diag-state)
+              (write-message stream `(:return ,id (:error "Aborted."))))
+            (continue ()
+              :report "Continue, returning NIL"
+              (%flush-stderr-capture stderr-capture stream)
+              (%flush-diagnostics stream diag-state)
+              (write-message stream `(:return ,id (:ok "T"))))))))))
 
 (defun handle-type-of (id symbol-name package-name stream)
   "Handle a :type-of request."

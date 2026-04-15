@@ -16,3 +16,14 @@ Returns T on success, or (values NIL error-message) on failure."
     (error (c)
       (values nil (format nil "~A" c)))))
 
+(defun beam-system (system-name &optional asd-path)
+  "Load ASD-PATH if provided, then load SYSTEM-NAME."
+  (handler-case
+      (progn
+        (when (and (stringp asd-path)
+                   (plusp (length asd-path)))
+          (asdf:load-asd asd-path))
+        (asdf:load-system system-name)
+        t)
+    (error (c)
+      (values nil (format nil "~A" c)))))

@@ -25,6 +25,7 @@
     :components ((:ct-file "wire")
                  (:ct-file "messages")
                  (:ct-file "client")
+                 (:file "diagnostics")
                  (:file "server")
                  (:ct-file "lifecycle")))
 
@@ -43,6 +44,7 @@
   :license "MIT"
   :defsystem-depends-on ("coalton-asdf")
   :depends-on ("mine/runtime")
+  :in-order-to ((asdf:test-op (asdf:test-op "mine-tests")))
   :pathname "src/"
   :serial t
   :components
@@ -159,5 +161,6 @@
                  (:ct-file "dialogs")
                  (:ct-file "find")
                  (:ct-file "build")
+                 (:file "diagnostics")
                  (:ct-file "mine")
                  (:file "executable")))))
