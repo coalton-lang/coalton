@@ -70,6 +70,11 @@
    #:stop-server
    #:tui-input-stream))
 
+(defpackage #:mine/protocol/diagnostics
+  (:use #:cl)
+  (:export
+   #:condition-diagnostics))
+
 ;;; Runtime packages (CL side)
 
 (defpackage #:mine/runtime/eval
@@ -89,7 +94,8 @@
 (defpackage #:mine/runtime/asdf
   (:use #:cl)
   (:export
-   #:load-system))
+   #:load-system
+   #:beam-system))
 
 (defpackage #:mine/runtime/server-main
   (:use #:cl)

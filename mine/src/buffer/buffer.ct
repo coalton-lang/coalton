@@ -18,6 +18,9 @@
 
 (in-package #:mine/buffer/buffer)
 
+(cl:defvar *buffer-dirty-hook* nil
+  "When non-nil, called with a file path each time editing marks that buffer dirty.")
+
 (coalton-toplevel
 
   ;;; BufferId
@@ -176,6 +179,13 @@
   (declare buffer-mark-dirty! (Buffer -> Void))
   (define (buffer-mark-dirty! buf)
     (cell:write! (.dirty buf) True)
+    (match (cell:read (.path buf))
+      ((Some fpath)
+       (lisp (-> Void) (fpath)
+         (cl:when mine/buffer/buffer::*buffer-dirty-hook*
+           (cl:funcall mine/buffer/buffer::*buffer-dirty-hook* fpath))
+         (cl:values)))
+      ((None) (values)))
     (values))
 
   (declare buffer-mark-clean! (Buffer -> Void))

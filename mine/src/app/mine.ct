@@ -69,10 +69,6 @@
   (value cl:nil :type cl:t))
 
 ;;; CL state referenced by lisp escapes in the Coalton code below.
-(cl:defvar *diagnostics-table* (cl:make-hash-table :test 'cl:equal)
-  "Hash table: filepath (string) -> list of (line severity message).")
-(cl:defvar *compile-file-remap* nil
-  "When non-nil, a cons (temp-path . real-path) for remapping compiler notes.")
 (cl:defvar *hint-result* "" "Cached hint string for status bar.")
 (cl:defvar *heap-info-result* "" "Cached heap info string from runtime server.")
 (cl:defvar *heap-info-last-time* 0 "Internal-real-time of last heap-info request.")
@@ -170,18 +166,20 @@
     (ms-project-asd-path  (Cell (Optional String))) ;; 25 -- path to .asd file
     (ms-quit              (Cell Boolean))           ;; 25
     (ms-eval-start-time   (Cell UFix))    ;; 26 -- internal-real-time
-    (ms-minibuffer        mini:Minibuffer) ;; 27
-    (ms-repl-lang         (Cell String)) ;; 28 -- "Coalton" or "Lisp"
-    (ms-preview-path      (Cell (Optional String))) ;; 29 -- path of previewed (unpinned) file
-    (ms-diagnostics       NativeBox) ;; 30 -- CL hash table: filepath -> list of (line severity message)
-    (ms-find-needle       (Cell String)) ;; 31 -- current search string (empty = no search)
-    (ms-find-matches      NativeBox) ;; 32 -- CL simple-vector of match positions (UFix), or nil
-    (ms-structural-editing (Cell Boolean)) ;; 33 -- structural editing enabled?
-    (ms-config             cfgt:MineConfig) ;; 34 -- loaded configuration
-    (ms-io-request-active  (Cell Boolean)) ;; 35 -- waiting for IO input from user?
-    (ms-io-request-data    NativeBox) ;; 36 -- (msg-id . stream) for IO response
-    (ms-completion         complete:CompletionState) ;; 37 -- inline completion popup
-    (ms-spinner           spinner:Spinner)) ;; 38 -- status bar busy spinner
+    (ms-active-request    (Cell (Optional msg:RequestId))) ;; 27 -- foreground REPL request controlling busy state
+    (ms-minibuffer        mini:Minibuffer) ;; 28
+    (ms-repl-lang         (Cell String)) ;; 29 -- "Coalton" or "Lisp"
+    (ms-preview-path      (Cell (Optional String))) ;; 30 -- path of previewed (unpinned) file
+    (ms-diagnostics       NativeBox) ;; 31 -- CL hash table: filepath -> list of (line severity message)
+    (ms-find-needle       (Cell String)) ;; 32 -- current search string (empty = no search)
+    (ms-find-matches      NativeBox) ;; 33 -- CL simple-vector of match positions (UFix), or nil
+    (ms-structural-editing (Cell Boolean)) ;; 34 -- structural editing enabled?
+    (ms-config             cfgt:MineConfig) ;; 35 -- loaded configuration
+    (ms-io-request-active  (Cell Boolean)) ;; 36 -- waiting for IO input from user?
+    (ms-io-request-data    NativeBox) ;; 37 -- (msg-id . stream) for IO response
+    (ms-completion         complete:CompletionState) ;; 38 -- inline completion popup
+    (ms-busy-activity     (Cell (Optional String))) ;; 39 -- named REPL activity, e.g. Beam
+    (ms-spinner           spinner:Spinner)) ;; 40 -- busy spinner
 
 ;;; Named accessors for CL interop (avoids fragile numeric indices)
 
@@ -214,6 +212,9 @@
 
   (declare get-eval-start-time-cell (MineState -> (Cell UFix)))
   (define (get-eval-start-time-cell st) (.ms-eval-start-time st))
+
+  (declare get-active-request-cell (MineState -> (Cell (Optional msg:RequestId))))
+  (define (get-active-request-cell st) (.ms-active-request st))
 
   (declare get-proto-mailbox (MineState -> NativeBox))
   (define (get-proto-mailbox st) (.ms-proto-mailbox st))
@@ -413,6 +414,8 @@
 
 ;;; Render
 
+  (declare render-diagnostic-popup (MineState * screen:Screen * UFix * UFix -> Void))
+  (declare %track-diagnostic-request! (msg:RequestId -> Void))
   (declare render-app (MineState * term:Terminal -> Void))
   (define (render-app st term)
     "Render the full IDE layout to the terminal screen."
@@ -436,14 +439,19 @@
     (let content-x = (if tree-vis (+ tree-w 1) 0))
     (cell:write! (.ms-content-x st) content-x)
     (let content-w = (if (> cols content-x) (- cols content-x) 1))
+    (when (cell:read (.ms-repl-busy st))
+      (spinner:spinner-tick! (.ms-spinner st)))
     ;; Render tree pane if visible
     (when tree-vis
       (cond
         (tree-focused
          ;; Expanded: full tree pane
-         (let tree-rect = (wt:Rect 0 1 tree-w middle-h))
-         (tree:tree-pane-render (.ms-tree st) scr tree-rect True
-                                (fn (fpath) (mgr:bufmgr-path-dirty? (.ms-bufmgr st) fpath))))
+	         (let tree-rect = (wt:Rect 0 1 tree-w middle-h))
+	         (tree:tree-pane-render (.ms-tree st) scr tree-rect True
+	                                (fn (fpath) (mgr:bufmgr-path-dirty? (.ms-bufmgr st) fpath))
+	                                (fn (fpath)
+	                                  (lisp (-> UFix) (fpath)
+	                                    (mine/app/diagnostics:diagnostic-rank-for-file fpath)))))
         (True
          ;; Collapsed: number strip
          (let strip-rect = (wt:Rect 0 1 1 middle-h))
@@ -528,15 +536,23 @@
                   "EDIT Structural"
                   "EDIT"))))
        (let cur-pos = (cursor:cursor-position (.ms-cursor st)))
-       ;; Check for diagnostic on current line first, then symbol info
-       (let cur-line-1 = (+ cur-line 1))
-       (let diag-msg = (lisp (-> String) (cur-line-1)
-                         (cl:if mine/pane/editor::*editor-filepath*
-                                (cl:let ((msg (%diagnostics-message-for-line
-                                               mine/pane/editor::*editor-filepath*
-                                               cur-line-1)))
-                                  (cl:if (cl:plusp (cl:length msg)) msg ""))
-                                "")))
+       ;; Prefer diagnostics at point, then diagnostics on the current line, then symbol info.
+	      (let diag-msg = (lisp (-> String) (cur-gb cur-line cur-pos)
+	                         (cl:if mine/pane/editor::*editor-filepath*
+	                                (cl:let* ((line-start (mine/buffer/gap:gap-line-to-pos cur-gb cur-line))
+	                                          (line-end (cl:+ line-start
+	                                                          (cl:length (mine/buffer/gap:gap-line-text cur-gb cur-line))))
+	                                          (msg (mine/app/diagnostics:diagnostics-message-for-position
+	                                                mine/pane/editor::*editor-filepath*
+	                                                cur-pos))
+	                                          (line-msg (cl:if (cl:plusp (cl:length msg))
+	                                                           msg
+	                                                           (mine/app/diagnostics:diagnostics-message-for-range
+	                                                            mine/pane/editor::*editor-filepath*
+	                                                            line-start
+	                                                            line-end))))
+	                                  (cl:if (cl:plusp (cl:length line-msg)) line-msg ""))
+	                                "")))
        ;; Type hints: query subprocess asynchronously, display cached result
        (let _hint-update =
          (match (mgr:bufmgr-current (.ms-bufmgr st))
@@ -566,6 +582,11 @@
        ;; Place cursor at end of REPL input line
        (values))
       (_ (screen:screen-hide-cursor scr)))
+    ;; Render a diagnostic popup when the caret is inside a highlighted span.
+    (when (match (focus:focus-current (.ms-focus st))
+            ((focus:FocusEditor) True)
+            (_ False))
+      (render-diagnostic-popup st scr cols rows))
     ;; Render completion popup overlay
     (when (complete:completion-active? (.ms-completion st))
       (complete:completion-render (.ms-completion st) scr cols rows))
@@ -635,6 +656,19 @@
                                 footer-style))
     ;; Cursor is already positioned by input-widget-render
     (values))
+
+  (define (render-diagnostic-popup st scr cols rows)
+    "Render a near-cursor popup describing the diagnostic under point, if any."
+    (lisp (-> Void) (st scr cols rows)
+      (mine/app/diagnostics:render-diagnostic-popup-cl st scr cols rows)))
+
+  (define (%track-diagnostic-request! req-id)
+    "Record the current edit generation for a diagnostic-producing request."
+    (match req-id
+      ((msg:RequestId raw-id)
+       (lisp (-> Void) (raw-id)
+         (mine/app/diagnostics:track-diagnostic-request raw-id)
+         (cl:values)))))
 
 ;;; Welcome screen
 
@@ -910,9 +944,12 @@
        (let busy-s = (color:Style color:info-fg
                                   color:onyx
                                   color:AttrBold))
-       (spinner:spinner-tick! (.ms-spinner st))
+       (let busy-label =
+         (match (cell:read (.ms-busy-activity st))
+           ((Some label) label)
+           ((None) "Busy")))
        (let spin-str = (into (spinner:spinner-char (.ms-spinner st))))
-       (screen:screen-set-string scr y (+ col2 8) (<> "Busy " spin-str) busy-s))
+       (screen:screen-set-string scr y (+ col2 8) (<> busy-label (<> " " spin-str)) busy-s))
       (True
        (let ready-s = (color:Style color:chameleon
                                    color:onyx
@@ -1153,7 +1190,8 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
        ;; Send to runtime (non-blocking)
        (match (ensure-runtime! st)
          ((Some conn)
-          (cell:write! (.ms-repl-busy st) True)
+         (cell:write! (.ms-repl-busy st) True)
+         (cell:write! (.ms-busy-activity st) None)
           ;; Record start time for timing
           (cell:write! (.ms-eval-start-time st)
                        (lisp (-> UFix) () (cl:get-internal-real-time)))
@@ -1161,6 +1199,7 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
           (start-proto-reader! st conn)
           ;; Send the request
           (let req-id = (next-request-id! st))
+          (cell:write! (.ms-active-request st) (Some req-id))
           (let eval-text = (%wrap-coalton-input st input-text))
           (let req = (msg:ReqEval req-id eval-text (cell:read (.ms-repl-package st))))
           (client:connection-send! conn req)
@@ -1210,7 +1249,7 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
 
   (define-type ProtoMsg
     "A parsed protocol message from the runtime."
-    (ProtoReturn String Boolean) ;; result-text, is-error?
+    (ProtoReturn msg:RequestId String Boolean) ;; request-id, result-text, is-error?
     (ProtoOutput String)         ;; output text
     (ProtoDebug String NativeBox) ;; condition-text, opaque CL debug data
     (ProtoIORequest String NativeBox) ;; prompt-text, opaque (msg-id . stream)
@@ -1292,7 +1331,7 @@ multiple values get 0>, 1>, etc."
   (declare handle-proto-msg! (MineState * ProtoMsg -> Void))
   (define (handle-proto-msg! st msg)
     (match msg
-      ((ProtoReturn text is-error)
+      ((ProtoReturn request-id text is-error)
        (let texts = (%decode-result-values text))
        (cond
          (is-error
@@ -1312,8 +1351,13 @@ multiple values get 0>, 1>, etc."
                                   (cl:round (cl:/ (cl:- end-time start-time)
                                                   cl:internal-time-units-per-second)))
                                  ""))))
-       (cell:write! (.ms-repl-timing st) elapsed)
-       (cell:write! (.ms-repl-busy st) False)
+       (when (match (cell:read (.ms-active-request st))
+               ((Some active-id) (== active-id request-id))
+               ((None) False))
+         (cell:write! (.ms-repl-timing st) elapsed)
+         (cell:write! (.ms-repl-busy st) False)
+         (cell:write! (.ms-busy-activity st) None)
+         (cell:write! (.ms-active-request st) None))
        (values))
       ((ProtoOutput text)
        (repl:repl-pane-append-output! (.ms-repl st) text))
@@ -1344,6 +1388,8 @@ multiple values get 0>, 1>, etc."
            (repl:repl-pane-append-system! (.ms-repl st) ";; Connection to REPL process lost")
            (repl:repl-pane-append-system! (.ms-repl st) ";; REPL process ended. Type ,restart to start a new one."))
        (cell:write! (.ms-repl-busy st) False)
+       (cell:write! (.ms-busy-activity st) None)
+       (cell:write! (.ms-active-request st) None)
        (when (cell:read (.ms-debugger-active st))
          (cell:write! (.ms-debugger-active st) False)
          (%show-editor! st))
@@ -1366,34 +1412,35 @@ multiple values get 0>, 1>, etc."
   (declare load-project-system! (MineState -> Void))
   (define (load-project-system! st)
     "Load the project's ASDF system via the REPL runtime.
-First reloads the .asd to pick up any changes, then loads the system."
+Uses a dedicated Beam request so diagnostics can stream independently."
     (match (cell:read (.ms-project-system st))
       ((None)
        (status:statusbar-set-message! (.ms-status st) "No project system loaded"))
       ((Some sys-name)
        (ensure-repl-visible! st)
-       ;; Build the eval form: reload .asd then load system
-       (let form = (match (cell:read (.ms-project-asd-path st))
-                     ((Some asd-path)
-                      (<> "(progn (asdf:load-asd \""
-                          (<> asd-path
-                              (<> "\") (asdf:load-system \""
-                                  (<> sys-name "\"))")))))
-                     ((None)
-                      (<> "(asdf:load-system \"" (<> sys-name "\")")))))
-       (repl:repl-pane-append-output! (.ms-repl st)
-                                      (<> ";; Loading system " sys-name))
+       (let asd-path = (match (cell:read (.ms-project-asd-path st))
+                         ((Some path) path)
+                         ((None) "")))
+	       (repl:repl-pane-append-output! (.ms-repl st)
+	                                      (<> ";; Loading system " sys-name))
+	       (lisp (-> Void) ()
+	         (mine/app/diagnostics:clear-all-diagnostics)
+	         (mine/app/diagnostics:clear-compile-file-remap)
+	         (cl:values))
        (match (ensure-runtime! st)
          ((None) (values))
          ((Some conn)
-          (cell:write! (.ms-repl-busy st) True)
+         (cell:write! (.ms-repl-busy st) True)
+         (cell:write! (.ms-busy-activity st) (Some "Beam"))
           (cell:write! (.ms-eval-start-time st)
                        (lisp (-> UFix) () (cl:get-internal-real-time)))
           (start-proto-reader! st conn)
           (let req-id = (next-request-id! st))
-          (let req = (msg:ReqEval req-id form "CL-USER"))
+          (cell:write! (.ms-active-request st) (Some req-id))
+          (%track-diagnostic-request! req-id)
+          (let req = (msg:ReqBeamSystem req-id sys-name asd-path))
           (client:connection-send! conn req)
-          (values))))))
+          (values)))))) 
 
 ;;; Debugger helpers (Coalton wrappers around thin CL)
 
@@ -1566,13 +1613,15 @@ First reloads the .asd to pick up any changes, then loads the system."
        ;; Clear async state before stopping
        (lisp (-> Void) (st)
          (cl:setf (%native-box-value (mine/app/mine::get-proto-mailbox st)) cl:nil)
-         (cl:setf (%native-box-value (mine/app/mine::get-proto-thread st)) cl:nil)
-         (cl:setf (%native-box-value (mine/app/mine::get-conn-stream st)) cl:nil)
-         (cl:values))
-       (cell:write! (.ms-debugger-active st) False)
-       (cell:write! (.ms-repl-busy st) False)
-       (lifecycle:runtime-stop! (.ms-runtime st))
-       (lifecycle:runtime-start! (.ms-runtime st))
+       (cl:setf (%native-box-value (mine/app/mine::get-proto-thread st)) cl:nil)
+       (cl:setf (%native-box-value (mine/app/mine::get-conn-stream st)) cl:nil)
+       (cl:values))
+      (cell:write! (.ms-debugger-active st) False)
+      (cell:write! (.ms-repl-busy st) False)
+      (cell:write! (.ms-busy-activity st) None)
+      (cell:write! (.ms-active-request st) None)
+      (lifecycle:runtime-stop! (.ms-runtime st))
+      (lifecycle:runtime-start! (.ms-runtime st))
        (match (lifecycle:runtime-connection (.ms-runtime st))
          ((Some _)
           (repl:repl-pane-append-system! (.ms-repl st) ";; Runtime restarted."))
@@ -1737,30 +1786,33 @@ If the buffer has unsaved changes, writes to a temp file for compilation."
           (let compile-path =
             (cond
               (dirty
-               (let buf-text = (gap:gap-to-string (buf:buffer-gap buf)))
-               (lisp (-> String) (buf-text fpath)
-                 (%write-temp-for-compile buf-text fpath)))
-              (True
-               (lisp (-> Void) ()
-                 (cl:setf *compile-file-remap* cl:nil)
-                 (cl:values))
-               fpath)))
+	               (let buf-text = (gap:gap-to-string (buf:buffer-gap buf)))
+	               (lisp (-> String) (buf-text fpath)
+	                 (mine/app/diagnostics:write-temp-for-compile buf-text fpath)))
+	              (True
+	               (lisp (-> Void) ()
+	                 (mine/app/diagnostics:clear-compile-file-remap)
+	                 (cl:values))
+	               fpath)))
           (repl:repl-pane-append-output! (.ms-repl st)
                                          (if dirty
                                              (<> ";; Compiling (unsaved) " fpath)
                                              (<> ";; Compiling " fpath)))
-          ;; Clear previous diagnostics for this file
-          (lisp (-> Void) (fpath)
-            (%clear-diagnostics-for-file fpath)
-            (cl:values))
+	          ;; Clear previous diagnostics for this file
+	          (lisp (-> Void) (fpath)
+	            (mine/app/diagnostics:clear-diagnostics-for-file fpath)
+	            (cl:values))
           (match (ensure-runtime! st)
             ((None) (values))
             ((Some conn)
              (cell:write! (.ms-repl-busy st) True)
+             (cell:write! (.ms-busy-activity st) (Some "Beam"))
              (cell:write! (.ms-eval-start-time st)
                           (lisp (-> UFix) () (cl:get-internal-real-time)))
              (start-proto-reader! st conn)
              (let req-id = (next-request-id! st))
+             (cell:write! (.ms-active-request st) (Some req-id))
+             (%track-diagnostic-request! req-id)
              (let req = (msg:ReqCompileFile req-id compile-path True))
              (client:connection-send! conn req))))))))
 
@@ -1821,18 +1873,28 @@ Uses the preceding (in-package ...) form to determine the compilation package."
           (let suffix = (if (> nlines 1)
                             (<> "... [" (<> (into nlines) " lines]"))
                             ""))
+          (let buffer-path = (match (buf:buffer-path buf)
+                               ((Some path) path)
+                               ((None) "")))
           (repl:repl-pane-append-output! (.ms-repl st)
-                                         (<> ";; Eval in " (<> pkg (<> ": " (<> preview suffix)))))
+                                         (<> ";; Compile in " (<> pkg (<> ": " (<> preview suffix)))))
+	          (when (> (str:length buffer-path) 0)
+	            (lisp (-> Void) (buffer-path)
+	              (mine/app/diagnostics:clear-diagnostics-for-file buffer-path)
+	              (cl:values)))
           (match (ensure-runtime! st)
             ((None) (values))
             ((Some conn)
              (cell:write! (.ms-repl-busy st) True)
+             (cell:write! (.ms-busy-activity st) (Some "Beam"))
              (cell:write! (.ms-eval-start-time st)
                           (lisp (-> UFix) () (cl:get-internal-real-time)))
              (start-proto-reader! st conn)
              (let req-id = (next-request-id! st))
-             (let eval-text = (%wrap-coalton form-text pkg))
-             (let req = (msg:ReqEval req-id eval-text pkg))
+             (cell:write! (.ms-active-request st) (Some req-id))
+             (%track-diagnostic-request! req-id)
+             (let compile-text = (%wrap-coalton form-text pkg))
+             (let req = (msg:ReqCompileString req-id compile-text buffer-path pkg form-start))
              (client:connection-send! conn req))))))))
 
 ;;; Create project on disk
@@ -2477,6 +2539,20 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                 "Jump stack empty")))
       (cl:values)))
 
+  (declare jump-next-diagnostic! (MineState -> Void))
+  (define (jump-next-diagnostic! st)
+    "Jump to the next diagnostic span, moving across files when needed."
+    (lisp (-> Void) (st)
+      (mine/app/diagnostics:jump-adjacent-diagnostic st 1)
+      (cl:values)))
+
+  (declare jump-prev-diagnostic! (MineState -> Void))
+  (define (jump-prev-diagnostic! st)
+    "Jump to the previous diagnostic span, moving across files when needed."
+    (lisp (-> Void) (st)
+      (mine/app/diagnostics:jump-adjacent-diagnostic st -1)
+      (cl:values)))
+
   (declare handle-alt-key! (MineState * Char -> Void))
   (define (handle-alt-key! st ch)
     "Handle an Alt+key combination in the editor."
@@ -2495,6 +2571,10 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       (#\. (jump-to-definition! st))
       ;; Alt+, -> jump back
       (#\, (jump-back! st))
+      ;; Alt+[ -> previous diagnostic
+      (#\[ (jump-prev-diagnostic! st))
+      ;; Alt+] -> next diagnostic
+      (#\] (jump-next-diagnostic! st))
       (_ (values))))
 
 ;;; Event handling -- REPL keys
@@ -3632,6 +3712,11 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       ((menubar:ActionFind) (start-find! st))
       ((menubar:ActionBeamFile) (compile-file! st))
       ((menubar:ActionBeamForm) (compile-form! st))
+	      ((menubar:ActionClearDiagnostics)
+	       (lisp (-> Void) ()
+	         (mine/app/diagnostics:clear-all-diagnostics)
+	         (cl:values))
+	       (status:statusbar-set-message! (.ms-status st) "Diagnostics cleared"))
       ((menubar:ActionJumpToDefinition) (jump-to-definition! st))
       ((menubar:ActionJumpBack) (jump-back! st))
       ((menubar:ActionShowRepl) (toggle-repl! st))
@@ -4030,10 +4115,15 @@ Render-app is NOT called here; the main loop handles rendering."
                     ((Err msg)
                      (%show-config-error! term msg)
                      (cfg:default-config))))
-    ;; Install diagnostics callback for editor rendering
-    (lisp (-> Void) ()
-      (cl:setf mine/pane/editor::*diag-fn* #'%has-diagnostics-on-line-p)
-      (cl:values))
+	    ;; Install diagnostics callback for editor rendering
+	    (lisp (-> Void) ()
+	      (cl:setf mine/pane/editor::*diag-fn*
+	               #'mine/app/diagnostics:diagnostic-severity-for-range)
+	      (cl:setf mine/pane/editor::*diag-spans-fn*
+	               #'mine/app/diagnostics:line-diagnostic-spans)
+	      (cl:setf mine/buffer/buffer::*buffer-dirty-hook*
+	               #'mine/app/diagnostics:invalidate-diagnostics-for-file)
+	      (cl:values))
     ;; Create application state
     (let bm = (mgr:bufmgr-new))
     (let cs = (cursor:cursor-new))
@@ -4056,6 +4146,7 @@ Render-app is NOT called here; the main loop handles rendering."
                          (cell:new None)
                          (cell:new False)
                          (cell:new 0)
+                         (cell:new None)
                          (mini:minibuffer-new)
                          (cell:new (%config-repl-lang-display (cfgt:.config-repl-language config)))
                          (cell:new None)
@@ -4067,6 +4158,7 @@ Render-app is NOT called here; the main loop handles rendering."
                          (cell:new False)
                          (native-box-new)
                          (complete:completion-new)
+                         (cell:new None)
                          (spinner:spinner-new)))
     ;; Open a file if given on the command line
     (let file-args = (filter (fn (a) (not (str:substring? "--" a))) (list:cdr args)))
@@ -4307,27 +4399,72 @@ If no colon, returns (values buf-pkg name)."
 
 (cl:defun %jump-to-file (st filepath char-offset)
   "Open FILEPATH in the editor and move cursor to CHAR-OFFSET."
-  (cl:setf char-offset (cl:or char-offset 0))
-  (cl:handler-case
-      (cl:let* ((bm (mine/app/mine::get-bufmgr st))
-                (ep (mine/app/mine::get-editor-pane st))
-                (cs (mine/app/mine::get-cursor-state st))
-                (buf-result (mine/buffer/manager::bufmgr-open-file! bm filepath)))
-        ;; buf-result is (Result String Buffer) -- check for Ok
-        (cl:when (cl:typep buf-result 'coalton-library/classes::result/ok)
-          (cl:let* ((buf (coalton-library/classes::result/ok-_0 buf-result))
-                    (bid (mine/buffer/buffer::buffer-id buf)))
-            (mine/buffer/manager::bufmgr-switch! bm bid)
-            (mine/pane/editor::editor-pane-set-buffer! ep bid)
-            (mine/edit/cursor::cursor-move-to-position! cs char-offset)
-            (mine/app/mine::%show-editor! st)
+  (cl:labels
+      ((%display-name (path)
+         (cl:handler-case
+             (cl:file-namestring (cl:pathname path))
+           (cl:error () path)))
+       (%unwrap-optional (value)
+         (cl:if (coalton-impl/runtime/optional:cl-none-p value)
+                cl:nil
+                (coalton-impl/runtime/optional:unwrap-cl-some value))))
+    (cl:handler-case
+        (cl:let* ((raw-path (cl:and filepath (cl:princ-to-string filepath)))
+                  (resolved-path
+                    (cl:or (cl:ignore-errors
+                             (cl:when raw-path
+                               (cl:let ((truename (cl:probe-file raw-path)))
+                                 (cl:when truename
+                                   (cl:namestring truename)))))
+                           raw-path)))
+          (cl:unless (cl:and (cl:stringp resolved-path)
+                             (cl:plusp (cl:length resolved-path)))
             (mine/pane/status::statusbar-set-message!
              (mine/app/mine::get-status-bar st)
-             (cl:format cl:nil "Jumped to ~A" (cl:file-namestring filepath))))))
-    (cl:error (c)
-      (mine/pane/status::statusbar-set-message!
-       (mine/app/mine::get-status-bar st)
-       (cl:format cl:nil "Jump failed: ~A" c)))))
+             "Jump failed: no file path")
+            (cl:return-from %jump-to-file cl:nil))
+          (cl:let* ((bm (mine/app/mine::get-bufmgr st))
+                    (ep (mine/app/mine::get-editor-pane st))
+                    (cs (mine/app/mine::get-cursor-state st))
+                    (existing-buf
+                      (cl:or (%unwrap-optional
+                              (mine/buffer/manager::bufmgr-find-by-path bm resolved-path))
+                             (cl:and raw-path
+                                     (cl:not (cl:string= raw-path resolved-path))
+                                     (%unwrap-optional
+                                      (mine/buffer/manager::bufmgr-find-by-path bm raw-path)))))
+                    (opened-buf nil))
+            (cl:unless existing-buf
+              (cl:let ((buf-result (mine/buffer/manager::bufmgr-open-file! bm resolved-path)))
+                (cl:if (cl:typep buf-result 'coalton-library/classes::result/ok)
+                       (cl:setf opened-buf
+                                (coalton-library/classes::result/ok-_0 buf-result))
+                       (cl:progn
+                         (mine/pane/status::statusbar-set-message!
+                          (mine/app/mine::get-status-bar st)
+                          (cl:format cl:nil "Jump failed: could not open ~A"
+                                     (%display-name resolved-path)))
+                         (cl:return-from %jump-to-file cl:nil)))))
+            (cl:let* ((buf (cl:or existing-buf opened-buf))
+                      (gb (mine/buffer/buffer::buffer-gap buf))
+                      (bid (mine/buffer/buffer::buffer-id buf))
+                      (safe-offset
+                        (cl:max 0
+                                (cl:min (cl:or char-offset 0)
+                                        (mine/buffer/gap::gap-length gb)))))
+              (mine/buffer/manager::bufmgr-switch! bm bid)
+              (mine/pane/editor::editor-pane-set-buffer! ep bid)
+              (mine/edit/cursor::cursor-move-to-position! cs safe-offset)
+              (mine/app/mine::%show-editor! st)
+              (mine/pane/status::statusbar-set-message!
+               (mine/app/mine::get-status-bar st)
+               (cl:format cl:nil "Jumped to ~A" (%display-name resolved-path))))))
+      (cl:error (c)
+        (mine/pane/status::statusbar-set-message!
+         (mine/app/mine::get-status-bar st)
+         (cl:format cl:nil "Jump failed: ~A" c))))))
+
+;;; Diagnostic navigation helpers live in app/diagnostics.lisp.
 
 (cl:defun %read-symbol-at-cursor (gb pos)
   "Read the symbol at or around cursor position POS in gap buffer GB.
@@ -4558,28 +4695,38 @@ Returns a Coalton List of ProtoMsg."
   (cl:cond
     ((cl:and (cl:consp msg) (cl:eq (cl:first msg) :connection-lost))
      mine/app/mine:ProtoConnectionLost)
-    ((cl:and (cl:consp msg) (cl:eq (cl:first msg) :return))
-     (cl:let ((payload (cl:third msg)))
-       (cl:cond
+	    ((cl:and (cl:consp msg) (cl:eq (cl:first msg) :return))
+	     (cl:let ((request-id (cl:second msg))
+	              (payload (cl:third msg)))
+	       (mine/app/diagnostics:forget-diagnostic-request request-id)
+	       (cl:cond
          ((cl:and (cl:consp payload) (cl:eq (cl:first payload) :ok))
-          (mine/app/mine:ProtoReturn (cl:format cl:nil "~A" (cl:second payload)) coalton:False))
+          (mine/app/mine:ProtoReturn
+           (mine/protocol/messages:RequestId request-id)
+           (cl:format cl:nil "~A" (cl:second payload))
+           coalton:False))
          ((cl:and (cl:consp payload) (cl:eq (cl:first payload) :error))
-          (mine/app/mine:ProtoReturn (cl:format cl:nil "~A" (cl:second payload)) coalton:True))
+          (mine/app/mine:ProtoReturn
+           (mine/protocol/messages:RequestId request-id)
+           (cl:format cl:nil "~A" (cl:second payload))
+           coalton:True))
          (cl:t cl:nil))))
     ((cl:and (cl:consp msg) (cl:eq (cl:first msg) :notify))
      (cl:let ((payload (cl:second msg)))
        (cl:cond
          ((cl:and (cl:consp payload) (cl:eq (cl:first payload) :output))
           (mine/app/mine:ProtoOutput (cl:second payload)))
-         ((cl:and (cl:consp payload) (cl:eq (cl:first payload) :compiler-note))
-          ;; Store the note; also emit as output for the REPL
-          (%store-compiler-note (cl:rest payload))
-          (cl:let ((sev (cl:getf (cl:rest payload) :severity))
-                   (msg-text (cl:getf (cl:rest payload) :message)))
-            (mine/app/mine:ProtoOutput
-              (cl:format cl:nil ";; ~A: ~A"
-                         (cl:string-downcase (cl:symbol-name sev))
-                         (cl:subseq msg-text 0 (cl:min (cl:length msg-text) 120))))))
+	        ((cl:and (cl:consp payload) (cl:eq (cl:first payload) :diagnostic))
+	          (cl:let ((diagnostic (cl:rest payload)))
+	            (cl:unless (mine/app/diagnostics:diagnostic-stale-p diagnostic)
+	              (mine/app/diagnostics:store-diagnostic diagnostic)
+	              (cl:let ((sev (cl:getf diagnostic :severity))
+	                       (summary (cl:or (cl:getf diagnostic :summary) "")))
+	                (cl:when (mine/app/diagnostics:diagnostic-announcement-p diagnostic)
+	                (mine/app/mine:ProtoOutput
+	                 (cl:format cl:nil ";; ~A: ~A"
+	                            (cl:string-downcase (cl:symbol-name sev))
+                            (cl:subseq summary 0 (cl:min (cl:length summary) 120)))))))))
          (cl:t cl:nil))))
     ((cl:and (cl:consp msg) (cl:eq (cl:first msg) :debug))
      (cl:let ((cond-text (cl:format cl:nil "~A" (cl:third msg))))
@@ -5129,77 +5276,4 @@ Code 0/1 => payload is the path to open. Code 2 => payload is an error message."
     (cl:error ()
       (Tuple 0 text))))
 
-;;; Diagnostics storage
-
-(cl:defun %clear-diagnostics-for-file (filepath)
-  "Clear all diagnostics for a file before a new compile."
-  (cl:remhash filepath *diagnostics-table*))
-
-(cl:defun %write-temp-for-compile (text original-path)
-  "Write TEXT to a temporary file preserving the extension of ORIGINAL-PATH.
-Sets *compile-file-remap* and returns the temporary file path string."
-  (cl:let* ((ext (cl:pathname-type (cl:pathname original-path)))
-            (base (cl:pathname-name (cl:pathname original-path)))
-            (tmp-path (cl:merge-pathnames
-                       (cl:make-pathname :name (cl:format nil "mine-beam-~A" base) :type ext)
-                       (uiop:temporary-directory))))
-    (cl:with-open-file (s tmp-path :direction :output
-                                    :if-exists :supersede
-                                    :external-format :utf-8)
-      (cl:write-string text s))
-    (cl:setf *compile-file-remap* (cl:cons (cl:namestring tmp-path) original-path))
-    (cl:namestring tmp-path)))
-
-(cl:defun %store-compiler-note (plist)
-  "Store a compiler note from the protocol. PLIST is (:severity S :message M :file F :position P :line L)."
-  (cl:let* ((raw-filepath (cl:getf plist :file))
-            (severity (cl:getf plist :severity))
-            (message (cl:getf plist :message))
-            (position (cl:getf plist :position))
-            (line (cl:getf plist :line))
-            ;; Remap temp path to real path for diagnostics storage
-            (filepath (cl:if (cl:and *compile-file-remap*
-                                     (cl:string= raw-filepath (cl:car *compile-file-remap*)))
-                             (cl:cdr *compile-file-remap*)
-                             raw-filepath)))
-    (cl:when filepath
-      ;; Try to compute line from position if line is nil
-      ;; Use raw-filepath (temp file) for reading since it has the actual content
-      (cl:let ((diag-line (cl:or line
-                                  (cl:when position
-                                    ;; Convert file position to line number
-                                    (cl:handler-case
-                                        (cl:with-open-file (s raw-filepath)
-                                          (cl:loop :for ch = (cl:read-char s cl:nil)
-                                                   :for i :from 0
-                                                   :for line-num = 1 :then (cl:if (cl:eql ch #\Newline) (cl:1+ line-num) line-num)
-                                                   :when (cl:or (cl:null ch) (cl:>= i position))
-                                                   :return line-num))
-                                      (cl:error () cl:nil))))))
-        (cl:when diag-line
-          (cl:push (cl:list diag-line severity message)
-                   (cl:gethash filepath *diagnostics-table*)))))))
-
-(cl:defun %get-diagnostics-for-line (filepath line)
-  "Get a list of (severity message) for a specific line in a file."
-  (cl:let ((notes (cl:gethash filepath *diagnostics-table*)))
-    (cl:loop :for note :in notes
-             :when (cl:= (cl:first note) line)
-             :collect (cl:rest note))))
-
-(cl:defun %has-diagnostics-on-line-p (filepath line)
-  "Return the worst severity keyword if LINE has diagnostics, or NIL."
-  (cl:let ((notes (%get-diagnostics-for-line filepath line)))
-    (cl:cond
-      ((cl:some (cl:lambda (n) (cl:eq (cl:first n) :error)) notes) :error)
-      ((cl:some (cl:lambda (n) (cl:eq (cl:first n) :warning)) notes) :warning)
-      ((cl:some (cl:lambda (n) (cl:eq (cl:first n) :style-warning)) notes) :style-warning)
-      (notes :note)
-      (cl:t cl:nil))))
-
-(cl:defun %diagnostics-message-for-line (filepath line)
-  "Get the first diagnostic message for a line, or empty string."
-  (cl:let ((notes (%get-diagnostics-for-line filepath line)))
-    (cl:if notes
-           (cl:second (cl:first notes))
-           "")))
+;;; Diagnostics helpers live in app/diagnostics.lisp.

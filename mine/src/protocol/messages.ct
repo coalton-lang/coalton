@@ -6,13 +6,14 @@
    #:RequestId #:RequestId
    #:Request
    #:ReqEval #:ReqComplete #:ReqMacroexpand
-   #:ReqCompileString #:ReqCompileFile
+   #:ReqCompileString #:ReqCompileFile #:ReqBeamSystem
    #:ReqCoaltonTypeOf #:ReqFindDefinition #:ReqArglist
    #:ReqPing #:ReqQuit
    #:Response #:RespOk #:RespError
+   #:Diagnostic #:Diagnostic
    #:Notification
    #:NotifyOutput #:NotifyDiagnostic
-   #:NotifyCompilerNote #:NotifyDebugActivate #:NotifyReady
+   #:NotifyDebugActivate #:NotifyReady
    #:request-to-sexpr
    #:sexpr-to-response
    #:sexpr-to-notification))
@@ -42,6 +43,7 @@
     (ReqMacroexpand RequestId String)
     (ReqCompileString RequestId String String String UFix)
     (ReqCompileFile RequestId String Boolean)
+    (ReqBeamSystem RequestId String String)
     (ReqCoaltonTypeOf RequestId String String)
     (ReqFindDefinition RequestId String String)
     (ReqArglist RequestId String String)
@@ -57,11 +59,22 @@
 
   ;;; Notification
 
+  (define-struct Diagnostic
+    "A structured compiler/runtime diagnostic."
+    (request RequestId)
+    (file (Optional String))
+    (severity String)
+    (summary String)
+    (label String)
+    (label-kind String)
+    (start UFix)
+    (end UFix)
+    (group UFix))
+
   (define-type Notification
     "An asynchronous notification from the runtime server."
     (NotifyOutput String)
-    (NotifyDiagnostic String UFix UFix String)
-    (NotifyCompilerNote String UFix UFix String)
+    (NotifyDiagnostic Diagnostic)
     (NotifyDebugActivate String (List String))
     (NotifyReady String))
 
@@ -98,6 +111,11 @@
                               (wire:SInteger (into id))
                               (wire:SString filename)
                               (if load? (wire:SAtom "T") wire:SNil))))
+      ((ReqBeamSystem (RequestId id) system-name asd-path)
+       (wire:SList (make-list (wire:SAtom ":BEAM-SYSTEM")
+                              (wire:SInteger (into id))
+                              (wire:SString system-name)
+                              (wire:SString asd-path))))
       ((ReqCoaltonTypeOf (RequestId id) sym pkg)
        (wire:SList (make-list (wire:SAtom ":COALTON-TYPE-OF")
                               (wire:SInteger (into id))
@@ -224,7 +242,7 @@ Expected shapes:
 Expected shapes:
   (:notify (:output TEXT))
   (:notify (:ready TEXT))
-  (:notify (:compiler-note FILE LINE COL MSG))
+  (:notify (:diagnostic ...plist...))
   (:notify (:debug-activate CONDITION (RESTARTS...)))"
   (cl:let ((items (match-slist expr)))
     (cl:unless (cl:and items (cl:= (cl:length items) 2))
@@ -249,20 +267,46 @@ Expected shapes:
                    (cl:= (cl:length rest) 1))
            (cl:let ((text (match-sstring (cl:first rest))))
              (cl:if text (Some (NotifyReady text)) None)))
-          ;; (:compiler-note file line col message)
-          ((cl:and (cl:string-equal kind ":COMPILER-NOTE")
-                   (cl:= (cl:length rest) 4))
-           (cl:let ((file (match-sstring (cl:first rest)))
-                    (line (match-sinteger (cl:second rest)))
-                    (col  (match-sinteger (cl:third rest)))
-                    (msg  (match-sstring (cl:fourth rest))))
-             (cl:if (cl:and file line col msg)
-                    (Some (NotifyCompilerNote
-                           file
-                           (cl:the cl:fixnum line)
-                           (cl:the cl:fixnum col)
-                           msg))
-                    None)))
+          ;; (:diagnostic :request n :file path-or-nil ...)
+          ((cl:and (cl:string-equal kind ":DIAGNOSTIC")
+                   (cl:evenp (cl:length rest)))
+           (cl:let ((plist
+                      (cl:loop :for (key value) :on rest :by #'cl:cddr
+                               :for key-atom = (match-satom key)
+                               :unless key-atom
+                                 :do (cl:return cl:nil)
+                               :append (cl:list
+                                        (cl:intern (cl:string-upcase (cl:subseq key-atom 1)) :keyword)
+                                        value))))
+             (cl:if (cl:null plist)
+                    None
+                    (cl:let* ((request-id (match-sinteger (cl:getf plist :request)))
+                              (file-expr (cl:getf plist :file))
+                              (file (cl:cond
+                                      ((cl:null file-expr) None)
+                                      ((match-sstring file-expr)
+                                       (Some (match-sstring file-expr)))
+                                      (cl:t None)))
+                              (severity (match-satom (cl:getf plist :severity)))
+                              (summary (match-sstring (cl:getf plist :summary)))
+                              (label (match-sstring (cl:getf plist :label)))
+                              (label-kind (match-satom (cl:getf plist :label-kind)))
+                              (start (match-sinteger (cl:getf plist :start)))
+                              (end (match-sinteger (cl:getf plist :end)))
+                              (group (match-sinteger (cl:getf plist :group))))
+                      (cl:if (cl:and request-id severity summary label label-kind start end group)
+                             (Some (NotifyDiagnostic
+                                    (Diagnostic
+                                     (RequestId (cl:the cl:fixnum request-id))
+                                     file
+                                     severity
+                                     summary
+                                     label
+                                     label-kind
+                                     (cl:the cl:fixnum start)
+                                     (cl:the cl:fixnum end)
+                                     (cl:the cl:fixnum group))))
+                             None)))))
           ;; (:debug-activate condition (restarts...))
           ((cl:and (cl:string-equal kind ":DEBUG-ACTIVATE")
                    (cl:= (cl:length rest) 2))

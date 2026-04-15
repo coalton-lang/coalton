@@ -29,6 +29,7 @@
    #:*lexer-mode*
    #:*editor-filepath*
    #:*diag-fn*
+   #:*diag-spans-fn*
    #:*search-matches*
    #:*search-needle-len*
    #:*search-current-pos*
@@ -43,11 +44,23 @@
 (cl:defvar *editor-filepath* cl:nil
   "Current buffer filepath for diagnostics lookup.")
 (cl:defvar *diag-fn* cl:nil
-  "Function (filepath line) -> severity-keyword-or-nil. Set by app before render.")
+  "Function (filepath line-start line-end) -> severity-keyword-or-nil.")
+(cl:defvar *diag-spans-fn* cl:nil
+  "Function (filepath line-start line-end) -> list of (start end severity).")
+(cl:defvar *line-diagnostic-ranges* cl:nil
+  "Current line diagnostic ranges as a CL list of (start end severity).")
 (cl:defvar *paren-match-a* cl:nil
   "Buffer position of the close bracket to highlight, or nil for none.")
 (cl:defvar *paren-match-b* cl:nil
   "Buffer position of the matching open bracket to highlight, or nil for none.")
+
+(cl:defun %diagnostic-rank-cl (severity)
+  (cl:cond
+    ((cl:eq severity :error) 4)
+    ((cl:eq severity :warning) 3)
+    ((cl:eq severity :style-warning) 2)
+    ((cl:eq severity :note) 1)
+    (cl:t 0)))
 
 (coalton-toplevel
 
@@ -256,34 +269,41 @@ Shows line numbers in the gutter and highlights the current line."
                  ;; Within buffer.
                  (cl:let* ((is-current (cl:and (cl:plusp hl-cur-cl) (cl:= line-idx cur-line)))
                            (line-style (cl:if is-current hl-style color:default-style)))
-                   ;; Draw gutter line number, with diagnostic marker if applicable.
-                   (cl:when (cl:plusp show-ln-cl)
-                     (cl:let ((diag-sev (cl:when (cl:and *editor-filepath* *diag-fn*)
-                                          (cl:funcall *diag-fn* *editor-filepath* (cl:1+ line-idx)))))
-                       (cl:if diag-sev
-                             (cl:let ((diag-style
-                                        (cl:cond
-                                          ((cl:eq diag-sev :error)
-                                           (mine/term/color::Style
-                                             mine/term/color::error-fg
-                                             mine/term/color::black
-                                             mine/term/color::AttrBold))
-                                          ((cl:eq diag-sev :warning)
-                                           (mine/term/color::Style
-                                             mine/term/color::warning-fg
-                                             mine/term/color::black
-                                             mine/term/color::AttrNone))
-                                          (cl:t
-                                           (mine/term/color::Style
-                                             mine/term/color::info-fg
-                                             mine/term/color::black
-                                             mine/term/color::AttrNone)))))
-                               (render-line-number scr y (cl:1+ line-idx) rect-x0 gw diag-style))
-                             (render-line-number scr y (cl:1+ line-idx) rect-x0 gw gutter-style))))
                    ;; Draw the text content.
                    (cl:let* ((text (gap:gap-line-text gb line-idx))
                              (text-len (cl:length text))
                              (tw mine/buffer/gap::*tab-width*))
+                     (cl:let* ((line-buf-offset (mine/buffer/gap:gap-line-to-pos gb line-idx))
+                               (line-end (cl:+ line-buf-offset text-len))
+                               (diag-sev (cl:when (cl:and *editor-filepath* *diag-fn*)
+                                             (cl:funcall *diag-fn* *editor-filepath*
+                                                         line-buf-offset line-end)))
+                               (diag-ranges (cl:when (cl:and *editor-filepath* *diag-spans-fn*)
+                                                (cl:funcall *diag-spans-fn* *editor-filepath*
+                                                            line-buf-offset line-end))))
+                       (cl:setf *line-diagnostic-ranges* diag-ranges)
+                       ;; Draw gutter line number, with diagnostic marker if applicable.
+                       (cl:when (cl:plusp show-ln-cl)
+                         (cl:if diag-sev
+                                (cl:let ((diag-style
+                                           (cl:cond
+                                             ((cl:eq diag-sev :error)
+                                              (mine/term/color::Style
+                                                mine/term/color::error-fg
+                                                mine/term/color::black
+                                                mine/term/color::AttrBold))
+                                             ((cl:eq diag-sev :warning)
+                                              (mine/term/color::Style
+                                                mine/term/color::warning-fg
+                                                mine/term/color::black
+                                                mine/term/color::AttrNone))
+                                             (cl:t
+                                              (mine/term/color::Style
+                                                mine/term/color::info-fg
+                                                mine/term/color::black
+                                                mine/term/color::AttrNone)))))
+                                  (render-line-number scr y (cl:1+ line-idx) rect-x0 gw diag-style))
+                                (render-line-number scr y (cl:1+ line-idx) rect-x0 gw gutter-style)))
                      ;; Fill the current line highlight if needed.
                      (cl:when is-current
                        (render:fill-rect scr
@@ -291,13 +311,15 @@ Shows line numbers in the gutter and highlights the current line."
                                          #\Space hl-style))
                      ;; Draw with syntax highlighting + selection.
                      ;; sc is a visual column; find the char index where visible area starts
-                     (cl:let ((line-buf-offset (mine/buffer/gap:gap-line-to-pos gb line-idx))
-                              (char-start (mine/buffer/gap:char-for-vcol text sc tw)))
+                       (cl:let ((char-start (mine/buffer/gap:char-for-vcol text sc tw)))
                        (cl:when (cl:< char-start text-len)
                          (mine/pane/editor::draw-highlighted-line
                           scr y text-x text-width sc text
                           line-style
-                          sel-start sel-end line-buf-offset tw))))))))
+                          sel-start sel-end line-buf-offset tw))
+                       (mine/pane/editor::draw-diagnostic-point-markers
+                        scr y text-x text-width sc text
+                        line-style line-buf-offset tw))))))))
       ;; Place the screen cursor at the editing position.
       (mine/term/screen:screen-set-cursor scr cursor-scr-y cursor-scr-x)
       (cl:values)))
@@ -369,6 +391,29 @@ Shows line numbers in the gutter and highlights the current line."
                     (cl:and *paren-match-b* (cl:= abs-pos *paren-match-b*)))
              True False)))
 
+  (declare %diagnostic-rank-at (UFix -> UFix))
+  (define (%diagnostic-rank-at abs-pos)
+    "Return the worst diagnostic severity rank covering ABS-POS."
+    (lisp (-> UFix) (abs-pos)
+      (cl:let ((best 0))
+        (cl:dolist (diag-range *line-diagnostic-ranges* best)
+          (cl:destructuring-bind (start end severity) diag-range
+            (cl:when (cl:if (cl:= start end)
+                            (cl:= abs-pos start)
+                            (cl:and (cl:>= abs-pos start)
+                                    (cl:< abs-pos end)))
+              (cl:setf best (cl:max best (%diagnostic-rank-cl severity)))))))))
+
+  (declare %diagnostic-style (color:Style * UFix -> color:Style))
+  (define (%diagnostic-style style rank)
+    "Apply a diagnostic background tint while preserving syntax foregrounds."
+    (match rank
+      (4 (color:Style (color:.style-fg style) color:dark-red (color:.style-attr style)))
+      (3 (color:Style (color:.style-fg style) color:brown (color:.style-attr style)))
+      (2 (color:Style (color:.style-fg style) color:slate (color:.style-attr style)))
+      (1 (color:Style (color:.style-fg style) color:dark-blue (color:.style-attr style)))
+      (_ style)))
+
   (declare %pick-style
     (UFix * UFix * UFix * color:Style * color:Style * color:Style * color:Style -> color:Style))
   (define (%pick-style abs-pos sel-start sel-end style sel-style search-style search-cur-style)
@@ -379,6 +424,8 @@ Shows line numbers in the gutter and highlights the current line."
        (color:Style (color:.style-fg style) color:match-paren-bg color:AttrBold))
       ((== (%search-hit-kind abs-pos) 2) search-cur-style)
       ((== (%search-hit-kind abs-pos) 1) search-style)
+      ((> (%diagnostic-rank-at abs-pos) 0)
+       (%diagnostic-style style (%diagnostic-rank-at abs-pos)))
       (True style)))
 
   (declare draw-chars-with-tabs
@@ -453,6 +500,35 @@ Shows line numbers in the gutter and highlights the current line."
        (%draw-hl-tokens tokens scr y text-x text text-len default-style def-bg
                         vcol-map scroll-vcol vis-vcol-end
                         line-buf-offset sel-start sel-end tab-w))))
+
+  (declare draw-diagnostic-point-markers
+    (screen:Screen * UFix * UFix * UFix * UFix *
+     String * color:Style * UFix * UFix -> Void))
+  (define (draw-diagnostic-point-markers scr y text-x text-width scroll-vcol
+                                         text default-style line-buf-offset tab-w)
+    "Render zero-length diagnostic spans as one-cell markers at their start position."
+    (let text-len = (str:length text))
+    (let vcol-map = (%build-vcol-map text tab-w))
+    (let vis-vcol-end = (+ scroll-vcol text-width))
+    (let line-end = (+ line-buf-offset text-len))
+    (lisp (-> Void) (scr y text-x text-len default-style
+                     vcol-map scroll-vcol vis-vcol-end
+                     line-buf-offset line-end)
+      (cl:let ((best 0))
+        (cl:dolist (diag-range *line-diagnostic-ranges*)
+          (cl:destructuring-bind (start end severity) diag-range
+            (cl:when (cl:and (cl:= start end)
+                             (cl:= start line-end))
+              (cl:setf best (cl:max best (%diagnostic-rank-cl severity))))))
+        (cl:when (cl:plusp best)
+          (cl:let ((vcol (vec:index-unsafe text-len vcol-map)))
+            (cl:when (cl:and (cl:>= vcol scroll-vcol)
+                             (cl:< vcol vis-vcol-end))
+              (mine/term/screen:screen-set-cell
+               scr y (cl:+ text-x (cl:- vcol scroll-vcol))
+               #\Space
+               (mine/pane/editor::%diagnostic-style default-style best))))))
+      (cl:values)))
 
   (declare %draw-hl-tokens
     ((List tok:Token) * screen:Screen * UFix * UFix * String * UFix *
