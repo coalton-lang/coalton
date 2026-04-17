@@ -6,6 +6,19 @@
 
 (in-package #:mine/app/executable)
 
+(defun %detect-version ()
+  "Return a version string from the environment or git."
+  (or (uiop:getenvp "MINE_VERSION")
+      (ignore-errors
+        (let ((hash (string-trim
+                     '(#\Space #\Newline #\Return)
+                     (with-output-to-string (s)
+                       (uiop:run-program '("git" "rev-parse" "--short" "HEAD")
+                                         :output s)))))
+          (when (plusp (length hash))
+            (format nil "[~A]" hash))))
+      "[unknown-build]"))
+
 (defun build ()
   ;; Load SBCL contrib modules so they are available in the saved image.
   ;; sb-alien is part of core SBCL and is always available.
@@ -53,6 +66,7 @@
            (push (asdf:component-name s) to-remove))))
     (dolist (name to-remove)
       (asdf:clear-system name)))
+  (setf mine/version:*mine-version* (%detect-version))
   (let ((toplevel (lambda ()
                     ;; The build bypasses uiop:dump-image, so UIOP's image
                     ;; restore hooks haven't run.  Call them now to recompute

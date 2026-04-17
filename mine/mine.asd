@@ -48,7 +48,9 @@
   :pathname "src/"
   :serial t
   :components
-  (;; CL bindings -- editor-only (platform, terminal, signal)
+  ((:file "version")
+
+   ;; CL bindings -- editor-only (platform, terminal, signal)
    (:module "bindings"
     :serial t
     :components ((:file "platform-package")

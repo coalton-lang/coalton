@@ -694,10 +694,13 @@
     (let cy = (if (> rh line-count)
                   (+ ry (lisp (-> UFix) (rh line-count) (cl:floor (cl:- rh line-count) 2)))
                   ry))
-    ;; Row 0: "Welcome to mine."
+    ;; Row 0: "Welcome to mine <version>."
     (let welcome-prefix = "Welcome to ")
     (let welcome-name = "mine")
-    (let welcome-suffix = ".")
+    (let welcome-suffix = (<> " "
+                              (<> (lisp (-> String) ()
+                                    mine/version:*mine-version*)
+                                  ".")))
     (let welcome-w = (+ (str:length welcome-prefix)
                         (+ (str:length welcome-name)
                            (str:length welcome-suffix))))
