@@ -352,7 +352,8 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
   "Jump to the next (>0) or previous (<0) stored diagnostic."
   (let* ((bm (call-mine-function "GET-BUFMGR" st))
          (cs (call-mine-function "GET-CURSOR-STATE" st))
-         (buf (mine/buffer/manager::bufmgr-current bm))
+         (opt-buf (mine/buffer/manager::bufmgr-current bm))
+         (buf (unless (coalton-impl/runtime/optional:cl-none-p opt-buf) opt-buf))
          (current-file (and buf (mine/buffer/buffer:buffer-path buf)))
          (current-pos (mine/edit/cursor:cursor-position cs))
          (locations (all-diagnostic-locations))
