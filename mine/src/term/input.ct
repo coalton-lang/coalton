@@ -137,6 +137,40 @@
     (lisp (-> Char) (n)
       (cl:code-char n)))
 
+  ;;; US keyboard shift mapping for Kitty protocol
+  ;;; The Kitty protocol sends base (unshifted) codepoints with shift in the
+  ;;; modifier bits.  When shift is set we need to map to the actual character.
+
+  (declare %apply-shift-to-codepoint (UFix -> UFix))
+  (define (%apply-shift-to-codepoint cp)
+    "Map a US-keyboard base codepoint to its shifted variant."
+    (cond
+      ;; letters a-z -> A-Z
+      ((and (>= cp 97) (<= cp 122)) (- cp 32))
+      ;; digits and punctuation
+      ((== cp 49) 33)   ; 1 -> !
+      ((== cp 50) 64)   ; 2 -> @
+      ((== cp 51) 35)   ; 3 -> #
+      ((== cp 52) 36)   ; 4 -> $
+      ((== cp 53) 37)   ; 5 -> %
+      ((== cp 54) 94)   ; 6 -> ^
+      ((== cp 55) 38)   ; 7 -> &
+      ((== cp 56) 42)   ; 8 -> *
+      ((== cp 57) 40)   ; 9 -> (
+      ((== cp 48) 41)   ; 0 -> )
+      ((== cp 45) 95)   ; - -> _
+      ((== cp 61) 43)   ; = -> +
+      ((== cp 91) 123)  ; [ -> {
+      ((== cp 93) 125)  ; ] -> }
+      ((== cp 92) 124)  ; \ -> |
+      ((== cp 59) 58)   ; ; -> :
+      ((== cp 39) 34)   ; ' -> "
+      ((== cp 96) 126)  ; ` -> ~
+      ((== cp 44) 60)   ; , -> <
+      ((== cp 46) 62)   ; . -> >
+      ((== cp 47) 63)   ; / -> ?
+      (True cp)))
+
   ;;; CSI parameter parsing
 
   (declare parse-csi-params
@@ -352,7 +386,16 @@ Returns (event next-pos)."
             IEvNone))
          (_ (IEvKey (KeyUnknown 116) ModNone))))
       ;; CSI u (progressive keyboard enhancement)
+      ;; Kitty protocol sends base (unshifted) codepoints with shift in
+      ;; the modifier bits.  Extract the shift bit so we can map the
+      ;; codepoint to the actual typed character.
       ((== final-byte 117)
+       (let raw-mod = (match params
+                        ((Cons _ (Cons m _)) m)
+                        (_ 0)))
+       (let shifted = (lisp (-> Boolean) (raw-mod)
+                        (cl:logbitp 0 (cl:if (cl:> raw-mod 1)
+                                             (cl:1- raw-mod) 0))))
        (match params
          ((Cons codepoint _)
           (cond
@@ -379,7 +422,10 @@ Returns (event next-pos)."
                   (and (>= codepoint 97) (<= codepoint 122)))
              (IEvKey (KeyCtrl (ufix-to-char codepoint)) ModCtrl))
             ((and (>= codepoint 32) (<= codepoint 126))
-             (IEvKey (KeyChar (ufix-to-char codepoint)) modifier))
+             (let actual = (if shifted
+                               (%apply-shift-to-codepoint codepoint)
+                               codepoint))
+             (IEvKey (KeyChar (ufix-to-char actual)) modifier))
             (True (IEvKey (KeyUnknown codepoint) modifier))))
          (_ (IEvKey (KeyUnknown 117) ModNone))))
       ;; Unknown
