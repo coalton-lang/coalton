@@ -22,7 +22,7 @@ Returns T on success, or (values NIL error-message) on failure."
       (progn
         (when (and (stringp asd-path)
                    (plusp (length asd-path)))
-          (asdf:load-asd asd-path))
+          (asdf:load-asd (truename asd-path)))
         (asdf:load-system system-name)
         t)
     (error (c)
