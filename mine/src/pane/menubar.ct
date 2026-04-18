@@ -35,7 +35,8 @@
    #:menubar-close!
    #:menubar-handle-key!
    #:menubar-handle-mouse!
-   #:menubar-title-hit-test))
+   #:menubar-title-hit-test
+   #:menubar-set-action-enabled!))
 
 (in-package #:mine/pane/menubar)
 
@@ -152,10 +153,11 @@
   ;;; MenuBar
 
   (define-struct MenuBar
-    (mb-menus      (List MenuDef))
-    (mb-open-index (Cell (Optional UFix)))
-    (mb-selected   (Cell UFix))
-    (mb-title-cols (List (Tuple UFix UFix))))
+    (mb-menus          (List MenuDef))
+    (mb-open-index     (Cell (Optional UFix)))
+    (mb-selected       (Cell UFix))
+    (mb-title-cols     (List (Tuple UFix UFix)))
+    (mb-action-enabled (Cell (MenuAction -> Boolean))))
 
   (declare menubar-new (Void -> MenuBar))
   (define (menubar-new)
@@ -166,7 +168,8 @@
     (MenuBar menus
              (cell:new None)
              (cell:new 0)
-             cols))
+             cols
+             (cell:new (fn (_) True))))
 
   ;;; Precompute title column ranges for hit testing
 
@@ -192,13 +195,46 @@
   (declare menubar-open! (MenuBar * UFix -> Void))
   (define (menubar-open! mb idx)
     (cell:write! (.mb-open-index mb) (Some idx))
-    (cell:write! (.mb-selected mb) 0)
+    (let items = (.md-items (%nth-menu mb idx)))
+    (let first = (%find-enabled-forward items mb 0 (list:length items)))
+    (cell:write! (.mb-selected mb) (match first ((Some i) i) ((None) 0)))
     (values))
 
   (declare menubar-close! (MenuBar -> Void))
   (define (menubar-close! mb)
     (cell:write! (.mb-open-index mb) None)
     (values))
+
+  (declare menubar-set-action-enabled! (MenuBar * (MenuAction -> Boolean) -> Void))
+  (define (menubar-set-action-enabled! mb pred)
+    (let _ = (cell:write! (.mb-action-enabled mb) pred))
+    (values))
+
+  (declare %item-enabled? (MenuBar * MenuItem -> Boolean))
+  (define (%item-enabled? mb item)
+    ((cell:read (.mb-action-enabled mb)) (.mi-action item)))
+
+  (declare %find-enabled-forward ((List MenuItem) * MenuBar * UFix * UFix -> (Optional UFix)))
+  (define (%find-enabled-forward items mb from count)
+    "Find first enabled item index at or after FROM, wrapping. Returns None if none enabled."
+    (cond
+      ((== count 0) None)
+      (True
+       (let n = (list:length items))
+       (let idx = (if (>= from n) 0 from))
+       (if (%item-enabled? mb (list:nth idx items))
+           (Some idx)
+           (%find-enabled-forward items mb (+ idx 1) (- count 1))))))
+
+  (declare %find-enabled-backward ((List MenuItem) * MenuBar * UFix * UFix * UFix -> (Optional UFix)))
+  (define (%find-enabled-backward items mb from n count)
+    "Find first enabled item index at or before FROM, wrapping. Returns None if none enabled."
+    (cond
+      ((== count 0) None)
+      (True
+       (if (%item-enabled? mb (list:nth from items))
+           (Some from)
+           (%find-enabled-backward items mb (if (== from 0) (- n 1) (- from 1)) n (- count 1))))))
 
   ;;; Title bar hit test
 
@@ -244,33 +280,34 @@
   (define (menubar-handle-key! mb key _mod)
     (match key
       ((input:KeyUp)
-       (let sel = (cell:read (.mb-selected mb)))
-       (cond
-         ((== sel 0)
-          (match (cell:read (.mb-open-index mb))
-            ((Some idx)
-             (let count = (%menu-item-count mb idx))
-             (cell:write! (.mb-selected mb) (- count 1))
-             (values))
-            ((None) (values))))
-         (True (cell:write! (.mb-selected mb) (- sel 1)) (values)))
-       None)
-      ((input:KeyDown)
-       (let sel = (cell:read (.mb-selected mb)))
        (match (cell:read (.mb-open-index mb))
          ((Some idx)
-          (let count = (%menu-item-count mb idx))
-          (cell:write! (.mb-selected mb)
-            (if (>= (+ sel 1) count) 0 (+ sel 1)))
-          (values))
+          (let sel = (cell:read (.mb-selected mb)))
+          (let items = (.md-items (%nth-menu mb idx)))
+          (let n = (list:length items))
+          (let start = (if (== sel 0) (- n 1) (- sel 1)))
+          (match (%find-enabled-backward items mb start n n)
+            ((Some i) (cell:write! (.mb-selected mb) i) (values))
+            ((None) (values))))
+         ((None) (values)))
+       None)
+      ((input:KeyDown)
+       (match (cell:read (.mb-open-index mb))
+         ((Some idx)
+          (let sel = (cell:read (.mb-selected mb)))
+          (let items = (.md-items (%nth-menu mb idx)))
+          (let n = (list:length items))
+          (let start = (if (>= (+ sel 1) n) 0 (+ sel 1)))
+          (match (%find-enabled-forward items mb start n)
+            ((Some i) (cell:write! (.mb-selected mb) i) (values))
+            ((None) (values))))
          ((None) (values)))
        None)
       ((input:KeyLeft)
        (match (cell:read (.mb-open-index mb))
          ((Some idx)
           (let new-idx = (if (== idx 0) 5 (- idx 1)))
-          (cell:write! (.mb-open-index mb) (Some new-idx))
-          (cell:write! (.mb-selected mb) 0)
+          (menubar-open! mb new-idx)
           (values))
          ((None) (values)))
        None)
@@ -278,15 +315,23 @@
        (match (cell:read (.mb-open-index mb))
          ((Some idx)
           (let new-idx = (if (>= idx 5) 0 (+ idx 1)))
-          (cell:write! (.mb-open-index mb) (Some new-idx))
-          (cell:write! (.mb-selected mb) 0)
+          (menubar-open! mb new-idx)
           (values))
          ((None) (values)))
        None)
       ((input:KeyEnter)
-       (let action = (%selected-action mb))
-       (menubar-close! mb)
-       action)
+       (match (cell:read (.mb-open-index mb))
+         ((Some idx)
+          (let sel = (cell:read (.mb-selected mb)))
+          (let item = (list:nth sel (.md-items (%nth-menu mb idx))))
+          (cond
+            ((%item-enabled? mb item)
+             (menubar-close! mb)
+             (Some (.mi-action item)))
+            (True None)))
+         ((None)
+          (menubar-close! mb)
+          None)))
       ((input:KeyEscape)
        (menubar-close! mb)
        None)
@@ -339,14 +384,17 @@
            (cond
              ((and (>= col dx) (and (< col (+ dx dw))
                       (and (>= row dy) (< row (+ dy dh)))))
-              ;; Click inside dropdown: select and execute
+              ;; Click inside dropdown: select and execute if enabled
               (let item-idx = (- row dy))
               (cond
                 ((< item-idx (%menu-item-count mb idx))
-                 (cell:write! (.mb-selected mb) item-idx)
-                 (let action = (%selected-action mb))
-                 (menubar-close! mb)
-                 action)
+                 (let item = (list:nth item-idx (.md-items (%nth-menu mb idx))))
+                 (cond
+                   ((%item-enabled? mb item)
+                    (cell:write! (.mb-selected mb) item-idx)
+                    (menubar-close! mb)
+                    (Some (.mi-action item)))
+                   (True None)))
                 (True
                  (menubar-close! mb)
                  None)))
@@ -486,21 +534,32 @@
           (render:draw-box scr (wt:Rect bx2 by bw bh) border-style)
           ;; Fill content area
           (render:fill-rect scr (wt:Rect cx2 (+ cy 1) cw ch) #\Space bg)
+          ;; Disabled item style
+          (let disabled-style = (color:Style color:text-dimmer-fg
+                                              color:panel-bg
+                                              color:AttrNone))
           ;; Draw items
           (let selected = (cell:read (.mb-selected mb)))
-          (%render-items (.md-items menu) scr cx2 (+ cy 1) cw 0 selected
-                         bg sel-style key-style sel-key-style)
+          (%render-items (.md-items menu) mb scr cx2 (+ cy 1) cw 0 selected
+                         bg sel-style key-style sel-key-style disabled-style)
           ;; Hide cursor while menu is open
           (screen:screen-hide-cursor scr))))
 
-  (declare %render-items ((List MenuItem) * screen:Screen * UFix * UFix * UFix * UFix * UFix * color:Style * color:Style * color:Style * color:Style -> Void))
-  (define (%render-items items scr x y w idx selected bg sel-style key-style sel-key-style)
+  (declare %render-items ((List MenuItem) * MenuBar * screen:Screen * UFix * UFix * UFix * UFix * UFix * color:Style * color:Style * color:Style * color:Style * color:Style -> Void))
+  (define (%render-items items mb scr x y w idx selected bg sel-style key-style sel-key-style disabled-style)
     (match items
       ((Nil) (values))
       ((Cons item rest)
+       (let enabled = (%item-enabled? mb item))
        (let is-sel = (== idx selected))
-       (let style = (if is-sel sel-style bg))
-       (let ks = (if is-sel sel-key-style key-style))
+       (let style = (cond
+                      ((not enabled) disabled-style)
+                      (is-sel sel-style)
+                      (True bg)))
+       (let ks = (cond
+                   ((not enabled) disabled-style)
+                   (is-sel sel-key-style)
+                   (True key-style)))
        ;; Fill the row background
        (render:fill-rect scr (wt:Rect x y w 1) #\Space style)
        ;; Draw label
@@ -512,5 +571,5 @@
          (let kb-display = (<> kb " "))
          (let kb-x = (- (+ x w) (cellw:string-cell-width kb-display)))
          (screen:screen-set-string scr y kb-x kb-display ks))
-       (%render-items rest scr x (+ y 1) w (+ idx 1) selected
-                      bg sel-style key-style sel-key-style)))))
+       (%render-items rest mb scr x (+ y 1) w (+ idx 1) selected
+                      bg sel-style key-style sel-key-style disabled-style)))))

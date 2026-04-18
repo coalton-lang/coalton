@@ -3709,6 +3709,39 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                                   :validate (cl:constantly cl:t))
       (cl:values)))
 
+  (declare %update-menu-enabled! (MineState -> Void))
+  (define (%update-menu-enabled! st)
+    (let has-project = (match (cell:read (.ms-project-asd-path st))
+                         ((Some _) True)
+                         ((None) False)))
+    (let has-buffer = (match (mgr:bufmgr-current (.ms-bufmgr st))
+                        ((Some _) True)
+                        ((None) False)))
+    (menubar:menubar-set-action-enabled! (.ms-menu st)
+      (fn (action)
+        (match action
+          ;; Project menu: require open project
+          ((menubar:ActionBeamSystem) has-project)
+          ((menubar:ActionRefreshProject) has-project)
+          ((menubar:ActionCloseProject) has-project)
+          ((menubar:ActionBuildExecutable) has-project)
+          ((menubar:ActionEditProject) has-project)
+          ((menubar:ActionAddFile) has-project)
+          ((menubar:ActionAddDependency) has-project)
+          ;; File menu: require open buffer
+          ((menubar:ActionSave) has-buffer)
+          ((menubar:ActionSaveAll) has-buffer)
+          ((menubar:ActionCloseFile) has-buffer)
+          ;; Editor menu: require open buffer
+          ((menubar:ActionFind) has-buffer)
+          ((menubar:ActionBeamFile) has-buffer)
+          ((menubar:ActionBeamForm) has-buffer)
+          ((menubar:ActionClearDiagnostics) has-buffer)
+          ((menubar:ActionJumpToDefinition) has-buffer)
+          ((menubar:ActionJumpBack) has-buffer)
+          ((menubar:ActionToggleStructural) has-buffer)
+          (_ True)))))
+
   (declare dispatch-menu-action! (MineState * term:Terminal * menubar:MenuAction -> Void))
   (define (dispatch-menu-action! st term action)
     "Execute a menu action."
@@ -4274,6 +4307,8 @@ Render-app is NOT called here; the main loop handles rendering."
             ((Err msg)
              (status:statusbar-set-message! (.ms-status st) msg))))))
       ((Nil) (values)))
+    ;; Set initial menu enabled state based on whether a project is open
+    (%update-menu-enabled! st)
     ;; Initial render
     (render-app st term)
     (term:terminal-flush term)
@@ -4298,6 +4333,8 @@ Render-app is NOT called here; the main loop handles rendering."
        (dispatch-input-events handler events)
        ;; Process any pending protocol messages (async responses, debugger, etc.)
        (process-protocol-messages! st)
+       ;; Update menu enabled state before rendering
+       (%update-menu-enabled! st)
        ;; Render and flush
        (render-app st term)
        (term:terminal-flush term)
