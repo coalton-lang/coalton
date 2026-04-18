@@ -24,17 +24,17 @@
 ;;; CL diagnostics state referenced by lisp escapes in the Coalton code.
 
 (defvar *diagnostics-table* (make-hash-table :test 'equal)
-  "Hash table: filepath (string) -> list of diagnostic plists.")
+  "Hash table: document key (string) -> list of diagnostic plists.")
 (defvar *reported-diagnostic-groups* (make-hash-table :test 'equal)
   "Hash table of (request . group) pairs already announced in the REPL.")
 (defvar *diagnostic-file-generations* (make-hash-table :test 'equal)
-  "Hash table: filepath (string) -> latest edit generation that invalidated diagnostics.")
+  "Hash table: document key (string) -> latest edit generation that invalidated diagnostics.")
 (defvar *diagnostic-request-generations* (make-hash-table :test 'eql)
   "Hash table: request id (integer) -> diagnostic generation snapshot at request start.")
 (defvar *diagnostic-generation-clock* 0
   "Monotonic counter used to invalidate stale diagnostics after edits.")
 (defvar *compile-file-remap* nil
-  "When non-nil, a cons (temp-path . real-path) for remapping file diagnostics.")
+  "When non-nil, a cons (temp-document-key . real-document-key) for remapping file diagnostics.")
 
 (defun mine-function (name)
   "Return the MINE/APP/MINE function named NAME."
@@ -48,20 +48,39 @@
   "Call the MINE/APP/MINE function NAME with ARGS."
   (apply (mine-function name) args))
 
+(defun buffer-document-key-p (document-key)
+  "Return T when DOCUMENT-KEY names an unnamed in-memory buffer."
+  (and (stringp document-key)
+       (>= (length document-key) 9)
+       (string= document-key "buffer://" :end1 9 :end2 9)))
+
+(defun normalize-document-key (document-key)
+  "Return the canonical document key string used for diagnostics lookup."
+  (cond
+    ((not (and (stringp document-key)
+               (plusp (length document-key))))
+     nil)
+    ((buffer-document-key-p document-key)
+     document-key)
+    (t
+     (mine/buffer/buffer::%normalize-file-document-key document-key))))
+
 ;;; Diagnostics storage
 
 (defun clear-diagnostics-for-file (filepath)
-  "Clear all diagnostics for a file before a new compile."
-  (remhash filepath *diagnostics-table*))
+  "Clear all diagnostics for a document before a new compile."
+  (let ((document-key (normalize-document-key filepath)))
+    (when document-key
+      (remhash document-key *diagnostics-table*))))
 
 (defun invalidate-diagnostics-for-file (filepath)
   "Clear FILEPATH diagnostics and mark any older request results as stale."
-  (when (and (stringp filepath)
-             (plusp (length filepath)))
-    (clear-diagnostics-for-file filepath)
-    (incf *diagnostic-generation-clock*)
-    (setf (gethash filepath *diagnostic-file-generations*)
-          *diagnostic-generation-clock*)))
+  (let ((document-key (normalize-document-key filepath)))
+    (when document-key
+      (clear-diagnostics-for-file document-key)
+      (incf *diagnostic-generation-clock*)
+      (setf (gethash document-key *diagnostic-file-generations*)
+            *diagnostic-generation-clock*))))
 
 (defun clear-all-diagnostics ()
   "Clear every stored diagnostic and reset REPL announcement tracking."
@@ -106,7 +125,9 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
                        :if-exists :supersede
                        :external-format :utf-8)
       (write-string text s))
-    (setf *compile-file-remap* (cons (namestring tmp-path) original-path))
+    (setf *compile-file-remap*
+          (cons (normalize-document-key (namestring tmp-path))
+                (normalize-document-key original-path)))
     (namestring tmp-path)))
 
 (defun diagnostic-severity-rank (severity)
@@ -119,28 +140,30 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
 
 (defun diagnostic-rank-for-file (filepath)
   "Return the worst stored diagnostic severity rank for FILEPATH."
-  (let ((best 0))
-    (dolist (note (gethash filepath *diagnostics-table*) best)
+  (let ((document-key (normalize-document-key filepath))
+        (best 0))
+    (dolist (note (gethash document-key *diagnostics-table*) best)
       (setf best
             (max best
                  (diagnostic-severity-rank (getf note :severity)))))))
 
 (defun remap-diagnostic-filepath (raw-filepath)
-  (if (and (stringp raw-filepath)
-           *compile-file-remap*
-           (string= raw-filepath (car *compile-file-remap*)))
-      (cdr *compile-file-remap*)
-      raw-filepath))
+  (let ((document-key (normalize-document-key raw-filepath)))
+    (if (and document-key
+             *compile-file-remap*
+             (string= document-key (car *compile-file-remap*)))
+        (cdr *compile-file-remap*)
+        document-key)))
 
 (defun diagnostic-stale-p (plist)
   "Return T if PLIST belongs to a request older than the file's latest edit."
   (let* ((request-id (getf plist :request))
-         (filepath (remap-diagnostic-filepath (getf plist :file))))
-    (when (and request-id filepath)
+         (document-key (remap-diagnostic-filepath (getf plist :file))))
+    (when (and request-id document-key)
       (multiple-value-bind (request-generation presentp)
           (gethash request-id *diagnostic-request-generations*)
         (and presentp
-             (> (gethash filepath *diagnostic-file-generations* 0)
+             (> (gethash document-key *diagnostic-file-generations* 0)
                 request-generation))))))
 
 (defun diagnostic-overlaps-range-p (diag-start diag-end range-start range-end)
@@ -159,7 +182,7 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
 (defun store-diagnostic (plist)
   "Store a diagnostic plist from the protocol."
   (let* ((raw-filepath (getf plist :file))
-         (filepath (remap-diagnostic-filepath raw-filepath))
+         (document-key (remap-diagnostic-filepath raw-filepath))
          (start (or (getf plist :start) 0))
          (end (or (getf plist :end) 0))
          (severity (getf plist :severity))
@@ -167,22 +190,24 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
          (label (or (getf plist :label) summary))
          (label-kind (getf plist :label-kind))
          (group (getf plist :group))
-         (diagnostic (list :start start
+         (diagnostic (list :file document-key
+                           :start start
                            :end end
                            :severity severity
                            :summary summary
                            :label label
                            :label-kind label-kind
                            :group group)))
-    (when (and (stringp filepath)
-               (plusp (length filepath)))
-      (setf (gethash filepath *diagnostics-table*)
-            (nconc (gethash filepath *diagnostics-table*)
+    (when (and (stringp document-key)
+               (plusp (length document-key)))
+      (setf (gethash document-key *diagnostics-table*)
+            (nconc (gethash document-key *diagnostics-table*)
                    (list diagnostic))))))
 
 (defun diagnostics-for-range (filepath start end)
   "Return diagnostics for FILEPATH overlapping [START, END]."
-  (let ((notes (gethash filepath *diagnostics-table*)))
+  (let* ((document-key (normalize-document-key filepath))
+         (notes (gethash document-key *diagnostics-table*)))
     (loop :for note :in notes
           :for diag-start = (getf note :start)
           :for diag-end = (getf note :end)
@@ -209,7 +234,8 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
 
 (defun diagnostics-message-for-position (filepath position)
   "Return the first diagnostic summary covering POSITION, or empty string."
-  (let ((notes (gethash filepath *diagnostics-table*)))
+  (let* ((document-key (normalize-document-key filepath))
+         (notes (gethash document-key *diagnostics-table*)))
     (or
      (loop :for note :in notes
            :for diag-start = (getf note :start)
@@ -259,8 +285,9 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
 
 (defun diagnostic-at-position (filepath position)
   "Return the best diagnostic plist covering POSITION in FILEPATH, or NIL."
-  (let ((best nil))
-    (dolist (note (gethash filepath *diagnostics-table*) best)
+  (let ((document-key (normalize-document-key filepath))
+        (best nil))
+    (dolist (note (gethash document-key *diagnostics-table*) best)
       (let ((diag-start (getf note :start))
             (diag-end (getf note :end)))
         (when (diagnostic-contains-position-p diag-start diag-end position)
@@ -283,13 +310,13 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
   (let ((seen (make-hash-table :test 'equal))
         (locations nil))
     (maphash
-     (lambda (filepath notes)
-       (when (and (stringp filepath)
-                  (plusp (length filepath)))
+     (lambda (document-key notes)
+       (when (and (stringp document-key)
+                  (plusp (length document-key)))
          (dolist (note notes)
            (let* ((start (or (getf note :start) 0))
                   (end (or (getf note :end) start))
-                  (key (list filepath start end)))
+                  (key (list document-key start end)))
              (unless (gethash key seen)
                (setf (gethash key seen) t)
                (push key locations))))))
@@ -346,37 +373,62 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
                         (< (second entry) current-pos)))
            (setf best entry)))))))
 
+(defun normalize-diagnostic-scope (scope)
+  "Return a scope hash table keyed by normalized document keys."
+  (when scope
+    (let ((normalized (make-hash-table :test 'equal)))
+      (maphash
+       (lambda (key value)
+         (let ((document-key (normalize-document-key key)))
+           (when document-key
+             (setf (gethash document-key normalized) value))))
+       scope)
+      normalized)))
+
 (defun jump-adjacent-diagnostic (st direction &optional scope)
   "Jump to the next (>0) or previous (<0) stored diagnostic.
-When SCOPE is a hash-table of filepaths, only consider diagnostics in those files."
+When SCOPE is a hash-table of document keys, only consider diagnostics in those files."
   (let* ((bm (call-mine-function "GET-BUFMGR" st))
          (cs (call-mine-function "GET-CURSOR-STATE" st))
          (opt-buf (mine/buffer/manager::bufmgr-current bm))
          (buf (unless (coalton-impl/runtime/optional:cl-none-p opt-buf) opt-buf))
-         (opt-path (and buf (mine/buffer/buffer:buffer-path buf)))
-         (current-file (and opt-path
-                            (not (coalton-impl/runtime/optional:cl-none-p opt-path))
-                            opt-path))
+         (current-file (and buf (mine/buffer/buffer:buffer-document-key buf)))
          (current-pos (mine/edit/cursor:cursor-position cs))
          (all-locs (all-diagnostic-locations))
-         (locations (if scope
-                       (remove-if-not (lambda (loc) (gethash (first loc) scope)) all-locs)
-                       all-locs))
-         (target (if (plusp direction)
-                     (find-next-diagnostic-location current-file current-pos locations)
-                     (find-prev-diagnostic-location current-file current-pos locations))))
+         (normalized-scope (normalize-diagnostic-scope scope))
+         (locations (if normalized-scope
+                        (remove-if-not (lambda (loc) (gethash (first loc) normalized-scope))
+                                       all-locs)
+                        all-locs))
+         (cursor-file current-file)
+         (cursor-pos current-pos)
+         (attempted (make-hash-table :test 'equal)))
     (cond
       ((null locations)
        (mine/pane/status::statusbar-set-message!
         (call-mine-function "GET-STATUS-BAR" st)
         (if scope "No project diagnostics" "No diagnostics")))
-      (target
-       (call-mine-function "%JUMP-TO-FILE" st (first target) (second target)))
       (t
-       (let ((wrapped (if (plusp direction)
-                          (first locations)
-                          (car (last locations)))))
-         (call-mine-function "%JUMP-TO-FILE" st (first wrapped) (second wrapped)))))))
+       (loop
+         :repeat (length locations)
+         :for target := (if (plusp direction)
+                            (or (find-next-diagnostic-location cursor-file cursor-pos locations)
+                                (first locations))
+                            (or (find-prev-diagnostic-location cursor-file cursor-pos locations)
+                                (car (last locations))))
+         :do (when (or (null target)
+                       (gethash target attempted))
+               (loop-finish))
+             (setf (gethash target attempted) t)
+             (when (call-mine-function "%JUMP-TO-DOCUMENT-KEY" st
+                                       (first target)
+                                       (second target))
+               (return-from jump-adjacent-diagnostic t))
+             (setf cursor-file (first target)
+                   cursor-pos (second target)))
+       (mine/pane/status::statusbar-set-message!
+        (call-mine-function "GET-STATUS-BAR" st)
+        "No reachable diagnostics")))))
 
 ;;; Diagnostics popup
 

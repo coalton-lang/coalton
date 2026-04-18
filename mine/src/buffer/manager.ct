@@ -17,6 +17,7 @@
    #:bufmgr-force-close!
    #:bufmgr-close-under-path!
    #:bufmgr-find-by-path
+   #:bufmgr-find-by-document-key
    #:bufmgr-current
    #:bufmgr-switch!
    #:bufmgr-path-dirty?
@@ -182,6 +183,20 @@ Returns True if closed successfully."
        (match (buf:buffer-path buf)
          ((Some p) (if (== p fpath) (Some buf) (%find-by-path-in entries fpath)))
          ((None) (%find-by-path-in entries fpath))))
+      ((None) None)))
+
+  (declare bufmgr-find-by-document-key (BufferManager * String -> Optional buf:Buffer))
+  (define (bufmgr-find-by-document-key mgr document-key)
+    "Find a buffer by its stable document key."
+    (%find-by-document-key-in (ht:entries (cell:read (.buffers mgr))) document-key))
+
+  (declare %find-by-document-key-in (iter:Iterator (Tuple UFix buf:Buffer) * String -> Optional buf:Buffer))
+  (define (%find-by-document-key-in entries document-key)
+    (match (iter:next! entries)
+      ((Some (Tuple _ buf))
+       (if (== (buf:buffer-document-key buf) document-key)
+           (Some buf)
+           (%find-by-document-key-in entries document-key)))
       ((None) None)))
 
   ;;; Switching

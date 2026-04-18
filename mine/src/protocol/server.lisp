@@ -198,9 +198,10 @@ Returns :quit if the server should shut down, T otherwise."
          (handle-eval id form-string package-name stream)))
 
       (:compile-string
-       (destructuring-bind (id string buffer-name package-name position)
+       (destructuring-bind (id string document-key package-name position client-prefix-length)
            (rest msg)
-         (handle-compile-string id string buffer-name package-name position stream)))
+         (handle-compile-string id string document-key package-name position
+                                client-prefix-length stream)))
 
       (:compile-file
        (destructuring-bind (id filename load-p) (rest msg)
@@ -453,17 +454,6 @@ Returns the symbol or NIL."
                           :offset-base offset-base
                           :synthetic-prefix synthetic-prefix)))
 
-(defun %compile-string-prefix-length (form-string)
-  "Return the length of any synthetic wrapper prefix used for Beam Form."
-  (cond
-    ((and (>= (length form-string) 18)
-          (string-equal "(coalton-toplevel " form-string :end2 18))
-     18)
-    ((and (>= (length form-string) 9)
-          (string-equal "(coalton " form-string :end2 9))
-     9)
-    (t 0)))
-
 (defun handle-eval (id form-string package-name stream)
   "Handle an :eval request with interactive debugger support."
   (let ((stderr-capture (make-string-output-stream)))
@@ -515,13 +505,14 @@ Returns the symbol or NIL."
               :report "Continue, returning NIL"
               (write-message stream `(:return ,id (:ok "NIL"))))))))))
 
-(defun handle-compile-string (id form-string buffer-name package-name position stream)
+(defun handle-compile-string (id form-string document-key package-name position client-prefix-length stream)
   "Handle a :compile-string request with interactive debugger support.
 Uses compile-file + load for correct eval-when toplevel semantics."
   (let ((stderr-capture (make-string-output-stream))
         (diag-state (%make-diagnostic-state))
-        (file-override (and (stringp buffer-name) (plusp (length buffer-name)) buffer-name))
-        (synthetic-prefix (%compile-string-prefix-length form-string)))
+        (file-override (and (stringp document-key) (plusp (length document-key)) document-key))
+        (synthetic-prefix (+ (length (mine/runtime/eval:compile-string-source-prefix package-name))
+                             (or client-prefix-length 0))))
     (catch '%debugger-abort
       (handler-bind
           ((serious-condition

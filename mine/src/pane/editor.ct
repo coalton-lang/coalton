@@ -42,11 +42,11 @@
 (cl:defvar *lexer-mode* 0
   "Buffer mode: 0=coalton, 1=lisp, 2=plain.")
 (cl:defvar *editor-filepath* cl:nil
-  "Current buffer filepath for diagnostics lookup.")
+  "Current buffer document key for diagnostics lookup.")
 (cl:defvar *diag-fn* cl:nil
-  "Function (filepath line-start line-end) -> severity-keyword-or-nil.")
+  "Function (document-key line-start line-end) -> severity-keyword-or-nil.")
 (cl:defvar *diag-spans-fn* cl:nil
-  "Function (filepath line-start line-end) -> list of (start end severity).")
+  "Function (document-key line-start line-end) -> list of (start end severity).")
 (cl:defvar *line-diagnostic-ranges* cl:nil
   "Current line diagnostic ranges as a CL list of (start end severity).")
 (cl:defvar *paren-match-a* cl:nil

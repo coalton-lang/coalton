@@ -12,14 +12,25 @@
    #:Mark #:Mark
    #:Buffer
    #:buffer-new #:buffer-new-file #:buffer-from-file
-   #:buffer-id #:buffer-name #:buffer-path
+   #:buffer-id #:buffer-name #:buffer-path #:buffer-document-key
    #:buffer-gap #:buffer-undo #:buffer-dirty? #:buffer-mode
    #:buffer-mark-dirty! #:buffer-mark-clean!))
 
 (in-package #:mine/buffer/buffer)
 
 (cl:defvar *buffer-dirty-hook* nil
-  "When non-nil, called with a file path each time editing marks that buffer dirty.")
+  "When non-nil, called with a document key each time editing marks that buffer dirty.")
+
+(cl:defun %normalize-file-document-key (fpath)
+  "Return the canonical document key for a file-backed buffer path."
+  (cl:when (cl:and (cl:stringp fpath)
+                   (cl:plusp (cl:length fpath)))
+    (cl:handler-case
+        (cl:let ((truename (cl:probe-file fpath)))
+          (cl:if truename
+                 (cl:namestring truename)
+                 fpath))
+      (cl:error () fpath))))
 
 (coalton-toplevel
 
@@ -158,6 +169,18 @@
   (define (buffer-path buf)
     (cell:read (.path buf)))
 
+  (declare buffer-document-key (Buffer -> String))
+  (define (buffer-document-key buf)
+    "Return the stable document key for BUF."
+    (match (buffer-path buf)
+      ((Some fpath)
+       (lisp (-> String) (fpath)
+         (cl:or (%normalize-file-document-key fpath) "")))
+      ((None)
+       (match (buffer-id buf)
+         ((BufferId n)
+          (<> "buffer://" (into n)))))))
+
   (declare buffer-gap (Buffer -> gap:GapBuffer))
   (define (buffer-gap buf)
     (.gap buf))
@@ -179,13 +202,11 @@
   (declare buffer-mark-dirty! (Buffer -> Void))
   (define (buffer-mark-dirty! buf)
     (cell:write! (.dirty buf) True)
-    (match (cell:read (.path buf))
-      ((Some fpath)
-       (lisp (-> Void) (fpath)
-         (cl:when mine/buffer/buffer::*buffer-dirty-hook*
-           (cl:funcall mine/buffer/buffer::*buffer-dirty-hook* fpath))
-         (cl:values)))
-      ((None) (values)))
+    (let doc-key = (buffer-document-key buf))
+    (lisp (-> Void) (doc-key)
+      (cl:when mine/buffer/buffer::*buffer-dirty-hook*
+        (cl:funcall mine/buffer/buffer::*buffer-dirty-hook* doc-key))
+      (cl:values))
     (values))
 
   (declare buffer-mark-clean! (Buffer -> Void))
