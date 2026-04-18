@@ -1,0 +1,434 @@
+(cl:defpackage #:mine/term/terminal
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:color #:mine/term/color)
+   (#:esc #:mine/term/escape)
+   (#:screen #:mine/term/screen)
+   (#:input #:mine/term/input)
+   (#:vec #:coalton/vector)
+   (#:cell #:coalton/cell))
+  (:export
+   #:Terminal
+   #:best-effort? #:set-best-effort!
+   #:probe-kitty-keyboard
+   #:terminal-init #:terminal-shutdown
+   #:.terminal-screen
+   #:terminal-cols #:terminal-rows #:terminal-update-size!
+   #:terminal-flush
+   #:terminal-clear-screen
+   #:terminal-read-input
+   #:terminal-wait-for-key))
+
+(in-package #:mine/term/terminal)
+
+(cl:eval-when (:compile-toplevel :load-toplevel :execute)
+  (cl:require :sb-concurrency))
+
+(cl:defstruct %terminal-input-runtime
+  (mailbox   (sb-concurrency:make-mailbox :name "mine-terminal-input") :type cl:t)
+  (thread    cl:nil :type cl:t)
+  (running-p cl:t :type cl:boolean))
+
+(cl:defun %terminal-input-runtime-start (runtime term initial-cols initial-rows)
+  (cl:let ((thread (%terminal-input-runtime-thread runtime)))
+    (cl:when (cl:or (cl:null thread)
+                    (cl:not (sb-thread:thread-alive-p thread)))
+      (cl:setf (%terminal-input-runtime-running-p runtime) cl:t)
+      (cl:setf (%terminal-input-runtime-thread runtime)
+               (mine/bindings/thread:make-thread
+                "mine-input"
+                (cl:lambda ()
+                  (cl:let ((mailbox (%terminal-input-runtime-mailbox runtime))
+                           (last-cols initial-cols)
+                           (last-rows initial-rows))
+                    (cl:loop
+                      :while (%terminal-input-runtime-running-p runtime)
+                      :do
+                      (cl:let ((events (mine/term/terminal::%poll-raw-input! term)))
+                        (cl:multiple-value-bind (rows cols)
+                            (mine/bindings/terminal:terminal-get-size)
+                          (cl:when (cl:or (cl:/= last-cols cols)
+                                          (cl:/= last-rows rows))
+                            (cl:setf last-cols cols
+                                     last-rows rows)
+                            (sb-concurrency:send-message
+                             mailbox
+                             (mine/term/input:IEvResize cols rows)))
+                          (cl:dolist (event events)
+                            (sb-concurrency:send-message mailbox event)))))))))))
+  (cl:values))
+
+(cl:defun %terminal-input-runtime-stop (runtime)
+  (cl:setf (%terminal-input-runtime-running-p runtime) cl:nil)
+  (cl:let ((thread (%terminal-input-runtime-thread runtime)))
+    (cl:when thread
+      (cl:ignore-errors
+        (sb-thread:join-thread thread :timeout 0.25d0 :default cl:nil))
+      (cl:unless (sb-thread:thread-alive-p thread)
+        (cl:setf (%terminal-input-runtime-thread runtime) cl:nil))))
+  (cl:values))
+
+(cl:defun %terminal-input-runtime-read-batch (runtime)
+  (cl:let ((mailbox (%terminal-input-runtime-mailbox runtime)))
+    (cl:multiple-value-bind (first ok)
+        (sb-concurrency:receive-message mailbox :timeout 0.05d0)
+      (cl:if ok
+             (cl:cons first (sb-concurrency:receive-pending-messages mailbox))
+             Nil))))
+
+(cl:defun %terminal-input-runtime-read-one (runtime)
+  (cl:nth-value 0
+                (sb-concurrency:receive-message
+                 (%terminal-input-runtime-mailbox runtime))))
+
+(cl:defun %read-terminal-bytes (timeout-ms)
+  "Read available bytes from stdin via the platform layer.
+Returns a Coalton-compatible (Vector UFix)."
+  (cl:multiple-value-bind (byte-vec count)
+      (mine/bindings/terminal:terminal-read-bytes timeout-ms)
+    (cl:declare (cl:ignore count))
+    (cl:if (cl:and byte-vec (cl:plusp (cl:length byte-vec)))
+        ;; Convert (unsigned-byte 8) vector to Coalton (Vector UFix)
+        (cl:let* ((len (cl:length byte-vec))
+                  (result (cl:make-array len :fill-pointer len
+                                             :adjustable cl:t
+                                             :element-type cl:t)))
+          (cl:dotimes (i len)
+            (cl:setf (cl:aref result i) (cl:aref byte-vec i)))
+          result)
+        ;; No data — empty vector
+        (cl:make-array 0 :fill-pointer 0 :adjustable cl:t
+                         :element-type cl:t))))
+
+(cl:defun %digit-byte-p (b)
+  (cl:and (cl:>= b 48) (cl:<= b 57)))
+
+(cl:defun %primary-device-attributes-response-p (resp)
+  "Return T if RESP contains a primary device attributes response."
+  (cl:let ((len (cl:length resp)))
+    (cl:loop :for i :from 0 :below len
+             :when (cl:and (cl:<= (cl:+ i 1) (cl:1- len))
+                           (cl:= (cl:aref resp i) 27)
+                           (cl:= (cl:aref resp (cl:+ i 1)) 91))
+               :do (cl:loop :for j :from (cl:+ i 2) :below len
+                            :for b = (cl:aref resp j)
+                            :do (cl:cond
+                                  ((cl:or (%digit-byte-p b)
+                                          (cl:= b 59)
+                                          (cl:= b 63))
+                                   nil)
+                                  ((cl:= b 99)
+                                   (cl:return-from %primary-device-attributes-response-p cl:t))
+                                  (cl:t
+                                   (cl:return)))))
+    cl:nil))
+
+(cl:defun %query-progressive-enhancement-flags (resp)
+  "Return the queried kitty progressive enhancement flags from RESP.
+Returns NIL if no query response is present."
+  (cl:let ((len (cl:length resp)))
+    (cl:loop :for i :from 0 :below len
+             :when (cl:and (cl:<= (cl:+ i 2) (cl:1- len))
+                           (cl:= (cl:aref resp i) 27)
+                           (cl:= (cl:aref resp (cl:+ i 1)) 91)
+                           (cl:= (cl:aref resp (cl:+ i 2)) 63))
+               :do (cl:let ((value 0)
+                            (saw-digit cl:nil))
+                     (cl:loop :for j :from (cl:+ i 3) :below len
+                              :for b = (cl:aref resp j)
+                              :do (cl:cond
+                                    ((%digit-byte-p b)
+                                     (cl:setf saw-digit cl:t
+                                               value (cl:+ (cl:* value 10)
+                                                            (cl:- b 48))))
+                                    ((cl:= b 117)
+                                     (cl:return-from %query-progressive-enhancement-flags
+                                       (cl:if saw-digit value 0)))
+                                    (cl:t
+                                     (cl:return))))))
+    cl:nil))
+
+(cl:defun %version>= (version-str major minor patch)
+  "Return T if VERSION-STR (e.g. \"0.21.0\") is >= MAJOR.MINOR.PATCH."
+  (cl:ignore-errors
+    (cl:let* ((parts (cl:loop :for start = 0 :then (cl:1+ dot)
+                              :for dot = (cl:position #\. version-str :start start)
+                              :collect (cl:parse-integer
+                                        version-str :start start
+                                        :end (cl:or dot (cl:length version-str))
+                                        :junk-allowed cl:t)
+                              :while dot))
+              (v-major (cl:or (cl:first parts) 0))
+              (v-minor (cl:or (cl:second parts) 0))
+              (v-patch (cl:or (cl:third parts) 0)))
+      (cl:or (cl:> v-major major)
+             (cl:and (cl:= v-major major)
+                     (cl:or (cl:> v-minor minor)
+                            (cl:and (cl:= v-minor minor)
+                                    (cl:>= v-patch patch))))))))
+
+(cl:defun %kitty-too-old-p ()
+  "Return T if we're running inside kitty with a version too old for
+reliable keyboard protocol support.  Kitty 0.20.0 introduced the
+protocol but had a regression that sent incorrect bytes for F1-F4
+\(kovidgoyal/kitty#3586, fixed in 0.21.0\)."
+  (cl:let ((term-program (sb-ext:posix-getenv "TERM_PROGRAM")))
+    (cl:when (cl:and term-program (cl:string-equal term-program "kitty"))
+      (cl:let ((version-str (sb-ext:posix-getenv "TERM_PROGRAM_VERSION")))
+        (cl:or (cl:null version-str)
+               (cl:not (%version>= version-str 0 21 0)))))))
+
+(cl:defun %probe-kitty-keyboard ()
+  "Probe whether the terminal supports the kitty keyboard protocol.
+Enables disambiguation, queries the active flags, and waits for
+primary device attributes as the fence. Returns T only if the query
+reply reports that flag 1 is active.
+Rejects kitty < 0.21.0 which has broken F1-F4 encoding."
+  (cl:when (%kitty-too-old-p)
+    (cl:return-from %probe-kitty-keyboard cl:nil))
+  (mine/bindings/terminal:terminal-enable-raw-mode)
+  (cl:unwind-protect
+      (cl:progn
+        ;; Request disambiguation, query active flags, then use primary
+        ;; device attributes as the fence as recommended by the spec.
+        (mine/bindings/terminal:terminal-write-string
+         (cl:format cl:nil
+                    "~c[>1u~c[?u~c[c"
+                    (cl:code-char 27)
+                    (cl:code-char 27)
+                    (cl:code-char 27)))
+        (mine/bindings/terminal:terminal-flush)
+        ;; Collect response bytes, stop at the primary DA response or timeout.
+        (cl:let ((resp (cl:make-array 0 :fill-pointer 0 :adjustable cl:t
+                                       :element-type '(cl:unsigned-byte 8))))
+          (cl:dotimes (_ 10)  ; up to 10 x 100ms = 1s
+            (cl:multiple-value-bind (bytes count)
+                (mine/bindings/terminal:terminal-read-bytes 100)
+              (cl:declare (cl:ignore count))
+              (cl:when (cl:and bytes (cl:plusp (cl:length bytes)))
+                (cl:loop :for b :across bytes
+                         :do (cl:vector-push-extend b resp))
+                (cl:when (%primary-device-attributes-response-p resp)
+                  (cl:return)))))
+          (cl:let ((flags (%query-progressive-enhancement-flags resp)))
+            (cl:and flags (cl:logtest 1 flags)))))
+    (cl:ignore-errors
+      (mine/bindings/terminal:terminal-write-string
+       (cl:format cl:nil "~c[<u" (cl:code-char 27)))
+      (mine/bindings/terminal:terminal-flush))
+    (mine/bindings/terminal:terminal-disable-raw-mode)))
+
+(coalton-toplevel
+
+  ;;; Best-effort mode
+
+  (define %best-effort-cell (cell:new False))
+
+  (declare best-effort? (Void -> Boolean))
+  (define (best-effort?)
+    "True if mine is running in best-effort mode (no kitty keyboard protocol)."
+    (cell:read %best-effort-cell))
+
+  (declare set-best-effort! (Void -> Void))
+  (define (set-best-effort!)
+    "Enable best-effort mode."
+    (cell:write! %best-effort-cell True)
+    (values))
+
+  ;;; Terminal input runtime
+
+  (repr :native %terminal-input-runtime)
+  (define-type TerminalInputRuntime
+    "Opaque CL-side runtime state for terminal input mailbox and reader thread.")
+
+  (declare %terminal-input-runtime-new (Void -> TerminalInputRuntime))
+  (define (%terminal-input-runtime-new)
+    "Create a fresh terminal input runtime."
+    (lisp (-> TerminalInputRuntime) ()
+      (make-%terminal-input-runtime)))
+
+  ;;; Terminal
+
+  (define-struct Terminal
+    "Top-level terminal handle with screen and running state."
+    (terminal-screen screen:Screen)
+    (terminal-running (cell:Cell Boolean))
+    (terminal-input-runtime TerminalInputRuntime)
+    (terminal-input-buf (cell:Cell (Vector UFix)))
+    (terminal-cols-cell (cell:Cell UFix))
+    (terminal-rows-cell (cell:Cell UFix)))
+
+  ;;; Kitty keyboard protocol probe
+
+  (declare probe-kitty-keyboard (Void -> Boolean))
+  (define (probe-kitty-keyboard)
+    "Probe whether the terminal supports the kitty keyboard protocol.
+Returns True if the terminal responds to the CSI ? u query."
+    (lisp (-> Boolean) ()
+      (cl:if (%probe-kitty-keyboard) True False)))
+
+  ;;; Init
+
+  (declare terminal-init (Void -> Terminal))
+  (define (terminal-init)
+    "Initialize the terminal.
+Enables raw mode, enters the alternate screen, enables mouse tracking,
+queries the terminal size, and returns a new Terminal with a fresh Screen."
+    ;; Enable raw mode
+    (lisp (-> Void) ()
+      (mine/bindings/terminal:terminal-enable-raw-mode)
+      (cl:values))
+    ;; Enter alt screen, enable mouse, hide cursor
+    (let setup = (<> (esc:enter-alt-screen)
+                     (<> (esc:enable-mouse-tracking)
+                         (<> (esc:enable-bracketed-paste)
+                             (<> (esc:enable-keyboard-enhancement)
+                                 (esc:cursor-hide))))))
+    (lisp (-> Void) (setup)
+      (mine/bindings/terminal:terminal-write-string setup)
+      (mine/bindings/terminal:terminal-flush)
+      (cl:values))
+    ;; Get terminal size and create screen
+    (let cols = (lisp (-> UFix) ()
+                  (cl:multiple-value-bind (r c)
+                      (mine/bindings/terminal:terminal-get-size)
+                    (cl:declare (cl:ignore r)) c)))
+    (let rows = (lisp (-> UFix) ()
+                  (cl:multiple-value-bind (r c)
+                      (mine/bindings/terminal:terminal-get-size)
+                    (cl:declare (cl:ignore c)) r)))
+    (let runtime = (%terminal-input-runtime-new))
+    (let term = (Terminal (screen:screen-new cols rows)
+                          (cell:new True)
+                          runtime
+                          (cell:new (%make-input-buf))
+                          (cell:new cols)
+                          (cell:new rows)))
+    (%start-input-thread! term cols rows)
+    term)
+
+  ;;; Shutdown
+
+  (declare terminal-shutdown (Terminal -> Void))
+  (define (terminal-shutdown term)
+    "Shut down the terminal.
+Disables mouse tracking, leaves the alternate screen, restores the
+cursor, and disables raw mode."
+    (cell:write! (.terminal-running term) False)
+    (let runtime = (.terminal-input-runtime term))
+    (lisp (-> Void) (runtime)
+      (%terminal-input-runtime-stop runtime)
+      (cl:values))
+    (let teardown = (<> (esc:disable-keyboard-enhancement)
+                        (<> (esc:disable-bracketed-paste)
+                            (<> (esc:disable-mouse-tracking)
+                                (<> (esc:cursor-show)
+                                    (<> (esc:sgr-reset)
+                                        (esc:leave-alt-screen)))))))
+    (lisp (-> Void) (teardown)
+      (mine/bindings/terminal:terminal-write-string teardown)
+      (mine/bindings/terminal:terminal-flush)
+      (mine/bindings/terminal:terminal-disable-raw-mode)
+      (cl:values)))
+
+  ;;; Size accessors
+
+  (declare terminal-cols (Terminal -> UFix))
+  (define (terminal-cols term)
+    "Get the cached terminal width in columns."
+    (cell:read (.terminal-cols-cell term)))
+
+  (declare terminal-rows (Terminal -> UFix))
+  (define (terminal-rows term)
+    "Get the cached terminal height in rows."
+    (cell:read (.terminal-rows-cell term)))
+
+  (declare terminal-update-size! (Terminal -> Void))
+  (define (terminal-update-size! term)
+    "Re-query the terminal size and update cached values."
+    (let cols-cell = (.terminal-cols-cell term))
+    (let rows-cell = (.terminal-rows-cell term))
+    (lisp (-> Void) (cols-cell rows-cell)
+      (cl:multiple-value-bind (r c)
+          (mine/bindings/terminal:terminal-get-size)
+        (coalton/cell:write! cols-cell c)
+        (coalton/cell:write! rows-cell r)
+        (cl:values))))
+
+  ;;; Flush
+
+  (declare terminal-flush (Terminal -> Void))
+  (define (terminal-flush term)
+    "Flush the screen to the terminal."
+    (screen:screen-flush (.terminal-screen term))
+    (values))
+
+  (declare terminal-clear-screen (Terminal -> Void))
+  (define (terminal-clear-screen _term)
+    "Clear the physical terminal screen."
+    (let s = (esc:clear-screen))
+    (lisp (-> Void) (s)
+      (mine/bindings/terminal:terminal-write-string s)
+      (mine/bindings/terminal:terminal-flush)
+      (cl:values)))
+
+  ;;; Input reading (via byte reads + input parser)
+
+  (declare %make-input-buf (Void -> (Vector UFix)))
+  (define (%make-input-buf)
+    "Create a fresh input buffer."
+    (lisp (-> (Vector UFix)) ()
+      (cl:make-array 0 :fill-pointer 0 :adjustable cl:t
+                       :element-type cl:t)))
+
+  (declare %start-input-thread! (Terminal * UFix * UFix -> Void))
+  (define (%start-input-thread! term cols rows)
+    "Start the terminal-owned input reader thread."
+    (let runtime = (.terminal-input-runtime term))
+    (lisp (-> Void) (runtime term cols rows)
+      (%terminal-input-runtime-start runtime term cols rows)
+      (cl:values)))
+
+  (declare %poll-raw-input! (Terminal -> (List input:InputEvent)))
+  (define (%poll-raw-input! term)
+    "Read raw bytes, update the internal remainder buffer, and return parsed input events."
+    (let prev-buf = (cell:read (.terminal-input-buf term)))
+    (let new-bytes = (lisp (-> (Vector UFix)) ()
+                      (%read-terminal-bytes 50)))
+    (let full-buf = (%concat-bufs prev-buf new-bytes))
+    (match (input:parse-input full-buf)
+      ((Tuple events remainder)
+       (cell:write! (.terminal-input-buf term) remainder)
+       events)))
+
+  (declare terminal-read-input (Terminal -> (List input:InputEvent)))
+  (define (terminal-read-input term)
+    "Read available input from the terminal mailbox.
+Wait up to 50ms for the first event, then drain any immediately pending events."
+    (let runtime = (.terminal-input-runtime term))
+    (lisp (-> (List input:InputEvent)) (runtime)
+      (%terminal-input-runtime-read-batch runtime)))
+
+  (declare %concat-bufs ((Vector UFix) * (Vector UFix) -> (Vector UFix)))
+  (define (%concat-bufs a b)
+    "Concatenate two byte vectors."
+    (lisp (-> (Vector UFix)) (a b)
+      (cl:let* ((alen (cl:length a))
+                (blen (cl:length b))
+                (total (cl:+ alen blen))
+                (result (cl:make-array total :fill-pointer total
+                                             :adjustable cl:t
+                                             :element-type cl:t)))
+        (cl:dotimes (i alen) (cl:setf (cl:aref result i) (cl:aref a i)))
+        (cl:dotimes (i blen) (cl:setf (cl:aref result (cl:+ alen i))
+                                       (cl:aref b i)))
+        result)))
+
+  ;;; Blocking key read (for modal dialogs)
+
+  (declare terminal-wait-for-key (Terminal -> input:InputEvent))
+  (define (terminal-wait-for-key term)
+    "Block until a key, mouse, paste, or resize event is received."
+    (let runtime = (.terminal-input-runtime term))
+    (lisp (-> input:InputEvent) (runtime)
+      (%terminal-input-runtime-read-one runtime))))

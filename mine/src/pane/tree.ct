@@ -1,0 +1,826 @@
+(cl:defpackage #:mine/pane/tree
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:screen #:mine/term/screen)
+   (#:color #:mine/term/color)
+   (#:wt #:mine/widget/types)
+   (#:render #:mine/widget/render)
+   (#:cell #:coalton/cell)
+   (#:vec #:coalton/vector)
+   (#:list #:coalton/list)
+   (#:str #:coalton/string)
+   (#:cellw #:mine/text/width))
+  (:export
+   #:TreeNode #:TreeDir #:TreeFile
+   #:TreePane
+   #:tree-pane-new
+   #:tree-pane-set-root!
+   #:tree-pane-clear-root!
+   #:tree-pane-render
+   #:tree-pane-move-up!
+   #:tree-pane-move-down!
+   #:tree-pane-toggle-expand!
+   #:tree-pane-selected-node
+   #:tree-pane-selected-path
+   #:tree-pane-selected-is-dir?
+   #:tree-pane-add-open-file!
+   #:tree-pane-remove-open-file!
+   #:tree-pane-remove-open-files-under!
+   #:tree-pane-open-files
+   #:tree-pane-selected-index
+   #:tree-pane-set-selected!
+   #:tree-pane-scroll-offset
+   #:tree-pane-set-scroll!
+   #:tree-pane-set-preview-path!
+   #:tree-visible-count
+   #:tree-pane-item-hit-test
+   #:tree-pane-in-open-section?
+   #:tree-pane-switch-to-open-section!
+   #:tree-pane-click-at!
+   #:tree-pane-scroll-delta!
+   #:tree-pane-scrollbar-drag-at!
+   #:tree-pane-render-collapsed
+   #:tree-pane-open-file-count))
+
+(in-package #:mine/pane/tree)
+
+(coalton-toplevel
+
+  ;;; TreeNode
+
+  (define-type TreeNode
+    "A node in the project file tree."
+    (TreeDir String (List TreeNode) Boolean)   ; name, children, expanded?
+    (TreeFile String String))                   ; name, path
+
+  ;;; TreePane
+
+  (define-struct TreePane
+    "A navigable project file-tree pane with separate open-files section."
+    (root          (Cell (Optional TreeNode)))
+    (selected      (Cell UFix))                          ; tree section selection
+    (scroll        (Cell UFix))                          ; tree section scroll
+    (open-files    (Cell (List (Tuple String String))))   ; (display-name, path)
+    (preview-path  (Cell (Optional String)))
+    (open-selected (Cell UFix))                          ; open files section selection
+    (open-scroll   (Cell UFix))                          ; open files section scroll
+    (in-open-sec   (Cell Boolean)))                      ; True = focus in open files
+
+  (declare tree-pane-new (Void -> TreePane))
+  (define (tree-pane-new)
+    "Create a new tree pane with no root and empty open-files state."
+    (TreePane (cell:new None)
+              (cell:new 0)
+              (cell:new 0)
+              (cell:new Nil)
+              (cell:new None)
+              (cell:new 0)
+              (cell:new 0)
+              (cell:new False)))
+
+  ;;; Root management
+
+  (declare tree-pane-set-root! (TreePane * TreeNode -> Void))
+  (define (tree-pane-set-root! tp node)
+    (cell:write! (.root tp) (Some node))
+    (cell:write! (.selected tp) 0)
+    (cell:write! (.scroll tp) 0)
+    (cell:write! (.in-open-sec tp) False)
+    (values))
+
+  (declare tree-pane-clear-root! (TreePane -> Void))
+  (define (tree-pane-clear-root! tp)
+    (cell:write! (.root tp) None)
+    (cell:write! (.selected tp) 0)
+    (cell:write! (.scroll tp) 0)
+    (when (> (length (cell:read (.open-files tp))) 0)
+      (cell:write! (.in-open-sec tp) True))
+    (values))
+
+  ;;; Section queries
+
+  (declare tree-pane-in-open-section? (TreePane -> Boolean))
+  (define (tree-pane-in-open-section? tp)
+    (cell:read (.in-open-sec tp)))
+
+  (declare tree-pane-switch-to-open-section! (TreePane -> Void))
+  (define (tree-pane-switch-to-open-section! tp)
+    "Switch to the open files section, selecting the first open file."
+    (cell:write! (.in-open-sec tp) True)
+    (cell:write! (.selected tp) 0)
+    (values))
+
+  (declare %has-tree? (TreePane -> Boolean))
+  (define (%has-tree? tp)
+    (match (cell:read (.root tp))
+      ((Some _) True)
+      ((None) False)))
+
+  (declare %open-section-height (TreePane * UFix -> UFix))
+  (define (%open-section-height tp total-height)
+    "How many rows the open files section uses, given total available height.
+When a project tree exists, returns a fixed height so the tree never shifts."
+    (cond
+      ;; No project tree: open files get exactly as many rows as needed
+      ((not (%has-tree? tp))
+       (min (length (cell:read (.open-files tp))) total-height))
+      ;; Project tree exists: fixed 1/4 height, always present
+      (True
+       (let h = (max 3 (lisp (-> UFix) (total-height) (cl:floor total-height 4))))
+       (cond
+         ((> total-height (+ h 2)) h)
+         ((> total-height 2) (- total-height 2))
+         (True 1)))))
+
+  ;;; Open files management
+
+  (declare tree-pane-open-files (TreePane -> (List (Tuple String String))))
+  (define (tree-pane-open-files tp)
+    (cell:read (.open-files tp)))
+
+  (declare tree-pane-add-open-file! (TreePane * String * String -> Void))
+  (define (tree-pane-add-open-file! tp display-name fpath)
+    "Add a loose file to the open files list (no duplicates by path)."
+    (let existing = (cell:read (.open-files tp)))
+    (let already = (list:any (fn (entry) (== (snd entry) fpath)) existing))
+    (unless already
+      (cell:write! (.open-files tp) (Cons (Tuple display-name fpath) existing))
+      ;; Adjust open-selected since we prepended at index 0
+      ;; Only shift if there were already files (otherwise keep at 0 for the new file)
+      (when (not (== existing Nil))
+        (cell:write! (.open-selected tp) (+ (cell:read (.open-selected tp)) 1)))
+      (values))
+    (values))
+
+  (declare tree-pane-remove-open-file! (TreePane * String -> Void))
+  (define (tree-pane-remove-open-file! tp fpath)
+    "Remove a loose file by path."
+    (cell:write! (.open-files tp)
+      (list:filter (fn (entry) (not (== (snd entry) fpath)))
+                   (cell:read (.open-files tp))))
+    ;; Clamp open-selected to bounds
+    (let new-count = (length (cell:read (.open-files tp))))
+    (when (and (> (cell:read (.open-selected tp)) 0)
+               (>= (cell:read (.open-selected tp)) new-count))
+      (cell:write! (.open-selected tp) (if (> new-count 0) (- new-count 1) 0)))
+    ;; If open files empty and in open section, switch to tree
+    (when (and (cell:read (.in-open-sec tp)) (== new-count 0))
+      (cell:write! (.in-open-sec tp) False))
+    (values))
+
+  (declare tree-pane-remove-open-files-under! (TreePane * String -> Void))
+  (define (tree-pane-remove-open-files-under! tp dir-prefix)
+    "Remove open files whose path starts with DIR-PREFIX."
+    (cell:write! (.open-files tp)
+      (list:filter (fn (entry)
+                     (let p = (snd entry))
+                     (lisp (-> Boolean) (p dir-prefix)
+                       (cl:let ((plen (cl:length dir-prefix)))
+                         (cl:if (cl:and (cl:<= plen (cl:length p))
+                                        (cl:string= p dir-prefix :end1 plen))
+                                False True))))
+                   (cell:read (.open-files tp))))
+    (let new-count = (length (cell:read (.open-files tp))))
+    (when (and (> (cell:read (.open-selected tp)) 0)
+               (>= (cell:read (.open-selected tp)) new-count))
+      (cell:write! (.open-selected tp) (if (> new-count 0) (- new-count 1) 0)))
+    (when (and (cell:read (.in-open-sec tp)) (== new-count 0))
+      (cell:write! (.in-open-sec tp) False))
+    (values))
+
+  (declare tree-pane-set-preview-path! (TreePane * Optional String -> Void))
+  (define (tree-pane-set-preview-path! tp path)
+    (cell:write! (.preview-path tp) path)
+    (values))
+
+  ;;; Flatten tree into (depth, name, is-dir?, expanded?, path-or-empty)
+
+  (define-struct FlatRow
+    "A flattened tree row for rendering."
+    (fr-depth    UFix)
+    (fr-name     String)
+    (fr-is-dir   Boolean)
+    (fr-expanded Boolean)
+    (fr-path     String)
+    (fr-separator Boolean))
+
+  (declare flatten-node (TreeNode * UFix -> (List FlatRow)))
+  (define (flatten-node node depth)
+    (match node
+      ((TreeFile name fpath)
+       (make-list (FlatRow depth name False False fpath False)))
+      ((TreeDir name children expanded)
+       (Cons (FlatRow depth name True expanded "" False)
+             (if expanded
+                 (concatmap (fn (child) (flatten-node child (+ depth 1)))
+                            children)
+                 Nil)))))
+
+  (declare flatten-tree (Optional TreeNode -> (List FlatRow)))
+  (define (flatten-tree opt)
+    (match opt
+      ((None) Nil)
+      ((Some node) (flatten-node node 0))))
+
+  (declare %flatten-open-files ((List (Tuple String String)) -> (List FlatRow)))
+  (define (%flatten-open-files files)
+    "Convert open files list to FlatRows at depth 0, with number prefixes 1-9."
+    (%flatten-open-files-aux files 1))
+
+  (declare %flatten-open-files-aux ((List (Tuple String String)) * UFix -> (List FlatRow)))
+  (define (%flatten-open-files-aux files num)
+    (match files
+      ((Nil) Nil)
+      ((Cons (Tuple name path) rest)
+       (let prefix = (if (<= num 9)
+                         (lisp (-> String) (num name)
+                           (cl:format cl:nil "~D: ~A" num name))
+                         name))
+       (Cons (FlatRow 0 prefix False False path False)
+             (%flatten-open-files-aux rest (+ num 1))))))
+
+  ;;; Navigation (legacy accessors — kept for compatibility)
+
+  (declare tree-visible-count (TreePane -> UFix))
+  (define (tree-visible-count tp)
+    "Return visible item count for the active section."
+    (if (cell:read (.in-open-sec tp))
+        (length (cell:read (.open-files tp)))
+        (length (flatten-tree (cell:read (.root tp))))))
+
+  (declare tree-pane-scroll-offset (TreePane -> UFix))
+  (define (tree-pane-scroll-offset tp)
+    (if (cell:read (.in-open-sec tp))
+        (cell:read (.open-scroll tp))
+        (cell:read (.scroll tp))))
+
+  (declare tree-pane-set-scroll! (TreePane * UFix -> Void))
+  (define (tree-pane-set-scroll! tp offset)
+    (cond
+      ((cell:read (.in-open-sec tp))
+       (cell:write! (.open-scroll tp) offset))
+      (True
+       (cell:write! (.scroll tp) offset)))
+    (values))
+
+  (declare tree-pane-selected-index (TreePane -> UFix))
+  (define (tree-pane-selected-index tp)
+    (if (cell:read (.in-open-sec tp))
+        (cell:read (.open-selected tp))
+        (cell:read (.selected tp))))
+
+  (declare tree-pane-set-selected! (TreePane * UFix -> Void))
+  (define (tree-pane-set-selected! tp idx)
+    (let count = (tree-visible-count tp))
+    (when (< idx count)
+      (cond
+        ((cell:read (.in-open-sec tp))
+         (cell:write! (.open-selected tp) idx))
+        (True
+         (cell:write! (.selected tp) idx))))
+    (values))
+
+  (declare tree-pane-item-hit-test (TreePane * UFix * UFix -> Optional String))
+  (define (tree-pane-item-hit-test tp flat-idx col)
+    "Hit-test against the tree section's flattened rows."
+    (let rows = (flatten-tree (cell:read (.root tp))))
+    (let total = (list:length rows))
+    (if (>= flat-idx total)
+        None
+        (%item-hit-test-row (list:nth flat-idx rows) col)))
+
+  (declare %item-hit-test-row (FlatRow * UFix -> Optional String))
+  (define (%item-hit-test-row row col)
+    (cond
+      ((.fr-separator row) None)
+      (True
+       (let indent-x = (* (.fr-depth row) 2))
+       (let name-len = (cellw:string-cell-width (.fr-name row)))
+       (let text-end = (+ indent-x (+ 2 name-len)))
+       (if (< col text-end)
+           (if (.fr-is-dir row)
+               (Some "")
+               (Some (.fr-path row)))
+           None))))
+
+  ;;; Section-aware navigation
+
+  (declare tree-pane-move-up! (TreePane -> Void))
+  (define (tree-pane-move-up! tp)
+    (let open-count = (length (cell:read (.open-files tp))))
+    (cond
+      ;; In open section: decrement, stop at 0
+      ((cell:read (.in-open-sec tp))
+       (let sel = (cell:read (.open-selected tp)))
+       (when (> sel 0)
+         (cell:write! (.open-selected tp) (- sel 1)))
+       (values))
+      ;; In tree section, can move up
+      ((> (cell:read (.selected tp)) 0)
+       (cell:write! (.selected tp) (- (cell:read (.selected tp)) 1))
+       (values))
+      ;; At top of tree, switch to open section (last item)
+      ((> open-count 0)
+       (cell:write! (.in-open-sec tp) True)
+       (cell:write! (.open-selected tp) (- open-count 1))
+       (values))
+      (True (values))))
+
+  (declare tree-pane-move-down! (TreePane -> Void))
+  (define (tree-pane-move-down! tp)
+    (let open-count = (length (cell:read (.open-files tp))))
+    (let tree-count = (length (flatten-tree (cell:read (.root tp)))))
+    (cond
+      ;; In open section, can move down within
+      ((and (cell:read (.in-open-sec tp))
+            (< (+ (cell:read (.open-selected tp)) 1) open-count))
+       (cell:write! (.open-selected tp) (+ (cell:read (.open-selected tp)) 1))
+       (values))
+      ;; In open section, at bottom -> switch to tree
+      ((and (cell:read (.in-open-sec tp)) (> tree-count 0))
+       (cell:write! (.in-open-sec tp) False)
+       (cell:write! (.selected tp) 0)
+       (values))
+      ;; In tree section, can move down
+      ((and (not (cell:read (.in-open-sec tp)))
+            (< (+ (cell:read (.selected tp)) 1) tree-count))
+       (cell:write! (.selected tp) (+ (cell:read (.selected tp)) 1))
+       (values))
+      (True (values))))
+
+  ;;; Expand / collapse
+
+  (declare toggle-at-index (TreeNode * UFix * UFix -> (Tuple TreeNode UFix)))
+  (define (toggle-at-index node idx counter)
+    (match node
+      ((TreeFile name fpath)
+       (Tuple (TreeFile name fpath) (+ counter 1)))
+      ((TreeDir name children expanded)
+       (cond
+         ((== counter idx)
+          (Tuple (TreeDir name children (not expanded)) (+ counter 1)))
+         (expanded
+          (match (toggle-children children idx (+ counter 1))
+            ((Tuple new-children final-counter)
+             (Tuple (TreeDir name new-children expanded) final-counter))))
+         (True (Tuple (TreeDir name children expanded) (+ counter 1)))))))
+
+  (declare toggle-children ((List TreeNode) * UFix * UFix -> (Tuple (List TreeNode) UFix)))
+  (define (toggle-children children idx counter)
+    (match children
+      ((Nil) (Tuple Nil counter))
+      ((Cons child rest)
+       (match (toggle-at-index child idx counter)
+         ((Tuple new-child new-counter)
+          (match (toggle-children rest idx new-counter)
+            ((Tuple new-rest final-counter)
+             (Tuple (Cons new-child new-rest) final-counter))))))))
+
+  (declare tree-pane-toggle-expand! (TreePane -> Void))
+  (define (tree-pane-toggle-expand! tp)
+    "Toggle expand/collapse on the selected tree node. No-op if in open section."
+    (when (not (cell:read (.in-open-sec tp)))
+      (match (cell:read (.root tp))
+        ((None) (values))
+        ((Some node)
+         (match (toggle-at-index node (cell:read (.selected tp)) 0)
+           ((Tuple new-root ___)
+            (cell:write! (.root tp) (Some new-root))
+            (values)))))))
+
+  ;;; Selected node queries
+
+  (declare %node-at-index (TreeNode * UFix * UFix -> (Tuple (Optional TreeNode) UFix)))
+  (define (%node-at-index node idx counter)
+    (match node
+      ((TreeFile name fpath)
+       (if (== counter idx)
+           (Tuple (Some (TreeFile name fpath)) (+ counter 1))
+           (Tuple None (+ counter 1))))
+      ((TreeDir name children expanded)
+       (cond
+         ((== counter idx)
+          (Tuple (Some (TreeDir name children expanded)) (+ counter 1)))
+         (expanded
+          (%nodes-at-index children idx (+ counter 1)))
+         (True (Tuple None (+ counter 1)))))))
+
+  (declare %nodes-at-index ((List TreeNode) * UFix * UFix -> (Tuple (Optional TreeNode) UFix)))
+  (define (%nodes-at-index children idx counter)
+    (match children
+      ((Nil) (Tuple None counter))
+      ((Cons child rest)
+       (match (%node-at-index child idx counter)
+         ((Tuple (Some found) new-counter)
+          (Tuple (Some found) new-counter))
+         ((Tuple (None) new-counter)
+          (%nodes-at-index rest idx new-counter))))))
+
+  (declare tree-pane-selected-node (TreePane -> Optional TreeNode))
+  (define (tree-pane-selected-node tp)
+    (cond
+      ;; In open files section (with files)
+      ((and (cell:read (.in-open-sec tp))
+            (> (length (cell:read (.open-files tp))) 0))
+       (let sel = (cell:read (.open-selected tp)))
+       (let files = (cell:read (.open-files tp)))
+       (if (< sel (length files))
+           (match (list:nth sel files)
+             ((Tuple name fpath) (Some (TreeFile name fpath))))
+           None))
+      ;; In tree section (or open section is empty -> fall back to tree)
+      (True
+       (match (cell:read (.root tp))
+         ((None) None)
+         ((Some root-node)
+          (match (%node-at-index root-node (cell:read (.selected tp)) 0)
+            ((Tuple result ____) result)))))))
+
+  (declare tree-pane-selected-path (TreePane -> Optional String))
+  (define (tree-pane-selected-path tp)
+    (match (tree-pane-selected-node tp)
+      ((Some (TreeFile _name fpath)) (Some fpath))
+      (_ None)))
+
+  (declare tree-pane-selected-is-dir? (TreePane -> Boolean))
+  (define (tree-pane-selected-is-dir? tp)
+    (match (tree-pane-selected-node tp)
+      ((Some (TreeDir _ _ _)) True)
+      (_ False)))
+
+  ;;; Click and scroll handlers
+
+  (declare tree-pane-click-at! (TreePane * UFix * UFix * UFix -> Optional String))
+  (define (tree-pane-click-at! tp row col height)
+    "Handle a click at ROW (0-based within pane), COL, with pane HEIGHT.
+Returns Some path for files, Some empty-string for dirs, None for miss."
+    (let has-tree = (%has-tree? tp))
+    (let tree-title-h = (if has-tree 1 0))
+    (let chrome = (+ 1 tree-title-h))
+    (let content-h = (if (> height chrome) (- height chrome) 0))
+    (let open-h = (%open-section-height tp content-h))
+    (cond
+      ;; Click on Open Files title
+      ((< row 1)
+       None)
+      ;; Click in open files section - valid item
+      ((and (< row (+ 1 open-h))
+            (< (+ (cell:read (.open-scroll tp)) (- row 1))
+               (length (cell:read (.open-files tp)))))
+       (cell:write! (.in-open-sec tp) True)
+       (let idx = (+ (cell:read (.open-scroll tp)) (- row 1)))
+       (cell:write! (.open-selected tp) idx)
+       (match (list:nth idx (cell:read (.open-files tp)))
+         ((Tuple _name fpath) (Some fpath))))
+      ;; Click in open files section - empty area
+      ((< row (+ 1 open-h))
+       (when (> (length (cell:read (.open-files tp))) 0)
+         (cell:write! (.in-open-sec tp) True))
+       None)
+      ;; Click on Project Tree title
+      ((< row (+ 1 (+ open-h tree-title-h)))
+       None)
+      ;; Click in tree section
+      (True
+       (cell:write! (.in-open-sec tp) False)
+       (let tree-row = (- row (+ chrome open-h)))
+       (let tree-scroll = (cell:read (.scroll tp)))
+       (let flat-idx = (+ tree-scroll tree-row))
+       (let tree-rows = (flatten-tree (cell:read (.root tp))))
+       (let tree-count = (length tree-rows))
+       (if (>= flat-idx tree-count)
+           None
+           (match (%item-hit-test-row (list:nth flat-idx tree-rows) col)
+             ((Some path)
+              (cell:write! (.selected tp) flat-idx)
+              (Some path))
+             ((None) None))))))
+
+  (declare tree-pane-scroll-delta! (TreePane * UFix * IFix * UFix -> Void))
+  (define (tree-pane-scroll-delta! tp row delta height)
+    "Scroll the section at ROW by DELTA, within a pane of total HEIGHT."
+    (let has-tree = (%has-tree? tp))
+    (let tree-title-h = (if has-tree 1 0))
+    (let chrome = (+ 1 tree-title-h))
+    (let content-h = (if (> height chrome) (- height chrome) 0))
+    (let open-h = (%open-section-height tp content-h))
+    (cond
+      ;; Scroll in open files section (title + content rows)
+      ((< row (+ 1 open-h))
+       (let cur = (cell:read (.open-scroll tp)))
+       (let total = (length (cell:read (.open-files tp))))
+       (let new-off = (lisp (-> UFix) (cur delta total open-h)
+                        (cl:max 0 (cl:min (cl:max 0 (cl:- total open-h))
+                                          (cl:+ cur delta)))))
+       (cell:write! (.open-scroll tp) new-off)
+       ;; Keep selection in visible range
+       (let sel = (cell:read (.open-selected tp)))
+       (when (< sel new-off)
+         (cell:write! (.open-selected tp) new-off))
+       (when (>= sel (+ new-off open-h))
+         (cell:write! (.open-selected tp) (+ new-off (- open-h 1))))
+       (values))
+      ;; Scroll in tree section
+      (True
+       (let tree-h = (if (> content-h open-h) (- content-h open-h) 1))
+       (let cur = (cell:read (.scroll tp)))
+       (let total = (length (flatten-tree (cell:read (.root tp)))))
+       (let new-off = (lisp (-> UFix) (cur delta total tree-h)
+                        (cl:max 0 (cl:min (cl:max 0 (cl:- total tree-h))
+                                          (cl:+ cur delta)))))
+       (cell:write! (.scroll tp) new-off)
+       ;; Keep selection in visible range
+       (let sel = (cell:read (.selected tp)))
+       (when (< sel new-off)
+         (cell:write! (.selected tp) new-off))
+       (when (>= sel (+ new-off tree-h))
+         (cell:write! (.selected tp) (+ new-off (- tree-h 1))))
+       (values))))
+
+  ;;; Rendering
+
+  (declare %draw-tree-rows
+    ((List FlatRow)
+     * screen:Screen * wt:Rect * UFix * UFix * UFix * UFix * UFix
+     * (String -> Boolean) * (String -> UFix) * Optional String -> Void))
+  (define (%draw-tree-rows items scr rect height scr-off2 sel row-idx flat-idx dirty-fn diag-fn preview-p)
+    (match items
+      ((Nil) (values))
+      ((Cons _ _)
+       (when (< row-idx height)
+         (if (< flat-idx scr-off2)
+             ;; Skip rows before scroll offset
+             (%draw-tree-rows (match items
+               ((Cons _ rest) rest)
+                                ((Nil) Nil))
+                              scr rect height scr-off2 sel row-idx (+ flat-idx 1) dirty-fn diag-fn preview-p)
+             ;; Draw this row
+             (match items
+               ((Nil) (values))
+               ((Cons row rest)
+                (cond
+                  ((.fr-separator row)
+                   (let sep-y = (+ (wt:.rect-y rect) row-idx))
+                   (let sep-style = (color:Style color:border-fg
+                                                  color:black
+                                                  color:AttrNone))
+                   (%draw-hsep scr (wt:.rect-x rect) sep-y (wt:.rect-width rect) sep-style)
+                   (%draw-tree-rows rest scr rect height scr-off2 sel
+                                    (+ row-idx 1) (+ flat-idx 1) dirty-fn diag-fn preview-p))
+                  (True
+                   (let depth = (.fr-depth row))
+                   (let name = (.fr-name row))
+                   (let is-dir = (.fr-is-dir row))
+                   (let expanded = (.fr-expanded row))
+                   (let fpath = (.fr-path row))
+                   (let y = (+ (wt:.rect-y rect) row-idx))
+                   (let x = (+ (wt:.rect-x rect) (* depth 2)))
+                   ;; Dirty indicator for files
+                   (let dirty = (if is-dir False (dirty-fn fpath)))
+                   (let diag-rank = (if is-dir 0 (diag-fn fpath)))
+                   (let dirty-ch = (if dirty "*" " "))
+                   (let diag-prefix = (cond
+                                        ((== diag-rank 4) "!!")
+                                        ((== diag-rank 3) " !")
+                                        (True "  ")))
+                   (let diag-bullet = (if (> diag-rank 0) "●" " "))
+                   ;; Directory expand/collapse marker
+                   (let dir-marker =
+                     (if is-dir
+                         (if expanded "▾   " "▸   ")
+                         ""))
+                   ;; Check if this is a preview file
+                   (let is-preview = (match preview-p
+                                       ((Some pp) (== pp fpath))
+                                       ((None) False)))
+                   ;; Style: selected=reverse, dir=bold, preview=italic
+                   (let row-style =
+                     (cond
+                       ((== flat-idx sel)
+                        (color:with-attr color:default-style color:AttrReverse))
+                       (is-dir
+                        (color:with-attr color:default-style color:AttrBold))
+                       (is-preview
+                        (color:with-attr color:default-style color:AttrItalic))
+                       (True color:default-style)))
+                   (let dirty-style =
+                     (color:Style color:error-fg
+                                  (color:.style-bg row-style)
+                                  (color:.style-attr row-style)))
+                   (let diag-style =
+                     (cond
+                       ((== diag-rank 4)
+                        (color:Style color:error-fg
+                                     (color:.style-bg row-style)
+                                     (color:.style-attr row-style)))
+                       ((== diag-rank 3)
+                        (color:Style color:warning-fg
+                                     (color:.style-bg row-style)
+                                     (color:.style-attr row-style)))
+                       ((== diag-rank 2)
+                        (color:Style color:gold
+                                     (color:.style-bg row-style)
+                                     (color:.style-attr row-style)))
+                       ((== diag-rank 1)
+                        (color:Style color:accent-fg
+                                     (color:.style-bg row-style)
+                                     (color:.style-attr row-style)))
+                       (True row-style)))
+                   ;; Draw marker + name
+                   (let name-x = (+ x 4))
+                   (let name-avail = (if (> (+ (wt:.rect-x rect) (wt:.rect-width rect)) name-x)
+                                         (- (+ (wt:.rect-x rect) (wt:.rect-width rect)) name-x)
+                                         0))
+                   (cond
+                     ((not is-dir)
+                      (screen:screen-set-string scr y x dirty-ch
+                                                (if dirty dirty-style row-style))
+                      (screen:screen-set-string scr y (+ x 1) diag-prefix
+                                                (if (> diag-rank 0) diag-style row-style))
+                      (screen:screen-set-string scr y (+ x 3) diag-bullet
+                                                (if (> diag-rank 0) diag-style row-style))
+                      (render:draw-text-clipped scr (wt:Rect name-x y name-avail 1) name y name-x row-style))
+                     (True
+                      (screen:screen-set-string scr y x dir-marker row-style)
+                      (render:draw-text-clipped scr (wt:Rect name-x y name-avail 1) name y name-x row-style)))
+                   (%draw-tree-rows rest scr rect height scr-off2 sel
+                                    (+ row-idx 1) (+ flat-idx 1) dirty-fn diag-fn preview-p))))))))))
+
+  (declare %draw-hsep (screen:Screen * UFix * UFix * UFix * color:Style -> Void))
+  (define (%draw-hsep scr x y w style)
+    "Draw a horizontal separator line."
+    (%draw-hsep-loop scr x y (+ x w) style))
+
+  (declare %draw-hsep-loop (screen:Screen * UFix * UFix * UFix * color:Style -> Void))
+  (define (%draw-hsep-loop scr x y end style)
+    (when (< x end)
+      (screen:screen-set-cell scr y x #\─ style)
+      (%draw-hsep-loop scr (+ x 1) y end style)))
+
+  (declare %draw-titled-sep (screen:Screen * UFix * UFix * UFix * String * color:Style -> Void))
+  (define (%draw-titled-sep scr x y w title style)
+    "Draw ─ Title ────── across width W starting at (x, y)."
+    (let title-len = (cellw:string-cell-width title))
+    (cond
+      ((>= w (+ title-len 4))
+       (screen:screen-set-cell scr y x #\─ style)
+       (screen:screen-set-string scr y (+ x 1)
+         (str:concat " " (str:concat title " ")) style)
+       (%draw-hsep-loop scr (+ x (+ 3 title-len)) y (+ x w) style))
+      (True
+       (%draw-hsep-loop scr x y (+ x w) style))))
+
+  (declare %ensure-visible! ((Cell UFix) * UFix * UFix -> Void))
+  (define (%ensure-visible! scroll-cell sel height)
+    "Adjust SCROLL-CELL so SEL is visible in HEIGHT rows."
+    (let scr = (cell:read scroll-cell))
+    (when (< sel scr)
+      (cell:write! scroll-cell sel))
+    (when (>= sel (+ scr height))
+      (cell:write! scroll-cell (if (>= sel height) (+ 1 (- sel height)) 0)))
+    (values))
+
+  (declare tree-pane-render (TreePane * screen:Screen * wt:Rect * Boolean * (String -> Boolean) * (String -> UFix) -> Void))
+  (define (tree-pane-render tp scr rect focused dirty-fn diag-fn)
+    "Render the tree pane with titled open-files and project-tree sections."
+    (let height = (wt:.rect-height rect))
+    (let has-tree = (%has-tree? tp))
+    (let tree-title-h = (if has-tree 1 0))
+    (let chrome = (+ 1 tree-title-h))
+    (let content-h = (if (> height chrome) (- height chrome) 0))
+    (let open-h = (%open-section-height tp content-h))
+    (let tree-h = (if (> content-h open-h) (- content-h open-h) 0))
+
+    ;; Clear the pane area
+    (render:fill-rect scr rect #\Space color:default-style)
+
+    (let preview-p = (cell:read (.preview-path tp)))
+    (let sep-style = (color:Style color:border-fg
+                                   color:black
+                                   color:AttrNone))
+    (let rx = (wt:.rect-x rect))
+    (let ry = (wt:.rect-y rect))
+    (let w = (wt:.rect-width rect))
+
+    ;; Open Files title
+    (%draw-titled-sep scr rx ry w "Open Files" sep-style)
+
+    ;; Render open files section
+    (when (> open-h 0)
+      (let open-sel = (cell:read (.open-selected tp)))
+      (%ensure-visible! (.open-scroll tp) open-sel open-h)
+      (let open-scr = (cell:read (.open-scroll tp)))
+      (let open-rows = (%flatten-open-files (cell:read (.open-files tp))))
+      (let open-rect = (wt:Rect rx (+ ry 1) w open-h))
+      (let in-open = (cell:read (.in-open-sec tp)))
+      (let draw-sel = (if (and focused in-open) open-sel 99999999))
+      (%draw-tree-rows open-rows scr open-rect open-h open-scr draw-sel
+                        0 0 dirty-fn diag-fn preview-p))
+
+    ;; Project Tree title
+    (when (> tree-title-h 0)
+      (%draw-titled-sep scr rx (+ ry (+ 1 open-h)) w "Project Tree" sep-style))
+
+    ;; Render tree section
+    (when (> tree-h 0)
+      (let tree-sel = (cell:read (.selected tp)))
+      (%ensure-visible! (.scroll tp) tree-sel tree-h)
+      (let tree-scr = (cell:read (.scroll tp)))
+      (let tree-rows = (flatten-tree (cell:read (.root tp))))
+      (let tree-rect = (wt:Rect rx (+ ry (+ chrome open-h)) w tree-h))
+      (let in-open = (cell:read (.in-open-sec tp)))
+      (let draw-sel = (if (and focused (not in-open)) tree-sel 99999999))
+      (%draw-tree-rows tree-rows scr tree-rect tree-h tree-scr draw-sel
+                        0 0 dirty-fn diag-fn preview-p)
+      ;; Scrollbar for tree section
+      (let total = (length tree-rows))
+      (let sb-col = (- (+ rx w) 1))
+      (let track-s = (color:Style color:scrollbar-track-fg
+                                   color:scrollbar-track-bg
+                                   color:AttrNone))
+      (let thumb-s = (color:Style color:scrollbar-thumb-fg
+                                   color:scrollbar-track-bg
+                                   color:AttrNone))
+      (render:draw-scrollbar scr sb-col (wt:.rect-y tree-rect) tree-h total tree-scr
+                              track-s thumb-s)))
+
+  (declare tree-pane-scrollbar-drag-at! (TreePane * UFix * UFix -> Void))
+  (define (tree-pane-scrollbar-drag-at! tp row-in-pane pane-height)
+    "Handle a scrollbar drag at ROW-IN-PANE. Scrollbar covers the tree section."
+    (let has-tree = (%has-tree? tp))
+    (let tree-title-h = (if has-tree 1 0))
+    (let chrome = (+ 1 tree-title-h))
+    (let content-h = (if (> pane-height chrome) (- pane-height chrome) 0))
+    (let open-h = (%open-section-height tp content-h))
+    (let tree-start = (+ chrome open-h))
+    (let tree-h = (if (> content-h open-h) (- content-h open-h) 1))
+    (let tree-count = (length (flatten-tree (cell:read (.root tp)))))
+    (when (and (>= row-in-pane tree-start) (> tree-count tree-h))
+      (let rel-y = (- row-in-pane tree-start))
+      (let max-scroll = (- tree-count tree-h))
+      (let new-scroll = (lisp (-> UFix) (rel-y max-scroll tree-h)
+                          (cl:min max-scroll
+                                  (cl:floor (cl:* rel-y max-scroll)
+                                            (cl:max 1 (cl:1- tree-h))))))
+      (cell:write! (.scroll tp) new-scroll)
+      (cell:write! (.selected tp) new-scroll))
+    (values))
+
+;;; Collapsed strip rendering
+
+  (declare tree-pane-open-file-count (TreePane -> UFix))
+  (define (tree-pane-open-file-count tp)
+    (length (cell:read (.open-files tp))))
+
+  (declare %find-current-file-index
+    ((List (Tuple String String)) * (Optional String) * UFix -> (Optional UFix)))
+  (define (%find-current-file-index files current-path idx)
+    "Find the 0-based index of CURRENT-PATH in the open files list."
+    (match current-path
+      ((None) None)
+      ((Some path)
+       (match files
+         ((Nil) None)
+         ((Cons (Tuple _ fpath) rest)
+          (if (== fpath path)
+              (Some idx)
+              (%find-current-file-index rest (Some path) (+ idx 1))))))))
+
+  (declare %draw-strip-numbers
+    (screen:Screen * UFix * UFix * UFix * (Optional UFix) * UFix -> Void))
+  (define (%draw-strip-numbers scr x y show-count current-idx num)
+    "Draw digit characters vertically for the collapsed strip."
+    (when (< num show-count)
+      (let is-current = (match current-idx
+                          ((Some idx) (== idx num))
+                          ((None) False)))
+      (let digit-char = (lisp (-> Char) (num) (cl:code-char (cl:+ 49 num))))
+      (let style = (if is-current
+                       (color:with-bg color:default-style color:panel-bg)
+                       (color:with-attr color:default-style color:AttrDim)))
+      (screen:screen-set-cell scr (+ y num) x digit-char style)
+      (%draw-strip-numbers scr x y show-count current-idx (+ num 1))))
+
+  (declare tree-pane-render-collapsed
+    (TreePane * screen:Screen * wt:Rect * (Optional String) -> Void))
+  (define (tree-pane-render-collapsed tp scr rect current-path)
+    "Render a collapsed 1-column strip with file numbers 1-9 and T indicator."
+    (render:fill-rect scr rect #\Space color:default-style)
+    (let files = (cell:read (.open-files tp)))
+    (let file-count = (length files))
+    (let show-count = (min 9 file-count))
+    (let current-idx = (%find-current-file-index files current-path 0))
+    ;; Draw numbers
+    (%draw-strip-numbers scr (wt:.rect-x rect) (wt:.rect-y rect)
+                         show-count current-idx 0)
+    ;; Draw T indicator below numbers
+    (when (< show-count (wt:.rect-height rect))
+      (let t-y = (+ (wt:.rect-y rect) show-count))
+      (let t-highlighted = (match current-idx
+                             ((Some idx) (>= idx 9))
+                             ((None) (> file-count 0))))
+      (let t-style = (if t-highlighted
+                         (color:with-bg color:default-style color:panel-bg)
+                         (color:with-attr color:default-style color:AttrDim)))
+      (screen:screen-set-cell scr t-y (wt:.rect-x rect) #\T t-style))
+    (values)))

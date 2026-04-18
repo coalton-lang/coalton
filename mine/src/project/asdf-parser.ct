@@ -1,0 +1,184 @@
+(cl:defpackage #:mine/project/asdf-parser
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:model #:mine/project/asdf-model)
+   (#:tree #:mine/pane/tree)
+   (#:str #:coalton/string)
+   (#:cell #:coalton/cell))
+  (:export
+   #:parse-asd-file
+   #:parse-asd-to-tree))
+
+(in-package #:mine/project/asdf-parser)
+
+(coalton-toplevel
+
+  ;;; parse-asd-to-tree -- Load system via ASDF and build a TreeNode
+
+  (declare parse-asd-to-tree (String -> Optional tree:TreeNode))
+  (define (parse-asd-to-tree path)
+    "Given a path to an .asd file, load the system and return a TreeNode."
+    (lisp (-> (Optional tree:TreeNode)) (path)
+      (cl:let ((result (%asd-path-to-tree path)))
+        (cl:if result (Some result) None))))
+
+  (declare parse-asd-file (String -> Optional model:SystemDef))
+  (define (parse-asd-file path)
+    "Parse an .asd file and return a SystemDef, or None on error."
+    (lisp (-> (Optional model:SystemDef)) (path)
+      (cl:let ((result (%parse-asd-file-impl path)))
+        (cl:if result (Some result) None)))))
+
+;;; CL-side: walk ASDF's own object model to build TreeNodes
+
+(cl:defun %asd-path-to-tree (asd-path)
+  "Given a path to a .asd file, find all systems and build a tree."
+  (cl:handler-case
+      (cl:let* ((truepath (cl:truename (cl:pathname asd-path)))
+                ;; Load the .asd so ASDF knows about the systems
+                (__ (asdf:load-asd truepath))
+                ;; Find ALL system names defined in this file
+                (sys-names (%find-all-system-names truepath)))
+        (cl:declare (cl:ignore __))
+        (cl:when sys-names
+          ;; Build a tree node for each system that has components
+          (cl:let* ((sys-trees
+                      (cl:remove cl:nil
+                        (cl:mapcar
+                         (cl:lambda (name)
+                           (cl:let ((sys (asdf:find-system name cl:nil)))
+                             (cl:when sys (%system-to-tree sys))))
+                         sys-names)))
+                    (root-name (cl:file-namestring truepath)))
+            (cl:if (cl:= (cl:length sys-trees) 1)
+                   ;; Single system: use it directly
+                   (cl:first sys-trees)
+                   ;; Multiple systems: wrap in a root node
+                   (mine/pane/tree:TreeDir root-name sys-trees coalton:True)))))
+    (cl:error (c)
+      (cl:format cl:*error-output* "~&;; asdf-parser error: ~A~%" c)
+      (cl:force-output cl:*error-output*)
+      cl:nil)))
+
+(cl:defun %find-all-system-names (path)
+  "Read the .asd file and return a list of all defsystem names."
+  (cl:handler-case
+      (cl:with-open-file (s path :direction :input)
+        (cl:let ((eof (cl:gensym))
+                 (names cl:nil))
+          (cl:loop
+            (cl:let ((form (cl:read s cl:nil eof)))
+              (cl:when (cl:eq form eof)
+                (cl:return (cl:nreverse names)))
+              (cl:when (cl:and (cl:consp form)
+                               (cl:symbolp (cl:car form))
+                               (cl:string-equal (cl:symbol-name (cl:car form))
+                                                "DEFSYSTEM"))
+                (cl:let ((raw-name (cl:cadr form)))
+                  (cl:push (cl:etypecase raw-name
+                             (cl:string raw-name)
+                             (cl:symbol (cl:string-downcase
+                                         (cl:symbol-name raw-name))))
+                           names)))))))
+    (cl:error () cl:nil)))
+
+(cl:defun %system-to-tree (sys)
+  "Convert an ASDF system object into a TreeDir node."
+  (cl:let* ((name (asdf:component-name sys))
+            (children (%children-to-tree-nodes sys)))
+    (mine/pane/tree:TreeDir name children coalton:True)))
+
+(cl:defun %children-to-tree-nodes (parent)
+  "Convert the children of an ASDF component into a list of TreeNodes."
+  (cl:let ((children (cl:handler-case
+                         (asdf:component-children parent)
+                       (cl:error () cl:nil))))
+    (cl:mapcar #'%component-to-tree-node children)))
+
+(cl:defun %component-to-tree-node (comp)
+  "Convert a single ASDF component into a TreeNode."
+  (cl:let ((name (asdf:component-name comp)))
+    (cl:typecase comp
+      ;; Module (has children) -> TreeDir
+      (asdf:module
+       (cl:let ((children (%children-to-tree-nodes comp)))
+         (mine/pane/tree:TreeDir name children coalton:True)))
+      ;; Source file -> TreeFile
+      (cl:t
+       (cl:let* ((pathname (asdf:component-pathname comp))
+                 (fpath (cl:if pathname
+                               (cl:namestring pathname)
+                               name))
+                 ;; Display name includes extension
+                 (display-name (cl:if pathname
+                                      (cl:file-namestring pathname)
+                                      name)))
+         (mine/pane/tree:TreeFile display-name fpath))))))
+
+;;; CL-side: parse .asd into SystemDef
+
+(cl:defun %parse-asd-file-impl (asd-path)
+  "Parse an .asd file and return a SystemDef, or NIL on error."
+  (cl:handler-case
+      (cl:let* ((truepath (cl:truename (cl:pathname asd-path)))
+                (__ (asdf:load-asd truepath))
+                (sys-names (%find-all-system-names truepath)))
+        (cl:declare (cl:ignore __))
+        (cl:when sys-names
+          ;; Use the first (primary) system
+          (cl:let ((sys (asdf:find-system (cl:first sys-names) cl:nil))
+                   (asd-dir (cl:directory-namestring truepath)))
+            (cl:when sys
+              (%system-to-sysdef sys asd-dir)))))
+    (cl:error (c)
+      (cl:format cl:*error-output* "~&;; parse-asd-file error: ~A~%" c)
+      (cl:force-output cl:*error-output*)
+      cl:nil)))
+
+(cl:defun %system-to-sysdef (sys asd-dir)
+  "Convert an ASDF system object to a SystemDef.
+ASD-DIR is the directory containing the .asd file, used to relativize :pathname."
+  (cl:let* ((name (asdf:component-name sys))
+            (raw-deps (cl:handler-case (asdf:system-depends-on sys)
+                        (cl:error () cl:nil)))
+            (deps (cl:mapcar #'%normalize-dep raw-deps))
+            (comps (cl:mapcar #'%asdf-component-to-model
+                              (cl:handler-case (asdf:component-children sys)
+                                (cl:error () cl:nil))))
+            (desc (cl:or (cl:ignore-errors (asdf:system-description sys)) ""))
+            (pathname (cl:let ((p (cl:ignore-errors
+                                    (asdf:component-pathname sys))))
+                        (cl:if p
+                               (cl:enough-namestring p asd-dir)
+                               "src/"))))
+    (mine/project/asdf-model::SystemDef
+     name deps comps (cl:or desc "") pathname)))
+
+(cl:defun %normalize-dep (d)
+  "Normalize a dependency spec to a string."
+  (cl:etypecase d
+    (cl:string d)
+    (cl:symbol (cl:string-downcase (cl:symbol-name d)))
+    (cl:cons (cl:let ((inner (cl:second d)))
+               (cl:etypecase inner
+                 (cl:string inner)
+                 (cl:symbol (cl:string-downcase (cl:symbol-name inner))))))))
+
+(cl:defun %asdf-component-to-model (comp)
+  "Convert an ASDF component to a model:Component."
+  (cl:let* ((name (asdf:component-name comp))
+            (ct (cl:typecase comp
+                  (asdf:module 'mine/project/asdf-model::COMPONENTTYPE/CTMODULE)
+                  (cl:t
+                   (cl:let ((cls-name (cl:class-name (cl:class-of comp))))
+                     (cl:if (cl:search "CT-FILE" (cl:symbol-name cls-name)
+                                       :test #'cl:char-equal)
+                            'mine/project/asdf-model::COMPONENTTYPE/CTCTFILE
+                            'mine/project/asdf-model::COMPONENTTYPE/CTFILE)))))
+            (children (cl:if (cl:typep comp 'asdf:module)
+                             (cl:mapcar #'%asdf-component-to-model
+                                        (cl:handler-case
+                                            (asdf:component-children comp)
+                                          (cl:error () cl:nil)))
+                             cl:nil)))
+    (mine/project/asdf-model::Component name ct children)))

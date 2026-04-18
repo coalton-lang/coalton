@@ -1,0 +1,64 @@
+(cl:defpackage #:mine/app/clipboard
+  (:use #:coalton #:coalton-prelude)
+  (:export
+   #:clipboard-copy!
+   #:clipboard-paste))
+
+(in-package #:mine/app/clipboard)
+
+(coalton-toplevel
+
+  (declare clipboard-copy! (String -> Void))
+  (define (clipboard-copy! text)
+    "Copy text to the system clipboard."
+    (lisp (-> Void) (text) (%clipboard-copy text) (cl:values)))
+
+  (declare clipboard-paste (Void -> String))
+  (define (clipboard-paste)
+    "Read text from the system clipboard."
+    (lisp (-> String) () (%clipboard-paste))))
+
+;;; System clipboard (uses pbcopy/pbpaste on macOS, xclip on Linux)
+
+(cl:defun %clipboard-copy (text)
+  "Copy TEXT to the system clipboard. Works on macOS, Linux, and Windows."
+  (cl:handler-case
+      (cl:multiple-value-bind (program args)
+          (%clipboard-copy-cmd)
+        (cl:let ((proc (sb-ext:run-program program args
+                         :input :stream :wait cl:nil :search cl:t)))
+          (cl:let ((input (sb-ext:process-input proc)))
+            (cl:write-string text input)
+            (cl:close input)
+            (sb-ext:process-wait proc)
+            cl:t)))
+    (cl:error () cl:nil)))
+
+(cl:defun %clipboard-copy-cmd ()
+  #+darwin  (cl:values "/usr/bin/pbcopy" cl:nil)
+  #+windows (cl:values "clip.exe" cl:nil)
+  #-(or darwin windows) (cl:values "xclip" (cl:list "-selection" "clipboard")))
+
+(cl:defun %clipboard-paste ()
+  "Read text from the system clipboard. Works on macOS, Linux, and Windows."
+  (cl:handler-case
+      (cl:multiple-value-bind (program args)
+          (%clipboard-paste-cmd)
+        (cl:let* ((proc (sb-ext:run-program program args
+                          :output :stream :wait cl:nil :search cl:t))
+                  (output (sb-ext:process-output proc))
+                  (text (cl:with-output-to-string (s)
+                          (cl:loop :for line := (cl:read-line output cl:nil cl:nil)
+                                   :while line
+                                   :for first := cl:t :then cl:nil
+                                   :do (cl:unless first (cl:write-char #\Newline s))
+                                       (cl:write-string line s)))))
+          (cl:close output)
+          (sb-ext:process-wait proc)
+          text))
+    (cl:error () "")))
+
+(cl:defun %clipboard-paste-cmd ()
+  #+darwin  (cl:values "/usr/bin/pbpaste" cl:nil)
+  #+windows (cl:values "powershell.exe" (cl:list "-command" "Get-Clipboard"))
+  #-(or darwin windows) (cl:values "xclip" (cl:list "-selection" "clipboard" "-o")))

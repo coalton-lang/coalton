@@ -1,0 +1,217 @@
+(cl:defpackage #:mine/buffer/buffer
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:gap #:mine/buffer/gap)
+   (#:undo #:mine/edit/undo)
+   (#:cell #:coalton/cell)
+   (#:str #:coalton/string)
+   (#:list #:coalton/list))
+  (:export
+   #:BufferId #:BufferId
+   #:BufferMode #:ModeCoalton #:ModeLisp #:ModePlainText
+   #:Mark #:Mark
+   #:Buffer
+   #:buffer-new #:buffer-new-file #:buffer-from-file
+   #:buffer-id #:buffer-name #:buffer-path #:buffer-document-key
+   #:buffer-gap #:buffer-undo #:buffer-dirty? #:buffer-mode
+   #:buffer-mark-dirty! #:buffer-mark-clean!))
+
+(in-package #:mine/buffer/buffer)
+
+(cl:defvar *buffer-dirty-hook* nil
+  "When non-nil, called with a document key each time editing marks that buffer dirty.")
+
+(cl:defun %normalize-file-document-key (fpath)
+  "Return the canonical document key for a file-backed buffer path."
+  (cl:when (cl:and (cl:stringp fpath)
+                   (cl:plusp (cl:length fpath)))
+    (cl:handler-case
+        (cl:let ((truename (cl:probe-file fpath)))
+          (cl:if truename
+                 (cl:namestring truename)
+                 fpath))
+      (cl:error () fpath))))
+
+(coalton-toplevel
+
+  ;;; BufferId
+
+  (define-type BufferId
+    "Unique identifier for a buffer."
+    (BufferId UFix))
+
+  (define-instance (Eq BufferId)
+    (define (== a b)
+      (match (Tuple a b)
+        ((Tuple (BufferId x) (BufferId y))
+         (== x y)))))
+
+  (define-instance (Hash BufferId)
+    (define (hash bid)
+      (match bid
+        ((BufferId n) (hash n)))))
+
+  ;;; BufferMode
+
+  (repr :enum)
+  (define-type BufferMode
+    "Major mode governing syntax and behaviour."
+    ModeCoalton
+    ModeLisp
+    ModePlainText)
+
+  (define-instance (Eq BufferMode)
+    (define (== a b)
+      (match (Tuple a b)
+        ((Tuple (ModeCoalton)  (ModeCoalton))  True)
+        ((Tuple (ModeLisp)     (ModeLisp))     True)
+        ((Tuple (ModePlainText)(ModePlainText)) True)
+        (_ False))))
+
+  ;;; Mark
+
+  (define-struct Mark
+    "A diagnostic or annotation attached to a buffer position."
+    (position     UFix)
+    (end-position (Optional UFix))
+    (message      String)
+    (severity     UFix))
+
+  ;;; Buffer
+
+  (define-struct Buffer
+    "An open text buffer backed by a gap buffer."
+    (id       BufferId)
+    (name     (Cell String))
+    (path     (Cell (Optional String)))
+    (gap      gap:GapBuffer)
+    (undo     undo:UndoTree)
+    (dirty    (Cell Boolean))
+    (readonly (Cell Boolean))
+    (mode     (Cell BufferMode))
+    (marks    (Cell (List Mark))))
+
+  ;;; Constructors
+
+  (declare buffer-new (BufferId * String -> Buffer))
+  (define (buffer-new bid bname)
+    "Create a new empty buffer with the given id and name."
+    (Buffer bid
+            (cell:new bname)
+            (cell:new None)
+            (gap:gap-new)
+            (undo:undo-tree-new)
+            (cell:new False)
+            (cell:new False)
+            (cell:new ModePlainText)
+            (cell:new Nil)))
+
+  (declare buffer-new-file (BufferId * String -> Buffer))
+  (define (buffer-new-file bid fpath)
+    "Create an empty buffer for a new file at FPATH (not yet on disk)."
+    (let bname = (lisp (-> String) (fpath)
+                   (cl:file-namestring fpath)))
+    (let m = (detect-mode fpath))
+    (Buffer bid
+            (cell:new bname)
+            (cell:new (Some fpath))
+            (gap:gap-new)
+            (undo:undo-tree-new)
+            (cell:new False)
+            (cell:new False)
+            (cell:new m)
+            (cell:new Nil)))
+
+  (declare detect-mode (String -> BufferMode))
+  (define (detect-mode fpath)
+    "Detect the buffer mode from a file extension."
+    (let ext = (lisp (-> String) (fpath)
+                 (cl:let ((p (cl:pathname fpath)))
+                   (cl:or (cl:pathname-type p) ""))))
+    (cond
+      ((list:member ext ["ct" "coal" "coalton"])
+       ModeCoalton)
+      ((list:member ext ["lisp" "asd" "cl" "lsp"])
+       ModeLisp)
+      (True ModePlainText)))
+
+  (declare buffer-from-file (BufferId * String -> Buffer))
+  (define (buffer-from-file bid fpath)
+    "Create a buffer by reading a file from FPATH."
+    (let contents = (lisp (-> String) (fpath)
+                      (cl:handler-case (uiop:read-file-string fpath)
+                        (cl:error () ""))))
+    (let bname = (lisp (-> String) (fpath)
+                   (cl:file-namestring fpath)))
+    (let gb = (gap:gap-from-string contents))
+    (let m = (detect-mode fpath))
+    (Buffer bid
+            (cell:new bname)
+            (cell:new (Some fpath))
+            gb
+            (undo:undo-tree-new)
+            (cell:new False)
+            (cell:new False)
+            (cell:new m)
+            (cell:new Nil)))
+
+  ;;; Accessors
+
+  (declare buffer-id (Buffer -> BufferId))
+  (define (buffer-id buf)
+    (.id buf))
+
+  (declare buffer-name (Buffer -> String))
+  (define (buffer-name buf)
+    (cell:read (.name buf)))
+
+  (declare buffer-path (Buffer -> Optional String))
+  (define (buffer-path buf)
+    (cell:read (.path buf)))
+
+  (declare buffer-document-key (Buffer -> String))
+  (define (buffer-document-key buf)
+    "Return the stable document key for BUF."
+    (match (buffer-path buf)
+      ((Some fpath)
+       (lisp (-> String) (fpath)
+         (cl:or (%normalize-file-document-key fpath) "")))
+      ((None)
+       (match (buffer-id buf)
+         ((BufferId n)
+          (<> "buffer://" (into n)))))))
+
+  (declare buffer-gap (Buffer -> gap:GapBuffer))
+  (define (buffer-gap buf)
+    (.gap buf))
+
+  (declare buffer-undo (Buffer -> undo:UndoTree))
+  (define (buffer-undo buf)
+    (.undo buf))
+
+  (declare buffer-dirty? (Buffer -> Boolean))
+  (define (buffer-dirty? buf)
+    (cell:read (.dirty buf)))
+
+  (declare buffer-mode (Buffer -> BufferMode))
+  (define (buffer-mode buf)
+    (cell:read (.mode buf)))
+
+  ;;; Mutators
+
+  (declare buffer-mark-dirty! (Buffer -> Void))
+  (define (buffer-mark-dirty! buf)
+    (cell:write! (.dirty buf) True)
+    (let doc-key = (buffer-document-key buf))
+    (lisp (-> Void) (doc-key)
+      (cl:when mine/buffer/buffer::*buffer-dirty-hook*
+        (cl:funcall mine/buffer/buffer::*buffer-dirty-hook* doc-key))
+      (cl:values))
+    (values))
+
+  (declare buffer-mark-clean! (Buffer -> Void))
+  (define (buffer-mark-clean! buf)
+    (cell:write! (.dirty buf) False)
+    (values))
+
+)

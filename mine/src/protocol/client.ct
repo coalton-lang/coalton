@@ -1,0 +1,124 @@
+(cl:defpackage #:mine/protocol/client
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:msg #:mine/protocol/messages)
+   (#:wire #:mine/protocol/wire)
+   (#:cell #:coalton/cell))
+  (:export
+   #:Connection
+   #:connection-new
+   #:connection-active?
+   #:connection-send!
+   #:connection-receive!
+   #:connection-receive-sexpr!
+   #:connection-close!))
+
+(in-package #:mine/protocol/client)
+
+;;; CL-side struct holding the socket stream.
+
+(cl:defstruct %connection
+  (stream cl:nil :type (cl:or cl:null cl:stream))
+  (host   "" :type cl:string)
+  (port   0  :type cl:fixnum)
+  (active cl:nil :type cl:boolean))
+
+(coalton-toplevel
+
+  ;;; Connection
+
+  (repr :native %connection)
+  (define-type Connection
+    "A connection to the runtime server, wrapping a TCP socket stream.")
+
+  ;;; Connect
+
+  (declare connection-new (String * UFix -> Connection))
+  (define (connection-new host port)
+    "Connect to 127.0.0.1:port and return a Connection.
+Uses mine/bindings/socket:socket-connect to establish the TCP connection."
+    (lisp (-> Connection) (host port)
+      (cl:handler-case
+          (cl:let ((s (mine/bindings/socket:socket-connect port)))
+            (make-%connection :stream s :host host :port port :active cl:t))
+        (cl:error ()
+          (make-%connection :stream cl:nil :host host :port port :active cl:nil)))))
+
+  ;;; Query
+
+  (declare connection-active? (Connection -> Boolean))
+  (define (connection-active? conn)
+    "Return whether the connection is active."
+    (lisp (-> Boolean) (conn)
+      (cl:if (%connection-active conn) True False)))
+
+  ;;; Send
+
+  (declare connection-send! (Connection * msg:Request -> Void))
+  (define (connection-send! conn req)
+    "Serialize a request and write it to the socket with the wire header."
+    (let sexpr = (msg:request-to-sexpr req))
+    (let payload = (wire:wire-encode sexpr))
+    (lisp (-> Void) (conn payload)
+      (cl:let ((stream (%connection-stream conn)))
+        (cl:when stream
+          (cl:handler-case
+              (mine/bindings/socket:socket-write-string stream payload)
+            (cl:error () cl:nil))))
+      (cl:values)))
+
+  ;;; Receive
+
+  (declare connection-receive! (Connection -> Optional msg:Response))
+  (define (connection-receive! conn)
+    "Read a message from the socket: 6-byte hex header + payload.
+Attempts to parse as a Response."
+    (match (connection-receive-sexpr! conn)
+      ((Some sexpr)
+       (msg:sexpr-to-response sexpr))
+      ((None) None)))
+
+  ;;; Receive (raw SExpr, for notifications)
+
+  (declare connection-receive-sexpr! (Connection -> Optional wire:SExpr))
+  (define (connection-receive-sexpr! conn)
+    "Read a message from the socket and return the raw SExpr.
+This is useful for reading either responses or notifications."
+    (lisp (-> (Optional wire:SExpr)) (conn)
+      (cl:let ((stream (%connection-stream conn)))
+        (cl:if (cl:null stream)
+               None
+               (cl:handler-case
+                   (cl:let* (;; Read the 6-byte hex length header
+                             (header-bytes (cl:make-array 6 :element-type '(cl:unsigned-byte 8))))
+                     (cl:read-sequence header-bytes stream)
+                     (cl:let* ((header-str (sb-ext:octets-to-string header-bytes
+                                                                    :external-format :utf-8))
+                               (payload-len (cl:parse-integer header-str :radix 16))
+                               ;; Read the payload
+                               (payload-bytes (cl:make-array payload-len
+                                                            :element-type '(cl:unsigned-byte 8))))
+                       (cl:read-sequence payload-bytes stream)
+                       (cl:let* ((payload-str (sb-ext:octets-to-string payload-bytes
+                                                                       :external-format :utf-8))
+                                 ;; Parse as SExpr
+                                 (sexpr (mine/protocol/wire::parse-sexpr-from-string payload-str)))
+                         (cl:if sexpr
+                                (Some sexpr)
+                                None))))
+                 (cl:error () None))))))
+
+  ;;; Close
+
+  (declare connection-close! (Connection -> Void))
+  (define (connection-close! conn)
+    "Close the connection socket."
+    (lisp (-> Void) (conn)
+      (cl:let ((stream (%connection-stream conn)))
+        (cl:when stream
+          (cl:handler-case
+              (mine/bindings/socket:socket-close stream)
+            (cl:error () cl:nil)))
+        (cl:setf (%connection-stream conn) cl:nil)
+        (cl:setf (%connection-active conn) cl:nil))
+      (cl:values))))

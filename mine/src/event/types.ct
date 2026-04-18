@@ -1,0 +1,41 @@
+(cl:defpackage #:mine/event/types
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:input #:mine/term/input))
+  (:export
+   #:Event
+   #:EvKey #:EvMouse #:EvPaste #:EvResize
+   #:EvProtocol #:EvConnectionLost
+   #:EvCommand #:EvTimer #:EvRedraw #:EvQuit
+   #:CommandId))
+
+(in-package #:mine/event/types)
+
+(coalton-toplevel
+
+  ;;; CommandId
+
+  (define-type CommandId
+    "Opaque identifier for a registered command."
+    (CommandId UFix))
+
+  (define-instance (Eq CommandId)
+    (define (== a b)
+      (match (Tuple a b)
+        ((Tuple (CommandId x) (CommandId y))
+         (== x y)))))
+
+  ;;; Event
+
+  (define-type Event
+    "A user or system event processed by the main loop."
+    (EvKey input:Key input:Modifier)
+    (EvMouse input:MouseAction input:MouseButton UFix UFix)
+    (EvPaste String)
+    (EvResize UFix UFix)
+    (EvProtocol UFix String)
+    (EvConnectionLost UFix)
+    (EvCommand CommandId)
+    (EvTimer UFix)
+    EvRedraw
+    EvQuit))
