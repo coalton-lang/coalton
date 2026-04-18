@@ -299,11 +299,10 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
             (diagnostic-location< (first a) (second a) (third a)
                                   (first b) (second b) (third b))))))
 
-(defun find-next-diagnostic-location (current-file current-pos)
-  "Return the next diagnostic location after CURRENT-FILE/CURRENT-POS."
-  (let* ((current-note (and current-file
-                            (diagnostic-at-position current-file current-pos)))
-         (locations (all-diagnostic-locations)))
+(defun find-next-diagnostic-location (current-file current-pos locations)
+  "Return the next diagnostic location after CURRENT-FILE/CURRENT-POS in LOCATIONS."
+  (let ((current-note (and current-file
+                           (diagnostic-at-position current-file current-pos))))
     (cond
       ((null locations) nil)
       ((null current-file) (first locations))
@@ -323,12 +322,11 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
                             (> (second entry) current-pos)))
              :return entry)))))
 
-(defun find-prev-diagnostic-location (current-file current-pos)
-  "Return the previous diagnostic location before CURRENT-FILE/CURRENT-POS."
-  (let* ((current-note (and current-file
-                            (diagnostic-at-position current-file current-pos)))
-         (locations (all-diagnostic-locations))
-         (best nil))
+(defun find-prev-diagnostic-location (current-file current-pos locations)
+  "Return the previous diagnostic location before CURRENT-FILE/CURRENT-POS in LOCATIONS."
+  (let ((current-note (and current-file
+                           (diagnostic-at-position current-file current-pos)))
+        (best nil))
     (cond
       ((null locations) nil)
       ((null current-file) (car (last locations)))
@@ -348,23 +346,30 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
                         (< (second entry) current-pos)))
            (setf best entry)))))))
 
-(defun jump-adjacent-diagnostic (st direction)
-  "Jump to the next (>0) or previous (<0) stored diagnostic."
+(defun jump-adjacent-diagnostic (st direction &optional scope)
+  "Jump to the next (>0) or previous (<0) stored diagnostic.
+When SCOPE is a hash-table of filepaths, only consider diagnostics in those files."
   (let* ((bm (call-mine-function "GET-BUFMGR" st))
          (cs (call-mine-function "GET-CURSOR-STATE" st))
          (opt-buf (mine/buffer/manager::bufmgr-current bm))
          (buf (unless (coalton-impl/runtime/optional:cl-none-p opt-buf) opt-buf))
-         (current-file (and buf (mine/buffer/buffer:buffer-path buf)))
+         (opt-path (and buf (mine/buffer/buffer:buffer-path buf)))
+         (current-file (and opt-path
+                            (not (coalton-impl/runtime/optional:cl-none-p opt-path))
+                            opt-path))
          (current-pos (mine/edit/cursor:cursor-position cs))
-         (locations (all-diagnostic-locations))
+         (all-locs (all-diagnostic-locations))
+         (locations (if scope
+                       (remove-if-not (lambda (loc) (gethash (first loc) scope)) all-locs)
+                       all-locs))
          (target (if (plusp direction)
-                     (find-next-diagnostic-location current-file current-pos)
-                     (find-prev-diagnostic-location current-file current-pos))))
+                     (find-next-diagnostic-location current-file current-pos locations)
+                     (find-prev-diagnostic-location current-file current-pos locations))))
     (cond
       ((null locations)
        (mine/pane/status::statusbar-set-message!
         (call-mine-function "GET-STATUS-BAR" st)
-        "No diagnostics"))
+        (if scope "No project diagnostics" "No diagnostics")))
       (target
        (call-mine-function "%JUMP-TO-FILE" st (first target) (second target)))
       (t

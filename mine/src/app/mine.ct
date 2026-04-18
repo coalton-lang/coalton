@@ -47,7 +47,9 @@
    (#:dialogs #:mine/app/dialogs)
    (#:build #:mine/app/build)
    (#:cellw #:mine/text/width)
-   (#:spinner #:mine/widget/spinner))
+   (#:spinner #:mine/widget/spinner)
+   (#:ht #:coalton/hashtable)
+   (#:iter #:coalton/iterator))
   (:export
    #:mine-main
    #:ProtoMsg #:ProtoReturn #:ProtoOutput #:ProtoDebug #:ProtoIORequest #:ProtoConnectionLost
@@ -2542,16 +2544,55 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                 "Jump stack empty")))
       (cl:values)))
 
+  (declare %tree-file-paths (tree:TreeNode -> (List String)))
+  (define (%tree-file-paths node)
+    "Collect all file paths from a project tree node."
+    (match node
+      ((tree:TreeFile _ path) (make-list path))
+      ((tree:TreeDir _ children _)
+       (concatmap %tree-file-paths children))))
+
+  (declare %diagnostic-scope (MineState -> ht:HashTable String Boolean))
+  (define (%diagnostic-scope st)
+    "Build a set of file paths in scope (project tree + open files)."
+    (let tree-paths =
+      (match (cell:read (.root (.ms-tree st)))
+        ((Some root) (%tree-file-paths root))
+        ((None) Nil)))
+    (let open-paths =
+      (map (fn (entry) (match entry ((Tuple _ path) path)))
+           (tree:tree-pane-open-files (.ms-tree st))))
+    (let scope = (ht:new))
+    (iter:for-each! (fn (path) (ht:set! scope path True))
+                    (iter:into-iter (append tree-paths open-paths)))
+    scope)
+
   (declare jump-next-diagnostic! (MineState -> Void))
   (define (jump-next-diagnostic! st)
-    "Jump to the next diagnostic span, moving across files when needed."
-    (lisp (-> Void) (st)
-      (mine/app/diagnostics:jump-adjacent-diagnostic st 1)
+    "Jump to the next diagnostic in project/open files."
+    (let scope = (%diagnostic-scope st))
+    (lisp (-> Void) (st scope)
+      (mine/app/diagnostics:jump-adjacent-diagnostic st 1 scope)
       (cl:values)))
 
   (declare jump-prev-diagnostic! (MineState -> Void))
   (define (jump-prev-diagnostic! st)
-    "Jump to the previous diagnostic span, moving across files when needed."
+    "Jump to the previous diagnostic in project/open files."
+    (let scope = (%diagnostic-scope st))
+    (lisp (-> Void) (st scope)
+      (mine/app/diagnostics:jump-adjacent-diagnostic st -1 scope)
+      (cl:values)))
+
+  (declare jump-next-diagnostic-global! (MineState -> Void))
+  (define (jump-next-diagnostic-global! st)
+    "Jump to the next diagnostic across all files."
+    (lisp (-> Void) (st)
+      (mine/app/diagnostics:jump-adjacent-diagnostic st 1)
+      (cl:values)))
+
+  (declare jump-prev-diagnostic-global! (MineState -> Void))
+  (define (jump-prev-diagnostic-global! st)
+    "Jump to the previous diagnostic across all files."
     (lisp (-> Void) (st)
       (mine/app/diagnostics:jump-adjacent-diagnostic st -1)
       (cl:values)))
@@ -2574,10 +2615,14 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       (#\. (jump-to-definition! st))
       ;; Alt+, -> jump back
       (#\, (jump-back! st))
-      ;; Alt+[ -> previous diagnostic
+      ;; Alt+[ -> previous diagnostic (project/open files)
       (#\[ (jump-prev-diagnostic! st))
-      ;; Alt+] -> next diagnostic
+      ;; Alt+] -> next diagnostic (project/open files)
       (#\] (jump-next-diagnostic! st))
+      ;; Alt+{ -> previous diagnostic (all files)
+      (#\{ (jump-prev-diagnostic-global! st))
+      ;; Alt+} -> next diagnostic (all files)
+      (#\} (jump-next-diagnostic-global! st))
       (_ (values))))
 
 ;;; Event handling -- REPL keys
