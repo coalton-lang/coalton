@@ -83,15 +83,20 @@ in a package matching SYSTEM-NAME."
         coalton:False)
     (cl:error () coalton:False)))
 
-;;; Mach-O code signature patching
+;;; Code signature patching (macOS + Windows)
 ;;;
 ;;; When Build Executable runs from the mine-app sidecar, save-lisp-and-die
-;;; copies the sidecar's runtime — including its developer code signature
-;;; (Tauri-signed, hardened runtime).  The appended core data invalidates
-;;; the signature, causing SIGKILL on ARM64 macOS.  We patch the output's
-;;; CodeDirectory flags to CS_ADHOC and zero the CMS blob, producing a
-;;; valid ad-hoc-signed executable.  Page hashes remain correct because
-;;; they cover only the runtime (unchanged by the appended core).
+;;; copies the sidecar's runtime — including its code signature.  The
+;;; appended core data invalidates the signature.
+;;;
+;;; macOS: Tauri signs with a developer certificate + hardened runtime.
+;;; The invalid signature causes SIGKILL on ARM64.  We patch CodeDirectory
+;;; flags to CS_ADHOC and zero the CMS blob.  Page hashes remain valid
+;;; because they cover only the runtime (unchanged by the appended core).
+;;;
+;;; Windows: Tauri signs with Authenticode.  The invalid signature causes
+;;; "not a valid Win32 application" errors.  We zero the PE Security
+;;; Directory entry and CheckSum to strip the signature entirely.
 
 (cl:defun %read-u32-le (stream offset)
   (cl:file-position stream offset)
@@ -106,6 +111,13 @@ in a package matching SYSTEM-NAME."
              (cl:ash (cl:read-byte stream) 16)
              (cl:ash (cl:read-byte stream) 8)
              (cl:read-byte stream)))
+
+(cl:defun %write-u32-le (stream offset value)
+  (cl:file-position stream offset)
+  (cl:write-byte (cl:logand value #xFF) stream)
+  (cl:write-byte (cl:logand (cl:ash value -8) #xFF) stream)
+  (cl:write-byte (cl:logand (cl:ash value -16) #xFF) stream)
+  (cl:write-byte (cl:logand (cl:ash value -24) #xFF) stream))
 
 (cl:defun %write-u32-be (stream offset value)
   (cl:file-position stream offset)
@@ -156,22 +168,43 @@ in a package matching SYSTEM-NAME."
         (cl:incf cmd-offset cmdsize)))
     cl:nil))
 
+(cl:defun %patch-pe-codesig (f)
+  "Strip the Authenticode signature from a PE binary in stream F."
+  (cl:let* ((e-lfanew (%read-u32-le f #x3C))
+            (pe-sig (%read-u32-le f e-lfanew)))
+    (cl:unless (cl:= pe-sig #x00004550) ; "PE\0\0"
+      (cl:return-from %patch-pe-codesig cl:nil))
+    (cl:let* ((opt-hdr (cl:+ e-lfanew 24))
+              (opt-magic (cl:logand (%read-u32-le f opt-hdr) #xFFFF))
+              (dd-offset (cl:cond
+                           ((cl:= opt-magic #x020B) (cl:+ opt-hdr 112)) ; PE32+
+                           ((cl:= opt-magic #x010B) (cl:+ opt-hdr 96))  ; PE32
+                           (cl:t (cl:return-from %patch-pe-codesig cl:nil))))
+              (sec-dir (cl:+ dd-offset 32))) ; Data Directory index 4
+      ;; Zero Security Directory entry (VirtualAddress + Size)
+      (%write-u32-le f sec-dir 0)
+      (%write-u32-le f (cl:+ sec-dir 4) 0)
+      ;; Zero PE CheckSum (offset 64 in Optional Header)
+      (%write-u32-le f (cl:+ opt-hdr 64) 0)
+      cl:t)))
+
 (cl:defun %patch-macho-codesig (path)
-  "Patch the Mach-O code signature in PATH to ad-hoc.
-On ARM64 macOS, executables need a valid code signature.  When Build
-Executable runs from the mine-app sidecar, save-lisp-and-die copies the
-sidecar's developer signature, which the appended core data invalidates.
-This rewrites CodeDirectory flags to CS_ADHOC and zeros the CMS blob."
+  "Patch the code signature in the executable at PATH.
+On macOS, rewrites CodeDirectory flags to CS_ADHOC and zeros the CMS blob.
+On Windows, strips the Authenticode signature by zeroing the PE Security
+Directory entry and CheckSum."
   (cl:declare (cl:ignorable path))
-  #+darwin
+  #+(or darwin win32)
   (cl:handler-case
       (cl:with-open-file (f path :direction :io
                                   :element-type '(cl:unsigned-byte 8)
                                   :if-exists :overwrite)
         (cl:let ((magic (%read-u32-le f 0)))
           (cl:cond
+            #+darwin
             ((cl:= magic #xFEEDFACF)
              (%patch-thin-macho-codesig f 0))
+            #+darwin
             ((cl:= magic #xBEBAFECA)
              (cl:let ((nfat (%read-u32-be f 4)))
                (cl:dotimes (i nfat)
@@ -179,7 +212,10 @@ This rewrites CodeDirectory flags to CS_ADHOC and zeros the CMS blob."
                            (arch-offset (%read-u32-be f (cl:+ fa-base 8)))
                            (slice-magic (%read-u32-le f arch-offset)))
                    (cl:when (cl:= slice-magic #xFEEDFACF)
-                     (%patch-thin-macho-codesig f arch-offset)))))))))
+                     (%patch-thin-macho-codesig f arch-offset))))))
+            #+win32
+            ((cl:= (cl:logand magic #xFFFF) #x5A4D)
+             (%patch-pe-codesig f)))))
     (cl:error (c)
       (cl:format cl:*error-output*
                  "~&;; Warning: could not patch code signature: ~A~%" c)
