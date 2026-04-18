@@ -83,6 +83,7 @@
    #:safe-eval
    #:eval-in-package
    #:debug-eval
+   #:compile-string-source-prefix
    #:debug-compile-string))
 
 (defpackage #:mine/runtime/introspect

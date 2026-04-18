@@ -132,6 +132,11 @@ Returns (values result-string output-string) on success."
       (values (%encode-result-values result-values pkg)
               all-output))))
 
+(defun compile-string-source-prefix (package-name)
+  "Return the exact source prefix written ahead of debug-compile-string input."
+  (let ((pkg (find-or-make-package package-name)))
+    (format nil "(in-package ~S)~%" (package-name pkg))))
+
 (defun debug-compile-string (form-string package-name &optional wire-stream msg-id coalton-p)
   "Compile FORM-STRING via compile-file + load for correct eval-when semantics.
 Lets errors propagate to the caller's handler-bind (for debugger support).
@@ -142,6 +147,7 @@ Returns (values result-string output-string) on success.
 Unlike debug-eval, this preserves toplevel form semantics but does not
 return expression values (load returns T)."
   (let* ((pkg (find-or-make-package package-name))
+         (file-prefix (compile-string-source-prefix package-name))
          (stdout-capture (make-string-output-stream))
          (stderr-capture (make-string-output-stream))
          (tis (when wire-stream
@@ -153,7 +159,7 @@ return expression values (load returns T)."
                                 :pathname tmp-path
                                 :type (if coalton-p "ct" "lisp")
                                 :direction :output)
-      (format tmp-stream "(in-package ~S)~%" (package-name pkg))
+      (write-string file-prefix tmp-stream)
       (write-string form-string tmp-stream)
       :close-stream
       (let* ((*standard-output* (if tis
