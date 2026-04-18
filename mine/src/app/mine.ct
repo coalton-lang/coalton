@@ -2103,10 +2103,19 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                       ((Some p) p) ((None) "")))
     (let system-name = (match (cell:read (.ms-project-system st))
                          ((Some s) s) ((None) "")))
-    (let log-path = "/tmp/mine-build.log")
+    (let default-output =
+      (lisp (-> String) (asd-path system-name)
+        (cl:if (cl:string= asd-path "")
+               system-name
+               (cl:let ((dir (cl:directory-namestring asd-path)))
+                 (cl:concatenate 'cl:string dir system-name
+                                 #+win32 ".exe" #-win32 "")))))
+    (let log-path =
+      (lisp (-> String) ()
+        (cl:format cl:nil "~Amine-build.log" (uiop:temporary-directory))))
     (let default-entry = (build:guess-entry-point asd-path system-name))
     (render-app st term)
-    (match (dialogs:build-form-dialog term asd-path system-name log-path default-entry "2048")
+    (match (dialogs:build-form-dialog term asd-path default-output log-path default-entry "2048")
       ((Some (Tuple (Tuple asd output) (Tuple logf (Tuple entry heap))))
        (cond
          ((== entry "")

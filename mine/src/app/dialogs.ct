@@ -9,7 +9,8 @@
    (#:wt #:mine/widget/types)
    (#:render #:mine/widget/render)
    (#:widget-input #:mine/widget/input)
-   (#:cfgt #:mine/config/types))
+   (#:cfgt #:mine/config/types)
+   (#:comp #:mine/app/completion))
   (:export
    #:handle-dialog-resize!
    #:wait-for-dismiss
@@ -612,8 +613,28 @@ Handles terminal resize by calling REDRAW-FN."
     (match ev
       ;; Escape -> cancel
       ((input:IEvKey (input:KeyEscape) _) None)
-      ;; Tab -> next field
-      ((input:IEvKey (input:KeyTab) _) (recur next-field))
+      ;; Tab -> path completion on fields 0-2, next field otherwise
+      ((input:IEvKey (input:KeyTab) _)
+       (cond
+         ((== field-idx 0)
+          (let text = (widget-input:input-widget-text iw0))
+          (match (comp:complete-project-path text)
+            ((Tuple completed _)
+             (widget-input:input-widget-set-text! iw0 completed)
+             (recur field-idx))))
+         ((== field-idx 1)
+          (let text = (widget-input:input-widget-text iw1))
+          (match (comp:complete-file-path text)
+            ((Tuple completed _)
+             (widget-input:input-widget-set-text! iw1 completed)
+             (recur field-idx))))
+         ((== field-idx 2)
+          (let text = (widget-input:input-widget-text iw2))
+          (match (comp:complete-file-path text)
+            ((Tuple completed _)
+             (widget-input:input-widget-set-text! iw2 completed)
+             (recur field-idx))))
+         (True (recur next-field))))
       ;; Down -> next field
       ((input:IEvKey (input:KeyDown) _)
        (if (< field-idx 5) (recur (+ field-idx 1)) (recur field-idx)))
