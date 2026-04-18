@@ -1984,6 +1984,13 @@ Uses the preceding (in-package ...) form to determine the compilation package."
              (cl:or (sb-ext:process-exit-code proc) 1))))
        (cond
          ((== exit-code 0)
+          ;; Patch the Mach-O code signature to ad-hoc.  save-lisp-and-die
+          ;; copies the build binary's signature verbatim; when run from
+          ;; the mine-app sidecar (Tauri-signed), the appended core data
+          ;; invalidates the developer signature on ARM64 macOS.
+          (lisp (-> Void) (output-path)
+            (mine/app/build::%patch-macho-codesig output-path)
+            (cl:values))
           (status:statusbar-set-message! (.ms-status st)
                                          (<> "Build succeeded: " output-path)))
          (True
