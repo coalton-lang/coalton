@@ -83,6 +83,108 @@ in a package matching SYSTEM-NAME."
         coalton:False)
     (cl:error () coalton:False)))
 
+;;; Mach-O code signature patching
+;;;
+;;; When Build Executable runs from the mine-app sidecar, save-lisp-and-die
+;;; copies the sidecar's runtime — including its developer code signature
+;;; (Tauri-signed, hardened runtime).  The appended core data invalidates
+;;; the signature, causing SIGKILL on ARM64 macOS.  We patch the output's
+;;; CodeDirectory flags to CS_ADHOC and zero the CMS blob, producing a
+;;; valid ad-hoc-signed executable.  Page hashes remain correct because
+;;; they cover only the runtime (unchanged by the appended core).
+
+(cl:defun %read-u32-le (stream offset)
+  (cl:file-position stream offset)
+  (cl:logior (cl:read-byte stream)
+             (cl:ash (cl:read-byte stream) 8)
+             (cl:ash (cl:read-byte stream) 16)
+             (cl:ash (cl:read-byte stream) 24)))
+
+(cl:defun %read-u32-be (stream offset)
+  (cl:file-position stream offset)
+  (cl:logior (cl:ash (cl:read-byte stream) 24)
+             (cl:ash (cl:read-byte stream) 16)
+             (cl:ash (cl:read-byte stream) 8)
+             (cl:read-byte stream)))
+
+(cl:defun %write-u32-be (stream offset value)
+  (cl:file-position stream offset)
+  (cl:write-byte (cl:logand (cl:ash value -24) #xFF) stream)
+  (cl:write-byte (cl:logand (cl:ash value -16) #xFF) stream)
+  (cl:write-byte (cl:logand (cl:ash value -8) #xFF) stream)
+  (cl:write-byte (cl:logand value #xFF) stream))
+
+(cl:defun %patch-thin-macho-codesig (f base-offset)
+  "Patch code signature in a thin 64-bit Mach-O at BASE-OFFSET in stream F."
+  (cl:let* ((ncmds (%read-u32-le f (cl:+ base-offset 16)))
+            (cmd-offset (cl:+ base-offset 32)))
+    (cl:dotimes (i ncmds)
+      (cl:let* ((cmd (%read-u32-le f cmd-offset))
+                (cmdsize (%read-u32-le f (cl:+ cmd-offset 4))))
+        (cl:when (cl:= cmd #x1D)
+          (cl:let* ((dataoff (%read-u32-le f (cl:+ cmd-offset 8)))
+                    (sig-start (cl:+ base-offset dataoff))
+                    (sb-magic (%read-u32-be f sig-start)))
+            (cl:when (cl:= sb-magic #xFADE0CC0)
+              (cl:let ((sb-count (%read-u32-be f (cl:+ sig-start 8))))
+                (cl:dotimes (j sb-count)
+                  (cl:let* ((entry-base (cl:+ sig-start 12 (cl:* j 8)))
+                            (entry-type (%read-u32-be f entry-base))
+                            (entry-offset (%read-u32-be f (cl:+ entry-base 4)))
+                            (blob-start (cl:+ sig-start entry-offset)))
+                    (cl:cond
+                      ;; CodeDirectory: primary (0) or alternate (0x1000-0x1005)
+                      ((cl:or (cl:= entry-type 0)
+                              (cl:and (cl:>= entry-type #x1000)
+                                      (cl:<= entry-type #x1005)))
+                       (cl:when (cl:= (%read-u32-be f blob-start) #xFADE0C02)
+                         (%write-u32-be f (cl:+ blob-start 12) #x00000002)))
+                      ;; CMS signature (0x10000) — zero it out
+                      ((cl:= entry-type #x10000)
+                       (cl:let ((blob-len (%read-u32-be f (cl:+ blob-start 4))))
+                         (cl:when (cl:plusp blob-len)
+                           (cl:file-position f blob-start)
+                           (cl:let* ((zeros (cl:make-array (cl:min blob-len 8192)
+                                                           :element-type '(cl:unsigned-byte 8)
+                                                           :initial-element 0))
+                                     (remaining blob-len))
+                             (cl:loop :while (cl:plusp remaining)
+                                      :for n = (cl:min remaining (cl:length zeros))
+                                      :do (cl:write-sequence zeros f :end n)
+                                          (cl:decf remaining n))))))))))))
+          (cl:return-from %patch-thin-macho-codesig cl:t))
+        (cl:incf cmd-offset cmdsize)))
+    cl:nil))
+
+(cl:defun %patch-macho-codesig (path)
+  "Patch the Mach-O code signature in PATH to ad-hoc.
+On ARM64 macOS, executables need a valid code signature.  When Build
+Executable runs from the mine-app sidecar, save-lisp-and-die copies the
+sidecar's developer signature, which the appended core data invalidates.
+This rewrites CodeDirectory flags to CS_ADHOC and zeros the CMS blob."
+  (cl:declare (cl:ignorable path))
+  #+darwin
+  (cl:handler-case
+      (cl:with-open-file (f path :direction :io
+                                  :element-type '(cl:unsigned-byte 8)
+                                  :if-exists :overwrite)
+        (cl:let ((magic (%read-u32-le f 0)))
+          (cl:cond
+            ((cl:= magic #xFEEDFACF)
+             (%patch-thin-macho-codesig f 0))
+            ((cl:= magic #xBEBAFECA)
+             (cl:let ((nfat (%read-u32-be f 4)))
+               (cl:dotimes (i nfat)
+                 (cl:let* ((fa-base (cl:+ 8 (cl:* i 20)))
+                           (arch-offset (%read-u32-be f (cl:+ fa-base 8)))
+                           (slice-magic (%read-u32-le f arch-offset)))
+                   (cl:when (cl:= slice-magic #xFEEDFACF)
+                     (%patch-thin-macho-codesig f arch-offset)))))))))
+    (cl:error (c)
+      (cl:format cl:*error-output*
+                 "~&;; Warning: could not patch code signature: ~A~%" c)
+      cl:nil)))
+
 ;;; CL-side: generate a build script
 
 (cl:defun %write-build-script-cl (asd-path output-path entry-point)
