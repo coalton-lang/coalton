@@ -211,7 +211,8 @@
     (ms-debugger-scroll   (Cell UFix)) ;; 41 -- debugger body scroll offset (in display lines)
     (ms-debugger-body-h   (Cell UFix)) ;; 42 -- cached debugger body height (rows) from last render
     (ms-debugger-total    (Cell UFix)) ;; 43 -- cached debugger total line count from last render
-    (ms-debugger-follow   (Cell Boolean))) ;; 44 -- scroll to keep selection visible on next render
+    (ms-debugger-follow   (Cell Boolean)) ;; 44 -- scroll to keep selection visible on next render
+    (ms-beam-request-id   (Cell (Optional msg:RequestId)))) ;; 45 -- id of pending Beam Project request, if any
 
 ;;; Named accessors for CL interop (avoids fragile numeric indices)
 
@@ -1365,15 +1366,27 @@ multiple values get 0>, 1>, etc."
     (match msg
       ((ProtoReturn request-id text is-error)
        (let texts = (%decode-result-values text))
+       (let is-my-request = (match (cell:read (.ms-active-request st))
+                              ((Some active-id) (== active-id request-id))
+                              ((None) False)))
+       (let beam-was-pending = (match (cell:read (.ms-beam-request-id st))
+                                 ((Some beam-id) (== beam-id request-id))
+                                 ((None) False)))
        (cond
          (is-error
           (match texts
             ((Cons err-text _) (%append-error-lines! st err-text))
-            ((Nil) (%append-error-lines! st ""))))
+            ((Nil) (%append-error-lines! st "")))
+          (when beam-was-pending
+            (repl:repl-pane-append-system! (.ms-repl st) ";; Beaming failed.")))
+         (beam-was-pending
+          (repl:repl-pane-append-system! (.ms-repl st) ";; Beaming complete."))
          ((== (list:length texts) 0)
           (repl:repl-pane-append-system! (.ms-repl st) ";; No values returned"))
          (True
           (%append-result-lines! st texts)))
+       (when beam-was-pending
+         (cell:write! (.ms-beam-request-id st) None))
        ;; Record timing
        (let start-time = (cell:read (.ms-eval-start-time st)))
        (let elapsed = (lisp (-> String) (start-time)
@@ -1383,9 +1396,7 @@ multiple values get 0>, 1>, etc."
                                   (cl:round (cl:/ (cl:- end-time start-time)
                                                   cl:internal-time-units-per-second)))
                                  ""))))
-       (when (match (cell:read (.ms-active-request st))
-               ((Some active-id) (== active-id request-id))
-               ((None) False))
+       (when is-my-request
          (cell:write! (.ms-repl-timing st) elapsed)
          (cell:write! (.ms-repl-busy st) False)
          (cell:write! (.ms-busy-activity st) None)
@@ -1421,6 +1432,7 @@ multiple values get 0>, 1>, etc."
            (repl:repl-pane-append-system! (.ms-repl st) ";; REPL process ended. Type ,restart to start a new one."))
        (cell:write! (.ms-repl-busy st) False)
        (cell:write! (.ms-busy-activity st) None)
+       (cell:write! (.ms-beam-request-id st) None)
        (cell:write! (.ms-active-request st) None)
        (when (cell:read (.ms-debugger-active st))
          (cell:write! (.ms-debugger-active st) False)
@@ -1453,8 +1465,8 @@ Uses a dedicated Beam request so diagnostics can stream independently."
        (let asd-path = (match (cell:read (.ms-project-asd-path st))
                          ((Some path) path)
                          ((None) "")))
-	       (repl:repl-pane-append-output! (.ms-repl st)
-	                                      (<> ";; Loading system " sys-name))
+	       (repl:repl-pane-append-system! (.ms-repl st)
+	                                      (<> ";; Beaming project " (<> sys-name "...")))
 	       (lisp (-> Void) ()
 	         (mine/app/diagnostics:clear-all-diagnostics)
 	         (mine/app/diagnostics:clear-compile-file-remap)
@@ -1469,6 +1481,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
           (start-proto-reader! st conn)
           (let req-id = (next-request-id! st))
           (cell:write! (.ms-active-request st) (Some req-id))
+          (cell:write! (.ms-beam-request-id st) (Some req-id))
           (%track-diagnostic-request! req-id)
           (let req = (msg:ReqBeamSystem req-id sys-name asd-path))
           (client:connection-send! conn req)
@@ -1676,6 +1689,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
       (cell:write! (.ms-debugger-active st) False)
       (cell:write! (.ms-repl-busy st) False)
       (cell:write! (.ms-busy-activity st) None)
+      (cell:write! (.ms-beam-request-id st) None)
       (cell:write! (.ms-active-request st) None)
       (lifecycle:runtime-stop! (.ms-runtime st))
       (lifecycle:runtime-start! (.ms-runtime st))
@@ -4372,7 +4386,8 @@ Render-app is NOT called here; the main loop handles rendering."
                          (cell:new 0)
                          (cell:new 0)
                          (cell:new 0)
-                         (cell:new True)))
+                         (cell:new True)
+                         (cell:new None)))
     ;; Open a file if given on the command line
     (let file-args = (filter (fn (a) (not (str:substring? "--" a))) (list:cdr args)))
     (match file-args
