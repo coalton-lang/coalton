@@ -56,12 +56,12 @@
     ;; Global
     (screen:screen-set-string scr (%scroll-row 4 scroll) 3 "Global" heading)
     (help-line scr (%scroll-row 5 scroll) key-s desc-s "F1-F6" "Open menus (Mine, File, Editor, REPL, Project, Site)")
-    (help-line scr (%scroll-row 6 scroll) key-s desc-s "Ctrl+R" "Open/focus REPL, maximize when focused")
-    (help-line scr (%scroll-row 7 scroll) key-s desc-s "Ctrl+E" "Focus editor, maximize when focused")
-    (help-line scr (%scroll-row 8 scroll) key-s desc-s "Ctrl+T" "Expand file tree / open files panel")
+    (help-line scr (%scroll-row 6 scroll) key-s desc-s "Ctrl+r" "Open/focus REPL, maximize when focused")
+    (help-line scr (%scroll-row 7 scroll) key-s desc-s "Ctrl+e" "Focus editor, maximize when focused")
+    (help-line scr (%scroll-row 8 scroll) key-s desc-s "Ctrl+t" "Expand file tree / open files panel")
     (help-line scr (%scroll-row 9 scroll) key-s desc-s "Ctrl+1-9" "Switch to open file by number")
-    (help-line scr (%scroll-row 10 scroll) key-s desc-s "Ctrl+Q" "Quit")
-    (help-line scr (%scroll-row 11 scroll) key-s desc-s "Esc / Ctrl+G" "Cancel / refresh terminal")
+    (help-line scr (%scroll-row 10 scroll) key-s desc-s "Ctrl+q" "Quit")
+    (help-line scr (%scroll-row 11 scroll) key-s desc-s "Esc / Ctrl+g" "Cancel / refresh terminal")
     (help-line scr (%scroll-row 12 scroll) key-s desc-s "Mouse click" "Switch pane focus")
     ;; Editor
     (screen:screen-set-string scr (%scroll-row 14 scroll) 3 "Editor" heading)
@@ -70,24 +70,24 @@
     (help-line scr (%scroll-row 17 scroll) key-s desc-s "PgUp / PgDn" "Scroll half screen")
     (help-line scr (%scroll-row 18 scroll) key-s desc-s "Enter" "Newline + auto-indent")
     (help-line scr (%scroll-row 19 scroll) key-s desc-s "Tab" "Reindent line (Lisp/Coalton)")
-    (help-line scr (%scroll-row 20 scroll) key-s desc-s "Ctrl+O" "New/open file")
-    (help-line scr (%scroll-row 21 scroll) key-s desc-s "Ctrl+S" "Save file")
-    (help-line scr (%scroll-row 22 scroll) key-s desc-s "Ctrl+W" "Close file")
-    (help-line scr (%scroll-row 23 scroll) key-s desc-s "Ctrl+F" "Find in file")
-    (help-line scr (%scroll-row 24 scroll) key-s desc-s "Ctrl+C" "Copy selection")
-    (help-line scr (%scroll-row 25 scroll) key-s desc-s "Ctrl+X" "Cut selection")
-    (help-line scr (%scroll-row 26 scroll) key-s desc-s "Ctrl+V" "Paste clipboard")
-    (help-line scr (%scroll-row 27 scroll) key-s desc-s "Ctrl+Z" "Undo")
+    (help-line scr (%scroll-row 20 scroll) key-s desc-s "Ctrl+o" "New/open file")
+    (help-line scr (%scroll-row 21 scroll) key-s desc-s "Ctrl+s" "Save file")
+    (help-line scr (%scroll-row 22 scroll) key-s desc-s "Ctrl+w" "Close file")
+    (help-line scr (%scroll-row 23 scroll) key-s desc-s "Ctrl+f" "Find in file")
+    (help-line scr (%scroll-row 24 scroll) key-s desc-s "Ctrl+c" "Copy selection")
+    (help-line scr (%scroll-row 25 scroll) key-s desc-s "Ctrl+x" "Cut selection")
+    (help-line scr (%scroll-row 26 scroll) key-s desc-s "Ctrl+v" "Paste clipboard")
+    (help-line scr (%scroll-row 27 scroll) key-s desc-s "Ctrl+z" "Undo")
     (help-line scr (%scroll-row 28 scroll) key-s desc-s "Ctrl+Space" "Toggle selection")
-    (help-line scr (%scroll-row 29 scroll) key-s desc-s "Alt+K" "Beam file to REPL")
-    (help-line scr (%scroll-row 30 scroll) key-s desc-s "Alt+C" "Beam form at cursor")
+    (help-line scr (%scroll-row 29 scroll) key-s desc-s "Alt+k" "Beam file to REPL")
+    (help-line scr (%scroll-row 30 scroll) key-s desc-s "Alt+c" "Beam form at cursor")
     (help-line scr (%scroll-row 31 scroll) key-s desc-s "Alt+." "Jump to definition")
     (help-line scr (%scroll-row 32 scroll) key-s desc-s "Alt+," "Jump back")
     (help-line scr (%scroll-row 33 scroll) key-s desc-s "Alt+[" "Previous diagnostic (project)")
     (help-line scr (%scroll-row 34 scroll) key-s desc-s "Alt+]" "Next diagnostic (project)")
     (help-line scr (%scroll-row 35 scroll) key-s desc-s "Alt+{" "Previous diagnostic (all)")
     (help-line scr (%scroll-row 36 scroll) key-s desc-s "Alt+}" "Next diagnostic (all)")
-    (help-line scr (%scroll-row 37 scroll) key-s desc-s "Ctrl+P" "Toggle structural editing")
+    (help-line scr (%scroll-row 37 scroll) key-s desc-s "Ctrl+p" "Toggle structural editing")
     ;; Structural Editing
     (screen:screen-set-string scr (%scroll-row 39 scroll) 3 "Structural Editing" heading)
     (screen:screen-set-string scr (%scroll-row 40 scroll) 5
@@ -97,7 +97,7 @@
     (help-line scr (%scroll-row 42 scroll) key-s desc-s "Backspace" "Balanced delete")
     (help-line scr (%scroll-row 43 scroll) key-s desc-s "Ctrl+Left / Ctrl+Right" "Backward / forward word")
     (help-line scr (%scroll-row 44 scroll) key-s desc-s "Ctrl+Backspace" "Backward word delete")
-    (help-line scr (%scroll-row 45 scroll) key-s desc-s "Alt+F / Alt+B" "Forward / backward sexp")
+    (help-line scr (%scroll-row 45 scroll) key-s desc-s "Alt+f / Alt+b" "Forward / backward sexp")
     (help-line scr (%scroll-row 46 scroll) key-s desc-s "Alt+Left / Alt+Right" "Forward barf / slurp")
     (help-line scr (%scroll-row 47 scroll) key-s desc-s "Alt+Up / Alt+Down" "Splice / cleave")
     ;; Tree
@@ -130,6 +130,16 @@
     (render:fill-rect scr (wt:Rect 0 footer-y cols 1) #\Space bg)
     (screen:screen-set-string scr footer-y 3 "Up/Down to scroll, Enter to close"
       (color:Style color:text-dimmer-fg color:panel-bg color:AttrItalic))
+    ;; Scrollbar on right edge (above footer)
+    (let track-s = (color:Style color:scrollbar-track-fg
+                                color:scrollbar-track-bg
+                                color:AttrNone))
+    (let thumb-s = (color:Style color:scrollbar-thumb-fg
+                                color:scrollbar-track-bg
+                                color:AttrNone))
+    (let sb-col = (if (> cols 0) (- cols 1) 0))
+    (let sb-h = (if (> rows 1) (- rows 1) 0))
+    (render:draw-scrollbar scr sb-col 0 sb-h 72 scroll track-s thumb-s)
     (values))
 
   ;;; Scroll loop
@@ -184,7 +194,7 @@
   (declare show-help! (term:Terminal -> Boolean))
   (define (show-help! term)
     "Show keybindings help overlay, scrollable, dismiss on Enter.
-Returns True if the user pressed Ctrl+Q to quit."
+Returns True if the user pressed Ctrl+q to quit."
     (let scr = (term:.terminal-screen term))
     (%draw-help-content scr (term:terminal-cols term) (term:terminal-rows term) 0)
     (%help-scroll-loop term 0)))

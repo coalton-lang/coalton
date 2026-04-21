@@ -171,7 +171,7 @@
 
   (declare %exit-key? (input:InputEvent -> Boolean))
   (define (%exit-key? ev)
-    "True if the event is Ctrl+C, Ctrl+D, Ctrl+Q, or Ctrl+G."
+    "True if the event is Ctrl+c, Ctrl+d, Ctrl+q, or Ctrl+g."
     (match ev
       ((input:IEvKey (input:KeyCtrl #\c) _) True)
       ((input:IEvKey (input:KeyCtrl #\d) _) True)
@@ -728,10 +728,10 @@
     (let line-alt = "Alt in your terminal's settings. Copy and paste")
     (draw-centered scr (+ r10 1) line-alt style-dim)
     (%overlay-bold scr (+ r10 1) line-alt 0 "Alt")
-    (let line-ctrl = "use Ctrl+C and Ctrl+V, not the Command key.")
+    (let line-ctrl = "use Ctrl+c and Ctrl+v, not the Command key.")
     (draw-centered scr (+ r10 2) line-ctrl style-dim)
-    (%overlay-bold scr (+ r10 2) line-ctrl 4 "Ctrl+C")
-    (%overlay-bold scr (+ r10 2) line-ctrl 15 "Ctrl+V")
+    (%overlay-bold scr (+ r10 2) line-ctrl 4 "Ctrl+c")
+    (%overlay-bold scr (+ r10 2) line-ctrl 15 "Ctrl+v")
     ;; Hint
     (draw-centered scr (+ r10 4) "Press any key." style-italic))
 
@@ -824,7 +824,7 @@
                         "parentheses. This is the more efficient editing"
                         "mode preferred by Lisp programmers."
                         ""
-                        "You can toggle this at any time with Ctrl+P."
+                        "You can toggle this at any time with Ctrl+p."
                         "Try the built-in lessons: Editor > Structural Lessons.")
                        (make-list "Yes" "No")
                        0))

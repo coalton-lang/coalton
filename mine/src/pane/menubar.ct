@@ -12,7 +12,7 @@
    (#:list #:coalton/list))
   (:export
    #:MenuAction
-   #:ActionHelp #:ActionLesson #:ActionAbout #:ActionQuit
+   #:ActionHelp #:ActionLesson #:ActionAbout #:ActionCredits #:ActionQuit
    #:ActionOpenProject #:ActionBeamSystem #:ActionRefreshProject #:ActionCloseProject
    #:ActionBuildExecutable
    #:ActionOpenFile #:ActionSave #:ActionSaveAll #:ActionCloseFile
@@ -49,6 +49,7 @@
     ActionHelp
     ActionLesson
     ActionAbout
+    ActionCredits
     ActionQuit
     ActionOpenProject
     ActionBeamSystem
@@ -102,7 +103,8 @@
     (MenuDef "mine" (make-list
       (MenuItem "Help"      "" ActionHelp)
       (MenuItem "About"     "" ActionAbout)
-      (MenuItem "Quit"      "Ctrl+Q" ActionQuit))))
+      (MenuItem "Credits"   "" ActionCredits)
+      (MenuItem "Quit"      "Ctrl+q" ActionQuit))))
 
   (declare %project-menu (Void -> MenuDef))
   (define (%project-menu)
@@ -118,30 +120,30 @@
   (declare %file-menu (Void -> MenuDef))
   (define (%file-menu)
     (MenuDef "File" (make-list
-      (MenuItem "New/Open..."  "Ctrl+O" ActionOpenFile)
-      (MenuItem "Save"     "Ctrl+S" ActionSave)
+      (MenuItem "New/Open..."  "Ctrl+o" ActionOpenFile)
+      (MenuItem "Save"     "Ctrl+s" ActionSave)
       (MenuItem "Save All" "" ActionSaveAll)
       (MenuItem "Close"    "" ActionCloseFile)
-      (MenuItem "Focus Tree"         "Ctrl+T" ActionOpenFiles))))
+      (MenuItem "Focus Tree"         "Ctrl+t" ActionOpenFiles))))
 
   (declare %edit-menu (Void -> MenuDef))
   (define (%edit-menu)
     (MenuDef "Editor" (make-list
-      (MenuItem "Find"               "Ctrl+F" ActionFind)
-      (MenuItem "Beam File"           "Alt+K" ActionBeamFile)
-      (MenuItem "Beam Form"           "Alt+C" ActionBeamForm)
+      (MenuItem "Find"               "Ctrl+f" ActionFind)
+      (MenuItem "Beam File"           "Alt+k" ActionBeamFile)
+      (MenuItem "Beam Form"           "Alt+c" ActionBeamForm)
       (MenuItem "Clear Diagnostics"   "" ActionClearDiagnostics)
       (MenuItem "Jump to Definition" "Alt+." ActionJumpToDefinition)
       (MenuItem "Jump Back"          "Alt+," ActionJumpBack)
-      (MenuItem "Focus/Maximize Editor" "Ctrl+E" ActionFocusEditor)
-      (MenuItem "Toggle Structural"  "Ctrl+P" ActionToggleStructural)
+      (MenuItem "Focus/Maximize Editor" "Ctrl+e" ActionFocusEditor)
+      (MenuItem "Toggle Structural"  "Ctrl+p" ActionToggleStructural)
       (MenuItem "Toggle Line Wrap"   "" ActionToggleLineWrap)
       (MenuItem "Structural Lessons"  "" ActionLesson))))
 
   (declare %repl-menu (Void -> MenuDef))
   (define (%repl-menu)
     (MenuDef "REPL" (make-list
-      (MenuItem "Show/Maximize" "Ctrl+R" ActionShowRepl)
+      (MenuItem "Show/Maximize" "Ctrl+r" ActionShowRepl)
       (MenuItem "Hide"       "" ActionHideRepl)
       (MenuItem "Interrupt"  "" ActionInterruptRepl)
       (MenuItem "Clear"      "" ActionClearRepl)
