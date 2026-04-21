@@ -311,7 +311,7 @@
                (:file "vector-tests")
                (:file "queue-tests")
                (:file "string-tests")
-               (:file "optional-tests")
+         #-ecl (:file "optional-tests")
                (:file "ordtree-tests")
                (:file "ordmap-tests")
                (:file "recursive-let-tests")

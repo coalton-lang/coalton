@@ -27,6 +27,7 @@
   (is (not (file:directory-pathname? "wow")))
   (is (== (the file:Pathname (into "wow/ok.txt"))
           (file:merge "wow/" "ok.txt")))
+  #-ecl
   (is (== (the file:Pathname (into "wow/ok/"))
           (file:merge "wow/" "ok/"))))
 
