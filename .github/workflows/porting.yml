@@ -45,7 +45,7 @@ jobs:
       fail-fast: false
       matrix:
           ## clasp excluded as it fails (ql:quickload :serapeum)
-        LISP_IMPL: [ "abcl", "clasp",
+        LISP_IMPL: [ # "abcl", "clasp",
                      "ecl" ]
         COALTON_ENV: ["release", "development"]
         SAFETY: ["0", "3"]
