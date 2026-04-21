@@ -12,7 +12,7 @@
 ;;; coalton-asdf and coalton-compiler live in their own .asd files.
 
 ;; coalton/doc uses packages that only work on sbcl/ccl
-#+(or sbcl ccl) (pushnew :coalton-with-doc *features*)
+#+(and (not :coalton-without-doc) (or sbcl ccl)) (pushnew :coalton-with-doc *features*)
 ;; abcl offers no TCE
 #-abcl (pushnew :coalton-env-has-tce *features*)
 
