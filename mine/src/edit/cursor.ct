@@ -18,7 +18,8 @@
    #:cursor-selection-anchor
    #:cursor-start-selection!
    #:cursor-clear-selection!
-   #:.pos))
+   #:.pos
+   #:.target-col))
 
 (in-package #:mine/edit/cursor)
 

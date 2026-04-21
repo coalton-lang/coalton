@@ -22,6 +22,7 @@
    #:ActionClearCache
    #:ActionSetupWizard
    #:ActionToggleStructural
+   #:ActionToggleLineWrap
    #:ActionOpenFiles
    #:ActionNewProject
    #:ActionAddFile #:ActionAddDependency
@@ -74,6 +75,7 @@
     ActionClearCache
     ActionSetupWizard
     ActionToggleStructural
+    ActionToggleLineWrap
     ActionOpenFiles
     ActionNewProject
     ActionAddFile
@@ -133,6 +135,7 @@
       (MenuItem "Jump Back"          "Alt+," ActionJumpBack)
       (MenuItem "Focus/Maximize Editor" "Ctrl+E" ActionFocusEditor)
       (MenuItem "Toggle Structural"  "Ctrl+P" ActionToggleStructural)
+      (MenuItem "Toggle Line Wrap"   "" ActionToggleLineWrap)
       (MenuItem "Structural Lessons"  "" ActionLesson))))
 
   (declare %repl-menu (Void -> MenuDef))
