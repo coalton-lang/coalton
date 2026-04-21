@@ -207,7 +207,11 @@
     (ms-io-request-data    NativeBox) ;; 37 -- (msg-id . stream) for IO response
     (ms-completion         complete:CompletionState) ;; 38 -- inline completion popup
     (ms-busy-activity     (Cell (Optional String))) ;; 39 -- named REPL activity, e.g. Beam
-    (ms-spinner           spinner:Spinner)) ;; 40 -- busy spinner
+    (ms-spinner           spinner:Spinner) ;; 40 -- busy spinner
+    (ms-debugger-scroll   (Cell UFix)) ;; 41 -- debugger body scroll offset (in display lines)
+    (ms-debugger-body-h   (Cell UFix)) ;; 42 -- cached debugger body height (rows) from last render
+    (ms-debugger-total    (Cell UFix)) ;; 43 -- cached debugger total line count from last render
+    (ms-debugger-follow   (Cell Boolean))) ;; 44 -- scroll to keep selection visible on next render
 
 ;;; Named accessors for CL interop (avoids fragile numeric indices)
 
@@ -258,6 +262,18 @@
 
   (declare get-debugger-selected-cell (MineState -> (Cell UFix)))
   (define (get-debugger-selected-cell st) (.ms-debugger-selected st))
+
+  (declare get-debugger-scroll-cell (MineState -> (Cell UFix)))
+  (define (get-debugger-scroll-cell st) (.ms-debugger-scroll st))
+
+  (declare get-debugger-body-h-cell (MineState -> (Cell UFix)))
+  (define (get-debugger-body-h-cell st) (.ms-debugger-body-h st))
+
+  (declare get-debugger-total-cell (MineState -> (Cell UFix)))
+  (define (get-debugger-total-cell st) (.ms-debugger-total st))
+
+  (declare get-debugger-follow-cell (MineState -> (Cell Boolean)))
+  (define (get-debugger-follow-cell st) (.ms-debugger-follow st))
 
   (declare get-conn-stream (MineState -> NativeBox))
   (define (get-conn-stream st) (.ms-debugger-conn-stream st))
@@ -1457,6 +1473,31 @@ Uses a dedicated Beam request so diagnostics can stream independently."
                       (%native-box-value (mine/app/mine::get-debugger-items st))
                       selected direction)))
     (cell:write! (.ms-debugger-selected st) new-sel)
+    (cell:write! (.ms-debugger-follow st) True)
+    (values))
+
+  (declare dbg-scroll-by! (MineState * IFix -> Void))
+  (define (dbg-scroll-by! st delta)
+    "Scroll the debugger body by DELTA lines (negative = up). Does not move selection."
+    (let cur = (cell:read (.ms-debugger-scroll st)))
+    (let total = (cell:read (.ms-debugger-total st)))
+    (let body-h = (cell:read (.ms-debugger-body-h st)))
+    (let max-scroll = (if (> total body-h) (- total body-h) 0))
+    (let new-scroll = (lisp (-> UFix) (cur delta max-scroll)
+                        (cl:max 0 (cl:min max-scroll (cl:+ cur delta)))))
+    (cell:write! (.ms-debugger-scroll st) new-scroll)
+    (cell:write! (.ms-debugger-follow st) False)
+    (values))
+
+  (declare dbg-set-scroll! (MineState * UFix -> Void))
+  (define (dbg-set-scroll! st offset)
+    "Set the debugger scroll to OFFSET, clamped to the valid range."
+    (let total = (cell:read (.ms-debugger-total st)))
+    (let body-h = (cell:read (.ms-debugger-body-h st)))
+    (let max-scroll = (if (> total body-h) (- total body-h) 0))
+    (let clamped = (if (> offset max-scroll) max-scroll offset))
+    (cell:write! (.ms-debugger-scroll st) clamped)
+    (cell:write! (.ms-debugger-follow st) False)
     (values))
 
   (declare dbg-selected-restart-idx (MineState -> Optional UFix))
@@ -3089,11 +3130,16 @@ Uses the preceding (in-package ...) form to determine the compilation package."
         (and (== center CenterEditorReplSplit)
              (>= _row split-repl-start)
              (< _row (+ split-repl-start split-repl-h))))
-       (if (< delta 0)
-           (repl:repl-pane-scroll-output-up! (.ms-repl st)
-                                             (lisp (-> UFix) (delta) (cl:- delta)))
-           (repl:repl-pane-scroll-output-down! (.ms-repl st)
-                                               (lisp (-> UFix) (delta) delta))))
+       (cond
+         ;; Debugger takes over the REPL area when active.
+         ((cell:read (.ms-debugger-active st))
+          (dbg-scroll-by! st delta))
+         ((< delta 0)
+          (repl:repl-pane-scroll-output-up! (.ms-repl st)
+                                            (lisp (-> UFix) (delta) (cl:- delta))))
+         (True
+          (repl:repl-pane-scroll-output-down! (.ms-repl st)
+                                              (lisp (-> UFix) (delta) delta)))))
       ;; Scroll in editor
       ((> editor-h 0)
        (let cur = (editor:editor-pane-scroll-row (.ms-editor st)))
@@ -3175,27 +3221,50 @@ Uses the preceding (in-package ...) form to determine the compilation package."
             ((None) (values)))
           True)
          ((== center CenterEditorReplSplit)
-          (let repl-output-h = (if (> split-repl-h 1) (- split-repl-h 1) 0))
-          (if (and (>= rel-y split-repl-start) (< rel-y (+ split-repl-start repl-output-h)))
-              (progn
+          (cond
+            ;; Debugger occupies the REPL area; map click to debugger body.
+            ((and (cell:read (.ms-debugger-active st))
+                  (and (>= rel-y (+ split-repl-start 1))
+                       (< rel-y (+ split-repl-start (- split-repl-h 1)))))
+             (let body-rel = (- rel-y (+ split-repl-start 1)))
+             (let body-h = (cell:read (.ms-debugger-body-h st)))
+             (let total = (cell:read (.ms-debugger-total st)))
+             (when (> total body-h)
+               (dbg-set-scroll! st (%scrollbar-compute-offset body-rel total body-h)))
+             True)
+            (True
+             (let repl-output-h = (if (> split-repl-h 1) (- split-repl-h 1) 0))
+             (cond
+               ((and (>= rel-y split-repl-start) (< rel-y (+ split-repl-start repl-output-h)))
                 (let repl-rel-y = (- rel-y split-repl-start))
                 (let total = (repl:repl-pane-output-line-count (.ms-repl st)))
                 (when (> total repl-output-h)
                   (repl:repl-pane-set-output-scroll! (.ms-repl st)
                                                      (%scrollbar-compute-offset repl-rel-y total repl-output-h)))
                 True)
-              False))
+               (True False)))))
          ((== center CenterReplFull)
           (let repl-h = (if (> middle-h 1) (- middle-h 1) 1))
-          (let repl-output-h = (if (> repl-h 1) (- repl-h 1) 0))
-          (if (and (>= rel-y 0) (< rel-y repl-output-h))
-              (progn
+          (cond
+            ;; Debugger occupies the REPL area.
+            ((and (cell:read (.ms-debugger-active st))
+                  (and (>= rel-y 1) (< rel-y (- repl-h 1))))
+             (let body-rel = (- rel-y 1))
+             (let body-h = (cell:read (.ms-debugger-body-h st)))
+             (let total = (cell:read (.ms-debugger-total st)))
+             (when (> total body-h)
+               (dbg-set-scroll! st (%scrollbar-compute-offset body-rel total body-h)))
+             True)
+            (True
+             (let repl-output-h = (if (> repl-h 1) (- repl-h 1) 0))
+             (cond
+               ((and (>= rel-y 0) (< rel-y repl-output-h))
                 (let total = (repl:repl-pane-output-line-count (.ms-repl st)))
                 (when (> total repl-output-h)
                   (repl:repl-pane-set-output-scroll! (.ms-repl st)
                                                      (%scrollbar-compute-offset rel-y total repl-output-h)))
                 True)
-              False))
+               (True False)))))
          (True False)))
       (True False)))
 
@@ -4261,7 +4330,11 @@ Render-app is NOT called here; the main loop handles rendering."
                          (native-box-new)
                          (complete:completion-new)
                          (cell:new None)
-                         (spinner:spinner-new)))
+                         (spinner:spinner-new)
+                         (cell:new 0)
+                         (cell:new 0)
+                         (cell:new 0)
+                         (cell:new True)))
     ;; Open a file if given on the command line
     (let file-args = (filter (fn (a) (not (str:substring? "--" a))) (list:cdr args)))
     (match file-args
@@ -4936,6 +5009,8 @@ Returns a Coalton List of ProtoMsg."
     (cl:setf (%native-box-value (mine/app/mine::get-debugger-items st)) all-items)
     (coalton/cell:write! (mine/app/mine::get-debugger-selected-cell st)
                          (%dbg-next-selectable all-items 0 1))
+    (coalton/cell:write! (mine/app/mine::get-debugger-scroll-cell st) 0)
+    (coalton/cell:write! (mine/app/mine::get-debugger-follow-cell st) cl:t)
     ;; Store (msg-id . stream) for sending restart choice
     (cl:let ((stream (%native-box-value (mine/app/mine::get-conn-stream st))))
       (cl:when stream
@@ -4977,6 +5052,58 @@ Skips :header items. Returns CURRENT if no selectable item found."
    (mine/term/color::ColorRGB br bg bb)
    attr-idx))
 
+(cl:defun %wrap-line-to-width (line max-w)
+  "Wrap LINE to at most MAX-W chars each; returns list of pieces."
+  (cl:cond
+    ((cl:or (cl:not (cl:stringp line)) (cl:zerop (cl:length line)))
+     (cl:list ""))
+    ((cl:<= (cl:length line) max-w)
+     (cl:list line))
+    (cl:t
+     (cl:loop :with len = (cl:length line)
+              :for start :from 0 :below len :by max-w
+              :for end = (cl:min len (cl:+ start max-w))
+              :collect (cl:subseq line start end)))))
+
+(cl:defun %wrap-text-to-width (text max-w)
+  "Split TEXT on newlines then wrap each line to MAX-W, returning a flat list."
+  (cl:when (cl:< max-w 1) (cl:setf max-w 1))
+  (cl:let ((result cl:nil)
+           (len (cl:length text)))
+    (cl:loop :for start = 0 :then (cl:1+ end)
+             :for end = (cl:position #\Newline text :start start)
+             :for raw = (cl:subseq text start (cl:or end len))
+             :do (cl:dolist (piece (%wrap-line-to-width raw max-w))
+                   (cl:push piece result))
+             :while end)
+    (cl:nreverse result)))
+
+(cl:defun %build-debugger-lines (cond-text items body-w)
+  "Build a flat list of display lines for the debugger body.
+Each line is (:cond text), (:blank), (:header text), or (:item idx kind label),
+where IDX is the index of the item in ITEMS."
+  (cl:let ((lines cl:nil))
+    (cl:dolist (line (%wrap-text-to-width cond-text body-w))
+      (cl:push (cl:list :cond line) lines))
+    (cl:when items
+      (cl:push (cl:list :blank) lines)
+      (cl:loop :for item :in items
+               :for i :from 0
+               :do (cl:let ((kind (cl:first item))
+                            (label (cl:third item)))
+                     (cl:if (cl:eq kind :header)
+                            (cl:push (cl:list :header label) lines)
+                            (cl:push (cl:list :item i kind label) lines)))))
+    (cl:nreverse lines)))
+
+(cl:defun %dbg-selected-line-index (lines selected)
+  "Return the line index whose :item refers to SELECTED, or NIL."
+  (cl:loop :for line :in lines
+           :for li :from 0
+           :when (cl:and (cl:eq (cl:first line) :item)
+                         (cl:= (cl:second line) selected))
+             :return li))
+
 (cl:defun %render-debugger-in-repl-cl (st scr rect)
   "Render the debugger view into the given rect using the screen abstraction."
   (cl:let* ((x (mine/widget/types::rect/rect-_0 rect))
@@ -4986,70 +5113,96 @@ Skips :header items. Returns CURRENT if no selectable item found."
             (cond-text (coalton/cell:read (mine/app/mine::get-debugger-condition-cell st)))
             (items (%native-box-value (mine/app/mine::get-debugger-items st)))
             (selected (coalton/cell:read (mine/app/mine::get-debugger-selected-cell st)))
+            (scroll-cell (mine/app/mine::get-debugger-scroll-cell st))
+            (follow-cell (mine/app/mine::get-debugger-follow-cell st))
+            (raw-scroll (coalton/cell:read scroll-cell))
+            (follow? (coalton/cell:read follow-cell))
             (max-y (cl:+ y h))
             ;; Styles
-            (title-style (%make-rgb-style 255 80 80 40 42 48 mine/term/color::AttrBold))
-            (text-style (%make-rgb-style 200 200 200 40 42 48 mine/term/color::AttrNone))
-            (restart-style (%make-rgb-style 120 220 120 40 42 48 mine/term/color::AttrNone))
-            (dim-style (%make-rgb-style 100 100 100 40 42 48 mine/term/color::AttrNone))
-            (sel-style (%make-rgb-style 200 200 200 50 60 90 mine/term/color::AttrNone))
-            (footer-style (%make-rgb-style 255 255 95 40 42 48 mine/term/color::AttrBold))
-            (header-style (%make-rgb-style 255 255 95 40 42 48 mine/term/color::AttrBold)))
-    ;; Clear the area
+            (title-style    (%make-rgb-style 255 80 80 40 42 48 mine/term/color::AttrBold))
+            (text-style     (%make-rgb-style 200 200 200 40 42 48 mine/term/color::AttrNone))
+            (restart-style  (%make-rgb-style 120 220 120 40 42 48 mine/term/color::AttrNone))
+            (dim-style      (%make-rgb-style 100 100 100 40 42 48 mine/term/color::AttrNone))
+            (sel-style      (%make-rgb-style 200 200 200 50 60 90 mine/term/color::AttrNone))
+            (footer-style   (%make-rgb-style 255 255 95 40 42 48 mine/term/color::AttrBold))
+            (header-style   (%make-rgb-style 255 255 95 40 42 48 mine/term/color::AttrBold))
+            (track-style    (%make-rgb-style 90 90 90 40 42 48 mine/term/color::AttrNone))
+            (thumb-style    (%make-rgb-style 180 180 180 40 42 48 mine/term/color::AttrNone))
+            ;; Layout: title at y, footer at (max-y - 1), body in between.
+            (title-row y)
+            (footer-row (cl:1- max-y))
+            (body-start (cl:1+ title-row))
+            (body-end footer-row) ;; exclusive
+            (body-h (cl:max 0 (cl:- body-end body-start)))
+            ;; Reserve last column for scrollbar; leading indent leaves 1.
+            (sb-col (cl:1- (cl:+ x w)))
+            (body-w (cl:max 1 (cl:- w 2)))
+            ;; Build flat list of body lines.
+            (lines (%build-debugger-lines cond-text items body-w))
+            (total-lines (cl:length lines))
+            (max-scroll (cl:max 0 (cl:- total-lines body-h)))
+            (scroll (cl:min (cl:max 0 raw-scroll) max-scroll)))
+    ;; Follow selection: adjust scroll so the selected item is in view.
+    (cl:when follow?
+      (cl:let ((sel-line (%dbg-selected-line-index lines selected)))
+        (cl:when (cl:and sel-line (cl:plusp body-h))
+          (cl:cond
+            ((cl:< sel-line scroll)
+             (cl:setf scroll sel-line))
+            ((cl:>= sel-line (cl:+ scroll body-h))
+             (cl:setf scroll (cl:1+ (cl:- sel-line body-h))))))
+        (cl:setf scroll (cl:min (cl:max 0 scroll) max-scroll))
+        (coalton/cell:write! follow-cell cl:nil)))
+    ;; Clear the area.
     (mine/widget/render::fill-rect scr rect #\Space text-style)
-    ;; Title row: DEBUGGER
-    (cl:let ((row y))
-      (mine/term/screen::screen-set-string scr row (cl:1+ x) "DEBUGGER" title-style)
-      (cl:incf row)
-      ;; Condition text (may span multiple lines)
-      (cl:dolist (line (cl:loop :for start = 0 :then (cl:1+ end)
-                                :for end = (cl:position #\Newline cond-text :start start)
-                                :collect (cl:subseq cond-text start (cl:or end (cl:length cond-text)))
-                                :while end))
-        (cl:when (cl:< row max-y)
-          (cl:let ((display (cl:subseq line 0 (cl:min (cl:length line) (cl:- w 2)))))
-            (mine/term/screen::screen-set-string scr row (cl:1+ x) display text-style))
-          (cl:incf row)))
-      ;; Items (scrollable)
-      (cl:when items
-        (cl:let* ((total (cl:length items))
-                   (avail-rows (cl:max 0 (cl:- max-y row 1)))  ;; leave 1 for footer
-                   ;; Compute scroll so selected is visible
-                   (scroll (cl:max 0 (cl:min (cl:max 0 (cl:- selected (cl:floor avail-rows 2)))
-                                             (cl:max 0 (cl:- total avail-rows)))))
-                   (vis-end (cl:min total (cl:+ scroll avail-rows))))
-           (cl:loop :for i :from scroll :below vis-end
-                    :while (cl:< row (cl:1- max-y))
-                    :do (cl:let* ((item (cl:nth i items))
-                                  (kind (cl:first item))
-                                  (label (cl:third item))
-                                  (is-sel (cl:= i selected)))
-                          (cl:cond
-                            ((cl:eq kind :header)
-                             (mine/term/screen::screen-set-string scr row (cl:1+ x)
-                               (cl:format cl:nil "  ~A" label) header-style))
-                            ((cl:eq kind :restart)
-                             (cl:let ((style (cl:if is-sel sel-style restart-style))
-                                      (prefix (cl:if is-sel "> " "  ")))
-                               (cl:when is-sel
-                                 (mine/widget/render::fill-rect scr
-                                   (mine/widget/types::Rect x row w 1) #\Space sel-style))
-                               (mine/term/screen::screen-set-string scr row (cl:1+ x)
-                                 (cl:format cl:nil "~A~A" prefix label) style)))
-                            (cl:t
-                             (cl:let ((style (cl:if is-sel sel-style dim-style))
-                                      (prefix (cl:if is-sel "> " "  ")))
-                               (cl:when is-sel
-                                 (mine/widget/render::fill-rect scr
-                                   (mine/widget/types::Rect x row w 1) #\Space sel-style))
-                               (mine/term/screen::screen-set-string scr row (cl:1+ x)
-                                 (cl:format cl:nil "~A~A" prefix label) style))))
-                          (cl:incf row)))))
-      ;; Footer
-      (cl:let ((footer-y (cl:1- max-y)))
-        (cl:when (cl:< y footer-y)
-          (mine/term/screen::screen-set-string scr footer-y (cl:1+ x)
-            "Up/Down: navigate  Enter/0-9: restart  q: abort" footer-style))))))
+    ;; Title row.
+    (cl:when (cl:< title-row max-y)
+      (mine/term/screen::screen-set-string scr title-row (cl:1+ x) "DEBUGGER" title-style))
+    ;; Body lines.
+    (cl:loop :for row :from body-start :below body-end
+             :for li :from scroll
+             :while (cl:< li total-lines)
+             :do (cl:let* ((line (cl:nth li lines))
+                           (kind (cl:first line)))
+                   (cl:case kind
+                     (:cond
+                      (mine/term/screen::screen-set-string scr row (cl:1+ x)
+                        (cl:second line) text-style))
+                     (:blank
+                      (cl:values))
+                     (:header
+                      (mine/term/screen::screen-set-string scr row (cl:1+ x)
+                        (cl:format cl:nil "  ~A" (cl:second line)) header-style))
+                     (:item
+                      (cl:let* ((item-idx (cl:second line))
+                                (item-kind (cl:third line))
+                                (label (cl:fourth line))
+                                (is-sel (cl:= item-idx selected))
+                                (base-style (cl:if (cl:eq item-kind :restart)
+                                                   restart-style dim-style))
+                                (style (cl:if is-sel sel-style base-style))
+                                (prefix (cl:if is-sel "> " "  "))
+                                (avail (cl:max 0 (cl:- body-w 2)))
+                                (clipped (cl:subseq label 0 (cl:min (cl:length label) avail))))
+                        (cl:when is-sel
+                          (mine/widget/render::fill-rect scr
+                            (mine/widget/types::Rect x row (cl:max 1 (cl:1- w)) 1) #\Space sel-style))
+                        (mine/term/screen::screen-set-string scr row (cl:1+ x)
+                          (cl:concatenate 'cl:string prefix clipped) style))))))
+    ;; Scrollbar on right edge of body.
+    (cl:when (cl:and (cl:> body-h 0) (cl:> w 1) (cl:> total-lines body-h))
+      (mine/widget/render::draw-scrollbar scr sb-col body-start body-h
+                                          total-lines scroll
+                                          track-style thumb-style))
+    ;; Footer.
+    (cl:when (cl:< y footer-row)
+      (mine/term/screen::screen-set-string scr footer-row (cl:1+ x)
+        "Up/Down: navigate  Enter/0-9: restart  q: abort" footer-style))
+    ;; Write back clamped scroll and cache geometry for navigation / mouse.
+    (coalton/cell:write! scroll-cell scroll)
+    (coalton/cell:write! (mine/app/mine::get-debugger-body-h-cell st) body-h)
+    (coalton/cell:write! (mine/app/mine::get-debugger-total-cell st) total-lines)
+    (cl:values)))
 
 ;;; Pending async requests (for subprocess queries that bypass REPL display)
 
