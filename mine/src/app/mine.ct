@@ -832,22 +832,34 @@
 
   (declare render-editor-cursor (MineState * screen:Screen -> Void))
   (define (render-editor-cursor st scr)
-    "Position the hardware cursor for the editor pane."
+    "Position the hardware cursor for the editor pane. Wrap-aware: the
+screen row comes from cursor-screen-row-offset, and the screen column is
+the cursor's display-x within its wrap segment."
     (match (mgr:bufmgr-current (.ms-bufmgr st))
       ((Some buf)
        (let gb = (buf:buffer-gap buf))
+       (let ep = (.ms-editor st))
        (match (cursor:cursor-line-col (.ms-cursor st) gb)
          ((Tuple cur-line cur-col)
-          (let scroll-r = (editor:editor-pane-scroll-row (.ms-editor st)))
-          (let scroll-c = (editor:editor-pane-scroll-col (.ms-editor st)))
-          (let gutter = (editor:editor-pane-gutter-width (.ms-editor st) gb))
+          (let scroll-r = (editor:editor-pane-scroll-row ep))
+          (let scroll-c = (editor:editor-pane-scroll-col ep))
+          (let gutter = (editor:editor-pane-gutter-width ep gb))
           (let cx = (cell:read (.ms-content-x st)))
           (let tab-w = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
           (let cur-text = (gap:gap-line-text gb cur-line))
           (let cur-vcol = (gap:visual-col cur-text cur-col tab-w))
+          (let wrap-w = (editor:editor-pane-effective-wrap-width ep))
+          (let row-off = (editor:cursor-screen-row-offset
+                          gb scroll-r cur-line cur-col wrap-w tab-w))
+          (let seg-vcol = (editor:wrap-seg-start-vcol
+                           gb cur-line cur-col wrap-w tab-w))
+          (let origin-vcol = (+ scroll-c seg-vcol))
+          (let eff-x = (if (>= cur-vcol origin-vcol)
+                           (- cur-vcol origin-vcol)
+                           0))
           (screen:screen-set-cursor scr
-                                    (+ 1 (- cur-line scroll-r))
-                                    (+ cx (+ gutter (- cur-vcol scroll-c)))))))
+                                    (+ 1 row-off)
+                                    (+ cx (+ gutter eff-x))))))
       ((None) (screen:screen-hide-cursor scr))))
 
 ;;; Editor status line
@@ -2392,7 +2404,10 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                             (fn (buffer) (paredit:paredit-splice! buffer (.ms-cursor st)))))
          (True
           (match (mgr:bufmgr-current (.ms-bufmgr st))
-            ((Some buf) (cursor:cursor-move-up! (buf:buffer-gap buf) (.ms-cursor st)))
+            ((Some buf)
+             (editor:editor-cursor-move-up! (.ms-editor st)
+                                            (buf:buffer-gap buf)
+                                            (.ms-cursor st)))
             ((None) (values))))))
       ((input:KeyDown)
        (cond
@@ -2401,7 +2416,10 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                             (fn (buffer) (paredit:paredit-cleave! buffer (.ms-cursor st)))))
          (True
           (match (mgr:bufmgr-current (.ms-bufmgr st))
-            ((Some buf) (cursor:cursor-move-down! (buf:buffer-gap buf) (.ms-cursor st)))
+            ((Some buf)
+             (editor:editor-cursor-move-down! (.ms-editor st)
+                                              (buf:buffer-gap buf)
+                                              (.ms-cursor st)))
             ((None) (values))))))
       ((input:KeyHome)
        (match (mgr:bufmgr-current (.ms-bufmgr st))
@@ -3047,23 +3065,35 @@ Uses the preceding (in-package ...) form to determine the compilation package."
 
   (declare screen-to-buffer-pos (MineState * UFix * UFix * UFix -> UFix))
   (define (screen-to-buffer-pos st col row content-x)
-    "Convert screen (col, row) to a buffer position."
+    "Convert screen (col, row) to a buffer position. Wrap-aware: when line
+wrap is on, row is resolved through screen-row-to-line-seg."
     (match (mgr:bufmgr-current (.ms-bufmgr st))
       ((Some buf)
        (let gb = (buf:buffer-gap buf))
-       (let sr = (editor:editor-pane-scroll-row (.ms-editor st)))
-       (let sc = (editor:editor-pane-scroll-col (.ms-editor st)))
-       (let gw = (editor:editor-pane-gutter-width (.ms-editor st) gb))
-       (let target-line = (+ sr (if (> row 0) (- row 1) 0)))
+       (let ep = (.ms-editor st))
+       (let sr = (editor:editor-pane-scroll-row ep))
+       (let sc = (editor:editor-pane-scroll-col ep))
+       (let gw = (editor:editor-pane-gutter-width ep gb))
        (let col-off = (+ content-x gw))
-       (let target-vcol = (+ sc (if (>= col col-off) (- col col-off) 0)))
+       (let disp-x = (if (>= col col-off) (- col col-off) 0))
+       (let target-row-off = (if (> row 0) (- row 1) 0))
        (let line-count = (gap:gap-line-count gb))
-       (let clamped-line = (min target-line (if (> line-count 0) (- line-count 1) 0)))
-       (let line-text = (gap:gap-line-text gb clamped-line))
        (let tab-w = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
-       (let char-col = (gap:char-for-vcol line-text target-vcol tab-w))
-       (let line-start = (gap:gap-line-to-pos gb clamped-line))
-       (+ line-start char-col))
+       (let wrap-w = (editor:editor-pane-effective-wrap-width ep))
+       (match (editor:screen-row-to-line-seg gb sr target-row-off wrap-w tab-w)
+         ((Some seg-info)
+          (match seg-info
+            ((Tuple4 line seg-start seg-end seg-start-vcol)
+             (let target-vcol = (+ sc (+ seg-start-vcol disp-x)))
+             (let line-text = (gap:gap-line-text gb line))
+             (let raw-col = (gap:char-for-vcol line-text target-vcol tab-w))
+             (let clamped = (max seg-start (min seg-end raw-col)))
+             (+ (gap:gap-line-to-pos gb line) clamped))))
+         ((None)
+          (let last-line = (if (> line-count 0) (- line-count 1) 0))
+          (let line-text = (gap:gap-line-text gb last-line))
+          (let len = (lisp (-> UFix) (line-text) (cl:length line-text)))
+          (+ (gap:gap-line-to-pos gb last-line) len))))
       ((None) 0)))
 
   (declare click-to-cursor! (MineState * UFix * UFix * UFix -> Void))
@@ -3818,6 +3848,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
           ((menubar:ActionJumpToDefinition) has-buffer)
           ((menubar:ActionJumpBack) has-buffer)
           ((menubar:ActionToggleStructural) has-buffer)
+          ((menubar:ActionToggleLineWrap) has-buffer)
           (_ True)))))
 
   (declare dispatch-menu-action! (MineState * term:Terminal * menubar:MenuAction -> Void))
@@ -3936,6 +3967,13 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          (values)))
       ((menubar:ActionToggleStructural)
        (toggle-structural! st))
+      ((menubar:ActionToggleLineWrap)
+       (editor:editor-pane-toggle-line-wrap! (.ms-editor st))
+       (status:statusbar-set-message!
+        (.ms-status st)
+        (if (editor:editor-pane-line-wrap? (.ms-editor st))
+            "Line wrap: on"
+            "Line wrap: off")))
       ((menubar:ActionOpenFiles)
        (toggle-open-files! st))
       ((menubar:ActionAddFile) (values))
@@ -5491,8 +5529,13 @@ Names are already qualified by the server."
                             (vcol (mine/buffer/gap:visual-col line-text cur-col tab-w))
                             (sc (mine/pane/editor:editor-pane-scroll-col ep))
                             (gw (mine/pane/editor:editor-pane-gutter-width ep gb))
+                            (wrap-w (mine/pane/editor:editor-pane-effective-wrap-width ep))
+                            (seg-vcol (mine/pane/editor:wrap-seg-start-vcol
+                                       gb line cur-col wrap-w tab-w))
+                            (origin (cl:+ sc seg-vcol))
+                            (eff-x (cl:max 0 (cl:- vcol origin)))
                             (content-x (coalton/cell:read (mine/app/mine::get-content-x-cell st))))
-                    (cl:+ content-x gw (cl:max 0 (cl:- vcol sc (cl:length prefix)))))
+                    (cl:+ content-x gw (cl:max 0 (cl:- eff-x (cl:length prefix)))))
                   0))))
 
 (cl:defun %completion-anchor-row (st is-repl)
@@ -5535,10 +5578,15 @@ Names are already qualified by the server."
                   (cl:let* ((gb (mine/buffer/buffer:buffer-gap buf))
                             (lc (mine/edit/cursor:cursor-line-col cs gb))
                             (cur-line (coalton-prelude:fst lc))
+                            (cur-col (coalton-prelude:snd lc))
                             (ep (mine/app/mine::get-editor-pane st))
-                            (sr (mine/pane/editor:editor-pane-scroll-row ep)))
+                            (sr (mine/pane/editor:editor-pane-scroll-row ep))
+                            (wrap-w (mine/pane/editor:editor-pane-effective-wrap-width ep))
+                            (tab-w mine/buffer/gap::*tab-width*)
+                            (row-off (mine/pane/editor:cursor-screen-row-offset
+                                      gb sr cur-line cur-col wrap-w tab-w)))
                     ;; +1 for menu bar row
-                  (cl:+ 1 (cl:- cur-line sr)))
+                  (cl:+ 1 row-off))
                   1))))
 
 (cl:defun %expand-project-input-path (text)
