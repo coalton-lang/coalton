@@ -95,7 +95,7 @@ CALLBACK is a function of no arguments."
                    (sb-alien:function (* t))))))
         (declare (ignore cb))
         ;; For now, use a polling approach: the event loop checks for
-        ;; ctrl events via the VT input stream (Ctrl+C comes as byte 0x03).
+        ;; ctrl events via the VT input stream (Ctrl+c comes as byte 0x03).
         ;; SetConsoleCtrlHandler with a Lisp callback requires careful
         ;; FFI callback support.  We defer this to a future enhancement.
         (setf *ctrl-handler-installed* t))))
@@ -106,8 +106,8 @@ CALLBACK is a function of no arguments."
     (values))
 
   (defun install-sigint-handler (callback)
-    "Install a Ctrl+C handler on Windows.
-Note: With VT input mode enabled, Ctrl+C arrives as byte 0x03 in the
+    "Install a Ctrl+c handler on Windows.
+Note: With VT input mode enabled, Ctrl+c arrives as byte 0x03 in the
 input stream and is handled by the input parser.  This handler is a
 fallback for console close events."
     (declare (type function callback))

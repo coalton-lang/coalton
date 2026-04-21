@@ -114,7 +114,7 @@
   (define (minibuffer-prompt-incremental! mb prompt-text repeat-key on-change-fn on-repeat-fn on-next-fn on-prev-fn)
     "Activate with incremental search. ON-CHANGE-FN fires on every keystroke.
 ON-REPEAT-FN fires when REPEAT-KEY is pressed again.
-ON-NEXT-FN/ON-PREV-FN fire on Down/Up. Enter/Ctrl+G dismiss."
+ON-NEXT-FN/ON-PREV-FN fire on Down/Up. Enter/Ctrl+g dismiss."
     (widget-input:input-widget-clear! (.input-widget mb))
     (cell:write! (widget-input:.iw-prompt (.input-widget mb)) prompt-text)
     (cell:write! (.active mb) True)
@@ -203,7 +203,7 @@ ON-NEXT-FN/ON-PREV-FN fire on Down/Up. Enter/Ctrl+G dismiss."
        wt:Ignored)
       (True
        (cond
-          ;; Repeat key (e.g., Ctrl+F again for find-next)
+          ;; Repeat key (e.g., Ctrl+f again for find-next)
           ((%is-repeat-key? mb key)
            (match (cell:read (.on-repeat mb))
              ((Some orfn) (orfn (widget-input:input-widget-text (.input-widget mb))))
@@ -264,7 +264,7 @@ ON-NEXT-FN/ON-PREV-FN fire on Down/Up. Enter/Ctrl+G dismiss."
        (match (cell:read (.complete-fn mb))
          ((Some _)
           (let hint-style = (color:Style (color:.style-fg style) (color:.style-bg style) color:AttrDim))
-          (screen:screen-set-string scr y x "Tab to autocomplete, Ctrl+G to close" hint-style))
+          (screen:screen-set-string scr y x "Tab to autocomplete, Ctrl+g to close" hint-style))
          ((None) (values))))
       (_
        (let col-w = (%comp-col-width items max-w))

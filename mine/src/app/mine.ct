@@ -453,7 +453,7 @@
       (render:fill-rect scr rect #\Space bg-style)
       (screen:screen-set-string scr y x "> " prompt-style)
       (screen:screen-set-string scr y (+ x 2)
-                                "Click here or press Ctrl+R to focus the REPL."
+                                "Click here or press Ctrl+r to focus the REPL."
                                 hint-style)
       (values)))
 
@@ -781,10 +781,10 @@
         (render:draw-text scr row lx key bold)
         (render:draw-text scr row (+ lx (str:length key))
                           (str:concat " " desc) dim)))
-    (draw-key-line key-y       "Ctrl+R" "to start a REPL")
-    (draw-key-line (+ key-y 1) "Ctrl+O" "to open a file")
-    (draw-key-line (+ key-y 2) "Ctrl+H" "for help and keybindings")
-    (draw-key-line (+ key-y 3) "Ctrl+Q" "to quit")
+    (draw-key-line key-y       "Ctrl+r" "to start a REPL")
+    (draw-key-line (+ key-y 1) "Ctrl+o" "to open a file")
+    (draw-key-line (+ key-y 2) "Ctrl+h" "for help and keybindings")
+    (draw-key-line (+ key-y 3) "Ctrl+q" "to quit")
     ;; Best-effort warning
     (when (term:best-effort?)
       (let warn = "--best-effort enabled, some features may not work.")
@@ -1841,7 +1841,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
 
   (declare compile-file! (MineState -> Void))
   (define (compile-file! st)
-    "Compile and load the current file (Alt+K).
+    "Compile and load the current file (Alt+k).
 If the buffer has unsaved changes, writes to a temp file for compilation."
     (ensure-repl-visible! st)
     (match (mgr:bufmgr-current (.ms-bufmgr st))
@@ -1917,7 +1917,7 @@ coalton-toplevel wrapper, descends to find the sub-form containing POS."
 
   (declare compile-form! (MineState -> Void))
   (define (compile-form! st)
-    "Compile the form at the cursor (Alt+C).
+    "Compile the form at the cursor (Alt+c).
 Finds the largest enclosing non-progn top-level form, descending through
 coalton-toplevel and progn wrappers. Works with cursor on opening/closing parens.
 Uses the preceding (in-package ...) form to determine the compilation package."
@@ -2551,19 +2551,19 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                (ops:insert-char! buf (buf:buffer-undo buf) (.ms-cursor st) ch))))
            ((None) (values)))))
 
-      ;; Ctrl+C -> copy selection to clipboard
+      ;; Ctrl+c -> copy selection to clipboard
       ((input:KeyCtrl #\c)
        (copy-selection! st))
 
-      ;; Ctrl+X -> cut selection to clipboard
+      ;; Ctrl+x -> cut selection to clipboard
       ((input:KeyCtrl #\x)
        (cut-selection! st))
 
-      ;; Ctrl+V -> paste from clipboard
+      ;; Ctrl+v -> paste from clipboard
       ((input:KeyCtrl #\v)
        (paste-clipboard! st))
 
-      ;; Ctrl+Z -> undo
+      ;; Ctrl+z -> undo
       ((input:KeyCtrl #\z)
        (match (mgr:bufmgr-current (.ms-bufmgr st))
          ((Some buf)
@@ -2574,7 +2574,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
             ((None) (values))))
          ((None) (values))))
 
-      ;; Ctrl+S -> save current file
+      ;; Ctrl+s -> save current file
       ((input:KeyCtrl #\s)
        (match (mgr:bufmgr-current (.ms-bufmgr st))
          ((Some buf)
@@ -2695,15 +2695,15 @@ Uses the preceding (in-package ...) form to determine the compilation package."
   (define (handle-alt-key! st ch)
     "Handle an Alt+key combination in the editor."
     (match ch
-      ;; Alt+F -> forward sexp
+      ;; Alt+f -> forward sexp
       (#\f (%paredit-if-lisp st
                              (fn (buffer) (paredit:paredit-forward-sexp! (buf:buffer-gap buffer) (.ms-cursor st)))))
-      ;; Alt+B -> backward sexp
+      ;; Alt+b -> backward sexp
       (#\b (%paredit-if-lisp st
                              (fn (buffer) (paredit:paredit-backward-sexp! (buf:buffer-gap buffer) (.ms-cursor st)))))
-      ;; Alt+K -> compile and load file
+      ;; Alt+k -> compile and load file
       (#\k (compile-file! st))
-      ;; Alt+C -> compile form at cursor
+      ;; Alt+c -> compile form at cursor
       (#\c (compile-form! st))
       ;; Alt+. -> jump to definition
       (#\. (jump-to-definition! st))
@@ -2740,7 +2740,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (match key
          ;; Enter handled in make-handler
          ((input:KeyEnter) (values))
-         ;; Ctrl+C -> copy REPL output selection
+         ;; Ctrl+c -> copy REPL output selection
          ((input:KeyCtrl #\c)
           (when (repl:repl-pane-has-selection? (.ms-repl st))
             (let text = (repl:repl-pane-copy-selection! (.ms-repl st)))
@@ -2748,7 +2748,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
             (repl:repl-pane-clear-selection! (.ms-repl st))
             (status:statusbar-set-message! (.ms-status st) "Copied"))
           (values))
-         ;; Ctrl+V -> paste into REPL input
+         ;; Ctrl+v -> paste into REPL input
          ((input:KeyCtrl #\v)
           (let text = (clipboard:clipboard-paste))
           (repl:repl-pane-paste-to-input! (.ms-repl st) text)
@@ -2949,7 +2949,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
           (complete:completion-dismiss! comp))
          ((None)
           (complete:completion-dismiss! comp))))
-      ;; Escape / Ctrl+G: dismiss
+      ;; Escape / Ctrl+g: dismiss
       ((input:KeyEscape)
        (complete:completion-dismiss! comp))
       ((input:KeyCtrl #\g)
@@ -3026,25 +3026,25 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          ;; F1 -> help screen (handled in make-handler, not here)
          ((input:KeyF 1) (values))
 
-         ;; Ctrl+Q -> handled in make-handler (needs term for rendering)
+         ;; Ctrl+q -> handled in make-handler (needs term for rendering)
          ((input:KeyCtrl #\q) (values))
 
          ;; F2 -> save (always)
          ((input:KeyF 2) (save-current-file! st))
 
-         ;; Ctrl+R -> toggle REPL
+         ;; Ctrl+r -> toggle REPL
          ((input:KeyCtrl #\r) (toggle-repl! st))
 
-         ;; Ctrl+E -> focus editor / toggle fullscreen editor
+         ;; Ctrl+e -> focus editor / toggle fullscreen editor
          ((input:KeyCtrl #\e) (focus-editor! st))
 
-         ;; Ctrl+P -> toggle structural editing
+         ;; Ctrl+p -> toggle structural editing
          ((input:KeyCtrl #\p) (toggle-structural! st))
 
-         ;; Ctrl+T -> toggle open files pane
+         ;; Ctrl+t -> toggle open files pane
          ((input:KeyCtrl #\t) (toggle-open-files! st))
 
-         ;; Ctrl+O -> open file
+         ;; Ctrl+o -> open file
          ((input:KeyCtrl #\o) (prompt-open-file! st))
 
          ;; Route to focused pane
@@ -3455,7 +3455,7 @@ wrap is on, row is resolved through screen-row-to-line-seg."
 
   (declare toggle-repl! (MineState -> Void))
   (define (toggle-repl! st)
-    "Ctrl+R: open/focus the REPL, maximize it when already focused."
+    "Ctrl+r: open/focus the REPL, maximize it when already focused."
     (let center = (%center-layout st))
     (cond
       ((and (== center CenterReplFull)
@@ -3482,7 +3482,7 @@ wrap is on, row is resolved through screen-row-to-line-seg."
 
   (declare focus-editor! (MineState -> Void))
   (define (focus-editor! st)
-    "Ctrl+E: focus editor; if already focused, toggle fullscreen editor mode."
+    "Ctrl+e: focus editor; if already focused, toggle fullscreen editor mode."
     (let cur = (focus:focus-current (.ms-focus st)))
     (cond
       ((== cur focus:FocusEditor)
@@ -3493,7 +3493,7 @@ wrap is on, row is resolved through screen-row-to-line-seg."
 
   (declare toggle-open-files! (MineState -> Void))
   (define (toggle-open-files! st)
-    "Ctrl+T: jump to open files pane, or back to editor if already there."
+    "Ctrl+t: jump to open files pane, or back to editor if already there."
     (let cur = (focus:focus-current (.ms-focus st)))
     (cond
       ;; Already in tree open section -> back to editor
@@ -3524,7 +3524,7 @@ wrap is on, row is resolved through screen-row-to-line-seg."
        (focus:focus-switch! (.ms-focus st) focus:FocusTree)
        (values))))
 
-;;; Incremental find (Ctrl+F)
+;;; Incremental find (Ctrl+f)
 
   (declare %update-find-prompt! (MineState * UFix * UFix -> Void))
   (define (%update-find-prompt! st idx total)
@@ -3578,7 +3578,7 @@ wrap is on, row is resolved through screen-row-to-line-seg."
                                          ;; on-change: search from cursor position
                                          (fn (needle)
                                            (%find-do-search! st needle (cursor:cursor-position (.ms-cursor st))))
-                                         ;; on-repeat (Ctrl+F again): jump to next match
+                                         ;; on-repeat (Ctrl+f again): jump to next match
                                          (fn (needle)
                                            (%find-do-search! st needle (+ (cursor:cursor-position (.ms-cursor st)) 1)))
                                          ;; on-next (Down): next match
@@ -3588,7 +3588,7 @@ wrap is on, row is resolved through screen-row-to-line-seg."
                                          (fn (needle)
                                            (%find-do-prev! st needle)))
     (mini:minibuffer-set-footer-hint! (.ms-minibuffer st)
-                                      "Ctrl+F for next match, Enter to dismiss"))
+                                      "Ctrl+f for next match, Enter to dismiss"))
 
 ;;; Close current file
 
@@ -3876,6 +3876,7 @@ wrap is on, row is resolved through screen-row-to-line-seg."
        (when (tutorial:run-tutorial! term)
          (try-quit! st term)))
       ((menubar:ActionAbout) (dialogs:show-about! term))
+      ((menubar:ActionCredits) (dialogs:show-credits! term))
       ((menubar:ActionQuit) (try-quit! st term))
       ((menubar:ActionNewProject)
        (render-app st term)
@@ -4091,14 +4092,14 @@ Render-app is NOT called here; the main loop handles rendering."
                          (_ (handle-key st term key mod))))))
               ((input:KeyCtrl #\q)
                (try-quit! st term))
-              ;; Ctrl+W: close current file
+              ;; Ctrl+w: close current file
               ((input:KeyCtrl #\w)
                (close-current-file! st term))
-              ;; Ctrl+H: help screen
+              ;; Ctrl+h: help screen
               ((input:KeyCtrl #\h)
                (when (help:show-help! term)
                  (try-quit! st term)))
-              ;; Ctrl+G: refresh terminal (force full redraw)
+              ;; Ctrl+g: refresh terminal (force full redraw)
               ((input:KeyCtrl #\g)
                (screen:screen-invalidate-all! (term:.terminal-screen term)))
               ;; Enter in REPL -> eval if complete, else insert newline

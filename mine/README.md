@@ -18,7 +18,7 @@
 - Jump-to-definition (also known as "`M-.`")
 - Function type and parameter list hints
 - Build-executable feature
-- Driven by either a mouse or keyboard or both with standard keybindings like Ctrl+C and Ctrl+V
+- Driven by either a mouse or keyboard or both with standard keybindings like Ctrl+c and Ctrl+v
 - Written entirely in Coalton and Lisp!
 
 There are also anti-features:
@@ -47,16 +47,16 @@ Once installed, open `mine` and proceed to **F6:Site > Setup Wizard** to get set
 > [!IMPORTANT]
 > We really recommend running F6:Site > Setup Wizard (or `mine --setup`) before proceeding!
 
-Quit `mine` with **F1:mine > Quit** menu or press **Ctrl+Q**.
+Quit `mine` with **F1:mine > Quit** menu or press **Ctrl+q**.
 
 ## Layout of `mine`
 
 `mine` has a fixed layout:
 
-- The **Open Files** pane: lists the current open files. It automatically collapses when editing. Switch to it with Ctrl+T. You can switch to (Enter), close (c), and save (s) files here.
+- The **Open Files** pane: lists the current open files. It automatically collapses when editing. Switch to it with Ctrl+t. You can switch to (Enter), close (c), and save (s) files here.
 - The **Project Tree**: lists all of the files in your `.asd` project. You can open files from this tree.
-- The **Editor** pane: where you do all your editing. Switch to it with Ctrl+E.
-- The **REPL** pane: where you interact with your program. Switch to it with Ctrl+R.
+- The **Editor** pane: where you do all your editing. Switch to it with Ctrl+e.
+- The **REPL** pane: where you interact with your program. Switch to it with Ctrl+r.
 - The **Status Line**: shows recent actions, as well as context-sensitive information about your program.
 
 Everything is clickable with your mouse, or accessible with keyboard shortcuts.
@@ -69,11 +69,11 @@ Everything is clickable with your mouse, or accessible with keyboard shortcuts.
 The biggest difference between `mine` and conventional IDEs is an idea we call "beaming". Your program, whether your whole project or just an individual function, can be beamed to the REPL. That means making that component available to the REPL for immediate testing and use. This gives an entirely new *interactive* and *incremental* development workflow that looks something like:
 
 1. Open files of interest. Or make a new one. Write some code.
-2. Open a REPL with F3:Editor > Show REPL, or Ctrl+R. Flip between the REPL and editor with Ctrl+R.
+2. Open a REPL with F3:Editor > Show REPL, or Ctrl+r. Flip between the REPL and editor with Ctrl+r.
 3. Beam the code you want:
     - Your project with F5:Project > Beam Project, or `(asdf:load-system "your-project")`
-    - A whole file with F3:Editor > Beam File, or Alt+K in the editor.
-    - An individual toplevel form under the cursor with F3:Editor > Beam Form, or Alt+C.
+    - A whole file with F3:Editor > Beam File, or Alt+k in the editor.
+    - An individual toplevel form under the cursor with F3:Editor > Beam Form, or Alt+c.
 4. Go to the REPL and try it out. Edit code. Beam. Iterate.
 5. Define a `main` function, and build an executable with F5:Project > Build Executable.
 

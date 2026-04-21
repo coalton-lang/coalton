@@ -1,0 +1,27 @@
+mine was built with the help of many people and projects.
+
+Common Lisp compiler provided by Steel Bank Common Lisp.
+
+"Ore the Wizard" artwork courtesy of a collaboration with Luke Kramer
+and Stephen Chen.
+
+mine-app uses:
+
+    - Tauri for packaging
+    - xterm.js for terminal emulation
+    - Iosevka Fixed Slab for fonts
+
+Thanks to the alpha group for their testing and detailed feedback:
+
+    - Zachary "zyd" D'Anthony
+    - Micah Killian
+    - Christos Kloukinas
+    - Luke Kramer
+    - Andy LeClair
+    - "LitFill" Fakhrur Rozy
+    - Francis St-Amour (@fstamour)
+    - ouz-a
+    - @vindarel
+    - Denzel "Goreng" Wendy
+
+and other anonymous contributors.

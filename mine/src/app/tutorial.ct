@@ -565,7 +565,7 @@ Returns the next row after all drawn lines."
     (term:Terminal * buf:Buffer * cursor:CursorState
      * UFix * UFix * UFix * (Optional Boolean) -> Boolean))
   (define (%tutorial-loop term buffer cs mod-idx ch-idx focus status)
-    "Main tutorial event loop. Returns True if user pressed Ctrl+Q."
+    "Main tutorial event loop. Returns True if user pressed Ctrl+q."
     (let scr = (term:.terminal-screen term))
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
@@ -581,7 +581,7 @@ Returns the next row after all drawn lines."
        (term:terminal-update-size! term)
        (screen:screen-resize scr (term:terminal-cols term) (term:terminal-rows term))
        (%tutorial-loop term buffer cs mod-idx ch-idx focus status))
-      ;; Ctrl+Q: quit app
+      ;; Ctrl+q: quit app
       ((input:IEvKey (input:KeyCtrl #\q) _) True)
       ;; Escape: exit tutorial
       ((input:IEvKey (input:KeyEscape) _) False)
@@ -710,7 +710,7 @@ Returns the next row after all drawn lines."
   (declare run-tutorial! (term:Terminal -> Boolean))
   (define (run-tutorial! term)
     "Run the structural editing tutorial.
-Returns True if the user pressed Ctrl+Q to quit the app."
+Returns True if the user pressed Ctrl+q to quit the app."
     (let buffer = (make-tutorial-buffer))
     (let cs = (cursor:cursor-new))
     (let n-ch = (challenge-count 0))

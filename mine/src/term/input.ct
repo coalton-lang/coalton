@@ -525,7 +525,7 @@ Returns (event next-pos)."
       ;; Enter (byte 10 or 13)
       ((or (== b 10) (== b 13))
        (Tuple (IEvKey KeyEnter ModNone) (+ pos 1)))
-      ;; Ctrl+A through Ctrl+Z (bytes 1-26, except 9, 10, 13, 27)
+      ;; Ctrl+a through Ctrl+z (bytes 1-26, except 9, 10, 13, 27)
       ((and (>= b 1) (<= b 26))
        (Tuple (IEvKey (KeyCtrl (ufix-to-char (+ b 96))) ModCtrl)
               (+ pos 1)))

@@ -15,6 +15,7 @@
    #:handle-dialog-resize!
    #:wait-for-dismiss
    #:show-about!
+   #:show-credits!
    #:confirm-dialog
    #:new-project-default-location
    #:new-project-dialog
@@ -93,6 +94,190 @@ Handles terminal resize by calling REDRAW-FN."
     (%draw-about term)
     (term:terminal-flush term)
     (wait-for-dismiss term %draw-about)
+    (values))
+
+;;; Credits dialog
+
+  (declare %credits-lines (Void -> (List String)))
+  (define (%credits-lines)
+    "Return CREDITS.txt lines, read at compile time."
+    (lisp (-> (List String)) ()
+      '#.(cl:with-input-from-string
+             (s (uiop:read-file-string
+                  (asdf:system-relative-pathname "mine" "CREDITS.txt")))
+           (cl:loop :for l := (cl:read-line s cl:nil cl:nil)
+                    :while l :collect l))))
+
+  (declare %credits-max-width ((List String) * UFix -> UFix))
+  (define (%credits-max-width lines acc)
+    (match lines
+      ((Nil) acc)
+      ((Cons s rest)
+       (let n = (the UFix (lisp (-> UFix) (s) (cl:length s))))
+       (%credits-max-width rest (max acc n)))))
+
+  (declare %clip-to-width (String * UFix -> String))
+  (define (%clip-to-width s n)
+    (lisp (-> String) (s n)
+      (cl:if (cl:> (cl:length s) n)
+             (cl:subseq s 0 n)
+             s)))
+
+  (declare %credits-box-h (UFix * UFix -> UFix))
+  (define (%credits-box-h n rows)
+    "Box height: 2 borders + title + blank + n + blank + footer = n + 6, clamped."
+    (let max-h = (if (> rows 2) (- rows 2) rows))
+    (min (+ n 6) max-h))
+
+  (declare %credits-box-w (UFix * UFix -> UFix))
+  (define (%credits-box-w content-w cols)
+    "Box width: content + 4 padding, clamped to terminal."
+    (let max-w = (if (> cols 4) (- cols 2) cols))
+    (min (+ content-w 4) max-w))
+
+  (declare %credits-inner-h (UFix -> UFix))
+  (define (%credits-inner-h box-h)
+    (if (> box-h 6) (- box-h 6) 0))
+
+  (declare %credits-max-scroll (UFix * UFix -> UFix))
+  (define (%credits-max-scroll n inner-h)
+    (if (> n inner-h) (- n inner-h) 0))
+
+  (declare %draw-credits-lines
+    (screen:Screen * (List String) * UFix * UFix * UFix * UFix * UFix * color:Style -> Void))
+  (define (%draw-credits-lines scr lines x y skip avail max-w style)
+    "Skip the first SKIP lines, then draw up to AVAIL lines at (Y, X), clipped to MAX-W."
+    (cond
+      ((== avail 0) (values))
+      (True
+       (match lines
+         ((Nil) (values))
+         ((Cons line rest)
+          (cond
+            ((> skip 0)
+             (%draw-credits-lines scr rest x y (- skip 1) avail max-w style))
+            (True
+             (screen:screen-set-string scr y x (%clip-to-width line max-w) style)
+             (%draw-credits-lines scr rest x (+ y 1) 0 (- avail 1) max-w style))))))))
+
+  (declare %draw-credits (term:Terminal * UFix -> Void))
+  (define (%draw-credits term scroll)
+    "Draw the Credits dialog with the given scroll offset."
+    (let scr = (term:.terminal-screen term))
+    (let cols = (term:terminal-cols term))
+    (let rows = (term:terminal-rows term))
+    (let bg = (color:Style color:text-fg
+                           color:panel-bg
+                           color:AttrNone))
+    (let title-s = (color:Style color:accent-fg
+                                color:panel-bg
+                                color:AttrBold))
+    (let dim = (color:Style color:text-dimmer-fg
+                            color:panel-bg
+                            color:AttrItalic))
+    (let border-style = (color:Style color:border-fg
+                                     color:panel-bg
+                                     color:AttrNone))
+    (let track-s = (color:Style color:scrollbar-track-fg
+                                color:scrollbar-track-bg
+                                color:AttrNone))
+    (let thumb-s = (color:Style color:scrollbar-thumb-fg
+                                color:scrollbar-track-bg
+                                color:AttrNone))
+    (let lines = (%credits-lines))
+    (let n = (length lines))
+    (let content-w = (%credits-max-width lines 0))
+    (let box-w = (%credits-box-w content-w cols))
+    (let box-h = (%credits-box-h n rows))
+    (let inner-w = (if (> box-w 4) (- box-w 4) 1))
+    (let inner-h = (%credits-inner-h box-h))
+    (let bx = (lisp (-> UFix) (cols box-w) (cl:max 0 (cl:floor (cl:- cols box-w) 2))))
+    (let by = (lisp (-> UFix) (rows box-h) (cl:max 0 (cl:floor (cl:- rows box-h) 2))))
+    (screen:screen-clear scr)
+    (render:draw-box scr (wt:Rect bx by box-w box-h) border-style)
+    (render:fill-rect scr (wt:Rect (+ bx 1) (+ by 1) (- box-w 2) (- box-h 2)) #\Space bg)
+    (let title = "Credits")
+    (let tx = (+ bx (lisp (-> UFix) (box-w) (cl:max 1 (cl:floor (cl:- box-w 7) 2)))))
+    (screen:screen-set-string scr (+ by 1) tx title title-s)
+    (%draw-credits-lines scr lines (+ bx 2) (+ by 3) scroll inner-h inner-w bg)
+    (render:draw-scrollbar scr (+ bx (- box-w 2)) (+ by 3) inner-h
+                           n scroll track-s thumb-s)
+    (let scrollable = (> n inner-h))
+    (let footer = (if scrollable
+                      "Up/Down to scroll, any other key to close."
+                      "Press any key to close."))
+    (let footer-y = (if (>= box-h 2) (- (+ by box-h) 2) by))
+    (let flen = (the UFix (lisp (-> UFix) (footer) (cl:length footer))))
+    (let fx = (+ bx (lisp (-> UFix) (box-w flen)
+                      (cl:max 1 (cl:floor (cl:- box-w flen) 2)))))
+    (screen:screen-set-string scr footer-y fx footer dim)
+    (screen:screen-hide-cursor scr)
+    (values))
+
+  (declare %credits-scroll-loop (term:Terminal * UFix -> Void))
+  (define (%credits-scroll-loop term scroll)
+    (term:terminal-flush term)
+    (let ev = (term:terminal-wait-for-key term))
+    (let lines = (%credits-lines))
+    (let n = (length lines))
+    (let rows = (term:terminal-rows term))
+    (let box-h = (%credits-box-h n rows))
+    (let inner-h = (%credits-inner-h box-h))
+    (let max-scroll = (%credits-max-scroll n inner-h))
+    (let scroll2 = (if (> scroll max-scroll) max-scroll scroll))
+    (let page = (if (> inner-h 1) (- inner-h 1) 1))
+    (match ev
+      ;; Scroll keys
+      ((input:IEvKey (input:KeyUp) _)
+       (let ns = (if (> scroll2 0) (- scroll2 1) 0))
+       (%draw-credits term ns)
+       (%credits-scroll-loop term ns))
+      ((input:IEvKey (input:KeyDown) _)
+       (let ns = (if (< scroll2 max-scroll) (+ scroll2 1) scroll2))
+       (%draw-credits term ns)
+       (%credits-scroll-loop term ns))
+      ((input:IEvKey (input:KeyPageUp) _)
+       (let ns = (if (> scroll2 page) (- scroll2 page) 0))
+       (%draw-credits term ns)
+       (%credits-scroll-loop term ns))
+      ((input:IEvKey (input:KeyPageDown) _)
+       (let ns = (min max-scroll (+ scroll2 page)))
+       (%draw-credits term ns)
+       (%credits-scroll-loop term ns))
+      ((input:IEvKey (input:KeyHome) _)
+       (%draw-credits term 0)
+       (%credits-scroll-loop term 0))
+      ((input:IEvKey (input:KeyEnd) _)
+       (%draw-credits term max-scroll)
+       (%credits-scroll-loop term max-scroll))
+      ;; Mouse wheel scrolls; mouse release/drag ignored; other button presses close
+      ((input:IEvMouse (input:MousePress) btn _ _)
+       (match btn
+         ((input:MouseScrollUp)
+          (let ns = (if (>= scroll2 3) (- scroll2 3) 0))
+          (%draw-credits term ns)
+          (%credits-scroll-loop term ns))
+         ((input:MouseScrollDown)
+          (let ns = (min max-scroll (+ scroll2 3)))
+          (%draw-credits term ns)
+          (%credits-scroll-loop term ns))
+         (_ (values))))
+      ((input:IEvMouse _ _ _ _) (%credits-scroll-loop term scroll2))
+      ;; Any other key closes
+      ((input:IEvKey _ _) (values))
+      ;; Resize: redraw and continue
+      ((input:IEvResize _ _)
+       (handle-dialog-resize! term)
+       (%draw-credits term scroll2)
+       (%credits-scroll-loop term scroll2))
+      (_ (%credits-scroll-loop term scroll2))))
+
+  (declare show-credits! (term:Terminal -> Void))
+  (define (show-credits! term)
+    "Show the Credits dialog. Up/Down/PgUp/PgDn/Home/End and mouse wheel
+scroll; any other key closes."
+    (%draw-credits term 0)
+    (%credits-scroll-loop term 0)
     (values))
 
 ;;; Confirm dialog
