@@ -289,7 +289,7 @@
                (:file "type-inference-tests")
                (:file "fundep-tests")
                (:file "fundep-fib-test")
-               (:ct-file "runtime-tests")
+               (:ct-file "runtime-tests")		; #-ecl (partially)
                (:module "typechecker"
                 :serial t
                 :components ((:file "lisp-type-tests")
@@ -328,7 +328,7 @@
                (:ct-file "inliner-tests")
                #+coalton-env-has-tce (:file "inliner-tests-1") ; must come after inliner-tests
                (:ct-file "deriver-tests")
-               (:ct-file "file-tests")
+               (:ct-file "file-tests")			; #-ecl (partially)
                (:ct-file "experimental-tests")
                (:file "exceptions")
                (:module "monad"
