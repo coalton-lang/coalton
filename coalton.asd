@@ -11,13 +11,19 @@
 ;;; The asdf extension in turn requires access to the compiler. so
 ;;; coalton-asdf and coalton-compiler live in their own .asd files.
 
+;; coalton/doc uses packages that only work on sbcl/ccl
+#+(and (not :coalton-without-doc) (or sbcl ccl)) (pushnew :coalton-with-doc *features*)
+;; abcl offers no TCE
+#-abcl (pushnew :coalton-env-has-tce *features*)
+
 (asdf:defsystem "coalton"
   :description "An efficient, statically typed functional programming language that supercharges Common Lisp. "
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
   :in-order-to ((asdf:test-op (asdf:test-op #:coalton/tests)))
-  :depends-on ("coalton-compiler"
+  :depends-on ("coalton-compatibility"
+               "coalton-compiler"
                "coalton/library"))
 
 (asdf:defsystem "coalton/library"
@@ -35,7 +41,8 @@
                           (*features* (cons ':coalton-lisp-toplevel *features*)))
                       (funcall compile)))
   :defsystem-depends-on ("coalton-asdf")
-  :depends-on ("coalton-compiler"
+  :depends-on ("coalton-compatibility"
+               "coalton-compiler"
                "coalton/hashtable-shim"
                "trivial-garbage"
                "alexandria")
@@ -218,6 +225,7 @@
                (:file "hash-table" :if-feature (:not :sbcl))
                (:file "impl-custom" :if-feature (:not :sbcl))))
 
+#+coalton-with-doc
 (asdf:defsystem "coalton/doc"
   :description "Documentation generator for Coalton"
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
@@ -251,7 +259,7 @@
   :depends-on ("coalton"
                "coalton/library/big-float"
                "coalton/library/algorithms"
-               "coalton/doc"
+               #+coalton-with-doc "coalton/doc"
                "coalton/xmath"
                "coalton/testing"
                "fiasco"
@@ -277,11 +285,11 @@
                (:file "entry-tests")
                (:file "codegen-pattern-tests")
                (:file "toplevel-tests")
-               (:file "doc-tests")
+               #+coalton-with-doc (:file "doc-tests")
                (:file "type-inference-tests")
                (:file "fundep-tests")
                (:file "fundep-fib-test")
-               (:ct-file "runtime-tests")
+               (:ct-file "runtime-tests")		; #-ecl (partially)
                (:module "typechecker"
                 :serial t
                 :components ((:file "lisp-type-tests")
@@ -303,7 +311,7 @@
                (:file "vector-tests")
                (:file "queue-tests")
                (:file "string-tests")
-               (:file "optional-tests")
+         #-ecl (:file "optional-tests")
                (:file "ordtree-tests")
                (:file "ordmap-tests")
                (:file "recursive-let-tests")
@@ -318,9 +326,9 @@
                (:file "looping-native-tests")
                (:ct-file "monomorphizer-tests")
                (:ct-file "inliner-tests")
-               (:file "inliner-tests-1") ; must come after inliner-tests
+               #+coalton-env-has-tce (:file "inliner-tests-1") ; must come after inliner-tests
                (:ct-file "deriver-tests")
-               (:ct-file "file-tests")
+               (:ct-file "file-tests")			; #-ecl (partially)
                (:ct-file "experimental-tests")
                (:file "exceptions")
                (:module "monad"
