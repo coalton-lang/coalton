@@ -69,7 +69,7 @@ Everything is clickable with your mouse, or accessible with keyboard shortcuts.
 The biggest difference between `mine` and conventional IDEs is an idea we call "beaming". Your program, whether your whole project or just an individual function, can be beamed to the REPL. That means making that component available to the REPL for immediate testing and use. This gives an entirely new *interactive* and *incremental* development workflow that looks something like:
 
 1. Open files of interest. Or make a new one. Write some code.
-2. Open a REPL with F3:Editor > Show REPL, or Ctrl+r. Flip between the REPL and editor with Ctrl+r.
+2. Open a REPL with F3:Editor > Show REPL, or Ctrl+r. Flip between the REPL and editor with Ctrl+r and Ctrl+e.
 3. Beam the code you want:
     - Your project with F5:Project > Beam Project, or `(asdf:load-system "your-project")`
     - A whole file with F3:Editor > Beam File, or Alt+k in the editor.
