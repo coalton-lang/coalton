@@ -101,7 +101,7 @@
   (declare %mine-menu (Void -> MenuDef))
   (define (%mine-menu)
     (MenuDef "mine" (make-list
-      (MenuItem "Help"      "" ActionHelp)
+      (MenuItem "Help"      "Ctrl+h" ActionHelp)
       (MenuItem "About"     "" ActionAbout)
       (MenuItem "Credits"   "" ActionCredits)
       (MenuItem "Quit"      "Ctrl+q" ActionQuit))))
