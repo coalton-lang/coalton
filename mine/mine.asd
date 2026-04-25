@@ -163,6 +163,7 @@
                  (:ct-file "dialogs")
                  (:ct-file "find")
                  (:ct-file "build")
+                 (:ct-file "symbols")
                  (:file "diagnostics")
                  (:ct-file "mine")
                  (:file "executable")))))

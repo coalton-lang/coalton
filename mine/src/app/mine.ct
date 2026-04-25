@@ -46,6 +46,7 @@
    (#:find #:mine/app/find)
    (#:dialogs #:mine/app/dialogs)
    (#:build #:mine/app/build)
+   (#:symbols #:mine/app/symbols)
    (#:cellw #:mine/text/width)
    (#:spinner #:mine/widget/spinner)
    (#:ht #:coalton/hashtable)
@@ -3067,6 +3068,9 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          ;; Ctrl+o -> open file
          ((input:KeyCtrl #\o) (prompt-open-file! st))
 
+         ;; Ctrl+\ -> insert Unicode symbol by LaTeX-style name
+         ((input:KeyCtrl #\\) (start-symbol-input! st))
+
          ;; Route to focused pane
          (_
           (match (focus:focus-current (.ms-focus st))
@@ -3609,6 +3613,46 @@ wrap is on, row is resolved through screen-row-to-line-seg."
                                            (%find-do-prev! st needle)))
     (mini:minibuffer-set-footer-hint! (.ms-minibuffer st)
                                       "Ctrl+f for next match, Enter to dismiss"))
+
+;;; Symbol input (Ctrl+\)
+
+  (declare %insert-text-at-focus! (MineState * String -> Void))
+  (define (%insert-text-at-focus! st text)
+    "Insert TEXT into whichever input area is currently in focus."
+    (match (focus:focus-current (.ms-focus st))
+      ((focus:FocusRepl)
+       (repl:repl-pane-paste-to-input! (.ms-repl st) text))
+      (_
+       (match (mgr:bufmgr-current (.ms-bufmgr st))
+         ((Some buf)
+          (ops:insert-string! buf (buf:buffer-undo buf) (.ms-cursor st) text))
+         ((None) (values))))))
+
+  (declare %finish-symbol-input! (MineState * String -> Void))
+  (define (%finish-symbol-input! st name)
+    "Look up NAME in the LaTeX symbol table and insert the matched character."
+    (cond
+      ((== (str:length name) 0)
+       (status:statusbar-set-message! (.ms-status st) "No symbol selected"))
+      (True
+       (match (symbols:latex-symbol-lookup name)
+         ((Some replacement)
+          (%insert-text-at-focus! st replacement))
+         ((None)
+          (status:statusbar-set-message!
+           (.ms-status st)
+           (str:concat "Unknown symbol: \\" name)))))))
+
+  (declare start-symbol-input! (MineState -> Void))
+  (define (start-symbol-input! st)
+    "Open the minibuffer for entering a LaTeX-style symbol name. Tab completes,
+Enter or Space inserts the matching Unicode character at the cursor."
+    (mini:minibuffer-prompt-symbol-picker! (.ms-minibuffer st)
+                                           "Symbol \\"
+                                           (fn (name) (%finish-symbol-input! st name))
+                                           symbols:latex-symbol-completion)
+    (mini:minibuffer-set-footer-hint! (.ms-minibuffer st)
+                                      "Tab to complete, Enter or Space to insert, Ctrl+g to cancel"))
 
 ;;; Close current file
 
