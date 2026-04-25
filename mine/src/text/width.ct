@@ -9,21 +9,9 @@
 
 (in-package #:mine/text/width)
 
-(coalton-toplevel
-
-  (declare char-cell-width (Char -> UFix))
-  (define (char-cell-width ch)
-    "Return the display width of CH in terminal cells (0, 1, or 2)."
-    (lisp (-> UFix) (ch)
-      (char-cell-width-cl ch)))
-
-  (declare string-cell-width (String -> UFix))
-  (define (string-cell-width text)
-    "Return the display width of TEXT in terminal cells."
-    (lisp (-> UFix) (text)
-      (string-cell-width-cl text))))
-
-;;; CL helpers — called from both Coalton and raw CL code
+;;; CL helpers — called from both Coalton and raw CL code.
+;;; Defined before the coalton-toplevel block so the INLINE proclamation
+;;; takes effect at the first call site (in the Coalton wrappers below).
 
 (cl:declaim (cl:inline char-cell-width-cl))
 (cl:defun char-cell-width-cl (ch)
@@ -54,3 +42,17 @@
              :while (cl:<= (cl:+ cols cw) columns)
              :do (cl:incf cols cw) (cl:incf count))
     count))
+
+(coalton-toplevel
+
+  (declare char-cell-width (Char -> UFix))
+  (define (char-cell-width ch)
+    "Return the display width of CH in terminal cells (0, 1, or 2)."
+    (lisp (-> UFix) (ch)
+      (char-cell-width-cl ch)))
+
+  (declare string-cell-width (String -> UFix))
+  (define (string-cell-width text)
+    "Return the display width of TEXT in terminal cells."
+    (lisp (-> UFix) (text)
+      (string-cell-width-cl text))))

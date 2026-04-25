@@ -943,7 +943,7 @@ line)."
     (let line-end = (+ line-buf-offset text-len))
     (lisp (-> Void) (scr y text-x text-len default-style
                      vcol-map scroll-vcol vis-vcol-end
-                     line-buf-offset line-end)
+                     line-end)
       (cl:let ((best 0))
         (cl:dolist (diag-range *line-diagnostic-ranges*)
           (cl:destructuring-bind (start end severity) diag-range
