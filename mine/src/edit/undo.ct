@@ -11,7 +11,8 @@
    #:undo-end-group!
    #:with-undo-group!
    #:undo-record!
-   #:undo-undo!))
+   #:undo-undo!
+   #:undo-redo!))
 
 (in-package #:mine/edit/undo)
 
@@ -144,6 +145,19 @@ The caller is responsible for applying the reversed operations to the buffer."
       ((Some entry)
        (let rev = (reverse-entry entry))
        (cell:push! (.redo-stack tree) rev)
+       (Some entry))))
+
+  (declare undo-redo! (UndoTree -> (Optional UndoEntry)))
+  (define (undo-redo! tree)
+    "Pop the top redo entry, push its reverse onto undo, and return it.
+The caller is responsible for applying the returned entry's operations
+to the buffer (interpreted as the inverse of an original edit, exactly
+like `undo-undo!`)."
+    (match (cell:pop! (.redo-stack tree))
+      ((None) None)
+      ((Some entry)
+       (let rev = (reverse-entry entry))
+       (cell:push! (.undo-stack tree) rev)
        (Some entry))))
 
 )
