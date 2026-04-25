@@ -417,10 +417,16 @@ Returns (event next-pos)."
             ;; Function keys F1-F12 (CSI u codepoints 57364-57375)
             ((and (>= codepoint 57364) (<= codepoint 57375))
              (IEvKey (KeyF (+ 1 (- codepoint 57364))) modifier))
-            ;; Ctrl+letter: emit KeyCtrl to match legacy key bindings
+            ;; Ctrl+letter: emit KeyCtrl to match legacy key bindings.
+            ;; When shift is also held the codepoint is uppercased so
+            ;; callers can distinguish e.g. Ctrl+z (undo) from Ctrl+Shift+z
+            ;; (redo).
             ((and (== modifier ModCtrl)
                   (and (>= codepoint 97) (<= codepoint 122)))
-             (IEvKey (KeyCtrl (ufix-to-char codepoint)) ModCtrl))
+             (let actual = (if shifted
+                               (%apply-shift-to-codepoint codepoint)
+                               codepoint))
+             (IEvKey (KeyCtrl (ufix-to-char actual)) ModCtrl))
             ((and (>= codepoint 32) (<= codepoint 126))
              (let actual = (if shifted
                                (%apply-shift-to-codepoint codepoint)

@@ -2574,6 +2574,17 @@ Uses the preceding (in-package ...) form to determine the compilation package."
             ((None) (values))))
          ((None) (values))))
 
+      ;; Ctrl+Shift+z -> redo
+      ((input:KeyCtrl #\Z)
+       (match (mgr:bufmgr-current (.ms-bufmgr st))
+         ((Some buf)
+          (match (undo:undo-redo! (buf:buffer-undo buf))
+            ((Some (undo:UndoEntry entry-ops entry-cursor-before _))
+             (apply-undo-ops (buf:buffer-gap buf) entry-ops)
+             (cursor:cursor-move-to-position! (.ms-cursor st) entry-cursor-before))
+            ((None) (values))))
+         ((None) (values))))
+
       ;; Ctrl+s -> save current file
       ((input:KeyCtrl #\s)
        (match (mgr:bufmgr-current (.ms-bufmgr st))
