@@ -6,6 +6,7 @@
    (#:term #:mine/term/terminal)
    (#:input #:mine/term/input)
    (#:render #:mine/widget/render)
+   (#:str #:coalton/string)
    (#:wt #:mine/widget/types))
   (:export
    #:show-help!))
@@ -21,116 +22,236 @@
     "Subtract scroll from row, returning a large value on underflow."
     (if (>= row scroll) (- row scroll) 99999))
 
-  (declare help-line (screen:Screen * UFix * color:Style * color:Style * String * String -> Void))
-  (define (help-line scr row key-s desc-s key desc)
-    (screen:screen-set-string scr row 5 key key-s)
-    (screen:screen-set-string scr row 30 desc desc-s)
-    (values))
-
   (declare make-rule-string (UFix -> String))
   (define (make-rule-string n)
     "A thin horizontal rule."
     (lisp (-> String) (n)
       (cl:make-string n :initial-element (cl:code-char #x2500))))
 
+  (declare wrap-words (String * UFix -> (List String)))
+  (define (wrap-words text width)
+    "Greedily word-wrap TEXT into lines of at most WIDTH chars, breaking
+on spaces only. An empty input produces a single empty line."
+    (lisp (-> (List String)) (text width)
+      (cl:let* ((w (cl:max 1 width))
+                (len (cl:length text))
+                (words cl:nil)
+                (start 0))
+        (cl:dotimes (i len)
+          (cl:when (cl:char= (cl:char text i) #\Space)
+            (cl:when (cl:> i start)
+              (cl:push (cl:subseq text start i) words))
+            (cl:setf start (cl:1+ i))))
+        (cl:when (cl:< start len)
+          (cl:push (cl:subseq text start len) words))
+        (cl:setf words (cl:nreverse words))
+        (cl:let ((lines cl:nil)
+                 (current ""))
+          (cl:dolist (word words)
+            (cl:cond
+              ((cl:zerop (cl:length current))
+               (cl:setf current word))
+              ((cl:<= (cl:+ (cl:length current) 1 (cl:length word)) w)
+               (cl:setf current (cl:concatenate 'cl:string current " " word)))
+              (cl:t
+               (cl:push current lines)
+               (cl:setf current word))))
+          (cl:when (cl:plusp (cl:length current))
+            (cl:push current lines))
+          (cl:if (cl:null lines)
+                 (cl:list "")
+                 (cl:nreverse lines))))))
+
+  ;;; Content model
+
+  (define-type HelpItem
+    "An entry in the help screen content list. The renderer assigns rows
+automatically based on each item's height."
+    (Title String)
+    (Section String)
+    (Binding String String)
+    (Tip String)
+    (Paragraph String)
+    Blank)
+
+  (declare help-item-height (HelpItem * UFix -> UFix))
+  (define (help-item-height item wrap-width)
+    "Vertical rows occupied by an item, given the wrap width for prose."
+    (match item
+      ((Title _) 2)
+      ((Paragraph s) (length (wrap-words s wrap-width)))
+      ((Tip s) (length (wrap-words s wrap-width)))
+      (_ 1)))
+
+  (declare help-total-height ((List HelpItem) * UFix -> UFix))
+  (define (help-total-height items wrap-width)
+    (fold (fn (acc item) (+ acc (help-item-height item wrap-width))) 0 items))
+
+  ;;; Content
+
+  (declare help-content (Void -> (List HelpItem)))
+  (define (help-content)
+    (make-list
+     (Title "Introduction")
+     (Paragraph "mine should be a familiar editor; common keybindings work. The usual workflow is to open a file or project, open a REPL, edit code, and beam code to the REPL to try it out. When your program is done, you can save an executable.")
+     Blank
+     (Paragraph "Be sure to run the F6:Site > Setup Wizard for basic setup.")
+     Blank
+     (Paragraph "Need help? Discord and bug tracker here: https://github.com/coalton-lang/coalton")
+     Blank
+     (Title "Glossary")
+     (Paragraph "BEAM, BEAMING: To send code to the REPL for further interaction.")
+     (Paragraph "FASL: An intermediate compilation artifact that is cached to make builds faster.")
+     (Paragraph "PROJECT: A group of source files unified by a system definition (a .asd file).")
+     (Paragraph "FORM: A piece of executable source code.")
+     (Paragraph "STRUCTURAL EDITING: A way of editing Lisp code where parentheses are always handled in pairs, so as to never unbalance them.")
+     Blank
+     (Title "Keybindings")
+     Blank
+     (Section "Global")
+     (Binding "F1-F6"        "Open menus")
+     (Binding "Ctrl+r"       "Open/focus REPL, maximize when focused")
+     (Binding "Ctrl+e"       "Focus editor, maximize when focused")
+     (Binding "Ctrl+t"       "Expand file tree / open files panel")
+     (Binding "Ctrl+1-9"     "Switch to open file by number")
+     (Binding "Ctrl+q"       "Quit")
+     (Binding "Esc / Ctrl+g" "Cancel / refresh display")
+     (Binding "Mouse click"  "Switch pane focus")
+     Blank
+     (Section "Editor - Basics")
+     (Binding "Arrows"      "Move cursor")
+     (Binding "Home / End"  "Line start / end")
+     (Binding "PgUp / PgDn" "Scroll half screen")
+     (Binding "Enter"       "Newline + auto-indent")
+     (Binding "Ctrl+o"      "New/open file")
+     (Binding "Ctrl+s"      "Save file")
+     (Binding "Ctrl+w"      "Close file")
+     (Binding "Ctrl+f"      "Find in file")
+     (Binding "Ctrl+c"      "Copy selection")
+     (Binding "Ctrl+x"      "Cut selection")
+     (Binding "Ctrl+v"      "Paste clipboard")
+     (Binding "Ctrl+z"      "Undo")
+     (Binding "Ctrl+Space"  "Toggle selection")
+     (Binding "Ctrl+1-5"    "View open file numbered 1 to 5")
+     Blank
+     (Section "Editor - Programming")
+     (Binding "Tab"         "Reindent line")
+     (Binding "Alt+k"       "Beam file to REPL")
+     (Binding "Alt+c"       "Beam form at cursor to REPL")
+     (Binding "Alt+."       "Jump to definition")
+     (Binding "Alt+,"       "Jump back")
+     (Binding "Alt+[ / Alt+]"       "Previous / Next diagnostic (project)")
+     (Binding "Alt+{ / Alt+}"       "Previous / Next diagnostic (everywhere)")
+     Blank
+     (Section "Editor - Structural Editing")
+     (Tip "Try the built-in lessons! Go to Editor > Structural Lessons.")
+     (Binding "Ctrl+p"                 "Toggle structural editing")
+     (Binding "( ) [ ] \""             "Balanced insert/close")
+     (Binding "Backspace"              "Balanced delete")
+     (Binding "Ctrl+Left / Ctrl+Right" "Backward / forward word")
+     (Binding "Alt+Left / Alt+Right"   "Forward barf / slurp")
+     (Binding "Alt+Up / Alt+Down"      "Splice / cleave")
+     (Binding "Ctrl+Backspace"         "Backward word delete")
+     (Binding "Alt+f / Alt+b"          "Forward / backward sexp")
+     Blank
+     (Section "File Tree")
+     (Binding "Up / Down"    "Navigate (previews file in Editor)")
+     (Binding "Left / Right" "Collapse / expand directory")
+     (Binding "Enter"        "Open file / toggle dir")
+     Blank
+     (Section "Open Files List")
+     (Binding "Enter" "Go to file in editor")
+     (Binding "c"     "Close file")
+     (Binding "s"     "Save file")
+     (Binding "r"     "Refresh from disk")
+     (Binding "o"     "Open file dialog")
+     Blank
+     (Section "REPL")
+     (Binding "Enter"     "Evaluate")
+     (Binding "Up / Down" "History")
+     (Binding ",restart"  "Restart runtime (clean slate)")
+     (Binding ",clear"    "Clear REPL output")
+     (Binding ",coalton"  "Switch to Coalton mode")
+     (Binding ",lisp"     "Switch to Lisp mode")
+     (Binding ",help"     "List comma commands")
+     Blank
+     (Section "Debugger")
+     (Binding "Up / Down" "Move between restarts/backtrace")
+     (Binding "0-9"       "Invoke restart")
+     (Binding "q / a"     "Abort")))
+
   ;;; Drawing
+
+  (declare draw-wrapped-lines
+    (screen:Screen * (List String) * UFix * UFix * color:Style -> Void))
+  (define (draw-wrapped-lines scr lines content-row scroll style)
+    (match lines
+      ((Nil) (values))
+      ((Cons line rest)
+       (screen:screen-set-string scr (%scroll-row content-row scroll) 5 line style)
+       (draw-wrapped-lines scr rest (+ content-row 1) scroll style))))
+
+  (declare draw-help-item
+    (screen:Screen * HelpItem * UFix * UFix * UFix
+     * color:Style * color:Style * color:Style * color:Style * color:Style
+     -> Void))
+  (define (draw-help-item scr item content-row scroll wrap-width
+                          heading-s key-s desc-s tip-s para-s)
+    (let r = (%scroll-row content-row scroll))
+    (match item
+      ((Title s)
+       (screen:screen-set-string scr r 3 s heading-s)
+       (screen:screen-set-string scr (%scroll-row (+ content-row 1) scroll) 3
+                                 (make-rule-string (str:length s))
+                                 desc-s))
+      ((Section s)
+       (screen:screen-set-string scr r 3 s heading-s))
+      ((Binding k d)
+       (screen:screen-set-string scr r 5  k key-s)
+       (screen:screen-set-string scr r 30 d desc-s))
+      ((Tip s)
+       (draw-wrapped-lines scr (wrap-words s wrap-width) content-row scroll tip-s))
+      ((Paragraph s)
+       (draw-wrapped-lines scr (wrap-words s wrap-width) content-row scroll para-s))
+      ((Blank) (values))))
+
+  (declare draw-help-items
+    (screen:Screen * (List HelpItem) * UFix * UFix * UFix
+     * color:Style * color:Style * color:Style * color:Style * color:Style
+     -> Void))
+  (define (draw-help-items scr items content-row scroll wrap-width
+                           heading-s key-s desc-s tip-s para-s)
+    (match items
+      ((Nil) (values))
+      ((Cons item rest)
+       (draw-help-item scr item content-row scroll wrap-width
+                       heading-s key-s desc-s tip-s para-s)
+       (draw-help-items scr rest (+ content-row (help-item-height item wrap-width))
+                        scroll wrap-width heading-s key-s desc-s tip-s para-s))))
 
   (declare %draw-help-content (screen:Screen * UFix * UFix * UFix -> Void))
   (define (%draw-help-content scr cols rows scroll)
     "Draw the help screen content with SCROLL offset."
-    (let bg = (color:Style color:text-fg
-                            color:panel-bg
-                            color:AttrNone))
-    (let heading = (color:Style color:accent-fg
-                                 color:panel-bg
-                                 color:AttrBold))
-    (let key-s = (color:Style color:info-fg
-                               color:panel-bg
-                               color:AttrBold))
+    (let bg = (color:Style color:text-fg color:panel-bg color:AttrNone))
+    (let heading-s = (color:Style color:accent-fg color:panel-bg color:AttrBold))
+    (let key-s = (color:Style color:info-fg color:panel-bg color:AttrBold))
     (let desc-s = bg)
+    (let tip-s = (color:Style color:text-dimmer-fg color:panel-bg color:AttrItalic))
+    (let para-s = bg)
+    ;; Wrap prose so it ends before the scrollbar (text starts at col 5,
+    ;; scrollbar at col cols-1, with a 1-col gap).
+    (let wrap-width = (if (> cols 7) (- cols 7) 1))
     ;; Clear screen with background
     (render:fill-rect scr (wt:Rect 0 0 cols rows) #\Space bg)
-    ;; Title
-    (screen:screen-set-string scr (%scroll-row 1 scroll) 3 "Keybindings" heading)
-    (screen:screen-set-string scr (%scroll-row 2 scroll) 3 (make-rule-string 11) bg)
-    ;; Global
-    (screen:screen-set-string scr (%scroll-row 4 scroll) 3 "Global" heading)
-    (help-line scr (%scroll-row 5 scroll) key-s desc-s "F1-F6" "Open menus (Mine, File, Editor, REPL, Project, Site)")
-    (help-line scr (%scroll-row 6 scroll) key-s desc-s "Ctrl+r" "Open/focus REPL, maximize when focused")
-    (help-line scr (%scroll-row 7 scroll) key-s desc-s "Ctrl+e" "Focus editor, maximize when focused")
-    (help-line scr (%scroll-row 8 scroll) key-s desc-s "Ctrl+t" "Expand file tree / open files panel")
-    (help-line scr (%scroll-row 9 scroll) key-s desc-s "Ctrl+1-9" "Switch to open file by number")
-    (help-line scr (%scroll-row 10 scroll) key-s desc-s "Ctrl+q" "Quit")
-    (help-line scr (%scroll-row 11 scroll) key-s desc-s "Esc / Ctrl+g" "Cancel / refresh terminal")
-    (help-line scr (%scroll-row 12 scroll) key-s desc-s "Mouse click" "Switch pane focus")
-    ;; Editor
-    (screen:screen-set-string scr (%scroll-row 14 scroll) 3 "Editor" heading)
-    (help-line scr (%scroll-row 15 scroll) key-s desc-s "Arrows" "Move cursor")
-    (help-line scr (%scroll-row 16 scroll) key-s desc-s "Home / End" "Line start / end")
-    (help-line scr (%scroll-row 17 scroll) key-s desc-s "PgUp / PgDn" "Scroll half screen")
-    (help-line scr (%scroll-row 18 scroll) key-s desc-s "Enter" "Newline + auto-indent")
-    (help-line scr (%scroll-row 19 scroll) key-s desc-s "Tab" "Reindent line (Lisp/Coalton)")
-    (help-line scr (%scroll-row 20 scroll) key-s desc-s "Ctrl+o" "New/open file")
-    (help-line scr (%scroll-row 21 scroll) key-s desc-s "Ctrl+s" "Save file")
-    (help-line scr (%scroll-row 22 scroll) key-s desc-s "Ctrl+w" "Close file")
-    (help-line scr (%scroll-row 23 scroll) key-s desc-s "Ctrl+f" "Find in file")
-    (help-line scr (%scroll-row 24 scroll) key-s desc-s "Ctrl+c" "Copy selection")
-    (help-line scr (%scroll-row 25 scroll) key-s desc-s "Ctrl+x" "Cut selection")
-    (help-line scr (%scroll-row 26 scroll) key-s desc-s "Ctrl+v" "Paste clipboard")
-    (help-line scr (%scroll-row 27 scroll) key-s desc-s "Ctrl+z" "Undo")
-    (help-line scr (%scroll-row 28 scroll) key-s desc-s "Ctrl+Space" "Toggle selection")
-    (help-line scr (%scroll-row 29 scroll) key-s desc-s "Alt+k" "Beam file to REPL")
-    (help-line scr (%scroll-row 30 scroll) key-s desc-s "Alt+c" "Beam form at cursor")
-    (help-line scr (%scroll-row 31 scroll) key-s desc-s "Alt+." "Jump to definition")
-    (help-line scr (%scroll-row 32 scroll) key-s desc-s "Alt+," "Jump back")
-    (help-line scr (%scroll-row 33 scroll) key-s desc-s "Alt+[" "Previous diagnostic (project)")
-    (help-line scr (%scroll-row 34 scroll) key-s desc-s "Alt+]" "Next diagnostic (project)")
-    (help-line scr (%scroll-row 35 scroll) key-s desc-s "Alt+{" "Previous diagnostic (all)")
-    (help-line scr (%scroll-row 36 scroll) key-s desc-s "Alt+}" "Next diagnostic (all)")
-    (help-line scr (%scroll-row 37 scroll) key-s desc-s "Ctrl+p" "Toggle structural editing")
-    ;; Structural Editing
-    (screen:screen-set-string scr (%scroll-row 39 scroll) 3 "Structural Editing" heading)
-    (screen:screen-set-string scr (%scroll-row 40 scroll) 5
-      "Try the built-in lessons! Go to Editor > Structural Lessons."
-      (color:Style color:text-dimmer-fg color:panel-bg color:AttrItalic))
-    (help-line scr (%scroll-row 41 scroll) key-s desc-s "( ) \"" "Balanced insert")
-    (help-line scr (%scroll-row 42 scroll) key-s desc-s "Backspace" "Balanced delete")
-    (help-line scr (%scroll-row 43 scroll) key-s desc-s "Ctrl+Left / Ctrl+Right" "Backward / forward word")
-    (help-line scr (%scroll-row 44 scroll) key-s desc-s "Ctrl+Backspace" "Backward word delete")
-    (help-line scr (%scroll-row 45 scroll) key-s desc-s "Alt+f / Alt+b" "Forward / backward sexp")
-    (help-line scr (%scroll-row 46 scroll) key-s desc-s "Alt+Left / Alt+Right" "Forward barf / slurp")
-    (help-line scr (%scroll-row 47 scroll) key-s desc-s "Alt+Up / Alt+Down" "Splice / cleave")
-    ;; Tree
-    (screen:screen-set-string scr (%scroll-row 49 scroll) 3 "File Tree" heading)
-    (help-line scr (%scroll-row 50 scroll) key-s desc-s "Up / Down" "Navigate (previews file)")
-    (help-line scr (%scroll-row 51 scroll) key-s desc-s "Left / Right" "Collapse / expand directory")
-    (help-line scr (%scroll-row 52 scroll) key-s desc-s "Enter" "Open file / toggle dir")
-    ;; Open Files
-    (screen:screen-set-string scr (%scroll-row 54 scroll) 3 "Open Files" heading)
-    (help-line scr (%scroll-row 55 scroll) key-s desc-s "Enter" "Go to file in editor")
-    (help-line scr (%scroll-row 56 scroll) key-s desc-s "c" "Close file")
-    (help-line scr (%scroll-row 57 scroll) key-s desc-s "s" "Save file")
-    (help-line scr (%scroll-row 58 scroll) key-s desc-s "r" "Refresh from disk")
-    (help-line scr (%scroll-row 59 scroll) key-s desc-s "o" "Open file dialog")
-    ;; REPL
-    (screen:screen-set-string scr (%scroll-row 61 scroll) 3 "REPL" heading)
-    (help-line scr (%scroll-row 62 scroll) key-s desc-s "Enter" "Evaluate")
-    (help-line scr (%scroll-row 63 scroll) key-s desc-s "Up / Down" "History")
-    (help-line scr (%scroll-row 64 scroll) key-s desc-s ",restart" "Restart runtime (clean slate)")
-    (help-line scr (%scroll-row 65 scroll) key-s desc-s ",clear" "Clear REPL output")
-    (help-line scr (%scroll-row 66 scroll) key-s desc-s ",coalton" "Switch to Coalton mode")
-    (help-line scr (%scroll-row 67 scroll) key-s desc-s ",lisp" "Switch to Lisp mode")
-    (help-line scr (%scroll-row 68 scroll) key-s desc-s ",help" "List comma commands")
-    ;; Debugger
-    (screen:screen-set-string scr (%scroll-row 70 scroll) 3 "Debugger" heading)
-    (help-line scr (%scroll-row 71 scroll) key-s desc-s "0-9" "Invoke restart")
-    (help-line scr (%scroll-row 72 scroll) key-s desc-s "q / a" "Abort")
+    ;; Draw items starting at content row 1 (row 0 is leading top padding).
+    (draw-help-items scr (help-content) 1 scroll wrap-width
+                     heading-s key-s desc-s tip-s para-s)
     ;; Footer (fixed at bottom)
     (let footer-y = (if (> rows 1) (- rows 1) 0))
     (render:fill-rect scr (wt:Rect 0 footer-y cols 1) #\Space bg)
-    (screen:screen-set-string scr footer-y 3 "Up/Down to scroll, Enter to close"
-      (color:Style color:text-dimmer-fg color:panel-bg color:AttrItalic))
-    ;; Scrollbar on right edge (above footer)
+    (screen:screen-set-string scr footer-y 3 "Up/Down to scroll, Enter to close" tip-s)
+    ;; Scrollbar on right edge (above footer). Total includes the leading
+    ;; top-padding row, matching the offset passed to draw-help-items above.
     (let track-s = (color:Style color:scrollbar-track-fg
                                 color:scrollbar-track-bg
                                 color:AttrNone))
@@ -139,7 +260,8 @@
                                 color:AttrNone))
     (let sb-col = (if (> cols 0) (- cols 1) 0))
     (let sb-h = (if (> rows 1) (- rows 1) 0))
-    (render:draw-scrollbar scr sb-col 0 sb-h 72 scroll track-s thumb-s)
+    (let total-lines = (+ 1 (help-total-height (help-content) wrap-width)))
+    (render:draw-scrollbar scr sb-col 0 sb-h total-lines scroll track-s thumb-s)
     (values))
 
   ;;; Scroll loop
@@ -153,7 +275,10 @@
     (let ev = (term:terminal-wait-for-key term))
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
-    (let max-scroll = (if (> 72 rows) (- 72 rows) 0))
+    (let wrap-width = (if (> cols 7) (- cols 7) 1))
+    (let total-lines = (+ 1 (help-total-height (help-content) wrap-width)))
+    (let viewport = (if (> rows 1) (- rows 1) 0))
+    (let max-scroll = (if (> total-lines viewport) (- total-lines viewport) 0))
     (match ev
       ((input:IEvKey (input:KeyEnter) _) False)
       ((input:IEvKey (input:KeyEscape) _) False)
