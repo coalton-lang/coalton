@@ -8,7 +8,7 @@
    #:KeyInsert #:KeyDelete
    #:KeyF #:KeyShiftedF
    #:KeyUnknown
-   #:Modifier #:ModNone #:ModShift #:ModAlt #:ModCtrl
+   #:Modifier #:ModNone #:ModShift #:ModAlt #:ModCtrl #:ModAltShift
    #:MouseButton
    #:MouseLeft #:MouseMiddle #:MouseRight
    #:MouseScrollUp #:MouseScrollDown
@@ -57,7 +57,8 @@
     ModNone
     ModShift
     ModAlt
-    ModCtrl)
+    ModCtrl
+    ModAltShift)
 
   (define-instance (Eq Modifier)
     (define (== a b)
@@ -332,6 +333,9 @@ Returns (event next-pos)."
                          (cl:let ((bits (cl:if (cl:> m 1) (cl:1- m) 0)))
                            (cl:cond
                              ((cl:logbitp 2 bits) ModCtrl)
+                             ((cl:and (cl:logbitp 1 bits)
+                                      (cl:logbitp 0 bits))
+                              ModAltShift)
                              ((cl:logbitp 1 bits) ModAlt)
                              ((cl:logbitp 0 bits) ModShift)
                              (cl:t ModNone)))))
@@ -431,7 +435,8 @@ Returns (event next-pos)."
              (let actual = (if shifted
                                (%apply-shift-to-codepoint codepoint)
                                codepoint))
-             (IEvKey (KeyChar (ufix-to-char actual)) modifier))
+             (let final-mod = (if shifted (%strip-shift modifier) modifier))
+             (IEvKey (KeyChar (ufix-to-char actual)) final-mod))
             (True (IEvKey (KeyUnknown codepoint) modifier))))
          (_ (IEvKey (KeyUnknown 117) ModNone))))
       ;; Unknown
@@ -453,11 +458,20 @@ Returns (event next-pos)."
 
   ;;; Helpers
 
+  (declare %strip-shift (Modifier -> Modifier))
+  (define (%strip-shift m)
+    "Clear the Shift bit from a modifier (used after a Shift-applied codepoint)."
+    (match m
+      ((ModAltShift) ModAlt)
+      ((ModShift) ModNone)
+      (_ m)))
+
   (declare %apply-alt (InputEvent -> InputEvent))
   (define (%apply-alt ev)
-    "Set the modifier to Alt on key events (for ESC-prefix encoding)."
+    "Add Alt to a key event's modifier (for ESC-prefix encoding)."
     (match ev
-      ((IEvKey key _) (IEvKey key ModAlt))
+      ((IEvKey key (ModShift)) (IEvKey key ModAltShift))
+      ((IEvKey key _)          (IEvKey key ModAlt))
       (_ ev)))
 
   ;;; Main parser

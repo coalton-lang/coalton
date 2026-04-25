@@ -133,7 +133,7 @@ automatically based on each item's height."
      (Binding "Ctrl+z / Ctrl+Z"   "Undo / Redo")
      (Binding "Ctrl+Space"        "Toggle selection")
      (Binding "Ctrl+1-5"          "View open file numbered 1 to 5")
-     (Binding "Ctrl+Left / Ctrl+Right" "Backward / forward word")
+     (Binding "Ctrl+← / Ctrl+→"   "Backward / forward word")
      (Binding "Ctrl+Backspace"    "Backward word delete")
      Blank
      (Section "Editor - Programming")
@@ -150,15 +150,16 @@ automatically based on each item's height."
      (Binding "Ctrl+p"                 "Toggle structural editing")
      (Binding "( ) [ ] \""             "Balanced insert/close")
      (Binding "Backspace"              "Balanced delete")
-     (Binding "Alt+Left / Alt+Right"   "Forward barf / slurp")
-     (Binding "Alt+Up / Alt+Down"      "Splice / cleave enclosing S-expression")
+     (Binding "Alt+← / Alt+→"             "Forward (right) barf / slurp")
+     (Binding "Alt+Shift+← / Alt+Shift+→" "Backward (left) slurp / barf")
+     (Binding "Alt+↑ / Alt+↓"             "Splice / cleave enclosing S-expression")
      (Binding "Alt+Backspace"          "Delete enclosing S-expression")
-     (Binding "Alt+f / Alt+b"          "Forward / backward sexp")
+     (Binding "Alt+f / Alt+b"          "Move forward / backward an S-expression")
      Blank
      (Section "File Tree")
-     (Binding "Up / Down"    "Navigate (previews file in Editor)")
-     (Binding "Left / Right" "Collapse / expand directory")
-     (Binding "Enter"        "Open file / toggle dir")
+     (Binding "↑ / ↓"   "Navigate (previews file in Editor)")
+     (Binding "← / →"   "Collapse / expand directory")
+     (Binding "Enter"   "Open file / toggle dir")
      Blank
      (Section "Open Files List")
      (Binding "Enter" "Go to file in editor")
@@ -169,7 +170,7 @@ automatically based on each item's height."
      Blank
      (Section "REPL")
      (Binding "Enter"     "Evaluate")
-     (Binding "Up / Down" "History")
+     (Binding "↑ / ↓"     "History")
      (Binding ",restart"  "Restart runtime (clean slate)")
      (Binding ",clear"    "Clear REPL output")
      (Binding ",coalton"  "Switch to Coalton mode")
@@ -177,7 +178,7 @@ automatically based on each item's height."
      (Binding ",help"     "List comma commands")
      Blank
      (Section "Debugger")
-     (Binding "Up / Down" "Move between restarts/backtrace")
+     (Binding "↑ / ↓"     "Move between restarts/backtrace")
      (Binding "0-9"       "Invoke restart")
      (Binding "q / a"     "Abort")))
 
@@ -209,7 +210,7 @@ automatically based on each item's height."
        (screen:screen-set-string scr r 3 s heading-s))
       ((Binding k d)
        (screen:screen-set-string scr r 5  k key-s)
-       (screen:screen-set-string scr r 30 d desc-s))
+       (screen:screen-set-string scr r 32 d desc-s))
       ((Tip s)
        (draw-wrapped-lines scr (wrap-words s wrap-width) content-row scroll tip-s))
       ((Paragraph s)
@@ -250,7 +251,7 @@ automatically based on each item's height."
     ;; Footer (fixed at bottom)
     (let footer-y = (if (> rows 1) (- rows 1) 0))
     (render:fill-rect scr (wt:Rect 0 footer-y cols 1) #\Space bg)
-    (screen:screen-set-string scr footer-y 3 "Up/Down to scroll, Enter to close" tip-s)
+    (screen:screen-set-string scr footer-y 3 "↑/↓ to scroll, Enter to close" tip-s)
     ;; Scrollbar on right edge (above footer). Total includes the leading
     ;; top-padding row, matching the offset passed to draw-help-items above.
     (let track-s = (color:Style color:scrollbar-track-fg

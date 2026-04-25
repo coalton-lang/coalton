@@ -2390,6 +2390,9 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          ((== mod input:ModAlt)
           (%paredit-if-lisp st
                             (fn (buffer) (paredit:paredit-forward-slurp! buffer (.ms-cursor st)))))
+         ((== mod input:ModAltShift)
+          (%paredit-if-lisp st
+                            (fn (buffer) (paredit:paredit-backward-barf! buffer (.ms-cursor st)))))
          ((== mod input:ModCtrl)
           (match (mgr:bufmgr-current (.ms-bufmgr st))
             ((Some buf) (cursor:cursor-move-word-right! (buf:buffer-gap buf) (.ms-cursor st)))
@@ -2403,6 +2406,9 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          ((== mod input:ModAlt)
           (%paredit-if-lisp st
                             (fn (buffer) (paredit:paredit-forward-barf! buffer (.ms-cursor st)))))
+         ((== mod input:ModAltShift)
+          (%paredit-if-lisp st
+                            (fn (buffer) (paredit:paredit-backward-slurp! buffer (.ms-cursor st)))))
          ((== mod input:ModCtrl)
           (match (mgr:bufmgr-current (.ms-bufmgr st))
             ((Some buf) (cursor:cursor-move-word-left! (buf:buffer-gap buf) (.ms-cursor st)))
@@ -4123,6 +4129,8 @@ Render-app is NOT called here; the main loop handles rendering."
                  ((Tuple (focus:FocusRepl) (input:ModShift))
                   (repl:repl-pane-insert-newline! (.ms-repl st)))
                  ((Tuple (focus:FocusRepl) (input:ModAlt))
+                  (repl:repl-pane-insert-newline! (.ms-repl st)))
+                 ((Tuple (focus:FocusRepl) (input:ModAltShift))
                   (repl:repl-pane-insert-newline! (.ms-repl st)))
                  ;; Unmodified Enter in REPL
                  ((Tuple (focus:FocusRepl) _)
