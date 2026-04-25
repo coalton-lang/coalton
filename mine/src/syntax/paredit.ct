@@ -24,6 +24,7 @@
    #:paredit-forward-barf!
    #:paredit-splice!
    #:paredit-cleave!
+   #:paredit-delete-enclosing!
    #:paredit-raise!
    #:paredit-wrap-round!
    #:paredit-forward-sexp!
@@ -1078,6 +1079,34 @@ Inside strings, parens are treated as normal characters."
                         (record-insert! buffer split-start (<> close-str (<> " " open-str)) p)
                         (cell:write! (cursor:.pos cs) (+ split-start 1)))
                       (values))))
+              (values))))))))
+
+  (declare paredit-delete-enclosing! (buf:Buffer * cursor:CursorState -> Void))
+  (define (paredit-delete-enclosing! buffer cs)
+    "Delete the enclosing S-expression including its delimiters."
+    (undo:with-undo-group! (buf:buffer-undo buffer)
+      (fn () (cursor:cursor-position cs))
+      (fn ()
+        (let gb = (buf:buffer-gap buffer))
+        (let p = (cursor:cursor-position cs))
+        (match (%current-delimiter-open gb p)
+          ((None) (values))
+          ((Some (Tuple open-pos _open-ch))
+           (match (%matching-close-for gb open-pos)
+             ((None) (values))
+             ((Some close-pos)
+              (let buf-len = (gap:gap-length gb))
+              (let left-outer = (if (> open-pos 0)
+                                    (gap:gap-char-at gb (- open-pos 1))
+                                    None))
+              (let right-outer = (if (< (+ close-pos 1) buf-len)
+                                     (gap:gap-char-at gb (+ close-pos 1))
+                                     None))
+              (let replacement = (if (%needs-space-between? left-outer right-outer) " " ""))
+              (record-delete! buffer open-pos (+ close-pos 1) p)
+              (when (> (str:length replacement) 0)
+                (record-insert! buffer open-pos replacement p))
+              (cell:write! (cursor:.pos cs) open-pos)
               (values))))))))
 
   (declare paredit-raise! (buf:Buffer * cursor:CursorState -> Void))

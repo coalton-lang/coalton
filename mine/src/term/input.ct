@@ -518,6 +518,9 @@ Returns (event next-pos)."
             ;; ESC + Enter -> Alt+Enter
             ((or (== next-byte 13) (== next-byte 10))
              (Tuple (IEvKey KeyEnter ModAlt) (+ pos 2)))
+            ;; ESC + DEL (127) -> Alt+Backspace
+            ((== next-byte 127)
+             (Tuple (IEvKey KeyBackspace ModAlt) (+ pos 2)))
             ;; ESC + printable -> Alt+key
             ((and (>= next-byte 32) (<= next-byte 126))
              (Tuple (IEvKey (KeyChar (ufix-to-char next-byte)) ModAlt)

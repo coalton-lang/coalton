@@ -2471,6 +2471,9 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (match (mgr:bufmgr-current (.ms-bufmgr st))
          ((Some buf)
           (cond
+            ((== mod input:ModAlt)
+             (when (%structural-edit? st buf)
+               (paredit:paredit-delete-enclosing! buf (.ms-cursor st))))
             ((== mod input:ModCtrl)
              (cond
                ((%structural-edit? st buf)
