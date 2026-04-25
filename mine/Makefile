@@ -5,7 +5,7 @@ QUICKLISP_SETUP = $(QUICKLISP_HOME)/setup.lisp
 REPO_ROOT = $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/..)
 LOCAL_SOURCE_REGISTRY = $(REPO_ROOT)//
 
-.PHONY: mine mine-app mine-app-fonts clean
+.PHONY: mine mine-app mine-app-fonts mine-app-deps clean
 
 mine:
 	env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" \
@@ -20,7 +20,7 @@ TAURI_TARGET_TRIPLE := $(shell rustc -vV | grep host | cut -d' ' -f2)
 IOSEVKA_VERSION := 34.3.0
 IOSEVKA_URL := https://github.com/be5invis/Iosevka/releases/download/v$(IOSEVKA_VERSION)/PkgWebFont-IosevkaFixedSlab-$(IOSEVKA_VERSION).zip
 
-mine-app: mine mine-app-fonts
+mine-app: mine mine-app-fonts mine-app-deps
 	mkdir -p mine-app/src-tauri/binaries
 	cp mine mine-app/src-tauri/binaries/mine-core-$(TAURI_TARGET_TRIPLE)
 	cd mine-app && npx tauri build
@@ -31,6 +31,12 @@ mine-app: mine mine-app-fonts
 		-srcfolder /tmp/mine-dmg \
 		-ov -format UDZO mine.dmg
 	rm -rf /tmp/mine-dmg
+
+mine-app-deps: mine-app/node_modules
+
+mine-app/node_modules: mine-app/package.json mine-app/package-lock.json
+	cd mine-app && npm install
+	touch mine-app/node_modules
 
 mine-app-fonts: mine-app/dist/fonts/IosevkaFixedSlab-Extended.woff2
 
