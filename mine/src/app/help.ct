@@ -114,6 +114,7 @@ automatically based on each item's height."
      (Binding "Ctrl+e"       "Focus editor, maximize when focused")
      (Binding "Ctrl+t"       "Expand file tree / open files panel")
      (Binding "Ctrl+1-9"     "Switch to open file by number")
+     (Binding "Ctrl+\\"      "Special character input (uses TeX-like names)")
      (Binding "Ctrl+q"       "Quit")
      (Binding "Esc / Ctrl+g" "Cancel / refresh display")
      (Binding "Mouse click"  "Switch pane focus")

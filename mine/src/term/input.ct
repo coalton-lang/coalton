@@ -431,6 +431,11 @@ Returns (event next-pos)."
                                (%apply-shift-to-codepoint codepoint)
                                codepoint))
              (IEvKey (KeyCtrl (ufix-to-char actual)) ModCtrl))
+            ;; Ctrl+\, Ctrl+], Ctrl+^, Ctrl+_ in kitty protocol.
+            ((and (== modifier ModCtrl)
+                  (or (== codepoint 92) (== codepoint 93)
+                      (or (== codepoint 94) (== codepoint 95))))
+             (IEvKey (KeyCtrl (ufix-to-char codepoint)) ModCtrl))
             ((and (>= codepoint 32) (<= codepoint 126))
              (let actual = (if shifted
                                (%apply-shift-to-codepoint codepoint)
@@ -552,6 +557,12 @@ Returns (event next-pos)."
       ((and (>= b 1) (<= b 26))
        (Tuple (IEvKey (KeyCtrl (ufix-to-char (+ b 96))) ModCtrl)
               (+ pos 1)))
+      ;; Ctrl+\ (byte 28), Ctrl+] (29), Ctrl+^ (30), Ctrl+_ (31).
+      ;; Map to literal punctuation chars to match legacy KeyCtrl bindings.
+      ((== b 28) (Tuple (IEvKey (KeyCtrl #\\) ModCtrl) (+ pos 1)))
+      ((== b 29) (Tuple (IEvKey (KeyCtrl #\]) ModCtrl) (+ pos 1)))
+      ((== b 30) (Tuple (IEvKey (KeyCtrl #\^) ModCtrl) (+ pos 1)))
+      ((== b 31) (Tuple (IEvKey (KeyCtrl #\_) ModCtrl) (+ pos 1)))
       ;; Printable ASCII (bytes 32-126)
       ((and (>= b 32) (<= b 126))
        (Tuple (IEvKey (KeyChar (ufix-to-char b)) ModNone)
