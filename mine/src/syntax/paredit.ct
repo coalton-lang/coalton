@@ -22,6 +22,8 @@
    #:paredit-delete!
    #:paredit-forward-slurp!
    #:paredit-forward-barf!
+   #:paredit-backward-slurp!
+   #:paredit-backward-barf!
    #:paredit-splice!
    #:paredit-cleave!
    #:paredit-delete-enclosing!
@@ -1003,6 +1005,82 @@ Inside strings, parens are treated as normal characters."
                     (when (> (cursor:cursor-position cs) eject-start)
                       (cell:write! (cursor:.pos cs) eject-start))
                     (values))))))))))))
+
+  (declare paredit-backward-slurp! (buf:Buffer * cursor:CursorState -> Void))
+  (define (paredit-backward-slurp! buffer cs)
+    "Move the opening delimiter of the enclosing form past the previous sexp."
+    (undo:with-undo-group! (buf:buffer-undo buffer)
+      (fn () (cursor:cursor-position cs))
+      (fn ()
+        (let gb = (buf:buffer-gap buffer))
+        (let p = (cursor:cursor-position cs))
+        (match (%current-list-open gb p)
+          ((None) (values))
+          ((Some open-pos)
+           (match (%matching-close-for gb open-pos)
+             ((None) (values))
+             ((Some close-pos)
+              (match (scan-backward-sexp gb open-pos)
+                ((None) (values))
+                ((Some prev-start)
+                 (let buf-len = (gap:gap-length gb))
+                 (let prev-end = (%skip-ws-back gb open-pos))
+                 (let head-start = (%skip-ws-fwd gb (+ open-pos 1) buf-len))
+                 (let open-str = (match (gap:gap-char-at gb open-pos)
+                                   ((Some ch) (%open-str-for ch))
+                                   ((None) "(")))
+                 (let moved-text = (gap:gap-substring gb prev-start prev-end))
+                 ;; Keep one space between the slurped sexp and existing list content.
+                 (let separator = (if (< head-start close-pos) " " ""))
+                 (let replacement = (<> open-str (<> moved-text separator)))
+                 ;; Replace the [prev-sexp .. open-delim] span with the new opener + sexp.
+                 (record-delete! buffer prev-start (+ open-pos 1) p)
+                 (record-insert! buffer prev-start replacement p)
+                 ;; Shift cursor by net length change (cursor is always inside the form).
+                 (let old-span = (- (+ open-pos 1) prev-start))
+                 (let new-span = (str:length replacement))
+                 (cell:write! (cursor:.pos cs) (+ (- p old-span) new-span))
+                 (values))))))))))
+
+  (declare paredit-backward-barf! (buf:Buffer * cursor:CursorState -> Void))
+  (define (paredit-backward-barf! buffer cs)
+    "Move the opening delimiter of the enclosing form past the first sexp."
+    (undo:with-undo-group! (buf:buffer-undo buffer)
+      (fn () (cursor:cursor-position cs))
+      (fn ()
+        (let gb = (buf:buffer-gap buffer))
+        (let p = (cursor:cursor-position cs))
+        (match (%current-list-open gb p)
+          ((None) (values))
+          ((Some open-pos)
+           (match (%matching-close-for gb open-pos)
+             ((None) (values))
+             ((Some close-pos)
+              (let buf-len = (gap:gap-length gb))
+              (let first-start = (%skip-ws-fwd gb (+ open-pos 1) buf-len))
+              (match (scan-forward-sexp gb (+ open-pos 1))
+                ((None) (values))
+                ((Some first-end)
+                 (when (< first-end close-pos)
+                   (let open-str = (match (gap:gap-char-at gb open-pos)
+                                     ((Some ch) (%open-str-for ch))
+                                     ((None) "(")))
+                   (let eject-end = (%skip-ws-fwd gb first-end buf-len))
+                   (let first-text = (gap:gap-substring gb first-start first-end))
+                   (let replacement = (<> first-text (<> " " open-str)))
+                   ;; Replace [open-delim .. ws-after-first-sexp] with "first-text (".
+                   (record-delete! buffer open-pos eject-end p)
+                   (record-insert! buffer open-pos replacement p)
+                   ;; Cursor adjustment: clamp into form if it was in the ejected region;
+                   ;; otherwise shift by net length change.
+                   (let old-span = (- eject-end open-pos))
+                   (let new-span = (str:length replacement))
+                   (cond
+                     ((< p eject-end)
+                      (cell:write! (cursor:.pos cs) (+ open-pos new-span)))
+                     (True
+                      (cell:write! (cursor:.pos cs) (+ (- p old-span) new-span)))))
+                 (values))))))))))
 
   (declare paredit-splice! (buf:Buffer * cursor:CursorState -> Void))
   (define (paredit-splice! buffer cs)
