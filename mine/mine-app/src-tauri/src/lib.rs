@@ -2,6 +2,7 @@
 use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem, MasterPty};
 
 use std::io::{Read, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, State};
 
@@ -39,12 +40,19 @@ impl PtyResizer for PipeResizer {
 }
 
 struct PtyState {
+    spawned: AtomicBool,
     writer: Arc<Mutex<Option<Box<dyn Write + Send>>>>,
     resizer: Mutex<Option<Box<dyn PtyResizer>>>,
 }
 
 #[tauri::command]
 fn spawn_pty(app: AppHandle, state: State<PtyState>, rows: u16, cols: u16) -> Result<(), String> {
+    // Idempotent: only the first call spawns. Any subsequent call (e.g. from a
+    // misbehaving frontend reload) is a silent no-op.
+    if state.spawned.swap(true, Ordering::SeqCst) {
+        return Ok(());
+    }
+
     let mine_bin = std::env::current_exe()
         .map_err(|e| e.to_string())?
         .parent()
@@ -135,10 +143,10 @@ fn spawn_pty(app: AppHandle, state: State<PtyState>, rows: u16, cols: u16) -> Re
 
 #[tauri::command]
 fn write_pty(state: State<PtyState>, data: String) -> Result<(), String> {
-    if let Some(ref mut writer) = *state.writer.lock().unwrap() {
-        writer.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
-        writer.flush().map_err(|e| e.to_string())?;
-    }
+    let mut guard = state.writer.lock().unwrap();
+    let writer = guard.as_mut().ok_or("pty not ready")?;
+    writer.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
+    writer.flush().map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -199,13 +207,44 @@ fn close_window(app: AppHandle) {
     app.exit(0);
 }
 
+#[cfg(target_os = "macos")]
+fn macos_menu<R: tauri::Runtime>(handle: &tauri::AppHandle<R>) -> tauri::Result<tauri::menu::Menu<R>> {
+    use tauri::menu::{AboutMetadataBuilder, MenuBuilder, PredefinedMenuItem, SubmenuBuilder};
+
+    let about = PredefinedMenuItem::about(
+        handle,
+        Some("About mine"),
+        Some(AboutMetadataBuilder::new().build()),
+    )?;
+
+    let app_menu = SubmenuBuilder::new(handle, "mine")
+        .item(&about)
+        .separator()
+        .item(&PredefinedMenuItem::hide(handle, None)?)
+        .item(&PredefinedMenuItem::hide_others(handle, None)?)
+        .item(&PredefinedMenuItem::show_all(handle, None)?)
+        .separator()
+        .item(&PredefinedMenuItem::quit(handle, None)?)
+        .build()?;
+
+    MenuBuilder::new(handle)
+        .item(&app_menu)
+        .build()
+}
+
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .manage(PtyState {
+            spawned: AtomicBool::new(false),
             writer: Arc::new(Mutex::new(None)),
             resizer: Mutex::new(None),
         })
-        .invoke_handler(tauri::generate_handler![spawn_pty, write_pty, resize_pty, close_window, get_font_config])
+        .invoke_handler(tauri::generate_handler![spawn_pty, write_pty, resize_pty, close_window, get_font_config]);
+
+    #[cfg(target_os = "macos")]
+    let builder = builder.menu(macos_menu);
+
+    builder
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
