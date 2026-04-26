@@ -385,7 +385,7 @@ Returns the next row after all drawn lines."
       ((> n-challenges 0)
        (let instr-row = (+ intro-end 1))
        (screen:screen-set-string scr instr-row margin
-         "Using structural editing, replicate the goals below. Press Enter when you got it." style-bg)
+         "Using structural editing, replicate the goals below. Press Enter when you've got it." style-bg)
        (let goal-row = (+ instr-row 2))
        ;; Goal N/M: ...
        (let goal-label = (<> "Goal " (<> (into (+ ch-idx 1))
