@@ -3921,6 +3921,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
     (let has-buffer = (match (mgr:bufmgr-current (.ms-bufmgr st))
                         ((Some _) True)
                         ((None) False)))
+    (let has-insert-target = (%has-insert-target? st))
     (menubar:menubar-set-action-enabled! (.ms-menu st)
       (fn (action)
         (match action
@@ -3945,6 +3946,8 @@ Enter or Space inserts the matching Unicode character at the cursor."
           ((menubar:ActionJumpBack) has-buffer)
           ((menubar:ActionToggleStructural) has-buffer)
           ((menubar:ActionToggleLineWrap) has-buffer)
+          ;; Insert Symbol: needs a buffer or focused REPL
+          ((menubar:ActionInsertSymbol) has-insert-target)
           (_ True)))))
 
   (declare dispatch-menu-action! (MineState * term:Terminal * menubar:MenuAction -> Void))
@@ -4011,6 +4014,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
       ((menubar:ActionCloseFile)
        (close-current-file! st term))
       ((menubar:ActionFind) (start-find! st))
+      ((menubar:ActionInsertSymbol) (start-symbol-input! st))
       ((menubar:ActionBeamFile) (compile-file! st))
       ((menubar:ActionBeamForm) (compile-form! st))
 	      ((menubar:ActionClearDiagnostics)
