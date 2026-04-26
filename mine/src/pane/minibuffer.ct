@@ -293,17 +293,7 @@ ON-NEXT-FN/ON-PREV-FN fire on Down/Up. Enter/Ctrl+g dismiss."
   (define (minibuffer-render-completions mb scr x y max-w max-y style)
     (let items = (cell:read (.completions mb)))
     (match items
-      ((Nil)
-       ;; Show a generic hint if a completion function is registered AND the
-       ;; caller hasn't supplied its own footer hint.
-       (cond
-         ((> (str:length (cell:read (.footer-hint mb))) 0) (values))
-         (True
-          (match (cell:read (.complete-fn mb))
-            ((Some _)
-             (let hint-style = (color:Style (color:.style-fg style) (color:.style-bg style) color:AttrDim))
-             (screen:screen-set-string scr y x "Tab to autocomplete, Ctrl+g to close" hint-style))
-            ((None) (values))))))
+      ((Nil) (values))
       (_
        (let col-w = (%comp-col-width items max-w))
        (let cols-per-row = (max 1 (lisp (-> UFix) (max-w col-w) (cl:floor max-w col-w))))
