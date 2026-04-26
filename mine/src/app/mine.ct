@@ -652,12 +652,11 @@
     (let footer = (mini:minibuffer-footer-hint (.ms-minibuffer st)))
     (let footer-rows = (if (> (str:length footer) 0) 1 0))
     (let n-cands = (list:length candidates))
-    (let has-complete-fn = (match (mini:minibuffer-has-complete-fn? (.ms-minibuffer st))
-                             ((True) 1)
-                             ((False) 0)))
-    ;; Compute completion rows needed (columnar layout, matching render logic)
+    ;; Compute completion rows needed (columnar layout, matching render logic).
+    ;; No row is reserved when there are no candidates yet — the italic footer
+    ;; hint provides the only "before you type" affordance.
     (let max-item-len = (fold (fn (acc s) (max acc (cellw:string-cell-width s))) 0 candidates))
-    (let comp-rows = (if (== n-cands 0) has-complete-fn
+    (let comp-rows = (if (== n-cands 0) 0
                          (lisp (-> UFix) (n-cands max-item-len w)
                            (cl:let* ((render-w (cl:- w 1))
                                      (col-width (cl:min (cl:+ max-item-len 2) render-w))
@@ -2850,7 +2849,9 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          (mini:minibuffer-prompt-with-completion! (.ms-minibuffer st)
                                                   "Open File: " cwd
                                                   (fn (path) (open-loose-file! st path))
-                                                  complete:complete-file-path)))
+                                                  complete:complete-file-path)
+         (mini:minibuffer-set-footer-hint! (.ms-minibuffer st)
+                                           "Tab to complete, Enter to open, Ctrl+g to cancel")))
       ;; Escape: return focus to editor
       ((input:KeyEscape)
        (%show-editor! st)
@@ -3475,7 +3476,9 @@ wrap is on, row is resolved through screen-row-to-line-seg."
     (mini:minibuffer-prompt-with-completion! (.ms-minibuffer st)
                                              "Open File: " start-dir
                                              (fn (path) (open-loose-file! st path))
-                                             complete:complete-file-path))
+                                             complete:complete-file-path)
+    (mini:minibuffer-set-footer-hint! (.ms-minibuffer st)
+                                      "Tab to complete, Enter to open, Ctrl+g to cancel"))
 
   (declare toggle-repl! (MineState -> Void))
   (define (toggle-repl! st)
@@ -3643,16 +3646,31 @@ wrap is on, row is resolved through screen-row-to-line-seg."
            (.ms-status st)
            (str:concat "Unknown symbol: \\" name)))))))
 
+  (declare %has-insert-target? (MineState -> Boolean))
+  (define (%has-insert-target? st)
+    "True if there is somewhere %insert-text-at-focus! would actually write."
+    (match (focus:focus-current (.ms-focus st))
+      ((focus:FocusRepl) True)
+      (_
+       (match (mgr:bufmgr-current (.ms-bufmgr st))
+         ((Some _) True)
+         ((None) False)))))
+
   (declare start-symbol-input! (MineState -> Void))
   (define (start-symbol-input! st)
     "Open the minibuffer for entering a LaTeX-style symbol name. Tab completes,
 Enter or Space inserts the matching Unicode character at the cursor."
-    (mini:minibuffer-prompt-symbol-picker! (.ms-minibuffer st)
-                                           "Symbol \\"
-                                           (fn (name) (%finish-symbol-input! st name))
-                                           symbols:latex-symbol-completion)
-    (mini:minibuffer-set-footer-hint! (.ms-minibuffer st)
-                                      "Tab to complete, Enter or Space to insert, Ctrl+g to cancel"))
+    (cond
+      ((not (%has-insert-target? st))
+       (status:statusbar-set-message! (.ms-status st)
+                                      "Open a file or REPL first"))
+      (True
+       (mini:minibuffer-prompt-symbol-picker! (.ms-minibuffer st)
+                                              "Symbol \\"
+                                              (fn (name) (%finish-symbol-input! st name))
+                                              symbols:latex-symbol-completion)
+       (mini:minibuffer-set-footer-hint! (.ms-minibuffer st)
+                                         "Tab to complete, Enter or Space to insert, Ctrl+g to cancel"))))
 
 ;;; Close current file
 
@@ -3961,7 +3979,9 @@ Enter or Space inserts the matching Unicode character at the cursor."
        (mini:minibuffer-prompt-with-completion! (.ms-minibuffer st)
                                                 "Open Project (.asd): " default-dir
                                                 (fn (path) (open-project-selection! st path))
-                                                complete:complete-project-path))
+                                                complete:complete-project-path)
+       (mini:minibuffer-set-footer-hint! (.ms-minibuffer st)
+                                         "Tab to complete, Enter to open, Ctrl+g to cancel"))
       ((menubar:ActionBeamSystem) (load-project-system! st))
       ((menubar:ActionRefreshProject) (refresh-project! st))
       ((menubar:ActionCloseProject)
