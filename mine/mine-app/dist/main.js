@@ -5,6 +5,17 @@ import { CanvasAddon } from "./canvas.mjs";
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
+// Suppress every webview/browser default shortcut. xterm still receives the
+// keydown via its hidden textarea and emits the proper byte sequence.
+window.addEventListener("keydown", (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey || /^F\d+$/.test(e.key)) {
+    e.preventDefault();
+  }
+}, { capture: true });
+window.addEventListener("contextmenu", (e) => e.preventDefault());
+window.addEventListener("dragover", (e) => e.preventDefault());
+window.addEventListener("drop", (e) => e.preventDefault());
+
 const fontConfig = await invoke("get_font_config");
 
 // Force-load all font variants before xterm builds its glyph atlas
@@ -37,6 +48,13 @@ if (!container) {
 
 term.open(container);
 term.loadAddon(new CanvasAddon());
+
+term.focus();
+container.addEventListener("mousedown", () => term.focus());
+window.addEventListener("focus", () => term.focus());
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) term.focus();
+});
 
 function parsePx(style, property) {
   const value = parseFloat(style.getPropertyValue(property));
@@ -101,19 +119,19 @@ listen("pty-exit", () => {
   window.__TAURI__.core.invoke("close_window");
 });
 
-// Terminal input -> PTY
-term.onData((data) => {
-  invoke("write_pty", { data });
-});
-
-// Resize handling
-term.onResize(({ cols, rows }) => {
-  invoke("resize_pty", { rows, cols });
-});
-
-// Spawn PTY with initial size
+// Spawn PTY with initial size, then wire input. Awaiting closes the
+// startup race in which keystrokes would be silently dropped by write_pty
+// before the writer is installed.
 for (let i = 0; i < 10 && !fitTerminal(); i += 1) {
   await new Promise((resolve) => requestAnimationFrame(resolve));
 }
 
-invoke("spawn_pty", { rows: term.rows, cols: term.cols });
+await invoke("spawn_pty", { rows: term.rows, cols: term.cols });
+
+term.onData((data) => {
+  invoke("write_pty", { data });
+});
+
+term.onResize(({ cols, rows }) => {
+  invoke("resize_pty", { rows, cols });
+});
