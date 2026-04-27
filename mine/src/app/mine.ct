@@ -179,41 +179,42 @@
     (ms-runtime           lifecycle:RuntimeManager) ;; 9
     (ms-next-req-id       (Cell UFix))              ;; 10
     (ms-layout            (Cell MineLayout))        ;; 11
-    (ms-content-x         (Cell UFix))              ;; 12
-    (ms-repl-package      (Cell String))            ;; 13
-    (ms-repl-busy         (Cell Boolean))           ;; 14
-    (ms-repl-timing       (Cell String))            ;; 15
-    (ms-proto-mailbox     NativeBox) ;; 16 -- sb-concurrency mailbox (value = mailbox or nil)
-    (ms-proto-thread      NativeBox) ;; 17 -- reader thread handle (value = thread or nil)
-    (ms-debugger-active   (Cell Boolean)) ;; 18
-    (ms-debugger-condition (Cell String)) ;; 19
-    (ms-debugger-items    NativeBox) ;; 20 -- CL list of debugger items (or nil)
-    (ms-debugger-selected (Cell UFix)) ;; 21
-    (ms-debugger-conn-stream NativeBox) ;; 22 -- socket stream (or (cons msg-id stream))
-    (ms-jump-stack        NativeBox) ;; 23 -- CL list of (filepath . position) for Alt+,
-    (ms-project-system    (Cell (Optional String))) ;; 24 -- ASDF system name if opened from .asd
-    (ms-project-asd-path  (Cell (Optional String))) ;; 25 -- path to .asd file
-    (ms-quit              (Cell Boolean))           ;; 25
-    (ms-eval-start-time   (Cell UFix))    ;; 26 -- internal-real-time
-    (ms-active-request    (Cell (Optional msg:RequestId))) ;; 27 -- foreground REPL request controlling busy state
-    (ms-minibuffer        mini:Minibuffer) ;; 28
-    (ms-repl-lang         (Cell String)) ;; 29 -- "Coalton" or "Lisp"
-    (ms-preview-path      (Cell (Optional String))) ;; 30 -- path of previewed (unpinned) file
-    (ms-diagnostics       NativeBox) ;; 31 -- CL hash table: filepath -> list of (line severity message)
-    (ms-find-needle       (Cell String)) ;; 32 -- current search string (empty = no search)
-    (ms-find-matches      NativeBox) ;; 33 -- CL simple-vector of match positions (UFix), or nil
-    (ms-structural-editing (Cell Boolean)) ;; 34 -- structural editing enabled?
-    (ms-config             cfgt:MineConfig) ;; 35 -- loaded configuration
-    (ms-io-request-active  (Cell Boolean)) ;; 36 -- waiting for IO input from user?
-    (ms-io-request-data    NativeBox) ;; 37 -- (msg-id . stream) for IO response
-    (ms-completion         complete:CompletionState) ;; 38 -- inline completion popup
-    (ms-busy-activity     (Cell (Optional String))) ;; 39 -- named REPL activity, e.g. Beam
-    (ms-spinner           spinner:Spinner) ;; 40 -- busy spinner
-    (ms-debugger-scroll   (Cell UFix)) ;; 41 -- debugger body scroll offset (in display lines)
-    (ms-debugger-body-h   (Cell UFix)) ;; 42 -- cached debugger body height (rows) from last render
-    (ms-debugger-total    (Cell UFix)) ;; 43 -- cached debugger total line count from last render
-    (ms-debugger-follow   (Cell Boolean)) ;; 44 -- scroll to keep selection visible on next render
-    (ms-beam-request-id   (Cell (Optional msg:RequestId)))) ;; 45 -- id of pending Beam Project request, if any
+    (ms-tree-frozen       (Cell Boolean))           ;; 12 -- freeze tree when focus leaves
+    (ms-content-x         (Cell UFix))              ;; 13
+    (ms-repl-package      (Cell String))            ;; 14
+    (ms-repl-busy         (Cell Boolean))           ;; 15
+    (ms-repl-timing       (Cell String))            ;; 16
+    (ms-proto-mailbox     NativeBox) ;; 17 -- sb-concurrency mailbox (value = mailbox or nil)
+    (ms-proto-thread      NativeBox) ;; 18 -- reader thread handle (value = thread or nil)
+    (ms-debugger-active   (Cell Boolean)) ;; 19
+    (ms-debugger-condition (Cell String)) ;; 20
+    (ms-debugger-items    NativeBox) ;; 21 -- CL list of debugger items (or nil)
+    (ms-debugger-selected (Cell UFix)) ;; 22
+    (ms-debugger-conn-stream NativeBox) ;; 23 -- socket stream (or (cons msg-id stream))
+    (ms-jump-stack        NativeBox) ;; 24 -- CL list of (filepath . position) for Alt+,
+    (ms-project-system    (Cell (Optional String))) ;; 25 -- ASDF system name if opened from .asd
+    (ms-project-asd-path  (Cell (Optional String))) ;; 26 -- path to .asd file
+    (ms-quit              (Cell Boolean))           ;; 26
+    (ms-eval-start-time   (Cell UFix))    ;; 27 -- internal-real-time
+    (ms-active-request    (Cell (Optional msg:RequestId))) ;; 28 -- foreground REPL request controlling busy state
+    (ms-minibuffer        mini:Minibuffer) ;; 29
+    (ms-repl-lang         (Cell String)) ;; 30 -- "Coalton" or "Lisp"
+    (ms-preview-path      (Cell (Optional String))) ;; 31 -- path of previewed (unpinned) file
+    (ms-diagnostics       NativeBox) ;; 32 -- CL hash table: filepath -> list of (line severity message)
+    (ms-find-needle       (Cell String)) ;; 33 -- current search string (empty = no search)
+    (ms-find-matches      NativeBox) ;; 34 -- CL simple-vector of match positions (UFix), or nil
+    (ms-structural-editing (Cell Boolean)) ;; 35 -- structural editing enabled?
+    (ms-config             cfgt:MineConfig) ;; 36 -- loaded configuration
+    (ms-io-request-active  (Cell Boolean)) ;; 37 -- waiting for IO input from user?
+    (ms-io-request-data    NativeBox) ;; 38 -- (msg-id . stream) for IO response
+    (ms-completion         complete:CompletionState) ;; 39 -- inline completion popup
+    (ms-busy-activity     (Cell (Optional String))) ;; 40 -- named REPL activity, e.g. Beam
+    (ms-spinner           spinner:Spinner) ;; 41 -- busy spinner
+    (ms-debugger-scroll   (Cell UFix)) ;; 42 -- debugger body scroll offset (in display lines)
+    (ms-debugger-body-h   (Cell UFix)) ;; 43 -- cached debugger body height (rows) from last render
+    (ms-debugger-total    (Cell UFix)) ;; 44 -- cached debugger total line count from last render
+    (ms-debugger-follow   (Cell Boolean)) ;; 45 -- scroll to keep selection visible on next render
+    (ms-beam-request-id   (Cell (Optional msg:RequestId)))) ;; 46 -- id of pending Beam Project request, if any
 
 ;;; Named accessors for CL interop (avoids fragile numeric indices)
 
@@ -340,6 +341,27 @@
   (define (%tree-visible? st)
     (%layout-tree-visible? (cell:read (.ms-layout st))))
 
+  (declare %tree-frozen? (MineState -> Boolean))
+  (define (%tree-frozen? st)
+    (cell:read (.ms-tree-frozen st)))
+
+  (declare %tree-expanded? (MineState -> Boolean))
+  (define (%tree-expanded? st)
+    (and (%tree-visible? st)
+         (or (%tree-frozen? st)
+             (== (focus:focus-current (.ms-focus st)) focus:FocusTree))))
+
+  (declare %tree-footer-visible? (MineState -> Boolean))
+  (define (%tree-footer-visible? st)
+    (and (%tree-expanded? st)
+         (== (focus:focus-current (.ms-focus st)) focus:FocusTree)))
+
+  (declare %tree-body-height (MineState * UFix -> UFix))
+  (define (%tree-body-height st height)
+    (if (%tree-footer-visible? st)
+        (if (> height 0) (- height 1) 0)
+        height))
+
   (declare %repl-visible? (MineState -> Boolean))
   (define (%repl-visible? st)
     (%layout-repl-visible? (cell:read (.ms-layout st))))
@@ -429,10 +451,10 @@
 
   (declare %tree-width (MineState * UFix -> UFix))
   (define (%tree-width st cols)
-    "Compute tree pane width. Full when focused, 1-column when collapsed, 0 when hidden."
+    "Compute tree pane width. Full when focused or frozen, 1-column when auto-hidden, 0 when hidden."
     (cond
       ((not (%tree-visible? st)) 0)
-      ((== (focus:focus-current (.ms-focus st)) focus:FocusTree)
+      ((%tree-expanded? st)
        (min 30 (lisp (-> UFix) (cols) (cl:floor cols 4))))
       (True 1)))
 
@@ -458,6 +480,26 @@
                                 hint-style)
       (values)))
 
+  (declare render-tree-focus-help (screen:Screen * wt:Rect * Boolean -> Void))
+  (define (render-tree-focus-help scr rect frozen)
+    "Render the focused tree footer hint."
+    (when (> (wt:.rect-height rect) 0)
+      (let y = (wt:.rect-y rect))
+      (let x = (wt:.rect-x rect))
+      (let w = (wt:.rect-width rect))
+      (let text = (if frozen
+                      "Ctrl+t to auto-hide"
+                      "Ctrl+t to freeze"))
+      (let style = (color:Style color:text-dimmer-fg
+                                 color:black
+                                 color:AttrItalic))
+      (let text-x = (if (> w 2) (+ x 1) x))
+      (let text-w = (if (> w 2) (- w 1) w))
+      (render:fill-rect scr rect #\Space style)
+      (render:draw-text-clipped scr (wt:Rect text-x y text-w 1)
+                                text y text-x style)
+      (values)))
+
 ;;; Render
 
   (declare render-diagnostic-popup (MineState * screen:Screen * UFix * UFix -> Void))
@@ -481,6 +523,7 @@
     (let layout = (cell:read (.ms-layout st)))
     (let tree-vis = (%layout-tree-visible? layout))
     (let tree-focused = (== (focus:focus-current (.ms-focus st)) focus:FocusTree))
+    (let tree-expanded = (%tree-expanded? st))
     (let tree-w = (%tree-width st cols))
     (let content-x = (if tree-vis (+ tree-w 1) 0))
     (cell:write! (.ms-content-x st) content-x)
@@ -490,14 +533,19 @@
     ;; Render tree pane if visible
     (when tree-vis
       (cond
-        (tree-focused
+        (tree-expanded
          ;; Expanded: full tree pane
-	         (let tree-rect = (wt:Rect 0 1 tree-w middle-h))
-	         (tree:tree-pane-render (.ms-tree st) scr tree-rect True
-	                                (fn (fpath) (mgr:bufmgr-path-dirty? (.ms-bufmgr st) fpath))
-	                                (fn (fpath)
-	                                  (lisp (-> UFix) (fpath)
-	                                    (mine/app/diagnostics:diagnostic-rank-for-file fpath)))))
+         (let tree-body-h = (%tree-body-height st middle-h))
+         (when (> tree-body-h 0)
+	   (let tree-rect = (wt:Rect 0 1 tree-w tree-body-h))
+	   (tree:tree-pane-render (.ms-tree st) scr tree-rect tree-focused
+	                          (fn (fpath) (mgr:bufmgr-path-dirty? (.ms-bufmgr st) fpath))
+	                          (fn (fpath)
+	                            (lisp (-> UFix) (fpath)
+	                              (mine/app/diagnostics:diagnostic-rank-for-file fpath)))))
+         (when tree-focused
+           (render-tree-focus-help scr (wt:Rect 0 (+ 1 tree-body-h) tree-w 1)
+                                   (%tree-frozen? st))))
         (True
          ;; Collapsed: number strip
          (let strip-rect = (wt:Rect 0 1 1 middle-h))
@@ -3224,6 +3272,7 @@ wrap is on, row is resolved through screen-row-to-line-seg."
     (let middle-h = (if (> rows 2) (- rows 2) 1))
     (let center = (.ml-center layout))
     (let split-repl-h = (max 3 (lisp (-> UFix) (middle-h) (cl:floor middle-h 3))))
+    (let tree-body-h = (%tree-body-height st middle-h))
     (let editor-h = (match center
                       ((CenterEditor)
                        (if (> middle-h 1) (- middle-h 1) 1))
@@ -3236,13 +3285,13 @@ wrap is on, row is resolved through screen-row-to-line-seg."
                            1))
                       ((CenterReplFull) 0)))
     (let split-repl-start = (+ 1 (+ editor-h 1)))
-    (let tree-focused = (== (focus:focus-current (.ms-focus st)) focus:FocusTree))
+    (let tree-expanded = (%tree-expanded? st))
     (cond
-      ;; Scroll in tree pane (only when expanded/focused)
-      ((and tree-vis (and tree-focused (< col tree-w)))
-       (let pane-h = (if (> rows 2) (- rows 2) 1))
+      ;; Scroll in tree pane (only when expanded)
+      ((and tree-vis (and tree-expanded (< col tree-w)))
        (let tree-row = (if (< _row 1) 0 (- _row 1)))
-       (tree:tree-pane-scroll-delta! (.ms-tree st) tree-row delta pane-h))
+       (when (and (> tree-body-h 0) (< tree-row tree-body-h))
+         (tree:tree-pane-scroll-delta! (.ms-tree st) tree-row delta tree-body-h)))
       ;; Scroll in REPL output area
       ((or
         (and (== center CenterReplFull)
@@ -3302,10 +3351,11 @@ wrap is on, row is resolved through screen-row-to-line-seg."
     (let layout = (cell:read (.ms-layout st)))
     (let tree-vis = (%layout-tree-visible? layout))
     (let tree-w = (%tree-width st cols))
-    (let tree-focused = (== (focus:focus-current (.ms-focus st)) focus:FocusTree))
+    (let tree-expanded = (%tree-expanded? st))
     (let right-edge = (- cols 1))
     (let status-y = (if (> rows 0) (- rows 1) 0))
     (let middle-h = (if (> rows 2) (- rows 2) 1))
+    (let tree-body-h = (%tree-body-height st middle-h))
     (let center = (.ml-center layout))
     (let split-repl-h = (max 3 (lisp (-> UFix) (middle-h) (cl:floor middle-h 3))))
     (let editor-h = (match center
@@ -3322,9 +3372,9 @@ wrap is on, row is resolved through screen-row-to-line-seg."
     (let split-repl-start = (+ editor-h 1))
     (cond
       ;; Tree scrollbar: rightmost column of tree area (only when expanded)
-      ((and tree-vis (and tree-focused (and (> tree-w 0) (and (== col (- tree-w 1)) (and (> row 0) (< row status-y))))))
+      ((and tree-vis (and tree-expanded (and (> tree-w 0) (and (== col (- tree-w 1)) (and (> row 0) (< row (+ 1 tree-body-h)))))))
        (let pane-row = (- row 1))
-       (tree:tree-pane-scrollbar-drag-at! (.ms-tree st) pane-row middle-h)
+       (tree:tree-pane-scrollbar-drag-at! (.ms-tree st) pane-row tree-body-h)
        True)
       ;; Right edge column: editor or REPL scrollbar
       ((and (== col right-edge) (> row 0) (< row status-y))
@@ -3397,10 +3447,11 @@ wrap is on, row is resolved through screen-row-to-line-seg."
     (let layout = (cell:read (.ms-layout st)))
     (let tree-vis = (%layout-tree-visible? layout))
     (let tree-w = (%tree-width st cols))
-    (let tree-focused = (== (focus:focus-current (.ms-focus st)) focus:FocusTree))
+    (let tree-expanded = (%tree-expanded? st))
     (let content-x = (if tree-vis (+ tree-w 1) 0))
     (let status-y = (if (> rows 0) (- rows 1) 0))
     (let middle-h = (if (> rows 2) (- rows 2) 1))
+    (let tree-body-h = (%tree-body-height st middle-h))
     (let center = (.ml-center layout))
     (let split-repl-h = (max 3 (lisp (-> UFix) (middle-h) (cl:floor middle-h 3))))
     (cond
@@ -3413,26 +3464,28 @@ wrap is on, row is resolved through screen-row-to-line-seg."
          ((None) (values))))
       ((>= row status-y) (values))
       ;; Click on collapsed strip -> expand tree
-      ((and tree-vis (and (not tree-focused) (< col tree-w)))
+      ((and tree-vis (and (not tree-expanded) (< col tree-w)))
        (tree:tree-pane-switch-to-open-section! (.ms-tree st))
        (focus:focus-switch! (.ms-focus st) focus:FocusTree))
       ;; Click in expanded tree area
-      ((and tree-vis (and tree-focused (< col tree-w)))
+      ((and tree-vis (and tree-expanded (< col tree-w)))
        (focus:focus-switch! (.ms-focus st) focus:FocusTree)
        (let pane-row = (if (< row 1) 0 (- row 1)))
-       (let pane-h = (if (> rows 2) (- rows 2) 1))
-       (match (tree:tree-pane-click-at! (.ms-tree st) pane-row col pane-h)
-         ((Some hit-path)
-          (cond
-            ;; Click in open files section: show in editor
-            ((tree:tree-pane-in-open-section? (.ms-tree st))
-             (%switch-to-open-file! st hit-path)
-             (%show-editor! st))
-            ;; Directory: toggle expand
-            ((== hit-path "") (tree:tree-pane-toggle-expand! (.ms-tree st)))
-            ;; Tree file: open
-            (True (tree-open-file! st hit-path))))
-         ((None) (values))))
+       (cond
+         ((and (> tree-body-h 0) (< pane-row tree-body-h))
+          (match (tree:tree-pane-click-at! (.ms-tree st) pane-row col tree-body-h)
+            ((Some hit-path)
+             (cond
+               ;; Click in open files section: show in editor
+               ((tree:tree-pane-in-open-section? (.ms-tree st))
+                (%switch-to-open-file! st hit-path)
+                (%show-editor! st))
+               ;; Directory: toggle expand
+               ((== hit-path "") (tree:tree-pane-toggle-expand! (.ms-tree st)))
+               ;; Tree file: open
+               (True (tree-open-file! st hit-path))))
+            ((None) (values))))
+         (True (values))))
       ;; Click in content area -> editor or REPL?
       ((>= col content-x)
        (match center
@@ -3572,12 +3625,18 @@ wrap is on, row is resolved through screen-row-to-line-seg."
 
   (declare toggle-open-files! (MineState -> Void))
   (define (toggle-open-files! st)
-    "Ctrl+t: jump to open files pane, or back to editor if already there."
+    "Ctrl+t: jump to open files pane; when tree is focused, toggle freeze/auto-hide."
     (let cur = (focus:focus-current (.ms-focus st)))
     (cond
-      ;; Already in tree open section -> back to editor
-      ((and (== cur focus:FocusTree) (tree:tree-pane-in-open-section? (.ms-tree st)))
-       (%show-editor! st)
+      ;; Already in tree -> freeze or auto-hide when focus leaves.
+      ((== cur focus:FocusTree)
+       (let frozen = (not (cell:read (.ms-tree-frozen st))))
+       (cell:write! (.ms-tree-frozen st) frozen)
+       (status:statusbar-set-message!
+        (.ms-status st)
+        (if frozen
+            "File tree frozen"
+            "File tree auto-hide enabled"))
        (values))
       ;; Otherwise -> show tree and switch to open files section
       (True
@@ -4504,7 +4563,9 @@ Render-app is NOT called here; the main loop handles rendering."
     (let tp = (tree:tree-pane-new))
     (let st = (MineState (menubar:menubar-new) (status:statusbar-new)
                          ep bm cs rp tp fm rm
-                         (cell:new 0) (cell:new (MineLayout TreeHidden CenterEditor)) (cell:new 0)
+                         (cell:new 0) (cell:new (MineLayout TreeHidden CenterEditor))
+                         (cell:new (not (cfgt:.config-auto-hide-tree-pane config)))
+                         (cell:new 0)
                          (cell:new (cfgt:.config-default-package config)) (cell:new False)
                          (cell:new "")
                          (native-box-new) (native-box-new)

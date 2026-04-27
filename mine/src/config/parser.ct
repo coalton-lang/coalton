@@ -13,7 +13,7 @@
   (declare default-config (Void -> cfg:MineConfig))
   (define (default-config)
     "Return the default configuration."
-    (cfg:MineConfig True "coalton" "COALTON-USER" None 4096 Nil))
+    (cfg:MineConfig True True "coalton" "COALTON-USER" None 4096 Nil))
 
   (declare load-config (String -> (Result String cfg:MineConfig)))
   (define (load-config path)
@@ -25,12 +25,13 @@ If the file does not exist, returns defaults. If malformed, returns Err."
                           (cl:user-homedir-pathname))))
         (cl:cond
           ((cl:not (cl:probe-file resolved))
-           (Ok (cfg:MineConfig cl:t "coalton" "COALTON-USER" None 4096 Nil)))
+           (Ok (cfg:MineConfig cl:t cl:t "coalton" "COALTON-USER" None 4096 Nil)))
           (cl:t
            (cl:handler-case
                (cl:with-open-file (in resolved :direction :input)
                  (cl:let* ((plist (cl:read in))
                            (se  (cl:getf plist ':structural-editing cl:t))
+                           (ah  (cl:getf plist ':auto-hide-tree-pane cl:t))
                            (rl  (cl:getf plist ':repl-language "coalton"))
                            (rp  (cl:getf plist ':default-package "COALTON-USER"))
                            (init (cl:getf plist ':repl-init cl:nil))
@@ -38,6 +39,8 @@ If the file does not exist, returns defaults. If malformed, returns Err."
                            (asdf-raw (cl:getf plist ':project-roots cl:nil)))
                    (cl:unless (cl:listp plist)
                      (cl:error "Config file must contain a plist"))
+                   (cl:unless (cl:or (cl:eq ah cl:t) (cl:null ah))
+                     (cl:error "Invalid :auto-hide-tree-pane ~S (expected t or nil)" ah))
                    (cl:unless (cl:member (cl:string-downcase rl)
                                          '("coalton" "lisp")
                                          :test #'cl:string-equal)
@@ -51,6 +54,7 @@ If the file does not exist, returns defaults. If malformed, returns Err."
                                            (cl:reverse asdf-raw) :initial-value Nil))
                                (cl:t Nil))))
                      (Ok (cfg:MineConfig (cl:if se cl:t cl:nil)
+                                         (cl:if ah cl:t cl:nil)
                                          (cl:string-downcase rl)
                                          (cl:string-upcase rp)
                                          (cl:if init

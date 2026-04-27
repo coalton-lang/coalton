@@ -623,6 +623,7 @@
   (define (write-config! config)
     "Write CONFIG to ~/.mine. Returns True on success."
     (let se = (cfg:.config-structural-editing config))
+    (let auto-hide-tree = (cfg:.config-auto-hide-tree-pane config))
     (let lang = (cfg:.config-repl-language config))
     (let pkg = (cfg:.config-default-package config))
     ;; Extract Optional String to a nullable CL string
@@ -638,7 +639,7 @@
     (let has-paths = (match (cfg:.config-project-roots config)
                       ((Cons _ _) True)
                       ((Nil) False)))
-    (lisp (-> Boolean) (se lang pkg init-str has-init path-str has-paths)
+    (lisp (-> Boolean) (se auto-hide-tree lang pkg init-str has-init path-str has-paths)
       (cl:let ((path (cl:merge-pathnames ".mine"
                                           (cl:user-homedir-pathname))))
         (cl:handler-case
@@ -650,6 +651,8 @@
                 (cl:format out "(~%")
                 (cl:format out " :structural-editing ~A~%"
                            (cl:if se "t" "nil"))
+                (cl:format out " :auto-hide-tree-pane ~A~%"
+                           (cl:if auto-hide-tree "t" "nil"))
                 (cl:format out " :repl-language ~S~%" lang)
                 (cl:format out " :default-package ~S~%" pkg)
                 (cl:when has-init
@@ -917,7 +920,7 @@
     (show-tip terminal)
 
     ;; Write config and show result
-    (let config = (cfg:MineConfig se lang pkg init 4096 project-roots))
+    (let config = (cfg:MineConfig se True lang pkg init 4096 project-roots))
     (let _ok = (write-config! config))
     (show-done terminal)
 

@@ -98,6 +98,7 @@ You can setup `mine` with `mine --setup` and not worry about manual configuratio
 Whitespace is arbitrary; add as many spaces and newlines as you please. The possible options are:
 
 - `:structural-editing` [`t`, `nil`]: Enable or disable structural editing by default. Values are `t` (enable, default) or `nil` (disable).
+- `:auto-hide-tree-pane` [`t`, `nil`]: Auto-hide the tree pane when it loses focus. Values are `t` (auto-hide, default) or `nil` (freeze).
 - `:repl-language` [`"coalton"`, `"lisp"`]: The default language to boot the REPL as. The REPL language determines how forms are sent and interpreted by teh REPL.
 - `:default-package` `<string>`: The default package to boot the REPL in and beam code from files in. Values are any boot-time package name, usually `"COALTON-USER"` (default) or `"CL-USER"`.
 - `:repl-init` `<lisp-form>`: An arbitrary Lisp form to run in the REPL each time it starts up.
