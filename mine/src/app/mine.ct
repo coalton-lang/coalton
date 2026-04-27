@@ -2475,10 +2475,10 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (cond
          ((== mod input:ModAlt)
           (%paredit-if-lisp st
-                            (fn (buffer) (paredit:paredit-forward-slurp! buffer (.ms-cursor st)))))
+                            (fn (buffer) (paredit:paredit-forward-join! buffer (.ms-cursor st)))))
          ((== mod input:ModAltShift)
           (%paredit-if-lisp st
-                            (fn (buffer) (paredit:paredit-backward-barf! buffer (.ms-cursor st)))))
+                            (fn (buffer) (paredit:paredit-backward-leave! buffer (.ms-cursor st)))))
          ((== mod input:ModCtrl)
           (match (mgr:bufmgr-current (.ms-bufmgr st))
             ((Some buf) (cursor:cursor-move-word-right! (buf:buffer-gap buf) (.ms-cursor st)))
@@ -2491,10 +2491,10 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (cond
          ((== mod input:ModAlt)
           (%paredit-if-lisp st
-                            (fn (buffer) (paredit:paredit-forward-barf! buffer (.ms-cursor st)))))
+                            (fn (buffer) (paredit:paredit-forward-leave! buffer (.ms-cursor st)))))
          ((== mod input:ModAltShift)
           (%paredit-if-lisp st
-                            (fn (buffer) (paredit:paredit-backward-slurp! buffer (.ms-cursor st)))))
+                            (fn (buffer) (paredit:paredit-backward-join! buffer (.ms-cursor st)))))
          ((== mod input:ModCtrl)
           (match (mgr:bufmgr-current (.ms-bufmgr st))
             ((Some buf) (cursor:cursor-move-word-left! (buf:buffer-gap buf) (.ms-cursor st)))
@@ -2507,7 +2507,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (cond
          ((== mod input:ModAlt)
           (%paredit-if-lisp st
-                            (fn (buffer) (paredit:paredit-splice! buffer (.ms-cursor st)))))
+                            (fn (buffer) (paredit:paredit-shed! buffer (.ms-cursor st)))))
          (True
           (match (mgr:bufmgr-current (.ms-bufmgr st))
             ((Some buf)
@@ -2519,7 +2519,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (cond
          ((== mod input:ModAlt)
           (%paredit-if-lisp st
-                            (fn (buffer) (paredit:paredit-cleave! buffer (.ms-cursor st)))))
+                            (fn (buffer) (paredit:paredit-split! buffer (.ms-cursor st)))))
          (True
           (match (mgr:bufmgr-current (.ms-bufmgr st))
             ((Some buf)

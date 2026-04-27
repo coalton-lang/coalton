@@ -349,27 +349,27 @@ ordinary input-widget handler."
       ((Tuple (input:KeyRight) (input:ModAlt))
        (%repl-paredit! rp
                        (fn (buffer cs)
-                         (paredit:paredit-forward-slurp! buffer cs))))
+                         (paredit:paredit-forward-join! buffer cs))))
       ((Tuple (input:KeyRight) (input:ModAltShift))
        (%repl-paredit! rp
                        (fn (buffer cs)
-                         (paredit:paredit-backward-barf! buffer cs))))
+                         (paredit:paredit-backward-leave! buffer cs))))
       ((Tuple (input:KeyLeft) (input:ModAlt))
        (%repl-paredit! rp
                        (fn (buffer cs)
-                         (paredit:paredit-forward-barf! buffer cs))))
+                         (paredit:paredit-forward-leave! buffer cs))))
       ((Tuple (input:KeyLeft) (input:ModAltShift))
        (%repl-paredit! rp
                        (fn (buffer cs)
-                         (paredit:paredit-backward-slurp! buffer cs))))
+                         (paredit:paredit-backward-join! buffer cs))))
       ((Tuple (input:KeyUp) (input:ModAlt))
        (%repl-paredit! rp
                        (fn (buffer cs)
-                         (paredit:paredit-splice! buffer cs))))
+                         (paredit:paredit-shed! buffer cs))))
       ((Tuple (input:KeyDown) (input:ModAlt))
        (%repl-paredit! rp
                        (fn (buffer cs)
-                         (paredit:paredit-cleave! buffer cs))))
+                         (paredit:paredit-split! buffer cs))))
       ((Tuple (input:KeyBackspace) (input:ModAlt))
        (%repl-paredit! rp
                        (fn (buffer cs)

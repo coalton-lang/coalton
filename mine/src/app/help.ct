@@ -151,9 +151,9 @@ automatically based on each item's height."
      (Binding "Ctrl+p"                 "Toggle structural editing")
      (Binding "( ) [ ] \""             "Balanced insert/close")
      (Binding "Backspace"              "Balanced delete")
-     (Binding "Alt+← / Alt+→"             "Forward (right) barf / slurp")
-     (Binding "Alt+Shift+← / Alt+Shift+→" "Backward (left) slurp / barf")
-     (Binding "Alt+↑ / Alt+↓"             "Splice / cleave enclosing S-expression")
+     (Binding "Alt+← / Alt+→"             "Forward leave / join")
+     (Binding "Alt+Shift+← / Alt+Shift+→" "Backward join / leave")
+     (Binding "Alt+↑ / Alt+↓"             "Shed / split enclosing S-expression")
      (Binding "Alt+Backspace"          "Delete enclosing S-expression")
      (Binding "Alt+f / Alt+b"          "Move forward / backward an S-expression")
      Blank
