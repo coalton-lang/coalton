@@ -119,6 +119,17 @@ listen("pty-exit", () => {
   window.__TAURI__.core.invoke("close_window");
 });
 
+const currentWindow = window.__TAURI__.window?.getCurrentWindow?.();
+await currentWindow?.onCloseRequested(async (event) => {
+  event.preventDefault();
+
+  try {
+    await invoke("write_pty", { data: "\x11" });
+  } catch (_) {
+    await invoke("close_window");
+  }
+});
+
 // Spawn PTY with initial size, then wire input. Awaiting closes the
 // startup race in which keystrokes would be silently dropped by write_pty
 // before the writer is installed.
