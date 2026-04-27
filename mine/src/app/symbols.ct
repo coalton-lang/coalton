@@ -1,0 +1,475 @@
+(cl:defpackage #:mine/app/symbols
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:list #:coalton/list)
+   (#:str #:coalton/string))
+  (:export
+   #:latex-symbol-lookup
+   #:latex-symbol-completion))
+
+(in-package #:mine/app/symbols)
+
+;;; LaTeX-style symbol table
+
+(cl:defvar *latex-symbols* (cl:make-hash-table :test 'cl:equal)
+  "Hash table mapping LaTeX-style symbol names (without leading backslash) to
+their Unicode replacement strings.")
+
+(cl:defvar *latex-symbol-names* cl:nil
+  "A sorted CL list of all known LaTeX symbol names. Cached for completion.")
+
+(cl:defun %register-latex-symbol (name replacement)
+  "Add NAME -> REPLACEMENT to the symbol table."
+  (cl:setf (cl:gethash name *latex-symbols*) replacement))
+
+(cl:defun %register-batch (entries)
+  "ENTRIES is a list of (name replacement) pairs."
+  (cl:dolist (e entries)
+    (%register-latex-symbol (cl:first e) (cl:second e))))
+
+;; Greek lowercase
+(%register-batch
+ '(("alpha"     "α") ("beta"      "β") ("gamma"   "γ") ("delta"   "δ")
+   ("epsilon"   "ε") ("zeta"      "ζ") ("eta"     "η") ("theta"   "θ")
+   ("iota"      "ι") ("kappa"     "κ") ("lambda"  "λ") ("mu"      "μ")
+   ("nu"        "ν") ("xi"        "ξ") ("omicron" "ο") ("pi"      "π")
+   ("rho"       "ρ") ("sigma"     "σ") ("tau"     "τ") ("upsilon" "υ")
+   ("phi"       "φ") ("chi"       "χ") ("psi"     "ψ") ("omega"   "ω")
+   ("varepsilon" "ε") ("vartheta"  "ϑ") ("varpi"  "ϖ") ("varrho"  "ϱ")
+   ("varsigma"   "ς") ("varphi"    "ϕ") ("varkappa" "ϰ") ("digamma" "ϝ")))
+
+;; Greek uppercase. Uses Greek-script codepoints even for letters that look
+;; identical to Latin (Α, Β, etc.) — they are semantically distinct.
+(%register-batch
+ '(("Alpha"   "Α") ("Beta"   "Β") ("Gamma"   "Γ") ("Delta"  "Δ")
+   ("Epsilon" "Ε") ("Zeta"   "Ζ") ("Eta"     "Η") ("Theta"  "Θ")
+   ("Iota"    "Ι") ("Kappa"  "Κ") ("Lambda"  "Λ") ("Mu"     "Μ")
+   ("Nu"      "Ν") ("Xi"     "Ξ") ("Omicron" "Ο") ("Pi"     "Π")
+   ("Rho"     "Ρ") ("Sigma"  "Σ") ("Tau"     "Τ") ("Upsilon" "Υ")
+   ("Phi"     "Φ") ("Chi"    "Χ") ("Psi"     "Ψ") ("Omega"  "Ω")))
+
+;; Arrows
+(%register-batch
+ '(("leftarrow"          "←") ("rightarrow"      "→")
+   ("uparrow"            "↑") ("downarrow"       "↓")
+   ("leftrightarrow"     "↔") ("updownarrow"     "↕")
+   ("Leftarrow"          "⇐") ("Rightarrow"      "⇒")
+   ("Uparrow"            "⇑") ("Downarrow"       "⇓")
+   ("Leftrightarrow"     "⇔") ("Updownarrow"     "⇕")
+   ("mapsto"             "↦") ("longmapsto"      "⟼")
+   ("hookleftarrow"      "↩") ("hookrightarrow"  "↪")
+   ("longleftarrow"      "⟵") ("longrightarrow"  "⟶")
+   ("longleftrightarrow" "⟷")
+   ("Longleftarrow"      "⟸") ("Longrightarrow"  "⟹")
+   ("Longleftrightarrow" "⟺")
+   ("leftharpoonup"      "↼") ("rightharpoonup"  "⇀")
+   ("leftharpoondown"    "↽") ("rightharpoondown" "⇁")
+   ("leftrightharpoons"  "⇋") ("rightleftharpoons" "⇌")
+   ("twoheadleftarrow"   "↞") ("twoheadrightarrow" "↠")
+   ("nearrow"            "↗") ("searrow"         "↘")
+   ("swarrow"            "↙") ("nwarrow"         "↖")
+   ("leadsto"            "⇝") ("nleftarrow"      "↚")
+   ("nrightarrow"        "↛") ("nLeftarrow"      "⇍")
+   ("nRightarrow"        "⇏") ("nLeftrightarrow" "⇎")
+   ("circlearrowleft"    "↺") ("circlearrowright" "↻")
+   ("curvearrowleft"     "↶") ("curvearrowright" "↷")
+   ;; Aliases used in programming/Coalton-friendly contexts
+   ("to"      "→") ("gets"    "←")
+   ("iff"     "⇔") ("implies" "⇒")))
+
+;; Quantifiers, set theory, and binary relations
+(%register-batch
+ '(("forall"     "∀") ("exists"    "∃") ("nexists"  "∄")
+   ("neg"        "¬") ("lnot"      "¬")
+   ("in"         "∈") ("notin"     "∉") ("ni"       "∋") ("notni" "∌")
+   ("subset"     "⊂") ("supset"    "⊃")
+   ("subseteq"   "⊆") ("supseteq"  "⊇")
+   ("subsetneq"  "⊊") ("supsetneq" "⊋")
+   ("nsubseteq"  "⊈") ("nsupseteq" "⊉")
+   ("sqsubset"   "⊏") ("sqsupset"  "⊐")
+   ("sqsubseteq" "⊑") ("sqsupseteq" "⊒")
+   ("cup"        "∪") ("cap"       "∩")
+   ("sqcup"      "⊔") ("sqcap"     "⊓")
+   ("uplus"      "⊎") ("biguplus"  "⨄")
+   ("vee"        "∨") ("wedge"     "∧")
+   ("lor"        "∨") ("land"      "∧")
+   ("setminus"   "∖") ("emptyset"  "∅") ("varnothing" "∅")))
+
+;; Big operators
+(%register-batch
+ '(("sum"        "∑") ("prod"      "∏") ("coprod"    "∐")
+   ("int"        "∫") ("iint"      "∬") ("iiint"     "∭")
+   ("oint"       "∮") ("oiint"     "∯") ("oiiint"    "∰")
+   ("bigcup"     "⋃") ("bigcap"    "⋂")
+   ("bigsqcup"   "⨆") ("bigsqcap"  "⨅")
+   ("bigvee"     "⋁") ("bigwedge"  "⋀")
+   ("bigoplus"   "⨁") ("bigotimes" "⨂") ("bigodot"   "⨀")))
+
+;; Binary operators
+(%register-batch
+ '(("pm"      "±") ("mp"      "∓") ("times"  "×") ("div"      "÷")
+   ("cdot"    "·") ("ast"     "∗") ("star"   "⋆") ("bullet"   "∙")
+   ("circ"    "∘") ("oplus"   "⊕") ("ominus" "⊖") ("otimes"   "⊗")
+   ("oslash"  "⊘") ("odot"    "⊙") ("boxplus" "⊞") ("boxminus" "⊟")
+   ("boxtimes" "⊠") ("boxdot" "⊡")
+   ("triangleleft" "◁") ("triangleright" "▷")
+   ("bigtriangleup" "△") ("bigtriangledown" "▽")
+   ("amalg"   "⨿") ("wr"      "≀")
+   ("dagger"  "†") ("ddagger" "‡")
+   ("diamond" "⋄") ("Diamond" "◇")
+   ("triangle" "△") ("nabla"   "∇") ("partial" "∂")))
+
+;; Comparison and relations
+(%register-batch
+ '(("le"      "≤") ("leq"     "≤") ("ge"      "≥") ("geq"     "≥")
+   ("ne"      "≠") ("neq"     "≠")
+   ("ll"      "≪") ("gg"      "≫") ("lll"     "⋘") ("ggg"     "⋙")
+   ("equiv"   "≡") ("nequiv"  "≢")
+   ("approx"  "≈") ("napprox" "≉") ("approxeq" "≊")
+   ("sim"     "∼") ("nsim"    "≁") ("simeq"   "≃") ("nsimeq"  "≄")
+   ("cong"    "≅") ("ncong"   "≇")
+   ("propto"  "∝")
+   ("perp"    "⊥") ("parallel" "∥") ("nparallel" "∦")
+   ("top"     "⊤") ("bot"     "⊥")
+   ("vdash"   "⊢") ("dashv"   "⊣")
+   ("vDash"   "⊨") ("models"  "⊨")
+   ("Vdash"   "⊩") ("Vvdash"  "⊪")
+   ("nvdash"  "⊬") ("nvDash"  "⊭")
+   ("prec"    "≺") ("succ"    "≻")
+   ("preceq"  "⪯") ("succeq"  "⪰")
+   ("doteq"   "≐") ("doteqdot" "≑")
+   ("leqq"    "≦") ("geqq"    "≧")
+   ("lessdot" "⋖") ("gtrdot"  "⋗")
+   ("smile"   "⌣") ("frown"   "⌢")
+   ("asymp"   "≍") ("bowtie"  "⋈")
+   ("between" "≬")
+   ("therefore" "∴") ("because" "∵")))
+
+;; Geometric / misc symbols
+(%register-batch
+ '(("infty"     "∞") ("aleph"   "ℵ") ("beth"   "ℶ") ("gimel" "ℷ") ("daleth" "ℸ")
+   ("hbar"      "ℏ") ("ell"     "ℓ") ("Re"     "ℜ") ("Im"    "ℑ")
+   ("wp"        "℘") ("Bbbk"    "𝕜")
+   ("prime"     "′") ("dprime"  "″") ("tprime" "‴")
+   ("backprime" "‵")
+   ("S"  "§") ("P"   "¶") ("copyright" "©") ("registered" "®")
+   ("ldots"     "…") ("cdots"   "⋯") ("vdots"  "⋮") ("ddots" "⋱")
+   ("dots"      "…")
+   ("flat"      "♭") ("natural" "♮") ("sharp"  "♯")
+   ("clubsuit"  "♣") ("diamondsuit" "♦") ("heartsuit" "♥") ("spadesuit" "♠")
+   ("checkmark" "✓") ("ballot" "✗")
+   ("angle"     "∠") ("measuredangle" "∡") ("sphericalangle" "∢")))
+
+;; Brackets and delimiters
+(%register-batch
+ '(("langle"     "⟨") ("rangle"   "⟩")
+   ("lceil"      "⌈") ("rceil"    "⌉")
+   ("lfloor"     "⌊") ("rfloor"   "⌋")
+   ("llbracket"  "⟦") ("rrbracket" "⟧")
+   ("lvert"      "|")  ("rvert"    "|")
+   ("lVert"      "‖")  ("rVert"    "‖")
+   ("Vert"       "‖")))
+
+;; Roots and miscellaneous math
+(%register-batch
+ '(("sqrt" "√") ("cbrt" "∛") ("qdrt" "∜")))
+
+;; Dashes, spaces, punctuation
+(%register-batch
+ '(("ndash" "–") ("mdash" "—") ("hyphen" "‐")
+   ("lsquo" "‘") ("rsquo" "’") ("ldquo" "“") ("rdquo" "”")
+   ("guillemetleft" "«") ("guillemetright" "»")))
+
+;; Subscript digits and signs (`_0`..`_9`, `_+`, `_-`, `_(`, `_)`, etc.)
+(%register-batch
+ '(("_0" "₀") ("_1" "₁") ("_2" "₂") ("_3" "₃") ("_4" "₄")
+   ("_5" "₅") ("_6" "₆") ("_7" "₇") ("_8" "₈") ("_9" "₉")
+   ("_+" "₊") ("_-" "₋") ("_=" "₌") ("_(" "₍") ("_)" "₎")
+   ("_a" "ₐ") ("_e" "ₑ") ("_h" "ₕ") ("_i" "ᵢ") ("_j" "ⱼ")
+   ("_k" "ₖ") ("_l" "ₗ") ("_m" "ₘ") ("_n" "ₙ") ("_o" "ₒ")
+   ("_p" "ₚ") ("_r" "ᵣ") ("_s" "ₛ") ("_t" "ₜ") ("_u" "ᵤ")
+   ("_v" "ᵥ") ("_x" "ₓ")))
+
+;; Superscript digits and signs
+(%register-batch
+ '(("^0" "⁰") ("^1" "¹") ("^2" "²") ("^3" "³") ("^4" "⁴")
+   ("^5" "⁵") ("^6" "⁶") ("^7" "⁷") ("^8" "⁸") ("^9" "⁹")
+   ("^+" "⁺") ("^-" "⁻") ("^=" "⁼") ("^(" "⁽") ("^)" "⁾")
+   ("^a" "ᵃ") ("^b" "ᵇ") ("^c" "ᶜ") ("^d" "ᵈ") ("^e" "ᵉ")
+   ("^f" "ᶠ") ("^g" "ᶢ") ("^h" "ʰ") ("^i" "ⁱ") ("^j" "ʲ")
+   ("^k" "ᵏ") ("^l" "ˡ") ("^m" "ᵐ") ("^n" "ⁿ") ("^o" "ᵒ")
+   ("^p" "ᵖ") ("^r" "ʳ") ("^s" "ˢ") ("^t" "ᵗ") ("^u" "ᵘ")
+   ("^v" "ᵛ") ("^w" "ʷ") ("^x" "ˣ") ("^y" "ʸ") ("^z" "ᶻ")))
+
+;; Common math fractions and ordinals
+(%register-batch
+ '(("half"      "½") ("third"   "⅓") ("quarter" "¼")
+   ("twothirds" "⅔") ("threequarters" "¾")
+   ("degree"    "°") ("micro"   "µ")
+   ("permille"  "‰") ("permyriad" "‱")))
+
+;; Geometric shapes
+(%register-batch
+ '(("square" "□") ("blacksquare" "■")
+   ("bigcirc" "○")
+   ("blacktriangle" "▲") ("blacktriangleleft" "◀") ("blacktriangleright" "▶")
+   ("blacktriangledown" "▼")
+   ("vartriangle" "△")
+   ("lozenge" "◊") ("blacklozenge" "⧫")))
+
+;; Additional comparison and order relations
+(%register-batch
+ '(("leqslant"   "⩽") ("geqslant"   "⩾")
+   ("lesssim"    "≲") ("gtrsim"     "≳")
+   ("lessapprox" "⪅") ("gtrapprox"  "⪆")
+   ("lessgtr"    "≶") ("gtrless"    "≷")
+   ("lesseqgtr"  "⋚") ("gtreqless"  "⋛")
+   ("nleq"       "≰") ("ngeq"       "≱")
+   ("nless"      "≮") ("ngtr"       "≯")
+   ("lneq"       "⪇") ("gneq"       "⪈")
+   ("precsim"    "≾") ("succsim"    "≿")
+   ("precapprox" "⪷") ("succapprox" "⪸")
+   ("nprec"      "⊀") ("nsucc"      "⊁")
+   ("npreceq"    "⋠") ("nsucceq"    "⋡")
+   ("Bumpeq"     "≎") ("bumpeq"     "≏")
+   ("circeq"     "≗") ("eqcirc"     "≖")
+   ("eqsim"      "≂")
+   ("fallingdotseq" "≒") ("risingdotseq" "≓")
+   ("backsim"    "∽") ("backsimeq"  "⋍")
+   ("triangleq"  "≜")))
+
+;; Additional arrows
+(%register-batch
+ '(("nleftrightarrow"  "↮")
+   ("leftleftarrows"   "⇇") ("rightrightarrows" "⇉")
+   ("upuparrows"       "⇈") ("downdownarrows"   "⇊")
+   ("leftrightarrows"  "⇆") ("rightleftarrows"  "⇄")
+   ("leftarrowtail"    "↢") ("rightarrowtail"   "↣")
+   ("Lsh"              "↰") ("Rsh"              "↱")
+   ("upharpoonleft"    "↿") ("upharpoonright"   "↾")
+   ("downharpoonleft"  "⇃") ("downharpoonright" "⇂")
+   ("Lleftarrow"       "⇚") ("Rrightarrow"      "⇛")
+   ("looparrowleft"    "↫") ("looparrowright"   "↬")
+   ("multimap"         "⊸")
+   ("rightsquigarrow"  "⇝") ("leftsquigarrow"   "⇜")))
+
+;; Additional set theory
+(%register-batch
+ '(("subseteqq"   "⫅") ("supseteqq"   "⫆")
+   ("subsetneqq"  "⫋") ("supsetneqq"  "⫌")
+   ("Cap"         "⋒") ("Cup"         "⋓")
+   ("complement"  "∁")
+   ("smallsetminus" "∖") ("backslash" "\\")
+   ("pitchfork"   "⋔")))
+
+;; Additional logic
+(%register-batch
+ '(("nVdash"  "⊮") ("nVDash" "⊯")))
+
+;; Triangle relations
+(%register-batch
+ '(("trianglelefteq"   "⊴") ("trianglerighteq"   "⊵")
+   ("ntriangleleft"    "⋪") ("ntriangleright"    "⋫")
+   ("ntrianglelefteq"  "⋬") ("ntrianglerighteq"  "⋭")))
+
+;; Additional binary operators and miscellany
+(%register-batch
+ '(("mid"           "∣") ("nmid"          "∤")
+   ("dotplus"       "∔") ("divideontimes" "⋇")
+   ("intercal"      "⊺") ("veebar"        "⊻")
+   ("barwedge"      "⊼") ("doublebarwedge" "⩞")
+   ("circleddash"   "⊝")
+   ("leftthreetimes" "⋋") ("rightthreetimes" "⋌")
+   ("imath" "ı") ("jmath" "ȷ")
+   ("eth" "ð")
+   ("Finv" "Ⅎ") ("Game" "⅁")
+   ("Box"  "□")))
+
+;;; Styled Latin alphabets
+;;;
+;;; The Unicode Mathematical Alphanumeric Symbols block (U+1D400+) provides
+;;; bold, italic, script, fraktur, double-struck (blackboard bold), sans-serif,
+;;; and monospace variants of A-Z and a-z. A few letters live in the older
+;;; Letterlike Symbols block (e.g. ℕ, ℝ, ℤ, ℋ, ℒ, …) and have to be patched
+;;; in by codepoint.
+
+(cl:defun %register-styled (suffix base-cp cl:&optional holes digits-base)
+  "Register A-SUFFIX..Z-SUFFIX, a-SUFFIX..z-SUFFIX and (optionally)
+0-SUFFIX..9-SUFFIX. BASE-CP is the codepoint of the bold-A-style start
+(uppercase A); lowercase follows 26 codepoints later. HOLES is an alist
+((CHARACTER . CODEPOINT) ...) overriding individual letters whose styled form
+lives outside the contiguous block."
+  (cl:flet ((emit (letter cp)
+              (%register-latex-symbol
+               (cl:concatenate 'cl:string (cl:string letter) "-" suffix)
+               (cl:string (cl:code-char cp)))))
+    (cl:loop :for offset :from 0 :below 26
+             :for letter :across "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+             :for hole = (cl:cdr (cl:assoc letter holes))
+             :do (emit letter (cl:or hole (cl:+ base-cp offset))))
+    (cl:loop :for offset :from 0 :below 26
+             :for letter :across "abcdefghijklmnopqrstuvwxyz"
+             :for hole = (cl:cdr (cl:assoc letter holes))
+             :do (emit letter (cl:or hole (cl:+ base-cp 26 offset))))
+    (cl:when digits-base
+      (cl:loop :for offset :from 0 :below 10
+               :for letter :across "0123456789"
+               :do (emit letter (cl:+ digits-base offset))))))
+
+;; Bold (A-b..Z-b, a-b..z-b, 0-b..9-b)
+(%register-styled "b" #x1D400 cl:nil #x1D7CE)
+;; Italic (…-i); italic h lives at U+210E (the Planck constant).
+(%register-styled "i" #x1D434 '((#\h . #x210E)))
+;; Bold italic (…-bi)
+(%register-styled "bi" #x1D468)
+;; Calligraphic / script (…-cal); many letters live in Letterlike Symbols.
+(%register-styled "cal" #x1D49C
+                  '((#\B . #x212C) (#\E . #x2130) (#\F . #x2131)
+                    (#\H . #x210B) (#\I . #x2110) (#\L . #x2112)
+                    (#\M . #x2133) (#\R . #x211B)
+                    (#\e . #x212F) (#\g . #x210A) (#\o . #x2134)))
+;; Bold calligraphic / bold script (…-bcal)
+(%register-styled "bcal" #x1D4D0)
+;; Fraktur (…-frak); five letters in Letterlike Symbols.
+(%register-styled "frak" #x1D504
+                  '((#\C . #x212D) (#\H . #x210C) (#\I . #x2111)
+                    (#\R . #x211C) (#\Z . #x2128)))
+;; Bold fraktur (…-bfrak)
+(%register-styled "bfrak" #x1D56C)
+;; Double-struck / blackboard bold (…-bb); seven letters in Letterlike.
+(%register-styled "bb" #x1D538
+                  '((#\C . #x2102) (#\H . #x210D) (#\N . #x2115)
+                    (#\P . #x2119) (#\Q . #x211A) (#\R . #x211D)
+                    (#\Z . #x2124))
+                  #x1D7D8)
+;; Sans-serif (…-sans)
+(%register-styled "sans" #x1D5A0 cl:nil #x1D7E2)
+;; Sans-serif bold (…-bsans)
+(%register-styled "bsans" #x1D5D4 cl:nil #x1D7EC)
+;; Sans-serif italic (…-isans)
+(%register-styled "isans" #x1D608)
+;; Sans-serif bold italic (…-bisans)
+(%register-styled "bisans" #x1D63C)
+;; Monospace (…-mono)
+(%register-styled "mono" #x1D670 cl:nil #x1D7F6)
+
+;;; Styled Greek alphabets
+;;;
+;;; The Mathematical Greek block (U+1D6A8 onwards) lays out 58 codepoints per
+;;; style: 25 capitals + capital theta variant + 25 lowercase (incl. final
+;;; sigma) + partial differential + 6 lowercase variants. Only five styles
+;;; have Greek glyphs — bold, italic, bold italic, sans-serif bold, and
+;;; sans-serif bold italic. Sans-serif (non-bold), italic sans-serif (non-
+;;; bold), monospace, calligraphic, fraktur, and double-struck do not.
+
+(cl:defparameter *greek-style-offsets*
+  '(("Alpha" . 0)  ("Beta" . 1)   ("Gamma" . 2)   ("Delta" . 3)
+    ("Epsilon" . 4) ("Zeta" . 5)  ("Eta" . 6)     ("Theta" . 7)
+    ("Iota" . 8)   ("Kappa" . 9)  ("Lambda" . 10) ("Mu" . 11)
+    ("Nu" . 12)    ("Xi" . 13)    ("Omicron" . 14) ("Pi" . 15)
+    ("Rho" . 16)   ("varTheta" . 17) ("Sigma" . 18) ("Tau" . 19)
+    ("Upsilon" . 20) ("Phi" . 21) ("Chi" . 22)    ("Psi" . 23)
+    ("Omega" . 24) ("nabla" . 25)
+    ("alpha" . 26) ("beta" . 27)  ("gamma" . 28)  ("delta" . 29)
+    ("epsilon" . 30) ("zeta" . 31) ("eta" . 32)   ("theta" . 33)
+    ("iota" . 34)  ("kappa" . 35) ("lambda" . 36) ("mu" . 37)
+    ("nu" . 38)    ("xi" . 39)    ("omicron" . 40) ("pi" . 41)
+    ("rho" . 42)   ("varsigma" . 43) ("sigma" . 44) ("tau" . 45)
+    ("upsilon" . 46) ("phi" . 47) ("chi" . 48)    ("psi" . 49)
+    ("omega" . 50) ("partial" . 51)
+    ("varepsilon" . 52) ("vartheta" . 53) ("varkappa" . 54)
+    ("varphi" . 55) ("varrho" . 56) ("varpi" . 57)))
+
+(cl:defun %register-styled-greek (suffix base-cp)
+  "Register Alpha-SUFFIX..Omega-SUFFIX, alpha-SUFFIX..omega-SUFFIX and the
+variant glyphs (varTheta, varsigma, varepsilon, vartheta, varkappa, varphi,
+varrho, varpi, partial, nabla) at offsets BASE-CP, BASE-CP+1, etc."
+  (cl:dolist (entry *greek-style-offsets*)
+    (cl:let ((name (cl:car entry))
+             (offset (cl:cdr entry)))
+      (%register-latex-symbol
+       (cl:concatenate 'cl:string name "-" suffix)
+       (cl:string (cl:code-char (cl:+ base-cp offset)))))))
+
+;; Bold Greek (Alpha-b, alpha-b, varepsilon-b, partial-b, nabla-b, ...)
+(%register-styled-greek "b" #x1D6A8)
+;; Italic Greek (…-i)
+(%register-styled-greek "i" #x1D6E2)
+;; Bold italic Greek (…-bi)
+(%register-styled-greek "bi" #x1D71C)
+;; Sans-serif bold Greek (…-bsans)
+(%register-styled-greek "bsans" #x1D756)
+;; Sans-serif bold italic Greek (…-bisans)
+(%register-styled-greek "bisans" #x1D790)
+
+;; Bold Digamma (only exists for the bold style).
+(%register-latex-symbol "Digamma-b" (cl:string (cl:code-char #x1D7CA)))
+(%register-latex-symbol "digamma-b" (cl:string (cl:code-char #x1D7CB)))
+
+;; Cache the sorted list of names for completion
+(cl:setf *latex-symbol-names*
+         (cl:sort (cl:loop :for k :being :the :hash-keys :of *latex-symbols*
+                           :collect k)
+                  #'cl:string<))
+
+;;; Coalton interface
+
+(coalton-toplevel
+
+  (declare latex-symbol-lookup (String -> (Optional String)))
+  (define (latex-symbol-lookup name)
+    "Return the Unicode string registered for NAME, or None if no entry exists."
+    (lisp (-> (Optional String)) (name)
+      (cl:multiple-value-bind (val found) (cl:gethash name *latex-symbols*)
+        (cl:if found (Some val) None))))
+
+  (declare latex-symbol-completion (String -> (Tuple String (List String))))
+  (define (latex-symbol-completion text)
+    "Tab-complete a LaTeX-style symbol name. Returns the longest unambiguous
+prefix in the first slot, and the list of matching names in the second."
+    (lisp (-> (Tuple String (List String))) (text)
+      (%latex-symbol-completion-impl text))))
+
+;;; CL implementation of completion
+
+(cl:defun %longest-common-prefix (strings)
+  "Return the longest common prefix of a non-empty list of strings."
+  (cl:if (cl:null strings)
+         ""
+         (cl:let* ((first (cl:first strings))
+                   (max-len (cl:length first))
+                   (i 0))
+           (cl:loop :while (cl:< i max-len)
+                    :do (cl:let ((ch (cl:char first i)))
+                          (cl:unless
+                              (cl:every (cl:lambda (s)
+                                          (cl:and (cl:< i (cl:length s))
+                                                  (cl:char= (cl:char s i) ch)))
+                                        (cl:rest strings))
+                            (cl:return)))
+                    :do (cl:incf i))
+           (cl:subseq first 0 i))))
+
+(cl:defun %latex-symbol-completion-impl (text)
+  "Return (Tuple completed-text candidates-list) for the prefix TEXT."
+  (cl:let ((matches
+             (cl:loop :for name :in *latex-symbol-names*
+                      :when (cl:and (cl:>= (cl:length name) (cl:length text))
+                                    (cl:string= text name
+                                                :end2 (cl:length text)))
+                        :collect name)))
+    (cl:cond
+      ((cl:null matches) (Tuple text coalton:Nil))
+      ((cl:null (cl:rest matches))
+       ;; Single match -- complete fully but don't show it as a candidate.
+       (Tuple (cl:first matches) coalton:Nil))
+      (cl:t
+       (Tuple (%longest-common-prefix matches)
+              (%cl-list-to-coalton-list matches))))))
+
+(cl:defun %cl-list-to-coalton-list (xs)
+  "Convert a CL list of strings into a Coalton (List String)."
+  (cl:if (cl:null xs)
+         coalton:Nil
+         (coalton:Cons (cl:first xs)
+                       (%cl-list-to-coalton-list (cl:rest xs)))))

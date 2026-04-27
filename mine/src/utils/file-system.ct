@@ -1,0 +1,16 @@
+(cl:defpackage #:mine/utils/file-system
+  (:use #:coalton #:coalton-prelude)
+  (:export
+   #:directory?))
+
+(in-package #:mine/utils/file-system)
+
+(coalton-toplevel
+
+  (declare directory? (String -> Boolean))
+  (define (directory? path)
+    "True if PATH exists and is a directory."
+    (lisp (-> Boolean) (path)
+      (cl:let ((p (cl:probe-file path)))
+        (cl:and p (cl:not (cl:pathname-name p))
+                  (cl:not (cl:pathname-type p)))))))

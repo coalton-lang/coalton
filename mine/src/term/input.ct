@@ -1,0 +1,611 @@
+(cl:defpackage #:mine/term/input
+  (:use #:coalton #:coalton-prelude)
+  (:export
+   #:Key
+   #:KeyChar #:KeyCtrl #:KeyEnter #:KeyTab #:KeyBackspace
+   #:KeyEscape #:KeyUp #:KeyDown #:KeyRight #:KeyLeft
+   #:KeyHome #:KeyEnd #:KeyPageUp #:KeyPageDown
+   #:KeyInsert #:KeyDelete
+   #:KeyF #:KeyShiftedF
+   #:KeyUnknown
+   #:Modifier #:ModNone #:ModShift #:ModAlt #:ModCtrl #:ModAltShift
+   #:MouseButton
+   #:MouseLeft #:MouseMiddle #:MouseRight
+   #:MouseScrollUp #:MouseScrollDown
+   #:MouseAction
+   #:MousePress #:MouseDrag #:MouseRelease
+   #:InputEvent
+   #:IEvKey #:IEvMouse #:IEvPaste #:IEvResize #:IEvNone
+   #:parse-input))
+
+(in-package #:mine/term/input)
+
+(cl:defun %digit-byte-p (b)
+  (cl:and (cl:>= b 48) (cl:<= b 57)))
+
+(coalton-toplevel
+
+  ;;; Key
+
+  (define-type Key
+    "A keyboard key."
+    (KeyChar Char)
+    (KeyCtrl Char)
+    KeyEnter
+    KeyTab
+    KeyBackspace
+    KeyEscape
+    KeyUp
+    KeyDown
+    KeyRight
+    KeyLeft
+    KeyHome
+    KeyEnd
+    KeyPageUp
+    KeyPageDown
+    KeyInsert
+    KeyDelete
+    (KeyF UFix)
+    (KeyShiftedF UFix)
+    (KeyUnknown UFix))
+
+  ;;; Modifier
+
+  (repr :enum)
+  (define-type Modifier
+    "Key modifier state."
+    ModNone
+    ModShift
+    ModAlt
+    ModCtrl
+    ModAltShift)
+
+  (define-instance (Eq Modifier)
+    (define (== a b)
+      (lisp (-> Boolean) (a b)
+        (cl:if (cl:eq a b) True False))))
+
+  ;;; Mouse
+
+  (repr :enum)
+  (define-type MouseButton
+    "Mouse button identifier."
+    MouseLeft
+    MouseMiddle
+    MouseRight
+    MouseScrollUp
+    MouseScrollDown)
+
+  (repr :enum)
+  (define-type MouseAction
+    "Mouse action type."
+    MousePress
+    MouseDrag
+    MouseRelease)
+
+  ;;; InputEvent
+
+  (define-type InputEvent
+    "A parsed terminal input event."
+    (IEvKey Key Modifier)
+    (IEvMouse MouseAction MouseButton UFix UFix)
+    (IEvPaste String)
+    (IEvResize UFix UFix)
+    IEvNone)
+
+  ;;; Vector helpers (via lisp escape since no local nickname)
+
+  (declare vec-length ((Vector UFix) -> UFix))
+  (define (vec-length v)
+    (lisp (-> UFix) (v)
+      (cl:length v)))
+
+  (declare vec-ref ((Vector UFix) * UFix -> UFix))
+  (define (vec-ref v i)
+    (lisp (-> UFix) (v i)
+      (cl:aref v i)))
+
+  (declare vec-new (Void -> (Vector UFix)))
+  (define (vec-new)
+    (lisp (-> (Vector UFix)) ()
+      (cl:make-array 0 :fill-pointer 0 :adjustable cl:t
+                       :element-type cl:t)))
+
+  (declare vec-push! ((Vector UFix) * UFix -> Void))
+  (define (vec-push! v x)
+    (lisp (-> Void) (v x)
+      (cl:vector-push-extend x v)
+      (cl:values)))
+
+  (declare vec-from-offset ((Vector UFix) * UFix -> (Vector UFix)))
+  (define (vec-from-offset v start)
+    "Create a new vector containing elements from START to the end."
+    (lisp (-> (Vector UFix)) (v start)
+      (cl:let* ((len (cl:length v))
+                (new-len (cl:max 0 (cl:- len start)))
+                (result (cl:make-array new-len :fill-pointer new-len
+                                               :adjustable cl:t
+                                               :element-type cl:t)))
+        (cl:dotimes (i new-len)
+          (cl:setf (cl:aref result i)
+                   (cl:aref v (cl:+ start i))))
+        result)))
+
+  ;;; Byte-to-char conversion
+
+  (declare ufix-to-char (UFix -> Char))
+  (define (ufix-to-char n)
+    (lisp (-> Char) (n)
+      (cl:code-char n)))
+
+  ;;; US keyboard shift mapping for Kitty protocol
+  ;;; The Kitty protocol sends base (unshifted) codepoints with shift in the
+  ;;; modifier bits.  When shift is set we need to map to the actual character.
+
+  (declare %apply-shift-to-codepoint (UFix -> UFix))
+  (define (%apply-shift-to-codepoint cp)
+    "Map a US-keyboard base codepoint to its shifted variant."
+    (cond
+      ;; letters a-z -> A-Z
+      ((and (>= cp 97) (<= cp 122)) (- cp 32))
+      ;; digits and punctuation
+      ((== cp 49) 33)   ; 1 -> !
+      ((== cp 50) 64)   ; 2 -> @
+      ((== cp 51) 35)   ; 3 -> #
+      ((== cp 52) 36)   ; 4 -> $
+      ((== cp 53) 37)   ; 5 -> %
+      ((== cp 54) 94)   ; 6 -> ^
+      ((== cp 55) 38)   ; 7 -> &
+      ((== cp 56) 42)   ; 8 -> *
+      ((== cp 57) 40)   ; 9 -> (
+      ((== cp 48) 41)   ; 0 -> )
+      ((== cp 45) 95)   ; - -> _
+      ((== cp 61) 43)   ; = -> +
+      ((== cp 91) 123)  ; [ -> {
+      ((== cp 93) 125)  ; ] -> }
+      ((== cp 92) 124)  ; \ -> |
+      ((== cp 59) 58)   ; ; -> :
+      ((== cp 39) 34)   ; ' -> "
+      ((== cp 96) 126)  ; ` -> ~
+      ((== cp 44) 60)   ; , -> <
+      ((== cp 46) 62)   ; . -> >
+      ((== cp 47) 63)   ; / -> ?
+      (True cp)))
+
+  ;;; CSI parameter parsing
+
+  (declare parse-csi-params
+    ((Vector UFix) * UFix -> (Tuple3 (List UFix) UFix UFix)))
+  (define (parse-csi-params buf start)
+    "Parse CSI numeric parameters from BUF starting at START.
+Returns (params final-byte next-pos)."
+    (let len = (vec-length buf))
+    (lisp (-> (Tuple3 (List UFix) UFix UFix)) (buf start len)
+      (cl:let ((params (cl:list 0))
+               (pos start))
+        ;; Parse optional '?' or '<' prefix
+        (cl:when (cl:and (cl:< pos len)
+                         (cl:member (cl:aref buf pos) '(63 60)))
+          ;; skip '?' (63) or '<' (60) prefix
+          (cl:incf pos))
+        ;; Parse numeric params separated by ';'
+        (cl:tagbody
+         loop-top
+         (cl:when (cl:< pos len)
+           (cl:let ((b (cl:aref buf pos)))
+             (cl:cond
+               ;; digit 0-9
+               ((cl:and (cl:>= b 48) (cl:<= b 57))
+                (cl:setf (cl:car params)
+                         (cl:+ (cl:* (cl:car params) 10) (cl:- b 48)))
+                (cl:incf pos))
+               ;; semicolon separator
+               ((cl:= b 59)
+                (cl:push 0 params)
+                (cl:incf pos))
+               ;; colon sub-parameter separator — keep first sub-param,
+               ;; skip remaining digits and colons in this group
+               ((cl:= b 58)
+                (cl:incf pos)
+                (cl:loop :while (cl:< pos len)
+                         :for bb = (cl:aref buf pos)
+                         :while (cl:or (%digit-byte-p bb) (cl:= bb 58))
+                         :do (cl:incf pos)))
+               ;; final byte (letter or ~)
+               ((cl:and (cl:>= b 64) (cl:<= b 126))
+                (cl:go loop-done))
+               ;; unknown intermediate byte, skip
+               (cl:t (cl:incf pos))))
+           (cl:go loop-top))
+         loop-done)
+        (cl:let ((final (cl:if (cl:< pos len) (cl:aref buf pos) 0))
+                 (next (cl:if (cl:< pos len) (cl:1+ pos) pos)))
+          (Tuple3 (cl:nreverse params) final next)))))
+
+  ;;; SGR mouse parsing
+
+  (declare decode-mouse-button (UFix -> MouseButton))
+  (define (decode-mouse-button btn)
+    (let base = (mod btn 4))
+    (cond
+      ((== btn 64) MouseScrollUp)
+      ((== btn 65) MouseScrollDown)
+      ((== base 0) MouseLeft)
+      ((== base 1) MouseMiddle)
+      ((== base 2) MouseRight)
+      (True MouseLeft)))
+
+  (declare decode-mouse-action (UFix * UFix -> MouseAction))
+  (define (decode-mouse-action btn final-byte)
+    "Decode mouse action. FINAL-BYTE is 77 for press/drag, 109 for release."
+    (cond
+      ((== final-byte 109) MouseRelease)
+      ((>= btn 64) MousePress)
+      ((>= btn 32) MouseDrag)
+      (True MousePress)))
+
+  ;;; UTF-8 decoding
+
+  (declare decode-utf8 ((Vector UFix) * UFix -> (Tuple Char UFix)))
+  (define (decode-utf8 buf pos)
+    "Decode a UTF-8 character from BUF at POS. Returns (char next-pos)."
+    (let b0 = (vec-ref buf pos))
+    (let len = (vec-length buf))
+    (cond
+      ;; ASCII
+      ((< b0 128)
+       (Tuple (ufix-to-char b0) (+ pos 1)))
+      ;; 2-byte sequence
+      ((and (>= b0 192) (< b0 224))
+       (cond
+         ((< (+ pos 1) len)
+          (let b1 = (vec-ref buf (+ pos 1)))
+          (let cp = (+ (* (- b0 192) 64) (- b1 128)))
+          (Tuple (ufix-to-char cp) (+ pos 2)))
+         (True (Tuple #\? (+ pos 1)))))
+      ;; 3-byte sequence
+      ((and (>= b0 224) (< b0 240))
+       (cond
+         ((< (+ pos 2) len)
+          (let b1 = (vec-ref buf (+ pos 1)))
+          (let b2 = (vec-ref buf (+ pos 2)))
+          (let cp = (+ (* (- b0 224) 4096)
+                       (+ (* (- b1 128) 64) (- b2 128))))
+          (Tuple (ufix-to-char cp) (+ pos 3)))
+         (True (Tuple #\? (+ pos 1)))))
+      ;; 4-byte sequence
+      ((and (>= b0 240) (< b0 248))
+       (cond
+         ((< (+ pos 3) len)
+          (let b1 = (vec-ref buf (+ pos 1)))
+          (let b2 = (vec-ref buf (+ pos 2)))
+          (let b3 = (vec-ref buf (+ pos 3)))
+          (let cp = (+ (* (- b0 240) 262144)
+                       (+ (* (- b1 128) 4096)
+                          (+ (* (- b2 128) 64)
+                             (- b3 128)))))
+          (Tuple (ufix-to-char cp) (+ pos 4)))
+         (True (Tuple #\? (+ pos 1)))))
+      ;; Invalid byte
+      (True (Tuple #\? (+ pos 1)))))
+
+  ;;; CSI sequence dispatch
+
+  (declare dispatch-csi
+    ((Vector UFix) * UFix -> (Tuple InputEvent UFix)))
+  (define (dispatch-csi buf start)
+    "Parse a CSI sequence from BUF starting after the '['.
+Returns (event next-pos)."
+    (let len = (vec-length buf))
+    ;; Check for SGR mouse: CSI < ...
+    (if (and (< start len) (== (vec-ref buf start) 60))
+        ;; SGR mouse sequence
+        (match (parse-csi-params buf start)
+          ((Tuple3 params final-byte next)
+           (if (== final-byte 0)
+               ;; Incomplete sequence -- preserve bytes for next read
+               (Tuple IEvNone (- start 2))
+               (match params
+                 ((Cons btn (Cons col1 (Cons row1 _)))
+                  (let col = (if (> col1 0) (- col1 1) 0))
+                  (let row = (if (> row1 0) (- row1 1) 0))
+                  (Tuple (IEvMouse (decode-mouse-action btn final-byte)
+                                   (decode-mouse-button btn)
+                                   col row)
+                         next))
+                 (_ (Tuple (IEvKey (KeyUnknown 91) ModNone) next))))))
+        ;; Regular CSI sequence
+        (match (parse-csi-params buf start)
+          ((Tuple3 params final-byte next)
+           (if (== final-byte 0)
+               ;; Incomplete sequence -- preserve bytes for next read
+               (Tuple IEvNone (- start 2))
+               (Tuple (dispatch-csi-final params final-byte) next))))))
+
+  (declare dispatch-csi-final ((List UFix) * UFix -> InputEvent))
+  (define (dispatch-csi-final params final-byte)
+    "Map CSI final byte and parameters to an InputEvent."
+    ;; Modifier is encoded as 1 + bitmask (Shift=1, Alt=2, Ctrl=4).
+    ;; Extract bits and pick highest-priority single modifier.
+    (let modifier = (match params
+                      ((Cons _ (Cons m _))
+                       (lisp (-> Modifier) (m)
+                         (cl:let ((bits (cl:if (cl:> m 1) (cl:1- m) 0)))
+                           (cl:cond
+                             ((cl:logbitp 2 bits) ModCtrl)
+                             ((cl:and (cl:logbitp 1 bits)
+                                      (cl:logbitp 0 bits))
+                              ModAltShift)
+                             ((cl:logbitp 1 bits) ModAlt)
+                             ((cl:logbitp 0 bits) ModShift)
+                             (cl:t ModNone)))))
+                      (_ ModNone)))
+    (cond
+      ;; Arrows
+      ((== final-byte 65) (IEvKey KeyUp modifier))
+      ((== final-byte 66) (IEvKey KeyDown modifier))
+      ((== final-byte 67) (IEvKey KeyRight modifier))
+      ((== final-byte 68) (IEvKey KeyLeft modifier))
+      ;; Home/End
+      ((== final-byte 72) (IEvKey KeyHome modifier))
+      ((== final-byte 70) (IEvKey KeyEnd modifier))
+      ;; F1-F4 (CSI encoding: xterm sends CSI 1;modifier P/Q/R/S
+      ;; with modifiers; kitty protocol sends CSI P/Q/S bare but
+      ;; uses CSI 13 ~ for F3 to avoid the CSI R / CPR conflict).
+      ((== final-byte 80) (IEvKey (KeyF 1) modifier))
+      ((== final-byte 81) (IEvKey (KeyF 2) modifier))
+      ((== final-byte 82) (IEvKey (KeyF 3) modifier))
+      ((== final-byte 83) (IEvKey (KeyF 4) modifier))
+      ;; Tilde sequences
+      ((== final-byte 126)
+       (match params
+         ((Cons p _)
+          (cond
+            ((== p 2) (IEvKey KeyInsert modifier))
+            ((== p 3) (IEvKey KeyDelete modifier))
+            ((== p 5) (IEvKey KeyPageUp modifier))
+            ((== p 6) (IEvKey KeyPageDown modifier))
+            ((== p 11) (IEvKey (KeyF 1) modifier))
+            ((== p 12) (IEvKey (KeyF 2) modifier))
+            ((== p 13) (IEvKey (KeyF 3) modifier))
+            ((== p 14) (IEvKey (KeyF 4) modifier))
+            ((== p 15) (IEvKey (KeyF 5) modifier))
+            ((== p 17) (IEvKey (KeyF 6) modifier))
+            ((== p 18) (IEvKey (KeyF 7) modifier))
+            ((== p 19) (IEvKey (KeyF 8) modifier))
+            ((== p 20) (IEvKey (KeyF 9) modifier))
+            ((== p 21) (IEvKey (KeyF 10) modifier))
+            ((== p 23) (IEvKey (KeyF 11) modifier))
+            ((== p 24) (IEvKey (KeyF 12) modifier))
+            (True (IEvKey (KeyUnknown p) ModNone))))
+         (_ (IEvKey (KeyUnknown 126) ModNone))))
+      ;; CSI 8;rows;cols t — resize notification from mine-app
+      ((== final-byte 116)
+       (match params
+         ((Cons 8 (Cons rows (Cons cols (Nil))))
+          (progn
+            (lisp (-> Void) (rows cols)
+              (mine/bindings/terminal:terminal-set-pipe-size rows cols)
+              (cl:values))
+            IEvNone))
+         (_ (IEvKey (KeyUnknown 116) ModNone))))
+      ;; CSI u (progressive keyboard enhancement)
+      ;; Kitty protocol sends base (unshifted) codepoints with shift in
+      ;; the modifier bits.  Extract the shift bit so we can map the
+      ;; codepoint to the actual typed character.
+      ((== final-byte 117)
+       (let raw-mod = (match params
+                        ((Cons _ (Cons m _)) m)
+                        (_ 0)))
+       (let shifted = (lisp (-> Boolean) (raw-mod)
+                        (cl:logbitp 0 (cl:if (cl:> raw-mod 1)
+                                             (cl:1- raw-mod) 0))))
+       (match params
+         ((Cons codepoint _)
+          (cond
+            ((== codepoint 13) (IEvKey KeyEnter modifier))
+            ((== codepoint 9)  (IEvKey KeyTab modifier))
+            ((== codepoint 27) (IEvKey KeyEscape modifier))
+            ((== codepoint 127) (IEvKey KeyBackspace modifier))
+            ;; Navigation keys (CSI u codepoints from private use area)
+            ((== codepoint 57348) (IEvKey KeyInsert modifier))
+            ((== codepoint 57349) (IEvKey KeyDelete modifier))
+            ((== codepoint 57350) (IEvKey KeyLeft modifier))
+            ((== codepoint 57351) (IEvKey KeyRight modifier))
+            ((== codepoint 57352) (IEvKey KeyUp modifier))
+            ((== codepoint 57353) (IEvKey KeyDown modifier))
+            ((== codepoint 57354) (IEvKey KeyPageUp modifier))
+            ((== codepoint 57355) (IEvKey KeyPageDown modifier))
+            ((== codepoint 57356) (IEvKey KeyHome modifier))
+            ((== codepoint 57357) (IEvKey KeyEnd modifier))
+            ;; Function keys F1-F12 (CSI u codepoints 57364-57375)
+            ((and (>= codepoint 57364) (<= codepoint 57375))
+             (IEvKey (KeyF (+ 1 (- codepoint 57364))) modifier))
+            ;; Ctrl+letter: emit KeyCtrl to match legacy key bindings.
+            ;; When shift is also held the codepoint is uppercased so
+            ;; callers can distinguish e.g. Ctrl+z (undo) from Ctrl+Shift+z
+            ;; (redo).
+            ((and (== modifier ModCtrl)
+                  (and (>= codepoint 97) (<= codepoint 122)))
+             (let actual = (if shifted
+                               (%apply-shift-to-codepoint codepoint)
+                               codepoint))
+             (IEvKey (KeyCtrl (ufix-to-char actual)) ModCtrl))
+            ;; Ctrl+\, Ctrl+], Ctrl+^, Ctrl+_ in kitty protocol.
+            ((and (== modifier ModCtrl)
+                  (or (== codepoint 92) (== codepoint 93)
+                      (or (== codepoint 94) (== codepoint 95))))
+             (IEvKey (KeyCtrl (ufix-to-char codepoint)) ModCtrl))
+            ((and (>= codepoint 32) (<= codepoint 126))
+             (let actual = (if shifted
+                               (%apply-shift-to-codepoint codepoint)
+                               codepoint))
+             (let final-mod = (if shifted (%strip-shift modifier) modifier))
+             (IEvKey (KeyChar (ufix-to-char actual)) final-mod))
+            (True (IEvKey (KeyUnknown codepoint) modifier))))
+         (_ (IEvKey (KeyUnknown 117) ModNone))))
+      ;; Unknown
+      (True (IEvKey (KeyUnknown final-byte) ModNone))))
+
+  ;;; SS3 sequence dispatch (ESC O)
+
+  (declare dispatch-ss3 (UFix -> InputEvent))
+  (define (dispatch-ss3 final-byte)
+    "Map an SS3 final byte to an InputEvent."
+    (cond
+      ((== final-byte 80) (IEvKey (KeyF 1) ModNone))
+      ((== final-byte 81) (IEvKey (KeyF 2) ModNone))
+      ((== final-byte 82) (IEvKey (KeyF 3) ModNone))
+      ((== final-byte 83) (IEvKey (KeyF 4) ModNone))
+      ((== final-byte 72) (IEvKey KeyHome ModNone))
+      ((== final-byte 70) (IEvKey KeyEnd ModNone))
+      (True (IEvKey (KeyUnknown final-byte) ModNone))))
+
+  ;;; Helpers
+
+  (declare %strip-shift (Modifier -> Modifier))
+  (define (%strip-shift m)
+    "Clear the Shift bit from a modifier (used after a Shift-applied codepoint)."
+    (match m
+      ((ModAltShift) ModAlt)
+      ((ModShift) ModNone)
+      (_ m)))
+
+  (declare %apply-alt (InputEvent -> InputEvent))
+  (define (%apply-alt ev)
+    "Add Alt to a key event's modifier (for ESC-prefix encoding)."
+    (match ev
+      ((IEvKey key (ModShift)) (IEvKey key ModAltShift))
+      ((IEvKey key _)          (IEvKey key ModAlt))
+      (_ ev)))
+
+  ;;; Main parser
+
+  (declare parse-one
+    ((Vector UFix) * UFix -> (Tuple InputEvent UFix)))
+  (define (parse-one buf pos)
+    "Parse a single input event from BUF starting at POS.
+Returns (event next-pos)."
+    (let len = (vec-length buf))
+    (let b = (vec-ref buf pos))
+    (cond
+      ;; ESC (byte 27) — CSI/SS3 lead-in, or Alt prefix in best-effort mode
+      ((== b 27)
+       (cond
+         ((>= (+ pos 1) len)
+          ;; Bare ESC at end of buffer -- incomplete, return IEvNone
+          (Tuple IEvNone pos))
+         (True
+          (let next-byte = (vec-ref buf (+ pos 1)))
+          (cond
+            ;; ESC [ -> CSI
+            ((== next-byte 91)
+             (if (>= (+ pos 2) len)
+                 (Tuple IEvNone pos)
+                 (dispatch-csi buf (+ pos 2))))
+            ;; ESC O -> SS3
+            ((== next-byte 79)
+             (cond
+               ((>= (+ pos 2) len)
+                (Tuple IEvNone pos))
+               (True
+                (let fb = (vec-ref buf (+ pos 2)))
+                (Tuple (dispatch-ss3 fb) (+ pos 3)))))
+            ;; ESC ESC -> Alt prefix (Option-as-Meta sends ESC before sequences)
+            ((== next-byte 27)
+             (cond
+               ((>= (+ pos 2) len)
+                (Tuple IEvNone pos))
+               ;; ESC ESC [ -> Alt + CSI sequence
+               ((== (vec-ref buf (+ pos 2)) 91)
+                (if (>= (+ pos 3) len)
+                    (Tuple IEvNone pos)
+                    (match (dispatch-csi buf (+ pos 3))
+                      ((Tuple ev next)
+                       (Tuple (%apply-alt ev) next)))))
+               ;; ESC ESC O -> Alt + SS3 sequence
+               ((== (vec-ref buf (+ pos 2)) 79)
+                (cond
+                  ((>= (+ pos 3) len)
+                   (Tuple IEvNone pos))
+                  (True
+                   (let fb = (vec-ref buf (+ pos 3)))
+                   (Tuple (%apply-alt (dispatch-ss3 fb)) (+ pos 4)))))
+               ;; ESC ESC + other -> just ESC
+               (True
+                (Tuple (IEvKey KeyEscape ModNone) (+ pos 1)))))
+            ;; ESC + Enter -> Alt+Enter
+            ((or (== next-byte 13) (== next-byte 10))
+             (Tuple (IEvKey KeyEnter ModAlt) (+ pos 2)))
+            ;; ESC + DEL (127) -> Alt+Backspace
+            ((== next-byte 127)
+             (Tuple (IEvKey KeyBackspace ModAlt) (+ pos 2)))
+            ;; ESC + printable -> Alt+key
+            ((and (>= next-byte 32) (<= next-byte 126))
+             (Tuple (IEvKey (KeyChar (ufix-to-char next-byte)) ModAlt)
+                    (+ pos 2)))
+            ;; ESC + other
+            (True
+             (Tuple (IEvKey KeyEscape ModNone) (+ pos 1)))))))
+      ;; Tab (byte 9)
+      ((== b 9)
+       (Tuple (IEvKey KeyTab ModNone) (+ pos 1)))
+      ;; Enter (byte 10 or 13)
+      ((or (== b 10) (== b 13))
+       (Tuple (IEvKey KeyEnter ModNone) (+ pos 1)))
+      ;; Ctrl+a through Ctrl+z (bytes 1-26, except 9, 10, 13, 27)
+      ((and (>= b 1) (<= b 26))
+       (Tuple (IEvKey (KeyCtrl (ufix-to-char (+ b 96))) ModCtrl)
+              (+ pos 1)))
+      ;; Ctrl+\ (byte 28), Ctrl+] (29), Ctrl+^ (30), Ctrl+_ (31).
+      ;; Map to literal punctuation chars to match legacy KeyCtrl bindings.
+      ((== b 28) (Tuple (IEvKey (KeyCtrl #\\) ModCtrl) (+ pos 1)))
+      ((== b 29) (Tuple (IEvKey (KeyCtrl #\]) ModCtrl) (+ pos 1)))
+      ((== b 30) (Tuple (IEvKey (KeyCtrl #\^) ModCtrl) (+ pos 1)))
+      ((== b 31) (Tuple (IEvKey (KeyCtrl #\_) ModCtrl) (+ pos 1)))
+      ;; Printable ASCII (bytes 32-126)
+      ((and (>= b 32) (<= b 126))
+       (Tuple (IEvKey (KeyChar (ufix-to-char b)) ModNone)
+              (+ pos 1)))
+      ;; Backspace (byte 127)
+      ((== b 127)
+       (Tuple (IEvKey KeyBackspace ModNone) (+ pos 1)))
+      ;; UTF-8 multi-byte (bytes >= 128)
+      ((>= b 128)
+       (match (decode-utf8 buf pos)
+         ((Tuple ch next)
+          (Tuple (IEvKey (KeyChar ch) ModNone) next))))
+      ;; Unknown byte
+      (True
+       (Tuple (IEvKey (KeyUnknown b) ModNone) (+ pos 1)))))
+
+  ;;; Top-level parse-input
+
+  (declare parse-input ((Vector UFix) -> (Tuple (List InputEvent) (Vector UFix))))
+  (define (parse-input buf)
+    "Parse all available input events from a byte buffer.
+Returns a tuple of (parsed-events remaining-bytes)."
+    (let len = (vec-length buf))
+    (if (== len 0)
+        (Tuple Nil (vec-new))
+        (parse-loop buf 0 len Nil)))
+
+  (declare parse-loop
+    ((Vector UFix) * UFix * UFix * (List InputEvent)
+     -> (Tuple (List InputEvent) (Vector UFix))))
+  (define (parse-loop buf pos len acc)
+    (if (>= pos len)
+        (Tuple (reverse acc) (vec-new))
+        (match (parse-one buf pos)
+          ((Tuple (IEvNone) next-pos)
+           ;; TODO: Add parser regression tests for:
+           ;; - ESC[8;40;120t is fully consumed with no remainder.
+           ;; - ESC[8;40;120t followed by `a` still yields the `a` key event.
+           ;; - A partial resize sequence remains in the remainder until completed.
+           (if (> next-pos pos)
+               ;; Fully consumed internal control sequence (for example, resize).
+               (parse-loop buf next-pos len acc)
+               ;; Incomplete sequence -- return what we have plus remaining bytes.
+               (Tuple (reverse acc) (vec-from-offset buf pos))))
+          ((Tuple ev next-pos)
+           (parse-loop buf next-pos len (Cons ev acc)))))))

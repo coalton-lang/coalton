@@ -1,0 +1,58 @@
+(cl:defpackage #:mine/text/width
+  (:use #:coalton #:coalton-prelude)
+  (:export
+   #:char-cell-width
+   #:string-cell-width
+   #:char-cell-width-cl
+   #:string-cell-width-cl
+   #:string-chars-fitting-cl))
+
+(in-package #:mine/text/width)
+
+;;; CL helpers — called from both Coalton and raw CL code.
+;;; Defined before the coalton-toplevel block so the INLINE proclamation
+;;; takes effect at the first call site (in the Coalton wrappers below).
+
+(cl:declaim (cl:inline char-cell-width-cl))
+(cl:defun char-cell-width-cl (ch)
+  "Return the display width of CH in terminal cells."
+  (cl:declare (cl:type cl:character ch))
+  (cl:cond
+    ((cl:< (cl:char-code ch) 32) 0)
+    ((cl:plusp (sb-unicode:combining-class ch)) 0)
+    ((cl:let ((eaw (sb-unicode:east-asian-width ch)))
+       (cl:or (cl:eq eaw :w) (cl:eq eaw :f)))
+     2)
+    (cl:t 1)))
+
+(cl:defun string-cell-width-cl (text)
+  "Return the display width of TEXT in terminal cells."
+  (cl:declare (cl:type cl:string text))
+  (cl:loop :for ch :across text :sum (char-cell-width-cl ch)))
+
+(cl:defun string-chars-fitting-cl (s start columns)
+  "Return the number of chars from S[START..] that fit in COLUMNS terminal columns."
+  (cl:declare (cl:type cl:string s)
+              (cl:type cl:fixnum start columns))
+  (cl:let ((len (cl:length s))
+           (cols 0)
+           (count 0))
+    (cl:loop :for i :from start :below len
+             :for cw := (char-cell-width-cl (cl:char s i))
+             :while (cl:<= (cl:+ cols cw) columns)
+             :do (cl:incf cols cw) (cl:incf count))
+    count))
+
+(coalton-toplevel
+
+  (declare char-cell-width (Char -> UFix))
+  (define (char-cell-width ch)
+    "Return the display width of CH in terminal cells (0, 1, or 2)."
+    (lisp (-> UFix) (ch)
+      (char-cell-width-cl ch)))
+
+  (declare string-cell-width (String -> UFix))
+  (define (string-cell-width text)
+    "Return the display width of TEXT in terminal cells."
+    (lisp (-> UFix) (text)
+      (string-cell-width-cl text))))

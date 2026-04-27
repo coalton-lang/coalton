@@ -1,0 +1,193 @@
+(cl:defpackage #:mine/protocol/lifecycle
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:client #:mine/protocol/client)
+   (#:cell #:coalton/cell))
+  (:export
+   #:RuntimeManager
+   #:runtime-manager-new
+   #:runtime-start!
+   #:runtime-stop!
+   #:runtime-interrupt!
+   #:runtime-connection
+   #:runtime-ensure-connection!
+   #:runtime-set-heap-size!
+   #:runtime-process-alive?))
+
+(in-package #:mine/protocol/lifecycle)
+
+;;; CL-side struct holding the runtime manager's mutable state.
+
+(cl:defstruct %runtime-manager
+  (connection (cl:the cl:t (cl:or)) :type cl:t)
+  (process    (cl:the cl:t (cl:or)) :type cl:t)
+  (port       0      :type cl:fixnum)
+  (running    (cl:the cl:t (cl:or))  :type cl:t)
+  (heap-size  4096   :type cl:fixnum))
+
+;;; CL-side functions for subprocess management.
+;;; These need cl:nil which the Coalton reader rejects inside coalton-toplevel.
+
+(cl:defun %runtime-do-start (mgr)
+  "Start a runtime subprocess and connect. Returns T on success, NIL on failure."
+  (cl:handler-case
+      (cl:let* ((argv0 (cl:or (cl:first sb-ext:*posix-argv*) "mine"))
+                (abspath (cl:handler-case
+                             (cl:namestring (cl:truename (cl:pathname argv0)))
+                           (cl:error () argv0)))
+                (heap-mb (%runtime-manager-heap-size mgr))
+                (proc (mine/bindings/process:spawn-subprocess
+                       abspath
+                       (cl:list "--disable-ldb"
+                                "--dynamic-space-size"
+                                (cl:write-to-string heap-mb)
+                                "--runtime-server")))
+                (stdout (sb-ext:process-output proc)))
+        (cl:setf (%runtime-manager-process mgr) proc)
+        (cl:setf (%runtime-manager-running mgr) cl:t)
+        ;; Read port with timeout
+        (cl:let* ((port-line (sb-ext:with-timeout 5
+                               (cl:read-line stdout cl:nil cl:nil)))
+                  (port (cl:if port-line
+                               (cl:parse-integer port-line :junk-allowed cl:t)
+                               cl:nil)))
+          (cl:unless port
+            (cl:error "Failed to read port from runtime (got: ~S)" port-line))
+          (cl:setf (%runtime-manager-port mgr) port)
+          ;; Connect via TCP
+          (cl:let* ((stream (mine/bindings/socket:socket-connect port))
+                    (conn (mine/protocol/client::make-%connection
+                           :stream stream
+                           :host "127.0.0.1"
+                           :port port
+                           :active cl:t)))
+            (cl:setf (%runtime-manager-connection mgr) conn)
+            cl:t)))
+    (cl:error (c)
+      (cl:format cl:*error-output* "~&;; runtime-start! failed: ~A~%" c)
+      (cl:force-output cl:*error-output*)
+      (cl:setf (%runtime-manager-running mgr) cl:nil)
+      cl:nil)))
+
+(cl:defun %runtime-do-stop (mgr)
+  "Stop the runtime subprocess."
+  (cl:let ((conn (%runtime-manager-connection mgr)))
+    (cl:when conn
+      (cl:handler-case
+          (cl:let ((stream (mine/protocol/client::%connection-stream conn)))
+            (cl:when stream
+              ;; Send quit
+              (cl:let* ((text (cl:prin1-to-string '(:quit 0)))
+                        (octets (sb-ext:string-to-octets text :external-format :utf-8))
+                        (header (sb-ext:string-to-octets
+                                 (cl:format cl:nil "~6,'0X" (cl:length octets))
+                                 :external-format :utf-8)))
+                (cl:write-sequence header stream)
+                (cl:write-sequence octets stream)
+                (cl:force-output stream))))
+        (cl:error () cl:nil))
+      (cl:handler-case (cl:close (mine/protocol/client::%connection-stream conn))
+        (cl:error () cl:nil))))
+  (cl:let ((proc (%runtime-manager-process mgr)))
+    (cl:when proc
+      (cl:handler-case (mine/bindings/process:process-kill proc)
+        (cl:error () cl:nil))))
+  (cl:setf (%runtime-manager-connection mgr) cl:nil)
+  (cl:setf (%runtime-manager-process mgr) cl:nil)
+  (cl:setf (%runtime-manager-running mgr) cl:nil)
+  (cl:values))
+
+(cl:defun %runtime-do-interrupt (mgr)
+  "Send SIGINT to the runtime subprocess to interrupt evaluation."
+  (cl:let ((proc (%runtime-manager-process mgr)))
+    (cl:when (cl:and proc (sb-ext:process-alive-p proc))
+      #-win32 (sb-ext:process-kill proc sb-unix:sigint)
+      #+win32 (sb-ext:process-kill proc 2)
+      cl:t)))
+
+(cl:defun %runtime-get-connection (mgr)
+  "Get the connection if active, or None."
+  (cl:let ((conn (%runtime-manager-connection mgr)))
+    (cl:if (cl:and conn
+                   (mine/protocol/client::%connection-active conn))
+           (Some conn)
+           None)))
+
+(coalton-toplevel
+
+  ;;; RuntimeManager
+
+  (repr :native %runtime-manager)
+  (define-type RuntimeManager
+    "Manages the lifecycle of a runtime server subprocess.")
+
+  ;;; Constructor
+
+  (declare runtime-manager-new (Void -> RuntimeManager))
+  (define (runtime-manager-new)
+    "Create a new runtime manager."
+    (lisp (-> RuntimeManager) ()
+      (make-%runtime-manager)))
+
+  ;;; Start
+
+  (declare runtime-start! (RuntimeManager -> Boolean))
+  (define (runtime-start! mgr)
+    "Start the runtime server subprocess. Returns True on success."
+    (lisp (-> Boolean) (mgr)
+      (cl:if (%runtime-do-start mgr) True False)))
+
+  ;;; Stop
+
+  (declare runtime-stop! (RuntimeManager -> Void))
+  (define (runtime-stop! mgr)
+    "Stop the runtime server subprocess."
+    (lisp (-> Void) (mgr)
+      (%runtime-do-stop mgr)
+      (cl:values)))
+
+  ;;; Interrupt
+
+  (declare runtime-interrupt! (RuntimeManager -> Boolean))
+  (define (runtime-interrupt! mgr)
+    "Send SIGINT to the runtime to interrupt evaluation. Returns True if signal sent."
+    (lisp (-> Boolean) (mgr)
+      (cl:if (%runtime-do-interrupt mgr) True False)))
+
+  ;;; Connection access
+
+  (declare runtime-connection (RuntimeManager -> Optional client:Connection))
+  (define (runtime-connection mgr)
+    "Get the current connection to the runtime, if any."
+    (lisp (-> (Optional client:Connection)) (mgr)
+      (%runtime-get-connection mgr)))
+
+  ;;; Heap size
+
+  (declare runtime-set-heap-size! (RuntimeManager * UFix -> Void))
+  (define (runtime-set-heap-size! mgr mb)
+    "Set the dynamic space size (in megabytes) for the next subprocess start."
+    (lisp (-> Void) (mgr mb)
+      (cl:setf (%runtime-manager-heap-size mgr) mb)
+      (cl:values)))
+
+  ;;; Process liveness
+
+  (declare runtime-process-alive? (RuntimeManager -> Boolean))
+  (define (runtime-process-alive? mgr)
+    "True if the runtime subprocess exists and is still running."
+    (lisp (-> Boolean) (mgr)
+      (cl:let ((proc (%runtime-manager-process mgr)))
+        (cl:if (cl:and proc (sb-ext:process-alive-p proc))
+               cl:t cl:nil))))
+
+  ;;; Ensure connection
+
+  (declare runtime-ensure-connection! (RuntimeManager -> Optional client:Connection))
+  (define (runtime-ensure-connection! mgr)
+    "If connected, return the connection. Otherwise start the runtime first."
+    (match (runtime-connection mgr)
+      ((Some conn) (Some conn))
+      ((None)
+       (runtime-start! mgr)
+       (runtime-connection mgr)))))

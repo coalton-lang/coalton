@@ -46,16 +46,13 @@
                              nil
                              ,(getf spec :supplied-p-var)))))))
 
-(defun method-wrapper-call (method-accessor positional-params keyword-specs)
+(defun method-wrapper-call (method-accessor visible-type positional-params keyword-specs)
   (declare (type symbol method-accessor)
+           (type tc:ty visible-type)
            (type list positional-params keyword-specs)
            (values t &optional))
   (cond
-    ((null keyword-specs)
-     (if (null positional-params)
-         `(,method-accessor dict)
-         `(rt:exact-call (,method-accessor dict) ,@positional-params)))
-    (t
+    ((not (null keyword-specs))
      `(apply #'rt:call-coalton-function
              (,method-accessor dict)
              (append
@@ -63,7 +60,13 @@
               ,@(loop :for spec :in keyword-specs
                       :collect `(if ,(getf spec :supplied-p-var)
                                     (list ,(getf spec :keyword) ,(getf spec :var))
-                                    '())))))))
+                                    '())))))
+    ((not (null positional-params))
+     `(rt:exact-call (,method-accessor dict) ,@positional-params))
+    ((tc:function-type-p visible-type)
+     `(rt:exact-call (,method-accessor dict)))
+    (t
+     `(,method-accessor dict))))
 
 (defun codegen-class-definitions (classes env)
   (declare (type tc:ty-class-list classes)
@@ -130,7 +133,7 @@
                             ,@(loop :for spec :in keyword-specs
                                     :append (list (getf spec :var)
                                                   (getf spec :supplied-p-var)))))
-        ,(method-wrapper-call method-accessor params keyword-specs))
+        ,(method-wrapper-call method-accessor visible-type params keyword-specs))
       ;; Generate the wrapper functions
       (global-lexical:define-global-lexical ,method-name rt:function-entry)
       (setf ,method-name

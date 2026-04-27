@@ -1,0 +1,331 @@
+(cl:defpackage #:mine/protocol/messages
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:wire #:mine/protocol/wire))
+  (:export
+   #:RequestId #:RequestId
+   #:Request
+   #:ReqEval #:ReqComplete #:ReqMacroexpand
+   #:ReqCompileString #:ReqCompileFile #:ReqBeamSystem
+   #:ReqCoaltonTypeOf #:ReqFindDefinition #:ReqArglist
+   #:ReqPing #:ReqQuit
+   #:Response #:RespOk #:RespError
+   #:Diagnostic #:Diagnostic
+   #:Notification
+   #:NotifyOutput #:NotifyDiagnostic
+   #:NotifyDebugActivate #:NotifyReady
+   #:request-to-sexpr
+   #:sexpr-to-response
+   #:sexpr-to-notification))
+
+(in-package #:mine/protocol/messages)
+
+(coalton-toplevel
+
+  ;;; RequestId
+
+  (define-type RequestId
+    "Unique identifier for a protocol request."
+    (RequestId UFix))
+
+  (define-instance (Eq RequestId)
+    (define (== a b)
+      (match (Tuple a b)
+        ((Tuple (RequestId x) (RequestId y))
+         (== x y)))))
+
+  ;;; Request
+
+  (define-type Request
+    "A request from the TUI client to the runtime server."
+    (ReqEval RequestId String String)
+    (ReqComplete RequestId String String UFix)
+    (ReqMacroexpand RequestId String)
+    (ReqCompileString RequestId String String String UFix UFix)
+    (ReqCompileFile RequestId String Boolean)
+    (ReqBeamSystem RequestId String String)
+    (ReqCoaltonTypeOf RequestId String String)
+    (ReqFindDefinition RequestId String String)
+    (ReqArglist RequestId String String)
+    (ReqPing RequestId)
+    (ReqQuit RequestId))
+
+  ;;; Response
+
+  (define-type Response
+    "A response from the runtime server to the TUI client."
+    (RespOk RequestId wire:SExpr)
+    (RespError RequestId String))
+
+  ;;; Notification
+
+  (define-struct Diagnostic
+    "A structured compiler/runtime diagnostic."
+    (request RequestId)
+    (file (Optional String))
+    (severity String)
+    (summary String)
+    (label String)
+    (label-kind String)
+    (start UFix)
+    (end UFix)
+    (group UFix))
+
+  (define-type Notification
+    "An asynchronous notification from the runtime server."
+    (NotifyOutput String)
+    (NotifyDiagnostic Diagnostic)
+    (NotifyDebugActivate String (List String))
+    (NotifyReady String))
+
+  ;;; Request -> SExpr serialization
+
+  (declare request-to-sexpr (Request -> wire:SExpr))
+  (define (request-to-sexpr req)
+    "Convert a Request to its wire SExpr representation."
+    (match req
+      ((ReqEval (RequestId id) form pkg)
+       (wire:SList (make-list (wire:SAtom ":EVAL")
+                              (wire:SInteger (into id))
+                              (wire:SString form)
+                              (wire:SString pkg))))
+      ((ReqComplete (RequestId id) prefix pkg limit)
+       (wire:SList (make-list (wire:SAtom ":COMPLETE")
+                              (wire:SInteger (into id))
+                              (wire:SString prefix)
+                              (wire:SString pkg)
+                              (wire:SInteger (into limit)))))
+      ((ReqMacroexpand (RequestId id) form)
+       (wire:SList (make-list (wire:SAtom ":MACROEXPAND")
+                              (wire:SInteger (into id))
+                              (wire:SString form))))
+      ((ReqCompileString (RequestId id) code document-key pkg pos client-prefix-length)
+       (wire:SList (make-list (wire:SAtom ":COMPILE-STRING")
+                              (wire:SInteger (into id))
+                              (wire:SString code)
+                              (wire:SString document-key)
+                              (wire:SString pkg)
+                              (wire:SInteger (into pos))
+                              (wire:SInteger (into client-prefix-length)))))
+      ((ReqCompileFile (RequestId id) filename load?)
+       (wire:SList (make-list (wire:SAtom ":COMPILE-FILE")
+                              (wire:SInteger (into id))
+                              (wire:SString filename)
+                              (if load? (wire:SAtom "T") wire:SNil))))
+      ((ReqBeamSystem (RequestId id) system-name asd-path)
+       (wire:SList (make-list (wire:SAtom ":BEAM-SYSTEM")
+                              (wire:SInteger (into id))
+                              (wire:SString system-name)
+                              (wire:SString asd-path))))
+      ((ReqCoaltonTypeOf (RequestId id) sym pkg)
+       (wire:SList (make-list (wire:SAtom ":COALTON-TYPE-OF")
+                              (wire:SInteger (into id))
+                              (wire:SString sym)
+                              (wire:SString pkg))))
+      ((ReqFindDefinition (RequestId id) sym pkg)
+       (wire:SList (make-list (wire:SAtom ":FIND-DEFINITION")
+                              (wire:SInteger (into id))
+                              (wire:SString sym)
+                              (wire:SString pkg))))
+      ((ReqArglist (RequestId id) func pkg)
+       (wire:SList (make-list (wire:SAtom ":ARGLIST")
+                              (wire:SInteger (into id))
+                              (wire:SString func)
+                              (wire:SString pkg))))
+      ((ReqPing (RequestId id))
+       (wire:SList (make-list (wire:SAtom ":PING")
+                              (wire:SInteger (into id)))))
+      ((ReqQuit (RequestId id))
+       (wire:SList (make-list (wire:SAtom ":QUIT")
+                              (wire:SInteger (into id)))))))
+
+  ;;; SExpr -> Response parsing
+
+  (declare sexpr-to-response (wire:SExpr -> Optional Response))
+  (define (sexpr-to-response expr)
+    "Parse a wire SExpr into a Response."
+    (lisp (-> (Optional Response)) (expr)
+      (mine/protocol/messages::parse-response-cl expr)))
+
+  ;;; SExpr -> Notification parsing
+
+  (declare sexpr-to-notification (wire:SExpr -> Optional Notification))
+  (define (sexpr-to-notification expr)
+    "Parse a wire SExpr into a Notification."
+    (lisp (-> (Optional Notification)) (expr)
+      (mine/protocol/messages::parse-notification-cl expr)))
+
+  ;;; Helpers
+
+  (declare atom-eq (String * String -> Boolean))
+  (define (atom-eq a b)
+    "Case-insensitive atom comparison."
+    (lisp (-> Boolean) (a b)
+      (cl:if (cl:string-equal a b) True False)))
+
+  (declare extract-strings ((List wire:SExpr) -> (List String)))
+  (define (extract-strings items)
+    "Extract strings from a list of SExprs, skipping non-strings."
+    (match items
+      ((Nil) Nil)
+      ((Cons (wire:SString s) rest)
+       (Cons s (extract-strings rest)))
+      ((Cons _ rest)
+       (extract-strings rest)))))
+
+;;; CL-side response and notification parsers.
+;;;
+;;; Coalton ADT constructors for SExpr use the naming scheme:
+;;;   Type:     SEXPR/SATOM, SEXPR/SSTRING, SEXPR/SINTEGER, SEXPR/SLIST, SEXPR/SNIL
+;;;   Accessor: SEXPR/SATOM-_0, SEXPR/SSTRING-_0, etc.
+;;; Coalton Lists are native CL cons cells / NIL.
+
+(cl:defun match-satom (sexpr)
+  "If SEXPR is (SAtom s), return s. Else NIL."
+  (cl:typecase sexpr
+    (mine/protocol/wire::sexpr/satom
+     (mine/protocol/wire::sexpr/satom-_0 sexpr))
+    (cl:t cl:nil)))
+
+(cl:defun match-sstring (sexpr)
+  "If SEXPR is (SString s), return s. Else NIL."
+  (cl:typecase sexpr
+    (mine/protocol/wire::sexpr/sstring
+     (mine/protocol/wire::sexpr/sstring-_0 sexpr))
+    (cl:t cl:nil)))
+
+(cl:defun match-sinteger (sexpr)
+  "If SEXPR is (SInteger n), return n. Else NIL."
+  (cl:typecase sexpr
+    (mine/protocol/wire::sexpr/sinteger
+     (mine/protocol/wire::sexpr/sinteger-_0 sexpr))
+    (cl:t cl:nil)))
+
+(cl:defun match-slist (sexpr)
+  "If SEXPR is (SList items), return items as a CL list. Else NIL."
+  (cl:typecase sexpr
+    (mine/protocol/wire::sexpr/slist
+     ;; Coalton lists are CL cons cells, return directly
+     (mine/protocol/wire::sexpr/slist-_0 sexpr))
+    (cl:t cl:nil)))
+
+(cl:defun parse-response-cl (expr)
+  "Parse an SExpr into an Optional Response.
+Expected shapes:
+  (:return ID (:ok RESULT))
+  (:return ID (:error MSG))"
+  (cl:let ((items (match-slist expr)))
+    (cl:unless (cl:and items (cl:= (cl:length items) 3))
+      (cl:return-from parse-response-cl None))
+    (cl:let ((tag    (match-satom (cl:first items)))
+             (id-val (match-sinteger (cl:second items)))
+             (sub    (match-slist (cl:third items))))
+      (cl:unless (cl:and tag (cl:string-equal tag ":RETURN") id-val sub)
+        (cl:return-from parse-response-cl None))
+      (cl:let ((sub-tag (match-satom (cl:first sub))))
+        (cl:cond
+          ((cl:and sub-tag
+                   (cl:string-equal sub-tag ":OK")
+                   (cl:= (cl:length sub) 2))
+           (Some (RespOk (RequestId (cl:the cl:fixnum id-val))
+                         (cl:second sub))))
+          ((cl:and sub-tag
+                   (cl:string-equal sub-tag ":ERROR")
+                   (cl:= (cl:length sub) 2))
+           (cl:let ((msg (match-sstring (cl:second sub))))
+             (cl:if msg
+                    (Some (RespError (RequestId (cl:the cl:fixnum id-val)) msg))
+                    None)))
+          (cl:t None))))))
+
+(cl:defun parse-notification-cl (expr)
+  "Parse an SExpr into an Optional Notification.
+Expected shapes:
+  (:notify (:output TEXT))
+  (:notify (:ready TEXT))
+  (:notify (:diagnostic ...plist...))
+  (:notify (:debug-activate CONDITION (RESTARTS...)))"
+  (cl:let ((items (match-slist expr)))
+    (cl:unless (cl:and items (cl:= (cl:length items) 2))
+      (cl:return-from parse-notification-cl None))
+    (cl:let ((tag  (match-satom (cl:first items)))
+             (sub  (match-slist (cl:second items))))
+      (cl:unless (cl:and tag (cl:string-equal tag ":NOTIFY") sub
+                         (cl:>= (cl:length sub) 1))
+        (cl:return-from parse-notification-cl None))
+      (cl:let* ((kind (match-satom (cl:first sub)))
+                (rest (cl:rest sub)))
+        (cl:unless kind
+          (cl:return-from parse-notification-cl None))
+        (cl:cond
+          ;; (:output text)
+          ((cl:and (cl:string-equal kind ":OUTPUT")
+                   (cl:= (cl:length rest) 1))
+           (cl:let ((text (match-sstring (cl:first rest))))
+             (cl:if text (Some (NotifyOutput text)) None)))
+          ;; (:ready text)
+          ((cl:and (cl:string-equal kind ":READY")
+                   (cl:= (cl:length rest) 1))
+           (cl:let ((text (match-sstring (cl:first rest))))
+             (cl:if text (Some (NotifyReady text)) None)))
+          ;; (:diagnostic :request n :file path-or-nil ...)
+          ((cl:and (cl:string-equal kind ":DIAGNOSTIC")
+                   (cl:evenp (cl:length rest)))
+           (cl:let ((plist
+                      (cl:loop :for (key value) :on rest :by #'cl:cddr
+                               :for key-atom = (match-satom key)
+                               :unless key-atom
+                                 :do (cl:return cl:nil)
+                               :append (cl:list
+                                        (cl:intern (cl:string-upcase (cl:subseq key-atom 1)) :keyword)
+                                        value))))
+             (cl:if (cl:null plist)
+                    None
+                    (cl:let* ((request-id (match-sinteger (cl:getf plist :request)))
+                              (file-expr (cl:getf plist :file))
+                              (file (cl:cond
+                                      ((cl:null file-expr) None)
+                                      ((match-sstring file-expr)
+                                       (Some (match-sstring file-expr)))
+                                      (cl:t None)))
+                              (severity (match-satom (cl:getf plist :severity)))
+                              (summary (match-sstring (cl:getf plist :summary)))
+                              (label (match-sstring (cl:getf plist :label)))
+                              (label-kind (match-satom (cl:getf plist :label-kind)))
+                              (start (match-sinteger (cl:getf plist :start)))
+                              (end (match-sinteger (cl:getf plist :end)))
+                              (group (match-sinteger (cl:getf plist :group))))
+                      (cl:if (cl:and request-id severity summary label label-kind start end group)
+                             (Some (NotifyDiagnostic
+                                    (Diagnostic
+                                     (RequestId (cl:the cl:fixnum request-id))
+                                     file
+                                     severity
+                                     summary
+                                     label
+                                     label-kind
+                                     (cl:the cl:fixnum start)
+                                     (cl:the cl:fixnum end)
+                                     (cl:the cl:fixnum group))))
+                             None)))))
+          ;; (:debug-activate condition (restarts...))
+          ((cl:and (cl:string-equal kind ":DEBUG-ACTIVATE")
+                   (cl:= (cl:length rest) 2))
+           (cl:let ((condition-str (match-sstring (cl:first rest)))
+                    (rst-items     (match-slist (cl:second rest))))
+             (cl:if (cl:and condition-str rst-items)
+                    (cl:let ((strings (cl:loop :for item :in rst-items
+                                              :for s = (match-sstring item)
+                                              :when s :collect s)))
+                      (Some (NotifyDebugActivate
+                             condition-str
+                             (cl-list-to-coalton-strings strings))))
+                    None)))
+          (cl:t None))))))
+
+(cl:defun cl-list-to-coalton-strings (items)
+  "Convert a CL list of strings to a Coalton (List String)."
+  (cl:if (cl:null items)
+         Nil
+         (Cons (cl:car items)
+               (cl-list-to-coalton-strings (cl:cdr items)))))

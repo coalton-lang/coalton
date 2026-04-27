@@ -1,0 +1,25 @@
+(cl:defpackage #:mine/config/types
+  (:use #:coalton #:coalton-prelude)
+  (:export
+   #:MineConfig #:MineConfig
+   #:.config-structural-editing
+   #:.config-auto-hide-tree-pane
+   #:.config-repl-language
+   #:.config-default-package
+   #:.config-repl-init
+   #:.config-repl-heap-size
+   #:.config-project-roots))
+
+(in-package #:mine/config/types)
+
+(coalton-toplevel
+
+  (define-struct MineConfig
+    "Top-level configuration for the mine IDE."
+    (config-structural-editing Boolean)
+    (config-auto-hide-tree-pane Boolean)
+    (config-repl-language      String)
+    (config-default-package    String)
+    (config-repl-init          (Optional String))
+    (config-repl-heap-size     UFix)
+    (config-project-roots      (List String))))

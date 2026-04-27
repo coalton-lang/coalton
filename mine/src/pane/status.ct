@@ -1,0 +1,114 @@
+(cl:defpackage #:mine/pane/status
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:screen #:mine/term/screen)
+   (#:color #:mine/term/color)
+   (#:wt #:mine/widget/types)
+   (#:render #:mine/widget/render)
+   (#:cell #:coalton/cell)
+   (#:str #:coalton/string)
+   (#:cellw #:mine/text/width))
+  (:export
+   #:StatusBar
+   #:statusbar-new
+   #:statusbar-render
+   #:statusbar-update!
+   #:statusbar-set-message!))
+
+(in-package #:mine/pane/status)
+
+(coalton-toplevel
+
+  ;;; StatusBar
+
+  (define-struct StatusBar
+    "A status bar showing mode, filename, position, and messages."
+    (mode-text    (Cell String))
+    (filename     (Cell String))
+    (modified     (Cell Boolean))
+    (line         (Cell UFix))
+    (col          (Cell UFix))
+    (message      (Cell (Optional String)))
+    (message-expiry (Cell UFix))
+    (package-name (Cell String))
+    (symbol-info  (Cell String)))
+
+  (declare statusbar-new (Void -> StatusBar))
+  (define (statusbar-new)
+    "Create a new status bar with default values."
+    (StatusBar (cell:new "EDIT")
+               (cell:new "[No File]")
+               (cell:new False)
+               (cell:new 1)
+               (cell:new 1)
+               (cell:new None)
+               (cell:new 0)
+               (cell:new "COALTON-USER")
+               (cell:new "")))
+
+  ;;; Update
+
+  (declare statusbar-update! (StatusBar * String * String * Boolean * UFix * UFix * String * String -> Void))
+  (define (statusbar-update! sb mode fname mod-flag ln co pkg sym-info)
+    "Update all status bar fields at once."
+    (cell:write! (.mode-text sb) mode)
+    (cell:write! (.filename sb) fname)
+    (cell:write! (.modified sb) mod-flag)
+    (cell:write! (.line sb) ln)
+    (cell:write! (.col sb) co)
+    (cell:write! (.package-name sb) pkg)
+    (cell:write! (.symbol-info sb) sym-info)
+    (values))
+
+  (declare statusbar-set-message! (StatusBar * String -> Void))
+  (define (statusbar-set-message! sb msg)
+    "Set a temporary message on the status bar (auto-expires after 3s)."
+    (cell:write! (.message sb) (Some msg))
+    (let expiry = (lisp (-> UFix) ()
+                    (cl:+ (cl:get-internal-real-time)
+                          (cl:* 3 cl:internal-time-units-per-second))))
+    (cell:write! (.message-expiry sb) expiry)
+    (values))
+
+  ;;; Rendering
+
+  (declare statusbar-render (StatusBar * screen:Screen * wt:Rect -> Void))
+  (define (statusbar-render sb scr rect)
+    "Render the status bar within a single-row RECT.
+Format: [MODE] filename [*] Ln:N Col:N [package]"
+    (let y = (wt:.rect-y rect))
+    (let w = (wt:.rect-width rect))
+    ;; Auto-expire messages
+    (match (cell:read (.message sb))
+      ((Some _)
+       (let now = (lisp (-> UFix) () (cl:get-internal-real-time)))
+       (when (>= now (cell:read (.message-expiry sb)))
+         (cell:write! (.message sb) None)))
+      ((None) (values)))
+    ;; Aluminium 3 on Aluminium 5 — subtle, tango-consistent
+    (let style = (color:Style color:text-dim-fg
+                               color:status-bar-bg
+                               color:AttrNone))
+    ;; Fill the entire row.
+    (render:fill-rect scr rect #\Space style)
+    ;; Build the left portion: [MODE]
+    (let mode-str = (<> " [" (<> (cell:read (.mode-text sb)) "] ")))
+    ;; Check for a temporary message overlay.
+    (let display-left =
+      (match (cell:read (.message sb))
+        ((Some msg) (<> mode-str msg))
+        ((None) mode-str)))
+    ;; Draw left-aligned text.
+    (let left-len = (cellw:string-cell-width display-left))
+    (screen:screen-set-string scr y (wt:.rect-x rect) display-left style)
+    ;; Draw symbol info after the left portion
+    (let sym = (cell:read (.symbol-info sb)))
+    (when (> (str:length sym) 0)
+      (let sym-display = (<> " " sym))
+      (let sym-width = (cellw:string-cell-width sym-display))
+      (let sym-style = (color:Style color:text-fg
+                                     color:status-bar-bg
+                                     color:AttrNone))
+      (when (< (+ left-len sym-width) w)
+        (screen:screen-set-string scr y (+ (wt:.rect-x rect) left-len) sym-display sym-style)))
+    (values)))

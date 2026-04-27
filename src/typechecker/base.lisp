@@ -91,12 +91,16 @@ This requires a valid PPRINT-VARIABLE-CONTEXT")
 (defun tc-error (message &rest notes)
   "Signal a typechecker error with MESSAGE, and optional NOTES that label source locations."
   (declare (type string message))
-  (error 'tc-error :message message :notes notes))
+  (let ((condition (make-condition 'tc-error :message message :notes notes)))
+    (source:emit-source-diagnostic condition)
+    (cl:error condition)))
 
 (defun tc-cerror (message &rest notes)
   "Signal a continuable typechecker error with MESSAGE, and optional NOTES that label source locations."
   (declare (type string message))
-  (cerror "Ignore and continue anyway." 'tc-error :message message :notes notes))
+  (let ((condition (make-condition 'tc-error :message message :notes notes)))
+    (source:emit-source-diagnostic condition)
+    (cerror "Ignore and continue anyway." condition)))
 
 (define-condition coalton-internal-type-error (error)
   ()

@@ -1,0 +1,287 @@
+(cl:defpackage #:mine/app/build
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:parser #:mine/project/asdf-parser)
+   (#:model #:mine/project/asdf-model))
+  (:export
+   #:guess-entry-point
+   #:write-build-script
+   #:run-lisp-script))
+
+(in-package #:mine/app/build)
+
+(coalton-toplevel
+
+  ;;; Build Executable entry point
+
+  (declare guess-entry-point (String * String -> String))
+  (define (guess-entry-point asd-path system-name)
+    "If the project defines main in the system's package, return system-name::main. Otherwise \"\"."
+    (match (parser:parse-asd-file asd-path)
+      ((Some sd)
+       (let src-sub = (model:.system-pathname sd))
+       (lisp (-> String) (asd-path src-sub system-name)
+         (cl:if (cl:eq (mine/app/build::%project-has-main-p asd-path src-sub system-name)
+                        coalton:True)
+                (cl:concatenate 'cl:string system-name "::" "main")
+                "")))
+      ((None) "")))
+
+  (declare write-build-script (String * String * String -> String))
+  (define (write-build-script asd-path output-path entry-point)
+    "Generate a build script and return its path."
+    (lisp (-> String) (asd-path output-path entry-point)
+      (mine/app/build::%write-build-script-cl asd-path output-path entry-point))))
+
+;;; CL-side: run a Lisp script (used for build worker and general scripting)
+
+(cl:defun run-lisp-script ()
+  "Load and execute a Lisp script from the --run-lisp-script argument."
+  (cl:let* ((args sb-ext:*posix-argv*)
+            (pos (cl:position "--run-lisp-script" args :test #'cl:string=))
+            (script-path (cl:and pos (cl:nth (cl:1+ pos) args))))
+    (cl:unless script-path
+      (cl:format cl:*error-output* "Usage: mine --run-lisp-script <script.lisp>~%")
+      (sb-ext:exit :code 1))
+    (cl:handler-case
+        (cl:load script-path)
+      (cl:error (c)
+        (cl:format cl:*error-output* "~&;; Error: ~A~%" c)
+        (sb-ext:exit :code 2)))))
+
+;;; CL-side: check if project defines main in the system's package
+
+(cl:defun %project-has-main-p (asd-path src-subdir system-name)
+  "Check if any source file under ASD-PATH/SRC-SUBDIR defines MAIN
+in a package matching SYSTEM-NAME."
+  (cl:handler-case
+      (cl:let* ((project-dir (cl:make-pathname :name cl:nil :type cl:nil
+                                                :defaults (cl:truename asd-path)))
+                (src-path (cl:if (cl:string= src-subdir "")
+                                 project-dir
+                                 (cl:merge-pathnames src-subdir project-dir)))
+                (pkg-pats (cl:list
+                           (cl:format cl:nil "in-package #:~A)" system-name)
+                           (cl:format cl:nil "in-package :~A)" system-name)
+                           (cl:format cl:nil "in-package \"~A\")" system-name))))
+        (cl:dolist (ext '("lisp" "ct"))
+          (cl:dolist (file (cl:directory
+                             (cl:merge-pathnames
+                               (cl:make-pathname :directory '(:relative :wild-inferiors)
+                                                  :name :wild :type ext)
+                               src-path)))
+            (cl:handler-case
+                (cl:let ((text (uiop:read-file-string file)))
+                  (cl:when (cl:and
+                            (cl:some (cl:lambda (pat)
+                                       (cl:search pat text :test #'cl:char-equal))
+                                     pkg-pats)
+                            (cl:or (cl:search "(defun main" text :test #'cl:char-equal)
+                                   (cl:search "(define (main" text :test #'cl:char-equal)))
+                    (cl:return-from %project-has-main-p coalton:True)))
+              (cl:error () cl:nil))))
+        coalton:False)
+    (cl:error () coalton:False)))
+
+;;; Code signature patching (macOS + Windows)
+;;;
+;;; When Build Executable runs from the mine-app sidecar, save-lisp-and-die
+;;; copies the sidecar's runtime — including its code signature.  The
+;;; appended core data invalidates the signature.
+;;;
+;;; macOS: Tauri signs with a developer certificate + hardened runtime.
+;;; The invalid signature causes SIGKILL on ARM64.  We patch CodeDirectory
+;;; flags to CS_ADHOC and zero the CMS blob.  Page hashes remain valid
+;;; because they cover only the runtime (unchanged by the appended core).
+;;;
+;;; Windows: Tauri signs with Authenticode.  The invalid signature causes
+;;; "not a valid Win32 application" errors.  We zero the PE Security
+;;; Directory entry and CheckSum to strip the signature entirely.
+
+(cl:defun %read-u32-le (stream offset)
+  (cl:file-position stream offset)
+  (cl:logior (cl:read-byte stream)
+             (cl:ash (cl:read-byte stream) 8)
+             (cl:ash (cl:read-byte stream) 16)
+             (cl:ash (cl:read-byte stream) 24)))
+
+(cl:defun %read-u32-be (stream offset)
+  (cl:file-position stream offset)
+  (cl:logior (cl:ash (cl:read-byte stream) 24)
+             (cl:ash (cl:read-byte stream) 16)
+             (cl:ash (cl:read-byte stream) 8)
+             (cl:read-byte stream)))
+
+(cl:defun %write-u32-le (stream offset value)
+  (cl:file-position stream offset)
+  (cl:write-byte (cl:logand value #xFF) stream)
+  (cl:write-byte (cl:logand (cl:ash value -8) #xFF) stream)
+  (cl:write-byte (cl:logand (cl:ash value -16) #xFF) stream)
+  (cl:write-byte (cl:logand (cl:ash value -24) #xFF) stream))
+
+(cl:defun %write-u32-be (stream offset value)
+  (cl:file-position stream offset)
+  (cl:write-byte (cl:logand (cl:ash value -24) #xFF) stream)
+  (cl:write-byte (cl:logand (cl:ash value -16) #xFF) stream)
+  (cl:write-byte (cl:logand (cl:ash value -8) #xFF) stream)
+  (cl:write-byte (cl:logand value #xFF) stream))
+
+(cl:defun %patch-thin-macho-codesig (f base-offset)
+  "Patch code signature in a thin 64-bit Mach-O at BASE-OFFSET in stream F."
+  (cl:let* ((ncmds (%read-u32-le f (cl:+ base-offset 16)))
+            (cmd-offset (cl:+ base-offset 32)))
+    (cl:dotimes (i ncmds)
+      (cl:let* ((cmd (%read-u32-le f cmd-offset))
+                (cmdsize (%read-u32-le f (cl:+ cmd-offset 4))))
+        (cl:when (cl:= cmd #x1D)
+          (cl:let* ((dataoff (%read-u32-le f (cl:+ cmd-offset 8)))
+                    (sig-start (cl:+ base-offset dataoff))
+                    (sb-magic (%read-u32-be f sig-start)))
+            (cl:when (cl:= sb-magic #xFADE0CC0)
+              (cl:let ((sb-count (%read-u32-be f (cl:+ sig-start 8))))
+                (cl:dotimes (j sb-count)
+                  (cl:let* ((entry-base (cl:+ sig-start 12 (cl:* j 8)))
+                            (entry-type (%read-u32-be f entry-base))
+                            (entry-offset (%read-u32-be f (cl:+ entry-base 4)))
+                            (blob-start (cl:+ sig-start entry-offset)))
+                    (cl:cond
+                      ;; CodeDirectory: primary (0) or alternate (0x1000-0x1005)
+                      ((cl:or (cl:= entry-type 0)
+                              (cl:and (cl:>= entry-type #x1000)
+                                      (cl:<= entry-type #x1005)))
+                       (cl:when (cl:= (%read-u32-be f blob-start) #xFADE0C02)
+                         (%write-u32-be f (cl:+ blob-start 12) #x00000002)))
+                      ;; CMS signature (0x10000) — zero it out
+                      ((cl:= entry-type #x10000)
+                       (cl:let ((blob-len (%read-u32-be f (cl:+ blob-start 4))))
+                         (cl:when (cl:plusp blob-len)
+                           (cl:file-position f blob-start)
+                           (cl:let* ((zeros (cl:make-array (cl:min blob-len 8192)
+                                                           :element-type '(cl:unsigned-byte 8)
+                                                           :initial-element 0))
+                                     (remaining blob-len))
+                             (cl:loop :while (cl:plusp remaining)
+                                      :for n = (cl:min remaining (cl:length zeros))
+                                      :do (cl:write-sequence zeros f :end n)
+                                          (cl:decf remaining n))))))))))))
+          (cl:return-from %patch-thin-macho-codesig cl:t))
+        (cl:incf cmd-offset cmdsize)))
+    cl:nil))
+
+(cl:defun %patch-pe-codesig (f)
+  "Strip the Authenticode signature from a PE binary in stream F."
+  (cl:let* ((e-lfanew (%read-u32-le f #x3C))
+            (pe-sig (%read-u32-le f e-lfanew)))
+    (cl:unless (cl:= pe-sig #x00004550) ; "PE\0\0"
+      (cl:return-from %patch-pe-codesig cl:nil))
+    (cl:let* ((opt-hdr (cl:+ e-lfanew 24))
+              (opt-magic (cl:logand (%read-u32-le f opt-hdr) #xFFFF))
+              (dd-offset (cl:cond
+                           ((cl:= opt-magic #x020B) (cl:+ opt-hdr 112)) ; PE32+
+                           ((cl:= opt-magic #x010B) (cl:+ opt-hdr 96))  ; PE32
+                           (cl:t (cl:return-from %patch-pe-codesig cl:nil))))
+              (sec-dir (cl:+ dd-offset 32))) ; Data Directory index 4
+      ;; Zero Security Directory entry (VirtualAddress + Size)
+      (%write-u32-le f sec-dir 0)
+      (%write-u32-le f (cl:+ sec-dir 4) 0)
+      ;; Zero PE CheckSum (offset 64 in Optional Header)
+      (%write-u32-le f (cl:+ opt-hdr 64) 0)
+      cl:t)))
+
+(cl:defun %patch-macho-codesig (path)
+  "Patch the code signature in the executable at PATH.
+On macOS, rewrites CodeDirectory flags to CS_ADHOC and zeros the CMS blob.
+On Windows, strips the Authenticode signature by zeroing the PE Security
+Directory entry and CheckSum."
+  (cl:declare (cl:ignorable path))
+  #+(or darwin win32)
+  (cl:handler-case
+      (cl:with-open-file (f path :direction :io
+                                  :element-type '(cl:unsigned-byte 8)
+                                  :if-exists :overwrite)
+        (cl:let ((magic (%read-u32-le f 0)))
+          (cl:cond
+            #+darwin
+            ((cl:= magic #xFEEDFACF)
+             (%patch-thin-macho-codesig f 0))
+            #+darwin
+            ((cl:= magic #xBEBAFECA)
+             (cl:let ((nfat (%read-u32-be f 4)))
+               (cl:dotimes (i nfat)
+                 (cl:let* ((fa-base (cl:+ 8 (cl:* i 20)))
+                           (arch-offset (%read-u32-be f (cl:+ fa-base 8)))
+                           (slice-magic (%read-u32-le f arch-offset)))
+                   (cl:when (cl:= slice-magic #xFEEDFACF)
+                     (%patch-thin-macho-codesig f arch-offset))))))
+            #+win32
+            ((cl:= (cl:logand magic #xFFFF) #x5A4D)
+             (%patch-pe-codesig f)))))
+    (cl:error (c)
+      (cl:format cl:*error-output*
+                 "~&;; Warning: could not patch code signature: ~A~%" c)
+      cl:nil)))
+
+;;; CL-side: generate a build script
+
+(cl:defun %write-build-script-cl (asd-path output-path entry-point)
+  "Write a Lisp build script to /tmp/mine-build-script.lisp. Returns the path."
+  (cl:let ((path (cl:format cl:nil "~Amine-build-~A-~A.lisp"
+                            (uiop:temporary-directory)
+                            (cl:get-universal-time)
+                            (cl:random 1000000)))
+           (pkg-names '("MINE/APP/MINE" "MINE/PANE/EDITOR" "MINE/PANE/MENUBAR"
+                         "MINE/PANE/MINIBUFFER" "MINE/PANE/REPL" "MINE/PANE/TREE"
+                         "MINE/PANE/STATUS" "MINE/TERM/TERMINAL" "MINE/TERM/SCREEN"
+                         "MINE/TERM/INPUT" "MINE/TERM/COLOR"
+                         "MINE/WIDGET/TYPES" "MINE/WIDGET/RENDER" "MINE/WIDGET/FOCUS"
+                         "MINE/WIDGET/INPUT"
+                         "MINE/EDIT/CURSOR" "MINE/EDIT/OPERATIONS" "MINE/EDIT/UNDO"
+                         "MINE/EDIT/PAREDIT"
+                         "MINE/SYNTAX/TOKEN" "MINE/SYNTAX/LEXER" "MINE/SYNTAX/HIGHLIGHT"
+                         "MINE/SYNTAX/INDENT"
+                         "MINE/BUFFER/BUFFER" "MINE/BUFFER/GAP" "MINE/BUFFER/MANAGER"
+                         "MINE/PROTOCOL/CLIENT" "MINE/PROTOCOL/SERVER"
+                         "MINE/PROTOCOL/MESSAGE" "MINE/PROTOCOL/LIFECYCLE"
+                         "MINE/RUNTIME/SERVER-MAIN"
+                         "MINE/BINDINGS/PROCESS" "MINE/BINDINGS/SOCKET"
+                         "MINE/BINDINGS/TERMINAL"
+                         "MINE/EVENT/TYPES")))
+    (cl:with-open-file (out path :direction :output
+                                 :if-exists :supersede
+                                 :if-does-not-exist :create)
+      (cl:write-line "(in-package :cl-user)" out)
+      (cl:terpri out)
+      (cl:format out "(let* ((asd-path ~S)~%" asd-path)
+      (cl:format out "       (output-path ~S)~%" output-path)
+      (cl:format out "       (entry-point ~S)~%" entry-point)
+      (cl:write-line "       (project-root (namestring" out)
+      (cl:write-line "                       (make-pathname :name nil :type nil" out)
+      (cl:write-line "                                      :defaults (truename asd-path))))" out)
+      (cl:write-line "       (system-name (pathname-name asd-path)))" out)
+      (cl:write-line "  (format t \"~&;; Build worker starting~%\")" out)
+      (cl:write-line "  (format t \";; Project: ~A~%\" asd-path)" out)
+      (cl:write-line "  (format t \";; System:  ~A~%\" system-name)" out)
+      (cl:write-line "  (format t \";; Output:  ~A~%\" output-path)" out)
+      (cl:write-line "  (format t \";; Entry:   ~A~%\" entry-point)" out)
+      (cl:write-line "  (force-output)" out)
+      (cl:write-line "  (asdf:initialize-source-registry" out)
+      (cl:write-line "    `(:source-registry (:tree ,project-root) :inherit-configuration))" out)
+      (cl:write-line "  (format t \";; Deleting editor packages...~%\")" out)
+      (cl:write-line "  (force-output)" out)
+      (cl:format out "  (dolist (pkg-name '~S)~%" pkg-names)
+      (cl:write-line "    (let ((pkg (find-package pkg-name)))" out)
+      (cl:write-line "      (when pkg (handler-case (delete-package pkg) (error () nil)))))" out)
+      (cl:write-line "  ;; Mark all pre-loaded systems as immutable so ASDF won't recompile them" out)
+      (cl:write-line "  (dolist (name (asdf:registered-systems))" out)
+      (cl:write-line "    (asdf:register-immutable-system name))" out)
+      (cl:write-line "  (format t \";; Loading system ~A...~%\" system-name)" out)
+      (cl:write-line "  (force-output)" out)
+      (cl:write-line "  (asdf:load-system system-name :verbose t)" out)
+      (cl:write-line "  (format t \";; Saving executable to ~A...~%\" output-path)" out)
+      (cl:write-line "  (force-output)" out)
+      (cl:write-line "  (sb-ext:save-lisp-and-die output-path" out)
+      (cl:write-line "    :toplevel (fdefinition (read-from-string entry-point))" out)
+      (cl:write-line "    :executable t" out)
+      (cl:write-line "    :save-runtime-options t" out)
+      (cl:write-line "    :compression nil))" out))
+    path))

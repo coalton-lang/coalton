@@ -1,0 +1,1032 @@
+(cl:defpackage #:mine/app/setup
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:cell #:coalton/cell)
+   (#:term #:mine/term/terminal)
+   (#:screen #:mine/term/screen)
+   (#:input #:mine/term/input)
+   (#:color #:mine/term/color)
+   (#:esc #:mine/term/escape)
+   (#:cellw #:mine/text/width)
+   (#:render #:mine/widget/render)
+   (#:wt #:mine/widget/types)
+   (#:cfg #:mine/config/types))
+  (:export
+   #:run-setup))
+
+(in-package #:mine/app/setup)
+
+(coalton-toplevel
+
+  ;;; Styles
+
+  (declare style-normal color:Style)
+  (define style-normal
+    (color:Style color:white color:black color:AttrNone))
+
+  (declare style-bold color:Style)
+  (define style-bold
+    (color:Style color:white color:black color:AttrBold))
+
+  (declare style-dim color:Style)
+  (define style-dim
+    (color:Style (color:ColorRGB 160 160 160) color:black color:AttrNone))
+
+  (declare style-italic color:Style)
+  (define style-italic
+    (color:Style (color:ColorRGB 160 160 160) color:black color:AttrItalic))
+
+  (declare style-selected color:Style)
+  (define style-selected
+    (color:Style color:black color:white color:AttrNone))
+
+  ;;; Wizard art styles
+
+  (declare style-wiz-star color:Style)
+  (define style-wiz-star
+    (color:Style (color:Color256 228) color:black color:AttrNone))
+
+  (declare style-wiz-hat color:Style)
+  (define style-wiz-hat
+    (color:Style (color:Color256 180) color:black color:AttrNone))
+
+  (declare style-wiz-eye color:Style)
+  (define style-wiz-eye
+    (color:Style (color:Color256 220) color:black color:AttrBold))
+
+  (declare style-wiz-wand color:Style)
+  (define style-wiz-wand
+    (color:Style (color:Color256 130) color:black color:AttrBold))
+
+  (declare style-wiz-vest color:Style)
+  (define style-wiz-vest
+    (color:Style (color:Color256 33) color:black color:AttrBold))
+
+  (declare style-wiz-feet color:Style)
+  (define style-wiz-feet
+    (color:Style (color:Color256 180) color:black color:AttrNone))
+
+  ;;; Wizard art drawing
+
+  (declare %draw-wizard (screen:Screen * UFix * UFix -> Void))
+  (define (%draw-wizard scr row col)
+    "Draw the wizard unicode art at (row, col) with colors."
+    ;; Line 0:  ✵  ✧   v\
+    (screen:screen-set-string scr row (+ col 1) "✵" style-wiz-star)
+    (screen:screen-set-string scr row (+ col 4) "✧" style-wiz-star)
+    (screen:screen-set-string scr row (+ col 8) "v" style-wiz-hat)
+    (screen:screen-set-string scr row (+ col 9) "\\" style-wiz-hat)
+    ;; Line 1:   ✧     / \
+    (screen:screen-set-string scr (+ row 1) (+ col 2) "✧" style-wiz-star)
+    (screen:screen-set-string scr (+ row 1) (+ col 8) "/" style-wiz-hat)
+    (screen:screen-set-string scr (+ row 1) (+ col 10) "\\" style-wiz-hat)
+    ;; Line 2: ✵  °·  <--->
+    (screen:screen-set-string scr (+ row 2) col "✵" style-wiz-star)
+    (screen:screen-set-string scr (+ row 2) (+ col 3) "°·" style-wiz-star)
+    (screen:screen-set-string scr (+ row 2) (+ col 7) "<--->" style-wiz-hat)
+    ;; Line 3:  ✧   \ (' ')
+    (screen:screen-set-string scr (+ row 3) (+ col 1) "✧" style-wiz-star)
+    (screen:screen-set-string scr (+ row 3) (+ col 5) "\\" style-wiz-wand)
+    (screen:screen-set-string scr (+ row 3) (+ col 7) "(" style-normal)
+    (screen:screen-set-string scr (+ row 3) (+ col 8) "'" style-wiz-eye)
+    (screen:screen-set-string scr (+ row 3) (+ col 10) "'" style-wiz-eye)
+    (screen:screen-set-string scr (+ row 3) (+ col 11) ")" style-normal)
+    ;; Line 4:       \=| |=o
+    (screen:screen-set-string scr (+ row 4) (+ col 6) "\\" style-wiz-wand)
+    (screen:screen-set-string scr (+ row 4) (+ col 7) "=" style-wiz-vest)
+    (screen:screen-set-string scr (+ row 4) (+ col 8) "|" style-wiz-vest)
+    (screen:screen-set-string scr (+ row 4) (+ col 10) "|" style-wiz-vest)
+    (screen:screen-set-string scr (+ row 4) (+ col 11) "=" style-wiz-vest)
+    (screen:screen-set-string scr (+ row 4) (+ col 12) "o" style-normal)
+    ;; Line 5:         d-b
+    (screen:screen-set-string scr (+ row 5) (+ col 8) "d" style-wiz-feet)
+    (screen:screen-set-string scr (+ row 5) (+ col 9) "-" style-wiz-vest)
+    (screen:screen-set-string scr (+ row 5) (+ col 10) "b" style-wiz-feet)
+    ;; Line 6:    Ore, the Wizard
+    ;; Label -- centered under wizard (art is 13 wide, label is 15)
+    (let label-col = (if (> col 1) (- col 1) 0))
+    (screen:screen-set-string scr (+ row 7) label-col "Ore, the Wizard"
+      (color:Style (color:Color256 243) color:black color:AttrItalic)))
+
+  ;;; Resize handling
+
+  (declare %handle-resize! (term:Terminal -> Void))
+  (define (%handle-resize! terminal)
+    "Update terminal size and resize the screen buffer after a resize event."
+    (term:terminal-update-size! terminal)
+    (screen:screen-resize (term:.terminal-screen terminal)
+                           (term:terminal-cols terminal)
+                           (term:terminal-rows terminal))
+    (lisp (-> Void) ()
+      (mine/bindings/terminal:terminal-write-string
+       (cl:format cl:nil "~C[2J" (cl:code-char 27)))
+      (cl:values)))
+
+  (declare %read-event (term:Terminal -> input:InputEvent))
+  (define (%read-event terminal)
+    "Read a single input event with resize detection via polling."
+    (let events = (term:terminal-read-input terminal))
+    (match events
+      ((Cons ev _) ev)
+      ((Nil) (%read-event terminal))))
+
+  (declare %wait-with-redraw (term:Terminal * (screen:Screen -> Void) -> Void))
+  (define (%wait-with-redraw terminal draw-fn)
+    "Wait for any key, redrawing on terminal resize."
+    (let ev = (%read-event terminal))
+    (match ev
+      ((input:IEvResize _ _)
+       (%handle-resize! terminal)
+       (draw-fn (term:.terminal-screen terminal))
+       (screen:screen-hide-cursor (term:.terminal-screen terminal))
+       (term:terminal-flush terminal)
+       (%wait-with-redraw terminal draw-fn))
+      (_ (values))))
+
+  ;;; Drawing helpers
+
+  (declare draw-centered (screen:Screen * UFix * String * color:Style -> Void))
+  (define (draw-centered scr row text style)
+    "Draw TEXT horizontally centered on ROW."
+    (let cols = (cell:read (screen:.screen-width scr)))
+    (let len = (cellw:string-cell-width text))
+    (let col = (if (> len cols) 0
+                   (lisp (-> UFix) (cols len)
+                     (cl:floor (cl:- cols len) 2))))
+    (screen:screen-set-string scr row col text style))
+
+  (declare draw-options (screen:Screen * UFix * UFix * (List String) * UFix -> Void))
+  (define (draw-options scr row center-col options selected)
+    "Draw a vertical list of options with SELECTED highlighted."
+    (match options
+      ((Nil) (values))
+      ((Cons opt rest)
+       (let marker = (if (== selected 0) " > " "   "))
+       (let style = (if (== selected 0) style-selected style-normal))
+       (screen:screen-set-string scr row center-col marker style-bold)
+       (screen:screen-set-string scr row (+ center-col 3) opt style)
+       (draw-options scr (+ row 1) center-col rest (- selected 1)))))
+
+  ;;; Exit keys
+
+  (declare %exit-key? (input:InputEvent -> Boolean))
+  (define (%exit-key? ev)
+    "True if the event is Ctrl+c, Ctrl+d, Ctrl+q, or Ctrl+g."
+    (match ev
+      ((input:IEvKey (input:KeyCtrl #\c) _) True)
+      ((input:IEvKey (input:KeyCtrl #\d) _) True)
+      ((input:IEvKey (input:KeyCtrl #\q) _) True)
+      ((input:IEvKey (input:KeyCtrl #\g) _) True)
+      (_ False)))
+
+  ;;; Selection loop
+
+  (declare select-loop (term:Terminal * screen:Screen * String * (List String)
+                         * (List String) * UFix * UFix * UFix * UFix -> UFix))
+  (define (select-loop terminal scr title description options row center-col selected n)
+    "Read keys and update selection until Enter is pressed. Redraws on resize."
+    (let ev = (%read-event terminal))
+    (cond
+      ((%exit-key? ev)
+       (term:terminal-shutdown terminal)
+       ;; Return type is a fiction — sb-ext:exit never returns
+       (lisp (-> UFix) () (sb-ext:exit :code 0)))
+      (True
+       (match ev
+         ((input:IEvResize _ _)
+          (%handle-resize! terminal)
+          (let new-row = (draw-question-screen scr title description options selected))
+          (let cols = (cell:read (screen:.screen-width scr)))
+          (let max-opt-len = (%max-string-length options))
+          (let new-col = (if (> (+ max-opt-len 3) cols) 0
+                             (lisp (-> UFix) (cols max-opt-len)
+                               (cl:floor (cl:- cols (cl:+ max-opt-len 3)) 2))))
+          (screen:screen-hide-cursor scr)
+          (term:terminal-flush terminal)
+          (select-loop terminal scr title description options new-row new-col selected n))
+         ((input:IEvKey (input:KeyUp) _)
+          (let new-sel = (if (> selected 0) (- selected 1) selected))
+          (draw-options scr row center-col options new-sel)
+          (screen:screen-hide-cursor scr)
+          (term:terminal-flush terminal)
+          (select-loop terminal scr title description options row center-col new-sel n))
+         ((input:IEvKey (input:KeyDown) _)
+          (let new-sel = (if (< selected (- n 1)) (+ selected 1) selected))
+          (draw-options scr row center-col options new-sel)
+          (screen:screen-hide-cursor scr)
+          (term:terminal-flush terminal)
+          (select-loop terminal scr title description options row center-col new-sel n))
+         ((input:IEvKey (input:KeyEnter) _)
+          selected)
+         ((input:IEvKey (input:KeyChar #\k) _)
+          (let new-sel = (if (> selected 0) (- selected 1) selected))
+          (draw-options scr row center-col options new-sel)
+          (screen:screen-hide-cursor scr)
+          (term:terminal-flush terminal)
+          (select-loop terminal scr title description options row center-col new-sel n))
+         ((input:IEvKey (input:KeyChar #\j) _)
+          (let new-sel = (if (< selected (- n 1)) (+ selected 1) selected))
+          (draw-options scr row center-col options new-sel)
+          (screen:screen-hide-cursor scr)
+          (term:terminal-flush terminal)
+          (select-loop terminal scr title description options row center-col new-sel n))
+         (_ (select-loop terminal scr title description options row center-col selected n))))))
+
+  ;;; Screen builders
+
+  (declare draw-question-screen
+    (screen:Screen * String * (List String) * (List String) * UFix -> UFix))
+  (define (draw-question-screen scr title description options default)
+    "Draw a question screen and return the row where options start."
+    (screen:screen-clear scr)
+    (let cols = (cell:read (screen:.screen-width scr)))
+    (let rows = (cell:read (screen:.screen-height scr)))
+
+    ;; Calculate vertical center
+    (let desc-lines = (length description))
+    (let opt-lines = (length options))
+    (let total-height = (+ 3 (+ desc-lines (+ 2 (+ opt-lines 2)))))
+    (let start-row = (if (> total-height rows) 1
+                         (lisp (-> UFix) (rows total-height)
+                           (cl:floor (cl:- rows total-height) 2))))
+
+    ;; Title
+    (draw-centered scr start-row title style-bold)
+
+    ;; Description lines
+    (let desc-start = (+ start-row 2))
+    (let _desc-end = (%draw-lines scr desc-start description style-dim))
+
+    ;; Options
+    (let opt-row = (+ desc-start (+ desc-lines 1)))
+    (let max-opt-len = (%max-string-length options))
+    (let opt-col = (if (> (+ max-opt-len 3) cols) 0
+                       (lisp (-> UFix) (cols max-opt-len)
+                         (cl:floor (cl:- cols (cl:+ max-opt-len 3)) 2))))
+    (draw-options scr opt-row opt-col options default)
+
+    ;; Hint
+    (let hint-row = (+ opt-row (+ opt-lines 1)))
+    (draw-centered scr hint-row "Arrow keys to select, Enter to confirm" style-italic)
+
+    opt-row)
+
+  (declare %draw-lines (screen:Screen * UFix * (List String) * color:Style -> UFix))
+  (define (%draw-lines scr row lines style)
+    "Draw each line centered. Returns the next row after all lines."
+    (match lines
+      ((Nil) row)
+      ((Cons line rest)
+       (draw-centered scr row line style)
+       (%draw-lines scr (+ row 1) rest style))))
+
+  (declare %max-string-length ((List String) -> UFix))
+  (define (%max-string-length strs)
+    (match strs
+      ((Nil) 0)
+      ((Cons s rest)
+       (let len = (cellw:string-cell-width s))
+       (max len (%max-string-length rest)))))
+
+  ;;; Directory path tab completion
+
+  (declare %complete-dir (String -> (Tuple String (List String))))
+  (define (%complete-dir text)
+    "Tab-complete a directory path. Returns (completed-text, candidates)."
+    (lisp (-> (Tuple String (List String))) (text)
+      (%setup-complete-dir text)))
+
+  ;;; Completion display
+
+  (declare %max-cand-len ((List String) * UFix -> UFix))
+  (define (%max-cand-len items acc)
+    (match items
+      ((Nil) acc)
+      ((Cons s rest)
+       (let len = (cellw:string-cell-width s))
+       (%max-cand-len rest (max acc len)))))
+
+  (declare %render-cand-items
+    ((List String) * screen:Screen * UFix * UFix * UFix * UFix * UFix * UFix -> Void))
+  (define (%render-cand-items items scr base-row base-col col-w cols-per-row idx max-rows)
+    (match items
+      ((Nil) (values))
+      ((Cons item rest)
+       (let row-idx = (lisp (-> UFix) (idx cols-per-row) (cl:floor idx cols-per-row)))
+       (let col-idx = (lisp (-> UFix) (idx cols-per-row) (cl:mod idx cols-per-row)))
+       (when (< row-idx max-rows)
+         (render:draw-text-clipped
+           scr
+           (wt:Rect (+ base-col (* col-idx col-w))
+                    (+ base-row row-idx)
+                    col-w
+                    1)
+           item
+           (+ base-row row-idx)
+           (+ base-col (* col-idx col-w))
+           style-dim)
+         (values))
+       (%render-cand-items rest scr base-row base-col col-w cols-per-row
+                            (+ idx 1) max-rows))))
+
+  (declare %draw-completions (screen:Screen * UFix * UFix * UFix * (List String) -> UFix))
+  (define (%draw-completions scr start-row start-col avail-w candidates)
+    "Draw completion candidates in columns. Returns rows used."
+    (match candidates
+      ((Nil) 0)
+      (_
+       (let max-len = (%max-cand-len candidates 0))
+       (let col-w = (max 1 (min (+ max-len 2) avail-w)))
+       (let cols-per-row = (max 1 (lisp (-> UFix) (avail-w col-w)
+                                     (cl:floor avail-w col-w))))
+       (let n = (length candidates))
+       (let total-rows = (lisp (-> UFix) (n cols-per-row)
+                            (cl:ceiling n cols-per-row)))
+       (let max-rows = (min total-rows 5))
+       (%render-cand-items candidates scr start-row start-col
+                            col-w cols-per-row 0 max-rows)
+       max-rows)))
+
+  ;;; Text input
+
+  (declare %str-insert-char (String * UFix * Char -> String))
+  (define (%str-insert-char text pos ch)
+    "Insert CH into TEXT at position POS."
+    (lisp (-> String) (text pos ch)
+      (cl:let ((len (cl:length text)))
+        (cl:concatenate 'cl:string
+                        (cl:subseq text 0 (cl:min pos len))
+                        (cl:string ch)
+                        (cl:subseq text (cl:min pos len))))))
+
+  (declare %str-delete-char (String * UFix -> String))
+  (define (%str-delete-char text pos)
+    "Delete the character before POS in TEXT."
+    (lisp (-> String) (text pos)
+      (cl:if (cl:or (cl:zerop pos) (cl:> pos (cl:length text)))
+          text
+          (cl:concatenate 'cl:string
+                          (cl:subseq text 0 (cl:1- pos))
+                          (cl:subseq text pos)))))
+
+  (declare %draw-text-input
+    (screen:Screen * String * (List String) * String * UFix * Boolean * UFix * (List String) -> Void))
+  (define (%draw-text-input scr title description text cursor-pos in-buttons button candidates)
+    "Draw a text input screen with completions and Accept/Skip buttons."
+    (screen:screen-clear scr)
+    (let cols = (cell:read (screen:.screen-width scr)))
+    (let rows = (cell:read (screen:.screen-height scr)))
+    (let desc-lines = (length description))
+    (let total-height = (+ desc-lines 9))
+    (let start-row = (if (> total-height rows) 1
+                         (lisp (-> UFix) (rows total-height)
+                           (cl:floor (cl:- rows total-height) 2))))
+    ;; Title
+    (draw-centered scr start-row title style-bold)
+    ;; Description
+    (let desc-start = (+ start-row 2))
+    (%draw-lines scr desc-start description style-dim)
+    ;; Input field
+    (let input-row = (+ desc-start (+ desc-lines 1)))
+    (let label-col = (if (> cols 50)
+                         (lisp (-> UFix) (cols)
+                           (cl:max 3 (cl:floor (cl:- cols 50) 2)))
+                         3))
+    (screen:screen-set-string scr input-row label-col "Path: " style-bold)
+    (screen:screen-set-string scr input-row (+ label-col 6) text style-normal)
+    ;; Cursor in input field, or hide if buttons focused
+    (if in-buttons
+        (screen:screen-hide-cursor scr)
+        (screen:screen-set-cursor
+          scr input-row
+          (+ label-col
+             (+ 6
+                (lisp (-> UFix) (text cursor-pos)
+                  (mine/text/width:string-cell-width-cl
+                    (cl:subseq text 0 (cl:min cursor-pos (cl:length text)))))))))
+    ;; Tab hint (right under input box)
+    (screen:screen-set-string scr (+ input-row 1) label-col "Tab to autocomplete path." style-italic)
+    ;; Completion candidates
+    (let avail-w = (if (> cols (+ label-col 2)) (- cols (+ label-col 2)) cols))
+    (let cand-rows = (%draw-completions scr (+ input-row 2) label-col avail-w candidates))
+    ;; Accept / Skip buttons
+    (let btn-row = (+ input-row (+ cand-rows 3)))
+    (let btn-total = 22)
+    (let btn-col = (if (> btn-total cols) 0
+                       (lisp (-> UFix) (cols btn-total)
+                         (cl:floor (cl:- cols btn-total) 2))))
+    (let accept-style = (cond
+      ((not in-buttons) style-dim)
+      ((== button 0) style-selected)
+      (True style-normal)))
+    (let skip-style = (cond
+      ((not in-buttons) style-dim)
+      ((== button 1) style-selected)
+      (True style-normal)))
+    (screen:screen-set-string scr btn-row btn-col "[ Accept ]" accept-style)
+    (screen:screen-set-string scr btn-row (+ btn-col 14) "[ Skip ]" skip-style)
+    (values))
+
+  (declare %text-input-loop
+    (term:Terminal * String * (List String) * String * UFix * Boolean * UFix * (List String) -> String))
+  (define (%text-input-loop terminal title description text cursor-pos in-buttons button cands)
+    "Handle text input with tab completion and Accept/Skip buttons."
+    (%draw-text-input (term:.terminal-screen terminal)
+                       title description text cursor-pos in-buttons button cands)
+    (term:terminal-flush terminal)
+    (let len = (lisp (-> UFix) (text) (cl:length text)))
+    (let ev = (%read-event terminal))
+    (cond
+      ((%exit-key? ev)
+       (term:terminal-shutdown terminal)
+       ;; Return type is a fiction — sb-ext:exit never returns
+       (lisp (-> String) () (sb-ext:exit :code 0)))
+      (True
+       (if in-buttons
+           ;; Button navigation
+           (match ev
+             ((input:IEvKey (input:KeyEnter) _)
+              (if (== button 0) text ""))
+             ((input:IEvKey (input:KeyEscape) _) "")
+             ((input:IEvKey (input:KeyLeft) _)
+              (%text-input-loop terminal title description text cursor-pos True 0 Nil))
+             ((input:IEvKey (input:KeyRight) _)
+              (%text-input-loop terminal title description text cursor-pos True 1 Nil))
+             ((input:IEvKey (input:KeyUp) _)
+              (%text-input-loop terminal title description text cursor-pos False button Nil))
+             ((input:IEvResize _ _)
+              (%handle-resize! terminal)
+              (%text-input-loop terminal title description text cursor-pos True button Nil))
+             (_ (%text-input-loop terminal title description text cursor-pos True button Nil)))
+           ;; Text input
+           (match ev
+             ((input:IEvKey (input:KeyEnter) _) text)
+             ((input:IEvKey (input:KeyEscape) _) "")
+             ((input:IEvKey (input:KeyTab) _)
+              (match (%complete-dir text)
+                ((Tuple completed new-cands)
+                 (let new-len = (lisp (-> UFix) (completed) (cl:length completed)))
+                 (%text-input-loop terminal title description
+                                   completed new-len False 0 new-cands))))
+             ((input:IEvKey (input:KeyDown) _)
+              (%text-input-loop terminal title description text cursor-pos True 0 Nil))
+             ((input:IEvKey (input:KeyBackspace) _)
+              (if (> cursor-pos 0)
+                (%text-input-loop terminal title description
+                                  (%str-delete-char text cursor-pos)
+                                  (- cursor-pos 1) False 0 Nil)
+                (%text-input-loop terminal title description text cursor-pos False 0 Nil)))
+             ((input:IEvKey (input:KeyLeft) _)
+              (%text-input-loop terminal title description text
+                                (if (> cursor-pos 0) (- cursor-pos 1) 0) False 0 Nil))
+             ((input:IEvKey (input:KeyRight) _)
+              (%text-input-loop terminal title description text
+                                (if (< cursor-pos len) (+ cursor-pos 1) cursor-pos) False 0 Nil))
+             ((input:IEvKey (input:KeyHome) _)
+              (%text-input-loop terminal title description text 0 False 0 Nil))
+             ((input:IEvKey (input:KeyEnd) _)
+              (%text-input-loop terminal title description text len False 0 Nil))
+             ((input:IEvKey (input:KeyChar c) _)
+              (%text-input-loop terminal title description
+                                (%str-insert-char text cursor-pos c)
+                                (+ cursor-pos 1) False 0 Nil))
+             ((input:IEvResize _ _)
+              (%handle-resize! terminal)
+              (%text-input-loop terminal title description text cursor-pos False 0 Nil))
+             (_ (%text-input-loop terminal title description text cursor-pos False 0 Nil)))))))
+
+  (declare ask-text (term:Terminal * String * (List String) * String -> String))
+  (define (ask-text terminal title description default-text)
+    "Show a text input question. Returns entered text, or empty on Skip."
+    (let len = (lisp (-> UFix) (default-text) (cl:length default-text)))
+    (%text-input-loop terminal title description default-text len False 0 Nil))
+
+  ;;; Present a question and return the selected index
+
+  (declare ask (term:Terminal * String * (List String) * (List String) * UFix -> UFix))
+  (define (ask terminal title description options default)
+    "Show a full-screen question and return the selected index."
+    (let scr = (term:.terminal-screen terminal))
+    (let n = (length options))
+    (let opt-row = (draw-question-screen scr title description options default))
+    (let cols = (cell:read (screen:.screen-width scr)))
+    (let max-opt-len = (%max-string-length options))
+    (let opt-col = (if (> (+ max-opt-len 3) cols) 0
+                       (lisp (-> UFix) (cols max-opt-len)
+                         (cl:floor (cl:- cols (cl:+ max-opt-len 3)) 2))))
+    (screen:screen-hide-cursor scr)
+    (term:terminal-flush terminal)
+    (select-loop terminal scr title description options opt-row opt-col default n))
+
+  ;;; Quicklisp
+
+  (declare quicklisp-installed-p (Void -> Boolean))
+  (define (quicklisp-installed-p)
+    "Check if Quicklisp is available via *features* or on disk."
+    (lisp (-> Boolean) ()
+      (cl:if (cl:or (cl:member :quicklisp cl:*features*)
+                    (cl:probe-file
+                     (cl:merge-pathnames "quicklisp/setup.lisp"
+                                         (cl:user-homedir-pathname))))
+             cl:t cl:nil)))
+
+  (declare %draw-output (screen:Screen * UFix * UFix * String -> Void))
+  (define (%draw-output scr start-row margin text)
+    "Render captured output TEXT on the screen buffer starting at START-ROW."
+    (let max-row = (cell:read (screen:.screen-height scr)))
+    (let cols = (cell:read (screen:.screen-width scr)))
+    (let max-w = (if (> cols (+ margin 2)) (- cols (+ margin 2)) cols))
+    (lisp (-> Void) (scr text start-row margin max-row max-w)
+      (cl:let ((row start-row))
+        (cl:with-input-from-string (in text)
+          (cl:loop :for line = (cl:read-line in cl:nil cl:nil)
+                   :while (cl:and line (cl:< row max-row))
+                   :do (cl:let ((truncated (cl:if (cl:> (cl:length line) max-w)
+                                                  (cl:subseq line 0 max-w)
+                                                  line)))
+                         (mine/term/screen:screen-set-string
+                          scr row margin truncated
+                          (mine/term/color:Style
+                           (mine/term/color:Color256 243)
+                           mine/term/color:black
+                           mine/term/color:AttrNone))
+                         (cl:incf row)))))
+      (cl:values)))
+
+  (declare install-quicklisp! (term:Terminal -> Boolean))
+  (define (install-quicklisp! terminal)
+    "Download and install Quicklisp, showing progress on screen."
+    (let scr = (term:.terminal-screen terminal))
+    (let cols = (cell:read (screen:.screen-width scr)))
+    (let margin = (if (> cols 6) 3 0))
+
+    ;; Step 1: Download
+    (screen:screen-clear scr)
+    (draw-centered scr 2 "Installing Quicklisp" style-bold)
+    (screen:screen-set-string scr 4 margin "Downloading quicklisp.lisp..." style-normal)
+    (screen:screen-hide-cursor scr)
+    (term:terminal-flush terminal)
+
+    (let download-ok = (lisp (-> Boolean) ()
+      (cl:let* ((ql-path (cl:merge-pathnames "quicklisp.lisp"
+                                              (cl:user-homedir-pathname)))
+                (exit-code
+                  (sb-ext:process-exit-code
+                   (sb-ext:run-program
+                    #+win32 "curl.exe" #-win32 "curl"
+                    (cl:list "-sS" "-o" (cl:namestring ql-path)
+                             "https://beta.quicklisp.org/quicklisp.lisp")
+                    :search cl:t
+                    :output cl:nil
+                    :error cl:nil
+                    :wait cl:t))))
+        (cl:zerop exit-code))))
+
+    (if (not download-ok)
+        (progn
+          (screen:screen-set-string scr 4 margin
+                                    "Download failed." style-bold)
+          (term:terminal-flush terminal)
+          False)
+        (progn
+          ;; Step 2: Install
+          (screen:screen-set-string scr 4 margin
+                                    "Running Quicklisp installer..." style-normal)
+          (term:terminal-flush terminal)
+
+          (let output = (lisp (-> String) ()
+            (cl:let ((capture (cl:make-string-output-stream)))
+              (cl:handler-case
+                  (cl:let* ((ql-path (cl:merge-pathnames "quicklisp.lisp"
+                                                          (cl:user-homedir-pathname)))
+                            (cl:*standard-output* capture)
+                            (cl:*trace-output* capture)
+                            (cl:*error-output* capture))
+                    (cl:load ql-path :verbose cl:nil :print cl:nil)
+                    (cl:funcall (cl:find-symbol "INSTALL" "QUICKLISP-QUICKSTART"))
+                    (cl:delete-file ql-path))
+                (cl:error (c)
+                  (cl:format capture "~%Error: ~A" c)))
+              (cl:get-output-stream-string capture))))
+
+          ;; Show output on screen
+          (screen:screen-clear scr)
+          (draw-centered scr 2 "Installing Quicklisp" style-bold)
+          (%draw-output scr 4 margin output)
+          (screen:screen-hide-cursor scr)
+          (term:terminal-flush terminal)
+          True)))
+
+  ;;; Config file writing
+
+  (declare write-config! (cfg:MineConfig -> Boolean))
+  (define (write-config! config)
+    "Write CONFIG to ~/.mine. Returns True on success."
+    (let se = (cfg:.config-structural-editing config))
+    (let auto-hide-tree = (cfg:.config-auto-hide-tree-pane config))
+    (let lang = (cfg:.config-repl-language config))
+    (let pkg = (cfg:.config-default-package config))
+    ;; Extract Optional String to a nullable CL string
+    (let init-str = (match (cfg:.config-repl-init config)
+                      ((Some s) s)
+                      ((None) "")))
+    (let has-init = (match (cfg:.config-repl-init config)
+                     ((Some _) True)
+                     ((None) False)))
+    (let path-str = (match (cfg:.config-project-roots config)
+                      ((Cons p _) p)
+                      ((Nil) "")))
+    (let has-paths = (match (cfg:.config-project-roots config)
+                      ((Cons _ _) True)
+                      ((Nil) False)))
+    (lisp (-> Boolean) (se auto-hide-tree lang pkg init-str has-init path-str has-paths)
+      (cl:let ((path (cl:merge-pathnames ".mine"
+                                          (cl:user-homedir-pathname))))
+        (cl:handler-case
+            (cl:progn
+              (cl:with-open-file (out path
+                                      :direction :output
+                                      :if-exists :supersede
+                                      :if-does-not-exist :create)
+                (cl:format out "(~%")
+                (cl:format out " :structural-editing ~A~%"
+                           (cl:if se "t" "nil"))
+                (cl:format out " :auto-hide-tree-pane ~A~%"
+                           (cl:if auto-hide-tree "t" "nil"))
+                (cl:format out " :repl-language ~S~%" lang)
+                (cl:format out " :default-package ~S~%" pkg)
+                (cl:when has-init
+                  (cl:format out " :repl-init ~A~%" init-str))
+                (cl:when has-paths
+                  (cl:format out " :project-roots ~S~%" path-str))
+                (cl:format out ")~%"))
+              cl:t)
+          (cl:error () cl:nil)))))
+
+  ;;; Completion screen
+
+  (declare %draw-done (screen:Screen -> Void))
+  (define (%draw-done scr)
+    "Draw the completion screen content."
+    (let rows = (cell:read (screen:.screen-height scr)))
+    (let mid = (lisp (-> UFix) (rows) (cl:floor rows 2)))
+    (screen:screen-clear scr)
+    (draw-centered scr (- mid 3) "You're now ready to work in the mines!" style-bold)
+    (draw-centered scr (- mid 1) "You can always re-run this setup process." style-dim)
+    (draw-centered scr (+ mid 1) "Please note this is software in development and has not been" style-dim)
+    (draw-centered scr (+ mid 2) "extensively battle tested. Save often and always make backups." style-dim)
+    (draw-centered scr (+ mid 4) "Press any key." style-italic))
+
+  (declare show-done (term:Terminal -> Void))
+  (define (show-done terminal)
+    "Show the final completion screen and wait for a key."
+    (let scr = (term:.terminal-screen terminal))
+    (%draw-done scr)
+    (screen:screen-hide-cursor scr)
+    (term:terminal-flush terminal)
+    (%wait-with-redraw terminal %draw-done))
+
+  ;;; Bold overlay for centered text
+
+  (declare %overlay-bold (screen:Screen * UFix * String * UFix * String -> Void))
+  (define (%overlay-bold scr row full-line offset bold-text)
+    "Overlay BOLD-TEXT at OFFSET within centered FULL-LINE on ROW."
+    (let cols = (cell:read (screen:.screen-width scr)))
+    (let len = (lisp (-> UFix) (full-line) (cl:length full-line)))
+    (let base-col = (if (> len cols) 0
+                        (lisp (-> UFix) (cols len)
+                          (cl:floor (cl:- cols len) 2))))
+    (screen:screen-set-string scr row (+ base-col offset) bold-text style-bold))
+
+  ;;; Tip screen
+
+  (declare %draw-tip (screen:Screen -> Void))
+  (define (%draw-tip scr)
+    "Draw the keyboard/mouse tip screen."
+    (let rows = (cell:read (screen:.screen-height scr)))
+    (let mid = (lisp (-> UFix) (rows) (cl:floor rows 2)))
+    (let start = (if (> rows 16) (- mid 7) 1))
+    (screen:screen-clear scr)
+    ;; Title
+    (draw-centered scr start "Keyboard? Mouse? You decide." style-bold)
+    ;; Paragraph 1
+    (let r2 = (+ start 2))
+    (draw-centered scr r2
+      "mine is a TUI, but can be driven by both a keyboard" style-dim)
+    (draw-centered scr (+ r2 1)
+      "and mouse. Click menus! Click-and-drag to highlight" style-dim)
+    (draw-centered scr (+ r2 2)
+      "text! But you can also just use a keyboard." style-dim)
+    ;; Paragraph 2
+    (let r6 = (+ r2 4))
+    (let line-help = "Check out F1:mine > Help for a complete list")
+    (draw-centered scr r6 line-help style-dim)
+    (%overlay-bold scr r6 line-help 10 "F1:mine > Help")
+    (draw-centered scr (+ r6 1) "of keybindings." style-dim)
+    ;; Paragraph 3
+    (let r10 = (+ r6 3))
+    (let line-opt = "For macOS: configure the Option key to act as")
+    (draw-centered scr r10 line-opt style-dim)
+    (%overlay-bold scr r10 line-opt 25 "Option")
+    (let line-alt = "Alt in your terminal's settings. Copy and paste")
+    (draw-centered scr (+ r10 1) line-alt style-dim)
+    (%overlay-bold scr (+ r10 1) line-alt 0 "Alt")
+    (let line-ctrl = "use Ctrl+c and Ctrl+v, not the Command key.")
+    (draw-centered scr (+ r10 2) line-ctrl style-dim)
+    (%overlay-bold scr (+ r10 2) line-ctrl 4 "Ctrl+c")
+    (%overlay-bold scr (+ r10 2) line-ctrl 15 "Ctrl+v")
+    ;; Hint
+    (draw-centered scr (+ r10 4) "Press any key." style-italic))
+
+  (declare show-tip (term:Terminal -> Void))
+  (define (show-tip terminal)
+    "Show the keyboard/mouse tip screen and wait for a key."
+    (let scr = (term:.terminal-screen terminal))
+    (%draw-tip scr)
+    (screen:screen-hide-cursor scr)
+    (term:terminal-flush terminal)
+    (%wait-with-redraw terminal %draw-tip))
+
+  ;;; Welcome screen
+
+  (declare %draw-welcome (screen:Screen -> Void))
+  (define (%draw-welcome scr)
+    "Draw the welcome screen content with wizard art."
+    (let rows = (cell:read (screen:.screen-height scr)))
+    (let cols = (cell:read (screen:.screen-width scr)))
+    (let mid = (lisp (-> UFix) (rows) (cl:floor rows 2)))
+    (screen:screen-clear scr)
+    (draw-centered scr (- mid 1) "mine Setup Wizard" style-bold)
+    (draw-centered scr (+ mid 1) "This short wizard will help you configure mine." style-dim)
+    (draw-centered scr (+ mid 2) "Your terminal will need true color support and a good Unicode font." style-dim)
+    ;; Best-effort warning
+    (let best = (term:best-effort?))
+    (when best
+      (draw-centered scr (+ mid 3)
+        "--best-effort enabled, some features may not work."
+        (color:Style color:error-fg color:black color:AttrBold)))
+    (draw-centered scr (+ mid 4) "Press any key to continue." style-italic)
+    ;; Draw wizard art centered below
+    (when (>= cols 50)
+      (let wiz-col = (+ 11 (lisp (-> UFix) (cols) (cl:floor (cl:- cols 13) 2))))
+      (%draw-wizard scr (+ mid 6) wiz-col)))
+
+  (declare show-welcome (term:Terminal -> Void))
+  (define (show-welcome terminal)
+    "Show the initial welcome screen and wait for a keyboard key."
+    (let scr = (term:.terminal-screen terminal))
+    (%draw-welcome scr)
+    (screen:screen-hide-cursor scr)
+    (term:terminal-flush terminal)
+    (%wait-key-only terminal %draw-welcome))
+
+  (declare %wait-key-only (term:Terminal * (screen:Screen -> Void) -> Void))
+  (define (%wait-key-only terminal draw-fn)
+    "Wait for a keyboard key, ignoring mouse events. Redraws on resize."
+    (let ev = (%read-event terminal))
+    (cond
+      ((%exit-key? ev)
+       (term:terminal-shutdown terminal)
+       ;; Return type is a fiction — sb-ext:exit never returns
+       (lisp (-> Void) () (sb-ext:exit :code 0)))
+      (True
+       (match ev
+         ((input:IEvResize _ _)
+          (%handle-resize! terminal)
+          (draw-fn (term:.terminal-screen terminal))
+          (screen:screen-hide-cursor (term:.terminal-screen terminal))
+          (term:terminal-flush terminal)
+          (%wait-key-only terminal draw-fn))
+         ((input:IEvMouse _ _ _ _)
+          (%wait-key-only terminal draw-fn))
+         (_ (values))))))
+
+  ;;; Main entry point
+
+  (declare run-setup (Void -> Void))
+  (define (run-setup)
+    "Run the interactive TUI setup wizard."
+    (let terminal = (term:terminal-init))
+
+    ;; Disable mouse tracking -- setup is keyboard-only
+    (lisp (-> Void) ()
+      (mine/bindings/terminal:terminal-write-string
+       (mine/term/escape:disable-mouse-tracking))
+      (mine/bindings/terminal:terminal-flush)
+      (cl:values))
+
+    ;; Welcome
+    (show-welcome terminal)
+
+    ;; 1. Structural editing
+    (let se-idx = (ask terminal
+                       "Do you want to enable structural editing?"
+                       (make-list
+                        "Structural editing allows you to edit Lisp-like"
+                        "code in a way where it's impossible to mismatch"
+                        "parentheses. This is the more efficient editing"
+                        "mode preferred by Lisp programmers."
+                        ""
+                        "You can toggle this at any time with Ctrl+p."
+                        "Try the built-in lessons: Editor > Structural Lessons.")
+                       (make-list "Yes" "No")
+                       0))
+    (let se = (== se-idx 0))
+
+    ;; 2. Language
+    (let lang-idx = (ask terminal
+                         "Do you want to primarily develop in Coalton or Common Lisp?"
+                         (make-list
+                          "This determines the default REPL language"
+                          "and package. Don't worry, you can switch"
+                          "between them on-the-fly; the default is"
+                          "just a convenience.")
+                         (make-list "Coalton" "Common Lisp")
+                         0))
+    (let lang = (if (== lang-idx 0) "coalton" "lisp"))
+    (let pkg = (if (== lang-idx 0) "COALTON-USER" "CL-USER"))
+
+    ;; 3. Quicklisp
+    (let load-ql = (cell:new False))
+    (cond
+      ((quicklisp-installed-p)
+       ;; Already installed -- offer to load it
+       (let ql-idx = (ask terminal
+                          "Would you like Quicklisp loaded automatically?"
+                          (make-list
+                           "mine does not use any existing Lisp configs."
+                           "It appears you have Quicklisp installed.")
+                          (make-list "Yes" "No")
+                          0))
+       (when (== ql-idx 0)
+         (cell:write! load-ql True)
+         (values)))
+      (True
+       ;; Not installed -- offer to install
+       (let ql-idx = (ask terminal
+                          "Do you want to install Quicklisp?"
+                          (make-list
+                           "Quicklisp is a package manager that allows"
+                           "downloading dependencies from the internet."
+                           "This will download the Quicklisp setup script"
+                           "from the internet, run it, and create a new"
+                           "folder called 'quicklisp' in your home directory.")
+                          (make-list "Yes" "No")
+                          0))
+       (when (== ql-idx 0)
+         (when (install-quicklisp! terminal)
+           (cell:write! load-ql True)
+           (values))
+         (values))))
+
+    ;; 4. Project directory (ASDF path)
+    (let ql-desc = (if (cell:read load-ql)
+                       (make-list "ASDF will search this directory for systems."
+                                  "The directory will be created if it doesn't exist."
+                                  "~/quicklisp/local-projects/ is also searched.")
+                       (make-list "ASDF will search this directory for systems."
+                                  "The directory will be created if it doesn't exist.")))
+    (let proj-input = (ask-text terminal
+                                "Where do you want to keep your projects?"
+                                ql-desc
+                                "~/common-lisp/"))
+    (let project-roots =
+      (if (lisp (-> Boolean) (proj-input) (cl:plusp (cl:length proj-input)))
+          (make-list (lisp (-> String) (proj-input)
+            (cl:let* ((input proj-input)
+                      (expanded (cl:if (cl:and (cl:>= (cl:length input) 2)
+                                                (cl:string= input "~/" :end1 2))
+                                    (cl:concatenate 'cl:string
+                                                    (cl:namestring (cl:user-homedir-pathname))
+                                                    (cl:subseq input 2))
+                                    input))
+                      (with-slash (cl:if (cl:and (cl:plusp (cl:length expanded))
+                                                  (cl:char= (cl:char expanded
+                                                              (cl:1- (cl:length expanded)))
+                                                             #\/))
+                                     expanded
+                                     (cl:concatenate 'cl:string expanded "/"))))
+              (cl:ensure-directories-exist (cl:pathname with-slash))
+              with-slash)))
+          Nil))
+
+    ;; Build init form: load Quicklisp setup if on disk
+    (let init = (if (cell:read load-ql)
+                    (Some "(load (merge-pathnames \"quicklisp/setup.lisp\" (user-homedir-pathname)))")
+                    None))
+
+    ;; Write config and show result
+    ;; Tip screen
+    (show-tip terminal)
+
+    ;; Write config and show result
+    (let config = (cfg:MineConfig se True lang pkg init 4096 project-roots))
+    (let _ok = (write-config! config))
+    (show-done terminal)
+
+    (term:terminal-shutdown terminal)))
+
+;;; CL helpers for directory tab completion
+
+(cl:defun %setup-list-dirs (dir-path)
+  "List subdirectory names in DIR-PATH. Returns a list of name strings with trailing /."
+  (cl:handler-case
+      (cl:let* ((dir (cl:pathname dir-path))
+                (wild (cl:make-pathname :name :wild :type :wild :defaults dir))
+                (entries (cl:directory wild :resolve-symlinks cl:nil)))
+        (cl:remove cl:nil
+          (cl:mapcar
+           (cl:lambda (entry)
+             (cl:handler-case
+                 (cl:let ((name (cl:file-namestring entry)))
+                   (cl:if (cl:string= name "")
+                          ;; Directory entry -- extract last dir component
+                          (cl:let ((dirs (cl:pathname-directory entry)))
+                            (cl:if (cl:and dirs (cl:consp dirs))
+                                   (cl:let ((last-dir (cl:car (cl:last dirs))))
+                                     (cl:if (cl:stringp last-dir)
+                                            (cl:concatenate 'cl:string last-dir "/")
+                                            cl:nil))
+                                   cl:nil))
+                          cl:nil))
+               (cl:error () cl:nil)))
+           entries)))
+    (cl:error () cl:nil)))
+
+(cl:defun %setup-common-prefix (strings)
+  "Return the longest common prefix of a list of strings."
+  (cl:if (cl:null strings) ""
+         (cl:let ((first (cl:first strings)))
+           (cl:loop :for i :from 0 :below (cl:length first)
+                    :while (cl:every
+                            (cl:lambda (s)
+                              (cl:and (cl:< i (cl:length s))
+                                      (cl:char= (cl:char first i)
+                                                 (cl:char s i))))
+                            strings)
+                    :finally (cl:return (cl:subseq first 0 i))))))
+
+(cl:defun %setup-strings-to-coalton-list (strings)
+  "Convert a CL list of strings to a Coalton (List String)."
+  (cl:if (cl:null strings)
+         coalton:Nil
+         (Cons (cl:first strings)
+               (%setup-strings-to-coalton-list (cl:rest strings)))))
+
+(cl:defun %setup-complete-dir (text)
+  "Complete a directory path. Returns (Tuple completed-text candidates)."
+  (cl:handler-case
+      (cl:let* (;; Expand ~ to home directory
+                (expanded (cl:if (cl:and (cl:plusp (cl:length text))
+                                         (cl:char= (cl:char text 0) #\~))
+                                 (cl:let ((home (cl:namestring
+                                                 (cl:user-homedir-pathname))))
+                                   (cl:concatenate 'cl:string
+                                     (cl:string-right-trim "/" home)
+                                     (cl:subseq text 1)))
+                                 text))
+                ;; Split into directory and prefix
+                (dir-end (cl:or (cl:position #\/ expanded :from-end cl:t) -1))
+                (dir-part (cl:if (cl:>= dir-end 0)
+                                 (cl:subseq expanded 0 (cl:1+ dir-end))
+                                 ""))
+                (prefix (cl:if (cl:>= dir-end 0)
+                               (cl:subseq expanded (cl:1+ dir-end))
+                               expanded))
+                ;; List directories only
+                (search-dir (cl:if (cl:string= dir-part "")
+                                   (cl:namestring (cl:truename "."))
+                                   dir-part))
+                (entries (%setup-list-dirs search-dir))
+                ;; Filter by prefix and sort
+                (matches (cl:remove-if-not
+                          (cl:lambda (name)
+                            (cl:and (cl:>= (cl:length name) (cl:length prefix))
+                                    (cl:string= prefix name
+                                                :end2 (cl:length prefix))))
+                          entries))
+                (sorted (cl:sort (cl:copy-list matches) #'cl:string<)))
+        (cl:if (cl:null sorted)
+               (Tuple text coalton:Nil)
+               (cl:let* ((common (%setup-common-prefix sorted))
+                         (completed (cl:concatenate 'cl:string dir-part common))
+                         ;; Re-insert ~ if we expanded it
+                         (display
+                          (cl:if (cl:and (cl:plusp (cl:length text))
+                                         (cl:char= (cl:char text 0) #\~))
+                                 (cl:let ((home (cl:namestring
+                                                 (cl:user-homedir-pathname))))
+                                   (cl:if (cl:and (cl:>= (cl:length completed)
+                                                          (cl:length home))
+                                                  (cl:string= home completed
+                                                              :end2 (cl:length home)))
+                                          (cl:concatenate 'cl:string "~/"
+                                            (cl:subseq completed (cl:length home)))
+                                          completed))
+                                 completed))
+                         (cands (cl:if (cl:= (cl:length sorted) 1)
+                                       coalton:Nil
+                                       (%setup-strings-to-coalton-list sorted))))
+                 (Tuple display cands))))
+    (cl:error ()
+      (Tuple text coalton:Nil))))

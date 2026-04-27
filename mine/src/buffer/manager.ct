@@ -1,0 +1,234 @@
+(cl:defpackage #:mine/buffer/manager
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:buf #:mine/buffer/buffer)
+   (#:gap #:mine/buffer/gap)
+   (#:cell #:coalton/cell)
+   (#:ht #:coalton/hashtable)
+   (#:iter #:coalton/iterator)
+   (#:file #:coalton/file)
+   (#:fs #:mine/utils/file-system))
+  (:export
+   #:BufferManager
+   #:bufmgr-new
+   #:bufmgr-open-file!
+   #:bufmgr-save!
+   #:bufmgr-close!
+   #:bufmgr-force-close!
+   #:bufmgr-close-under-path!
+   #:bufmgr-find-by-path
+   #:bufmgr-find-by-document-key
+   #:bufmgr-current
+   #:bufmgr-switch!
+   #:bufmgr-path-dirty?
+   #:%path-dirty-p))
+
+(in-package #:mine/buffer/manager)
+
+(coalton-toplevel
+
+  ;;; BufferManager
+
+  (define-struct BufferManager
+    "Registry of open buffers with a monotonic id counter."
+    (buffers  (Cell (ht:HashTable UFix buf:Buffer)))
+    (next-id  (Cell UFix))
+    (current  (Cell (Optional buf:BufferId))))
+
+  (declare bufmgr-new (Void -> BufferManager))
+  (define (bufmgr-new)
+    "Create a new empty buffer manager."
+    (BufferManager (cell:new (ht:new))
+                   (cell:new 0)
+                   (cell:new None)))
+
+  ;;; Internal: allocate an id
+
+  (declare %alloc-id (BufferManager -> buf:BufferId))
+  (define (%alloc-id mgr)
+    (let n = (cell:read (.next-id mgr)))
+    (cell:write! (.next-id mgr) (+ n 1))
+    (buf:BufferId n))
+
+  ;;; Creating buffers
+
+  (declare bufmgr-open-file! (BufferManager * String -> Result String buf:Buffer))
+  (define (bufmgr-open-file! mgr fpath)
+    "Open a file, create a buffer, and register it.
+If the file does not exist, creates an empty buffer with that path (not written to disk until saved)."
+    (cond
+      ((fs:directory? fpath)
+       (Err (<> "Not a file: " fpath)))
+      (True
+       (let file-exists = (lisp (-> Boolean) (fpath)
+                            (cl:if (cl:probe-file fpath) True False)))
+       (let bid = (%alloc-id mgr))
+       (let b = (if file-exists
+                    (buf:buffer-from-file bid fpath)
+                    (buf:buffer-new-file bid fpath)))
+       (match bid
+         ((buf:BufferId n)
+          (ht:set! (cell:read (.buffers mgr)) n b)))
+       (Ok b))))
+
+  ;;; Save
+
+  (declare bufmgr-save! (BufferManager * buf:BufferId -> Result String Unit))
+  (define (bufmgr-save! mgr bid)
+    "Save a buffer to its path. Returns Err if no path is set or on I/O error."
+    (match (bufmgr-get mgr bid)
+      ((None) (Err "Buffer not found"))
+      ((Some b)
+       (match (buf:buffer-path b)
+         ((None) (Err "Buffer has no file path"))
+         ((Some fpath)
+          (let contents = (gap:gap-to-string (buf:buffer-gap b)))
+          (let result =
+            (lisp (-> (Result String Unit)) (fpath contents)
+              (cl:handler-case
+                  (cl:progn
+                   (cl:with-open-file (s fpath :direction :output
+                                              :if-exists :supersede
+                                              :if-does-not-exist :create)
+                     (cl:write-string contents s))
+                   (Ok Unit))
+                (cl:error (c)
+                  (Err (cl:format cl:nil "~A" c))))))
+          (match result
+            ((Ok _)
+             (buf:buffer-mark-clean! b)
+             (Ok Unit))
+            ((Err e) (Err e))))))))
+
+  ;;; Close
+
+  (declare bufmgr-close! (BufferManager * buf:BufferId -> Boolean))
+  (define (bufmgr-close! mgr bid)
+    "Close a buffer. Returns False if the buffer is dirty (caller decides).
+Returns True if closed successfully."
+    (match (bufmgr-get mgr bid)
+      ((None) True)
+      ((Some b)
+       (cond
+         ((buf:buffer-dirty? b) False)
+         (True (bufmgr-force-close! mgr bid) True)))))
+
+  (declare bufmgr-force-close! (BufferManager * buf:BufferId -> Void))
+  (define (bufmgr-force-close! mgr bid)
+    "Close a buffer unconditionally, discarding any unsaved changes."
+    (match bid
+      ((buf:BufferId n)
+       (ht:remove! (cell:read (.buffers mgr)) n)
+       (match (cell:read (.current mgr))
+         ((Some cur)
+          (when (== cur bid)
+            (cell:write! (.current mgr) None)
+            (values)))
+         ((None) (values))))))
+
+  (declare bufmgr-close-under-path! (BufferManager * String -> Void))
+  (define (bufmgr-close-under-path! mgr dir-prefix)
+    "Close all buffers whose file path starts with DIR-PREFIX."
+    (let tbl = (cell:read (.buffers mgr)))
+    (let limit = (cell:read (.next-id mgr)))
+    (%close-under-path tbl mgr dir-prefix 0 limit)
+    (values))
+
+  (declare %close-under-path (ht:HashTable UFix buf:Buffer * BufferManager * String * UFix * UFix -> Void))
+  (define (%close-under-path tbl mgr prefix i limit)
+    (when (< i limit)
+      (match (ht:get tbl i)
+        ((Some b)
+         (when (%path-starts-with? b prefix)
+           (bufmgr-force-close! mgr (buf:BufferId i))))
+        ((None) (values)))
+      (%close-under-path tbl mgr prefix (+ i 1) limit)))
+
+  (declare %path-starts-with? (buf:Buffer * String -> Boolean))
+  (define (%path-starts-with? b prefix)
+    (match (buf:buffer-path b)
+      ((None) False)
+      ((Some p)
+       (lisp (-> Boolean) (p prefix)
+         (cl:let ((plen (cl:length prefix)))
+           (cl:if (cl:and (cl:<= plen (cl:length p))
+                          (cl:string= p prefix :end1 plen))
+                  True False))))))
+
+  ;;; Lookup
+
+  (declare bufmgr-get (BufferManager * buf:BufferId -> Optional buf:Buffer))
+  (define (bufmgr-get mgr bid)
+    "Look up a buffer by its id."
+    (match bid
+      ((buf:BufferId n)
+       (ht:get (cell:read (.buffers mgr)) n))))
+
+  (declare bufmgr-current (BufferManager -> Optional buf:Buffer))
+  (define (bufmgr-current mgr)
+    "Return the currently active buffer, if any."
+    (match (cell:read (.current mgr))
+      ((None) None)
+      ((Some bid) (bufmgr-get mgr bid))))
+
+  (declare bufmgr-find-by-path (BufferManager * String -> Optional buf:Buffer))
+  (define (bufmgr-find-by-path mgr fpath)
+    "Find a buffer by its file path."
+    (%find-by-path-in (ht:entries (cell:read (.buffers mgr))) fpath))
+
+  (declare %find-by-path-in (iter:Iterator (Tuple UFix buf:Buffer) * String -> Optional buf:Buffer))
+  (define (%find-by-path-in entries fpath)
+    (match (iter:next! entries)
+      ((Some (Tuple _ buf))
+       (match (buf:buffer-path buf)
+         ((Some p) (if (== p fpath) (Some buf) (%find-by-path-in entries fpath)))
+         ((None) (%find-by-path-in entries fpath))))
+      ((None) None)))
+
+  (declare bufmgr-find-by-document-key (BufferManager * String -> Optional buf:Buffer))
+  (define (bufmgr-find-by-document-key mgr document-key)
+    "Find a buffer by its stable document key."
+    (%find-by-document-key-in (ht:entries (cell:read (.buffers mgr))) document-key))
+
+  (declare %find-by-document-key-in (iter:Iterator (Tuple UFix buf:Buffer) * String -> Optional buf:Buffer))
+  (define (%find-by-document-key-in entries document-key)
+    (match (iter:next! entries)
+      ((Some (Tuple _ buf))
+       (if (== (buf:buffer-document-key buf) document-key)
+           (Some buf)
+           (%find-by-document-key-in entries document-key)))
+      ((None) None)))
+
+  ;;; Switching
+
+  (declare bufmgr-switch! (BufferManager * buf:BufferId -> Void))
+  (define (bufmgr-switch! mgr bid)
+    "Set BID as the current buffer."
+    (cell:write! (.current mgr) (Some bid))
+    (values))
+
+  (declare %check-buf-dirty (buf:Buffer * String -> Boolean))
+  (define (%check-buf-dirty b fpath)
+    "Return True if buffer B has path FPATH and is dirty."
+    (match (buf:buffer-path b)
+      ((Some p) (and (== p fpath) (buf:buffer-dirty? b)))
+      ((None) False)))
+
+  (declare %scan-ids (ht:Hashtable UFix buf:Buffer * String * UFix * UFix -> Boolean))
+  (define (%scan-ids tbl fpath i limit)
+    "Probe buffer ids 0..limit looking for a dirty buffer matching fpath."
+    (if (>= i limit)
+        False
+        (match (ht:get tbl i)
+          ((Some b)
+           (if (%check-buf-dirty b fpath)
+               True
+               (%scan-ids tbl fpath (+ i 1) limit)))
+          ((None) (%scan-ids tbl fpath (+ i 1) limit)))))
+
+  (declare bufmgr-path-dirty? (BufferManager * String -> Boolean))
+  (define (bufmgr-path-dirty? mgr fpath)
+    "Return True if any open buffer with path FPATH is dirty."
+    (let tbl = (cell:read (.buffers mgr)))
+    (let limit = (cell:read (.next-id mgr)))
+    (%scan-ids tbl fpath 0 limit)))

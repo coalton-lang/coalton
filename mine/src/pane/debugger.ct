@@ -1,0 +1,152 @@
+(cl:defpackage #:mine/pane/debugger
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:screen #:mine/term/screen)
+   (#:color #:mine/term/color)
+   (#:wt #:mine/widget/types)
+   (#:render #:mine/widget/render)
+   (#:cell #:coalton/cell)
+   (#:vec #:coalton/vector)
+   (#:str #:coalton/string))
+  (:export
+   #:DebuggerPane
+   #:debugger-pane-new
+   #:debugger-active?
+   #:debugger-pane-render
+   #:debugger-activate!
+   #:debugger-deactivate!))
+
+(in-package #:mine/pane/debugger)
+
+(coalton-toplevel
+
+  ;;; DebuggerPane
+
+  (define-struct DebuggerPane
+    "A dedicated debugger screen showing condition, restarts, and stack frames."
+    (active         (Cell Boolean))
+    (condition-text (Cell String))
+    (restarts       (Cell (List (Tuple UFix String))))
+    (frames         (Cell (List String)))
+    (selected-frame (Cell UFix)))
+
+  (declare debugger-pane-new (Void -> DebuggerPane))
+  (define (debugger-pane-new)
+    "Create a new inactive debugger pane."
+    (DebuggerPane (cell:new False)
+                  (cell:new "")
+                  (cell:new Nil)
+                  (cell:new Nil)
+                  (cell:new 0)))
+
+  ;;; State
+
+  (declare debugger-active? (DebuggerPane -> Boolean))
+  (define (debugger-active? dp)
+    "Return whether the debugger is currently active."
+    (cell:read (.active dp)))
+
+  (declare debugger-activate! (DebuggerPane * String * (List (Tuple UFix String)) * (List String) -> Void))
+  (define (debugger-activate! dp condition restart-list frame-list)
+    "Activate the debugger with the given condition, restarts, and stack frames."
+    (cell:write! (.active dp) True)
+    (cell:write! (.condition-text dp) condition)
+    (cell:write! (.restarts dp) restart-list)
+    (cell:write! (.frames dp) frame-list)
+    (cell:write! (.selected-frame dp) 0)
+    (values))
+
+  (declare debugger-deactivate! (DebuggerPane -> Void))
+  (define (debugger-deactivate! dp)
+    "Deactivate the debugger and return to normal editing."
+    (cell:write! (.active dp) False)
+    (values))
+
+  ;;; Rendering helpers
+
+  (declare render-section-header (screen:Screen * UFix * UFix * UFix * String * color:Style -> Void))
+  (define (render-section-header scr y x w title style)
+    "Render a section header bar."
+    (render:fill-rect scr (wt:Rect x y w 1) #\Space style)
+    (screen:screen-set-string scr y (+ x 1) title style)
+    (values))
+
+  (declare render-restarts (screen:Screen * (List (Tuple UFix String)) * UFix * UFix * UFix -> UFix))
+  (define (render-restarts scr restart-list y x max-y)
+    "Render the list of available restarts. Returns the next Y position."
+    (match restart-list
+      ((Nil) y)
+      ((Cons (Tuple idx desc) rest)
+       (cond
+         ((>= y max-y) y)
+         (True
+          (let label = (<> "  " (<> (into idx) (<> ": " desc))))
+          (let style = (color:with-fg color:default-style color:warning-fg))
+          (screen:screen-set-string scr y x label style)
+          (render-restarts scr rest (+ y 1) x max-y))))))
+
+  (declare %render-frame-rows
+    (screen:Screen * (List String) * UFix * UFix * UFix * UFix * UFix -> UFix))
+  (define (%render-frame-rows scr frs row x max-y sel idx)
+    "Render stack frame rows."
+    (match frs
+      ((Nil) row)
+      ((Cons fr rest)
+       (cond
+         ((>= row max-y) row)
+         (True
+          (let label = (<> "  " (<> (into idx) (<> ": " fr))))
+          (let style =
+            (if (== idx sel)
+                (color:with-attr color:default-style color:AttrReverse)
+                color:default-style))
+          (screen:screen-set-string scr row x label style)
+          (%render-frame-rows scr rest (+ row 1) x max-y sel (+ idx 1)))))))
+
+  (declare render-frames (screen:Screen * (List String) * UFix * UFix * UFix * UFix -> UFix))
+  (define (render-frames scr frame-list y x max-y sel)
+    "Render the stack frames with the selected frame highlighted. Returns the next Y position."
+    (%render-frame-rows scr frame-list y x max-y sel 0))
+
+  ;;; Main render
+
+  (declare debugger-pane-render (DebuggerPane * screen:Screen * wt:Rect -> Void))
+  (define (debugger-pane-render dp scr rect)
+    "Render the debugger screen within RECT.
+Shows the condition at the top, followed by restarts and stack frames."
+    (when (not (debugger-active? dp))
+      (return (values)))
+    (let x = (wt:.rect-x rect))
+    (let w = (wt:.rect-width rect))
+    (let max-y = (+ (wt:.rect-y rect) (wt:.rect-height rect)))
+    (let header-style = (color:with-attr
+                          (color:with-fg color:default-style color:error-fg)
+                          color:AttrBold))
+    ;; Clear the pane.
+    (render:fill-rect scr rect #\Space color:default-style)
+    ;; Title.
+    (let y0 = (wt:.rect-y rect))
+    (render:fill-rect scr (wt:Rect x y0 w 1) #\Space
+                      (color:with-attr color:default-style color:AttrReverse))
+    (screen:screen-set-string scr y0 (+ x 1) "DEBUGGER"
+                              (color:with-attr color:default-style color:AttrReverse))
+    ;; Condition.
+    (let y1 = (+ y0 2))
+    (when (< y1 max-y)
+      (screen:screen-set-string scr y1 (+ x 1)
+                                (cell:read (.condition-text dp))
+                                header-style))
+    ;; Restarts section.
+    (let y2 = (+ y1 2))
+    (when (< y2 max-y)
+      (render-section-header scr y2 x w "Restarts:"
+                             (color:with-attr color:default-style color:AttrBold)))
+    (let y3 = (render-restarts scr (cell:read (.restarts dp)) (+ y2 1) (+ x 1) max-y))
+    ;; Stack frames section.
+    (let y4 = (+ y3 1))
+    (when (< y4 max-y)
+      (render-section-header scr y4 x w "Stack:"
+                             (color:with-attr color:default-style color:AttrBold)))
+    (let sel = (cell:read (.selected-frame dp)))
+    (let _y5 = (render-frames scr (cell:read (.frames dp)) (+ y4 1) (+ x 1) max-y sel))
+    (values)))
