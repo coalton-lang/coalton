@@ -112,7 +112,7 @@ automatically based on each item's height."
      (Binding "F1-F6"        "Open menus")
      (Binding "Ctrl+r"       "Open/focus REPL, maximize when focused")
      (Binding "Ctrl+e"       "Focus editor, maximize when focused")
-     (Binding "Ctrl+t"       "Expand file tree / open files panel")
+     (Binding "Ctrl+t"       "Focus file tree; in tree, freeze/auto-hide")
      (Binding "Ctrl+1-9"     "Switch to open file by number")
      (Binding "Ctrl+\\"      "Special character input (uses TeX-like names)")
      (Binding "Ctrl+q"       "Quit")
