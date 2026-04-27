@@ -2,7 +2,9 @@
   (:use #:cl)
   (:local-nicknames
    (#:diag #:mine/protocol/diagnostics)
+   (#:gap #:mine/buffer/gap)
    (#:input #:mine/term/input)
+   (#:paredit #:mine/syntax/paredit)
    (#:repl #:mine/pane/repl)
    (#:server #:mine/protocol/server)
    (#:source #:coalton-impl/source)
@@ -55,6 +57,12 @@
                   check-source-diagnostic-hook-sees-source-error-subclasses
                   check-reader-errors-produce-point-diagnostics
                   check-repl-structural-editing-pairs-delimiters
+                  check-repl-structural-close-paren-in-string-inserts
+                  check-repl-structural-delimiters-in-string-insert-literals
+                  check-repl-structural-delimiters-in-line-comment-insert-literals
+                  check-repl-structural-doublequote-in-string
+                  check-repl-structural-escaped-quote-deletes-as-unit
+                  check-paredit-matching-ignores-delimiters-in-strings
                   check-repl-structural-editing-alt-sexp-motion
                   check-repl-hint-symbol-extraction
                   check-beam-system-emits-diagnostics-before-return

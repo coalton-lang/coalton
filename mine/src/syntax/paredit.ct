@@ -420,8 +420,12 @@ NESTING starts at 1."
   (declare find-matching-close (gap:GapBuffer * UFix -> Optional UFix))
   (define (find-matching-close gb pos)
     "Given POS of an open paren, find the matching close paren."
-    (let buf-len = (gap:gap-length gb))
-    (%scan-close gb (+ pos 1) buf-len (cell:new 1)))
+    (%ensure-syntax-map! gb)
+    (cond
+      ((not (%code-at? pos)) None)
+      (True
+       (let buf-len = (gap:gap-length gb))
+       (%scan-close gb (+ pos 1) buf-len (cell:new 1)))))
 
   (declare %scan-close-bracket (gap:GapBuffer * UFix * UFix * (Cell UFix) -> Optional UFix))
   (define (%scan-close-bracket gb p buf-len depth)
@@ -454,7 +458,11 @@ NESTING starts at 1."
   (declare scan-matching-bracket (gap:GapBuffer * UFix -> Optional UFix))
   (define (scan-matching-bracket gb pos)
     "Given POS of an open bracket, find the matching close bracket."
-    (%scan-close-bracket gb (+ pos 1) (gap:gap-length gb) (cell:new 1)))
+    (%ensure-syntax-map! gb)
+    (cond
+      ((not (%code-at? pos)) None)
+      (True
+       (%scan-close-bracket gb (+ pos 1) (gap:gap-length gb) (cell:new 1)))))
 
   (declare %scan-open-paren (gap:GapBuffer * UFix * (Cell UFix) -> Optional UFix))
   (define (%scan-open-paren gb p depth)
@@ -484,7 +492,9 @@ NESTING starts at 1."
   (define (scan-matching-open-paren gb pos)
     "Given POS of a close paren, find the matching open paren."
     (%ensure-syntax-map! gb)
-    (%scan-open-paren gb pos (cell:new 1)))
+    (cond
+      ((not (%code-at? pos)) None)
+      (True (%scan-open-paren gb pos (cell:new 1)))))
 
   (declare %scan-open-bracket (gap:GapBuffer * UFix * (Cell UFix) -> Optional UFix))
   (define (%scan-open-bracket gb p depth)
@@ -514,7 +524,9 @@ NESTING starts at 1."
   (define (scan-matching-open-bracket gb pos)
     "Given POS of a close bracket, find the matching open bracket."
     (%ensure-syntax-map! gb)
-    (%scan-open-bracket gb pos (cell:new 1)))
+    (cond
+      ((not (%code-at? pos)) None)
+      (True (%scan-open-bracket gb pos (cell:new 1)))))
 
   (declare %scan-enclosing-open (gap:GapBuffer * UFix * (Cell IFix) -> Optional UFix))
   (define (%scan-enclosing-open gb p depth)
@@ -556,6 +568,65 @@ and character literals."
     (%ensure-syntax-map! gb)
     (%in-string-at? pos))
 
+  (declare %in-line-comment? (gap:GapBuffer * UFix -> Boolean))
+  (define (%in-line-comment? gb pos)
+    "Return True if the cursor at POS is inside a line comment."
+    (%ensure-syntax-map! gb)
+    (and (> pos 0)
+         (== 2 (%syntax-class-at (- pos 1)))))
+
+  (declare %literal-delimiter-context? (gap:GapBuffer * UFix -> Boolean))
+  (define (%literal-delimiter-context? gb pos)
+    "True when delimiter keys should insert text instead of editing structure."
+    (or (%in-string? gb pos)
+        (%in-line-comment? gb pos)))
+
+  (declare %escaped-at? (gap:GapBuffer * UFix * Boolean -> Boolean))
+  (define (%escaped-at? gb pos escaped?)
+    (cond
+      ((== pos 0) escaped?)
+      (True
+       (match (gap:gap-char-at gb (- pos 1))
+         ((Some #\\) (%escaped-at? gb (- pos 1) (not escaped?)))
+         (_ escaped?)))))
+
+  (declare %closing-string-quote-at? (gap:GapBuffer * UFix -> Boolean))
+  (define (%closing-string-quote-at? gb pos)
+    "True if POS is the terminating quote for the current string."
+    (%ensure-syntax-map! gb)
+    (and (%in-string-at? pos)
+         (match (gap:gap-char-at gb pos)
+           ((Some #\") (not (%escaped-at? gb pos False)))
+           (_ False))))
+
+  (declare %escaped-quote-before? (gap:GapBuffer * UFix -> Boolean))
+  (define (%escaped-quote-before? gb pos)
+    "True if the two chars before POS are an escaped string quote."
+    (and (> pos 1)
+         (match (Tuple (gap:gap-char-at gb (- pos 2))
+                       (gap:gap-char-at gb (- pos 1)))
+           ((Tuple (Some #\\) (Some #\"))
+            (%escaped-at? gb (- pos 1) False))
+           (_ False))))
+
+  (declare %escaped-quote-at? (gap:GapBuffer * UFix -> Boolean))
+  (define (%escaped-quote-at? gb pos)
+    "True if POS is the backslash starting an escaped string quote."
+    (and (< (+ pos 1) (gap:gap-length gb))
+         (match (Tuple (gap:gap-char-at gb pos)
+                       (gap:gap-char-at gb (+ pos 1)))
+           ((Tuple (Some #\\) (Some #\"))
+            (%escaped-at? gb (+ pos 1) False))
+           (_ False))))
+
+  (declare %escaped-quote-ending-at? (gap:GapBuffer * UFix -> Boolean))
+  (define (%escaped-quote-ending-at? gb pos)
+    "True if POS is the quote in an escaped string quote."
+    (and (> pos 0)
+         (match (gap:gap-char-at gb pos)
+           ((Some #\") (%escaped-at? gb pos False))
+           (_ False))))
+
   ;;; Internal: record an insert for undo
 
   (declare record-insert! (buf:Buffer * UFix * String * UFix -> Void))
@@ -584,55 +655,85 @@ and character literals."
 
   (declare paredit-open-paren! (buf:Buffer * cursor:CursorState -> Void))
   (define (paredit-open-paren! buffer cs)
-    "Insert \"()\" with cursor between the parens."
+    "Insert \"()\" with cursor between the parens.
+Inside strings or line comments, insert a literal open paren."
     (undo:with-undo-group! (buf:buffer-undo buffer)
       (fn () (cursor:cursor-position cs))
       (fn ()
+        (let gb = (buf:buffer-gap buffer))
         (let p = (cursor:cursor-position cs))
-        (record-insert! buffer p "()" p)
-        (cell:write! (cursor:.pos cs) (+ p 1))
-        (values))))
+        (cond
+          ((%literal-delimiter-context? gb p)
+           (record-insert! buffer p "(" p)
+           (cell:write! (cursor:.pos cs) (+ p 1))
+           (values))
+          (True
+           (record-insert! buffer p "()" p)
+           (cell:write! (cursor:.pos cs) (+ p 1))
+           (values))))))
 
   (declare paredit-close-paren! (buf:Buffer * cursor:CursorState -> Void))
   (define (paredit-close-paren! buffer cs)
-    "Move past the closing paren of the enclosing form."
+    "Move past the closing paren of the enclosing form.
+Inside strings or line comments, insert a literal close paren."
     (let gb = (buf:buffer-gap buffer))
     (let p = (cursor:cursor-position cs))
-    (match (find-enclosing-open gb p)
-      ((Some open-pos)
-       (match (find-matching-close gb open-pos)
-         ((Some close-pos)
-          (cell:write! (cursor:.pos cs) (+ close-pos 1))
-          (values))
-         ((None) (values))))
-      ((None) (values))))
+    (cond
+      ((%literal-delimiter-context? gb p)
+       (record-insert! buffer p ")" p)
+       (cell:write! (cursor:.pos cs) (+ p 1))
+       (values))
+      (True
+       (match (find-enclosing-open gb p)
+         ((Some open-pos)
+          (match (find-matching-close gb open-pos)
+            ((Some close-pos)
+             (cell:write! (cursor:.pos cs) (+ close-pos 1))
+             (values))
+            ((None) (values))))
+         ((None) (values))))))
 
   (declare paredit-open-bracket! (buf:Buffer * cursor:CursorState -> Void))
   (define (paredit-open-bracket! buffer cs)
-    "Insert \"[]\" with cursor between the brackets."
+    "Insert \"[]\" with cursor between the brackets.
+Inside strings or line comments, insert a literal open bracket."
     (undo:with-undo-group! (buf:buffer-undo buffer)
       (fn () (cursor:cursor-position cs))
       (fn ()
+        (let gb = (buf:buffer-gap buffer))
         (let p = (cursor:cursor-position cs))
-        (record-insert! buffer p "[]" p)
-        (cell:write! (cursor:.pos cs) (+ p 1))
-        (values))))
+        (cond
+          ((%literal-delimiter-context? gb p)
+           (record-insert! buffer p "[" p)
+           (cell:write! (cursor:.pos cs) (+ p 1))
+           (values))
+          (True
+           (record-insert! buffer p "[]" p)
+           (cell:write! (cursor:.pos cs) (+ p 1))
+           (values))))))
 
   (declare paredit-close-bracket! (buf:Buffer * cursor:CursorState -> Void))
   (define (paredit-close-bracket! buffer cs)
-    "Move past the closing bracket of the enclosing bracket form."
+    "Move past the closing bracket of the enclosing bracket form.
+Inside strings or line comments, insert a literal close bracket."
     (let gb = (buf:buffer-gap buffer))
     (let p = (cursor:cursor-position cs))
-    (%ensure-syntax-map! gb)
-    ;; Scan backward for the enclosing [
-    (match (%scan-enclosing-open-bracket gb p (cell:new 0))
-      ((Some open-pos)
-       (match (scan-matching-bracket gb open-pos)
-         ((Some close-pos)
-          (cell:write! (cursor:.pos cs) (+ close-pos 1))
-          (values))
-         ((None) (values))))
-      ((None) (values))))
+    (cond
+      ((%literal-delimiter-context? gb p)
+       (record-insert! buffer p "]" p)
+       (cell:write! (cursor:.pos cs) (+ p 1))
+       (values))
+      (True
+       (%ensure-syntax-map! gb)
+       ;; Scan backward for the enclosing [
+       (match (%scan-enclosing-open-bracket gb p (cell:new 0))
+         ((Some open-pos)
+          (match (scan-matching-bracket gb open-pos)
+            ((Some close-pos)
+             (cell:write! (cursor:.pos cs) (+ close-pos 1))
+             (values))
+            ((None) (values))))
+         ((None) (values))))))
 
   (declare %scan-enclosing-open-bracket (gap:GapBuffer * UFix * (Cell IFix) -> Optional UFix))
   (define (%scan-enclosing-open-bracket gb p depth)
@@ -660,23 +761,34 @@ and character literals."
 
   (declare paredit-doublequote! (buf:Buffer * cursor:CursorState -> Void))
   (define (paredit-doublequote! buffer cs)
-    "Insert a pair of double-quotes or move past closing quote."
+    "Insert a pair of double-quotes, escape quotes inside strings,
+or move past a closing string quote."
     (undo:with-undo-group! (buf:buffer-undo buffer)
       (fn () (cursor:cursor-position cs))
       (fn ()
         (let gb = (buf:buffer-gap buffer))
         (let p = (cursor:cursor-position cs))
-        ;; Check if we're inside a string by looking at char at cursor
-        (match (gap:gap-char-at gb p)
-          ((Some #\")
-           ;; At a closing quote: move past it
+        (cond
+          ((%in-line-comment? gb p)
+           (record-insert! buffer p "\"" p)
            (cell:write! (cursor:.pos cs) (+ p 1))
            (values))
-          (_
-           ;; Insert paired quotes
-           (record-insert! buffer p "\"\"" p)
+          ((%closing-string-quote-at? gb p)
            (cell:write! (cursor:.pos cs) (+ p 1))
-           (values))))))
+           (values))
+          ((%in-string? gb p)
+           (record-insert! buffer p "\\\"" p)
+           (cell:write! (cursor:.pos cs) (+ p 2))
+           (values))
+          (True
+           (match (gap:gap-char-at gb p)
+             ((Some #\")
+              (cell:write! (cursor:.pos cs) (+ p 1))
+              (values))
+             (_
+              (record-insert! buffer p "\"\"" p)
+              (cell:write! (cursor:.pos cs) (+ p 1))
+              (values))))))))
 
   (declare paredit-backspace! (buf:Buffer * cursor:CursorState -> Void))
   (define (paredit-backspace! buffer cs)
@@ -688,7 +800,22 @@ Inside strings, parens are treated as normal characters."
         (let gb = (buf:buffer-gap buffer))
         (let p = (cursor:cursor-position cs))
         (when (> p 0)
-          (if (%in-string? gb p)
+          (cond
+            ((%in-line-comment? gb p)
+             (record-delete! buffer (- p 1) p p)
+             (cell:write! (cursor:.pos cs) (- p 1))
+             (values))
+            ((%in-string? gb p)
+             (cond
+               ((%escaped-quote-before? gb p)
+                (record-delete! buffer (- p 2) p p)
+                (cell:write! (cursor:.pos cs) (- p 2))
+                (values))
+               ((%escaped-quote-ending-at? gb p)
+                (record-delete! buffer (- p 1) (+ p 1) p)
+                (cell:write! (cursor:.pos cs) (- p 1))
+                (values))
+               (True
               ;; Inside a string: only protect the opening quote
               (match (gap:gap-char-at gb (- p 1))
                 ((Some #\")
@@ -704,7 +831,8 @@ Inside strings, parens are treated as normal characters."
                 (_
                  (record-delete! buffer (- p 1) p p)
                  (cell:write! (cursor:.pos cs) (- p 1))
-                 (values)))
+                 (values))))))
+            (True
               ;; Outside a string: full paredit behavior
               (match (gap:gap-char-at gb (- p 1))
                 ((Some #\()
@@ -741,7 +869,7 @@ Inside strings, parens are treated as normal characters."
                 (_
                  (record-delete! buffer (- p 1) p p)
                  (cell:write! (cursor:.pos cs) (- p 1))
-                 (values))))))))
+                 (values)))))))))
 
   (declare %paredit-backspace-word-loop! (buf:Buffer * cursor:CursorState * UFix -> Void))
   (define (%paredit-backspace-word-loop! buffer cs target)
@@ -803,7 +931,20 @@ Inside strings, parens are treated as normal characters."
         (let gb = (buf:buffer-gap buffer))
         (let p = (cursor:cursor-position cs))
         (when (< p (gap:gap-length gb))
-          (if (%in-string? gb p)
+          (cond
+            ((%in-line-comment? gb p)
+             (record-delete! buffer p (+ p 1) p)
+             (values))
+            ((%in-string? gb p)
+             (cond
+               ((%escaped-quote-at? gb p)
+                (record-delete! buffer p (+ p 2) p)
+                (values))
+               ((%escaped-quote-ending-at? gb p)
+                (record-delete! buffer (- p 1) (+ p 1) p)
+                (cell:write! (cursor:.pos cs) (- p 1))
+                (values))
+               (True
               ;; Inside a string: only protect the closing quote
               (match (gap:gap-char-at gb p)
                 ((Some #\")
@@ -812,7 +953,8 @@ Inside strings, parens are treated as normal characters."
                 ;; Normal char inside string (including parens): delete it
                 (_
                  (record-delete! buffer p (+ p 1) p)
-                 (values)))
+                 (values))))))
+            (True
               ;; Outside a string: full paredit behavior
               (match (gap:gap-char-at gb p)
                 ((Some #\)) (values))
@@ -827,11 +969,11 @@ Inside strings, parens are treated as normal characters."
                    (_ (values))))
                 ((Some #\")
                  (match (gap:gap-char-at gb (+ p 1))
-                   ((Some #\") (record-delete! buffer p (+ p 2) p))
-                   (_ (values))))
+                  ((Some #\") (record-delete! buffer p (+ p 2) p))
+                  (_ (values))))
                 (_
                  (record-delete! buffer p (+ p 1) p)
-                 (values))))))))
+                 (values)))))))))
 
   (declare %current-string-open (gap:GapBuffer * UFix -> Optional UFix))
   (define (%current-string-open gb p)
