@@ -197,6 +197,10 @@ Returns :quit if the server should shut down, T otherwise."
        (destructuring-bind (id form-string package-name) (rest msg)
          (handle-eval id form-string package-name stream)))
 
+      (:quick-result
+       (destructuring-bind (id form-string package-name) (rest msg)
+         (handle-quick-result id form-string package-name stream)))
+
       (:compile-string
        (destructuring-bind (id string document-key package-name position client-prefix-length)
            (rest msg)
@@ -504,6 +508,23 @@ Returns the symbol or NIL."
             (continue ()
               :report "Continue, returning NIL"
               (write-message stream `(:return ,id (:ok "NIL"))))))))))
+
+(defun handle-quick-result (id form-string package-name stream)
+  "Handle a :quick-result request without debugger or diagnostic side effects."
+  (handler-case
+      (multiple-value-bind (display error-text)
+          (mine/runtime/eval:quick-result
+           form-string package-name
+           (let ((pkg (find-package (string-upcase package-name))))
+             (and pkg (%coalton-package-p pkg))))
+        (if error-text
+            (write-message stream `(:return ,id (:error ,error-text)))
+            (write-message stream `(:return ,id (:ok ,display)))))
+    (sb-sys:interactive-interrupt (c)
+      (declare (ignore c))
+      (write-message stream `(:return ,id (:error "Interrupted."))))
+    (error (c)
+      (write-message stream `(:return ,id (:error ,(format nil "~A" c)))))))
 
 (defun handle-compile-string (id form-string document-key package-name position client-prefix-length stream)
   "Handle a :compile-string request with interactive debugger support.
