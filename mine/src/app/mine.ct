@@ -1694,6 +1694,35 @@ Uses a dedicated Beam request so diagnostics can stream independently."
 
 ;;; REPL comma commands
 
+  (declare %clear-runtime-session! (MineState -> Void))
+  (define (%clear-runtime-session! st)
+    "Clear state tied to the current runtime connection."
+    (lisp (-> Void) (st)
+      (cl:setf (%native-box-value (mine/app/mine::get-proto-mailbox st)) cl:nil)
+      (cl:setf (%native-box-value (mine/app/mine::get-proto-thread st)) cl:nil)
+      (cl:setf (%native-box-value (mine/app/mine::get-conn-stream st)) cl:nil)
+      (cl:values))
+    (cell:write! (.ms-debugger-active st) False)
+    (cell:write! (.ms-repl-busy st) False)
+    (cell:write! (.ms-busy-activity st) None)
+    (cell:write! (.ms-beam-request-id st) None)
+    (cell:write! (.ms-active-request st) None)
+    (when (cell:read (.ms-io-request-active st))
+      (%deactivate-io-request! st))
+    (values))
+
+  (declare restart-runtime! (MineState -> Boolean))
+  (define (restart-runtime! st)
+    "Restart the runtime and replay the configured :repl-init."
+    (%clear-runtime-session! st)
+    (lifecycle:runtime-stop! (.ms-runtime st))
+    (lifecycle:runtime-start! (.ms-runtime st))
+    (match (lifecycle:runtime-connection (.ms-runtime st))
+      ((Some conn)
+       (%send-repl-init! st conn)
+       True)
+      ((None) False)))
+
   (declare repl-command! (MineState * String -> Void))
   (define (repl-command! st cmd)
     "Dispatch a comma command."
@@ -1702,23 +1731,10 @@ Uses a dedicated Beam request so diagnostics can stream independently."
     (cond
       ((or (== trimmed "restart") (== trimmed "rs"))
        (repl:repl-pane-append-system! (.ms-repl st) ";; Restarting runtime...")
-       ;; Clear async state before stopping
-       (lisp (-> Void) (st)
-         (cl:setf (%native-box-value (mine/app/mine::get-proto-mailbox st)) cl:nil)
-       (cl:setf (%native-box-value (mine/app/mine::get-proto-thread st)) cl:nil)
-       (cl:setf (%native-box-value (mine/app/mine::get-conn-stream st)) cl:nil)
-       (cl:values))
-      (cell:write! (.ms-debugger-active st) False)
-      (cell:write! (.ms-repl-busy st) False)
-      (cell:write! (.ms-busy-activity st) None)
-      (cell:write! (.ms-beam-request-id st) None)
-      (cell:write! (.ms-active-request st) None)
-      (lifecycle:runtime-stop! (.ms-runtime st))
-      (lifecycle:runtime-start! (.ms-runtime st))
-       (match (lifecycle:runtime-connection (.ms-runtime st))
-         ((Some _)
+       (cond
+         ((restart-runtime! st)
           (repl:repl-pane-append-system! (.ms-repl st) ";; Runtime restarted."))
-         ((None)
+         (True
           (repl:repl-pane-append-system! (.ms-repl st) ";; ERROR: Failed to restart runtime."))))
       ((or (== trimmed "clear") (== trimmed "cl"))
        (repl:repl-pane-clear-output! (.ms-repl st))
@@ -4071,8 +4087,11 @@ Enter or Space inserts the matching Unicode character at the cursor."
           (status:statusbar-set-message! (.ms-status st) "No runtime to interrupt"))))
       ((menubar:ActionClearRepl) (repl:repl-pane-clear-output! (.ms-repl st)))
       ((menubar:ActionRestartRepl)
-       (lifecycle:runtime-stop! (.ms-runtime st))
-       (status:statusbar-set-message! (.ms-status st) "Runtime restarted"))
+       (cond
+         ((restart-runtime! st)
+          (status:statusbar-set-message! (.ms-status st) "Runtime restarted"))
+         (True
+          (status:statusbar-set-message! (.ms-status st) "Failed to restart runtime"))))
       ((menubar:ActionGotoLine)
        (status:statusbar-set-message! (.ms-status st) "Go to Line: not yet implemented"))
       ((menubar:ActionClearCache)
