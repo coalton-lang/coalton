@@ -1,0 +1,370 @@
+(cl:defpackage #:mine/widget/input
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:screen #:mine/term/screen)
+   (#:color #:mine/term/color)
+   (#:wt #:mine/widget/types)
+   (#:render #:mine/widget/render)
+   (#:cell #:coalton/cell)
+   (#:str #:coalton/string)
+   (#:cellw #:mine/text/width)
+   (#:input #:mine/term/input)
+   (#:ev #:mine/event/types))
+  (:export
+   #:InputWidget #:InputWidget
+   #:.iw-text #:.iw-cursor #:.iw-prompt #:.iw-prompt-style #:.iw-text-style
+   #:input-widget-new
+   #:input-widget-render
+   #:input-widget-handle-key!
+   #:input-widget-text
+   #:input-widget-set-text!
+   #:input-widget-clear!
+   #:input-widget-insert-newline!
+   #:input-widget-insert-string!
+   #:input-widget-line-count
+   #:input-widget-cursor-row
+   #:input-widget-set-hint!))
+
+(in-package #:mine/widget/input)
+
+(coalton-toplevel
+
+  ;;; InputWidget
+
+  (define-struct InputWidget
+    "A text input widget with prompt, cursor, and styles. Supports multi-line input."
+    (iw-text         (Cell String))
+    (iw-cursor       (Cell UFix))
+    (iw-prompt       (Cell String))
+    (iw-prompt-style color:Style)
+    (iw-text-style   color:Style)
+    (iw-scroll       (Cell UFix))
+    (iw-hint         (Cell String)))
+
+  (declare input-widget-new (String * color:Style * color:Style -> InputWidget))
+  (define (input-widget-new prompt prompt-style text-style)
+    "Create a new InputWidget with separate prompt and text styles."
+    (InputWidget (cell:new "")
+                 (cell:new 0)
+                 (cell:new prompt)
+                 prompt-style
+                 text-style
+                 (cell:new 0)
+                 (cell:new "")))
+
+  (declare input-widget-text (InputWidget -> String))
+  (define (input-widget-text iw)
+    "Get the current text content."
+    (cell:read (.iw-text iw)))
+
+  (declare input-widget-set-text! (InputWidget * String -> Void))
+  (define (input-widget-set-text! iw text)
+    "Set the text content and move cursor to the end."
+    (cell:write! (.iw-text iw) text)
+    (cell:write! (.iw-cursor iw) (str:length text))
+    (cell:write! (.iw-scroll iw) 0)
+    (values))
+
+  (declare input-widget-clear! (InputWidget -> Void))
+  (define (input-widget-clear! iw)
+    "Clear the text content and reset cursor."
+    (cell:write! (.iw-text iw) "")
+    (cell:write! (.iw-cursor iw) 0)
+    (cell:write! (.iw-scroll iw) 0)
+    (values))
+
+  (declare input-widget-set-hint! (InputWidget * String -> Void))
+  (define (input-widget-set-hint! iw hint)
+    "Set the placeholder hint shown when input is empty."
+    (cell:write! (.iw-hint iw) hint)
+    (values))
+
+  ;;; Multi-line helpers
+
+  (declare %count-newlines (String -> UFix))
+  (define (%count-newlines s)
+    "Count the number of newline characters in S."
+    (lisp (-> UFix) (s)
+      (cl:count #\Newline s)))
+
+  (declare input-widget-line-count (InputWidget -> UFix))
+  (define (input-widget-line-count iw)
+    "Return the number of lines in the input (1 for empty/single-line)."
+    (+ 1 (%count-newlines (cell:read (.iw-text iw)))))
+
+  (declare %line-start (String * UFix -> UFix))
+  (define (%line-start s row)
+    "Return the character offset of the start of line ROW (0-based)."
+    (lisp (-> UFix) (s row)
+      (cl:let ((pos 0)
+               (len (cl:length s)))
+        (cl:dotimes (i row pos)
+          (cl:let ((nl (cl:position #\Newline s :start pos)))
+            (cl:if nl
+                   (cl:setf pos (cl:1+ nl))
+                   (cl:return len))))
+        pos)))
+
+  (declare %line-end (String * UFix -> UFix))
+  (define (%line-end s row)
+    "Return the character offset of the end of line ROW (before the newline)."
+    (let start = (%line-start s row))
+    (lisp (-> UFix) (s start)
+      (cl:let ((nl (cl:position #\Newline s :start start)))
+        (cl:if nl nl (cl:length s)))))
+
+  (declare %cursor-row (String * UFix -> UFix))
+  (define (%cursor-row s cursor)
+    "Return the row (0-based) the cursor is on."
+    (lisp (-> UFix) (s cursor)
+      (cl:count #\Newline s :end (cl:min cursor (cl:length s)))))
+
+  (declare %cursor-col (String * UFix -> UFix))
+  (define (%cursor-col s cursor)
+    "Return the display column (0-based) within the current line."
+    (let row = (%cursor-row s cursor))
+    (let start = (%line-start s row))
+    (lisp (-> UFix) (s start cursor)
+      (cl:if (cl:>= cursor start)
+             (mine/text/width:string-cell-width-cl
+               (cl:subseq s start (cl:min cursor (cl:length s))))
+             0)))
+
+  (declare %char-for-col (String * UFix -> UFix))
+  (define (%char-for-col s target-col)
+    "Return the character index whose display column is closest to TARGET-COL."
+    (lisp (-> UFix) (s target-col)
+      (cl:let ((vcol 0)
+               (len (cl:length s)))
+        (cl:dotimes (i len len)
+          (cl:let* ((span (mine/text/width:char-cell-width-cl (cl:char s i)))
+                    (next-vcol (cl:+ vcol span)))
+            (cl:when (cl:> next-vcol target-col)
+              (cl:return i))
+            (cl:setf vcol next-vcol))))))
+
+  (declare input-widget-cursor-row (InputWidget -> UFix))
+  (define (input-widget-cursor-row iw)
+    "Return the row the cursor is currently on (0-based)."
+    (%cursor-row (cell:read (.iw-text iw))
+                 (cell:read (.iw-cursor iw))))
+
+  (declare input-widget-insert-newline! (InputWidget -> Void))
+  (define (input-widget-insert-newline! iw)
+    "Insert a newline at the cursor position."
+    (let text = (cell:read (.iw-text iw)))
+    (let cursor = (cell:read (.iw-cursor iw)))
+    (cell:write! (.iw-text iw) (insert-char-at text cursor #\Newline))
+    (cell:write! (.iw-cursor iw) (+ cursor 1))
+    (values))
+
+  (declare input-widget-insert-string! (InputWidget * String -> Void))
+  (define (input-widget-insert-string! iw s)
+    "Insert a string at the cursor position."
+    (let text = (cell:read (.iw-text iw)))
+    (let cursor = (cell:read (.iw-cursor iw)))
+    (let len = (str:length text))
+    (let before = (str:substring text 0 (min cursor len)))
+    (let after = (str:substring text (min cursor len) len))
+    (cell:write! (.iw-text iw) (<> before (<> s after)))
+    (cell:write! (.iw-cursor iw) (+ cursor (str:length s)))
+    (values))
+
+  ;;; Rendering
+
+  (declare %get-line (String * UFix -> String))
+  (define (%get-line s row)
+    "Extract the text of line ROW from S."
+    (let start = (%line-start s row))
+    (let end = (%line-end s row))
+    (str:substring s start end))
+
+  (declare %ensure-cursor-visible! (InputWidget * UFix -> Void))
+  (define (%ensure-cursor-visible! iw height)
+    "Adjust scroll so the cursor row is visible within HEIGHT rows."
+    (let text = (cell:read (.iw-text iw)))
+    (let cursor = (cell:read (.iw-cursor iw)))
+    (let crow = (%cursor-row text cursor))
+    (let scroll = (cell:read (.iw-scroll iw)))
+    (cond
+      ;; Cursor above viewport -- scroll up
+      ((< crow scroll)
+       (cell:write! (.iw-scroll iw) crow)
+       (values))
+      ;; Cursor below viewport -- scroll down
+      ((>= crow (+ scroll height))
+       (cell:write! (.iw-scroll iw) (+ 1 (- crow height)))
+       (values))
+      (True (values))))
+
+  (declare input-widget-render (InputWidget * screen:Screen * wt:Rect -> Void))
+  (define (input-widget-render iw scr rect)
+    "Render the input widget. Supports multi-line text with vertical scrolling.
+Prompt is shown on the first visible line; continuation lines are indented."
+    (let text   = (cell:read (.iw-text iw)))
+    (let cursor = (cell:read (.iw-cursor iw)))
+    (let ps     = (.iw-prompt-style iw))
+    (let ts     = (.iw-text-style iw))
+    (let x0     = (wt:.rect-x rect))
+    (let y0     = (wt:.rect-y rect))
+    (let w      = (wt:.rect-width rect))
+    (let h      = (wt:.rect-height rect))
+    (let prompt = (cell:read (.iw-prompt iw)))
+    (let plen   = (cellw:string-cell-width prompt))
+    ;; Clear entire input area
+    (render:fill-rect scr rect #\Space ts)
+    ;; If empty, show hint
+    (when (== (str:length text) 0)
+      (let hint = (cell:read (.iw-hint iw)))
+      (when (> (str:length hint) 0)
+        (let dim-style = (color:Style color:text-dimmer-fg
+                                       (color:.style-bg ts)
+                                       color:AttrItalic))
+        (render:draw-text-clipped scr rect hint y0 (+ x0 plen) dim-style)))
+    ;; Ensure cursor is visible
+    (%ensure-cursor-visible! iw h)
+    (let scroll = (cell:read (.iw-scroll iw)))
+    (let crow = (%cursor-row text cursor))
+    ;; Compute visual column (display width) for cursor position
+    (let ccol = (%cursor-col text cursor))
+    (let nlines = (+ 1 (%count-newlines text)))
+    ;; Draw each visible line
+    (let text-w = (if (>= w plen) (- w plen) 0))
+    ;; Horizontal scroll for the cursor's line
+    (let cursor-line-scroll = (if (or (== text-w 0) (< ccol text-w)) 0 (+ 1 (- ccol text-w))))
+    (%render-lines iw scr x0 y0 w h scroll nlines text prompt plen text-w crow cursor-line-scroll ps ts)
+    ;; Position cursor
+    (let cursor-screen-row = (+ y0 (- crow scroll)))
+    (screen:screen-set-cursor scr cursor-screen-row (+ x0 (+ plen (- ccol cursor-line-scroll))))
+    (values))
+
+  (declare %render-lines
+    (InputWidget * screen:Screen * UFix * UFix * UFix * UFix * UFix * UFix
+     * String * String * UFix * UFix * UFix * UFix * color:Style * color:Style -> Void))
+  (define (%render-lines _iw scr x0 y0 _w h scroll nlines text prompt plen text-w crow cursor-line-scroll ps ts)
+    "Render visible lines of the input widget."
+    (lisp (-> Void) (scr x0 y0 h scroll nlines text prompt plen text-w crow cursor-line-scroll ps ts)
+      (cl:dotimes (vi h)
+        (cl:let* ((line-idx (cl:+ scroll vi))
+                  (row (cl:+ y0 vi)))
+          (cl:when (cl:< line-idx nlines)
+            ;; Draw prompt on first line, spaces on continuation lines
+            (cl:if (cl:zerop line-idx)
+                   (screen:screen-set-string scr row x0 prompt ps)
+                   (screen:screen-set-string scr row x0
+                     (cl:make-string plen :initial-element #\Space) ts))
+            ;; Get line text
+            (cl:let* ((line-text (mine/widget/input::%get-line text line-idx))
+                      (line-len (mine/text/width:string-cell-width-cl line-text))
+                      ;; Use cursor-aware scroll for the cursor's line
+                      (line-scroll (cl:if (cl:= line-idx crow)
+                                          cursor-line-scroll
+                                          (cl:if (cl:> line-len text-w)
+                                                 (cl:max 0 (cl:- line-len text-w))
+                                                 0)))
+                      (text-x (cl:+ x0 plen))
+                      (max-col (cl:+ text-x text-w))
+                      (vcol 0))
+              (cl:loop :for ch :across line-text :do
+                (cl:let* ((span (mine/text/width:char-cell-width-cl ch))
+                          (draw-col (cl:+ text-x (cl:- vcol line-scroll)))
+                          (end-col (cl:+ draw-col span)))
+                  (cl:when (cl:and (cl:plusp span)
+                                   (cl:>= draw-col text-x)
+                                   (cl:<= end-col max-col))
+                    (screen:screen-set-cell scr row draw-col ch ts))
+                  (cl:incf vcol span)
+                  (cl:when (cl:>= vcol (cl:+ line-scroll text-w))
+                    (cl:return))))))))
+      (cl:values)))
+
+  ;;; Key handling
+
+  (declare delete-char-at (String * UFix -> String))
+  (define (delete-char-at s pos)
+    "Remove the character at POS from string S."
+    (str:concat (str:substring s 0 pos)
+                (str:substring s (+ pos 1) (str:length s))))
+
+  (declare insert-char-at (String * UFix * Char -> String))
+  (define (insert-char-at s pos ch)
+    "Insert CH at POS in string S."
+    (str:concat (str:substring s 0 pos)
+                (str:concat (into ch) (str:substring s pos (str:length s)))))
+
+  (declare input-widget-handle-key! (InputWidget * input:Key * input:Modifier -> wt:EventResult))
+  (define (input-widget-handle-key! iw key _modifier)
+    "Handle a key event. Return Consumed if handled, Ignored otherwise."
+    (let text   = (cell:read (.iw-text iw)))
+    (let cursor = (cell:read (.iw-cursor iw)))
+    (let len    = (str:length text))
+    (match key
+      ;; Character input
+      ((input:KeyChar ch)
+       (cell:write! (.iw-text iw) (insert-char-at text cursor ch))
+       (cell:write! (.iw-cursor iw) (+ cursor 1))
+       wt:Consumed)
+      ;; Backspace: delete character before cursor (including newlines)
+      ((input:KeyBackspace)
+       (cond
+         ((> cursor 0)
+          (cell:write! (.iw-text iw) (delete-char-at text (- cursor 1)))
+          (cell:write! (.iw-cursor iw) (- cursor 1))
+          wt:Consumed)
+         (True wt:Ignored)))
+      ;; Delete: delete character at cursor
+      ((input:KeyDelete)
+       (cond
+         ((< cursor len)
+          (cell:write! (.iw-text iw) (delete-char-at text cursor))
+          wt:Consumed)
+         (True wt:Ignored)))
+      ;; Home: move to start of current line
+      ((input:KeyHome)
+       (let row = (%cursor-row text cursor))
+       (cell:write! (.iw-cursor iw) (%line-start text row))
+       wt:Consumed)
+      ;; End: move to end of current line
+      ((input:KeyEnd)
+       (let row = (%cursor-row text cursor))
+       (cell:write! (.iw-cursor iw) (%line-end text row))
+       wt:Consumed)
+      ;; Left arrow: move cursor left (crosses line boundaries)
+      ((input:KeyLeft)
+       (cond
+         ((> cursor 0)
+          (cell:write! (.iw-cursor iw) (- cursor 1))
+          wt:Consumed)
+         (True wt:Ignored)))
+      ;; Right arrow: move cursor right (crosses line boundaries)
+      ((input:KeyRight)
+       (cond
+         ((< cursor len)
+          (cell:write! (.iw-cursor iw) (+ cursor 1))
+          wt:Consumed)
+         (True wt:Ignored)))
+      ;; Up arrow: move to previous line, or Ignored if on first line
+      ((input:KeyUp)
+       (let row = (%cursor-row text cursor))
+       (cond
+         ((> row 0)
+          (let col = (%cursor-col text cursor))
+          (let prev-start = (%line-start text (- row 1)))
+          (let prev-text = (%get-line text (- row 1)))
+          (cell:write! (.iw-cursor iw) (+ prev-start (%char-for-col prev-text col)))
+          wt:Consumed)
+         (True wt:Ignored)))
+      ;; Down arrow: move to next line, or Ignored if on last line
+      ((input:KeyDown)
+       (let row = (%cursor-row text cursor))
+       (let nlines = (+ 1 (%count-newlines text)))
+       (cond
+         ((< (+ row 1) nlines)
+          (let col = (%cursor-col text cursor))
+          (let next-start = (%line-start text (+ row 1)))
+          (let next-text = (%get-line text (+ row 1)))
+          (cell:write! (.iw-cursor iw) (+ next-start (%char-for-col next-text col)))
+          wt:Consumed)
+         (True wt:Ignored)))
+      ;; Anything else: not handled
+      (_ wt:Ignored))))

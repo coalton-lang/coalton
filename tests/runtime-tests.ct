@@ -50,7 +50,29 @@
 
   (define-instance (KeywordMethodRuntime Integer)
     (define (keyword-method-runtime x &key (offset 1))
-      (+ x offset))))
+      (+ x offset)))
+
+  (define-class (Monad :m => RuntimeHasStore :m)
+    (runtime-get-store
+     (Void -> m-env:EnvT Unit :m Unit)))
+
+  (define-instance (Monad :m => RuntimeHasStore :m)
+    (define (runtime-get-store)
+      (pure Unit)))
+
+  (declare runtime-use-store
+    (RuntimeHasStore :m => Void -> m-env:EnvT Unit :m Unit))
+  (define (runtime-use-store)
+    (do
+     (s <- (noinline (runtime-get-store)))
+     (pure s)))
+
+  (declare runtime-run-store (Void -> Unit))
+  (define (runtime-run-store)
+    (m-id:run-identity
+     (m-env:run-envT
+      (runtime-use-store)
+      Unit))))
 
 (coalton-toplevel
   (declare type-of-literal-string String)
@@ -111,6 +133,9 @@
 (define-test test-keyword-instance-method-runtime ()
   (is (== (keyword-method-runtime 10) 11))
   (is (== (keyword-method-runtime 10 :offset 5) 15)))
+
+(define-test test-nullary-typeclass-method-runtime ()
+  (is (== Unit (runtime-run-store))))
 
 (define-test test-type-of-shows-constrained-polymorphic-types ()
   (is (== type-of-literal-string

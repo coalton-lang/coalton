@@ -72,7 +72,7 @@ jobs:
         CL_SOURCE_REGISTRY: "/__w/${{ needs.check-image.outputs.repo_name }}/${{ needs.check-image.outputs.repo_name }}//"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Run SBCL tests
         if: matrix.LISP_IMPL == 'sbcl'
         env:

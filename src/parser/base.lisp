@@ -107,7 +107,9 @@
 
 (defun parse-error (message &rest notes)
   "Signal PARSE-ERROR with provided MESSAGE and source NOTES."
-  (error 'parse-error :message message :notes notes))
+  (let ((condition (make-condition 'parse-error :message message :notes notes)))
+    (source:emit-source-diagnostic condition)
+    (cl:error condition)))
 
 (defun ensure-span (spanning)
   "Is SPANNING is a span, return it unchanged; if it is a cst node, return the node's span."

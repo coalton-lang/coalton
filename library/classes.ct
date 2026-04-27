@@ -20,6 +20,7 @@
    #:Semigroup #:<>
    #:Monoid #:mempty
    #:Functor #:map
+   #:fmap
    #:Applicative #:pure #:liftA2
    #:Monad #:>>=
    #:MonadTransformer #:lift
@@ -217,6 +218,13 @@ The hash function must satisfy the invariant that `(== left right)` implies `(==
   (define-class (Functor :f)
     "Types which can map an inner type where the mapping adheres to the identity and composition laws."
     (map ((:a -> :b) * (:f :a) -> (:f :b))))
+
+  (declare fmap (Functor :f => (:a -> :b) -> (:f :a -> :f :b)))
+  (define (fmap f)
+    "A \"curried\" version of `map`. Lift a function into a Functor, converting `:a -> :b` to `:f :a -> :f :b`.
+
+The name `fmap` comes from Haskell."
+    (fn (fa) (map f fa)))
 
   (define-class (Functor :f => Applicative :f)
     "Types which are a functor which can embed pure expressions and sequence operations."

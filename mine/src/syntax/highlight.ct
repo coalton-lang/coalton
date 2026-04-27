@@ -1,0 +1,157 @@
+(cl:defpackage #:mine/syntax/highlight
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:tok #:mine/syntax/token)
+   (#:color #:mine/term/color))
+  (:export
+   #:token-style))
+
+(in-package #:mine/syntax/highlight)
+
+(coalton-toplevel
+
+  ;;; token-style (tangotango palette)
+
+  (declare token-style (UFix * tok:TokenKind -> color:Style))
+  (define (token-style _mode kind)
+    "Map a token kind to a terminal style. MODE: 0=coalton, 1=lisp, 2=plain."
+    (match kind
+      ;; Whitespace: default
+      ((tok:TokWhitespace) color:default-style)
+
+      ;; Comments: Aluminium 4 (#888a85), italic
+      ((tok:TokComment)
+       (color:Style color:text-dimmer-fg
+                    color:ColorDefault
+                    color:AttrItalic))
+      ((tok:TokBlockComment)
+       (color:Style color:text-dimmer-fg
+                    color:ColorDefault
+                    color:AttrItalic))
+
+      ;; Strings: Plum 1 (#ad7fa8)
+      ((tok:TokString)
+       (color:Style color:plum
+                    color:ColorDefault
+                    color:AttrNone))
+
+      ;; Character literals: Plum 1
+      ((tok:TokChar)
+       (color:Style color:plum
+                    color:ColorDefault
+                    color:AttrNone))
+
+      ;; Numbers: Chameleon 1 (#8ae234)
+      ((tok:TokNumber)
+       (color:Style color:chameleon
+                    color:ColorDefault
+                    color:AttrNone))
+
+      ;; Parens: Aluminium 3 (#babdb6)
+      ((tok:TokOpenParen)
+       (color:Style color:text-dim-fg
+                    color:ColorDefault
+                    color:AttrNone))
+      ((tok:TokCloseParen)
+       (color:Style color:text-dim-fg
+                    color:ColorDefault
+                    color:AttrNone))
+      ((tok:TokOpenBracket)
+       (color:Style color:text-dim-fg
+                    color:ColorDefault
+                    color:AttrNone))
+      ((tok:TokCloseBracket)
+       (color:Style color:text-dim-fg
+                    color:ColorDefault
+                    color:AttrNone))
+
+      ;; Quote-family: Scarlet Red 1 (#ef2929)
+      ((tok:TokQuote)
+       (color:Style color:scarlet-red
+                    color:ColorDefault
+                    color:AttrNone))
+      ((tok:TokBackquote)
+       (color:Style color:scarlet-red
+                    color:ColorDefault
+                    color:AttrNone))
+      ((tok:TokComma)
+       (color:Style color:scarlet-red
+                    color:ColorDefault
+                    color:AttrNone))
+      ((tok:TokCommaAt)
+       (color:Style color:scarlet-red
+                    color:ColorDefault
+                    color:AttrNone))
+      ((tok:TokHashQuote)
+       (color:Style color:scarlet-red
+                    color:ColorDefault
+                    color:AttrNone))
+
+      ;; Sharp sign: default
+      ((tok:TokSharpSign) color:default-style)
+
+      ;; Dot: default
+      ((tok:TokDot) color:default-style)
+
+      ;; Plain symbol: default (Aluminium 1 on editor bg)
+      ((tok:TokSymbol) color:default-style)
+
+      ;; Keyword: Sky Blue 1 (#729fcf)
+      ((tok:TokKeyword)
+       (color:Style color:accent-fg
+                    color:ColorDefault
+                    color:AttrNone))
+
+      ;; Package prefix: Aluminium 4 (#888a85)
+      ((tok:TokPackagePrefix)
+       (color:Style color:text-dimmer-fg
+                    color:ColorDefault
+                    color:AttrNone))
+
+      ;; Package-qualified (fallback): default
+      ((tok:TokPackageQualified) color:default-style)
+
+      ;; Coalton keyword: Sky Blue 1 (#729fcf), bold
+      ((tok:TokCoaltonKeyword)
+       (color:Style color:accent-fg
+                    color:ColorDefault
+                    color:AttrBold))
+
+      ;; Type variable: Chameleon 1 (#8ae234), italic
+      ((tok:TokTypeVariable)
+       (color:Style color:chameleon
+                    color:ColorDefault
+                    color:AttrItalic))
+
+      ;; Constructor: Butter 2 (#edd400), bold
+      ((tok:TokConstructor)
+       (color:Style color:dark-butter
+                    color:ColorDefault
+                    color:AttrBold))
+
+      ;; Accessor (.foo): Plum 1 (#ad7fa8), italic
+      ((tok:TokAccessor)
+       (color:Style color:plum
+                    color:ColorDefault
+                    color:AttrItalic))
+
+      ;; Dynamic variable (*foo*): tomato (#ff6347), bold
+      ((tok:TokDynamic)
+       (color:Style color:tomato
+                    color:ColorDefault
+                    color:AttrBold))
+
+      ;; Arrow: Butter 2 (#edd400)
+      ((tok:TokArrow)
+       (color:Style color:dark-butter
+                    color:ColorDefault
+                    color:AttrNone))
+
+      ;; Operator: Sky Blue 1 (#729fcf), bold
+      ((tok:TokOperator)
+       (color:Style color:accent-fg
+                    color:ColorDefault
+                    color:AttrBold))
+
+      ;; Unknown: default
+      ((tok:TokUnknown) color:default-style))))

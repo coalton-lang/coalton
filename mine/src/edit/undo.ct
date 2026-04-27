@@ -1,0 +1,163 @@
+(cl:defpackage #:mine/edit/undo
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:cell #:coalton/cell))
+  (:export
+   #:EditOp #:OpInsert #:OpDelete
+   #:UndoEntry #:UndoEntry
+   #:UndoTree
+   #:undo-tree-new
+   #:undo-begin-group!
+   #:undo-end-group!
+   #:with-undo-group!
+   #:undo-record!
+   #:undo-undo!
+   #:undo-redo!))
+
+(in-package #:mine/edit/undo)
+
+(coalton-toplevel
+
+  ;;; EditOp
+
+  (define-type EditOp
+    "A single atomic edit operation."
+    (OpInsert UFix String)
+    (OpDelete UFix String))
+
+  ;;; UndoEntry
+
+  (define-struct UndoEntry
+    "A group of edit operations that form a single undo step."
+    (ops (List EditOp))
+    (cursor-before UFix)
+    (cursor-after UFix))
+
+  ;;; UndoTree
+
+  (define-struct UndoTree
+    "Undo/redo stacks with optional operation grouping."
+    (undo-stack (cell:Cell (List UndoEntry)))
+    (redo-stack (cell:Cell (List UndoEntry)))
+    (current-group (cell:Cell (Optional (List EditOp))))
+    (group-cursor-start (cell:Cell UFix))
+    (group-depth (cell:Cell UFix)))
+
+  ;;; Constructor
+
+  (declare undo-tree-new (Void -> UndoTree))
+  (define (undo-tree-new)
+    "Create a new empty undo tree."
+    (UndoTree (cell:new Nil)
+              (cell:new Nil)
+              (cell:new None)
+              (cell:new 0)
+              (cell:new 0)))
+
+  ;;; Internal helpers
+
+  (declare reverse-op (EditOp -> EditOp))
+  (define (reverse-op op)
+    "Reverse an edit operation: inserts become deletes and vice versa."
+    (match op
+      ((OpInsert pos text) (OpDelete pos text))
+      ((OpDelete pos text) (OpInsert pos text))))
+
+  (declare reverse-entry (UndoEntry -> UndoEntry))
+  (define (reverse-entry entry)
+    "Reverse an undo entry: reverse each op and swap cursor positions."
+    (UndoEntry (map reverse-op (reverse (.ops entry)))
+               (.cursor-after entry)
+               (.cursor-before entry)))
+
+  ;;; Recording
+
+  (declare undo-begin-group! (UndoTree * UFix -> Void))
+  (define (undo-begin-group! tree cursor-start)
+    "Begin recording a grouped undo step starting at CURSOR-START."
+    (let depth = (cell:read (.group-depth tree)))
+    (when (== depth 0)
+      (cell:write! (.current-group tree) (Some Nil))
+      (cell:write! (.group-cursor-start tree) cursor-start))
+    (cell:write! (.group-depth tree) (+ depth 1))
+    (values))
+
+  (declare undo-end-group! (UndoTree * UFix -> Void))
+  (define (undo-end-group! tree cursor-end)
+    "Finish the current grouped undo step at CURSOR-END."
+    (let depth = (cell:read (.group-depth tree)))
+    (cond
+      ((== depth 0) (values))
+      ((== depth 1)
+       (match (cell:read (.current-group tree))
+         ((Some ops)
+          (match ops
+            ((Nil) (values))
+            (_
+             (let entry = (UndoEntry ops
+                                     (cell:read (.group-cursor-start tree))
+                                     cursor-end))
+             (cell:push! (.undo-stack tree) entry)
+             (values))))
+         ((None) (values)))
+       (cell:write! (.current-group tree) None)
+       (cell:write! (.group-depth tree) 0)
+       (values))
+      (True
+       (cell:write! (.group-depth tree) (- depth 1))
+       (values))))
+
+  (inline)
+  (declare with-undo-group! (UndoTree * (Void -> UFix) * (Void -> Void) -> Void))
+  (define (with-undo-group! tree get-cursor action)
+    "Run ACTION so all recorded edits become a single undo step."
+    (undo-begin-group! tree (get-cursor))
+    (action)
+    (undo-end-group! tree (get-cursor))
+    (values))
+
+  (declare undo-record! (UndoTree * EditOp * UFix * UFix -> Void))
+  (define (undo-record! tree op cbefore cafter)
+    "Record a single edit operation. Clears the redo stack.
+If grouping is active, appends to the current group.
+Otherwise, creates a single-op undo entry."
+    ;; Clear redo stack on new edits
+    (cell:write! (.redo-stack tree) Nil)
+    (match (cell:read (.current-group tree))
+      ;; Grouping active: append op to current group
+      ((Some ops-so-far)
+       (cell:write! (.current-group tree) (Some (Cons op ops-so-far)))
+       (values))
+      ;; No grouping: push a single-op entry onto the undo stack
+      ((None)
+       (let entry = (UndoEntry (Cons op Nil) cbefore cafter))
+       (cell:push! (.undo-stack tree) entry)
+       (values))))
+
+  ;;; Undo / Redo
+
+  (declare undo-undo! (UndoTree -> (Optional UndoEntry)))
+  (define (undo-undo! tree)
+    "Pop the top undo entry, push its reverse onto redo, and return it.
+The caller is responsible for applying the reversed operations to the buffer."
+    (match (cell:pop! (.undo-stack tree))
+      ((None) None)
+      ((Some entry)
+       (let rev = (reverse-entry entry))
+       (cell:push! (.redo-stack tree) rev)
+       (Some entry))))
+
+  (declare undo-redo! (UndoTree -> (Optional UndoEntry)))
+  (define (undo-redo! tree)
+    "Pop the top redo entry, push its reverse onto undo, and return it.
+The caller is responsible for applying the returned entry's operations
+to the buffer (interpreted as the inverse of an original edit, exactly
+like `undo-undo!`)."
+    (match (cell:pop! (.redo-stack tree))
+      ((None) None)
+      ((Some entry)
+       (let rev = (reverse-entry entry))
+       (cell:push! (.undo-stack tree) rev)
+       (Some entry))))
+
+)

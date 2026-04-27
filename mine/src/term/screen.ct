@@ -1,0 +1,345 @@
+(cl:defpackage #:mine/term/screen
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:color #:mine/term/color)
+   (#:esc #:mine/term/escape)
+   (#:cellw #:mine/text/width)
+   (#:vec #:coalton/vector)
+   (#:cell #:coalton/cell))
+  (:export
+   #:ScreenCell
+   #:Screen
+   #:screen-new #:screen-resize
+   #:screen-set-cell #:screen-set-string
+   #:screen-flush #:screen-clear
+   #:.screen-width #:.screen-height
+   #:screen-set-cursor
+   #:screen-hide-cursor
+   #:screen-invalidate-all!))
+
+(in-package #:mine/term/screen)
+
+(coalton-toplevel
+
+  ;;; ScreenCell
+
+  (define-struct ScreenCell
+    "A single cell in the terminal screen buffer."
+    (screen-cell-ch Char)
+    (screen-cell-style color:Style)
+    (screen-cell-span UFix))
+
+  ;;; Screen
+
+  (define-struct Screen
+    "Double-buffered terminal screen."
+    (screen-width (cell:Cell UFix))
+    (screen-height (cell:Cell UFix))
+    (screen-front (cell:Cell (vec:Vector ScreenCell)))
+    (screen-back (cell:Cell (vec:Vector ScreenCell)))
+    (screen-cursor-row (cell:Cell UFix))
+    (screen-cursor-col (cell:Cell UFix))
+    (screen-cursor-visible (cell:Cell Boolean)))
+
+  ;;; Helpers
+
+  (declare default-cell (Void -> ScreenCell))
+  (define (default-cell)
+    "A blank screen cell with default style."
+    (ScreenCell #\Space color:default-style 1))
+
+  (declare make-buffer (UFix -> (vec:Vector ScreenCell)))
+  (define (make-buffer size)
+    "Allocate a buffer of blank cells."
+    (vec:with-initial-element size (default-cell)))
+
+  (declare make-dirty-buffer (UFix -> (vec:Vector ScreenCell)))
+  (define (make-dirty-buffer size)
+    "Allocate a buffer of sentinel cells that won't match any real content.
+Used for the front buffer after resize to force a full re-render."
+    (let nul = (lisp (-> Char) () (cl:code-char 0)))
+    (vec:with-initial-element size (ScreenCell nul color:default-style 1)))
+
+  ;;; Constructor
+
+  (declare screen-new (UFix * UFix -> Screen))
+  (define (screen-new w h)
+    "Create a new screen with the given width and height.
+Uses a dirty front buffer so the first flush paints every cell."
+    (let size = (* w h))
+    (Screen (cell:new w)
+            (cell:new h)
+            (cell:new (make-dirty-buffer size))
+            (cell:new (make-buffer size))
+            (cell:new 0)
+            (cell:new 0)
+            (cell:new True)))
+
+  ;;; Accessors
+
+  (declare screen-w (Screen -> UFix))
+  (define (screen-w scr)
+    (cell:read (.screen-width scr)))
+
+  (declare screen-h (Screen -> UFix))
+  (define (screen-h scr)
+    (cell:read (.screen-height scr)))
+
+  ;;; Resize
+
+  (declare screen-resize (Screen * UFix * UFix -> Void))
+  (define (screen-resize scr w h)
+    "Resize the screen, reallocating both buffers.
+Uses a dirty front buffer to force the next flush to re-emit every cell."
+    (let size = (* w h))
+    (cell:write! (.screen-width scr) w)
+    (cell:write! (.screen-height scr) h)
+    (cell:write! (.screen-front scr) (make-dirty-buffer size))
+    (cell:write! (.screen-back scr) (make-buffer size))
+    (values))
+
+  ;;; Cell access
+
+  (declare screen-set-cell (Screen * UFix * UFix * Char * color:Style -> Void))
+  (define (screen-set-cell scr row col ch style)
+    "Set a cell in the back buffer at (row, col). Handles wide characters."
+    (let w = (screen-w scr))
+    (let h = (screen-h scr))
+    (when (and (< row h) (< col w))
+      (let span = (cellw:char-cell-width ch))
+      (when (and (> span 0) (<= (+ col span) w))
+        (let idx = (+ (* row w) col))
+        (let buf = (cell:read (.screen-back scr)))
+        (vec:set! idx (ScreenCell ch style span) buf)
+        (when (== span 2)
+          (vec:set! (+ idx 1) (ScreenCell #\Space style 0) buf))))
+    (values))
+
+  (declare screen-set-string (Screen * UFix * UFix * String * color:Style -> Void))
+  (define (screen-set-string scr row col text style)
+    "Write a string to the back buffer starting at (row, col)."
+    (let h = (screen-h scr))
+    (when (< row h)
+      (lisp (-> Void) (scr row col text style)
+        (cl:let ((cursor col)
+                 (text-len (cl:length text)))
+          (cl:dotimes (i text-len)
+            (cl:let* ((ch (cl:char text i))
+                      (span (mine/text/width:char-cell-width-cl ch)))
+              (cl:cond
+                ((cl:zerop span))
+                ((cl:<= (cl:+ cursor span) (screen-w scr))
+                 (screen-set-cell scr row cursor ch style)
+                 (cl:incf cursor span))
+                (cl:t
+                 (cl:return))))))
+        (cl:values)))
+    (values))
+
+  ;;; Clear
+
+  (declare screen-clear (Screen -> Void))
+  (define (screen-clear scr)
+    "Fill the back buffer with blank cells."
+    (let buf = (cell:read (.screen-back scr)))
+    (let size = (* (screen-w scr) (screen-h scr)))
+    (let dc = (default-cell))
+    (lisp (-> Void) (buf size dc)
+      (cl:dotimes (i size)
+        (cl:setf (cl:aref buf i) dc))
+      (cl:values)))
+
+  ;;; Cursor
+
+  (declare screen-set-cursor (Screen * UFix * UFix -> Void))
+  (define (screen-set-cursor scr row col)
+    "Set the cursor position and make it visible."
+    (cell:write! (.screen-cursor-visible scr) True)
+    (cell:write! (.screen-cursor-row scr) row)
+    (cell:write! (.screen-cursor-col scr) col)
+    (values))
+
+  (declare screen-hide-cursor (Screen -> Void))
+  (define (screen-hide-cursor scr)
+    "Hide the hardware cursor."
+    (cell:write! (.screen-cursor-visible scr) False)
+    (values))
+
+  ;;; Style hashing (for fast comparison in the CL flush helper)
+
+  (declare %color-key (color:Color -> UFix))
+  (define (%color-key c)
+    "Convert a Color to a unique integer for comparison."
+    (match c
+      ((color:ColorDefault) 0)
+      ((color:Color16 n) (+ #x4000000 n))
+      ((color:Color256 n) (+ #x8000000 n))
+      ((color:ColorRGB r g b)
+       (+ #xC000000 (+ (* 65536 r) (+ (* 256 g) b))))))
+
+  (declare %style-key (color:Style -> UFix))
+  (define (%style-key s)
+    "Convert a Style to a unique integer for fast equality comparison."
+    (let fg-k = (%color-key (color:.style-fg s)))
+    (let bg-k = (%color-key (color:.style-bg s)))
+    (let attr-k = (match (color:.style-attr s)
+                    ((color:AttrNone)      0)
+                    ((color:AttrBold)      1)
+                    ((color:AttrDim)       2)
+                    ((color:AttrItalic)    3)
+                    ((color:AttrUnderline) 4)
+                    ((color:AttrReverse)   5)))
+    ;; Pack into a single fixnum: fg(28 bits) | bg(28 bits) | attr(4 bits)
+    (lisp (-> UFix) (fg-k bg-k attr-k)
+      (cl:logior fg-k (cl:ash bg-k 28) (cl:ash attr-k 56))))
+
+  (declare %style-sgr (color:Style -> String))
+  (define (%style-sgr s)
+    "Convert a Style to its ANSI SGR escape string."
+    (esc:style-to-sgr s))
+
+  ;;; Invalidate
+
+  (declare screen-invalidate-all! (Screen -> Void))
+  (define (screen-invalidate-all! scr)
+    "Mark all front-buffer cells dirty to force full re-emission on next flush."
+    (let front = (cell:read (.screen-front scr)))
+    (let size = (* (screen-w scr) (screen-h scr)))
+    (let nul = (lisp (-> Char) () (cl:code-char 0)))
+    (let dirty = (ScreenCell nul color:default-style 1))
+    (lisp (-> Void) (front size dirty)
+      (cl:dotimes (i size)
+        (cl:setf (cl:aref front i) dirty))
+      (cl:values)))
+
+  ;;; Flush — emit ANSI escape sequences via terminal-write-string
+
+  (declare screen-flush (Screen -> String))
+  (define (screen-flush scr)
+    "Flush the back buffer to the terminal via ANSI escape sequences.
+Diffs front vs back buffer to minimize output.  Returns an empty
+string (return type kept for API compatibility)."
+    (let w = (screen-w scr))
+    (let h = (screen-h scr))
+    (let size = (* w h))
+    (let back = (cell:read (.screen-back scr)))
+    (let front = (cell:read (.screen-front scr)))
+    (let crow = (cell:read (.screen-cursor-row scr)))
+    (let ccol = (cell:read (.screen-cursor-col scr)))
+    (let cvis = (cell:read (.screen-cursor-visible scr)))
+    (lisp (-> String) (w h size back front crow ccol cvis)
+      (%flush-to-terminal w h size back front crow ccol cvis)
+      "")))
+
+;;; -----------------------------------------------------------------------
+;;; CL helper for screen-flush.
+;;;
+;;; Builds a single output string with ANSI sequences, then writes it
+;;; in one call.  This is done in CL (not Coalton) for efficient string
+;;; building.
+;;;
+;;; Style comparison uses %style-key (Coalton→UFix) to avoid assumptions
+;;; about Coalton ADT internals.  SGR generation uses %style-sgr which
+;;; delegates to escape.ct.
+;;; -----------------------------------------------------------------------
+
+(cl:in-package #:mine/term/screen)
+
+(cl:defun %flush-to-terminal (w _h size back front crow ccol cvis)
+  "Diff back vs front buffer and emit ANSI escape sequences.
+Uses synchronized output (DEC mode 2026) for flicker-free rendering."
+  (cl:declare (cl:type cl:fixnum w _h size crow ccol)
+              (cl:type cl:vector back front)
+              (cl:ignore _h))
+  (cl:let ((out (cl:make-array 4096 :element-type 'cl:character
+                                    :fill-pointer 0 :adjustable cl:t))
+           (last-style-key -1)
+           (last-row -1)
+           (last-col -1))
+    ;; Begin synchronized update
+    (%write-csi out "?2026h")
+    ;; Hide cursor during update
+    (%write-csi out "?25l")
+    ;; Diff back vs front, emitting only changed cells
+    (cl:dotimes (i size)
+      (cl:let* ((bc (cl:aref back i))
+                (b-ch (screencell/screencell-_0 bc))
+                (b-style (screencell/screencell-_1 bc))
+                (b-span (screencell/screencell-_2 bc))
+                (b-key (%style-key b-style)))
+        ;; Skip unchanged cells
+        (cl:unless (cl:and (cl:char= b-ch (screencell/screencell-_0 (cl:aref front i)))
+                           (cl:= b-key (%style-key (screencell/screencell-_1 (cl:aref front i))))
+                           (cl:= b-span (screencell/screencell-_2 (cl:aref front i))))
+          ;; Skip continuation cells (span=0)
+          (cl:unless (cl:zerop b-span)
+            (cl:let ((row (cl:floor i w))
+                     (col (cl:mod i w)))
+              (cl:unless (cl:and (cl:= row last-row)
+                                 (cl:= col last-col))
+                (%write-cursor-to out (cl:1+ row) (cl:1+ col)))
+              (cl:unless (cl:= b-key last-style-key)
+                (%append-string out (%style-sgr b-style))
+                (cl:setf last-style-key b-key))
+              (cl:vector-push-extend
+               (cl:if (cl:< (cl:char-code b-ch) 32) #\Space b-ch)
+               out)
+              (cl:setf last-row row
+                       last-col (cl:+ col b-span))
+              (cl:when (cl:= last-col w)
+                (%write-csi out "0m")
+                (cl:setf last-style-key -1)))))))
+    ;; Reset SGR
+    (%write-csi out "0m")
+    ;; Position and show/hide cursor
+    (cl:cond
+      ((cl:eq cvis True)
+       (%write-cursor-to out (cl:1+ crow) (cl:1+ ccol))
+       (%write-csi out "?25h"))
+      (cl:t
+       (%write-csi out "?25l")))
+    ;; End synchronized update
+    (%write-csi out "?2026l")
+    ;; Write all at once and flush
+    (mine/bindings/terminal:terminal-write-string out)
+    (mine/bindings/terminal:terminal-flush)
+    ;; Copy back → front
+    (cl:dotimes (i size)
+      (cl:setf (cl:aref front i) (cl:aref back i)))))
+
+;;; String-building helpers
+
+(cl:defun %write-csi (out suffix)
+  "Append ESC[ followed by SUFFIX to OUT."
+  (cl:vector-push-extend (cl:code-char 27) out)
+  (cl:vector-push-extend #\[ out)
+  (cl:loop :for c :across suffix
+           :do (cl:vector-push-extend c out)))
+
+(cl:defun %write-cursor-to (out row col)
+  "Append CSI row;col H to OUT (1-based coordinates)."
+  (cl:vector-push-extend (cl:code-char 27) out)
+  (cl:vector-push-extend #\[ out)
+  (%write-fixnum out row)
+  (cl:vector-push-extend #\; out)
+  (%write-fixnum out col)
+  (cl:vector-push-extend #\H out))
+
+(cl:defun %write-fixnum (out n)
+  "Append the decimal representation of non-negative fixnum N to OUT."
+  (cl:declare (cl:type cl:fixnum n))
+  (cl:cond
+    ((cl:< n 10)
+     (cl:vector-push-extend (cl:code-char (cl:+ 48 n)) out))
+    ((cl:< n 100)
+     (cl:vector-push-extend (cl:code-char (cl:+ 48 (cl:floor n 10))) out)
+     (cl:vector-push-extend (cl:code-char (cl:+ 48 (cl:mod n 10))) out))
+    (cl:t
+     (cl:let ((s (cl:write-to-string n :base 10)))
+       (cl:loop :for c :across s
+                :do (cl:vector-push-extend c out))))))
+
+(cl:defun %append-string (out s)
+  "Append all characters from string S to adjustable string OUT."
+  (cl:loop :for c :across s
+           :do (cl:vector-push-extend c out)))

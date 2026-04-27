@@ -1,0 +1,20 @@
+(cl:defpackage #:mine/config/keys
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:input #:mine/term/input))
+  (:export
+   #:KeyBinding #:KeyBinding
+   #:.keybinding-key #:.keybinding-command))
+
+(in-package #:mine/config/keys)
+
+(coalton-toplevel
+
+  ;;; KeyBinding
+
+  (define-struct KeyBinding
+    "A key-to-command binding."
+    (keybinding-key     input:Key)
+    (keybinding-command String))
+
+)
