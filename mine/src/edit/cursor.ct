@@ -1,0 +1,273 @@
+(cl:defpackage #:mine/edit/cursor
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:gap #:mine/buffer/gap)
+   (#:cell #:coalton/cell))
+  (:export
+   #:CursorState
+   #:cursor-new
+   #:cursor-position #:cursor-line-col
+   #:cursor-move-left! #:cursor-move-right!
+   #:cursor-move-word-left! #:cursor-move-word-right!
+   #:cursor-move-up! #:cursor-move-down!
+   #:cursor-move-to-line-start!
+   #:cursor-move-to-line-end!
+   #:cursor-move-to-position!
+   #:cursor-move-page-up!
+   #:cursor-move-page-down!
+   #:cursor-selection-anchor
+   #:cursor-start-selection!
+   #:cursor-clear-selection!
+   #:.pos
+   #:.target-col))
+
+(in-package #:mine/edit/cursor)
+
+(coalton-toplevel
+
+  ;;; CursorState
+
+  (define-struct CursorState
+    "Cursor position and selection state within a buffer."
+    (pos (cell:Cell UFix))
+    (target-col (cell:Cell UFix))
+    (selection (cell:Cell (Optional UFix))))
+
+  ;;; Constructor and accessors
+
+  (declare cursor-new (Void -> CursorState))
+  (define (cursor-new)
+    "Create a new cursor at position 0 with no selection."
+    (CursorState (cell:new 0)
+                 (cell:new 0)
+                 (cell:new None)))
+
+  (declare cursor-position (CursorState -> UFix))
+  (define (cursor-position cs)
+    "Read the absolute buffer position of the cursor."
+    (cell:read (.pos cs)))
+
+  (declare cursor-line-col (CursorState * gap:GapBuffer -> (Tuple UFix UFix)))
+  (define (cursor-line-col cs gb)
+    "Return the (line, column) of the cursor in the given gap buffer."
+    (gap:gap-pos-to-line-col gb (cursor-position cs)))
+
+  ;;; Internal helpers
+
+  (declare set-pos! (CursorState * UFix -> Void))
+  (define (set-pos! cs p)
+    "Set the cursor position."
+    (cell:write! (.pos cs) p)
+    (values))
+
+  (declare set-target-col! (CursorState * UFix -> Void))
+  (define (set-target-col! cs c)
+    "Set the sticky target column."
+    (cell:write! (.target-col cs) c)
+    (values))
+
+  (declare update-target-col-from-pos! (CursorState * gap:GapBuffer -> Void))
+  (define (update-target-col-from-pos! cs gb)
+    "Update target-col to match the current visual column (tab-aware)."
+    (match (gap:gap-pos-to-line-col gb (cursor-position cs))
+      ((Tuple line col)
+       (let text = (gap:gap-line-text gb line))
+       (let tab-w = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
+       (set-target-col! cs (gap:visual-col text col tab-w)))))
+
+  (declare string-length (String -> UFix))
+  (define (string-length s)
+    "Return the length of a string."
+    (lisp (-> UFix) (s)
+      (cl:length s)))
+
+  (declare word-char? (Char -> Boolean))
+  (define (word-char? ch)
+    "True if CH should be treated as part of a word/token for editor motion."
+    (lisp (-> Boolean) (ch)
+      (cl:if (cl:member ch '(#\Space #\Tab #\Newline #\Return
+                             #\( #\) #\[ #\]
+                             #\; #\" #\' #\` #\,)
+                        :test #'cl:char=)
+             False
+             True)))
+
+  (declare %word-char-at? (gap:GapBuffer * UFix -> Boolean))
+  (define (%word-char-at? gb pos)
+    (match (gap:gap-char-at gb pos)
+      ((Some ch) (word-char? ch))
+      ((None) False)))
+
+  (declare %skip-non-word-left (gap:GapBuffer * UFix -> UFix))
+  (define (%skip-non-word-left gb pos)
+    (if (and (> pos 0) (not (%word-char-at? gb (- pos 1))))
+        (%skip-non-word-left gb (- pos 1))
+        pos))
+
+  (declare %skip-word-left (gap:GapBuffer * UFix -> UFix))
+  (define (%skip-word-left gb pos)
+    (if (and (> pos 0) (%word-char-at? gb (- pos 1)))
+        (%skip-word-left gb (- pos 1))
+        pos))
+
+  (declare %skip-non-word-right (gap:GapBuffer * UFix * UFix -> UFix))
+  (define (%skip-non-word-right gb pos len)
+    (if (and (< pos len) (not (%word-char-at? gb pos)))
+        (%skip-non-word-right gb (+ pos 1) len)
+        pos))
+
+  (declare %skip-word-right (gap:GapBuffer * UFix * UFix -> UFix))
+  (define (%skip-word-right gb pos len)
+    (if (and (< pos len) (%word-char-at? gb pos))
+        (%skip-word-right gb (+ pos 1) len)
+        pos))
+
+  ;;; Horizontal movement
+
+  (declare cursor-move-left! (gap:GapBuffer * CursorState -> Void))
+  (define (cursor-move-left! gb cs)
+    "Move cursor one character to the left. Skips over tabs as a single unit."
+    (let p = (cursor-position cs))
+    (when (> p 0)
+      (let new-p = (- p 1))
+      ;; If we landed on a tab, the cursor is already past it (before it),
+      ;; so just move to that position — the tab is one buffer char.
+      (set-pos! cs new-p))
+    (update-target-col-from-pos! cs gb))
+
+  (declare cursor-move-right! (gap:GapBuffer * CursorState -> Void))
+  (define (cursor-move-right! gb cs)
+    "Move cursor one character to the right. Skips over tabs as a single unit."
+    (let p = (cursor-position cs))
+    (let len = (gap:gap-length gb))
+    (when (< p len)
+      (set-pos! cs (+ p 1)))
+    (update-target-col-from-pos! cs gb))
+
+  (declare cursor-move-word-left! (gap:GapBuffer * CursorState -> Void))
+  (define (cursor-move-word-left! gb cs)
+    "Move cursor left to the previous word boundary."
+    (let p = (cursor-position cs))
+    (let new-p = (%skip-word-left gb (%skip-non-word-left gb p)))
+    (set-pos! cs new-p)
+    (update-target-col-from-pos! cs gb))
+
+  (declare cursor-move-word-right! (gap:GapBuffer * CursorState -> Void))
+  (define (cursor-move-word-right! gb cs)
+    "Move cursor right to the next word boundary."
+    (let p = (cursor-position cs))
+    (let len = (gap:gap-length gb))
+    (let new-p = (%skip-word-right gb (%skip-non-word-right gb p len) len))
+    (set-pos! cs new-p)
+    (update-target-col-from-pos! cs gb))
+
+  ;;; Vertical movement
+
+  (declare cursor-move-up! (gap:GapBuffer * CursorState -> Void))
+  (define (cursor-move-up! gb cs)
+    "Move cursor up one line, preserving the visual target column."
+    (match (gap:gap-pos-to-line-col gb (cursor-position cs))
+      ((Tuple line _col)
+       (when (> line 0)
+         (let prev-line = (- line 1))
+         (let prev-start = (gap:gap-line-to-pos gb prev-line))
+         (let prev-text = (gap:gap-line-text gb prev-line))
+         (let tab-w = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
+         (let tc = (cell:read (.target-col cs)))
+         (let new-col = (gap:char-for-vcol prev-text tc tab-w))
+         (set-pos! cs (+ prev-start new-col))))))
+
+  (declare cursor-move-down! (gap:GapBuffer * CursorState -> Void))
+  (define (cursor-move-down! gb cs)
+    "Move cursor down one line, preserving the visual target column."
+    (match (gap:gap-pos-to-line-col gb (cursor-position cs))
+      ((Tuple line _col)
+       (let total-lines = (gap:gap-line-count gb))
+       (when (< (+ line 1) total-lines)
+         (let next-line = (+ line 1))
+         (let next-start = (gap:gap-line-to-pos gb next-line))
+         (let next-text = (gap:gap-line-text gb next-line))
+         (let tab-w = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
+         (let tc = (cell:read (.target-col cs)))
+         (let new-col = (gap:char-for-vcol next-text tc tab-w))
+         (set-pos! cs (+ next-start new-col))))))
+
+  ;;; Line-boundary movement
+
+  (declare cursor-move-to-line-start! (gap:GapBuffer * CursorState -> Void))
+  (define (cursor-move-to-line-start! gb cs)
+    "Move cursor to the start of the current line."
+    (match (gap:gap-pos-to-line-col gb (cursor-position cs))
+      ((Tuple line _col)
+       (set-pos! cs (gap:gap-line-to-pos gb line))
+       (update-target-col-from-pos! cs gb))))
+
+  (declare cursor-move-to-line-end! (gap:GapBuffer * CursorState -> Void))
+  (define (cursor-move-to-line-end! gb cs)
+    "Move cursor to the end of the current line (before newline)."
+    (match (gap:gap-pos-to-line-col gb (cursor-position cs))
+      ((Tuple line _col)
+       (let line-start = (gap:gap-line-to-pos gb line))
+       (let line-text = (gap:gap-line-text gb line))
+       (let line-len = (string-length line-text))
+       (set-pos! cs (+ line-start line-len))
+       (update-target-col-from-pos! cs gb))))
+
+  ;;; Direct positioning
+
+  (declare cursor-move-to-position! (CursorState * UFix -> Void))
+  (define (cursor-move-to-position! cs new-pos)
+    "Set cursor to an absolute position and reset target column.
+Note: caller should clamp new-pos to buffer length."
+    (set-pos! cs new-pos)
+    ;; Cannot update target-col without a gap buffer, so set to 0.
+    ;; Callers who have the gap buffer should follow with update-target-col.
+    (set-target-col! cs 0))
+
+  ;;; Page movement
+
+  (declare cursor-move-page-up! (gap:GapBuffer * CursorState * UFix -> Void))
+  (define (cursor-move-page-up! gb cs height)
+    "Move cursor up by `height` lines."
+    (match (gap:gap-pos-to-line-col gb (cursor-position cs))
+      ((Tuple line _col)
+       (let target-line = (if (>= line height) (- line height) 0))
+       (let target-start = (gap:gap-line-to-pos gb target-line))
+       (let target-text = (gap:gap-line-text gb target-line))
+       (let target-len = (string-length target-text))
+       (let tc = (cell:read (.target-col cs)))
+       (let new-col = (min tc target-len))
+       (set-pos! cs (+ target-start new-col)))))
+
+  (declare cursor-move-page-down! (gap:GapBuffer * CursorState * UFix -> Void))
+  (define (cursor-move-page-down! gb cs height)
+    "Move cursor down by `height` lines."
+    (match (gap:gap-pos-to-line-col gb (cursor-position cs))
+      ((Tuple line _col)
+       (let total-lines = (gap:gap-line-count gb))
+       (let target-line = (min (+ line height) (- total-lines 1)))
+       (let target-start = (gap:gap-line-to-pos gb target-line))
+       (let target-text = (gap:gap-line-text gb target-line))
+       (let target-len = (string-length target-text))
+       (let tc = (cell:read (.target-col cs)))
+       (let new-col = (min tc target-len))
+       (set-pos! cs (+ target-start new-col)))))
+
+  ;;; Selection
+
+  (declare cursor-selection-anchor (CursorState -> (Optional UFix)))
+  (define (cursor-selection-anchor cs)
+    "Return the selection anchor position, or None if no selection."
+    (cell:read (.selection cs)))
+
+  (declare cursor-start-selection! (CursorState -> Void))
+  (define (cursor-start-selection! cs)
+    "Begin a selection at the current cursor position."
+    (cell:write! (.selection cs) (Some (cursor-position cs)))
+    (values))
+
+  (declare cursor-clear-selection! (CursorState -> Void))
+  (define (cursor-clear-selection! cs)
+    "Clear any active selection."
+    (cell:write! (.selection cs) None)
+    (values)))

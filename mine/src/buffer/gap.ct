@@ -1,0 +1,429 @@
+(cl:defpackage #:mine/buffer/gap
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:vec #:coalton/vector)
+   (#:cell #:coalton/cell)
+   (#:str #:coalton/string)
+   (#:char #:coalton/char)
+   (#:cellw #:mine/text/width))
+  (:export
+   #:GapBuffer
+   #:gap-new #:gap-from-string
+   #:gap-length #:gap-char-at
+   #:gap-insert-char! #:gap-insert-string!
+   #:gap-delete-range! #:gap-delete-char!
+   #:gap-to-string #:gap-substring
+   #:gap-line-count
+   #:gap-line-to-pos #:gap-pos-to-line-col
+   #:gap-line-text
+   #:visual-col #:char-for-vcol))
+
+(in-package #:mine/buffer/gap)
+
+(cl:defvar *tab-width* 4
+  "Tab stop width for visual column calculations.")
+
+(coalton-toplevel
+
+  ;;; GapBuffer
+
+  (define-struct GapBuffer
+    "A gap-buffer storing characters for efficient editing.
+
+Logical positions ignore the gap. Physical positions account for it:
+if pos < gap-start then physical = pos, otherwise physical =
+pos + (gap-end - gap-start)."
+    (data        (Cell (vec:Vector Char)))
+    (gap-start   (Cell UFix))
+    (gap-end     (Cell UFix))
+    (len         (Cell UFix))
+    (line-starts (Cell (vec:Vector UFix))))
+
+  ;;; Internal: coordinate conversion
+
+  (declare logical-to-physical (GapBuffer * UFix -> UFix))
+  (define (logical-to-physical gb pos)
+    "Convert a logical position to a physical index in the backing array."
+    (let gs = (cell:read (.gap-start gb)))
+    (if (< pos gs)
+        pos
+        (+ pos (- (cell:read (.gap-end gb)) gs))))
+
+  ;;; Internal: gap movement and growth
+
+  (declare gap-move-to! (GapBuffer * UFix -> Void))
+  (define (gap-move-to! gb pos)
+    "Shift the gap so that it starts at logical position POS."
+    (let gs = (cell:read (.gap-start gb)))
+    (let ge = (cell:read (.gap-end gb)))
+    (let v  = (cell:read (.data gb)))
+    (let gap-size = (- ge gs))
+    (cond
+      ((== pos gs) (values))
+      ((< pos gs)
+       ;; Move chars [pos..gs) to [pos+gap-size..gs+gap-size)
+       ;; i.e. shift them rightward into the gap.
+       (lisp (-> Void) (v pos gs gap-size)
+         (cl:loop :for i :from (cl:1- gs) :downto pos
+                  :do (cl:setf (cl:aref v (cl:+ i gap-size))
+                               (cl:aref v i)))
+         (cl:values))
+       (cell:write! (.gap-start gb) pos)
+       (cell:write! (.gap-end gb) (+ pos gap-size))
+       (values))
+      (True
+       ;; pos > gs: move chars [ge..ge+(pos-gs)) leftward into the gap.
+       (let count = (- pos gs))
+       (lisp (-> Void) (v gs ge count)
+         (cl:loop :for i :from 0 :below count
+                  :do (cl:setf (cl:aref v (cl:+ gs i))
+                               (cl:aref v (cl:+ ge i))))
+         (cl:values))
+       (cell:write! (.gap-start gb) pos)
+       (cell:write! (.gap-end gb) (+ pos gap-size))
+       (values))))
+
+  (declare gap-grow! (GapBuffer * UFix -> Void))
+  (define (gap-grow! gb needed)
+    "Ensure the gap has room for at least NEEDED characters, growing if necessary."
+    (let gs = (cell:read (.gap-start gb)))
+    (let ge = (cell:read (.gap-end gb)))
+    (let current-gap = (- ge gs))
+    (cond
+      ((< current-gap needed)
+       (let v = (cell:read (.data gb)))
+       (let old-cap = (vec:length v))
+       (let new-cap = (max (* old-cap 2) (+ old-cap needed)))
+       (let added = (- new-cap old-cap))
+       ;; Create a new vector and copy data around the enlarged gap.
+       (let new-v = (vec:with-capacity new-cap))
+       ;; Fill new-v to full capacity so we can index freely.
+       (lisp (-> Void) (new-v new-cap)
+         (cl:setf (cl:fill-pointer new-v) new-cap)
+         (cl:values))
+       ;; Copy [0..gs)
+       (lisp (-> Void) (v new-v gs)
+         (cl:replace new-v v :end1 gs :end2 gs)
+         (cl:values))
+       ;; Copy [ge..old-cap) -> [ge+added..new-cap)
+       (let new-ge = (+ ge added))
+       (lisp (-> Void) (v new-v ge old-cap new-ge)
+         (cl:replace new-v v :start1 new-ge :start2 ge :end2 old-cap)
+         (cl:values))
+       (cell:write! (.data gb) new-v)
+       (cell:write! (.gap-end gb) new-ge)
+       (values))
+      (True (values))))
+
+  ;;; Internal: line-starts maintenance
+
+  (declare %scan-lines (GapBuffer * (vec:Vector UFix) * UFix * UFix -> Void))
+  (define (%scan-lines gb ls i n)
+    "Helper: scan characters [i..n) and push newline positions."
+    (when (< i n)
+      (match (gap-char-at gb i)
+        ((Some #\Newline)
+         (vec:push! (+ i 1) ls)
+         (values))
+        (_ (values)))
+      (%scan-lines gb ls (+ i 1) n)))
+
+  (declare rebuild-line-starts! (GapBuffer -> Void))
+  (define (rebuild-line-starts! gb)
+    "Rebuild the line-starts vector by scanning all logical characters."
+    (let n = (cell:read (.len gb)))
+    (let ls = (cell:read (.line-starts gb)))
+    (vec:clear! ls)
+    (vec:push! 0 ls)
+    (%scan-lines gb ls 0 n))
+
+  (declare update-line-starts-insert! (GapBuffer * UFix * String -> Void))
+  (define (update-line-starts-insert! gb pos text)
+    "Incrementally update line-starts after inserting TEXT at logical POS.
+Shifts existing entries beyond POS by the text length, then inserts
+new line-start entries for each newline found in TEXT."
+    (let ls = (cell:read (.line-starts gb)))
+    (lisp (-> Void) (ls pos text)
+      (cl:let ((text-len (cl:length text)))
+        ;; 1. Shift existing entries that sit beyond the insertion point.
+        (cl:loop :for i :from 0 :below (cl:length ls)
+                 :when (cl:> (cl:aref ls i) pos)
+                   :do (cl:incf (cl:aref ls i) text-len))
+        ;; 2. Collect new line-start positions for newlines in text.
+        (cl:let ((new-starts
+                   (cl:loop :for i :from 0 :below text-len
+                            :when (cl:char= (cl:char text i) #\Newline)
+                              :collect (cl:+ pos i 1))))
+          ;; 3. Insert them into ls at the right place.
+          (cl:when new-starts
+            (cl:let ((insert-at
+                       (cl:loop :for i :from 0 :below (cl:length ls)
+                                :when (cl:> (cl:aref ls i) pos)
+                                  :return i
+                                :finally (cl:return (cl:length ls)))))
+              ;; Make room and shift tail rightward.
+              (cl:let ((n-new (cl:length new-starts))
+                       (old-len (cl:length ls)))
+                (cl:dotimes (k n-new)
+                  (cl:vector-push-extend 0 ls))
+                ;; Shift [insert-at..old-len) right by n-new.
+                (cl:loop :for j :from (cl:1- (cl:+ old-len n-new))
+                           :downto (cl:+ insert-at n-new)
+                         :do (cl:setf (cl:aref ls j)
+                                      (cl:aref ls (cl:- j n-new))))
+                ;; Write new starts.
+                (cl:loop :for val :in new-starts
+                         :for j :from insert-at
+                         :do (cl:setf (cl:aref ls j) val)))))))
+      (cl:values)))
+
+  (declare update-line-starts-delete! (GapBuffer * UFix * UFix -> Void))
+  (define (update-line-starts-delete! gb start end)
+    "Incrementally update line-starts after deleting the range [START, END).
+Rebuild the line-starts vector by compacting in place: keep entries
+<= start unchanged, drop entries in (start, end], and shift entries
+> end down by the deleted span."
+    (let span = (- end start))
+    (let ls = (cell:read (.line-starts gb)))
+    (lisp (-> Void) (ls start end span)
+      (cl:let ((src-len (cl:length ls))
+               (dst 0))
+        (cl:loop :for i :from 0 :below src-len
+                 :for v = (cl:aref ls i)
+                 :do (cl:cond
+                       ((cl:<= v start)
+                        (cl:setf (cl:aref ls dst) v)
+                        (cl:incf dst))
+                       ((cl:<= v end))      ; drop
+                       (cl:t
+                        (cl:setf (cl:aref ls dst) (cl:- v span))
+                        (cl:incf dst))))
+        (cl:setf (cl:fill-pointer ls) dst))
+      (cl:values)))
+
+  ;;; Constructors
+
+  (declare gap-new (Void -> GapBuffer))
+  (define (gap-new)
+    "Create an empty gap buffer with initial capacity 256."
+    (let cap = (the UFix 256))
+    (let v = (vec:with-capacity cap))
+    ;; Set fill-pointer to cap so the full array is addressable.
+    (lisp (-> Void) (v cap)
+      (cl:setf (cl:fill-pointer v) cap)
+      (cl:values))
+    (let ls = (vec:new))
+    (vec:push! 0 ls)
+    (GapBuffer (cell:new v)
+               (cell:new 0)
+               (cell:new cap)
+               (cell:new 0)
+               (cell:new ls)))
+
+  (declare gap-from-string (String -> GapBuffer))
+  (define (gap-from-string s)
+    "Create a gap buffer pre-loaded with the contents of S."
+    (let gb = (gap-new))
+    (gap-insert-string! gb 0 s)
+    gb)
+
+  ;;; Accessors
+
+  (declare gap-length (GapBuffer -> UFix))
+  (define (gap-length gb)
+    "Return the number of logical characters."
+    (cell:read (.len gb)))
+
+  (declare gap-char-at (GapBuffer * UFix -> Optional Char))
+  (define (gap-char-at gb pos)
+    "Return the character at logical POS, or None if out of range."
+    (cond
+      ((>= pos (cell:read (.len gb))) None)
+      (True
+       (let phys = (logical-to-physical gb pos))
+       (vec:index phys (cell:read (.data gb))))))
+
+  ;;; Insertion
+
+  (declare gap-insert-char! (GapBuffer * UFix * Char -> Void))
+  (define (gap-insert-char! gb pos ch)
+    "Insert CH at logical position POS."
+    (gap-grow! gb 1)
+    (gap-move-to! gb pos)
+    (let gs = (cell:read (.gap-start gb)))
+    (let v  = (cell:read (.data gb)))
+    (lisp (-> Void) (v gs ch)
+      (cl:setf (cl:aref v gs) ch)
+      (cl:values))
+    (cell:write! (.gap-start gb) (+ gs 1))
+    (cell:write! (.len gb) (+ (cell:read (.len gb)) 1))
+    (let s = (lisp (-> String) (ch)
+               (cl:string ch)))
+    (update-line-starts-insert! gb pos s)
+    (values))
+
+  (declare gap-insert-string! (GapBuffer * UFix * String -> Void))
+  (define (gap-insert-string! gb pos s)
+    "Insert string S at logical position POS."
+    (let slen = (str:length s))
+    (when (> slen 0)
+      (gap-grow! gb slen)
+      (gap-move-to! gb pos)
+      (let gs = (cell:read (.gap-start gb)))
+      (let v  = (cell:read (.data gb)))
+      ;; Copy string chars into gap.
+      (lisp (-> Void) (v gs s slen)
+        (cl:loop :for i :from 0 :below slen
+                 :do (cl:setf (cl:aref v (cl:+ gs i))
+                              (cl:char s i)))
+        (cl:values))
+      (cell:write! (.gap-start gb) (+ gs slen))
+      (cell:write! (.len gb) (+ (cell:read (.len gb)) slen))
+      (update-line-starts-insert! gb pos s)
+      (values)))
+
+  ;;; Deletion
+
+  (declare gap-delete-range! (GapBuffer * UFix * UFix -> String))
+  (define (gap-delete-range! gb start end)
+    "Delete characters in [START, END) and return them as a string."
+    (cond
+      ((>= start end) "")
+      (True
+       (let deleted = (gap-substring gb start end))
+       (gap-move-to! gb start)
+       ;; Expand the gap to swallow [start, end).
+       (let span = (- end start))
+       (cell:write! (.gap-end gb)
+                    (+ (cell:read (.gap-end gb)) span))
+       (cell:write! (.len gb)
+                    (- (cell:read (.len gb)) span))
+       (update-line-starts-delete! gb start end)
+       deleted)))
+
+  (declare gap-delete-char! (GapBuffer * UFix -> Optional Char))
+  (define (gap-delete-char! gb pos)
+    "Delete the character at logical POS. Return it, or None if out of range."
+    (cond
+      ((>= pos (cell:read (.len gb))) None)
+      (True
+       (let ch = (gap-char-at gb pos))
+       (gap-delete-range! gb pos (+ pos 1))
+       ch)))
+
+  ;;; Extraction
+
+  (declare gap-to-string (GapBuffer -> String))
+  (define (gap-to-string gb)
+    "Return the full contents as a string."
+    (gap-substring gb 0 (cell:read (.len gb))))
+
+  (declare gap-substring (GapBuffer * UFix * UFix -> String))
+  (define (gap-substring gb start end)
+    "Return the substring of logical positions [START, END)."
+    (let gs = (cell:read (.gap-start gb)))
+    (let ge = (cell:read (.gap-end gb)))
+    (let v  = (cell:read (.data gb)))
+    (let n  = (- end start))
+    (if (== n 0)
+        ""
+        (lisp (-> String) (v gs ge start end n)
+          (cl:let ((result (cl:make-string n))
+                   (ri 0))
+            (cl:loop :for lpos :from start :below end
+                     :for ppos = (cl:if (cl:< lpos gs)
+                                        lpos
+                                        (cl:+ lpos (cl:- ge gs)))
+                     :do (cl:setf (cl:char result ri)
+                                  (cl:aref v ppos))
+                         (cl:incf ri))
+            result))))
+
+  ;;; Line information
+
+  (declare gap-line-count (GapBuffer -> UFix))
+  (define (gap-line-count gb)
+    "Return the number of lines (at least 1)."
+    (vec:length (cell:read (.line-starts gb))))
+
+  (declare gap-line-to-pos (GapBuffer * UFix -> UFix))
+  (define (gap-line-to-pos gb line)
+    "Return the start position of LINE (0-indexed)."
+    (match (vec:index line (cell:read (.line-starts gb)))
+      ((Some p) p)
+      ((None) (cell:read (.len gb)))))
+
+  (declare %bsearch-line ((vec:Vector UFix) * UFix * UFix * UFix -> UFix))
+  (define (%bsearch-line ls pos lo hi)
+    "Binary search for the largest line-start <= pos."
+    (cond
+      ((>= lo hi) lo)
+      (True
+       (let mid = (+ lo (lisp (-> UFix) (lo hi) (cl:floor (cl:- hi lo) 2))))
+       (match (vec:index (+ mid 1) ls)
+         ((Some v)
+          (if (<= v pos)
+              (%bsearch-line ls pos (+ mid 1) hi)
+              (%bsearch-line ls pos lo mid)))
+         ((None) (%bsearch-line ls pos lo mid))))))
+
+  (declare gap-pos-to-line-col (GapBuffer * UFix -> Tuple UFix UFix))
+  (define (gap-pos-to-line-col gb pos)
+    "Return (line, col) for the given logical position."
+    (let ls = (cell:read (.line-starts gb)))
+    (let num = (vec:length ls))
+    (let line = (%bsearch-line ls pos 0 (- num 1)))
+    (let col = (- pos (gap-line-to-pos gb line)))
+    (Tuple line col))
+
+  (declare gap-line-text (GapBuffer * UFix -> String))
+  (define (gap-line-text gb line)
+    "Return the text of LINE (excluding trailing newline)."
+    (let start = (gap-line-to-pos gb line))
+    (let total-lines = (gap-line-count gb))
+    (let end-pos =
+      (cond
+        ((< (+ line 1) total-lines)
+         ;; The next line starts right after our newline.
+         (let next = (gap-line-to-pos gb (+ line 1)))
+         ;; Exclude the trailing newline character.
+         (if (> next start)
+             (- next 1)
+             next))
+        (True
+         ;; Last line: runs to end of buffer.
+         (cell:read (.len gb)))))
+    (gap-substring gb start end-pos))
+
+  ;;; Tab-aware column helpers
+
+  (declare visual-col (String * UFix * UFix -> UFix))
+  (define (visual-col text char-col tab-w)
+    "Compute the visual column for character position CHAR-COL in TEXT,
+expanding tabs to the next tab stop of width TAB-W."
+    (lisp (-> UFix) (text char-col tab-w)
+      (cl:let ((vcol 0)
+               (limit (cl:min char-col (cl:length text))))
+        (cl:dotimes (i limit vcol)
+          (cl:let ((ch (cl:char text i)))
+            (cl:if (cl:char= ch #\Tab)
+                   (cl:setf vcol (cl:* (cl:1+ (cl:floor vcol tab-w)) tab-w))
+                   (cl:incf vcol (mine/text/width:char-cell-width-cl ch))))))))
+
+  (declare char-for-vcol (String * UFix * UFix -> UFix))
+  (define (char-for-vcol text vcol-target tab-w)
+    "Find the character index in TEXT whose visual column is closest to
+VCOL-TARGET (without exceeding it), expanding tabs with TAB-W."
+    (lisp (-> UFix) (text vcol-target tab-w)
+      (cl:let ((vcol 0)
+               (len (cl:length text)))
+        (cl:dotimes (i len len)
+          (cl:let* ((ch (cl:char text i))
+                    (next-vcol (cl:if (cl:char= ch #\Tab)
+                                      (cl:* (cl:1+ (cl:floor vcol tab-w)) tab-w)
+                                      (cl:+ vcol (mine/text/width:char-cell-width-cl ch)))))
+            (cl:when (cl:> next-vcol vcol-target)
+              (cl:return i))
+            (cl:setf vcol next-vcol))))))
+
+)

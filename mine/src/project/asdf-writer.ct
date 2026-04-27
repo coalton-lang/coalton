@@ -1,0 +1,102 @@
+(cl:defpackage #:mine/project/asdf-writer
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:model #:mine/project/asdf-model))
+  (:export
+   #:write-asd-file))
+
+(in-package #:mine/project/asdf-writer)
+
+(coalton-toplevel
+
+  (declare write-asd-file (model:SystemDef * String -> Void))
+  (define (write-asd-file sysdef path)
+    "Write a SystemDef to an .asd file at PATH."
+    (lisp (-> Void) (sysdef path)
+      (%write-asd-file-impl sysdef path)
+      (cl:values))))
+
+;;; CL-side writer
+;;;
+;;; Coalton struct accessors (.system-name etc.) are not CL functions;
+;;; they exist only at Coalton compile time.  We access slots via the
+;;; positional names (_0, _1, ...) that Coalton generates.
+
+;; SystemDef field order (see asdf-model.ct):
+;;   _0 = system-name,  _1 = system-depends-on,  _2 = system-components,
+;;   _3 = system-description,  _4 = system-pathname
+(cl:defun %sd-name  (sd) (cl:slot-value sd 'mine/project/asdf-model::_0))
+(cl:defun %sd-deps  (sd) (cl:slot-value sd 'mine/project/asdf-model::_1))
+(cl:defun %sd-comps (sd) (cl:slot-value sd 'mine/project/asdf-model::_2))
+(cl:defun %sd-desc  (sd) (cl:slot-value sd 'mine/project/asdf-model::_3))
+(cl:defun %sd-path  (sd) (cl:slot-value sd 'mine/project/asdf-model::_4))
+
+;; Component field order:
+;;   _0 = component-name,  _1 = component-type,  _2 = component-children
+(cl:defun %comp-name (c) (cl:slot-value c 'mine/project/asdf-model::_0))
+(cl:defun %comp-type (c) (cl:slot-value c 'mine/project/asdf-model::_1))
+(cl:defun %comp-kids (c) (cl:slot-value c 'mine/project/asdf-model::_2))
+
+(cl:defun %component-type-keyword (ct)
+  "Map a ComponentType to an ASDF component keyword."
+  (cl:cond
+    ((cl:eq ct 'mine/project/asdf-model::COMPONENTTYPE/CTFILE) :file)
+    ((cl:eq ct 'mine/project/asdf-model::COMPONENTTYPE/CTMODULE) :module)
+    ((cl:eq ct 'mine/project/asdf-model::COMPONENTTYPE/CTCTFILE) :ct-file)
+    (cl:t :file)))
+
+(cl:defun %write-component (out comp indent)
+  "Write a single component s-expression to stream OUT at INDENT level."
+  (cl:let* ((name (%comp-name comp))
+            (ct (%comp-type comp))
+            (children (%comp-kids comp))
+            (kw (%component-type-keyword ct))
+            (pad (cl:make-string (cl:* indent 2) :initial-element #\Space)))
+    (cl:if children
+           ;; Module with children
+           (cl:progn
+             (cl:format out "~A(:module ~S~%" pad name)
+             (cl:format out "~A :serial t~%" pad)
+             (cl:format out "~A :components~%" pad)
+             (cl:format out "~A (~%" pad)
+             (cl:dolist (child children)
+               (%write-component out child (cl:+ indent 2)))
+             (cl:format out "~A))~%" pad))
+           ;; Leaf file
+           (cl:format out "~A(~(~S~) ~S)~%" pad kw name))))
+
+(cl:defun %write-asd-file-impl (sysdef path)
+  "Write SYSDEF to PATH as a formatted .asd file."
+  (cl:let* ((name (%sd-name sysdef))
+            (desc (%sd-desc sysdef))
+            (pathname (%sd-path sysdef))
+            (deps (%sd-deps sysdef))
+            (comps (%sd-comps sysdef))
+            (has-coalton (cl:eq (mine/project/asdf-model::system-has-coalton? sysdef)
+                                coalton:True))
+            ;; Ensure "coalton" is in deps for Coalton projects
+            (final-deps (cl:if (cl:and has-coalton
+                                       (cl:not (cl:member "coalton" deps
+                                                          :test #'cl:string-equal)))
+                               (cl:cons "coalton" deps)
+                               deps)))
+    (cl:with-open-file (out path :direction :output
+                                 :if-exists :supersede
+                                 :if-does-not-exist :create)
+      (cl:format out "(asdf:defsystem ~S~%" name)
+      (cl:when (cl:and desc (cl:> (cl:length desc) 0))
+        (cl:format out "  :description ~S~%" desc))
+      (cl:when has-coalton
+        (cl:format out "  :defsystem-depends-on (\"coalton-asdf\")~%"))
+      (cl:when final-deps
+        (cl:format out "  :depends-on (~{~S~^ ~})~%" final-deps))
+      (cl:when (cl:and pathname (cl:> (cl:length pathname) 0))
+        (cl:format out "  :pathname ~S~%" pathname))
+      (cl:format out "  :serial t~%")
+      (cl:when comps
+        (cl:format out "  :components~%")
+        (cl:format out "  (~%")
+        (cl:dolist (comp comps)
+          (%write-component out comp 2))
+        (cl:format out "  )~%"))
+      (cl:format out ")~%"))))

@@ -1,0 +1,540 @@
+(cl:defpackage #:mine/app/completion
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:cell #:coalton/cell)
+   (#:str #:coalton/string)
+   (#:vec #:coalton/vector)
+   (#:list #:coalton/list)
+   (#:screen #:mine/term/screen)
+   (#:color #:mine/term/color)
+   (#:wt #:mine/widget/types)
+   (#:render #:mine/widget/render)
+   (#:gap #:mine/buffer/gap)
+   (#:cellw #:mine/text/width))
+  (:export
+   #:complete-file-path
+   #:complete-project-path
+   #:Candidate #:.cand-name #:.cand-kind #:.cand-type-sig
+   #:cand-name #:cand-kind #:cand-type-sig
+   #:CompletionState
+   #:completion-new
+   #:completion-active?
+   #:completion-open!
+   #:completion-dismiss!
+   #:completion-cycle-down!
+   #:completion-cycle-up!
+   #:completion-selected-name
+   #:completion-filter!
+   #:completion-render
+   #:.cs-prefix
+   #:.cs-active
+   #:extract-symbol-prefix
+   #:extract-symbol-prefix-input
+   #:common-prefix))
+
+(in-package #:mine/app/completion)
+
+(coalton-toplevel
+
+;;; Candidate
+
+  (define-struct Candidate
+    "A completion candidate with metadata."
+    (cand-name     String)
+    (cand-kind     String)
+    (cand-type-sig String))
+
+  (declare cand-name (Candidate -> String))
+  (define (cand-name c) (.cand-name c))
+
+  (declare cand-kind (Candidate -> String))
+  (define (cand-kind c) (.cand-kind c))
+
+  (declare cand-type-sig (Candidate -> String))
+  (define (cand-type-sig c) (.cand-type-sig c))
+
+;;; CompletionState
+
+  (define-struct CompletionState
+    "Mutable state for the inline completion popup."
+    (cs-active     (Cell Boolean))
+    (cs-all        (Cell (List Candidate)))
+    (cs-filtered   (Cell (List Candidate)))
+    (cs-selected   (Cell UFix))
+    (cs-prefix     (Cell String))
+    (cs-anchor-col (Cell UFix))
+    (cs-anchor-row (Cell UFix)))
+
+  (declare completion-new (Void -> CompletionState))
+  (define (completion-new)
+    (CompletionState (cell:new False)
+                     (cell:new Nil)
+                     (cell:new Nil)
+                     (cell:new 0)
+                     (cell:new "")
+                     (cell:new 0)
+                     (cell:new 0)))
+
+  (declare completion-active? (CompletionState -> Boolean))
+  (define (completion-active? cs)
+    (cell:read (.cs-active cs)))
+
+  (declare completion-open! (CompletionState * String * (List Candidate) * UFix * UFix -> Void))
+  (define (completion-open! cs prefix candidates anchor-col anchor-row)
+    "Open the popup with CANDIDATES for PREFIX at the given screen anchor."
+    (cell:write! (.cs-active cs) True)
+    (cell:write! (.cs-all cs) candidates)
+    (cell:write! (.cs-filtered cs) candidates)
+    (cell:write! (.cs-selected cs) 0)
+    (cell:write! (.cs-prefix cs) prefix)
+    (cell:write! (.cs-anchor-col cs) anchor-col)
+    (cell:write! (.cs-anchor-row cs) anchor-row)
+    (values))
+
+  (declare completion-dismiss! (CompletionState -> Void))
+  (define (completion-dismiss! cs)
+    (cell:write! (.cs-active cs) False)
+    (cell:write! (.cs-all cs) Nil)
+    (cell:write! (.cs-filtered cs) Nil)
+    (cell:write! (.cs-selected cs) 0)
+    (cell:write! (.cs-prefix cs) "")
+    (values))
+
+  (declare completion-cycle-down! (CompletionState -> Void))
+  (define (completion-cycle-down! cs)
+    "Move highlight down, wrapping around."
+    (let n = (list:length (cell:read (.cs-filtered cs))))
+    (when (> n 0)
+      (let cur = (cell:read (.cs-selected cs)))
+      (cell:write! (.cs-selected cs) (if (>= (+ cur 1) n) 0 (+ cur 1))))
+    (values))
+
+  (declare completion-cycle-up! (CompletionState -> Void))
+  (define (completion-cycle-up! cs)
+    "Move highlight up, wrapping around."
+    (let n = (list:length (cell:read (.cs-filtered cs))))
+    (when (> n 0)
+      (let cur = (cell:read (.cs-selected cs)))
+      (cell:write! (.cs-selected cs) (if (== cur 0) (- n 1) (- cur 1))))
+    (values))
+
+  (declare completion-selected-name (CompletionState -> Optional String))
+  (define (completion-selected-name cs)
+    "Return the name of the currently highlighted candidate."
+    (let idx = (cell:read (.cs-selected cs)))
+    (let items = (cell:read (.cs-filtered cs)))
+    (if (< idx (list:length items))
+        (Some (.cand-name (list:nth idx items)))
+        None))
+
+  (declare completion-filter! (CompletionState * String -> Void))
+  (define (completion-filter! cs new-prefix)
+    "Re-filter candidates by NEW-PREFIX. Dismiss if empty prefix or 0-1 remain."
+    (cond
+      ((== (str:length new-prefix) 0)
+       (completion-dismiss! cs))
+      (True
+       (let lc-prefix = (lowercase new-prefix))
+       (let filtered = (list:filter
+                         (fn (c) (%string-prefix? lc-prefix (lowercase (.cand-name c))))
+                         (cell:read (.cs-all cs))))
+       (cond
+         ((<= (list:length filtered) 1)
+          (completion-dismiss! cs))
+         (True
+          (cell:write! (.cs-filtered cs) filtered)
+          (cell:write! (.cs-prefix cs) new-prefix)
+          ;; Clamp selected index
+          (let sel = (cell:read (.cs-selected cs)))
+          (when (>= sel (list:length filtered))
+            (cell:write! (.cs-selected cs) 0))
+          (values))))))
+
+;;; Prefix extraction
+
+  (declare extract-symbol-prefix (gap:GapBuffer * UFix -> String))
+  (define (extract-symbol-prefix gb cursor-pos)
+    "Extract the symbol prefix before CURSOR-POS in a gap buffer.
+Scans backward from cursor until a non-symbol character is found."
+    (lisp (-> String) (gb cursor-pos)
+      (%extract-prefix-from-gap gb cursor-pos)))
+
+  (declare extract-symbol-prefix-input (String * UFix -> String))
+  (define (extract-symbol-prefix-input text cursor)
+    "Extract the symbol prefix before CURSOR in a plain string."
+    (lisp (-> String) (text cursor)
+      (%extract-prefix-from-string text cursor)))
+
+;;; Common prefix computation
+
+  (declare common-prefix ((List Candidate) -> String))
+  (define (common-prefix candidates)
+    "Compute the longest common prefix of all candidate names."
+    (match candidates
+      ((Nil) "")
+      ((Cons first (Nil)) (.cand-name first))
+      ((Cons first rest)
+       (let name = (.cand-name first))
+       (lisp (-> String) (name rest)
+         (%common-prefix-impl name rest)))))
+
+;;; Helpers
+
+  (declare %string-prefix? (String * String -> Boolean))
+  (define (%string-prefix? prefix str)
+    "True if STR starts with PREFIX (case-sensitive)."
+    (lisp (-> Boolean) (prefix str)
+      (cl:if (cl:and (cl:<= (cl:length prefix) (cl:length str))
+                     (cl:string= prefix str :end2 (cl:length prefix)))
+             True False)))
+
+  (declare lowercase (String -> String))
+  (define (lowercase s)
+    (lisp (-> String) (s)
+      (cl:string-downcase s)))
+
+;;; Rendering
+
+  (declare completion-render (CompletionState * screen:Screen * UFix * UFix -> Void))
+  (define (completion-render cs scr screen-w screen-h)
+    "Render the completion popup as an overlay."
+    (when (completion-active? cs)
+      (let items = (cell:read (.cs-filtered cs)))
+      (let sel = (cell:read (.cs-selected cs)))
+      (let anchor-col = (cell:read (.cs-anchor-col cs)))
+      (let anchor-row = (cell:read (.cs-anchor-row cs)))
+      (lisp (-> Void) (items sel anchor-col anchor-row scr screen-w screen-h)
+        (%render-popup items sel anchor-col anchor-row scr screen-w screen-h))))
+
+;;; File path completion (preserved)
+
+  (declare complete-file-path (String -> (Tuple String (List String))))
+  (define (complete-file-path text)
+    "Tab-complete a file path. Returns (completed-text, candidates)."
+    (lisp (-> (Tuple String (List String))) (text)
+      (%complete-file-path-impl text)))
+
+  (declare complete-project-path (String -> (Tuple String (List String))))
+  (define (complete-project-path text)
+    "Tab-complete a project path. Only directories and .asd files are candidates."
+    (lisp (-> (Tuple String (List String))) (text)
+      (%complete-project-path-impl text)))
+
+) ;; coalton-toplevel
+
+;;; CL implementations
+
+(cl:defun %symbol-char-p (ch)
+  "Return T if CH is a valid symbol constituent for completion purposes."
+  (cl:and (cl:characterp ch)
+          (cl:not (cl:member ch '(#\Space #\Tab #\Newline #\Return
+                                  #\( #\) #\[ #\] #\{ #\}
+                                  #\' #\` #\, #\" #\; #\#)
+                             :test #'cl:char=))))
+
+(cl:defun %extract-prefix-from-gap (gb cursor-pos)
+  "Extract symbol prefix from gap buffer before CURSOR-POS."
+  (cl:let ((start cursor-pos))
+    (cl:loop :while (cl:> start 0)
+             :do (cl:let ((ch (mine/buffer/gap:gap-char-at gb (cl:1- start))))
+                   ;; Coalton Optional Char is nil for None, Char for Some
+                   (cl:if (cl:and ch (%symbol-char-p ch))
+                          (cl:decf start)
+                          (cl:return))))
+    (cl:if (cl:= start cursor-pos)
+           ""
+           (cl:let ((result (cl:make-string (cl:- cursor-pos start))))
+             (cl:loop :for i :from start :below cursor-pos
+                      :for j :from 0
+                      :do (cl:let ((ch (mine/buffer/gap:gap-char-at gb i)))
+                            (cl:setf (cl:char result j) (cl:or ch #\?))))
+             result))))
+
+(cl:defun %extract-prefix-from-string (text cursor)
+  "Extract symbol prefix from plain string TEXT before CURSOR."
+  (cl:let ((start (cl:min cursor (cl:length text))))
+    (cl:loop :while (cl:> start 0)
+             :do (cl:if (%symbol-char-p (cl:char text (cl:1- start)))
+                        (cl:decf start)
+                        (cl:return)))
+    (cl:if (cl:= start (cl:min cursor (cl:length text)))
+           ""
+           (cl:subseq text start (cl:min cursor (cl:length text))))))
+
+(cl:defun %common-prefix-impl (first-name rest-candidates)
+  "Compute common prefix of FIRST-NAME and all candidate names in REST-CANDIDATES."
+  (cl:let ((prefix (cl:string-downcase first-name)))
+    (cl:loop :for cand-cell = rest-candidates :then (cl:cdr cand-cell)
+             :while (cl:consp cand-cell)
+             :do (cl:let* ((cand (cl:car cand-cell))
+                           (name (cl:string-downcase (cand-name cand))))
+                   (cl:let ((end (cl:min (cl:length prefix) (cl:length name))))
+                     (cl:setf prefix
+                              (cl:subseq prefix 0
+                                         (cl:loop :for i :from 0 :below end
+                                                  :while (cl:char= (cl:char prefix i)
+                                                                    (cl:char name i))
+                                                  :finally (cl:return i)))))))
+    prefix))
+
+;;; Popup rendering
+
+(cl:defparameter *max-visible* 8
+  "Maximum number of completion items shown at once.")
+
+(cl:defun %render-popup (items sel anchor-col anchor-row scr screen-w screen-h)
+  "Render a bordered completion popup on SCR."
+  (cl:let* ((n (%coalton-list-length items))
+            (visible (cl:min n *max-visible*))
+            ;; Compute scroll offset to keep selected item visible
+            (scroll (cl:cond
+                      ((cl:< sel visible) 0)
+                      (cl:t (cl:min (cl:- sel (cl:floor visible 2))
+                                    (cl:- n visible)))))
+            ;; Measure widths
+            (max-name 0)
+            (max-kind 0))
+    (cl:when (cl:zerop n) (cl:return-from %render-popup))
+    ;; Measure
+    (cl:loop :for cell = items :then (cl:cdr cell)
+             :while (cl:consp cell)
+             :do (cl:let ((c (cl:car cell)))
+                   (cl:setf max-name
+                            (cl:max max-name
+                                    (cl:length (cand-name c))))
+                   ;; Right column: type-sig if available, otherwise kind
+                   (cl:let ((right (cand-type-sig c)))
+                     (cl:when (cl:zerop (cl:length right))
+                       (cl:setf right (cand-kind c)))
+                     (cl:setf max-kind (cl:max max-kind (cl:length right))))))
+    ;; Box dimensions: border(1) + space + name + space + right-col + space + border(1)
+    (cl:let* ((inner-w (cl:+ max-name 1 max-kind))
+              (box-w (cl:min (cl:+ inner-w 2) (cl:max 10 (cl:- screen-w 2))))
+              (box-h (cl:+ visible 2))
+              ;; Position: prefer below cursor, flip above if no room
+              (below-row (cl:1+ anchor-row))
+              (fits-below (cl:<= (cl:+ below-row box-h) screen-h))
+              (box-y (cl:if fits-below
+                            below-row
+                            (cl:max 0 (cl:- anchor-row box-h))))
+              ;; Horizontal: anchor at prefix start, clamp to screen
+              (box-x (cl:min anchor-col
+                             (cl:max 0 (cl:- screen-w box-w))))
+              ;; Styles
+              (border-style (mine/term/color:Style
+                              mine/term/color:border-fg
+                              mine/term/color:panel-bg
+                              mine/term/color:AttrNone))
+              (normal-style (mine/term/color:Style
+                              mine/term/color:text-fg
+                              mine/term/color:panel-bg
+                              mine/term/color:AttrNone))
+              (selected-style (mine/term/color:Style
+                                mine/term/color:text-fg
+                                mine/term/color:selection-bg
+                                mine/term/color:AttrNone))
+              (kind-style (mine/term/color:Style
+                            mine/term/color:text-dim-fg
+                            mine/term/color:panel-bg
+                            mine/term/color:AttrNone))
+              (kind-sel-style (mine/term/color:Style
+                                mine/term/color:text-dim-fg
+                                mine/term/color:selection-bg
+                                mine/term/color:AttrNone))
+              (content-w (cl:- box-w 2)))
+      ;; Draw border
+      (mine/widget/render:draw-box scr
+        (mine/widget/types:Rect box-x box-y box-w box-h)
+        border-style)
+      ;; Fill interior
+      (cl:loop :for vi :from 0 :below visible
+               :do (cl:let* ((idx (cl:+ scroll vi))
+                             (row (cl:+ box-y 1 vi))
+                             (x-inner (cl:1+ box-x))
+                             (is-sel (cl:= idx sel))
+                             (bg-style (cl:if is-sel selected-style normal-style))
+                             (k-style (cl:if is-sel kind-sel-style kind-style)))
+                    ;; Clear row
+                    (mine/widget/render:fill-rect scr
+                      (mine/widget/types:Rect x-inner row content-w 1)
+                      #\Space bg-style)
+                    ;; Get candidate at index
+                    (cl:let ((cand (%coalton-list-nth idx items)))
+                      (cl:when cand
+                        (cl:let* ((name (cand-name cand))
+                                  (type-sig (cand-type-sig cand))
+                                  (kind (cand-kind cand))
+                                  ;; Right column: prefer type-sig, fall back to kind
+                                  (right-text (cl:if (cl:plusp (cl:length type-sig))
+                                                     type-sig kind))
+                                  ;; Truncate right-text to fit
+                                  (max-right (cl:max 0 (cl:- content-w 2)))
+                                  (right-text (cl:if (cl:> (cl:length right-text) max-right)
+                                                     (cl:subseq right-text 0 max-right)
+                                                     right-text))
+                                  ;; Truncate name if needed
+                                  (name-space (cl:max 1 (cl:- content-w (cl:length right-text) 1)))
+                                  (display-name (cl:if (cl:> (cl:length name) name-space)
+                                                       (cl:subseq name 0 name-space)
+                                                       name)))
+                          ;; Draw name
+                          (mine/term/screen:screen-set-string scr row x-inner
+                            display-name bg-style)
+                          ;; Draw right column, right-aligned
+                          (cl:let ((right-x (cl:+ x-inner (cl:- content-w (cl:length right-text)))))
+                            (mine/term/screen:screen-set-string scr row right-x
+                              right-text k-style))))))))))
+
+(cl:defun %coalton-list-length (lst)
+  "Length of a Coalton list."
+  (cl:length lst))
+
+(cl:defun %coalton-list-nth (n lst)
+  "Nth element of a Coalton list (0-based), or NIL."
+  (cl:loop :for cell = lst :then (cl:cdr cell)
+           :for i :from 0
+           :while (cl:consp cell)
+           :when (cl:= i n) :return (cl:car cell)
+           :finally (cl:return cl:nil)))
+
+;;; File path completion (preserved from original)
+
+(cl:defun %expand-user-path (text)
+  "Expand a leading ~ in TEXT to the user's home directory."
+  (cl:if (cl:and (cl:plusp (cl:length text))
+                 (cl:char= (cl:char text 0) #\~))
+         (cl:let ((home (cl:namestring (cl:user-homedir-pathname))))
+           (cl:concatenate 'cl:string
+             (cl:string-right-trim "/" home)
+             (cl:subseq text 1)))
+         text))
+
+(cl:defun %restore-user-path (original-text completed)
+  "Re-insert a leading ~ when ORIGINAL-TEXT used it."
+  (cl:if (cl:and (cl:plusp (cl:length original-text))
+                 (cl:char= (cl:char original-text 0) #\~))
+         (cl:let ((home (cl:namestring (cl:user-homedir-pathname))))
+           (cl:if (cl:and (cl:>= (cl:length completed) (cl:length home))
+                          (cl:string= home completed
+                                      :end2 (cl:length home)))
+                  (cl:concatenate 'cl:string "~/"
+                    (cl:subseq completed (cl:length home)))
+                  completed))
+         completed))
+
+(cl:defun %directory-entry-p (name)
+  "Return T when NAME is a directory entry display name."
+  (cl:and (cl:plusp (cl:length name))
+          (cl:char= (cl:char name (cl:1- (cl:length name))) #\/)))
+
+(cl:defun %asd-entry-p (name)
+  "Return T when NAME is an .asd file display name."
+  (cl:and (cl:not (%directory-entry-p name))
+          (cl:>= (cl:length name) 4)
+          (cl:string-equal ".asd"
+                           (cl:subseq name (cl:- (cl:length name) 4)))))
+
+(cl:defun %allow-any-path-entry-p (_name)
+  "Allow any path entry during completion."
+  (cl:declare (cl:ignore _name))
+  cl:t)
+
+(cl:defun %allow-project-path-entry-p (name)
+  "Allow only directories and .asd files during project completion."
+  (cl:or (%directory-entry-p name)
+         (%asd-entry-p name)))
+
+(cl:defun %complete-path-impl (text entry-allowed-p)
+  "Complete TEXT using ENTRY-ALLOWED-P to filter directory entries."
+  (cl:handler-case
+      (cl:let* ((expanded (%expand-user-path text))
+                ;; Split into directory and prefix parts
+                (dir-end (cl:or (cl:position #\/ expanded :from-end cl:t) -1))
+                (dir-part (cl:if (cl:>= dir-end 0)
+                                 (cl:subseq expanded 0 (cl:1+ dir-end))
+                                 ""))
+                (prefix (cl:if (cl:>= dir-end 0)
+                               (cl:subseq expanded (cl:1+ dir-end))
+                               expanded))
+                ;; List the directory
+                (search-dir (cl:if (cl:string= dir-part "")
+                                   (cl:namestring (cl:truename "."))
+                                   dir-part))
+                (entries (%list-directory search-dir))
+                ;; Filter by prefix
+                (matches (cl:remove-if-not
+                          (cl:lambda (name)
+                            (cl:and (cl:>= (cl:length name) (cl:length prefix))
+                                    (cl:string= prefix name
+                                                :end2 (cl:length prefix))
+                                    (cl:funcall entry-allowed-p name)))
+                          entries))
+                ;; Sort matches
+                (sorted (cl:sort (cl:copy-list matches) #'cl:string<)))
+        ;; Compute common prefix of all matches
+        (cl:if (cl:null sorted)
+               (Tuple text coalton:Nil)
+               (cl:let* ((common (%file-common-prefix sorted))
+                         (completed (cl:concatenate 'cl:string dir-part common))
+                         (display-completed (%restore-user-path text completed))
+                         ;; Build Coalton list of display names
+                         (cands (%strings-to-coalton-list sorted)))
+                 (Tuple display-completed
+                        (cl:if (cl:= (cl:length sorted) 1)
+                               coalton:Nil
+                               cands)))))
+    (cl:error ()
+      (Tuple text coalton:Nil))))
+
+(cl:defun %complete-file-path-impl (text)
+  "Complete a file path. Returns (Tuple completed-text candidates-list)."
+  (%complete-path-impl text #'%allow-any-path-entry-p))
+
+(cl:defun %complete-project-path-impl (text)
+  "Complete a project path. Only directories and .asd files are candidates."
+  (%complete-path-impl text #'%allow-project-path-entry-p))
+
+(cl:defun %list-directory (dir-path)
+  "List file/directory names in DIR-PATH. Returns a list of name strings.
+Directories get a trailing /."
+  (cl:handler-case
+      (cl:let* ((dir (cl:pathname dir-path))
+                (wild (cl:make-pathname :name :wild :type :wild :defaults dir))
+                (entries (cl:directory wild :resolve-symlinks cl:nil)))
+        (cl:remove cl:nil
+          (cl:mapcar
+           (cl:lambda (entry)
+             (cl:handler-case
+                 (cl:let* ((name (cl:file-namestring entry)))
+                   (cl:if (cl:string= name "")
+                          ;; Directory entry -- extract the last dir component
+                          (cl:let ((dirs (cl:pathname-directory entry)))
+                            (cl:if (cl:and dirs (cl:consp dirs))
+                                   (cl:let ((last-dir (cl:car (cl:last dirs))))
+                                     (cl:if (cl:stringp last-dir)
+                                            (cl:concatenate 'cl:string last-dir "/")
+                                            cl:nil))
+                                   cl:nil))
+                          name))
+               (cl:error () cl:nil)))
+           entries)))
+    (cl:error () cl:nil)))
+
+(cl:defun %file-common-prefix (strings)
+  "Return the longest common prefix of a list of strings."
+  (cl:if (cl:null strings) ""
+         (cl:let ((first (cl:first strings)))
+           (cl:loop :for i :from 0 :below (cl:length first)
+                    :while (cl:every
+                            (cl:lambda (s)
+                              (cl:and (cl:< i (cl:length s))
+                                      (cl:char= (cl:char first i)
+                                                 (cl:char s i))))
+                            strings)
+                    :finally (cl:return (cl:subseq first 0 i))))))
+
+(cl:defun %strings-to-coalton-list (strings)
+  "Convert a CL list of strings to a Coalton (List String)."
+  (cl:if (cl:null strings)
+         coalton:Nil
+         (Cons (cl:first strings) (%strings-to-coalton-list (cl:rest strings)))))

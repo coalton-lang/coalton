@@ -1,0 +1,324 @@
+(cl:defpackage #:mine/pane/minibuffer
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:screen #:mine/term/screen)
+   (#:color #:mine/term/color)
+   (#:wt #:mine/widget/types)
+   (#:render #:mine/widget/render)
+   (#:cell #:coalton/cell)
+   (#:str #:coalton/string)
+   (#:cellw #:mine/text/width)
+   (#:list #:coalton/list)
+   (#:widget-input #:mine/widget/input)
+   (#:input #:mine/term/input)
+   (#:ev #:mine/event/types))
+  (:export
+   #:Minibuffer
+   #:minibuffer-new
+   #:minibuffer-active?
+   #:minibuffer-prompt!
+   #:minibuffer-prompt-with-completion!
+   #:minibuffer-prompt-symbol-picker!
+   #:minibuffer-prompt-incremental!
+   #:minibuffer-render
+   #:minibuffer-render-completions
+   #:minibuffer-completions
+   #:minibuffer-footer-hint
+   #:minibuffer-set-footer-hint!
+   #:minibuffer-handle-key!
+   #:minibuffer-cancel!
+   #:minibuffer-has-complete-fn?
+   #:.input-widget))
+
+(in-package #:mine/pane/minibuffer)
+
+(coalton-toplevel
+
+  ;;; Minibuffer
+
+  (define-struct Minibuffer
+    (input-widget  widget-input:InputWidget)
+    (active        (Cell Boolean))
+    (callback      (Cell (Optional (String -> Void))))
+    (completions   (Cell (List String)))
+    (footer-hint   (Cell String))
+    (complete-fn   (Cell (Optional (String -> (Tuple String (List String))))))
+    (on-change     (Cell (Optional (String -> Void))))
+    (on-repeat-key (Cell (Optional input:Key)))
+    (on-repeat     (Cell (Optional (String -> Void))))
+    (on-next       (Cell (Optional (String -> Void))))
+    (on-prev       (Cell (Optional (String -> Void))))
+    (confirm-on-space (Cell Boolean)))
+
+  (declare minibuffer-new (Void -> Minibuffer))
+  (define (minibuffer-new)
+    (Minibuffer (widget-input:input-widget-new "" color:default-style color:default-style)
+                (cell:new False)
+                (cell:new None)
+                (cell:new Nil)
+                (cell:new "")
+                (cell:new None)
+                (cell:new None)
+                (cell:new None)
+                (cell:new None)
+                (cell:new None)
+                (cell:new None)
+                (cell:new False)))
+
+  (declare minibuffer-active? (Minibuffer -> Boolean))
+  (define (minibuffer-active? mb)
+    (cell:read (.active mb)))
+
+  (declare minibuffer-completions (Minibuffer -> (List String)))
+  (define (minibuffer-completions mb)
+    (cell:read (.completions mb)))
+
+  (declare minibuffer-footer-hint (Minibuffer -> String))
+  (define (minibuffer-footer-hint mb)
+    (cell:read (.footer-hint mb)))
+
+  (declare minibuffer-set-footer-hint! (Minibuffer * String -> Void))
+  (define (minibuffer-set-footer-hint! mb text)
+    (cell:write! (.footer-hint mb) text)
+    (values))
+
+  (declare minibuffer-has-complete-fn? (Minibuffer -> Boolean))
+  (define (minibuffer-has-complete-fn? mb)
+    (match (cell:read (.complete-fn mb))
+      ((Some _) True)
+      ((None) False)))
+
+  (declare minibuffer-prompt! (Minibuffer * String * (String -> Void) -> Void))
+  (define (minibuffer-prompt! mb prompt-text cb)
+    (widget-input:input-widget-clear! (.input-widget mb))
+    (cell:write! (widget-input:.iw-prompt (.input-widget mb)) prompt-text)
+    (cell:write! (.active mb) True)
+    (cell:write! (.callback mb) (Some cb))
+    (cell:write! (.completions mb) Nil)
+    (cell:write! (.footer-hint mb) "")
+    (cell:write! (.complete-fn mb) None)
+    (cell:write! (.confirm-on-space mb) False)
+    (values))
+
+  (declare minibuffer-prompt-with-completion!
+    (Minibuffer * String * String * (String -> Void) * (String -> (Tuple String (List String))) -> Void))
+  (define (minibuffer-prompt-with-completion! mb prompt-text initial-text cb cfn)
+    (widget-input:input-widget-clear! (.input-widget mb))
+    (widget-input:input-widget-set-text! (.input-widget mb) initial-text)
+    (cell:write! (widget-input:.iw-prompt (.input-widget mb)) prompt-text)
+    (cell:write! (.active mb) True)
+    (cell:write! (.callback mb) (Some cb))
+    (cell:write! (.completions mb) Nil)
+    (cell:write! (.footer-hint mb) "")
+    (cell:write! (.complete-fn mb) (Some cfn))
+    (cell:write! (.confirm-on-space mb) False)
+    (values))
+
+  (declare minibuffer-prompt-symbol-picker!
+    (Minibuffer * String * (String -> Void) * (String -> (Tuple String (List String))) -> Void))
+  (define (minibuffer-prompt-symbol-picker! mb prompt-text cb cfn)
+    "Activate the minibuffer for picking a named symbol. Like the regular
+completion prompt, but Space also confirms (in addition to Enter), so a user
+who has typed enough of a unique name can press Space to insert."
+    (widget-input:input-widget-clear! (.input-widget mb))
+    (cell:write! (widget-input:.iw-prompt (.input-widget mb)) prompt-text)
+    (cell:write! (.active mb) True)
+    (cell:write! (.callback mb) (Some cb))
+    (cell:write! (.completions mb) Nil)
+    (cell:write! (.footer-hint mb) "")
+    (cell:write! (.complete-fn mb) (Some cfn))
+    (cell:write! (.confirm-on-space mb) True)
+    (values))
+
+  (declare minibuffer-prompt-incremental!
+    (Minibuffer * String * input:Key * (String -> Void) * (String -> Void) * (String -> Void) * (String -> Void) -> Void))
+  (define (minibuffer-prompt-incremental! mb prompt-text repeat-key on-change-fn on-repeat-fn on-next-fn on-prev-fn)
+    "Activate with incremental search. ON-CHANGE-FN fires on every keystroke.
+ON-REPEAT-FN fires when REPEAT-KEY is pressed again.
+ON-NEXT-FN/ON-PREV-FN fire on Down/Up. Enter/Ctrl+g dismiss."
+    (widget-input:input-widget-clear! (.input-widget mb))
+    (cell:write! (widget-input:.iw-prompt (.input-widget mb)) prompt-text)
+    (cell:write! (.active mb) True)
+    (cell:write! (.callback mb) None)
+    (cell:write! (.completions mb) Nil)
+    (cell:write! (.footer-hint mb) "")
+    (cell:write! (.complete-fn mb) None)
+    (cell:write! (.on-change mb) (Some on-change-fn))
+    (cell:write! (.on-repeat-key mb) (Some repeat-key))
+    (cell:write! (.on-repeat mb) (Some on-repeat-fn))
+    (cell:write! (.on-next mb) (Some on-next-fn))
+    (cell:write! (.on-prev mb) (Some on-prev-fn))
+    (cell:write! (.confirm-on-space mb) False)
+    (values))
+
+  (declare minibuffer-cancel! (Minibuffer -> Void))
+  (define (minibuffer-cancel! mb)
+    (cell:write! (.active mb) False)
+    (cell:write! (.callback mb) None)
+    (cell:write! (.completions mb) Nil)
+    (cell:write! (.footer-hint mb) "")
+    (cell:write! (.complete-fn mb) None)
+    (cell:write! (.on-change mb) None)
+    (cell:write! (.on-repeat-key mb) None)
+    (cell:write! (.on-repeat mb) None)
+    (cell:write! (.on-next mb) None)
+    (cell:write! (.on-prev mb) None)
+    (cell:write! (.confirm-on-space mb) False)
+    (widget-input:input-widget-clear! (.input-widget mb))
+    (values))
+
+  ;;; Key handling — confirm, cancel, tab-complete, or delegate
+
+  (declare %confirm! (Minibuffer -> Void))
+  (define (%confirm! mb)
+    (let text = (widget-input:input-widget-text (.input-widget mb)))
+    (let cb-opt = (cell:read (.callback mb)))
+    (cell:write! (.active mb) False)
+    (cell:write! (.callback mb) None)
+    (cell:write! (.completions mb) Nil)
+    (cell:write! (.complete-fn mb) None)
+    (cell:write! (.confirm-on-space mb) False)
+    (widget-input:input-widget-clear! (.input-widget mb))
+    (match cb-opt
+      ((Some cb) (cb text))
+      ((None) (values))))
+
+  (declare %tab-complete! (Minibuffer -> Void))
+  (define (%tab-complete! mb)
+    (match (cell:read (.complete-fn mb))
+      ((None) (values))
+      ((Some cfn)
+       (let text = (widget-input:input-widget-text (.input-widget mb)))
+       (match (cfn text)
+         ((Tuple completed candidates)
+          (widget-input:input-widget-set-text! (.input-widget mb) completed)
+          (cell:write! (.completions mb) candidates)
+          (values))))))
+
+  (declare %delegate-key! (Minibuffer * input:Key * input:Modifier -> wt:EventResult))
+  (define (%delegate-key! mb key modifier)
+    (cell:write! (.completions mb) Nil)
+    (let result = (widget-input:input-widget-handle-key! (.input-widget mb) key modifier))
+    ;; Fire on-change if text was modified
+    (match (cell:read (.on-change mb))
+      ((Some ocfn) (ocfn (widget-input:input-widget-text (.input-widget mb))))
+      ((None) (values)))
+    result)
+
+  (declare %is-repeat-key? (Minibuffer * input:Key -> Boolean))
+  (define (%is-repeat-key? mb key)
+    "Check if KEY matches the registered repeat key."
+    (match (cell:read (.on-repeat-key mb))
+      ((None) False)
+      ((Some (input:KeyCtrl expected-ch))
+       (match key
+         ((input:KeyCtrl ch) (== ch expected-ch))
+         (_ False)))
+      ((Some (input:KeyF expected-n))
+       (match key
+         ((input:KeyF n) (== n expected-n))
+         (_ False)))
+      (_ False)))
+
+  (declare minibuffer-handle-key! (Minibuffer * input:Key * input:Modifier -> wt:EventResult))
+  (define (minibuffer-handle-key! mb key modifier)
+    (cond
+      ((not (minibuffer-active? mb))
+       wt:Ignored)
+      (True
+       (cond
+          ;; Repeat key (e.g., Ctrl+f again for find-next)
+          ((%is-repeat-key? mb key)
+           (match (cell:read (.on-repeat mb))
+             ((Some orfn) (orfn (widget-input:input-widget-text (.input-widget mb))))
+             ((None) (values)))
+           wt:Consumed)
+          (True
+           (match key
+             ((input:KeyEnter)
+              (let text = (widget-input:input-widget-text (.input-widget mb)))
+              (match (cell:read (.callback mb))
+                ((Some cb) (cb text))
+                ((None) (values)))
+              (minibuffer-cancel! mb)
+              wt:Consumed)
+             ((input:KeyEscape) (minibuffer-cancel! mb) wt:Consumed)
+             ((input:KeyCtrl #\g) (minibuffer-cancel! mb) wt:Consumed)
+             ((input:KeyTab) (%tab-complete! mb) wt:Consumed)
+             ((input:KeyChar ch)
+              (cond
+                ;; Symbol-picker mode: Space also confirms.
+                ((and (== ch #\Space) (cell:read (.confirm-on-space mb)))
+                 (let text = (widget-input:input-widget-text (.input-widget mb)))
+                 (match (cell:read (.callback mb))
+                   ((Some cb) (cb text))
+                   ((None) (values)))
+                 (minibuffer-cancel! mb)
+                 wt:Consumed)
+                (True (%delegate-key! mb key modifier))))
+             ((input:KeyBackspace) (%delegate-key! mb key modifier))
+             ((input:KeyDelete) (%delegate-key! mb key modifier))
+             ((input:KeyLeft) (%delegate-key! mb key modifier))
+             ((input:KeyRight) (%delegate-key! mb key modifier))
+             ((input:KeyHome) (%delegate-key! mb key modifier))
+             ((input:KeyEnd) (%delegate-key! mb key modifier))
+             ;; Up/Down: previous/next match
+             ((input:KeyUp)
+              (match (cell:read (.on-prev mb))
+                ((Some cb) (cb (widget-input:input-widget-text (.input-widget mb))))
+                ((None) (values)))
+              wt:Consumed)
+             ((input:KeyDown)
+              (match (cell:read (.on-next mb))
+                ((Some cb) (cb (widget-input:input-widget-text (.input-widget mb))))
+                ((None) (values)))
+              wt:Consumed)
+             ((input:KeyPageUp) wt:Consumed)
+             ((input:KeyPageDown) wt:Consumed)
+             ((input:KeyInsert) wt:Consumed)
+             ((input:KeyF _n) wt:Consumed)
+             ((input:KeyShiftedF _n) wt:Consumed)
+             ((input:KeyCtrl _ch) wt:Consumed)
+             ((input:KeyUnknown _n) wt:Consumed)))))))
+
+  ;;; Rendering
+
+  (declare minibuffer-render (Minibuffer * screen:Screen * wt:Rect -> Void))
+  (define (minibuffer-render mb scr rect)
+    (when (minibuffer-active? mb)
+      (widget-input:input-widget-render (.input-widget mb) scr rect))
+    (values))
+
+  (declare minibuffer-render-completions (Minibuffer * screen:Screen * UFix * UFix * UFix * UFix * color:Style -> Void))
+  (define (minibuffer-render-completions mb scr x y max-w max-y style)
+    (let items = (cell:read (.completions mb)))
+    (match items
+      ((Nil) (values))
+      (_
+       (let col-w = (%comp-col-width items max-w))
+       (let cols-per-row = (max 1 (lisp (-> UFix) (max-w col-w) (cl:floor max-w col-w))))
+       (%render-comp-items items scr x y max-w style 0 col-w cols-per-row max-y))))
+
+  (declare %comp-col-width ((List String) * UFix -> UFix))
+  (define (%comp-col-width items max-w)
+    "Compute column width for completion display."
+    (let max-len = (%max-str-len items 0))
+    (min (+ max-len 2) max-w))
+
+  (declare %max-str-len ((List String) * UFix -> UFix))
+  (define (%max-str-len items acc)
+    (match items
+      ((Nil) acc)
+      ((Cons s rest) (%max-str-len rest (max acc (cellw:string-cell-width s))))))
+
+  (declare %render-comp-items ((List String) * screen:Screen * UFix * UFix * UFix * color:Style * UFix * UFix * UFix * UFix -> Void))
+  (define (%render-comp-items items scr x y max-w style col col-w cols-per-row max-y)
+    (match items
+      ((Nil) (values))
+      ((Cons item rest)
+       (let cur-col = (if (>= col cols-per-row) 0 col))
+       (let cur-y = (if (>= col cols-per-row) (+ y 1) y))
+       (when (<= cur-y max-y)
+         (let cx = (+ x (* cur-col col-w)))
+         (render:draw-text-clipped scr (wt:Rect cx cur-y col-w 1) item cur-y cx style)
+         (%render-comp-items rest scr x cur-y max-w style (+ cur-col 1) col-w cols-per-row max-y))))))

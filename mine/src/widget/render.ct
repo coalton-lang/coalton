@@ -1,0 +1,164 @@
+(cl:defpackage #:mine/widget/render
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:screen #:mine/term/screen)
+   (#:color #:mine/term/color)
+   (#:wt #:mine/widget/types)
+   (#:cellw #:mine/text/width)
+   (#:str #:coalton/string))
+  (:export
+   #:fill-rect
+   #:draw-text
+   #:draw-text-clipped
+   #:draw-hline
+   #:draw-vline
+   #:draw-box
+   #:draw-scrollbar))
+
+(in-package #:mine/widget/render)
+
+(coalton-toplevel
+
+  ;;; fill-rect
+
+  (declare fill-rect (screen:Screen * wt:Rect * Char * color:Style -> Void))
+  (define (fill-rect scr rect ch style)
+    "Fill RECT on SCR with character CH using STYLE."
+    (let x0 = (wt:.rect-x rect))
+    (let y0 = (wt:.rect-y rect))
+    (let w  = (wt:.rect-width rect))
+    (let h  = (wt:.rect-height rect))
+    (lisp (-> Void) (scr x0 y0 w h ch style)
+      (cl:dotimes (ri h)
+        (cl:dotimes (ci w)
+          (screen:screen-set-cell scr (cl:+ y0 ri) (cl:+ x0 ci) ch style)))
+      (cl:values)))
+
+  ;;; draw-text
+
+  (declare draw-text (screen:Screen * UFix * UFix * String * color:Style -> Void))
+  (define (draw-text scr row col text style)
+    "Draw TEXT at (ROW, COL) on SCR with STYLE. No clipping."
+    (screen:screen-set-string scr row col text style)
+    (values))
+
+  ;;; draw-text-clipped
+
+  (declare draw-text-clipped (screen:Screen * wt:Rect * String * UFix * UFix * color:Style -> Void))
+  (define (draw-text-clipped scr rect text row col style)
+    "Draw TEXT at (ROW, COL) on SCR, clipped to RECT."
+    (let rx = (wt:.rect-x rect))
+    (let ry = (wt:.rect-y rect))
+    (let rw = (wt:.rect-width rect))
+    (let rh = (wt:.rect-height rect))
+    ;; Only draw if the row is within the rect
+    (when (and (>= row ry)
+              (< row (+ ry rh)))
+      (let max-col = (+ rx rw))
+      (lisp (-> Void) (scr text row col style rx max-col)
+        (cl:let ((cursor col)
+                 (len (cl:length text)))
+          (cl:dotimes (i len)
+            (cl:let* ((ch (cl:char text i))
+                      (span (mine/text/width:char-cell-width-cl ch))
+                      (end (cl:+ cursor span)))
+              (cl:when (cl:and (cl:plusp span)
+                               (cl:>= cursor rx)
+                               (cl:<= end max-col))
+                (screen:screen-set-cell scr row cursor ch style))
+              (cl:incf cursor span)
+              (cl:when (cl:>= cursor max-col)
+                (cl:return)))))
+        (cl:values)))
+    (values))
+
+  ;;; draw-hline
+
+  (declare draw-hline (screen:Screen * UFix * UFix * UFix * Char * color:Style -> Void))
+  (define (draw-hline scr row col width ch style)
+    "Draw a horizontal line of CH at (ROW, COL) for WIDTH columns."
+    (lisp (-> Void) (scr row col width ch style)
+      (cl:dotimes (i width)
+        (screen:screen-set-cell scr row (cl:+ col i) ch style))
+      (cl:values)))
+
+  ;;; draw-vline
+
+  (declare draw-vline (screen:Screen * UFix * UFix * UFix * Char * color:Style -> Void))
+  (define (draw-vline scr col row height ch style)
+    "Draw a vertical line of CH at column COL starting at ROW for HEIGHT rows."
+    (lisp (-> Void) (scr col row height ch style)
+      (cl:dotimes (i height)
+        (screen:screen-set-cell scr (cl:+ row i) col ch style))
+      (cl:values)))
+
+  ;;; draw-box
+
+  ;; Unicode box-drawing characters via code-char
+  (declare %box-dr (Void -> Char))
+  (define (%box-dr) (lisp (-> Char) () (cl:code-char 9484)))  ;; U+250C down-and-right
+  (declare %box-dl (Void -> Char))
+  (define (%box-dl) (lisp (-> Char) () (cl:code-char 9488)))  ;; U+2510 down-and-left
+  (declare %box-ur (Void -> Char))
+  (define (%box-ur) (lisp (-> Char) () (cl:code-char 9492)))  ;; U+2514 up-and-right
+  (declare %box-ul (Void -> Char))
+  (define (%box-ul) (lisp (-> Char) () (cl:code-char 9496)))  ;; U+2518 up-and-left
+  (declare %box-h (Void -> Char))
+  (define (%box-h) (lisp (-> Char) () (cl:code-char 9472)))   ;; U+2500 horizontal
+  (declare %box-v (Void -> Char))
+  (define (%box-v) (lisp (-> Char) () (cl:code-char 9474)))   ;; U+2502 vertical
+
+  (declare draw-box (screen:Screen * wt:Rect * color:Style -> Void))
+  (define (draw-box scr rect style)
+    "Draw a single-line Unicode box border around RECT."
+    (let x0 = (wt:.rect-x rect))
+    (let y0 = (wt:.rect-y rect))
+    (let w  = (wt:.rect-width rect))
+    (let h  = (wt:.rect-height rect))
+    (when (and (>= w 2) (>= h 2))
+      (let x1 = (- (+ x0 w) 1))
+      (let y1 = (- (+ y0 h) 1))
+      ;; Corners
+      (screen:screen-set-cell scr y0 x0 (%box-dr) style)
+      (screen:screen-set-cell scr y0 x1 (%box-dl) style)
+      (screen:screen-set-cell scr y1 x0 (%box-ur) style)
+      (screen:screen-set-cell scr y1 x1 (%box-ul) style)
+      ;; Top and bottom edges
+      (draw-hline scr y0 (+ x0 1) (- w 2) (%box-h) style)
+      (draw-hline scr y1 (+ x0 1) (- w 2) (%box-h) style)
+      ;; Left and right edges
+      (draw-vline scr x0 (+ y0 1) (- h 2) (%box-v) style)
+      (draw-vline scr x1 (+ y0 1) (- h 2) (%box-v) style))
+    (values))
+
+  ;;; Scrollbar
+
+  (declare draw-scrollbar (screen:Screen * UFix * UFix * UFix * UFix * UFix * color:Style * color:Style -> Void))
+  (define (draw-scrollbar scr col y0 height total-lines scroll-offset track-style thumb-style)
+    "Draw a vertical scrollbar at column COL from row Y0 for HEIGHT rows.
+TOTAL-LINES is the total content length, SCROLL-OFFSET is the current top line."
+    (cond
+      ;; No scrollbar needed — content fits
+      ((<= total-lines height)
+       (values))
+      ;; Scrollbar needed
+      (True
+       (let thumb-size = (max 1 (lisp (-> UFix) (height total-lines)
+                             (cl:floor (cl:* height height) total-lines))))
+       (let thumb-pos = (lisp (-> UFix) (scroll-offset total-lines height thumb-size)
+                            (cl:min (cl:- height thumb-size)
+                                    (cl:floor (cl:* scroll-offset (cl:- height thumb-size))
+                                              (cl:max 1 (cl:- total-lines height))))))
+       ;; Draw track
+       (%draw-scrollbar-col scr col y0 height 0 thumb-pos thumb-size
+                              track-style thumb-style))))
+
+  (declare %draw-scrollbar-col (screen:Screen * UFix * UFix * UFix * UFix * UFix * UFix * color:Style * color:Style -> Void))
+  (define (%draw-scrollbar-col scr col y0 height idx thumb-pos thumb-size track-style thumb-style)
+    (when (< idx height)
+      (let is-thumb = (and (>= idx thumb-pos) (< idx (+ thumb-pos thumb-size))))
+      (let ch = (if is-thumb #\┃ #\│))
+      (let style = (if is-thumb thumb-style track-style))
+      (screen:screen-set-cell scr (+ y0 idx) col ch style)
+      (%draw-scrollbar-col scr col y0 height (+ idx 1) thumb-pos thumb-size
+                           track-style thumb-style))))

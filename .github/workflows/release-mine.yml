@@ -1,0 +1,72 @@
+name: Release mine
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit SHA to release from coalton"
+        required: true
+        type: string
+      tag:
+        description: "Release tag (e.g. mine-v1.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch-release:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Validate release inputs
+        id: validate
+        env:
+          SHA: ${{ inputs.sha }}
+          TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          case "$TAG" in
+            mine-v*) ;;
+            *)
+              echo "Tag must start with mine-v" >&2
+              exit 1
+              ;;
+          esac
+
+          git fetch --force --tags origin
+          git cat-file -e "${SHA}^{commit}" 2>/dev/null || {
+            echo "Unknown commit SHA: $SHA" >&2
+            exit 1
+          }
+
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "Tag already exists: $TAG" >&2
+            exit 1
+          fi
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release already exists: $TAG" >&2
+            exit 1
+          fi
+
+          echo "version=${TAG#mine-v}" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch signed release build
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.MINE_BUILD_DISPATCH_TOKEN }}
+          repository: coalton-lang/mine-build
+          event-type: release-mine
+          client-payload: '{"sha":"${{ inputs.sha }}","tag":"${{ inputs.tag }}","version":"${{ steps.validate.outputs.version }}"}'
+
+      - name: Release summary
+        run: |
+          echo "Triggered mine-build release for ${{ inputs.tag }} at ${{ inputs.sha }}."
+          echo "Monitor: https://github.com/coalton-lang/mine-build/actions"

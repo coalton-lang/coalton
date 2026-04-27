@@ -1,0 +1,44 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "mine",
+  "version": "0.0.0-dev",
+  "identifier": "org.coalton.mine",
+  "build": {
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "mine",
+        "width": 900,
+        "height": 600,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app"],
+    "externalBin": ["binaries/mine-core"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "files": {
+        "Resources/Assets.car": "icons/Assets.car"
+      },
+      "infoPlist": "Info.plist",
+      "hardenedRuntime": true,
+      "entitlements": "entitlements.plist"
+    }
+  }
+}

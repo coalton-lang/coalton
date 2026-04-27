@@ -1,0 +1,216 @@
+(cl:defpackage #:mine/term/color
+  (:use #:coalton #:coalton-prelude)
+  (:export
+   #:Color
+   #:ColorDefault #:Color16 #:Color256 #:ColorRGB
+   #:Attr
+   #:AttrNone #:AttrBold #:AttrDim #:AttrItalic
+   #:AttrUnderline #:AttrReverse
+   #:Style #:Style
+   #:default-style
+   #:.style-fg #:.style-bg #:.style-attr
+   #:with-fg #:with-bg #:with-attr
+   ;; Basic
+   #:black #:white
+   ;; Tango palette - greys
+   #:aluminium-1 #:aluminium-3 #:aluminium-4 #:aluminium-5 #:aluminium-6
+   #:charcoal #:jet #:slate #:dim-grey
+   ;; Non-Tango greys
+   #:silver #:onyx #:light-grey
+   ;; Tango palette - blues
+   #:sky-blue #:dark-blue #:baby-blue
+   ;; Tango palette - reds
+   #:scarlet-red #:dark-red #:tomato
+   ;; Non-Tango reds
+   #:coral
+   ;; Tango palette - yellows
+   #:butter #:dark-butter
+   ;; Tango palette - other
+   #:orange #:plum #:chameleon
+   ;; Non-Tango
+   #:dark-slate-blue #:brown #:gold
+   ;; Semantic - backgrounds
+   #:selection-bg #:search-match-bg #:search-current-bg #:highlight-bg #:match-paren-bg
+   #:panel-bg #:repl-bg #:current-line-bg #:field-bg
+   #:status-bar-bg #:accent-bg #:error-dialog-bg
+   ;; Semantic - foregrounds
+   #:text-fg #:text-dim-fg #:text-dimmer-fg
+   #:accent-fg #:error-fg #:warning-fg #:info-fg
+   #:gutter-fg #:border-fg
+   ;; Semantic - scrollbar
+   #:scrollbar-track-fg #:scrollbar-track-bg #:scrollbar-thumb-fg))
+
+(in-package #:mine/term/color)
+
+(coalton-toplevel
+
+  ;;; Color
+
+  (define-type Color
+    "Terminal color specification."
+    ColorDefault
+    (Color16 UFix)
+    (Color256 UFix)
+    (ColorRGB UFix UFix UFix))
+
+  (define-instance (Eq Color)
+    (define (== a b)
+      (match (Tuple a b)
+        ((Tuple (ColorDefault) (ColorDefault))
+         True)
+        ((Tuple (Color16 x) (Color16 y))
+         (== x y))
+        ((Tuple (Color256 x) (Color256 y))
+         (== x y))
+        ((Tuple (ColorRGB r1 g1 b1) (ColorRGB r2 g2 b2))
+         (and (== r1 r2) (and (== g1 g2) (== b1 b2))))
+        (_ False))))
+
+  ;;; Attr
+
+  (repr :enum)
+  (define-type Attr
+    "Text attribute for terminal rendering."
+    AttrNone
+    AttrBold
+    AttrDim
+    AttrItalic
+    AttrUnderline
+    AttrReverse)
+
+  (define-instance (Eq Attr)
+    (define (== a b)
+      (match (Tuple a b)
+        ((Tuple (AttrNone) (AttrNone)) True)
+        ((Tuple (AttrBold) (AttrBold)) True)
+        ((Tuple (AttrDim) (AttrDim)) True)
+        ((Tuple (AttrItalic) (AttrItalic)) True)
+        ((Tuple (AttrUnderline) (AttrUnderline)) True)
+        ((Tuple (AttrReverse) (AttrReverse)) True)
+        (_ False))))
+
+  ;;; Style
+
+  (define-struct Style
+    "Combined foreground color, background color, and text attribute."
+    (style-fg Color)
+    (style-bg Color)
+    (style-attr Attr))
+
+  (define-instance (Eq Style)
+    (define (== a b)
+      (and (== (.style-fg a) (.style-fg b))
+           (and (== (.style-bg a) (.style-bg b))
+                (== (.style-attr a) (.style-attr b))))))
+
+  ;;; Defaults and helpers
+
+  (declare default-style Style)
+  (define default-style
+    "Style with default foreground and black background."
+    (Style (ColorRGB 255 255 255) (ColorRGB 0 0 0) AttrNone))
+
+  (declare with-fg (Style * Color -> Style))
+  (define (with-fg s c)
+    "Return a new style with the foreground color replaced."
+    (Style c (.style-bg s) (.style-attr s)))
+
+  (declare with-bg (Style * Color -> Style))
+  (define (with-bg s c)
+    "Return a new style with the background color replaced."
+    (Style (.style-fg s) c (.style-attr s)))
+
+  (declare with-attr (Style * Attr -> Style))
+  (define (with-attr s a)
+    "Return a new style with the attribute replaced."
+    (Style (.style-fg s) (.style-bg s) a)))
+
+;;; Named colors
+
+(coalton-toplevel
+
+  ;; Basic
+
+  (define black (ColorRGB   0   0   0))
+  (define white (ColorRGB 255 255 255))
+
+  ;; Tango palette - greys / aluminium
+
+  (define aluminium-1 (ColorRGB 238 238 236))
+  (define aluminium-3 (ColorRGB 186 189 182))
+  (define aluminium-4 (ColorRGB 136 138 133))
+  (define aluminium-5 (ColorRGB  85  87  83))
+  (define aluminium-6 (ColorRGB  46  52  52))
+  (define charcoal    (ColorRGB  37  43  43))
+  (define jet         (ColorRGB  32  36  36))
+  (define slate       (ColorRGB  54  60  60))
+  (define dim-grey    (ColorRGB  60  66  66))
+
+  ;; Non-Tango greys
+
+  (define silver     (ColorRGB 187 187 188))
+  (define onyx       (ColorRGB  34  34  34))
+  (define light-grey (ColorRGB 200 200 200))
+
+  ;; Blues
+
+  (define sky-blue  (ColorRGB 114 159 207))
+  (define dark-blue (ColorRGB  52 101 164))
+  (define baby-blue (ColorRGB 135 206 250))
+
+  ;; Reds
+
+  (define scarlet-red (ColorRGB 239  41  41))
+  (define dark-red    (ColorRGB 140   0   0))
+  (define tomato      (ColorRGB 255  99  71))
+  (define coral       (ColorRGB 200  60  60))
+
+  ;; Yellows
+
+  (define butter      (ColorRGB 252 233  79))
+  (define dark-butter (ColorRGB 237 212   0))
+
+  ;; Other
+
+  (define orange    (ColorRGB 252 175  62))
+  (define plum      (ColorRGB 173 127 168))
+  (define chameleon (ColorRGB 138 226  52))
+
+  ;; Non-Tango
+
+  (define dark-slate-blue (ColorRGB  72  61 139))
+  (define brown           (ColorRGB 161 105  18))
+  (define gold            (ColorRGB 214 138  22))
+
+  ;;; Semantic names - backgrounds
+
+  (define selection-bg      dark-slate-blue)
+  (define search-match-bg   brown)
+  (define search-current-bg gold)
+  (define highlight-bg      sky-blue)
+  (define match-paren-bg   (ColorRGB 52 101 164))
+  (define panel-bg          aluminium-6)
+  (define repl-bg           charcoal)
+  (define current-line-bg   charcoal)
+  (define field-bg          jet)
+  (define status-bar-bg     aluminium-5)
+  (define accent-bg         dark-blue)
+  (define error-dialog-bg   dark-red)
+
+  ;;; Semantic names - foregrounds
+
+  (define text-fg        aluminium-1)
+  (define text-dim-fg    aluminium-3)
+  (define text-dimmer-fg aluminium-4)
+  (define accent-fg      sky-blue)
+  (define error-fg       scarlet-red)
+  (define warning-fg     orange)
+  (define info-fg        butter)
+  (define gutter-fg      aluminium-5)
+  (define border-fg      aluminium-5)
+
+  ;;; Semantic names - scrollbar
+
+  (define scrollbar-track-fg dim-grey)
+  (define scrollbar-track-bg aluminium-6)
+  (define scrollbar-thumb-fg aluminium-3))

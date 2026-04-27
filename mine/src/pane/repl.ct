@@ -1,0 +1,495 @@
+(cl:defpackage #:mine/pane/repl
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:screen #:mine/term/screen)
+   (#:color #:mine/term/color)
+   (#:wt #:mine/widget/types)
+   (#:render #:mine/widget/render)
+   (#:cell #:coalton/cell)
+   (#:buf #:mine/buffer/buffer)
+   (#:gap #:mine/buffer/gap)
+   (#:cursor #:mine/edit/cursor)
+   (#:paredit #:mine/syntax/paredit)
+   (#:vec #:coalton/vector)
+   (#:str #:coalton/string)
+   (#:widget-text #:mine/widget/text)
+   (#:widget-input #:mine/widget/input)
+   (#:input #:mine/term/input)
+   (#:ev #:mine/event/types))
+  (:export
+   #:ReplPane
+   #:repl-pane-new
+   #:repl-pane-render
+   #:repl-pane-clear-output!
+   #:repl-pane-append-output!
+   #:repl-pane-append-system!
+   #:repl-pane-get-input
+   #:repl-pane-clear-input!
+   #:repl-pane-handle-key!
+   #:repl-pane-handle-structural-key!
+   #:repl-pane-history-up!
+   #:repl-pane-history-down!
+   #:repl-pane-add-history!
+   #:repl-pane-scroll-output-up!
+   #:repl-pane-scroll-output-down!
+   #:repl-pane-output-line-count
+   #:repl-pane-output-scroll
+   #:repl-pane-set-output-scroll!
+   #:repl-pane-start-selection!
+   #:repl-pane-extend-selection!
+   #:repl-pane-clear-selection!
+   #:repl-pane-has-selection?
+   #:repl-pane-copy-selection!
+   #:repl-pane-input-cursor
+   #:repl-pane-paste-to-input!
+   #:repl-pane-insert-newline!
+   #:repl-pane-input-complete?
+   #:repl-pane-input-line-count
+   #:repl-pane-set-prompt!
+   #:repl-pane-prompt-text))
+
+(in-package #:mine/pane/repl)
+
+(coalton-toplevel
+
+  ;;; ReplPane
+
+  (define-struct ReplPane
+    "An interactive REPL pane with output history and input line."
+    (output        widget-text:TextWidget)
+    (input-widget  widget-input:InputWidget)
+    (history       (Cell (Vector String)))
+    (history-pos   (Cell UFix))
+    (prompt        (Cell String)))
+
+  (declare repl-pane-new (Void -> ReplPane))
+  (define (repl-pane-new)
+    "Create a new REPL pane with the default Coalton prompt."
+    (let prompt-style = (color:Style color:accent-fg
+                                      color:repl-bg
+                                      color:AttrBold))
+    (let text-style = (color:Style color:text-fg
+                                    color:repl-bg
+                                    color:AttrNone))
+    (let iw = (widget-input:input-widget-new "> " prompt-style text-style))
+    (widget-input:input-widget-set-hint! iw "Shift+Enter for newline")
+    (ReplPane (widget-text:text-widget-new color:default-style)
+              iw
+              (cell:new (vec:new))
+              (cell:new 0)
+              (cell:new "> ")))
+
+  ;;; Output management
+
+  (declare repl-pane-clear-output! (ReplPane -> Void))
+  (define (repl-pane-clear-output! rp)
+    "Clear the REPL output area."
+    (widget-text:text-widget-clear! (.output rp))
+    (values))
+
+  (declare repl-pane-append-output! (ReplPane * String -> Void))
+  (define (repl-pane-append-output! rp text)
+    "Append text to the REPL output area."
+    (widget-text:text-widget-append! (.output rp) text)
+    (widget-text:text-widget-scroll-to-bottom! (.output rp))
+    (values))
+
+  (declare repl-pane-append-system! (ReplPane * String -> Void))
+  (define (repl-pane-append-system! rp text)
+    "Append a system/info line to the REPL output (rendered in dim italic)."
+    (widget-text:text-widget-append-system! (.output rp) text)
+    (widget-text:text-widget-scroll-to-bottom! (.output rp))
+    (values))
+
+  ;;; Input management
+
+  (declare repl-pane-get-input (ReplPane -> String))
+  (define (repl-pane-get-input rp)
+    "Get the current text from the input widget."
+    (widget-input:input-widget-text (.input-widget rp)))
+
+  (declare repl-pane-input-cursor (ReplPane -> UFix))
+  (define (repl-pane-input-cursor rp)
+    "Get the current cursor position in the input widget."
+    (cell:read (widget-input:.iw-cursor (.input-widget rp))))
+
+  (declare repl-pane-clear-input! (ReplPane -> Void))
+  (define (repl-pane-clear-input! rp)
+    "Clear the input widget."
+    (widget-input:input-widget-clear! (.input-widget rp))
+    (values))
+
+  (declare repl-pane-insert-newline! (ReplPane -> Void))
+  (define (repl-pane-insert-newline! rp)
+    "Insert a newline into the input widget at the cursor."
+    (widget-input:input-widget-insert-newline! (.input-widget rp))
+    (values))
+
+  (declare repl-pane-set-prompt! (ReplPane * String -> Void))
+  (define (repl-pane-set-prompt! rp text)
+    "Set the REPL input prompt string."
+    (cell:write! (widget-input:.iw-prompt (.input-widget rp)) text)
+    (values))
+
+  (declare repl-pane-prompt-text (ReplPane -> String))
+  (define (repl-pane-prompt-text rp)
+    "Return the current prompt string."
+    (cell:read (widget-input:.iw-prompt (.input-widget rp))))
+
+  (declare repl-pane-input-line-count (ReplPane -> UFix))
+  (define (repl-pane-input-line-count rp)
+    "Return the number of lines in the REPL input."
+    (widget-input:input-widget-line-count (.input-widget rp)))
+
+  ;;; Balance check
+
+  (declare repl-pane-input-complete? (ReplPane -> Boolean))
+  (define (repl-pane-input-complete? rp)
+    "Return True if the REPL input has balanced parens, brackets, and strings.
+Handles line comments (;) and character literals (#\\)."
+    (let text = (widget-input:input-widget-text (.input-widget rp)))
+    (%input-complete? text))
+
+  (declare %input-complete? (String -> Boolean))
+  (define (%input-complete? text)
+    "Check if TEXT has balanced delimiters."
+    (lisp (-> Boolean) (text)
+      (cl:let ((len (cl:length text))
+               (depth 0)
+               (in-string cl:nil)
+               (i 0))
+        (cl:loop
+          (cl:when (cl:>= i len) (cl:return))
+          (cl:let ((ch (cl:char text i)))
+            (cl:cond
+              ;; Inside a string
+              (in-string
+               (cl:cond
+                 ;; Backslash escape -- skip next char
+                 ((cl:char= ch #\\)
+                  (cl:incf i))
+                 ;; End of string
+                 ((cl:char= ch #\")
+                  (cl:setf in-string cl:nil))))
+              ;; Line comment -- skip to end of line
+              ((cl:char= ch #\;)
+               (cl:let ((nl (cl:position #\Newline text :start i)))
+                 (cl:setf i (cl:if nl nl (cl:1- len)))))
+              ;; Character literal -- skip #\x
+              ((cl:and (cl:char= ch #\#)
+                       (cl:< (cl:1+ i) len)
+                       (cl:char= (cl:char text (cl:1+ i)) #\\))
+               (cl:incf i (cl:if (cl:< (cl:+ i 2) len) 2 1)))
+              ;; Open delimiter
+              ((cl:or (cl:char= ch #\() (cl:char= ch #\[))
+               (cl:incf depth))
+              ;; Close delimiter
+              ((cl:or (cl:char= ch #\)) (cl:char= ch #\]))
+               (cl:decf depth))
+              ;; Start of string
+              ((cl:char= ch #\")
+               (cl:setf in-string cl:t))))
+          (cl:incf i))
+        (cl:if (cl:and (cl:<= depth 0) (cl:not in-string))
+               True False))))
+
+  ;;; History
+
+  (declare repl-pane-add-history! (ReplPane * String -> Void))
+  (define (repl-pane-add-history! rp text)
+    "Add an entry to the command history."
+    (vec:push! text (cell:read (.history rp)))
+    (cell:write! (.history-pos rp) (vec:length (cell:read (.history rp))))
+    (values))
+
+  (declare repl-pane-history-up! (ReplPane -> Void))
+  (define (repl-pane-history-up! rp)
+    "Navigate to the previous history entry."
+    (let pos = (cell:read (.history-pos rp)))
+    (let hist = (cell:read (.history rp)))
+    (when (> pos 0)
+      (let new-pos = (- pos 1))
+      (cell:write! (.history-pos rp) new-pos)
+      (match (vec:index-unsafe new-pos hist)
+        (entry
+         (widget-input:input-widget-set-text! (.input-widget rp) entry))))
+    (values))
+
+  (declare repl-pane-history-down! (ReplPane -> Void))
+  (define (repl-pane-history-down! rp)
+    "Navigate to the next history entry."
+    (let pos = (cell:read (.history-pos rp)))
+    (let hist = (cell:read (.history rp)))
+    (let hist-len = (vec:length hist))
+    (cond
+      ;; Past the end -- clear input.
+      ((>= (+ pos 1) hist-len)
+       (cell:write! (.history-pos rp) hist-len)
+       (widget-input:input-widget-clear! (.input-widget rp))
+       (values))
+      ;; Show next entry.
+      (True
+       (let new-pos = (+ pos 1))
+       (cell:write! (.history-pos rp) new-pos)
+       (match (vec:index-unsafe new-pos hist)
+         (entry
+          (widget-input:input-widget-set-text! (.input-widget rp) entry)))
+       (values))))
+
+  ;;; Output scrolling
+
+  (declare repl-pane-scroll-output-up! (ReplPane * UFix -> Void))
+  (define (repl-pane-scroll-output-up! rp n)
+    "Scroll the output area up by N lines."
+    (widget-text:text-widget-scroll-up! (.output rp) n)
+    (values))
+
+  (declare repl-pane-scroll-output-down! (ReplPane * UFix -> Void))
+  (define (repl-pane-scroll-output-down! rp n)
+    "Scroll the output area down by N lines."
+    (widget-text:text-widget-scroll-down! (.output rp) n)
+    (values))
+
+  (declare repl-pane-output-line-count (ReplPane -> UFix))
+  (define (repl-pane-output-line-count rp)
+    "Return the number of lines in the output."
+    (widget-text:text-widget-line-count (.output rp)))
+
+  (declare repl-pane-output-scroll (ReplPane -> UFix))
+  (define (repl-pane-output-scroll rp)
+    "Return the current output scroll offset."
+    (cell:read (widget-text:.tw-scroll (.output rp))))
+
+  (declare repl-pane-set-output-scroll! (ReplPane * UFix -> Void))
+  (define (repl-pane-set-output-scroll! rp n)
+    "Set the output scroll offset."
+    (cell:write! (widget-text:.tw-scroll (.output rp)) n)
+    (values))
+
+  ;;; Selection
+
+  (declare repl-pane-start-selection! (ReplPane * UFix * UFix -> Void))
+  (define (repl-pane-start-selection! rp line col)
+    "Start a selection in the output area at (LINE, COL)."
+    (widget-text:text-widget-start-selection! (.output rp) line col)
+    (values))
+
+  (declare repl-pane-extend-selection! (ReplPane * UFix * UFix -> Void))
+  (define (repl-pane-extend-selection! rp line col)
+    "Extend the selection in the output area to (LINE, COL)."
+    (widget-text:text-widget-extend-selection! (.output rp) line col)
+    (values))
+
+  (declare repl-pane-clear-selection! (ReplPane -> Void))
+  (define (repl-pane-clear-selection! rp)
+    "Clear the output selection."
+    (widget-text:text-widget-clear-selection! (.output rp))
+    (values))
+
+  (declare repl-pane-has-selection? (ReplPane -> Boolean))
+  (define (repl-pane-has-selection? rp)
+    "Return True if the output has an active selection."
+    (widget-text:text-widget-has-selection? (.output rp)))
+
+  (declare repl-pane-copy-selection! (ReplPane -> String))
+  (define (repl-pane-copy-selection! rp)
+    "Return the selected text from the output."
+    (widget-text:text-widget-selected-text (.output rp)))
+
+  (declare repl-pane-paste-to-input! (ReplPane * String -> Void))
+  (define (repl-pane-paste-to-input! rp text)
+    "Insert TEXT into the input widget at the cursor position."
+    (widget-input:input-widget-insert-string! (.input-widget rp) text)
+    (values))
+
+  ;;; Structural input editing
+
+  (declare %with-repl-input-buffer!
+    (ReplPane * (buf:Buffer * cursor:CursorState -> Void) -> Void))
+  (define (%with-repl-input-buffer! rp action)
+    "Run ACTION on the REPL input using the normal editor buffer APIs.
+
+The REPL input widget stores plain text, while paredit operates on a Buffer
+and CursorState. This adapter keeps the REPL binding area small and lets the
+REPL reuse the editor's structural editing implementation."
+    (let iw = (.input-widget rp))
+    (let text = (widget-input:input-widget-text iw))
+    (let cur = (cell:read (widget-input:.iw-cursor iw)))
+    (let buffer = (buf:buffer-new (buf:BufferId 0) "*repl-input*"))
+    (let gb = (buf:buffer-gap buffer))
+    (gap:gap-insert-string! gb 0 text)
+    (let cs = (cursor:cursor-new))
+    (cursor:cursor-move-to-position! cs (min cur (gap:gap-length gb)))
+    (action buffer cs)
+    (let updated = (gap:gap-to-string gb))
+    (let updated-len = (str:length updated))
+    (cell:write! (widget-input:.iw-text iw) updated)
+    (cell:write! (widget-input:.iw-cursor iw)
+                 (min (cursor:cursor-position cs) updated-len))
+    (values))
+
+  (declare %repl-paredit! (ReplPane * (buf:Buffer * cursor:CursorState -> Void) -> wt:EventResult))
+  (define (%repl-paredit! rp action)
+    (%with-repl-input-buffer! rp action)
+    wt:Consumed)
+
+  (declare %plain-char-modifier? (input:Modifier -> Boolean))
+  (define (%plain-char-modifier? modifier)
+    (or (== modifier input:ModNone)
+        (== modifier input:ModShift)))
+
+  (declare repl-pane-handle-structural-key!
+    (ReplPane * input:Key * input:Modifier -> wt:EventResult))
+  (define (repl-pane-handle-structural-key! rp key modifier)
+    "Handle structural editing keys for the REPL input.
+
+Returns Ignored for non-structural keys so callers can fall back to the
+ordinary input-widget handler."
+    (match (Tuple key modifier)
+      ((Tuple (input:KeyRight) (input:ModAlt))
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-forward-join! buffer cs))))
+      ((Tuple (input:KeyRight) (input:ModAltShift))
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-backward-leave! buffer cs))))
+      ((Tuple (input:KeyLeft) (input:ModAlt))
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-forward-leave! buffer cs))))
+      ((Tuple (input:KeyLeft) (input:ModAltShift))
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-backward-join! buffer cs))))
+      ((Tuple (input:KeyUp) (input:ModAlt))
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-shed! buffer cs))))
+      ((Tuple (input:KeyDown) (input:ModAlt))
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-split! buffer cs))))
+      ((Tuple (input:KeyBackspace) (input:ModAlt))
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-delete-enclosing! buffer cs))))
+      ((Tuple (input:KeyBackspace) (input:ModCtrl))
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-backspace-word! buffer cs))))
+      ((Tuple (input:KeyBackspace) _)
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-backspace! buffer cs))))
+      ((Tuple (input:KeyDelete) _)
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-delete! buffer cs))))
+      ((Tuple (input:KeyChar #\() _)
+       (if (%plain-char-modifier? modifier)
+           (%repl-paredit! rp
+                           (fn (buffer cs)
+                             (paredit:paredit-open-paren! buffer cs)))
+           wt:Ignored))
+      ((Tuple (input:KeyChar #\)) _)
+       (if (%plain-char-modifier? modifier)
+           (%repl-paredit! rp
+                           (fn (buffer cs)
+                             (paredit:paredit-close-paren! buffer cs)))
+           wt:Ignored))
+      ((Tuple (input:KeyChar #\[) _)
+       (if (%plain-char-modifier? modifier)
+           (%repl-paredit! rp
+                           (fn (buffer cs)
+                             (paredit:paredit-open-bracket! buffer cs)))
+           wt:Ignored))
+      ((Tuple (input:KeyChar #\]) _)
+       (if (%plain-char-modifier? modifier)
+           (%repl-paredit! rp
+                           (fn (buffer cs)
+                             (paredit:paredit-close-bracket! buffer cs)))
+           wt:Ignored))
+      ((Tuple (input:KeyChar #\") _)
+       (if (%plain-char-modifier? modifier)
+           (%repl-paredit! rp
+                           (fn (buffer cs)
+                             (paredit:paredit-doublequote! buffer cs)))
+           wt:Ignored))
+      ((Tuple (input:KeyChar #\f) (input:ModAlt))
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-forward-sexp! (buf:buffer-gap buffer) cs))))
+      ((Tuple (input:KeyChar #\b) (input:ModAlt))
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-backward-sexp! (buf:buffer-gap buffer) cs))))
+      (_ wt:Ignored)))
+
+  ;;; Key handling
+
+  (declare repl-pane-handle-key! (ReplPane * input:Key * input:Modifier -> wt:EventResult))
+  (define (repl-pane-handle-key! rp key modifier)
+    "Handle a key press in the REPL pane.
+Up/Down navigate within multi-line input first; fall through to history
+only when at the first/last line."
+    (match (Tuple key modifier)
+      ;; Up arrow -- try moving within input first, then history.
+      ((Tuple (input:KeyUp) (input:ModNone))
+       (match (widget-input:input-widget-handle-key! (.input-widget rp) key modifier)
+         ((wt:Consumed) wt:Consumed)
+         ((wt:Ignored)
+          (repl-pane-history-up! rp)
+          wt:Consumed)))
+      ;; Down arrow -- try moving within input first, then history.
+      ((Tuple (input:KeyDown) (input:ModNone))
+       (match (widget-input:input-widget-handle-key! (.input-widget rp) key modifier)
+         ((wt:Consumed) wt:Consumed)
+         ((wt:Ignored)
+          (repl-pane-history-down! rp)
+          wt:Consumed)))
+      ;; Delegate to input widget.
+      (_
+       (widget-input:input-widget-handle-key! (.input-widget rp) key modifier))))
+
+  ;;; Rendering
+
+  (declare repl-pane-render (ReplPane * screen:Screen * wt:Rect -> Void))
+  (define (repl-pane-render rp scr rect)
+    "Render the REPL pane: output takes top area, input takes bottom.
+Input area grows dynamically based on line count, up to half the pane height."
+    (let h = (wt:.rect-height rect))
+    (let input-lines = (widget-input:input-widget-line-count (.input-widget rp)))
+    ;; Input height: at least 1, at most half the pane
+    (let max-input-h = (max 1 (lisp (-> UFix) (h) (cl:floor h 2))))
+    (let input-h = (max 1 (min input-lines max-input-h)))
+    (cond
+      ;; Not enough room -- just draw the input.
+      ((<= h 1)
+       (widget-input:input-widget-render (.input-widget rp) scr rect))
+      ;; Split: output above, input below.
+      (True
+       (let output-h = (- h input-h))
+       (let output-rect = (wt:Rect (wt:.rect-x rect)
+                                     (wt:.rect-y rect)
+                                     (wt:.rect-width rect)
+                                     output-h))
+       (let input-rect = (wt:Rect (wt:.rect-x rect)
+                                    (+ (wt:.rect-y rect) output-h)
+                                    (wt:.rect-width rect)
+                                    input-h))
+       (widget-text:text-widget-render (.output rp) scr output-rect)
+       ;; Scrollbar on output area
+       (let total-lines = (widget-text:text-widget-line-count (.output rp)))
+       (let scroll-off = (cell:read (widget-text:.tw-scroll (.output rp))))
+       (let sb-col = (- (+ (wt:.rect-x rect) (wt:.rect-width rect)) 1))
+       (let track-s = (color:Style color:scrollbar-track-fg
+                                     color:scrollbar-track-bg
+                                     color:AttrNone))
+       (let thumb-s = (color:Style color:scrollbar-thumb-fg
+                                     color:scrollbar-track-bg
+                                     color:AttrNone))
+       (render:draw-scrollbar scr sb-col (wt:.rect-y rect) output-h
+                               total-lines scroll-off track-s thumb-s)
+       (widget-input:input-widget-render (.input-widget rp) scr input-rect)
+       (values)))))
