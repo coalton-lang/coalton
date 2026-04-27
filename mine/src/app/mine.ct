@@ -60,7 +60,7 @@
    #:get-debugger-condition-cell #:get-debugger-items
    #:get-debugger-selected-cell #:get-conn-stream #:get-diagnostics
    #:get-jump-stack #:get-quit-cell #:get-next-req-id-cell
-   #:get-runtime-mgr))
+   #:get-runtime-mgr #:get-quick-result-state))
 
 (in-package #:mine/app/mine)
 
@@ -214,7 +214,9 @@
     (ms-debugger-body-h   (Cell UFix)) ;; 43 -- cached debugger body height (rows) from last render
     (ms-debugger-total    (Cell UFix)) ;; 44 -- cached debugger total line count from last render
     (ms-debugger-follow   (Cell Boolean)) ;; 45 -- scroll to keep selection visible on next render
-    (ms-beam-request-id   (Cell (Optional msg:RequestId)))) ;; 46 -- id of pending Beam Project request, if any
+    (ms-beam-request-id   (Cell (Optional msg:RequestId))) ;; 46 -- id of pending Beam Project request, if any
+    (ms-quick-result-state  NativeBox) ;; 47 -- CL plist for the transient result popup
+    (ms-quick-result-request-id (Cell (Optional msg:RequestId)))) ;; 48 -- pending Quick Result request, if any
 
 ;;; Named accessors for CL interop (avoids fragile numeric indices)
 
@@ -304,6 +306,12 @@
 
   (declare get-content-x-cell (MineState -> (Cell UFix)))
   (define (get-content-x-cell st) (.ms-content-x st))
+
+  (declare get-quick-result-state (MineState -> NativeBox))
+  (define (get-quick-result-state st) (.ms-quick-result-state st))
+
+  (declare get-quick-result-request-cell (MineState -> (Cell (Optional msg:RequestId))))
+  (define (get-quick-result-request-cell st) (.ms-quick-result-request-id st))
 
 ;;; Layout helpers
 
@@ -503,6 +511,7 @@
 ;;; Render
 
   (declare render-diagnostic-popup (MineState * screen:Screen * UFix * UFix -> Void))
+  (declare render-quick-result-popup (MineState * screen:Screen * UFix * UFix -> Void))
   (declare %track-diagnostic-request! (msg:RequestId -> Void))
   (declare render-app (MineState * term:Terminal -> Void))
   (define (render-app st term)
@@ -703,6 +712,8 @@
             ((focus:FocusEditor) True)
             (_ False))
       (render-diagnostic-popup st scr cols rows))
+    ;; Render transient Quick Result popup.
+    (render-quick-result-popup st scr cols rows)
     ;; Render completion popup overlay
     (when (complete:completion-active? (.ms-completion st))
       (complete:completion-render (.ms-completion st) scr cols rows))
@@ -776,6 +787,15 @@
     "Render a near-cursor popup describing the diagnostic under point, if any."
     (lisp (-> Void) (st scr cols rows)
       (mine/app/diagnostics:render-diagnostic-popup-cl st scr cols rows)))
+
+  (define (render-quick-result-popup st scr cols rows)
+    "Render the transient Quick Result popup, if any."
+    (let spin-char = (spinner:spinner-char (.ms-spinner st)))
+    (let spin-str = (lisp (-> String) (spin-char)
+                     (cl:string spin-char)))
+    (lisp (-> Void) (st scr cols rows spin-str)
+      (%render-quick-result-popup-cl st scr cols rows spin-str)
+      (cl:values)))
 
   (define (%track-diagnostic-request! req-id)
     "Record the current edit generation for a diagnostic-producing request."
@@ -1442,7 +1462,18 @@ multiple values get 0>, 1>, etc."
        (let beam-was-pending = (match (cell:read (.ms-beam-request-id st))
                                  ((Some beam-id) (== beam-id request-id))
                                  ((None) False)))
+       (let quick-result-was-pending =
+         (match (cell:read (.ms-quick-result-request-id st))
+           ((Some quick-id) (== quick-id request-id))
+           ((None) False)))
        (cond
+         (quick-result-was-pending
+          (lisp (-> Void) (st text is-error)
+            (%set-quick-result-popup st
+                                   (cl:if is-error "Error" "Quick Result")
+                                   text
+                                   is-error)
+            (cl:values)))
          (is-error
           (match texts
             ((Cons err-text _) (%append-error-lines! st err-text))
@@ -1457,6 +1488,8 @@ multiple values get 0>, 1>, etc."
           (%append-result-lines! st texts)))
        (when beam-was-pending
          (cell:write! (.ms-beam-request-id st) None))
+       (when quick-result-was-pending
+         (cell:write! (.ms-quick-result-request-id st) None))
        ;; Record timing
        (let start-time = (cell:read (.ms-eval-start-time st)))
        (let elapsed = (lisp (-> String) (start-time)
@@ -1497,13 +1530,20 @@ multiple values get 0>, 1>, etc."
        (ensure-repl-visible! st)
        (%focus-repl! st))
       ((ProtoConnectionLost)
+       (let quick-result-was-pending =
+         (match (cell:read (.ms-quick-result-request-id st))
+           ((Some _) True)
+           ((None) False)))
        (if (lifecycle:runtime-process-alive? (.ms-runtime st))
            (repl:repl-pane-append-system! (.ms-repl st) ";; Connection to REPL process lost")
            (repl:repl-pane-append-system! (.ms-repl st) ";; REPL process ended. Type ,restart to start a new one."))
        (cell:write! (.ms-repl-busy st) False)
        (cell:write! (.ms-busy-activity st) None)
        (cell:write! (.ms-beam-request-id st) None)
+       (cell:write! (.ms-quick-result-request-id st) None)
        (cell:write! (.ms-active-request st) None)
+       (when quick-result-was-pending
+         (%show-quick-result! st "Error" "Runtime connection lost" True))
        (when (cell:read (.ms-debugger-active st))
          (cell:write! (.ms-debugger-active st) False)
          (%show-editor! st))
@@ -1749,11 +1789,13 @@ Uses a dedicated Beam request so diagnostics can stream independently."
       (cl:setf (%native-box-value (mine/app/mine::get-proto-mailbox st)) cl:nil)
       (cl:setf (%native-box-value (mine/app/mine::get-proto-thread st)) cl:nil)
       (cl:setf (%native-box-value (mine/app/mine::get-conn-stream st)) cl:nil)
+      (cl:setf (%native-box-value (mine/app/mine::get-quick-result-state st)) cl:nil)
       (cl:values))
     (cell:write! (.ms-debugger-active st) False)
     (cell:write! (.ms-repl-busy st) False)
     (cell:write! (.ms-busy-activity st) None)
     (cell:write! (.ms-beam-request-id st) None)
+    (cell:write! (.ms-quick-result-request-id st) None)
     (cell:write! (.ms-active-request st) None)
     (when (cell:read (.ms-io-request-active st))
       (%deactivate-io-request! st))
@@ -1815,6 +1857,69 @@ Uses a dedicated Beam request so diagnostics can stream independently."
   (define (ensure-repl-visible! st)
     "Make sure the REPL pane is visible."
     (%set-center-layout! st (%center-open-repl (%center-layout st))))
+
+  (declare %show-quick-result! (MineState * String * String * Boolean -> Void))
+  (define (%show-quick-result! st title text error?)
+    "Show a transient Quick Result popup."
+    (lisp (-> Void) (st title text error?)
+      (%set-quick-result-popup st title text error?)
+      (cl:values)))
+
+  (declare %show-quick-result-pending! (MineState -> Void))
+  (define (%show-quick-result-pending! st)
+    "Show the Quick Result pending popup."
+    (lisp (-> Void) (st)
+      (%set-quick-result-pending-popup st)
+      (cl:values)))
+
+  (declare %show-quick-result-interrupting! (MineState -> Void))
+  (define (%show-quick-result-interrupting! st)
+    "Show the Quick Result interrupting popup."
+    (lisp (-> Void) (st)
+      (%set-quick-result-interrupting-popup st)
+      (cl:values)))
+
+  (declare %clear-quick-result! (MineState -> Void))
+  (define (%clear-quick-result! st)
+    "Clear the transient Quick Result popup."
+    (lisp (-> Void) (st)
+      (%clear-quick-result-popup st)
+      (cl:values)))
+
+  (declare %quick-result-popup-visible? (MineState -> Boolean))
+  (define (%quick-result-popup-visible? st)
+    "True when the transient Quick Result popup is visible."
+    (lisp (-> Boolean) (st)
+      (cl:if (%quick-result-popup-visible-p st) True False)))
+
+  (declare %quick-result-pending? (MineState -> Boolean))
+  (define (%quick-result-pending? st)
+    "True when a Quick Result request is waiting on the runtime."
+    (match (cell:read (.ms-quick-result-request-id st))
+      ((Some _) True)
+      ((None) False)))
+
+  (declare %quick-result-cancel-key? (input:Key -> Boolean))
+  (define (%quick-result-cancel-key? key)
+    "True for keys that dismiss transient Quick Result UI."
+    (match key
+      ((input:KeyEscape) True)
+      ((input:KeyCtrl #\g) True)
+      (_ False)))
+
+  (declare %cancel-quick-result! (MineState -> Void))
+  (define (%cancel-quick-result! st)
+    "Interrupt a pending Quick Result request."
+    (%show-quick-result-interrupting! st)
+    (cond
+      ((lifecycle:runtime-interrupt! (.ms-runtime st))
+       (status:statusbar-set-message! (.ms-status st) "Quick Result interrupt sent"))
+      (True
+       (cell:write! (.ms-quick-result-request-id st) None)
+       (cell:write! (.ms-active-request st) None)
+       (cell:write! (.ms-repl-busy st) False)
+       (cell:write! (.ms-busy-activity st) None)
+       (%show-quick-result! st "Error" "No runtime to interrupt" True))))
 
   (declare %send-repl-init! (MineState * client:Connection -> Void))
   (define (%send-repl-init! st conn)
@@ -2001,6 +2106,19 @@ coalton-toplevel wrapper, descends to find the sub-form containing POS."
       (cl:let ((pkg (%find-in-package-before gb pos)))
         (cl:if pkg (Some pkg) None))))
 
+  (declare %active-selection-range (cursor:CursorState -> Optional (Tuple UFix UFix)))
+  (define (%active-selection-range cs)
+    "Return the active non-empty selection range, if any."
+    (match (cursor:cursor-selection-anchor cs)
+      ((None) None)
+      ((Some anchor)
+       (let cur = (cursor:cursor-position cs))
+       (let sel-start = (min anchor cur))
+       (let sel-end = (max anchor cur))
+       (if (> sel-end sel-start)
+           (Some (Tuple sel-start sel-end))
+           None))))
+
   (declare compile-form! (MineState -> Void))
   (define (compile-form! st)
     "Compile the form at the cursor (Alt+c).
@@ -2051,6 +2169,46 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                ((Tuple compile-text client-prefix-length)
                 (let req = (msg:ReqCompileString req-id compile-text document-key pkg
                                                  form-start client-prefix-length))
+                (client:connection-send! conn req))))))))))
+
+  (declare quick-result-form! (MineState -> Void))
+  (define (quick-result-form! st)
+    "Show a Quick Result popup for the selection, or the form at the cursor (Alt+r)."
+    (match (mgr:bufmgr-current (.ms-bufmgr st))
+      ((None)
+       (%show-quick-result! st "Error" "No file open" True))
+      ((Some buf)
+       (let gb = (buf:buffer-gap buf))
+       (let cur-pos = (cursor:cursor-position (.ms-cursor st)))
+       (let target-range =
+         (match (%active-selection-range (.ms-cursor st))
+           ((Some range) (Some range))
+           ((None) (%find-compile-target gb cur-pos))))
+       (match target-range
+         ((None)
+          (%show-quick-result! st "Error" "No enclosing form found" True))
+         ((Some (Tuple target-start target-end))
+          (let target-text = (gap:gap-substring gb target-start target-end))
+          (let pkg = (match (%find-buffer-package gb target-start)
+                       ((Some p) p)
+                       ((None) (cell:read (.ms-repl-package st)))))
+          (%clear-quick-result! st)
+          (match (ensure-runtime! st)
+            ((None)
+             (%show-quick-result! st "Error" "Runtime unavailable" True))
+            ((Some conn)
+             (start-proto-reader! st conn)
+             (let req-id = (next-request-id! st))
+             (cell:write! (.ms-repl-busy st) True)
+             (cell:write! (.ms-busy-activity st) None)
+             (cell:write! (.ms-eval-start-time st)
+                          (lisp (-> UFix) () (cl:get-internal-real-time)))
+             (cell:write! (.ms-active-request st) (Some req-id))
+             (cell:write! (.ms-quick-result-request-id st) (Some req-id))
+             (%show-quick-result-pending! st)
+             (match (%wrap-coalton target-text pkg)
+               ((Tuple quick-text _client-prefix-length)
+                (let req = (msg:ReqQuickResult req-id quick-text pkg))
                 (client:connection-send! conn req))))))))))
 
 ;;; Create project on disk
@@ -2811,6 +2969,8 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       (#\k (compile-file! st))
       ;; Alt+c -> compile form at cursor
       (#\c (compile-form! st))
+      ;; Alt+r -> show Quick Result for selection or form at cursor
+      (#\r (quick-result-form! st))
       ;; Alt+. -> jump to definition
       (#\. (jump-to-definition! st))
       ;; Alt+, -> jump back
@@ -4052,6 +4212,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
           ((menubar:ActionFind) has-buffer)
           ((menubar:ActionBeamFile) has-buffer)
           ((menubar:ActionBeamForm) has-buffer)
+          ((menubar:ActionQuickResult) has-buffer)
           ((menubar:ActionClearDiagnostics) has-buffer)
           ((menubar:ActionJumpToDefinition) has-buffer)
           ((menubar:ActionJumpBack) has-buffer)
@@ -4128,6 +4289,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
       ((menubar:ActionInsertSymbol) (start-symbol-input! st))
       ((menubar:ActionBeamFile) (compile-file! st))
       ((menubar:ActionBeamForm) (compile-form! st))
+      ((menubar:ActionQuickResult) (quick-result-form! st))
 	      ((menubar:ActionClearDiagnostics)
 	       (lisp (-> Void) ()
 	         (mine/app/diagnostics:clear-all-diagnostics)
@@ -4228,6 +4390,16 @@ Render-app is NOT called here; the main loop handles rendering."
          (term:terminal-clear-screen term))
         (_ (values)))
       (cond
+        ;; Escape / Ctrl+g cancel a pending Quick Result or dismiss a completed popup.
+        ((match event
+           ((ev:EvKey key _mod)
+            (and (or (%quick-result-popup-visible? st)
+                     (%quick-result-pending? st))
+                 (%quick-result-cancel-key? key)))
+           (_ False))
+         (if (%quick-result-pending? st)
+             (%cancel-quick-result! st)
+             (%clear-quick-result! st)))
         ;; If minibuffer is active, route keys to it
         ((mini:minibuffer-active? (.ms-minibuffer st))
          (match event
@@ -4594,6 +4766,8 @@ Render-app is NOT called here; the main loop handles rendering."
                          (cell:new 0)
                          (cell:new 0)
                          (cell:new True)
+                         (cell:new None)
+                         (native-box-new)
                          (cell:new None)))
     ;; Open a file if given on the command line
     (let file-args = (filter (fn (a) (not (str:substring? "--" a))) (list:cdr args)))
@@ -5254,6 +5428,402 @@ Returns a Coalton List of ProtoMsg."
                     (cl:list text))))
        (cl:error ()
          (cl:list text))))))
+
+(cl:defun %parse-quick-result-payload (text)
+  "Decode the Quick Result payload string into output and value strings."
+  (cl:handler-case
+      (cl:let ((cl:*read-eval* cl:nil))
+        (cl:multiple-value-bind (payload pos)
+            (cl:read-from-string text)
+          (cl:if (cl:and (cl:= pos (cl:length text))
+                         (cl:consp payload)
+                         (cl:eq (cl:first payload) :quick-result))
+                 (cl:let* ((plist (cl:rest payload))
+                           (output (cl:getf plist :output ""))
+                           (values (cl:getf plist :values cl:nil)))
+                   (cl:values
+                    (cl:if (cl:stringp output) output "")
+                    (cl:if (cl:and (cl:listp values)
+                                   (cl:every #'cl:stringp values))
+                           values
+                           (cl:list text))))
+                 (cl:values "" (cl:list text)))))
+    (cl:error ()
+      (cl:values "" (cl:list text)))))
+
+(cl:defun %set-quick-result-popup (st title text error-p)
+  "Store transient Quick Result popup state on ST."
+  (cl:let* ((box (mine/app/mine::get-quick-result-state st))
+            (text (cl:if (cl:stringp text) text (cl:princ-to-string text)))
+            (expiry (cl:+ (cl:get-internal-real-time)
+                          (cl:* 8 cl:internal-time-units-per-second))))
+    (cl:if error-p
+           (cl:setf (%native-box-value box)
+                    (cl:list :title (cl:if (cl:stringp title) title "Error")
+                             :text text
+                             :error cl:t
+                               :expiry expiry))
+           (cl:multiple-value-bind (output values)
+               (%parse-quick-result-payload text)
+             (cl:setf (%native-box-value box)
+                      (cl:list :title (cl:if (cl:plusp (cl:length output))
+                                             "Output"
+                                             "Result")
+                               :output output
+                               :values values
+                               :error cl:nil
+                               :expiry expiry))))))
+
+(cl:defun %set-quick-result-pending-state (st mode)
+  "Store Quick Result pending state on ST."
+  (cl:setf (%native-box-value (mine/app/mine::get-quick-result-state st))
+           (cl:list :title "Quick Result"
+                    :pending mode
+                    :error cl:nil
+                    :expiry cl:nil)))
+
+(cl:defun %set-quick-result-pending-popup (st)
+  "Store the Quick Result busy popup state on ST."
+  (%set-quick-result-pending-state st :busy))
+
+(cl:defun %set-quick-result-interrupting-popup (st)
+  "Store the Quick Result interrupting popup state on ST."
+  (%set-quick-result-pending-state st :interrupting))
+
+(cl:defun %clear-quick-result-popup (st)
+  "Clear transient Quick Result popup state on ST."
+  (cl:setf (%native-box-value (mine/app/mine::get-quick-result-state st)) cl:nil))
+
+(cl:defun %quick-result-popup-visible-p (st)
+  "Return true when the transient Quick Result popup has visible state."
+  (cl:not (cl:null (%native-box-value (mine/app/mine::get-quick-result-state st)))))
+
+(cl:defun %quick-result-popup-lines (text include-empty-p)
+  "Split TEXT into display lines for the Quick Result popup."
+  (cl:let ((len (cl:length text))
+           (start 0)
+           (lines cl:nil))
+    (cl:cond
+      ((cl:zerop len)
+       (cl:if include-empty-p (cl:list "") cl:nil))
+      (cl:t
+       (cl:loop
+         :while (cl:< start len)
+         :for end = (cl:position #\Newline text :start start)
+         :do (cl:push (cl:subseq text start (cl:or end len)) lines)
+             (cl:setf start (cl:if end (cl:1+ end) len)))
+       (cl:nreverse lines)))))
+
+(cl:defun %quick-result-value-lines (values)
+  "Flatten printed value strings into display lines."
+  (cl:if (cl:null values)
+         (cl:list "No values")
+         (cl:let ((lines cl:nil))
+           (cl:dolist (value values)
+             (cl:dolist (line (%quick-result-popup-lines value cl:t))
+               (cl:push line lines)))
+           (cl:or (cl:nreverse lines) (cl:list "No values")))))
+
+(cl:defun %quick-result-omitted-line (n-lines)
+  "Return the vertical truncation summary line."
+  (cl:format cl:nil
+             "~C ~D line~:P omitted"
+             (cl:code-char 8230)
+             n-lines))
+
+(cl:defun %quick-result-truncate-output-lines (lines max-lines)
+  "Truncate output lines vertically, ending with an omitted-line count."
+  (cl:let ((n-lines (cl:length lines)))
+    (cl:cond
+      ((cl:<= max-lines 0) (cl:values cl:nil cl:nil))
+      ((cl:<= n-lines max-lines) (cl:values lines cl:nil))
+      ((cl:= max-lines 1)
+       (cl:values (cl:list (%quick-result-omitted-line n-lines)) cl:t))
+      (cl:t
+       (cl:let* ((kept (cl:1- max-lines))
+                 (omitted (cl:- n-lines kept)))
+         (cl:values
+          (cl:append (cl:subseq lines 0 kept)
+                     (cl:list (%quick-result-omitted-line omitted)))
+          cl:t))))))
+
+(cl:defun %quick-result-truncate-result-lines (lines max-lines)
+  "Truncate result lines, keeping at least the first result line when possible."
+  (cl:let ((n-lines (cl:length lines)))
+    (cl:cond
+      ((cl:<= max-lines 0) (cl:values cl:nil cl:nil))
+      ((cl:<= n-lines max-lines) (cl:values lines cl:nil))
+      ((cl:= max-lines 1) (cl:values (cl:list (cl:first lines)) cl:nil))
+      (cl:t
+       (cl:let* ((kept (cl:1- max-lines))
+                 (omitted (cl:- n-lines kept)))
+         (cl:values
+          (cl:append (cl:subseq lines 0 kept)
+                     (cl:list (%quick-result-omitted-line omitted)))
+          cl:t))))))
+
+(cl:defun %quick-result-layout (state max-body-lines cl:&optional (spinner-text ""))
+  "Compute visible Quick Result sections, preserving result rows before output."
+  (cl:let* ((cap (cl:max 1 max-body-lines))
+            (error-p (cl:getf state :error)))
+    (cl:cond
+      ((cl:getf state :pending)
+       (cl:let* ((interrupting-p (cl:eq (cl:getf state :pending) :interrupting))
+                 (verb (cl:if interrupting-p "Interrupting" "Busy"))
+                 (hint (cl:if interrupting-p
+                               "Waiting for runtime"
+                               "Esc/Ctrl+g cancels"))
+                 (spinner (cl:if (cl:and (cl:stringp spinner-text)
+                                         (cl:plusp (cl:length spinner-text)))
+                                  (cl:concatenate 'cl:string " " spinner-text)
+                                  ""))
+                 (lines (cl:if (cl:> cap 1)
+                                (cl:list (cl:concatenate 'cl:string verb spinner)
+                                         hint)
+                                (cl:list (cl:concatenate 'cl:string verb spinner)))))
+         (cl:list :title "Quick Result"
+                  :output-lines cl:nil
+                  :output-omitted cl:nil
+                  :separator cl:nil
+                  :result-lines lines
+                  :result-omitted cl:nil
+                  :pending cl:t
+                  :no-values cl:nil)))
+      (error-p
+           (cl:let* ((text (cl:or (cl:getf state :text) ""))
+                     (lines (%quick-result-popup-lines text cl:t)))
+             (cl:multiple-value-bind (result-lines result-omitted-p)
+                 (%quick-result-truncate-result-lines lines cap)
+               (cl:list :title (cl:or (cl:getf state :title) "Error")
+                        :output-lines cl:nil
+                        :output-omitted cl:nil
+                        :separator cl:nil
+                        :result-lines result-lines
+                        :result-omitted result-omitted-p
+                        :no-values cl:nil))))
+      (cl:t
+           (cl:let* ((output (cl:or (cl:getf state :output) ""))
+                     (output-lines (%quick-result-popup-lines output cl:nil))
+                     (values (cl:getf state :values cl:nil))
+                     (no-values-p (cl:null values))
+                     (result-lines (%quick-result-value-lines values)))
+             (cl:if (cl:null output-lines)
+                    (cl:multiple-value-bind (truncated-results result-omitted-p)
+                        (%quick-result-truncate-result-lines result-lines cap)
+                      (cl:list :title "Result"
+                               :output-lines cl:nil
+                               :output-omitted cl:nil
+                               :separator cl:nil
+                               :result-lines truncated-results
+                               :result-omitted result-omitted-p
+                               :no-values no-values-p))
+                    (cl:if (cl:= cap 1)
+                           (cl:multiple-value-bind (truncated-results result-omitted-p)
+                               (%quick-result-truncate-result-lines result-lines 1)
+                             (cl:list :title "Result"
+                                      :output-lines cl:nil
+                                      :output-omitted cl:nil
+                                      :separator cl:nil
+                                      :result-lines truncated-results
+                                      :result-omitted result-omitted-p
+                                      :no-values no-values-p))
+                           (cl:let* ((result-cap
+                                       (cl:min (cl:length result-lines)
+                                               (cl:max 1 (cl:- cap 2))))
+                                      (output-cap
+                                       (cl:max 1 (cl:- cap 1 result-cap))))
+                             (cl:multiple-value-bind (truncated-output output-omitted-p)
+                                 (%quick-result-truncate-output-lines
+                                  output-lines output-cap)
+                               (cl:multiple-value-bind (truncated-results result-omitted-p)
+                                   (%quick-result-truncate-result-lines
+                                    result-lines result-cap)
+                                 (cl:list :title "Output"
+                                          :output-lines truncated-output
+                                          :output-omitted output-omitted-p
+                                          :separator cl:t
+                                          :result-lines truncated-results
+                                          :result-omitted result-omitted-p
+                                          :no-values no-values-p)))))))))))
+
+(cl:defun %quick-result-max-body-lines (screen-h)
+  "Return the maximum popup body rows for a terminal height."
+  (cl:max 1 (cl:- screen-h 5)))
+
+(cl:defun %quick-result-ellipsize (text width)
+  "Return TEXT clipped to WIDTH cells, appending a single-cell ellipsis if cut."
+  (cl:let ((width (cl:max 0 width)))
+    (cl:cond
+      ((cl:<= (mine/text/width:string-cell-width-cl text) width)
+       text)
+      ((cl:zerop width)
+       "")
+      (cl:t
+       (cl:let* ((ellipsis (cl:string (cl:code-char 8230)))
+                 (ellipsis-w (mine/text/width:string-cell-width-cl ellipsis))
+                 (prefix-w (cl:max 0 (cl:- width ellipsis-w)))
+                 (prefix-n (mine/text/width:string-chars-fitting-cl text 0 prefix-w)))
+         (cl:concatenate 'cl:string
+                         (cl:subseq text 0 prefix-n)
+                         ellipsis))))))
+
+(cl:defun %draw-quick-result-separator (scr row col width title style)
+  "Draw a box-style separator line with TITLE embedded."
+  (cl:let ((line-char (cl:code-char 9472)))
+    (cl:dotimes (i width)
+      (mine/term/screen:screen-set-cell scr row (cl:+ col i) line-char style))
+    (cl:when (cl:> width 2)
+      (cl:let* ((label-width (cl:max 1 (cl:- width 2)))
+                (label (%quick-result-ellipsize
+                        (cl:concatenate 'cl:string " " title " ")
+                        label-width)))
+        (mine/widget/render:draw-text-clipped
+         scr
+         (mine/widget/types:Rect (cl:1+ col) row label-width 1)
+         label
+         row
+         (cl:1+ col)
+         style)))))
+
+(cl:defun %render-quick-result-popup-cl (st scr screen-w screen-h spinner-text)
+  "Render the transient Quick Result popup near the editor caret."
+  (cl:let* ((box (mine/app/mine::get-quick-result-state st))
+            (state (%native-box-value box)))
+    (cl:when state
+      (cl:let ((expiry (cl:getf state :expiry)))
+        (cl:when (cl:and expiry
+                         (cl:>= (cl:get-internal-real-time) expiry))
+          (%clear-quick-result-popup st)
+          (cl:return-from %render-quick-result-popup-cl cl:nil)))
+      (cl:let* ((error-p (cl:getf state :error))
+                (max-body-lines (%quick-result-max-body-lines screen-h))
+                (layout (%quick-result-layout state max-body-lines spinner-text))
+                (title (cl:getf layout :title))
+                (output-lines (cl:getf layout :output-lines))
+                (output-omitted-p (cl:getf layout :output-omitted))
+                (separator-p (cl:getf layout :separator))
+                (result-lines (cl:getf layout :result-lines))
+                (result-omitted-p (cl:getf layout :result-omitted))
+                (pending-p (cl:getf layout :pending))
+                (no-values-p (cl:getf layout :no-values))
+                (body-lines (cl:append output-lines result-lines))
+                (max-content-w (cl:max 18 (cl:min 72 (cl:max 10 (cl:- screen-w 6)))))
+                (title-w (mine/text/width:string-cell-width-cl title))
+                (frame-title-w
+                  (mine/text/width:string-cell-width-cl
+                   (cl:concatenate 'cl:string " " title " ")))
+                (separator-title-w
+                  (cl:if separator-p
+                         (mine/text/width:string-cell-width-cl " Result ")
+                         0))
+                (max-line-w
+                  (cl:or (cl:loop :for line :in body-lines
+                                  :maximize
+                                  (mine/text/width:string-cell-width-cl line))
+                         0))
+                (content-w (cl:min
+                            max-content-w
+                            (cl:max title-w
+                                    (cl:+ frame-title-w 2)
+                                    (cl:+ separator-title-w 2)
+                                    max-line-w)))
+                (available-w (cl:max 4 (cl:- screen-w 2)))
+                (box-w (cl:min (cl:+ content-w 2) available-w))
+                (body-rows (cl:+ (cl:length output-lines)
+                                  (cl:if separator-p 1 0)
+                                  (cl:length result-lines)))
+                (box-h (cl:+ body-rows 2))
+                (anchor-col (%completion-anchor-col st cl:nil ""))
+                (anchor-row (%completion-anchor-row st cl:nil))
+                (top-limit 1)
+                (bottom-limit (cl:max 2 (cl:- screen-h 1)))
+                (below-row (cl:1+ anchor-row))
+                (fits-below (cl:<= (cl:+ below-row box-h) bottom-limit))
+                (box-y (cl:if fits-below
+                              below-row
+                              (cl:max top-limit (cl:- anchor-row box-h))))
+                (box-x (cl:min (cl:+ anchor-col 1)
+                               (cl:max 0 (cl:- screen-w box-w))))
+                (border-fg (cl:if error-p
+                                  mine/term/color:error-fg
+                                  mine/term/color:info-fg))
+                (border-style (mine/term/color:Style border-fg
+                                                       mine/term/color:panel-bg
+                                                       mine/term/color:AttrNone))
+                (title-style (mine/term/color:Style border-fg
+                                                     mine/term/color:panel-bg
+                                                     mine/term/color:AttrBold))
+                (body-style (mine/term/color:Style mine/term/color:text-fg
+                                                    mine/term/color:panel-bg
+                                                    mine/term/color:AttrNone))
+                (omitted-style (mine/term/color:Style mine/term/color:text-dimmer-fg
+                                                       mine/term/color:panel-bg
+                                                       mine/term/color:AttrItalic))
+                (no-values-style (mine/term/color:Style mine/term/color:text-dimmer-fg
+                                                         mine/term/color:panel-bg
+                                                         mine/term/color:AttrItalic))
+                (inner-rect (mine/widget/types:Rect
+                             (cl:1+ box-x)
+                             (cl:1+ box-y)
+                             (cl:max 1 (cl:- box-w 2))
+                             (cl:max 1 (cl:- box-h 2)))))
+        (mine/widget/render:draw-box scr
+                                     (mine/widget/types:Rect box-x box-y box-w box-h)
+                                     border-style)
+        (mine/widget/render:fill-rect scr inner-rect #\Space body-style)
+        (cl:let* ((title-w (cl:max 0 (cl:- box-w 4)))
+                  (frame-title
+                    (%quick-result-ellipsize
+                     (cl:concatenate 'cl:string " " title " ")
+                     title-w)))
+          (cl:when (cl:plusp title-w)
+            (mine/widget/render:draw-text-clipped
+             scr
+             (mine/widget/types:Rect (cl:+ box-x 2) box-y title-w 1)
+             frame-title
+             box-y
+             (cl:+ box-x 2)
+             title-style)))
+        (cl:let ((row (cl:1+ box-y))
+                 (inner-x (cl:1+ box-x))
+                 (inner-w (cl:- box-w 2))
+                 (output-omitted-row (cl:and output-omitted-p
+                                             (cl:1- (cl:length output-lines))))
+                 (result-omitted-row (cl:and result-omitted-p
+                                             (cl:1- (cl:length result-lines)))))
+          (cl:loop
+            :for line :in output-lines
+            :for line-index :from 0
+            :do
+            (cl:let ((clipped (%quick-result-ellipsize line inner-w))
+                     (line-style (cl:if (cl:and output-omitted-row
+                                                (cl:= line-index output-omitted-row))
+                                      omitted-style
+                                      body-style)))
+              (mine/widget/render:draw-text-clipped scr inner-rect clipped
+                                                    row inner-x line-style))
+            (cl:incf row))
+          (cl:when separator-p
+            (%draw-quick-result-separator scr row inner-x inner-w
+                                          "Result" title-style)
+            (cl:incf row))
+          (cl:loop
+            :for line :in result-lines
+            :for line-index :from 0
+            :do
+            (cl:let ((clipped (%quick-result-ellipsize line inner-w))
+                     (line-style
+                       (cl:cond
+                         (no-values-p no-values-style)
+                         ((cl:and pending-p (cl:plusp line-index))
+                          no-values-style)
+                         ((cl:and result-omitted-row
+                                  (cl:= line-index result-omitted-row))
+                          omitted-style)
+                         (cl:t body-style))))
+              (mine/widget/render:draw-text-clipped
+               scr inner-rect clipped row inner-x line-style))
+            (cl:incf row)))))))
 
 (cl:defun %install-debugger-data (st debug-data)
   "Install debugger state from the packed debug data NativeBox."

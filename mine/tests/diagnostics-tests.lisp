@@ -87,6 +87,34 @@
              (eq (first (second message)) ':diagnostic))
     (rest (second message))))
 
+(defun %return-message-p (message)
+  (and (consp message)
+       (eq (first message) ':return)))
+
+(defun %return-payload-text (message tag)
+  (let ((payload (third message)))
+    (when (and (consp payload)
+               (eq (first payload) tag)
+               (stringp (second payload)))
+      (second payload))))
+
+(defun %debug-notification-p (message)
+  (and (consp message)
+       (eq (first message) ':notify)
+       (consp (second message))
+       (eq (first (second message)) ':debug-activate)))
+
+(defun %quick-result-plist (text)
+  (let ((*read-eval* nil))
+    (multiple-value-bind (payload pos)
+        (read-from-string text)
+      (%check (and (consp payload)
+                   (eq (first payload) ':quick-result)
+                   (= pos (length text)))
+              "Expected Quick Result payload, got ~S"
+              text)
+      (rest payload))))
+
 (defun %canonical-namestring (pathspec)
   (let* ((pathname (pathname pathspec))
          (probe (ignore-errors (probe-file pathname))))
@@ -274,6 +302,193 @@
                    "Expected reader error start within file, got ~S"
                    diagnostic))
       (ignore-errors (delete-file pathname)))))
+
+(defun check-quick-result-lisp-expression-shows-result ()
+  (let* ((messages (%collect-server-messages
+                    (lambda (stream)
+                      (server::handle-quick-result
+                       17 "(+ 1 2)" "CL-USER" stream))))
+         (return-message (find-if #'%return-message-p messages))
+         (text (%return-payload-text return-message ':ok))
+         (payload (%quick-result-plist text)))
+    (%check return-message "Expected a Quick Result return message: ~S" messages)
+    (%check (string= (getf payload ':output) "")
+            "Expected no printed output, got ~S from ~S"
+            (getf payload ':output)
+            messages)
+    (%check (equal (getf payload ':values) '("3"))
+            "Expected Quick Result value 3, got ~S from ~S"
+            (getf payload ':values)
+            messages)
+    (%check (notany #'%debug-notification-p messages)
+            "Quick Result must not activate the debugger: ~S"
+            messages)))
+
+(defun check-quick-result-lisp-format-separates-output-and-result ()
+  (let* ((messages (%collect-server-messages
+                    (lambda (stream)
+                      (server::handle-quick-result
+                       23 "(format t \"hello\")" "CL-USER" stream))))
+         (return-message (find-if #'%return-message-p messages))
+         (text (%return-payload-text return-message ':ok))
+         (payload (%quick-result-plist text)))
+    (%check return-message "Expected a Quick Result return message: ~S" messages)
+    (%check (string= (getf payload ':output) "hello")
+            "Expected captured output, got ~S from ~S"
+            (getf payload ':output)
+            messages)
+    (%check (equal (getf payload ':values) '("NIL"))
+            "Expected NIL result value, got ~S from ~S"
+            (getf payload ':values)
+            messages)
+    (%check (notany #'%debug-notification-p messages)
+            "Quick Result must not activate the debugger: ~S"
+            messages)))
+
+(defun check-quick-result-lisp-no-values-is-distinct ()
+  (let* ((messages (%collect-server-messages
+                    (lambda (stream)
+                      (server::handle-quick-result
+                       31 "(values)" "CL-USER" stream))))
+         (return-message (find-if #'%return-message-p messages))
+         (text (%return-payload-text return-message ':ok))
+         (payload (%quick-result-plist text)))
+    (%check return-message "Expected a Quick Result return message: ~S" messages)
+    (%check (string= (getf payload ':output) "")
+            "Expected no printed output, got ~S from ~S"
+            (getf payload ':output)
+            messages)
+    (%check (equal (getf payload ':values) nil)
+            "Expected no result values, got ~S from ~S"
+            (getf payload ':values)
+            messages)
+    (%check (notany #'%debug-notification-p messages)
+            "Quick Result must not activate the debugger: ~S"
+            messages)))
+
+(defun check-quick-result-lisp-error-is-short ()
+  (let* ((messages (%collect-server-messages
+                    (lambda (stream)
+                      (server::handle-quick-result
+                       29 "(error \"boom\")" "CL-USER" stream))))
+         (return-message (find-if #'%return-message-p messages))
+         (text (%return-payload-text return-message ':error)))
+    (%check return-message "Expected a Quick Result error return message: ~S" messages)
+    (%check (and text (search "boom" text :test #'char-equal))
+            "Expected short error containing boom, got ~S from ~S"
+            text
+            messages)
+    (%check (notany #'%debug-notification-p messages)
+            "Quick Result must not activate the debugger: ~S"
+            messages)))
+
+(defun %tuple-slot (tuple slot-name)
+  (slot-value tuple (find-symbol slot-name "COALTON/CLASSES")))
+
+(defun check-quick-result-selection-range ()
+  (let ((cs (cursor:cursor-new)))
+    (cursor:cursor-move-to-position! cs 3)
+    (cursor:cursor-start-selection! cs)
+    (cursor:cursor-move-to-position! cs 8)
+    (let ((range (mine/app/mine::%active-selection-range cs)))
+      (%check (and (not (eq range coalton:none))
+                   (= (%tuple-slot range "_0") 3)
+                   (= (%tuple-slot range "_1") 8))
+              "Expected forward selection range 3..8, got ~S"
+              range))
+    (cursor:cursor-clear-selection! cs)
+    (cursor:cursor-move-to-position! cs 8)
+    (cursor:cursor-start-selection! cs)
+    (cursor:cursor-move-to-position! cs 3)
+    (let ((range (mine/app/mine::%active-selection-range cs)))
+      (%check (and (not (eq range coalton:none))
+                   (= (%tuple-slot range "_0") 3)
+                   (= (%tuple-slot range "_1") 8))
+              "Expected backward selection range 3..8, got ~S"
+              range))
+    (cursor:cursor-clear-selection! cs)
+    (cursor:cursor-move-to-position! cs 3)
+    (cursor:cursor-start-selection! cs)
+    (%check (eq (mine/app/mine::%active-selection-range cs) coalton:none)
+            "Expected zero-width selection to be ignored")))
+
+(defun check-quick-result-popup-ellipsizes-clipped-lines ()
+  (let ((ellipsis (string (code-char 8230))))
+    (%check (string= (mine/app/mine::%quick-result-ellipsize "abc" 3) "abc")
+            "Expected fitted Quick Result text to stay unchanged")
+    (%check (string= (mine/app/mine::%quick-result-ellipsize "abcdef" 4)
+                     (concatenate 'string "abc" ellipsis))
+            "Expected clipped Quick Result text to use a single ellipsis")
+    (%check (string= (mine/app/mine::%quick-result-ellipsize "abcdef" 1)
+                     ellipsis)
+            "Expected one-cell Quick Result clipping to show only the ellipsis")))
+
+(defun check-quick-result-popup-layout-prioritizes-results ()
+  (let* ((layout (mine/app/mine::%quick-result-layout
+                  (list :output (format nil "one~%two~%three")
+                        :values '("VALUE"))
+                  4)))
+    (%check (string= (getf layout ':title) "Output")
+            "Expected Output frame title, got ~S" layout)
+    (%check (equal (getf layout ':output-lines)
+                   (list "one" (format nil "~C 2 lines omitted" (code-char 8230))))
+            "Expected output to truncate first, got ~S" layout)
+    (%check (getf layout ':output-omitted)
+            "Expected output omitted marker, got ~S" layout)
+    (%check (getf layout ':separator)
+            "Expected Result separator, got ~S" layout)
+    (%check (equal (getf layout ':result-lines) '("VALUE"))
+            "Expected result line to remain visible, got ~S" layout)
+    (%check (not (getf layout ':result-omitted))
+            "Expected no result omitted marker, got ~S" layout))
+  (let ((layout (mine/app/mine::%quick-result-layout
+                 '(:output "" :values ("VALUE"))
+                 3)))
+    (%check (string= (getf layout ':title) "Result")
+            "Expected Result frame title without output, got ~S" layout)
+    (%check (not (getf layout ':separator))
+            "Expected no separator without output, got ~S" layout)
+    (%check (equal (getf layout ':result-lines) '("VALUE"))
+            "Expected value result line, got ~S" layout))
+  (let ((layout (mine/app/mine::%quick-result-layout
+                 '(:output "" :values nil)
+                 3)))
+    (%check (getf layout ':no-values)
+            "Expected no-values marker, got ~S" layout)
+    (%check (equal (getf layout ':result-lines) '("No values"))
+            "Expected No values display line, got ~S" layout))
+  (let ((layout (mine/app/mine::%quick-result-layout
+                 '(:output "" :values ("first" "second" "third"))
+                 2)))
+    (%check (equal (getf layout ':result-lines)
+                   (list "first" (format nil "~C 2 lines omitted" (code-char 8230))))
+            "Expected result overflow to use an omitted-line marker, got ~S" layout)
+    (%check (getf layout ':result-omitted)
+            "Expected result omitted marker, got ~S" layout))
+  (let ((layout (mine/app/mine::%quick-result-layout
+                 '(:title "Quick Result" :pending :busy)
+                 3
+                 "*")))
+    (%check (string= (getf layout ':title) "Quick Result")
+            "Expected Quick Result pending title, got ~S" layout)
+    (%check (getf layout ':pending)
+            "Expected pending Quick Result layout, got ~S" layout)
+    (%check (equal (getf layout ':result-lines)
+                   '("Busy *" "Esc/Ctrl+g cancels"))
+            "Expected pending Quick Result busy rows, got ~S" layout))
+  (let ((layout (mine/app/mine::%quick-result-layout
+                 '(:title "Quick Result" :pending :interrupting)
+                 3
+                 "*")))
+    (%check (equal (getf layout ':result-lines)
+                   '("Interrupting *" "Waiting for runtime"))
+            "Expected pending Quick Result interrupt rows, got ~S" layout)))
+
+(defun check-quick-result-popup-uses-terminal-height ()
+  (%check (> (mine/app/mine::%quick-result-max-body-lines 30) 8)
+          "Expected Quick Result popup to use more than the old fixed row cap")
+  (%check (= (mine/app/mine::%quick-result-max-body-lines 3) 1)
+          "Expected very short terminals to keep at least one body row"))
 
 (defun check-beam-system-emits-diagnostics-before-return ()
   (let* ((system-name (format nil "mine-beam-test-~A"
