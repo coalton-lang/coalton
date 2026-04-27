@@ -41,6 +41,31 @@ const term = new Terminal({
   linkHandler: null,
 });
 
+const isWindows = /^Win/.test(navigator.userAgentData?.platform || navigator.platform || "");
+// WebView2/Windows is unreliable for this chord through xterm's normal path.
+// Send the standard xterm modifier-arrow sequence that mine already parses.
+const windowsAltShiftArrowSequences = new Map([
+  ["ArrowUp", "\x1b[1;4A"],
+  ["ArrowDown", "\x1b[1;4B"],
+  ["ArrowRight", "\x1b[1;4C"],
+  ["ArrowLeft", "\x1b[1;4D"],
+]);
+
+function windowsAltShiftArrowSequence(event) {
+  if (
+    !isWindows ||
+    event.type !== "keydown" ||
+    !event.altKey ||
+    !event.shiftKey ||
+    // Do not reject ctrlKey here: Windows can expose right Alt/AltGr as Ctrl+Alt.
+    event.metaKey
+  ) {
+    return null;
+  }
+
+  return windowsAltShiftArrowSequences.get(event.key) ?? null;
+}
+
 const container = document.getElementById("terminal");
 if (!container) {
   throw new Error("Terminal container not found");
@@ -138,6 +163,18 @@ for (let i = 0; i < 10 && !fitTerminal(); i += 1) {
 }
 
 await invoke("spawn_pty", { rows: term.rows, cols: term.cols });
+
+term.attachCustomKeyEventHandler((event) => {
+  const data = windowsAltShiftArrowSequence(event);
+  if (data === null) {
+    return true;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  invoke("write_pty", { data });
+  return false;
+});
 
 term.onData((data) => {
   invoke("write_pty", { data });
