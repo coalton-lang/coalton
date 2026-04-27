@@ -20,12 +20,12 @@
    #:paredit-backspace!
    #:paredit-backspace-word!
    #:paredit-delete!
-   #:paredit-forward-slurp!
-   #:paredit-forward-barf!
-   #:paredit-backward-slurp!
-   #:paredit-backward-barf!
-   #:paredit-splice!
-   #:paredit-cleave!
+   #:paredit-forward-join!
+   #:paredit-forward-leave!
+   #:paredit-backward-join!
+   #:paredit-backward-leave!
+   #:paredit-shed!
+   #:paredit-split!
    #:paredit-delete-enclosing!
    #:paredit-raise!
    #:paredit-wrap-round!
@@ -1083,8 +1083,8 @@ Inside strings, parens are treated as normal characters."
             (not (delimiter? right))))
       (_ False)))
 
-  (declare paredit-forward-slurp! (buf:Buffer * cursor:CursorState -> Void))
-  (define (paredit-forward-slurp! buffer cs)
+  (declare paredit-forward-join! (buf:Buffer * cursor:CursorState -> Void))
+  (define (paredit-forward-join! buffer cs)
     "Move the closing delimiter of the enclosing form past the next sexp."
     (undo:with-undo-group! (buf:buffer-undo buffer)
       (fn () (cursor:cursor-position cs))
@@ -1106,18 +1106,18 @@ Inside strings, parens are treated as normal characters."
                  (let tail-start = (%skip-ws-back gb close-pos))
                  (let next-start = (%skip-ws-fwd gb (+ close-pos 1) buf-len))
                  (let moved-text = (gap:gap-substring gb next-start after-next))
-                 ;; Keep one space between existing list content and the slurped sexp.
+                 ;; Keep one space between existing list content and the joined sexp.
                  (let separator = (if (> tail-start (+ open-pos 1)) " " ""))
                  (let replacement = (<> separator (<> moved-text close-str)))
-                 ;; Replace the old tail with the slurped sexp plus the new close delimiter.
+                 ;; Replace the old tail with the joined sexp plus the new close delimiter.
                  (record-delete! buffer tail-start after-next p)
                  (record-insert! buffer tail-start replacement p)
                  (when (> p tail-start)
                    (cell:write! (cursor:.pos cs) (+ tail-start (str:length separator))))
                  (values))))))))))
 
-  (declare paredit-forward-barf! (buf:Buffer * cursor:CursorState -> Void))
-  (define (paredit-forward-barf! buffer cs)
+  (declare paredit-forward-leave! (buf:Buffer * cursor:CursorState -> Void))
+  (define (paredit-forward-leave! buffer cs)
     "Move the closing delimiter of the enclosing form before the last sexp."
     (undo:with-undo-group! (buf:buffer-undo buffer)
       (fn () (cursor:cursor-position cs))
@@ -1148,8 +1148,8 @@ Inside strings, parens are treated as normal characters."
                       (cell:write! (cursor:.pos cs) eject-start))
                     (values))))))))))))
 
-  (declare paredit-backward-slurp! (buf:Buffer * cursor:CursorState -> Void))
-  (define (paredit-backward-slurp! buffer cs)
+  (declare paredit-backward-join! (buf:Buffer * cursor:CursorState -> Void))
+  (define (paredit-backward-join! buffer cs)
     "Move the opening delimiter of the enclosing form past the previous sexp."
     (undo:with-undo-group! (buf:buffer-undo buffer)
       (fn () (cursor:cursor-position cs))
@@ -1172,7 +1172,7 @@ Inside strings, parens are treated as normal characters."
                                    ((Some ch) (%open-str-for ch))
                                    ((None) "(")))
                  (let moved-text = (gap:gap-substring gb prev-start prev-end))
-                 ;; Keep one space between the slurped sexp and existing list content.
+                 ;; Keep one space between the joined sexp and existing list content.
                  (let separator = (if (< head-start close-pos) " " ""))
                  (let replacement = (<> open-str (<> moved-text separator)))
                  ;; Replace the [prev-sexp .. open-delim] span with the new opener + sexp.
@@ -1184,8 +1184,8 @@ Inside strings, parens are treated as normal characters."
                  (cell:write! (cursor:.pos cs) (+ (- p old-span) new-span))
                  (values))))))))))
 
-  (declare paredit-backward-barf! (buf:Buffer * cursor:CursorState -> Void))
-  (define (paredit-backward-barf! buffer cs)
+  (declare paredit-backward-leave! (buf:Buffer * cursor:CursorState -> Void))
+  (define (paredit-backward-leave! buffer cs)
     "Move the opening delimiter of the enclosing form past the first sexp."
     (undo:with-undo-group! (buf:buffer-undo buffer)
       (fn () (cursor:cursor-position cs))
@@ -1224,9 +1224,9 @@ Inside strings, parens are treated as normal characters."
                       (cell:write! (cursor:.pos cs) (+ (- p old-span) new-span)))))
                  (values))))))))))
 
-  (declare paredit-splice! (buf:Buffer * cursor:CursorState -> Void))
-  (define (paredit-splice! buffer cs)
-    "Remove the enclosing delimiters, splicing contents into parent."
+  (declare paredit-shed! (buf:Buffer * cursor:CursorState -> Void))
+  (define (paredit-shed! buffer cs)
+    "Remove the enclosing delimiters, shedding contents into parent."
     (undo:with-undo-group! (buf:buffer-undo buffer)
       (fn () (cursor:cursor-position cs))
       (fn ()
@@ -1267,8 +1267,8 @@ Inside strings, parens are treated as normal characters."
                     (values)))
               (values))))))))
 
-  (declare paredit-cleave! (buf:Buffer * cursor:CursorState -> Void))
-  (define (paredit-cleave! buffer cs)
+  (declare paredit-split! (buf:Buffer * cursor:CursorState -> Void))
+  (define (paredit-split! buffer cs)
     "Split the current delimiter at point into two sibling forms."
     (undo:with-undo-group! (buf:buffer-undo buffer)
       (fn () (cursor:cursor-position cs))

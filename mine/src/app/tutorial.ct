@@ -25,16 +25,16 @@
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
   (cl:defvar *tutorial-modules* cl:nil)
   (cl:defvar *tutorial-names*
-    (cl:vector "Introduction" "Parentheses" "Deletion" "Slurp" "Barf"
-               "Splice" "Cleave" "Easy Challenges" "Hard Challenges" "Congratulations"))
+    (cl:vector "Introduction" "Parentheses" "Deletion" "Join" "Leave"
+               "Shed" "Split" "Easy Challenges" "Hard Challenges" "Congratulations"))
   (cl:let* ((asd-dir (uiop:pathname-directory-pathname
                       (asdf:system-source-file "mine")))
             (tut-dir (cl:merge-pathnames "lessons/" asd-dir)))
     (cl:setf *tutorial-modules*
       (cl:coerce
        (cl:loop :for i :from 0 :below 10
-                :for name :in '("intro" "parens" "delete" "slurp" "barf"
-                                 "splice" "cleave" "easy" "hard" "finish")
+                :for name :in '("intro" "parens" "delete" "join" "leave"
+                                 "shed" "split" "easy" "hard" "finish")
                 :collect
                 (cl:let ((path (cl:merge-pathnames
                                 (cl:format cl:nil "~2,'0D-~A.lisp" i name)
@@ -461,7 +461,7 @@ Returns the next row after all drawn lines."
       ((input:KeyRight)
        (cond
          ((== mod input:ModAlt)
-          (paredit:paredit-forward-slurp! buffer cs))
+          (paredit:paredit-forward-join! buffer cs))
          ((== mod input:ModCtrl)
           (cursor:cursor-move-word-right! gb cs))
          (True
@@ -469,17 +469,17 @@ Returns the next row after all drawn lines."
       ((input:KeyLeft)
        (cond
          ((== mod input:ModAlt)
-          (paredit:paredit-forward-barf! buffer cs))
+          (paredit:paredit-forward-leave! buffer cs))
          ((== mod input:ModCtrl)
           (cursor:cursor-move-word-left! gb cs))
          (True
           (cursor:cursor-move-left! gb cs))))
       ((input:KeyUp)
        (when (== mod input:ModAlt)
-         (paredit:paredit-splice! buffer cs)))
+         (paredit:paredit-shed! buffer cs)))
       ((input:KeyDown)
        (when (== mod input:ModAlt)
-         (paredit:paredit-cleave! buffer cs)))
+         (paredit:paredit-split! buffer cs)))
       ;; Home / End
       ((input:KeyHome)
        (cursor:cursor-move-to-line-start! gb cs))

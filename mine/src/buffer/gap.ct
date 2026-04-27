@@ -140,7 +140,7 @@ pos + (gap-end - gap-start)."
   (declare update-line-starts-insert! (GapBuffer * UFix * String -> Void))
   (define (update-line-starts-insert! gb pos text)
     "Incrementally update line-starts after inserting TEXT at logical POS.
-Shifts existing entries beyond POS by the text length, then splices in
+Shifts existing entries beyond POS by the text length, then inserts
 new line-start entries for each newline found in TEXT."
     (let ls = (cell:read (.line-starts gb)))
     (lisp (-> Void) (ls pos text)
@@ -154,7 +154,7 @@ new line-start entries for each newline found in TEXT."
                    (cl:loop :for i :from 0 :below text-len
                             :when (cl:char= (cl:char text i) #\Newline)
                               :collect (cl:+ pos i 1))))
-          ;; 3. Splice them into ls at the right place.
+          ;; 3. Insert them into ls at the right place.
           (cl:when new-starts
             (cl:let ((insert-at
                        (cl:loop :for i :from 0 :below (cl:length ls)
