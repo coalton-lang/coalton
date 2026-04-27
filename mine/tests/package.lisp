@@ -2,8 +2,11 @@
   (:use #:cl)
   (:local-nicknames
    (#:diag #:mine/protocol/diagnostics)
+   (#:input #:mine/term/input)
+   (#:repl #:mine/pane/repl)
    (#:server #:mine/protocol/server)
-   (#:source #:coalton-impl/source))
+   (#:source #:coalton-impl/source)
+   (#:wt #:mine/widget/types))
   (:export #:run-mine-tests
            #:run-mine-tests-in-subprocess))
 
@@ -51,6 +54,9 @@
                   check-generic-coalton-toplevel-notes-stay-textual
                   check-source-diagnostic-hook-sees-source-error-subclasses
                   check-reader-errors-produce-point-diagnostics
+                  check-repl-structural-editing-pairs-delimiters
+                  check-repl-structural-editing-alt-sexp-motion
+                  check-repl-hint-symbol-extraction
                   check-beam-system-emits-diagnostics-before-return
                   check-beam-system-preserves-coalton-error-spans))
     (format t "~&~A~%" test)

@@ -574,51 +574,73 @@
          (match (mgr:bufmgr-current (.ms-bufmgr st))
            ((Some buf) (buf:buffer-dirty? buf))
            ((None) False)))
+       (let current-focus = (focus:focus-current (.ms-focus st)))
        (let mode-str =
-         (match (focus:focus-current (.ms-focus st))
-           ((focus:FocusRepl) "REPL")
+         (match current-focus
+           ((focus:FocusRepl)
+            (if (cell:read (.ms-structural-editing st))
+                "REPL Structural"
+                "REPL"))
            ((focus:FocusTree) "TREE")
            (_ (if (cell:read (.ms-structural-editing st))
                   "EDIT Structural"
                   "EDIT"))))
        (let cur-pos = (cursor:cursor-position (.ms-cursor st)))
        ;; Prefer diagnostics at point, then diagnostics on the current line, then symbol info.
-	      (let diag-msg = (lisp (-> String) (cur-gb cur-line cur-pos)
-	                         (cl:if mine/pane/editor::*editor-filepath*
-	                                (cl:let* ((line-start (mine/buffer/gap:gap-line-to-pos cur-gb cur-line))
-	                                          (line-end (cl:+ line-start
-	                                                          (cl:length (mine/buffer/gap:gap-line-text cur-gb cur-line))))
-	                                          (msg (mine/app/diagnostics:diagnostics-message-for-position
-	                                                mine/pane/editor::*editor-filepath*
-	                                                cur-pos))
-	                                          (line-msg (cl:if (cl:plusp (cl:length msg))
-	                                                           msg
-	                                                           (mine/app/diagnostics:diagnostics-message-for-range
-	                                                            mine/pane/editor::*editor-filepath*
-	                                                            line-start
-	                                                            line-end))))
-	                                  (cl:if (cl:plusp (cl:length line-msg)) line-msg ""))
-	                                "")))
+       (let diag-msg =
+         (match current-focus
+           ((focus:FocusRepl) "")
+           (_
+            (lisp (-> String) (cur-gb cur-line cur-pos)
+              (cl:if mine/pane/editor::*editor-filepath*
+                     (cl:let* ((line-start (mine/buffer/gap:gap-line-to-pos cur-gb cur-line))
+                               (line-end (cl:+ line-start
+                                               (cl:length (mine/buffer/gap:gap-line-text cur-gb cur-line))))
+                               (msg (mine/app/diagnostics:diagnostics-message-for-position
+                                     mine/pane/editor::*editor-filepath*
+                                     cur-pos))
+                               (line-msg (cl:if (cl:plusp (cl:length msg))
+                                                msg
+                                                (mine/app/diagnostics:diagnostics-message-for-range
+                                                 mine/pane/editor::*editor-filepath*
+                                                 line-start
+                                                 line-end))))
+                       (cl:if (cl:plusp (cl:length line-msg)) line-msg ""))
+                     "")))))
        ;; Type hints: query subprocess asynchronously, display cached result
        (let _hint-update =
-         (match (mgr:bufmgr-current (.ms-bufmgr st))
-           ((Some _buf)
-            (let default-pkg = (cell:read (.ms-repl-package st)))
-            (let buf-text = (gap:gap-to-string cur-gb))
-            (lisp (-> Unit) (st cur-gb cur-pos buf-text default-pkg)
-              (cl:let* ((sym-name (%read-enclosing-symbol cur-gb cur-pos))
-                        (buf-pkg (%detect-buffer-package buf-text default-pkg)))
+         (match current-focus
+           ((focus:FocusRepl)
+            (let repl-text = (repl:repl-pane-get-input (.ms-repl st)))
+            (let repl-cur = (repl:repl-pane-input-cursor (.ms-repl st)))
+            (let repl-pkg = (cell:read (.ms-repl-package st)))
+            (lisp (-> Unit) (st repl-text repl-cur repl-pkg)
+              (cl:let ((sym-name (%read-enclosing-symbol-from-string repl-text repl-cur)))
                 (cl:multiple-value-bind (resolved-pkg resolved-sym)
-                    (%resolve-qualified-name (cl:or sym-name "") buf-pkg)
+                    (%resolve-qualified-name (cl:or sym-name "") repl-pkg)
                   (%update-hint-if-changed st resolved-sym resolved-pkg)))
               Unit))
-           ((None) Unit)))
+           (_
+            (match (mgr:bufmgr-current (.ms-bufmgr st))
+              ((Some _buf)
+               (let default-pkg = (cell:read (.ms-repl-package st)))
+               (let buf-text = (gap:gap-to-string cur-gb))
+               (lisp (-> Unit) (st cur-gb cur-pos buf-text default-pkg)
+                 (cl:let* ((sym-name (%read-enclosing-symbol cur-gb cur-pos))
+                           (buf-pkg (%detect-buffer-package buf-text default-pkg)))
+                   (cl:multiple-value-bind (resolved-pkg resolved-sym)
+                       (%resolve-qualified-name (cl:or sym-name "") buf-pkg)
+                     (%update-hint-if-changed st resolved-sym resolved-pkg)))
+                 Unit))
+              ((None) Unit)))))
        (let sym-info =
          (cond
            ((> (str:length diag-msg) 0) diag-msg)
            (True (lisp (-> String) () *hint-result*))))
        (status:statusbar-update! (.ms-status st) mode-str fname is-dirty
-                                 (+ cur-line 1) (+ cur-col 1) "COALTON-USER" sym-info)))
+                                 (+ cur-line 1) (+ cur-col 1)
+                                 (cell:read (.ms-repl-package st))
+                                 sym-info)))
     (status:statusbar-render (.ms-status st) scr status-rect)
     ;; Position the hardware cursor (only visible in editor/REPL)
     (match (focus:focus-current (.ms-focus st))
@@ -2741,6 +2763,20 @@ Uses the preceding (in-package ...) form to determine the compilation package."
 
 ;;; Event handling -- REPL keys
 
+  (declare handle-repl-input-key! (MineState * input:Key * input:Modifier -> Void))
+  (define (handle-repl-input-key! st key mod)
+    "Handle a key in the REPL input, using paredit first when enabled."
+    (cond
+      ((cell:read (.ms-structural-editing st))
+       (match (repl:repl-pane-handle-structural-key! (.ms-repl st) key mod)
+         ((wt:Consumed) (values))
+         ((wt:Ignored)
+          (repl:repl-pane-handle-key! (.ms-repl st) key mod)
+          (values))))
+      (True
+       (repl:repl-pane-handle-key! (.ms-repl st) key mod)
+       (values))))
+
   (declare handle-repl-key (MineState * input:Key * input:Modifier -> Void))
   (define (handle-repl-key st key mod)
     "Handle a key event when the REPL pane is focused."
@@ -2782,11 +2818,11 @@ Uses the preceding (in-package ...) form to determine the compilation package."
             ((> (str:length prefix) 0)
              (%trigger-completion! st))
             (True
-             (repl:repl-pane-handle-key! (.ms-repl st) key mod)
+             (handle-repl-input-key! st key mod)
              (values))))
          (_
           ;; Delegate everything else to the REPL pane's own key handler
-          (repl:repl-pane-handle-key! (.ms-repl st) key mod)
+          (handle-repl-input-key! st key mod)
           (values))))))
 
 ;;; Event handling -- tree keys
@@ -4636,6 +4672,14 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
                 (paren-pos (%find-enclosing-open-paren gb cursor-pos)))
         (cl:when paren-pos
           (%read-symbol-after gb (cl:1+ paren-pos) len)))
+    (cl:error () cl:nil)))
+
+(cl:defun %read-enclosing-symbol-from-string (text cursor-pos)
+  "Read the head symbol of the nearest enclosing form in TEXT."
+  (cl:handler-case
+      (cl:let* ((gb (mine/buffer/gap:gap-from-string text))
+                (safe-pos (cl:max 0 (cl:min cursor-pos (mine/buffer/gap:gap-length gb)))))
+        (%read-enclosing-symbol gb safe-pos))
     (cl:error () cl:nil)))
 
 
