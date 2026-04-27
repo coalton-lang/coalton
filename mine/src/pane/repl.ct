@@ -6,6 +6,10 @@
    (#:wt #:mine/widget/types)
    (#:render #:mine/widget/render)
    (#:cell #:coalton/cell)
+   (#:buf #:mine/buffer/buffer)
+   (#:gap #:mine/buffer/gap)
+   (#:cursor #:mine/edit/cursor)
+   (#:paredit #:mine/syntax/paredit)
    (#:vec #:coalton/vector)
    (#:str #:coalton/string)
    (#:widget-text #:mine/widget/text)
@@ -22,6 +26,7 @@
    #:repl-pane-get-input
    #:repl-pane-clear-input!
    #:repl-pane-handle-key!
+   #:repl-pane-handle-structural-key!
    #:repl-pane-history-up!
    #:repl-pane-history-down!
    #:repl-pane-add-history!
@@ -296,6 +301,130 @@ Handles line comments (;) and character literals (#\\)."
     "Insert TEXT into the input widget at the cursor position."
     (widget-input:input-widget-insert-string! (.input-widget rp) text)
     (values))
+
+  ;;; Structural input editing
+
+  (declare %with-repl-input-buffer!
+    (ReplPane * (buf:Buffer * cursor:CursorState -> Void) -> Void))
+  (define (%with-repl-input-buffer! rp action)
+    "Run ACTION on the REPL input using the normal editor buffer APIs.
+
+The REPL input widget stores plain text, while paredit operates on a Buffer
+and CursorState. This adapter keeps the REPL binding area small and lets the
+REPL reuse the editor's structural editing implementation."
+    (let iw = (.input-widget rp))
+    (let text = (widget-input:input-widget-text iw))
+    (let cur = (cell:read (widget-input:.iw-cursor iw)))
+    (let buffer = (buf:buffer-new (buf:BufferId 0) "*repl-input*"))
+    (let gb = (buf:buffer-gap buffer))
+    (gap:gap-insert-string! gb 0 text)
+    (let cs = (cursor:cursor-new))
+    (cursor:cursor-move-to-position! cs (min cur (gap:gap-length gb)))
+    (action buffer cs)
+    (let updated = (gap:gap-to-string gb))
+    (let updated-len = (str:length updated))
+    (cell:write! (widget-input:.iw-text iw) updated)
+    (cell:write! (widget-input:.iw-cursor iw)
+                 (min (cursor:cursor-position cs) updated-len))
+    (values))
+
+  (declare %repl-paredit! (ReplPane * (buf:Buffer * cursor:CursorState -> Void) -> wt:EventResult))
+  (define (%repl-paredit! rp action)
+    (%with-repl-input-buffer! rp action)
+    wt:Consumed)
+
+  (declare %plain-char-modifier? (input:Modifier -> Boolean))
+  (define (%plain-char-modifier? modifier)
+    (or (== modifier input:ModNone)
+        (== modifier input:ModShift)))
+
+  (declare repl-pane-handle-structural-key!
+    (ReplPane * input:Key * input:Modifier -> wt:EventResult))
+  (define (repl-pane-handle-structural-key! rp key modifier)
+    "Handle structural editing keys for the REPL input.
+
+Returns Ignored for non-structural keys so callers can fall back to the
+ordinary input-widget handler."
+    (match (Tuple key modifier)
+      ((Tuple (input:KeyRight) (input:ModAlt))
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-forward-slurp! buffer cs))))
+      ((Tuple (input:KeyRight) (input:ModAltShift))
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-backward-barf! buffer cs))))
+      ((Tuple (input:KeyLeft) (input:ModAlt))
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-forward-barf! buffer cs))))
+      ((Tuple (input:KeyLeft) (input:ModAltShift))
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-backward-slurp! buffer cs))))
+      ((Tuple (input:KeyUp) (input:ModAlt))
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-splice! buffer cs))))
+      ((Tuple (input:KeyDown) (input:ModAlt))
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-cleave! buffer cs))))
+      ((Tuple (input:KeyBackspace) (input:ModAlt))
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-delete-enclosing! buffer cs))))
+      ((Tuple (input:KeyBackspace) (input:ModCtrl))
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-backspace-word! buffer cs))))
+      ((Tuple (input:KeyBackspace) _)
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-backspace! buffer cs))))
+      ((Tuple (input:KeyDelete) _)
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-delete! buffer cs))))
+      ((Tuple (input:KeyChar #\() _)
+       (if (%plain-char-modifier? modifier)
+           (%repl-paredit! rp
+                           (fn (buffer cs)
+                             (paredit:paredit-open-paren! buffer cs)))
+           wt:Ignored))
+      ((Tuple (input:KeyChar #\)) _)
+       (if (%plain-char-modifier? modifier)
+           (%repl-paredit! rp
+                           (fn (buffer cs)
+                             (paredit:paredit-close-paren! buffer cs)))
+           wt:Ignored))
+      ((Tuple (input:KeyChar #\[) _)
+       (if (%plain-char-modifier? modifier)
+           (%repl-paredit! rp
+                           (fn (buffer cs)
+                             (paredit:paredit-open-bracket! buffer cs)))
+           wt:Ignored))
+      ((Tuple (input:KeyChar #\]) _)
+       (if (%plain-char-modifier? modifier)
+           (%repl-paredit! rp
+                           (fn (buffer cs)
+                             (paredit:paredit-close-bracket! buffer cs)))
+           wt:Ignored))
+      ((Tuple (input:KeyChar #\") _)
+       (if (%plain-char-modifier? modifier)
+           (%repl-paredit! rp
+                           (fn (buffer cs)
+                             (paredit:paredit-doublequote! buffer cs)))
+           wt:Ignored))
+      ((Tuple (input:KeyChar #\f) (input:ModAlt))
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-forward-sexp! (buf:buffer-gap buffer) cs))))
+      ((Tuple (input:KeyChar #\b) (input:ModAlt))
+       (%repl-paredit! rp
+                       (fn (buffer cs)
+                         (paredit:paredit-backward-sexp! (buf:buffer-gap buffer) cs))))
+      (_ wt:Ignored)))
 
   ;;; Key handling
 
