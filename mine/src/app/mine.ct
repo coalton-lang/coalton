@@ -56,7 +56,7 @@
    #:ProtoMsg #:ProtoReturn #:ProtoOutput #:ProtoDebug #:ProtoIORequest #:ProtoConnectionLost
    #:get-status-bar #:get-editor-pane #:get-bufmgr #:get-cursor-state
    #:get-repl-pane #:get-focus-mgr #:get-repl-package-cell
-   #:get-proto-mailbox #:get-proto-thread
+   #:get-proto-mailbox #:get-proto-thread #:get-bg-proto-thread
    #:get-debugger-condition-cell #:get-debugger-items
    #:get-debugger-selected-cell #:get-conn-stream #:get-diagnostics
    #:get-jump-stack #:get-quit-cell #:get-next-req-id-cell
@@ -73,8 +73,12 @@
 
 ;;; CL state referenced by lisp escapes in the Coalton code below.
 (cl:defvar *hint-result* "" "Cached hint string for status bar.")
+(cl:defvar *hint-request-id* nil "Request ID of pending hint query.")
 (cl:defvar *heap-info-result* "" "Cached heap info string from runtime server.")
 (cl:defvar *heap-info-last-time* 0 "Internal-real-time of last heap-info request.")
+(cl:defvar *pending-requests* nil
+  "Alist of (request-id . handler-fn). Handler takes (st raw-payload).")
+(cl:defvar *pending-jump-source* nil "(filepath . position) for jump-back stack.")
 (cl:defvar *restart-into-setup* nil
   "When set to T by the Setup Wizard menu action, mine-main reruns the setup wizard.")
 
@@ -216,7 +220,8 @@
     (ms-debugger-follow   (Cell Boolean)) ;; 45 -- scroll to keep selection visible on next render
     (ms-beam-request-id   (Cell (Optional msg:RequestId))) ;; 46 -- id of pending Beam Project request, if any
     (ms-quick-result-state  NativeBox) ;; 47 -- CL plist for the transient result popup
-    (ms-quick-result-request-id (Cell (Optional msg:RequestId)))) ;; 48 -- pending Quick Result request, if any
+    (ms-quick-result-request-id (Cell (Optional msg:RequestId))) ;; 48 -- pending Quick Result request, if any
+    (ms-bg-proto-thread    NativeBox)) ;; 49 -- background protocol reader thread handle
 
 ;;; Named accessors for CL interop (avoids fragile numeric indices)
 
@@ -258,6 +263,9 @@
 
   (declare get-proto-thread (MineState -> NativeBox))
   (define (get-proto-thread st) (.ms-proto-thread st))
+
+  (declare get-bg-proto-thread (MineState -> NativeBox))
+  (define (get-bg-proto-thread st) (.ms-bg-proto-thread st))
 
   (declare get-debugger-condition-cell (MineState -> (Cell String)))
   (define (get-debugger-condition-cell st) (.ms-debugger-condition st))
@@ -1287,6 +1295,43 @@ First line gets PREFIX, continuation lines get spaces of the same width."
             (cl:setf start (cl:if nl (cl:1+ nl) len))))))
     (values))
 
+  (declare %runtime-foreground-active? (MineState -> Boolean))
+  (define (%runtime-foreground-active? st)
+    "True when the runtime is already handling an exclusive foreground request."
+    (or (cell:read (.ms-repl-busy st))
+        (or (cell:read (.ms-debugger-active st))
+            (or (cell:read (.ms-io-request-active st))
+                (or (match (cell:read (.ms-active-request st))
+                      ((Some _) True)
+                      ((None) False))
+                    (or (match (cell:read (.ms-beam-request-id st))
+                          ((Some _) True)
+                          ((None) False))
+                        (match (cell:read (.ms-quick-result-request-id st))
+                          ((Some _) True)
+                          ((None) False))))))))
+
+  (declare %runtime-foreground-block-message (MineState -> String))
+  (define (%runtime-foreground-block-message st)
+    "Return the user-facing reason a new runtime request is blocked."
+    (cond
+      ((cell:read (.ms-io-request-active st))
+       "Runtime waiting for input; answer in the REPL or press Esc")
+      ((cell:read (.ms-debugger-active st))
+       "Debugger active; choose a restart or abort first")
+      (True
+       "Runtime busy; finish or cancel the current request first")))
+
+  (declare %block-runtime-foreground-request! (MineState -> Boolean))
+  (define (%block-runtime-foreground-request! st)
+    "Show feedback and return True when a new foreground runtime request is blocked."
+    (cond
+      ((%runtime-foreground-active? st)
+       (status:statusbar-set-message! (.ms-status st)
+                                      (%runtime-foreground-block-message st))
+       True)
+      (True False)))
+
   (declare repl-eval! (MineState -> Void))
   (define (repl-eval! st)
     "Take the current REPL input. If it starts with comma, dispatch as a command.
@@ -1295,13 +1340,16 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
     ;; Ignore empty input
     (when (== (str:length input-text) 0)
       (return (values)))
+    (let command-input? = (match (str:ref input-text 0) ((Some #\,) True) (_ False)))
+    (when (and (not command-input?) (%block-runtime-foreground-request! st))
+      (return (values)))
     ;; Add to history
     (repl:repl-pane-add-history! (.ms-repl st) input-text)
     ;; Clear the input line
     (repl:repl-pane-clear-input! (.ms-repl st))
     ;; Check for comma commands
     (cond
-      ((match (str:ref input-text 0) ((Some #\,) True) (_ False))
+      (command-input?
        (%append-input-to-output! st "> " input-text)
        (repl-command! st (str:substring input-text 1 (str:length input-text))))
       (True
@@ -1337,33 +1385,14 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
   (define (start-proto-reader! st conn)
     "Start the protocol reader thread if not already running."
     (lisp (-> Void) (st conn)
-      (cl:block done
-        (cl:let ((existing (%native-box-value (mine/app/mine::get-proto-mailbox st))))
-          (cl:when existing
-            (cl:return-from done (cl:values))))
-        (cl:let* ((mailbox (sb-concurrency:make-mailbox :name "mine-proto"))
-                  (stream (mine/protocol/client::%connection-stream conn)))
-          ;; Store mailbox and stream in NativeBox fields
-          (cl:setf (%native-box-value (mine/app/mine::get-proto-mailbox st)) mailbox)
-          (cl:setf (%native-box-value (mine/app/mine::get-conn-stream st)) stream)
-          ;; Start reader thread
-          (cl:let ((thread
-                     (mine/bindings/thread:make-thread
-                      "mine-proto-reader"
-                      (cl:lambda ()
-                        (cl:loop
-                          (cl:handler-case
-                              (cl:let ((msg (mine/protocol/server::read-message stream)))
-                                (cl:cond
-                                  (msg
-                                   (sb-concurrency:send-message mailbox msg))
-                                  (cl:t
-                                   (sb-concurrency:send-message mailbox '(:connection-lost))
-                                   (cl:return))))
-                            (cl:error ()
-                              (sb-concurrency:send-message mailbox '(:connection-lost))
-                              (cl:return))))))))
-            (cl:setf (%native-box-value (mine/app/mine::get-proto-thread st)) thread))))
+      (%start-foreground-proto-reader-cl st conn)
+      (cl:values)))
+
+  (declare start-background-proto-reader! (MineState * client:Connection -> Void))
+  (define (start-background-proto-reader! st conn)
+    "Start the background protocol reader thread if not already running."
+    (lisp (-> Void) (st conn)
+      (%start-background-proto-reader-cl st conn)
       (cl:values)))
 
 ;;; Process protocol messages from mailbox (non-blocking)
@@ -1552,6 +1581,7 @@ multiple values get 0>, 1>, etc."
        (lisp (-> Void) (st)
          (cl:setf (%native-box-value (mine/app/mine::get-proto-mailbox st)) cl:nil)
          (cl:setf (%native-box-value (mine/app/mine::get-proto-thread st)) cl:nil)
+         (%clear-background-protocol-state st)
          ;; Deactivate the connection so the status bar sees it as gone
          (cl:let ((mgr (mine/app/mine::get-runtime-mgr st)))
            (cl:let ((conn (mine/protocol/lifecycle::%runtime-manager-connection mgr)))
@@ -1572,6 +1602,8 @@ Uses a dedicated Beam request so diagnostics can stream independently."
        (status:statusbar-set-message! (.ms-status st) "No project system loaded"))
       ((Some sys-name)
        (ensure-repl-visible! st)
+       (when (%block-runtime-foreground-request! st)
+         (return (values)))
        (let asd-path = (match (cell:read (.ms-project-asd-path st))
                          ((Some path) path)
                          ((None) "")))
@@ -1788,8 +1820,12 @@ Uses a dedicated Beam request so diagnostics can stream independently."
     (lisp (-> Void) (st)
       (cl:setf (%native-box-value (mine/app/mine::get-proto-mailbox st)) cl:nil)
       (cl:setf (%native-box-value (mine/app/mine::get-proto-thread st)) cl:nil)
+      (cl:setf (%native-box-value (mine/app/mine::get-bg-proto-thread st)) cl:nil)
       (cl:setf (%native-box-value (mine/app/mine::get-conn-stream st)) cl:nil)
       (cl:setf (%native-box-value (mine/app/mine::get-quick-result-state st)) cl:nil)
+      (cl:setf *pending-requests* cl:nil)
+      (cl:setf *hint-request-id* cl:nil)
+      (cl:setf *pending-jump-source* cl:nil)
       (cl:values))
     (cell:write! (.ms-debugger-active st) False)
     (cell:write! (.ms-repl-busy st) False)
@@ -2043,6 +2079,8 @@ If the buffer has unsaved changes, writes to a temp file for compilation."
          ((None)
           (repl:repl-pane-append-system! (.ms-repl st) ";; Buffer has no file path"))
          ((Some fpath)
+          (when (%block-runtime-foreground-request! st)
+            (return (values)))
           ;; If dirty, write buffer contents to a temp file for compilation
           (let dirty = (buf:buffer-dirty? buf))
           (let compile-path =
@@ -2149,6 +2187,8 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                             (<> "... [" (<> (into nlines) " lines]"))
                             ""))
           (let document-key = (buf:buffer-document-key buf))
+          (when (%block-runtime-foreground-request! st)
+            (return (values)))
           (repl:repl-pane-append-output! (.ms-repl st)
                                          (<> ";; Compile in " (<> pkg (<> ": " (<> preview suffix)))))
           (lisp (-> Void) (document-key)
@@ -2174,6 +2214,8 @@ Uses the preceding (in-package ...) form to determine the compilation package."
   (declare quick-result-form! (MineState -> Void))
   (define (quick-result-form! st)
     "Show a Quick Result popup for the selection, or the form at the cursor (Alt+r)."
+    (when (%block-runtime-foreground-request! st)
+      (return (values)))
     (match (mgr:bufmgr-current (.ms-bufmgr st))
       ((None)
        (%show-quick-result! st "Error" "No file open" True))
@@ -4768,7 +4810,8 @@ Render-app is NOT called here; the main loop handles rendering."
                          (cell:new True)
                          (cell:new None)
                          (native-box-new)
-                         (cell:new None)))
+                         (cell:new None)
+                         (native-box-new)))
     ;; Open a file if given on the command line
     (let file-args = (filter (fn (a) (not (str:substring? "--" a))) (list:cdr args)))
     (match file-args
@@ -5337,6 +5380,74 @@ Handles #:foo, :foo, 'foo, \"foo\", and bare symbols."
   (mine/pane/repl::repl-pane-append-output!
    (mine/app/mine::get-repl-pane st) text))
 
+(cl:defun %ensure-proto-mailbox (st)
+  "Return the shared protocol mailbox, creating it if needed."
+  (cl:let ((box (mine/app/mine::get-proto-mailbox st)))
+    (cl:or (%native-box-value box)
+           (cl:setf (%native-box-value box)
+                    (sb-concurrency:make-mailbox :name "mine-proto")))))
+
+(cl:defun %thread-alive-or-nil (thread)
+  (cl:and thread
+          (cl:handler-case
+              (mine/bindings/thread:thread-alive-p thread)
+            (cl:error () cl:nil))))
+
+(cl:defun %start-proto-reader-thread-cl (st conn thread-box lost-message thread-name)
+  "Start a reader for CONN, forwarding raw protocol messages into ST's mailbox."
+  (cl:block done
+    (cl:when (%thread-alive-or-nil (%native-box-value thread-box))
+      (cl:return-from done cl:t))
+    (cl:let ((stream (mine/protocol/client::%connection-stream conn)))
+      (cl:unless (cl:and (cl:streamp stream) (cl:open-stream-p stream))
+        (cl:return-from done cl:nil))
+      (cl:let ((mailbox (%ensure-proto-mailbox st)))
+        (cl:setf (%native-box-value thread-box)
+                 (mine/bindings/thread:make-thread
+                  thread-name
+                  (cl:lambda ()
+                    (cl:loop
+                      (cl:handler-case
+                          (cl:let ((msg (mine/protocol/server::read-message stream)))
+                            (cl:cond
+                              (msg
+                               (sb-concurrency:send-message mailbox msg))
+                              (cl:t
+                               (sb-concurrency:send-message mailbox lost-message)
+                               (cl:return))))
+                        (cl:error ()
+                          (sb-concurrency:send-message mailbox lost-message)
+                          (cl:return)))))))
+        cl:t))))
+
+(cl:defun %start-foreground-proto-reader-cl (st conn)
+  "Start the foreground protocol reader and remember its stream for debugger/IO replies."
+  (cl:let ((stream (mine/protocol/client::%connection-stream conn)))
+    (cl:setf (%native-box-value (mine/app/mine::get-conn-stream st)) stream))
+  (%start-proto-reader-thread-cl st conn
+                                 (mine/app/mine::get-proto-thread st)
+                                 '(:connection-lost)
+                                 "mine-proto-reader"))
+
+(cl:defun %start-background-proto-reader-cl (st conn)
+  "Start the background protocol reader for editor-service replies."
+  (%start-proto-reader-thread-cl st conn
+                                 (mine/app/mine::get-bg-proto-thread st)
+                                 '(:background-connection-lost)
+                                 "mine-bg-proto-reader"))
+
+(cl:defun %clear-background-protocol-state (st)
+  "Forget background protocol state and pending editor-service requests."
+  (cl:setf (%native-box-value (mine/app/mine::get-bg-proto-thread st)) cl:nil)
+  (cl:let* ((mgr (mine/app/mine::get-runtime-mgr st))
+            (conn (mine/protocol/lifecycle::%runtime-manager-background-connection mgr)))
+    (cl:when conn
+      (cl:setf (mine/protocol/client::%connection-active conn) cl:nil)))
+  (cl:setf *pending-requests* cl:nil)
+  (cl:setf *hint-request-id* cl:nil)
+  (cl:setf *pending-jump-source* cl:nil)
+  (cl:values))
+
 (cl:defun %drain-and-parse-messages (st)
   "Drain the mailbox and convert raw CL messages to Coalton ProtoMsg values.
 Returns a Coalton List of ProtoMsg."
@@ -5346,15 +5457,18 @@ Returns a Coalton List of ProtoMsg."
            (cl:let ((raw-msgs (sb-concurrency:receive-pending-messages mailbox))
                     (result Nil))
              (cl:dolist (msg (cl:reverse raw-msgs))
-               ;; Check for pending async request (hint, jump-to-def, etc.)
-               (cl:let ((handler (cl:when (cl:and (cl:consp msg)
-                                                   (cl:eq (cl:first msg) :return))
-                                   (%pop-pending-request (cl:second msg)))))
-                 (cl:if handler
-                        (cl:funcall handler st (cl:third msg))
-                        (cl:let ((parsed (%parse-one-message msg)))
-                          (cl:when parsed
-                            (cl:setf result (Cons parsed result)))))))
+               (cl:if (cl:and (cl:consp msg)
+                               (cl:eq (cl:first msg) :background-connection-lost))
+                      (%clear-background-protocol-state st)
+                      ;; Check for pending async request (hint, jump-to-def, etc.)
+                      (cl:let ((handler (cl:when (cl:and (cl:consp msg)
+                                                          (cl:eq (cl:first msg) :return))
+                                          (%pop-pending-request (cl:second msg)))))
+                        (cl:if handler
+                               (cl:funcall handler st (cl:third msg))
+                               (cl:let ((parsed (%parse-one-message msg)))
+                                 (cl:when parsed
+                                   (cl:setf result (Cons parsed result))))))))
              result))))
 
 (cl:defun %parse-one-message (msg)
@@ -6044,9 +6158,6 @@ where IDX is the index of the item in ITEMS."
 
 ;;; Pending async requests (for subprocess queries that bypass REPL display)
 
-(cl:defvar *pending-requests* nil
-  "Alist of (request-id . handler-fn). Handler takes (st raw-payload).")
-
 (cl:defun %register-pending-request (rid handler)
   (cl:push (cl:cons rid handler) *pending-requests*))
 
@@ -6074,11 +6185,25 @@ Handles the debugger state where conn-stream is (msg-id . stream)."
           (mine/protocol/server::write-message stream msg)
         (cl:error () cl:nil)))))
 
+(cl:defun %send-to-background-subprocess (st msg)
+  "Send read-only editor-service MSG on the runtime background connection."
+  (cl:let* ((mgr (mine/app/mine::get-runtime-mgr st))
+            (conn (mine/protocol/lifecycle::%runtime-ensure-background-connection-raw mgr)))
+    (cl:when conn
+      (%start-background-proto-reader-cl st conn)
+      (cl:let ((stream (mine/protocol/client::%connection-stream conn)))
+        (cl:when (cl:and (cl:streamp stream) (cl:open-stream-p stream))
+          (cl:handler-case
+              (mine/protocol/server::write-message stream msg)
+            (cl:error ()
+              (cl:setf (mine/protocol/client::%connection-active conn) cl:nil)
+              (cl:setf (%native-box-value (mine/app/mine::get-bg-proto-thread st)) cl:nil)
+              cl:nil)))))))
+
 ;;; Async type hint cache
 
 (cl:defvar *hint-last-sym* nil "Last symbol name we queried for hints.")
 (cl:defvar *hint-last-pkg* nil "Last package name for hints.")
-(cl:defvar *hint-request-id* nil "Request ID of pending hint query.")
 
 (cl:defun %request-symbol-hint (st sym-name pkg-name)
   "Send a :coalton-type-of query to the subprocess for status bar hints."
@@ -6109,10 +6234,12 @@ Handles the debugger state where conn-stream is (msg-id . stream)."
                         (cl:t ""))))
                    (cl:t "")))))
             (cl:t (cl:setf *hint-result* "")))))
-      (%send-to-subprocess st
-        (cl:list :coalton-type-of rid
-          (cl:string-upcase sym-name)
-          (cl:string-upcase pkg-name))))))
+      (cl:unless (%send-to-background-subprocess st
+                   (cl:list :coalton-type-of rid
+                     (cl:string-upcase sym-name)
+                     (cl:string-upcase pkg-name)))
+        (%pop-pending-request rid)
+        (cl:setf *hint-request-id* nil)))))
 
 (cl:defun %update-hint-if-changed (st sym-name pkg-name)
   "If the symbol at cursor changed, request a new hint from the subprocess."
@@ -6152,9 +6279,8 @@ Handles the debugger state where conn-stream is (msg-id . stream)."
                     (cl:setf *heap-info-result*
                       (cl:format cl:nil "~,1F/~,1F GB (~D%)"
                                  used-gb total-gb pct))))))))
-        (%send-to-subprocess st (cl:list :heap-info rid))))))
-
-(cl:defvar *pending-jump-source* nil "(filepath . position) for jump-back stack.")
+        (cl:unless (%send-to-background-subprocess st (cl:list :heap-info rid))
+          (%pop-pending-request rid))))))
 
 (cl:defun %request-remote-definition (st sym-name pkg-name cur-path cur-pos)
   "Send a :find-definition request to the subprocess."
@@ -6180,10 +6306,13 @@ Handles the debugger state where conn-stream is (msg-id . stream)."
                     (%status-msg st "No definition found"))))
           (cl:t (%status-msg st (cl:format cl:nil "~A" (cl:or (cl:second payload) "No definition found")))))
         (cl:setf *pending-jump-source* nil)))
-    (%send-to-subprocess st
-      (cl:list :find-definition rid
-        (cl:string-upcase sym-name)
-        (cl:string-upcase pkg-name)))))
+    (cl:unless (%send-to-background-subprocess st
+                 (cl:list :find-definition rid
+                   (cl:string-upcase sym-name)
+                   (cl:string-upcase pkg-name)))
+      (%pop-pending-request rid)
+      (cl:setf *pending-jump-source* nil)
+      (%status-msg st "No runtime connection"))))
 
 (cl:defun %status-msg (st text)
   (mine/pane/status::statusbar-set-message!
@@ -6209,8 +6338,9 @@ package resolution including local nicknames."
           (%register-pending-request rid
             (cl:lambda (st payload)
               (%handle-completion-response st payload saved-prefix saved-cursor is-repl)))
-          (%send-to-subprocess st
-            (cl:list :complete rid prefix pkg-name)))))))
+          (cl:unless (%send-to-background-subprocess st
+                       (cl:list :complete rid prefix pkg-name))
+            (%pop-pending-request rid)))))))
 
 (cl:defun %completion-context-editor (st)
   "Return (values prefix pkg-name cursor-pos) for the editor."
