@@ -24,6 +24,7 @@
    #:fresh-inst                         ; FUNCTION
    #:ty-scheme-instantiation-types      ; FUNCTION
    #:scheme-predicates                  ; FUNCTION
+   #:predicates-to-scheme               ; FUNCTION
    #:fresh-pred                         ; FUNCTION
    #:fresh-preds                        ; FUNCTION
    #:quantify-using-tvar-order          ; FUNCTION
@@ -293,22 +294,31 @@ and pretty printing can recover the programmer-written binders."
   "Get freshly instantiated predicates of scheme TY-SCHEME"
   (qualified-ty-predicates (fresh-inst ty-scheme)))
 
+(defun predicates-to-scheme (preds sentinel)
+  "Return a scheme over PREDS using SENTINEL as the unquantified result type.
+
+SENTINEL exists only to make a predicate list fit the qualified type carried
+by type schemes. Pass the same sentinel to multiple calls when comparing the
+resulting schemes for alpha-equivalence.
+"
+  (declare (type ty-predicate-list preds)
+           (type ty sentinel)
+           (values ty-scheme &optional))
+  (quantify (type-variables preds)
+            (qualify preds sentinel)))
+
 (defun fresh-pred (pred)
   "Returns PRED with fresh type variables"
   (declare (type ty-predicate pred)
            (values ty-predicate))
-  (let* ((var (make-variable))
-         (qual-ty (make-qualified-ty :predicates (list pred) :type var))
-         (scheme (quantify (type-variables (list pred var)) qual-ty)))
+  (let ((scheme (predicates-to-scheme (list pred) (make-variable))))
     (car (qualified-ty-predicates (fresh-inst scheme)))))
 
 (defun fresh-preds (preds)
   "Returns PRED with fresh type variables"
   (declare (type ty-predicate-list preds)
            (values ty-predicate-list))
-  (let* ((var (make-variable))
-         (qual-ty (make-qualified-ty :predicates preds :type var))
-         (scheme (quantify (type-variables (cons var preds)) qual-ty)))
+  (let ((scheme (predicates-to-scheme preds (make-variable))))
     (qualified-ty-predicates (fresh-inst scheme))))
 
 (defun quantify-using-tvar-order (tyvars type &optional (explicit-p nil))

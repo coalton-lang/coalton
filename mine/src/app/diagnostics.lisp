@@ -48,6 +48,11 @@
   "Call the MINE/APP/MINE function NAME with ARGS."
   (apply (mine-function name) args))
 
+(defun coalton-optional-value-or-nil (value)
+  "Return NIL for Coalton None, otherwise return the wrapped value."
+  (unless (coalton-impl/runtime/optional:cl-none-p value)
+    (coalton-impl/runtime/optional:unwrap-cl-some value)))
+
 (defun buffer-document-key-p (document-key)
   "Return T when DOCUMENT-KEY names an unnamed in-memory buffer."
   (and (stringp document-key)
@@ -391,7 +396,7 @@ When SCOPE is a hash-table of document keys, only consider diagnostics in those 
   (let* ((bm (call-mine-function "GET-BUFMGR" st))
          (cs (call-mine-function "GET-CURSOR-STATE" st))
          (opt-buf (mine/buffer/manager::bufmgr-current bm))
-         (buf (unless (coalton-impl/runtime/optional:cl-none-p opt-buf) opt-buf))
+         (buf (coalton-optional-value-or-nil opt-buf))
          (current-file (and buf (mine/buffer/buffer:buffer-document-key buf)))
          (current-pos (mine/edit/cursor:cursor-position cs))
          (all-locs (all-diagnostic-locations))
@@ -536,8 +541,9 @@ When SCOPE is a hash-table of document keys, only consider diagnostics in those 
 (defun render-diagnostic-popup-cl (st scr screen-w screen-h)
   "Render a non-modal diagnostic popup near the editor caret."
   (let* ((filepath mine/pane/editor::*editor-filepath*)
-         (buf (mine/buffer/manager:bufmgr-current
-               (call-mine-function "GET-BUFMGR" st))))
+         (buf (coalton-optional-value-or-nil
+               (mine/buffer/manager:bufmgr-current
+                (call-mine-function "GET-BUFMGR" st)))))
     (when (and (stringp filepath)
                (plusp (length filepath))
                buf)

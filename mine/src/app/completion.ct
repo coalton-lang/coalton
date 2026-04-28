@@ -232,12 +232,18 @@ Scans backward from cursor until a non-symbol character is found."
                                   #\' #\` #\, #\" #\; #\#)
                              :test #'cl:char=))))
 
+(cl:defun %coalton-optional-value-or-nil (value)
+  "Return NIL for Coalton None, otherwise return the wrapped value."
+  (cl:if (coalton-impl/runtime/optional:cl-none-p value)
+         cl:nil
+         (coalton-impl/runtime/optional:unwrap-cl-some value)))
+
 (cl:defun %extract-prefix-from-gap (gb cursor-pos)
   "Extract symbol prefix from gap buffer before CURSOR-POS."
   (cl:let ((start cursor-pos))
     (cl:loop :while (cl:> start 0)
-             :do (cl:let ((ch (mine/buffer/gap:gap-char-at gb (cl:1- start))))
-                   ;; Coalton Optional Char is nil for None, Char for Some
+             :do (cl:let ((ch (%coalton-optional-value-or-nil
+                               (mine/buffer/gap:gap-char-at gb (cl:1- start)))))
                    (cl:if (cl:and ch (%symbol-char-p ch))
                           (cl:decf start)
                           (cl:return))))
@@ -246,7 +252,8 @@ Scans backward from cursor until a non-symbol character is found."
            (cl:let ((result (cl:make-string (cl:- cursor-pos start))))
              (cl:loop :for i :from start :below cursor-pos
                       :for j :from 0
-                      :do (cl:let ((ch (mine/buffer/gap:gap-char-at gb i)))
+                      :do (cl:let ((ch (%coalton-optional-value-or-nil
+                                        (mine/buffer/gap:gap-char-at gb i))))
                             (cl:setf (cl:char result j) (cl:or ch #\?))))
              result))))
 

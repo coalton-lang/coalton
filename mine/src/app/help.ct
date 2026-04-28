@@ -70,6 +70,7 @@ automatically based on each item's height."
     (Title String)
     (Section String)
     (Binding String String)
+    (Glossary String String)
     (Tip String)
     (Paragraph String)
     Blank)
@@ -79,6 +80,8 @@ automatically based on each item's height."
     "Vertical rows occupied by an item, given the wrap width for prose."
     (match item
       ((Title _) 2)
+      ((Glossary term definition)
+       (length (wrap-words (<> term (<> ": " definition)) wrap-width)))
       ((Paragraph s) (length (wrap-words s wrap-width)))
       ((Tip s) (length (wrap-words s wrap-width)))
       (_ 1)))
@@ -100,11 +103,12 @@ automatically based on each item's height."
      (Paragraph "Need help? Discord and bug tracker here: https://github.com/coalton-lang/coalton")
      Blank
      (Title "Glossary")
-     (Paragraph "BEAM, BEAMING: To send code to the REPL for further interaction.")
-     (Paragraph "FASL: An intermediate compilation artifact that is cached to make builds faster.")
-     (Paragraph "PROJECT: A group of source files unified by a system definition (a .asd file).")
-     (Paragraph "FORM: A piece of executable source code.")
-     (Paragraph "STRUCTURAL EDITING: A way of editing Lisp code where parentheses are always handled in pairs, so as to never unbalance them.")
+     (Glossary "Beam, Beaming" "To send code to the REPL for further interaction in the REPL or debugger.")
+     (Glossary "FASL" "An intermediate compilation artifact that is cached to make builds faster.")
+     (Glossary "Form" "A piece of executable source code.")
+     (Glossary "Project" "A group of source files unified by a system definition (a .asd file).")
+     (Glossary "Structural Editing" "A way of editing Lisp code where parentheses are always handled in pairs, so as to never unbalance them.")
+     (Glossary "Quick Result" "Immediately evaluate an expression and see its result.")
      Blank
      (Title "Keybindings")
      Blank
@@ -140,7 +144,8 @@ automatically based on each item's height."
      (Section "Editor - Programming")
      (Binding "Tab"         "Reindent line")
      (Binding "Alt+k"       "Beam file to REPL")
-     (Binding "Alt+c"       "Beam form at cursor to REPL")
+     (Binding "Alt+c"       "Beam toplevel form to REPL")
+     (Binding "Alt+r"       "Quick Result for selection or enclosing form")
      (Binding "Alt+."       "Jump to definition")
      (Binding "Alt+,"       "Jump back")
      (Binding "Alt+[ / Alt+]"       "Previous / Next diagnostic (project)")
@@ -194,6 +199,15 @@ automatically based on each item's height."
        (screen:screen-set-string scr (%scroll-row content-row scroll) 5 line style)
        (draw-wrapped-lines scr rest (+ content-row 1) scroll style))))
 
+  (declare draw-glossary-item
+    (screen:Screen * String * String * UFix * UFix * UFix * color:Style * color:Style
+     -> Void))
+  (define (draw-glossary-item scr term definition content-row scroll wrap-width term-s para-s)
+    "Draw a glossary paragraph, with the term highlighted on the first line."
+    (let text = (<> term (<> ": " definition)))
+    (draw-wrapped-lines scr (wrap-words text wrap-width) content-row scroll para-s)
+    (screen:screen-set-string scr (%scroll-row content-row scroll) 5 term term-s))
+
   (declare draw-help-item
     (screen:Screen * HelpItem * UFix * UFix * UFix
      * color:Style * color:Style * color:Style * color:Style * color:Style
@@ -212,6 +226,8 @@ automatically based on each item's height."
       ((Binding k d)
        (screen:screen-set-string scr r 5  k key-s)
        (screen:screen-set-string scr r 32 d desc-s))
+      ((Glossary term definition)
+       (draw-glossary-item scr term definition content-row scroll wrap-width key-s para-s))
       ((Tip s)
        (draw-wrapped-lines scr (wrap-words s wrap-width) content-row scroll tip-s))
       ((Paragraph s)
