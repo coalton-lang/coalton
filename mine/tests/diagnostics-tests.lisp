@@ -412,6 +412,27 @@
     (%check (eq (mine/app/mine::%active-selection-range cs) coalton:none)
             "Expected zero-width selection to be ignored")))
 
+(defun check-quick-result-target-uses-smallest-enclosing-form ()
+  (let* ((text "(progn (+ 1 (* 2 3)) (list 4))")
+         (gb (gap:gap-from-string text))
+         (pos (search "* 2" text))
+         (range (mine/app/mine::%find-quick-result-target gb pos)))
+    (%check (and (not (eq range coalton:none))
+                 (string= (gap:gap-substring gb
+                                             (%tuple-slot range "_0")
+                                             (%tuple-slot range "_1"))
+                          "(* 2 3)"))
+            "Expected Quick Result to target the smallest enclosing form, got ~S"
+            range))
+  (let* ((text "(+ 1 2)")
+         (gb (gap:gap-from-string text))
+         (range (mine/app/mine::%find-quick-result-target gb 0)))
+    (%check (and (not (eq range coalton:none))
+                 (= (%tuple-slot range "_0") 0)
+                 (= (%tuple-slot range "_1") (length text)))
+            "Expected Quick Result at an opening paren to target that form, got ~S"
+            range)))
+
 (defun check-quick-result-popup-ellipsizes-clipped-lines ()
   (let ((ellipsis (string (code-char 8230))))
     (%check (string= (mine/app/mine::%quick-result-ellipsize "abc" 3) "abc")

@@ -95,7 +95,7 @@
         (cl:string-downcase form-head)))))
 
 (cl:defun %classify-form-head-cl (form-head)
-  "Return a keyword describing how FORM-HEAD should be treated by Beam Form."
+  "Return a keyword describing how FORM-HEAD should be treated by Beam Toplevel Form."
   (cl:cond
     ((cl:not (cl:stringp form-head)) ':other)
     ((cl:string= form-head "progn") ':progn-wrapper)
@@ -520,6 +520,7 @@
 
   (declare render-diagnostic-popup (MineState * screen:Screen * UFix * UFix -> Void))
   (declare render-quick-result-popup (MineState * screen:Screen * UFix * UFix -> Void))
+  (declare %quick-result-highlight-range (MineState * String -> Optional (Tuple UFix UFix)))
   (declare %track-diagnostic-request! (msg:RequestId -> Void))
   (declare render-app (MineState * term:Terminal -> Void))
   (define (render-app st term)
@@ -915,6 +916,8 @@
        (lisp (-> Void) (document-key)
          (cl:setf mine/pane/editor::*editor-filepath* document-key)
          (cl:values))
+       (editor:set-quick-result-highlight!
+        (%quick-result-highlight-range st document-key))
        ;; Clear search highlights when find is not active
        (when (not (mini:minibuffer-active? (.ms-minibuffer st)))
          (find:clear-search!))
@@ -926,6 +929,7 @@
        (editor:%editor-scrollbar scr editor-rect (buf:buffer-gap buf)
                                  (editor:editor-pane-scroll-row (.ms-editor st))))
       ((None)
+       (editor:set-quick-result-highlight! None)
        (render:fill-rect scr editor-rect #\Space color:default-style)
        (render-welcome scr editor-rect))))
 
@@ -1908,6 +1912,13 @@ Uses a dedicated Beam request so diagnostics can stream independently."
       (%set-quick-result-pending-popup st)
       (cl:values)))
 
+  (declare %show-quick-result-pending-for-range! (MineState * UFix * UFix * String -> Void))
+  (define (%show-quick-result-pending-for-range! st start end document-key)
+    "Show the Quick Result pending popup and highlight the submitted source range."
+    (lisp (-> Void) (st start end document-key)
+      (%set-quick-result-pending-popup-with-range st start end document-key)
+      (cl:values)))
+
   (declare %show-quick-result-interrupting! (MineState -> Void))
   (define (%show-quick-result-interrupting! st)
     "Show the Quick Result interrupting popup."
@@ -1921,6 +1932,14 @@ Uses a dedicated Beam request so diagnostics can stream independently."
     (lisp (-> Void) (st)
       (%clear-quick-result-popup st)
       (cl:values)))
+
+  (define (%quick-result-highlight-range st document-key)
+    "Return the current Quick Result source highlight range for DOCUMENT-KEY."
+    (lisp (-> (Optional (Tuple UFix UFix))) (st document-key)
+      (cl:let ((qr-highlight-range (%quick-result-highlight-range-cl st document-key)))
+        (cl:if qr-highlight-range
+               (Some (Tuple (cl:car qr-highlight-range) (cl:cdr qr-highlight-range)))
+               None))))
 
   (declare %quick-result-popup-visible? (MineState -> Boolean))
   (define (%quick-result-popup-visible? st)
@@ -2137,6 +2156,11 @@ coalton-toplevel wrapper, descends to find the sub-form containing POS."
                (Some (Tuple (cl:car result) (cl:cdr result)))
                None))))
 
+  (declare %find-quick-result-target (gap:GapBuffer * UFix -> Optional (Tuple UFix UFix)))
+  (define (%find-quick-result-target gb pos)
+    "Find the smallest enclosing list form around POS for Quick Result."
+    (paredit:smallest-enclosing-form-range gb pos))
+
   (declare %find-buffer-package (gap:GapBuffer * UFix -> Optional String))
   (define (%find-buffer-package gb pos)
     "Find the package from the nearest preceding (in-package ...) form."
@@ -2157,9 +2181,9 @@ coalton-toplevel wrapper, descends to find the sub-form containing POS."
            (Some (Tuple sel-start sel-end))
            None))))
 
-  (declare compile-form! (MineState -> Void))
-  (define (compile-form! st)
-    "Compile the form at the cursor (Alt+c).
+  (declare beam-toplevel-form! (MineState -> Void))
+  (define (beam-toplevel-form! st)
+    "Beam the toplevel form at the cursor (Alt+c).
 Finds the largest enclosing non-progn top-level form, descending through
 coalton-toplevel and progn wrappers. Works with cursor on opening/closing parens.
 Uses the preceding (in-package ...) form to determine the compilation package."
@@ -2213,11 +2237,12 @@ Uses the preceding (in-package ...) form to determine the compilation package."
 
   (declare quick-result-form! (MineState -> Void))
   (define (quick-result-form! st)
-    "Show a Quick Result popup for the selection, or the form at the cursor (Alt+r)."
+    "Show a Quick Result popup for the selection, or the smallest enclosing form (Alt+r)."
     (when (%block-runtime-foreground-request! st)
       (return (values)))
     (match (mgr:bufmgr-current (.ms-bufmgr st))
       ((None)
+       (%clear-quick-result! st)
        (%show-quick-result! st "Error" "No file open" True))
       ((Some buf)
        (let gb = (buf:buffer-gap buf))
@@ -2225,15 +2250,17 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (let target-range =
          (match (%active-selection-range (.ms-cursor st))
            ((Some range) (Some range))
-           ((None) (%find-compile-target gb cur-pos))))
+           ((None) (%find-quick-result-target gb cur-pos))))
        (match target-range
          ((None)
+          (%clear-quick-result! st)
           (%show-quick-result! st "Error" "No enclosing form found" True))
          ((Some (Tuple target-start target-end))
           (let target-text = (gap:gap-substring gb target-start target-end))
           (let pkg = (match (%find-buffer-package gb target-start)
                        ((Some p) p)
                        ((None) (cell:read (.ms-repl-package st)))))
+          (let document-key = (buf:buffer-document-key buf))
           (%clear-quick-result! st)
           (match (ensure-runtime! st)
             ((None)
@@ -2247,7 +2274,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                           (lisp (-> UFix) () (cl:get-internal-real-time)))
              (cell:write! (.ms-active-request st) (Some req-id))
              (cell:write! (.ms-quick-result-request-id st) (Some req-id))
-             (%show-quick-result-pending! st)
+             (%show-quick-result-pending-for-range! st target-start target-end document-key)
              (match (%wrap-coalton target-text pkg)
                ((Tuple quick-text _client-prefix-length)
                 (let req = (msg:ReqQuickResult req-id quick-text pkg))
@@ -3009,9 +3036,9 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                              (fn (buffer) (paredit:paredit-backward-sexp! (buf:buffer-gap buffer) (.ms-cursor st)))))
       ;; Alt+k -> compile and load file
       (#\k (compile-file! st))
-      ;; Alt+c -> compile form at cursor
-      (#\c (compile-form! st))
-      ;; Alt+r -> show Quick Result for selection or form at cursor
+      ;; Alt+c -> beam toplevel form at cursor
+      (#\c (beam-toplevel-form! st))
+      ;; Alt+r -> show Quick Result for selection or smallest enclosing form
       (#\r (quick-result-form! st))
       ;; Alt+. -> jump to definition
       (#\. (jump-to-definition! st))
@@ -4253,7 +4280,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
           ;; Editor menu: require open buffer
           ((menubar:ActionFind) has-buffer)
           ((menubar:ActionBeamFile) has-buffer)
-          ((menubar:ActionBeamForm) has-buffer)
+          ((menubar:ActionBeamToplevelForm) has-buffer)
           ((menubar:ActionQuickResult) has-buffer)
           ((menubar:ActionClearDiagnostics) has-buffer)
           ((menubar:ActionJumpToDefinition) has-buffer)
@@ -4330,7 +4357,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
       ((menubar:ActionFind) (start-find! st))
       ((menubar:ActionInsertSymbol) (start-symbol-input! st))
       ((menubar:ActionBeamFile) (compile-file! st))
-      ((menubar:ActionBeamForm) (compile-form! st))
+      ((menubar:ActionBeamToplevelForm) (beam-toplevel-form! st))
       ((menubar:ActionQuickResult) (quick-result-form! st))
 	      ((menubar:ActionClearDiagnostics)
 	       (lisp (-> Void) ()
@@ -5224,7 +5251,7 @@ Returns a string or NIL."
     len))
 
 (cl:defun %form-head-is-wrapper-p (gb paren-pos len)
-  "Check if the form at PAREN-POS starts with a Beam Form wrapper."
+  "Check if the form at PAREN-POS starts with a Beam Toplevel Form wrapper."
   (cl:let ((start (cl:1+ paren-pos)))
     ;; Skip whitespace after open paren
     (cl:loop :while (cl:and (cl:< start len)
@@ -5565,40 +5592,97 @@ Returns a Coalton List of ProtoMsg."
     (cl:error ()
       (cl:values "" (cl:list text)))))
 
+(cl:defun %quick-result-highlight-plist (state)
+  "Return the source highlight keys from Quick Result STATE, when valid."
+  (cl:let ((start (cl:getf state :range-start))
+           (end (cl:getf state :range-end))
+           (document-key (cl:getf state :document-key)))
+    (cl:if (cl:and (cl:integerp start)
+                   (cl:integerp end)
+                   (cl:< start end)
+                   (cl:stringp document-key))
+           (cl:list :range-start start
+                    :range-end end
+                    :document-key document-key)
+           cl:nil)))
+
+(cl:defun %quick-result-highlight-range-cl (st document-key)
+  "Return (START . END) for the active Quick Result source highlight."
+  (cl:let* ((box (mine/app/mine::get-quick-result-state st))
+            (state (%native-box-value box)))
+    (cl:when state
+      (cl:let ((expiry (cl:getf state :expiry)))
+        (cl:when (cl:and expiry
+                         (cl:>= (cl:get-internal-real-time) expiry))
+          (%clear-quick-result-popup st)
+          (cl:return-from %quick-result-highlight-range-cl cl:nil)))
+      (cl:let ((start (cl:getf state :range-start))
+               (end (cl:getf state :range-end))
+               (state-document-key (cl:getf state :document-key)))
+        (cl:when (cl:and (cl:integerp start)
+                         (cl:integerp end)
+                         (cl:< start end)
+                         (cl:stringp state-document-key)
+                         (cl:stringp document-key)
+                         (cl:string= state-document-key document-key))
+          (cl:cons start end))))))
+
 (cl:defun %set-quick-result-popup (st title text error-p)
   "Store transient Quick Result popup state on ST."
   (cl:let* ((box (mine/app/mine::get-quick-result-state st))
+            (old-state (%native-box-value box))
+            (highlight (%quick-result-highlight-plist old-state))
             (text (cl:if (cl:stringp text) text (cl:princ-to-string text)))
             (expiry (cl:+ (cl:get-internal-real-time)
                           (cl:* 8 cl:internal-time-units-per-second))))
     (cl:if error-p
            (cl:setf (%native-box-value box)
-                    (cl:list :title (cl:if (cl:stringp title) title "Error")
-                             :text text
-                             :error cl:t
-                               :expiry expiry))
+                    (cl:append
+                     (cl:list :title (cl:if (cl:stringp title) title "Error")
+                              :text text
+                              :error cl:t
+                              :expiry expiry)
+                     highlight))
            (cl:multiple-value-bind (output values)
                (%parse-quick-result-payload text)
              (cl:setf (%native-box-value box)
-                      (cl:list :title (cl:if (cl:plusp (cl:length output))
-                                             "Output"
-                                             "Result")
-                               :output output
-                               :values values
-                               :error cl:nil
-                               :expiry expiry))))))
+                      (cl:append
+                       (cl:list :title (cl:if (cl:plusp (cl:length output))
+                                              "Output"
+                                              "Result")
+                                :output output
+                                :values values
+                                :error cl:nil
+                                :expiry expiry)
+                       highlight))))))
 
-(cl:defun %set-quick-result-pending-state (st mode)
+(cl:defun %set-quick-result-pending-state (st mode cl:&optional highlight)
   "Store Quick Result pending state on ST."
   (cl:setf (%native-box-value (mine/app/mine::get-quick-result-state st))
-           (cl:list :title "Quick Result"
-                    :pending mode
-                    :error cl:nil
-                    :expiry cl:nil)))
+           (cl:append
+            (cl:list :title "Quick Result"
+                     :pending mode
+                     :error cl:nil
+                     :expiry cl:nil)
+            highlight)))
 
 (cl:defun %set-quick-result-pending-popup (st)
   "Store the Quick Result busy popup state on ST."
   (%set-quick-result-pending-state st :busy))
+
+(cl:defun %set-quick-result-pending-popup-with-range (st start end document-key)
+  "Store the Quick Result busy popup state and source highlight range on ST."
+  (%set-quick-result-pending-state
+   st
+   :busy
+   (cl:if (cl:and (cl:integerp start)
+                  (cl:integerp end)
+                  (cl:< start end)
+                  (cl:stringp document-key))
+          (cl:list :range-start start
+                   :range-end end
+                   :document-key document-key)
+          cl:nil)))
 
 (cl:defun %set-quick-result-interrupting-popup (st)
   "Store the Quick Result interrupting popup state on ST."
