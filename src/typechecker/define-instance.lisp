@@ -57,6 +57,33 @@
                       :from method-tvar
                       :to scoped-tvar))))
 
+(defun check-instance-predicate-not-narrowed (method pred context subs env)
+  "Reject instance methods that narrow the instance predicate.
+
+The instance head and its context are implicitly universally quantified over
+the whole instance. Method checking may alpha-rename those variables, but it
+must not collapse distinct variables or specialize one to a concrete type.
+"
+  (declare (type instance-method-definition method)
+           (type tc:ty-predicate pred)
+           (type tc:ty-predicate-list context)
+           (type tc:substitution-list subs)
+           (type tc:environment env)
+           (values null))
+  (let* ((sentinel (tc:make-variable))
+         (before (tc:predicates-to-scheme (cons pred context) sentinel))
+         (narrowed-pred (tc:apply-substitution subs pred))
+         (narrowed-context (tc:apply-substitution subs context))
+         (after (tc:predicates-to-scheme (cons narrowed-pred narrowed-context)
+                                         sentinel)))
+    (unless (tc:ty-scheme= before after)
+      (tc-error "Instance method type is too specific"
+                (tc-location
+                 (source:location (instance-method-definition-name method))
+                 "The method definition narrows instance ~A to ~A."
+                 (type-object-string pred env)
+                 (type-object-string narrowed-pred env))))))
+
 (defun toplevel-define-instance (instances env)
   (declare (type parser:toplevel-define-instance-list instances)
            (type tc:environment env)
@@ -393,6 +420,11 @@
                                             (setf subs (tc:compose-substitution-lists
                                                         match-subs
                                                         subs))))
+                                (check-instance-predicate-not-narrowed method
+                                                                       pred
+                                                                       context
+                                                                       subs
+                                                                       env)
                                 (setf (gethash name table) (tc:apply-substitution subs method)))
 
 	                          :finally (return table))))

@@ -83,6 +83,7 @@
    #:safe-eval
    #:eval-in-package
    #:debug-eval
+   #:quick-result
    #:compile-string-source-prefix
    #:debug-compile-string))
 

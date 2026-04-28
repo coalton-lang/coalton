@@ -40,7 +40,7 @@ SOCKET-LOCAL-PORT afterwards).  Returns the listening socket object."
           ;; Allow quick rebinding after a crash
           (setf (sb-bsd-sockets:sockopt-reuse-address sock) t)
           (sb-bsd-sockets:socket-bind sock (%loopback-address) port)
-          (sb-bsd-sockets:socket-listen sock 1)
+          (sb-bsd-sockets:socket-listen sock 4)
           sock)
       (error (c)
         (ignore-errors (sb-bsd-sockets:socket-close sock))
@@ -106,4 +106,3 @@ Useful when the socket was bound with port 0 (OS-assigned)."
       (sb-bsd-sockets:socket-name listening-socket)
     (declare (ignore address))
     port))
-
