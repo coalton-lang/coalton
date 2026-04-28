@@ -6,7 +6,8 @@
   (:export
    #:from-some
    #:some?
-   #:none?))
+   #:none?
+   #:or-def))
 
 (in-package #:coalton/optional)
 
@@ -18,6 +19,7 @@
   ;; Optional
   ;;
 
+  (inline)
   (declare from-some (String * (Optional :a) -> :a))
   (define (from-some str opt)
     "Get the value of OPT, erroring with the provided string if it is None."
@@ -40,6 +42,14 @@
     (match x
       ((None) True)
       ((Some _) False)))
+
+  (inline)
+  (declare or-def (:a * Optional :a -> :a))
+  (define (or-def def val?)
+    "Get the value of OPT if it is Some, or use DEF as the default."
+    (match val?
+      ((Some val) val)
+      ((None) def)))
 
   ;;
   ;; Instances
