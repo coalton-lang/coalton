@@ -845,7 +845,38 @@
     (define issue-1918-value
       (issue-1918-project id (pure \"hi\")))"
 
-   '("issue-1918-value" . "String")))
+   '("issue-1918-value" . "String"))
+
+  (signals coalton-impl/typechecker:tc-error
+    (check-coalton-types
+     "(repr :transparent)
+      (define-type (IssuePtState :s1 :s2 :a)
+        (IssuePtSt% (:s1 -> :s2 * :a)))
+
+      (declare issue-run-state
+        (:s1 * IssuePtState :s1 :s2 :a -> :s2 * :a))
+      (define (issue-run-state st (IssuePtSt% f-state))
+        (f-state st))
+
+      (define-instance (Functor (IssuePtState :s1 :s2))
+        (define (map f st)
+          (IssuePtSt%
+            (fn (s)
+              (let (values s2 a) = (issue-run-state s st))
+              (values s2 (f a))))))
+
+      (define-instance (Applicative (IssuePtState :s1 :s2))
+        (define (pure a)
+          (IssuePtSt%
+            (fn (s)
+              (values s a))))
+
+        (define (lifta2 f st-a st-b)
+          (IssuePtSt%
+            (fn (s1)
+              (let (values s2 a) = (issue-run-state s1 st-a))
+              (let (values s3 b) = (issue-run-state s2 st-b))
+              (values s3 (f a b))))))")))
 
 (deftest test-typeclass-cyclic-superclass-checks ()
   (check-coalton-types
