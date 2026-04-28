@@ -80,6 +80,14 @@
                    :collect message)))
       (ignore-errors (delete-file pathname)))))
 
+(defun %read-server-messages-from-file (pathname)
+  (with-open-file (stream pathname
+                          :direction :input
+                          :element-type '(unsigned-byte 8))
+    (loop :for message = (server::read-message stream)
+          :while message
+          :collect message)))
+
 (defun %message-diagnostic-plist (message)
   (when (and (consp message)
              (eq (first message) ':notify)
@@ -381,6 +389,76 @@
     (%check (notany #'%debug-notification-p messages)
             "Quick Result must not activate the debugger: ~S"
             messages)))
+
+(defun check-quick-result-interrupt-request-cancels-eval-thread ()
+  (uiop:with-temporary-file (:pathname quick-path :keep t)
+    (uiop:with-temporary-file (:pathname interrupt-path :keep t)
+      (let ((quick-stream nil)
+            (interrupt-stream nil)
+            (worker nil))
+        (unwind-protect
+             (progn
+               (setf quick-stream
+                     (open quick-path
+                           :direction :output
+                           :if-exists :supersede
+                           :element-type '(unsigned-byte 8)))
+               (setf interrupt-stream
+                     (open interrupt-path
+                           :direction :output
+                           :if-exists :supersede
+                           :element-type '(unsigned-byte 8)))
+               (setf worker
+                     (sb-thread:make-thread
+                      (lambda ()
+                        (server::dispatch-message
+                         '(:quick-result 900 "(loop)" "CL-USER")
+                         quick-stream)
+                        (force-output quick-stream))
+                      :name "mine-test-quick-result-interrupt"))
+               (loop :repeat 50
+                     :until (server::%active-request-thread 900)
+                     :do (sleep 0.02))
+               (%check (server::%active-request-thread 900)
+                       "Expected Quick Result request to be registered as active")
+               (server::dispatch-message '(:interrupt-request 901 900)
+                                         interrupt-stream)
+               (force-output interrupt-stream)
+               (let ((done nil))
+                 (loop :repeat 50
+                       :do (if (sb-thread:thread-alive-p worker)
+                               (sleep 0.05)
+                               (progn
+                                 (setf done t)
+                                 (return))))
+                 (%check done
+                         "Expected request-scoped interrupt to stop Quick Result evaluation"))
+               (close quick-stream)
+               (setf quick-stream nil)
+               (close interrupt-stream)
+               (setf interrupt-stream nil)
+               (let ((interrupt-messages
+                       (%read-server-messages-from-file interrupt-path))
+                     (quick-messages
+                       (%read-server-messages-from-file quick-path)))
+                 (%check (member '(:return 901 (:ok t))
+                                 interrupt-messages
+                                 :test #'equal)
+                         "Expected interrupt request to succeed, got ~S"
+                         interrupt-messages)
+                 (%check (member '(:return 900 (:error "Interrupted."))
+                                 quick-messages
+                                 :test #'equal)
+                         "Expected Quick Result to return Interrupted, got ~S"
+                         quick-messages)))
+          (when (and worker (sb-thread:thread-alive-p worker))
+            (sb-thread:terminate-thread worker))
+          (when quick-stream
+            (ignore-errors (close quick-stream)))
+          (when interrupt-stream
+            (ignore-errors (close interrupt-stream)))
+          (ignore-errors (delete-file quick-path))
+          (ignore-errors (delete-file interrupt-path)))))))
 
 (defun %tuple-slot (tuple slot-name)
   (slot-value tuple (find-symbol slot-name "COALTON/CLASSES")))

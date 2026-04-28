@@ -90,6 +90,47 @@ Returns the parsed S-expression, or NIL on EOF/error."
                      `(:return ,id
                        (:error ,(format nil "Runtime is waiting for ~A." context)))))))
 
+(defvar *active-request-threads* (make-hash-table :test #'eql)
+  "Map request IDs to the runtime thread currently evaluating them.")
+
+(defvar *active-request-threads-lock*
+  (mine/bindings/thread:make-mutex "mine-active-requests"))
+
+(defun %remember-active-request (id)
+  "Remember that ID is running on the current thread."
+  (mine/bindings/thread:with-mutex (*active-request-threads-lock*)
+    (setf (gethash id *active-request-threads*) sb-thread:*current-thread*)))
+
+(defun %forget-active-request (id)
+  "Forget the runtime thread for ID."
+  (mine/bindings/thread:with-mutex (*active-request-threads-lock*)
+    (remhash id *active-request-threads*)))
+
+(defmacro %with-active-request ((id) &body body)
+  "Run BODY while ID can be interrupted by :interrupt-request."
+  `(unwind-protect
+        (progn
+          (%remember-active-request ,id)
+          ,@body)
+     (%forget-active-request ,id)))
+
+(defun %active-request-thread (id)
+  "Return the thread handling ID, or NIL."
+  (mine/bindings/thread:with-mutex (*active-request-threads-lock*)
+    (gethash id *active-request-threads*)))
+
+(defun %interrupt-active-request (id)
+  "Interrupt the thread handling ID without signaling the whole runtime process."
+  (let ((thread (%active-request-thread id)))
+    (when (and thread
+               (not (eq thread sb-thread:*current-thread*))
+               (sb-thread:thread-alive-p thread))
+      (sb-thread:interrupt-thread
+       thread
+       (lambda ()
+         (error 'sb-sys:interactive-interrupt)))
+      t)))
+
 ;;; TUI input stream (Gray stream for interactive IO)
 
 (defclass tui-input-stream (sb-gray:fundamental-character-input-stream)
@@ -209,7 +250,14 @@ Returns :quit if the server should shut down, T otherwise."
 
       (:quick-result
        (destructuring-bind (id form-string package-name) (rest msg)
-         (handle-quick-result id form-string package-name stream)))
+         (%with-active-request (id)
+           (handle-quick-result id form-string package-name stream))))
+
+      (:interrupt-request
+       (destructuring-bind (id target-id) (rest msg)
+         (if (%interrupt-active-request target-id)
+             (write-message stream `(:return ,id (:ok t)))
+             (write-message stream `(:return ,id (:error "No active request"))))))
 
       (:compile-string
        (destructuring-bind (id string document-key package-name position client-prefix-length)

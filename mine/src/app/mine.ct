@@ -1962,19 +1962,33 @@ Uses a dedicated Beam request so diagnostics can stream independently."
       ((input:KeyCtrl #\g) True)
       (_ False)))
 
+  (declare %send-quick-result-interrupt! (MineState * UFix -> Boolean))
+  (define (%send-quick-result-interrupt! st target-id)
+    "Ask the runtime to interrupt the thread evaluating TARGET-ID."
+    (lisp (-> Boolean) (st target-id)
+      (cl:if (%send-quick-result-interrupt-cl st target-id) True False)))
+
   (declare %cancel-quick-result! (MineState -> Void))
   (define (%cancel-quick-result! st)
-    "Interrupt a pending Quick Result request."
-    (%show-quick-result-interrupting! st)
-    (cond
-      ((lifecycle:runtime-interrupt! (.ms-runtime st))
-       (status:statusbar-set-message! (.ms-status st) "Quick Result interrupt sent"))
-      (True
+    "Cancel a pending Quick Result request without interrupting the whole runtime."
+    (match (cell:read (.ms-quick-result-request-id st))
+      ((Some (msg:RequestId target-id))
+       (%show-quick-result-interrupting! st)
+       (cond
+         ((%send-quick-result-interrupt! st target-id)
+          (status:statusbar-set-message! (.ms-status st) "Quick Result cancel sent"))
+         (True
+          (cell:write! (.ms-quick-result-request-id st) None)
+          (cell:write! (.ms-active-request st) None)
+          (cell:write! (.ms-repl-busy st) False)
+          (cell:write! (.ms-busy-activity st) None)
+          (%show-quick-result! st "Error" "No runtime to interrupt" True))))
+      ((None)
        (cell:write! (.ms-quick-result-request-id st) None)
        (cell:write! (.ms-active-request st) None)
        (cell:write! (.ms-repl-busy st) False)
        (cell:write! (.ms-busy-activity st) None)
-       (%show-quick-result! st "Error" "No runtime to interrupt" True))))
+       (%clear-quick-result! st))))
 
   (declare %send-repl-init! (MineState * client:Connection -> Void))
   (define (%send-repl-init! st conn)
@@ -6270,7 +6284,7 @@ Handles the debugger state where conn-stream is (msg-id . stream)."
         (cl:error () cl:nil)))))
 
 (cl:defun %send-to-background-subprocess (st msg)
-  "Send read-only editor-service MSG on the runtime background connection."
+  "Send MSG on the runtime background connection."
   (cl:let* ((mgr (mine/app/mine::get-runtime-mgr st))
             (conn (mine/protocol/lifecycle::%runtime-ensure-background-connection-raw mgr)))
     (cl:when conn
@@ -6283,6 +6297,21 @@ Handles the debugger state where conn-stream is (msg-id . stream)."
               (cl:setf (mine/protocol/client::%connection-active conn) cl:nil)
               (cl:setf (%native-box-value (mine/app/mine::get-bg-proto-thread st)) cl:nil)
               cl:nil)))))))
+
+(cl:defun %send-quick-result-interrupt-cl (st target-id)
+  "Send a request-scoped interrupt for Quick Result TARGET-ID."
+  (cl:let ((rid (%next-request-id-cl st)))
+    (%register-pending-request
+     rid
+     (cl:lambda (st payload)
+       (cl:declare (cl:ignore st payload))
+       cl:nil))
+    (cl:let ((sent (%send-to-background-subprocess
+                    st
+                    (cl:list :interrupt-request rid target-id))))
+      (cl:unless sent
+        (%pop-pending-request rid))
+      sent)))
 
 ;;; Async type hint cache
 
