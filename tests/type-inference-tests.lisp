@@ -820,7 +820,32 @@
        Tuple Integer Integer ->
        Boolean))
      (define (f a b)
-       (==? a b))"))
+       (==? a b))")
+
+  ;; https://github.com/coalton-lang/coalton/issues/1918
+  (check-coalton-types
+   "(define-type (Issue1918Box :x :y :a)
+      (Issue1918Box% :a (:y -> :x)))
+
+    (define-instance (Functor (Issue1918Box :x :y))
+      (define (map f (Issue1918Box% a y->x))
+        (Issue1918Box% (f a) y->x)))
+
+    (define-instance (Applicative (Issue1918Box :r :r))
+      (define (pure a)
+        (Issue1918Box% a id))
+
+      (define (lifta2 f (Issue1918Box% a _) (Issue1918Box% b _))
+        (Issue1918Box% (f a b) id)))
+
+    (declare issue-1918-project ((:a -> :y) * Issue1918Box :x :y :a -> :x))
+    (define (issue-1918-project a->y (Issue1918Box% a y->x))
+      (y->x (a->y a)))
+
+    (define issue-1918-value
+      (issue-1918-project id (pure \"hi\")))"
+
+   '("issue-1918-value" . "String")))
 
 (deftest test-typeclass-cyclic-superclass-checks ()
   (check-coalton-types
