@@ -16,7 +16,7 @@
    #:ActionOpenProject #:ActionBeamSystem #:ActionRefreshProject #:ActionCloseProject
    #:ActionBuildExecutable
    #:ActionOpenFile #:ActionSave #:ActionSaveAll #:ActionCloseFile
-   #:ActionFind #:ActionBeamFile #:ActionBeamForm #:ActionQuickResult #:ActionClearDiagnostics
+   #:ActionFind #:ActionBeamFile #:ActionBeamToplevelForm #:ActionQuickResult #:ActionClearDiagnostics
    #:ActionJumpToDefinition #:ActionJumpBack #:ActionGotoLine
    #:ActionShowRepl #:ActionFocusEditor #:ActionHideRepl #:ActionInterruptRepl #:ActionClearRepl #:ActionRestartRepl
    #:ActionClearCache
@@ -64,7 +64,7 @@
     ActionFind
     ActionGotoLine
     ActionBeamFile
-    ActionBeamForm
+    ActionBeamToplevelForm
     ActionQuickResult
     ActionClearDiagnostics
     ActionJumpToDefinition
@@ -135,7 +135,7 @@
       (MenuItem "Find"               "Ctrl+f" ActionFind)
       (MenuItem "Insert Symbol"      "Ctrl+\\" ActionInsertSymbol)
       (MenuItem "Beam File"           "Alt+k" ActionBeamFile)
-      (MenuItem "Beam Form"           "Alt+c" ActionBeamForm)
+      (MenuItem "Beam Toplevel Form"  "Alt+c" ActionBeamToplevelForm)
       (MenuItem "Quick Result"        "Alt+r" ActionQuickResult)
       (MenuItem "Clear Diagnostics"   "" ActionClearDiagnostics)
       (MenuItem "Jump to Definition" "Alt+." ActionJumpToDefinition)

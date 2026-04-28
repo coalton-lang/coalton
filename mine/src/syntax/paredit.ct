@@ -12,6 +12,7 @@
   (:export
    #:find-enclosing-open
    #:find-matching-close
+   #:smallest-enclosing-form-range
    #:paredit-open-paren!
    #:paredit-close-paren!
    #:paredit-open-bracket!
@@ -1057,6 +1058,22 @@ Inside strings, parens are treated as normal characters."
          ((Some after-close) (Some (- after-close 1)))
          ((None) None)))
       (_ None)))
+
+  (declare smallest-enclosing-form-range (gap:GapBuffer * UFix -> Optional (Tuple UFix UFix)))
+  (define (smallest-enclosing-form-range gb p)
+    "Return the innermost enclosing list form range around gap P."
+    (%ensure-syntax-map! gb)
+    (let open-pos =
+      (match (gap:gap-char-at gb p)
+        ((Some #\() (Some p))
+        ((Some #\[) (Some p))
+        (_ (%current-list-open gb p))))
+    (match open-pos
+      ((None) None)
+      ((Some start)
+       (match (%matching-close-for gb start)
+         ((Some close) (Some (Tuple start (+ close 1))))
+         ((None) None)))))
 
   (declare %open-str-for (Char -> String))
   (define (%open-str-for open-ch)

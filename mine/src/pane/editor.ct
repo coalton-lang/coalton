@@ -28,6 +28,7 @@
    #:editor-pane-gutter-width
    #:editor-pane-line-wrap?
    #:editor-pane-toggle-line-wrap!
+   #:set-quick-result-highlight!
    #:editor-pane-text-width
    #:wrap-points
    #:segment-for-col
@@ -68,6 +69,10 @@
   "Buffer position of the close bracket to highlight, or nil for none.")
 (cl:defvar *paren-match-b* cl:nil
   "Buffer position of the matching open bracket to highlight, or nil for none.")
+(cl:defvar *quick-result-highlight-start* cl:nil
+  "Start buffer position of the active Quick Result source highlight.")
+(cl:defvar *quick-result-highlight-end* cl:nil
+  "End buffer position of the active Quick Result source highlight.")
 
 (cl:defun %diagnostic-rank-cl (severity)
   (cl:cond
@@ -151,6 +156,21 @@
     (when now
       (cell:write! (.scroll-col ep) 0))
     (values))
+
+  (declare set-quick-result-highlight! (Optional (Tuple UFix UFix) -> Void))
+  (define (set-quick-result-highlight! range)
+    "Set or clear the transient Quick Result source highlight."
+    (match range
+      ((Some (Tuple start end))
+       (lisp (-> Void) (start end)
+         (cl:setf *quick-result-highlight-start* start)
+         (cl:setf *quick-result-highlight-end* end)
+         (cl:values)))
+      ((None)
+       (lisp (-> Void) ()
+         (cl:setf *quick-result-highlight-start* cl:nil)
+         (cl:setf *quick-result-highlight-end* cl:nil)
+         (cl:values)))))
 
   (declare editor-pane-text-width (EditorPane * gap:GapBuffer * wt:Rect -> UFix))
   (define (editor-pane-text-width ep gb rect)
@@ -796,6 +816,17 @@ segments) and highlights the current visual row."
                                     (cl:< abs-pos end)))
               (cl:setf best (cl:max best (%diagnostic-rank-cl severity)))))))))
 
+  (declare %quick-result-highlight? (UFix -> Boolean))
+  (define (%quick-result-highlight? abs-pos)
+    "Return True when ABS-POS is inside the transient Quick Result range."
+    (lisp (-> Boolean) (abs-pos)
+      (cl:if (cl:and *quick-result-highlight-start*
+                     *quick-result-highlight-end*
+                     (cl:>= abs-pos *quick-result-highlight-start*)
+                     (cl:< abs-pos *quick-result-highlight-end*))
+             True
+             False)))
+
   (declare %diagnostic-style (color:Style * UFix -> color:Style))
   (define (%diagnostic-style style rank)
     "Apply a diagnostic background tint while preserving syntax foregrounds."
@@ -818,6 +849,8 @@ segments) and highlights the current visual row."
       ((== (%search-hit-kind abs-pos) 1) search-style)
       ((> (%diagnostic-rank-at abs-pos) 0)
        (%diagnostic-style style (%diagnostic-rank-at abs-pos)))
+      ((%quick-result-highlight? abs-pos)
+       (color:Style (color:.style-fg style) color:slate (color:.style-attr style)))
       (True style)))
 
   (declare draw-chars-with-tabs

@@ -71,6 +71,7 @@
                   check-quick-result-lisp-no-values-is-distinct
                   check-quick-result-lisp-error-is-short
                   check-quick-result-selection-range
+                  check-quick-result-target-uses-smallest-enclosing-form
                   check-quick-result-popup-ellipsizes-clipped-lines
                   check-quick-result-popup-layout-prioritizes-results
                   check-quick-result-popup-uses-terminal-height
