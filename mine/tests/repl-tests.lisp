@@ -191,3 +191,13 @@
           "Expected REPL hint extraction to handle an incomplete form")
   (%check (null (mine/app/mine::%read-enclosing-symbol-from-string "plain-symbol" 12))
           "Expected no enclosing function outside a form"))
+
+(defun check-editor-completion-prefix-extraction ()
+  (let* ((text "(alpha beta)")
+         (gb (gap:gap-from-string text)))
+    (%check (string= "beta"
+                     (mine/app/completion:extract-symbol-prefix gb 11))
+            "Expected editor completion prefix beta")
+    (%check (string= ""
+                     (mine/app/completion:extract-symbol-prefix gb 0))
+            "Expected no editor completion prefix at buffer start")))

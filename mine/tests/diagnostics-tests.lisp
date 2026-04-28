@@ -589,6 +589,17 @@
   (%check (= (mine/app/mine::%quick-result-max-body-lines 3) 1)
           "Expected very short terminals to keep at least one body row"))
 
+(defun check-coalton-none-is-not-current-buffer-at-cl-boundary ()
+  (let* ((bm (mine/buffer/manager:bufmgr-new))
+         (current (mine/buffer/manager:bufmgr-current bm)))
+    (%check (eq current coalton:none)
+            "Expected empty buffer manager to return Coalton None, got ~S"
+            current)
+    (%check (null (mine/app/mine::%coalton-optional-value-or-nil current))
+            "Expected Coalton None to unwrap to CL NIL at app boundary")
+    (%check (null (mine/app/diagnostics::coalton-optional-value-or-nil current))
+            "Expected Coalton None to unwrap to CL NIL at diagnostics boundary")))
+
 (defun check-beam-system-emits-diagnostics-before-return ()
   (let* ((system-name (format nil "mine-beam-test-~A"
                               (string-downcase (symbol-name (gensym)))))

@@ -66,6 +66,7 @@
                   check-paredit-matching-ignores-delimiters-in-strings
                   check-repl-structural-editing-alt-sexp-motion
                   check-repl-hint-symbol-extraction
+                  check-editor-completion-prefix-extraction
                   check-quick-result-lisp-expression-shows-result
                   check-quick-result-lisp-format-separates-output-and-result
                   check-quick-result-lisp-no-values-is-distinct
@@ -76,6 +77,7 @@
                   check-quick-result-popup-ellipsizes-clipped-lines
                   check-quick-result-popup-layout-prioritizes-results
                   check-quick-result-popup-uses-terminal-height
+                  check-coalton-none-is-not-current-buffer-at-cl-boundary
                   check-beam-system-emits-diagnostics-before-return
                   check-beam-system-preserves-coalton-error-spans))
     (format t "~&~A~%" test)
