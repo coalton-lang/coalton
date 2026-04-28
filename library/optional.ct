@@ -7,7 +7,7 @@
    #:from-some
    #:some?
    #:none?
-   #:or-def))
+   #:from-some-or))
 
 (in-package #:coalton/optional)
 
@@ -44,8 +44,8 @@
       ((Some _) False)))
 
   (inline)
-  (declare or-def (:a * Optional :a -> :a))
-  (define (or-def def val?)
+  (declare from-some-or (:a * Optional :a -> :a))
+  (define (from-some-or def val?)
     "Get the value of OPT if it is Some, or use DEF as the default."
     (match val?
       ((Some val) val)
