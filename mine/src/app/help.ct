@@ -135,7 +135,7 @@ automatically based on each item's height."
      (Binding "Ctrl+c"            "Copy selection")
      (Binding "Ctrl+x"            "Cut selection")
      (Binding "Ctrl+v"            "Paste clipboard")
-     (Binding "Ctrl+z / Ctrl+Z"   "Undo / Redo")
+     (Binding "Ctrl+z / Ctrl+y"   "Undo / Redo")
      (Binding "Ctrl+Space"        "Toggle selection")
      (Binding "Ctrl+1-5"          "View open file numbered 1 to 5")
      (Binding "Ctrl+← / Ctrl+→"   "Backward / forward word")

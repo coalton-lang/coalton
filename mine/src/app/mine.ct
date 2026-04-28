@@ -2913,8 +2913,8 @@ Uses the preceding (in-package ...) form to determine the compilation package."
             ((None) (values))))
          ((None) (values))))
 
-      ;; Ctrl+Shift+z -> redo
-      ((input:KeyCtrl #\Z)
+      ;; Ctrl+y -> redo
+      ((input:KeyCtrl #\y)
        (match (mgr:bufmgr-current (.ms-bufmgr st))
          ((Some buf)
           (match (undo:undo-redo! (buf:buffer-undo buf))
