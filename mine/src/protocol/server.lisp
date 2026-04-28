@@ -82,6 +82,14 @@ Returns the parsed S-expression, or NIL on EOF/error."
         t)
     (error () nil)))
 
+(defun %reject-unexpected-message-during-wait (stream msg context)
+  "Return an error for MSG when a nested protocol wait cannot handle it."
+  (let ((id (and (consp msg) (integerp (second msg)) (second msg))))
+    (when id
+      (write-message stream
+                     `(:return ,id
+                       (:error ,(format nil "Runtime is waiting for ~A." context)))))))
+
 ;;; TUI input stream (Gray stream for interactive IO)
 
 (defclass tui-input-stream (sb-gray:fundamental-character-input-stream)
@@ -117,7 +125,9 @@ Returns the input text string, or NIL for EOF/abort."
           ((and (consp msg) (eq (first msg) :io-response))
            (return (third msg)))
           ((and (consp msg) (eq (first msg) :io-abort))
-           (return nil)))))))
+           (return nil))
+          (t
+           (%reject-unexpected-message-during-wait wire msg "input")))))))
 
 (defmethod sb-gray:stream-read-line ((stream tui-input-stream))
   "Read a line from the TUI. Returns (values string eof-p)."
@@ -324,7 +334,9 @@ Returns the symbol or NIL."
                   (t
                    (write-message stream
                      `(:return ,id (:error ,(format nil "Aborted: ~A" condition-text))))
-                   (throw '%debugger-abort nil)))))))))))
+                   (throw '%debugger-abort nil)))))
+            (otherwise
+             (%reject-unexpected-message-during-wait stream msg "the debugger"))))))))
 
 (defun %flush-stderr-capture (stderr-capture stream)
   "Send any captured stderr output as :notify messages, then reset the stream."
@@ -1078,11 +1090,47 @@ When no colon in prefix, also completes package names/nicknames."
 (defvar *server-socket* nil
   "The listening socket for the protocol server.")
 
-(defvar *server-stream* nil
-  "The current client connection stream.")
+(defvar *server-streams* nil
+  "Open client connection streams.")
+
+(defvar *server-primary-stream* nil
+  "The foreground client connection stream.")
+
+(defvar *server-streams-lock*
+  (mine/bindings/thread:make-mutex "mine-server-streams"))
 
 (defvar *server-running* nil
   "Flag controlling the server loop.")
+
+(defun %remember-server-stream (stream)
+  (mine/bindings/thread:with-mutex (*server-streams-lock*)
+    (unless *server-primary-stream*
+      (setf *server-primary-stream* stream))
+    (pushnew stream *server-streams* :test #'eq)))
+
+(defun %forget-server-stream (stream)
+  (mine/bindings/thread:with-mutex (*server-streams-lock*)
+    (when (eq stream *server-primary-stream*)
+      (setf *server-primary-stream* nil))
+    (setf *server-streams* (remove stream *server-streams* :test #'eq))))
+
+(defun %primary-server-stream-p (stream)
+  (mine/bindings/thread:with-mutex (*server-streams-lock*)
+    (eq stream *server-primary-stream*)))
+
+(defun %close-server-streams ()
+  (let ((streams nil))
+    (mine/bindings/thread:with-mutex (*server-streams-lock*)
+      (setf streams *server-streams*)
+      (setf *server-streams* nil)
+      (setf *server-primary-stream* nil))
+    (dolist (stream streams)
+      (ignore-errors (close stream)))))
+
+(defun %close-server-socket ()
+  (when *server-socket*
+    (mine/bindings/socket:socket-close *server-socket*)
+    (setf *server-socket* nil)))
 
 (defun start-server (port)
   "Start the protocol server on PORT (0 = auto-assign).
@@ -1102,31 +1150,42 @@ Blocks until the server is shut down."
            (serve-loop listen-socket)
         (stop-server)))))
 
+(defun %serve-connection (stream)
+  "Process messages from one client connection until it closes or quits."
+  (unwind-protect
+       (loop :while *server-running*
+             :do (let ((msg (read-message stream)))
+                   (cond
+                     ((null msg)
+                      ;; EOF or read error -- this connection disconnected.
+                      (when (%primary-server-stream-p stream)
+                        (setf *server-running* nil)
+                        (%close-server-socket))
+                      (return))
+                     (t
+                      (let ((result (dispatch-message msg stream)))
+                        (when (eq result ':quit)
+                          (setf *server-running* nil)
+                          (%close-server-socket)
+                          (return)))))))
+    (%forget-server-stream stream)
+    (ignore-errors (close stream))))
+
 (defun serve-loop (listen-socket)
-  "Accept a connection and process messages until quit."
-  (let ((stream (mine/bindings/socket:socket-accept listen-socket)))
-    (setf *server-stream* stream)
-    (unwind-protect
-         (loop :while *server-running*
-               :do (let ((msg (read-message stream)))
-                    (cond
-                      ((null msg)
-                       ;; EOF or read error -- client disconnected
-                       (setf *server-running* nil))
-                      (t
-                       (let ((result (dispatch-message msg stream)))
-                         (when (eq result ':quit)
-                           (setf *server-running* nil)))))))
-      ;; Clean up
-      (ignore-errors (close stream))
-      (setf *server-stream* nil))))
+  "Accept connections and process each one in its own thread."
+  (loop :while *server-running*
+        :do (handler-case
+                (let ((stream (mine/bindings/socket:socket-accept listen-socket)))
+                  (%remember-server-stream stream)
+                  (mine/bindings/thread:make-thread
+                   "mine-runtime-client"
+                   (lambda () (%serve-connection stream))))
+              (error ()
+                (unless *server-running*
+                  (return))))))
 
 (defun stop-server ()
   "Stop the protocol server and close all connections."
   (setf *server-running* nil)
-  (when *server-stream*
-    (ignore-errors (close *server-stream*))
-    (setf *server-stream* nil))
-  (when *server-socket*
-    (mine/bindings/socket:socket-close *server-socket*)
-    (setf *server-socket* nil)))
+  (%close-server-streams)
+  (%close-server-socket))
