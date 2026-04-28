@@ -717,9 +717,12 @@
        (values))
       (_ (screen:screen-hide-cursor scr)))
     ;; Render a diagnostic popup when the caret is inside a highlighted span.
-    (when (match (focus:focus-current (.ms-focus st))
-            ((focus:FocusEditor) True)
-            (_ False))
+    (when (and (match (focus:focus-current (.ms-focus st))
+                 ((focus:FocusEditor) True)
+                 (_ False))
+               (match (mgr:bufmgr-current (.ms-bufmgr st))
+                 ((Some _) True)
+                 ((None) False)))
       (render-diagnostic-popup st scr cols rows))
     ;; Render transient Quick Result popup.
     (render-quick-result-popup st scr cols rows)
@@ -6431,6 +6434,12 @@ Handles the debugger state where conn-stream is (msg-id . stream)."
   (mine/pane/status::statusbar-set-message!
    (mine/app/mine::get-status-bar st) text))
 
+(cl:defun %coalton-optional-value-or-nil (value)
+  "Return NIL for Coalton None, otherwise return the wrapped value."
+  (cl:if (coalton-impl/runtime/optional:cl-none-p value)
+         cl:nil
+         (coalton-impl/runtime/optional:unwrap-cl-some value)))
+
 ;;; Async symbol completion
 
 (cl:defun %request-completion (st)
@@ -6458,8 +6467,8 @@ package resolution including local nicknames."
 (cl:defun %completion-context-editor (st)
   "Return (values prefix pkg-name cursor-pos) for the editor."
   (cl:let* ((bufmgr (mine/app/mine::get-bufmgr st))
-            (buf (mine/buffer/manager:bufmgr-current bufmgr)))
-    ;; Coalton Optional Buffer is nil for None, Buffer for Some
+            (buf (%coalton-optional-value-or-nil
+                  (mine/buffer/manager:bufmgr-current bufmgr))))
     (cl:if buf
            (cl:let* ((gb (mine/buffer/buffer:buffer-gap buf))
                      (cs (mine/app/mine::get-cursor-state st))
@@ -6505,7 +6514,9 @@ Server returns names already qualified (e.g. \"vec:push-extend\")."
                        (mine/pane/repl:repl-pane-paste-to-input!
                          (mine/app/mine::get-repl-pane st)
                          extension)
-                       (cl:let ((buf (mine/buffer/manager:bufmgr-current (mine/app/mine::get-bufmgr st))))
+                       (cl:let ((buf (%coalton-optional-value-or-nil
+                                      (mine/buffer/manager:bufmgr-current
+                                       (mine/app/mine::get-bufmgr st)))))
                          (cl:when buf
                            (mine/edit/operations:insert-string!
                              buf
@@ -6560,7 +6571,9 @@ Names are already qualified by the server."
                  (cl:max 0 (cl:- vcol (cl:length prefix)))))
          ;; Editor: from cursor position
          (cl:let* ((cs (mine/app/mine::get-cursor-state st))
-                   (buf (mine/buffer/manager:bufmgr-current (mine/app/mine::get-bufmgr st))))
+                   (buf (%coalton-optional-value-or-nil
+                         (mine/buffer/manager:bufmgr-current
+                          (mine/app/mine::get-bufmgr st)))))
            (cl:if buf
                   (cl:let* ((gb (mine/buffer/buffer:buffer-gap buf))
                             (ep (mine/app/mine::get-editor-pane st))
@@ -6616,7 +6629,9 @@ Names are already qualified by the server."
            (cl:+ input-y cursor-row))
          ;; Editor: cursor line on screen
          (cl:let* ((cs (mine/app/mine::get-cursor-state st))
-                   (buf (mine/buffer/manager:bufmgr-current (mine/app/mine::get-bufmgr st))))
+                   (buf (%coalton-optional-value-or-nil
+                         (mine/buffer/manager:bufmgr-current
+                          (mine/app/mine::get-bufmgr st)))))
            (cl:if buf
                   (cl:let* ((gb (mine/buffer/buffer:buffer-gap buf))
                             (lc (mine/edit/cursor:cursor-line-col cs gb))
