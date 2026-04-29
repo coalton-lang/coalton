@@ -164,6 +164,7 @@
                  (:ct-file "find")
                  (:ct-file "build")
                  (:ct-file "symbols")
+                 (:ct-file "keyboard-debugger")
                  (:file "diagnostics")
                  (:ct-file "mine")
                  (:file "executable")))))

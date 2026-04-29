@@ -21,6 +21,7 @@
    #:ActionShowRepl #:ActionFocusEditor #:ActionHideRepl #:ActionInterruptRepl #:ActionClearRepl #:ActionRestartRepl
    #:ActionClearCache
    #:ActionSetupWizard
+   #:ActionKeyboardDebugger
    #:ActionToggleStructural
    #:ActionToggleLineWrap
    #:ActionOpenFiles
@@ -77,6 +78,7 @@
     ActionRestartRepl
     ActionClearCache
     ActionSetupWizard
+    ActionKeyboardDebugger
     ActionToggleStructural
     ActionToggleLineWrap
     ActionOpenFiles
@@ -157,8 +159,9 @@
   (declare %site-menu (Void -> MenuDef))
   (define (%site-menu)
     (MenuDef "Site" (make-list
-      (MenuItem "Empty FASL Cache" "" ActionClearCache)
-      (MenuItem "Setup Wizard"     "" ActionSetupWizard))))
+      (MenuItem "Empty FASL Cache"   "" ActionClearCache)
+      (MenuItem "Setup Wizard"       "" ActionSetupWizard)
+      (MenuItem "Keyboard Debugger"  "" ActionKeyboardDebugger))))
 
   ;;; MenuBar
 

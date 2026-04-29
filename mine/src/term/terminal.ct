@@ -17,7 +17,10 @@
    #:terminal-flush
    #:terminal-clear-screen
    #:terminal-read-input
-   #:terminal-wait-for-key))
+   #:terminal-wait-for-key
+   #:terminal-pause-input!
+   #:terminal-resume-input!
+   #:terminal-poll-bytes!))
 
 (in-package #:mine/term/terminal)
 
@@ -431,4 +434,34 @@ Wait up to 50ms for the first event, then drain any immediately pending events."
     "Block until a key, mouse, paste, or resize event is received."
     (let runtime = (.terminal-input-runtime term))
     (lisp (-> input:InputEvent) (runtime)
-      (%terminal-input-runtime-read-one runtime))))
+      (%terminal-input-runtime-read-one runtime)))
+
+  ;;; Pause/resume the background input runtime so a caller can take
+  ;;; exclusive ownership of stdin (e.g. the keyboard debugger pane).
+
+  (declare terminal-pause-input! (Terminal -> Void))
+  (define (terminal-pause-input! term)
+    "Stop the background input-reader thread so the caller can read raw bytes
+directly via TERMINAL-POLL-BYTES!. Pair with TERMINAL-RESUME-INPUT!."
+    (let runtime = (.terminal-input-runtime term))
+    (lisp (-> Void) (runtime)
+      (%terminal-input-runtime-stop runtime)
+      (cl:values)))
+
+  (declare terminal-resume-input! (Terminal -> Void))
+  (define (terminal-resume-input! term)
+    "Restart the background input-reader thread after a TERMINAL-PAUSE-INPUT!."
+    (let runtime = (.terminal-input-runtime term))
+    (let cols = (cell:read (.terminal-cols-cell term)))
+    (let rows = (cell:read (.terminal-rows-cell term)))
+    (lisp (-> Void) (runtime term cols rows)
+      (%terminal-input-runtime-start runtime term cols rows)
+      (cl:values)))
+
+  (declare terminal-poll-bytes! (Terminal * UFix -> (Vector UFix)))
+  (define (terminal-poll-bytes! term timeout-ms)
+    "Read raw bytes directly from stdin with a TIMEOUT-MS wait.
+Only valid while the input runtime is paused."
+    (let _ = term)
+    (lisp (-> (Vector UFix)) (timeout-ms)
+      (%read-terminal-bytes timeout-ms))))
