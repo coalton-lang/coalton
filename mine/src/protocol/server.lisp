@@ -82,6 +82,55 @@ Returns the parsed S-expression, or NIL on EOF/error."
         t)
     (error () nil)))
 
+(defun %reject-unexpected-message-during-wait (stream msg context)
+  "Return an error for MSG when a nested protocol wait cannot handle it."
+  (let ((id (and (consp msg) (integerp (second msg)) (second msg))))
+    (when id
+      (write-message stream
+                     `(:return ,id
+                       (:error ,(format nil "Runtime is waiting for ~A." context)))))))
+
+(defvar *active-request-threads* (make-hash-table :test #'eql)
+  "Map request IDs to the runtime thread currently evaluating them.")
+
+(defvar *active-request-threads-lock*
+  (mine/bindings/thread:make-mutex "mine-active-requests"))
+
+(defun %remember-active-request (id)
+  "Remember that ID is running on the current thread."
+  (mine/bindings/thread:with-mutex (*active-request-threads-lock*)
+    (setf (gethash id *active-request-threads*) sb-thread:*current-thread*)))
+
+(defun %forget-active-request (id)
+  "Forget the runtime thread for ID."
+  (mine/bindings/thread:with-mutex (*active-request-threads-lock*)
+    (remhash id *active-request-threads*)))
+
+(defmacro %with-active-request ((id) &body body)
+  "Run BODY while ID can be interrupted by :interrupt-request."
+  `(unwind-protect
+        (progn
+          (%remember-active-request ,id)
+          ,@body)
+     (%forget-active-request ,id)))
+
+(defun %active-request-thread (id)
+  "Return the thread handling ID, or NIL."
+  (mine/bindings/thread:with-mutex (*active-request-threads-lock*)
+    (gethash id *active-request-threads*)))
+
+(defun %interrupt-active-request (id)
+  "Interrupt the thread handling ID without signaling the whole runtime process."
+  (let ((thread (%active-request-thread id)))
+    (when (and thread
+               (not (eq thread sb-thread:*current-thread*))
+               (sb-thread:thread-alive-p thread))
+      (sb-thread:interrupt-thread
+       thread
+       (lambda ()
+         (error 'sb-sys:interactive-interrupt)))
+      t)))
+
 ;;; TUI input stream (Gray stream for interactive IO)
 
 (defclass tui-input-stream (sb-gray:fundamental-character-input-stream)
@@ -117,7 +166,9 @@ Returns the input text string, or NIL for EOF/abort."
           ((and (consp msg) (eq (first msg) :io-response))
            (return (third msg)))
           ((and (consp msg) (eq (first msg) :io-abort))
-           (return nil)))))))
+           (return nil))
+          (t
+           (%reject-unexpected-message-during-wait wire msg "input")))))))
 
 (defmethod sb-gray:stream-read-line ((stream tui-input-stream))
   "Read a line from the TUI. Returns (values string eof-p)."
@@ -197,6 +248,17 @@ Returns :quit if the server should shut down, T otherwise."
        (destructuring-bind (id form-string package-name) (rest msg)
          (handle-eval id form-string package-name stream)))
 
+      (:quick-result
+       (destructuring-bind (id form-string package-name) (rest msg)
+         (%with-active-request (id)
+           (handle-quick-result id form-string package-name stream))))
+
+      (:interrupt-request
+       (destructuring-bind (id target-id) (rest msg)
+         (if (%interrupt-active-request target-id)
+             (write-message stream `(:return ,id (:ok t)))
+             (write-message stream `(:return ,id (:error "No active request"))))))
+
       (:compile-string
        (destructuring-bind (id string document-key package-name position client-prefix-length)
            (rest msg)
@@ -226,6 +288,10 @@ Returns :quit if the server should shut down, T otherwise."
       (:arglist
        (destructuring-bind (id function-name package-name) (rest msg)
          (handle-arglist id function-name package-name stream)))
+
+      (:indent-rules
+       (destructuring-bind (id heads package-name) (rest msg)
+         (handle-indent-rules id heads package-name stream)))
 
       (:coalton-type-of
        (destructuring-bind (id symbol-name package-name) (rest msg)
@@ -261,6 +327,168 @@ Returns the symbol or NIL."
               (when sym
                 (return-from %find-symbol-flexibly sym)))))))
     nil))
+
+(defun %find-indent-package (package-name)
+  "Find PACKAGE-NAME for indentation resolution.
+Try the exact runtime package name first, then the normal uppercase spelling.
+Never fall back to *PACKAGE*; an unknown package means unknown indentation."
+  (and (stringp package-name)
+       (or (find-package package-name)
+           (find-package (string-upcase package-name)))))
+
+(defun %read-symbol-token-in-package (token package-name)
+  "Read TOKEN as a symbol in PACKAGE-NAME.
+The CL reader is the authority here: it handles imports, shadows, package
+prefixes, and SBCL package-local nicknames relative to *PACKAGE*."
+  (handler-case
+      (let ((pkg (%find-indent-package package-name)))
+        (when pkg
+          (let ((*package* pkg)
+                (*read-eval* nil))
+            (multiple-value-bind (object position)
+                (read-from-string token nil nil)
+              (and (symbolp object)
+                   (= position (length token))
+                   object)))))
+    (error () nil)))
+
+(defun %symbol-named-p (sym package-name symbol-name)
+  (let ((pkg (find-package package-name)))
+    (and pkg
+         (multiple-value-bind (found status)
+             (find-symbol symbol-name pkg)
+           (and status (eq sym found))))))
+
+(defun %symbol-name-member-p (sym package-name symbol-names)
+  (let ((target-package (find-package package-name))
+        (symbol-package (symbol-package sym)))
+    (and target-package
+         symbol-package
+         (eq symbol-package target-package)
+         (member (symbol-name sym) symbol-names :test #'string=))))
+
+(defun %known-indent-rule-for-symbol (sym)
+  "Return (BODY-START LAMBDA-INDEX IF-P LOCAL-BINDINGS-P DEFMETHOD-P)
+for symbols with built-in indentation semantics, or NIL."
+  (flet ((rule (body-start lambda-index
+                &key if local-bindings defmethod)
+           (list body-start lambda-index
+                 (and if t) (and local-bindings t) (and defmethod t))))
+    (cond
+      ((%symbol-named-p sym "COMMON-LISP" "IF")
+       (rule nil nil :if t))
+      ((%symbol-name-member-p sym "COMMON-LISP"
+                              '("PROGN" "LOCALLY" "TAGBODY" "LOOP" "COND"))
+       (rule 1 nil))
+      ((%symbol-name-member-p sym "COMMON-LISP"
+                              '("LAMBDA"))
+       (rule 2 1))
+      ((%symbol-name-member-p sym "COMMON-LISP"
+                              '("LET" "LET*" "WHEN" "UNLESS"
+                                "EVAL-WHEN" "WITH-OPEN-FILE" "HANDLER-BIND"
+                                "RESTART-BIND" "SYMBOL-MACROLET" "BLOCK"
+                                "CATCH" "UNWIND-PROTECT" "HANDLER-CASE"
+                                "RESTART-CASE" "DOLIST" "DOTIMES"
+                                "DEFSTRUCT" "DEFVAR" "DEFPARAMETER"
+                                "DEFCONSTANT"))
+       (rule 2 nil))
+      ((%symbol-name-member-p sym "COMMON-LISP"
+                              '("FLET" "LABELS" "MACROLET"))
+       (rule 2 nil :local-bindings t))
+      ((%symbol-name-member-p sym "COMMON-LISP"
+                              '("DEFUN" "DEFMACRO" "DEFINE-COMPILER-MACRO"
+                                "DEFTYPE"))
+       (rule 3 2))
+      ((%symbol-name-member-p sym "COMMON-LISP"
+                              '("DESTRUCTURING-BIND" "MULTIPLE-VALUE-BIND"))
+       (rule 3 1))
+      ((%symbol-named-p sym "COMMON-LISP" "DEFMETHOD")
+       (rule 3 nil :defmethod t))
+      ((%symbol-name-member-p sym "COMMON-LISP"
+                              '("DEFGENERIC" "WITH-SLOTS" "WITH-ACCESSORS"
+                                "DEFINE-CONDITION" "DEFCLASS"))
+       (rule 3 nil))
+      ((%symbol-name-member-p sym "COALTON"
+                              '("COALTON-TOPLEVEL" "DEFINE" "DEFINE-TYPE"
+                                "DEFINE-STRUCT" "DEFINE-CLASS"
+                                "DEFINE-INSTANCE" "REPR" "MATCH"))
+       (rule 1 nil))
+      ((%symbol-named-p sym "COALTON" "FN")
+       (rule 2 1))
+      (t nil))))
+
+(defun %lambda-list-body-start (lambda-list)
+  "Derive a conservative body start from a macro lambda list with &BODY.
+Returns the form element index where body indentation begins, or NIL."
+  (let ((arg-count 0)
+        (skip-next nil))
+    (dolist (item lambda-list)
+      (let ((name (and (symbolp item) (symbol-name item))))
+        (cond
+          ((and name (string= name "&BODY"))
+           (return-from %lambda-list-body-start (1+ arg-count)))
+          (skip-next
+           (setf skip-next nil))
+          ((and name (member name '("&WHOLE" "&ENVIRONMENT") :test #'string=))
+           (setf skip-next t))
+          ((and name (>= (length name) 1) (char= (char name 0) #\&))
+           nil)
+          (t
+           (incf arg-count)))))
+    nil))
+
+(defun %image-indent-rule-for-symbol (sym)
+  "Return indentation rule metadata from the live image for SYM.
+Known CL/Coalton symbol identities are exact. For other macros, derive body
+indentation only when the runtime can expose a macro lambda list containing
+&BODY."
+  (or (%known-indent-rule-for-symbol sym)
+      (let ((property (get sym 'common-lisp-indent-function)))
+        (when (and (integerp property) (>= property 0))
+          (list (1+ property) nil nil nil nil)))
+      (when (macro-function sym)
+        (let* ((lambda-list
+                 (ignore-errors
+                   (sb-introspect:function-lambda-list (macro-function sym))))
+               (body-start (and (listp lambda-list)
+                                (%lambda-list-body-start lambda-list))))
+          (when body-start
+            (list body-start nil nil nil nil))))))
+
+(defun %indent-rule-spec-for-head (head package-name)
+  "Return a protocol-friendly indentation rule spec for HEAD."
+  (let* ((sym (%read-symbol-token-in-package head package-name))
+         (rule (and sym (%image-indent-rule-for-symbol sym))))
+    (if rule
+        (destructuring-bind (body-start lambda-index if-p local-bindings-p defmethod-p)
+            rule
+          (list head body-start lambda-index
+                (and if-p t)
+                (and local-bindings-p t)
+                (and defmethod-p t)))
+        (list head nil nil nil nil nil))))
+
+(defun %indent-rule-specs-for-heads (heads package-name)
+  "Return indentation rule specs for HEADS resolved in PACKAGE-NAME."
+  (let ((seen (make-hash-table :test 'equal))
+        (result nil))
+    (dolist (head heads (nreverse result))
+      (when (and (stringp head) (not (gethash head seen)))
+        (setf (gethash head seen) t)
+        (push (%indent-rule-spec-for-head head package-name) result)))))
+
+(defun handle-indent-rules (id heads package-name stream)
+  "Handle an :indent-rules request."
+  (handler-case
+      (write-message stream
+                     `(:return ,id
+                       (:ok ,(%indent-rule-specs-for-heads
+                              (if (listp heads) heads nil)
+                              package-name))))
+    (error (c)
+      (write-message stream
+                     `(:return ,id
+                       (:error ,(format nil "~A" c)))))))
 
 (defun split-string-by-newline (string)
   "Split STRING into a list of substrings at newline boundaries."
@@ -320,7 +548,9 @@ Returns the symbol or NIL."
                   (t
                    (write-message stream
                      `(:return ,id (:error ,(format nil "Aborted: ~A" condition-text))))
-                   (throw '%debugger-abort nil)))))))))))
+                   (throw '%debugger-abort nil)))))
+            (otherwise
+             (%reject-unexpected-message-during-wait stream msg "the debugger"))))))))
 
 (defun %flush-stderr-capture (stderr-capture stream)
   "Send any captured stderr output as :notify messages, then reset the stream."
@@ -504,6 +734,23 @@ Returns the symbol or NIL."
             (continue ()
               :report "Continue, returning NIL"
               (write-message stream `(:return ,id (:ok "NIL"))))))))))
+
+(defun handle-quick-result (id form-string package-name stream)
+  "Handle a :quick-result request without debugger or diagnostic side effects."
+  (handler-case
+      (multiple-value-bind (display error-text)
+          (mine/runtime/eval:quick-result
+           form-string package-name
+           (let ((pkg (find-package (string-upcase package-name))))
+             (and pkg (%coalton-package-p pkg))))
+        (if error-text
+            (write-message stream `(:return ,id (:error ,error-text)))
+            (write-message stream `(:return ,id (:ok ,display)))))
+    (sb-sys:interactive-interrupt (c)
+      (declare (ignore c))
+      (write-message stream `(:return ,id (:error "Interrupted."))))
+    (error (c)
+      (write-message stream `(:return ,id (:error ,(format nil "~A" c)))))))
 
 (defun handle-compile-string (id form-string document-key package-name position client-prefix-length stream)
   "Handle a :compile-string request with interactive debugger support.
@@ -1057,11 +1304,47 @@ When no colon in prefix, also completes package names/nicknames."
 (defvar *server-socket* nil
   "The listening socket for the protocol server.")
 
-(defvar *server-stream* nil
-  "The current client connection stream.")
+(defvar *server-streams* nil
+  "Open client connection streams.")
+
+(defvar *server-primary-stream* nil
+  "The foreground client connection stream.")
+
+(defvar *server-streams-lock*
+  (mine/bindings/thread:make-mutex "mine-server-streams"))
 
 (defvar *server-running* nil
   "Flag controlling the server loop.")
+
+(defun %remember-server-stream (stream)
+  (mine/bindings/thread:with-mutex (*server-streams-lock*)
+    (unless *server-primary-stream*
+      (setf *server-primary-stream* stream))
+    (pushnew stream *server-streams* :test #'eq)))
+
+(defun %forget-server-stream (stream)
+  (mine/bindings/thread:with-mutex (*server-streams-lock*)
+    (when (eq stream *server-primary-stream*)
+      (setf *server-primary-stream* nil))
+    (setf *server-streams* (remove stream *server-streams* :test #'eq))))
+
+(defun %primary-server-stream-p (stream)
+  (mine/bindings/thread:with-mutex (*server-streams-lock*)
+    (eq stream *server-primary-stream*)))
+
+(defun %close-server-streams ()
+  (let ((streams nil))
+    (mine/bindings/thread:with-mutex (*server-streams-lock*)
+      (setf streams *server-streams*)
+      (setf *server-streams* nil)
+      (setf *server-primary-stream* nil))
+    (dolist (stream streams)
+      (ignore-errors (close stream)))))
+
+(defun %close-server-socket ()
+  (when *server-socket*
+    (mine/bindings/socket:socket-close *server-socket*)
+    (setf *server-socket* nil)))
 
 (defun start-server (port)
   "Start the protocol server on PORT (0 = auto-assign).
@@ -1081,31 +1364,42 @@ Blocks until the server is shut down."
            (serve-loop listen-socket)
         (stop-server)))))
 
+(defun %serve-connection (stream)
+  "Process messages from one client connection until it closes or quits."
+  (unwind-protect
+       (loop :while *server-running*
+             :do (let ((msg (read-message stream)))
+                   (cond
+                     ((null msg)
+                      ;; EOF or read error -- this connection disconnected.
+                      (when (%primary-server-stream-p stream)
+                        (setf *server-running* nil)
+                        (%close-server-socket))
+                      (return))
+                     (t
+                      (let ((result (dispatch-message msg stream)))
+                        (when (eq result ':quit)
+                          (setf *server-running* nil)
+                          (%close-server-socket)
+                          (return)))))))
+    (%forget-server-stream stream)
+    (ignore-errors (close stream))))
+
 (defun serve-loop (listen-socket)
-  "Accept a connection and process messages until quit."
-  (let ((stream (mine/bindings/socket:socket-accept listen-socket)))
-    (setf *server-stream* stream)
-    (unwind-protect
-         (loop :while *server-running*
-               :do (let ((msg (read-message stream)))
-                    (cond
-                      ((null msg)
-                       ;; EOF or read error -- client disconnected
-                       (setf *server-running* nil))
-                      (t
-                       (let ((result (dispatch-message msg stream)))
-                         (when (eq result ':quit)
-                           (setf *server-running* nil)))))))
-      ;; Clean up
-      (ignore-errors (close stream))
-      (setf *server-stream* nil))))
+  "Accept connections and process each one in its own thread."
+  (loop :while *server-running*
+        :do (handler-case
+                (let ((stream (mine/bindings/socket:socket-accept listen-socket)))
+                  (%remember-server-stream stream)
+                  (mine/bindings/thread:make-thread
+                   "mine-runtime-client"
+                   (lambda () (%serve-connection stream))))
+              (error ()
+                (unless *server-running*
+                  (return))))))
 
 (defun stop-server ()
   "Stop the protocol server and close all connections."
   (setf *server-running* nil)
-  (when *server-stream*
-    (ignore-errors (close *server-stream*))
-    (setf *server-stream* nil))
-  (when *server-socket*
-    (mine/bindings/socket:socket-close *server-socket*)
-    (setf *server-socket* nil)))
+  (%close-server-streams)
+  (%close-server-socket))

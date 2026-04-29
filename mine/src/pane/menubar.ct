@@ -16,11 +16,12 @@
    #:ActionOpenProject #:ActionBeamSystem #:ActionRefreshProject #:ActionCloseProject
    #:ActionBuildExecutable
    #:ActionOpenFile #:ActionSave #:ActionSaveAll #:ActionCloseFile
-   #:ActionFind #:ActionBeamFile #:ActionBeamForm #:ActionClearDiagnostics
+   #:ActionFind #:ActionBeamFile #:ActionBeamToplevelForm #:ActionQuickResult #:ActionClearDiagnostics
    #:ActionJumpToDefinition #:ActionJumpBack #:ActionGotoLine
    #:ActionShowRepl #:ActionFocusEditor #:ActionHideRepl #:ActionInterruptRepl #:ActionClearRepl #:ActionRestartRepl
    #:ActionClearCache
    #:ActionSetupWizard
+   #:ActionKeyboardDebugger
    #:ActionToggleStructural
    #:ActionToggleLineWrap
    #:ActionOpenFiles
@@ -64,7 +65,8 @@
     ActionFind
     ActionGotoLine
     ActionBeamFile
-    ActionBeamForm
+    ActionBeamToplevelForm
+    ActionQuickResult
     ActionClearDiagnostics
     ActionJumpToDefinition
     ActionJumpBack
@@ -76,6 +78,7 @@
     ActionRestartRepl
     ActionClearCache
     ActionSetupWizard
+    ActionKeyboardDebugger
     ActionToggleStructural
     ActionToggleLineWrap
     ActionOpenFiles
@@ -134,7 +137,8 @@
       (MenuItem "Find"               "Ctrl+f" ActionFind)
       (MenuItem "Insert Symbol"      "Ctrl+\\" ActionInsertSymbol)
       (MenuItem "Beam File"           "Alt+k" ActionBeamFile)
-      (MenuItem "Beam Form"           "Alt+c" ActionBeamForm)
+      (MenuItem "Beam Toplevel Form"  "Alt+c" ActionBeamToplevelForm)
+      (MenuItem "Quick Result"        "Alt+r" ActionQuickResult)
       (MenuItem "Clear Diagnostics"   "" ActionClearDiagnostics)
       (MenuItem "Jump to Definition" "Alt+." ActionJumpToDefinition)
       (MenuItem "Jump Back"          "Alt+," ActionJumpBack)
@@ -155,8 +159,9 @@
   (declare %site-menu (Void -> MenuDef))
   (define (%site-menu)
     (MenuDef "Site" (make-list
-      (MenuItem "Empty FASL Cache" "" ActionClearCache)
-      (MenuItem "Setup Wizard"     "" ActionSetupWizard))))
+      (MenuItem "Empty FASL Cache"   "" ActionClearCache)
+      (MenuItem "Setup Wizard"       "" ActionSetupWizard)
+      (MenuItem "Keyboard Debugger"  "" ActionKeyboardDebugger))))
 
   ;;; MenuBar
 

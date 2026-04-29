@@ -12,6 +12,7 @@
   (:export
    #:find-enclosing-open
    #:find-matching-close
+   #:smallest-enclosing-form-range
    #:paredit-open-paren!
    #:paredit-close-paren!
    #:paredit-open-bracket!
@@ -134,6 +135,17 @@
   (define (delimiter? ch)
     (or (whitespace? ch)
         (list:member ch [#\( #\) #\[ #\] #\" #\; ])))
+
+  (declare %whitespace-only-between? (gap:GapBuffer * UFix * UFix -> Boolean))
+  (define (%whitespace-only-between? gb start end)
+    "True when [START, END) contains only whitespace."
+    (if (>= start end)
+        True
+        (match (gap:gap-char-at gb start)
+          ((Some ch)
+           (and (whitespace? ch)
+                (%whitespace-only-between? gb (+ start 1) end)))
+          ((None) False))))
 
   ;;; Syntax map helpers — classify buffer positions for syntax awareness
 
@@ -676,22 +688,32 @@ Inside strings or line comments, insert a literal open paren."
   (define (paredit-close-paren! buffer cs)
     "Move past the closing paren of the enclosing form.
 Inside strings or line comments, insert a literal close paren."
-    (let gb = (buf:buffer-gap buffer))
-    (let p = (cursor:cursor-position cs))
-    (cond
-      ((%literal-delimiter-context? gb p)
-       (record-insert! buffer p ")" p)
-       (cell:write! (cursor:.pos cs) (+ p 1))
-       (values))
-      (True
-       (match (find-enclosing-open gb p)
-         ((Some open-pos)
-          (match (find-matching-close gb open-pos)
-            ((Some close-pos)
-             (cell:write! (cursor:.pos cs) (+ close-pos 1))
-             (values))
-            ((None) (values))))
-         ((None) (values))))))
+    (undo:with-undo-group! (buf:buffer-undo buffer)
+      (fn () (cursor:cursor-position cs))
+      (fn ()
+        (let gb = (buf:buffer-gap buffer))
+        (let p = (cursor:cursor-position cs))
+        (cond
+          ((%literal-delimiter-context? gb p)
+           (record-insert! buffer p ")" p)
+           (cell:write! (cursor:.pos cs) (+ p 1))
+           (values))
+          (True
+           (match (find-enclosing-open gb p)
+             ((Some open-pos)
+              (match (find-matching-close gb open-pos)
+                ((Some close-pos)
+                 (cond
+                   ((and (< p close-pos)
+                         (%whitespace-only-between? gb p close-pos))
+                    (record-delete! buffer p close-pos p)
+                    (cell:write! (cursor:.pos cs) (+ p 1))
+                    (values))
+                   (True
+                    (cell:write! (cursor:.pos cs) (+ close-pos 1))
+                    (values))))
+                ((None) (values))))
+             ((None) (values))))))))
 
   (declare paredit-open-bracket! (buf:Buffer * cursor:CursorState -> Void))
   (define (paredit-open-bracket! buffer cs)
@@ -1057,6 +1079,22 @@ Inside strings, parens are treated as normal characters."
          ((Some after-close) (Some (- after-close 1)))
          ((None) None)))
       (_ None)))
+
+  (declare smallest-enclosing-form-range (gap:GapBuffer * UFix -> Optional (Tuple UFix UFix)))
+  (define (smallest-enclosing-form-range gb p)
+    "Return the innermost enclosing list form range around gap P."
+    (%ensure-syntax-map! gb)
+    (let open-pos =
+      (match (gap:gap-char-at gb p)
+        ((Some #\() (Some p))
+        ((Some #\[) (Some p))
+        (_ (%current-list-open gb p))))
+    (match open-pos
+      ((None) None)
+      ((Some start)
+       (match (%matching-close-for gb start)
+         ((Some close) (Some (Tuple start (+ close 1))))
+         ((None) None)))))
 
   (declare %open-str-for (Char -> String))
   (define (%open-str-for open-ch)
