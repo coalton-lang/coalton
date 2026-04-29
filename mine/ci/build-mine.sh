@@ -19,6 +19,14 @@ if [ -n "${SBCL_SRC_DIR:-}" ] && \
   export MINE_SAVE_CORE=1
 fi
 
+# MINE_AS_CORE=1 explicitly requests the saved-core path without the
+# embedding step that follows.  Used by the Linux AppImage build, which
+# ships the SBCL runtime + saved core as a sidecar trio rather than a
+# standalone executable, and so doesn't need (or want) the core embedded.
+if [ -n "${MINE_AS_CORE:-}" ]; then
+  export MINE_SAVE_CORE=1
+fi
+
 COALTON_PORTABLE_BIGFLOAT=1 \
 CL_SOURCE_REGISTRY="$CL_SOURCE_REGISTRY_VALUE" \
 "$SBCL_BIN" \
@@ -30,8 +38,9 @@ CL_SOURCE_REGISTRY="$CL_SOURCE_REGISTRY_VALUE" \
 
 # When SBCL was built with --with-sb-linkable-runtime, the Lisp build
 # saves mine.core instead of a standalone executable.  Embed the core
-# into a proper Mach-O binary so it can be code-signed.
-if [ -f "$PROJECT_ROOT/mine.core" ]; then
+# into a proper Mach-O binary so it can be code-signed.  Skip embedding
+# when MINE_AS_CORE=1 is set: the caller wants the bare core file.
+if [ -f "$PROJECT_ROOT/mine.core" ] && [ -z "${MINE_AS_CORE:-}" ]; then
   EMBED_SCRIPT="${SBCL_SRC_DIR}/tools-for-build/make-embedded-core-executable.lisp"
   if [ ! -f "$EMBED_SCRIPT" ]; then
     echo "ERROR: make-embedded-core-executable.lisp not found at $EMBED_SCRIPT"

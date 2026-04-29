@@ -462,6 +462,8 @@ Returns the next row after all drawn lines."
        (cond
          ((== mod input:ModAlt)
           (paredit:paredit-forward-join! buffer cs))
+         ((== mod input:ModAltShift)
+          (paredit:paredit-backward-leave! buffer cs))
          ((== mod input:ModCtrl)
           (cursor:cursor-move-word-right! gb cs))
          (True
@@ -470,6 +472,8 @@ Returns the next row after all drawn lines."
        (cond
          ((== mod input:ModAlt)
           (paredit:paredit-forward-leave! buffer cs))
+         ((== mod input:ModAltShift)
+          (paredit:paredit-backward-join! buffer cs))
          ((== mod input:ModCtrl)
           (cursor:cursor-move-word-left! gb cs))
          (True

@@ -43,7 +43,9 @@
 (cl:defun %runtime-do-start (mgr)
   "Start a runtime subprocess and connect. Returns T on success, NIL on failure."
   (cl:handler-case
-      (cl:let* ((argv0 (cl:or (cl:first sb-ext:*posix-argv*) "mine"))
+      (cl:let* ((argv0 (cl:or (sb-ext:posix-getenv "MINE_LAUNCHER")
+                              (cl:first sb-ext:*posix-argv*)
+                              "mine"))
                 (abspath (cl:handler-case
                              (cl:namestring (cl:truename (cl:pathname argv0)))
                            (cl:error () argv0)))
