@@ -2622,6 +2622,14 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       ((buf:ModeLisp) True)
       (_ False)))
 
+  (declare %indent-mode (buf:Buffer -> Optional UFix))
+  (define (%indent-mode buffer)
+    "Return the indentation mode for Lisp-like buffers."
+    (match (buf:buffer-mode buffer)
+      ((buf:ModeCoalton) (Some 0))
+      ((buf:ModeLisp) (Some 1))
+      (_ None)))
+
   (declare %structural-edit? (MineState * buf:Buffer -> Boolean))
   (define (%structural-edit? st buffer)
     "True if structural editing is enabled and the buffer is in a Lisp mode."
@@ -2642,13 +2650,33 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     (lisp (-> String) (n)
       (cl:make-string n :initial-element #\Space)))
 
-  (declare %count-leading-spaces (String -> UFix))
-  (define (%count-leading-spaces s)
+  (declare %count-leading-whitespace (String -> UFix))
+  (define (%count-leading-whitespace s)
+    "Return the number of leading indentation characters on a line."
     (lisp (-> UFix) (s)
       (cl:let ((len (cl:length s)))
         (cl:dotimes (i len len)
-          (cl:unless (cl:char= (cl:char s i) #\Space)
+          (cl:unless (cl:member (cl:char s i) '(#\Space #\Tab)
+                                :test #'cl:char=)
             (cl:return i))))))
+
+  (declare %leading-indent-column (String -> UFix))
+  (define (%leading-indent-column s)
+    "Return the visual width of a line's leading indentation."
+    (lisp (-> UFix) (s)
+      (cl:let ((col 0)
+               (len (cl:length s))
+               (tab-w mine/buffer/gap::*tab-width*))
+        (cl:dotimes (i len col)
+          (cl:let ((ch (cl:char s i)))
+            (cl:cond
+              ((cl:char= ch #\Space)
+               (cl:incf col))
+              ((cl:char= ch #\Tab)
+               (cl:setf col
+                         (cl:* (cl:1+ (cl:floor col tab-w)) tab-w)))
+              (cl:t
+               (cl:return col))))))))
 
   (declare gap-char-at-cl (gap:GapBuffer * UFix -> Char))
   (define (gap-char-at-cl gb pos)
@@ -2657,42 +2685,135 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       ((Some c) c)
       ((None) (lisp (-> Char) () (cl:code-char 0)))))
 
-  (declare reindent-line! (buf:Buffer * undo:UndoTree * cursor:CursorState -> Void))
-  (define (reindent-line! buffer tree cs)
+  (declare %indent-default-package (MineState * buf:Buffer -> String))
+  (define (%indent-default-package st buffer)
+    "Return the package used when a buffer has no preceding in-package form."
+    (match (buf:buffer-mode buffer)
+      ((buf:ModeLisp) "CL-USER")
+      ((buf:ModeCoalton) (cell:read (.ms-repl-package st)))
+      (_ (cell:read (.ms-repl-package st)))))
+
+  (declare %indent-rules-for-line! (MineState * buf:Buffer * UFix -> List indent:IndentRuleEntry))
+  (define (%indent-rules-for-line! st buffer line)
+    "Ask the runtime image for indentation rules relevant to LINE."
+    (let gb = (buf:buffer-gap buffer))
+    (let heads = (indent:indent-heads-for-line gb line))
+    (match heads
+      ((Nil) Nil)
+      (_
+       (let _conn = (ensure-runtime! st))
+       (let default-package = (%indent-default-package st buffer))
+       (lisp (-> (List indent:IndentRuleEntry)) (st heads gb line default-package)
+         (%indent-rules-for-line-cl st heads gb line default-package)))))
+
+  (declare %target-indent-for-line! (MineState * buf:Buffer * UFix -> Optional UFix))
+  (define (%target-indent-for-line! st buffer line)
+    "Return runtime-resolved indentation for LINE, or None outside Lisp-like modes."
+    (match (%indent-mode buffer)
+      ((None) None)
+      ((Some mode)
+       (let gb = (buf:buffer-gap buffer))
+       (let rules = (%indent-rules-for-line! st buffer line))
+       (Some (indent:compute-indent-with-rules gb mode line rules)))))
+
+  (declare %target-blank-indent-at-position! (MineState * buf:Buffer * UFix * UFix -> Optional UFix))
+  (define (%target-blank-indent-at-position! st buffer line pos)
+    "Return indentation for a freshly inserted blank line at POS."
+    (match (%indent-mode buffer)
+      ((None) None)
+      ((Some mode)
+       (let gb = (buf:buffer-gap buffer))
+       (let rules = (%indent-rules-for-line! st buffer line))
+       (Some (indent:compute-blank-indent-at-position-with-rules gb mode pos rules)))))
+
+  (declare %cursor-before-close-paren? (gap:GapBuffer * cursor:CursorState -> Boolean))
+  (define (%cursor-before-close-paren? gb cs)
+    (match (gap:gap-char-at gb (cursor:cursor-position cs))
+      ((Some ch) (== ch #\)))
+      ((None) False)))
+
+  (declare %set-line-indentation! (buf:Buffer * undo:UndoTree * cursor:CursorState * UFix * UFix -> Void))
+  (define (%set-line-indentation! buffer tree cs line target-indent)
+    "Set LINE's indentation and keep cursor movement compatible with Emacs."
+    (let gb = (buf:buffer-gap buffer))
+    (let line-text = (gap:gap-line-text gb line))
+    (let current-indent-chars = (%count-leading-whitespace line-text))
+    (let current-indent-column = (%leading-indent-column line-text))
+    (let line-start = (gap:gap-line-to-pos gb line))
+    (let old-pos = (cursor:cursor-position cs))
+    (match (cursor:cursor-line-col cs gb)
+      ((Tuple _ cursor-col)
+       (let cursor-in-indent = (<= cursor-col current-indent-chars))
+       (cond
+         ((== target-indent current-indent-column)
+          (when (< cursor-col current-indent-chars)
+            (cursor:cursor-move-to-position! cs (+ line-start current-indent-chars))))
+         (True
+          (when (> current-indent-chars 0)
+            (let deleted =
+              (gap:gap-delete-range! gb line-start (+ line-start current-indent-chars)))
+            (buf:buffer-mark-dirty! buffer)
+            (undo:undo-record! tree
+                               (undo:OpDelete line-start deleted)
+                               old-pos line-start))
+          (when (> target-indent 0)
+            (let spaces = (%make-spaces target-indent))
+            (gap:gap-insert-string! gb line-start spaces)
+            (buf:buffer-mark-dirty! buffer)
+            (undo:undo-record! tree
+                               (undo:OpInsert line-start spaces)
+                               line-start (+ line-start target-indent)))
+          (cursor:cursor-move-to-position!
+           cs
+           (if cursor-in-indent
+               (+ line-start target-indent)
+               (+ (- old-pos current-indent-chars) target-indent))))))))
+
+  (declare reindent-line! (MineState * buf:Buffer * undo:UndoTree * cursor:CursorState -> Void))
+  (define (reindent-line! st buffer tree cs)
     "Reindent the current line to the canonical indentation level."
     (undo:with-undo-group! tree
       (fn () (cursor:cursor-position cs))
       (fn ()
         (let gb = (buf:buffer-gap buffer))
-        (let mode = (match (buf:buffer-mode buffer)
-                      ((buf:ModeCoalton) 0)
-                      ((buf:ModeLisp) 1)
-                      (_ 2)))
         (match (cursor:cursor-line-col cs gb)
           ((Tuple line _col)
-           (let target-indent = (indent:compute-indent gb mode line))
-           (let line-text = (gap:gap-line-text gb line))
-           (let current-indent = (%count-leading-spaces line-text))
-           (when (not (== target-indent current-indent))
-             ;; Replace leading whitespace
-             (let line-start = (gap:gap-line-to-pos gb line))
-             ;; Delete existing leading spaces
-             (when (> current-indent 0)
-               (gap:gap-delete-range! gb line-start (+ line-start current-indent))
-               (buf:buffer-mark-dirty! buffer)
-               (undo:undo-record! tree
-                                  (undo:OpDelete line-start (%make-spaces current-indent))
-                                  (cursor:cursor-position cs) line-start))
-             ;; Insert new indentation
-             (when (> target-indent 0)
-               (let spaces = (%make-spaces target-indent))
-               (gap:gap-insert-string! gb line-start spaces)
-               (buf:buffer-mark-dirty! buffer)
-               (undo:undo-record! tree
-                                  (undo:OpInsert line-start spaces)
-                                  line-start (+ line-start target-indent)))
-             ;; Move cursor to end of new indentation
-             (cursor:cursor-move-to-position! cs (+ (gap:gap-line-to-pos gb line) target-indent))))))))
+           (match (%target-indent-for-line! st buffer line)
+             ((None) (values))
+             ((Some target-indent)
+              (%set-line-indentation! buffer tree cs line target-indent))))))))
+
+  (declare editor-newline! (MineState * buf:Buffer -> Void))
+  (define (editor-newline! st buffer)
+    "Insert a newline and indent it using runtime-resolved indentation rules."
+    (let tree = (buf:buffer-undo buffer))
+    (let cs = (.ms-cursor st))
+    (undo:with-undo-group! tree
+      (fn () (cursor:cursor-position cs))
+      (fn ()
+        (ops:insert-char! buffer tree cs #\Newline)
+        (let gb = (buf:buffer-gap buffer))
+        (let pos = (cursor:cursor-position cs))
+        (match (cursor:cursor-line-col cs gb)
+          ((Tuple line _col)
+           (let target-indent =
+             (if (%cursor-before-close-paren? gb cs)
+                 (%target-blank-indent-at-position! st buffer line pos)
+                 (%target-indent-for-line! st buffer line)))
+           (match target-indent
+             ((None) (values))
+             ((Some indent-level)
+              (%set-line-indentation! buffer tree cs line indent-level))))))))
+
+  (declare %trigger-editor-completion-if-prefix! (MineState * buf:Buffer -> Void))
+  (define (%trigger-editor-completion-if-prefix! st buffer)
+    "Start editor completion when point is after a non-empty symbol prefix."
+    (let gb = (buf:buffer-gap buffer))
+    (let prefix = (complete:extract-symbol-prefix
+                   gb
+                   (cursor:cursor-position (.ms-cursor st))))
+    (when (> (str:length prefix) 0)
+      (%trigger-completion! st)))
 
 ;;; Event handling -- editor keys
 
@@ -2835,25 +2956,24 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       ;; Enter
       ((input:KeyEnter)
        (match (mgr:bufmgr-current (.ms-bufmgr st))
-         ((Some buf) (ops:newline! buf (buf:buffer-undo buf) (.ms-cursor st)))
+         ((Some buf) (editor-newline! st buf))
          ((None) (values))))
-      ;; Tab: trigger completion if mid-symbol, else indent
+      ;; Tab: reindent in Lisp-like modes, insert spaces elsewhere.
       ((input:KeyTab)
        (match (mgr:bufmgr-current (.ms-bufmgr st))
          ((Some buf)
-          (let prefix = (complete:extract-symbol-prefix
-                         (buf:buffer-gap buf)
-                         (cursor:cursor-position (.ms-cursor st))))
-          (cond
-            ;; Non-empty prefix and not plain text: try completion
-            ((and (> (str:length prefix) 0)
-                  (not (== (buf:buffer-mode buf) buf:ModePlainText)))
-             (%trigger-completion! st))
-            ;; Structural editing: reindent
-            ((%structural-edit? st buf)
-             (reindent-line! buf (buf:buffer-undo buf) (.ms-cursor st)))
-            ;; Otherwise: insert spaces
-            (True
+          (match (%indent-mode buf)
+            ((Some _)
+             (let gb = (buf:buffer-gap buf))
+             (let old-pos = (cursor:cursor-position (.ms-cursor st)))
+             (match (cursor:cursor-line-col (.ms-cursor st) gb)
+               ((Tuple line _col)
+                (let old-line-text = (gap:gap-line-text gb line))
+                (reindent-line! st buf (buf:buffer-undo buf) (.ms-cursor st))
+                (when (and (== old-pos (cursor:cursor-position (.ms-cursor st)))
+                           (== old-line-text (gap:gap-line-text gb line)))
+                  (%trigger-editor-completion-if-prefix! st buf)))))
+            ((None)
              (ops:insert-string! buf (buf:buffer-undo buf) (.ms-cursor st) "  "))))
          ((None) (values))))
 
@@ -6307,6 +6427,72 @@ Handles the debugger state where conn-stream is (msg-id . stream)."
               (cl:setf (mine/protocol/client::%connection-active conn) cl:nil)
               (cl:setf (%native-box-value (mine/app/mine::get-bg-proto-thread st)) cl:nil)
               cl:nil)))))))
+
+(cl:defun %sync-runtime-request (st msg)
+  "Send MSG to the runtime over a short-lived connection and return the reply.
+This avoids stealing messages from the foreground/background protocol readers."
+  (cl:let* ((mgr (mine/app/mine::get-runtime-mgr st))
+            (proc (mine/protocol/lifecycle::%runtime-manager-process mgr))
+            (port (mine/protocol/lifecycle::%runtime-manager-port mgr)))
+    (cl:when (cl:and proc (sb-ext:process-alive-p proc) (cl:plusp port))
+      (cl:handler-case
+          (cl:let* ((conn (mine/protocol/lifecycle::%runtime-open-connection port))
+                    (stream (mine/protocol/client::%connection-stream conn)))
+            (cl:unwind-protect
+                 (cl:progn
+                   (mine/protocol/server::write-message stream msg)
+                   (mine/protocol/server::read-message stream))
+              (cl:ignore-errors
+                (mine/bindings/socket:socket-close stream))
+              (cl:setf (mine/protocol/client::%connection-active conn) cl:nil)))
+        (cl:error () cl:nil)))))
+
+(cl:defun %optional-ufix (value)
+  (cl:if (cl:and (cl:integerp value) (cl:>= value 0))
+         (coalton:Some value)
+         coalton:None))
+
+(cl:defun %boolean-value (value)
+  (cl:if value coalton:True coalton:False))
+
+(cl:defun %indent-rule-from-spec (spec)
+  "Convert a runtime indent-rule wire spec into Coalton data."
+  (cl:handler-case
+      (cl:destructuring-bind (raw-head body-start lambda-index if-p local-bindings-p defmethod-p)
+          spec
+        (cl:let ((has-rule (cl:or body-start lambda-index if-p local-bindings-p defmethod-p)))
+          (mine/syntax/indent:IndentRuleEntry
+           (cl:if (cl:stringp raw-head) raw-head "")
+           (cl:if has-rule
+                  (mine/syntax/indent:RuleKnown
+                   (%optional-ufix body-start)
+                   (%optional-ufix lambda-index)
+                   (%boolean-value if-p)
+                   (%boolean-value local-bindings-p)
+                   (%boolean-value defmethod-p))
+                  mine/syntax/indent:RuleGeneric))))
+    (cl:error ()
+      (mine/syntax/indent:IndentRuleEntry "" mine/syntax/indent:RuleGeneric))))
+
+(cl:defun %request-indent-rules (st heads package-name)
+  "Synchronously ask the runtime image for indentation rules for HEADS."
+  (cl:let* ((rid (%next-request-id-cl st))
+            (reply (%sync-runtime-request
+                    st
+                    (cl:list :indent-rules rid heads package-name))))
+    (cl:when (cl:and (cl:consp reply)
+                     (cl:eq (cl:first reply) :return)
+                     (cl:eql (cl:second reply) rid))
+      (cl:let ((payload (cl:third reply)))
+        (cl:when (cl:and (cl:consp payload) (cl:eq (cl:first payload) :ok))
+          (cl:mapcar #'%indent-rule-from-spec (cl:second payload)))))))
+
+(cl:defun %indent-rules-for-line-cl (st heads gb line default-package)
+  "Return runtime-resolved indentation rules for HEADS affecting LINE in GB."
+  (cl:let* ((line-pos (mine/buffer/gap:gap-line-to-pos gb line))
+            (pkg (cl:or (%find-in-package-before gb line-pos) default-package)))
+    (cl:or (%request-indent-rules st heads pkg)
+           cl:nil)))
 
 (cl:defun %send-quick-result-interrupt-cl (st target-id)
   "Send a request-scoped interrupt for Quick Result TARGET-ID."

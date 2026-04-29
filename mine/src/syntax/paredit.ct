@@ -136,6 +136,17 @@
     (or (whitespace? ch)
         (list:member ch [#\( #\) #\[ #\] #\" #\; ])))
 
+  (declare %whitespace-only-between? (gap:GapBuffer * UFix * UFix -> Boolean))
+  (define (%whitespace-only-between? gb start end)
+    "True when [START, END) contains only whitespace."
+    (if (>= start end)
+        True
+        (match (gap:gap-char-at gb start)
+          ((Some ch)
+           (and (whitespace? ch)
+                (%whitespace-only-between? gb (+ start 1) end)))
+          ((None) False))))
+
   ;;; Syntax map helpers — classify buffer positions for syntax awareness
 
   (declare %ensure-syntax-map! (gap:GapBuffer -> Void))
@@ -677,22 +688,32 @@ Inside strings or line comments, insert a literal open paren."
   (define (paredit-close-paren! buffer cs)
     "Move past the closing paren of the enclosing form.
 Inside strings or line comments, insert a literal close paren."
-    (let gb = (buf:buffer-gap buffer))
-    (let p = (cursor:cursor-position cs))
-    (cond
-      ((%literal-delimiter-context? gb p)
-       (record-insert! buffer p ")" p)
-       (cell:write! (cursor:.pos cs) (+ p 1))
-       (values))
-      (True
-       (match (find-enclosing-open gb p)
-         ((Some open-pos)
-          (match (find-matching-close gb open-pos)
-            ((Some close-pos)
-             (cell:write! (cursor:.pos cs) (+ close-pos 1))
-             (values))
-            ((None) (values))))
-         ((None) (values))))))
+    (undo:with-undo-group! (buf:buffer-undo buffer)
+      (fn () (cursor:cursor-position cs))
+      (fn ()
+        (let gb = (buf:buffer-gap buffer))
+        (let p = (cursor:cursor-position cs))
+        (cond
+          ((%literal-delimiter-context? gb p)
+           (record-insert! buffer p ")" p)
+           (cell:write! (cursor:.pos cs) (+ p 1))
+           (values))
+          (True
+           (match (find-enclosing-open gb p)
+             ((Some open-pos)
+              (match (find-matching-close gb open-pos)
+                ((Some close-pos)
+                 (cond
+                   ((and (< p close-pos)
+                         (%whitespace-only-between? gb p close-pos))
+                    (record-delete! buffer p close-pos p)
+                    (cell:write! (cursor:.pos cs) (+ p 1))
+                    (values))
+                   (True
+                    (cell:write! (cursor:.pos cs) (+ close-pos 1))
+                    (values))))
+                ((None) (values))))
+             ((None) (values))))))))
 
   (declare paredit-open-bracket! (buf:Buffer * cursor:CursorState -> Void))
   (define (paredit-open-bracket! buffer cs)

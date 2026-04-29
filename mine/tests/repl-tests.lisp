@@ -40,6 +40,30 @@
             "Expected structural close paren in a string to be consumed")
     (%check-repl-input rp "(print \"abc)\")" 12)))
 
+(defun check-repl-structural-close-paren-collapses-empty-form ()
+  (let ((rp (repl:repl-pane-new)))
+    (repl:repl-pane-paste-to-input! rp (format nil "(~%~%)"))
+    (dotimes (i 3)
+      (declare (ignorable i))
+      (repl:repl-pane-handle-key! rp input:KeyLeft input:ModNone))
+    (%check-repl-input rp (format nil "(~%~%)") 1)
+    (%check (eq wt:Consumed
+                (repl:repl-pane-handle-structural-key!
+                 rp (input:KeyChar #\)) input:ModShift))
+            "Expected structural close paren in whitespace-only form to be consumed")
+    (%check-repl-input rp "()" 2))
+  (let ((rp (repl:repl-pane-new)))
+    (repl:repl-pane-paste-to-input! rp (format nil "(~%~%a)"))
+    (dotimes (i 4)
+      (declare (ignorable i))
+      (repl:repl-pane-handle-key! rp input:KeyLeft input:ModNone))
+    (%check-repl-input rp (format nil "(~%~%a)") 1)
+    (%check (eq wt:Consumed
+                (repl:repl-pane-handle-structural-key!
+                 rp (input:KeyChar #\)) input:ModShift))
+            "Expected structural close paren before non-whitespace body to be consumed")
+    (%check-repl-input rp (format nil "(~%~%a)") 5)))
+
 (defun check-repl-structural-delimiters-in-string-insert-literals ()
   (flet ((check-one (key modifier expected-text)
            (let ((rp (repl:repl-pane-new)))

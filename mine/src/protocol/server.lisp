@@ -289,6 +289,10 @@ Returns :quit if the server should shut down, T otherwise."
        (destructuring-bind (id function-name package-name) (rest msg)
          (handle-arglist id function-name package-name stream)))
 
+      (:indent-rules
+       (destructuring-bind (id heads package-name) (rest msg)
+         (handle-indent-rules id heads package-name stream)))
+
       (:coalton-type-of
        (destructuring-bind (id symbol-name package-name) (rest msg)
          (handle-coalton-type-of id symbol-name package-name stream)))
@@ -323,6 +327,168 @@ Returns the symbol or NIL."
               (when sym
                 (return-from %find-symbol-flexibly sym)))))))
     nil))
+
+(defun %find-indent-package (package-name)
+  "Find PACKAGE-NAME for indentation resolution.
+Try the exact runtime package name first, then the normal uppercase spelling.
+Never fall back to *PACKAGE*; an unknown package means unknown indentation."
+  (and (stringp package-name)
+       (or (find-package package-name)
+           (find-package (string-upcase package-name)))))
+
+(defun %read-symbol-token-in-package (token package-name)
+  "Read TOKEN as a symbol in PACKAGE-NAME.
+The CL reader is the authority here: it handles imports, shadows, package
+prefixes, and SBCL package-local nicknames relative to *PACKAGE*."
+  (handler-case
+      (let ((pkg (%find-indent-package package-name)))
+        (when pkg
+          (let ((*package* pkg)
+                (*read-eval* nil))
+            (multiple-value-bind (object position)
+                (read-from-string token nil nil)
+              (and (symbolp object)
+                   (= position (length token))
+                   object)))))
+    (error () nil)))
+
+(defun %symbol-named-p (sym package-name symbol-name)
+  (let ((pkg (find-package package-name)))
+    (and pkg
+         (multiple-value-bind (found status)
+             (find-symbol symbol-name pkg)
+           (and status (eq sym found))))))
+
+(defun %symbol-name-member-p (sym package-name symbol-names)
+  (let ((target-package (find-package package-name))
+        (symbol-package (symbol-package sym)))
+    (and target-package
+         symbol-package
+         (eq symbol-package target-package)
+         (member (symbol-name sym) symbol-names :test #'string=))))
+
+(defun %known-indent-rule-for-symbol (sym)
+  "Return (BODY-START LAMBDA-INDEX IF-P LOCAL-BINDINGS-P DEFMETHOD-P)
+for symbols with built-in indentation semantics, or NIL."
+  (flet ((rule (body-start lambda-index
+                &key if local-bindings defmethod)
+           (list body-start lambda-index
+                 (and if t) (and local-bindings t) (and defmethod t))))
+    (cond
+      ((%symbol-named-p sym "COMMON-LISP" "IF")
+       (rule nil nil :if t))
+      ((%symbol-name-member-p sym "COMMON-LISP"
+                              '("PROGN" "LOCALLY" "TAGBODY" "LOOP" "COND"))
+       (rule 1 nil))
+      ((%symbol-name-member-p sym "COMMON-LISP"
+                              '("LAMBDA"))
+       (rule 2 1))
+      ((%symbol-name-member-p sym "COMMON-LISP"
+                              '("LET" "LET*" "WHEN" "UNLESS"
+                                "EVAL-WHEN" "WITH-OPEN-FILE" "HANDLER-BIND"
+                                "RESTART-BIND" "SYMBOL-MACROLET" "BLOCK"
+                                "CATCH" "UNWIND-PROTECT" "HANDLER-CASE"
+                                "RESTART-CASE" "DOLIST" "DOTIMES"
+                                "DEFSTRUCT" "DEFVAR" "DEFPARAMETER"
+                                "DEFCONSTANT"))
+       (rule 2 nil))
+      ((%symbol-name-member-p sym "COMMON-LISP"
+                              '("FLET" "LABELS" "MACROLET"))
+       (rule 2 nil :local-bindings t))
+      ((%symbol-name-member-p sym "COMMON-LISP"
+                              '("DEFUN" "DEFMACRO" "DEFINE-COMPILER-MACRO"
+                                "DEFTYPE"))
+       (rule 3 2))
+      ((%symbol-name-member-p sym "COMMON-LISP"
+                              '("DESTRUCTURING-BIND" "MULTIPLE-VALUE-BIND"))
+       (rule 3 1))
+      ((%symbol-named-p sym "COMMON-LISP" "DEFMETHOD")
+       (rule 3 nil :defmethod t))
+      ((%symbol-name-member-p sym "COMMON-LISP"
+                              '("DEFGENERIC" "WITH-SLOTS" "WITH-ACCESSORS"
+                                "DEFINE-CONDITION" "DEFCLASS"))
+       (rule 3 nil))
+      ((%symbol-name-member-p sym "COALTON"
+                              '("COALTON-TOPLEVEL" "DEFINE" "DEFINE-TYPE"
+                                "DEFINE-STRUCT" "DEFINE-CLASS"
+                                "DEFINE-INSTANCE" "REPR" "MATCH"))
+       (rule 1 nil))
+      ((%symbol-named-p sym "COALTON" "FN")
+       (rule 2 1))
+      (t nil))))
+
+(defun %lambda-list-body-start (lambda-list)
+  "Derive a conservative body start from a macro lambda list with &BODY.
+Returns the form element index where body indentation begins, or NIL."
+  (let ((arg-count 0)
+        (skip-next nil))
+    (dolist (item lambda-list)
+      (let ((name (and (symbolp item) (symbol-name item))))
+        (cond
+          ((and name (string= name "&BODY"))
+           (return-from %lambda-list-body-start (1+ arg-count)))
+          (skip-next
+           (setf skip-next nil))
+          ((and name (member name '("&WHOLE" "&ENVIRONMENT") :test #'string=))
+           (setf skip-next t))
+          ((and name (>= (length name) 1) (char= (char name 0) #\&))
+           nil)
+          (t
+           (incf arg-count)))))
+    nil))
+
+(defun %image-indent-rule-for-symbol (sym)
+  "Return indentation rule metadata from the live image for SYM.
+Known CL/Coalton symbol identities are exact. For other macros, derive body
+indentation only when the runtime can expose a macro lambda list containing
+&BODY."
+  (or (%known-indent-rule-for-symbol sym)
+      (let ((property (get sym 'common-lisp-indent-function)))
+        (when (and (integerp property) (>= property 0))
+          (list (1+ property) nil nil nil nil)))
+      (when (macro-function sym)
+        (let* ((lambda-list
+                 (ignore-errors
+                   (sb-introspect:function-lambda-list (macro-function sym))))
+               (body-start (and (listp lambda-list)
+                                (%lambda-list-body-start lambda-list))))
+          (when body-start
+            (list body-start nil nil nil nil))))))
+
+(defun %indent-rule-spec-for-head (head package-name)
+  "Return a protocol-friendly indentation rule spec for HEAD."
+  (let* ((sym (%read-symbol-token-in-package head package-name))
+         (rule (and sym (%image-indent-rule-for-symbol sym))))
+    (if rule
+        (destructuring-bind (body-start lambda-index if-p local-bindings-p defmethod-p)
+            rule
+          (list head body-start lambda-index
+                (and if-p t)
+                (and local-bindings-p t)
+                (and defmethod-p t)))
+        (list head nil nil nil nil nil))))
+
+(defun %indent-rule-specs-for-heads (heads package-name)
+  "Return indentation rule specs for HEADS resolved in PACKAGE-NAME."
+  (let ((seen (make-hash-table :test 'equal))
+        (result nil))
+    (dolist (head heads (nreverse result))
+      (when (and (stringp head) (not (gethash head seen)))
+        (setf (gethash head seen) t)
+        (push (%indent-rule-spec-for-head head package-name) result)))))
+
+(defun handle-indent-rules (id heads package-name stream)
+  "Handle an :indent-rules request."
+  (handler-case
+      (write-message stream
+                     `(:return ,id
+                       (:ok ,(%indent-rule-specs-for-heads
+                              (if (listp heads) heads nil)
+                              package-name))))
+    (error (c)
+      (write-message stream
+                     `(:return ,id
+                       (:error ,(format nil "~A" c)))))))
 
 (defun split-string-by-newline (string)
   "Split STRING into a list of substrings at newline boundaries."
