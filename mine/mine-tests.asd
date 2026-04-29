@@ -10,4 +10,5 @@
   :serial t
   :components ((:file "package")
                (:file "diagnostics-tests")
+               (:file "indent-tests")
                (:file "repl-tests")))

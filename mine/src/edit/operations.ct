@@ -6,7 +6,6 @@
    (#:cursor #:mine/edit/cursor)
    (#:undo #:mine/edit/undo)
    (#:cell #:coalton/cell)
-   (#:indent #:mine/syntax/indent)
    (#:str #:coalton/string))
   (:export
    #:insert-char!
@@ -120,34 +119,13 @@ Does nothing if the cursor is at the end of the buffer."
 
   ;;; newline!
 
-  (declare %make-spaces (UFix -> String))
-  (define (%make-spaces n)
-    "Create a string of N spaces."
-    (lisp (-> String) (n)
-      (cl:make-string n :initial-element #\Space)))
-
-  (declare %indent-newline! (buf:Buffer * undo:UndoTree * cursor:CursorState * UFix -> Void))
-  (define (%indent-newline! buffer tree cs mode)
-    "Indent the current line according to MODE."
-    (let gb = (buf:buffer-gap buffer))
-    (match (cursor:cursor-line-col cs gb)
-      ((Tuple new-line _col)
-       (let indent-level = (indent:compute-indent gb mode new-line))
-       (when (> indent-level 0)
-         (insert-string! buffer tree cs (%make-spaces indent-level))))))
-
   (declare newline! (buf:Buffer * undo:UndoTree * cursor:CursorState
                       -> Void))
   (define (newline! buffer tree cs)
-    "Insert a newline at the cursor position.
-Auto-indentation is only applied in Lisp-like modes."
+    "Insert a newline at the cursor position."
     (undo:with-undo-group! tree
       (fn () (cursor:cursor-position cs))
       (fn ()
-        (insert-char! buffer tree cs #\Newline)
-        (match (buf:buffer-mode buffer)
-          ((buf:ModeCoalton) (%indent-newline! buffer tree cs 0))
-          ((buf:ModeLisp) (%indent-newline! buffer tree cs 1))
-          ((buf:ModePlainText) (values))))))
+        (insert-char! buffer tree cs #\Newline))))
 
 )
