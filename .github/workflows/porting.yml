@@ -54,8 +54,8 @@ jobs:
         exclude:
           # Since we don't have a way of switching safety on clasp or ecl, we can
           # just ignore high safety tests.
-          # - LISP_IMPL: "clasp"
-          #   SAFETY: "3"
+          - LISP_IMPL: "clasp"
+            SAFETY: "3"
           - LISP_IMPL: "ecl"
             SAFETY: "3"
 
