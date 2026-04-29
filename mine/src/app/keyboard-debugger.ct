@@ -1,0 +1,327 @@
+;;;; keyboard-debugger.ct -- A simple key-tester pane.
+;;;;
+;;;; Activated from Site > Keyboard Debugger.  Pauses the regular input
+;;;; runtime and reads stdin bytes directly, displaying both the raw
+;;;; hex bytes received and the InputEvent mine parses out of them.
+;;;; Press F10 to exit.
+
+(cl:defpackage #:mine/app/keyboard-debugger
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:term #:mine/term/terminal)
+   (#:screen #:mine/term/screen)
+   (#:color #:mine/term/color)
+   (#:input #:mine/term/input)
+   (#:wt #:mine/widget/types)
+   (#:render #:mine/widget/render)
+   (#:str #:coalton/string)
+   (#:list #:coalton/list)
+   (#:cell #:coalton/cell)
+   (#:clip #:mine/app/clipboard))
+  (:export
+   #:show-keyboard-debugger!))
+
+(in-package #:mine/app/keyboard-debugger)
+
+(coalton-toplevel
+
+  ;;; Recent-input history entry: a single read from stdin produces
+  ;;; one byte-vector and zero-or-more parsed events.
+
+  (define-struct DebugEntry
+    (de-bytes  (Vector UFix))
+    (de-events (List input:InputEvent)))
+
+  ;;; Formatting helpers
+
+  (declare %vec-to-hex ((Vector UFix) -> String))
+  (define (%vec-to-hex v)
+    (lisp (-> String) (v)
+      (cl:with-output-to-string (s)
+        (cl:loop :for i :below (cl:length v)
+                 :for b = (cl:aref v i)
+                 :do (cl:format s (cl:if (cl:zerop i) "~2,'0X" " ~2,'0X") b)))))
+
+  (declare %char-display (Char -> String))
+  (define (%char-display c)
+    (lisp (-> String) (c)
+      (cl:cond
+        ((cl:char= c #\Space)   "' '")
+        ((cl:graphic-char-p c)  (cl:format cl:nil "'~A'" c))
+        (cl:t                   (cl:format cl:nil "0x~2,'0X" (cl:char-code c))))))
+
+  (declare %key-name (input:Key -> String))
+  (define (%key-name k)
+    (match k
+      ((input:KeyChar c)      (str:concat "Char " (%char-display c)))
+      ;; KeyCtrl already implies Ctrl-modified; the IEvKey's modifier is
+      ;; ModCtrl in this case, and %event-desc prefixes that.  Just show
+      ;; the character so we don't double up "Ctrl+Ctrl+".
+      ((input:KeyCtrl c)      (str:concat "Char " (%char-display c)))
+      ((input:KeyF n)         (lisp (-> String) (n)
+                                (cl:format cl:nil "F~D" n)))
+      ((input:KeyShiftedF n)   (lisp (-> String) (n)
+                                (cl:format cl:nil "Shift+F~D" n)))
+      ((input:KeyEnter)       "Enter")
+      ((input:KeyEscape)      "Escape")
+      ((input:KeyTab)         "Tab")
+      ((input:KeyBackspace)   "Backspace")
+      ((input:KeyDelete)      "Delete")
+      ((input:KeyInsert)      "Insert")
+      ((input:KeyUp)          "Up")
+      ((input:KeyDown)        "Down")
+      ((input:KeyLeft)        "Left")
+      ((input:KeyRight)       "Right")
+      ((input:KeyHome)        "Home")
+      ((input:KeyEnd)         "End")
+      ((input:KeyPageUp)      "PageUp")
+      ((input:KeyPageDown)    "PageDown")
+      ((input:KeyUnknown b)   (lisp (-> String) (b)
+                                (cl:format cl:nil "Unknown(~D)" b)))))
+
+  (declare %mod-name (input:Modifier -> String))
+  (define (%mod-name m)
+    (match m
+      ((input:ModNone)     "")
+      ((input:ModShift)    "Shift")
+      ((input:ModAlt)      "Alt")
+      ((input:ModCtrl)     "Ctrl")
+      ((input:ModAltShift) "Alt+Shift")))
+
+  (declare %mouse-action-name (input:MouseAction -> String))
+  (define (%mouse-action-name a)
+    (match a
+      ((input:MousePress)   "Press")
+      ((input:MouseDrag)    "Drag")
+      ((input:MouseRelease) "Release")))
+
+  (declare %mouse-button-name (input:MouseButton -> String))
+  (define (%mouse-button-name b)
+    (match b
+      ((input:MouseLeft)       "Left")
+      ((input:MouseMiddle)     "Middle")
+      ((input:MouseRight)      "Right")
+      ((input:MouseScrollUp)   "ScrollUp")
+      ((input:MouseScrollDown) "ScrollDown")))
+
+  (declare %ufix-str (UFix -> String))
+  (define (%ufix-str n)
+    (lisp (-> String) (n) (cl:format cl:nil "~D" n)))
+
+  (declare %event-desc (input:InputEvent -> String))
+  (define (%event-desc ev)
+    (match ev
+      ((input:IEvKey k m)
+       (let mn = (%mod-name m))
+       (let kn = (%key-name k))
+       (if (== (str:length mn) 0)
+           kn
+           (str:concat mn (str:concat "+" kn))))
+      ((input:IEvMouse a b col row)
+       (str:concat "Mouse "
+         (str:concat (%mouse-action-name a)
+           (str:concat " "
+             (str:concat (%mouse-button-name b)
+               (str:concat " @("
+                 (str:concat (%ufix-str col)
+                   (str:concat ","
+                     (str:concat (%ufix-str row) ")")))))))))
+      ((input:IEvPaste s)
+       (str:concat "Paste " (lisp (-> String) (s)
+                              (cl:let* ((trim (cl:if (cl:> (cl:length s) 32)
+                                                     (cl:concatenate 'cl:string
+                                                                     (cl:subseq s 0 32) "...")
+                                                     s)))
+                                (cl:format cl:nil "~D bytes ~S" (cl:length s) trim)))))
+      ((input:IEvResize cols rows)
+       (str:concat "Resize "
+         (str:concat (%ufix-str cols)
+           (str:concat "x" (%ufix-str rows)))))
+      ((input:IEvNone) "<incomplete>")))
+
+  (declare %events-desc ((List input:InputEvent) -> String))
+  (define (%events-desc evs)
+    (match evs
+      ((Nil) "(buffered, no event yet)")
+      ((Cons ev rest)
+       (match rest
+         ((Nil) (%event-desc ev))
+         (_ (str:concat (%event-desc ev) (str:concat ", " (%events-desc rest))))))))
+
+  ;;; Rendering
+
+  (declare %render (term:Terminal * (List DebugEntry) -> Void))
+  (define (%render term entries)
+    (let scr  = (term:.terminal-screen term))
+    (let cols = (term:terminal-cols term))
+    (let rows = (term:terminal-rows term))
+    (let bg       = (color:Style color:text-fg color:panel-bg color:AttrNone))
+    (let header-s = (color:Style color:accent-fg color:panel-bg color:AttrBold))
+    (let dim-s    = (color:Style color:text-dimmer-fg color:panel-bg color:AttrItalic))
+    (render:fill-rect scr (wt:Rect 0 0 cols rows) #\Space bg)
+    (screen:screen-set-string scr 0 1 "Keyboard Debugger" header-s)
+    (let hint = "F9 to copy transcript  |  F10 to exit")
+    (let hint-len = (str:length hint))
+    (let hint-col = (if (> cols (+ hint-len 1)) (- cols (+ hint-len 1)) 0))
+    (screen:screen-set-string scr 0 hint-col hint dim-s)
+    (screen:screen-set-string scr 1 1
+      "Press any key.  Each line shows the raw stdin bytes (hex) and"
+      bg)
+    (screen:screen-set-string scr 2 1
+      "the InputEvent mine parses out of them."
+      bg)
+    (screen:screen-set-string scr 4 1 "BYTES (hex)" header-s)
+    (screen:screen-set-string scr 4 40 "PARSED" header-s)
+    (let max-rows = (if (> rows 7) (- rows 7) 1))
+    (%render-entries scr entries 6 max-rows bg)
+    (screen:screen-hide-cursor scr)
+    (term:terminal-flush term))
+
+  (declare %render-entries
+           (screen:Screen * (List DebugEntry) * UFix * UFix * color:Style -> Void))
+  (define (%render-entries scr entries row max-rows style)
+    (cond
+      ((== max-rows 0) (values))
+      (True
+       (match entries
+         ((Nil) (values))
+         ((Cons entry rest)
+          (let bytes-str = (%vec-to-hex (.de-bytes entry)))
+          (let events-str = (%events-desc (.de-events entry)))
+          (screen:screen-set-string scr row 1 bytes-str style)
+          (screen:screen-set-string scr row 40 events-str style)
+          (%render-entries scr rest (+ row 1) (- max-rows 1) style))))))
+
+  ;;; Loop -- REMAINDER carries any unparsed leftover (e.g. a partial CSI
+  ;;; sequence) from the previous read.  We also poll terminal-get-size
+  ;;; every iteration so the debugger reacts to window resizes (the
+  ;;; background runtime that normally handles this is paused).
+
+  (declare %sync-size! (term:Terminal -> Boolean))
+  (define (%sync-size! term)
+    "Re-query the terminal size; if it changed, resize the Screen too.
+Returns True if size changed."
+    (let old-cols = (term:terminal-cols term))
+    (let old-rows = (term:terminal-rows term))
+    (term:terminal-update-size! term)
+    (let new-cols = (term:terminal-cols term))
+    (let new-rows = (term:terminal-rows term))
+    (cond
+      ((or (/= new-cols old-cols) (/= new-rows old-rows))
+       (screen:screen-resize (term:.terminal-screen term) new-cols new-rows)
+       True)
+      (True False)))
+
+  (declare %loop (term:Terminal * (Vector UFix) * (List DebugEntry) -> Boolean))
+  (define (%loop term remainder entries)
+    (let new-bytes = (term:terminal-poll-bytes! term 200))
+    (let n = (lisp (-> UFix) (new-bytes) (cl:length new-bytes)))
+    (let resized = (%sync-size! term))
+    (cond
+      ((and (== n 0) (not resized))
+       (%loop term remainder entries))
+      ((== n 0)
+       ;; Resize-only tick: redraw at new size.
+       (%render term entries)
+       (%loop term remainder entries))
+      (True
+       (let full-buf = (%concat-vecs remainder new-bytes))
+       (match (input:parse-input full-buf)
+         ((Tuple events new-remainder)
+          (let new-entries = (Cons (DebugEntry new-bytes events) entries))
+          (cond
+            ((%has-f10? events) False)
+            ((%has-f9? events)
+             (clip:clipboard-copy! (%transcript new-entries))
+             (%render term new-entries)
+             (%loop term new-remainder (%cap-entries new-entries 200)))
+            (True
+             (%render term new-entries)
+             (%loop term new-remainder (%cap-entries new-entries 200)))))))))
+
+  (declare %has-f10? ((List input:InputEvent) -> Boolean))
+  (define (%has-f10? evs)
+    (match evs
+      ((Nil) False)
+      ((Cons ev rest)
+       (match ev
+         ((input:IEvKey (input:KeyF 10) _) True)
+         (_ (%has-f10? rest))))))
+
+  (declare %has-f9? ((List input:InputEvent) -> Boolean))
+  (define (%has-f9? evs)
+    (match evs
+      ((Nil) False)
+      ((Cons ev rest)
+       (match ev
+         ((input:IEvKey (input:KeyF 9) _) True)
+         (_ (%has-f9? rest))))))
+
+  ;;; Transcript formatting (for clipboard copy)
+
+  (declare %pad-right (String * UFix -> String))
+  (define (%pad-right s n)
+    (lisp (-> String) (s n)
+      (cl:let ((len (cl:length s)))
+        (cl:if (cl:>= len n)
+               s
+               (cl:concatenate 'cl:string s
+                               (cl:make-string (cl:- n len) :initial-element #\Space))))))
+
+  (declare %newline String)
+  (define %newline (lisp (-> String) () (cl:string #\Newline)))
+
+  (declare %entry-line (DebugEntry -> String))
+  (define (%entry-line entry)
+    (str:concat (%pad-right (%vec-to-hex (.de-bytes entry)) 30)
+                (%events-desc (.de-events entry))))
+
+  (declare %join-lines ((List String) -> String))
+  (define (%join-lines lines)
+    (match lines
+      ((Nil) "")
+      ((Cons l rest) (str:concat l (str:concat %newline (%join-lines rest))))))
+
+  (declare %transcript ((List DebugEntry) -> String))
+  (define (%transcript entries)
+    "Plain-text transcript of the debugger history, oldest first."
+    (let header = (str:concat "BYTES" (%pad-right "" 25)))
+    (let header-line = (str:concat header "PARSED"))
+    (str:concat header-line
+                (str:concat %newline
+                            (%join-lines (map %entry-line (list:reverse entries))))))
+
+  (declare %cap-entries ((List DebugEntry) * UFix -> (List DebugEntry)))
+  (define (%cap-entries lst n)
+    "Drop entries beyond N to keep the history bounded."
+    (list:take n lst))
+
+  (declare %concat-vecs ((Vector UFix) * (Vector UFix) -> (Vector UFix)))
+  (define (%concat-vecs a b)
+    (lisp (-> (Vector UFix)) (a b)
+      (cl:let* ((alen (cl:length a))
+                (blen (cl:length b))
+                (total (cl:+ alen blen))
+                (result (cl:make-array total :fill-pointer total
+                                             :adjustable cl:t
+                                             :element-type cl:t)))
+        (cl:dotimes (i alen) (cl:setf (cl:aref result i) (cl:aref a i)))
+        (cl:dotimes (i blen)
+          (cl:setf (cl:aref result (cl:+ alen i)) (cl:aref b i)))
+        result)))
+
+  ;;; Entry point
+
+  (declare show-keyboard-debugger! (term:Terminal -> Boolean))
+  (define (show-keyboard-debugger! term)
+    "Take over the screen to show raw input bytes and parsed events.
+Returns False (the caller should NOT exit mine) -- the debugger only
+accepts F10 as exit, never propagating a quit signal."
+    (term:terminal-pause-input! term)
+    (%render term Nil)
+    (let empty-vec = (lisp (-> (Vector UFix)) ()
+                       (cl:make-array 0 :fill-pointer 0 :adjustable cl:t
+                                        :element-type cl:t)))
+    (let result = (%loop term empty-vec Nil))
+    (term:terminal-resume-input! term)
+    result))

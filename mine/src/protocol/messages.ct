@@ -6,6 +6,7 @@
    #:RequestId #:RequestId
    #:Request
    #:ReqEval #:ReqComplete #:ReqMacroexpand
+   #:ReqQuickResult
    #:ReqCompileString #:ReqCompileFile #:ReqBeamSystem
    #:ReqCoaltonTypeOf #:ReqFindDefinition #:ReqArglist
    #:ReqPing #:ReqQuit
@@ -39,6 +40,7 @@
   (define-type Request
     "A request from the TUI client to the runtime server."
     (ReqEval RequestId String String)
+    (ReqQuickResult RequestId String String)
     (ReqComplete RequestId String String UFix)
     (ReqMacroexpand RequestId String)
     (ReqCompileString RequestId String String String UFix UFix)
@@ -86,6 +88,11 @@
     (match req
       ((ReqEval (RequestId id) form pkg)
        (wire:SList (make-list (wire:SAtom ":EVAL")
+                              (wire:SInteger (into id))
+                              (wire:SString form)
+                              (wire:SString pkg))))
+      ((ReqQuickResult (RequestId id) form pkg)
+       (wire:SList (make-list (wire:SAtom ":QUICK-RESULT")
                               (wire:SInteger (into id))
                               (wire:SString form)
                               (wire:SString pkg))))

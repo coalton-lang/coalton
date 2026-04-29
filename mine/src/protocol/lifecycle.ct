@@ -10,6 +10,8 @@
    #:runtime-stop!
    #:runtime-interrupt!
    #:runtime-connection
+   #:runtime-background-connection
+   #:runtime-ensure-background-connection!
    #:runtime-ensure-connection!
    #:runtime-set-heap-size!
    #:runtime-process-alive?))
@@ -20,6 +22,7 @@
 
 (cl:defstruct %runtime-manager
   (connection (cl:the cl:t (cl:or)) :type cl:t)
+  (background-connection (cl:the cl:t (cl:or)) :type cl:t)
   (process    (cl:the cl:t (cl:or)) :type cl:t)
   (port       0      :type cl:fixnum)
   (running    (cl:the cl:t (cl:or))  :type cl:t)
@@ -28,10 +31,21 @@
 ;;; CL-side functions for subprocess management.
 ;;; These need cl:nil which the Coalton reader rejects inside coalton-toplevel.
 
+(cl:defun %runtime-open-connection (port)
+  "Open a protocol connection to the runtime server on PORT."
+  (cl:let ((stream (mine/bindings/socket:socket-connect port)))
+    (mine/protocol/client::make-%connection
+     :stream stream
+     :host "127.0.0.1"
+     :port port
+     :active cl:t)))
+
 (cl:defun %runtime-do-start (mgr)
   "Start a runtime subprocess and connect. Returns T on success, NIL on failure."
   (cl:handler-case
-      (cl:let* ((argv0 (cl:or (cl:first sb-ext:*posix-argv*) "mine"))
+      (cl:let* ((argv0 (cl:or (sb-ext:posix-getenv "MINE_LAUNCHER")
+                              (cl:first sb-ext:*posix-argv*)
+                              "mine"))
                 (abspath (cl:handler-case
                              (cl:namestring (cl:truename (cl:pathname argv0)))
                            (cl:error () argv0)))
@@ -55,13 +69,12 @@
             (cl:error "Failed to read port from runtime (got: ~S)" port-line))
           (cl:setf (%runtime-manager-port mgr) port)
           ;; Connect via TCP
-          (cl:let* ((stream (mine/bindings/socket:socket-connect port))
-                    (conn (mine/protocol/client::make-%connection
-                           :stream stream
-                           :host "127.0.0.1"
-                           :port port
-                           :active cl:t)))
+          (cl:let ((conn (%runtime-open-connection port)))
             (cl:setf (%runtime-manager-connection mgr) conn)
+            (cl:setf (%runtime-manager-background-connection mgr)
+                     (cl:handler-case
+                         (%runtime-open-connection port)
+                       (cl:error () cl:nil)))
             cl:t)))
     (cl:error (c)
       (cl:format cl:*error-output* "~&;; runtime-start! failed: ~A~%" c)
@@ -88,11 +101,16 @@
         (cl:error () cl:nil))
       (cl:handler-case (cl:close (mine/protocol/client::%connection-stream conn))
         (cl:error () cl:nil))))
+  (cl:let ((conn (%runtime-manager-background-connection mgr)))
+    (cl:when conn
+      (cl:handler-case (cl:close (mine/protocol/client::%connection-stream conn))
+        (cl:error () cl:nil))))
   (cl:let ((proc (%runtime-manager-process mgr)))
     (cl:when proc
       (cl:handler-case (mine/bindings/process:process-kill proc)
         (cl:error () cl:nil))))
   (cl:setf (%runtime-manager-connection mgr) cl:nil)
+  (cl:setf (%runtime-manager-background-connection mgr) cl:nil)
   (cl:setf (%runtime-manager-process mgr) cl:nil)
   (cl:setf (%runtime-manager-running mgr) cl:nil)
   (cl:values))
@@ -112,6 +130,35 @@
                    (mine/protocol/client::%connection-active conn))
            (Some conn)
            None)))
+
+(cl:defun %runtime-get-background-connection (mgr)
+  "Get the background connection if active, or None."
+  (cl:let ((conn (%runtime-manager-background-connection mgr)))
+    (cl:if (cl:and conn
+                   (mine/protocol/client::%connection-active conn))
+           (Some conn)
+           None)))
+
+(cl:defun %runtime-ensure-background-connection-raw (mgr)
+  "Return an active background connection object when the runtime process is already alive."
+  (cl:let ((conn (%runtime-manager-background-connection mgr)))
+    (cl:cond
+      ((cl:and conn (mine/protocol/client::%connection-active conn))
+       conn)
+      ((cl:and (cl:plusp (%runtime-manager-port mgr))
+               (cl:let ((proc (%runtime-manager-process mgr)))
+                 (cl:and proc (sb-ext:process-alive-p proc))))
+       (cl:handler-case
+           (cl:let ((new-conn (%runtime-open-connection (%runtime-manager-port mgr))))
+             (cl:setf (%runtime-manager-background-connection mgr) new-conn)
+             new-conn)
+         (cl:error () cl:nil)))
+      (cl:t cl:nil))))
+
+(cl:defun %runtime-ensure-background-connection (mgr)
+  "Return an active background connection Optional when the runtime process is already alive."
+  (cl:let ((conn (%runtime-ensure-background-connection-raw mgr)))
+    (cl:if conn (Some conn) None)))
 
 (coalton-toplevel
 
@@ -161,6 +208,18 @@
     "Get the current connection to the runtime, if any."
     (lisp (-> (Optional client:Connection)) (mgr)
       (%runtime-get-connection mgr)))
+
+  (declare runtime-background-connection (RuntimeManager -> Optional client:Connection))
+  (define (runtime-background-connection mgr)
+    "Get the current background connection to the runtime, if any."
+    (lisp (-> (Optional client:Connection)) (mgr)
+      (%runtime-get-background-connection mgr)))
+
+  (declare runtime-ensure-background-connection! (RuntimeManager -> Optional client:Connection))
+  (define (runtime-ensure-background-connection! mgr)
+    "Connect the background runtime pipe if the runtime process is already alive."
+    (lisp (-> (Optional client:Connection)) (mgr)
+      (%runtime-ensure-background-connection mgr)))
 
   ;;; Heap size
 

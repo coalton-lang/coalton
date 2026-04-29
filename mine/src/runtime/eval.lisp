@@ -30,6 +30,13 @@
   "Encode VALUES for transport to the TUI while preserving value boundaries."
   (prin1-to-string (list :values (%format-result-values values package))))
 
+(defun %quick-result-payload-string (values output package)
+  "Encode output and printed values for Quick Result."
+  (prin1-to-string
+   (list :quick-result
+         :output output
+         :values (%format-result-values values package))))
+
 (defun %coalton-readtable ()
   "Return the Coalton named-readtable."
   (named-readtables:ensure-readtable 'coalton:coalton))
@@ -131,6 +138,45 @@ Returns (values result-string output-string) on success."
                         (get-output-stream-string stderr-capture))))
       (values (%encode-result-values result-values pkg)
               all-output))))
+
+(defun quick-result (form-string package-name &optional coalton-p)
+  "Evaluate FORM-STRING and return compact display text or an error string.
+This is for non-modal editor Quick Result: it captures output and values, catches
+errors, and deliberately does not enter the interactive debugger."
+  (let ((pkg (find-or-make-package package-name))
+        (stdout-capture (make-string-output-stream))
+        (stderr-capture (make-string-output-stream)))
+    (handler-case
+        (let* ((form (let ((*package* pkg)
+                           (*read-eval* nil)
+                           (*readtable* (if coalton-p (%coalton-readtable) *readtable*)))
+                       (read-from-string form-string)))
+               (result-values
+                 (let ((*standard-output* stdout-capture)
+                       (*error-output* stderr-capture)
+                       (*trace-output* stderr-capture)
+                       (*package* pkg))
+                   (multiple-value-list (eval form)))))
+          (values
+           (%quick-result-payload-string
+            result-values
+            (concatenate 'string
+                         (get-output-stream-string stdout-capture)
+                         (get-output-stream-string stderr-capture))
+            pkg)
+           nil))
+      (reader-error (c)
+        (values nil (format nil "Read error: ~A" c)))
+      (end-of-file (c)
+        (declare (ignore c))
+        (values nil "Read error: unexpected end of input"))
+      (package-error (c)
+        (values nil (format nil "Package error: ~A" c)))
+      (sb-sys:interactive-interrupt (c)
+        (declare (ignore c))
+        (values nil "Interrupted."))
+      (error (c)
+        (values nil (format nil "~A" c))))))
 
 (defun compile-string-source-prefix (package-name)
   "Return the exact source prefix written ahead of debug-compile-string input."

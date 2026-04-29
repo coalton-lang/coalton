@@ -73,7 +73,7 @@ The biggest difference between `mine` and conventional IDEs is an idea we call "
 3. Beam the code you want:
     - Your project with F5:Project > Beam Project, or `(asdf:load-system "your-project")`
     - A whole file with F3:Editor > Beam File, or Alt+k in the editor.
-    - An individual toplevel form under the cursor with F3:Editor > Beam Form, or Alt+c.
+    - An individual toplevel form under the cursor with F3:Editor > Beam Toplevel Form, or Alt+c.
 4. Go to the REPL and try it out. Edit code. Beam. Iterate.
 5. Define a `main` function, and build an executable with F5:Project > Build Executable.
 

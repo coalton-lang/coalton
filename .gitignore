@@ -21,3 +21,5 @@ mine/*.log
 *.app
 *.dmg
 *.exe
+mine.AppImage
+mine.core
