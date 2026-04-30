@@ -378,21 +378,10 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
                         (< (second entry) current-pos)))
            (setf best entry)))))))
 
-(defun normalize-diagnostic-scope (scope)
-  "Return a scope hash table keyed by normalized document keys."
-  (when scope
-    (let ((normalized (make-hash-table :test 'equal)))
-      (maphash
-       (lambda (key value)
-         (let ((document-key (normalize-document-key key)))
-           (when document-key
-             (setf (gethash document-key normalized) value))))
-       scope)
-      normalized)))
-
 (defun jump-adjacent-diagnostic (st direction &optional scope)
   "Jump to the next (>0) or previous (<0) stored diagnostic.
-When SCOPE is a hash-table of document keys, only consider diagnostics in those files."
+When SCOPE is a Coalton HashMap of document keys, only consider diagnostics in
+those files."
   (let* ((bm (call-mine-function "GET-BUFMGR" st))
          (cs (call-mine-function "GET-CURSOR-STATE" st))
          (opt-buf (mine/buffer/manager::bufmgr-current bm))
@@ -400,10 +389,15 @@ When SCOPE is a hash-table of document keys, only consider diagnostics in those 
          (current-file (and buf (mine/buffer/buffer:buffer-document-key buf)))
          (current-pos (mine/edit/cursor:cursor-position cs))
          (all-locs (all-diagnostic-locations))
-         (normalized-scope (normalize-diagnostic-scope scope))
-         (locations (if normalized-scope
-                        (remove-if-not (lambda (loc) (gethash (first loc) normalized-scope))
-                                       all-locs)
+         (locations (if scope
+                        (remove-if-not
+                         (lambda (loc)
+                           (let ((document-key (normalize-document-key (first loc))))
+                             (and document-key
+                                  (mine/app/diagnostic-scope:contains-normalized?
+                                   scope
+                                   document-key))))
+                         all-locs)
                         all-locs))
          (cursor-file current-file)
          (cursor-pos current-pos)

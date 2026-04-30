@@ -166,6 +166,7 @@
                  (:ct-file "build")
                  (:ct-file "symbols")
                  (:ct-file "keyboard-debugger")
+                 (:ct-file "diagnostic-scope")
                  (:file "diagnostics")
                  (:ct-file "mine")
                  (:file "executable")))))
