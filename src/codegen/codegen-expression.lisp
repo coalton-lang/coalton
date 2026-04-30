@@ -198,11 +198,11 @@
                                          (tc:lookup-function env value :no-error t))))
            (if (and (not (tc:function-type-p (node-type node)))
                     (zerop (tc:function-env-entry-arity entry)))
-               `(rt:exact-call ,value)
+               `(funcall ,value)
                value)
            value)))))
 
-  ;; Keyword dispatch for indirect calls (through function-entry).
+  ;; Keyword dispatch for indirect calls through first-class function values.
   ;; The parallel logic for direct calls is in the node-direct-application
   ;; method below; both share keyword-tail-forms/keyword-call-args-list-form
   ;; for the dynamic-keyword path.
@@ -213,17 +213,17 @@
           (keyword-rands (node-application-keyword-rands node)))
       (cond
         ((and (null rands) (null keyword-rands))
-         `(rt:exact-call ,rator))
+         `(funcall ,rator))
         ((null keyword-rands)
-         `(rt:exact-call
+         `(funcall
            ,rator
            ,@(mapcar (lambda (subnode)
                        (codegen-expression subnode env))
                      rands)))
         ((every (lambda (arg)
                   (null (node-application-keyword-arg-supplied-p arg)))
-                keyword-rands)
-         `(rt:call-coalton-function
+               keyword-rands)
+         `(funcall
            ,rator
            ,@(mapcar (lambda (subnode)
                        (codegen-expression subnode env))
@@ -232,8 +232,7 @@
                    :append (list (node-application-keyword-arg-keyword arg)
                                  (codegen-expression (node-application-keyword-arg-value arg) env)))))
         (t
-         `(apply #'rt:call-coalton-function
-                 ,rator
+         `(apply ,rator
                  ,(keyword-call-args-list-form rands keyword-rands env))))))
 
   ;; Keyword dispatch for direct calls (known callee).
@@ -261,7 +260,7 @@
       (if (and (tc:function-type-p residual-type)
                (explicit-nullary-callable-p residual-type)
                (not (tc:function-type-p (node-type node))))
-          `(rt:exact-call ,call)
+          `(funcall ,call)
           call)))
 
   (:method ((node node-values) env)
@@ -286,18 +285,12 @@
 
   (:method ((expr node-abstraction) env)
     (declare (type tc:environment env))
-    (let* ((var-names (node-abstraction-vars expr))
-
-           (arity (length var-names)))
-
-      (rt:construct-function-entry
-       `(lambda ,(abstraction-lambda-list expr)
-          ,(function-declarations expr env)
-          ,(annotate-function-body
-            expr
-            (codegen-expression (node-abstraction-subexpr expr) env)
-            env))
-       arity)))
+    `(lambda ,(abstraction-lambda-list expr)
+       ,(function-declarations expr env)
+       ,(annotate-function-body
+         expr
+         (codegen-expression (node-abstraction-subexpr expr) env)
+         env)))
 
   (:method ((expr node-let) env)
     (declare (type tc:environment env))
@@ -617,18 +610,17 @@
       (cond
         ((and (node-abstraction-p bound-expr)
               (find name (node-variables body :variable-namespace-only t)))
-         (let ((arity (length (node-abstraction-vars bound-expr))))
-           `(let ((,name))
-              (declare (ignorable ,name))
-              (flet ((,name
-                         ,(abstraction-lambda-list bound-expr)
-                       ,(function-declarations bound-expr env)
-                       ,(annotate-function-body
-                         bound-expr
-                         (codegen-expression (node-abstraction-subexpr bound-expr) env)
-                         env)))
-                (setf ,name ,(rt:construct-function-entry `#',name arity))
-                ,(codegen-expression body env)))))
+         `(let ((,name))
+            (declare (ignorable ,name))
+            (flet ((,name
+                       ,(abstraction-lambda-list bound-expr)
+                     ,(function-declarations bound-expr env)
+                     ,(annotate-function-body
+                       bound-expr
+                       (codegen-expression (node-abstraction-subexpr bound-expr) env)
+                       env)))
+              (setf ,name #',name)
+              ,(codegen-expression body env))))
         ((node-abstraction-p bound-expr)
          `(flet ((,name
                      ,(abstraction-lambda-list bound-expr)
@@ -722,12 +714,12 @@ forms follow the same binding semantics."
               (inner
                 (if binding-names-vars
                     (append
-                     (loop :for (name . node) :in scc-bindings
-                           :for arity := (length (node-abstraction-vars node))
+                     (loop :for binding :in scc-bindings
+                           :for name := (car binding)
                            :if (find name binding-names-vars :test #'equalp)
                              :collect `(setf
                                         ,name
-                                        ,(rt:construct-function-entry `#',name arity)))
+                                        #',name))
                      (list inner))
                     (list inner)))
 

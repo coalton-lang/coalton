@@ -103,22 +103,47 @@ preserve a nested function-valued result."
   (if (or (null hidden-argument-nodes)
           (not (tc:function-type-p visible-type)))
       inner-node
-      (let* ((function-var (gensym "FUNCTION-ENTRY-"))
+      (let* ((function-var (gensym "FUNCTION-"))
              (hidden-bindings
                (loop :for hidden-node :in hidden-argument-nodes
                      :for i :from 0
                      :collect (cons (gensym (format nil "HIDDEN-~D-" i))
                                     hidden-node)))
-             (bound-entry
-               (make-node-lisp
-                :type visible-type
-                :vars (cons (cons function-var function-var)
-                            (loop :for binding :in hidden-bindings
-                                  :collect (cons (car binding) (car binding))))
-                :form `((coalton-impl/runtime:bind-function-entry-hidden-arguments
-                         ,function-var
-                         ,@(mapcar #'car hidden-bindings))))))
-        (loop :with inner := bound-entry
+             (visible-bindings
+               (loop :for input-type :in (tc:function-type-arguments visible-type)
+                     :for i :from 0
+                     :collect (cons (gensym (format nil "ARG-~D-" i))
+                                    input-type)))
+             (keyword-params nil)
+             (keyword-rands nil)
+             (bound-function
+               (progn
+                 (when (typep visible-type 'tc:function-ty)
+                   (multiple-value-setq (keyword-params keyword-rands)
+                     (make-keyword-forwarders visible-type)))
+                 (make-node-abstraction
+                  :type visible-type
+                  :vars (mapcar #'car visible-bindings)
+                  :keyword-params keyword-params
+                  :subexpr
+                  (make-node-application
+                   :type (tc:function-return-type visible-type)
+                   :properties '()
+                   :rator (make-node-variable
+                           :type (node-type inner-node)
+                           :value function-var)
+                   :rands
+                   (append
+                    (loop :for (var . hidden-node) :in hidden-bindings
+                          :collect (make-node-variable
+                                    :type (node-type hidden-node)
+                                    :value var))
+                    (loop :for (var . input-type) :in visible-bindings
+                          :collect (make-node-variable
+                                    :type input-type
+                                    :value var)))
+                   :keyword-rands keyword-rands)))))
+        (loop :with inner := bound-function
               :for (var . hidden-node) :in (reverse hidden-bindings)
               :do (setf inner
                         (make-node-bind

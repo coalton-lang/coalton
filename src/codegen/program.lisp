@@ -32,7 +32,6 @@
    (#:source #:coalton-impl/source)
    (#:settings #:coalton-impl/settings)
    (#:global-lexical #:coalton-impl/global-lexical)
-   (#:rt #:coalton-impl/runtime)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:*codegen-hook*
@@ -298,8 +297,7 @@ Example:
                       (list
                        `(setf
                          ,name
-                         ,(rt:construct-function-entry
-                           `#',name (length (node-abstraction-vars node)))))))
+                         #',name))))
 
      ;; Compile variables
      (loop :for (name . node) :in bindings
