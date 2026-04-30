@@ -15,6 +15,8 @@
 #+(and (not :coalton-without-doc) (or sbcl ccl)) (pushnew :coalton-with-doc *features*)
 ;; abcl offers no TCE
 #-abcl (pushnew :coalton-env-has-tce *features*)
+;; ecl seems to have some issues with TCE too
+#+(and coalton-env-has-tce (not ecl)) (pushnew :coalton-env-really-has-tce *features*)
 
 (asdf:defsystem "coalton"
   :description "An efficient, statically typed functional programming language that supercharges Common Lisp. "
