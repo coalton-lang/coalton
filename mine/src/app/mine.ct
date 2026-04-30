@@ -50,8 +50,7 @@
    (#:symbols #:mine/app/symbols)
    (#:cellw #:mine/text/width)
    (#:spinner #:mine/widget/spinner)
-   (#:ht #:coalton/hashtable)
-   (#:iter #:coalton/iterator))
+   (#:hm #:coalton/hashmap))
   (:export
    #:mine-main
    #:ProtoMsg #:ProtoReturn #:ProtoOutput #:ProtoDebug #:ProtoIORequest #:ProtoConnectionLost
@@ -3110,8 +3109,32 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       ((tree:TreeDir _ children _)
        (concatmap %tree-file-paths children))))
 
-  (declare %diagnostic-scope (MineState -> ht:HashTable String Boolean))
-  (define (%diagnostic-scope st)
+  (declare normalize-document-key (String -> Optional String))
+  (define (normalize-document-key key)
+    "Normalize a document key or path for diagnostics lookup."
+    (lisp (-> (Optional String)) (key)
+      (cl:let ((normalized (mine/app/diagnostics::normalize-document-key key)))
+        (cl:if normalized (Some normalized) None))))
+
+  (declare diagnostic-scope-insert
+           (hm:HashMap String Boolean * String -> hm:HashMap String Boolean))
+  (define (diagnostic-scope-insert scope key)
+    "Insert KEY into SCOPE if it can be normalized to a diagnostic document key."
+    (match (normalize-document-key key)
+      ((Some document-key) (hm:insert scope document-key True))
+      ((None) scope)))
+
+  (declare diagnostic-scope-add-paths
+           ((List String) * hm:HashMap String Boolean -> hm:HashMap String Boolean))
+  (define (diagnostic-scope-add-paths paths scope)
+    "Insert each path from PATHS into SCOPE."
+    (match paths
+      ((Nil) scope)
+      ((Cons path rest)
+       (diagnostic-scope-add-paths rest (diagnostic-scope-insert scope path)))))
+
+  (declare diagnostic-scope (MineState -> hm:HashMap String Boolean))
+  (define (diagnostic-scope st)
     "Build a set of document keys in scope (project tree + open files)."
     (let tree-paths =
       (match (cell:read (.root (.ms-tree st)))
@@ -3124,18 +3147,15 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       (match (mgr:bufmgr-current (.ms-bufmgr st))
         ((Some buf) (Some (buf:buffer-document-key buf)))
         ((None) None)))
-    (let scope = (ht:new))
-    (iter:for-each! (fn (path) (ht:set! scope path True))
-                    (iter:into-iter (append tree-paths open-paths)))
+    (let scope = (diagnostic-scope-add-paths (append tree-paths open-paths) hm:empty))
     (match current-document-key
-      ((Some key) (ht:set! scope key True))
-      ((None) (values)))
-    scope)
+      ((Some key) (diagnostic-scope-insert scope key))
+      ((None) scope)))
 
   (declare jump-next-diagnostic! (MineState -> Void))
   (define (jump-next-diagnostic! st)
     "Jump to the next diagnostic in project/open files."
-    (let scope = (%diagnostic-scope st))
+    (let scope = (diagnostic-scope st))
     (lisp (-> Void) (st scope)
       (mine/app/diagnostics:jump-adjacent-diagnostic st 1 scope)
       (cl:values)))
@@ -3143,7 +3163,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
   (declare jump-prev-diagnostic! (MineState -> Void))
   (define (jump-prev-diagnostic! st)
     "Jump to the previous diagnostic in project/open files."
-    (let scope = (%diagnostic-scope st))
+    (let scope = (diagnostic-scope st))
     (lisp (-> Void) (st scope)
       (mine/app/diagnostics:jump-adjacent-diagnostic st -1 scope)
       (cl:values)))

@@ -10,7 +10,7 @@
    (#:gap #:mine/buffer/gap)
    (#:cursor #:mine/edit/cursor)
    (#:paredit #:mine/syntax/paredit)
-   (#:vec #:coalton/vector)
+   (#:seq #:coalton/seq)
    (#:str #:coalton/string)
    (#:widget-text #:mine/widget/text)
    (#:widget-input #:mine/widget/input)
@@ -58,7 +58,7 @@
     "An interactive REPL pane with output history and input line."
     (output        widget-text:TextWidget)
     (input-widget  widget-input:InputWidget)
-    (history       (Cell (Vector String)))
+    (history       (Cell (seq:Seq String)))
     (history-pos   (Cell UFix))
     (prompt        (Cell String)))
 
@@ -75,7 +75,7 @@
     (widget-input:input-widget-set-hint! iw "Shift+Enter for newline")
     (ReplPane (widget-text:text-widget-new color:default-style)
               iw
-              (cell:new (vec:new))
+              (cell:new (seq:new))
               (cell:new 0)
               (cell:new "> ")))
 
@@ -198,8 +198,10 @@ Handles line comments (;) and character literals (#\\)."
   (declare repl-pane-add-history! (ReplPane * String -> Void))
   (define (repl-pane-add-history! rp text)
     "Add an entry to the command history."
-    (vec:push! text (cell:read (.history rp)))
-    (cell:write! (.history-pos rp) (vec:length (cell:read (.history rp))))
+    (let hist = (cell:read (.history rp)))
+    (let new-hist = (seq:push hist text))
+    (cell:write! (.history rp) new-hist)
+    (cell:write! (.history-pos rp) (seq:size new-hist))
     (values))
 
   (declare repl-pane-history-up! (ReplPane -> Void))
@@ -210,9 +212,10 @@ Handles line comments (;) and character literals (#\\)."
     (when (> pos 0)
       (let new-pos = (- pos 1))
       (cell:write! (.history-pos rp) new-pos)
-      (match (vec:index-unsafe new-pos hist)
-        (entry
-         (widget-input:input-widget-set-text! (.input-widget rp) entry))))
+      (match (seq:get hist new-pos)
+        ((Some entry)
+         (widget-input:input-widget-set-text! (.input-widget rp) entry))
+        ((None) (values))))
     (values))
 
   (declare repl-pane-history-down! (ReplPane -> Void))
@@ -220,7 +223,7 @@ Handles line comments (;) and character literals (#\\)."
     "Navigate to the next history entry."
     (let pos = (cell:read (.history-pos rp)))
     (let hist = (cell:read (.history rp)))
-    (let hist-len = (vec:length hist))
+    (let hist-len = (seq:size hist))
     (cond
       ;; Past the end -- clear input.
       ((>= (+ pos 1) hist-len)
@@ -231,9 +234,10 @@ Handles line comments (;) and character literals (#\\)."
       (True
        (let new-pos = (+ pos 1))
        (cell:write! (.history-pos rp) new-pos)
-       (match (vec:index-unsafe new-pos hist)
-         (entry
-          (widget-input:input-widget-set-text! (.input-widget rp) entry)))
+       (match (seq:get hist new-pos)
+         ((Some entry)
+          (widget-input:input-widget-set-text! (.input-widget rp) entry))
+         ((None) (values)))
        (values))))
 
   ;;; Output scrolling
