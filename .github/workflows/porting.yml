@@ -87,6 +87,7 @@ jobs:
           (cl:handler-case
             (cl:progn
               (load "/.abclrc")
+              (ql:quickload :computable-reals) ;; breaks on SAFETY=3
               (setq system:*safety* ${{ matrix.SAFETY }})
               (ql:quickload :coalton/tests)
               (asdf:test-system :coalton/tests)
