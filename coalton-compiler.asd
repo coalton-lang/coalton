@@ -50,7 +50,7 @@
                              (:file "package")))
                (:module "runtime"
                 :serial t
-                :components ((:file "function-entry")
+                :components ((:file "function")
                              (:file "optional")
                              (:file "package")))
                (:module "typechecker"

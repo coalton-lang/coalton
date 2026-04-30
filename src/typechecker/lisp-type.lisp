@@ -5,9 +5,6 @@
    #:coalton-impl/typechecker/predicate
    #:coalton-impl/typechecker/scheme
    #:coalton-impl/typechecker/environment)
-  (:import-from
-   #:coalton-impl/runtime
-   #:function-entry)
   (:local-nicknames
    (#:util #:coalton-impl/util))
   (:export
@@ -45,9 +42,7 @@
 ;;;
 
 (defgeneric lisp-type (ty env)
-  (:documentation "Returns the corresponding lisp type for the type of the given node.
-
-USE-FUNCTION-ENTRIES specifies whether to emit FUNCTION-ENTRY for functions, emitting FUNCTION when NIL. Defaults to T.")
+  (:documentation "Returns the corresponding lisp type for the type of the given node.")
 
   (:method ((ty tyvar) env)
     (declare (ignore env))
@@ -71,7 +66,7 @@ USE-FUNCTION-ENTRIES specifies whether to emit FUNCTION-ENTRY for functions, emi
 
   (:method ((ty function-ty) env)
     (declare (ignore ty env))
-    'function-entry)
+    'function)
 
   (:method ((ty result-ty) env)
     (let ((output-types (result-ty-output-types ty)))
@@ -92,7 +87,7 @@ USE-FUNCTION-ENTRIES specifies whether to emit FUNCTION-ENTRY for functions, emi
     (cond
       ;; If we are a function, emit a function type
       ((function-type-p ty)
-       'function-entry)
+       'function)
 
       ((typep (tapp-from ty) 'tycon)
        (let ((from (tycon-name (tapp-from ty)))

@@ -109,11 +109,11 @@
     (lisp (-> Boolean) (needle haystack)
       (cl:not (cl:null (cl:search needle haystack)))))
 
-  (declare runtime-repr-is-function-entry? (types:RuntimeRepr :a => types:Proxy :a -> Boolean))
-  (define (runtime-repr-is-function-entry? p)
+  (declare runtime-repr-is-function? (types:RuntimeRepr :a => types:Proxy :a -> Boolean))
+  (define (runtime-repr-is-function? p)
     (let repr = (types:runtime-repr p))
     (lisp (-> Boolean) (repr)
-      (cl:eq repr 'coalton-impl/runtime/function-entry:function-entry))))
+      (cl:eq repr 'cl:function))))
 
 (define-test test-keyword-arguments-runtime ()
   (is (== (keyword-add-runtime 2) 3))
@@ -154,7 +154,7 @@
           "∀ :A. :A")))
 
 (define-test test-synthesized-runtime-repr-for-general-function-types ()
-  (is (runtime-repr-is-function-entry?
+  (is (runtime-repr-is-function?
        (the (types:Proxy (Integer * String -> Boolean * Char)) types:Proxy))))
 
 (coalton-toplevel

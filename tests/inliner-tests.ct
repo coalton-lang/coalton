@@ -518,19 +518,25 @@
   (let ((node
           (coalton:lookup-code
            'coalton-native-tests::constrained-keyword-nullary-pointfree-regression)))
-    (etypecase node
-      ((or ast:node-application ast:node-direct-application)
-       (let ((rand (first (ast:node-rands node))))
-         (is (not (typep rand 'ast:node-abstraction)))
-         (is (typep (unwrap-inline-lisp-node rand) 'ast:node-lisp))))
-      (ast:node-let
-       (is (= 1 (length (ast:node-let-bindings node))))
-       (let* ((binding (first (ast:node-let-bindings node)))
-              (bound-value (cdr binding))
-              (call (ast:node-let-subexpr node)))
-         (is (not (typep bound-value 'ast:node-abstraction)))
-         (is (typep (unwrap-inline-lisp-node bound-value) 'ast:node-lisp))
-         (is (typep call '(or ast:node-application ast:node-direct-application))))))))
+    (flet ((hidden-function-wrapper-p (node)
+             (and (typep node 'ast:node-abstraction)
+                  (null (ast:node-abstraction-vars node))
+                  (null (ast:node-abstraction-keyword-params node))
+                  (typep (ast:node-abstraction-subexpr node)
+                         'ast:node-application))))
+      (etypecase node
+        ((or ast:node-application ast:node-direct-application)
+         (let ((rand (first (ast:node-rands node))))
+           (is (not (typep rand 'ast:node-abstraction)))
+           (is (hidden-function-wrapper-p (unwrap-inline-lisp-node rand)))))
+        (ast:node-let
+         (is (= 1 (length (ast:node-let-bindings node))))
+         (let* ((binding (first (ast:node-let-bindings node)))
+                (bound-value (cdr binding))
+                (call (ast:node-let-subexpr node)))
+           (is (not (typep bound-value 'ast:node-abstraction)))
+           (is (hidden-function-wrapper-p (unwrap-inline-lisp-node bound-value)))
+           (is (typep call '(or ast:node-application ast:node-direct-application)))))))))
 
 (deftest nullary-method-alias-inline-code ()
   (let ((call

@@ -71,7 +71,7 @@
                       :vars nil
                       :form (list
                              (util:runtime-quote
-                              'coalton-impl/runtime/function-entry:function-entry))))))
+                              'cl:function))))))
     (make-node-application
      :type (pred-type pred env)
      :properties '()
