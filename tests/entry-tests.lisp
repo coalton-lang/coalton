@@ -28,6 +28,8 @@
   (flet ((test-sym ()
            (let ((p (find-package "SMALL-COALTON-PROGRAMS/FACT-FIB")))
              (when p
+               #+coalton-phantom-package-locks
+               (coalton-compatibility:try-unlock-package p)
                (intern "FACT" p)))))
     (let ((fact (test-sym)))
       (fmakunbound fact)
