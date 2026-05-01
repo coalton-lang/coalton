@@ -130,6 +130,7 @@
                              (:file "monomorphize")
                              (:file "constant-propagation")
                              (:file "inliner")
+                             (:file "lawnmower")
                              (:file "specializer")
                              (:file "optimizer")
 

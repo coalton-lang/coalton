@@ -153,10 +153,14 @@
   (define (same-tu-specialized-double-float-add-caller x y)
     (same-tu-specialized-generic-for-inline x y))
 
+  (declare local-qualified-application-target (Num :a => :a -> :a))
+  (define (local-qualified-application-target x)
+    (+ x x))
+
   (declare local-qualified-application-regression (Integer -> Integer))
   (define (local-qualified-application-regression x)
     (let ((declare f (Num :a => :a -> :a))
-          (f id))
+          (f local-qualified-application-target))
       (f x))))
 
 (coalton-toplevel
@@ -424,10 +428,9 @@
 (deftest same-translation-unit-function-inline-code ()
   (is (equal '((cl:+ coalton-native-tests::x coalton-native-tests::y))
              (ast:node-lisp-form
-              (ast:node-let-subexpr
-               (ast:node-abstraction-subexpr
-                (coalton:lookup-code
-                 'coalton-native-tests::same-tu-inline-double-float-add-caller)))))))
+              (unwrap-inline-lisp-node
+               (coalton:lookup-code
+                'coalton-native-tests::same-tu-inline-double-float-add-caller))))))
 
 (deftest emitted-inline-defuns-use-local-notinline-for-recursive-sccs ()
   (let* ((forms (compiled-program-locally-forms
@@ -457,6 +460,42 @@
                      x))")))
     (is (null (declaim-declaration-names forms 'notinline)))))
 
+(defun unwrap-administrative-code-node (node)
+  (loop
+    (typecase node
+      (ast:node-locally
+       (if (null (ast:node-locally-noinline-functions node))
+           (setf node (ast:node-locally-subexpr node))
+           (return node)))
+      (ast:node-let
+       (setf node (ast:node-let-subexpr node)))
+      (ast:node-bind
+       (setf node (ast:node-bind-body node)))
+      (t
+       (return node)))))
+
+(defun nullary-function-wrapper-p (node)
+  (and (typep node 'ast:node-abstraction)
+       (null (ast:node-abstraction-vars node))
+       (null (ast:node-abstraction-keyword-params node))
+       (typep (ast:node-abstraction-subexpr node)
+              '(or ast:node-application
+                   ast:node-direct-application))))
+
+(defun wrapped-nullary-function-wrapper-p (node)
+  (or (nullary-function-wrapper-p node)
+      (nullary-function-wrapper-p (unwrap-inline-lisp-node node))))
+
+(defun direct-variable-rand-call-to-p (node name)
+  (and (typep node '(or ast:node-application ast:node-direct-application))
+       (eq (ast:node-rator-name node) name)
+       (every #'ast:node-variable-p (ast:node-rands node))))
+
+(defun application-rands-have-no-abstractions-p (node)
+  (every (lambda (rand)
+           (not (typep (unwrap-inline-lisp-node rand) 'ast:node-abstraction)))
+         (ast:node-rands node)))
+
 (deftest method-inline-code ()
   (is (equal '((cl:+ coalton-native-tests::x coalton-native-tests::y))
              (ast:node-lisp-form
@@ -468,22 +507,23 @@
   (fiasco:skip-unless (not coalton-impl/settings:*coalton-disable-specialization*))
   (is (equal '((cl:+ coalton-native-tests::x coalton-native-tests::y))
              (ast:node-lisp-form
-              (ast:node-let-subexpr
-               (ast:node-abstraction-subexpr
-                (coalton:lookup-code
-                 'coalton-native-tests::same-tu-specialized-double-float-add-caller)))))))
+              (unwrap-inline-lisp-node
+               (coalton:lookup-code
+                'coalton-native-tests::same-tu-specialized-double-float-add-caller))))))
 
 (deftest local-qualified-application-code ()
   (let* ((body
            (ast:node-abstraction-subexpr
             (coalton:lookup-code
              'coalton-native-tests::local-qualified-application-regression)))
-         (call
-           (ast:node-let-subexpr body)))
-    (is (typep body 'ast:node-let))
-    (is (typep call 'ast:node-direct-application))
-    (is (= 2 (length (ast:node-direct-application-rands call))))
-    (is (null (ast:node-direct-application-keyword-rands call)))))
+         (call (unwrap-administrative-code-node body)))
+    (etypecase call
+      (ast:node-direct-application
+       (is (= 2 (length (ast:node-direct-application-rands call))))
+       (is (null (ast:node-direct-application-keyword-rands call))))
+      (ast:node-lisp
+       (is call)))))
+
 (deftest keyword-call-shape-code ()
   (let ((call
           (ast:node-abstraction-subexpr
@@ -502,9 +542,7 @@
            'coalton-native-tests::keyword-nullary-pointfree-regression)))
     (etypecase node
       ((or ast:node-application ast:node-direct-application)
-       (let ((rand (first (ast:node-rands node))))
-         (is (typep rand 'ast:node-variable))
-         (is (not (typep rand 'ast:node-abstraction)))))
+       (is (application-rands-have-no-abstractions-p node)))
       (ast:node-let
        (is (= 1 (length (ast:node-let-bindings node))))
        (let* ((binding (first (ast:node-let-bindings node)))
@@ -518,25 +556,25 @@
   (let ((node
           (coalton:lookup-code
            'coalton-native-tests::constrained-keyword-nullary-pointfree-regression)))
-    (flet ((hidden-function-wrapper-p (node)
-             (and (typep node 'ast:node-abstraction)
-                  (null (ast:node-abstraction-vars node))
-                  (null (ast:node-abstraction-keyword-params node))
-                  (typep (ast:node-abstraction-subexpr node)
-                         'ast:node-application))))
-      (etypecase node
-        ((or ast:node-application ast:node-direct-application)
-         (let ((rand (first (ast:node-rands node))))
-           (is (not (typep rand 'ast:node-abstraction)))
-           (is (hidden-function-wrapper-p (unwrap-inline-lisp-node rand)))))
-        (ast:node-let
-         (is (= 1 (length (ast:node-let-bindings node))))
-         (let* ((binding (first (ast:node-let-bindings node)))
-                (bound-value (cdr binding))
-                (call (ast:node-let-subexpr node)))
-           (is (not (typep bound-value 'ast:node-abstraction)))
-           (is (hidden-function-wrapper-p (unwrap-inline-lisp-node bound-value)))
-           (is (typep call '(or ast:node-application ast:node-direct-application)))))))))
+    (etypecase node
+      ((or ast:node-application ast:node-direct-application)
+       (let ((rand (first (ast:node-rands node))))
+         (is (or (wrapped-nullary-function-wrapper-p rand)
+                 (direct-variable-rand-call-to-p
+                  node
+                  'coalton-native-tests::constrained-keyword-nullary-pointfree-target)))))
+      (ast:node-let
+       (is (= 1 (length (ast:node-let-bindings node))))
+       (let* ((binding (first (ast:node-let-bindings node)))
+              (bound-value (cdr binding))
+              (call (ast:node-let-subexpr node)))
+         (is (not (typep bound-value 'ast:node-abstraction)))
+         (is (or (wrapped-nullary-function-wrapper-p bound-value)
+                 (and (typep bound-value 'ast:node-variable)
+                      (direct-variable-rand-call-to-p
+                       call
+                       'coalton-native-tests::constrained-keyword-nullary-pointfree-target))))
+         (is (typep call '(or ast:node-application ast:node-direct-application))))))))
 
 (deftest nullary-method-alias-inline-code ()
   (let ((call
@@ -605,6 +643,20 @@
         (values))))
     mismatch-count))
 
+(defun count-let-binding-type-mismatches-in-node (node)
+  "Count mismatched let-bound variable uses in all LETs under NODE."
+  (declare (type ast:node node)
+           (values fixnum &optional))
+  (let ((mismatch-count 0))
+    (traverse:traverse
+     node
+     (list
+      (traverse:action (:after ast:node-let let-node)
+        (incf mismatch-count
+              (count-let-binding-type-mismatches let-node))
+        (values))))
+    mismatch-count))
+
 (deftest polymorphic-inline-substitution-types-test ()
   (let* ((caller-node
            (coalton:lookup-code
@@ -615,8 +667,7 @@
             entry:*global-environment*))
          (caller-subexpr
            (ast:node-abstraction-subexpr inlined-caller-node)))
-    (is (typep caller-subexpr 'ast:node-let))
-    (is (= 0 (count-let-binding-type-mismatches caller-subexpr)))))
+    (is (= 0 (count-let-binding-type-mismatches-in-node caller-subexpr)))))
 
 (defun unwrap-inline-lisp-node (node)
   (labels ((unwrap-leading-abstractions (node)
@@ -648,15 +699,28 @@ redefinition."
                      (unwrap-leading-abstractions
                       (ast:node-application-rator node))))
              node)
+           (unwrap-match-context (node)
+             (loop
+               (typecase node
+                 (ast:node-let
+                  (setf node (ast:node-let-subexpr node)))
+                 (ast:node-bind
+                  (setf node (ast:node-bind-body node)))
+                 (ast:node-locally
+                  (if (null (ast:node-locally-noinline-functions node))
+                      (setf node (ast:node-locally-subexpr node))
+                      (return node)))
+                 (t
+                  (return node)))))
            (abstraction-second-branch (node)
              (second
               (ast:node-match-branches
-               (ast:node-let-subexpr
+               (unwrap-match-context
                 (unwrap-abstractions-and-application node)))))
            (branch-second-branch (node)
              (second
               (ast:node-match-branches
-               (ast:node-let-subexpr
+               (unwrap-match-context
                 (unwrap-abstractions-and-application
                  (ast:match-branch-body node))))))
            (fact-to-locally (node)

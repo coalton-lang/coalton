@@ -1,0 +1,500 @@
+(in-package #:coalton-tests)
+
+(defun lawnmow-fixed-point (node)
+  (loop :with current := node
+        :with changed-any? := nil
+        :do (multiple-value-bind (new-node changed?)
+                (coalton-impl/codegen/lawnmower:lawnmow current)
+              (unless changed?
+                (return (values current changed-any?)))
+              (setf current new-node)
+              (setf changed-any? t))))
+
+(defun lawnmower-constructor-node (constructor value &optional (ty tc:*integer-type*))
+  (ast:make-node-direct-application
+   :type ty
+   :properties nil
+   :rator-type (tc:make-function-type* (list (ast:node-type value)) ty)
+   :rator constructor
+   :rands (list value)))
+
+(defun lawnmower-constructor-pattern (constructor var &optional (ty tc:*integer-type*))
+  (coalton-impl/codegen/pattern:make-pattern-constructor
+   :type ty
+   :name constructor
+   :patterns
+   (list
+    (coalton-impl/codegen/pattern:make-pattern-var
+     :type ty
+     :name var))))
+
+(deftest lawnmower-collapses-identity-let ()
+  (let* ((ty tc:*integer-type*)
+         (alias 'coalton-native-tests::lawnmower-alias)
+         (target 'coalton-native-tests::lawnmower-target)
+         (node
+           (ast:make-node-let
+            :type ty
+            :bindings
+            (list
+             (cons alias
+                   (ast:make-node-variable
+                    :type ty
+                    :value target)))
+            :subexpr
+            (ast:make-node-variable
+             :type ty
+             :value alias))))
+    (multiple-value-bind (new-node changedp)
+        (coalton-impl/codegen/lawnmower:lawnmow node)
+      (is changedp)
+      (is (typep new-node 'ast:node-variable))
+      (is (eq target (ast:node-variable-value new-node))))))
+
+(deftest lawnmower-collapses-let-alias-chain ()
+  (let* ((ty tc:*integer-type*)
+         (fn-ty (tc:make-function-type* (list ty) ty))
+         (value-name 'coalton-native-tests::lawnmower-value)
+         (alias-1 'coalton-native-tests::lawnmower-alias-1)
+         (alias-2 'coalton-native-tests::lawnmower-alias-2)
+         (function-name 'coalton-native-tests::lawnmower-function)
+         (node
+           (ast:make-node-let
+            :type ty
+            :bindings
+            (list
+             (cons value-name
+                   (ast:make-node-literal
+                    :type ty
+                    :value 1))
+             (cons alias-1
+                   (ast:make-node-variable
+                    :type ty
+                    :value value-name))
+             (cons alias-2
+                   (ast:make-node-variable
+                    :type ty
+                    :value alias-1)))
+            :subexpr
+            (ast:make-node-application
+             :type ty
+             :properties nil
+             :rator
+             (ast:make-node-variable
+              :type fn-ty
+              :value function-name)
+             :rands
+             (list
+              (ast:make-node-variable
+               :type ty
+               :value alias-2))))))
+    (multiple-value-bind (new-node changedp)
+        (coalton-impl/codegen/lawnmower:lawnmow node)
+      (is changedp)
+      (is (typep new-node 'ast:node-let))
+      (is (= 1 (length (ast:node-let-bindings new-node))))
+      (is (eq value-name
+              (caar (ast:node-let-bindings new-node))))
+      (let ((rand
+              (first
+               (ast:node-application-rands
+                (ast:node-let-subexpr new-node)))))
+        (is (typep rand 'ast:node-variable))
+        (is (eq value-name (ast:node-variable-value rand)))))))
+
+(deftest lawnmower-collapses-bind-alias ()
+  (let* ((ty tc:*integer-type*)
+         (fn-ty (tc:make-function-type* (list ty) ty))
+         (target 'coalton-native-tests::lawnmower-target)
+         (alias 'coalton-native-tests::lawnmower-alias)
+         (function-name 'coalton-native-tests::lawnmower-function)
+         (node
+           (ast:make-node-bind
+            :type ty
+            :name alias
+            :expr
+            (ast:make-node-variable
+             :type ty
+             :value target)
+            :body
+            (ast:make-node-application
+             :type ty
+             :properties nil
+             :rator
+             (ast:make-node-variable
+              :type fn-ty
+              :value function-name)
+             :rands
+             (list
+              (ast:make-node-variable
+               :type ty
+               :value alias))))))
+    (multiple-value-bind (new-node changed?)
+        (coalton-impl/codegen/lawnmower:lawnmow node)
+      (is changed?)
+      (is (typep new-node 'ast:node-application))
+      (let ((rand (first (ast:node-application-rands new-node))))
+        (is (typep rand 'ast:node-variable))
+        (is (eq target (ast:node-variable-value rand)))))))
+
+(deftest lawnmower-sinks-application-through-let-rator ()
+  (let* ((ty tc:*integer-type*)
+         (fn-ty (tc:make-function-type* nil ty))
+         (alias 'coalton-native-tests::lawnmower-alias)
+         (thunk
+           (ast:make-node-abstraction
+            :type fn-ty
+            :vars nil
+            :subexpr (ast:make-node-variable
+                      :type ty
+                      :value alias)))
+         (node
+           (ast:make-node-application
+            :type ty
+            :properties nil
+            :rator
+            (ast:make-node-let
+             :type fn-ty
+             :bindings
+             (list
+              (cons alias
+                    (ast:make-node-literal
+                     :type ty
+                     :value 1)))
+             :subexpr thunk)
+            :rands nil)))
+    (multiple-value-bind (new-node changedp)
+        (coalton-impl/codegen/lawnmower:lawnmow node)
+      (is changedp)
+      (is (typep new-node 'ast:node-let))
+      (is (typep (ast:node-let-subexpr new-node) 'ast:node-application))
+      (let ((rator (ast:node-application-rator
+                    (ast:node-let-subexpr new-node))))
+        (is (typep rator 'ast:node-abstraction))
+        (is (eq alias
+                (ast:node-variable-value
+                 (ast:node-abstraction-subexpr rator))))))))
+
+(deftest lawnmower-does-not-capture-call-arguments ()
+  (let* ((ty tc:*integer-type*)
+         (fn-ty (tc:make-function-type* (list ty) ty))
+         (alias 'coalton-native-tests::lawnmower-alias)
+         (target 'coalton-native-tests::lawnmower-target)
+         (node
+           (ast:make-node-application
+            :type ty
+            :properties nil
+            :rator
+            (ast:make-node-let
+             :type fn-ty
+             :bindings
+             (list
+              (cons alias
+                    (ast:make-node-literal
+                     :type ty
+                     :value 1)))
+             :subexpr
+             (ast:make-node-variable
+              :type fn-ty
+              :value target))
+            :rands
+            (list
+             (ast:make-node-variable
+              :type ty
+              :value alias)))))
+    (multiple-value-bind (new-node changedp)
+        (coalton-impl/codegen/lawnmower:lawnmow node)
+      (is (not changedp))
+      (is (typep new-node 'ast:node-application))
+      (is (typep (ast:node-application-rator new-node) 'ast:node-let)))))
+
+(deftest lawnmower-sinks-application-through-match-rator ()
+  (let* ((ty tc:*integer-type*)
+         (fn-ty (tc:make-function-type* nil ty))
+         (target 'coalton-native-tests::lawnmower-target)
+         (constructor 'coalton-native-tests::lawnmower-constructor)
+         (function-name 'coalton-native-tests::lawnmower-function)
+         (node
+           (ast:make-node-application
+            :type ty
+            :properties nil
+            :rator
+            (ast:make-node-match
+             :type fn-ty
+             :expr (ast:make-node-variable
+                    :type ty
+                    :value target)
+             :branches
+             (list
+              (ast:make-match-branch
+               :pattern
+               (coalton-impl/codegen/pattern:make-pattern-constructor
+                :type ty
+                :name constructor
+                :patterns nil)
+               :body
+               (ast:make-node-variable
+                :type fn-ty
+                :value function-name))))
+            :rands nil)))
+    (multiple-value-bind (new-node changedp)
+        (coalton-impl/codegen/lawnmower:lawnmow node)
+      (is changedp)
+      (is (typep new-node 'ast:node-match))
+      (let ((branch-body
+              (ast:match-branch-body
+               (first (ast:node-match-branches new-node)))))
+        (is (typep branch-body 'ast:node-application))
+        (is (eq function-name
+                (ast:node-variable-value
+                 (ast:node-application-rator branch-body))))))))
+
+(deftest lawnmower-collapses-single-binding-identity-let ()
+  (let* ((ty tc:*integer-type*)
+         (name 'coalton-native-tests::lawnmower-value)
+         (node
+           (ast:make-node-let
+            :type ty
+            :bindings
+            (list
+             (cons name
+                   (ast:make-node-literal
+                    :type ty
+                    :value 1)))
+            :subexpr
+            (ast:make-node-variable
+             :type ty
+             :value name))))
+    (multiple-value-bind (new-node changed?)
+        (coalton-impl/codegen/lawnmower:lawnmow node)
+      (is changed?)
+      (is (typep new-node 'ast:node-literal))
+      (is (= 1 (ast:node-literal-value new-node))))))
+
+(deftest lawnmower-reduces-known-constructor-match ()
+  (let* ((ty tc:*integer-type*)
+         (constructor 'coalton-native-tests::lawnmower-constructor)
+         (field 'coalton-native-tests::lawnmower-field)
+         (node
+           (ast:make-node-match
+            :type ty
+            :expr
+            (lawnmower-constructor-node
+             constructor
+             (ast:make-node-literal
+              :type ty
+              :value 1))
+            :branches
+            (list
+             (ast:make-match-branch
+              :pattern (lawnmower-constructor-pattern constructor field)
+              :body
+              (ast:make-node-variable
+               :type ty
+               :value field))))))
+    (multiple-value-bind (new-node changed?)
+        (lawnmow-fixed-point node)
+      (is changed?)
+      (is (typep new-node 'ast:node-literal))
+      (is (= 1 (ast:node-literal-value new-node))))))
+
+(deftest lawnmower-reduces-known-function-field-match ()
+  (let* ((ty tc:*integer-type*)
+         (fn-ty (tc:make-function-type* nil ty))
+         (constructor 'coalton-native-tests::lawnmower-constructor)
+         (field 'coalton-native-tests::lawnmower-field)
+         (node
+           (ast:make-node-match
+            :type ty
+            :expr
+            (lawnmower-constructor-node
+             constructor
+             (ast:make-node-abstraction
+              :type fn-ty
+              :vars nil
+              :subexpr
+              (ast:make-node-literal
+               :type ty
+               :value 1)))
+            :branches
+            (list
+             (ast:make-match-branch
+              :pattern
+              (coalton-impl/codegen/pattern:make-pattern-constructor
+               :type ty
+               :name constructor
+               :patterns
+               (list
+                (coalton-impl/codegen/pattern:make-pattern-var
+                 :type fn-ty
+                 :name field)))
+              :body
+              (ast:make-node-application
+               :type ty
+               :properties nil
+               :rator
+               (ast:make-node-variable
+                :type fn-ty
+                :value field)
+               :rands nil))))))
+    (multiple-value-bind (new-node changed?)
+        (lawnmow-fixed-point node)
+      (is changed?)
+      (is (typep new-node 'ast:node-literal))
+      (is (= 1 (ast:node-literal-value new-node))))))
+
+(deftest lawnmower-sinks-match-through-let-expr ()
+  (let* ((ty tc:*integer-type*)
+         (constructor 'coalton-native-tests::lawnmower-constructor)
+         (inner 'coalton-native-tests::lawnmower-inner)
+         (field 'coalton-native-tests::lawnmower-field)
+         (node
+           (ast:make-node-match
+            :type ty
+            :expr
+            (ast:make-node-let
+             :type ty
+             :bindings
+             (list
+              (cons inner
+                    (ast:make-node-literal
+                     :type ty
+                     :value 1)))
+             :subexpr
+             (lawnmower-constructor-node
+              constructor
+              (ast:make-node-variable
+               :type ty
+               :value inner)))
+            :branches
+            (list
+             (ast:make-match-branch
+              :pattern (lawnmower-constructor-pattern constructor field)
+              :body
+              (ast:make-node-variable
+               :type ty
+               :value field))))))
+    (multiple-value-bind (new-node changed?)
+        (lawnmow-fixed-point node)
+      (is changed?)
+      (is (typep new-node 'ast:node-literal))
+      (is (= 1 (ast:node-literal-value new-node))))))
+
+(deftest lawnmower-does-not-capture-branch-variables-when-sinking-match ()
+  (let* ((ty tc:*integer-type*)
+         (constructor 'coalton-native-tests::lawnmower-constructor)
+         (captured 'coalton-native-tests::lawnmower-captured)
+         (field 'coalton-native-tests::lawnmower-field)
+         (node
+           (ast:make-node-match
+            :type ty
+            :expr
+            (ast:make-node-let
+             :type ty
+             :bindings
+             (list
+              (cons captured
+                    (ast:make-node-literal
+                     :type ty
+                     :value 1)))
+             :subexpr
+             (lawnmower-constructor-node
+              constructor
+              (ast:make-node-literal
+               :type ty
+               :value 2)))
+            :branches
+            (list
+             (ast:make-match-branch
+              :pattern (lawnmower-constructor-pattern constructor field)
+              :body
+              (ast:make-node-variable
+               :type ty
+               :value captured))))))
+    (multiple-value-bind (new-node changed?)
+        (coalton-impl/codegen/lawnmower:lawnmow node)
+      (is (not changed?))
+      (is (typep new-node 'ast:node-match))
+      (is (typep (ast:node-match-expr new-node) 'ast:node-let)))))
+
+(deftest lawnmower-does-not-sink-match-through-captured-let ()
+  (let* ((ty tc:*integer-type*)
+         (fn-ty (tc:make-function-type* nil ty))
+         (constructor 'coalton-native-tests::lawnmower-constructor)
+         (captured 'coalton-native-tests::lawnmower-captured)
+         (field 'coalton-native-tests::lawnmower-field)
+         (node
+           (ast:make-node-match
+            :type ty
+            :expr
+            (ast:make-node-let
+             :type ty
+             :bindings
+             (list
+              (cons captured
+                    (ast:make-node-literal
+                     :type ty
+                     :value 1)))
+             :subexpr
+             (lawnmower-constructor-node
+              constructor
+              (ast:make-node-abstraction
+               :type fn-ty
+               :vars nil
+               :subexpr
+               (ast:make-node-variable
+                :type ty
+                :value captured))
+              ty))
+            :branches
+            (list
+             (ast:make-match-branch
+              :pattern
+              (coalton-impl/codegen/pattern:make-pattern-constructor
+               :type ty
+               :name constructor
+               :patterns
+               (list
+                (coalton-impl/codegen/pattern:make-pattern-var
+                 :type fn-ty
+                 :name field)))
+              :body
+              (ast:make-node-literal
+               :type ty
+               :value 0))))))
+    (multiple-value-bind (new-node changed?)
+        (coalton-impl/codegen/lawnmower:lawnmow node)
+      (is (not changed?))
+      (is (typep new-node 'ast:node-match))
+      (is (typep (ast:node-match-expr new-node) 'ast:node-let)))))
+
+(deftest lawnmower-inlines-immediate-bound-thunk-call ()
+  (let* ((ty tc:*integer-type*)
+         (fn-ty (tc:make-function-type* nil ty))
+         (function-name 'coalton-native-tests::lawnmower-function)
+         (node
+           (ast:make-node-bind
+            :type ty
+            :name function-name
+            :expr
+            (ast:make-node-abstraction
+             :type fn-ty
+             :vars nil
+             :subexpr
+             (ast:make-node-literal
+              :type ty
+              :value 1))
+            :body
+            (ast:make-node-application
+             :type ty
+             :properties nil
+             :rator
+             (ast:make-node-variable
+              :type fn-ty
+              :value function-name)
+             :rands nil))))
+    (multiple-value-bind (new-node changed?)
+        (lawnmow-fixed-point node)
+      (is changed?)
+      (is (typep new-node 'ast:node-literal))
+      (is (= 1 (ast:node-literal-value new-node))))))

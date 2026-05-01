@@ -50,6 +50,9 @@
    #:coalton-impl/codegen/inliner
    #:inline-applications)
   (:import-from
+   #:coalton-impl/codegen/lawnmower
+   #:lawnmow)
+  (:import-from
    #:coalton-impl/codegen/specializer
    #:apply-specializations)
   (:local-nicknames
@@ -267,6 +270,9 @@ ENV. Return a new node which is optimized."
      (setf node (resolve-static-superclass node env))
      (multiple-value-bind (new-node inlined?) (inline-applications node env)
        (setf redo? (or redo? inlined?))
+       (setf node new-node))
+     (multiple-value-bind (new-node lawnmowed?) (lawnmow node)
+       (setf redo? (or redo? lawnmowed?))
        (setf node new-node))
 
      (when (and redo? (< runs *maximum-optimization-passes*))
@@ -540,13 +546,12 @@ when possible."
 
   (labels ((apply-lift (node)
 
-             ;; If the constructed value is captured by a variable
-             ;; pattern, then it can escape the match branches scope,
-             ;; and thus cannot be safely stack allocated.
+             ;; If the constructed value, or any field of it, is captured by
+             ;; a pattern variable, then it can escape the match branch scope
+             ;; and cannot be safely stack allocated.
              (loop :for branch :in (node-match-branches node)
                    :for pattern := (match-branch-pattern branch)
-                   :when (or (pattern-var-p pattern)
-                             (pattern-binding-p pattern))
+                   :when (pattern-variables pattern)
                      :do (return-from apply-lift nil))
 
              (let ((expr (node-match-expr node)))
