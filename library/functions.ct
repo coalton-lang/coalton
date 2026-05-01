@@ -68,6 +68,7 @@ Print a line to `cl:*standard-output*` in the form \"{STR}: {ITEM}\"."
   ;; Function combinators
   ;;
 
+  (inline) 
   (declare fix (((:a -> :b) * :a -> :b) -> (:a -> :b)))
   (define (fix f)
     "Compute the fixed point of a unary function. This is equivalent to the Y-combinator of the lambda calculus. This combinator allows recursion without specific assignment of names. For example, the factorial function can be written
@@ -99,6 +100,7 @@ Print a line to `cl:*standard-output*` in the form \"{STR}: {ITEM}\"."
     "Returns a function that takes its arguments in reverse order."
     (fn (x y) (f y x)))
 
+  (inline) 
   (declare reduce (Foldable :f => (:a * :b -> :b) * :b * (:f :a) -> :b))
   (define (reduce f y xs)
     "The same as `fold` but with the argument order swapped to match `cl:reduce`"
@@ -112,11 +114,13 @@ Print a line to `cl:*standard-output*` in the form \"{STR}: {ITEM}\"."
 
 (coalton-toplevel
  
+ (inline) 
  (declare conjoin ((:a -> Boolean) * (:a -> Boolean) * :a -> Boolean))
  (define (conjoin f g x)
    "Compute the conjunction of two unary Boolean functions."
    (and (f x) (g x)))
 
+ (inline) 
  (declare disjoin ((:a -> Boolean) * (:a -> Boolean) * :a -> Boolean))
  (define (disjoin f g x)
    "Compute the disjunction of two unary Boolean functions."
@@ -154,6 +158,7 @@ For example, the following expressions are equivalent.
    "Compute the complement of a unary Boolean function."
    (not (f x)))
 
+ (inline) 
  (declare curry ((Tuple :left :right -> :result) -> (:left * :right -> :result)))
  (define (curry func)
    "Adapt a function on `(Tuple left right)` into a two-argument function."
@@ -168,6 +173,7 @@ For example, the following expressions are equivalent.
        ((Tuple left right)
         (func left right)))))
 
+ (inline) 
  (declare pair-with ((:left -> :right) * :left -> Tuple :left :right))
  (define (pair-with func left)
    "Create a `Tuple` of the form `(Tuple left (func left))`."
@@ -177,13 +183,13 @@ For example, the following expressions are equivalent.
    ;; Monadic operators
    ;;
 
-
-
+  (inline) 
   (declare msum ((Monoid :a) (Foldable :t) => :t :a -> :a))
   (define (msum xs)
     "Fold over a list using `<>`."
     (foldr <> mempty xs))
 
+  (inline) 
   (declare asum ((Alternative :f) (Foldable :t) => :t (:f :a) -> :f :a))
   (define (asum xs)
     "Fold over a list using `alt`."
@@ -199,16 +205,18 @@ For example, the following expressions are equivalent.
    ;; Instances
    ;;
 
-
-
   (define-instance (Functor (Arrow :a))
+    (inline) 
     (define map compose))
 
   (define-instance (Applicative (Arrow :a))
+    (inline) 
     (define (pure x) (fn (_) x))
+    (inline) 
     (define (liftA2 f g h) (fn (x) (f (g x) (h x)))))
 
   (define-instance (Monad (Arrow :a))
+    (inline) 
     (define (>>= f g) (fn (x) ((g (f x)) x)))))
 
 ;;;
