@@ -8,6 +8,8 @@
    (#:indent #:mine/syntax/indent)
    (#:input #:mine/term/input)
    (#:cursor #:mine/edit/cursor)
+   (#:ops #:mine/edit/operations)
+   (#:undo #:mine/edit/undo)
    (#:paredit #:mine/syntax/paredit)
    (#:repl #:mine/pane/repl)
    (#:server #:mine/protocol/server)
@@ -74,6 +76,7 @@
                   check-indent-newline-before-close-paren-uses-blank-context
                   check-indent-line-tab-hop-to-source
                   check-indent-line-preserves-source-position
+                  check-editor-paste-clamps-stale-cursor-to-buffer-end
                   check-repl-structural-editing-pairs-delimiters
                   check-repl-structural-close-paren-in-string-inserts
                   check-repl-structural-close-paren-collapses-empty-form

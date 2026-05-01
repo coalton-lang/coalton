@@ -27,6 +27,11 @@
     (lisp (-> UFix) (s)
       (cl:length s)))
 
+  (declare clamp-position (gap:GapBuffer * UFix -> UFix))
+  (define (clamp-position gb pos)
+    "Clamp POS to the valid insertion range for GB."
+    (min pos (gap:gap-length gb)))
+
   ;;; insert-char!
 
   (declare insert-char! (buf:Buffer * undo:UndoTree * cursor:CursorState
@@ -34,8 +39,11 @@
   (define (insert-char! buffer tree cs ch)
     "Insert a single character at the cursor position.
 Records the operation for undo and advances the cursor."
-    (let p = (cursor:cursor-position cs))
+    (let old-p = (cursor:cursor-position cs))
     (let gb = (buf:buffer-gap buffer))
+    (let p = (clamp-position gb old-p))
+    (when (> old-p p)
+      (cursor:cursor-move-to-position! cs p))
     (gap:gap-insert-char! gb p ch)
     (buf:buffer-mark-dirty! buffer)
     (let text = (into ch))
@@ -49,11 +57,14 @@ Records the operation for undo and advances the cursor."
   (define (insert-string! buffer tree cs text)
     "Insert a string at the cursor position.
 Records the operation for undo and advances the cursor."
+    (let old-p = (cursor:cursor-position cs))
+    (let gb = (buf:buffer-gap buffer))
+    (let p = (clamp-position gb old-p))
+    (when (> old-p p)
+      (cursor:cursor-move-to-position! cs p))
     (undo:with-undo-group! tree
       (fn () (cursor:cursor-position cs))
       (fn ()
-        (let p = (cursor:cursor-position cs))
-        (let gb = (buf:buffer-gap buffer))
         (let len = (string-length text))
         (gap:gap-insert-string! gb p text)
         (buf:buffer-mark-dirty! buffer)
@@ -69,9 +80,12 @@ Records the operation for undo and advances the cursor."
   (define (delete-backward! buffer tree cs)
     "Delete one character before the cursor (backspace).
 Does nothing if the cursor is at position 0."
-    (let p = (cursor:cursor-position cs))
+    (let old-p = (cursor:cursor-position cs))
+    (let gb = (buf:buffer-gap buffer))
+    (let p = (clamp-position gb old-p))
+    (when (> old-p p)
+      (cursor:cursor-move-to-position! cs p))
     (when (> p 0)
-      (let gb = (buf:buffer-gap buffer))
       (let del-pos = (- p 1))
       (match (gap:gap-char-at gb del-pos)
         ((None) (values))
@@ -86,9 +100,12 @@ Does nothing if the cursor is at position 0."
                                    -> Void))
   (define (delete-backward-word! buffer tree cs)
     "Delete backward to the previous word boundary."
-    (let old-pos = (cursor:cursor-position cs))
+    (let raw-old-pos = (cursor:cursor-position cs))
+    (let gb = (buf:buffer-gap buffer))
+    (let old-pos = (clamp-position gb raw-old-pos))
+    (when (> raw-old-pos old-pos)
+      (cursor:cursor-move-to-position! cs old-pos))
     (when (> old-pos 0)
-      (let gb = (buf:buffer-gap buffer))
       (cursor:cursor-move-word-left! gb cs)
       (let new-pos = (cursor:cursor-position cs))
       (when (< new-pos old-pos)
@@ -104,8 +121,11 @@ Does nothing if the cursor is at position 0."
   (define (delete-forward! buffer tree cs)
     "Delete one character at the cursor position (delete key).
 Does nothing if the cursor is at the end of the buffer."
-    (let p = (cursor:cursor-position cs))
+    (let old-p = (cursor:cursor-position cs))
     (let gb = (buf:buffer-gap buffer))
+    (let p = (clamp-position gb old-p))
+    (when (> old-p p)
+      (cursor:cursor-move-to-position! cs p))
     (let len = (gap:gap-length gb))
     (when (< p len)
       (match (gap:gap-char-at gb p)
@@ -123,6 +143,11 @@ Does nothing if the cursor is at the end of the buffer."
                       -> Void))
   (define (newline! buffer tree cs)
     "Insert a newline at the cursor position."
+    (let gb = (buf:buffer-gap buffer))
+    (let old-p = (cursor:cursor-position cs))
+    (let p = (clamp-position gb old-p))
+    (when (> old-p p)
+      (cursor:cursor-move-to-position! cs p))
     (undo:with-undo-group! tree
       (fn () (cursor:cursor-position cs))
       (fn ()
