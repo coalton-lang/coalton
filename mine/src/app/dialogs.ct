@@ -483,7 +483,7 @@ scroll; any other key closes."
     ;; Pre-fill location from config
     (widget-input:input-widget-set-text! iw-loc (new-project-default-location config))
     ;; Language toggle: True = Coalton, False = Common Lisp
-    (let is-coalton = (cell:new True))
+    (let is-coalton = (cell:new (not (== (cfgt:.config-repl-language config) "lisp"))))
     ;; field-idx: 0 = name, 1 = location, 2 = language toggle,
     ;;            3 = Create button, 4 = Cancel button
     (%new-project-loop term scr bx by box-w box-h
