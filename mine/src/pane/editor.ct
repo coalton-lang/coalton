@@ -15,7 +15,8 @@
    (#:lexer #:mine/syntax/lexer)
    (#:hl #:mine/syntax/highlight)
    (#:paredit #:mine/syntax/paredit)
-   (#:vec #:coalton/vector))
+   (#:vec #:coalton/vector)
+   (#:seq #:coalton/seq))
   (:export
    #:EditorPane
    #:editor-pane-new
@@ -46,9 +47,12 @@
    #:*editor-filepath*
    #:*diag-fn*
    #:*diag-spans-fn*
-   #:*search-matches*
-   #:*search-needle-len*
-   #:*search-current-pos*
+   #:search-state-set!
+   #:search-state-clear!
+   #:search-current-set!
+   #:search-match-index
+   #:search-next-from
+   #:search-prev-from
    #:%editor-scrollbar))
 
 (in-package #:mine/pane/editor)
@@ -749,15 +753,114 @@ segments) and highlights the current visual row."
                            (gap:gap-line-count gb) scroll-row
                            track-s thumb-s)))
 
-;;; Search highlight state: set by mine.ct, read by draw loop.
-
-(cl:defvar *search-matches* cl:nil)
-(cl:defvar *search-needle-len* 0)
-(cl:defvar *search-current-pos* cl:nil)
+;;; Search highlight state: set by find.ct, read by draw loop.
 
 ;;; Coalton drawing helpers for syntax highlighting, selection, and tab expansion.
 
 (coalton-toplevel
+
+  (declare *search-matches* (cell:Cell (seq:Seq UFix)))
+  (define *search-matches*
+    (cell:new (seq:new)))
+
+  (declare *search-needle-len* (cell:Cell UFix))
+  (define *search-needle-len*
+    (cell:new 0))
+
+  (declare *search-current-pos* (cell:Cell (Optional UFix)))
+  (define *search-current-pos*
+    (cell:new None))
+
+  (declare search-state-set! (seq:Seq UFix * UFix -> Void))
+  (define (search-state-set! matches needle-len)
+    (cell:write! *search-matches* matches)
+    (cell:write! *search-needle-len* needle-len)
+    (values))
+
+  (declare search-state-clear! (Void -> Void))
+  (define (search-state-clear!)
+    (cell:write! *search-matches* (seq:new))
+    (cell:write! *search-needle-len* 0)
+    (cell:write! *search-current-pos* None)
+    (values))
+
+  (declare search-current-set! (UFix -> Void))
+  (define (search-current-set! pos)
+    (cell:write! *search-current-pos* (Some pos))
+    (values))
+
+  (declare search-match-index-from (seq:Seq UFix * UFix * UFix -> UFix))
+  (define (search-match-index-from matches cur-pos idx)
+    (if (>= idx (seq:size matches))
+        0
+        (match (seq:get matches idx)
+          ((Some pos)
+           (if (== pos cur-pos)
+               (+ idx 1)
+               (search-match-index-from matches cur-pos (+ idx 1))))
+          ((None) 0))))
+
+  (declare search-match-index (UFix -> UFix))
+  (define (search-match-index cur-pos)
+    "Return the 1-based index of the match at CUR-POS, or 0 if not found."
+    (search-match-index-from (cell:read *search-matches*) cur-pos 0))
+
+  (declare search-next-in (seq:Seq UFix * UFix * UFix -> Optional UFix))
+  (define (search-next-in matches start-pos idx)
+    (if (>= idx (seq:size matches))
+        (seq:get matches 0)
+        (match (seq:get matches idx)
+          ((Some pos)
+           (if (>= pos start-pos)
+               (Some pos)
+               (search-next-in matches start-pos (+ idx 1))))
+          ((None) (seq:get matches 0)))))
+
+  (declare search-next-from (UFix -> Optional UFix))
+  (define (search-next-from start-pos)
+    "Find the next match position at or after START-POS, wrapping around."
+    (let matches = (cell:read *search-matches*))
+    (if (seq:empty? matches)
+        None
+        (search-next-in matches start-pos 0)))
+
+  (declare search-prev-in (seq:Seq UFix * UFix * UFix -> Optional UFix))
+  (define (search-prev-in matches start-pos idx)
+    (match (seq:get matches idx)
+      ((Some pos)
+       (if (< pos start-pos)
+           (Some pos)
+           (if (== idx 0)
+               (seq:get matches (- (seq:size matches) 1))
+               (search-prev-in matches start-pos (- idx 1)))))
+      ((None) None)))
+
+  (declare search-prev-from (UFix -> Optional UFix))
+  (define (search-prev-from start-pos)
+    "Find the previous match position before START-POS, wrapping around."
+    (let matches = (cell:read *search-matches*))
+    (let count = (seq:size matches))
+    (if (== count 0)
+        None
+        (search-prev-in matches start-pos (- count 1))))
+
+  (declare current-search-match? (Optional UFix * UFix -> Boolean))
+  (define (current-search-match? current pos)
+    (match current
+      ((Some current-pos) (== pos current-pos))
+      ((None) False)))
+
+  (declare search-hit-kind-in (seq:Seq UFix * UFix * Optional UFix * UFix * UFix -> UFix))
+  (define (search-hit-kind-in matches needle-len current abs-pos idx)
+    (if (>= idx (seq:size matches))
+        0
+        (match (seq:get matches idx)
+          ((Some pos)
+           (cond
+             ((and (>= abs-pos pos) (< abs-pos (+ pos needle-len)))
+              (if (current-search-match? current pos) 2 1))
+             (True (search-hit-kind-in matches needle-len current abs-pos (+ idx 1)))))
+          ((None) 0))))
 
   (define selection-bg   color:selection-bg)
   (define search-bg      color:search-match-bg)
@@ -781,19 +884,17 @@ segments) and highlights the current visual row."
       (cl:values))
     v)
 
-  (declare %search-hit-kind (UFix -> UFix))
-  (define (%search-hit-kind abs-pos)
+  (declare search-hit-kind (UFix -> UFix))
+  (define (search-hit-kind abs-pos)
     "Return 0=no match, 1=other match, 2=current match."
-    (lisp (-> UFix) (abs-pos)
-      (cl:if (cl:and *search-matches* (cl:> *search-needle-len* 0))
-             (cl:loop :for m :across *search-matches*
-                      :when (cl:and (cl:>= abs-pos m)
-                                    (cl:< abs-pos (cl:+ m *search-needle-len*)))
-                        :return (cl:if (cl:and *search-current-pos*
-                                              (cl:= m *search-current-pos*))
-                                       2 1)
-                      :finally (cl:return 0))
-             0)))
+    (let needle-len = (cell:read *search-needle-len*))
+    (if (== needle-len 0)
+        0
+        (search-hit-kind-in (cell:read *search-matches*)
+                            needle-len
+                            (cell:read *search-current-pos*)
+                            abs-pos
+                            0)))
 
   (declare %paren-match? (UFix -> Boolean))
   (define (%paren-match? abs-pos)
@@ -841,14 +942,16 @@ segments) and highlights the current visual row."
     (UFix * UFix * UFix * color:Style * color:Style * color:Style * color:Style -> color:Style))
   (define (%pick-style abs-pos sel-start sel-end style sel-style search-style search-cur-style)
     "Choose the style for a character based on selection, bracket match, and search state."
+    (let search-kind = (search-hit-kind abs-pos))
+    (let diagnostic-rank = (%diagnostic-rank-at abs-pos))
     (cond
       ((and (>= abs-pos sel-start) (< abs-pos sel-end)) sel-style)
       ((%paren-match? abs-pos)
        (color:Style (color:.style-fg style) color:match-paren-bg color:AttrBold))
-      ((== (%search-hit-kind abs-pos) 2) search-cur-style)
-      ((== (%search-hit-kind abs-pos) 1) search-style)
-      ((> (%diagnostic-rank-at abs-pos) 0)
-       (%diagnostic-style style (%diagnostic-rank-at abs-pos)))
+      ((== search-kind 2) search-cur-style)
+      ((== search-kind 1) search-style)
+      ((> diagnostic-rank 0)
+       (%diagnostic-style style diagnostic-rank))
       ((%quick-result-highlight? abs-pos)
        (color:Style (color:.style-fg style) color:slate (color:.style-attr style)))
       (True style)))
