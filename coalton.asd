@@ -12,11 +12,14 @@
 ;;; coalton-asdf and coalton-compiler live in their own .asd files.
 
 ;; coalton/doc uses packages that only work on sbcl/ccl
-#+(and (not :coalton-without-doc) (or sbcl ccl)) (pushnew :coalton-with-doc *features*)
+#+(and (not coalton-without-doc) (or sbcl ccl)) (pushnew :coalton-with-doc *features*)
 ;; abcl offers no TCE
 #-abcl (pushnew :coalton-env-has-tce *features*)
 ;; ecl seems to have some issues with TCE too
 #+(and coalton-env-has-tce (not ecl)) (pushnew :coalton-env-really-has-tce *features*)
+;; ecl/clasp - without package locks
+#+(and (or ecl clasp) (not coalton-with-package-locks))
+(pushnew :coalton-without-package-locks *features*)
 
 (asdf:defsystem "coalton"
   :description "An efficient, statically typed functional programming language that supercharges Common Lisp. "

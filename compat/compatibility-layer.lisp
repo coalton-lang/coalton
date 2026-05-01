@@ -205,19 +205,21 @@
   #-(or sbcl abcl)
   0)
 
-;;; Package locks (or sbcl ecl)
+;;; Package locks (and (or sb-package-locks ecl clasp) (not coalton-without-package-locks))
 
 #+ecl(require '#:package-locks)
 (defmacro try-lock-package (the-package)
-  #-(or sbcl ecl clasp)(declare (ignore the-package))
-  #+sb-package-locks
+  #-(and (or sb-package-locks ecl clasp) (not coalton-without-package-locks))
+  (declare (ignore the-package))
+  #+(and sb-package-locks (not coalton-without-package-locks))
   `(sb-ext:lock-package ,the-package)
-  #+(or ecl clasp)
+  #+(and (or ecl clasp) (not coalton-without-package-locks))
   `(ext:lock-package ,the-package))
 
 (defmacro try-unlock-package (the-package)
-  #-(or sbcl ecl clasp)(declare (ignore the-package))
-  #+sb-package-locks
+  #-(and (or sb-package-locks ecl clasp) (not coalton-without-package-locks))
+  (declare (ignore the-package))
+  #+(and sb-package-locks (not coalton-without-package-locks))
   `(sb-ext:unlock-package ,the-package)
-  #+(or ecl clasp)
+  #+(and (or ecl clasp) (not coalton-without-package-locks))
   `(ext:unlock-package ,the-package))
