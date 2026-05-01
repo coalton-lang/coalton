@@ -102,7 +102,7 @@ jobs:
           EOF
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
           ls ${CL_SOURCE_REGISTRY}/coalton.asd
-	  rm -rf /root/.cache/c*
+          rm -rf /root/.cache/c*
           abcl --noinform --nosystem --batch --load run-tests.lisp
 
       - name: Run Clasp tests
@@ -126,7 +126,7 @@ jobs:
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
           ls ${CL_SOURCE_REGISTRY}/coalton.asd
           ls /root/.clasprc /root/quicklisp
-	  rm -rf /root/.cache/c*
+          rm -rf /root/.cache/c*
           clasp --load /root/.clasprc --script run-tests.lisp
 
       - name: Run ECL tests
@@ -145,5 +145,5 @@ jobs:
           EOF
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
           ls ${CL_SOURCE_REGISTRY}/coalton.asd
-	  rm -rf /root/.cache/c*
+          rm -rf /root/.cache/c*
           ecl --rc -q --shell run-tests.lisp
