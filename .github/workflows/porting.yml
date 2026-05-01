@@ -89,7 +89,8 @@ jobs:
               (load "/.abclrc")
               (ql:quickload :computable-reals) ;; breaks on SAFETY=3
               (setq system:*safety* ${{ matrix.SAFETY }})
-              (ql:quickload :coalton/tests)
+              ;; (ql:quickload :coalton/tests)
+              (asdf:load-system :coalton/tests)
               (asdf:test-system :coalton/tests)
               ; TODO: Remove this or add tests for these programs.
               (asdf:load-system :small-coalton-programs)
@@ -114,7 +115,8 @@ jobs:
           ;; (load "/.clasprc")
             #-quicklisp (load "/root/quicklisp/setup.lisp")
             (setf ql:*local-project-directories* (quote ("/extras" "/lisp")))
-          (ql:quickload :coalton/tests)
+          ;; (ql:quickload :coalton/tests)
+          (asdf:load-system :coalton/tests)
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
           (asdf:load-system :small-coalton-programs)
@@ -132,7 +134,8 @@ jobs:
         run: |
           cat <<EOF > run-tests.lisp
           (load "/.eclrc")
-          (ql:quickload :coalton/tests)
+          ;; (ql:quickload :coalton/tests)
+          (asdf:load-system :coalton/tests)
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
           (asdf:load-system :small-coalton-programs)
