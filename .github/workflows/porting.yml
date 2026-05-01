@@ -87,7 +87,8 @@ jobs:
           (cl:handler-case
             (cl:progn
               (load "/.abclrc")
-              (ql:quickload :computable-reals) ;; breaks on SAFETY=3
+              ;; (ql:quickload :computable-reals) ;; breaks on SAFETY=3
+              (asdf:load-system :computable-reals) ;; breaks on SAFETY=3
               (setq system:*safety* ${{ matrix.SAFETY }})
               ;; (ql:quickload :coalton/tests)
               (asdf:load-system :coalton/tests)
@@ -101,6 +102,7 @@ jobs:
           EOF
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
           ls ${CL_SOURCE_REGISTRY}/coalton.asd
+	  rm -rf /root/.cache/c*
           abcl --noinform --nosystem --batch --load run-tests.lisp
 
       - name: Run Clasp tests
@@ -113,8 +115,8 @@ jobs:
           cat <<EOF > run-tests.lisp
           ;;; Clasp cannot find /.clasprc - copy its code here instead.
           ;; (load "/.clasprc")
-            #-quicklisp (load "/root/quicklisp/setup.lisp")
-            (setf ql:*local-project-directories* (quote ("/extras" "/lisp")))
+            ;; #-quicklisp (load "/root/quicklisp/setup.lisp")
+            ;; (setf ql:*local-project-directories* (quote ("/extras" "/lisp")))
           ;; (ql:quickload :coalton/tests)
           (asdf:load-system :coalton/tests)
           (asdf:test-system :coalton/tests)
@@ -123,7 +125,9 @@ jobs:
           EOF
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
           ls ${CL_SOURCE_REGISTRY}/coalton.asd
-          clasp --script run-tests.lisp
+          ls /root/.clasprc /root/quicklisp
+	  rm -rf /root/.cache/c*
+          clasp --load /root/.clasprc --script run-tests.lisp
 
       - name: Run ECL tests
         if: matrix.LISP_IMPL == 'ecl'
@@ -133,7 +137,6 @@ jobs:
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
-          (load "/.eclrc")
           ;; (ql:quickload :coalton/tests)
           (asdf:load-system :coalton/tests)
           (asdf:test-system :coalton/tests)
@@ -142,4 +145,5 @@ jobs:
           EOF
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
           ls ${CL_SOURCE_REGISTRY}/coalton.asd
-          ecl --norc -q --shell run-tests.lisp
+	  rm -rf /root/.cache/c*
+          ecl --rc -q --shell run-tests.lisp
