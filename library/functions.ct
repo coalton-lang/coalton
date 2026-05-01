@@ -68,7 +68,6 @@ Print a line to `cl:*standard-output*` in the form \"{STR}: {ITEM}\"."
   ;; Function combinators
   ;;
 
-  (inline) 
   (declare fix (((:a -> :b) * :a -> :b) -> (:a -> :b)))
   (define (fix f)
     "Compute the fixed point of a unary function. This is equivalent to the Y-combinator of the lambda calculus. This combinator allows recursion without specific assignment of names. For example, the factorial function can be written
