@@ -84,7 +84,7 @@ jobs:
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
-          (cl:handler-case
+          ;; (cl:handler-case
             (cl:progn
               (load "/.abclrc")
               (ql:update-dist "quicklisp")
@@ -97,9 +97,9 @@ jobs:
               ; TODO: Remove this or add tests for these programs.
               (asdf:load-system :small-coalton-programs)
               (uiop:quit 0))
-            (cl:error (c)
-              (declare (ignore c))
-              (uiop:quit 1)))
+            ;; (cl:error (c)
+              ;; (declare (ignore c))
+              ;; (uiop:quit 1)))
           EOF
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
           ls ${CL_SOURCE_REGISTRY}/coalton.asd
@@ -128,7 +128,7 @@ jobs:
           EOF
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
           ls ${CL_SOURCE_REGISTRY}/coalton.asd
-          ls -l /root/.clasprc
+          ls -l /.clasprc /root/.clasprc
           ls -lR /root/quicklisp
           clasp --script run-tests.lisp
 
