@@ -87,6 +87,7 @@ jobs:
           (cl:handler-case
             (cl:progn
               (load "/.abclrc")
+              (ql:update-dist "quicklisp")
               ;; (ql:quickload :computable-reals) ;; breaks on SAFETY=3
               (asdf:load-system :computable-reals) ;; breaks on SAFETY=3
               (setq system:*safety* ${{ matrix.SAFETY }})
@@ -116,6 +117,9 @@ jobs:
           ;; (load "/.clasprc")
             #-quicklisp (load "/root/quicklisp/setup.lisp")
             (setf ql:*local-project-directories* (quote ("/extras" "/lisp")))
+          (ql:update-dist "quicklisp")
+          (ql:quickload :eclector)
+          (ql:quickload :eclector-concrete-syntax-tree)
           ;; (ql:quickload :coalton/tests)
           (asdf:load-system :coalton/tests)
           (asdf:test-system :coalton/tests)
@@ -124,8 +128,8 @@ jobs:
           EOF
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
           ls ${CL_SOURCE_REGISTRY}/coalton.asd
-          ls -l /root/.clasprc /root/quicklisp
-          id
+          ls -l /root/.clasprc
+          ls -lR /root/quicklisp
           clasp --script run-tests.lisp
 
       - name: Run ECL tests
@@ -138,6 +142,7 @@ jobs:
           cat <<EOF > run-tests.lisp
           ;; (ql:quickload :coalton/tests)
           (load "/.eclrc")
+          (ql:update-dist "quicklisp")
           (asdf:load-system :coalton/tests)
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
