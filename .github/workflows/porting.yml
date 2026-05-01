@@ -102,7 +102,6 @@ jobs:
           EOF
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
           ls ${CL_SOURCE_REGISTRY}/coalton.asd
-          rm -rf /root/.cache/c*
           abcl --noinform --nosystem --batch --load run-tests.lisp
 
       - name: Run Clasp tests
@@ -115,8 +114,8 @@ jobs:
           cat <<EOF > run-tests.lisp
           ;;; Clasp cannot find /.clasprc - copy its code here instead.
           ;; (load "/.clasprc")
-            ;; #-quicklisp (load "/root/quicklisp/setup.lisp")
-            ;; (setf ql:*local-project-directories* (quote ("/extras" "/lisp")))
+            #-quicklisp (load "/root/quicklisp/setup.lisp")
+            (setf ql:*local-project-directories* (quote ("/extras" "/lisp")))
           ;; (ql:quickload :coalton/tests)
           (asdf:load-system :coalton/tests)
           (asdf:test-system :coalton/tests)
@@ -125,9 +124,9 @@ jobs:
           EOF
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
           ls ${CL_SOURCE_REGISTRY}/coalton.asd
-          ls /root/.clasprc /root/quicklisp
-          rm -rf /root/.cache/c*
-          clasp --load /root/.clasprc --script run-tests.lisp
+          ls -l /root/.clasprc /root/quicklisp
+          id
+          clasp --script run-tests.lisp
 
       - name: Run ECL tests
         if: matrix.LISP_IMPL == 'ecl'
@@ -138,6 +137,7 @@ jobs:
         run: |
           cat <<EOF > run-tests.lisp
           ;; (ql:quickload :coalton/tests)
+          (load "/.eclrc")
           (asdf:load-system :coalton/tests)
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
@@ -145,5 +145,4 @@ jobs:
           EOF
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
           ls ${CL_SOURCE_REGISTRY}/coalton.asd
-          rm -rf /root/.cache/c*
-          ecl --rc -q --shell run-tests.lisp
+          ecl -q --shell run-tests.lisp
