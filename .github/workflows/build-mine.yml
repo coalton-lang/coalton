@@ -132,10 +132,34 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev \
             libsoup-3.0-dev libgtk-3-dev librsvg2-dev \
             libayatana-appindicator3-dev libxdo-dev libssl-dev \
             pkg-config file curl unzip jq
+
+          # Pin libwebkit2gtk-4.1 to 2.38.6 — the last pre-DMA-BUF
+          # release in the 4.1 line.  Versions >= 2.42 take EGL paths
+          # that fail when the bundled libwebkit links against a host's
+          # mesa with a different ABI (Fedora/Manjaro/etc.), surfacing
+          # as EGL_BAD_PARAMETER on launch.  See coalton-lang/coalton#1935
+          # and the matching gitbutler fix in gitbutlerapp/gitbutler#5301.
+          # We can't go lower than 2.38 because `javascriptcore-rs-sys`
+          # enforces `>= 2.38`, and Jammy's GA (2.36.0) is below that.
+          # 2.38.6 is no longer in active jammy pockets, so we point
+          # apt at a frozen Ubuntu archive snapshot from when it was
+          # current.
+          SNAPSHOT=20230301T000000Z
+          sudo tee /etc/apt/sources.list.d/jammy-snapshot.list >/dev/null <<EOF
+          deb [check-valid-until=no] http://snapshot.ubuntu.com/ubuntu/$SNAPSHOT jammy-security main
+          EOF
+          sudo apt-get update
+          WEBKIT_PIN=2.38.6-0ubuntu0.22.04.1
+          sudo apt-get install -y --allow-downgrades \
+            libwebkit2gtk-4.1-0=$WEBKIT_PIN \
+            libwebkit2gtk-4.1-dev=$WEBKIT_PIN \
+            libjavascriptcoregtk-4.1-0=$WEBKIT_PIN \
+            libjavascriptcoregtk-4.1-dev=$WEBKIT_PIN \
+            gir1.2-javascriptcoregtk-4.1=$WEBKIT_PIN \
+            gir1.2-webkit2-4.1=$WEBKIT_PIN
 
       - name: Setup SBCL
         uses: coalton-lang/coalton-runners/setup-sbcl@main
