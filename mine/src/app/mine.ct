@@ -4849,6 +4849,7 @@ Render-app is NOT called here; the main loop handles rendering."
       (True
        (when best-effort
          (term:set-best-effort!))
+       (clipboard:initialize-clipboard!)
        (cond
          ((any (fn (a) (== a "--setup")) args)
           (setup:run-setup)
