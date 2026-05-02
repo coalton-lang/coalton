@@ -10,6 +10,7 @@
    (#:cellw #:mine/text/width)
    (#:render #:mine/widget/render)
    (#:wt #:mine/widget/types)
+   (#:cfg-tm #:mine/config/themes)
    (#:cfg #:mine/config/types))
   (:export
    #:run-setup))
@@ -660,6 +661,10 @@
                   (cl:format out " :repl-init ~A~%" init-str))
                 (cl:when has-paths
                   (cl:format out " :project-roots ~S~%" path-str))
+                ;; Write theme
+                (cl:format out " :theme ")
+                (cfg-tm:save-theme-config! out theme)
+                (cl:format out "~%")
                 (cl:format out ")~%"))
               cl:t)
           (cl:error () cl:nil)))))
@@ -891,6 +896,20 @@
                                 "Where do you want to keep your projects?"
                                 ql-desc
                                 "~/common-lisp/"))
+
+    ;; 5. Visual Theme (Mine or Terminal)
+    (let theme-idx = (ask terminal
+                          "Which theme do you want to use?"
+                          (make-list "Mine can use its own visual theme."
+                                     "Alternatively, Mine can let the terminal"
+                                     "control the theme. Some terminals have"
+                                     "their own theme support.")
+                          (make-list "Mine" "Terminal")
+                          0))
+    (let theme = (if (== 0 theme-idx)
+                     cfg-tm:MineTheme
+                     cfg-tm:TerminalTheme))
+
     (let project-roots =
       (if (lisp (-> Boolean) (proj-input) (cl:plusp (cl:length proj-input)))
           (make-list (lisp (-> String) (proj-input)
@@ -921,7 +940,7 @@
     (show-tip terminal)
 
     ;; Write config and show result
-    (let config = (cfg:MineConfig se True lang pkg init 4096 project-roots))
+    (let config = (cfg:MineConfig se True lang pkg init 4096 project-roots theme))
     (let _ok = (write-config! config))
     (show-done terminal)
 

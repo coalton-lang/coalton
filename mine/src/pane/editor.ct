@@ -759,7 +759,6 @@ segments) and highlights the current visual row."
 
 (coalton-toplevel
 
-  (define selection-bg   color:selection-bg)
   (define search-bg      color:search-match-bg)
   (define search-current-bg color:search-current-bg)
 
@@ -853,14 +852,20 @@ segments) and highlights the current visual row."
        (color:Style (color:.style-fg style) color:slate (color:.style-attr style)))
       (True style)))
 
+  ;; NOTE: Was getting a compiler error with just adding the theme argument. Workaround by adding Tuple.
+  ;; 264 |          (DRAW-CHARS-WITH-TABS SCR Y TEXT-X TEXT 0 TEXT-LEN DEFAULT-STYLE
+  ;;     |  ________^
+  ;; 265 | |                              VCOL-MAP SCROLL-VCOL VIS-VCOL-END LINE-BUF-OFFSET
+  ;; 266 | |                              SEL-START SEL-END TAB-W))
+  ;;     | |_____________________________________________________^ Function call has 14 positional arguments but inferred type 'Screen * UFix * UFix * String * UFix * UFix * Style * Vector UFix * UFix * UFix * UFix * UFix * UFix * UFix * Theme -> Void' takes 15
   (declare draw-chars-with-tabs
     (screen:Screen * UFix * UFix * String * UFix * UFix * color:Style *
-     (Vector UFix) * UFix * UFix * UFix * UFix * UFix * UFix -> Void))
+     (Vector UFix) * UFix * UFix * UFix * UFix * UFix * (Tuple UFix color:Theme) -> Void))
   (define (draw-chars-with-tabs scr y text-x text char-start char-end style
                                 vcol-map scroll-vcol vis-vcol-end
-                                line-buf-offset sel-start sel-end tab-w)
+                                line-buf-offset sel-start sel-end (Tuple tab-w theme))
     "Draw characters TEXT[CHAR-START..CHAR-END) with tab expansion."
-    (let sel-style = (color:Style (color:.style-fg style) selection-bg (color:.style-attr style)))
+    (let sel-style = (color:Style (color:.style-fg style) (.selection-bg theme) (color:.style-attr style)))
     (let search-style = (color:Style color:black search-bg color:AttrNone))
     (let search-cur-style = (color:Style color:black search-current-bg color:AttrBold))
     (let vm-len = (vec:length vcol-map))
@@ -897,10 +902,10 @@ segments) and highlights the current visual row."
 
   (declare draw-highlighted-line
     (screen:Screen * UFix * UFix * UFix * UFix *
-     String * color:Style * UFix * UFix * UFix * UFix -> Void))
+     String * color:Style * UFix * UFix * UFix * UFix * color:Theme -> Void))
   (define (draw-highlighted-line scr y text-x text-width scroll-vcol
                                  text default-style
-                                 sel-start sel-end line-buf-offset tab-w)
+                                 sel-start sel-end line-buf-offset tab-w theme)
     "Draw TEXT with syntax highlighting, selection, and tab expansion."
     (lisp (-> Void) ()
       (cl:when (cl:or (cl:null *lexer-state*)
@@ -920,11 +925,11 @@ segments) and highlights the current visual row."
       ((Nil)
        (draw-chars-with-tabs scr y text-x text 0 text-len default-style
                              vcol-map scroll-vcol vis-vcol-end
-                             line-buf-offset sel-start sel-end tab-w))
+                             line-buf-offset sel-start sel-end (Tuple tab-w theme)))
       (_
        (%draw-hl-tokens tokens scr y text-x text text-len default-style def-bg
                         vcol-map scroll-vcol vis-vcol-end
-                        line-buf-offset sel-start sel-end tab-w))))
+                        line-buf-offset sel-start sel-end (Tuple tab-w theme)))))
 
   (declare %lex-one-line (String -> (List tok:Token)))
   (define (%lex-one-line text)
@@ -942,10 +947,10 @@ For plain-text mode (lexer-mode 2), returns Nil."
   (declare draw-line-segment
     (screen:Screen * UFix * UFix * UFix * UFix *
      String * color:Style * UFix * UFix * UFix * UFix *
-     (List tok:Token) -> Void))
+     (List tok:Token) * color:Theme -> Void))
   (define (draw-line-segment scr y text-x text-width scroll-vcol
                              text default-style sel-start sel-end
-                             line-buf-offset tab-w tokens)
+                             line-buf-offset tab-w tokens theme)
     "Draw a portion of TEXT at screen (Y, TEXT-X) spanning TEXT-WIDTH visual
 columns starting at SCROLL-VCOL. TOKENS are the pre-lexed tokens for the
 whole logical line (same tokens can be reused for every segment of that
@@ -958,11 +963,11 @@ line)."
       ((Nil)
        (draw-chars-with-tabs scr y text-x text 0 text-len default-style
                              vcol-map scroll-vcol vis-vcol-end
-                             line-buf-offset sel-start sel-end tab-w))
+                             line-buf-offset sel-start sel-end (Tuple tab-w theme)))
       (_
        (%draw-hl-tokens tokens scr y text-x text text-len default-style def-bg
                         vcol-map scroll-vcol vis-vcol-end
-                        line-buf-offset sel-start sel-end tab-w))))
+                        line-buf-offset sel-start sel-end (Tuple tab-w theme)))))
 
   (declare draw-diagnostic-point-markers
     (screen:Screen * UFix * UFix * UFix * UFix *
@@ -996,10 +1001,10 @@ line)."
   (declare %draw-hl-tokens
     ((List tok:Token) * screen:Screen * UFix * UFix * String * UFix *
      color:Style * color:Color * (Vector UFix) * UFix * UFix *
-     UFix * UFix * UFix * UFix -> Void))
+     UFix * UFix * UFix * (Tuple UFix color:Theme) -> Void))
   (define (%draw-hl-tokens tokens scr y text-x text text-len
                            default-style def-bg vcol-map scroll-vcol vis-vcol-end
-                           line-buf-offset sel-start sel-end tab-w)
+                           line-buf-offset sel-start sel-end (Tuple tab-w theme))
     "Draw tokens with syntax highlighting."
     (match tokens
       ((Nil) (values))
@@ -1017,7 +1022,7 @@ line)."
                (color:Style (color:.style-fg style) def-bg (color:.style-attr style))))
          (draw-chars-with-tabs scr y text-x text tok-start tok-end
                                final-style vcol-map scroll-vcol vis-vcol-end
-                               line-buf-offset sel-start sel-end tab-w))
+                               line-buf-offset sel-start sel-end (Tuple tab-w theme)))
        (%draw-hl-tokens rest scr y text-x text text-len
                         default-style def-bg vcol-map scroll-vcol vis-vcol-end
-                        line-buf-offset sel-start sel-end tab-w)))))
+                        line-buf-offset sel-start sel-end (Tuple tab-w theme))))))

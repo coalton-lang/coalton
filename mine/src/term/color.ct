@@ -46,7 +46,9 @@
    #:accent-fg #:error-fg #:warning-fg #:info-fg
    #:gutter-fg #:border-fg
    ;; Semantic - scrollbar
-   #:scrollbar-track-fg #:scrollbar-track-bg #:scrollbar-thumb-fg))
+   #:scrollbar-track-fg #:scrollbar-track-bg #:scrollbar-thumb-fg
+   ;; Theme
+   #:Theme))
 
 (in-package #:mine/term/color)
 
@@ -251,3 +253,43 @@
   (define scrollbar-track-fg dim-grey)
   (define scrollbar-track-bg aluminium-6)
   (define scrollbar-thumb-fg aluminium-3))
+
+;;; Theme
+
+(coalton-toplevel
+
+  (define-struct Theme
+    "An assignment of colors to semantic roles."
+
+    ;;; Backgrounds
+
+    (selection-bg            Color)
+    (search-match-bg         Color)
+    (search-current-bg       Color)
+    (highlight-bg            Color)
+    (match-paren-bg          Color)
+    (panel-bg                Color)
+    (repl-bg                 Color)
+    (current-line-bg         Color)
+    (field-bg                Color)
+    (status-bar-bg           Color)
+    (accent-bg               Color)
+    (error-dialog-bg         Color)
+
+    ;;; Foregrounds
+
+    (text-fg                 Color)
+    (text-dim-fg             Color)
+    (text-dimmer-fg          Color)
+    (accent-fg               Color)
+    (error-fg                Color)
+    (warning-fg              Color)
+    (info-fg                 Color)
+    (gutter-fg               Color)
+    (border-fg               Color)
+
+    ;;; Scrollbar
+
+    (scrollbar-track-fg      Color)
+    (scrollbar-track-bg      Color)
+    (scrollbar-thumb-fg      Color)))

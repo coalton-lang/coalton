@@ -1,7 +1,7 @@
 (cl:defpackage #:mine/config/types
   (:use #:coalton #:coalton-prelude)
   (:local-nicknames
-   (:mt #:mine/config/themes))
+   (:c #:mine/term/color))
   (:export
    #:MineConfig #:MineConfig
    #:.config-structural-editing
@@ -26,4 +26,4 @@
     (config-repl-init          (Optional String))
     (config-repl-heap-size     UFix)
     (config-project-roots      (List String))
-    (config-theme              mt:Theme)))
+    (config-theme              c:Theme)))
