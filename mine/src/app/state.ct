@@ -1,0 +1,321 @@
+(cl:defpackage #:mine/app/state
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:cell #:coalton/cell)
+   (#:menubar #:mine/pane/menubar)
+   (#:status #:mine/pane/status)
+   (#:editor #:mine/pane/editor)
+   (#:mgr #:mine/buffer/manager)
+   (#:cursor #:mine/edit/cursor)
+   (#:repl #:mine/pane/repl)
+   (#:tree #:mine/pane/tree)
+   (#:focus #:mine/widget/focus)
+   (#:lifecycle #:mine/protocol/lifecycle)
+   (#:msg #:mine/protocol/messages)
+   (#:mini #:mine/pane/minibuffer)
+   (#:cfgt #:mine/config/types)
+   (#:complete #:mine/app/completion)
+   (#:spinner #:mine/widget/spinner))
+  (:export
+   #:NativeBox
+   #:native-box-new
+   #:TreeLayout
+   #:TreeHidden
+   #:TreeVisible
+   #:CenterLayout
+   #:CenterEditor
+   #:CenterEditorFull
+   #:CenterEditorFullReplRow
+   #:CenterEditorReplSplit
+   #:CenterReplFull
+   #:MineLayout
+   #:.ml-tree
+   #:.ml-center
+   #:MineState
+   #:.ms-menu
+   #:.ms-status
+   #:.ms-editor
+   #:.ms-bufmgr
+   #:.ms-cursor
+   #:.ms-repl
+   #:.ms-tree
+   #:.ms-focus
+   #:.ms-runtime
+   #:.ms-next-req-id
+   #:.ms-layout
+   #:.ms-tree-frozen
+   #:.ms-content-x
+   #:.ms-repl-package
+   #:.ms-repl-busy
+   #:.ms-repl-timing
+   #:.ms-proto-mailbox
+   #:.ms-proto-thread
+   #:.ms-debugger-active
+   #:.ms-debugger-condition
+   #:.ms-debugger-items
+   #:.ms-debugger-selected
+   #:.ms-debugger-conn-stream
+   #:.ms-jump-stack
+   #:.ms-project-system
+   #:.ms-project-asd-path
+   #:.ms-quit
+   #:.ms-eval-start-time
+   #:.ms-active-request
+   #:.ms-minibuffer
+   #:.ms-repl-lang
+   #:.ms-preview-path
+   #:.ms-diagnostics
+   #:.ms-structural-editing
+   #:.ms-config
+   #:.ms-io-request-active
+   #:.ms-io-request-data
+   #:.ms-completion
+   #:.ms-busy-activity
+   #:.ms-spinner
+   #:.ms-debugger-scroll
+   #:.ms-debugger-body-h
+   #:.ms-debugger-total
+   #:.ms-debugger-follow
+   #:.ms-beam-request-id
+   #:.ms-quick-result-state
+   #:.ms-quick-result-request-id
+   #:.ms-bg-proto-thread
+   #:get-status-bar
+   #:get-editor-pane
+   #:get-bufmgr
+   #:get-cursor-state
+   #:get-repl-pane
+   #:get-focus-mgr
+   #:get-repl-package-cell
+   #:get-repl-lang-cell
+   #:get-runtime-mgr
+   #:get-eval-start-time-cell
+   #:get-active-request-cell
+   #:get-proto-mailbox
+   #:get-proto-thread
+   #:get-bg-proto-thread
+   #:get-debugger-condition-cell
+   #:get-debugger-items
+   #:get-debugger-selected-cell
+   #:get-debugger-scroll-cell
+   #:get-debugger-body-h-cell
+   #:get-debugger-total-cell
+   #:get-debugger-follow-cell
+   #:get-conn-stream
+   #:get-diagnostics
+   #:get-jump-stack
+   #:get-quit-cell
+   #:get-next-req-id-cell
+   #:get-io-request-data
+   #:get-layout-cell
+   #:get-completion
+   #:get-content-x-cell
+   #:get-quick-result-state
+   #:get-quick-result-request-cell))
+
+(in-package #:mine/app/state)
+
+(cl:defstruct %native-box
+  "A box holding an arbitrary CL object, used for mailboxes, threads, streams."
+  (value cl:nil :type cl:t))
+
+(coalton-toplevel
+
+;;; NativeBox -- opaque wrapper for CL-side objects
+
+  (repr :native %native-box)
+  (define-type NativeBox
+    "Opaque container for CL-side native objects (mailboxes, threads, streams).")
+
+  (declare native-box-new (Void -> NativeBox))
+  (define (native-box-new)
+    "Create an empty NativeBox."
+    (lisp (-> NativeBox) ()
+      (make-%native-box)))
+
+;;; Layout state
+
+  (repr :enum)
+  (define-type TreeLayout
+    TreeHidden
+    TreeVisible)
+
+  (define-instance (Eq TreeLayout)
+    (define (== a b)
+      (match (Tuple a b)
+        ((Tuple (TreeHidden) (TreeHidden)) True)
+        ((Tuple (TreeVisible) (TreeVisible)) True)
+        (_ False))))
+
+  (repr :enum)
+  (define-type CenterLayout
+    CenterEditor
+    CenterEditorFull
+    CenterEditorFullReplRow
+    CenterEditorReplSplit
+    CenterReplFull)
+
+  (define-instance (Eq CenterLayout)
+    (define (== a b)
+      (match (Tuple a b)
+        ((Tuple (CenterEditor) (CenterEditor)) True)
+        ((Tuple (CenterEditorFull) (CenterEditorFull)) True)
+        ((Tuple (CenterEditorFullReplRow) (CenterEditorFullReplRow)) True)
+        ((Tuple (CenterEditorReplSplit) (CenterEditorReplSplit)) True)
+        ((Tuple (CenterReplFull) (CenterReplFull)) True)
+        (_ False))))
+
+  (define-struct MineLayout
+    (ml-tree   TreeLayout)
+    (ml-center CenterLayout))
+
+;;; Application state
+
+  (define-struct MineState
+    "Top-level mutable application state."
+    (ms-menu              menubar:MenuBar)
+    (ms-status            status:StatusBar)
+    (ms-editor            editor:EditorPane)
+    (ms-bufmgr            mgr:BufferManager)
+    (ms-cursor            cursor:CursorState)
+    (ms-repl              repl:ReplPane)
+    (ms-tree              tree:TreePane)
+    (ms-focus             focus:FocusManager)
+    (ms-runtime           lifecycle:RuntimeManager)
+    (ms-next-req-id       (Cell UFix))
+    (ms-layout            (Cell MineLayout))
+    (ms-tree-frozen       (Cell Boolean))
+    (ms-content-x         (Cell UFix))
+    (ms-repl-package      (Cell String))
+    (ms-repl-busy         (Cell Boolean))
+    (ms-repl-timing       (Cell String))
+    (ms-proto-mailbox     NativeBox) ;; sb-concurrency mailbox, or nil
+    (ms-proto-thread      NativeBox) ;; reader thread handle, or nil
+    (ms-debugger-active   (Cell Boolean))
+    (ms-debugger-condition (Cell String))
+    (ms-debugger-items    NativeBox) ;; CL list of debugger items, or nil
+    (ms-debugger-selected (Cell UFix))
+    (ms-debugger-conn-stream NativeBox) ;; socket stream, or (cons msg-id stream)
+    (ms-jump-stack        NativeBox) ;; CL list of (filepath . position)
+    (ms-project-system    (Cell (Optional String)))
+    (ms-project-asd-path  (Cell (Optional String)))
+    (ms-quit              (Cell Boolean))
+    (ms-eval-start-time   (Cell UFix))
+    (ms-active-request    (Cell (Optional msg:RequestId)))
+    (ms-minibuffer        mini:Minibuffer)
+    (ms-repl-lang         (Cell String))
+    (ms-preview-path      (Cell (Optional String)))
+    (ms-diagnostics       NativeBox) ;; CL hash table: filepath -> diagnostics
+    (ms-structural-editing (Cell Boolean))
+    (ms-config             cfgt:MineConfig)
+    (ms-io-request-active  (Cell Boolean))
+    (ms-io-request-data    NativeBox) ;; (msg-id . stream) for IO response
+    (ms-completion         complete:CompletionState)
+    (ms-busy-activity     (Cell (Optional String)))
+    (ms-spinner           spinner:Spinner)
+    (ms-debugger-scroll   (Cell UFix))
+    (ms-debugger-body-h   (Cell UFix))
+    (ms-debugger-total    (Cell UFix))
+    (ms-debugger-follow   (Cell Boolean))
+    (ms-beam-request-id   (Cell (Optional msg:RequestId)))
+    (ms-quick-result-state  NativeBox) ;; CL plist for transient result popup
+    (ms-quick-result-request-id (Cell (Optional msg:RequestId)))
+    (ms-bg-proto-thread    NativeBox))
+
+;;; Named accessors for CL interop
+
+  (declare get-status-bar (MineState -> status:StatusBar))
+  (define (get-status-bar st) (.ms-status st))
+
+  (declare get-editor-pane (MineState -> editor:EditorPane))
+  (define (get-editor-pane st) (.ms-editor st))
+
+  (declare get-bufmgr (MineState -> mgr:BufferManager))
+  (define (get-bufmgr st) (.ms-bufmgr st))
+
+  (declare get-cursor-state (MineState -> cursor:CursorState))
+  (define (get-cursor-state st) (.ms-cursor st))
+
+  (declare get-repl-pane (MineState -> repl:ReplPane))
+  (define (get-repl-pane st) (.ms-repl st))
+
+  (declare get-focus-mgr (MineState -> focus:FocusManager))
+  (define (get-focus-mgr st) (.ms-focus st))
+
+  (declare get-repl-package-cell (MineState -> (Cell String)))
+  (define (get-repl-package-cell st) (.ms-repl-package st))
+
+  (declare get-repl-lang-cell (MineState -> (Cell String)))
+  (define (get-repl-lang-cell st) (.ms-repl-lang st))
+
+  (declare get-runtime-mgr (MineState -> lifecycle:RuntimeManager))
+  (define (get-runtime-mgr st) (.ms-runtime st))
+
+  (declare get-eval-start-time-cell (MineState -> (Cell UFix)))
+  (define (get-eval-start-time-cell st) (.ms-eval-start-time st))
+
+  (declare get-active-request-cell (MineState -> (Cell (Optional msg:RequestId))))
+  (define (get-active-request-cell st) (.ms-active-request st))
+
+  (declare get-proto-mailbox (MineState -> NativeBox))
+  (define (get-proto-mailbox st) (.ms-proto-mailbox st))
+
+  (declare get-proto-thread (MineState -> NativeBox))
+  (define (get-proto-thread st) (.ms-proto-thread st))
+
+  (declare get-bg-proto-thread (MineState -> NativeBox))
+  (define (get-bg-proto-thread st) (.ms-bg-proto-thread st))
+
+  (declare get-debugger-condition-cell (MineState -> (Cell String)))
+  (define (get-debugger-condition-cell st) (.ms-debugger-condition st))
+
+  (declare get-debugger-items (MineState -> NativeBox))
+  (define (get-debugger-items st) (.ms-debugger-items st))
+
+  (declare get-debugger-selected-cell (MineState -> (Cell UFix)))
+  (define (get-debugger-selected-cell st) (.ms-debugger-selected st))
+
+  (declare get-debugger-scroll-cell (MineState -> (Cell UFix)))
+  (define (get-debugger-scroll-cell st) (.ms-debugger-scroll st))
+
+  (declare get-debugger-body-h-cell (MineState -> (Cell UFix)))
+  (define (get-debugger-body-h-cell st) (.ms-debugger-body-h st))
+
+  (declare get-debugger-total-cell (MineState -> (Cell UFix)))
+  (define (get-debugger-total-cell st) (.ms-debugger-total st))
+
+  (declare get-debugger-follow-cell (MineState -> (Cell Boolean)))
+  (define (get-debugger-follow-cell st) (.ms-debugger-follow st))
+
+  (declare get-conn-stream (MineState -> NativeBox))
+  (define (get-conn-stream st) (.ms-debugger-conn-stream st))
+
+  (declare get-diagnostics (MineState -> NativeBox))
+  (define (get-diagnostics st) (.ms-diagnostics st))
+
+  (declare get-jump-stack (MineState -> NativeBox))
+  (define (get-jump-stack st) (.ms-jump-stack st))
+
+  (declare get-quit-cell (MineState -> (Cell Boolean)))
+  (define (get-quit-cell st) (.ms-quit st))
+
+  (declare get-next-req-id-cell (MineState -> (Cell UFix)))
+  (define (get-next-req-id-cell st) (.ms-next-req-id st))
+
+  (declare get-io-request-data (MineState -> NativeBox))
+  (define (get-io-request-data st) (.ms-io-request-data st))
+
+  (declare get-layout-cell (MineState -> (Cell MineLayout)))
+  (define (get-layout-cell st) (.ms-layout st))
+
+  (declare get-completion (MineState -> complete:CompletionState))
+  (define (get-completion st) (.ms-completion st))
+
+  (declare get-content-x-cell (MineState -> (Cell UFix)))
+  (define (get-content-x-cell st) (.ms-content-x st))
+
+  (declare get-quick-result-state (MineState -> NativeBox))
+  (define (get-quick-result-state st) (.ms-quick-result-state st))
+
+  (declare get-quick-result-request-cell (MineState -> (Cell (Optional msg:RequestId))))
+  (define (get-quick-result-request-cell st) (.ms-quick-result-request-id st)))

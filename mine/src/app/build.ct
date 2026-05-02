@@ -229,7 +229,9 @@ Directory entry and CheckSum."
                             (uiop:temporary-directory)
                             (cl:get-universal-time)
                             (cl:random 1000000)))
-           (pkg-names '("MINE/APP/MINE" "MINE/PANE/EDITOR" "MINE/PANE/MENUBAR"
+           (pkg-names '("MINE/APP/MINE" "MINE/APP/STATE"
+                         "MINE/APP/LAYOUT" "MINE/APP/NAVIGATION"
+                         "MINE/PANE/EDITOR" "MINE/PANE/MENUBAR"
                          "MINE/PANE/MINIBUFFER" "MINE/PANE/REPL" "MINE/PANE/TREE"
                          "MINE/PANE/STATUS" "MINE/TERM/TERMINAL" "MINE/TERM/SCREEN"
                          "MINE/TERM/INPUT" "MINE/TERM/COLOR"

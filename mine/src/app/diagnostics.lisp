@@ -36,18 +36,6 @@
 (defvar *compile-file-remap* nil
   "When non-nil, a cons (temp-document-key . real-document-key) for remapping file diagnostics.")
 
-(defun mine-function (name)
-  "Return the MINE/APP/MINE function named NAME."
-  (multiple-value-bind (symbol status)
-      (find-symbol name "MINE/APP/MINE")
-    (unless (and symbol status)
-      (error "Missing mine/app/mine function ~A" name))
-    (symbol-function symbol)))
-
-(defun call-mine-function (name &rest args)
-  "Call the MINE/APP/MINE function NAME with ARGS."
-  (apply (mine-function name) args))
-
 (defun coalton-optional-value-or-nil (value)
   "Return NIL for Coalton None, otherwise return the wrapped value."
   (unless (coalton-impl/runtime/optional:cl-none-p value)
@@ -382,8 +370,8 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
   "Jump to the next (>0) or previous (<0) stored diagnostic.
 When SCOPE is a Coalton HashMap of document keys, only consider diagnostics in
 those files."
-  (let* ((bm (call-mine-function "GET-BUFMGR" st))
-         (cs (call-mine-function "GET-CURSOR-STATE" st))
+  (let* ((bm (mine/app/state:get-bufmgr st))
+         (cs (mine/app/state:get-cursor-state st))
          (opt-buf (mine/buffer/manager::bufmgr-current bm))
          (buf (coalton-optional-value-or-nil opt-buf))
          (current-file (and buf (mine/buffer/buffer:buffer-document-key buf)))
@@ -405,7 +393,7 @@ those files."
     (cond
       ((null locations)
        (mine/pane/status::statusbar-set-message!
-        (call-mine-function "GET-STATUS-BAR" st)
+        (mine/app/state:get-status-bar st)
         (if scope "No project diagnostics" "No diagnostics")))
       (t
        (loop
@@ -419,14 +407,14 @@ those files."
                        (gethash target attempted))
                (loop-finish))
              (setf (gethash target attempted) t)
-             (when (call-mine-function "%JUMP-TO-DOCUMENT-KEY" st
-                                       (first target)
-                                       (second target))
+             (when (mine/app/navigation:jump-to-document-key st
+                                                              (first target)
+                                                              (second target))
                (return-from jump-adjacent-diagnostic t))
              (setf cursor-file (first target)
                    cursor-pos (second target)))
        (mine/pane/status::statusbar-set-message!
-        (call-mine-function "GET-STATUS-BAR" st)
+        (mine/app/state:get-status-bar st)
         "No reachable diagnostics")))))
 
 ;;; Diagnostics popup
@@ -537,11 +525,11 @@ those files."
   (let* ((filepath mine/pane/editor::*editor-filepath*)
          (buf (coalton-optional-value-or-nil
                (mine/buffer/manager:bufmgr-current
-                (call-mine-function "GET-BUFMGR" st)))))
+                (mine/app/state:get-bufmgr st)))))
     (when (and (stringp filepath)
                (plusp (length filepath))
                buf)
-      (let* ((cs (call-mine-function "GET-CURSOR-STATE" st))
+      (let* ((cs (mine/app/state:get-cursor-state st))
              (position (mine/edit/cursor:cursor-position cs))
              (diagnostic (diagnostic-at-position filepath position)))
         (when diagnostic
@@ -569,8 +557,8 @@ those files."
                  (box-w (min (+ content-w 2)
                              (max 10 (- screen-w 2))))
                  (box-h (+ (length wrapped-lines) 3))
-                 (anchor-col (call-mine-function "%COMPLETION-ANCHOR-COL" st nil ""))
-                 (anchor-row (call-mine-function "%COMPLETION-ANCHOR-ROW" st nil))
+                 (anchor-col (mine/app/navigation:completion-anchor-col st nil ""))
+                 (anchor-row (mine/app/navigation:completion-anchor-row st nil))
                  (top-limit 1)
                  (bottom-limit (max 2 (- screen-h 1)))
                  (below-row (1+ anchor-row))
