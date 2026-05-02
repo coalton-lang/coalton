@@ -179,6 +179,10 @@ mapping known function names to their arity."
               (loop :for (name . node) :in bindings
                     :collect (cons name (direct-application node function-table))))
 
+        (setf bindings
+              (loop :for (name . node) :in bindings
+                    :collect (cons name (lawnmow-to-fixpoint node))))
+
         ;; Update code db
         (loop :for (name . node) :in bindings
               :do (setf env (tc:set-code env name node)))
@@ -248,6 +252,18 @@ arity. TABLE will be mutated with additional entries."
 (defvar *maximum-optimization-passes* 8
   "The maximum number of times the optimizer may re-optimize.")
 
+(defun lawnmow-to-fixpoint (node)
+  (declare (type node node)
+           (values node &optional))
+  (loop :repeat *maximum-optimization-passes*
+        :do
+           (multiple-value-bind (new-node changed?) (lawnmow node)
+             (setf node new-node)
+             (unless changed?
+               (return node)))
+        :finally
+           (return node)))
+
 (defun optimize-node (node env)
   "Perform a series of optimizations on NODE in the environment
 ENV. Return a new node which is optimized."
@@ -279,6 +295,77 @@ ENV. Return a new node which is optimized."
        (go :REDO)))
   ;; Return the node.
   node)
+
+(defun node-abstraction-bound-variables (node)
+  (declare (type node-abstraction node)
+           (values parser:identifier-list &optional))
+  (append
+   (node-abstraction-vars node)
+   (loop :for param :in (node-abstraction-keyword-params node)
+         :append (list (keyword-param-var param)
+                       (keyword-param-supplied-p-var param)))))
+
+(defun pattern-bound-variables-escape-p (variables body)
+  "Return true if VARIABLES are used in BODY outside immediate call position."
+  (declare (type parser:identifier-list variables)
+           (type node body)
+           (values boolean &optional))
+  (let ((escaped? nil))
+    (labels ((tracked-variable-p (node bound-variables)
+               (and (node-variable-p node)
+                    (member (node-variable-value node) variables :test #'eq)
+                    (not (member (node-variable-value node)
+                                 bound-variables
+                                 :test #'eq))))
+             (mark-escaping-variables (node bound-variables)
+               (when (intersection variables
+                                   (set-difference (node-variables node)
+                                                   bound-variables
+                                                   :test #'eq)
+                                   :test #'eq)
+                 (setf escaped? t)))
+             (traverse-keyword-rands (keyword-rands bound-variables)
+               (loop :for rand :in keyword-rands
+                     :do
+                        (funcall *traverse*
+                                 (node-application-keyword-arg-value rand)
+                                 bound-variables)
+                        (alexandria:when-let ((supplied-p (node-application-keyword-arg-supplied-p rand)))
+                          (funcall *traverse* supplied-p bound-variables)))))
+      (unless (null variables)
+        (traverse-with-binding-list
+         body
+         (list
+          (action (:after node-variable node bound-variables)
+            (when (tracked-variable-p node bound-variables)
+              (setf escaped? t))
+            (values))
+          (action (:after node-lisp node bound-variables)
+            (loop :for (_ . name) :in (node-lisp-vars node)
+                  :when (and (member name variables :test #'eq)
+                             (not (member name bound-variables :test #'eq)))
+                    :do (setf escaped? t))
+            (values))
+          (action (:traverse node-application node bound-variables)
+            (unless (tracked-variable-p (node-application-rator node)
+                                        bound-variables)
+              (funcall *traverse*
+                       (node-application-rator node)
+                       bound-variables))
+            (loop :for rand :in (node-application-rands node)
+                  :do (funcall *traverse* rand bound-variables))
+            (traverse-keyword-rands (node-application-keyword-rands node)
+                                    bound-variables)
+            node)
+          (action (:traverse node-abstraction node bound-variables)
+            ;; A reference captured by a nested lambda may outlive the match
+            ;; branch, so treat it as escaping.
+            (mark-escaping-variables
+             (node-abstraction-subexpr node)
+             (append (node-abstraction-bound-variables node)
+                     bound-variables))
+            node)))))
+    escaped?))
 
 (defun pointfree (node table env)
   "Given a node NODE, a function table TABLE, and an environment ENV,
@@ -546,12 +633,16 @@ when possible."
 
   (labels ((apply-lift (node)
 
-             ;; If the constructed value, or any field of it, is captured by
-             ;; a pattern variable, then it can escape the match branch scope
-             ;; and cannot be safely stack allocated.
+             ;; If the constructed value, or any field of it, escapes the
+             ;; match branch scope, then it cannot be safely stack allocated.
+             ;; Immediate calls of captured functions are fine; returning or
+             ;; closing over them is not.
              (loop :for branch :in (node-match-branches node)
                    :for pattern := (match-branch-pattern branch)
-                   :when (pattern-variables pattern)
+                   :for variables := (pattern-variables pattern)
+                   :when (pattern-bound-variables-escape-p
+                          variables
+                          (match-branch-body branch))
                      :do (return-from apply-lift nil))
 
              (let ((expr (node-match-expr node)))

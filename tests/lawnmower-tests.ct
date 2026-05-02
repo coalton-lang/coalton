@@ -417,7 +417,7 @@
       (is (typep new-node 'ast:node-match))
       (is (typep (ast:node-match-expr new-node) 'ast:node-let)))))
 
-(deftest lawnmower-does-not-sink-match-through-captured-let ()
+(deftest lawnmower-sinks-match-through-captured-let ()
   (let* ((ty tc:*integer-type*)
          (fn-ty (tc:make-function-type* nil ty))
          (constructor 'coalton-native-tests::lawnmower-constructor)
@@ -464,9 +464,14 @@
                :value 0))))))
     (multiple-value-bind (new-node changed?)
         (coalton-impl/codegen/lawnmower:lawnmow node)
-      (is (not changed?))
-      (is (typep new-node 'ast:node-match))
-      (is (typep (ast:node-match-expr new-node) 'ast:node-let)))))
+      (is changed?)
+      (is (typep new-node 'ast:node-let))
+      (is (eq captured
+              (caar (ast:node-let-bindings new-node))))
+      (let ((subexpr (ast:node-let-subexpr new-node)))
+        (is (typep subexpr 'ast:node-match))
+        (is (typep (ast:node-match-expr subexpr)
+                   'ast:node-direct-application))))))
 
 (deftest lawnmower-inlines-immediate-bound-thunk-call ()
   (let* ((ty tc:*integer-type*)
