@@ -134,10 +134,12 @@
                      (render-type
                       (parsed-type
                        "(List (coalton/seq:Seq Integer) -> Tuple Boolean String)")))
+      #+coalton-with-doc
       (check-string= "documentation generator preserves explicit forall order"
                      "&forall; :RESULT :INPUT. :INPUT * :RESULT &rarr; :INPUT"
                      (coalton/doc/markdown::to-markdown
                       (coalton-type-of 'coalton-native-tests::ordered-forall-fn)))
+      #+coalton-with-doc
       (check-string= "documentation generator preserves nested forall order"
                      "&forall; :OUTER :INNER. :OUTER * :INNER &rarr; :OUTER"
                      (coalton/doc/markdown::to-markdown
@@ -153,6 +155,7 @@
                      (render-type (coalton-type-of 'coalton-native-tests::pretty-keyword-fn)))
       )))
 
+#+coalton-with-doc
 (deftest test-documentation-anchors-include-package-name ()
   (let* ((env coalton-impl/entry:*global-environment*)
          (hashmap-count
