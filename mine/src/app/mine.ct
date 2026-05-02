@@ -1,5 +1,5 @@
 (cl:defpackage #:mine/app/mine
-  (:use #:coalton #:coalton-prelude)
+  (:use #:coalton #:coalton-prelude #:mine/app/state)
   (:local-nicknames
    (#:cell #:coalton/cell)
    (#:str #:coalton/string)
@@ -53,23 +53,12 @@
    (#:hm #:coalton/hashmap))
   (:export
    #:mine-main
-   #:ProtoMsg #:ProtoReturn #:ProtoOutput #:ProtoDebug #:ProtoIORequest #:ProtoConnectionLost
-   #:get-status-bar #:get-editor-pane #:get-bufmgr #:get-cursor-state
-   #:get-repl-pane #:get-focus-mgr #:get-repl-package-cell
-   #:get-proto-mailbox #:get-proto-thread #:get-bg-proto-thread
-   #:get-debugger-condition-cell #:get-debugger-items
-   #:get-debugger-selected-cell #:get-conn-stream #:get-diagnostics
-   #:get-jump-stack #:get-quit-cell #:get-next-req-id-cell
-   #:get-runtime-mgr #:get-quick-result-state))
+   #:ProtoMsg #:ProtoReturn #:ProtoOutput #:ProtoDebug #:ProtoIORequest #:ProtoConnectionLost))
 
 (in-package #:mine/app/mine)
 
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
   (cl:require :sb-concurrency))
-
-(cl:defstruct %native-box
-  "A box holding an arbitrary CL object, used for mailboxes, threads, streams."
-  (value cl:nil :type cl:t))
 
 ;;; CL state referenced by lisp escapes in the Coalton code below.
 (cl:defvar *hint-result* "" "Cached hint string for status bar.")
@@ -119,207 +108,6 @@
                   (cl:format cl:nil "~Dm ~Ds" m s)))))
 
 (coalton-toplevel
-
-;;; NativeBox -- opaque wrapper for CL-side objects
-
-  (repr :native %native-box)
-  (define-type NativeBox
-    "Opaque container for CL-side native objects (mailboxes, threads, streams).")
-
-  (declare native-box-new (Void -> NativeBox))
-  (define (native-box-new)
-    "Create an empty NativeBox."
-    (lisp (-> NativeBox) ()
-      (make-%native-box)))
-
-;;; Layout state
-
-  (repr :enum)
-  (define-type TreeLayout
-    TreeHidden
-    TreeVisible)
-
-  (define-instance (Eq TreeLayout)
-    (define (== a b)
-      (match (Tuple a b)
-	((Tuple (TreeHidden) (TreeHidden)) True)
-	((Tuple (TreeVisible) (TreeVisible)) True)
-	(_ False))))
-
-  (repr :enum)
-  (define-type CenterLayout
-    CenterEditor
-    CenterEditorFull
-    CenterEditorFullReplRow
-    CenterEditorReplSplit
-    CenterReplFull)
-
-  (define-instance (Eq CenterLayout)
-    (define (== a b)
-      (match (Tuple a b)
-	((Tuple (CenterEditor) (CenterEditor)) True)
-	((Tuple (CenterEditorFull) (CenterEditorFull)) True)
-	((Tuple (CenterEditorFullReplRow) (CenterEditorFullReplRow)) True)
-	((Tuple (CenterEditorReplSplit) (CenterEditorReplSplit)) True)
-	((Tuple (CenterReplFull) (CenterReplFull)) True)
-	(_ False))))
-
-  (define-struct MineLayout
-    (ml-tree   TreeLayout)
-    (ml-center CenterLayout))
-
-;;; Application state
-
-  (define-struct MineState
-    "Top-level mutable application state."
-    (ms-menu              menubar:MenuBar)         ;; 0
-    (ms-status            status:StatusBar)        ;; 1
-    (ms-editor            editor:EditorPane)       ;; 2
-    (ms-bufmgr            mgr:BufferManager)       ;; 3
-    (ms-cursor            cursor:CursorState)      ;; 4
-    (ms-repl              repl:ReplPane)           ;; 5
-    (ms-tree              tree:TreePane)           ;; 7
-    (ms-focus             focus:FocusManager)      ;; 8
-    (ms-runtime           lifecycle:RuntimeManager) ;; 9
-    (ms-next-req-id       (Cell UFix))              ;; 10
-    (ms-layout            (Cell MineLayout))        ;; 11
-    (ms-tree-frozen       (Cell Boolean))           ;; 12 -- freeze tree when focus leaves
-    (ms-content-x         (Cell UFix))              ;; 13
-    (ms-repl-package      (Cell String))            ;; 14
-    (ms-repl-busy         (Cell Boolean))           ;; 15
-    (ms-repl-timing       (Cell String))            ;; 16
-    (ms-proto-mailbox     NativeBox) ;; 17 -- sb-concurrency mailbox (value = mailbox or nil)
-    (ms-proto-thread      NativeBox) ;; 18 -- reader thread handle (value = thread or nil)
-    (ms-debugger-active   (Cell Boolean)) ;; 19
-    (ms-debugger-condition (Cell String)) ;; 20
-    (ms-debugger-items    NativeBox) ;; 21 -- CL list of debugger items (or nil)
-    (ms-debugger-selected (Cell UFix)) ;; 22
-    (ms-debugger-conn-stream NativeBox) ;; 23 -- socket stream (or (cons msg-id stream))
-    (ms-jump-stack        NativeBox) ;; 24 -- CL list of (filepath . position) for Alt+,
-    (ms-project-system    (Cell (Optional String))) ;; 25 -- ASDF system name if opened from .asd
-    (ms-project-asd-path  (Cell (Optional String))) ;; 26 -- path to .asd file
-    (ms-quit              (Cell Boolean))           ;; 26
-    (ms-eval-start-time   (Cell UFix))    ;; 27 -- internal-real-time
-    (ms-active-request    (Cell (Optional msg:RequestId))) ;; 28 -- foreground REPL request controlling busy state
-    (ms-minibuffer        mini:Minibuffer) ;; 29
-    (ms-repl-lang         (Cell String)) ;; 30 -- "Coalton" or "Lisp"
-    (ms-preview-path      (Cell (Optional String))) ;; 31 -- path of previewed (unpinned) file
-    (ms-diagnostics       NativeBox) ;; 32 -- CL hash table: filepath -> list of (line severity message)
-    (ms-find-needle       (Cell String)) ;; 33 -- current search string (empty = no search)
-    (ms-find-matches      NativeBox) ;; 34 -- CL simple-vector of match positions (UFix), or nil
-    (ms-structural-editing (Cell Boolean)) ;; 35 -- structural editing enabled?
-    (ms-config             cfgt:MineConfig) ;; 36 -- loaded configuration
-    (ms-io-request-active  (Cell Boolean)) ;; 37 -- waiting for IO input from user?
-    (ms-io-request-data    NativeBox) ;; 38 -- (msg-id . stream) for IO response
-    (ms-completion         complete:CompletionState) ;; 39 -- inline completion popup
-    (ms-busy-activity     (Cell (Optional String))) ;; 40 -- named REPL activity, e.g. Beam
-    (ms-spinner           spinner:Spinner) ;; 41 -- busy spinner
-    (ms-debugger-scroll   (Cell UFix)) ;; 42 -- debugger body scroll offset (in display lines)
-    (ms-debugger-body-h   (Cell UFix)) ;; 43 -- cached debugger body height (rows) from last render
-    (ms-debugger-total    (Cell UFix)) ;; 44 -- cached debugger total line count from last render
-    (ms-debugger-follow   (Cell Boolean)) ;; 45 -- scroll to keep selection visible on next render
-    (ms-beam-request-id   (Cell (Optional msg:RequestId))) ;; 46 -- id of pending Beam Project request, if any
-    (ms-quick-result-state  NativeBox) ;; 47 -- CL plist for the transient result popup
-    (ms-quick-result-request-id (Cell (Optional msg:RequestId))) ;; 48 -- pending Quick Result request, if any
-    (ms-bg-proto-thread    NativeBox)) ;; 49 -- background protocol reader thread handle
-
-;;; Named accessors for CL interop (avoids fragile numeric indices)
-
-  (declare get-status-bar (MineState -> status:StatusBar))
-  (define (get-status-bar st) (.ms-status st))
-
-  (declare get-editor-pane (MineState -> editor:EditorPane))
-  (define (get-editor-pane st) (.ms-editor st))
-
-  (declare get-bufmgr (MineState -> mgr:BufferManager))
-  (define (get-bufmgr st) (.ms-bufmgr st))
-
-  (declare get-cursor-state (MineState -> cursor:CursorState))
-  (define (get-cursor-state st) (.ms-cursor st))
-
-  (declare get-repl-pane (MineState -> repl:ReplPane))
-  (define (get-repl-pane st) (.ms-repl st))
-
-  (declare get-focus-mgr (MineState -> focus:FocusManager))
-  (define (get-focus-mgr st) (.ms-focus st))
-
-  (declare get-repl-package-cell (MineState -> (Cell String)))
-  (define (get-repl-package-cell st) (.ms-repl-package st))
-
-  (declare get-repl-lang-cell (MineState -> (Cell String)))
-  (define (get-repl-lang-cell st) (.ms-repl-lang st))
-
-  (declare get-runtime-mgr (MineState -> lifecycle:RuntimeManager))
-  (define (get-runtime-mgr st) (.ms-runtime st))
-
-  (declare get-eval-start-time-cell (MineState -> (Cell UFix)))
-  (define (get-eval-start-time-cell st) (.ms-eval-start-time st))
-
-  (declare get-active-request-cell (MineState -> (Cell (Optional msg:RequestId))))
-  (define (get-active-request-cell st) (.ms-active-request st))
-
-  (declare get-proto-mailbox (MineState -> NativeBox))
-  (define (get-proto-mailbox st) (.ms-proto-mailbox st))
-
-  (declare get-proto-thread (MineState -> NativeBox))
-  (define (get-proto-thread st) (.ms-proto-thread st))
-
-  (declare get-bg-proto-thread (MineState -> NativeBox))
-  (define (get-bg-proto-thread st) (.ms-bg-proto-thread st))
-
-  (declare get-debugger-condition-cell (MineState -> (Cell String)))
-  (define (get-debugger-condition-cell st) (.ms-debugger-condition st))
-
-  (declare get-debugger-items (MineState -> NativeBox))
-  (define (get-debugger-items st) (.ms-debugger-items st))
-
-  (declare get-debugger-selected-cell (MineState -> (Cell UFix)))
-  (define (get-debugger-selected-cell st) (.ms-debugger-selected st))
-
-  (declare get-debugger-scroll-cell (MineState -> (Cell UFix)))
-  (define (get-debugger-scroll-cell st) (.ms-debugger-scroll st))
-
-  (declare get-debugger-body-h-cell (MineState -> (Cell UFix)))
-  (define (get-debugger-body-h-cell st) (.ms-debugger-body-h st))
-
-  (declare get-debugger-total-cell (MineState -> (Cell UFix)))
-  (define (get-debugger-total-cell st) (.ms-debugger-total st))
-
-  (declare get-debugger-follow-cell (MineState -> (Cell Boolean)))
-  (define (get-debugger-follow-cell st) (.ms-debugger-follow st))
-
-  (declare get-conn-stream (MineState -> NativeBox))
-  (define (get-conn-stream st) (.ms-debugger-conn-stream st))
-
-  (declare get-diagnostics (MineState -> NativeBox))
-  (define (get-diagnostics st) (.ms-diagnostics st))
-
-  (declare get-jump-stack (MineState -> NativeBox))
-  (define (get-jump-stack st) (.ms-jump-stack st))
-
-  (declare get-quit-cell (MineState -> (Cell Boolean)))
-  (define (get-quit-cell st) (.ms-quit st))
-
-  (declare get-next-req-id-cell (MineState -> (Cell UFix)))
-  (define (get-next-req-id-cell st) (.ms-next-req-id st))
-
-  (declare get-io-request-data (MineState -> NativeBox))
-  (define (get-io-request-data st) (.ms-io-request-data st))
-
-  (declare get-layout-cell (MineState -> (Cell MineLayout)))
-  (define (get-layout-cell st) (.ms-layout st))
-
-  (declare get-completion (MineState -> complete:CompletionState))
-  (define (get-completion st) (.ms-completion st))
-
-  (declare get-content-x-cell (MineState -> (Cell UFix)))
-  (define (get-content-x-cell st) (.ms-content-x st))
-
-  (declare get-quick-result-state (MineState -> NativeBox))
-  (define (get-quick-result-state st) (.ms-quick-result-state st))
-
-  (declare get-quick-result-request-cell (MineState -> (Cell (Optional msg:RequestId))))
-  (define (get-quick-result-request-cell st) (.ms-quick-result-request-id st))
 
 ;;; Layout helpers
 
@@ -1120,7 +908,7 @@ the cursor's display-x within its wrap segment."
     (let timing =
       (if busy
           (lisp (-> String) (st)
-            (cl:let ((start (cell:read (mine/app/mine::get-eval-start-time-cell st))))
+            (cl:let ((start (cell:read (mine/app/state:get-eval-start-time-cell st))))
               (cl:if (cl:and (cl:numberp start) (cl:plusp start))
                      (%format-elapsed
                       (cl:round (cl:/ (cl:- (cl:get-internal-real-time) start)
@@ -1450,7 +1238,7 @@ multiple values get 0>, 1>, etc."
                        repl (cl:concatenate 'cl:string prefix line))
                       (cl:setf first cl:nil)
                   :while end))))
-        (cl:let ((repl (mine/app/mine::get-repl-pane st))
+        (cl:let ((repl (mine/app/state:get-repl-pane st))
                  (n-values (cl:length texts)))
           (cl:cond
             ((cl:= n-values 1)
@@ -1479,7 +1267,7 @@ multiple values get 0>, 1>, etc."
            :for end = (cl:position #\Newline text :start start)
            :for line = (cl:subseq text start (cl:or end (cl:length text)))
            :do (repl:repl-pane-append-output!
-                (mine/app/mine::get-repl-pane st)
+                (mine/app/state:get-repl-pane st)
                 (cl:if first
                        (cl:concatenate 'cl:string "ERROR: " line)
                        line))
@@ -1586,11 +1374,11 @@ multiple values get 0>, 1>, etc."
        (when (cell:read (.ms-io-request-active st))
          (%deactivate-io-request! st))
        (lisp (-> Void) (st)
-         (cl:setf (%native-box-value (mine/app/mine::get-proto-mailbox st)) cl:nil)
-         (cl:setf (%native-box-value (mine/app/mine::get-proto-thread st)) cl:nil)
+         (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-proto-mailbox st)) cl:nil)
+         (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-proto-thread st)) cl:nil)
          (%clear-background-protocol-state st)
          ;; Deactivate the connection so the status bar sees it as gone
-         (cl:let ((mgr (mine/app/mine::get-runtime-mgr st)))
+         (cl:let ((mgr (mine/app/state:get-runtime-mgr st)))
            (cl:let ((conn (mine/protocol/lifecycle::%runtime-manager-connection mgr)))
              (cl:when conn
                (cl:setf (mine/protocol/client::%connection-active conn) cl:nil))))
@@ -1644,7 +1432,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
     (let selected = (cell:read (.ms-debugger-selected st)))
     (let new-sel = (lisp (-> UFix) (st selected direction)
                      (%dbg-next-selectable
-                      (%native-box-value (mine/app/mine::get-debugger-items st))
+                      (mine/app/state::%native-box-value (mine/app/state:get-debugger-items st))
                       selected direction)))
     (cell:write! (.ms-debugger-selected st) new-sel)
     (cell:write! (.ms-debugger-follow st) True)
@@ -1679,7 +1467,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
     "Get the restart index of the selected item, or None if not a restart."
     (let selected = (cell:read (.ms-debugger-selected st)))
     (lisp (-> (Optional UFix)) (st selected)
-      (cl:let* ((items (%native-box-value (mine/app/mine::get-debugger-items st)))
+      (cl:let* ((items (mine/app/state::%native-box-value (mine/app/state:get-debugger-items st)))
                 (item (cl:when (cl:and items (cl:< selected (cl:length items)))
                         (cl:nth selected items))))
         (cl:if (cl:and item (cl:eq (cl:first item) :restart))
@@ -1690,13 +1478,13 @@ Uses a dedicated Beam request so diagnostics can stream independently."
   (define (dbg-send-restart! st restart-idx)
     "Send a restart choice to the runtime and deactivate debugger."
     (lisp (-> Void) (st restart-idx)
-      (cl:let ((sp (%native-box-value (mine/app/mine::get-conn-stream st))))
+      (cl:let ((sp (mine/app/state::%native-box-value (mine/app/state:get-conn-stream st))))
         (cl:when (cl:consp sp)
           (cl:handler-case
               (mine/protocol/server::write-message (cl:cdr sp)
                                                    `(:debug-restart ,(cl:car sp) ,restart-idx))
             (cl:error () cl:nil))
-          (cl:setf (%native-box-value (mine/app/mine::get-conn-stream st))
+          (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-conn-stream st))
                    (cl:cdr sp))))
       (cl:values))
     (cell:write! (.ms-debugger-active st) False)
@@ -1709,13 +1497,13 @@ Uses a dedicated Beam request so diagnostics can stream independently."
   (define (dbg-abort! st)
     "Send abort to runtime and deactivate debugger."
     (lisp (-> Void) (st)
-      (cl:let ((sp (%native-box-value (mine/app/mine::get-conn-stream st))))
+      (cl:let ((sp (mine/app/state::%native-box-value (mine/app/state:get-conn-stream st))))
         (cl:when (cl:consp sp)
           (cl:handler-case
               (mine/protocol/server::write-message (cl:cdr sp)
                                                    `(:debug-abort ,(cl:car sp)))
             (cl:error () cl:nil))
-          (cl:setf (%native-box-value (mine/app/mine::get-conn-stream st))
+          (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-conn-stream st))
                    (cl:cdr sp))))
       (cl:values))
     (cell:write! (.ms-debugger-active st) False)
@@ -1737,7 +1525,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
   (define (io-send-response! st text)
     "Send IO response text to the runtime and deactivate IO request mode."
     (lisp (-> Void) (st text)
-      (cl:let ((sp (%native-box-value (mine/app/mine::get-io-request-data st))))
+      (cl:let ((sp (mine/app/state::%native-box-value (mine/app/state:get-io-request-data st))))
         (cl:when (cl:consp sp)
           (cl:handler-case
               (mine/protocol/server::write-message (cl:cdr sp)
@@ -1750,7 +1538,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
   (define (io-abort! st)
     "Send IO abort to runtime and deactivate IO request mode."
     (lisp (-> Void) (st)
-      (cl:let ((sp (%native-box-value (mine/app/mine::get-io-request-data st))))
+      (cl:let ((sp (mine/app/state::%native-box-value (mine/app/state:get-io-request-data st))))
         (cl:when (cl:consp sp)
           (cl:handler-case
               (mine/protocol/server::write-message (cl:cdr sp)
@@ -1808,13 +1596,13 @@ Uses a dedicated Beam request so diagnostics can stream independently."
                                     (cl:string pkg-arg)
                                     (cl:symbol (cl:symbol-name pkg-arg)))))
                 (coalton/cell:write!
-                 (mine/app/mine::get-repl-package-cell st)
+                 (mine/app/state:get-repl-package-cell st)
                  pkg-name)
                 ;; Auto-detect lang from new package
                 (cl:let ((lang (%detect-repl-lang pkg-name)))
                   (cl:unless (cl:string= lang "--")
                     (coalton/cell:write!
-                     (mine/app/mine::get-repl-lang-cell st)
+                     (mine/app/state:get-repl-lang-cell st)
                      lang))))))
         (cl:error () cl:nil))
       (cl:values)))
@@ -1825,11 +1613,11 @@ Uses a dedicated Beam request so diagnostics can stream independently."
   (define (%clear-runtime-session! st)
     "Clear state tied to the current runtime connection."
     (lisp (-> Void) (st)
-      (cl:setf (%native-box-value (mine/app/mine::get-proto-mailbox st)) cl:nil)
-      (cl:setf (%native-box-value (mine/app/mine::get-proto-thread st)) cl:nil)
-      (cl:setf (%native-box-value (mine/app/mine::get-bg-proto-thread st)) cl:nil)
-      (cl:setf (%native-box-value (mine/app/mine::get-conn-stream st)) cl:nil)
-      (cl:setf (%native-box-value (mine/app/mine::get-quick-result-state st)) cl:nil)
+      (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-proto-mailbox st)) cl:nil)
+      (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-proto-thread st)) cl:nil)
+      (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-bg-proto-thread st)) cl:nil)
+      (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-conn-stream st)) cl:nil)
+      (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-quick-result-state st)) cl:nil)
       (cl:setf *pending-requests* cl:nil)
       (cl:setf *hint-request-id* cl:nil)
       (cl:setf *pending-jump-source* cl:nil)
@@ -2372,7 +2160,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        ;; Clean up
        (let exit-code =
          (lisp (-> UFix) (proc-box)
-           (cl:let* ((pair (%native-box-value proc-box))
+           (cl:let* ((pair (mine/app/state::%native-box-value proc-box))
                      (proc (cl:car pair))
                      (log-stream (cl:cdr pair)))
              (cl:handler-case (cl:close log-stream) (cl:error () cl:nil))
@@ -2401,7 +2189,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     ;; Read any available output lines
     (let new-lines =
       (lisp (-> (List String)) (proc-box)
-        (cl:let* ((pair (%native-box-value proc-box))
+        (cl:let* ((pair (mine/app/state::%native-box-value proc-box))
                   (proc (cl:car pair))
                   (log-stream (cl:cdr pair))
                   (stdout (sb-ext:process-output proc))
@@ -2422,7 +2210,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     ;; Check if process is done
     (let done =
       (lisp (-> Boolean) (proc-box)
-        (cl:let ((proc (cl:car (%native-box-value proc-box))))
+        (cl:let ((proc (cl:car (mine/app/state::%native-box-value proc-box))))
           (cl:if (sb-ext:process-alive-p proc) False True))))
     ;; Render progress box
     (let box-w = (min 76 (- cols 4)))
@@ -3085,7 +2873,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                     (%request-remote-definition st resolved-sym resolved-pkg
                                                 cur-path cur-pos))
                   (mine/pane/status::statusbar-set-message!
-                   (mine/app/mine::get-status-bar st)
+                   (mine/app/state:get-status-bar st)
                    "No symbol at cursor")))
          (cl:values)))))
 
@@ -3095,9 +2883,9 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     (lisp (-> Void) (st)
       (cl:let ((entry (%jump-stack-pop st)))
         (cl:if entry
-               (%jump-to-file st (cl:car entry) (cl:cdr entry))
+               (mine/app/navigation:jump-to-file st (cl:car entry) (cl:cdr entry))
                (mine/pane/status::statusbar-set-message!
-                (mine/app/mine::get-status-bar st)
+                (mine/app/state:get-status-bar st)
                 "Jump stack empty")))
       (cl:values)))
 
@@ -4996,8 +4784,6 @@ Render-app is NOT called here; the main loop handles rendering."
                          (cell:new (%config-repl-lang-display (cfgt:.config-repl-language config)))
                          (cell:new None)
                          (native-box-new)
-                         (cell:new "")
-                         (native-box-new)
                          (cell:new (cfgt:.config-structural-editing config))
                          config
                          (cell:new False)
@@ -5158,8 +4944,8 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
                 (log-stream (cl:open log-path :direction :output
                                               :if-exists :supersede
                                               :if-does-not-exist :create))
-                (box (make-%native-box)))
-        (cl:setf (%native-box-value box) (cl:cons proc log-stream))
+                (box (mine/app/state::make-%native-box)))
+        (cl:setf (mine/app/state::%native-box-value box) (cl:cons proc log-stream))
         (Some box))
     (cl:error (c)
       (cl:declare (cl:ignore c))
@@ -5261,116 +5047,6 @@ If no colon, returns (values buf-pkg name)."
                     (cl:values prefix sym-part)))
            (cl:values buf-pkg name))))
 
-;;; Jump-to-definition
-
-
-(cl:defun %jump-to-file (st filepath char-offset)
-  "Open FILEPATH in the editor and move cursor to CHAR-OFFSET."
-  (cl:labels
-      ((%display-name (path)
-         (cl:handler-case
-             (cl:file-namestring (cl:pathname path))
-           (cl:error () path)))
-       (%unwrap-optional (value)
-         (cl:if (coalton-impl/runtime/optional:cl-none-p value)
-                cl:nil
-                (coalton-impl/runtime/optional:unwrap-cl-some value))))
-    (cl:handler-case
-        (cl:let* ((raw-path (cl:and filepath (cl:princ-to-string filepath)))
-                  (resolved-path
-                    (cl:or (cl:ignore-errors
-                             (cl:when raw-path
-                               (cl:let ((truename (cl:probe-file raw-path)))
-                                 (cl:when truename
-                                   (cl:namestring truename)))))
-                           raw-path))
-                  (document-key (cl:and resolved-path
-                                        (mine/buffer/buffer::%normalize-file-document-key
-                                         resolved-path))))
-          (cl:unless (cl:and (cl:stringp resolved-path)
-                             (cl:plusp (cl:length resolved-path)))
-            (mine/pane/status::statusbar-set-message!
-             (mine/app/mine::get-status-bar st)
-             "Jump failed: no file path")
-            (cl:return-from %jump-to-file cl:nil))
-          (cl:let* ((bm (mine/app/mine::get-bufmgr st))
-                    (ep (mine/app/mine::get-editor-pane st))
-                    (cs (mine/app/mine::get-cursor-state st))
-                    (existing-buf (%unwrap-optional
-                                   (mine/buffer/manager::bufmgr-find-by-document-key
-                                    bm document-key)))
-                    (opened-buf nil))
-            (cl:unless existing-buf
-              (cl:let ((buf-result (mine/buffer/manager::bufmgr-open-file! bm resolved-path)))
-                (cl:if (cl:typep buf-result 'coalton-library/classes::result/ok)
-                       (cl:setf opened-buf
-                                (coalton-library/classes::result/ok-_0 buf-result))
-                       (cl:progn
-                         (mine/pane/status::statusbar-set-message!
-                          (mine/app/mine::get-status-bar st)
-                          (cl:format cl:nil "Jump failed: could not open ~A"
-                                     (%display-name resolved-path)))
-                         (cl:return-from %jump-to-file cl:nil)))))
-            (cl:let* ((buf (cl:or existing-buf opened-buf))
-                      (gb (mine/buffer/buffer::buffer-gap buf))
-                      (bid (mine/buffer/buffer::buffer-id buf))
-                      (safe-offset
-                        (cl:max 0
-                                (cl:min (cl:or char-offset 0)
-                                        (mine/buffer/gap::gap-length gb)))))
-              (mine/buffer/manager::bufmgr-switch! bm bid)
-              (mine/pane/editor::editor-pane-set-buffer! ep bid)
-              (mine/edit/cursor::cursor-move-to-position! cs safe-offset)
-              (mine/app/mine::%show-editor! st)
-              (mine/pane/status::statusbar-set-message!
-               (mine/app/mine::get-status-bar st)
-               (cl:format cl:nil "Jumped to ~A" (%display-name resolved-path)))
-              cl:t)))
-      (cl:error (c)
-        (mine/pane/status::statusbar-set-message!
-         (mine/app/mine::get-status-bar st)
-         (cl:format cl:nil "Jump failed: ~A" c))))))
-
-(cl:defun %jump-to-document-key (st document-key char-offset)
-  "Jump to DOCUMENT-KEY, which may name either a file or an open unnamed buffer."
-  (cl:labels
-      ((%unwrap-optional (value)
-         (cl:if (coalton-impl/runtime/optional:cl-none-p value)
-                cl:nil
-                (coalton-impl/runtime/optional:unwrap-cl-some value))))
-    (cl:cond
-      ((cl:and (cl:stringp document-key)
-               (cl:>= (cl:length document-key) 9)
-               (cl:string= document-key "buffer://" :end1 9 :end2 9))
-       (cl:let* ((bm (mine/app/mine::get-bufmgr st))
-                 (ep (mine/app/mine::get-editor-pane st))
-                 (cs (mine/app/mine::get-cursor-state st))
-                 (buf (%unwrap-optional
-                       (mine/buffer/manager::bufmgr-find-by-document-key bm document-key))))
-         (cl:if (cl:null buf)
-                (cl:progn
-                  (mine/pane/status::statusbar-set-message!
-                   (mine/app/mine::get-status-bar st)
-                   "Jump skipped: buffer is no longer open")
-                  cl:nil)
-                (cl:let* ((gb (mine/buffer/buffer::buffer-gap buf))
-                          (bid (mine/buffer/buffer::buffer-id buf))
-                          (safe-offset
-                            (cl:max 0
-                                    (cl:min (cl:or char-offset 0)
-                                            (mine/buffer/gap::gap-length gb)))))
-                  (mine/buffer/manager::bufmgr-switch! bm bid)
-                  (mine/pane/editor::editor-pane-set-buffer! ep bid)
-                  (mine/edit/cursor::cursor-move-to-position! cs safe-offset)
-                  (mine/app/mine::%show-editor! st)
-                  (mine/pane/status::statusbar-set-message!
-                   (mine/app/mine::get-status-bar st)
-                   (cl:format cl:nil "Jumped to ~A"
-                              (mine/buffer/buffer::buffer-name buf)))
-                  cl:t))))
-      (cl:t
-       (%jump-to-file st document-key char-offset)))))
-
 ;;; Diagnostic navigation helpers live in app/diagnostics.lisp.
 
 (cl:defun %read-symbol-at-cursor (gb pos)
@@ -5397,17 +5073,17 @@ Returns a string or NIL."
 
 (cl:defun %jump-stack-push (st filepath position)
   "Push (filepath . position) onto the jump stack."
-  (cl:let* ((box (mine/app/mine::get-jump-stack st))
-            (stack (mine/app/mine::%native-box-value box)))
-    (cl:setf (mine/app/mine::%native-box-value box)
+  (cl:let* ((box (mine/app/state:get-jump-stack st))
+            (stack (mine/app/state::%native-box-value box)))
+    (cl:setf (mine/app/state::%native-box-value box)
              (cl:cons (cl:cons filepath position) stack))))
 
 (cl:defun %jump-stack-pop (st)
   "Pop and return (filepath . position) from the jump stack, or NIL."
-  (cl:let* ((box (mine/app/mine::get-jump-stack st))
-            (stack (mine/app/mine::%native-box-value box)))
+  (cl:let* ((box (mine/app/state:get-jump-stack st))
+            (stack (mine/app/state::%native-box-value box)))
     (cl:when stack
-      (cl:setf (mine/app/mine::%native-box-value box) (cl:cdr stack))
+      (cl:setf (mine/app/state::%native-box-value box) (cl:cdr stack))
       (cl:car stack))))
 
 ;;; Find compile target (enclosing top-level form, descending through wrappers)
@@ -5581,13 +5257,13 @@ Handles #:foo, :foo, 'foo, \"foo\", and bare symbols."
 
 (cl:defun %repl-append (st text)
   (mine/pane/repl::repl-pane-append-output!
-   (mine/app/mine::get-repl-pane st) text))
+   (mine/app/state:get-repl-pane st) text))
 
 (cl:defun %ensure-proto-mailbox (st)
   "Return the shared protocol mailbox, creating it if needed."
-  (cl:let ((box (mine/app/mine::get-proto-mailbox st)))
-    (cl:or (%native-box-value box)
-           (cl:setf (%native-box-value box)
+  (cl:let ((box (mine/app/state:get-proto-mailbox st)))
+    (cl:or (mine/app/state::%native-box-value box)
+           (cl:setf (mine/app/state::%native-box-value box)
                     (sb-concurrency:make-mailbox :name "mine-proto")))))
 
 (cl:defun %thread-alive-or-nil (thread)
@@ -5599,13 +5275,13 @@ Handles #:foo, :foo, 'foo, \"foo\", and bare symbols."
 (cl:defun %start-proto-reader-thread-cl (st conn thread-box lost-message thread-name)
   "Start a reader for CONN, forwarding raw protocol messages into ST's mailbox."
   (cl:block done
-    (cl:when (%thread-alive-or-nil (%native-box-value thread-box))
+    (cl:when (%thread-alive-or-nil (mine/app/state::%native-box-value thread-box))
       (cl:return-from done cl:t))
     (cl:let ((stream (mine/protocol/client::%connection-stream conn)))
       (cl:unless (cl:and (cl:streamp stream) (cl:open-stream-p stream))
         (cl:return-from done cl:nil))
       (cl:let ((mailbox (%ensure-proto-mailbox st)))
-        (cl:setf (%native-box-value thread-box)
+        (cl:setf (mine/app/state::%native-box-value thread-box)
                  (mine/bindings/thread:make-thread
                   thread-name
                   (cl:lambda ()
@@ -5626,23 +5302,23 @@ Handles #:foo, :foo, 'foo, \"foo\", and bare symbols."
 (cl:defun %start-foreground-proto-reader-cl (st conn)
   "Start the foreground protocol reader and remember its stream for debugger/IO replies."
   (cl:let ((stream (mine/protocol/client::%connection-stream conn)))
-    (cl:setf (%native-box-value (mine/app/mine::get-conn-stream st)) stream))
+    (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-conn-stream st)) stream))
   (%start-proto-reader-thread-cl st conn
-                                 (mine/app/mine::get-proto-thread st)
+                                 (mine/app/state:get-proto-thread st)
                                  '(:connection-lost)
                                  "mine-proto-reader"))
 
 (cl:defun %start-background-proto-reader-cl (st conn)
   "Start the background protocol reader for editor-service replies."
   (%start-proto-reader-thread-cl st conn
-                                 (mine/app/mine::get-bg-proto-thread st)
+                                 (mine/app/state:get-bg-proto-thread st)
                                  '(:background-connection-lost)
                                  "mine-bg-proto-reader"))
 
 (cl:defun %clear-background-protocol-state (st)
   "Forget background protocol state and pending editor-service requests."
-  (cl:setf (%native-box-value (mine/app/mine::get-bg-proto-thread st)) cl:nil)
-  (cl:let* ((mgr (mine/app/mine::get-runtime-mgr st))
+  (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-bg-proto-thread st)) cl:nil)
+  (cl:let* ((mgr (mine/app/state:get-runtime-mgr st))
             (conn (mine/protocol/lifecycle::%runtime-manager-background-connection mgr)))
     (cl:when conn
       (cl:setf (mine/protocol/client::%connection-active conn) cl:nil)))
@@ -5654,7 +5330,7 @@ Handles #:foo, :foo, 'foo, \"foo\", and bare symbols."
 (cl:defun %drain-and-parse-messages (st)
   "Drain the mailbox and convert raw CL messages to Coalton ProtoMsg values.
 Returns a Coalton List of ProtoMsg."
-  (cl:let ((mailbox (%native-box-value (mine/app/mine::get-proto-mailbox st))))
+  (cl:let ((mailbox (mine/app/state::%native-box-value (mine/app/state:get-proto-mailbox st))))
     (cl:if (cl:null mailbox)
            Nil
            (cl:let ((raw-msgs (sb-concurrency:receive-pending-messages mailbox))
@@ -5716,12 +5392,12 @@ Returns a Coalton List of ProtoMsg."
      (cl:let ((cond-text (cl:format cl:nil "~A" (cl:third msg))))
        ;; Pack all debug data into a NativeBox for the Coalton side to install
        (mine/app/mine:ProtoDebug cond-text
-         (mine/app/mine::make-%native-box :value msg))))
+         (mine/app/state::make-%native-box :value msg))))
     ((cl:and (cl:consp msg) (cl:eq (cl:first msg) :io-request))
      (cl:let ((prompt (cl:or (cl:third msg) "")))
        (mine/app/mine:ProtoIORequest
          (cl:format cl:nil "~A" prompt)
-         (mine/app/mine::make-%native-box :value msg))))
+         (mine/app/state::make-%native-box :value msg))))
     (cl:t cl:nil)))
 
 (cl:defun %decode-result-values-cl (text)
@@ -5784,8 +5460,8 @@ Returns a Coalton List of ProtoMsg."
 
 (cl:defun %quick-result-highlight-range-cl (st document-key)
   "Return (START . END) for the active Quick Result source highlight."
-  (cl:let* ((box (mine/app/mine::get-quick-result-state st))
-            (state (%native-box-value box)))
+  (cl:let* ((box (mine/app/state:get-quick-result-state st))
+            (state (mine/app/state::%native-box-value box)))
     (cl:when state
       (cl:let ((expiry (cl:getf state :expiry)))
         (cl:when (cl:and expiry
@@ -5805,14 +5481,14 @@ Returns a Coalton List of ProtoMsg."
 
 (cl:defun %set-quick-result-popup (st title text error-p)
   "Store transient Quick Result popup state on ST."
-  (cl:let* ((box (mine/app/mine::get-quick-result-state st))
-            (old-state (%native-box-value box))
+  (cl:let* ((box (mine/app/state:get-quick-result-state st))
+            (old-state (mine/app/state::%native-box-value box))
             (highlight (%quick-result-highlight-plist old-state))
             (text (cl:if (cl:stringp text) text (cl:princ-to-string text)))
             (expiry (cl:+ (cl:get-internal-real-time)
                           (cl:* 8 cl:internal-time-units-per-second))))
     (cl:if error-p
-           (cl:setf (%native-box-value box)
+           (cl:setf (mine/app/state::%native-box-value box)
                     (cl:append
                      (cl:list :title (cl:if (cl:stringp title) title "Error")
                               :text text
@@ -5821,7 +5497,7 @@ Returns a Coalton List of ProtoMsg."
                      highlight))
            (cl:multiple-value-bind (output values)
                (%parse-quick-result-payload text)
-             (cl:setf (%native-box-value box)
+             (cl:setf (mine/app/state::%native-box-value box)
                       (cl:append
                        (cl:list :title (cl:if (cl:plusp (cl:length output))
                                               "Output"
@@ -5834,7 +5510,7 @@ Returns a Coalton List of ProtoMsg."
 
 (cl:defun %set-quick-result-pending-state (st mode cl:&optional highlight)
   "Store Quick Result pending state on ST."
-  (cl:setf (%native-box-value (mine/app/mine::get-quick-result-state st))
+  (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-quick-result-state st))
            (cl:append
             (cl:list :title "Quick Result"
                      :pending mode
@@ -5866,11 +5542,11 @@ Returns a Coalton List of ProtoMsg."
 
 (cl:defun %clear-quick-result-popup (st)
   "Clear transient Quick Result popup state on ST."
-  (cl:setf (%native-box-value (mine/app/mine::get-quick-result-state st)) cl:nil))
+  (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-quick-result-state st)) cl:nil))
 
 (cl:defun %quick-result-popup-visible-p (st)
   "Return true when the transient Quick Result popup has visible state."
-  (cl:not (cl:null (%native-box-value (mine/app/mine::get-quick-result-state st)))))
+  (cl:not (cl:null (mine/app/state::%native-box-value (mine/app/state:get-quick-result-state st)))))
 
 (cl:defun %quick-result-popup-lines (text include-empty-p)
   "Split TEXT into display lines for the Quick Result popup."
@@ -6061,8 +5737,8 @@ Returns a Coalton List of ProtoMsg."
 
 (cl:defun %render-quick-result-popup-cl (st scr screen-w screen-h spinner-text)
   "Render the transient Quick Result popup near the editor caret."
-  (cl:let* ((box (mine/app/mine::get-quick-result-state st))
-            (state (%native-box-value box)))
+  (cl:let* ((box (mine/app/state:get-quick-result-state st))
+            (state (mine/app/state::%native-box-value box)))
     (cl:when state
       (cl:let ((expiry (cl:getf state :expiry)))
         (cl:when (cl:and expiry
@@ -6107,8 +5783,8 @@ Returns a Coalton List of ProtoMsg."
                                   (cl:if separator-p 1 0)
                                   (cl:length result-lines)))
                 (box-h (cl:+ body-rows 2))
-                (anchor-col (%completion-anchor-col st cl:nil ""))
-                (anchor-row (%completion-anchor-row st cl:nil))
+                (anchor-col (mine/app/navigation:completion-anchor-col st cl:nil ""))
+                (anchor-row (mine/app/navigation:completion-anchor-row st cl:nil))
                 (top-limit 1)
                 (bottom-limit (cl:max 2 (cl:- screen-h 1)))
                 (below-row (cl:1+ anchor-row))
@@ -6201,7 +5877,7 @@ Returns a Coalton List of ProtoMsg."
 
 (cl:defun %install-debugger-data (st debug-data)
   "Install debugger state from the packed debug data NativeBox."
-  (cl:let* ((msg (%native-box-value debug-data))
+  (cl:let* ((msg (mine/app/state::%native-box-value debug-data))
             (msg-id (cl:second msg))
             (restarts (cl:fourth msg))
             (frames (cl:fifth msg))
@@ -6218,15 +5894,15 @@ Returns a Coalton List of ProtoMsg."
       (cl:push (cl:list :frame (cl:first f) (cl:second f)) all-items))
     (cl:setf all-items (cl:nreverse all-items))
     ;; Store in NativeBox fields
-    (cl:setf (%native-box-value (mine/app/mine::get-debugger-items st)) all-items)
-    (coalton/cell:write! (mine/app/mine::get-debugger-selected-cell st)
+    (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-debugger-items st)) all-items)
+    (coalton/cell:write! (mine/app/state:get-debugger-selected-cell st)
                          (%dbg-next-selectable all-items 0 1))
-    (coalton/cell:write! (mine/app/mine::get-debugger-scroll-cell st) 0)
-    (coalton/cell:write! (mine/app/mine::get-debugger-follow-cell st) cl:t)
+    (coalton/cell:write! (mine/app/state:get-debugger-scroll-cell st) 0)
+    (coalton/cell:write! (mine/app/state:get-debugger-follow-cell st) cl:t)
     ;; Store (msg-id . stream) for sending restart choice
-    (cl:let ((stream (%native-box-value (mine/app/mine::get-conn-stream st))))
+    (cl:let ((stream (mine/app/state::%native-box-value (mine/app/state:get-conn-stream st))))
       (cl:when stream
-        (cl:setf (%native-box-value (mine/app/mine::get-conn-stream st))
+        (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-conn-stream st))
                  (cl:cons msg-id stream))))))
 
 ;;; IO request helpers (thin CL — only NativeBox access)
@@ -6234,11 +5910,11 @@ Returns a Coalton List of ProtoMsg."
 (cl:defun %install-io-request-data (st io-data)
   "Install IO request state from the packed NativeBox.
 Pairs the message ID with the raw socket stream for sending :io-response."
-  (cl:let* ((msg (%native-box-value io-data))
+  (cl:let* ((msg (mine/app/state::%native-box-value io-data))
             (msg-id (cl:second msg))
-            (stream (%native-box-value (mine/app/mine::get-conn-stream st))))
+            (stream (mine/app/state::%native-box-value (mine/app/state:get-conn-stream st))))
     (cl:when stream
-      (cl:setf (%native-box-value (mine/app/mine::get-io-request-data st))
+      (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-io-request-data st))
                (cl:cons msg-id (cl:if (cl:consp stream) (cl:cdr stream) stream))))))
 
 ;;; Debugger helpers (thin CL — only NativeBox access)
@@ -6322,11 +5998,11 @@ where IDX is the index of the item in ITEMS."
             (y (mine/widget/types::rect/rect-_1 rect))
             (w (mine/widget/types::rect/rect-_2 rect))
             (h (mine/widget/types::rect/rect-_3 rect))
-            (cond-text (coalton/cell:read (mine/app/mine::get-debugger-condition-cell st)))
-            (items (%native-box-value (mine/app/mine::get-debugger-items st)))
-            (selected (coalton/cell:read (mine/app/mine::get-debugger-selected-cell st)))
-            (scroll-cell (mine/app/mine::get-debugger-scroll-cell st))
-            (follow-cell (mine/app/mine::get-debugger-follow-cell st))
+            (cond-text (coalton/cell:read (mine/app/state:get-debugger-condition-cell st)))
+            (items (mine/app/state::%native-box-value (mine/app/state:get-debugger-items st)))
+            (selected (coalton/cell:read (mine/app/state:get-debugger-selected-cell st)))
+            (scroll-cell (mine/app/state:get-debugger-scroll-cell st))
+            (follow-cell (mine/app/state:get-debugger-follow-cell st))
             (raw-scroll (coalton/cell:read scroll-cell))
             (follow? (coalton/cell:read follow-cell))
             (max-y (cl:+ y h))
@@ -6412,8 +6088,8 @@ where IDX is the index of the item in ITEMS."
         "Up/Down: navigate  Enter/0-9: restart  q: abort" footer-style))
     ;; Write back clamped scroll and cache geometry for navigation / mouse.
     (coalton/cell:write! scroll-cell scroll)
-    (coalton/cell:write! (mine/app/mine::get-debugger-body-h-cell st) body-h)
-    (coalton/cell:write! (mine/app/mine::get-debugger-total-cell st) total-lines)
+    (coalton/cell:write! (mine/app/state:get-debugger-body-h-cell st) body-h)
+    (coalton/cell:write! (mine/app/state:get-debugger-total-cell st) total-lines)
     (cl:values)))
 
 ;;; Pending async requests (for subprocess queries that bypass REPL display)
@@ -6430,7 +6106,7 @@ where IDX is the index of the item in ITEMS."
 
 (cl:defun %next-request-id-cl (st)
   "Allocate a request ID from CL side. Returns the integer."
-  (cl:let* ((cell (mine/app/mine::get-next-req-id-cell st))
+  (cl:let* ((cell (mine/app/state:get-next-req-id-cell st))
             (rid (coalton/cell:read cell)))
     (coalton/cell:write! cell (cl:1+ rid))
     rid))
@@ -6438,7 +6114,7 @@ where IDX is the index of the item in ITEMS."
 (cl:defun %send-to-subprocess (st msg)
   "Send a protocol message MSG (a list) to the subprocess. Returns T on success.
 Handles the debugger state where conn-stream is (msg-id . stream)."
-  (cl:let* ((raw (%native-box-value (mine/app/mine::get-conn-stream st)))
+  (cl:let* ((raw (mine/app/state::%native-box-value (mine/app/state:get-conn-stream st)))
             (stream (cl:if (cl:consp raw) (cl:cdr raw) raw)))
     (cl:when (cl:and (cl:streamp stream) (cl:open-stream-p stream))
       (cl:handler-case
@@ -6447,7 +6123,7 @@ Handles the debugger state where conn-stream is (msg-id . stream)."
 
 (cl:defun %send-to-background-subprocess (st msg)
   "Send MSG on the runtime background connection."
-  (cl:let* ((mgr (mine/app/mine::get-runtime-mgr st))
+  (cl:let* ((mgr (mine/app/state:get-runtime-mgr st))
             (conn (mine/protocol/lifecycle::%runtime-ensure-background-connection-raw mgr)))
     (cl:when conn
       (%start-background-proto-reader-cl st conn)
@@ -6457,13 +6133,13 @@ Handles the debugger state where conn-stream is (msg-id . stream)."
               (mine/protocol/server::write-message stream msg)
             (cl:error ()
               (cl:setf (mine/protocol/client::%connection-active conn) cl:nil)
-              (cl:setf (%native-box-value (mine/app/mine::get-bg-proto-thread st)) cl:nil)
+              (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-bg-proto-thread st)) cl:nil)
               cl:nil)))))))
 
 (cl:defun %sync-runtime-request (st msg)
   "Send MSG to the runtime over a short-lived connection and return the reply.
 This avoids stealing messages from the foreground/background protocol readers."
-  (cl:let* ((mgr (mine/app/mine::get-runtime-mgr st))
+  (cl:let* ((mgr (mine/app/state:get-runtime-mgr st))
             (proc (mine/protocol/lifecycle::%runtime-manager-process mgr))
             (port (mine/protocol/lifecycle::%runtime-manager-port mgr)))
     (cl:when (cl:and proc (sb-ext:process-alive-p proc) (cl:plusp port))
@@ -6642,7 +6318,7 @@ This avoids stealing messages from the foreground/background protocol readers."
                                           (cl:car *pending-jump-source*)
                                           (cl:cdr *pending-jump-source*)))
                       (cl:if file
-                             (%jump-to-file st file offset)
+                             (mine/app/navigation:jump-to-file st file offset)
                              (%status-msg st "No definition found")))
                     (%status-msg st "No definition found"))))
           (cl:t (%status-msg st (cl:format cl:nil "~A" (cl:or (cl:second payload) "No definition found")))))
@@ -6657,7 +6333,7 @@ This avoids stealing messages from the foreground/background protocol readers."
 
 (cl:defun %status-msg (st text)
   (mine/pane/status::statusbar-set-message!
-   (mine/app/mine::get-status-bar st) text))
+   (mine/app/state:get-status-bar st) text))
 
 (cl:defun %coalton-optional-value-or-nil (value)
   "Return NIL for Coalton None, otherwise return the wrapped value."
@@ -6671,7 +6347,7 @@ This avoids stealing messages from the foreground/background protocol readers."
   "Send a :complete request to the subprocess based on current focus context.
 Sends the raw prefix and buffer package to the server, which handles all
 package resolution including local nicknames."
-  (cl:let* ((focus (mine/widget/focus:focus-current (mine/app/mine::get-focus-mgr st)))
+  (cl:let* ((focus (mine/widget/focus:focus-current (mine/app/state:get-focus-mgr st)))
             (repl-focus-p (cl:eq focus mine/widget/focus:FocusRepl)))
     (cl:multiple-value-bind (prefix pkg-name cursor-pos)
         (cl:if repl-focus-p
@@ -6691,27 +6367,27 @@ package resolution including local nicknames."
 
 (cl:defun %completion-context-editor (st)
   "Return (values prefix pkg-name cursor-pos) for the editor."
-  (cl:let* ((bufmgr (mine/app/mine::get-bufmgr st))
+  (cl:let* ((bufmgr (mine/app/state:get-bufmgr st))
             (buf (%coalton-optional-value-or-nil
                   (mine/buffer/manager:bufmgr-current bufmgr))))
     (cl:if buf
            (cl:let* ((gb (mine/buffer/buffer:buffer-gap buf))
-                     (cs (mine/app/mine::get-cursor-state st))
+                     (cs (mine/app/state:get-cursor-state st))
                      (cur-pos (mine/edit/cursor:cursor-position cs))
                      (prefix (mine/app/completion:extract-symbol-prefix gb cur-pos))
                      (buf-text (mine/buffer/gap:gap-to-string gb))
-                     (default-pkg (coalton/cell:read (mine/app/mine::get-repl-package-cell st)))
+                     (default-pkg (coalton/cell:read (mine/app/state:get-repl-package-cell st)))
                      (pkg (%detect-buffer-package buf-text default-pkg)))
              (cl:values prefix pkg cur-pos))
            (cl:values nil "CL-USER" 0))))
 
 (cl:defun %completion-context-repl (st)
   "Return (values prefix pkg-name cursor-pos) for the REPL input."
-  (cl:let* ((rp (mine/app/mine::get-repl-pane st))
+  (cl:let* ((rp (mine/app/state:get-repl-pane st))
             (text (mine/pane/repl:repl-pane-get-input rp))
             (cursor (mine/pane/repl:repl-pane-input-cursor rp))
             (prefix (mine/app/completion:extract-symbol-prefix-input text cursor))
-            (pkg (coalton/cell:read (mine/app/mine::get-repl-package-cell st))))
+            (pkg (coalton/cell:read (mine/app/state:get-repl-package-cell st))))
     (cl:values prefix pkg cursor)))
 
 (cl:defun %handle-completion-response (st payload saved-prefix saved-cursor is-repl)
@@ -6720,7 +6396,7 @@ insert the unambiguous part, and open the popup.
 Server returns names already qualified (e.g. \"vec:push-extend\")."
   (cl:declare (cl:ignore saved-cursor))
   ;; Ignore if a completion popup is already active (duplicate request)
-  (cl:when (mine/app/completion:completion-active? (mine/app/mine::get-completion st))
+  (cl:when (mine/app/completion:completion-active? (mine/app/state:get-completion st))
     (cl:return-from %handle-completion-response))
   (cl:when (cl:and (cl:consp payload) (cl:eq (cl:first payload) :ok))
     (cl:let ((raw-matches (cl:second payload)))
@@ -6731,28 +6407,28 @@ Server returns names already qualified (e.g. \"vec:push-extend\")."
           (cl:let* ((cp (mine/app/completion:common-prefix candidates))
                     (cp-len (cl:length cp))
                     (prefix-len (cl:length saved-prefix))
-                    (comp-state (mine/app/mine::get-completion st)))
+                    (comp-state (mine/app/state:get-completion st)))
             ;; Insert unambiguous extension into buffer
             (cl:when (cl:> cp-len prefix-len)
               (cl:let ((extension (cl:subseq cp prefix-len)))
                 (cl:if is-repl
                        (mine/pane/repl:repl-pane-paste-to-input!
-                         (mine/app/mine::get-repl-pane st)
+                         (mine/app/state:get-repl-pane st)
                          extension)
                        (cl:let ((buf (%coalton-optional-value-or-nil
                                       (mine/buffer/manager:bufmgr-current
-                                       (mine/app/mine::get-bufmgr st)))))
+                                       (mine/app/state:get-bufmgr st)))))
                          (cl:when buf
                            (mine/edit/operations:insert-string!
                              buf
                              (mine/buffer/buffer:buffer-undo buf)
-                             (mine/app/mine::get-cursor-state st)
+                             (mine/app/state:get-cursor-state st)
                              extension))))))
             ;; Open popup if multiple candidates remain
             (cl:when (cl:> n 1)
               ;; Compute anchor screen position (approximate)
-              (cl:let ((anchor-col (%completion-anchor-col st is-repl saved-prefix))
-                       (anchor-row (%completion-anchor-row st is-repl))
+              (cl:let ((anchor-col (mine/app/navigation:completion-anchor-col st is-repl saved-prefix))
+                       (anchor-row (mine/app/navigation:completion-anchor-row st is-repl))
                        (new-prefix (cl:if (cl:> cp-len prefix-len) cp saved-prefix)))
                 (mine/app/completion:completion-open!
                   comp-state new-prefix candidates anchor-col anchor-row)))))))))
@@ -6777,100 +6453,6 @@ Names are already qualified by the server."
                   (Cons (mine/app/completion:Candidate
                           (cl:princ-to-string entry) "" "")
                         (%build-candidate-list (cl:rest raw-matches)))))))
-
-
-
-(cl:defun %completion-anchor-col (st is-repl prefix)
-  "Compute the screen column for the completion popup anchor."
-  (cl:if is-repl
-         ;; REPL: approximate from input widget
-         (cl:let* ((rp (mine/app/mine::get-repl-pane st))
-                   (cursor (mine/pane/repl:repl-pane-input-cursor rp))
-                   (prompt-len (mine/text/width:string-cell-width-cl
-                                 (mine/pane/repl:repl-pane-prompt-text rp)))
-                   (text (mine/pane/repl:repl-pane-get-input rp))
-                   (text-before (cl:subseq text 0 (cl:min cursor (cl:length text))))
-                   (vcol (mine/text/width:string-cell-width-cl text-before))
-                   (content-x (coalton/cell:read (mine/app/mine::get-content-x-cell st))))
-           (cl:+ content-x prompt-len
-                 (cl:max 0 (cl:- vcol (cl:length prefix)))))
-         ;; Editor: from cursor position
-         (cl:let* ((cs (mine/app/mine::get-cursor-state st))
-                   (buf (%coalton-optional-value-or-nil
-                         (mine/buffer/manager:bufmgr-current
-                          (mine/app/mine::get-bufmgr st)))))
-           (cl:if buf
-                  (cl:let* ((gb (mine/buffer/buffer:buffer-gap buf))
-                            (ep (mine/app/mine::get-editor-pane st))
-                            (lc (mine/edit/cursor:cursor-line-col cs gb))
-                            (cur-col (coalton-prelude:snd lc))
-                            (line (coalton-prelude:fst lc))
-                            (line-text (mine/buffer/gap:gap-line-text gb line))
-                            (tab-w mine/buffer/gap::*tab-width*)
-                            (vcol (mine/buffer/gap:visual-col line-text cur-col tab-w))
-                            (sc (mine/pane/editor:editor-pane-scroll-col ep))
-                            (gw (mine/pane/editor:editor-pane-gutter-width ep gb))
-                            (wrap-w (mine/pane/editor:editor-pane-effective-wrap-width ep))
-                            (seg-vcol (mine/pane/editor:wrap-seg-start-vcol
-                                       gb line cur-col wrap-w tab-w))
-                            (origin (cl:+ sc seg-vcol))
-                            (eff-x (cl:max 0 (cl:- vcol origin)))
-                            (content-x (coalton/cell:read (mine/app/mine::get-content-x-cell st))))
-                    (cl:+ content-x gw (cl:max 0 (cl:- eff-x (cl:length prefix)))))
-                  0))))
-
-(cl:defun %completion-anchor-row (st is-repl)
-  "Compute the screen row for the completion popup anchor (the cursor line)."
-  (cl:if is-repl
-         ;; REPL: match the layout in render-app
-         (cl:let* ((rp (mine/app/mine::get-repl-pane st))
-                   (text (mine/pane/repl:repl-pane-get-input rp))
-                   (cursor (mine/pane/repl:repl-pane-input-cursor rp))
-                   (cursor-row (cl:count #\Newline text :end (cl:min cursor (cl:length text))))
-                   (rows (mine/bindings/terminal:terminal-get-size))
-                   (middle-h (cl:max 1 (cl:- rows 2)))
-                   (layout (coalton/cell:read
-                             (mine/app/mine::get-layout-cell st)))
-                   (repl-full (mine/app/mine::%layout-repl-full? layout))
-                   (repl-h (cl:if repl-full
-                                  (cl:max 1 (cl:- middle-h 1))
-                                  (cl:max 3 (cl:floor middle-h 3))))
-                   (editor-h (cl:if repl-full
-                                    0
-                                    (cl:if (cl:> middle-h (cl:+ repl-h 2))
-                                           (cl:- middle-h (cl:+ repl-h 2))
-                                           1)))
-                   ;; repl-y: menu(1) + editor-h + editor-status(1)
-                   (repl-y (cl:if repl-full
-                                  1
-                                  (cl:+ 1 editor-h 1)))
-                   ;; Input position within REPL pane (output above, input below)
-                   (input-lines (mine/pane/repl:repl-pane-input-line-count rp))
-                   (max-input-h (cl:max 1 (cl:floor repl-h 2)))
-                   (input-h (cl:max 1 (cl:min input-lines max-input-h)))
-                   (output-h (cl:- repl-h input-h))
-                   ;; Input starts at repl-y + output-h
-                   (input-y (cl:+ repl-y output-h)))
-           (cl:+ input-y cursor-row))
-         ;; Editor: cursor line on screen
-         (cl:let* ((cs (mine/app/mine::get-cursor-state st))
-                   (buf (%coalton-optional-value-or-nil
-                         (mine/buffer/manager:bufmgr-current
-                          (mine/app/mine::get-bufmgr st)))))
-           (cl:if buf
-                  (cl:let* ((gb (mine/buffer/buffer:buffer-gap buf))
-                            (lc (mine/edit/cursor:cursor-line-col cs gb))
-                            (cur-line (coalton-prelude:fst lc))
-                            (cur-col (coalton-prelude:snd lc))
-                            (ep (mine/app/mine::get-editor-pane st))
-                            (sr (mine/pane/editor:editor-pane-scroll-row ep))
-                            (wrap-w (mine/pane/editor:editor-pane-effective-wrap-width ep))
-                            (tab-w mine/buffer/gap::*tab-width*)
-                            (row-off (mine/pane/editor:cursor-screen-row-offset
-                                      gb sr cur-line cur-col wrap-w tab-w)))
-                    ;; +1 for menu bar row
-                  (cl:+ 1 row-off))
-                  1))))
 
 (cl:defun %expand-project-input-path (text)
   "Expand a leading ~ in TEXT to the user's home directory."
