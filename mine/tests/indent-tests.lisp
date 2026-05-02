@@ -211,3 +211,34 @@ should-stay-flush-left)"))
     (%check (= pos 8)
             "Expected reindentation to preserve cursor's source-relative position, got ~D"
             pos)))
+
+(defun check-editor-paste-clamps-stale-cursor-to-buffer-end ()
+  (let* ((buffer (buf:buffer-new-file (buf:BufferId 0) "paste-test.ct"))
+         (cs (cursor:cursor-new))
+         (gb (buf:buffer-gap buffer)))
+    (gap:gap-insert-string! (buf:buffer-gap buffer) 0 "abc")
+    (cursor:cursor-move-to-position! cs 250)
+    (ops:insert-string! buffer (buf:buffer-undo buffer) cs "XYZ")
+    (%check (string= "abcXYZ" (gap:gap-to-string gb))
+            "Expected paste with a stale cursor to append at EOF, got ~S"
+            (gap:gap-to-string gb))
+    (%check (= 6 (cursor:cursor-position cs))
+            "Expected cursor after clamped paste to be 6, got ~D"
+            (cursor:cursor-position cs))
+    (let ((entry (app::%coalton-optional-value-or-nil
+                  (undo:undo-undo! (buf:buffer-undo buffer)))))
+      (%check entry "Expected paste to record an undo entry")
+      (app::apply-undo-ops
+       gb
+       (funcall (find-symbol "UNDOENTRY/UNDOENTRY-_0" "MINE/EDIT/UNDO")
+                entry))
+      (cursor:cursor-move-to-position!
+       cs
+       (funcall (find-symbol "UNDOENTRY/UNDOENTRY-_1" "MINE/EDIT/UNDO")
+                entry))
+      (%check (string= "abc" (gap:gap-to-string gb))
+              "Expected undo after clamped paste to restore text, got ~S"
+              (gap:gap-to-string gb))
+      (%check (= 3 (cursor:cursor-position cs))
+              "Expected undo after clamped paste to restore cursor to EOF, got ~D"
+              (cursor:cursor-position cs)))))
