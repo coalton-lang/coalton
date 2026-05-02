@@ -56,6 +56,7 @@ CCL_COMP=ccl --no-init --batch --quiet
 ## **Unsupported** lisps:
 ABCL_COMP=abcl --noinit --nosystem --batch
 ECL_COMP=ecl --norc -q
+## Allegro's command line arguments: https://franz.com/support/documentation/startup.html#50-command-line-arguments
 ALLEGRO_COMP=alisp --batch
 CLASP_COMP=clasp --non-interactive --norc
 # # do read ql's setup
@@ -124,12 +125,14 @@ ifeq ($(LISP),sbcl)
   runOnFileAndExprNoEnv = $(call runOnFileAndExprNoEnvDefault,$(1),$(2),$(3))
 endif
 ifeq ($(LISP),alisp)
+  ## Allegro's command line arguments: https://franz.com/support/documentation/startup.html#50-command-line-arguments
   COMP=$(ALLEGRO)
-  runOnFile = cat $(QUICKLISP_HOME)/asdf.lisp $(2) | env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1)
-  runOnExpr = (cat $(QUICKLISP_HOME)/asdf.lisp ; echo $(2)) | env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1)
-  runOnExprAndFile = (cat $(QUICKLISP_HOME)/asdf.lisp ; echo $(2) ; cat $(3)) | env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1) 
-  runOnFileAndExpr = (cat $(QUICKLISP_HOME)/asdf.lisp $(2) ; echo $(3)) | env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1)
-  runOnFileAndExprNoEnv = (cat $(QUICKLISP_HOME)/asdf.lisp $(2) ; echo $(3)) | $(TIME) $(1)
+  LD_ASDF= -L $(QUICKLISP_HOME)/asdf.lisp
+  runOnFile = env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1) $(LD_ASDF) -L $(2) 
+  runOnExpr = env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1) $(LD_ASDF) -e $(2)
+  runOnExprAndFile = env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1) $(LD_ASDF) -e $(2) -L $(3)
+  runOnFileAndExpr = env CL_SOURCE_REGISTRY="$(LOCAL_SOURCE_REGISTRY)" $(TIME) $(1) $(LD_ASDF) -L $(2) -e $(3)
+  runOnFileAndExprNoEnv = $(TIME) $(1) $(LD_ASDF) -L $(2) -e $(3)
   LISPEXEC=alisp
 endif
 ifeq ($(LISP),ccl)
