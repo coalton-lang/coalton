@@ -639,7 +639,8 @@
     (let has-paths = (match (cfg:.config-project-roots config)
                       ((Cons _ _) True)
                       ((Nil) False)))
-    (lisp (-> Boolean) (se auto-hide-tree lang pkg init-str has-init path-str has-paths)
+    (let theme = (cfg:.config-theme config))
+    (lisp (-> Boolean) (se auto-hide-tree lang pkg init-str has-init path-str has-paths theme)
       (cl:let ((path (cl:merge-pathnames ".mine"
                                           (cl:user-homedir-pathname))))
         (cl:handler-case

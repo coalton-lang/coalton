@@ -10,6 +10,14 @@
    #:default-style
    #:.style-fg #:.style-bg #:.style-attr
    #:with-fg #:with-bg #:with-attr
+   ;;; Color16
+   ;; Normal
+   #:black-c16 #:red3-c16 #:green3-c16 #:yellow3-c16
+   #:dark-blue-c16 #:magenta3-c16 #:cyan3-c16 #:gray90
+   ;; Bright
+   #:gray30-c16 #:red-c16 #:green-c16 #:yellow-c16
+   #:light-blue-c16 #:magenta-c16 #:cyan-c16 #:white
+   ;;; ColorRGB
    ;; Basic
    #:black #:white
    ;; Tango palette - greys
@@ -125,7 +133,34 @@
     "Return a new style with the attribute replaced."
     (Style (.style-fg s) (.style-bg s) a)))
 
-;;; Named colors
+;;; Named colors - Color16
+;;; See https://linux.die.net/man/1/xterm
+
+(coalton-toplevel
+
+  ;; Normal colors
+
+  (define black-c16     (Color16 0))
+  (define red3-c16      (Color16 1))
+  (define green3-c16    (Color16 2))
+  (define yellow3-c16   (Color16 3))
+  (define dark-blue-c16 (Color16 4))
+  (define magenta3-c16  (Color16 5))
+  (define cyan3-c16     (Color16 6))
+  (define gray90        (Color16 7))
+
+  ;; Bright colors
+
+  (define gray30-c16     (Color16 8))
+  (define red-c16        (Color16 9))
+  (define green-c16      (Color16 10))
+  (define yellow-c16     (Color16 11))
+  (define light-blue-c16 (Color16 12))
+  (define magenta-c16    (Color16 13))
+  (define cyan-c16       (Color16 14))
+  (define white          (Color16 15)))
+
+;;; Named colors - ColorRGB
 
 (coalton-toplevel
 
@@ -181,6 +216,8 @@
   (define dark-slate-blue (ColorRGB  72  61 139))
   (define brown           (ColorRGB 161 105  18))
   (define gold            (ColorRGB 214 138  22))
+
+  ;;; Semantic names, Default Mine Theme
 
   ;;; Semantic names - backgrounds
 

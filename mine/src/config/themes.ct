@@ -1,0 +1,129 @@
+(cl:defpackage #:mine/config/themes
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:f #:coalton/functions)
+   (#:c #:mine/term/color))
+  (:export
+   #:Theme
+   #:MineTheme
+  ))
+
+(in-package #:mine/config/themes)
+
+(coalton-toplevel
+
+  ;;; Theme
+
+  (define-struct Theme
+    "An assignment of colors to semantic roles."
+
+    ;;; Backgrounds
+
+    (selection-bg            c:Color)
+    (search-match-bg         c:Color)
+    (search-current-bg       c:Color)
+    (highlight-bg            c:Color)
+    (match-paren-bg          c:Color)
+    (panel-bg                c:Color)
+    (repl-bg                 c:Color)
+    (current-line-bg         c:Color)
+    (field-bg                c:Color)
+    (status-bar-bg           c:Color)
+    (accent-bg               c:Color)
+    (error-dialog-bg         c:Color)
+
+    ;;; Foregrounds
+
+    (text-fg                 c:Color)
+    (text-dim-fg             c:Color)
+    (text-dimmer-fg          c:Color)
+    (accent-fg               c:Color)
+    (error-fg                c:Color)
+    (warning-fg              c:Color)
+    (info-fg                 c:Color)
+    (gutter-fg               c:Color)
+    (border-fg               c:Color)
+
+    ;;; Scrollbar
+
+    (scrollbar-track-fg      c:Color)
+    (scrollbar-track-bg      c:Color)
+    (scrollbar-thumb-fg      c:Color))
+
+  (declare serialize-color ((String -> Void) * c:Color -> Void))
+  (define (serialize-color write clr)
+    "Serialize CLR to save in the config."
+    (match clr
+      ((c:ColorDefault)
+       (write "(ColorDefault)"))
+      ((c:Color16 c)
+       (f:call-all (fn (x) (write (show-as-string x)))
+                 "(Color16 "
+                 c
+                 ")"))
+      ((c:Color256 c)
+       (f:call-all (fn (x) (write (show-as-string x)))
+                 "(Color256 "
+                 c
+                 ")"))
+      ((c:ColorRGB r g b)
+       (f:call-all (fn (x) (write (show-as-string x)))
+                 "(ColorRGB "
+                 r
+                 " "
+                 g
+                 " "
+                 b
+                 ")"))))
+
+  (declare serialize-theme (Theme -> String))
+  (define (serialize-theme theme)
+    "Serialize THEME to save in the config."
+    (let (Theme c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13
+                c14 c15 c16 c17 c18 c19 c20 c21 c22 c23 c24) = theme)
+    (let (values write finish) = (coalton/show:make-string-builder))
+    (write "(Theme ")
+    (f:call-all (fn (c) (serialize-color write c))
+                c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13
+                c14 c15 c16 c17 c18 c19 c20 c21 c22 c23 c24)
+    (finish))
+
+  ;;; Mine Theme
+
+  (define MineTheme
+    (Theme
+     ;; Backgrounds
+     c:selection-bg
+     c:search-match-bg
+     c:search-current-bg
+     c:highlight-bg
+     c:match-paren-bg
+     c:panel-bg
+     c:repl-bg
+     c:current-line-bg
+     c:field-bg
+     c:status-bar-bg
+     c:accent-bg
+     c:error-dialog-bg
+
+     ;; Foregrounds
+     c:text-fg
+     c:text-dim-fg
+     c:text-dimmer-fg
+     c:accent-fg
+     c:error-fg
+     c:warning-fg
+     c:info-fg
+     c:gutter-fg
+     c:border-fg
+
+     ;; Scrollbar
+     c:scrollbar-track-fg
+     c:scrollbar-track-bg
+     c:scrollbar-thumb-fg))
+
+  ;;; Terminal Theme - Defers to Terminal's Theme
+
+  ;; (define TerminalTheme
+  ;;   (Theme
+  )

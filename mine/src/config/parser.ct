@@ -1,6 +1,7 @@
 (cl:defpackage #:mine/config/parser
   (:use #:coalton #:coalton-prelude)
   (:local-nicknames
+   (:cfg-tm #:mine/config/themes)
    (#:cfg #:mine/config/types))
   (:export
    #:load-config
@@ -13,7 +14,7 @@
   (declare default-config (Void -> cfg:MineConfig))
   (define (default-config)
     "Return the default configuration."
-    (cfg:MineConfig True True "coalton" "COALTON-USER" None 4096 Nil))
+    (cfg:MineConfig True True "coalton" "COALTON-USER" None 4096 Nil cfg-tm:MineTheme))
 
   (declare load-config (String -> (Result String cfg:MineConfig)))
   (define (load-config path)
@@ -25,7 +26,7 @@ If the file does not exist, returns defaults. If malformed, returns Err."
                           (cl:user-homedir-pathname))))
         (cl:cond
           ((cl:not (cl:probe-file resolved))
-           (Ok (cfg:MineConfig cl:t cl:t "coalton" "COALTON-USER" None 4096 Nil)))
+           (Ok (default-config)))
           (cl:t
            (cl:handler-case
                (cl:with-open-file (in resolved :direction :input)

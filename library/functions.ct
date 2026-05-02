@@ -25,7 +25,8 @@
    #:msum
    #:asum
    #:/=
-   #:bracket))
+   #:bracket
+   #:call-all))
 
 (in-package #:coalton/functions)
 
@@ -247,6 +248,15 @@ Modeled after Haskell: https://wiki.haskell.org/Bracket_pattern"
      (obj <- init)
      (lisp (-> (:m :c)) (obj exit body)
        (%unwind-protect obj exit body)))))
+
+(defmacro call-all (f cl:&rest rest)
+  "Call function F once with all arguments in REST.
+
+Equivalent to: (progn (f r1) (f r2) ...)"
+  `(progn
+     ,@(cl:mapcar (cl:lambda (arg)
+                    `(,f ,arg))
+                  rest)))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/FUNCTIONS")
