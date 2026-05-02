@@ -3369,6 +3369,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (let bid = (buf:buffer-id buf))
        (mgr:bufmgr-switch! (.ms-bufmgr st) bid)
        (editor:editor-pane-set-buffer! (.ms-editor st) bid)
+       (clamp-cursor-to-buffer! st buf)
        (cell:write! (.ms-preview-path st) (Some fpath))
        (tree:tree-pane-set-preview-path! (.ms-tree st) (Some fpath))
        (values))
@@ -4185,6 +4186,15 @@ Enter or Space inserts the matching Unicode character at the cursor."
 
 ;;; Open files section helpers
 
+  (declare clamp-cursor-to-buffer! (MineState * buf:Buffer -> Void))
+  (define (clamp-cursor-to-buffer! st buffer)
+    "Clamp the shared editor cursor to BUFFER's current length."
+    (let gb = (buf:buffer-gap buffer))
+    (let len = (gap:gap-length gb))
+    (let pos = (cursor:cursor-position (.ms-cursor st)))
+    (when (> pos len)
+      (cursor:cursor-move-to-position! (.ms-cursor st) len)))
+
   (declare %switch-to-open-file! (MineState * String -> Void))
   (define (%switch-to-open-file! st fpath)
     "Switch the editor to display the buffer for FPATH."
@@ -4193,6 +4203,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
        (let bid = (buf:buffer-id buf))
        (mgr:bufmgr-switch! (.ms-bufmgr st) bid)
        (editor:editor-pane-set-buffer! (.ms-editor st) bid)
+       (clamp-cursor-to-buffer! st buf)
        (values))
       ((None)
        (status:statusbar-set-message! (.ms-status st)
