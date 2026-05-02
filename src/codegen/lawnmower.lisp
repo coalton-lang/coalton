@@ -129,41 +129,26 @@ later passes and Lisp compilers see simpler code.")
    :expr expr
    :branches (node-match-branches node)))
 
-(defun node-abstraction-mentions-any-p (node names)
-  "Return true if an abstraction under NODE mentions any of NAMES.
-
-The check is intentionally conservative; it only needs to prevent moving a LET
-around a closure-producing expression when that closure may depend on the LET."
-  (declare (type node node)
-           (type parser:identifier-list names)
-           (values boolean &optional))
-  (let ((mentions? nil))
-    (traverse
-     node
-     (list
-      (action (:after node-abstraction node)
-        (unless (identifiers-disjoint-p
-                 names
-                 (set-difference
-                  (node-variables (node-abstraction-subexpr node))
-                  (node-abstraction-vars node)
-                  :test #'eq))
-          (setf mentions? t))
-        (values))))
-    mentions?))
-
 (defun match-can-enter-let-p (match let-node)
   "Return true when (match (let BINDINGS X) BRANCHES...) can become
 (let BINDINGS (match X BRANCHES...))."
   (declare (type node-match match)
            (type node-let let-node)
            (values boolean &optional))
-  (let ((let-names (let-bound-names let-node)))
-    (and (identifiers-disjoint-p let-names
-                                 (match-scope-variables match))
-         (not (node-abstraction-mentions-any-p
-               (node-let-subexpr let-node)
-               let-names)))))
+  (identifiers-disjoint-p (let-bound-names let-node)
+                          (match-scope-variables match)))
+
+(defun match-can-enter-match-p (outer-match inner-match)
+  "Return true when (match (match X BRANCHES...) OUTER-BRANCHES...) can
+push OUTER-BRANCHES into the inner match branches."
+  (declare (type node-match outer-match inner-match)
+           (values boolean &optional))
+  (let ((outer-scope-vars (match-scope-variables outer-match)))
+    (every (lambda (branch)
+             (identifiers-disjoint-p
+              (pattern-variables (match-branch-pattern branch))
+              outer-scope-vars))
+           (node-match-branches inner-match))))
 
 (defun alias-binding-target (binding)
   "Return the target variable node for a LET binding of the form (ALIAS TARGET)."
@@ -539,6 +524,23 @@ Returns a status keyword and a replacement body. Status is one of:
              :type (node-type node)
              :bindings (node-let-bindings expr)
              :subexpr (match-with-expr node (node-let-subexpr expr)))
+            t)
+           (values node nil)))
+
+      (node-match
+       ;; (match (match x (p y)...) branches...)
+       ;; -> (match x (p (match y branches...))...)
+       (if (match-can-enter-match-p node expr)
+           (values
+            (make-node-match
+             :type (node-type node)
+             :expr (node-match-expr expr)
+             :branches
+             (loop :for branch :in (node-match-branches expr)
+                   :collect
+                   (make-match-branch
+                    :pattern (match-branch-pattern branch)
+                    :body (match-with-expr node (match-branch-body branch)))))
             t)
            (values node nil)))
 
