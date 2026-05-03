@@ -90,7 +90,6 @@
    #:get-repl-lang-cell
    #:get-runtime-mgr
    #:get-eval-start-time-cell
-   #:get-active-request-cell
    #:get-proto-mailbox
    #:get-proto-thread
    #:get-bg-proto-thread
@@ -102,16 +101,13 @@
    #:get-debugger-total-cell
    #:get-debugger-follow-cell
    #:get-conn-stream
-   #:get-diagnostics
    #:get-jump-stack
-   #:get-quit-cell
    #:get-next-req-id-cell
    #:get-io-request-data
    #:get-layout-cell
    #:get-completion
    #:get-content-x-cell
-   #:get-quick-result-state
-   #:get-quick-result-request-cell))
+   #:get-quick-result-state))
 
 (in-package #:mine/app/state)
 
@@ -254,9 +250,6 @@
   (declare get-eval-start-time-cell (MineState -> (Cell UFix)))
   (define (get-eval-start-time-cell st) (.ms-eval-start-time st))
 
-  (declare get-active-request-cell (MineState -> (Cell (Optional msg:RequestId))))
-  (define (get-active-request-cell st) (.ms-active-request st))
-
   (declare get-proto-mailbox (MineState -> NativeBox))
   (define (get-proto-mailbox st) (.ms-proto-mailbox st))
 
@@ -290,14 +283,8 @@
   (declare get-conn-stream (MineState -> NativeBox))
   (define (get-conn-stream st) (.ms-debugger-conn-stream st))
 
-  (declare get-diagnostics (MineState -> NativeBox))
-  (define (get-diagnostics st) (.ms-diagnostics st))
-
   (declare get-jump-stack (MineState -> NativeBox))
   (define (get-jump-stack st) (.ms-jump-stack st))
-
-  (declare get-quit-cell (MineState -> (Cell Boolean)))
-  (define (get-quit-cell st) (.ms-quit st))
 
   (declare get-next-req-id-cell (MineState -> (Cell UFix)))
   (define (get-next-req-id-cell st) (.ms-next-req-id st))
@@ -315,7 +302,4 @@
   (define (get-content-x-cell st) (.ms-content-x st))
 
   (declare get-quick-result-state (MineState -> NativeBox))
-  (define (get-quick-result-state st) (.ms-quick-result-state st))
-
-  (declare get-quick-result-request-cell (MineState -> (Cell (Optional msg:RequestId))))
-  (define (get-quick-result-request-cell st) (.ms-quick-result-request-id st)))
+  (define (get-quick-result-state st) (.ms-quick-result-state st)))

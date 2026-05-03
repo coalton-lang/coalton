@@ -28,8 +28,6 @@
    #:paredit-shed!
    #:paredit-split!
    #:paredit-delete-enclosing!
-   #:paredit-raise!
-   #:paredit-wrap-round!
    #:paredit-forward-sexp!
    #:paredit-backward-sexp!
    #:scan-matching-open-paren
@@ -1366,53 +1364,6 @@ Inside strings, parens are treated as normal characters."
                 (record-insert! buffer open-pos replacement p))
               (cell:write! (cursor:.pos cs) open-pos)
               (values))))))))
-
-  (declare paredit-raise! (buf:Buffer * cursor:CursorState -> Void))
-  (define (paredit-raise! buffer cs)
-    "Replace the enclosing form with the sexp at point."
-    (undo:with-undo-group! (buf:buffer-undo buffer)
-      (fn () (cursor:cursor-position cs))
-      (fn ()
-        (let gb = (buf:buffer-gap buffer))
-        (let p = (cursor:cursor-position cs))
-        (match (%current-list-open gb p)
-          ((None) (values))
-          ((Some open-pos)
-           (match (%matching-close-for gb open-pos)
-             ((None) (values))
-             ((Some close-pos)
-              ;; Get the sexp at point
-              (match (scan-forward-sexp gb p)
-                ((None) (values))
-                ((Some sexp-end)
-                 (let sexp-text = (gap:gap-substring gb p sexp-end))
-                 ;; Delete the entire enclosing form
-                 (record-delete! buffer open-pos (+ close-pos 1) p)
-                 ;; Insert the sexp text where the form was
-                 (record-insert! buffer open-pos sexp-text p)
-                 ;; Place cursor at start of raised sexp
-                 (cell:write! (cursor:.pos cs) open-pos)
-                 (values)
-                 (values))))))))))
-
-  (declare paredit-wrap-round! (buf:Buffer * cursor:CursorState -> Void))
-  (define (paredit-wrap-round! buffer cs)
-    "Wrap the next sexp in parentheses."
-    (undo:with-undo-group! (buf:buffer-undo buffer)
-      (fn () (cursor:cursor-position cs))
-      (fn ()
-        (let gb = (buf:buffer-gap buffer))
-        (let p = (cursor:cursor-position cs))
-        (match (scan-forward-sexp gb p)
-          ((None) (values))
-          ((Some sexp-end)
-           ;; Insert close paren after sexp
-           (record-insert! buffer sexp-end ")" p)
-           ;; Insert open paren before sexp
-           (record-insert! buffer p "(" p)
-           ;; Place cursor after the open paren
-           (cell:write! (cursor:.pos cs) (+ p 1))
-           (values))))))
 
   (declare paredit-forward-sexp! (gap:GapBuffer * cursor:CursorState -> Void))
   (define (paredit-forward-sexp! gb cs)

@@ -8,12 +8,6 @@
                           :external-format :utf-8)
     (write-string text stream)))
 
-(defun %read-utf8-file (pathname)
-  (with-open-file (stream pathname :direction :input :external-format :utf-8)
-    (let ((text (make-string (file-length stream))))
-      (read-sequence text stream)
-      text)))
-
 (defun %muffle-warning-if-possible (condition)
   (let ((restart (find-restart 'muffle-warning condition)))
     (when restart

@@ -122,25 +122,6 @@
       ((CenterEditorFull) False)
       (_ True)))
 
-  (declare %layout-editor-full? (MineLayout -> Boolean))
-  (define (%layout-editor-full? layout)
-    (match (.ml-center layout)
-      ((CenterEditorFull) True)
-      ((CenterEditorFullReplRow) True)
-      (_ False)))
-
-  (declare %layout-editor-full-repl-row? (MineLayout -> Boolean))
-  (define (%layout-editor-full-repl-row? layout)
-    (== (.ml-center layout) CenterEditorFullReplRow))
-
-  (declare %layout-repl-full? (MineLayout -> Boolean))
-  (define (%layout-repl-full? layout)
-    (== (.ml-center layout) CenterReplFull))
-
-  (declare %layout-split? (MineLayout -> Boolean))
-  (define (%layout-split? layout)
-    (== (.ml-center layout) CenterEditorReplSplit))
-
   (declare %tree-visible? (MineState -> Boolean))
   (define (%tree-visible? st)
     (%layout-tree-visible? (cell:read (.ms-layout st))))
@@ -189,10 +170,6 @@
   (declare %show-tree! (MineState -> Void))
   (define (%show-tree! st)
     (%set-tree-layout! st TreeVisible))
-
-  (declare %hide-tree! (MineState -> Void))
-  (define (%hide-tree! st)
-    (%set-tree-layout! st TreeHidden))
 
   (declare %center-open-repl (CenterLayout -> CenterLayout))
   (define (%center-open-repl center)
@@ -825,15 +802,6 @@ the cursor's display-x within its wrap segment."
                    (cl:t "--")))
                "--"))))
 
-  (declare %update-repl-lang-from-package (MineState -> Void))
-  (define (%update-repl-lang-from-package st)
-    "Auto-detect and set the REPL lang from the current package."
-    (let lang = (%detect-repl-lang (cell:read (.ms-repl-package st))))
-    (when (not (== lang "--"))
-      (cell:write! (.ms-repl-lang st) lang)
-      (values))
-    (values))
-
   (declare %heap-info (Void -> String))
   (define (%heap-info)
     "Return cached heap info from the runtime server."
@@ -1181,13 +1149,6 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
     "Start the protocol reader thread if not already running."
     (lisp (-> Void) (st conn)
       (%start-foreground-proto-reader-cl st conn)
-      (cl:values)))
-
-  (declare start-background-proto-reader! (MineState * client:Connection -> Void))
-  (define (start-background-proto-reader! st conn)
-    "Start the background protocol reader thread if not already running."
-    (lisp (-> Void) (st conn)
-      (%start-background-proto-reader-cl st conn)
       (cl:values)))
 
 ;;; Process protocol messages from mailbox (non-blocking)
@@ -1694,13 +1655,6 @@ Uses a dedicated Beam request so diagnostics can stream independently."
     "Show a transient Quick Result popup."
     (lisp (-> Void) (st title text error?)
       (%set-quick-result-popup st title text error?)
-      (cl:values)))
-
-  (declare %show-quick-result-pending! (MineState -> Void))
-  (define (%show-quick-result-pending! st)
-    "Show the Quick Result pending popup."
-    (lisp (-> Void) (st)
-      (%set-quick-result-pending-popup st)
       (cl:values)))
 
   (declare %show-quick-result-pending-for-range! (MineState * UFix * UFix * String -> Void))
@@ -3821,23 +3775,6 @@ wrap is on, row is resolved through screen-row-to-line-seg."
        (focus:focus-switch! (.ms-focus st) focus:FocusTree)
        (values))))
 
-  (declare toggle-tree! (MineState -> Void))
-  (define (toggle-tree! st)
-    (let tvis = (%tree-visible? st))
-    (cond
-      (tvis
-       (match (focus:focus-current (.ms-focus st))
-         ((focus:FocusTree)
-          (%show-editor! st)
-          (values))
-         (_
-          (focus:focus-switch! (.ms-focus st) focus:FocusTree)
-          (values))))
-      (True
-       (%show-tree! st)
-       (focus:focus-switch! (.ms-focus st) focus:FocusTree)
-       (values))))
-
 ;;; Incremental find (Ctrl+f)
 
   (declare %update-find-prompt! (MineState * UFix * UFix -> Void))
@@ -5255,10 +5192,6 @@ Handles #:foo, :foo, 'foo, \"foo\", and bare symbols."
 
 ;;; Async protocol message processing (CL side)
 
-(cl:defun %repl-append (st text)
-  (mine/pane/repl::repl-pane-append-output!
-   (mine/app/state:get-repl-pane st) text))
-
 (cl:defun %ensure-proto-mailbox (st)
   "Return the shared protocol mailbox, creating it if needed."
   (cl:let ((box (mine/app/state:get-proto-mailbox st)))
@@ -5517,10 +5450,6 @@ Returns a Coalton List of ProtoMsg."
                      :error cl:nil
                      :expiry cl:nil)
             highlight)))
-
-(cl:defun %set-quick-result-pending-popup (st)
-  "Store the Quick Result busy popup state on ST."
-  (%set-quick-result-pending-state st :busy))
 
 (cl:defun %set-quick-result-pending-popup-with-range (st start end document-key)
   "Store the Quick Result busy popup state and source highlight range on ST."
@@ -6110,16 +6039,6 @@ where IDX is the index of the item in ITEMS."
             (rid (coalton/cell:read cell)))
     (coalton/cell:write! cell (cl:1+ rid))
     rid))
-
-(cl:defun %send-to-subprocess (st msg)
-  "Send a protocol message MSG (a list) to the subprocess. Returns T on success.
-Handles the debugger state where conn-stream is (msg-id . stream)."
-  (cl:let* ((raw (mine/app/state::%native-box-value (mine/app/state:get-conn-stream st)))
-            (stream (cl:if (cl:consp raw) (cl:cdr raw) raw)))
-    (cl:when (cl:and (cl:streamp stream) (cl:open-stream-p stream))
-      (cl:handler-case
-          (mine/protocol/server::write-message stream msg)
-        (cl:error () cl:nil)))))
 
 (cl:defun %send-to-background-subprocess (st msg)
   "Send MSG on the runtime background connection."

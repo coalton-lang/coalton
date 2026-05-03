@@ -128,15 +128,6 @@ pos + (gap-end - gap-start)."
         (_ (values)))
       (%scan-lines gb ls (+ i 1) n)))
 
-  (declare rebuild-line-starts! (GapBuffer -> Void))
-  (define (rebuild-line-starts! gb)
-    "Rebuild the line-starts vector by scanning all logical characters."
-    (let n = (cell:read (.len gb)))
-    (let ls = (cell:read (.line-starts gb)))
-    (vec:clear! ls)
-    (vec:push! 0 ls)
-    (%scan-lines gb ls 0 n))
-
   (declare update-line-starts-insert! (GapBuffer * UFix * String -> Void))
   (define (update-line-starts-insert! gb pos text)
     "Incrementally update line-starts after inserting TEXT at logical POS.
