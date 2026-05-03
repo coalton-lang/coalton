@@ -16,19 +16,12 @@
   ;;; ComponentType
 
   (repr :enum)
+  (derive Eq)
   (define-type ComponentType
     "Type of an ASDF system component."
     CTFile
     CTModule
     CTCtFile)
-
-  (define-instance (Eq ComponentType)
-    (define (== a b)
-      (match (Tuple a b)
-        ((Tuple (CTFile) (CTFile)) True)
-        ((Tuple (CTModule) (CTModule)) True)
-        ((Tuple (CTCtFile) (CTCtFile)) True)
-        (_ False))))
 
   ;;; Component
 

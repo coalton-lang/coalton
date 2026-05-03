@@ -15,15 +15,10 @@
 
   ;;; CommandId
 
+  (derive Eq)
   (define-type CommandId
     "Opaque identifier for a registered command."
     (CommandId UFix))
-
-  (define-instance (Eq CommandId)
-    (define (== a b)
-      (match (Tuple a b)
-        ((Tuple (CommandId x) (CommandId y))
-         (== x y)))))
 
   ;;; Event
 

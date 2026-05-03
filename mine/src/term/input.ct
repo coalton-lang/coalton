@@ -52,6 +52,7 @@
   ;;; Modifier
 
   (repr :enum)
+  (derive Eq)
   (define-type Modifier
     "Key modifier state."
     ModNone
@@ -59,11 +60,6 @@
     ModAlt
     ModCtrl
     ModAltShift)
-
-  (define-instance (Eq Modifier)
-    (define (== a b)
-      (lisp (-> Boolean) (a b)
-        (cl:if (cl:eq a b) True False))))
 
   ;;; Mouse
 
