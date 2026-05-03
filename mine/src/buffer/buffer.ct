@@ -36,15 +36,10 @@
 
   ;;; BufferId
 
-  (derive Eq)
+  (derive Eq Hash)
   (define-type BufferId
     "Unique identifier for a buffer."
     (BufferId UFix))
-
-  (define-instance (Hash BufferId)
-    (define (hash bid)
-      (match bid
-        ((BufferId n) (hash n)))))
 
   ;;; BufferMode
 
