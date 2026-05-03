@@ -50,14 +50,13 @@
   :components
   ((:file "version")
 
-   ;; CL bindings -- editor-only (platform, terminal, signal)
+   ;; CL bindings -- editor-only (platform, terminal)
    (:module "bindings"
     :serial t
     :components ((:file "platform-package")
                  (:file "platform-unix" :if-feature :unix)
                  (:file "platform-win32" :if-feature :win32)
-                 (:file "terminal")
-                 (:file "signal")))
+                 (:file "terminal")))
 
    ;; Shared text layout helpers
    (:module "text"
@@ -76,8 +75,7 @@
    ;; Event system
    (:module "event"
     :serial t
-    :components ((:ct-file "types")
-                 (:ct-file "queue")))
+    :components ((:ct-file "types")))
 
    ;; Utilities and bindings
    (:module "utils"
@@ -135,7 +133,6 @@
                  (:ct-file "editor")
                  (:ct-file "repl")
                  (:ct-file "status")
-                 (:ct-file "debugger")
                  (:ct-file "minibuffer")))
 
    ;; Project management
@@ -149,8 +146,7 @@
    (:module "config"
     :serial t
     :components ((:ct-file "types")
-                 (:ct-file "parser")
-                 (:ct-file "keys")))
+                 (:ct-file "parser")))
 
    ;; Application entry point
    (:module "app"

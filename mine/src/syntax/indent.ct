@@ -10,7 +10,6 @@
    #:RuleKnown
    #:IndentRuleEntry
    #:indent-heads-for-line
-   #:compute-indent
    #:compute-indent-with-rules
    #:compute-blank-indent-at-position-with-rules))
 
@@ -641,10 +640,5 @@ and DEFMETHOD's qualifier-sensitive lambda list."
          (parse-context (gap:gap-to-string gb) pos)
          None
          rules)))
-
-  (declare compute-indent (gap:GapBuffer * UFix * UFix -> UFix))
-  (define (compute-indent gb mode line)
-    "Compute indentation without runtime rules. This is intentionally generic."
-    (compute-indent-with-rules gb mode line Nil))
 
 )

@@ -11,7 +11,6 @@
    #:focus-new
    #:focus-current
    #:focus-switch!
-   #:focus-cycle!
    #:focus-return!))
 
 (in-package #:mine/widget/focus)
@@ -65,19 +64,6 @@
     (cell:write! (.fm-previous fm) (cell:read (.fm-current fm)))
     (cell:write! (.fm-current fm) target)
     (values))
-
-  (declare next-cycle-target (FocusTarget -> FocusTarget))
-  (define (next-cycle-target t)
-    "Return the next target in the cycle: Editor -> Repl -> Tree -> Editor."
-    (match t
-      ((FocusEditor) FocusRepl)
-      ((FocusRepl)   FocusTree)
-      (_             FocusEditor)))
-
-  (declare focus-cycle! (FocusManager -> Void))
-  (define (focus-cycle! fm)
-    "Cycle focus: Editor -> Repl -> Tree -> Editor."
-    (focus-switch! fm (next-cycle-target (focus-current fm))))
 
   (declare focus-return! (FocusManager -> Void))
   (define (focus-return! fm)

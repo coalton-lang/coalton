@@ -30,7 +30,6 @@
    #:editor-pane-line-wrap?
    #:editor-pane-toggle-line-wrap!
    #:set-quick-result-highlight!
-   #:editor-pane-text-width
    #:wrap-points
    #:segment-for-col
    #:rows-for-line
@@ -175,13 +174,6 @@
          (cl:setf *quick-result-highlight-start* cl:nil)
          (cl:setf *quick-result-highlight-end* cl:nil)
          (cl:values)))))
-
-  (declare editor-pane-text-width (EditorPane * gap:GapBuffer * wt:Rect -> UFix))
-  (define (editor-pane-text-width ep gb rect)
-    "Text area width (viewport width minus gutter). At least 1."
-    (let gw = (editor-pane-gutter-width ep gb))
-    (let rw = (wt:.rect-width rect))
-    (if (> rw gw) (- rw gw) 1))
 
   (declare editor-pane-effective-wrap-width (EditorPane -> UFix))
   (define (editor-pane-effective-wrap-width ep)
@@ -997,37 +989,6 @@ segments) and highlights the current visual row."
                     scr y (cl:+ text-x (cl:- ch-vcol scroll-vcol))
                     ch s)))))
       (cl:values)))
-
-  (declare draw-highlighted-line
-    (screen:Screen * UFix * UFix * UFix * UFix *
-     String * color:Style * UFix * UFix * UFix * UFix -> Void))
-  (define (draw-highlighted-line scr y text-x text-width scroll-vcol
-                                 text default-style
-                                 sel-start sel-end line-buf-offset tab-w)
-    "Draw TEXT with syntax highlighting, selection, and tab expansion."
-    (lisp (-> Void) ()
-      (cl:when (cl:or (cl:null *lexer-state*)
-                      (cl:/= (mine/syntax/lexer::lexerstate/lexerstate-_2 *lexer-state*)
-                             *lexer-mode*))
-        (cl:setf *lexer-state* (mine/syntax/lexer:lexer-state-new *lexer-mode*)))
-      (cl:values))
-    (let text-len = (str:length text))
-    (let vcol-map = (%build-vcol-map text tab-w))
-    (let vis-vcol-end = (+ scroll-vcol text-width))
-    (let def-bg = (color:.style-bg default-style))
-    (let tokens = (lisp (-> (List tok:Token)) (text)
-                    (cl:if (cl:= *lexer-mode* 2)
-                           Nil
-                           (mine/syntax/lexer:lex-line *lexer-state* text 0))))
-    (match tokens
-      ((Nil)
-       (draw-chars-with-tabs scr y text-x text 0 text-len default-style
-                             vcol-map scroll-vcol vis-vcol-end
-                             line-buf-offset sel-start sel-end tab-w))
-      (_
-       (%draw-hl-tokens tokens scr y text-x text text-len default-style def-bg
-                        vcol-map scroll-vcol vis-vcol-end
-                        line-buf-offset sel-start sel-end tab-w))))
 
   (declare %lex-one-line (String -> (List tok:Token)))
   (define (%lex-one-line text)
