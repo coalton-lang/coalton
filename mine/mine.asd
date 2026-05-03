@@ -167,5 +167,6 @@
                  (:ct-file "keyboard-debugger")
                  (:ct-file "diagnostic-scope")
                  (:file "diagnostics")
+                 (:file "check-update")
                  (:ct-file "mine")
                  (:file "executable")))))

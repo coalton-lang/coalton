@@ -584,8 +584,20 @@
 
 ;;; Welcome screen
 
-  (declare render-welcome (screen:Screen * wt:Rect -> Void))
-  (define (render-welcome scr rect)
+  (declare update-check-message (MineState -> String))
+  (define (update-check-message st)
+    "Return the welcome-screen update status line, or empty string."
+    (lisp (-> String) (st)
+      (update-check-message-cl st)))
+
+  (declare update-check-available? (MineState -> Boolean))
+  (define (update-check-available? st)
+    "True when the background update check found a newer release."
+    (lisp (-> Boolean) (st)
+      (cl:if (update-check-available-p-cl st) cl:t cl:nil)))
+
+  (declare render-welcome (MineState * screen:Screen * wt:Rect -> Void))
+  (define (render-welcome st scr rect)
     "Render the welcome screen when no file is open."
     (let rx = (wt:.rect-x rect))
     (let ry = (wt:.rect-y rect))
@@ -594,6 +606,12 @@
     (let bold-blue = (color:Style color:baby-blue color:black color:AttrBold))
     (let bold = (color:Style color:text-fg color:black color:AttrBold))
     (let dim = (color:Style color:text-dim-fg color:black color:AttrNone))
+    (let update = (update-check-message st))
+    (let has-update = (> (str:length update) 0))
+    (let update-offset = (if has-update 1 0))
+    (let update-style = (if (update-check-available? st)
+                            (color:Style color:warning-fg color:black color:AttrBold)
+                            dim))
     ;; Check if ~/.mine exists
     (let has-config = (lisp (-> Boolean) ()
                         (cl:if (cl:probe-file
@@ -601,7 +619,7 @@
                                cl:t cl:nil)))
     ;; Line count: welcome + blank + 4 keys = 6, or welcome + setup + blank + 4 keys = 7
     ;; Add 2 for best-effort warning (blank + warning line)
-    (let base-count = (if has-config 6 7))
+    (let base-count = (+ (if has-config 6 7) update-offset))
     (let line-count = (if (term:best-effort?) (+ base-count 2) base-count))
     (let cy = (if (> rh line-count)
                   (+ ry (lisp (-> UFix) (rh line-count) (cl:floor (cl:- rh line-count) 2)))
@@ -623,6 +641,13 @@
     (render:draw-text scr cy (+ cx (str:length welcome-prefix)) welcome-name bold-blue)
     (render:draw-text scr cy (+ cx (+ (str:length welcome-prefix) (str:length welcome-name)))
                       welcome-suffix dim)
+    ;; Optional update status line
+    (when has-update
+      (let update-w = (str:length update))
+      (let update-x = (if (> rw update-w)
+                          (+ rx (lisp (-> UFix) (rw update-w) (cl:floor (cl:- rw update-w) 2)))
+                          rx))
+      (render:draw-text scr (+ cy 1) update-x update update-style))
     ;; Optional setup wizard line
     (when (not has-config)
       (let setup-pre = "Run ")
@@ -633,12 +658,13 @@
       (let setup-x = (if (> rw setup-w)
                          (+ rx (lisp (-> UFix) (rw setup-w) (cl:floor (cl:- rw setup-w) 2)))
                          rx))
-      (render:draw-text scr (+ cy 1) setup-x setup-pre dim)
-      (render:draw-text scr (+ cy 1) (+ setup-x (str:length setup-pre)) setup-key bold)
-      (render:draw-text scr (+ cy 1) (+ setup-x (+ (str:length setup-pre) (str:length setup-key)))
+      (let setup-y = (+ cy (+ 1 update-offset)))
+      (render:draw-text scr setup-y setup-x setup-pre dim)
+      (render:draw-text scr setup-y (+ setup-x (str:length setup-pre)) setup-key bold)
+      (render:draw-text scr setup-y (+ setup-x (+ (str:length setup-pre) (str:length setup-key)))
                         setup-post dim))
     ;; Keybinding lines (offset by 2 if config exists, 3 if setup line shown)
-    (let key-y = (+ cy (if has-config 2 3)))
+    (let key-y = (+ cy (+ update-offset (if has-config 2 3))))
     (let draw-key-line =
       (fn (row key desc)
         (let line-w = (+ (str:length key) (+ 1 (str:length desc))))
@@ -699,7 +725,7 @@
       ((None)
        (editor:set-quick-result-highlight! None)
        (render:fill-rect scr editor-rect #\Space color:default-style)
-       (render-welcome scr editor-rect))))
+       (render-welcome st scr editor-rect))))
 
   (declare render-editor-cursor (MineState * screen:Screen -> Void))
   (define (render-editor-cursor st scr)
@@ -4632,6 +4658,14 @@ Render-app is NOT called here; the main loop handles rendering."
       ((== lang "lisp") "Lisp")
       (True "Coalton")))
 
+  (declare start-update-check! (MineState -> Void))
+  (define (start-update-check! st)
+    "Start the opt-in background update check."
+    (when (cfgt:.config-check-for-updates (.ms-config st))
+      (lisp (-> Void) (st)
+        (start-update-check-thread-cl st)
+        (cl:values))))
+
   (declare %draw-config-error (term:Terminal * String -> Void))
   (define (%draw-config-error term msg)
     "Draw the config error alert."
@@ -4735,7 +4769,9 @@ Render-app is NOT called here; the main loop handles rendering."
                          (cell:new None)
                          (native-box-new)
                          (cell:new None)
+                         (native-box-new)
                          (native-box-new)))
+    (start-update-check! st)
     ;; Open a file if given on the command line
     (let file-args = (filter (fn (a) (not (str:substring? "--" a))) (list:cdr args)))
     (match file-args
@@ -5204,6 +5240,25 @@ Handles #:foo, :foo, 'foo, \"foo\", and bare symbols."
           (cl:handler-case
               (mine/bindings/thread:thread-alive-p thread)
             (cl:error () cl:nil))))
+
+(cl:defun start-update-check-thread-cl (st)
+  "Start the opt-in update check thread for ST."
+  (cl:let ((box (mine/app/state:get-update-check-state st)))
+    (mine/app/check-update:start-update-check-thread
+     (cl:lambda (state)
+       (cl:setf (mine/app/state::%native-box-value box) state))))
+  (cl:values))
+
+(cl:defun update-check-message-cl (st)
+  "Return a user-facing update-check line for the welcome screen."
+  (cl:let* ((box (mine/app/state:get-update-check-state st))
+            (state (mine/app/state::%native-box-value box)))
+    (mine/app/check-update:update-check-message state)))
+
+(cl:defun update-check-available-p-cl (st)
+  (cl:let* ((box (mine/app/state:get-update-check-state st))
+            (state (mine/app/state::%native-box-value box)))
+    (mine/app/check-update:update-check-available-p state)))
 
 (cl:defun %start-proto-reader-thread-cl (st conn thread-box lost-message thread-name)
   "Start a reader for CONN, forwarding raw protocol messages into ST's mailbox."
