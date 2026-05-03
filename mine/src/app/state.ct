@@ -80,6 +80,7 @@
    #:.ms-quick-result-state
    #:.ms-quick-result-request-id
    #:.ms-bg-proto-thread
+   #:.ms-update-check-state
    #:get-status-bar
    #:get-editor-pane
    #:get-bufmgr
@@ -107,7 +108,8 @@
    #:get-layout-cell
    #:get-completion
    #:get-content-x-cell
-   #:get-quick-result-state))
+   #:get-quick-result-state
+   #:get-update-check-state))
 
 (in-package #:mine/app/state)
 
@@ -201,7 +203,8 @@
     (ms-beam-request-id   (Cell (Optional msg:RequestId)))
     (ms-quick-result-state  NativeBox) ;; CL plist for transient result popup
     (ms-quick-result-request-id (Cell (Optional msg:RequestId)))
-    (ms-bg-proto-thread    NativeBox))
+    (ms-bg-proto-thread    NativeBox)
+    (ms-update-check-state NativeBox)) ;; CL plist for update-check status
 
 ;;; Named accessors for CL interop
 
@@ -287,4 +290,7 @@
   (define (get-content-x-cell st) (.ms-content-x st))
 
   (declare get-quick-result-state (MineState -> NativeBox))
-  (define (get-quick-result-state st) (.ms-quick-result-state st)))
+  (define (get-quick-result-state st) (.ms-quick-result-state st))
+
+  (declare get-update-check-state (MineState -> NativeBox))
+  (define (get-update-check-state st) (.ms-update-check-state st)))

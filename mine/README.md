@@ -105,6 +105,7 @@ Whitespace is arbitrary; add as many spaces and newlines as you please. The poss
     - Examples: `(defvar *repl-started* t)` 
 - `:project-roots` [`<string>`, `(<string> ...)`]: A string or a list of strings which are root directories where projects are subdirectories. This is where `mine` will search for projects.
     - Examples: `"c:/projects/"`, `("/projects/" "/my/other-projects/")`
+- `:check-for-updates` [`t`, `nil`]: Best-effort check of the Coalton GitHub releases for newer `mine` releases on startup. Values are `t` (check, requires `curl`) or `nil` (do not check, default).
 - `:repl-heap-size-megabytes` `<integer>`: The number of megabytes of memory the REPL should get. Defaults to 4096 MiB.
 - `:app-font-family` `<string>`: The font family to use in the mine desktop app. Defaults to `"Iosevka Fixed Slab Extended"` which comes pre-installed with the app.
 - `:app-font-size` `<integer>`: The font size in pixels to use in the mine desktop app. Defaults to `14`.
