@@ -20,6 +20,7 @@
   ;;; FocusTarget
 
   (repr :enum)
+  (derive Eq)
   (define-type FocusTarget
     "Identifies which pane currently has focus."
     FocusEditor
@@ -28,17 +29,6 @@
     FocusMinibuffer
     FocusDebugger
     FocusMenu)
-
-  (define-instance (Eq FocusTarget)
-    (define (== a b)
-      (match (Tuple a b)
-        ((Tuple (FocusEditor) (FocusEditor))         True)
-        ((Tuple (FocusRepl) (FocusRepl))             True)
-        ((Tuple (FocusTree) (FocusTree))             True)
-        ((Tuple (FocusMinibuffer) (FocusMinibuffer)) True)
-        ((Tuple (FocusDebugger) (FocusDebugger))     True)
-        ((Tuple (FocusMenu) (FocusMenu))             True)
-        (_ False))))
 
   ;;; FocusManager
 

@@ -132,34 +132,19 @@
 ;;; Layout state
 
   (repr :enum)
+  (derive Eq)
   (define-type TreeLayout
     TreeHidden
     TreeVisible)
 
-  (define-instance (Eq TreeLayout)
-    (define (== a b)
-      (match (Tuple a b)
-        ((Tuple (TreeHidden) (TreeHidden)) True)
-        ((Tuple (TreeVisible) (TreeVisible)) True)
-        (_ False))))
-
   (repr :enum)
+  (derive Eq)
   (define-type CenterLayout
     CenterEditor
     CenterEditorFull
     CenterEditorFullReplRow
     CenterEditorReplSplit
     CenterReplFull)
-
-  (define-instance (Eq CenterLayout)
-    (define (== a b)
-      (match (Tuple a b)
-        ((Tuple (CenterEditor) (CenterEditor)) True)
-        ((Tuple (CenterEditorFull) (CenterEditorFull)) True)
-        ((Tuple (CenterEditorFullReplRow) (CenterEditorFullReplRow)) True)
-        ((Tuple (CenterEditorReplSplit) (CenterEditorReplSplit)) True)
-        ((Tuple (CenterReplFull) (CenterReplFull)) True)
-        (_ False))))
 
   (define-struct MineLayout
     (ml-tree   TreeLayout)

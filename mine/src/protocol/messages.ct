@@ -18,15 +18,10 @@
 
   ;;; RequestId
 
+  (derive Eq)
   (define-type RequestId
     "Unique identifier for a protocol request."
     (RequestId UFix))
-
-  (define-instance (Eq RequestId)
-    (define (== a b)
-      (match (Tuple a b)
-        ((Tuple (RequestId x) (RequestId y))
-         (== x y)))))
 
   ;;; Request
 
