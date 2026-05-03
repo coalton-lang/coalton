@@ -1,6 +1,7 @@
 (cl:defpackage #:mine/config/parser
   (:use #:coalton #:coalton-prelude)
   (:local-nicknames
+   (:cfg-tm #:mine/config/themes)
    (#:cfg #:mine/config/types))
   (:export
    #:load-config
@@ -13,7 +14,7 @@
   (declare default-config (Void -> cfg:MineConfig))
   (define (default-config)
     "Return the default configuration."
-    (cfg:MineConfig True True "coalton" "COALTON-USER" None 4096 Nil))
+    (cfg:MineConfig True True "coalton" "COALTON-USER" None 4096 Nil cfg-tm:MineTheme))
 
   (declare load-config (String -> (Result String cfg:MineConfig)))
   (define (load-config path)
@@ -25,7 +26,7 @@ If the file does not exist, returns defaults. If malformed, returns Err."
                           (cl:user-homedir-pathname))))
         (cl:cond
           ((cl:not (cl:probe-file resolved))
-           (Ok (cfg:MineConfig cl:t cl:t "coalton" "COALTON-USER" None 4096 Nil)))
+           (Ok (default-config)))
           (cl:t
            (cl:handler-case
                (cl:with-open-file (in resolved :direction :input)
@@ -36,7 +37,8 @@ If the file does not exist, returns defaults. If malformed, returns Err."
                            (rp  (cl:getf plist ':default-package "COALTON-USER"))
                            (init (cl:getf plist ':repl-init cl:nil))
                            (heap-raw (cl:getf plist ':repl-heap-size-megabytes 4096))
-                           (asdf-raw (cl:getf plist ':project-roots cl:nil)))
+                           (asdf-raw (cl:getf plist ':project-roots cl:nil))
+                           (theme-raw (cl:getf plist ':theme cl:nil)))
                    (cl:unless (cl:listp plist)
                      (cl:error "Config file must contain a plist"))
                    (cl:unless (cl:or (cl:eq ah cl:t) (cl:null ah))
@@ -52,7 +54,10 @@ If the file does not exist, returns defaults. If malformed, returns Err."
                                ((cl:listp asdf-raw)
                                 (cl:reduce (cl:lambda (acc item) (Cons item acc))
                                            (cl:reverse asdf-raw) :initial-value Nil))
-                               (cl:t Nil))))
+                               (cl:t Nil)))
+                            (theme (cl:if theme-raw
+                                          (cfg-tm:read-theme-config theme-raw)
+                                          cfg-tm:MineTheme)))
                      (Ok (cfg:MineConfig (cl:if se cl:t cl:nil)
                                          (cl:if ah cl:t cl:nil)
                                          (cl:string-downcase rl)
@@ -61,7 +66,8 @@ If the file does not exist, returns defaults. If malformed, returns Err."
                                                 (Some (cl:write-to-string init))
                                                 None)
                                          (cl:max 256 (cl:truncate heap-raw))
-                                         project-roots)))))
+                                         project-roots
+                                         theme)))))
              (cl:error (c)
                (Err (cl:format cl:nil "~A: ~A"
                                (cl:namestring resolved) c))))))))))

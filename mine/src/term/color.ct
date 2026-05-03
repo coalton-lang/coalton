@@ -10,6 +10,14 @@
    #:default-style
    #:.style-fg #:.style-bg #:.style-attr
    #:with-fg #:with-bg #:with-attr
+   ;;; Color16
+   ;; Normal
+   #:black-c16 #:red3-c16 #:green3-c16 #:yellow3-c16
+   #:dark-blue-c16 #:magenta3-c16 #:cyan3-c16 #:gray90
+   ;; Bright
+   #:gray30-c16 #:red-c16 #:green-c16 #:yellow-c16
+   #:light-blue-c16 #:magenta-c16 #:cyan-c16 #:white
+   ;;; ColorRGB
    ;; Basic
    #:black #:white
    ;; Tango palette - greys
@@ -38,7 +46,9 @@
    #:accent-fg #:error-fg #:warning-fg #:info-fg
    #:gutter-fg #:border-fg
    ;; Semantic - scrollbar
-   #:scrollbar-track-fg #:scrollbar-track-bg #:scrollbar-thumb-fg))
+   #:scrollbar-track-fg #:scrollbar-track-bg #:scrollbar-thumb-fg
+   ;; Theme
+   #:Theme))
 
 (in-package #:mine/term/color)
 
@@ -125,7 +135,34 @@
     "Return a new style with the attribute replaced."
     (Style (.style-fg s) (.style-bg s) a)))
 
-;;; Named colors
+;;; Named colors - Color16
+;;; See https://linux.die.net/man/1/xterm
+
+(coalton-toplevel
+
+  ;; Normal colors
+
+  (define black-c16     (Color16 0))
+  (define red3-c16      (Color16 1))
+  (define green3-c16    (Color16 2))
+  (define yellow3-c16   (Color16 3))
+  (define dark-blue-c16 (Color16 4))
+  (define magenta3-c16  (Color16 5))
+  (define cyan3-c16     (Color16 6))
+  (define gray90        (Color16 7))
+
+  ;; Bright colors
+
+  (define gray30-c16     (Color16 8))
+  (define red-c16        (Color16 9))
+  (define green-c16      (Color16 10))
+  (define yellow-c16     (Color16 11))
+  (define light-blue-c16 (Color16 12))
+  (define magenta-c16    (Color16 13))
+  (define cyan-c16       (Color16 14))
+  (define white          (Color16 15)))
+
+;;; Named colors - ColorRGB
 
 (coalton-toplevel
 
@@ -182,6 +219,8 @@
   (define brown           (ColorRGB 161 105  18))
   (define gold            (ColorRGB 214 138  22))
 
+  ;;; Semantic names, Default Mine Theme
+
   ;;; Semantic names - backgrounds
 
   (define selection-bg      dark-slate-blue)
@@ -214,3 +253,43 @@
   (define scrollbar-track-fg dim-grey)
   (define scrollbar-track-bg aluminium-6)
   (define scrollbar-thumb-fg aluminium-3))
+
+;;; Theme
+
+(coalton-toplevel
+
+  (define-struct Theme
+    "An assignment of colors to semantic roles."
+
+    ;;; Backgrounds
+
+    (selection-bg            Color)
+    (search-match-bg         Color)
+    (search-current-bg       Color)
+    (highlight-bg            Color)
+    (match-paren-bg          Color)
+    (panel-bg                Color)
+    (repl-bg                 Color)
+    (current-line-bg         Color)
+    (field-bg                Color)
+    (status-bar-bg           Color)
+    (accent-bg               Color)
+    (error-dialog-bg         Color)
+
+    ;;; Foregrounds
+
+    (text-fg                 Color)
+    (text-dim-fg             Color)
+    (text-dimmer-fg          Color)
+    (accent-fg               Color)
+    (error-fg                Color)
+    (warning-fg              Color)
+    (info-fg                 Color)
+    (gutter-fg               Color)
+    (border-fg               Color)
+
+    ;;; Scrollbar
+
+    (scrollbar-track-fg      Color)
+    (scrollbar-track-bg      Color)
+    (scrollbar-thumb-fg      Color)))

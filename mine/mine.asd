@@ -148,7 +148,8 @@
    ;; Configuration
    (:module "config"
     :serial t
-    :components ((:ct-file "types")
+    :components ((:ct-file "themes")
+                 (:ct-file "types")
                  (:ct-file "parser")
                  (:ct-file "keys")))
 

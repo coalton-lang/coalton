@@ -1,0 +1,94 @@
+(cl:defpackage #:mine/config/themes
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:f #:coalton/functions)
+   (#:c #:mine/term/color))
+  (:export
+   #:MineTheme
+   #:TerminalTheme
+   #:save-theme-config!
+   #:read-theme-config
+  ))
+
+(in-package #:mine/config/themes)
+
+(coalton-toplevel
+
+  ;;; Mine Theme
+
+  (define MineTheme
+    (c:Theme
+     ;; Backgrounds
+     c:selection-bg
+     c:search-match-bg
+     c:search-current-bg
+     c:highlight-bg
+     c:match-paren-bg
+     c:panel-bg
+     c:repl-bg
+     c:current-line-bg
+     c:field-bg
+     c:status-bar-bg
+     c:accent-bg
+     c:error-dialog-bg
+
+     ;; Foregrounds
+     c:text-fg
+     c:text-dim-fg
+     c:text-dimmer-fg
+     c:accent-fg
+     c:error-fg
+     c:warning-fg
+     c:info-fg
+     c:gutter-fg
+     c:border-fg
+
+     ;; Scrollbar
+     c:scrollbar-track-fg
+     c:scrollbar-track-bg
+     c:scrollbar-thumb-fg))
+
+  ;;; Terminal Theme - Defers to Terminal's Theme
+
+  (define TerminalTheme
+    (c:Theme
+     ;; Backgrounds
+     c:selection-bg
+     c:search-match-bg
+     c:search-current-bg
+     c:highlight-bg
+     c:match-paren-bg
+     c:panel-bg
+     c:repl-bg
+     c:current-line-bg
+     c:field-bg
+     c:status-bar-bg
+     c:accent-bg
+     c:error-dialog-bg
+
+     ;; Foregrounds
+     c:text-fg
+     c:text-dim-fg
+     c:text-dimmer-fg
+     c:accent-fg
+     c:error-fg
+     c:warning-fg
+     c:info-fg
+     c:gutter-fg
+     c:border-fg
+
+     ;; Scrollbar
+     c:scrollbar-track-fg
+     c:scrollbar-track-bg
+     c:scrollbar-thumb-fg))
+  )
+
+(cl:defun save-theme-config! (out theme)
+  "Write THEME to OUT for saving config."
+  (cl:with-standard-io-syntax
+    (cl:print out theme)))
+
+(cl:defun read-theme-config (theme-raw)
+  "Read a theme from saved config."
+  (cl:with-standard-io-syntax
+    (cl:read-from-string theme-raw)))
