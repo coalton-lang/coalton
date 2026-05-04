@@ -1501,17 +1501,22 @@ Returns two values:
           (values nil t)
           (values nil nil)))))
 
+(defun lookup-class-instance-in-list (pred instances &key no-error)
+  (declare (type ty-predicate pred)
+           (type list instances))
+  (dolist (instance instances)
+    (handler-case
+        (let ((subs (predicate-match (ty-class-instance-predicate instance) pred)))
+          (return-from lookup-class-instance-in-list (values instance subs)))
+      (predicate-unification-error () nil)))
+  (unless no-error
+    (error "Unknown instance for predicate ~S" pred)))
+
 (defun lookup-class-instance (env pred &key no-error)
   (declare (type environment env))
   (let* ((pred-class (ty-predicate-class pred))
          (instances (lookup-class-instances env pred-class :no-error no-error)))
-    (dolist (instance instances)
-      (handler-case
-          (let ((subs (predicate-match (ty-class-instance-predicate instance) pred)))
-            (return-from lookup-class-instance (values instance subs)))
-        (predicate-unification-error () nil)))
-    (unless no-error
-      (error "Unknown instance for predicate ~S" pred))))
+    (lookup-class-instance-in-list pred instances :no-error no-error)))
 
 (defun lookup-instance-by-codegen-sym (env codegen-sym &key no-error)
   (declare (type environment env)
@@ -2008,6 +2013,135 @@ This function will return the single functional dependency
           :when (> count 1)
             :collect var)))
 
+;; Fundep solving repeatedly asks whether a wanted predicate can match or unify
+;; with an instance head. Classes with many concrete instances, such as `Num`,
+;; make a linear scan expensive for large generated predicate sets. Instance
+;; indexes bucket instances by the head constructor of the first predicate
+;; argument, while preserving original instance order by storing each instance's
+;; original position. A concrete wanted head only needs its matching concrete
+;; bucket plus variable-headed instances. Variable, function, result, and
+;; unknown wanted heads conservatively fall back to the full instance list
+;; whenever a first-head test would risk dropping a possible match.
+(defconstant +instance-variable-head-key+ ':coalton-instance-variable-head)
+(defconstant +instance-nullary-head-key+ ':coalton-instance-nullary-head)
+(defconstant +instance-function-head-key+ ':coalton-instance-function-head)
+(defconstant +instance-result-head-key+ ':coalton-instance-result-head)
+(defconstant +instance-unknown-head-key+ ':coalton-instance-unknown-head)
+
+(defstruct instance-index
+  (instances nil :type list :read-only t)
+  (buckets (util:required 'buckets) :type hash-table :read-only t)
+  (nonlinear-head-p nil :type boolean :read-only t))
+
+(defun type-head-key (type)
+  (declare (type ty type)
+           (values symbol &optional))
+  (typecase type
+    ((or tyvar tgen)
+     +instance-variable-head-key+)
+    (tycon
+     (tycon-name type))
+    (tapp
+     (type-head-key (tapp-from type)))
+    (function-ty
+     +instance-function-head-key+)
+    (result-ty
+     +instance-result-head-key+)
+    (t
+     +instance-unknown-head-key+)))
+
+(defun predicate-head-key (pred)
+  (declare (type ty-predicate pred)
+           (values symbol &optional))
+  (let ((types (ty-predicate-types pred)))
+    (if (endp types)
+        +instance-nullary-head-key+
+        (type-head-key (first types)))))
+
+(defun broad-instance-head-key-p (key)
+  (declare (type symbol key)
+           (values boolean &optional))
+  (or (eq key +instance-function-head-key+)
+      (eq key +instance-result-head-key+)
+      (eq key +instance-unknown-head-key+)))
+
+(defun build-instance-index (instances)
+  (declare (type list instances)
+           (values instance-index &optional))
+  (let ((buckets (make-hash-table :test #'eq))
+        (nonlinear-head-p nil))
+    (loop :for instance :in instances
+          :for index :from 0
+          :for pred := (ty-class-instance-predicate instance)
+          :do
+             (push (cons index instance)
+                   (gethash (predicate-head-key pred) buckets))
+             (when (repeated-type-variables pred)
+               (setf nonlinear-head-p t)))
+    (maphash (lambda (key entries)
+               (setf (gethash key buckets) (nreverse entries)))
+             buckets)
+    (make-instance-index
+     :instances instances
+     :buckets buckets
+     :nonlinear-head-p nonlinear-head-p)))
+
+(defun merge-indexed-instance-lists (left right)
+  (declare (type list left right)
+           (values list &optional))
+  (cond
+    ((endp left)
+     right)
+    ((endp right)
+     left)
+    ((< (caar left) (caar right))
+     (cons (car left)
+           (merge-indexed-instance-lists (cdr left) right)))
+    (t
+     (cons (car right)
+           (merge-indexed-instance-lists left (cdr right))))))
+
+(defun indexed-instance-candidates-for-match (index pred)
+  "Return instances that can match PRED with `predicate-match`.
+
+This is an over-approximation based on the first predicate type. It preserves
+instance order while avoiding impossible concrete-head matches such as
+`Num UFix` against `Num #T`."
+  (declare (type instance-index index)
+           (type ty-predicate pred)
+           (values list &optional))
+  (let* ((buckets (instance-index-buckets index))
+         (key (predicate-head-key pred))
+         (variable-instances (gethash +instance-variable-head-key+ buckets)))
+    (cond
+      ((eq key +instance-variable-head-key+)
+       (mapcar #'cdr variable-instances))
+      ((broad-instance-head-key-p key)
+       (instance-index-instances index))
+      (t
+       (mapcar #'cdr
+               (merge-indexed-instance-lists
+                (gethash key buckets)
+                variable-instances))))))
+
+(defun indexed-instance-candidates-for-unification (index pred)
+  "Return instances that can unify with PRED with `predicate-mgu`.
+
+When PRED has an unknown head, every concrete instance head may still determine
+that variable, so this falls back to the full instance list."
+  (declare (type instance-index index)
+           (type ty-predicate pred)
+           (values list &optional))
+  (let* ((buckets (instance-index-buckets index))
+         (key (predicate-head-key pred)))
+    (if (or (eq key +instance-variable-head-key+)
+            (broad-instance-head-key-p key))
+        (instance-index-instances index)
+        (mapcar #'cdr
+                (merge-indexed-instance-lists
+                 (gethash key buckets)
+                 (gethash +instance-variable-head-key+ buckets))))))
+
 (defun linearize-type (type)
   "Replace each type variable occurrence in TYPE with a distinct fresh variable."
   (declare (type (or ty keyword-ty-entry list) type))
@@ -2049,12 +2183,12 @@ This function will return the single functional dependency
    :types (linearize-type (ty-predicate-types pred))
    :location (source:location pred)))
 
-(defun single-unifying-instance (env pred)
-  (declare (type environment env)
-           (type ty-predicate pred)
+(defun single-unifying-instance (pred instances)
+  (declare (type ty-predicate pred)
+           (type list instances)
            (values (or null ty-class-instance) boolean &optional))
   (let ((match nil))
-    (dolist (instance (lookup-class-instances env (ty-predicate-class pred) :no-error t))
+    (dolist (instance instances)
       (handler-case
           (progn
             (predicate-mgu (fresh-pred (ty-class-instance-predicate instance)) pred)
@@ -2064,13 +2198,18 @@ This function will return the single functional dependency
         (predicate-unification-error () nil)))
     (values match (and match t))))
 
-(defun improve-predicate-from-instance-head (env pred subs)
+(defun improve-predicate-from-instance-head (env pred subs &key (instances nil instances-supplied-p))
   (declare (type environment env)
            (type ty-predicate pred)
            (type substitution-list subs)
+           (type list instances)
            (values substitution-list boolean &optional))
   (multiple-value-bind (instance foundp)
-      (single-unifying-instance env pred)
+      (single-unifying-instance
+       pred
+       (if instances-supplied-p
+           instances
+           (lookup-class-instances env (ty-predicate-class pred) :no-error t)))
     (unless foundp
       (return-from improve-predicate-from-instance-head (values subs nil)))
     (let* ((instance-pred (fresh-pred (ty-class-instance-predicate instance)))
@@ -2116,162 +2255,193 @@ predicates with all substitutions applied and the new substitutions."
            (type substitution-list subs)
            (values ty-predicate-list substitution-list &optional))
 
-  ;; We memoize this function to support the type-checking of
-  ;; constructors of collections, e.g., MAKE-LIST.
-  (let ((fundepsp-cache (make-hash-table :test #'eq)))
-    (labels ((fundepsp (preds)
+  (let ((class-cache (make-hash-table :test #'eq))
+        (fundepsp-cache (make-hash-table :test #'eq))
+        (instance-index-cache (make-hash-table :test #'eq)))
+    (labels ((class-for (class-name)
+               (multiple-value-bind (class foundp)
+                   (gethash class-name class-cache)
+                 (if foundp
+                     class
+                     (setf (gethash class-name class-cache)
+                           (lookup-class env class-name)))))
+             (class-fundepsp (class-name)
+               "Does CLASS-NAME or any superclass have functional dependencies?"
+               (multiple-value-bind (fundepsp foundp)
+                   (gethash class-name fundepsp-cache)
+                 (if foundp
+                     fundepsp
+                     (let ((class (class-for class-name)))
+                       (setf (gethash class-name fundepsp-cache)
+                             (or (consp (ty-class-fundeps class))
+                                 (loop :for superclass :in (ty-class-superclasses class)
+                                       :thereis (class-fundepsp
+                                                 (ty-predicate-class superclass)))))))))
+             (fundepsp (preds)
                "Are any of PREDS constrained by functional dependencies?"
-               (unless (endp preds)
-                 (let* ((pred (first preds))
-                        (class-name (ty-predicate-class pred)))
-                   (multiple-value-bind (fundepsp foundp)
-                       (gethash class-name fundepsp-cache)
-                     (cond
-                       (foundp
-                        (or fundepsp (fundepsp (rest preds))))
-                       (t
-                        (let ((class (lookup-class env class-name)))
-                          (or (setf (gethash class-name fundepsp-cache)
-                                    (or (consp (ty-class-fundeps class))
-                                        (fundepsp (ty-class-superclasses class))))
-                              (fundepsp (rest preds))))))))))
+               (loop :for pred :in preds
+                     :thereis (class-fundepsp (ty-predicate-class pred))))
+             (instance-index-for (class-name)
+               (multiple-value-bind (index foundp)
+                   (gethash class-name instance-index-cache)
+                 (if foundp
+                     index
+                     (setf (gethash class-name instance-index-cache)
+                           (build-instance-index
+                            (lookup-class-instances env class-name :no-error t))))))
+             (improve-predicate-with-index (pred subs index)
+               (if (not (instance-index-nonlinear-head-p index))
+                   (values subs nil)
+                   (let ((pred (apply-substitution subs pred)))
+                     (improve-predicate-from-instance-head
+                      env
+                      pred
+                      subs
+                      :instances (indexed-instance-candidates-for-unification
+                                  index
+                                  pred)))))
              (instance-improvementp (preds)
                "Can any predicate be improved from a non-linear instance head?"
                (loop :for pred :in preds
+                     :for index := (instance-index-for (ty-predicate-class pred))
                      :thereis (nth-value
                                 1
-                                (improve-predicate-from-instance-head
-                                 env
-                                 (apply-substitution subs pred)
-                                 subs)))))
+                                (improve-predicate-with-index pred subs index)))))
 
       ;; If no predicates have fundeps or instance-head improvements,
       ;; then exit early.
       (unless (or (fundepsp preds) (instance-improvementp preds))
-        (return-from solve-fundeps (values preds subs)))))
+        (return-from solve-fundeps (values preds subs)))
 
-  ;; Expand PREDS into the superclasses
-  (setf preds
-        (loop :for remaining-preds := (copy-list preds)
-                :then (rest remaining-preds)
-              :until (endp remaining-preds)
-              :for pred := (first remaining-preds)
-              :for class := (lookup-class env (ty-predicate-class pred))
-              :for _subs := (predicate-match (ty-class-predicate class) pred subs)
-              :do (alexandria:nconcf
-                   remaining-preds
-                   (mapcar (alexandria:curry #'apply-substitution _subs)
-                           (ty-class-superclasses class)))
-              :collect pred))
+      ;; Expand PREDS into the superclasses.
+      (setf preds
+            (loop :for remaining-preds := (copy-list preds)
+                    :then (rest remaining-preds)
+                  :until (endp remaining-preds)
+                  :for pred := (first remaining-preds)
+                  :for class := (class-for (ty-predicate-class pred))
+                  :for applied-pred := (apply-substitution subs pred)
+                  :for _subs := (predicate-match (ty-class-predicate class) applied-pred)
+                  :do (alexandria:nconcf
+                       remaining-preds
+                       (mapcar (alexandria:curry #'apply-substitution _subs)
+                               (ty-class-superclasses class)))
+                  :collect pred))
 
-  ;; The purpose of this block is to create a substitution list that
-  ;; unifies the expanded predicates from the previous block based
-  ;; on the functional dependencies that constrain them.
-  (loop :for remaining-preds := preds :then (rest remaining-preds)
-        :until (endp remaining-preds)
-        :for pred := (first remaining-preds)
-        :for class-name := (ty-predicate-class pred)
-        :for class := (lookup-class env class-name)
-        :for fundeps := (ty-class-fundeps class)
-        :for other-pred := (find class-name (rest preds)
-                                 :key #'ty-predicate-class
-                                 :test #'eq)
-        :when (and (consp fundeps) (not (null other-pred)))
-          :do (handler-case
-                  (let ((class-vars (ty-class-class-variables class))
-                        (pred-tys (ty-predicate-types pred))
-                        (other-pred-tys (ty-predicate-types other-pred)))
-                    (dolist (fundep fundeps)
-                      (let* ((from (fundep-from fundep))
-                             (to (fundep-to fundep))
-                             (pred-from
-                               (project-elements from
-                                                 class-vars
-                                                 pred-tys))
-                             (other-pred-from
-                               (project-elements from
-                                                 class-vars
-                                                 other-pred-tys)))
-                        (when (every #'ty= pred-from other-pred-from)
-                          (let ((pred-to
-                                  (project-elements to
-                                                    class-vars
-                                                    pred-tys))
-                                (other-pred-to
-                                  (project-elements to
-                                                    class-vars
-                                                    other-pred-tys)))
-                            (setf subs (unify-list subs
-                                                   pred-to
-                                                   other-pred-to)))))))
-                (unification-error ()
-                  (error 'context-fundep-conflict
-                         :first-pred pred
-                         :second-pred other-pred)))
-        :finally (setf preds (apply-substitution subs preds)))
+      ;; The purpose of this block is to create a substitution list that
+      ;; unifies the expanded predicates from the previous block based
+      ;; on the functional dependencies that constrain them.
+      (loop :for remaining-preds := preds :then (rest remaining-preds)
+            :until (endp remaining-preds)
+            :for pred := (first remaining-preds)
+            :for class-name := (ty-predicate-class pred)
+            :for class := (class-for class-name)
+            :for fundeps := (ty-class-fundeps class)
+            :for other-pred := (find class-name (rest preds)
+                                     :key #'ty-predicate-class
+                                     :test #'eq)
+            :when (and (consp fundeps) (not (null other-pred)))
+              :do (handler-case
+                      (let ((class-vars (ty-class-class-variables class))
+                            (pred-tys (ty-predicate-types pred))
+                            (other-pred-tys (ty-predicate-types other-pred)))
+                        (dolist (fundep fundeps)
+                          (let* ((from (fundep-from fundep))
+                                 (to (fundep-to fundep))
+                                 (pred-from
+                                   (project-elements from
+                                                     class-vars
+                                                     pred-tys))
+                                 (other-pred-from
+                                   (project-elements from
+                                                     class-vars
+                                                     other-pred-tys)))
+                            (when (every #'ty= pred-from other-pred-from)
+                              (let ((pred-to
+                                      (project-elements to
+                                                        class-vars
+                                                        pred-tys))
+                                    (other-pred-to
+                                      (project-elements to
+                                                        class-vars
+                                                        other-pred-tys)))
+                                (setf subs (unify-list subs
+                                                       pred-to
+                                                       other-pred-to)))))))
+                    (unification-error ()
+                      (error 'context-fundep-conflict
+                             :first-pred pred
+                             :second-pred other-pred)))
+            :finally (setf preds (apply-substitution subs preds)))
 
-  ;; This block is meant to simplify PREDS if instances exist in the
-  ;; environment which constrain them by functional dependencies or by
-  ;; repeated variables in an instance head.
-  (loop :with new-subs := nil
-        :with preds-generated := nil
-        :for i :below +fundep-max-depth+
-        :do
-           (setf new-subs subs)
+      ;; This block is meant to simplify PREDS if instances exist in the
+      ;; environment which constrain them by functional dependencies or by
+      ;; repeated variables in an instance head.
+      (loop :with new-subs := nil
+            :with preds-generated := nil
+            :for i :below +fundep-max-depth+
+            :do
+               (setf new-subs subs)
 
-           (loop :for pred :in preds
-                 :for class-name := (ty-predicate-class pred)
-                 :for class := (lookup-class env class-name)
-                 ;; If there are super-predicates then add those
-                 ;; predicates into the list of preds and remove
-                 ;; this predicate from the list since it will give
-                 ;; us no new type information. Additionally,
-                 ;; restart the current check to avoid terminating
-                 ;; early when no subs are generated.
-                 :for instance := (lookup-class-instance env pred :no-error t)
+               (loop :for pred :in preds
+                     :for class-name := (ty-predicate-class pred)
+                     :for class := (class-for class-name)
+                     :for index := (instance-index-for class-name)
+                     :for instance-candidates := (indexed-instance-candidates-for-match
+                                                  index
+                                                  pred)
+                     ;; If there are super-predicates then add those
+                     ;; predicates into the list of preds and remove
+                     ;; this predicate from the list since it will give
+                     ;; us no new type information. Additionally,
+                     ;; restart the current check to avoid terminating
+                     ;; early when no subs are generated.
+                     :for instance := (lookup-class-instance-in-list
+                                       pred
+                                       instance-candidates
+                                       :no-error t)
 
-                 :when instance
-                   ;; Since we allow for type variables in the
-                   ;; constraints which do not appear in the
-                   ;; predicate, we need to create a full fresh set of
-                   ;; predicates, rather than just matching the head.
-                   :do (let* ((fresh-instance-preds
-                                (fresh-preds
-                                 (cons (ty-class-instance-predicate instance)
-                                       (ty-class-instance-constraints-expanded instance env))))
-                              (instance-head (car fresh-instance-preds))
-                              (instance-context (cdr fresh-instance-preds))
+                     :when instance
+                       ;; Since we allow for type variables in the
+                       ;; constraints which do not appear in the
+                       ;; predicate, we need to create a full fresh set of
+                       ;; predicates, rather than just matching the head.
+                       :do (let* ((fresh-instance-preds
+                                    (fresh-preds
+                                     (cons (ty-class-instance-predicate instance)
+                                           (ty-class-instance-constraints-expanded instance env))))
+                                  (instance-head (car fresh-instance-preds))
+                                  (instance-context (cdr fresh-instance-preds))
 
-                              (instance-subs (predicate-match instance-head pred new-subs)))
-                         (loop :for new-pred :in instance-context :do
-                           (push (make-ty-predicate
-                                  :class (ty-predicate-class new-pred)
-                                  :types (apply-substitution instance-subs (ty-predicate-types new-pred)))
-                                 preds))
+                                  (instance-subs (predicate-match
+                                                  instance-head
+                                                  (apply-substitution new-subs pred))))
+                             (loop :for new-pred :in instance-context :do
+                               (push (make-ty-predicate
+                                      :class (ty-predicate-class new-pred)
+                                      :types (apply-substitution instance-subs (ty-predicate-types new-pred)))
+                                     preds))
 
-                         (setf preds (remove pred preds :test #'eq))
-                         (setf preds-generated t)
-                         (return))
+                             (setf preds (remove pred preds :test #'eq))
+                             (setf preds-generated t)
+                             (return))
 
-                 :do (multiple-value-bind (improved-subs improvedp)
-                         (improve-predicate-from-instance-head
-                          env
-                          (apply-substitution new-subs pred)
-                          new-subs)
-                       (when improvedp
-                         (setf new-subs improved-subs)
-                         (return)))
+                     :do (multiple-value-bind (improved-subs improvedp)
+                             (improve-predicate-with-index pred new-subs index)
+                           (when improvedp
+                             (setf new-subs improved-subs)
+                             (return)))
 
-                 :when (ty-class-fundeps class)
-                   :do (setf new-subs (generate-fundep-subs% env (apply-substitution new-subs pred) new-subs)))
-           (if (and (not preds-generated)
-                    (or (equalp new-subs subs)
-                        (null preds)))
-               (return-from solve-fundeps (values preds subs))
-               (setf subs new-subs))
-           (setf preds-generated nil)
-           (setf preds (apply-substitution subs preds))
-        :finally (util:coalton-bug "Fundep solving failed to fixpoint")))
+                     :when (ty-class-fundeps class)
+                       :do (setf new-subs (generate-fundep-subs% env (apply-substitution new-subs pred) new-subs)))
+               (if (and (not preds-generated)
+                        (or (equalp new-subs subs)
+                            (null preds)))
+                   (return-from solve-fundeps (values preds subs))
+                   (setf subs new-subs))
+               (setf preds-generated nil)
+               (setf preds (apply-substitution subs preds))
+            :finally (util:coalton-bug "Fundep solving failed to fixpoint")))))
 
 
 (defun generate-fundep-subs% (env pred subs)
