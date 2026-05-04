@@ -74,6 +74,7 @@
                   check-indent-runtime-rules-resolve-shadowed-cl-symbols
                   check-indent-runtime-rules-use-cl-user-for-lisp-default
                   check-indent-newline-before-close-paren-uses-blank-context
+                  check-editor-nonprinting-character-widths
                   check-indent-line-tab-hop-to-source
                   check-indent-line-preserves-source-position
                   check-editor-paste-clamps-stale-cursor-to-buffer-end

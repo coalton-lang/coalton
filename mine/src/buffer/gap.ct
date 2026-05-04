@@ -399,7 +399,7 @@ expanding tabs to the next tab stop of width TAB-W."
           (cl:let ((ch (cl:char text i)))
             (cl:if (cl:char= ch #\Tab)
                    (cl:setf vcol (cl:* (cl:1+ (cl:floor vcol tab-w)) tab-w))
-                   (cl:incf vcol (mine/text/width:char-cell-width-cl ch))))))))
+                   (cl:incf vcol (mine/text/width:editor-char-cell-width-cl ch))))))))
 
   (declare char-for-vcol (String * UFix * UFix -> UFix))
   (define (char-for-vcol text vcol-target tab-w)
@@ -412,7 +412,7 @@ VCOL-TARGET (without exceeding it), expanding tabs with TAB-W."
           (cl:let* ((ch (cl:char text i))
                     (next-vcol (cl:if (cl:char= ch #\Tab)
                                       (cl:* (cl:1+ (cl:floor vcol tab-w)) tab-w)
-                                      (cl:+ vcol (mine/text/width:char-cell-width-cl ch)))))
+                                      (cl:+ vcol (mine/text/width:editor-char-cell-width-cl ch)))))
             (cl:when (cl:> next-vcol vcol-target)
               (cl:return i))
             (cl:setf vcol next-vcol))))))

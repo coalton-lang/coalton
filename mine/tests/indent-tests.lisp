@@ -184,6 +184,25 @@ should-stay-flush-left)"))
     (gap:gap-insert-string! (buf:buffer-gap buffer) 0 text)
     buffer))
 
+(defun check-editor-nonprinting-character-widths ()
+  (let ((text (concatenate 'string "a" (string #\Return) "b"))
+        (return-picture (string (code-char #x240D))))
+    (%check (string= return-picture
+                     (mine/text/width:editor-control-char-representation-cl
+                      #\Return))
+            "Expected Return to render as a control-picture marker")
+    (%check (null (mine/text/width:editor-control-char-representation-cl
+                   #\Tab))
+            "Expected Tab to keep its indentation rendering")
+    (%check (= 1 (mine/text/width:editor-char-cell-width-cl #\Return))
+            "Expected Return marker to occupy one editor cell")
+    (%check (= 2 (gap:visual-col text 2 4))
+            "Expected visual column after a Return marker to include marker width")
+    (%check (= 1 (gap:char-for-vcol text 1 4))
+            "Expected vcol at Return marker to map to the Return character")
+    (%check (= 2 (gap:char-for-vcol text 2 4))
+            "Expected vcol after Return marker to map to following character")))
+
 (defun %apply-line-indent (text cursor-pos line target-indent)
   (let* ((buffer (%indent-buffer-with-text text))
          (cs (cursor:cursor-new)))
