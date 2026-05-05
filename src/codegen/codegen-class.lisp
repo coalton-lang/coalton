@@ -9,7 +9,6 @@
    (#:source #:coalton-impl/source)
    (#:settings #:coalton-impl/settings)
    (#:global-lexical #:coalton-impl/global-lexical)
-   (#:rt #:coalton-impl/runtime)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:codegen-class-definitions))
@@ -53,8 +52,7 @@
            (values t &optional))
   (cond
     ((not (null keyword-specs))
-     `(apply #'rt:call-coalton-function
-             (,method-accessor dict)
+     `(apply (,method-accessor dict)
              (append
               (list ,@positional-params)
               ,@(loop :for spec :in keyword-specs
@@ -62,9 +60,9 @@
                                     (list ,(getf spec :keyword) ,(getf spec :var))
                                     '())))))
     ((not (null positional-params))
-     `(rt:exact-call (,method-accessor dict) ,@positional-params))
+     `(funcall (,method-accessor dict) ,@positional-params))
     ((tc:function-type-p visible-type)
-     `(rt:exact-call (,method-accessor dict)))
+     `(funcall (,method-accessor dict)))
     (t
      `(,method-accessor dict))))
 
@@ -135,10 +133,10 @@
                                                   (getf spec :supplied-p-var)))))
         ,(method-wrapper-call method-accessor visible-type params keyword-specs))
       ;; Generate the wrapper functions
-      (global-lexical:define-global-lexical ,method-name rt:function-entry)
+      (global-lexical:define-global-lexical ,method-name function)
       (setf ,method-name
             ;; We need a function of arity + 1 to account for DICT
-            ,(rt:construct-function-entry `#',method-name (+ arity 1)))
+            #',method-name)
       ,@(when method-docstring
           `((setf (documentation ',method-name 'variable)
                   ,method-docstring)

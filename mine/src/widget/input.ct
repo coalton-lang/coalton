@@ -22,7 +22,6 @@
    #:input-widget-insert-newline!
    #:input-widget-insert-string!
    #:input-widget-line-count
-   #:input-widget-cursor-row
    #:input-widget-set-hint!))
 
 (in-package #:mine/widget/input)
@@ -142,12 +141,6 @@
             (cl:when (cl:> next-vcol target-col)
               (cl:return i))
             (cl:setf vcol next-vcol))))))
-
-  (declare input-widget-cursor-row (InputWidget -> UFix))
-  (define (input-widget-cursor-row iw)
-    "Return the row the cursor is currently on (0-based)."
-    (%cursor-row (cell:read (.iw-text iw))
-                 (cell:read (.iw-cursor iw))))
 
   (declare input-widget-insert-newline! (InputWidget -> Void))
   (define (input-widget-insert-newline! iw)

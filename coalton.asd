@@ -330,6 +330,7 @@
                (:file "pattern-matching-tests")
                (:file "looping-native-tests")
                (:ct-file "monomorphizer-tests")
+               (:ct-file "lawnmower-tests")
                (:ct-file "inliner-tests")
                #+coalton-env-has-tce (:file "inliner-tests-1") ; must come after inliner-tests
                (:ct-file "deriver-tests")

@@ -16,7 +16,6 @@
    #:Minibuffer
    #:minibuffer-new
    #:minibuffer-active?
-   #:minibuffer-prompt!
    #:minibuffer-prompt-with-completion!
    #:minibuffer-prompt-symbol-picker!
    #:minibuffer-prompt-incremental!
@@ -27,7 +26,6 @@
    #:minibuffer-set-footer-hint!
    #:minibuffer-handle-key!
    #:minibuffer-cancel!
-   #:minibuffer-has-complete-fn?
    #:.input-widget))
 
 (in-package #:mine/pane/minibuffer)
@@ -80,24 +78,6 @@
   (declare minibuffer-set-footer-hint! (Minibuffer * String -> Void))
   (define (minibuffer-set-footer-hint! mb text)
     (cell:write! (.footer-hint mb) text)
-    (values))
-
-  (declare minibuffer-has-complete-fn? (Minibuffer -> Boolean))
-  (define (minibuffer-has-complete-fn? mb)
-    (match (cell:read (.complete-fn mb))
-      ((Some _) True)
-      ((None) False)))
-
-  (declare minibuffer-prompt! (Minibuffer * String * (String -> Void) -> Void))
-  (define (minibuffer-prompt! mb prompt-text cb)
-    (widget-input:input-widget-clear! (.input-widget mb))
-    (cell:write! (widget-input:.iw-prompt (.input-widget mb)) prompt-text)
-    (cell:write! (.active mb) True)
-    (cell:write! (.callback mb) (Some cb))
-    (cell:write! (.completions mb) Nil)
-    (cell:write! (.footer-hint mb) "")
-    (cell:write! (.complete-fn mb) None)
-    (cell:write! (.confirm-on-space mb) False)
     (values))
 
   (declare minibuffer-prompt-with-completion!
@@ -168,20 +148,6 @@ ON-NEXT-FN/ON-PREV-FN fire on Down/Up. Enter/Ctrl+g dismiss."
     (values))
 
   ;;; Key handling — confirm, cancel, tab-complete, or delegate
-
-  (declare %confirm! (Minibuffer -> Void))
-  (define (%confirm! mb)
-    (let text = (widget-input:input-widget-text (.input-widget mb)))
-    (let cb-opt = (cell:read (.callback mb)))
-    (cell:write! (.active mb) False)
-    (cell:write! (.callback mb) None)
-    (cell:write! (.completions mb) Nil)
-    (cell:write! (.complete-fn mb) None)
-    (cell:write! (.confirm-on-space mb) False)
-    (widget-input:input-widget-clear! (.input-widget mb))
-    (match cb-opt
-      ((Some cb) (cb text))
-      ((None) (values))))
 
   (declare %tab-complete! (Minibuffer -> Void))
   (define (%tab-complete! mb)

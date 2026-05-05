@@ -14,8 +14,7 @@
    (#:settings #:coalton-impl/settings)
    (#:source #:coalton-impl/source)
    (#:global-lexical #:coalton-impl/global-lexical)
-   (#:tc #:coalton-impl/typechecker)
-   (#:rt #:coalton-impl/runtime))
+   (#:tc #:coalton-impl/typechecker))
   (:export
    #:codegen-type-definition
    #:constructor-slot-name))
@@ -50,9 +49,9 @@
                                 ,constructor-name))))
           (declaim (inline ,constructor-name))
           (defun ,constructor-name (x) x)
-          (global-lexical:define-global-lexical ,constructor-name rt:function-entry)
+          (global-lexical:define-global-lexical ,constructor-name function)
           (setf ,constructor-name
-                ,(rt:construct-function-entry `#',constructor-name 1)))))
+                #',constructor-name))))
 
      (t
       `(,(cond
@@ -113,15 +112,13 @@
                        ((zerop (tc:constructor-entry-arity constructor))
                         `(defmethod print-object ((self ,classname) stream)
                            (declare (type stream stream)
-                                    (type ,classname self)
-                                    (values ,classname))
+                                    (type ,classname self))
                            (format stream "#.~s" ',(tc:constructor-entry-name constructor))
                            self))
                        (t
                         `(defmethod print-object ((self ,classname) stream)
                            (declare (type stream stream)
-                                    (type ,classname self)
-                                    (values ,classname))
+                                    (type ,classname self))
                            (format stream "#.(~s" ',(tc:constructor-entry-name constructor))
                            ,@(loop :for slot :in field-names
                                    :collect `(cond

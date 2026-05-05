@@ -4,12 +4,9 @@
    (#:color #:mine/term/color))
   (:export
    ;; Cursor
-   #:cursor-to
    #:cursor-show #:cursor-hide
    ;; Screen
    #:clear-screen
-   ;; Scroll
-   #:scroll-up #:scroll-down
    ;; Attributes
    #:sgr-reset #:style-to-sgr
    ;; Alt screen
@@ -43,17 +40,7 @@
     "Build a CSI escape sequence with a numeric parameter."
     (<> (csi) (<> (into n) suffix)))
 
-  (declare csi-nn (UFix * UFix * String -> String))
-  (define (csi-nn a b suffix)
-    "Build a CSI escape sequence with two numeric parameters."
-    (<> (csi) (<> (into a) (<> ";" (<> (into b) suffix)))))
-
   ;;; Cursor movement
-
-  (declare cursor-to (UFix * UFix -> String))
-  (define (cursor-to row col)
-    "Move cursor to the given row and column (1-based)."
-    (csi-nn row col "H"))
 
   (declare cursor-show (Void -> String))
   (define (cursor-show)
@@ -71,18 +58,6 @@
   (define (clear-screen)
     "Clear the entire screen."
     (csi-seq "2J"))
-
-  ;;; Scrolling
-
-  (declare scroll-up (UFix -> String))
-  (define (scroll-up n)
-    "Scroll the screen up by N lines."
-    (csi-n n "S"))
-
-  (declare scroll-down (UFix -> String))
-  (define (scroll-down n)
-    "Scroll the screen down by N lines."
-    (csi-n n "T"))
 
   ;;; SGR (Select Graphic Rendition)
 

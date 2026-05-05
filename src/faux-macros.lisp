@@ -6,9 +6,7 @@
 
 (defpackage #:coalton-impl/faux-macros
   (:use
-   #:cl)
-  (:local-nicknames
-   (#:rt #:coalton-impl/runtime)))
+   #:cl))
 
 (in-package #:coalton-impl/faux-macros)
 
@@ -89,7 +87,7 @@
 
 (defmacro coalton:fn (vars &body form)
   "A lambda abstraction callable within coalton."
-  (rt:construct-function-entry `(lambda ,vars ,@form) (length vars)))
+  `(lambda ,vars ,@form))
 
 (define-coalton-editor-macro coalton:throw (exception)
     "Throw an exception.")

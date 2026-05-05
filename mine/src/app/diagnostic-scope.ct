@@ -1,0 +1,15 @@
+(cl:defpackage #:mine/app/diagnostic-scope
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:hm #:coalton/hashmap))
+  (:export
+   #:contains-normalized?))
+
+(in-package #:mine/app/diagnostic-scope)
+
+(coalton-toplevel
+
+  (declare contains-normalized? (hm:HashMap String Boolean * String -> Boolean))
+  (define (contains-normalized? scope document-key)
+    "Return True when SCOPE contains normalized DOCUMENT-KEY."
+    (some? (hm:lookup scope document-key))))
