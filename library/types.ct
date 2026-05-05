@@ -104,7 +104,7 @@ The compiler will auto-generate instances of `RuntimeRepr` for all defined types
   (define-instance (RuntimeRepr (:a -> :b))
     (inline)
     (define (runtime-repr _)
-      (lisp (-> LispType) () 'coalton-impl/runtime/function-entry:function-entry)))
+      (lisp (-> LispType) () 'cl:function)))
 
   (define-instance (RuntimeRepr (List :a))
     (inline)

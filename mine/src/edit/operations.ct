@@ -12,8 +12,7 @@
    #:insert-string!
    #:delete-backward!
    #:delete-backward-word!
-   #:delete-forward!
-   #:newline!))
+   #:delete-forward!))
 
 (in-package #:mine/edit/operations)
 
@@ -136,21 +135,5 @@ Does nothing if the cursor is at the end of the buffer."
          (let text = (into ch))
          (undo:undo-record! tree (undo:OpDelete p text) p p)
          (values)))))
-
-  ;;; newline!
-
-  (declare newline! (buf:Buffer * undo:UndoTree * cursor:CursorState
-                      -> Void))
-  (define (newline! buffer tree cs)
-    "Insert a newline at the cursor position."
-    (let gb = (buf:buffer-gap buffer))
-    (let old-p = (cursor:cursor-position cs))
-    (let p = (clamp-position gb old-p))
-    (when (> old-p p)
-      (cursor:cursor-move-to-position! cs p))
-    (undo:with-undo-group! tree
-      (fn () (cursor:cursor-position cs))
-      (fn ()
-        (insert-char! buffer tree cs #\Newline))))
 
 )

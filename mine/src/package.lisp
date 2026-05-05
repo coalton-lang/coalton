@@ -58,7 +58,6 @@
    #:condition-wait
    #:condition-notify
    #:thread-alive-p
-   #:current-thread
    #:thread-name))
 
 ;;; Protocol server (CL side)

@@ -1,0 +1,38 @@
+(cl:defpackage #:mine/app/layout
+  (:use #:coalton #:coalton-prelude #:mine/app/state)
+  (:local-nicknames
+   (#:cell #:coalton/cell)
+   (#:focus #:mine/widget/focus))
+  (:export
+   #:layout-repl-full?
+   #:show-editor!))
+
+(in-package #:mine/app/layout)
+
+(coalton-toplevel
+
+  (declare layout-repl-full? (MineLayout -> Boolean))
+  (define (layout-repl-full? layout)
+    (== (.ml-center layout) CenterReplFull))
+
+  (declare center-focus-editor (CenterLayout -> CenterLayout))
+  (define (center-focus-editor center)
+    (match center
+      ((CenterReplFull) CenterEditorReplSplit)
+      (_ center)))
+
+  (declare center-layout (MineState -> CenterLayout))
+  (define (center-layout st)
+    (.ml-center (cell:read (.ms-layout st))))
+
+  (declare set-center-layout! (MineState * CenterLayout -> Void))
+  (define (set-center-layout! st center)
+    (let layout = (cell:read (.ms-layout st)))
+    (cell:write! (.ms-layout st) (MineLayout (.ml-tree layout) center))
+    (values))
+
+  (declare show-editor! (MineState -> Void))
+  (define (show-editor! st)
+    (set-center-layout! st (center-focus-editor (center-layout st)))
+    (focus:focus-switch! (.ms-focus st) focus:FocusEditor)
+    (values)))

@@ -1,13 +1,8 @@
 (cl:defpackage #:mine/widget/types
   (:use #:coalton #:coalton-prelude)
-  (:local-nicknames
-   (#:color #:mine/term/color)
-   (#:screen #:mine/term/screen))
   (:export
    #:Rect #:Rect
    #:.rect-x #:.rect-y #:.rect-width #:.rect-height
-   #:rect-contains?
-   #:SizePolicy #:Fixed #:Flex #:MinMax
    #:EventResult #:Consumed #:Ignored))
 
 (in-package #:mine/widget/types)
@@ -22,22 +17,6 @@
     (rect-y      UFix)
     (rect-width  UFix)
     (rect-height UFix))
-
-  (declare rect-contains? (Rect * UFix * UFix -> Boolean))
-  (define (rect-contains? r row col)
-    "Return True if the screen position (ROW, COL) falls within R."
-    (and (>= row (.rect-y r))
-         (and (< row (+ (.rect-y r) (.rect-height r)))
-              (and (>= col (.rect-x r))
-                   (< col (+ (.rect-x r) (.rect-width r)))))))
-
-  ;;; SizePolicy
-
-  (define-type SizePolicy
-    "Sizing policy for layout entries."
-    (Fixed UFix)
-    (Flex UFix)
-    (MinMax UFix UFix))
 
   ;;; EventResult
 

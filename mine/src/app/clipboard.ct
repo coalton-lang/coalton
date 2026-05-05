@@ -1,12 +1,20 @@
 (cl:defpackage #:mine/app/clipboard
   (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:find-clipboard #:mine/app/find-clipboard))
   (:export
+   #:initialize-clipboard!
    #:clipboard-copy!
    #:clipboard-paste))
 
 (in-package #:mine/app/clipboard)
 
 (coalton-toplevel
+
+  (declare initialize-clipboard! (Void -> Void))
+  (define (initialize-clipboard!)
+    "Detect the system clipboard commands."
+    (lisp (-> Void) () (find-clipboard:initialize-clipboard) (cl:values)))
 
   (declare clipboard-copy! (String -> Void))
   (define (clipboard-copy! text)
@@ -18,13 +26,10 @@
     "Read text from the system clipboard."
     (lisp (-> String) () (%clipboard-paste))))
 
-;;; System clipboard (uses pbcopy/pbpaste on macOS, xclip on Linux)
-
 (cl:defun %clipboard-copy (text)
   "Copy TEXT to the system clipboard. Works on macOS, Linux, and Windows."
   (cl:handler-case
-      (cl:multiple-value-bind (program args)
-          (%clipboard-copy-cmd)
+      (cl:destructuring-bind (program args) find-clipboard:*clipboard-copy*
         (cl:let ((proc (sb-ext:run-program program args
                          :input :stream :wait cl:nil :search cl:t)))
           (cl:let ((input (sb-ext:process-input proc)))
@@ -34,16 +39,10 @@
             cl:t)))
     (cl:error () cl:nil)))
 
-(cl:defun %clipboard-copy-cmd ()
-  #+darwin  (cl:values "/usr/bin/pbcopy" cl:nil)
-  #+windows (cl:values "clip.exe" cl:nil)
-  #-(or darwin windows) (cl:values "xclip" (cl:list "-selection" "clipboard")))
-
 (cl:defun %clipboard-paste ()
   "Read text from the system clipboard. Works on macOS, Linux, and Windows."
   (cl:handler-case
-      (cl:multiple-value-bind (program args)
-          (%clipboard-paste-cmd)
+      (cl:destructuring-bind (program args) find-clipboard:*clipboard-paste*
         (cl:let* ((proc (sb-ext:run-program program args
                           :output :stream :wait cl:nil :search cl:t))
                   (output (sb-ext:process-output proc))
@@ -57,8 +56,3 @@
           (sb-ext:process-wait proc)
           text))
     (cl:error () "")))
-
-(cl:defun %clipboard-paste-cmd ()
-  #+darwin  (cl:values "/usr/bin/pbpaste" cl:nil)
-  #+windows (cl:values "powershell.exe" (cl:list "-command" "Get-Clipboard"))
-  #-(or darwin windows) (cl:values "xclip" (cl:list "-selection" "clipboard" "-o")))

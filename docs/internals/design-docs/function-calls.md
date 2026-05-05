@@ -14,22 +14,18 @@ the needed dictionaries and prepends them at the same call site. It does not
 eta-expand immediate calls into forwarding lambdas just to supply hidden
 arguments.
 
-At runtime, first-class Coalton functions are wrapped in `function-entry`
-structs. A `function-entry` stores:
-
-- the visible positional arity
-- the underlying Lisp function
-- any hidden dictionary arguments already bound onto the value
-
-Keyword arguments do not contribute to the stored arity.
+At runtime, first-class Coalton functions are ordinary Common Lisp function
+objects. When a constrained function becomes a first-class value, the compiler
+captures the resolved hidden dictionaries in a closure whose Common Lisp lambda
+list matches the remaining visible positional and keyword interface, so Common
+Lisp performs the runtime arity and keyword checks.
 
 For keyword-bearing calls, the compiler evaluates the visible arguments once and
 emits an ordinary Common Lisp call with keyword arguments. The visible Coalton
 keyword syntax therefore maps directly onto the generated `cl:&key` call shape.
 
 The generalized application path is still useful for explicit higher-order
-values and Common Lisp interop. In those cases, `call-coalton-function` checks
-the exact visible positional arity of a `function-entry`, prepends any bound
-hidden arguments, and forwards Lisp keyword arguments unchanged. When the call
-site is known to have no keywords and the callee is already a `function-entry`,
-the compiler may emit `exact-call` instead.
+values and Common Lisp interop. In those cases, `call-coalton-function` calls
+raw Lisp function objects directly and forwards Lisp keyword arguments
+unchanged. Compiler-generated indirect calls use `funcall` or `apply` on raw
+function objects directly.

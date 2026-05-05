@@ -8,5 +8,5 @@
 
 (defvar *mine-version* "[unknown-build]"
   "Version string baked in at build time.
-Release builds set MINE_VERSION (e.g. \"v0.0.0-alpha1m\"); dev builds
+Release builds set MINE_VERSION (e.g. \"1.0.0\"); dev builds
 fall back to the git short hash; otherwise \"[unknown-build]\".")

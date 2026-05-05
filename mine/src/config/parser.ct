@@ -13,7 +13,7 @@
   (declare default-config (Void -> cfg:MineConfig))
   (define (default-config)
     "Return the default configuration."
-    (cfg:MineConfig True True "coalton" "COALTON-USER" None 4096 Nil))
+    (cfg:MineConfig True True "coalton" "COALTON-USER" None 4096 Nil False))
 
   (declare load-config (String -> (Result String cfg:MineConfig)))
   (define (load-config path)
@@ -25,7 +25,7 @@ If the file does not exist, returns defaults. If malformed, returns Err."
                           (cl:user-homedir-pathname))))
         (cl:cond
           ((cl:not (cl:probe-file resolved))
-           (Ok (cfg:MineConfig cl:t cl:t "coalton" "COALTON-USER" None 4096 Nil)))
+           (Ok (cfg:MineConfig cl:t cl:t "coalton" "COALTON-USER" None 4096 Nil cl:nil)))
           (cl:t
            (cl:handler-case
                (cl:with-open-file (in resolved :direction :input)
@@ -36,11 +36,15 @@ If the file does not exist, returns defaults. If malformed, returns Err."
                            (rp  (cl:getf plist ':default-package "COALTON-USER"))
                            (init (cl:getf plist ':repl-init cl:nil))
                            (heap-raw (cl:getf plist ':repl-heap-size-megabytes 4096))
-                           (asdf-raw (cl:getf plist ':project-roots cl:nil)))
+                           (asdf-raw (cl:getf plist ':project-roots cl:nil))
+                           (check-updates (cl:getf plist ':check-for-updates cl:nil)))
                    (cl:unless (cl:listp plist)
                      (cl:error "Config file must contain a plist"))
                    (cl:unless (cl:or (cl:eq ah cl:t) (cl:null ah))
                      (cl:error "Invalid :auto-hide-tree-pane ~S (expected t or nil)" ah))
+                   (cl:unless (cl:or (cl:eq check-updates cl:t)
+                                      (cl:null check-updates))
+                     (cl:error "Invalid :check-for-updates ~S (expected t or nil)" check-updates))
                    (cl:unless (cl:member (cl:string-downcase rl)
                                          '("coalton" "lisp")
                                          :test #'cl:string-equal)
@@ -61,7 +65,8 @@ If the file does not exist, returns defaults. If malformed, returns Err."
                                                 (Some (cl:write-to-string init))
                                                 None)
                                          (cl:max 256 (cl:truncate heap-raw))
-                                         project-roots)))))
+                                         project-roots
+                                         (cl:if check-updates cl:t cl:nil))))))
              (cl:error (c)
                (Err (cl:format cl:nil "~A: ~A"
                                (cl:namestring resolved) c))))))))))

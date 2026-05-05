@@ -50,7 +50,7 @@
                              (:file "package")))
                (:module "runtime"
                 :serial t
-                :components ((:file "function-entry")
+                :components ((:file "function")
                              (:file "optional")
                              (:file "package")))
                (:module "typechecker"
@@ -130,6 +130,7 @@
                              (:file "monomorphize")
                              (:file "constant-propagation")
                              (:file "inliner")
+                             (:file "lawnmower")
                              (:file "specializer")
                              (:file "optimizer")
 

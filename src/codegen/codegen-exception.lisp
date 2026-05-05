@@ -5,7 +5,6 @@
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
    (#:global-lexical #:coalton-impl/global-lexical)
-   (#:rt #:coalton-impl/runtime)
    (#:soc #:coalton-impl/codegen/struct-or-class))
   
   (:export

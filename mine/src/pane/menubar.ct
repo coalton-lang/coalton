@@ -275,18 +275,6 @@
   (define (%menu-item-count mb idx)
     (list:length (.md-items (%nth-menu mb idx))))
 
-  (declare %selected-action (MenuBar -> (Optional MenuAction)))
-  (define (%selected-action mb)
-    (match (cell:read (.mb-open-index mb))
-      ((None) None)
-      ((Some idx)
-       (let menu = (%nth-menu mb idx))
-       (let sel = (cell:read (.mb-selected mb)))
-       (let items = (.md-items menu))
-       (if (< sel (list:length items))
-           (Some (.mi-action (list:nth sel items)))
-           None))))
-
   ;;; Key handling
 
   (declare menubar-handle-key! (MenuBar * input:Key * input:Modifier -> (Optional MenuAction)))
