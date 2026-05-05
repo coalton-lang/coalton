@@ -75,6 +75,11 @@
                   check-indent-runtime-rules-use-cl-user-for-lisp-default
                   check-indent-newline-before-close-paren-uses-blank-context
                   check-editor-nonprinting-character-widths
+                  check-crlf-line-text-and-editor-unit-boundaries
+                  check-crlf-editor-unit-cursor-motion
+                  check-crlf-editor-unit-delete
+                  check-crlf-structural-editor-unit-delete
+                  check-clipboard-stream-read-preserves-crlf
                   check-indent-line-tab-hop-to-source
                   check-indent-line-preserves-source-position
                   check-editor-paste-clamps-stale-cursor-to-buffer-end

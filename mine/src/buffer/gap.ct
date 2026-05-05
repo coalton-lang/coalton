@@ -4,18 +4,23 @@
    (#:vec #:coalton/vector)
    (#:cell #:coalton/cell)
    (#:str #:coalton/string)
+   (#:math #:coalton/math)
    (#:char #:coalton/char)
    (#:cellw #:mine/text/width))
   (:export
    #:GapBuffer
    #:gap-new #:gap-from-string
    #:gap-length #:gap-char-at
+   #:gap-crlf-at?
+   #:gap-editor-unit-start-pos #:gap-editor-unit-end-pos
+   #:gap-editor-unit-next-pos #:gap-editor-unit-prev-pos
+   #:gap-expand-range-to-editor-units
    #:gap-insert-char! #:gap-insert-string!
    #:gap-delete-range! #:gap-delete-char!
    #:gap-to-string #:gap-substring
    #:gap-line-count
    #:gap-line-to-pos #:gap-pos-to-line-col
-   #:gap-line-text
+   #:gap-line-end-pos #:gap-line-text
    #:visual-col #:char-for-vcol))
 
 (in-package #:mine/buffer/gap)
@@ -234,6 +239,68 @@ Rebuild the line-starts vector by compacting in place: keep entries
        (let phys = (logical-to-physical gb pos))
        (vec:index phys (cell:read (.data gb))))))
 
+  ;;; Editor-unit helpers
+
+  (declare gap-crlf-at? (GapBuffer * UFix -> Boolean))
+  (define (gap-crlf-at? gb pos)
+    "True when POS starts a CRLF sequence."
+    (match (gap-char-at gb pos)
+      ((Some #\Return)
+       (match (gap-char-at gb (+ pos 1))
+         ((Some #\Newline) True)
+         (_ False)))
+      (_ False)))
+
+  (declare gap-position-between-crlf? (GapBuffer * UFix -> Boolean))
+  (define (gap-position-between-crlf? gb pos)
+    "True when POS is between the CR and LF of a CRLF sequence."
+    (and (> pos 0)
+         (gap-crlf-at? gb (- pos 1))))
+
+  (declare gap-editor-unit-start-pos (GapBuffer * UFix -> UFix))
+  (define (gap-editor-unit-start-pos gb pos)
+    "Return POS clamped to the start boundary of its editor unit."
+    (let bounded = (min pos (gap-length gb)))
+    (if (gap-position-between-crlf? gb bounded)
+        (- bounded 1)
+        bounded))
+
+  (declare gap-editor-unit-end-pos (GapBuffer * UFix -> UFix))
+  (define (gap-editor-unit-end-pos gb pos)
+    "Return POS clamped to the end boundary of its editor unit."
+    (let bounded = (min pos (gap-length gb)))
+    (if (gap-position-between-crlf? gb bounded)
+        (+ bounded 1)
+        bounded))
+
+  (declare gap-editor-unit-next-pos (GapBuffer * UFix -> UFix))
+  (define (gap-editor-unit-next-pos gb pos)
+    "Return the next editor-unit boundary after POS.
+CRLF is treated as one editor unit; all other characters are one raw
+buffer character."
+    (let len = (gap-length gb))
+    (cond
+      ((>= pos len) len)
+      ((gap-crlf-at? gb pos) (+ pos 2))
+      (True (+ pos 1))))
+
+  (declare gap-editor-unit-prev-pos (GapBuffer * UFix -> UFix))
+  (define (gap-editor-unit-prev-pos gb pos)
+    "Return the previous editor-unit boundary before POS.
+When POS is immediately after LF in a CRLF sequence, this skips back
+over both raw characters."
+    (cond
+      ((== pos 0) 0)
+      ((and (>= pos 2) (gap-crlf-at? gb (- pos 2)))
+       (- pos 2))
+      (True (- pos 1))))
+
+  (declare gap-expand-range-to-editor-units (GapBuffer * UFix * UFix -> (Tuple UFix UFix)))
+  (define (gap-expand-range-to-editor-units gb start end)
+    "Expand [START, END) so it never splits a CRLF editor unit."
+    (Tuple (gap-editor-unit-start-pos gb start)
+           (gap-editor-unit-end-pos gb end)))
+
   ;;; Insertion
 
   (declare gap-insert-char! (GapBuffer * UFix * Char -> Void))
@@ -367,54 +434,78 @@ Rebuild the line-starts vector by compacting in place: keep entries
     (let col = (- pos (gap-line-to-pos gb line)))
     (Tuple line col))
 
+  (declare gap-line-end-pos (GapBuffer * UFix -> UFix))
+  (define (gap-line-end-pos gb line)
+    "Return the raw buffer position where LINE text ends.
+For LF lines this is the LF position. For CRLF lines this is the CR
+position, so the CRLF terminator is omitted from line text."
+    (let start = (gap-line-to-pos gb line))
+    (let total-lines = (gap-line-count gb))
+    (cond
+      ((< (+ line 1) total-lines)
+       ;; The next line starts immediately after this line's LF.
+       (let next = (gap-line-to-pos gb (+ line 1)))
+       (cond
+         ((and (>= next (+ start 2))
+               (gap-crlf-at? gb (- next 2)))
+          (- next 2))
+         ((> next start) (- next 1))
+         (True next)))
+      (True
+       ;; Last line: runs to end of buffer.
+       (cell:read (.len gb)))))
+
   (declare gap-line-text (GapBuffer * UFix -> String))
   (define (gap-line-text gb line)
     "Return the text of LINE (excluding trailing newline)."
     (let start = (gap-line-to-pos gb line))
-    (let total-lines = (gap-line-count gb))
-    (let end-pos =
-      (cond
-        ((< (+ line 1) total-lines)
-         ;; The next line starts right after our newline.
-         (let next = (gap-line-to-pos gb (+ line 1)))
-         ;; Exclude the trailing newline character.
-         (if (> next start)
-             (- next 1)
-             next))
-        (True
-         ;; Last line: runs to end of buffer.
-         (cell:read (.len gb)))))
-    (gap-substring gb start end-pos))
+    (gap-substring gb start (gap-line-end-pos gb line)))
 
   ;;; Tab-aware column helpers
+
+  (declare next-tab-stop (UFix * UFix -> UFix))
+  (define (next-tab-stop vcol tab-w)
+    "Return the visual column after a tab at VCOL."
+    (if (== tab-w 0)
+        vcol
+        (* (+ (math:div vcol tab-w) 1) tab-w)))
+
+  (declare visual-col-loop (String * UFix * UFix * UFix * UFix -> UFix))
+  (define (visual-col-loop text limit i vcol tab-w)
+    (if (>= i limit)
+        vcol
+        (progn
+          (let ch = (str:ref-unchecked text i))
+          (let next-vcol =
+            (if (== ch #\Tab)
+                (next-tab-stop vcol tab-w)
+                (+ vcol (cellw:editor-char-cell-width ch))))
+          (visual-col-loop text limit (+ i 1) next-vcol tab-w))))
 
   (declare visual-col (String * UFix * UFix -> UFix))
   (define (visual-col text char-col tab-w)
     "Compute the visual column for character position CHAR-COL in TEXT,
 expanding tabs to the next tab stop of width TAB-W."
-    (lisp (-> UFix) (text char-col tab-w)
-      (cl:let ((vcol 0)
-               (limit (cl:min char-col (cl:length text))))
-        (cl:dotimes (i limit vcol)
-          (cl:let ((ch (cl:char text i)))
-            (cl:if (cl:char= ch #\Tab)
-                   (cl:setf vcol (cl:* (cl:1+ (cl:floor vcol tab-w)) tab-w))
-                   (cl:incf vcol (mine/text/width:editor-char-cell-width-cl ch))))))))
+    (visual-col-loop text (min char-col (str:length text)) 0 0 tab-w))
+
+  (declare char-for-vcol-loop (String * UFix * UFix * UFix * UFix * UFix -> UFix))
+  (define (char-for-vcol-loop text len i vcol vcol-target tab-w)
+    (if (>= i len)
+        len
+        (progn
+          (let ch = (str:ref-unchecked text i))
+          (let next-vcol =
+            (if (== ch #\Tab)
+                (next-tab-stop vcol tab-w)
+                (+ vcol (cellw:editor-char-cell-width ch))))
+          (if (> next-vcol vcol-target)
+              i
+              (char-for-vcol-loop text len (+ i 1) next-vcol vcol-target tab-w)))))
 
   (declare char-for-vcol (String * UFix * UFix -> UFix))
   (define (char-for-vcol text vcol-target tab-w)
     "Find the character index in TEXT whose visual column is closest to
 VCOL-TARGET (without exceeding it), expanding tabs with TAB-W."
-    (lisp (-> UFix) (text vcol-target tab-w)
-      (cl:let ((vcol 0)
-               (len (cl:length text)))
-        (cl:dotimes (i len len)
-          (cl:let* ((ch (cl:char text i))
-                    (next-vcol (cl:if (cl:char= ch #\Tab)
-                                      (cl:* (cl:1+ (cl:floor vcol tab-w)) tab-w)
-                                      (cl:+ vcol (mine/text/width:editor-char-cell-width-cl ch)))))
-            (cl:when (cl:> next-vcol vcol-target)
-              (cl:return i))
-            (cl:setf vcol next-vcol))))))
+    (char-for-vcol-loop text (str:length text) 0 0 vcol-target tab-w))
 
 )

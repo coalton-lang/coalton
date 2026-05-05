@@ -146,7 +146,7 @@ SOURCE provides metadata for the stream argument, for error messages."
   (with-open-file (stream file
                           :direction ':input
                           :element-type 'character
-                          :external-format ':utf-8)
+                          :external-format (source:source-external-format))
     (loop :with bytes := 0
           :with chars := 0
           :while (< bytes byte-offset)

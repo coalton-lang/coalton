@@ -203,6 +203,180 @@ should-stay-flush-left)"))
     (%check (= 2 (gap:char-for-vcol text 2 4))
             "Expected vcol after Return marker to map to following character")))
 
+(defun check-crlf-line-text-and-editor-unit-boundaries ()
+  (let* ((text (concatenate 'string
+                            "a"
+                            (string #\Return)
+                            (string #\Newline)
+                            "b"
+                            (string #\Return)
+                            "c"))
+         (gb (gap:gap-from-string text)))
+    (%check (string= text (gap:gap-to-string gb))
+            "Expected CRLF buffer text to remain raw, got ~S"
+            (gap:gap-to-string gb))
+    (%check (= 2 (gap:gap-line-count gb))
+            "Expected CRLF to count as one line break")
+    (%check (= 1 (gap:gap-line-end-pos gb 0))
+            "Expected first line to end before CR in CRLF")
+    (%check (string= "a" (gap:gap-line-text gb 0))
+            "Expected CRLF terminator to be omitted from line text, got ~S"
+            (gap:gap-line-text gb 0))
+    (%check (string= (concatenate 'string "b" (string #\Return) "c")
+                     (gap:gap-line-text gb 1))
+            "Expected bare CR in line text to remain visible, got ~S"
+            (gap:gap-line-text gb 1))
+    (%check (= 3 (gap:gap-editor-unit-next-pos gb 1))
+            "Expected editor next from CR to skip CRLF")
+    (%check (= 1 (gap:gap-editor-unit-prev-pos gb 3))
+            "Expected editor previous after LF to skip CRLF")
+    (let ((range-from-cr (gap:gap-expand-range-to-editor-units gb 1 2))
+          (range-from-lf (gap:gap-expand-range-to-editor-units gb 2 3)))
+      (%check (and (= 1 (%tuple-slot range-from-cr "_0"))
+                   (= 3 (%tuple-slot range-from-cr "_1")))
+              "Expected range touching CR to expand to CRLF, got ~S"
+              range-from-cr)
+      (%check (and (= 1 (%tuple-slot range-from-lf "_0"))
+                   (= 3 (%tuple-slot range-from-lf "_1")))
+              "Expected range touching LF to expand to CRLF, got ~S"
+              range-from-lf))))
+
+(defun check-crlf-editor-unit-cursor-motion ()
+  (let* ((text (concatenate 'string "a" (string #\Return) (string #\Newline) "b"))
+         (gb (gap:gap-from-string text))
+         (cs (cursor:cursor-new)))
+    (cursor:cursor-move-to-position! cs 1)
+    (cursor:cursor-move-right! gb cs)
+    (%check (= 3 (cursor:cursor-position cs))
+            "Expected cursor right at CRLF to land after LF, got ~D"
+            (cursor:cursor-position cs))
+    (cursor:cursor-move-left! gb cs)
+    (%check (= 1 (cursor:cursor-position cs))
+            "Expected cursor left after CRLF to land before CR, got ~D"
+            (cursor:cursor-position cs))))
+
+(defun check-crlf-editor-unit-delete ()
+  (let* ((text (concatenate 'string "a" (string #\Return) (string #\Newline) "b"))
+         (buffer (buf:buffer-new-file (buf:BufferId 0) "crlf-delete.ct"))
+         (gb (buf:buffer-gap buffer))
+         (cs (cursor:cursor-new)))
+    (gap:gap-insert-string! gb 0 text)
+    (cursor:cursor-move-to-position! cs 3)
+    (ops:delete-backward! buffer (buf:buffer-undo buffer) cs)
+    (%check (string= "ab" (gap:gap-to-string gb))
+            "Expected backspace after CRLF to delete both characters, got ~S"
+            (gap:gap-to-string gb))
+    (%check (= 1 (cursor:cursor-position cs))
+            "Expected backspace after CRLF to leave cursor before deleted unit, got ~D"
+            (cursor:cursor-position cs)))
+  (let* ((text (concatenate 'string "a" (string #\Return) (string #\Newline) "b"))
+         (buffer (buf:buffer-new-file (buf:BufferId 1) "crlf-delete.ct"))
+         (gb (buf:buffer-gap buffer))
+         (cs (cursor:cursor-new)))
+    (gap:gap-insert-string! gb 0 text)
+    (cursor:cursor-move-to-position! cs 1)
+    (ops:delete-forward! buffer (buf:buffer-undo buffer) cs)
+    (%check (string= "ab" (gap:gap-to-string gb))
+            "Expected delete before CRLF to delete both characters, got ~S"
+            (gap:gap-to-string gb))
+    (%check (= 1 (cursor:cursor-position cs))
+            "Expected delete before CRLF to leave cursor at same position, got ~D"
+            (cursor:cursor-position cs)))
+  (let* ((text (concatenate 'string "a" (string #\Return) (string #\Newline) "b"))
+         (buffer (buf:buffer-new-file (buf:BufferId 2) "crlf-delete.ct"))
+         (gb (buf:buffer-gap buffer))
+         (cs (cursor:cursor-new)))
+    (gap:gap-insert-string! gb 0 text)
+    (cursor:cursor-move-to-position! cs 2)
+    (ops:delete-forward! buffer (buf:buffer-undo buffer) cs)
+    (%check (string= "ab" (gap:gap-to-string gb))
+            "Expected delete from inside CRLF to delete both characters, got ~S"
+            (gap:gap-to-string gb))
+    (%check (= 1 (cursor:cursor-position cs))
+            "Expected delete from inside CRLF to leave cursor before deleted unit, got ~D"
+            (cursor:cursor-position cs)))
+  (let* ((text (concatenate 'string "a" (string #\Return) (string #\Newline) "b"))
+         (buffer (buf:buffer-new-file (buf:BufferId 3) "crlf-delete.ct"))
+         (gb (buf:buffer-gap buffer))
+         (cs (cursor:cursor-new)))
+    (gap:gap-insert-string! gb 0 text)
+    (cursor:cursor-move-to-position! cs 2)
+    (ops:delete-backward-word! buffer (buf:buffer-undo buffer) cs)
+    (%check (string= "b" (gap:gap-to-string gb))
+            "Expected word-delete from inside CRLF to keep CRLF paired, got ~S"
+            (gap:gap-to-string gb))
+    (%check (= 0 (cursor:cursor-position cs))
+            "Expected word-delete from inside CRLF to leave cursor at start, got ~D"
+            (cursor:cursor-position cs)))
+  (let* ((text (concatenate 'string "a" (string #\Newline) "b"))
+         (buffer (buf:buffer-new-file (buf:BufferId 4) "crlf-insert.ct"))
+         (gb (buf:buffer-gap buffer))
+         (cs (cursor:cursor-new)))
+    (gap:gap-insert-string! gb 0 text)
+    (cursor:cursor-move-to-position! cs 1)
+    (ops:insert-string! buffer (buf:buffer-undo buffer) cs (string #\Return))
+    (%check (string= (concatenate 'string "a" (string #\Return) (string #\Newline) "b")
+                     (gap:gap-to-string gb))
+            "Expected inserting CR before LF to create raw CRLF, got ~S"
+            (gap:gap-to-string gb))
+    (%check (= 3 (cursor:cursor-position cs))
+            "Expected inserting CR before LF to leave cursor after the CRLF unit, got ~D"
+            (cursor:cursor-position cs))))
+
+(defun check-crlf-structural-editor-unit-delete ()
+  (let* ((text (concatenate 'string "a" (string #\Return) (string #\Newline) "b"))
+         (buffer (buf:buffer-new-file (buf:BufferId 5) "crlf-paredit.ct"))
+         (gb (buf:buffer-gap buffer))
+         (cs (cursor:cursor-new)))
+    (gap:gap-insert-string! gb 0 text)
+    (cursor:cursor-move-to-position! cs 3)
+    (paredit:paredit-backspace! buffer cs)
+    (%check (string= "ab" (gap:gap-to-string gb))
+            "Expected structural backspace after CRLF to delete both characters, got ~S"
+            (gap:gap-to-string gb))
+    (%check (= 1 (cursor:cursor-position cs))
+            "Expected structural backspace after CRLF to leave cursor before deleted unit, got ~D"
+            (cursor:cursor-position cs)))
+  (let* ((text (concatenate 'string "a" (string #\Return) (string #\Newline) "b"))
+         (buffer (buf:buffer-new-file (buf:BufferId 6) "crlf-paredit.ct"))
+         (gb (buf:buffer-gap buffer))
+         (cs (cursor:cursor-new)))
+    (gap:gap-insert-string! gb 0 text)
+    (cursor:cursor-move-to-position! cs 2)
+    (paredit:paredit-backspace! buffer cs)
+    (%check (string= "ab" (gap:gap-to-string gb))
+            "Expected structural backspace inside CRLF to delete both characters, got ~S"
+            (gap:gap-to-string gb))
+    (%check (= 1 (cursor:cursor-position cs))
+            "Expected structural backspace inside CRLF to leave cursor before deleted unit, got ~D"
+            (cursor:cursor-position cs)))
+  (let* ((text (concatenate 'string "a" (string #\Return) (string #\Newline) "b"))
+         (buffer (buf:buffer-new-file (buf:BufferId 7) "crlf-paredit.ct"))
+         (gb (buf:buffer-gap buffer))
+         (cs (cursor:cursor-new)))
+    (gap:gap-insert-string! gb 0 text)
+    (cursor:cursor-move-to-position! cs 1)
+    (paredit:paredit-delete! buffer cs)
+    (%check (string= "ab" (gap:gap-to-string gb))
+            "Expected structural delete before CRLF to delete both characters, got ~S"
+            (gap:gap-to-string gb))
+    (%check (= 1 (cursor:cursor-position cs))
+            "Expected structural delete before CRLF to leave cursor before deleted unit, got ~D"
+            (cursor:cursor-position cs))))
+
+(defun check-clipboard-stream-read-preserves-crlf ()
+  (let ((text (concatenate 'string
+                           "alpha"
+                           (string #\Return)
+                           (string #\Newline)
+                           "beta"
+                           (string #\Return)
+                           (string #\Newline))))
+    (with-input-from-string (stream text)
+      (%check (string= text
+                       (mine/app/clipboard::%read-stream-to-string stream))
+              "Expected clipboard stream read to preserve CRLF exactly"))))
+
 (defun %apply-line-indent (text cursor-pos line target-indent)
   (let* ((buffer (%indent-buffer-with-text text))
          (cs (cursor:cursor-new)))

@@ -196,7 +196,8 @@ return expression values (load returns T)."
     (uiop:with-temporary-file (:stream tmp-stream
                                 :pathname tmp-path
                                 :type (if coalton-p "ct" "lisp")
-                                :direction :output)
+                                :direction :output
+                                :external-format (coalton-impl/source:source-external-format))
       (write-string file-prefix tmp-stream)
       (write-string form-string tmp-stream)
       :close-stream
@@ -217,7 +218,8 @@ return expression values (load returns T)."
                                  *terminal-io*))
               (*package* pkg)
               (*readtable* (if coalton-p (%coalton-readtable) *readtable*)))
-        (let ((fasl (compile-file tmp-path)))
+        (let ((fasl (compile-file tmp-path
+                                  :external-format (coalton-impl/source:source-external-format))))
           (when fasl
             (unwind-protect
                  (setf result-values (multiple-value-list (load fasl)))
