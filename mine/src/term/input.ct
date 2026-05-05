@@ -52,6 +52,7 @@
   ;;; Modifier
 
   (repr :enum)
+  (derive Eq)
   (define-type Modifier
     "Key modifier state."
     ModNone
@@ -59,11 +60,6 @@
     ModAlt
     ModCtrl
     ModAltShift)
-
-  (define-instance (Eq Modifier)
-    (define (== a b)
-      (lisp (-> Boolean) (a b)
-        (cl:if (cl:eq a b) True False))))
 
   ;;; Mouse
 
@@ -110,12 +106,6 @@
     (lisp (-> (Vector UFix)) ()
       (cl:make-array 0 :fill-pointer 0 :adjustable cl:t
                        :element-type cl:t)))
-
-  (declare vec-push! ((Vector UFix) * UFix -> Void))
-  (define (vec-push! v x)
-    (lisp (-> Void) (v x)
-      (cl:vector-push-extend x v)
-      (cl:values)))
 
   (declare vec-from-offset ((Vector UFix) * UFix -> (Vector UFix)))
   (define (vec-from-offset v start)

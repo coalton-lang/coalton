@@ -27,20 +27,13 @@
    #:tree-pane-remove-open-file!
    #:tree-pane-remove-open-files-under!
    #:tree-pane-open-files
-   #:tree-pane-selected-index
-   #:tree-pane-set-selected!
-   #:tree-pane-scroll-offset
-   #:tree-pane-set-scroll!
    #:tree-pane-set-preview-path!
-   #:tree-visible-count
-   #:tree-pane-item-hit-test
    #:tree-pane-in-open-section?
    #:tree-pane-switch-to-open-section!
    #:tree-pane-click-at!
    #:tree-pane-scroll-delta!
    #:tree-pane-scrollbar-drag-at!
-   #:tree-pane-render-collapsed
-   #:tree-pane-open-file-count))
+   #:tree-pane-render-collapsed))
 
 (in-package #:mine/pane/tree)
 
@@ -238,56 +231,6 @@ When a project tree exists, returns a fixed height so the tree never shifts."
                          name))
        (Cons (FlatRow 0 prefix False False path False)
              (%flatten-open-files-aux rest (+ num 1))))))
-
-  ;;; Navigation (legacy accessors — kept for compatibility)
-
-  (declare tree-visible-count (TreePane -> UFix))
-  (define (tree-visible-count tp)
-    "Return visible item count for the active section."
-    (if (cell:read (.in-open-sec tp))
-        (length (cell:read (.open-files tp)))
-        (length (flatten-tree (cell:read (.root tp))))))
-
-  (declare tree-pane-scroll-offset (TreePane -> UFix))
-  (define (tree-pane-scroll-offset tp)
-    (if (cell:read (.in-open-sec tp))
-        (cell:read (.open-scroll tp))
-        (cell:read (.scroll tp))))
-
-  (declare tree-pane-set-scroll! (TreePane * UFix -> Void))
-  (define (tree-pane-set-scroll! tp offset)
-    (cond
-      ((cell:read (.in-open-sec tp))
-       (cell:write! (.open-scroll tp) offset))
-      (True
-       (cell:write! (.scroll tp) offset)))
-    (values))
-
-  (declare tree-pane-selected-index (TreePane -> UFix))
-  (define (tree-pane-selected-index tp)
-    (if (cell:read (.in-open-sec tp))
-        (cell:read (.open-selected tp))
-        (cell:read (.selected tp))))
-
-  (declare tree-pane-set-selected! (TreePane * UFix -> Void))
-  (define (tree-pane-set-selected! tp idx)
-    (let count = (tree-visible-count tp))
-    (when (< idx count)
-      (cond
-        ((cell:read (.in-open-sec tp))
-         (cell:write! (.open-selected tp) idx))
-        (True
-         (cell:write! (.selected tp) idx))))
-    (values))
-
-  (declare tree-pane-item-hit-test (TreePane * UFix * UFix -> Optional String))
-  (define (tree-pane-item-hit-test tp flat-idx col)
-    "Hit-test against the tree section's flattened rows."
-    (let rows = (flatten-tree (cell:read (.root tp))))
-    (let total = (list:length rows))
-    (if (>= flat-idx total)
-        None
-        (%item-hit-test-row (list:nth flat-idx rows) col)))
 
   (declare %item-hit-test-row (FlatRow * UFix -> Optional String))
   (define (%item-hit-test-row row col)
@@ -767,10 +710,6 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
     (values))
 
 ;;; Collapsed strip rendering
-
-  (declare tree-pane-open-file-count (TreePane -> UFix))
-  (define (tree-pane-open-file-count tp)
-    (length (cell:read (.open-files tp))))
 
   (declare %find-current-file-index
     ((List (Tuple String String)) * (Optional String) * UFix -> (Optional UFix)))

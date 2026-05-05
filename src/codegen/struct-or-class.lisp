@@ -4,8 +4,7 @@
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
-   (#:global-lexical #:coalton-impl/global-lexical)
-   (#:rt #:coalton-impl/runtime))
+   (#:global-lexical #:coalton-impl/global-lexical))
   (:export
    #:struct-or-class                    ; FUNCTION
    #:struct-or-class-field              ; STRUCT
@@ -153,13 +152,12 @@ regardless of Coalton's release mode."
      (if (not (null fields))
          (append
           (list
-           `(global-lexical:define-global-lexical ,constructor rt:function-entry)
-           `(setf ,constructor ,(rt:construct-function-entry `#',constructor (length fields))))
+           `(global-lexical:define-global-lexical ,constructor function)
+           `(setf ,constructor #',constructor))
           (loop :for reader :in reader-names
-                :collect `(global-lexical:define-global-lexical ,reader rt:function-entry)
-                :collect `(setf ,reader ,(rt:construct-function-entry `#',reader 1))))
+                :collect `(global-lexical:define-global-lexical ,reader function)
+                :collect `(setf ,reader #',reader)))
 
          (list
           `(global-lexical:define-global-lexical ,constructor ,classname)
           `(setf ,constructor (,constructor)))))))
-

@@ -626,6 +626,7 @@
     (let auto-hide-tree = (cfg:.config-auto-hide-tree-pane config))
     (let lang = (cfg:.config-repl-language config))
     (let pkg = (cfg:.config-default-package config))
+    (let check-updates = (cfg:.config-check-for-updates config))
     ;; Extract Optional String to a nullable CL string
     (let init-str = (match (cfg:.config-repl-init config)
                       ((Some s) s)
@@ -639,7 +640,7 @@
     (let has-paths = (match (cfg:.config-project-roots config)
                       ((Cons _ _) True)
                       ((Nil) False)))
-    (lisp (-> Boolean) (se auto-hide-tree lang pkg init-str has-init path-str has-paths)
+    (lisp (-> Boolean) (se auto-hide-tree lang pkg check-updates init-str has-init path-str has-paths)
       (cl:let ((path (cl:merge-pathnames ".mine"
                                           (cl:user-homedir-pathname))))
         (cl:handler-case
@@ -655,6 +656,8 @@
                            (cl:if auto-hide-tree "t" "nil"))
                 (cl:format out " :repl-language ~S~%" lang)
                 (cl:format out " :default-package ~S~%" pkg)
+                (cl:format out " :check-for-updates ~A~%"
+                           (cl:if check-updates "t" "nil"))
                 (cl:when has-init
                   (cl:format out " :repl-init ~A~%" init-str))
                 (cl:when has-paths
@@ -846,7 +849,18 @@
     (let lang = (if (== lang-idx 0) "coalton" "lisp"))
     (let pkg = (if (== lang-idx 0) "COALTON-USER" "CL-USER"))
 
-    ;; 3. Quicklisp
+    ;; 3. Updates
+    (let updates-idx = (ask terminal
+                            "Check for mine updates on startup?"
+                            (make-list
+                             "When enabled, mine will check GitHub releases"
+                             "in the background when it starts. This is"
+                             "disabled unless you opt in.")
+                            (make-list "Yes" "No")
+                            1))
+    (let check-updates = (== updates-idx 0))
+
+    ;; 4. Quicklisp
     (let load-ql = (cell:new False))
     (cond
       ((quicklisp-installed-p)
@@ -879,7 +893,7 @@
            (values))
          (values))))
 
-    ;; 4. Project directory (ASDF path)
+    ;; 5. Project directory (ASDF path)
     (let ql-desc = (if (cell:read load-ql)
                        (make-list "ASDF will search this directory for systems."
                                   "The directory will be created if it doesn't exist."
@@ -920,7 +934,7 @@
     (show-tip terminal)
 
     ;; Write config and show result
-    (let config = (cfg:MineConfig se True lang pkg init 4096 project-roots))
+    (let config = (cfg:MineConfig se True lang pkg init 4096 project-roots check-updates))
     (let _ok = (write-config! config))
     (show-done terminal)
 

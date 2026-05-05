@@ -22,6 +22,7 @@
 
   ;;; TokenKind
 
+  (derive Eq)
   (define-type TokenKind
     "Classification of a lexical token."
     TokWhitespace
@@ -53,40 +54,6 @@
     TokArrow
     TokOperator
     TokUnknown)
-
-  (define-instance (Eq TokenKind)
-    (define (== a b)
-      (match (Tuple a b)
-        ((Tuple (TokWhitespace) (TokWhitespace)) True)
-        ((Tuple (TokComment) (TokComment)) True)
-        ((Tuple (TokBlockComment) (TokBlockComment)) True)
-        ((Tuple (TokString) (TokString)) True)
-        ((Tuple (TokChar) (TokChar)) True)
-        ((Tuple (TokNumber) (TokNumber)) True)
-        ((Tuple (TokOpenParen) (TokOpenParen)) True)
-        ((Tuple (TokCloseParen) (TokCloseParen)) True)
-        ((Tuple (TokOpenBracket) (TokOpenBracket)) True)
-        ((Tuple (TokCloseBracket) (TokCloseBracket)) True)
-        ((Tuple (TokQuote) (TokQuote)) True)
-        ((Tuple (TokBackquote) (TokBackquote)) True)
-        ((Tuple (TokComma) (TokComma)) True)
-        ((Tuple (TokCommaAt) (TokCommaAt)) True)
-        ((Tuple (TokHashQuote) (TokHashQuote)) True)
-        ((Tuple (TokSharpSign) (TokSharpSign)) True)
-        ((Tuple (TokDot) (TokDot)) True)
-        ((Tuple (TokSymbol) (TokSymbol)) True)
-        ((Tuple (TokKeyword) (TokKeyword)) True)
-        ((Tuple (TokPackagePrefix) (TokPackagePrefix)) True)
-        ((Tuple (TokPackageQualified) (TokPackageQualified)) True)
-        ((Tuple (TokCoaltonKeyword) (TokCoaltonKeyword)) True)
-        ((Tuple (TokTypeVariable) (TokTypeVariable)) True)
-        ((Tuple (TokConstructor) (TokConstructor)) True)
-        ((Tuple (TokAccessor) (TokAccessor)) True)
-        ((Tuple (TokDynamic) (TokDynamic)) True)
-        ((Tuple (TokArrow) (TokArrow)) True)
-        ((Tuple (TokOperator) (TokOperator)) True)
-        ((Tuple (TokUnknown) (TokUnknown)) True)
-        (_ False))))
 
   ;;; Token
 

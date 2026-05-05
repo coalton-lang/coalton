@@ -108,7 +108,7 @@
                  (lisp-type (coalton-type-of-arg1 'coalton-native-tests::lisp-array-fn-1))))
 
       ;; Transparent type
-      (is (equal 'coalton-impl/runtime/function-entry:function-entry
+      (is (equal 'function
                  (lisp-type (coalton-type-of 'coalton-native-tests::transparent-type-fn))))
       (is (equal '(simple-array * (*))
                  (lisp-type (coalton-type-of-arg1 'coalton-native-tests::transparent-type-fn))))

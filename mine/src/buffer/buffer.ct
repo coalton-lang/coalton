@@ -36,37 +36,20 @@
 
   ;;; BufferId
 
+  (derive Eq Hash)
   (define-type BufferId
     "Unique identifier for a buffer."
     (BufferId UFix))
 
-  (define-instance (Eq BufferId)
-    (define (== a b)
-      (match (Tuple a b)
-        ((Tuple (BufferId x) (BufferId y))
-         (== x y)))))
-
-  (define-instance (Hash BufferId)
-    (define (hash bid)
-      (match bid
-        ((BufferId n) (hash n)))))
-
   ;;; BufferMode
 
   (repr :enum)
+  (derive Eq)
   (define-type BufferMode
     "Major mode governing syntax and behaviour."
     ModeCoalton
     ModeLisp
     ModePlainText)
-
-  (define-instance (Eq BufferMode)
-    (define (== a b)
-      (match (Tuple a b)
-        ((Tuple (ModeCoalton)  (ModeCoalton))  True)
-        ((Tuple (ModeLisp)     (ModeLisp))     True)
-        ((Tuple (ModePlainText)(ModePlainText)) True)
-        (_ False))))
 
   ;;; Mark
 

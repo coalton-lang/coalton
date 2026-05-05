@@ -55,10 +55,6 @@ Must be called while holding MUTEX."
   "Return T if THREAD is still running."
   (sb-thread:thread-alive-p thread))
 
-(defun current-thread ()
-  "Return the current thread object."
-  sb-thread:*current-thread*)
-
 (defun thread-name (thread)
   "Return the name string of THREAD, or NIL if unnamed."
   (sb-thread:thread-name thread))

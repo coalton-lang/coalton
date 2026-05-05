@@ -11,14 +11,6 @@
   (or (find-package (string-upcase package-name))
       (make-package (string-upcase package-name) :use '(#:cl))))
 
-(defun coalton-form-p (form)
-  "Return T if FORM is a Coalton toplevel or inline form."
-  (and (consp form)
-       (symbolp (car form))
-       (member (symbol-name (car form))
-               '("COALTON-TOPLEVEL" "COALTON")
-               :test #'string-equal)))
-
 (defun %format-result-values (values package)
   "Render VALUES for transport to the TUI as one printed string per value."
   (loop :for val :in values

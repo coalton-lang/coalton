@@ -46,6 +46,7 @@
 
   ;;; Color
 
+  (derive Eq)
   (define-type Color
     "Terminal color specification."
     ColorDefault
@@ -53,22 +54,10 @@
     (Color256 UFix)
     (ColorRGB UFix UFix UFix))
 
-  (define-instance (Eq Color)
-    (define (== a b)
-      (match (Tuple a b)
-        ((Tuple (ColorDefault) (ColorDefault))
-         True)
-        ((Tuple (Color16 x) (Color16 y))
-         (== x y))
-        ((Tuple (Color256 x) (Color256 y))
-         (== x y))
-        ((Tuple (ColorRGB r1 g1 b1) (ColorRGB r2 g2 b2))
-         (and (== r1 r2) (and (== g1 g2) (== b1 b2))))
-        (_ False))))
-
   ;;; Attr
 
   (repr :enum)
+  (derive Eq)
   (define-type Attr
     "Text attribute for terminal rendering."
     AttrNone
@@ -78,30 +67,14 @@
     AttrUnderline
     AttrReverse)
 
-  (define-instance (Eq Attr)
-    (define (== a b)
-      (match (Tuple a b)
-        ((Tuple (AttrNone) (AttrNone)) True)
-        ((Tuple (AttrBold) (AttrBold)) True)
-        ((Tuple (AttrDim) (AttrDim)) True)
-        ((Tuple (AttrItalic) (AttrItalic)) True)
-        ((Tuple (AttrUnderline) (AttrUnderline)) True)
-        ((Tuple (AttrReverse) (AttrReverse)) True)
-        (_ False))))
-
   ;;; Style
 
+  (derive Eq)
   (define-struct Style
     "Combined foreground color, background color, and text attribute."
     (style-fg Color)
     (style-bg Color)
     (style-attr Attr))
-
-  (define-instance (Eq Style)
-    (define (== a b)
-      (and (== (.style-fg a) (.style-fg b))
-           (and (== (.style-bg a) (.style-bg b))
-                (== (.style-attr a) (.style-attr b))))))
 
   ;;; Defaults and helpers
 
