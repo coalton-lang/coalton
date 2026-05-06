@@ -351,12 +351,17 @@
 
 (defun compiled-program-locally-forms (toplevel-string)
   (let* ((program (compile-test-program toplevel-string))
-         (locally-form (find-if (lambda (form)
-                                  (and (consp form)
-                                       (eq 'locally (car form))))
-                                (rest program))))
-    (is locally-form)
-    (rest locally-form)))
+         (locally-present-p nil)
+         (forms
+           (loop :for form :in (rest program)
+                 :append (if (and (consp form)
+                                  (eq 'locally (car form)))
+                             (progn
+                               (setf locally-present-p t)
+                               (rest form))
+                             (list form)))))
+    (is locally-present-p)
+    forms))
 
 (defun compiled-defun (forms name)
   (find-if (lambda (form)
