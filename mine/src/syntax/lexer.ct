@@ -446,6 +446,9 @@
           (handle-hash! i text len state result line-offset pos))
          ((== ch #\:)
           (handle-keyword! i text len state result line-offset pos))
+         ((and (<= (.lex-mode state) 1)
+               (== ch #\ƒ))
+          (emit-single! i result line-offset tok:TokCoaltonKeyword pos))
          ((number-start? ch (if (< (+ pos 1) len) (str:ref text (+ pos 1)) None))
           (handle-number! i text len result line-offset pos ch))
          ;; Dot followed by alpha = accessor like .foo

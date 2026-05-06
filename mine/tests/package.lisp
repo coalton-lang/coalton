@@ -15,6 +15,7 @@
    (#:proc #:mine/bindings/process)
    (#:server #:mine/protocol/server)
    (#:source #:coalton-impl/source)
+   (#:symbols #:mine/app/symbols)
    (#:wt #:mine/widget/types))
   (:export #:run-mine-tests
            #:run-mine-tests-in-subprocess))
@@ -63,6 +64,8 @@
                   check-generic-coalton-toplevel-notes-stay-textual
                   check-source-diagnostic-hook-sees-source-error-subclasses
                   check-reader-errors-produce-point-diagnostics
+                  check-symbol-input-fn-alias
+                  check-short-lambda-introducer-highlights-as-fn
                   check-indent-hunchentoot-style-handler-body
                   check-indent-multiple-value-bind-special-form
                   check-indent-lambda-list-keyword-alignment
