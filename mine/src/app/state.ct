@@ -34,6 +34,7 @@
    #:MineState
    #:.ms-menu
    #:.ms-status
+   #:.ms-pending-error
    #:.ms-editor
    #:.ms-bufmgr
    #:.ms-cursor
@@ -82,6 +83,7 @@
    #:.ms-bg-proto-thread
    #:.ms-update-check-state
    #:get-status-bar
+   #:get-pending-error-cell
    #:get-editor-pane
    #:get-bufmgr
    #:get-cursor-state
@@ -158,6 +160,7 @@
     "Top-level mutable application state."
     (ms-menu              menubar:MenuBar)
     (ms-status            status:StatusBar)
+    (ms-pending-error     (Cell (Optional String)))
     (ms-editor            editor:EditorPane)
     (ms-bufmgr            mgr:BufferManager)
     (ms-cursor            cursor:CursorState)
@@ -210,6 +213,9 @@
 
   (declare get-status-bar (MineState -> status:StatusBar))
   (define (get-status-bar st) (.ms-status st))
+
+  (declare get-pending-error-cell (MineState -> (Cell (Optional String))))
+  (define (get-pending-error-cell st) (.ms-pending-error st))
 
   (declare get-editor-pane (MineState -> editor:EditorPane))
   (define (get-editor-pane st) (.ms-editor st))

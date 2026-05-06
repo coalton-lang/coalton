@@ -16,6 +16,7 @@
    #:wait-for-dismiss
    #:show-about!
    #:show-credits!
+   #:alert-dialog
    #:confirm-dialog
    #:new-project-default-location
    #:new-project-dialog
@@ -299,6 +300,81 @@ scroll; any other key closes."
        (let hx = (+ bx (lisp (-> UFix) (box-w len) (cl:max 1 (cl:floor (cl:- box-w len) 2)))))
        (screen:screen-set-string scr start-row hx line style)
        (%render-help-lines scr rest bx box-w (+ start-row 1) style))))
+
+  (declare %render-alert-lines (screen:Screen * (List String) * UFix * UFix * UFix * UFix * color:Style -> Void))
+  (define (%render-alert-lines scr lines bx box-w max-w start-row style)
+    (match lines
+      ((Nil) (values))
+      ((Cons line rest)
+       (let clipped = (%clip-to-width line max-w))
+       (let len = (the UFix (lisp (-> UFix) (clipped) (cl:length clipped))))
+       (let hx = (+ bx (lisp (-> UFix) (box-w len) (cl:max 1 (cl:floor (cl:- box-w len) 2)))))
+       (screen:screen-set-string scr start-row hx clipped style)
+       (%render-alert-lines scr rest bx box-w max-w (+ start-row 1) style))))
+
+  (declare alert-dialog (term:Terminal * String * String * (List String) * (term:Terminal -> Void) -> Void))
+  (define (alert-dialog term title message help-lines bg-fn)
+    "Show a modal alert dialog with a single OK button."
+    (let scr = (term:.terminal-screen term))
+    (let cols = (term:terminal-cols term))
+    (let rows = (term:terminal-rows term))
+    (let bg = (color:Style color:text-fg
+                           color:panel-bg
+                           color:AttrNone))
+    (let title-s = (color:Style color:error-fg
+                                color:panel-bg
+                                color:AttrBold))
+    (let border-s = (color:Style color:error-fg
+                                 color:panel-bg
+                                 color:AttrNone))
+    (let btn-sel = (color:Style color:panel-bg
+                                color:text-fg
+                                color:AttrBold))
+    (let help-s = (color:Style color:text-dim-fg
+                               color:panel-bg
+                               color:AttrNone))
+    (let title-len = (the UFix (lisp (-> UFix) (title) (cl:length title))))
+    (let msg-len = (the UFix (lisp (-> UFix) (message) (cl:length message))))
+    (let help-max = (%max-string-len help-lines))
+    (let max-line = (max title-len (max msg-len help-max)))
+    (let help-count = (length help-lines))
+    (let max-box-w = (if (> cols 2) (- cols 2) cols))
+    (let max-inner-w = (if (> max-box-w 2) (- max-box-w 2) 1))
+    (let desired-inner = (max 22 (+ max-line 4)))
+    (let inner-w = (min max-inner-w desired-inner))
+    (let content-w = (if (> inner-w 4) (- inner-w 4) inner-w))
+    (let box-w = (+ inner-w 2))
+    (let box-h = (+ 7 help-count))
+    (let bx = (lisp (-> UFix) (cols box-w) (cl:max 0 (cl:floor (cl:- cols box-w) 2))))
+    (let by = (lisp (-> UFix) (rows box-h) (cl:max 0 (cl:floor (cl:- rows box-h) 2))))
+    (let ok-text = " OK ")
+    (let ok-len = (the UFix (lisp (-> UFix) (ok-text) (cl:length ok-text))))
+    (let ok-x = (+ bx (lisp (-> UFix) (box-w ok-len) (cl:max 1 (cl:floor (cl:- box-w ok-len) 2)))))
+    (let ok-y = (+ by (+ 5 help-count)))
+    (render:draw-box scr (wt:Rect bx by box-w box-h) border-s)
+    (render:fill-rect scr (wt:Rect (+ bx 1) (+ by 1) (- box-w 2) (- box-h 2)) #\Space bg)
+    (%render-alert-lines scr (make-list title) bx box-w content-w (+ by 1) title-s)
+    (%render-alert-lines scr (make-list message) bx box-w content-w (+ by 3) bg)
+    (%render-alert-lines scr help-lines bx box-w content-w (+ by 4) help-s)
+    (screen:screen-set-string scr ok-y ok-x ok-text btn-sel)
+    (screen:screen-hide-cursor scr)
+    (term:terminal-flush term)
+    (let ev = (term:terminal-wait-for-key term))
+    (match ev
+      ((input:IEvKey (input:KeyEnter) _) (values))
+      ((input:IEvKey (input:KeyChar #\Space) _) (values))
+      ((input:IEvKey (input:KeyChar #\o) _) (values))
+      ((input:IEvKey (input:KeyChar #\O) _) (values))
+      ((input:IEvMouse (input:MousePress) _ click-col click-row)
+       (if (and (== click-row ok-y)
+                (and (>= click-col ok-x) (< click-col (+ ok-x ok-len))))
+           (values)
+           (alert-dialog term title message help-lines bg-fn)))
+      ((input:IEvResize _ _)
+       (handle-dialog-resize! term)
+       (bg-fn term)
+       (alert-dialog term title message help-lines bg-fn))
+      (_ (alert-dialog term title message help-lines bg-fn))))
 
   (declare confirm-dialog (term:Terminal * String * String * String * (List String) * (term:Terminal -> Void) -> Boolean))
   (define (confirm-dialog term message btn-yes btn-no help-lines bg-fn)

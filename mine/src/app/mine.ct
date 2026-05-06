@@ -503,6 +503,25 @@
     (when (mini:minibuffer-active? (.ms-minibuffer st))
       (render-minibuffer-overlay st scr cols rows)))
 
+  (declare user-error! (MineState * String -> Void))
+  (define (user-error! st msg)
+    "Queue an error modal to be shown by the main loop."
+    (cell:write! (.ms-pending-error st) (Some msg))
+    (values))
+
+  (declare show-pending-error! (MineState * term:Terminal -> Boolean))
+  (define (show-pending-error! st term)
+    "Show and clear a pending user-facing error modal. Returns True if one was shown."
+    (match (cell:read (.ms-pending-error st))
+      ((None) False)
+      ((Some msg)
+       (cell:write! (.ms-pending-error st) None)
+       (render-app st term)
+       (dialogs:alert-dialog term "Error" msg Nil (fn (t) (render-app st t)))
+       (render-app st term)
+       (term:terminal-flush term)
+       True)))
+
   (declare render-minibuffer-overlay (MineState * screen:Screen * UFix * UFix -> Void))
   (define (render-minibuffer-overlay st scr cols rows)
     "Render the minibuffer as a centered dialog box with completions."
@@ -1117,8 +1136,7 @@ First line gets PREFIX, continuation lines get spaces of the same width."
     "Show feedback and return True when a new foreground runtime request is blocked."
     (cond
       ((%runtime-foreground-active? st)
-       (status:statusbar-set-message! (.ms-status st)
-                                      (%runtime-foreground-block-message st))
+       (user-error! st (%runtime-foreground-block-message st))
        True)
       (True False)))
 
@@ -1382,7 +1400,7 @@ multiple values get 0>, 1>, etc."
 Uses a dedicated Beam request so diagnostics can stream independently."
     (match (cell:read (.ms-project-system st))
       ((None)
-       (status:statusbar-set-message! (.ms-status st) "No project system loaded"))
+       (user-error! st "No project system loaded"))
       ((Some sys-name)
        (ensure-repl-visible! st)
        (when (%block-runtime-foreground-request! st)
@@ -2160,7 +2178,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (status:statusbar-set-message! (.ms-status st)
                                       (<> "Created project: " name)))
       ((Err msg)
-       (status:statusbar-set-message! (.ms-status st) msg))))
+       (user-error! st msg))))
 
 ;;; Build progress dialog
 
@@ -2177,7 +2195,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     (let scr = (term:.terminal-screen term))
     (match (%spawn-build-process script-path log-path heap-size)
       ((None)
-       (status:statusbar-set-message! (.ms-status st) "Failed to start build process"))
+       (user-error! st "Failed to start build process"))
       ((Some proc-box)
        (%build-progress-loop term scr proc-box (the (List String) Nil) 0)
        ;; Clean up
@@ -2200,8 +2218,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
           (status:statusbar-set-message! (.ms-status st)
                                          (<> "Build succeeded: " output-path)))
          (True
-          (status:statusbar-set-message! (.ms-status st)
-                                         (<> "Build failed. See log: " log-path)))))))
+          (user-error! st (<> "Build failed. See log: " log-path)))))))
 
   (declare %build-progress-loop
            (term:Terminal * screen:Screen * NativeBox * (List String) * UFix -> Void))
@@ -2327,8 +2344,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       ((Some (Tuple (Tuple asd output) (Tuple logf (Tuple entry heap))))
        (cond
          ((== entry "")
-          (status:statusbar-set-message! (.ms-status st)
-                                         "Build cancelled: entry point is required"))
+          (user-error! st "Build cancelled: entry point is required"))
          (True
           (let script = (build:write-build-script asd output entry))
           (%build-progress-dialog st term script logf output heap))))
@@ -2852,9 +2868,9 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          ((Some buf)
           (match (mgr:bufmgr-save! (.ms-bufmgr st) (buf:buffer-id buf))
             ((Ok _) (status:statusbar-set-message! (.ms-status st) "Saved"))
-            ((Err msg) (status:statusbar-set-message! (.ms-status st) msg))))
+            ((Err msg) (user-error! st msg))))
          ((None)
-          (status:statusbar-set-message! (.ms-status st) "No file open"))))
+          (user-error! st "No file open"))))
       ((input:KeyCtrl #\f) (start-find! st))
       ;; Everything else -> ignore
       (_ (values))))
@@ -2865,7 +2881,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
   (define (jump-to-definition! st)
     "Look up the symbol at cursor and jump to its definition."
     (match (mgr:bufmgr-current (.ms-bufmgr st))
-      ((None) (status:statusbar-set-message! (.ms-status st) "No file open"))
+      ((None) (user-error! st "No file open"))
       ((Some buf)
        (let gb = (buf:buffer-gap buf))
        (let cur-pos = (cursor:cursor-position (.ms-cursor st)))
@@ -2886,9 +2902,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                       (%resolve-qualified-name sym-name buf-pkg)
                     (%request-remote-definition st resolved-sym resolved-pkg
                                                 cur-path cur-pos))
-                  (mine/pane/status::statusbar-set-message!
-                   (mine/app/state:get-status-bar st)
-                   "No symbol at cursor")))
+                  (user-error! st "No symbol at cursor")))
          (cl:values)))))
 
   (declare jump-back! (MineState -> Void))
@@ -2898,9 +2912,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       (cl:let ((entry (%jump-stack-pop st)))
         (cl:if entry
                (mine/app/navigation:jump-to-file st (cl:car entry) (cl:cdr entry))
-               (mine/pane/status::statusbar-set-message!
-                (mine/app/state:get-status-bar st)
-                "Jump stack empty")))
+               (user-error! st "Jump stack empty")))
       (cl:values)))
 
   (declare %tree-file-paths (tree:TreeNode -> (List String)))
@@ -3207,7 +3219,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
           (tree:tree-pane-set-preview-path! (.ms-tree st) (Some fpath))
           (values))
          ((Err msg)
-          (status:statusbar-set-message! (.ms-status st) msg))))))
+          (user-error! st msg))))))
 
 ;;; Ctrl+digit buffer switching
 
@@ -3751,12 +3763,11 @@ wrap is on, row is resolved through screen-row-to-line-seg."
                   (tree:tree-pane-set-root! (.ms-tree st) root-node)
                   (status:statusbar-set-message! (.ms-status st) "Saved — project refreshed"))
                  ((None)
-                  (status:statusbar-set-message! (.ms-status st)
-                                                 "Saved — but .asd has errors (project tree not updated)")))))
+                  (user-error! st "Saved, but .asd has errors (project tree not updated)")))))
             (_ (values))))
-         ((Err msg) (status:statusbar-set-message! (.ms-status st) msg))))
+         ((Err msg) (user-error! st msg))))
       ((None)
-       (status:statusbar-set-message! (.ms-status st) "No file open"))))
+       (user-error! st "No file open"))))
 
   (declare prompt-open-file! (MineState -> Void))
   (define (prompt-open-file! st)
@@ -3920,15 +3931,13 @@ wrap is on, row is resolved through screen-row-to-line-seg."
     "Look up NAME in the LaTeX symbol table and insert the matched character."
     (cond
       ((== (str:length name) 0)
-       (status:statusbar-set-message! (.ms-status st) "No symbol selected"))
+       (user-error! st "No symbol selected"))
       (True
        (match (symbols:latex-symbol-lookup name)
          ((Some replacement)
           (%insert-text-at-focus! st replacement))
          ((None)
-          (status:statusbar-set-message!
-           (.ms-status st)
-           (str:concat "Unknown symbol: \\" name)))))))
+          (user-error! st (str:concat "Unknown symbol: \\" name)))))))
 
   (declare %has-insert-target? (MineState -> Boolean))
   (define (%has-insert-target? st)
@@ -3946,8 +3955,7 @@ wrap is on, row is resolved through screen-row-to-line-seg."
 Enter or Space inserts the matching Unicode character at the cursor."
     (cond
       ((not (%has-insert-target? st))
-       (status:statusbar-set-message! (.ms-status st)
-                                      "Open a file or REPL first"))
+       (user-error! st "Open a file or REPL first"))
       (True
        (mini:minibuffer-prompt-symbol-picker! (.ms-minibuffer st)
                                               "Symbol \\"
@@ -3978,7 +3986,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
   (define (close-current-file! st term)
     (match (mgr:bufmgr-current (.ms-bufmgr st))
       ((None)
-       (status:statusbar-set-message! (.ms-status st) "No file open"))
+       (user-error! st "No file open"))
       ((Some buf)
        (cond
          ((buf:buffer-dirty? buf)
@@ -4011,8 +4019,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
        (clamp-cursor-to-buffer! st buf)
        (values))
       ((None)
-       (status:statusbar-set-message! (.ms-status st)
-                                      (<> "Buffer not found: " fpath)))))
+       (user-error! st (<> "Buffer not found: " fpath)))))
 
   (declare %close-open-file! (MineState * term:Terminal -> Void))
   (define (%close-open-file! st term)
@@ -4044,9 +4051,9 @@ Enter or Space inserts the matching Unicode character at the cursor."
          ((Some buf)
           (match (mgr:bufmgr-save! (.ms-bufmgr st) (buf:buffer-id buf))
             ((Ok _) (status:statusbar-set-message! (.ms-status st) "Saved"))
-            ((Err msg) (status:statusbar-set-message! (.ms-status st) msg))))
+            ((Err msg) (user-error! st msg))))
          ((None)
-          (status:statusbar-set-message! (.ms-status st) "No buffer to save"))))))
+          (user-error! st "No buffer to save"))))))
 
   (declare %refresh-open-file! (MineState * term:Terminal -> Void))
   (define (%refresh-open-file! st term)
@@ -4065,7 +4072,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
             (True
              (%do-refresh-file! st fpath))))
          ((None)
-          (status:statusbar-set-message! (.ms-status st) "No buffer to refresh"))))))
+          (user-error! st "No buffer to refresh"))))))
 
   (declare %do-refresh-file! (MineState * String -> Void))
   (define (%do-refresh-file! st fpath)
@@ -4082,7 +4089,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
           (status:statusbar-set-message! (.ms-status st) "Refreshed"))
          ((Err msg)
           (tree:tree-pane-remove-open-file! (.ms-tree st) fpath)
-          (status:statusbar-set-message! (.ms-status st) msg))))
+          (user-error! st msg))))
       ((None) (values))))
 
   (declare %tree-preview-selected! (MineState -> Void))
@@ -4119,7 +4126,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
          (%show-editor! st)
          (status:statusbar-set-message! (.ms-status st) (<> "Opened " display-name)))
         ((Err msg)
-         (status:statusbar-set-message! (.ms-status st) msg)))))
+         (user-error! st msg)))))
 
 ;;; Open project from path
 
@@ -4130,7 +4137,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
       ((Tuple code payload)
        (cond
          ((== code 2)
-          (status:statusbar-set-message! (.ms-status st) payload))
+          (user-error! st payload))
          (True
           (open-project-at-path! st payload))))))
 
@@ -4138,8 +4145,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
     "Open a project .asd file at PATH."
     (cond
       ((not (%is-asd-file path))
-       (status:statusbar-set-message! (.ms-status st)
-                                      (<> "Not an .asd file: " path)))
+       (user-error! st (<> "Not an .asd file: " path)))
       (True
        (match (parser:parse-asd-to-tree path)
          ((Some root-node)
@@ -4165,13 +4171,12 @@ Enter or Space inserts the matching Unicode character at the cursor."
                                       (cl:file-namestring (cl:pathname fpath))))
                 (tree:tree-pane-add-open-file! (.ms-tree st) display-name fpath))
                ((Err msg)
-                (status:statusbar-set-message! (.ms-status st) msg))))
+                (user-error! st msg))))
             ((None) (values)))
           (status:statusbar-set-message! (.ms-status st)
                                          (<> "Opened project: " sys-name)))
          ((None)
-          (status:statusbar-set-message! (.ms-status st)
-                                         (<> "Failed to parse: " path)))))))
+          (user-error! st (<> "Failed to parse: " path)))))))
 
 ;;; Refresh project
 
@@ -4180,15 +4185,14 @@ Enter or Space inserts the matching Unicode character at the cursor."
     "Re-load the project .asd and re-populate the tree."
     (match (cell:read (.ms-project-asd-path st))
       ((None)
-       (status:statusbar-set-message! (.ms-status st) "No project open"))
+       (user-error! st "No project open"))
       ((Some asd-path)
        (match (parser:parse-asd-to-tree asd-path)
          ((Some root-node)
           (tree:tree-pane-set-root! (.ms-tree st) root-node)
           (status:statusbar-set-message! (.ms-status st) "Project refreshed"))
          ((None)
-          (status:statusbar-set-message! (.ms-status st)
-                                         (<> "Failed to parse: " asd-path)))))))
+          (user-error! st (<> "Failed to parse: " asd-path)))))))
 
 ;;; Menu action dispatch
 
@@ -4284,7 +4288,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
          (match (dialogs:new-project-dialog term (.ms-config st))
            ((Some (Tuple name (Tuple location is-coalton)))
             (if (== (str:length name) 0)
-                (status:statusbar-set-message! (.ms-status st) "Project name cannot be empty")
+                (user-error! st "Project name cannot be empty")
                 (progn
                   (let len = (str:length location))
                   (let loc = (if (and (> len 0)
@@ -4325,7 +4329,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
        (prompt-open-file! st))
       ((menubar:ActionSave) (save-current-file! st))
       ((menubar:ActionSaveAll)
-       (status:statusbar-set-message! (.ms-status st) "Save All: not yet implemented"))
+       (user-error! st "Save All is not yet implemented"))
       ((menubar:ActionCloseFile)
        (close-current-file! st term))
       ((menubar:ActionFind) (start-find! st))
@@ -4348,16 +4352,16 @@ Enter or Space inserts the matching Unicode character at the cursor."
          ((lifecycle:runtime-interrupt! (.ms-runtime st))
           (status:statusbar-set-message! (.ms-status st) "Interrupt sent"))
          (True
-          (status:statusbar-set-message! (.ms-status st) "No runtime to interrupt"))))
+          (user-error! st "No runtime to interrupt"))))
       ((menubar:ActionClearRepl) (repl:repl-pane-clear-output! (.ms-repl st)))
       ((menubar:ActionRestartRepl)
        (cond
          ((restart-runtime! st)
           (status:statusbar-set-message! (.ms-status st) "Runtime restarted"))
          (True
-          (status:statusbar-set-message! (.ms-status st) "Failed to restart runtime"))))
+          (user-error! st "Failed to restart runtime"))))
       ((menubar:ActionGotoLine)
-       (status:statusbar-set-message! (.ms-status st) "Go to Line: not yet implemented"))
+       (user-error! st "Go to Line is not yet implemented"))
       ((menubar:ActionClearCache)
        (render-app st term)
        (when (dialogs:confirm-dialog term "Empty the FASL cache?" "Empty" "Cancel"
@@ -4406,7 +4410,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
       ((menubar:ActionAddDependency) (values))
       ((menubar:ActionEditProject)
        (match (cell:read (.ms-project-asd-path st))
-         ((None) (status:statusbar-set-message! (.ms-status st) "No project open"))
+         ((None) (user-error! st "No project open"))
          ((Some asd-path)
           (match (mgr:bufmgr-open-file! (.ms-bufmgr st) asd-path)
             ((Ok buf)
@@ -4418,7 +4422,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
              (tree:tree-pane-add-open-file! (.ms-tree st) display-name asd-path)
              (%show-editor! st))
             ((Err msg)
-             (status:statusbar-set-message! (.ms-status st) msg))))))))
+             (user-error! st msg))))))))
 
 ;;; Top-level event dispatch
 
@@ -4790,6 +4794,7 @@ Render-app is NOT called here; the main loop handles rendering."
     (lifecycle:runtime-set-heap-size! rm (cfgt:.config-repl-heap-size config))
     (let tp = (tree:tree-pane-new))
     (let st = (MineState (menubar:menubar-new) (status:statusbar-new)
+                         (cell:new None)
                          ep bm cs rp tp fm rm
                          (cell:new 0) (cell:new (MineLayout TreeHidden CenterEditor))
                          (cell:new (not (cfgt:.config-auto-hide-tree-pane config)))
@@ -4858,10 +4863,10 @@ Render-app is NOT called here; the main loop handles rendering."
                                          (cl:file-namestring (cl:pathname fpath))))
                    (tree:tree-pane-add-open-file! tp display-name fpath))
                   ((Err msg)
-                   (status:statusbar-set-message! (.ms-status st) msg))))
+                   (user-error! st msg))))
                ((None) (values))))
             ((None)
-             (status:statusbar-set-message! (.ms-status st) "Failed to parse .asd file"))))
+             (user-error! st "Failed to parse .asd file"))))
          ;; Regular file: open directly in editor (creates if doesn't exist)
          (True
           (let abs-path = (lisp (-> String) (path)
@@ -4878,7 +4883,7 @@ Render-app is NOT called here; the main loop handles rendering."
              (%show-tree! st)
              (focus:focus-switch! fm focus:FocusEditor))
             ((Err msg)
-             (status:statusbar-set-message! (.ms-status st) msg))))))
+             (user-error! st msg))))))
       ((Nil) (values)))
     ;; Set initial menu enabled state based on whether a project is open
     (%update-menu-enabled! st)
@@ -4908,9 +4913,11 @@ Render-app is NOT called here; the main loop handles rendering."
        (process-protocol-messages! st)
        ;; Update menu enabled state before rendering
        (%update-menu-enabled! st)
-       ;; Render and flush
-       (render-app st term)
-       (term:terminal-flush term)
+       ;; Render, or show an acknowledged modal error when one was queued by
+       ;; the user action just processed.
+       (unless (show-pending-error! st term)
+         (render-app st term)
+         (term:terminal-flush term))
        ;; Loop
        (main-loop st term handler))))
 
@@ -6360,8 +6367,9 @@ This avoids stealing messages from the foreground/background protocol readers."
       (%status-msg st "No runtime connection"))))
 
 (cl:defun %status-msg (st text)
-  (mine/pane/status::statusbar-set-message!
-   (mine/app/state:get-status-bar st) text))
+  (coalton/cell:write!
+   (mine/app/state:get-pending-error-cell st)
+   (coalton:Some text)))
 
 (cl:defun %coalton-optional-value-or-nil (value)
   "Return NIL for Coalton None, otherwise return the wrapped value."
