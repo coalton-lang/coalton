@@ -106,7 +106,9 @@
                   check-quick-result-popup-uses-terminal-height
                   check-coalton-none-is-not-current-buffer-at-cl-boundary
                   check-beam-system-emits-diagnostics-before-return
-                  check-beam-system-preserves-coalton-error-spans))
+                  check-beam-system-preserves-coalton-error-spans
+                  check-create-project-creates-new-project
+                  check-create-project-refuses-existing-directory))
     (format t "~&~A~%" test)
     (funcall test))
   t)

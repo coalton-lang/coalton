@@ -2073,6 +2073,56 @@ Uses the preceding (in-package ...) form to determine the compilation package."
 
   (declare open-project-selection! (MineState * String -> Void))
   (declare open-project-at-path! (MineState * String -> Void))
+  (declare project-destination-exists? (String * String -> Boolean))
+  (define (project-destination-exists? location name)
+    "True if creating project NAME in LOCATION would collide with an existing file or directory."
+    (lisp (-> Boolean) (location name)
+      (cl:let* ((base (uiop:ensure-directory-pathname (cl:pathname location)))
+                (file-path (cl:merge-pathnames name base))
+                (dir-path (uiop:ensure-directory-pathname file-path)))
+        (cl:not (cl:null (cl:or (uiop:directory-exists-p dir-path)
+                                (uiop:file-exists-p file-path)))))))
+
+  (declare create-project-files! (String * String * Boolean -> (Result String String)))
+  (define (create-project-files! name location is-coalton)
+    "Create a new project directory and skeleton files. Returns the .asd path."
+    (let project-dir = (<> location (<> name "/")))
+    (let src-dir = (<> project-dir "src/"))
+    (let asd-path = (<> project-dir (<> name ".asd")))
+    (let ext = (if is-coalton ".ct" ".lisp"))
+    (let main-file = (<> src-dir (<> "main" ext)))
+    (if (project-destination-exists? location name)
+        (Err (<> "Project already exists: " project-dir))
+        (progn
+          ;; Create directories and write main file (one-package-per-file)
+          (lisp (-> Void) (src-dir main-file name is-coalton)
+            (cl:ensure-directories-exist (cl:pathname src-dir))
+            (cl:with-open-file (out main-file :direction :output
+                                              :if-exists :error
+                                              :if-does-not-exist :create)
+              (cl:if (cl:eq is-coalton coalton:True)
+                     (cl:progn
+                       (cl:format out "(cl:defpackage #:~A~%" name)
+                       (cl:format out "  (:use #:coalton #:coalton-prelude))~%~%")
+                       (cl:format out "(cl:in-package #:~A)~%~%" name)
+                       (cl:format out "(coalton-toplevel~%~%")
+                       (cl:format out "  (declare main (Void -> Void))~%")
+                       (cl:format out "  (define (main)~%")
+                       (cl:format out "    (print \"Hello!\")))~%"))
+                     (cl:progn
+                       (cl:format out "(defpackage #:~A~%" name)
+                       (cl:format out "  (:use #:cl))~%~%")
+                       (cl:format out "(in-package #:~A)~%~%" name)
+                       (cl:format out "(defun main ()~%")
+                       (cl:format out "  (write-line \"Hello!\"))~%"))))
+            (cl:values))
+          ;; Build SystemDef and write .asd
+          (let comp-type = (if is-coalton model:CTCtFile model:CTFile))
+          (let main-comp = (model:Component "main" comp-type Nil))
+          (let sysdef = (model:SystemDef name Nil (make-list main-comp) "" "src/"))
+          (writer:write-asd-file sysdef asd-path)
+          (Ok asd-path))))
+
   (declare create-new-project! (MineState * String * String * Boolean -> Void))
   (define (create-new-project! st name location is-coalton)
     "Create a new project directory, .asd, and skeleton files, then open it."
@@ -2081,47 +2131,24 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     (let asd-path = (<> project-dir (<> name ".asd")))
     (let ext = (if is-coalton ".ct" ".lisp"))
     (let main-file = (<> src-dir (<> "main" ext)))
-    ;; Create directories and write main file (one-package-per-file)
-    (lisp (-> Void) (src-dir main-file name is-coalton)
-      (cl:ensure-directories-exist (cl:pathname src-dir))
-      (cl:with-open-file (out main-file :direction :output
-                                        :if-exists :supersede
-                                        :if-does-not-exist :create)
-        (cl:if (cl:eq is-coalton coalton:True)
-               (cl:progn
-                 (cl:format out "(cl:defpackage #:~A~%" name)
-                 (cl:format out "  (:use #:coalton #:coalton-prelude))~%~%")
-                 (cl:format out "(cl:in-package #:~A)~%~%" name)
-                 (cl:format out "(coalton-toplevel~%~%")
-                 (cl:format out "  (declare main (Void -> Void))~%")
-                 (cl:format out "  (define (main)~%")
-                 (cl:format out "    (print \"Hello!\")))~%"))
-               (cl:progn
-                 (cl:format out "(defpackage #:~A~%" name)
-                 (cl:format out "  (:use #:cl))~%~%")
-                 (cl:format out "(in-package #:~A)~%~%" name)
-                 (cl:format out "(defun main ()~%")
-                 (cl:format out "  (write-line \"Hello!\"))~%"))))
-      (cl:values))
-    ;; Build SystemDef and write .asd
-    (let comp-type = (if is-coalton model:CTCtFile model:CTFile))
-    (let main-comp = (model:Component "main" comp-type Nil))
-    (let sysdef = (model:SystemDef name Nil (make-list main-comp) "" "src/"))
-    (writer:write-asd-file sysdef asd-path)
-    ;; Open the new project
-    (open-project-at-path! st asd-path)
-    ;; Open main file in editor
-    (match (mgr:bufmgr-open-file! (.ms-bufmgr st) main-file)
-      ((Ok buf)
-       (mgr:bufmgr-switch! (.ms-bufmgr st) (buf:buffer-id buf))
-       (editor:editor-pane-set-buffer! (.ms-editor st) (buf:buffer-id buf))
-       (cursor:cursor-move-to-position! (.ms-cursor st) 0)
-       (let display-name = (lisp (-> String) (main-file)
-                             (cl:file-namestring (cl:pathname main-file))))
-       (tree:tree-pane-add-open-file! (.ms-tree st) display-name main-file))
-      ((Err _msg) (values)))
-    (status:statusbar-set-message! (.ms-status st)
-                                   (<> "Created project: " name)))
+    (match (create-project-files! name location is-coalton)
+      ((Ok _)
+       ;; Open the new project
+       (open-project-at-path! st asd-path)
+       ;; Open main file in editor
+       (match (mgr:bufmgr-open-file! (.ms-bufmgr st) main-file)
+         ((Ok buf)
+          (mgr:bufmgr-switch! (.ms-bufmgr st) (buf:buffer-id buf))
+          (editor:editor-pane-set-buffer! (.ms-editor st) (buf:buffer-id buf))
+          (cursor:cursor-move-to-position! (.ms-cursor st) 0)
+          (let display-name = (lisp (-> String) (main-file)
+                                (cl:file-namestring (cl:pathname main-file))))
+          (tree:tree-pane-add-open-file! (.ms-tree st) display-name main-file))
+         ((Err _msg) (values)))
+       (status:statusbar-set-message! (.ms-status st)
+                                      (<> "Created project: " name)))
+      ((Err msg)
+       (status:statusbar-set-message! (.ms-status st) msg))))
 
 ;;; Build progress dialog
 
