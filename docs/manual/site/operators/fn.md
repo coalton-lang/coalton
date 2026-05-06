@@ -13,6 +13,9 @@ weight: 140
 (fn (⟨arg⟩ ...) ⟨body⟩)
 ```
 
+Coalton also has short `fn` syntax for compact lambdas:
+[`ƒ`](/manual/operators/short-lambda/).
+
 ## Semantics
 
 - `fn` is the standard way to write lambdas in Coalton.

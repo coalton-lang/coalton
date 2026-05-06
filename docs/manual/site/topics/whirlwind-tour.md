@@ -208,7 +208,10 @@ Functions are defined similarly to variables. Unlike Common Lisp, Coalton functi
   (define x (addTwo 3))
 
   ;; Anonymous functions can be defined with fn
-  (define z (map (fn (x) (+ 2 x)) (make-list 1 2 3 4))))
+  (define z (map (fn (x) (+ 2 x)) (make-list 1 2 3 4)))
+
+  ;; ƒ is short fn syntax
+  (define z-short (map ƒx.(+ 2 x) (make-list 1 2 3 4))))
 ```
 
 ### Top-Level Type Declarations
@@ -2042,7 +2045,8 @@ Specialization can be listed in the repl with `print-specializations`.
 * Coalton uses `True` (not `t`).  As such, `t` may be used as an ordinary variable name.
 * For testing equality, Coalton uses double-equals, `==`.
 * Lists in Coalton must be homogeneous.
-* To denote anonymous functions, Coalton uses `fn` (*not* `lambda`).
+* To denote anonymous functions, Coalton uses `fn` (*not* `lambda`), with
+  `ƒ` available as short `fn` syntax in Coalton source.
 * Numerical operators like `+` only take 2 arguments.
 * Negation is done with `negate`. The operator `-` is a fixed-arity subtraction operator.
 
