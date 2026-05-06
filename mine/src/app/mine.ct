@@ -4802,12 +4802,7 @@ Render-app is NOT called here; the main loop handles rendering."
   "Spawn mine --run-lisp-script to execute a build script.
 Returns (Some native-box) holding (process . log-stream), or None on error."
   (cl:handler-case
-      (cl:let* ((argv0 (cl:or (sb-ext:posix-getenv "MINE_LAUNCHER")
-                              (cl:first sb-ext:*posix-argv*)
-                              "mine"))
-                (abspath (cl:handler-case
-                             (cl:namestring (cl:truename (cl:pathname argv0)))
-                           (cl:error () argv0)))
+      (cl:let* ((abspath (mine/bindings/process:reexec-program))
                 (args (cl:if (cl:and (cl:stringp heap-size)
                                      (cl:plusp (cl:length heap-size)))
                              (cl:list "--dynamic-space-size" heap-size

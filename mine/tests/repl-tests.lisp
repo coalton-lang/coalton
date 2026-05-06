@@ -120,6 +120,38 @@
                          "(+ 1 2)"
                          0)))
 
+(defun check-reexec-program-keeps-bare-command-with-cwd-collision ()
+  (let* ((root (merge-pathnames (format nil "mine-reexec-test-~A/" (gensym))
+                                (uiop:temporary-directory)))
+         (mine-dir (merge-pathnames "mine/" root)))
+    (unwind-protect
+         (progn
+           (ensure-directories-exist mine-dir)
+           (let ((*default-pathname-defaults* root))
+             (%check (string= "mine" (proc::%resolve-reexec-program "mine"))
+                     "Expected bare command name to remain PATH-searchable")))
+      (ignore-errors (uiop:delete-directory-tree root :validate t)))))
+
+(defun check-reexec-program-canonicalizes-paths ()
+  (let* ((root (merge-pathnames (format nil "mine-reexec-test-~A/" (gensym))
+                                (uiop:temporary-directory)))
+         (bin-dir (merge-pathnames "bin/" root))
+         (launcher (merge-pathnames "mine" bin-dir)))
+    (unwind-protect
+         (progn
+           (ensure-directories-exist launcher)
+           (with-open-file (stream launcher
+                                   :direction :output
+                                   :if-exists :supersede
+                                   :if-does-not-exist :create)
+             (write-string "" stream))
+           (let ((*default-pathname-defaults* root)
+                 (expected (namestring (truename launcher))))
+             (%check (string= expected (proc::%resolve-reexec-program "bin/mine"))
+                     "Expected path argv0 to canonicalize to ~S"
+                     expected)))
+      (ignore-errors (uiop:delete-directory-tree root :validate t)))))
+
 (defun check-repl-structural-editing-pairs-delimiters ()
   (let ((rp (repl:repl-pane-new)))
     (%check (eq wt:Consumed

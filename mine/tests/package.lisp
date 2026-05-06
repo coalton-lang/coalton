@@ -12,6 +12,7 @@
    (#:undo #:mine/edit/undo)
    (#:paredit #:mine/syntax/paredit)
    (#:repl #:mine/pane/repl)
+   (#:proc #:mine/bindings/process)
    (#:server #:mine/protocol/server)
    (#:source #:coalton-impl/source)
    (#:wt #:mine/widget/types))
@@ -85,6 +86,8 @@
                   check-editor-paste-clamps-stale-cursor-to-buffer-end
                   check-runtime-coalton-stdlib-packages-classification
                   check-runtime-coalton-auto-wrap-classification
+                  check-reexec-program-keeps-bare-command-with-cwd-collision
+                  check-reexec-program-canonicalizes-paths
                   check-repl-structural-editing-pairs-delimiters
                   check-repl-structural-close-paren-in-string-inserts
                   check-repl-structural-close-paren-collapses-empty-form
