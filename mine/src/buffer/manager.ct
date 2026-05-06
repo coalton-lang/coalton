@@ -20,6 +20,7 @@
    #:bufmgr-find-by-document-key
    #:bufmgr-current
    #:bufmgr-switch!
+   #:bufmgr-any-dirty?
    #:bufmgr-path-dirty?))
 
 (in-package #:mine/buffer/manager)
@@ -206,6 +207,19 @@ Returns True if closed successfully."
     "Set BID as the current buffer."
     (cell:write! (.current mgr) (Some bid))
     (values))
+
+  (declare any-dirty-in (iter:Iterator (Tuple UFix buf:Buffer) -> Boolean))
+  (define (any-dirty-in entries)
+    (match (iter:next! entries)
+      ((Some (Tuple _ b))
+       (or (buf:buffer-dirty? b)
+           (any-dirty-in entries)))
+      ((None) False)))
+
+  (declare bufmgr-any-dirty? (BufferManager -> Boolean))
+  (define (bufmgr-any-dirty? mgr)
+    "Return True if any open buffer is dirty."
+    (any-dirty-in (hm:entries (cell:read (.buffers mgr)))))
 
   (declare check-buf-dirty (buf:Buffer * String -> Boolean))
   (define (check-buf-dirty b fpath)

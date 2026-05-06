@@ -109,7 +109,8 @@
                   check-beam-system-preserves-coalton-error-spans
                   check-create-project-creates-new-project
                   check-create-project-refuses-existing-directory
-                  check-create-project-rejects-path-like-name))
+                  check-create-project-rejects-path-like-name
+                  check-buffer-manager-any-dirty-sees-non-current-buffer))
     (format t "~&~A~%" test)
     (funcall test))
   t)

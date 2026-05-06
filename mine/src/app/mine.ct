@@ -471,6 +471,7 @@
        (status:statusbar-update! (.ms-status st) mode-str fname is-dirty
                                  (+ cur-line 1) (+ cur-col 1)
                                  (cell:read (.ms-repl-package st))
+                                 (cell:read (.ms-project-system st))
                                  sym-info)))
     (status:statusbar-render (.ms-status st) scr status-rect)
     ;; Position the hardware cursor (only visible in editor/REPL)
@@ -2339,9 +2340,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
   (declare has-dirty-buffers? (mgr:BufferManager -> Boolean))
   (define (has-dirty-buffers? bm)
     "Return True if any open buffer is dirty."
-    (match (mgr:bufmgr-current bm)
-      ((Some b) (buf:buffer-dirty? b))
-      ((None) False)))
+    (mgr:bufmgr-any-dirty? bm))
 
   (declare try-quit! (MineState * term:Terminal -> Void))
   (define (try-quit! st term)
@@ -4246,6 +4245,25 @@ Enter or Space inserts the matching Unicode character at the cursor."
           ((menubar:ActionInsertSymbol) has-insert-target)
           (_ True)))))
 
+  (declare new-project-switch-confirmed? (MineState * term:Terminal -> Boolean))
+  (define (new-project-switch-confirmed? st term)
+    "Confirm switching away from the current project before creating a new one."
+    (match (cell:read (.ms-project-system st))
+      ((None) True)
+      ((Some sys-name)
+       (render-app st term)
+       (let help-lines =
+         (if (has-dirty-buffers? (.ms-bufmgr st))
+             (make-list (<> "Current Project: " sys-name)
+                        "Unsaved buffers will remain open.")
+             (make-list (<> "Current Project: " sys-name))))
+       (dialogs:confirm-dialog term
+                               "Create new project and switch?"
+                               "Create"
+                               "Cancel"
+                               help-lines
+                               (fn (t) (render-app st t))))))
+
   (declare dispatch-menu-action! (MineState * term:Terminal * menubar:MenuAction -> Void))
   (define (dispatch-menu-action! st term action)
     "Execute a menu action."
@@ -4260,19 +4278,20 @@ Enter or Space inserts the matching Unicode character at the cursor."
       ((menubar:ActionCredits) (dialogs:show-credits! term))
       ((menubar:ActionQuit) (try-quit! st term))
       ((menubar:ActionNewProject)
-       (render-app st term)
-       (term:terminal-flush term)
-       (match (dialogs:new-project-dialog term (.ms-config st))
-         ((Some (Tuple name (Tuple location is-coalton)))
-          (if (== (str:length name) 0)
-              (status:statusbar-set-message! (.ms-status st) "Project name cannot be empty")
-              (progn
-                (let len = (str:length location))
-                (let loc = (if (and (> len 0)
-                                    (== (str:ref-unchecked location (- len 1)) #\/))
-                               location (<> location "/")))
-                (create-new-project! st name loc is-coalton))))
-         ((None) (values))))
+       (when (new-project-switch-confirmed? st term)
+         (render-app st term)
+         (term:terminal-flush term)
+         (match (dialogs:new-project-dialog term (.ms-config st))
+           ((Some (Tuple name (Tuple location is-coalton)))
+            (if (== (str:length name) 0)
+                (status:statusbar-set-message! (.ms-status st) "Project name cannot be empty")
+                (progn
+                  (let len = (str:length location))
+                  (let loc = (if (and (> len 0)
+                                      (== (str:ref-unchecked location (- len 1)) #\/))
+                                 location (<> location "/")))
+                  (create-new-project! st name loc is-coalton))))
+           ((None) (values)))))
       ((menubar:ActionOpenProject)
        (let default-dir = (dialogs:new-project-default-location (.ms-config st)))
        (mini:minibuffer-prompt-with-completion! (.ms-minibuffer st)

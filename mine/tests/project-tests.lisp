@@ -83,3 +83,38 @@
                      name
                      root))
         (ignore-errors (uiop:delete-directory-tree root :validate t))))))
+
+(defun check-buffer-manager-any-dirty-sees-non-current-buffer ()
+  (let* ((root (%mine-project-test-root))
+         (path-a (merge-pathnames "a.lisp" root))
+         (path-b (merge-pathnames "b.lisp" root)))
+    (unwind-protect
+         (progn
+           (ensure-directories-exist path-a)
+           (%write-utf8-file path-a "(defun a () nil)")
+           (%write-utf8-file path-b "(defun b () nil)")
+           (let* ((bm (mine/buffer/manager:bufmgr-new))
+                  (result-a (mine/buffer/manager:bufmgr-open-file!
+                             bm
+                             (namestring path-a)))
+                  (result-b (mine/buffer/manager:bufmgr-open-file!
+                             bm
+                             (namestring path-b))))
+             (%check (coalton/result:ok? result-a)
+                     "Expected first buffer to open, got ~S"
+                     result-a)
+             (%check (coalton/result:ok? result-b)
+                     "Expected second buffer to open, got ~S"
+                     result-b)
+             (let* ((fallback (mine/buffer/buffer:buffer-new
+                               (mine/buffer/buffer:BufferId 999999)
+                               "fallback"))
+                    (buf-a (coalton/result:ok-or-def fallback result-a))
+                    (buf-b (coalton/result:ok-or-def fallback result-b)))
+               (%check (not (mine/buffer/manager:bufmgr-any-dirty? bm))
+                       "Expected clean buffers to report no dirty state")
+               (mine/buffer/manager:bufmgr-switch! bm (mine/buffer/buffer:buffer-id buf-b))
+               (mine/buffer/buffer:buffer-mark-dirty! buf-a)
+               (%check (mine/buffer/manager:bufmgr-any-dirty? bm)
+                       "Expected a dirty non-current buffer to be detected"))))
+      (ignore-errors (uiop:delete-directory-tree root :validate t)))))
