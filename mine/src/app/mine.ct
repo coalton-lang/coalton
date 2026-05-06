@@ -210,12 +210,14 @@
   (declare %focus-repl! (MineState -> Void))
   (define (%focus-repl! st)
     (%set-center-layout! st (%center-focus-repl (%center-layout st)))
+    (cursor:cursor-clear-selection! (.ms-cursor st))
     (focus:focus-switch! (.ms-focus st) focus:FocusRepl)
     (values))
 
   (declare %show-editor! (MineState -> Void))
   (define (%show-editor! st)
     (%set-center-layout! st (%center-focus-editor (%center-layout st)))
+    (repl:repl-pane-clear-selection! (.ms-repl st))
     (focus:focus-switch! (.ms-focus st) focus:FocusEditor)
     (values))
 

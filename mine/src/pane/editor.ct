@@ -854,7 +854,6 @@ segments) and highlights the current visual row."
              (True (search-hit-kind-in matches needle-len current abs-pos (+ idx 1)))))
           ((None) 0))))
 
-  (define selection-bg   color:selection-bg)
   (define search-bg      color:search-match-bg)
   (define search-current-bg color:search-current-bg)
 
@@ -955,7 +954,7 @@ segments) and highlights the current visual row."
                                 vcol-map scroll-vcol vis-vcol-end
                                 line-buf-offset sel-start sel-end tab-w)
     "Draw characters TEXT[CHAR-START..CHAR-END) with tab expansion."
-    (let sel-style = (color:Style (color:.style-fg style) selection-bg (color:.style-attr style)))
+    (let sel-style = color:user-selection-style)
     (let search-style = (color:Style color:black search-bg color:AttrNone))
     (let search-cur-style = (color:Style color:black search-current-bg color:AttrBold))
     (let vm-len = (vec:length vcol-map))
