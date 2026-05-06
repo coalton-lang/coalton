@@ -882,10 +882,11 @@ Binds IO streams so interactive reads (y-or-n-p, read, etc.) work via the TUI."
                  ;; .ct files: bind the Coalton readtable (as coalton-asdf does)
                  ;; and load source directly
                  (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton)))
-                   (load path)))
+                   (load path :external-format (coalton-impl/source:source-external-format))))
                 (t
                  ;; .lisp files: compile then optionally load the FASL
-                 (let ((output-file (compile-file path)))
+                 (let ((output-file (compile-file path :external-format
+                                                  (coalton-impl/source:source-external-format))))
                    (when (and load-p output-file)
                      (load output-file)))))))
           ;; Send any captured output

@@ -24,6 +24,61 @@
                    (cdr (nth 71 chars)))
             "Second kanji is at char offset, not byte offset")))))
 
+(deftest test-source-stream-preserves-crlf-characters ()
+  (flet ((stream-contents (stream)
+           (loop :for char := (read-char stream nil nil)
+                 :while char
+                 :collect (cons char (file-position stream)))))
+    (uiop:with-temporary-file (:stream out
+                               :pathname path
+                               :type "coal"
+                               :direction :output
+                               :element-type '(unsigned-byte 8))
+      (write-sequence
+       (make-array 4
+         :element-type '(unsigned-byte 8)
+         :initial-contents '(97 13 10 98))
+       out)
+      :close-stream
+      (let* ((source (source:make-source-file path))
+             (char-stream (source:source-stream source))
+             (chars (stream-contents char-stream)))
+        (unwind-protect
+             (progn
+               (is (equal (list (cons #\a 1)
+                                (cons #\Return 2)
+                                (cons #\Newline 3)
+                                (cons #\b 4))
+                          chars)
+                   "Source streams should preserve CRLF as raw CR then LF")
+               (is (equal '(0 3)
+                          (source::find-line-offsets char-stream))
+                   "Line offsets should treat only LF as a line break"))
+          (close char-stream))))))
+
+(deftest test-source-line-display-omits-only-crlf-return ()
+  (uiop:with-temporary-file (:stream out
+                             :pathname path
+                             :type "coal"
+                             :direction :output
+                             :element-type '(unsigned-byte 8))
+    (write-sequence
+     (make-array 6
+       :element-type '(unsigned-byte 8)
+       :initial-contents '(97 13 10 98 13 99))
+     out)
+    :close-stream
+    (let* ((source (source:make-source-file path))
+           (char-stream (source:source-stream source)))
+      (unwind-protect
+           (progn
+             (is (string= "a" (source::read-source-line char-stream))
+                 "Displayed CRLF lines should omit the CR terminator")
+             (is (string= (concatenate 'string "b" (string #\Return) "c")
+                          (source::read-source-line char-stream))
+                 "Displayed lines should preserve bare CR characters"))
+        (close char-stream)))))
+
 (deftest test-location ()
   (let* ((source (source:make-source-string "1234567890"))
          (location-a (source:make-location source '(0 . 3)))

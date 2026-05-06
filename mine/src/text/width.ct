@@ -1,10 +1,18 @@
 (cl:defpackage #:mine/text/width
   (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:char #:coalton/char)
+   (#:math #:coalton/math)
+   (#:str #:coalton/string))
   (:export
    #:char-cell-width
    #:string-cell-width
    #:char-cell-width-cl
    #:string-cell-width-cl
+   #:editor-char-cell-width
+   #:editor-control-char-representation
+   #:editor-char-cell-width-cl
+   #:editor-control-char-representation-cl
    #:string-chars-fitting-cl))
 
 (in-package #:mine/text/width)
@@ -24,6 +32,11 @@
        (cl:or (cl:eq eaw :w) (cl:eq eaw :f)))
      2)
     (cl:t 1)))
+
+(cl:defun combining-char-p-cl (ch)
+  "True when CH is a combining character according to SBCL's Unicode table."
+  (cl:declare (cl:type cl:character ch))
+  (cl:plusp (sb-unicode:combining-class ch)))
 
 (cl:defun string-cell-width-cl (text)
   "Return the display width of TEXT in terminal cells."
@@ -45,14 +58,113 @@
 
 (coalton-toplevel
 
+  (declare codepoint-string (UFix -> String))
+  (define (codepoint-string cp)
+    "Return the one-character string for Unicode codepoint CP, or empty string."
+    (match (char:code-char cp)
+      ((Some ch) (into ch))
+      ((None) "")))
+
+  (declare combining-char? (Char -> Boolean))
+  (define (combining-char? ch)
+    "True when CH is a combining character according to the host Unicode table."
+    (lisp (-> Boolean) (ch)
+      (combining-char-p-cl ch)))
+
+  (declare hex-digit-char (UFix -> Char))
+  (define (hex-digit-char n)
+    "Return the uppercase hexadecimal digit for N modulo 16."
+    (match (char:code-char (if (< n 10)
+                               (+ #x30 n)
+                               (+ #x37 n)))
+      ((Some ch) ch)
+      ((None) #\0)))
+
+  (declare fixed-hex-loop (UFix * UFix * String -> String))
+  (define (fixed-hex-loop remaining value acc)
+    "Build REMAINING fixed-width hexadecimal digits from VALUE into ACC."
+    (if (== remaining 0)
+        acc
+        (fixed-hex-loop (- remaining 1)
+                        (math:div value 16)
+                        (str:concat (into (hex-digit-char (math:mod value 16)))
+                                    acc))))
+
+  (declare fixed-hex (UFix * UFix -> String))
+  (define (fixed-hex width value)
+    "Return VALUE as uppercase hexadecimal, padded or truncated to WIDTH digits."
+    (fixed-hex-loop width value ""))
+
+  (declare common-zero-width-format-codepoint? (UFix -> Boolean))
+  (define (common-zero-width-format-codepoint? code)
+    "True for format characters commonly responsible for invisible source text."
+    (or (== code #x200B)
+        (or (== code #x200C)
+            (or (== code #x200D)
+                (or (== code #x2060)
+                    (== code #xFEFF))))))
+
   (declare char-cell-width (Char -> UFix))
   (define (char-cell-width ch)
     "Return the display width of CH in terminal cells (0, 1, or 2)."
     (lisp (-> UFix) (ch)
       (char-cell-width-cl ch)))
 
+  (declare editor-control-char-representation-or-empty (Char -> String))
+  (define (editor-control-char-representation-or-empty ch)
+    "Return a visible editor marker for non-printing CH, or the empty string."
+    (let code = (char:char-code ch))
+    (cond
+      ;; Tabs keep their editor indentation behavior; Newline is not part of
+      ;; gap-line-text and is therefore not rendered as an inline marker.
+      ((or (== ch #\Tab) (== ch #\Newline)) "")
+      ((< code 32)
+       (codepoint-string (+ #x2400 code)))
+      ((== code 127)
+       (codepoint-string #x2421))
+      ((and (>= code 128) (< code 160))
+       (str:concat "\\x" (fixed-hex 2 code)))
+      ((common-zero-width-format-codepoint? code)
+       (str:concat "\\u" (fixed-hex 4 code)))
+      ((and (== (char-cell-width ch) 0)
+            (not (combining-char? ch)))
+       (if (<= code #xFFFF)
+           (str:concat "\\u" (fixed-hex 4 code))
+           (str:concat "\\U" (fixed-hex 8 code))))
+      (True "")))
+
+  (declare editor-control-char-representation (Char -> Optional String))
+  (define (editor-control-char-representation ch)
+    "Return a visible editor marker for non-printing CH, or None."
+    (let marker = (editor-control-char-representation-or-empty ch))
+    (if (== marker "")
+        None
+        (Some marker)))
+
+  (declare editor-char-cell-width (Char -> UFix))
+  (define (editor-char-cell-width ch)
+    "Return the editor width of CH, rendering non-printing markers visibly."
+    (let marker = (editor-control-char-representation-or-empty ch))
+    (if (== marker "")
+        (char-cell-width ch)
+        (str:length marker)))
+
   (declare string-cell-width (String -> UFix))
   (define (string-cell-width text)
     "Return the display width of TEXT in terminal cells."
     (lisp (-> UFix) (text)
-      (string-cell-width-cl text))))
+      (string-cell-width-cl text)))
+
+  )
+
+(cl:defun editor-control-char-representation-cl (ch)
+  "Return a visible editor representation for non-printing CH, or NIL."
+  (cl:declare (cl:type cl:character ch))
+  (cl:let ((marker (editor-control-char-representation-or-empty ch)))
+    (cl:unless (cl:zerop (cl:length marker))
+      marker)))
+
+(cl:defun editor-char-cell-width-cl (ch)
+  "Return the editor display width of CH, including visible control markers."
+  (cl:declare (cl:type cl:character ch))
+  (editor-char-cell-width ch))
