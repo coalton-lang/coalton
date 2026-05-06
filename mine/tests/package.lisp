@@ -79,9 +79,13 @@
                   check-crlf-editor-unit-cursor-motion
                   check-crlf-editor-unit-delete
                   check-crlf-structural-editor-unit-delete
+                  check-paredit-forward-join-preserves-newline-separators
+                  check-paredit-forward-join-newline-range-detects-formatting
                   check-clipboard-stream-read-preserves-crlf
                   check-indent-line-tab-hop-to-source
                   check-indent-line-preserves-source-position
+                  check-indent-line-start-follows-inserted-indentation
+                  check-indent-line-after-cursor-preserves-cursor
                   check-editor-paste-clamps-stale-cursor-to-buffer-end
                   check-runtime-coalton-stdlib-packages-classification
                   check-runtime-coalton-auto-wrap-classification

@@ -2400,33 +2400,37 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     (let current-indent-column = (%leading-indent-column line-text))
     (let line-start = (gap:gap-line-to-pos gb line))
     (let old-pos = (cursor:cursor-position cs))
-    (match (cursor:cursor-line-col cs gb)
-      ((Tuple _ cursor-col)
-       (let cursor-in-indent = (<= cursor-col current-indent-chars))
+    (let indent-end = (+ line-start current-indent-chars))
+    (let cursor-in-indent = (and (>= old-pos line-start) (<= old-pos indent-end)))
+    (let cursor-strictly-in-indent = (and (>= old-pos line-start) (< old-pos indent-end)))
+    (let cursor-after-indent = (> old-pos indent-end))
+    (cond
+      ((== target-indent current-indent-column)
+       (when cursor-strictly-in-indent
+         (cursor:cursor-move-to-position! cs indent-end)))
+      (True
+       (when (> current-indent-chars 0)
+         (let deleted =
+           (gap:gap-delete-range! gb line-start indent-end))
+         (buf:buffer-mark-dirty! buffer)
+         (undo:undo-record! tree
+                            (undo:OpDelete line-start deleted)
+                            old-pos line-start))
+       (when (> target-indent 0)
+         (let spaces = (%make-spaces target-indent))
+         (gap:gap-insert-string! gb line-start spaces)
+         (buf:buffer-mark-dirty! buffer)
+         (undo:undo-record! tree
+                            (undo:OpInsert line-start spaces)
+                            line-start (+ line-start target-indent)))
        (cond
-         ((== target-indent current-indent-column)
-          (when (< cursor-col current-indent-chars)
-            (cursor:cursor-move-to-position! cs (+ line-start current-indent-chars))))
-         (True
-          (when (> current-indent-chars 0)
-            (let deleted =
-              (gap:gap-delete-range! gb line-start (+ line-start current-indent-chars)))
-            (buf:buffer-mark-dirty! buffer)
-            (undo:undo-record! tree
-                               (undo:OpDelete line-start deleted)
-                               old-pos line-start))
-          (when (> target-indent 0)
-            (let spaces = (%make-spaces target-indent))
-            (gap:gap-insert-string! gb line-start spaces)
-            (buf:buffer-mark-dirty! buffer)
-            (undo:undo-record! tree
-                               (undo:OpInsert line-start spaces)
-                               line-start (+ line-start target-indent)))
+         (cursor-in-indent
+          (cursor:cursor-move-to-position! cs (+ line-start target-indent)))
+         (cursor-after-indent
           (cursor:cursor-move-to-position!
            cs
-           (if cursor-in-indent
-               (+ line-start target-indent)
-               (+ (- old-pos current-indent-chars) target-indent))))))))
+           (+ (- old-pos current-indent-chars) target-indent)))
+         (True (values))))))
 
   (declare reindent-line! (MineState * buf:Buffer * undo:UndoTree * cursor:CursorState -> Void))
   (define (reindent-line! st buffer tree cs)
@@ -2441,6 +2445,41 @@ Uses the preceding (in-package ...) form to determine the compilation package."
              ((None) (values))
              ((Some target-indent)
               (%set-line-indentation! buffer tree cs line target-indent))))))))
+
+  (declare %line-at-position (gap:GapBuffer * UFix -> UFix))
+  (define (%line-at-position gb pos)
+    (match (gap:gap-pos-to-line-col gb pos)
+      ((Tuple line _col) line)))
+
+  (declare %reindent-line-range! (MineState * buf:Buffer * undo:UndoTree * cursor:CursorState * UFix * UFix -> Void))
+  (define (%reindent-line-range! st buffer tree cs line end-line)
+    "Reindent lines LINE..END-LINE, clamped to the current buffer."
+    (let gb = (buf:buffer-gap buffer))
+    (let line-count = (gap:gap-line-count gb))
+    (when (and (<= line end-line) (< line line-count))
+      (match (%target-indent-for-line! st buffer line)
+        ((None) (values))
+        ((Some target-indent)
+         (%set-line-indentation! buffer tree cs line target-indent)))
+      (%reindent-line-range! st buffer tree cs (+ line 1) end-line)))
+
+  (declare paredit-forward-join-and-indent! (MineState * buf:Buffer -> Void))
+  (define (paredit-forward-join-and-indent! st buffer)
+    "Forward-join structurally; if a newline was preserved, reindent touched lines."
+    (let tree = (buf:buffer-undo buffer))
+    (let cs = (.ms-cursor st))
+    (let gb = (buf:buffer-gap buffer))
+    (match (paredit:paredit-forward-join-newline-range gb (cursor:cursor-position cs))
+      ((None)
+       (paredit:paredit-forward-join! buffer cs))
+      ((Some (Tuple range-start range-end))
+       (let start-line = (%line-at-position gb range-start))
+       (let end-line = (%line-at-position gb range-end))
+       (undo:with-undo-group! tree
+         (fn () (cursor:cursor-position cs))
+         (fn ()
+           (paredit:paredit-forward-join! buffer cs)
+           (%reindent-line-range! st buffer tree cs start-line end-line))))))
 
   (declare editor-newline! (MineState * buf:Buffer -> Void))
   (define (editor-newline! st buffer)
@@ -2500,7 +2539,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (cond
          ((== mod input:ModAlt)
           (%paredit-if-lisp st
-                            (fn (buffer) (paredit:paredit-forward-join! buffer (.ms-cursor st)))))
+                            (fn (buffer) (paredit-forward-join-and-indent! st buffer))))
          ((== mod input:ModAltShift)
           (%paredit-if-lisp st
                             (fn (buffer) (paredit:paredit-backward-leave! buffer (.ms-cursor st)))))
