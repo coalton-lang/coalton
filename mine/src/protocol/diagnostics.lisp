@@ -152,16 +152,22 @@
     (error :error)
     (t :note)))
 
-(defun %coalton-toplevel-prefix-p (text)
+(defun %string-prefix-equal-p (prefix text)
   (and (stringp text)
-       (or (and (>= (length text) 18)
-                (string-equal "(coalton-toplevel " text :end2 18))
-           (and (>= (length text) 17)
-                (string-equal "(coalton-toplevel" text :end2 17))
-           (and (>= (length text) 9)
-                (string-equal "(coalton " text :end2 9))
-           (and (>= (length text) 8)
-                (string-equal "(coalton" text :end2 8)))))
+       (>= (length text) (length prefix))
+       (string-equal prefix text :end2 (length prefix))))
+
+(defun %coalton-toplevel-prefix-p (text)
+  (some (lambda (prefix)
+          (%string-prefix-equal-p prefix text))
+        '("(coalton-toplevel "
+          "(coalton-toplevel"
+          "(coalton "
+          "(coalton"
+          "(coalton:coalton-toplevel "
+          "(coalton:coalton-toplevel"
+          "(coalton:coalton "
+          "(coalton:coalton")))
 
 (defun %source-prefix-at (file start)
   (handler-case

@@ -83,6 +83,8 @@
                   check-indent-line-tab-hop-to-source
                   check-indent-line-preserves-source-position
                   check-editor-paste-clamps-stale-cursor-to-buffer-end
+                  check-runtime-coalton-stdlib-packages-classification
+                  check-runtime-coalton-auto-wrap-classification
                   check-repl-structural-editing-pairs-delimiters
                   check-repl-structural-close-paren-in-string-inserts
                   check-repl-structural-close-paren-collapses-empty-form

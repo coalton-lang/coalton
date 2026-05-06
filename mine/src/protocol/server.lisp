@@ -245,13 +245,13 @@ Returns :quit if the server should shut down, T otherwise."
          (return-from dispatch-message ':quit)))
 
       (:eval
-       (destructuring-bind (id form-string package-name) (rest msg)
-         (handle-eval id form-string package-name stream)))
+       (destructuring-bind (id form-string package-name &optional auto-coalton-p) (rest msg)
+         (handle-eval id form-string package-name stream auto-coalton-p)))
 
       (:quick-result
-       (destructuring-bind (id form-string package-name) (rest msg)
+       (destructuring-bind (id form-string package-name &optional auto-coalton-p) (rest msg)
          (%with-active-request (id)
-           (handle-quick-result id form-string package-name stream))))
+           (handle-quick-result id form-string package-name stream auto-coalton-p))))
 
       (:interrupt-request
        (destructuring-bind (id target-id) (rest msg)
@@ -260,10 +260,11 @@ Returns :quit if the server should shut down, T otherwise."
              (write-message stream `(:return ,id (:error "No active request"))))))
 
       (:compile-string
-       (destructuring-bind (id string document-key package-name position client-prefix-length)
+       (destructuring-bind (id string document-key package-name position client-prefix-length
+                               &optional auto-coalton-p)
            (rest msg)
          (handle-compile-string id string document-key package-name position
-                                client-prefix-length stream)))
+                                client-prefix-length stream auto-coalton-p)))
 
       (:compile-file
        (destructuring-bind (id filename load-p) (rest msg)
@@ -497,6 +498,142 @@ indentation only when the runtime can expose a macro lambda list containing
         :collect (subseq string start (or end (length string)))
         :while end))
 
+(defun %coalton-package-p (pkg)
+  "True if PKG is a Coalton package.
+Matches \"COALTON\" itself, \"COALTON-PRELUDE\", any \"COALTON/...\" stdlib
+package, or packages that use COALTON."
+  (let ((name (package-name pkg)))
+    (or (string-equal "COALTON" name)
+        (string-equal "COALTON-PRELUDE" name)
+        (and (>= (length name) 8)
+             (string-equal "COALTON/" name :end2 8))
+        (let ((coalton-pkg (find-package "COALTON")))
+          (and coalton-pkg
+               (member coalton-pkg (package-use-list pkg)))))))
+
+(defun %coalton-wrapper-symbol-p (sym)
+  (member sym
+          '(coalton:coalton-toplevel
+            coalton:coalton-codegen
+            coalton:coalton-codegen-types
+            coalton:coalton-codegen-ast
+            coalton:coalton)
+          :test #'eq))
+
+(defun %coalton-toplevel-symbol-p (sym)
+  (member sym
+          '(coalton:define
+            coalton:define-type
+            coalton:define-struct
+            coalton:define-type-alias
+            coalton:define-exception
+            coalton:define-resumption
+            coalton:declare
+            coalton:define-class
+            coalton:define-instance
+            coalton:lisp-toplevel
+            coalton:specialize)
+          :test #'eq))
+
+(defun %whitespace-or-form-delimiter-p (char)
+  (member char '(#\Space #\Tab #\Newline #\Return #\( #\)) :test #'char=))
+
+(defun %skip-space-and-line-comments (text start end)
+  (loop :with pos = start
+        :do (loop :while (and (< pos end)
+                              (find (char text pos)
+                                    '(#\Space #\Tab #\Newline #\Return)
+                                    :test #'char=))
+                  :do (incf pos))
+            (if (and (< pos end) (char= (char text pos) #\;))
+                (let ((line-end (position #\Newline text :start pos)))
+                  (setf pos (if line-end (1+ line-end) end)))
+                (return pos))))
+
+(defun %first-list-head-token (text)
+  "Return the first symbol token after TEXT's opening list paren, or NIL."
+  (let* ((end (length text))
+         (open-pos (%skip-space-and-line-comments text 0 end)))
+    (when (and (< open-pos end) (char= (char text open-pos) #\())
+      (let* ((head-start (%skip-space-and-line-comments text (1+ open-pos) end))
+             (head-end (loop :for pos :from head-start :below end
+                             :when (%whitespace-or-form-delimiter-p (char text pos))
+                               :return pos
+                             :finally (return end))))
+        (when (< head-start head-end)
+          (subseq text head-start head-end))))))
+
+(defun %first-token (text)
+  "Return TEXT's first token when it is not a list form, or NIL."
+  (let* ((end (length text))
+         (start (%skip-space-and-line-comments text 0 end)))
+    (when (and (< start end) (not (char= (char text start) #\()))
+      (let ((token-end (loop :for pos :from start :below end
+                             :when (%whitespace-or-form-delimiter-p (char text pos))
+                               :return pos
+                             :finally (return end))))
+        (subseq text start token-end)))))
+
+(defun %read-token-symbol (token package)
+  "Read TOKEN as one symbol in PACKAGE. Return NIL for invalid or non-symbol tokens."
+  (handler-case
+      (let ((*package* package)
+            (*read-eval* nil))
+        (multiple-value-bind (object position)
+            (read-from-string token nil nil)
+          (and (symbolp object)
+               (= position (length token))
+               object)))
+    (error () nil)))
+
+(defun %non-coalton-symbol-p (sym)
+  (let ((home (and (symbolp sym) (symbol-package sym))))
+    (and home (not (%coalton-package-p home)))))
+
+(defun %wrap-with-coalton (form-string)
+  (let ((prefix "(coalton:coalton "))
+    (values (concatenate 'string prefix form-string ")")
+            (length prefix))))
+
+(defun %wrap-with-coalton-toplevel (form-string)
+  (let ((prefix "(coalton:coalton-toplevel "))
+    (values (concatenate 'string prefix form-string ")")
+            (length prefix))))
+
+(defun %wrap-coalton-input (form-string package-name auto-coalton-p)
+  "Return FORM-STRING and the wrapper prefix length after optional Coalton wrapping.
+AUTO-COALTON-P is supplied by the client language mode. Package and nickname
+resolution intentionally happens in the runtime image, where Quicklisp loads and
+user package changes are visible."
+  (let ((pkg (and (stringp package-name)
+                  (or (find-package package-name)
+                      (find-package (string-upcase package-name))))))
+    (if (not (and auto-coalton-p pkg (%coalton-package-p pkg)))
+        (values form-string 0)
+        (let* ((head-token (%first-list-head-token form-string))
+               (head-sym (and head-token (%read-token-symbol head-token pkg))))
+          (cond
+            ((and head-token
+                  (member head-token '("in-package" "defpackage")
+                          :test #'string-equal))
+             (values form-string 0))
+            ((and head-sym (%coalton-wrapper-symbol-p head-sym))
+             (values form-string 0))
+            ((and head-sym (member head-sym '(cl:in-package cl:defpackage) :test #'eq))
+             (values form-string 0))
+            ((and head-sym (%coalton-toplevel-symbol-p head-sym))
+             (%wrap-with-coalton-toplevel form-string))
+            ((and head-sym (%non-coalton-symbol-p head-sym))
+             (values form-string 0))
+            (head-token
+             (%wrap-with-coalton form-string))
+            (t
+             (let* ((token (%first-token form-string))
+                    (sym (and token (%read-token-symbol token pkg))))
+               (if (and sym (%non-coalton-symbol-p sym))
+                   (values form-string 0)
+                   (%wrap-with-coalton form-string)))))))))
+
 (defun %enter-debugger (id condition stream)
   "Enter interactive debug mode. Send debug info to TUI, wait for restart choice."
   (let* ((condition-text (handler-case (format nil "~A" condition)
@@ -684,7 +821,7 @@ indentation only when the runtime can expose a macro lambda list containing
                           :offset-base offset-base
                           :synthetic-prefix synthetic-prefix)))
 
-(defun handle-eval (id form-string package-name stream)
+(defun handle-eval (id form-string package-name stream &optional auto-coalton-p)
   "Handle an :eval request with interactive debugger support."
   (let ((stderr-capture (make-string-output-stream)))
     (catch '%debugger-abort
@@ -713,10 +850,13 @@ indentation only when the runtime can expose a macro lambda list containing
           (restart-case
               (handler-case
                   (multiple-value-bind (result output)
-                      (mine/runtime/eval:debug-eval form-string package-name
-                                                    stream id
-                                                    (let ((pkg (find-package (string-upcase package-name))))
-                                                      (and pkg (%coalton-package-p pkg))))
+                      (multiple-value-bind (eval-string _prefix-length)
+                          (%wrap-coalton-input form-string package-name auto-coalton-p)
+                        (declare (ignore _prefix-length))
+                        (mine/runtime/eval:debug-eval eval-string package-name
+                                                      stream id
+                                                      (let ((pkg (find-package (string-upcase package-name))))
+                                                        (and pkg (%coalton-package-p pkg)))))
                     (when (and output (plusp (length output)))
                       (dolist (line (split-string-by-newline output))
                         (write-message stream `(:notify (:output ,line)))))
@@ -735,31 +875,38 @@ indentation only when the runtime can expose a macro lambda list containing
               :report "Continue, returning NIL"
               (write-message stream `(:return ,id (:ok "NIL"))))))))))
 
-(defun handle-quick-result (id form-string package-name stream)
+(defun handle-quick-result (id form-string package-name stream &optional auto-coalton-p)
   "Handle a :quick-result request without debugger or diagnostic side effects."
   (handler-case
-      (multiple-value-bind (display error-text)
-          (mine/runtime/eval:quick-result
-           form-string package-name
-           (let ((pkg (find-package (string-upcase package-name))))
-             (and pkg (%coalton-package-p pkg))))
+      (multiple-value-bind (quick-string _prefix-length)
+          (%wrap-coalton-input form-string package-name auto-coalton-p)
+        (declare (ignore _prefix-length))
+        (multiple-value-bind (display error-text)
+            (mine/runtime/eval:quick-result
+             quick-string package-name
+             (let ((pkg (find-package (string-upcase package-name))))
+               (and pkg (%coalton-package-p pkg))))
         (if error-text
             (write-message stream `(:return ,id (:error ,error-text)))
-            (write-message stream `(:return ,id (:ok ,display)))))
+            (write-message stream `(:return ,id (:ok ,display))))))
     (sb-sys:interactive-interrupt (c)
       (declare (ignore c))
       (write-message stream `(:return ,id (:error "Interrupted."))))
     (error (c)
       (write-message stream `(:return ,id (:error ,(format nil "~A" c)))))))
 
-(defun handle-compile-string (id form-string document-key package-name position client-prefix-length stream)
+(defun handle-compile-string (id form-string document-key package-name position client-prefix-length
+                              stream &optional auto-coalton-p)
   "Handle a :compile-string request with interactive debugger support.
 Uses compile-file + load for correct eval-when toplevel semantics."
-  (let ((stderr-capture (make-string-output-stream))
-        (diag-state (%make-diagnostic-state))
-        (file-override (and (stringp document-key) (plusp (length document-key)) document-key))
-        (synthetic-prefix (+ (length (mine/runtime/eval:compile-string-source-prefix package-name))
-                             (or client-prefix-length 0))))
+  (multiple-value-bind (compile-string runtime-prefix-length)
+      (%wrap-coalton-input form-string package-name auto-coalton-p)
+    (let ((stderr-capture (make-string-output-stream))
+          (diag-state (%make-diagnostic-state))
+          (file-override (and (stringp document-key) (plusp (length document-key)) document-key))
+          (synthetic-prefix (+ (length (mine/runtime/eval:compile-string-source-prefix package-name))
+                               (or client-prefix-length 0)
+                               runtime-prefix-length)))
     (catch '%debugger-abort
       (handler-bind
           ((serious-condition
@@ -798,7 +945,7 @@ Uses compile-file + load for correct eval-when toplevel semantics."
               (handler-case
                   (multiple-value-bind (result output)
                       (mine/runtime/eval:debug-compile-string
-                       form-string package-name stream id
+                       compile-string package-name stream id
                        (let ((pkg (find-package (string-upcase package-name))))
                          (and pkg (%coalton-package-p pkg))))
                     (when (and output (plusp (length output)))
@@ -836,7 +983,7 @@ Uses compile-file + load for correct eval-when toplevel semantics."
               :report "Continue, returning NIL"
               (%flush-stderr-capture stderr-capture stream)
               (%flush-diagnostics stream diag-state)
-              (write-message stream `(:return ,id (:ok "T"))))))))))
+              (write-message stream `(:return ,id (:ok "T")))))))))))
 
 (defun %ct-file-p (filename)
   "Return T if FILENAME has a .ct extension."
@@ -1120,17 +1267,6 @@ Returns (((:file . path) (:offset . n))) or NIL."
     (or (coalton-impl/typechecker/environment:lookup-value-type env sym :no-error t)
         (coalton-impl/typechecker/environment:lookup-type env sym :no-error t)
         (coalton-impl/typechecker/environment:lookup-class env sym :no-error t))))
-
-(defun %coalton-package-p (pkg)
-  "True if PKG is a Coalton package.
-Matches \"COALTON\" itself, any \"COALTON/...\" stdlib package, or packages that use COALTON."
-  (let ((name (package-name pkg)))
-    (or (string-equal "COALTON" name)
-        (and (>= (length name) 8)
-             (string-equal "COALTON/" name :end2 8))
-        (let ((coalton-pkg (find-package "COALTON")))
-          (and coalton-pkg
-               (member coalton-pkg (package-use-list pkg)))))))
 
 (defun %symbol-defined-p (sym pkg)
   "True if SYM has a useful definition.

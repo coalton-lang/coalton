@@ -10,6 +10,116 @@
           expected-cursor
           (repl:repl-pane-input-cursor rp)))
 
+(defun %ensure-wrap-test-package (name &key use)
+  (or (find-package name)
+      (make-package name :use use)))
+
+(defun %check-coalton-wrap (input package auto-coalton-p expected expected-prefix-length)
+  (multiple-value-bind (wrapped prefix-length)
+      (server::%wrap-coalton-input input package auto-coalton-p)
+    (%check (string= expected wrapped)
+            "Expected wrapper output ~S, got ~S"
+            expected
+            wrapped)
+    (%check (= expected-prefix-length prefix-length)
+            "Expected wrapper prefix length ~D, got ~D"
+            expected-prefix-length
+            prefix-length)))
+
+(defun %string-prefix-p (prefix string)
+  (and (>= (length string) (length prefix))
+       (string= prefix string :end2 (length prefix))))
+
+(defun %coalton-stdlib-package-p (pkg)
+  (let ((name (package-name pkg)))
+    (or (member name '("COALTON" "COALTON-PRELUDE" "COALTON-USER")
+                :test #'string=)
+        (%string-prefix-p "COALTON/" name)
+        (some (lambda (nickname)
+                (%string-prefix-p "COALTON-LIBRARY/" nickname))
+              (package-nicknames pkg)))))
+
+(defun check-runtime-coalton-stdlib-packages-classification ()
+  (asdf:load-system "coalton/library")
+  (let ((misses
+          (loop :for pkg :in (list-all-packages)
+                :when (and (%coalton-stdlib-package-p pkg)
+                           (not (server::%coalton-package-p pkg)))
+                  :collect (package-name pkg))))
+    (%check (null misses)
+            "Expected every loaded Coalton stdlib package to classify as Coalton; missed ~S"
+            (sort misses #'string<))))
+
+(defun check-runtime-coalton-auto-wrap-classification ()
+  (let* ((coalton-pkg (%ensure-wrap-test-package "MINE-TEST-WRAP-COALTON"
+                                                 :use '("COALTON" "COALTON-PRELUDE")))
+         (lisp-pkg (%ensure-wrap-test-package "MINE-TEST-WRAP-LISP"
+                                              :use '("CL")))
+         (quick-pkg (%ensure-wrap-test-package "MINE-TEST-QUICKLISP"
+                                               :use '("CL"))))
+    (declare (ignore coalton-pkg lisp-pkg))
+    (export (intern "QUICKLOAD" quick-pkg) quick-pkg)
+    (%check-coalton-wrap "(mine-test-quicklisp:quickload \"alexandria\")"
+                         "MINE-TEST-WRAP-COALTON"
+                         t
+                         "(mine-test-quicklisp:quickload \"alexandria\")"
+                         0)
+    (%check-coalton-wrap "(cl:format t \"x\")"
+                         "MINE-TEST-WRAP-COALTON"
+                         t
+                         "(cl:format t \"x\")"
+                         0)
+    (%check-coalton-wrap "(in-package #:cl-user)"
+                         "MINE-TEST-WRAP-COALTON"
+                         t
+                         "(in-package #:cl-user)"
+                         0)
+    (%check-coalton-wrap "(coalton/math/integral:isqrt 16)"
+                         "MINE-TEST-WRAP-COALTON"
+                         t
+                         "(coalton:coalton (coalton/math/integral:isqrt 16))"
+                         17)
+    (%check-coalton-wrap "(define answer 42)"
+                         "MINE-TEST-WRAP-COALTON"
+                         t
+                         "(coalton:coalton-toplevel (define answer 42))"
+                         26)
+    (%check-coalton-wrap "(declare answer Integer)"
+                         "MINE-TEST-WRAP-COALTON"
+                         t
+                         "(coalton:coalton-toplevel (declare answer Integer))"
+                         26)
+    (%check-coalton-wrap "(coalton (+ 1 2))"
+                         "MINE-TEST-WRAP-COALTON"
+                         t
+                         "(coalton (+ 1 2))"
+                         0)
+    (%check-coalton-wrap "(coalton:coalton (+ 1 2))"
+                         "COALTON-PRELUDE"
+                         t
+                         "(coalton:coalton (+ 1 2))"
+                         0)
+    (%check-coalton-wrap "(+ 1 2)"
+                         "COALTON-PRELUDE"
+                         t
+                         "(coalton:coalton (+ 1 2))"
+                         17)
+    (%check-coalton-wrap "(+ 1 2)"
+                         "COALTON/MATH"
+                         t
+                         "(coalton:coalton (+ 1 2))"
+                         17)
+    (%check-coalton-wrap "(+ 1 2)"
+                         "MINE-TEST-WRAP-COALTON"
+                         nil
+                         "(+ 1 2)"
+                         0)
+    (%check-coalton-wrap "(+ 1 2)"
+                         "MINE-TEST-WRAP-LISP"
+                         t
+                         "(+ 1 2)"
+                         0)))
+
 (defun check-repl-structural-editing-pairs-delimiters ()
   (let ((rp (repl:repl-pane-new)))
     (%check (eq wt:Consumed

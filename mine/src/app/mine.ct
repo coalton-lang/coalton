@@ -815,19 +815,6 @@ the cursor's display-x within its wrap segment."
 
 ;;; REPL status line
 
-  (declare %detect-repl-lang (String -> String))
-  (define (%detect-repl-lang pkg-name)
-    "Detect whether the REPL package is Lisp, Coalton, or neither."
-    (lisp (-> String) (pkg-name)
-      (cl:let ((pkg (cl:find-package (cl:string-upcase pkg-name))))
-        (cl:if pkg
-               (cl:let ((uses (cl:mapcar #'cl:package-name (cl:package-use-list pkg))))
-                 (cl:cond
-                   ((cl:member "COALTON" uses :test #'cl:string-equal) "Coalton")
-                   ((cl:member "COMMON-LISP" uses :test #'cl:string-equal) "Lisp")
-                   (cl:t "--")))
-               "--"))))
-
   (declare %heap-info (Void -> String))
   (define (%heap-info)
     "Return cached heap info from the runtime server."
@@ -922,144 +909,6 @@ the cursor's display-x within its wrap segment."
 
 ;;; REPL eval
 
-  (declare %coalton-toplevel-form? (String -> Boolean))
-  (define (%coalton-toplevel-form? text)
-    "True if TEXT starts with a Coalton toplevel form that should be sent verbatim."
-    (lisp (-> Boolean) (text)
-      (cl:let ((form-class (%classify-form-head-cl (%read-form-head-cl text))))
-        (cl:if (cl:member form-class '(:coalton-wrapper :coalton-verbatim :package-form))
-               cl:t
-               cl:nil))))
-
-  (declare %coalton-definition-form? (String -> Boolean))
-  (define (%coalton-definition-form? text)
-    "True if TEXT starts with a Coalton definition form that needs coalton-toplevel."
-    (lisp (-> Boolean) (text)
-      (cl:let ((form-head (%read-form-head-cl text)))
-        (cl:if (cl:member form-head
-                          '("define" "define-type" "define-struct"
-                            "define-class" "define-instance")
-                          :test #'cl:string=)
-               cl:t cl:nil))))
-
-  (declare %non-coalton-package-form? (String -> Boolean))
-  (define (%non-coalton-package-form? text)
-    "True if TEXT is (pkg:sym ...) where pkg is not a Coalton package."
-    (lisp (-> Boolean) (text)
-      (cl:let ((trimmed (cl:string-trim '(#\Space #\Tab #\Newline) text)))
-        (cl:if (cl:and (cl:plusp (cl:length trimmed))
-                       (cl:char= (cl:char trimmed 0) #\())
-               (cl:let* ((rest (cl:subseq trimmed 1))
-                         ;; Find the delimiter after the first symbol
-                         (delim-pos (cl:position-if
-                                     (cl:lambda (c)
-                                       (cl:member c '(#\Space #\Tab #\Newline #\))))
-                                     rest))
-                         (first-sym (cl:if delim-pos
-                                           (cl:subseq rest 0 delim-pos)
-                                           rest))
-                         ;; Check for package qualifier (single colon, not double)
-                         (colon-pos (cl:position #\: first-sym)))
-                 (cl:if (cl:and colon-pos
-                                (cl:plusp colon-pos)
-                                ;; Not a keyword (doesn't start with :)
-                                ;; Has a real package prefix
-                                (cl:let* ((pkg-name (cl:string-upcase
-                                                     (cl:subseq first-sym 0 colon-pos)))
-                                          (pkg (cl:find-package pkg-name)))
-                                  ;; Non-Coalton package: anything not starting with "COALTON"
-                                  (cl:and pkg
-                                          (cl:not (cl:and (cl:>= (cl:length pkg-name) 7)
-                                                          (cl:string= "COALTON" pkg-name
-                                                                      :end2 7))))))
-                        cl:t cl:nil))
-               cl:nil))))
-
-  (declare %cl-package-symbol? (String * String -> Boolean))
-  (define (%cl-package-symbol? input pkg-name)
-    "True if INPUT is a symbol (possibly package-qualified) whose home
-package :USEs CL.  Handles both bare names and pkg:sym / pkg::sym."
-    (lisp (-> Boolean) (input pkg-name)
-      (cl:let ((trimmed (cl:string-trim '(#\Space #\Tab #\Newline) input)))
-        (cl:if (cl:or (cl:zerop (cl:length trimmed))
-                      (cl:char= (cl:char trimmed 0) #\())
-               cl:nil
-               (cl:let ((colon-pos (cl:position #\: trimmed)))
-                 (cl:if colon-pos
-                        ;; Package-qualified: parse pkg:sym or pkg::sym
-                        (cl:let* ((pkg-str (cl:string-upcase
-                                            (cl:subseq trimmed 0 colon-pos)))
-                                  (name-start
-                                    (cl:if (cl:and (cl:< (cl:1+ colon-pos)
-                                                         (cl:length trimmed))
-                                                   (cl:char= (cl:char trimmed
-                                                                      (cl:1+ colon-pos))
-                                                             #\:))
-                                           (cl:+ colon-pos 2)
-                                           (cl:1+ colon-pos)))
-                                  (sym-name (cl:string-upcase
-                                             (cl:subseq trimmed name-start)))
-                                  (pkg (cl:find-package pkg-str)))
-                          (cl:if pkg
-                                 (cl:multiple-value-bind (sym status)
-                                     (cl:find-symbol sym-name pkg)
-                                   (cl:declare (cl:ignore status))
-                                   (cl:if (cl:and sym (cl:symbol-package sym)
-                                                  (cl:member
-                                                   (cl:find-package "CL")
-                                                   (cl:package-use-list
-                                                    (cl:symbol-package sym))))
-                                          cl:t cl:nil))
-                                 cl:nil))
-                        ;; Bare symbol: look up in REPL package
-                        (cl:let ((pkg (cl:find-package pkg-name)))
-                          (cl:if (cl:null pkg)
-                                 cl:nil
-                                 (cl:multiple-value-bind (sym status)
-                                     (cl:find-symbol (cl:string-upcase trimmed)
-                                                     pkg)
-                                   (cl:declare (cl:ignore status))
-                                   (cl:if (cl:and sym (cl:symbol-package sym)
-                                                  (cl:member
-                                                   (cl:find-package "CL")
-                                                   (cl:package-use-list
-                                                    (cl:symbol-package sym))))
-                                          cl:t cl:nil))))))))))
-
-  (declare %coalton-package? (String -> Boolean))
-  (define (%coalton-package? pkg-name)
-    "True if PKG-NAME names a Coalton package (uses the COALTON package)."
-    (lisp (-> Boolean) (pkg-name)
-      (cl:let ((pkg (cl:find-package (cl:string-upcase pkg-name))))
-        (cl:if (cl:and pkg (mine/protocol/server::%coalton-package-p pkg))
-               cl:t cl:nil))))
-
-  (declare %wrap-coalton (String * String -> (Tuple String UFix)))
-  (define (%wrap-coalton input pkg-name)
-    "If PKG-NAME is a Coalton package, wrap INPUT appropriately:
-- definitions -> (coalton-toplevel ...)
-- expressions -> (coalton ...)
-- already-toplevel forms -> verbatim
-- forms with a non-Coalton package prefix -> verbatim (CL escape)
-- bare symbols from CL-using packages -> verbatim"
-    (if (%coalton-package? pkg-name)
-        (cond
-          ((%coalton-toplevel-form? input) (Tuple input 0))
-          ((%non-coalton-package-form? input) (Tuple input 0))
-          ((%coalton-definition-form? input)
-           (Tuple (<> "(coalton-toplevel " (<> input ")")) 18))
-          ((%cl-package-symbol? input pkg-name) (Tuple input 0))
-          (True (Tuple (<> "(coalton " (<> input ")")) 9)))
-        (Tuple input 0)))
-
-  (declare %wrap-coalton-input (MineState * String -> String))
-  (define (%wrap-coalton-input st input)
-    "If in Coalton REPL mode, wrap appropriately."
-    (if (== (cell:read (.ms-repl-lang st)) "Coalton")
-        (match (%wrap-coalton input (cell:read (.ms-repl-package st)))
-          ((Tuple wrapped _) wrapped))
-        input))
-
   (declare %append-input-to-output! (MineState * String * String -> Void))
   (define (%append-input-to-output! st prefix input-text)
     "Append input text to REPL output, splitting multi-line input into separate lines.
@@ -1145,7 +994,7 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
        ;; Display input in output area
        (let prompt-str = (<> (cell:read (.ms-repl-package st)) "> "))
        (%append-input-to-output! st prompt-str input-text)
-       ;; Detect in-package and update local state (also updates lang)
+       ;; Detect in-package and update local package state only.
        (%detect-in-package st input-text)
        ;; Send to runtime (non-blocking)
        (match (ensure-runtime! st)
@@ -1160,8 +1009,11 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
           ;; Send the request
           (let req-id = (next-request-id! st))
           (cell:write! (.ms-active-request st) (Some req-id))
-          (let eval-text = (%wrap-coalton-input st input-text))
-          (let req = (msg:ReqEval req-id eval-text (cell:read (.ms-repl-package st))))
+          ;; This flag is only the user-selected REPL mode. The runtime
+          ;; subprocess decides whether the current package is Coalton.
+          (let auto-coalton? = (== (cell:read (.ms-repl-lang st)) "Coalton"))
+          (let req = (msg:ReqEval req-id input-text (cell:read (.ms-repl-package st))
+                                 auto-coalton?))
           (client:connection-send! conn req)
           ;; Return immediately -- response will arrive via mailbox
           (values))
@@ -1584,13 +1436,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
                                     (cl:symbol (cl:symbol-name pkg-arg)))))
                 (coalton/cell:write!
                  (mine/app/state:get-repl-package-cell st)
-                 pkg-name)
-                ;; Auto-detect lang from new package
-                (cl:let ((lang (%detect-repl-lang pkg-name)))
-                  (cl:unless (cl:string= lang "--")
-                    (coalton/cell:write!
-                     (mine/app/state:get-repl-lang-cell st)
-                     lang))))))
+                 pkg-name))))
         (cl:error () cl:nil))
       (cl:values)))
 
@@ -1849,7 +1695,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
       (repl:repl-pane-append-system! (.ms-repl st) ";; Running :repl-init...")
       (start-proto-reader! st conn)
       (let req-id = (next-request-id! st))
-      (let req = (msg:ReqEval req-id init-form "CL-USER"))
+      (let req = (msg:ReqEval req-id init-form "CL-USER" False))
       (client:connection-send! conn req)
       (values)))
 
@@ -2018,11 +1864,9 @@ Uses the preceding (in-package ...) form to determine the compilation package."
              (let req-id = (next-request-id! st))
              (cell:write! (.ms-active-request st) (Some req-id))
              (%track-diagnostic-request! req-id)
-             (match (%wrap-coalton form-text pkg)
-               ((Tuple compile-text client-prefix-length)
-                (let req = (msg:ReqCompileString req-id compile-text document-key pkg
-                                                 form-start client-prefix-length))
-                (client:connection-send! conn req))))))))))
+             (let req = (msg:ReqCompileString req-id form-text document-key pkg
+                                             form-start 0 True))
+             (client:connection-send! conn req))))))))
 
   (declare quick-result-form! (MineState -> Void))
   (define (quick-result-form! st)
@@ -2064,10 +1908,8 @@ Uses the preceding (in-package ...) form to determine the compilation package."
              (cell:write! (.ms-active-request st) (Some req-id))
              (cell:write! (.ms-quick-result-request-id st) (Some req-id))
              (%show-quick-result-pending-for-range! st target-start target-end document-key)
-             (match (%wrap-coalton target-text pkg)
-               ((Tuple quick-text _client-prefix-length)
-                (let req = (msg:ReqQuickResult req-id quick-text pkg))
-                (client:connection-send! conn req))))))))))
+             (let req = (msg:ReqQuickResult req-id target-text pkg True))
+             (client:connection-send! conn req))))))))
 
 ;;; Create project on disk
 
