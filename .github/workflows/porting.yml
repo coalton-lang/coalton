@@ -84,6 +84,12 @@ jobs:
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
+          (setf *debugger-hook*
+            (lambda (c h)
+              (declare (ignore h))
+              (format *error-output* "~&Fatal Error: ~A~%" c)
+              (uiop:print-backtrace :condition c)
+              (uiop:quit 1)))
           ;; (cl:handler-case
             (cl:progn
               (load "/.abclrc")
@@ -113,6 +119,12 @@ jobs:
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
+          (setf *debugger-hook*
+            (lambda (c h)
+              (declare (ignore h))
+              (format *error-output* "~&Fatal Error: ~A~%" c)
+              (uiop:print-backtrace :condition c)
+              (uiop:quit 1)))
           ;;; Clasp cannot find /.clasprc - copy its code here instead.
           ;; (load "/.clasprc")
             #-quicklisp (load "/root/quicklisp/setup.lisp")
@@ -140,6 +152,12 @@ jobs:
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
+          (setf *debugger-hook*
+            (lambda (c h)
+              (declare (ignore h))
+              (format *error-output* "~&Fatal Error: ~A~%" c)
+              (uiop:print-backtrace :condition c)
+              (uiop:quit 1)))
           ;; (ql:quickload :coalton/tests)
           (load "/.eclrc")
           (ql:update-dist "quicklisp")
