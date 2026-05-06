@@ -225,7 +225,7 @@ chars wider than WRAP-W)."
                     (ch-width (cl:if (cl:char= ch #\Tab)
                                      (cl:- (cl:* (cl:1+ (cl:floor vcol tab-w)) tab-w)
                                            vcol)
-                                     (mine/text/width:char-cell-width-cl ch)))
+                                     (mine/text/width:editor-char-cell-width-cl ch)))
                     (new-vcol (cl:+ vcol ch-width)))
             (cl:cond
               ((cl:and (cl:> new-vcol safe-w) (cl:plusp vcol))
@@ -865,13 +865,13 @@ segments) and highlights the current visual row."
     (let v = (vec:new))
     (let vc = (cell:new 0))
     (lisp (-> Void) (text text-len v vc tab-w)
-      (cl:dotimes (i text-len)
-        (vec:push! (coalton/cell:read vc) v)
-        (cl:let ((ch (cl:char text i)))
-          (cl:if (cl:char= ch #\Tab)
+        (cl:dotimes (i text-len)
+          (vec:push! (coalton/cell:read vc) v)
+          (cl:let ((ch (cl:char text i)))
+            (cl:if (cl:char= ch #\Tab)
                  (coalton/cell:write! vc (cl:* (cl:1+ (cl:floor (coalton/cell:read vc) tab-w)) tab-w))
                  (coalton/cell:write! vc (cl:+ (coalton/cell:read vc)
-                                               (mine/text/width:char-cell-width-cl ch))))))
+                                               (mine/text/width:editor-char-cell-width-cl ch))))))
       (vec:push! (coalton/cell:read vc) v)
       (cl:values))
     v)
@@ -969,7 +969,8 @@ segments) and highlights the current visual row."
         :do
         (cl:let* ((ch (cl:char text ci))
                   (ch-vcol (vec:index-unsafe ci vcol-map))
-                  (ch-width (mine/text/width:char-cell-width-cl ch))
+                  (ch-width (mine/text/width:editor-char-cell-width-cl ch))
+                  (display-text (mine/text/width:editor-control-char-representation-cl ch))
                   (abs-pos (cl:+ line-buf-offset ci))
                   (s (mine/pane/editor::%pick-style
                       abs-pos sel-start sel-end style
@@ -982,12 +983,20 @@ segments) and highlights the current visual row."
                                   (mine/term/screen:screen-set-cell
                                    scr y (cl:+ text-x (cl:- v scroll-vcol))
                                    #\Space s))))
-                 (cl:when (cl:and (cl:plusp ch-width)
-                                  (cl:>= ch-vcol scroll-vcol)
-                                  (cl:<= (cl:+ ch-vcol ch-width) vis-vcol-end))
-                   (mine/term/screen:screen-set-cell
-                    scr y (cl:+ text-x (cl:- ch-vcol scroll-vcol))
-                    ch s)))))
+                 (cl:if display-text
+                        (cl:loop :for j :from 0 :below (cl:length display-text)
+                                 :for v := (cl:+ ch-vcol j)
+                                 :do (cl:when (cl:and (cl:>= v scroll-vcol)
+                                                      (cl:< v vis-vcol-end))
+                                       (mine/term/screen:screen-set-cell
+                                        scr y (cl:+ text-x (cl:- v scroll-vcol))
+                                        (cl:char display-text j) s)))
+                        (cl:when (cl:and (cl:plusp ch-width)
+                                         (cl:>= ch-vcol scroll-vcol)
+                                         (cl:<= (cl:+ ch-vcol ch-width) vis-vcol-end))
+                          (mine/term/screen:screen-set-cell
+                           scr y (cl:+ text-x (cl:- ch-vcol scroll-vcol))
+                           ch s))))))
       (cl:values)))
 
   (declare %lex-one-line (String -> (List tok:Token)))

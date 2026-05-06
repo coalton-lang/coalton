@@ -116,7 +116,7 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
                     (uiop:temporary-directory))))
     (with-open-file (s tmp-path :direction :output
                        :if-exists :supersede
-                       :external-format :utf-8)
+                       :external-format (coalton-impl/source:source-external-format))
       (write-string text s))
     (setf *compile-file-remap*
           (cons (normalize-document-key (namestring tmp-path))

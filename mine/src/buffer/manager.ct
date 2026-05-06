@@ -88,7 +88,8 @@ If the file does not exist, creates an empty buffer with that path (not written 
                   (cl:progn
                    (cl:with-open-file (s fpath :direction :output
                                               :if-exists :supersede
-                                              :if-does-not-exist :create)
+                                              :if-does-not-exist :create
+                                              :external-format (coalton-impl/source:source-external-format))
                      (cl:write-string contents s))
                    (Ok Unit))
                 (cl:error (c)

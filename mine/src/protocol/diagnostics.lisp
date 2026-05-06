@@ -109,7 +109,8 @@
                (every #'integerp path))
     (return-from %source-path-file-position nil))
   (let ((buffer nil))
-    (with-open-file (stream filename)
+    (with-open-file (stream filename
+                            :external-format (coalton-impl/source:source-external-format))
       (%skip-toplevel-forms (1+ (first path)) stream)
       (let ((endpos (file-position stream)))
         (setf buffer (make-array (list endpos)

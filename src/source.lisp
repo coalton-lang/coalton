@@ -32,6 +32,7 @@
    #:source-error
    #:source-file-path
    #:source-name
+   #:source-external-format
    #:source-stream
    #:source-warning
    #:span
@@ -87,6 +88,12 @@
 
 (defgeneric source-stream (source)
   (:documentation "Open and return a stream from which source text may be read. The caller is responsible for closing the stream, and the stream's initial position may be greater than zero."))
+
+(defun source-external-format ()
+  "Return the external format used for source files.
+On SBCL, this preserves CRLF as raw CR then LF characters."
+  #+sbcl '(:utf-8 :newline :lf)
+  #-sbcl :utf-8)
 
 (defgeneric source-available-p (source)
   (:documentation "Return T if a stream containing SOURCE's source text can be opened."))
@@ -165,7 +172,7 @@ OFFSET indicates starting character offset within the file."
   (let* ((fd-stream (open (input-name self)
                           :direction ':input
                           :element-type 'character
-                          :external-format ':utf-8))
+                          :external-format (source-external-format)))
          (stream (make-instance 'char-position-stream
                    :stream fd-stream)))
     (when (plusp (file-offset self))
@@ -505,13 +512,26 @@ column numbers for a sequence of absolute stream offsets."
                     line (1+ line)
                     line-offsets (cdr line-offsets))))
 
+(defun read-source-line (stream)
+  "Read one LF-terminated source line from STREAM.
+When the line ended with CRLF, omit the CR from the display text. Bare
+CR characters elsewhere, including at EOF, are preserved."
+  (multiple-value-bind (line missing-newline-p)
+      (read-line stream nil "")
+    (let ((len (length line)))
+      (if (and (not missing-newline-p)
+               (plusp len)
+               (char= (char line (1- len)) #\Return))
+          (subseq line 0 (1- len))
+          line))))
+
 (defun line-contents (printer-state line-number)
   (with-slots (line-offsets source-stream) printer-state
     (let ((offset (if (= 1 line-number)
                       0
                       (aref line-offsets (1- line-number)))))
       (file-position source-stream offset)
-      (read-line source-stream nil ""))))
+      (read-source-line source-stream))))
 
 (defun positioned-annotations (printer-state)
   (with-slots (notes help) printer-state

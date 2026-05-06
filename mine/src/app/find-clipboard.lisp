@@ -10,7 +10,8 @@
 (in-package #:mine/app/find-clipboard)
 
 ;;; System clipboard command detection (pbcopy/pbpaste on macOS,
-;;; clip/Get-Clipboard on Windows, and wl-clipboard/xclip/xsel on Unix).
+;;; clip/Get-Clipboard on Windows and WSL, and wl-clipboard/xclip/xsel
+;;; on Unix).
 
 (defvar *clipboard-copy* nil)
 (defvar *clipboard-paste* nil)
@@ -43,9 +44,9 @@
       (first candidates)))
 
 (defun find-clipboard-copy-command ()
-  #+darwin  (list "/usr/bin/pbcopy" nil)
-  #+windows (list "clip.exe" nil)
-  #-(or darwin windows)
+  #+darwin           (list "/usr/bin/pbcopy" nil)
+  #+(or windows wsl) (list "clip.exe" nil)
+  #-(or darwin windows wsl)
   (%find-first-command
    (if (%wayland-session-p)
        (list (list "wl-copy" nil)
@@ -56,9 +57,9 @@
              (list "wl-copy" nil)))))
 
 (defun find-clipboard-paste-command ()
-  #+darwin  (list "/usr/bin/pbpaste" nil)
-  #+windows (list "powershell.exe" (list "-command" "Get-Clipboard"))
-  #-(or darwin windows)
+  #+darwin           (list "/usr/bin/pbpaste" nil)
+  #+(or windows wsl) (list "powershell.exe" (list "-command" "Get-Clipboard"))
+  #-(or darwin windows wsl)
   (%find-first-command
    (if (%wayland-session-p)
        (list (list "wl-paste" (list "--no-newline"))

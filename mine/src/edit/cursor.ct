@@ -2,7 +2,8 @@
   (:use #:coalton #:coalton-prelude)
   (:local-nicknames
    (#:gap #:mine/buffer/gap)
-   (#:cell #:coalton/cell))
+   (#:cell #:coalton/cell)
+   (#:str #:coalton/string))
   (:export
    #:CursorState
    #:cursor-new
@@ -13,6 +14,7 @@
    #:cursor-move-to-line-start!
    #:cursor-move-to-line-end!
    #:cursor-move-to-position!
+   #:cursor-move-to-buffer-position!
    #:cursor-move-page-up!
    #:cursor-move-page-down!
    #:cursor-selection-anchor
@@ -75,22 +77,24 @@
        (let tab-w = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
        (set-target-col! cs (gap:visual-col text col tab-w)))))
 
-  (declare string-length (String -> UFix))
-  (define (string-length s)
-    "Return the length of a string."
-    (lisp (-> UFix) (s)
-      (cl:length s)))
-
   (declare word-char? (Char -> Boolean))
   (define (word-char? ch)
     "True if CH should be treated as part of a word/token for editor motion."
-    (lisp (-> Boolean) (ch)
-      (cl:if (cl:member ch '(#\Space #\Tab #\Newline #\Return
-                             #\( #\) #\[ #\]
-                             #\; #\" #\' #\` #\,)
-                        :test #'cl:char=)
-             False
-             True)))
+    (cond
+      ((== ch #\Space) False)
+      ((== ch #\Tab) False)
+      ((== ch #\Newline) False)
+      ((== ch #\Return) False)
+      ((== ch #\() False)
+      ((== ch #\)) False)
+      ((== ch #\[) False)
+      ((== ch #\]) False)
+      ((== ch #\;) False)
+      ((== ch #\") False)
+      ((== ch #\') False)
+      ((== ch #\`) False)
+      ((== ch #\,) False)
+      (True True)))
 
   (declare %word-char-at? (gap:GapBuffer * UFix -> Boolean))
   (define (%word-char-at? gb pos)
@@ -126,22 +130,19 @@
 
   (declare cursor-move-left! (gap:GapBuffer * CursorState -> Void))
   (define (cursor-move-left! gb cs)
-    "Move cursor one character to the left. Skips over tabs as a single unit."
+    "Move cursor one editor unit to the left."
     (let p = (cursor-position cs))
     (when (> p 0)
-      (let new-p = (- p 1))
-      ;; If we landed on a tab, the cursor is already past it (before it),
-      ;; so just move to that position — the tab is one buffer char.
-      (set-pos! cs new-p))
+      (set-pos! cs (gap:gap-editor-unit-prev-pos gb p)))
     (update-target-col-from-pos! cs gb))
 
   (declare cursor-move-right! (gap:GapBuffer * CursorState -> Void))
   (define (cursor-move-right! gb cs)
-    "Move cursor one character to the right. Skips over tabs as a single unit."
+    "Move cursor one editor unit to the right."
     (let p = (cursor-position cs))
     (let len = (gap:gap-length gb))
     (when (< p len)
-      (set-pos! cs (+ p 1)))
+      (set-pos! cs (gap:gap-editor-unit-next-pos gb p)))
     (update-target-col-from-pos! cs gb))
 
   (declare cursor-move-word-left! (gap:GapBuffer * CursorState -> Void))
@@ -209,7 +210,7 @@
       ((Tuple line _col)
        (let line-start = (gap:gap-line-to-pos gb line))
        (let line-text = (gap:gap-line-text gb line))
-       (let line-len = (string-length line-text))
+       (let line-len = (str:length line-text))
        (set-pos! cs (+ line-start line-len))
        (update-target-col-from-pos! cs gb))))
 
@@ -224,6 +225,12 @@ Note: caller should clamp new-pos to buffer length."
     ;; Callers who have the gap buffer should follow with update-target-col.
     (set-target-col! cs 0))
 
+  (declare cursor-move-to-buffer-position! (gap:GapBuffer * CursorState * UFix -> Void))
+  (define (cursor-move-to-buffer-position! gb cs new-pos)
+    "Set cursor to an absolute buffer position and update target column."
+    (set-pos! cs (min new-pos (gap:gap-length gb)))
+    (update-target-col-from-pos! cs gb))
+
   ;;; Page movement
 
   (declare cursor-move-page-up! (gap:GapBuffer * CursorState * UFix -> Void))
@@ -234,7 +241,7 @@ Note: caller should clamp new-pos to buffer length."
        (let target-line = (if (>= line height) (- line height) 0))
        (let target-start = (gap:gap-line-to-pos gb target-line))
        (let target-text = (gap:gap-line-text gb target-line))
-       (let target-len = (string-length target-text))
+       (let target-len = (str:length target-text))
        (let tc = (cell:read (.target-col cs)))
        (let new-col = (min tc target-len))
        (set-pos! cs (+ target-start new-col)))))
@@ -248,7 +255,7 @@ Note: caller should clamp new-pos to buffer length."
        (let target-line = (min (+ line height) (- total-lines 1)))
        (let target-start = (gap:gap-line-to-pos gb target-line))
        (let target-text = (gap:gap-line-text gb target-line))
-       (let target-len = (string-length target-text))
+       (let target-len = (str:length target-text))
        (let tc = (cell:read (.target-col cs)))
        (let new-col = (min tc target-len))
        (set-pos! cs (+ target-start new-col)))))
