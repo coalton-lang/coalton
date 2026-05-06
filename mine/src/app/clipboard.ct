@@ -39,6 +39,13 @@
             cl:t)))
     (cl:error () cl:nil)))
 
+(cl:defun %read-stream-to-string (stream)
+  "Read STREAM to EOF without line-based newline reconstruction."
+  (cl:with-output-to-string (s)
+    (cl:loop :for ch := (cl:read-char stream cl:nil cl:nil)
+             :while ch
+             :do (cl:write-char ch s))))
+
 (cl:defun %clipboard-paste ()
   "Read text from the system clipboard. Works on macOS, Linux, and Windows."
   (cl:handler-case
@@ -46,12 +53,7 @@
         (cl:let* ((proc (sb-ext:run-program program args
                           :output :stream :wait cl:nil :search cl:t))
                   (output (sb-ext:process-output proc))
-                  (text (cl:with-output-to-string (s)
-                          (cl:loop :for line := (cl:read-line output cl:nil cl:nil)
-                                   :while line
-                                   :for first := cl:t :then cl:nil
-                                   :do (cl:unless first (cl:write-char #\Newline s))
-                                       (cl:write-string line s)))))
+                  (text (%read-stream-to-string output)))
           (cl:close output)
           (sb-ext:process-wait proc)
           text))

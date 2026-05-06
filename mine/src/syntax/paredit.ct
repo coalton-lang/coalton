@@ -650,16 +650,45 @@ and character literals."
       (+ pos (str:length text)))
     (values))
 
+  (declare clamp-position (gap:GapBuffer * UFix -> UFix))
+  (define (clamp-position gb pos)
+    (min pos (gap:gap-length gb)))
+
   (declare record-delete! (buf:Buffer * UFix * UFix * UFix -> Void))
   (define (record-delete! buffer start end cursor-before)
     (let gb = (buf:buffer-gap buffer))
-    (let deleted = (gap:gap-delete-range! gb start end))
-    (buf:buffer-mark-dirty! buffer)
-    (undo:undo-record! (buf:buffer-undo buffer)
-      (undo:OpDelete start deleted)
-      cursor-before
-      start)
+    (match (gap:gap-expand-range-to-editor-units gb start end)
+      ((Tuple del-start del-end)
+       (when (> del-end del-start)
+         (let deleted = (gap:gap-delete-range! gb del-start del-end))
+         (buf:buffer-mark-dirty! buffer)
+         (undo:undo-record! (buf:buffer-undo buffer)
+           (undo:OpDelete del-start deleted)
+           cursor-before
+           del-start))))
     (values))
+
+  (declare record-delete-backward-unit! (buf:Buffer * cursor:CursorState * UFix -> Void))
+  (define (record-delete-backward-unit! buffer cs pos)
+    "Delete the editor unit before POS and leave the cursor at its start."
+    (let gb = (buf:buffer-gap buffer))
+    (let unit-end = (gap:gap-editor-unit-end-pos gb (clamp-position gb pos)))
+    (when (> unit-end 0)
+      (let unit-start = (gap:gap-editor-unit-prev-pos gb unit-end))
+      (record-delete! buffer unit-start unit-end unit-end)
+      (cell:write! (cursor:.pos cs) unit-start)
+      (values)))
+
+  (declare record-delete-forward-unit! (buf:Buffer * cursor:CursorState * UFix -> Void))
+  (define (record-delete-forward-unit! buffer cs pos)
+    "Delete the editor unit at POS and leave the cursor at its start."
+    (let gb = (buf:buffer-gap buffer))
+    (let unit-start = (gap:gap-editor-unit-start-pos gb (clamp-position gb pos)))
+    (when (< unit-start (gap:gap-length gb))
+      (let unit-end = (gap:gap-editor-unit-next-pos gb unit-start))
+      (record-delete! buffer unit-start unit-end unit-start)
+      (cell:write! (cursor:.pos cs) unit-start)
+      (values)))
 
   ;;; Commands
 
@@ -818,12 +847,14 @@ Inside strings, parens are treated as normal characters."
       (fn () (cursor:cursor-position cs))
       (fn ()
         (let gb = (buf:buffer-gap buffer))
-        (let p = (cursor:cursor-position cs))
+        (let raw-p = (cursor:cursor-position cs))
+        (let p = (gap:gap-editor-unit-end-pos gb (clamp-position gb raw-p)))
+        (when (not (== raw-p p))
+          (cell:write! (cursor:.pos cs) p))
         (when (> p 0)
           (cond
             ((%in-line-comment? gb p)
-             (record-delete! buffer (- p 1) p p)
-             (cell:write! (cursor:.pos cs) (- p 1))
+             (record-delete-backward-unit! buffer cs p)
              (values))
             ((%in-string? gb p)
              (cond
@@ -849,8 +880,7 @@ Inside strings, parens are treated as normal characters."
                    (_ (values))))
                 ;; Normal char inside string (including parens): delete it
                 (_
-                 (record-delete! buffer (- p 1) p p)
-                 (cell:write! (cursor:.pos cs) (- p 1))
+                 (record-delete-backward-unit! buffer cs p)
                  (values))))))
             (True
               ;; Outside a string: full paredit behavior
@@ -887,8 +917,7 @@ Inside strings, parens are treated as normal characters."
                  (cell:write! (cursor:.pos cs) (- p 1))
                  (values))
                 (_
-                 (record-delete! buffer (- p 1) p p)
-                 (cell:write! (cursor:.pos cs) (- p 1))
+                 (record-delete-backward-unit! buffer cs p)
                  (values)))))))))
 
   (declare %paredit-backspace-word-loop! (buf:Buffer * cursor:CursorState * UFix -> Void))
@@ -904,8 +933,7 @@ Inside strings, parens are treated as normal characters."
              (cell:write! (cursor:.pos cs) (- p 1))
              (%paredit-backspace-word-loop! buffer cs target))
             (_
-             (record-delete! buffer (- p 1) p p)
-             (cell:write! (cursor:.pos cs) (- p 1))
+             (record-delete-backward-unit! buffer cs p)
              (%paredit-backspace-word-loop! buffer cs target)))
           (match (gap:gap-char-at gb (- p 1))
             ;; Step over structural delimiters instead of deleting them.
@@ -925,8 +953,7 @@ Inside strings, parens are treated as normal characters."
              (cell:write! (cursor:.pos cs) (- p 1))
              (%paredit-backspace-word-loop! buffer cs target))
             (_
-             (record-delete! buffer (- p 1) p p)
-             (cell:write! (cursor:.pos cs) (- p 1))
+             (record-delete-backward-unit! buffer cs p)
              (%paredit-backspace-word-loop! buffer cs target))))))
 
   (declare paredit-backspace-word! (buf:Buffer * cursor:CursorState -> Void))
@@ -949,11 +976,14 @@ Inside strings, parens are treated as normal characters."
       (fn () (cursor:cursor-position cs))
       (fn ()
         (let gb = (buf:buffer-gap buffer))
-        (let p = (cursor:cursor-position cs))
+        (let raw-p = (cursor:cursor-position cs))
+        (let p = (gap:gap-editor-unit-start-pos gb (clamp-position gb raw-p)))
+        (when (not (== raw-p p))
+          (cell:write! (cursor:.pos cs) p))
         (when (< p (gap:gap-length gb))
           (cond
             ((%in-line-comment? gb p)
-             (record-delete! buffer p (+ p 1) p)
+             (record-delete-forward-unit! buffer cs p)
              (values))
             ((%in-string? gb p)
              (cond
@@ -972,7 +1002,7 @@ Inside strings, parens are treated as normal characters."
                  (values))
                 ;; Normal char inside string (including parens): delete it
                 (_
-                 (record-delete! buffer p (+ p 1) p)
+                 (record-delete-forward-unit! buffer cs p)
                  (values))))))
             (True
               ;; Outside a string: full paredit behavior
@@ -989,10 +1019,10 @@ Inside strings, parens are treated as normal characters."
                    (_ (values))))
                 ((Some #\")
                  (match (gap:gap-char-at gb (+ p 1))
-                  ((Some #\") (record-delete! buffer p (+ p 2) p))
-                  (_ (values))))
+                   ((Some #\") (record-delete! buffer p (+ p 2) p))
+                   (_ (values))))
                 (_
-                 (record-delete! buffer p (+ p 1) p)
+                 (record-delete-forward-unit! buffer cs p)
                  (values)))))))))
 
   (declare %current-string-open (gap:GapBuffer * UFix -> Optional UFix))
