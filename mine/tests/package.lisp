@@ -108,7 +108,8 @@
                   check-beam-system-emits-diagnostics-before-return
                   check-beam-system-preserves-coalton-error-spans
                   check-create-project-creates-new-project
-                  check-create-project-refuses-existing-directory))
+                  check-create-project-refuses-existing-directory
+                  check-create-project-rejects-path-like-name))
     (format t "~&~A~%" test)
     (funcall test))
   t)

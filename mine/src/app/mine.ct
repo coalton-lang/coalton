@@ -2073,6 +2073,14 @@ Uses the preceding (in-package ...) form to determine the compilation package."
 
   (declare open-project-selection! (MineState * String -> Void))
   (declare open-project-at-path! (MineState * String -> Void))
+  (declare valid-project-name? (String -> Boolean))
+  (define (valid-project-name? name)
+    "True if NAME is a single path component."
+    (lisp (-> Boolean) (name)
+      (cl:and (cl:plusp (cl:length name))
+              (cl:not (cl:find #\/ name))
+              (cl:not (cl:find #\\ name)))))
+
   (declare project-destination-exists? (String * String -> Boolean))
   (define (project-destination-exists? location name)
     "True if creating project NAME in LOCATION would collide with an existing file or directory."
@@ -2091,37 +2099,40 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     (let asd-path = (<> project-dir (<> name ".asd")))
     (let ext = (if is-coalton ".ct" ".lisp"))
     (let main-file = (<> src-dir (<> "main" ext)))
-    (if (project-destination-exists? location name)
-        (Err (<> "Project already exists: " project-dir))
-        (progn
-          ;; Create directories and write main file (one-package-per-file)
-          (lisp (-> Void) (src-dir main-file name is-coalton)
-            (cl:ensure-directories-exist (cl:pathname src-dir))
-            (cl:with-open-file (out main-file :direction :output
-                                              :if-exists :error
-                                              :if-does-not-exist :create)
-              (cl:if (cl:eq is-coalton coalton:True)
-                     (cl:progn
-                       (cl:format out "(cl:defpackage #:~A~%" name)
-                       (cl:format out "  (:use #:coalton #:coalton-prelude))~%~%")
-                       (cl:format out "(cl:in-package #:~A)~%~%" name)
-                       (cl:format out "(coalton-toplevel~%~%")
-                       (cl:format out "  (declare main (Void -> Void))~%")
-                       (cl:format out "  (define (main)~%")
-                       (cl:format out "    (print \"Hello!\")))~%"))
-                     (cl:progn
-                       (cl:format out "(defpackage #:~A~%" name)
-                       (cl:format out "  (:use #:cl))~%~%")
-                       (cl:format out "(in-package #:~A)~%~%" name)
-                       (cl:format out "(defun main ()~%")
-                       (cl:format out "  (write-line \"Hello!\"))~%"))))
-            (cl:values))
-          ;; Build SystemDef and write .asd
-          (let comp-type = (if is-coalton model:CTCtFile model:CTFile))
-          (let main-comp = (model:Component "main" comp-type Nil))
-          (let sysdef = (model:SystemDef name Nil (make-list main-comp) "" "src/"))
-          (writer:write-asd-file sysdef asd-path)
-          (Ok asd-path))))
+    (cond
+      ((not (valid-project-name? name))
+       (Err "Project name cannot contain path separators"))
+      ((project-destination-exists? location name)
+       (Err (<> "Project already exists: " project-dir)))
+      (True
+       ;; Create directories and write main file (one-package-per-file)
+       (lisp (-> Void) (src-dir main-file name is-coalton)
+         (cl:ensure-directories-exist (cl:pathname src-dir))
+         (cl:with-open-file (out main-file :direction :output
+                                           :if-exists :error
+                                           :if-does-not-exist :create)
+           (cl:if (cl:eq is-coalton coalton:True)
+                  (cl:progn
+                    (cl:format out "(cl:defpackage #:~A~%" name)
+                    (cl:format out "  (:use #:coalton #:coalton-prelude))~%~%")
+                    (cl:format out "(cl:in-package #:~A)~%~%" name)
+                    (cl:format out "(coalton-toplevel~%~%")
+                    (cl:format out "  (declare main (Void -> Void))~%")
+                    (cl:format out "  (define (main)~%")
+                    (cl:format out "    (print \"Hello!\")))~%"))
+                  (cl:progn
+                    (cl:format out "(defpackage #:~A~%" name)
+                    (cl:format out "  (:use #:cl))~%~%")
+                    (cl:format out "(in-package #:~A)~%~%" name)
+                    (cl:format out "(defun main ()~%")
+                    (cl:format out "  (write-line \"Hello!\"))~%"))))
+         (cl:values))
+       ;; Build SystemDef and write .asd
+       (let comp-type = (if is-coalton model:CTCtFile model:CTFile))
+       (let main-comp = (model:Component "main" comp-type Nil))
+       (let sysdef = (model:SystemDef name Nil (make-list main-comp) "" "src/"))
+       (writer:write-asd-file sysdef asd-path)
+       (Ok asd-path))))
 
   (declare create-new-project! (MineState * String * String * Boolean -> Void))
   (define (create-new-project! st name location is-coalton)

@@ -65,3 +65,21 @@
            (%check (string= asd-sentinel (%read-utf8-file asd-path))
                    "Expected existing ASD file to remain unchanged"))
       (ignore-errors (uiop:delete-directory-tree root :validate t)))))
+
+(defun check-create-project-rejects-path-like-name ()
+  (dolist (name '("path-like-project/" "path\\like-project"))
+    (let ((root (%mine-project-test-root)))
+      (unwind-protect
+           (let ((result (mine/app/mine::create-project-files!
+                          name
+                          (namestring root)
+                          coalton:True)))
+             (%check (coalton/result:err? result)
+                     "Expected path-like project name ~S to be rejected, got ~S"
+                     name
+                     result)
+             (%check (not (probe-file root))
+                     "Expected invalid project name ~S to leave root untouched at ~S"
+                     name
+                     root))
+        (ignore-errors (uiop:delete-directory-tree root :validate t))))))
