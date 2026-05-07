@@ -127,10 +127,10 @@
 
           (when (> (+ offset size) length)
             (let remaining = (- length offset))
-            (cell:update! (fn (x) (+ size x)) offset_)
+            (cell:update! ƒx.(+ size x) offset_)
             (return (Some (new offset remaining s))))
 
-          (cell:update! (fn (x) (+ size x)) offset_)
+          (cell:update! ƒx.(+ size x) offset_)
           (Some (new offset size s)))
       (cond
         ;; If size is greater than length the iterator is empty
@@ -153,7 +153,7 @@
         (when (> (+ offset size) length)
           (return None))
 
-        (cell:update! (fn (x) (+ size x)) offset_)
+        (cell:update! ƒx.(+ size x) offset_)
         (Some (new offset size s)))
       (div length size)))
 

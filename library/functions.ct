@@ -78,8 +78,7 @@ Print a line to `cl:*standard-output*` in the form \"{STR}: {ITEM}\"."
           (if (== n 0)
             1
             (* n (f (- n 1)))))))"
-    (fn (n)
-      (f (fix f) n)))
+    ƒn.(f (fix f) n))
 
   (inline)
   (declare id (:a -> :a))
@@ -91,13 +90,13 @@ Print a line to `cl:*standard-output*` in the form \"{STR}: {ITEM}\"."
   (declare const (:a -> (:b -> :a)))
   (define (const a)
     "A function that always returns its first argument."
-    (fn (_b) a))
+    ƒ_.a)
 
   (inline)
   (declare flip ((:a * :b -> :c) -> (:b * :a -> :c)))
   (define (flip f)
     "Returns a function that takes its arguments in reverse order."
-    (fn (x y) (f y x)))
+    ƒxy.(f y x))
 
   (inline) 
   (declare reduce (Foldable :f => (:a * :b -> :b) * :b * (:f :a) -> :b))
@@ -109,7 +108,7 @@ Print a line to `cl:*standard-output*` in the form \"{STR}: {ITEM}\"."
   (declare compose ((:b -> :c) * (:a -> :b) -> (:a -> :c)))
   (define (compose f g)
     "Equivalent to `(f (g x))`."
-    (fn (x) (f (g x)))))
+    ƒx.(f (g x))))
 
 (coalton-toplevel
  
@@ -210,7 +209,7 @@ For example, the following expressions are equivalent.
 
   (define-instance (Applicative (Arrow :a))
     (inline) 
-    (define (pure x) (fn (_) x))
+    (define (pure x) ƒ_.x)
     (inline) 
     (define (liftA2 f g h) (fn (x) (f (g x) (h x)))))
 

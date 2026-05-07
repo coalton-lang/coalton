@@ -184,8 +184,7 @@
     (let iter = (iter:into-iter iter))
 
     (iter:for-each!
-     (fn (x)
-       (push! x q))
+     ƒx.(push! x q)
      iter))
 
   (declare items! (Queue :a -> iter:Iterator :a))

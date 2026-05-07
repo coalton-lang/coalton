@@ -21,6 +21,7 @@
    #:paredit-backspace!
    #:paredit-backspace-word!
    #:paredit-delete!
+   #:paredit-forward-join-newline-range
    #:paredit-forward-join!
    #:paredit-forward-leave!
    #:paredit-backward-join!
@@ -1149,6 +1150,44 @@ Inside strings, parens are treated as normal characters."
             (not (delimiter? right))))
       (_ False)))
 
+  (declare %string-contains-newline? (String -> Boolean))
+  (define (%string-contains-newline? s)
+    (lisp (-> Boolean) (s)
+      (cl:not (cl:null (cl:position #\Newline s)))))
+
+  (declare %forward-join-separator (String * String * String -> String))
+  (define (%forward-join-separator tail-ws between-ws fallback)
+    "Choose the separator inserted before a joined sexp.
+When the join crosses existing line structure, preserve that line structure
+instead of collapsing it to a space."
+    (cond
+      ((%string-contains-newline? tail-ws) tail-ws)
+      ((%string-contains-newline? between-ws) between-ws)
+      (True fallback)))
+
+  (declare paredit-forward-join-newline-range (gap:GapBuffer * UFix -> Optional (Tuple UFix UFix)))
+  (define (paredit-forward-join-newline-range gb p)
+    "Return the buffer span touched by a forward join when it preserves a newline."
+    (match (%current-list-open gb p)
+      ((None) None)
+      ((Some open-pos)
+       (match (%matching-close-for gb open-pos)
+         ((None) None)
+         ((Some close-pos)
+          (match (scan-forward-sexp gb (+ close-pos 1))
+            ((None) None)
+            ((Some after-next)
+             (let buf-len = (gap:gap-length gb))
+             (let tail-start = (%skip-ws-back gb close-pos))
+             (let next-start = (%skip-ws-fwd gb (+ close-pos 1) buf-len))
+             (let tail-ws = (gap:gap-substring gb tail-start close-pos))
+             (let between-ws = (gap:gap-substring gb (+ close-pos 1) next-start))
+             (let fallback-separator = (if (> tail-start (+ open-pos 1)) " " ""))
+             (let separator = (%forward-join-separator tail-ws between-ws fallback-separator))
+             (if (%string-contains-newline? separator)
+                 (Some (Tuple tail-start after-next))
+                 None))))))))
+
   (declare paredit-forward-join! (buf:Buffer * cursor:CursorState -> Void))
   (define (paredit-forward-join! buffer cs)
     "Move the closing delimiter of the enclosing form past the next sexp."
@@ -1171,9 +1210,12 @@ Inside strings, parens are treated as normal characters."
                  (let buf-len = (gap:gap-length gb))
                  (let tail-start = (%skip-ws-back gb close-pos))
                  (let next-start = (%skip-ws-fwd gb (+ close-pos 1) buf-len))
+                 (let tail-ws = (gap:gap-substring gb tail-start close-pos))
+                 (let between-ws = (gap:gap-substring gb (+ close-pos 1) next-start))
                  (let moved-text = (gap:gap-substring gb next-start after-next))
                  ;; Keep one space between existing list content and the joined sexp.
-                 (let separator = (if (> tail-start (+ open-pos 1)) " " ""))
+                 (let fallback-separator = (if (> tail-start (+ open-pos 1)) " " ""))
+                 (let separator = (%forward-join-separator tail-ws between-ws fallback-separator))
                  (let replacement = (<> separator (<> moved-text close-str)))
                  ;; Replace the old tail with the joined sexp plus the new close delimiter.
                  (record-delete! buffer tail-start after-next p)

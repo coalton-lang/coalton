@@ -5,6 +5,31 @@
 
 (in-package #:mine/bindings/process)
 
+;;; Launcher resolution
+
+(defun %argv0-has-directory-component-p (argv0)
+  (or (position #\/ argv0)
+      #+win32 (position #\\ argv0)
+      #+win32 (position #\: argv0)))
+
+(defun %resolve-reexec-program (argv0)
+  "Return the executable name/path to use when re-executing mine."
+  (if (%argv0-has-directory-component-p argv0)
+      (handler-case
+          (namestring (truename (pathname argv0)))
+        (error () argv0))
+      argv0))
+
+(defun reexec-program ()
+  "Return the launcher program to use when spawning another mine process.
+
+Bare command names are left untouched so `run-program' can search PATH.
+Only names that already contain a directory component are canonicalized."
+  (%resolve-reexec-program
+   (or (sb-ext:posix-getenv "MINE_LAUNCHER")
+       (first sb-ext:*posix-argv*)
+       "mine")))
+
 ;;; Spawning
 
 (defun spawn-subprocess (program args)

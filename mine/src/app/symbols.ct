@@ -622,6 +622,11 @@
 
 (coalton-toplevel
 
+  ;; Coalton shorthand aliases
+  (declare coalton-symbols (List (Tuple String String)))
+  (define coalton-symbols
+    ["fn" => "ƒ"])
+
   (declare entries-to-symbol-map (List (Tuple String String) -> hm:HashMap String String))
   (define (entries-to-symbol-map entries)
     (iter:collect! (iter:into-iter entries)))
@@ -832,6 +837,7 @@
   (define latex-symbol-entries
     (list:concat
      [
+      coalton-symbols
       greek-lowercase-symbols
       greek-uppercase-symbols
       arrows-symbols

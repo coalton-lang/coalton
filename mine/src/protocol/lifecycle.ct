@@ -40,12 +40,7 @@
 (cl:defun %runtime-do-start (mgr)
   "Start a runtime subprocess and connect. Returns T on success, NIL on failure."
   (cl:handler-case
-      (cl:let* ((argv0 (cl:or (sb-ext:posix-getenv "MINE_LAUNCHER")
-                              (cl:first sb-ext:*posix-argv*)
-                              "mine"))
-                (abspath (cl:handler-case
-                             (cl:namestring (cl:truename (cl:pathname argv0)))
-                           (cl:error () argv0)))
+      (cl:let* ((abspath (mine/bindings/process:reexec-program))
                 (heap-mb (%runtime-manager-heap-size mgr))
                 (proc (mine/bindings/process:spawn-subprocess
                        abspath

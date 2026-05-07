@@ -12,8 +12,10 @@
    (#:undo #:mine/edit/undo)
    (#:paredit #:mine/syntax/paredit)
    (#:repl #:mine/pane/repl)
+   (#:proc #:mine/bindings/process)
    (#:server #:mine/protocol/server)
    (#:source #:coalton-impl/source)
+   (#:symbols #:mine/app/symbols)
    (#:wt #:mine/widget/types))
   (:export #:run-mine-tests
            #:run-mine-tests-in-subprocess))
@@ -62,6 +64,9 @@
                   check-generic-coalton-toplevel-notes-stay-textual
                   check-source-diagnostic-hook-sees-source-error-subclasses
                   check-reader-errors-produce-point-diagnostics
+                  check-symbol-input-fn-alias
+                  check-short-lambda-introducer-highlights-as-fn
+                  check-chained-short-lambda-introducers-each-highlight
                   check-indent-hunchentoot-style-handler-body
                   check-indent-multiple-value-bind-special-form
                   check-indent-lambda-list-keyword-alignment
@@ -79,10 +84,18 @@
                   check-crlf-editor-unit-cursor-motion
                   check-crlf-editor-unit-delete
                   check-crlf-structural-editor-unit-delete
+                  check-paredit-forward-join-preserves-newline-separators
+                  check-paredit-forward-join-newline-range-detects-formatting
                   check-clipboard-stream-read-preserves-crlf
                   check-indent-line-tab-hop-to-source
                   check-indent-line-preserves-source-position
+                  check-indent-line-start-follows-inserted-indentation
+                  check-indent-line-after-cursor-preserves-cursor
                   check-editor-paste-clamps-stale-cursor-to-buffer-end
+                  check-runtime-coalton-stdlib-packages-classification
+                  check-runtime-coalton-auto-wrap-classification
+                  check-reexec-program-keeps-bare-command-with-cwd-collision
+                  check-reexec-program-canonicalizes-paths
                   check-repl-structural-editing-pairs-delimiters
                   check-repl-structural-close-paren-in-string-inserts
                   check-repl-structural-close-paren-collapses-empty-form
@@ -106,7 +119,11 @@
                   check-quick-result-popup-uses-terminal-height
                   check-coalton-none-is-not-current-buffer-at-cl-boundary
                   check-beam-system-emits-diagnostics-before-return
-                  check-beam-system-preserves-coalton-error-spans))
+                  check-beam-system-preserves-coalton-error-spans
+                  check-create-project-creates-new-project
+                  check-create-project-refuses-existing-directory
+                  check-create-project-rejects-path-like-name
+                  check-buffer-manager-any-dirty-sees-non-current-buffer))
     (format t "~&~A~%" test)
     (funcall test))
   t)

@@ -601,10 +601,10 @@ Collection comprehension iterables must implement IntoIterator
 --------------------------------------------------------------------------------
 
 error: Unknown instance
-  --> test:5:43
+  --> test:5:46
    |
  5 |    (define x (the (coalton/seq:Seq Integer) [x :for x :in True])))
-   |                                             ^^^^^^^^^^^^^^^^^^^ Unknown instance IntoIterator Boolean Integer
+   |                                                ^^^^^^^^^^^^^^^ Unknown instance IntoIterator Boolean Integer
 
 ================================================================================
 Collection comprehension when clauses must be Boolean
@@ -637,10 +637,10 @@ Association comprehension iterables must implement IntoIterator
 --------------------------------------------------------------------------------
 
 error: Unknown instance
-  --> test:5:59
+  --> test:5:67
    |
  5 |    (define x (the (coalton/seq:Seq (Tuple Integer Integer)) [x => x :for x :in True])))
-   |                                                             ^^^^^^^^^^^^^^^^^^^^^^^^ Unknown instance IntoIterator Boolean Integer
+   |                                                                     ^^^^^^^^^^^^^^^ Unknown instance IntoIterator Boolean Integer
 
 ================================================================================
 Association comprehension when clauses must be Boolean
@@ -673,8 +673,8 @@ Collection comprehension :below clauses must be numeric
 --------------------------------------------------------------------------------
 
 error: Unknown instance
-  --> test:5:13
+  --> test:5:20
    |
  5 |    (define x [x :for x :below "no"]))
-   |               ^ Unknown instance Num String
+   |                      ^ Unknown instance Num String
  
