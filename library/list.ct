@@ -289,7 +289,7 @@
   
   (declare elemIndex (Eq :a => :a * List :a -> Optional UFix))
   (define (elemIndex x xs)
-    (findIndex (fn (y) (== x y)) xs))
+    (findIndex ƒy.(== x y) xs))
 
   (declare findIndex ((:a -> Boolean) * List :a -> Optional UFix))
   (define (findIndex f xs)
@@ -335,7 +335,7 @@
   (declare concat (List (List :a) -> List :a))
   (define (concat xs)
     "Appends a list of lists together into a single new list."
-    (concatMap (fn (x) x) xs))
+    (concatMap ƒx.x xs))
 
   (specialize mconcatMap concatMap ((:a -> (List :b)) * List :a -> List :b))
   (declare concatMap ((:a -> (List :b)) * List :a -> List :b))
@@ -424,7 +424,7 @@
   (declare remove (Eq :a => (:a * (List :a) -> (List :a))))
   (define (remove x ys)
     "Return a new list with the first element equal to `x` removed."
-    (remove-if (fn (y) (== x y)) ys))
+    (remove-if ƒy.(== x y) ys))
 
   (declare difference (Eq :a => ((List :a) * (List :a) -> (List :a))))
   (define (difference xs ys)

@@ -14,6 +14,12 @@
       nil
       (coalton-impl/runtime/optional:unwrap-cl-some value)))
 
+(defun user-error (st text)
+  "Queue a user-facing modal error."
+  (coalton/cell:write!
+   (mine/app/state:get-pending-error-cell st)
+   (coalton:Some text)))
+
 (defun jump-to-file (st filepath char-offset)
   "Open FILEPATH in the editor and move cursor to CHAR-OFFSET."
   (labels
@@ -35,9 +41,7 @@
                                    resolved-path))))
           (unless (and (stringp resolved-path)
                        (plusp (length resolved-path)))
-            (mine/pane/status::statusbar-set-message!
-             (mine/app/state:get-status-bar st)
-             "Jump failed: no file path")
+            (user-error st "Jump failed: no file path")
             (return-from jump-to-file nil))
           (let* ((bm (mine/app/state:get-bufmgr st))
                  (ep (mine/app/state:get-editor-pane st))
@@ -53,10 +57,9 @@
                     (setf opened-buf
                           (coalton-library/classes::result/ok-_0 buf-result))
                     (progn
-                      (mine/pane/status::statusbar-set-message!
-                       (mine/app/state:get-status-bar st)
-                       (format nil "Jump failed: could not open ~A"
-                               (display-name resolved-path)))
+                      (user-error st
+                                  (format nil "Jump failed: could not open ~A"
+                                          (display-name resolved-path)))
                       (return-from jump-to-file nil)))))
             (let* ((buf (or existing-buf opened-buf))
                    (gb (mine/buffer/buffer::buffer-gap buf))
@@ -74,9 +77,7 @@
                (format nil "Jumped to ~A" (display-name resolved-path)))
               t)))
       (error (c)
-        (mine/pane/status::statusbar-set-message!
-         (mine/app/state:get-status-bar st)
-         (format nil "Jump failed: ~A" c))))))
+        (user-error st (format nil "Jump failed: ~A" c))))))
 
 (defun jump-to-document-key (st document-key char-offset)
   "Jump to DOCUMENT-KEY, which may name either a file or an open unnamed buffer."
@@ -91,9 +92,7 @@
                   (mine/buffer/manager::bufmgr-find-by-document-key bm document-key))))
        (if (null buf)
            (progn
-             (mine/pane/status::statusbar-set-message!
-              (mine/app/state:get-status-bar st)
-              "Jump skipped: buffer is no longer open")
+             (user-error st "Jump skipped: buffer is no longer open")
              nil)
            (let* ((gb (mine/buffer/buffer::buffer-gap buf))
                   (bid (mine/buffer/buffer::buffer-id buf))

@@ -56,3 +56,44 @@
       (is (equal "NOT"
                  (symbol-name (first
                                (package-shadowing-symbols lisp-pkg-c))))))))
+
+(defun declaim-under-locally-p (form &optional under-locally-p)
+  (cond
+    ((atom form)
+     nil)
+    ((and under-locally-p
+          (eq 'cl:declaim (first form)))
+     t)
+    (t
+     (let ((under-locally-p (or under-locally-p
+                                (eq 'cl:locally (first form)))))
+       (some (lambda (subform)
+               (declaim-under-locally-p subform under-locally-p))
+             form)))))
+
+(deftest test-generated-declaims-remain-top-level ()
+  "Generated DECLAIM forms must not be nested inside LOCALLY."
+  (let* ((package-name (format nil "COALTON-DECL-TOPLEVEL-~A" (gensym)))
+         (package (make-package package-name
+                                :use '("COALTON" "COALTON-PRELUDE"))))
+    (unwind-protect
+         (let* ((*package* package)
+                (source (source:make-source-string
+                         "(declare *width* Integer)
+                          (define *width* 400)
+
+                          (declare *aspect-ratio* Fraction)
+                          (define *aspect-ratio* 16/9)
+
+                          (declare height-from-aspect-ratio
+                            (Integer * Fraction -> Integer))
+                          (define (height-from-aspect-ratio width ratio)
+                            (floor (/ (into width) ratio)))"
+                         :name "test"))
+                (program
+                  (with-open-stream (stream (source:source-stream source))
+                    (parser:with-reader-context stream
+                      (parser:read-program stream source))))
+                (lisp-form (entry:entry-point program)))
+           (is (not (declaim-under-locally-p lisp-form))))
+      (delete-package package))))

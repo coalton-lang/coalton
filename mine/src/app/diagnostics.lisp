@@ -41,6 +41,12 @@
   (unless (coalton-impl/runtime/optional:cl-none-p value)
     (coalton-impl/runtime/optional:unwrap-cl-some value)))
 
+(defun user-error (st text)
+  "Queue a user-facing modal error."
+  (coalton/cell:write!
+   (mine/app/state:get-pending-error-cell st)
+   (coalton:Some text)))
+
 (defun buffer-document-key-p (document-key)
   "Return T when DOCUMENT-KEY names an unnamed in-memory buffer."
   (and (stringp document-key)
@@ -392,9 +398,7 @@ those files."
          (attempted (make-hash-table :test 'equal)))
     (cond
       ((null locations)
-       (mine/pane/status::statusbar-set-message!
-        (mine/app/state:get-status-bar st)
-        (if scope "No project diagnostics" "No diagnostics")))
+       (user-error st (if scope "No project diagnostics" "No diagnostics")))
       (t
        (loop
          :repeat (length locations)
@@ -413,9 +417,7 @@ those files."
                (return-from jump-adjacent-diagnostic t))
              (setf cursor-file (first target)
                    cursor-pos (second target)))
-       (mine/pane/status::statusbar-set-message!
-        (mine/app/state:get-status-bar st)
-        "No reachable diagnostics")))))
+       (user-error st "No reachable diagnostics")))))
 
 ;;; Diagnostics popup
 

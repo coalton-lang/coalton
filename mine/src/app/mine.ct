@@ -210,12 +210,14 @@
   (declare %focus-repl! (MineState -> Void))
   (define (%focus-repl! st)
     (%set-center-layout! st (%center-focus-repl (%center-layout st)))
+    (cursor:cursor-clear-selection! (.ms-cursor st))
     (focus:focus-switch! (.ms-focus st) focus:FocusRepl)
     (values))
 
   (declare %show-editor! (MineState -> Void))
   (define (%show-editor! st)
     (%set-center-layout! st (%center-focus-editor (%center-layout st)))
+    (repl:repl-pane-clear-selection! (.ms-repl st))
     (focus:focus-switch! (.ms-focus st) focus:FocusEditor)
     (values))
 
@@ -471,6 +473,7 @@
        (status:statusbar-update! (.ms-status st) mode-str fname is-dirty
                                  (+ cur-line 1) (+ cur-col 1)
                                  (cell:read (.ms-repl-package st))
+                                 (cell:read (.ms-project-system st))
                                  sym-info)))
     (status:statusbar-render (.ms-status st) scr status-rect)
     ;; Position the hardware cursor (only visible in editor/REPL)
@@ -501,6 +504,25 @@
     ;; Render minibuffer overlay
     (when (mini:minibuffer-active? (.ms-minibuffer st))
       (render-minibuffer-overlay st scr cols rows)))
+
+  (declare user-error! (MineState * String -> Void))
+  (define (user-error! st msg)
+    "Queue an error modal to be shown by the main loop."
+    (cell:write! (.ms-pending-error st) (Some msg))
+    (values))
+
+  (declare show-pending-error! (MineState * term:Terminal -> Boolean))
+  (define (show-pending-error! st term)
+    "Show and clear a pending user-facing error modal. Returns True if one was shown."
+    (match (cell:read (.ms-pending-error st))
+      ((None) False)
+      ((Some msg)
+       (cell:write! (.ms-pending-error st) None)
+       (render-app st term)
+       (dialogs:alert-dialog term "Error" msg Nil (fn (t) (render-app st t)))
+       (render-app st term)
+       (term:terminal-flush term)
+       True)))
 
   (declare render-minibuffer-overlay (MineState * screen:Screen * UFix * UFix -> Void))
   (define (render-minibuffer-overlay st scr cols rows)
@@ -815,19 +837,6 @@ the cursor's display-x within its wrap segment."
 
 ;;; REPL status line
 
-  (declare %detect-repl-lang (String -> String))
-  (define (%detect-repl-lang pkg-name)
-    "Detect whether the REPL package is Lisp, Coalton, or neither."
-    (lisp (-> String) (pkg-name)
-      (cl:let ((pkg (cl:find-package (cl:string-upcase pkg-name))))
-        (cl:if pkg
-               (cl:let ((uses (cl:mapcar #'cl:package-name (cl:package-use-list pkg))))
-                 (cl:cond
-                   ((cl:member "COALTON" uses :test #'cl:string-equal) "Coalton")
-                   ((cl:member "COMMON-LISP" uses :test #'cl:string-equal) "Lisp")
-                   (cl:t "--")))
-               "--"))))
-
   (declare %heap-info (Void -> String))
   (define (%heap-info)
     "Return cached heap info from the runtime server."
@@ -922,144 +931,6 @@ the cursor's display-x within its wrap segment."
 
 ;;; REPL eval
 
-  (declare %coalton-toplevel-form? (String -> Boolean))
-  (define (%coalton-toplevel-form? text)
-    "True if TEXT starts with a Coalton toplevel form that should be sent verbatim."
-    (lisp (-> Boolean) (text)
-      (cl:let ((form-class (%classify-form-head-cl (%read-form-head-cl text))))
-        (cl:if (cl:member form-class '(:coalton-wrapper :coalton-verbatim :package-form))
-               cl:t
-               cl:nil))))
-
-  (declare %coalton-definition-form? (String -> Boolean))
-  (define (%coalton-definition-form? text)
-    "True if TEXT starts with a Coalton definition form that needs coalton-toplevel."
-    (lisp (-> Boolean) (text)
-      (cl:let ((form-head (%read-form-head-cl text)))
-        (cl:if (cl:member form-head
-                          '("define" "define-type" "define-struct"
-                            "define-class" "define-instance")
-                          :test #'cl:string=)
-               cl:t cl:nil))))
-
-  (declare %non-coalton-package-form? (String -> Boolean))
-  (define (%non-coalton-package-form? text)
-    "True if TEXT is (pkg:sym ...) where pkg is not a Coalton package."
-    (lisp (-> Boolean) (text)
-      (cl:let ((trimmed (cl:string-trim '(#\Space #\Tab #\Newline) text)))
-        (cl:if (cl:and (cl:plusp (cl:length trimmed))
-                       (cl:char= (cl:char trimmed 0) #\())
-               (cl:let* ((rest (cl:subseq trimmed 1))
-                         ;; Find the delimiter after the first symbol
-                         (delim-pos (cl:position-if
-                                     (cl:lambda (c)
-                                       (cl:member c '(#\Space #\Tab #\Newline #\))))
-                                     rest))
-                         (first-sym (cl:if delim-pos
-                                           (cl:subseq rest 0 delim-pos)
-                                           rest))
-                         ;; Check for package qualifier (single colon, not double)
-                         (colon-pos (cl:position #\: first-sym)))
-                 (cl:if (cl:and colon-pos
-                                (cl:plusp colon-pos)
-                                ;; Not a keyword (doesn't start with :)
-                                ;; Has a real package prefix
-                                (cl:let* ((pkg-name (cl:string-upcase
-                                                     (cl:subseq first-sym 0 colon-pos)))
-                                          (pkg (cl:find-package pkg-name)))
-                                  ;; Non-Coalton package: anything not starting with "COALTON"
-                                  (cl:and pkg
-                                          (cl:not (cl:and (cl:>= (cl:length pkg-name) 7)
-                                                          (cl:string= "COALTON" pkg-name
-                                                                      :end2 7))))))
-                        cl:t cl:nil))
-               cl:nil))))
-
-  (declare %cl-package-symbol? (String * String -> Boolean))
-  (define (%cl-package-symbol? input pkg-name)
-    "True if INPUT is a symbol (possibly package-qualified) whose home
-package :USEs CL.  Handles both bare names and pkg:sym / pkg::sym."
-    (lisp (-> Boolean) (input pkg-name)
-      (cl:let ((trimmed (cl:string-trim '(#\Space #\Tab #\Newline) input)))
-        (cl:if (cl:or (cl:zerop (cl:length trimmed))
-                      (cl:char= (cl:char trimmed 0) #\())
-               cl:nil
-               (cl:let ((colon-pos (cl:position #\: trimmed)))
-                 (cl:if colon-pos
-                        ;; Package-qualified: parse pkg:sym or pkg::sym
-                        (cl:let* ((pkg-str (cl:string-upcase
-                                            (cl:subseq trimmed 0 colon-pos)))
-                                  (name-start
-                                    (cl:if (cl:and (cl:< (cl:1+ colon-pos)
-                                                         (cl:length trimmed))
-                                                   (cl:char= (cl:char trimmed
-                                                                      (cl:1+ colon-pos))
-                                                             #\:))
-                                           (cl:+ colon-pos 2)
-                                           (cl:1+ colon-pos)))
-                                  (sym-name (cl:string-upcase
-                                             (cl:subseq trimmed name-start)))
-                                  (pkg (cl:find-package pkg-str)))
-                          (cl:if pkg
-                                 (cl:multiple-value-bind (sym status)
-                                     (cl:find-symbol sym-name pkg)
-                                   (cl:declare (cl:ignore status))
-                                   (cl:if (cl:and sym (cl:symbol-package sym)
-                                                  (cl:member
-                                                   (cl:find-package "CL")
-                                                   (cl:package-use-list
-                                                    (cl:symbol-package sym))))
-                                          cl:t cl:nil))
-                                 cl:nil))
-                        ;; Bare symbol: look up in REPL package
-                        (cl:let ((pkg (cl:find-package pkg-name)))
-                          (cl:if (cl:null pkg)
-                                 cl:nil
-                                 (cl:multiple-value-bind (sym status)
-                                     (cl:find-symbol (cl:string-upcase trimmed)
-                                                     pkg)
-                                   (cl:declare (cl:ignore status))
-                                   (cl:if (cl:and sym (cl:symbol-package sym)
-                                                  (cl:member
-                                                   (cl:find-package "CL")
-                                                   (cl:package-use-list
-                                                    (cl:symbol-package sym))))
-                                          cl:t cl:nil))))))))))
-
-  (declare %coalton-package? (String -> Boolean))
-  (define (%coalton-package? pkg-name)
-    "True if PKG-NAME names a Coalton package (uses the COALTON package)."
-    (lisp (-> Boolean) (pkg-name)
-      (cl:let ((pkg (cl:find-package (cl:string-upcase pkg-name))))
-        (cl:if (cl:and pkg (mine/protocol/server::%coalton-package-p pkg))
-               cl:t cl:nil))))
-
-  (declare %wrap-coalton (String * String -> (Tuple String UFix)))
-  (define (%wrap-coalton input pkg-name)
-    "If PKG-NAME is a Coalton package, wrap INPUT appropriately:
-- definitions -> (coalton-toplevel ...)
-- expressions -> (coalton ...)
-- already-toplevel forms -> verbatim
-- forms with a non-Coalton package prefix -> verbatim (CL escape)
-- bare symbols from CL-using packages -> verbatim"
-    (if (%coalton-package? pkg-name)
-        (cond
-          ((%coalton-toplevel-form? input) (Tuple input 0))
-          ((%non-coalton-package-form? input) (Tuple input 0))
-          ((%coalton-definition-form? input)
-           (Tuple (<> "(coalton-toplevel " (<> input ")")) 18))
-          ((%cl-package-symbol? input pkg-name) (Tuple input 0))
-          (True (Tuple (<> "(coalton " (<> input ")")) 9)))
-        (Tuple input 0)))
-
-  (declare %wrap-coalton-input (MineState * String -> String))
-  (define (%wrap-coalton-input st input)
-    "If in Coalton REPL mode, wrap appropriately."
-    (if (== (cell:read (.ms-repl-lang st)) "Coalton")
-        (match (%wrap-coalton input (cell:read (.ms-repl-package st)))
-          ((Tuple wrapped _) wrapped))
-        input))
-
   (declare %append-input-to-output! (MineState * String * String -> Void))
   (define (%append-input-to-output! st prefix input-text)
     "Append input text to REPL output, splitting multi-line input into separate lines.
@@ -1116,8 +987,7 @@ First line gets PREFIX, continuation lines get spaces of the same width."
     "Show feedback and return True when a new foreground runtime request is blocked."
     (cond
       ((%runtime-foreground-active? st)
-       (status:statusbar-set-message! (.ms-status st)
-                                      (%runtime-foreground-block-message st))
+       (user-error! st (%runtime-foreground-block-message st))
        True)
       (True False)))
 
@@ -1145,7 +1015,7 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
        ;; Display input in output area
        (let prompt-str = (<> (cell:read (.ms-repl-package st)) "> "))
        (%append-input-to-output! st prompt-str input-text)
-       ;; Detect in-package and update local state (also updates lang)
+       ;; Detect in-package and update local package state only.
        (%detect-in-package st input-text)
        ;; Send to runtime (non-blocking)
        (match (ensure-runtime! st)
@@ -1160,8 +1030,11 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
           ;; Send the request
           (let req-id = (next-request-id! st))
           (cell:write! (.ms-active-request st) (Some req-id))
-          (let eval-text = (%wrap-coalton-input st input-text))
-          (let req = (msg:ReqEval req-id eval-text (cell:read (.ms-repl-package st))))
+          ;; This flag is only the user-selected REPL mode. The runtime
+          ;; subprocess decides whether the current package is Coalton.
+          (let auto-coalton? = (== (cell:read (.ms-repl-lang st)) "Coalton"))
+          (let req = (msg:ReqEval req-id input-text (cell:read (.ms-repl-package st))
+                                 auto-coalton?))
           (client:connection-send! conn req)
           ;; Return immediately -- response will arrive via mailbox
           (values))
@@ -1381,7 +1254,7 @@ multiple values get 0>, 1>, etc."
 Uses a dedicated Beam request so diagnostics can stream independently."
     (match (cell:read (.ms-project-system st))
       ((None)
-       (status:statusbar-set-message! (.ms-status st) "No project system loaded"))
+       (user-error! st "No project system loaded"))
       ((Some sys-name)
        (ensure-repl-visible! st)
        (when (%block-runtime-foreground-request! st)
@@ -1584,13 +1457,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
                                     (cl:symbol (cl:symbol-name pkg-arg)))))
                 (coalton/cell:write!
                  (mine/app/state:get-repl-package-cell st)
-                 pkg-name)
-                ;; Auto-detect lang from new package
-                (cl:let ((lang (%detect-repl-lang pkg-name)))
-                  (cl:unless (cl:string= lang "--")
-                    (coalton/cell:write!
-                     (mine/app/state:get-repl-lang-cell st)
-                     lang))))))
+                 pkg-name))))
         (cl:error () cl:nil))
       (cl:values)))
 
@@ -1849,7 +1716,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
       (repl:repl-pane-append-system! (.ms-repl st) ";; Running :repl-init...")
       (start-proto-reader! st conn)
       (let req-id = (next-request-id! st))
-      (let req = (msg:ReqEval req-id init-form "CL-USER"))
+      (let req = (msg:ReqEval req-id init-form "CL-USER" False))
       (client:connection-send! conn req)
       (values)))
 
@@ -2018,11 +1885,9 @@ Uses the preceding (in-package ...) form to determine the compilation package."
              (let req-id = (next-request-id! st))
              (cell:write! (.ms-active-request st) (Some req-id))
              (%track-diagnostic-request! req-id)
-             (match (%wrap-coalton form-text pkg)
-               ((Tuple compile-text client-prefix-length)
-                (let req = (msg:ReqCompileString req-id compile-text document-key pkg
-                                                 form-start client-prefix-length))
-                (client:connection-send! conn req))))))))))
+             (let req = (msg:ReqCompileString req-id form-text document-key pkg
+                                             form-start 0 True))
+             (client:connection-send! conn req))))))))
 
   (declare quick-result-form! (MineState -> Void))
   (define (quick-result-form! st)
@@ -2064,15 +1929,74 @@ Uses the preceding (in-package ...) form to determine the compilation package."
              (cell:write! (.ms-active-request st) (Some req-id))
              (cell:write! (.ms-quick-result-request-id st) (Some req-id))
              (%show-quick-result-pending-for-range! st target-start target-end document-key)
-             (match (%wrap-coalton target-text pkg)
-               ((Tuple quick-text _client-prefix-length)
-                (let req = (msg:ReqQuickResult req-id quick-text pkg))
-                (client:connection-send! conn req))))))))))
+             (let req = (msg:ReqQuickResult req-id target-text pkg True))
+             (client:connection-send! conn req))))))))
 
 ;;; Create project on disk
 
   (declare open-project-selection! (MineState * String -> Void))
   (declare open-project-at-path! (MineState * String -> Void))
+  (declare valid-project-name? (String -> Boolean))
+  (define (valid-project-name? name)
+    "True if NAME is a single path component."
+    (lisp (-> Boolean) (name)
+      (cl:and (cl:plusp (cl:length name))
+              (cl:not (cl:find #\/ name))
+              (cl:not (cl:find #\\ name)))))
+
+  (declare project-destination-exists? (String * String -> Boolean))
+  (define (project-destination-exists? location name)
+    "True if creating project NAME in LOCATION would collide with an existing file or directory."
+    (lisp (-> Boolean) (location name)
+      (cl:let* ((base (uiop:ensure-directory-pathname (cl:pathname location)))
+                (file-path (cl:merge-pathnames name base))
+                (dir-path (uiop:ensure-directory-pathname file-path)))
+        (cl:not (cl:null (cl:or (uiop:directory-exists-p dir-path)
+                                (uiop:file-exists-p file-path)))))))
+
+  (declare create-project-files! (String * String * Boolean -> (Result String String)))
+  (define (create-project-files! name location is-coalton)
+    "Create a new project directory and skeleton files. Returns the .asd path."
+    (let project-dir = (<> location (<> name "/")))
+    (let src-dir = (<> project-dir "src/"))
+    (let asd-path = (<> project-dir (<> name ".asd")))
+    (let ext = (if is-coalton ".ct" ".lisp"))
+    (let main-file = (<> src-dir (<> "main" ext)))
+    (cond
+      ((not (valid-project-name? name))
+       (Err "Project name cannot contain path separators"))
+      ((project-destination-exists? location name)
+       (Err (<> "Project already exists: " project-dir)))
+      (True
+       ;; Create directories and write main file (one-package-per-file)
+       (lisp (-> Void) (src-dir main-file name is-coalton)
+         (cl:ensure-directories-exist (cl:pathname src-dir))
+         (cl:with-open-file (out main-file :direction :output
+                                           :if-exists :error
+                                           :if-does-not-exist :create)
+           (cl:if (cl:eq is-coalton coalton:True)
+                  (cl:progn
+                    (cl:format out "(cl:defpackage #:~A~%" name)
+                    (cl:format out "  (:use #:coalton #:coalton-prelude))~%~%")
+                    (cl:format out "(cl:in-package #:~A)~%~%" name)
+                    (cl:format out "(coalton-toplevel~%~%")
+                    (cl:format out "  (declare main (Void -> Void))~%")
+                    (cl:format out "  (define (main)~%")
+                    (cl:format out "    (print \"Hello!\")))~%"))
+                  (cl:progn
+                    (cl:format out "(defpackage #:~A~%" name)
+                    (cl:format out "  (:use #:cl))~%~%")
+                    (cl:format out "(in-package #:~A)~%~%" name)
+                    (cl:format out "(defun main ()~%")
+                    (cl:format out "  (write-line \"Hello!\"))~%"))))
+         (cl:values))
+       ;; Build SystemDef and write .asd
+       (let comp-type = (if is-coalton model:CTCtFile model:CTFile))
+       (let main-comp = (model:Component "main" comp-type Nil))
+       (let sysdef = (model:SystemDef name Nil (make-list main-comp) "" "src/"))
+       (writer:write-asd-file sysdef asd-path)
+       (Ok asd-path))))
+
   (declare create-new-project! (MineState * String * String * Boolean -> Void))
   (define (create-new-project! st name location is-coalton)
     "Create a new project directory, .asd, and skeleton files, then open it."
@@ -2081,47 +2005,24 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     (let asd-path = (<> project-dir (<> name ".asd")))
     (let ext = (if is-coalton ".ct" ".lisp"))
     (let main-file = (<> src-dir (<> "main" ext)))
-    ;; Create directories and write main file (one-package-per-file)
-    (lisp (-> Void) (src-dir main-file name is-coalton)
-      (cl:ensure-directories-exist (cl:pathname src-dir))
-      (cl:with-open-file (out main-file :direction :output
-                                        :if-exists :supersede
-                                        :if-does-not-exist :create)
-        (cl:if (cl:eq is-coalton coalton:True)
-               (cl:progn
-                 (cl:format out "(cl:defpackage #:~A~%" name)
-                 (cl:format out "  (:use #:coalton #:coalton-prelude))~%~%")
-                 (cl:format out "(cl:in-package #:~A)~%~%" name)
-                 (cl:format out "(coalton-toplevel~%~%")
-                 (cl:format out "  (declare main (Void -> Void))~%")
-                 (cl:format out "  (define (main)~%")
-                 (cl:format out "    (print \"Hello!\")))~%"))
-               (cl:progn
-                 (cl:format out "(defpackage #:~A~%" name)
-                 (cl:format out "  (:use #:cl))~%~%")
-                 (cl:format out "(in-package #:~A)~%~%" name)
-                 (cl:format out "(defun main ()~%")
-                 (cl:format out "  (write-line \"Hello!\"))~%"))))
-      (cl:values))
-    ;; Build SystemDef and write .asd
-    (let comp-type = (if is-coalton model:CTCtFile model:CTFile))
-    (let main-comp = (model:Component "main" comp-type Nil))
-    (let sysdef = (model:SystemDef name Nil (make-list main-comp) "" "src/"))
-    (writer:write-asd-file sysdef asd-path)
-    ;; Open the new project
-    (open-project-at-path! st asd-path)
-    ;; Open main file in editor
-    (match (mgr:bufmgr-open-file! (.ms-bufmgr st) main-file)
-      ((Ok buf)
-       (mgr:bufmgr-switch! (.ms-bufmgr st) (buf:buffer-id buf))
-       (editor:editor-pane-set-buffer! (.ms-editor st) (buf:buffer-id buf))
-       (cursor:cursor-move-to-position! (.ms-cursor st) 0)
-       (let display-name = (lisp (-> String) (main-file)
-                             (cl:file-namestring (cl:pathname main-file))))
-       (tree:tree-pane-add-open-file! (.ms-tree st) display-name main-file))
-      ((Err _msg) (values)))
-    (status:statusbar-set-message! (.ms-status st)
-                                   (<> "Created project: " name)))
+    (match (create-project-files! name location is-coalton)
+      ((Ok _)
+       ;; Open the new project
+       (open-project-at-path! st asd-path)
+       ;; Open main file in editor
+       (match (mgr:bufmgr-open-file! (.ms-bufmgr st) main-file)
+         ((Ok buf)
+          (mgr:bufmgr-switch! (.ms-bufmgr st) (buf:buffer-id buf))
+          (editor:editor-pane-set-buffer! (.ms-editor st) (buf:buffer-id buf))
+          (cursor:cursor-move-to-position! (.ms-cursor st) 0)
+          (let display-name = (lisp (-> String) (main-file)
+                                (cl:file-namestring (cl:pathname main-file))))
+          (tree:tree-pane-add-open-file! (.ms-tree st) display-name main-file))
+         ((Err _msg) (values)))
+       (status:statusbar-set-message! (.ms-status st)
+                                      (<> "Created project: " name)))
+      ((Err msg)
+       (user-error! st msg))))
 
 ;;; Build progress dialog
 
@@ -2138,7 +2039,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     (let scr = (term:.terminal-screen term))
     (match (%spawn-build-process script-path log-path heap-size)
       ((None)
-       (status:statusbar-set-message! (.ms-status st) "Failed to start build process"))
+       (user-error! st "Failed to start build process"))
       ((Some proc-box)
        (%build-progress-loop term scr proc-box (the (List String) Nil) 0)
        ;; Clean up
@@ -2161,8 +2062,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
           (status:statusbar-set-message! (.ms-status st)
                                          (<> "Build succeeded: " output-path)))
          (True
-          (status:statusbar-set-message! (.ms-status st)
-                                         (<> "Build failed. See log: " log-path)))))))
+          (user-error! st (<> "Build failed. See log: " log-path)))))))
 
   (declare %build-progress-loop
            (term:Terminal * screen:Screen * NativeBox * (List String) * UFix -> Void))
@@ -2288,8 +2188,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       ((Some (Tuple (Tuple asd output) (Tuple logf (Tuple entry heap))))
        (cond
          ((== entry "")
-          (status:statusbar-set-message! (.ms-status st)
-                                         "Build cancelled: entry point is required"))
+          (user-error! st "Build cancelled: entry point is required"))
          (True
           (let script = (build:write-build-script asd output entry))
           (%build-progress-dialog st term script logf output heap))))
@@ -2301,9 +2200,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
   (declare has-dirty-buffers? (mgr:BufferManager -> Boolean))
   (define (has-dirty-buffers? bm)
     "Return True if any open buffer is dirty."
-    (match (mgr:bufmgr-current bm)
-      ((Some b) (buf:buffer-dirty? b))
-      ((None) False)))
+    (mgr:bufmgr-any-dirty? bm))
 
   (declare try-quit! (MineState * term:Terminal -> Void))
   (define (try-quit! st term)
@@ -2505,33 +2402,37 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     (let current-indent-column = (%leading-indent-column line-text))
     (let line-start = (gap:gap-line-to-pos gb line))
     (let old-pos = (cursor:cursor-position cs))
-    (match (cursor:cursor-line-col cs gb)
-      ((Tuple _ cursor-col)
-       (let cursor-in-indent = (<= cursor-col current-indent-chars))
+    (let indent-end = (+ line-start current-indent-chars))
+    (let cursor-in-indent = (and (>= old-pos line-start) (<= old-pos indent-end)))
+    (let cursor-strictly-in-indent = (and (>= old-pos line-start) (< old-pos indent-end)))
+    (let cursor-after-indent = (> old-pos indent-end))
+    (cond
+      ((== target-indent current-indent-column)
+       (when cursor-strictly-in-indent
+         (cursor:cursor-move-to-position! cs indent-end)))
+      (True
+       (when (> current-indent-chars 0)
+         (let deleted =
+           (gap:gap-delete-range! gb line-start indent-end))
+         (buf:buffer-mark-dirty! buffer)
+         (undo:undo-record! tree
+                            (undo:OpDelete line-start deleted)
+                            old-pos line-start))
+       (when (> target-indent 0)
+         (let spaces = (%make-spaces target-indent))
+         (gap:gap-insert-string! gb line-start spaces)
+         (buf:buffer-mark-dirty! buffer)
+         (undo:undo-record! tree
+                            (undo:OpInsert line-start spaces)
+                            line-start (+ line-start target-indent)))
        (cond
-         ((== target-indent current-indent-column)
-          (when (< cursor-col current-indent-chars)
-            (cursor:cursor-move-to-position! cs (+ line-start current-indent-chars))))
-         (True
-          (when (> current-indent-chars 0)
-            (let deleted =
-              (gap:gap-delete-range! gb line-start (+ line-start current-indent-chars)))
-            (buf:buffer-mark-dirty! buffer)
-            (undo:undo-record! tree
-                               (undo:OpDelete line-start deleted)
-                               old-pos line-start))
-          (when (> target-indent 0)
-            (let spaces = (%make-spaces target-indent))
-            (gap:gap-insert-string! gb line-start spaces)
-            (buf:buffer-mark-dirty! buffer)
-            (undo:undo-record! tree
-                               (undo:OpInsert line-start spaces)
-                               line-start (+ line-start target-indent)))
+         (cursor-in-indent
+          (cursor:cursor-move-to-position! cs (+ line-start target-indent)))
+         (cursor-after-indent
           (cursor:cursor-move-to-position!
            cs
-           (if cursor-in-indent
-               (+ line-start target-indent)
-               (+ (- old-pos current-indent-chars) target-indent))))))))
+           (+ (- old-pos current-indent-chars) target-indent)))
+         (True (values))))))
 
   (declare reindent-line! (MineState * buf:Buffer * undo:UndoTree * cursor:CursorState -> Void))
   (define (reindent-line! st buffer tree cs)
@@ -2546,6 +2447,41 @@ Uses the preceding (in-package ...) form to determine the compilation package."
              ((None) (values))
              ((Some target-indent)
               (%set-line-indentation! buffer tree cs line target-indent))))))))
+
+  (declare %line-at-position (gap:GapBuffer * UFix -> UFix))
+  (define (%line-at-position gb pos)
+    (match (gap:gap-pos-to-line-col gb pos)
+      ((Tuple line _col) line)))
+
+  (declare %reindent-line-range! (MineState * buf:Buffer * undo:UndoTree * cursor:CursorState * UFix * UFix -> Void))
+  (define (%reindent-line-range! st buffer tree cs line end-line)
+    "Reindent lines LINE..END-LINE, clamped to the current buffer."
+    (let gb = (buf:buffer-gap buffer))
+    (let line-count = (gap:gap-line-count gb))
+    (when (and (<= line end-line) (< line line-count))
+      (match (%target-indent-for-line! st buffer line)
+        ((None) (values))
+        ((Some target-indent)
+         (%set-line-indentation! buffer tree cs line target-indent)))
+      (%reindent-line-range! st buffer tree cs (+ line 1) end-line)))
+
+  (declare paredit-forward-join-and-indent! (MineState * buf:Buffer -> Void))
+  (define (paredit-forward-join-and-indent! st buffer)
+    "Forward-join structurally; if a newline was preserved, reindent touched lines."
+    (let tree = (buf:buffer-undo buffer))
+    (let cs = (.ms-cursor st))
+    (let gb = (buf:buffer-gap buffer))
+    (match (paredit:paredit-forward-join-newline-range gb (cursor:cursor-position cs))
+      ((None)
+       (paredit:paredit-forward-join! buffer cs))
+      ((Some (Tuple range-start range-end))
+       (let start-line = (%line-at-position gb range-start))
+       (let end-line = (%line-at-position gb range-end))
+       (undo:with-undo-group! tree
+         (fn () (cursor:cursor-position cs))
+         (fn ()
+           (paredit:paredit-forward-join! buffer cs)
+           (%reindent-line-range! st buffer tree cs start-line end-line))))))
 
   (declare editor-newline! (MineState * buf:Buffer -> Void))
   (define (editor-newline! st buffer)
@@ -2605,7 +2541,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (cond
          ((== mod input:ModAlt)
           (%paredit-if-lisp st
-                            (fn (buffer) (paredit:paredit-forward-join! buffer (.ms-cursor st)))))
+                            (fn (buffer) (paredit-forward-join-and-indent! st buffer))))
          ((== mod input:ModAltShift)
           (%paredit-if-lisp st
                             (fn (buffer) (paredit:paredit-backward-leave! buffer (.ms-cursor st)))))
@@ -2815,9 +2751,9 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          ((Some buf)
           (match (mgr:bufmgr-save! (.ms-bufmgr st) (buf:buffer-id buf))
             ((Ok _) (status:statusbar-set-message! (.ms-status st) "Saved"))
-            ((Err msg) (status:statusbar-set-message! (.ms-status st) msg))))
+            ((Err msg) (user-error! st msg))))
          ((None)
-          (status:statusbar-set-message! (.ms-status st) "No file open"))))
+          (user-error! st "No file open"))))
       ((input:KeyCtrl #\f) (start-find! st))
       ;; Everything else -> ignore
       (_ (values))))
@@ -2828,7 +2764,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
   (define (jump-to-definition! st)
     "Look up the symbol at cursor and jump to its definition."
     (match (mgr:bufmgr-current (.ms-bufmgr st))
-      ((None) (status:statusbar-set-message! (.ms-status st) "No file open"))
+      ((None) (user-error! st "No file open"))
       ((Some buf)
        (let gb = (buf:buffer-gap buf))
        (let cur-pos = (cursor:cursor-position (.ms-cursor st)))
@@ -2849,9 +2785,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                       (%resolve-qualified-name sym-name buf-pkg)
                     (%request-remote-definition st resolved-sym resolved-pkg
                                                 cur-path cur-pos))
-                  (mine/pane/status::statusbar-set-message!
-                   (mine/app/state:get-status-bar st)
-                   "No symbol at cursor")))
+                  (user-error! st "No symbol at cursor")))
          (cl:values)))))
 
   (declare jump-back! (MineState -> Void))
@@ -2861,9 +2795,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       (cl:let ((entry (%jump-stack-pop st)))
         (cl:if entry
                (mine/app/navigation:jump-to-file st (cl:car entry) (cl:cdr entry))
-               (mine/pane/status::statusbar-set-message!
-                (mine/app/state:get-status-bar st)
-                "Jump stack empty")))
+               (user-error! st "Jump stack empty")))
       (cl:values)))
 
   (declare %tree-file-paths (tree:TreeNode -> (List String)))
@@ -3170,7 +3102,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
           (tree:tree-pane-set-preview-path! (.ms-tree st) (Some fpath))
           (values))
          ((Err msg)
-          (status:statusbar-set-message! (.ms-status st) msg))))))
+          (user-error! st msg))))))
 
 ;;; Ctrl+digit buffer switching
 
@@ -3714,12 +3646,11 @@ wrap is on, row is resolved through screen-row-to-line-seg."
                   (tree:tree-pane-set-root! (.ms-tree st) root-node)
                   (status:statusbar-set-message! (.ms-status st) "Saved — project refreshed"))
                  ((None)
-                  (status:statusbar-set-message! (.ms-status st)
-                                                 "Saved — but .asd has errors (project tree not updated)")))))
+                  (user-error! st "Saved, but .asd has errors (project tree not updated)")))))
             (_ (values))))
-         ((Err msg) (status:statusbar-set-message! (.ms-status st) msg))))
+         ((Err msg) (user-error! st msg))))
       ((None)
-       (status:statusbar-set-message! (.ms-status st) "No file open"))))
+       (user-error! st "No file open"))))
 
   (declare prompt-open-file! (MineState -> Void))
   (define (prompt-open-file! st)
@@ -3883,15 +3814,13 @@ wrap is on, row is resolved through screen-row-to-line-seg."
     "Look up NAME in the LaTeX symbol table and insert the matched character."
     (cond
       ((== (str:length name) 0)
-       (status:statusbar-set-message! (.ms-status st) "No symbol selected"))
+       (user-error! st "No symbol selected"))
       (True
        (match (symbols:latex-symbol-lookup name)
          ((Some replacement)
           (%insert-text-at-focus! st replacement))
          ((None)
-          (status:statusbar-set-message!
-           (.ms-status st)
-           (str:concat "Unknown symbol: \\" name)))))))
+          (user-error! st (str:concat "Unknown symbol: \\" name)))))))
 
   (declare %has-insert-target? (MineState -> Boolean))
   (define (%has-insert-target? st)
@@ -3909,8 +3838,7 @@ wrap is on, row is resolved through screen-row-to-line-seg."
 Enter or Space inserts the matching Unicode character at the cursor."
     (cond
       ((not (%has-insert-target? st))
-       (status:statusbar-set-message! (.ms-status st)
-                                      "Open a file or REPL first"))
+       (user-error! st "Open a file or REPL first"))
       (True
        (mini:minibuffer-prompt-symbol-picker! (.ms-minibuffer st)
                                               "Symbol \\"
@@ -3941,7 +3869,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
   (define (close-current-file! st term)
     (match (mgr:bufmgr-current (.ms-bufmgr st))
       ((None)
-       (status:statusbar-set-message! (.ms-status st) "No file open"))
+       (user-error! st "No file open"))
       ((Some buf)
        (cond
          ((buf:buffer-dirty? buf)
@@ -3974,8 +3902,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
        (clamp-cursor-to-buffer! st buf)
        (values))
       ((None)
-       (status:statusbar-set-message! (.ms-status st)
-                                      (<> "Buffer not found: " fpath)))))
+       (user-error! st (<> "Buffer not found: " fpath)))))
 
   (declare %close-open-file! (MineState * term:Terminal -> Void))
   (define (%close-open-file! st term)
@@ -4007,9 +3934,9 @@ Enter or Space inserts the matching Unicode character at the cursor."
          ((Some buf)
           (match (mgr:bufmgr-save! (.ms-bufmgr st) (buf:buffer-id buf))
             ((Ok _) (status:statusbar-set-message! (.ms-status st) "Saved"))
-            ((Err msg) (status:statusbar-set-message! (.ms-status st) msg))))
+            ((Err msg) (user-error! st msg))))
          ((None)
-          (status:statusbar-set-message! (.ms-status st) "No buffer to save"))))))
+          (user-error! st "No buffer to save"))))))
 
   (declare %refresh-open-file! (MineState * term:Terminal -> Void))
   (define (%refresh-open-file! st term)
@@ -4028,7 +3955,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
             (True
              (%do-refresh-file! st fpath))))
          ((None)
-          (status:statusbar-set-message! (.ms-status st) "No buffer to refresh"))))))
+          (user-error! st "No buffer to refresh"))))))
 
   (declare %do-refresh-file! (MineState * String -> Void))
   (define (%do-refresh-file! st fpath)
@@ -4045,7 +3972,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
           (status:statusbar-set-message! (.ms-status st) "Refreshed"))
          ((Err msg)
           (tree:tree-pane-remove-open-file! (.ms-tree st) fpath)
-          (status:statusbar-set-message! (.ms-status st) msg))))
+          (user-error! st msg))))
       ((None) (values))))
 
   (declare %tree-preview-selected! (MineState -> Void))
@@ -4082,7 +4009,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
          (%show-editor! st)
          (status:statusbar-set-message! (.ms-status st) (<> "Opened " display-name)))
         ((Err msg)
-         (status:statusbar-set-message! (.ms-status st) msg)))))
+         (user-error! st msg)))))
 
 ;;; Open project from path
 
@@ -4093,7 +4020,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
       ((Tuple code payload)
        (cond
          ((== code 2)
-          (status:statusbar-set-message! (.ms-status st) payload))
+          (user-error! st payload))
          (True
           (open-project-at-path! st payload))))))
 
@@ -4101,8 +4028,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
     "Open a project .asd file at PATH."
     (cond
       ((not (%is-asd-file path))
-       (status:statusbar-set-message! (.ms-status st)
-                                      (<> "Not an .asd file: " path)))
+       (user-error! st (<> "Not an .asd file: " path)))
       (True
        (match (parser:parse-asd-to-tree path)
          ((Some root-node)
@@ -4128,13 +4054,12 @@ Enter or Space inserts the matching Unicode character at the cursor."
                                       (cl:file-namestring (cl:pathname fpath))))
                 (tree:tree-pane-add-open-file! (.ms-tree st) display-name fpath))
                ((Err msg)
-                (status:statusbar-set-message! (.ms-status st) msg))))
+                (user-error! st msg))))
             ((None) (values)))
           (status:statusbar-set-message! (.ms-status st)
                                          (<> "Opened project: " sys-name)))
          ((None)
-          (status:statusbar-set-message! (.ms-status st)
-                                         (<> "Failed to parse: " path)))))))
+          (user-error! st (<> "Failed to parse: " path)))))))
 
 ;;; Refresh project
 
@@ -4143,15 +4068,14 @@ Enter or Space inserts the matching Unicode character at the cursor."
     "Re-load the project .asd and re-populate the tree."
     (match (cell:read (.ms-project-asd-path st))
       ((None)
-       (status:statusbar-set-message! (.ms-status st) "No project open"))
+       (user-error! st "No project open"))
       ((Some asd-path)
        (match (parser:parse-asd-to-tree asd-path)
          ((Some root-node)
           (tree:tree-pane-set-root! (.ms-tree st) root-node)
           (status:statusbar-set-message! (.ms-status st) "Project refreshed"))
          ((None)
-          (status:statusbar-set-message! (.ms-status st)
-                                         (<> "Failed to parse: " asd-path)))))))
+          (user-error! st (<> "Failed to parse: " asd-path)))))))
 
 ;;; Menu action dispatch
 
@@ -4208,6 +4132,25 @@ Enter or Space inserts the matching Unicode character at the cursor."
           ((menubar:ActionInsertSymbol) has-insert-target)
           (_ True)))))
 
+  (declare new-project-switch-confirmed? (MineState * term:Terminal -> Boolean))
+  (define (new-project-switch-confirmed? st term)
+    "Confirm switching away from the current project before creating a new one."
+    (match (cell:read (.ms-project-system st))
+      ((None) True)
+      ((Some sys-name)
+       (render-app st term)
+       (let help-lines =
+         (if (has-dirty-buffers? (.ms-bufmgr st))
+             (make-list (<> "Current Project: " sys-name)
+                        "Unsaved buffers will remain open.")
+             (make-list (<> "Current Project: " sys-name))))
+       (dialogs:confirm-dialog term
+                               "Create new project and switch?"
+                               "Create"
+                               "Cancel"
+                               help-lines
+                               (fn (t) (render-app st t))))))
+
   (declare dispatch-menu-action! (MineState * term:Terminal * menubar:MenuAction -> Void))
   (define (dispatch-menu-action! st term action)
     "Execute a menu action."
@@ -4222,19 +4165,20 @@ Enter or Space inserts the matching Unicode character at the cursor."
       ((menubar:ActionCredits) (dialogs:show-credits! term))
       ((menubar:ActionQuit) (try-quit! st term))
       ((menubar:ActionNewProject)
-       (render-app st term)
-       (term:terminal-flush term)
-       (match (dialogs:new-project-dialog term (.ms-config st))
-         ((Some (Tuple name (Tuple location is-coalton)))
-          (if (== (str:length name) 0)
-              (status:statusbar-set-message! (.ms-status st) "Project name cannot be empty")
-              (progn
-                (let len = (str:length location))
-                (let loc = (if (and (> len 0)
-                                    (== (str:ref-unchecked location (- len 1)) #\/))
-                               location (<> location "/")))
-                (create-new-project! st name loc is-coalton))))
-         ((None) (values))))
+       (when (new-project-switch-confirmed? st term)
+         (render-app st term)
+         (term:terminal-flush term)
+         (match (dialogs:new-project-dialog term (.ms-config st))
+           ((Some (Tuple name (Tuple location is-coalton)))
+            (if (== (str:length name) 0)
+                (user-error! st "Project name cannot be empty")
+                (progn
+                  (let len = (str:length location))
+                  (let loc = (if (and (> len 0)
+                                      (== (str:ref-unchecked location (- len 1)) #\/))
+                                 location (<> location "/")))
+                  (create-new-project! st name loc is-coalton))))
+           ((None) (values)))))
       ((menubar:ActionOpenProject)
        (let default-dir = (dialogs:new-project-default-location (.ms-config st)))
        (mini:minibuffer-prompt-with-completion! (.ms-minibuffer st)
@@ -4268,7 +4212,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
        (prompt-open-file! st))
       ((menubar:ActionSave) (save-current-file! st))
       ((menubar:ActionSaveAll)
-       (status:statusbar-set-message! (.ms-status st) "Save All: not yet implemented"))
+       (user-error! st "Save All is not yet implemented"))
       ((menubar:ActionCloseFile)
        (close-current-file! st term))
       ((menubar:ActionFind) (start-find! st))
@@ -4291,16 +4235,16 @@ Enter or Space inserts the matching Unicode character at the cursor."
          ((lifecycle:runtime-interrupt! (.ms-runtime st))
           (status:statusbar-set-message! (.ms-status st) "Interrupt sent"))
          (True
-          (status:statusbar-set-message! (.ms-status st) "No runtime to interrupt"))))
+          (user-error! st "No runtime to interrupt"))))
       ((menubar:ActionClearRepl) (repl:repl-pane-clear-output! (.ms-repl st)))
       ((menubar:ActionRestartRepl)
        (cond
          ((restart-runtime! st)
           (status:statusbar-set-message! (.ms-status st) "Runtime restarted"))
          (True
-          (status:statusbar-set-message! (.ms-status st) "Failed to restart runtime"))))
+          (user-error! st "Failed to restart runtime"))))
       ((menubar:ActionGotoLine)
-       (status:statusbar-set-message! (.ms-status st) "Go to Line: not yet implemented"))
+       (user-error! st "Go to Line is not yet implemented"))
       ((menubar:ActionClearCache)
        (render-app st term)
        (when (dialogs:confirm-dialog term "Empty the FASL cache?" "Empty" "Cancel"
@@ -4349,7 +4293,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
       ((menubar:ActionAddDependency) (values))
       ((menubar:ActionEditProject)
        (match (cell:read (.ms-project-asd-path st))
-         ((None) (status:statusbar-set-message! (.ms-status st) "No project open"))
+         ((None) (user-error! st "No project open"))
          ((Some asd-path)
           (match (mgr:bufmgr-open-file! (.ms-bufmgr st) asd-path)
             ((Ok buf)
@@ -4361,7 +4305,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
              (tree:tree-pane-add-open-file! (.ms-tree st) display-name asd-path)
              (%show-editor! st))
             ((Err msg)
-             (status:statusbar-set-message! (.ms-status st) msg))))))))
+             (user-error! st msg))))))))
 
 ;;; Top-level event dispatch
 
@@ -4733,6 +4677,7 @@ Render-app is NOT called here; the main loop handles rendering."
     (lifecycle:runtime-set-heap-size! rm (cfgt:.config-repl-heap-size config))
     (let tp = (tree:tree-pane-new))
     (let st = (MineState (menubar:menubar-new) (status:statusbar-new)
+                         (cell:new None)
                          ep bm cs rp tp fm rm
                          (cell:new 0) (cell:new (MineLayout TreeHidden CenterEditor))
                          (cell:new (not (cfgt:.config-auto-hide-tree-pane config)))
@@ -4801,10 +4746,10 @@ Render-app is NOT called here; the main loop handles rendering."
                                          (cl:file-namestring (cl:pathname fpath))))
                    (tree:tree-pane-add-open-file! tp display-name fpath))
                   ((Err msg)
-                   (status:statusbar-set-message! (.ms-status st) msg))))
+                   (user-error! st msg))))
                ((None) (values))))
             ((None)
-             (status:statusbar-set-message! (.ms-status st) "Failed to parse .asd file"))))
+             (user-error! st "Failed to parse .asd file"))))
          ;; Regular file: open directly in editor (creates if doesn't exist)
          (True
           (let abs-path = (lisp (-> String) (path)
@@ -4821,7 +4766,7 @@ Render-app is NOT called here; the main loop handles rendering."
              (%show-tree! st)
              (focus:focus-switch! fm focus:FocusEditor))
             ((Err msg)
-             (status:statusbar-set-message! (.ms-status st) msg))))))
+             (user-error! st msg))))))
       ((Nil) (values)))
     ;; Set initial menu enabled state based on whether a project is open
     (%update-menu-enabled! st)
@@ -4851,9 +4796,11 @@ Render-app is NOT called here; the main loop handles rendering."
        (process-protocol-messages! st)
        ;; Update menu enabled state before rendering
        (%update-menu-enabled! st)
-       ;; Render and flush
-       (render-app st term)
-       (term:terminal-flush term)
+       ;; Render, or show an acknowledged modal error when one was queued by
+       ;; the user action just processed.
+       (unless (show-pending-error! st term)
+         (render-app st term)
+         (term:terminal-flush term))
        ;; Loop
        (main-loop st term handler))))
 
@@ -4894,12 +4841,7 @@ Render-app is NOT called here; the main loop handles rendering."
   "Spawn mine --run-lisp-script to execute a build script.
 Returns (Some native-box) holding (process . log-stream), or None on error."
   (cl:handler-case
-      (cl:let* ((argv0 (cl:or (sb-ext:posix-getenv "MINE_LAUNCHER")
-                              (cl:first sb-ext:*posix-argv*)
-                              "mine"))
-                (abspath (cl:handler-case
-                             (cl:namestring (cl:truename (cl:pathname argv0)))
-                           (cl:error () argv0)))
+      (cl:let* ((abspath (mine/bindings/process:reexec-program))
                 (args (cl:if (cl:and (cl:stringp heap-size)
                                      (cl:plusp (cl:length heap-size)))
                              (cl:list "--dynamic-space-size" heap-size
@@ -6303,8 +6245,9 @@ This avoids stealing messages from the foreground/background protocol readers."
       (%status-msg st "No runtime connection"))))
 
 (cl:defun %status-msg (st text)
-  (mine/pane/status::statusbar-set-message!
-   (mine/app/state:get-status-bar st) text))
+  (coalton/cell:write!
+   (mine/app/state:get-pending-error-cell st)
+   (coalton:Some text)))
 
 (cl:defun %coalton-optional-value-or-nil (value)
   "Return NIL for Coalton None, otherwise return the wrapped value."

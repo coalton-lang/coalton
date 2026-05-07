@@ -3,9 +3,12 @@
 (defun read-form-with-source (string)
   (let ((source (source:make-source-string string :name "test")))
     (with-open-stream (stream (source:source-stream source))
-      (parser:with-reader-context stream
-        (values (parser:maybe-read-form stream source parser::*coalton-eclector-client*)
-                source)))))
+      (let ((eclector.readtable:*readtable*
+             (eclector.readtable:copy-readtable eclector.readtable:*readtable*)))
+        (parser:install-coalton-reader-syntax eclector.readtable:*readtable*)
+        (parser:with-reader-context stream
+          (values (parser:maybe-read-form stream source parser::*coalton-eclector-client*)
+                  source))))))
 
 (defun cst-symbol-spans (form name)
   (labels ((walk (node spans)
@@ -19,6 +22,23 @@
                            (string= (symbol-name raw) name))
                       (cons (concrete-syntax-tree:source node) spans)
                       spans)))
+               (t
+                spans))))
+    (nreverse (walk form nil))))
+
+(defun cst-form-spans-starting-with (form marker)
+  (labels ((walk (node spans)
+             (cond
+               ((concrete-syntax-tree:consp node)
+                (let ((spans (if (and (concrete-syntax-tree:atom
+                                       (concrete-syntax-tree:first node))
+                                      (eq marker
+                                          (concrete-syntax-tree:raw
+                                           (concrete-syntax-tree:first node))))
+                                 (cons (concrete-syntax-tree:source node) spans)
+                                 spans)))
+                  (walk (concrete-syntax-tree:rest node)
+                        (walk (concrete-syntax-tree:first node) spans))))
                (t
                 spans))))
     (nreverse (walk form nil))))
@@ -72,6 +92,65 @@
                              (cons second (+ second (length "Tuple"))))))
         (is (equal expected
                    (cst-symbol-spans form "TUPLE")))))))
+
+(deftest short-lambda-reader-desugars ()
+  (let ((*package* (make-package "COALTON-SHORT-LAMBDA-READER-PACKAGE"
+                                 :use '("COALTON"))))
+    (unwind-protect
+         (multiple-value-bind (form source)
+             (read-form-with-source "ƒxy.x")
+           (declare (ignore source))
+           (let ((x (intern "X" *package*))
+                 (y (intern "Y" *package*)))
+             (is (equal (list 'coalton:fn (list x y) x)
+                        (concrete-syntax-tree:raw form)))
+             (is (equal (list (cons 1 2) (cons 4 5))
+                        (cst-symbol-spans form "X")))
+             (is (equal (list (cons 2 3))
+                        (cst-symbol-spans form "Y")))))
+      (delete-package *package*))))
+
+(deftest bracket-reader-preserves-generated-source-spans ()
+  (let ((*package* (make-package "COALTON-BRACKET-READER-PACKAGE"
+                                 :use '("COALTON"))))
+    (unwind-protect
+         (progn
+           (multiple-value-bind (form source)
+               (read-form-with-source "[x => y z => w]")
+             (declare (ignore source))
+             (is (equal (list (cons 1 7) (cons 8 14))
+                        (cst-form-spans-starting-with
+                         form
+                         (parser:association-entry-marker))))
+             (is (equal (list (cons 3 5) (cons 10 12))
+                        (cst-symbol-spans form "%ASSOCIATION-ENTRY"))))
+           (multiple-value-bind (form source)
+               (read-form-with-source "[x :for y :in z :when w]")
+             (declare (ignore source))
+             (is (equal (list (cons 3 15))
+                        (cst-form-spans-starting-with
+                         form
+                         (parser:builder-for-marker))))
+             (is (equal (list (cons 16 23))
+                        (cst-form-spans-starting-with
+                         form
+                         (parser:builder-when-marker))))
+             (is (equal (list (cons 3 7))
+                        (cst-symbol-spans form "%BUILDER-FOR")))
+             (is (equal (list (cons 16 21))
+                        (cst-symbol-spans form "%BUILDER-WHEN"))))
+           (multiple-value-bind (form source)
+               (read-form-with-source "(the (List Integer) [x :for x :in xs])")
+             (declare (ignore source))
+             (is (equal (list (cons 20 37))
+                        (cst-form-spans-starting-with
+                         form
+                         (parser:collection-comprehension-marker))))
+             (is (equal (list (cons 23 36))
+                        (cst-form-spans-starting-with
+                         form
+                         (parser:builder-for-marker))))))
+      (delete-package *package*))))
 
 (deftest reader-defers-coalton-compilation ()
   (uiop:with-temporary-file (:stream stream

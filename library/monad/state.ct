@@ -44,7 +44,7 @@ Represented as a closure from initial state to updated state and value."
   (declare put-state (:state -> ST :state Unit))
   (define (put-state state)
     "A StatefulComputation with state set to be the given state. The returned value is Unit."
-    (ST (fn (_) (Tuple state Unit))))
+    (ST ƒ_.(Tuple state Unit)))
 
   (inline)
   (declare get-state (ST :state :state))

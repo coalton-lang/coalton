@@ -261,11 +261,9 @@
     ;; Overlay selection highlight if active
     (match (Tuple (cell:read (.tw-sel-anchor tw)) (cell:read (.tw-sel-end tw)))
       ((Tuple (Some anchor) (Some end))
-       (let hl-style = (color:Style color:panel-bg
-                                     color:highlight-bg
-                                     color:AttrNone))
        (match (%sel-ordered anchor end)
          ((Tuple sel-start sel-end)
           (%render-selection-highlight scr rect lines scroll h
-                                       sel-start sel-end hl-style))))
+                                       sel-start sel-end
+                                       color:user-selection-style))))
       (_ (values)))))

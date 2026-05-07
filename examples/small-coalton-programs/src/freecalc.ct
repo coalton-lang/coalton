@@ -30,9 +30,9 @@ we map over."
   (define-instance (Functor (ArithExprF :t))
     (define (map f ast)
       (match ast
-        ((AddE t1 t2 cont) (AddE t1 t2 (fn (x) (f (cont x)))))
-        ((SubE t1 t2 cont) (SubE t1 t2 (fn (x) (f (cont x)))))
-        ((InputE cont) (InputE (fn (x) (f (cont x))))))))
+        ((AddE t1 t2 cont) (AddE t1 t2 ƒx.(f (cont x))))
+        ((SubE t1 t2 cont) (SubE t1 t2 ƒx.(f (cont x))))
+        ((InputE cont) (InputE ƒx.(f (cont x)))))))
 
 
   ;;
