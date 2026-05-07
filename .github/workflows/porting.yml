@@ -84,12 +84,6 @@ jobs:
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
-          (setf *debugger-hook*
-            (lambda (c h)
-              (declare (ignore h))
-              (format *error-output* "~&Fatal Error: ~A~%" c)
-              (uiop:print-backtrace :condition c)
-              (uiop:quit 1)))
           ;; (cl:handler-case
             (cl:progn
               (load "/.abclrc")
@@ -97,6 +91,12 @@ jobs:
               ;; (ql:quickload :computable-reals) ;; breaks on SAFETY=3
               (asdf:load-system :computable-reals) ;; breaks on SAFETY=3
               (setq system:*safety* ${{ matrix.SAFETY }})
+          (setf *debugger-hook*
+            (lambda (c h)
+              (declare (ignore h))
+              (format *error-output* "~&Fatal Error: ~A~%" c)
+              (uiop:print-backtrace :condition c)
+              (uiop:quit 1)))
               ;; (ql:quickload :coalton/tests)
               (asdf:load-system :coalton/tests)
               (asdf:test-system :coalton/tests)
@@ -119,12 +119,6 @@ jobs:
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
-          (setf *debugger-hook*
-            (lambda (c h)
-              (declare (ignore h))
-              (format *error-output* "~&Fatal Error: ~A~%" c)
-              (uiop:print-backtrace :condition c)
-              (uiop:quit 1)))
           ;;; Clasp cannot find /.clasprc - copy its code here instead.
           ;; (load "/.clasprc")
             #-quicklisp (load "/root/quicklisp/setup.lisp")
@@ -132,6 +126,12 @@ jobs:
           (ql:update-dist "quicklisp")
           (ql:quickload :eclector)
           (ql:quickload :eclector-concrete-syntax-tree)
+          (setf *debugger-hook*
+            (lambda (c h)
+              (declare (ignore h))
+              (format *error-output* "~&Fatal Error: ~A~%" c)
+              (uiop:print-backtrace :condition c)
+              (uiop:quit 1)))
           ;; (ql:quickload :coalton/tests)
           (asdf:load-system :coalton/tests)
           (asdf:test-system :coalton/tests)
@@ -152,15 +152,15 @@ jobs:
           COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
         run: |
           cat <<EOF > run-tests.lisp
+          ;; (ql:quickload :coalton/tests)
+          (load "/.eclrc")
+          (ql:update-dist "quicklisp")
           (setf *debugger-hook*
             (lambda (c h)
               (declare (ignore h))
               (format *error-output* "~&Fatal Error: ~A~%" c)
               (uiop:print-backtrace :condition c)
               (uiop:quit 1)))
-          ;; (ql:quickload :coalton/tests)
-          (load "/.eclrc")
-          (ql:update-dist "quicklisp")
           (asdf:load-system :coalton/tests)
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
