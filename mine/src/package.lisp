@@ -41,6 +41,7 @@
 (defpackage #:mine/bindings/process
   (:use #:cl)
   (:export
+   #:reexec-program
    #:spawn-subprocess
    #:process-alive-p
    #:process-kill

@@ -159,7 +159,7 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
         (error "Polynomial coefficient division by zero.")
         (match p
           ((Poly coeffs)
-           (Poly (map (fn (c) (quot c d)) coeffs))))))
+           (Poly (map ƒc.(quot c d) coeffs))))))
 
   (declare poly-int-primitive (Poly Integer -> Poly Integer))
   (define (poly-int-primitive p)
@@ -274,7 +274,7 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
         (match p
           ((Poly coeffs)
            (poly-frac-trim
-            (Poly (map (fn (c) (* k c)) coeffs)))))))
+            (Poly (map ƒc.(* k c) coeffs)))))))
 
   (declare poly-frac-shift (Poly Fraction * Integer -> Poly Fraction))
   (define (poly-frac-shift p power)
@@ -929,7 +929,7 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
         poly-int-zero
         (match p
           ((Poly coeffs)
-           (poly-trim-desc (Poly (map (fn (c) (* k c)) coeffs)))))))
+           (poly-trim-desc (Poly (map ƒc.(* k c) coeffs)))))))
 
   (declare poly-int-shift (Poly Integer * Integer -> Poly Integer))
   (define (poly-int-shift p power)

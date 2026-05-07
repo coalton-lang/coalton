@@ -253,12 +253,12 @@ together."
   (declare >> (Monad :m => (:m :a) * (:m :b) -> (:m :b)))
   (define (>> a b)
     "Equivalent to `(>>= a (fn (_) b))`."
-    (>>= a (fn (_) b)))
+    (>>= a ƒ_.b))
 
   (declare join (Monad :m => :m (:m :a) -> :m :a))
   (define (join m)
     "Equivalent to `(>>= m id)`."
-    (>>= m (fn (x) x)))
+    (>>= m ƒx.x))
 
   (define-class (Monad :m => MonadFail :m)
     (fail (String -> :m :a)))
@@ -286,7 +286,7 @@ together."
   (declare mconcatmap ((Foldable :f) (Monoid :a) => (:b -> :a) * (:f :b) -> :a))
   (define (mconcatmap f a)
     "Map a container to a container of monoids, and then fold that container into a single element."
-    (fold (fn (a b) (<> a (f b))) mempty a))
+    (fold ƒab.(<> a (f b)) mempty a))
 
   (declare mcommute? ((Eq :a) (Semigroup :a) => :a * :a -> Boolean))
   (define (mcommute? a b)
@@ -298,7 +298,7 @@ together."
 
   (declare sequence ((Traversable :t) (Applicative :f) => :t (:f :b) -> :f (:t :b)))
   (define (sequence x)
-    (traverse (fn (y) y) x))
+    (traverse ƒy.y x))
 
   (define-class (Bifunctor :f)
     "Types which take two type arguments and are functors on both."

@@ -130,6 +130,11 @@ Example:
                             lisp-forms)))
     (mapcan #'cdr (merge-forms bindings lisp-forms))))
 
+(defun wrap-forms-with-low-type-check (forms)
+  (when forms
+    `((locally (declare #+sbcl (optimize (sb-c::type-check 0)))
+        ,@forms))))
+
 (defun definition-bindings (definitions env offsets)
   "Translate the DEFINITIONS in this TU into bindings, updating an OFFSETS hashtable to record the source offset of each binding's source definition."
   (loop :for define :in definitions
@@ -215,8 +220,7 @@ Example:
                 (list
                  `(declaim (sb-ext:start-block ,@definition-names))))
 
-            (locally (declare #+sbcl (optimize (sb-c::type-check 0)))
-              ,@(compile-definitions sccs definitions lisp-forms offsets env))
+            ,@(compile-definitions sccs definitions lisp-forms offsets env)
 
             #+sbcl
             ,@(when (and (eq sb-ext:*block-compile-default* :specified)
@@ -252,79 +256,90 @@ Example:
   "Compile SCC definitions in a translation unit."
   (declare (type binding-list bindings)
            (type tc:environment env))
-  (let ((inline-function-names
-          (loop :for (name . node) :in bindings
-                :when (and (node-abstraction-p node)
-                           (function-declared-inline-p name env))
-                  :collect name)))
+  (let* ((inline-function-names
+           (loop :for (name . node) :in bindings
+                 :when (and (node-abstraction-p node)
+                            (function-declared-inline-p name env))
+                   :collect name))
+         (special-declarations
+           (loop :for binding :in bindings
+                 :for name := (car binding)
+                 :when (util:dynamic-variable-name-p name)
+                   :collect `(declaim (special ,name))))
+         (global-definitions
+           (loop :for (name . node) :in bindings
+                 :if (util:dynamic-variable-name-p name)
+                   :collect `(defvar ,name)
+                 :else
+                   :collect `(global-lexical:define-global-lexical ,name ,(tc:lisp-type (node-type node) env))))
+         ;; Function declarations must appear before function definitions to
+         ;; optimize mutual tail-calls.
+         (function-type-declarations
+           (loop :for (name . node) :in bindings
+                 :if (and (node-abstraction-p node)
+                          settings:*emit-type-annotations*)
+                   :collect
+                   `(declaim
+                     (ftype
+                      (function
+                       ,(function-type-lambda-list node env)
+                       (values ,@(node-output-lisp-types node env)
+                               &optional))
+                      ,name))))
+         ;; Keep emitted definitions globally inline for Lisp callers, but
+         ;; stop inline SCC members from recursively inlining each other while
+         ;; their own bodies are compiled.
+         (inline-declarations
+           (loop :for (name . node) :in bindings
+                 :when (and (node-abstraction-p node)
+                            (function-declared-inline-p name env))
+                   :collect `(declaim (inline ,name))))
+         (definition-forms
+           (append
+            (loop :for (name . node) :in bindings
+                  :if (node-abstraction-p node)
+                    :append (list
+                             (compile-function name
+                                               node
+                                               env
+                                               :local-notinline-names inline-function-names)
+                             `(setf
+                               ,name
+                               #',name)))
+
+            (loop :for (name . node) :in bindings
+                  :if (not (node-abstraction-p node))
+                    :collect `(setf
+                                ,name
+                                ,(codegen-expression node env)))
+
+            (loop :for (name . node) :in bindings
+                  :for entry := (tc:lookup-name env name :no-error t)
+                  :for docstring := (and entry (source:docstring entry))
+                  :append (when docstring
+                            (list `(setf (documentation ',name 'variable)
+                                         ,docstring)))
+                  :append (when (and docstring
+                                     entry
+                                     (node-abstraction-p node))
+                            (list `(setf (documentation ',name 'function)
+                                         ,docstring)))))))
+
+    ;; Print types of definitions.
+    (when settings:*compile-print-types*
+      (dolist (binding bindings)
+        (let* ((name (car binding))
+               (type (tc:lookup-value-type env name :no-error t)))
+          (unless (null type)
+            (format t "~&;; ~a :: ~a~%"
+                    name
+                    (tc:type-to-string type env))))))
+
     (append
-     ;; Predeclare ordinary globals and special dynamic variables.
-     (loop :for (name . node) :in bindings
-           :if (util:dynamic-variable-name-p name)
-             :append `((declaim (special ,name))
-                       (defvar ,name))
-           :else
-           :collect `(global-lexical:define-global-lexical ,name ,(tc:lisp-type (node-type node) env)))
-
-     ;; Function declarations
-     ;; They must appear before function definitions to optimize mutual tail-calls.
-     (loop :for (name . node) :in bindings
-           :if (and (node-abstraction-p node)
-                    settings:*emit-type-annotations*)
-           :collect
-           `(declaim
-             (ftype
-              (function
-               ,(function-type-lambda-list node env)
-               (values ,@(node-output-lisp-types node env)
-                       &optional))
-              ,name)))
-
-     ;; Compile functions
-     (loop :for (name . node) :in bindings
-           :if (node-abstraction-p node)
-             :append (append
-                     ;; Keep emitted definitions globally inline for Lisp callers,
-                     ;; but stop inline SCC members from recursively inlining each
-                     ;; other while their own bodies are compiled.
-                     (when (function-declared-inline-p name env)
-                       `((declaim (inline ,name))))
-                      (list
-                       (compile-function name
-                                         node
-                                         env
-                                         :local-notinline-names inline-function-names))
-                      (list
-                       `(setf
-                         ,name
-                         #',name))))
-
-     ;; Compile variables
-     (loop :for (name . node) :in bindings
-           :if (not (node-abstraction-p node))
-             :collect `(setf
-                         ,name
-                         ,(codegen-expression node env)))
-
-     ;; Print types of definitions
-     (when settings:*compile-print-types*
-       (dolist (binding bindings)
-         (let* ((name (car binding))
-                (type (tc:lookup-value-type env name :no-error t)))
-           (unless (null type)
-             (format t "~&;; ~a :: ~a~%"
-                     name
-                     (tc:type-to-string type env))))))
-
-     ;; Docstrings
-     (loop :for (name . node) :in bindings
-           :for entry := (tc:lookup-name env name :no-error t)
-           :for docstring := (and entry (source:docstring entry))
-           :append (when docstring
-                     (list `(setf (documentation ',name 'variable)
-                                  ,docstring)))
-           :append (when (and docstring
-                              entry
-                              (node-abstraction-p node))
-                     (list `(setf (documentation ',name 'function)
-                                  ,docstring)))))))
+     special-declarations
+     (wrap-forms-with-low-type-check
+      global-definitions)
+     function-type-declarations
+     inline-declarations
+     (wrap-forms-with-low-type-check
+      definition-forms))))

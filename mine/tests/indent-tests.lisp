@@ -364,6 +364,49 @@ should-stay-flush-left)"))
             "Expected structural delete before CRLF to leave cursor before deleted unit, got ~D"
             (cursor:cursor-position cs))))
 
+(defun %paredit-forward-join-result (text cursor-position)
+  (let* ((buffer (buf:buffer-new-file (buf:BufferId 8) "join-paredit.ct"))
+         (gb (buf:buffer-gap buffer))
+         (cs (cursor:cursor-new)))
+    (gap:gap-insert-string! gb 0 text)
+    (cursor:cursor-move-to-position! cs cursor-position)
+    (paredit:paredit-forward-join! buffer cs)
+    (gap:gap-to-string gb)))
+
+(defun check-paredit-forward-join-preserves-newline-separators ()
+  (let ((one-line "(a b) c d"))
+    (%check (string= "(a b c) d"
+                     (%paredit-forward-join-result one-line 2))
+            "Expected one-line forward join to preserve compact formatting"))
+  (let ((text (format nil "(a b~%) c d"))
+        (expected (format nil "(a b~%c) d")))
+    (%check (string= expected (%paredit-forward-join-result text 2))
+            "Expected forward join to preserve newline before old close delimiter"))
+  (let ((text (format nil "(a b)~%c d"))
+        (expected (format nil "(a b~%c) d")))
+    (%check (string= expected (%paredit-forward-join-result text 2))
+            "Expected forward join to preserve newline after old close delimiter"))
+  (let ((text (format nil "(a~%  b~%  ) c"))
+        (expected (format nil "(a~%  b~%  c)")))
+    (%check (string= expected (%paredit-forward-join-result text 2))
+            "Expected forward join to keep indentation carried by the old close line")))
+
+(defun check-paredit-forward-join-newline-range-detects-formatting ()
+  (let* ((one-line "(a b) c")
+         (one-gb (gap:gap-from-string one-line)))
+    (%check (eq coalton:none
+                (paredit:paredit-forward-join-newline-range one-gb 2))
+            "Expected one-line forward join to report no newline range"))
+  (let* ((text (format nil "(a b)~%c"))
+         (gb (gap:gap-from-string text))
+         (range (app::%coalton-optional-value-or-nil
+                 (paredit:paredit-forward-join-newline-range gb 2))))
+    (%check (and range
+                 (= 4 (%tuple-slot range "_0"))
+                 (= 7 (%tuple-slot range "_1")))
+            "Expected forward join newline range to cover the old close through joined sexp, got ~S"
+            range)))
+
 (defun check-clipboard-stream-read-preserves-crlf ()
   (let ((text (concatenate 'string
                            "alpha"
@@ -405,6 +448,16 @@ should-stay-flush-left)"))
             "Expected reindentation to preserve cursor's source-relative position, got ~D"
             pos)))
 
+(defun check-indent-line-start-follows-inserted-indentation ()
+  (multiple-value-bind (text pos)
+      (%apply-line-indent (format nil "(foo~%bar)") 5 1 2)
+    (%check (string= text (format nil "(foo~%  bar)"))
+            "Expected indentation to insert two spaces, got ~S"
+            text)
+    (%check (= pos 7)
+            "Expected cursor at line start to move after inserted indentation, got ~D"
+            pos)))
+
 (defun check-editor-paste-clamps-stale-cursor-to-buffer-end ()
   (let* ((buffer (buf:buffer-new-file (buf:BufferId 0) "paste-test.ct"))
          (cs (cursor:cursor-new))
@@ -435,3 +488,16 @@ should-stay-flush-left)"))
       (%check (= 3 (cursor:cursor-position cs))
               "Expected undo after clamped paste to restore cursor to EOF, got ~D"
               (cursor:cursor-position cs)))))
+
+(defun check-indent-line-after-cursor-preserves-cursor ()
+  (let* ((buffer (%indent-buffer-with-text (format nil "x~%y")))
+         (gb (buf:buffer-gap buffer))
+         (cs (cursor:cursor-new)))
+    (cursor:cursor-move-to-position! cs 0)
+    (app::%set-line-indentation! buffer (buf:buffer-undo buffer) cs 1 2)
+    (%check (string= (format nil "x~%  y") (gap:gap-to-string gb))
+            "Expected indentation to update the following line, got ~S"
+            (gap:gap-to-string gb))
+    (%check (= 0 (cursor:cursor-position cs))
+            "Expected indenting a later line to leave cursor unchanged, got ~D"
+            (cursor:cursor-position cs))))

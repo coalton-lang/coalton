@@ -31,6 +31,7 @@
     (message      (Cell (Optional String)))
     (message-expiry (Cell UFix))
     (package-name (Cell String))
+    (project-name (Cell (Optional String)))
     (symbol-info  (Cell String)))
 
   (declare statusbar-new (Void -> StatusBar))
@@ -44,12 +45,13 @@
                (cell:new None)
                (cell:new 0)
                (cell:new "COALTON-USER")
+               (cell:new None)
                (cell:new "")))
 
   ;;; Update
 
-  (declare statusbar-update! (StatusBar * String * String * Boolean * UFix * UFix * String * String -> Void))
-  (define (statusbar-update! sb mode fname mod-flag ln co pkg sym-info)
+  (declare statusbar-update! (StatusBar * String * String * Boolean * UFix * UFix * String * (Optional String) * String -> Void))
+  (define (statusbar-update! sb mode fname mod-flag ln co pkg project sym-info)
     "Update all status bar fields at once."
     (cell:write! (.mode-text sb) mode)
     (cell:write! (.filename sb) fname)
@@ -57,6 +59,7 @@
     (cell:write! (.line sb) ln)
     (cell:write! (.col sb) co)
     (cell:write! (.package-name sb) pkg)
+    (cell:write! (.project-name sb) project)
     (cell:write! (.symbol-info sb) sym-info)
     (values))
 
@@ -75,7 +78,7 @@
   (declare statusbar-render (StatusBar * screen:Screen * wt:Rect -> Void))
   (define (statusbar-render sb scr rect)
     "Render the status bar within a single-row RECT.
-Format: [MODE] filename [*] Ln:N Col:N [package]"
+Format: [MODE] optional current project, temporary messages, and symbol info."
     (let y = (wt:.rect-y rect))
     (let w = (wt:.rect-width rect))
     ;; Auto-expire messages
@@ -97,7 +100,10 @@ Format: [MODE] filename [*] Ln:N Col:N [package]"
     (let display-left =
       (match (cell:read (.message sb))
         ((Some msg) (<> mode-str msg))
-        ((None) mode-str)))
+        ((None)
+         (match (cell:read (.project-name sb))
+           ((Some project) (<> mode-str (<> "Current Project: " project)))
+           ((None) mode-str)))))
     ;; Draw left-aligned text.
     (let left-len = (cellw:string-cell-width display-left))
     (screen:screen-set-string scr y (wt:.rect-x rect) display-left style)

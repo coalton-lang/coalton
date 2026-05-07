@@ -30,7 +30,7 @@
    ;; Non-Tango
    #:dark-slate-blue #:brown #:gold
    ;; Semantic - backgrounds
-   #:selection-bg #:search-match-bg #:search-current-bg #:highlight-bg #:match-paren-bg
+   #:selection-bg #:user-selection-style #:search-match-bg #:search-current-bg #:highlight-bg #:match-paren-bg
    #:panel-bg #:repl-bg #:current-line-bg #:field-bg
    #:status-bar-bg #:accent-bg #:error-dialog-bg
    ;; Semantic - foregrounds
@@ -169,6 +169,11 @@
   (define status-bar-bg     aluminium-5)
   (define accent-bg         dark-blue)
   (define error-dialog-bg   dark-red)
+
+  ;;; Semantic names - styles
+
+  (define user-selection-style
+    (Style panel-bg highlight-bg AttrNone))
 
   ;;; Semantic names - foregrounds
 

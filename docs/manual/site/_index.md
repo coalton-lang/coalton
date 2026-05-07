@@ -41,8 +41,8 @@ see the [Standard Library Reference](/reference/).
 |  | [`=>`](/manual/operators/constraint-arrow/) | [`forall`](/manual/operators/forall/) | [`the`](/manual/operators/the/) |
 | **Expressions** | [`=`](/manual/operators/pattern-bind/) | [`[=>]`](/manual/operators/association-builder/) | [`[]`](/manual/operators/collection-builder/) |
 |  | [`_`](/manual/operators/wildcard/) | [`dynamic-bind`](/manual/operators/dynamic-bind/) | [`fn`](/manual/operators/fn/) |
-|  | [`let`](/manual/operators/let/) | [`let*`](/manual/operators/let-star/) | [`lisp`](/manual/operators/lisp/) |
-|  | [`match`](/manual/operators/match/) | [`values`](/manual/operators/values/) |  |
+|  | [`ƒ`](/manual/operators/short-fn/) | [`let`](/manual/operators/let/) | [`let*`](/manual/operators/let-star/) |
+|  | [`lisp`](/manual/operators/lisp/) | [`match`](/manual/operators/match/) | [`values`](/manual/operators/values/) |
 | **Conditionals** | [`and`](/manual/operators/and/) | [`cond`](/manual/operators/cond/) | [`if`](/manual/operators/if/) |
 |  | [`or`](/manual/operators/or/) | [`unless`](/manual/operators/unless/) | [`when`](/manual/operators/when/) |
 | **Looping** | [`break`](/manual/operators/break/) | [`continue`](/manual/operators/continue/) | [`for`](/manual/operators/for/) |

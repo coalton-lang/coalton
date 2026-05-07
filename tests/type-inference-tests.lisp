@@ -1083,6 +1083,27 @@
    "(define f (fn () 5))"
    '("f" . "(Num :a => (Void -> :a))")))
 
+(deftest test-short-lambda-shorthand ()
+  (check-coalton-types
+   "(define short-id ƒx.x)
+    (define short-zero ƒ.True)
+    (define short-add ƒxy.(+ x y))
+    (define short-nested-add ƒx.ƒy.(+ x y))
+    (define short-ignore ƒ_x_.x)"
+   '("short-id" . "(:a -> :a)")
+   '("short-zero" . "(Void -> Boolean)")
+   '("short-add" . "(Num :a => :a * :a -> :a)")
+   '("short-nested-add" . "(Num :a => :a -> :a -> :a)")
+   '("short-ignore" . "(:a * :b * :c -> :b)"))
+
+  (signals coalton-impl/parser:parse-error
+    (check-coalton-types
+     "(define duplicate-param ƒxx.x)"))
+
+  (signals coalton-impl/parser:parse-error
+    (check-coalton-types
+     "(define bad-param ƒx1.x)")))
+
 (deftest test-collection-builder-defaults ()
   (check-coalton-types
    "(define seq-default [1 2 3])

@@ -686,13 +686,13 @@ new value, if the key was found."
   (declare keys (Hash :k => HashMap :k :v -> (iter:Iterator :k)))
   (define (keys hm)
     "Returns an iterator over all the keys in a hashmap hm."
-    (iter:new (make-generator hm (fn (k _) k))))
+    (iter:new (make-generator hm ƒk_.k)))
 
   ;; API
   (declare values-iter (Hash :k => HashMap :k :v -> (iter:Iterator :v)))
   (define (values-iter hm)
     "Returns an iterator over all the values in a hashmap hm."
-    (iter:new (make-generator hm (fn (_ v) v))))
+    (iter:new (make-generator hm ƒ_v.v)))
 
   ;; API
   (declare entries (Hash :k => HashMap :k :v -> (iter:Iterator (Tuple :k :v))))
