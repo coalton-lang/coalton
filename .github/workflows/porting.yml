@@ -88,8 +88,8 @@ jobs:
             (cl:progn
               (load "/.abclrc")
               (ql:update-dist "quicklisp")
-              ;; (ql:quickload :computable-reals) ;; breaks on SAFETY=3
-              (asdf:load-system :computable-reals) ;; breaks on SAFETY=3
+              (ql:quickload :computable-reals) ;; breaks on SAFETY=3
+              ;; (asdf:load-system :computable-reals) ;; breaks on SAFETY=3
               (setq system:*safety* ${{ matrix.SAFETY }})
           (setf *debugger-hook*
             (lambda (c h)
@@ -97,8 +97,8 @@ jobs:
               (format *error-output* "~&Fatal Error: ~A~%" c)
               (uiop:print-backtrace :condition c)
               (uiop:quit 1)))
-              ;; (ql:quickload :coalton/tests)
-              (asdf:load-system :coalton/tests)
+              (ql:quickload :coalton/tests)
+              ;; (asdf:load-system :coalton/tests)
               (asdf:test-system :coalton/tests)
               ; TODO: Remove this or add tests for these programs.
               (asdf:load-system :small-coalton-programs)
@@ -132,8 +132,8 @@ jobs:
               (format *error-output* "~&Fatal Error: ~A~%" c)
               (uiop:print-backtrace :condition c)
               (uiop:quit 1)))
-          ;; (ql:quickload :coalton/tests)
-          (asdf:load-system :coalton/tests)
+          (ql:quickload :coalton/tests)
+          ;; (asdf:load-system :coalton/tests)
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
           (asdf:load-system :small-coalton-programs)
@@ -161,7 +161,8 @@ jobs:
               (format *error-output* "~&Fatal Error: ~A~%" c)
               (uiop:print-backtrace :condition c)
               (uiop:quit 1)))
-          (asdf:load-system :coalton/tests)
+          (ql:quickload :coalton/tests)
+          ;; (asdf:load-system :coalton/tests)
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
           (asdf:load-system :small-coalton-programs)
