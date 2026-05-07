@@ -66,6 +66,7 @@
                   check-reader-errors-produce-point-diagnostics
                   check-symbol-input-fn-alias
                   check-short-lambda-introducer-highlights-as-fn
+                  check-chained-short-lambda-introducers-each-highlight
                   check-indent-hunchentoot-style-handler-body
                   check-indent-multiple-value-bind-special-form
                   check-indent-lambda-list-keyword-alignment

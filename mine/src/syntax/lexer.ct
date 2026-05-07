@@ -41,7 +41,11 @@
   (define delimiters
     [#\Space #\Tab #\Newline #\Return
      #\( #\) #\[ #\]
-     #\; #\" #\' #\` #\, ])
+     #\; #\" #\' #\` #\,
+     ;; Hard delimiter so chained short lambdas like `ƒx.ƒy.(+ x y)`
+     ;; tokenize each ƒ as its own keyword rather than letting an
+     ;; inner ƒ get absorbed into a surrounding symbol.
+     #\ƒ ])
 
   (declare delimiter-char? (Char -> Boolean))
   (define (delimiter-char? ch)
