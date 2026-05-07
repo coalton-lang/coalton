@@ -109,7 +109,8 @@ jobs:
           EOF
           echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
           ls ${CL_SOURCE_REGISTRY}/coalton.asd
-          abcl --noinform --nosystem --batch --load run-tests.lisp
+          # abcl --noinform --nosystem --batch --load run-tests.lisp
+          java -Xmx2048m -server -Xrs -cp /bin/abcl.jar org.armedbear.lisp.Main --noinform --nosystem --batch --load run-tests.lisp
 
       - name: Run Clasp tests
         if: matrix.LISP_IMPL == 'clasp'
