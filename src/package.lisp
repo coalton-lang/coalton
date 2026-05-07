@@ -78,7 +78,7 @@
 
   ;; Primitive Syntax
   (:export
-   #:fn #:λ
+   #:fn
    #:&key
    #:match
    #:type-of
