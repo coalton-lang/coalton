@@ -14,7 +14,7 @@ weight: 140
 ```
 
 Coalton also has short `fn` syntax for compact lambdas:
-[`ƒ`](/manual/operators/short-lambda/).
+[`ƒ`](/manual/operators/short-fn/).
 
 ## Semantics
 

@@ -20,6 +20,8 @@ expression.
 `⟨chars⟩` may be empty. When it is present, it is a sequence of underscores or
 non-repeated alphabetic characters. The underscore character may be repeated.
 
+This character may be entered in the mine editor by typing `Ctrl+\ fn`.
+
 ## Semantics
 
 - `ƒx.x` is equivalent to `(fn (x) x)`.
