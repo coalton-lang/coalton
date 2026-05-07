@@ -173,8 +173,8 @@ iterator is empty."
     (assert (> step 0)
         "STEP ~a should be positive and non-zero in RANGE-INCREASING"
         step)
-    (recursive-iter (fn (x) (+ step x))
-                    (fn (x) (<= end x))
+    (recursive-iter ƒx.(+ step x)
+                    ƒx.(<= end x)
                     start))
 
   (declare up-to ((Num :num) (Ord :num) => :num -> Iterator :num))
@@ -247,7 +247,7 @@ Equivalent to reversing `range-increasing`"
   (declare count-forever ((Num :num) (Ord :num) => (Void -> Iterator :num)))
   (define (count-forever)
     "An infinite iterator which starts at 0 and counts upwards by 1."
-    (recursive-iter (fn (x) (+ 1 x))
+    (recursive-iter ƒx.(+ 1 x)
                     (const False)
                     0))
 
@@ -475,7 +475,7 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
   (declare last! (Iterator :a -> Optional :a))
   (define (last! iter)
     "Yields the last element of ITER, completely consuming it."
-    (fold! (fn (_ e) (Some e)) None iter))
+    (fold! ƒ_e.(Some e) None iter))
 
   (declare and! (Iterator Boolean -> Boolean))
   (define (and! iter)

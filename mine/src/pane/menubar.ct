@@ -182,7 +182,7 @@
              (cell:new None)
              (cell:new 0)
              cols
-             (cell:new (fn (_) True))))
+             (cell:new ƒ_.True)))
 
   ;;; Precompute title column ranges for hit testing
 
