@@ -21,6 +21,8 @@
    #:Functor #:map
    #:fmap
    #:Applicative #:pure #:liftA2
+   #:take-left
+   #:take-right
    #:Monad #:>>=
    #:MonadTransformer #:lift
    #:>> #:join
@@ -240,6 +242,26 @@ The name `fmap` comes from Haskell."
     "Types which are a functor which can embed pure expressions and sequence operations."
     (pure (:a -> (:f :a)))
     (liftA2 ((:a * :b -> :c) * (:f :a) * (:f :b) -> (:f :c))))
+
+  (inline)
+  (declare take-left (Applicative :f => :f :a * :f :b -> :f :a))
+  (define (take-left fa fb)
+    "Evaluate two applicatives, and take the value returned by the left one.
+Useful when the right applicative could produce a meaningful structural
+change that would alter the computation, such as returning a `None`.
+
+Equivalent of Haskell's `<*`"
+    (lifta2 ƒa_.a fa fb))
+
+  (inline)
+  (declare take-right (Applicative :f => :f :a * :f :b -> :f :b))
+  (define (take-right fa fb)
+    "Evaluate two applicatives, and take the value returned by the right one.
+Useful when the left applicative could produce a meaningful structural
+change that would alter the computation, such as returning a `None`.
+
+Equivalent of Haskell's `*>`"
+    (lifta2 ƒ_b.b fa fb))
 
   (define-class (Applicative :m => Monad :m)
     "Types which are monads as defined in Haskell. See https://wiki.haskell.org/Monad for more information."
