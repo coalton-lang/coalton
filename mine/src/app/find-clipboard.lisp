@@ -12,6 +12,14 @@
 ;;; System clipboard command detection (pbcopy/pbpaste on macOS,
 ;;; clip/Get-Clipboard on Windows and WSL, and wl-clipboard/xclip/xsel
 ;;; on Unix).
+;;;
+;;; OS dispatch is done at runtime via UIOP, not via #+ reader
+;;; conditionals.  Two reasons: (1) SBCL on Windows ships only :win32
+;;; (not :windows), so #+windows is unreliable, and (2) the Linux
+;;; release is cross-built on a non-WSL CI runner, so a compile-time
+;;; #+wsl check would never fire and we'd fall through to xclip/xsel,
+;;; which aren't installed on stock WSL Ubuntu, leaving copy/paste a
+;;; silent no-op.
 
 (defvar *clipboard-copy* nil)
 (defvar *clipboard-paste* nil)
@@ -37,6 +45,16 @@
       (string-equal (or (uiop:getenv "XDG_SESSION_TYPE") "")
                     "wayland")))
 
+(defun %wsl-p ()
+  "True when running inside the Windows Subsystem for Linux."
+  (or (%non-empty-env-p "WSL_DISTRO_NAME")
+      (%non-empty-env-p "WSL_INTEROP")
+      ;; Fallback for WSL1: kernel release string contains "microsoft".
+      (ignore-errors
+        (with-open-file (s "/proc/sys/kernel/osrelease" :direction :input)
+          (search "microsoft" (read-line s nil "")
+                  :test #'char-equal)))))
+
 (defun %find-first-command (candidates)
   (or (find-if (lambda (candidate)
                  (%program-available-p (first candidate)))
@@ -44,30 +62,38 @@
       (first candidates)))
 
 (defun find-clipboard-copy-command ()
-  #+darwin           (list "/usr/bin/pbcopy" nil)
-  #+(or windows wsl) (list "clip.exe" nil)
-  #-(or darwin windows wsl)
-  (%find-first-command
-   (if (%wayland-session-p)
-       (list (list "wl-copy" nil)
-             (list "xclip" (list "-selection" "clipboard"))
-             (list "xsel" (list "--clipboard" "--input")))
-       (list (list "xclip" (list "-selection" "clipboard"))
-             (list "xsel" (list "--clipboard" "--input"))
-             (list "wl-copy" nil)))))
+  (cond
+    ((uiop:os-macosx-p)
+     (list "/usr/bin/pbcopy" nil))
+    ((or (uiop:os-windows-p) (%wsl-p))
+     (list "clip.exe" nil))
+    ((%wayland-session-p)
+     (%find-first-command
+      (list (list "wl-copy" nil)
+            (list "xclip" (list "-selection" "clipboard"))
+            (list "xsel" (list "--clipboard" "--input")))))
+    (t
+     (%find-first-command
+      (list (list "xclip" (list "-selection" "clipboard"))
+            (list "xsel" (list "--clipboard" "--input"))
+            (list "wl-copy" nil))))))
 
 (defun find-clipboard-paste-command ()
-  #+darwin           (list "/usr/bin/pbpaste" nil)
-  #+(or windows wsl) (list "powershell.exe" (list "-command" "Get-Clipboard"))
-  #-(or darwin windows wsl)
-  (%find-first-command
-   (if (%wayland-session-p)
-       (list (list "wl-paste" (list "--no-newline"))
-             (list "xclip" (list "-selection" "clipboard" "-o"))
-             (list "xsel" (list "--clipboard" "--output")))
-       (list (list "xclip" (list "-selection" "clipboard" "-o"))
-             (list "xsel" (list "--clipboard" "--output"))
-             (list "wl-paste" (list "--no-newline"))))))
+  (cond
+    ((uiop:os-macosx-p)
+     (list "/usr/bin/pbpaste" nil))
+    ((or (uiop:os-windows-p) (%wsl-p))
+     (list "powershell.exe" (list "-command" "Get-Clipboard")))
+    ((%wayland-session-p)
+     (%find-first-command
+      (list (list "wl-paste" (list "--no-newline"))
+            (list "xclip" (list "-selection" "clipboard" "-o"))
+            (list "xsel" (list "--clipboard" "--output")))))
+    (t
+     (%find-first-command
+      (list (list "xclip" (list "-selection" "clipboard" "-o"))
+            (list "xsel" (list "--clipboard" "--output"))
+            (list "wl-paste" (list "--no-newline")))))))
 
 (defun initialize-clipboard ()
   (setf *clipboard-copy* (find-clipboard-copy-command)
