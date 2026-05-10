@@ -91,46 +91,54 @@ This symbol may be bound to a string source in the case of direct evaluation in 
           (setf dotted-context t)
           (eclector.reader:recover c))))))
 
+(defmacro with-coalton-parser-readtable (&body body)
+  "Run BODY with Coalton's Eclector reader syntax installed."
+  `(let ((eclector.readtable:*readtable*
+           (eclector.readtable:copy-readtable eclector.readtable:*readtable*)))
+     (preader:install-coalton-reader-syntax eclector.readtable:*readtable*)
+     ,@body))
+
 (defun maybe-read-coalton (stream source)
   "If the first form on STREAM indicates that Coalton code is present, read a program, and perform the indicated operation (compile, codegen, etc.).
 SOURCE provides metadata for the stream argument, for error messages."
-  (parser:with-reader-context stream
-    (let ((first-form
-            (multiple-value-bind (form presentp)
-                (parser:maybe-read-form stream source)
-              (unless presentp
-                (return-from maybe-read-coalton nil))
-              form)))
+  (with-coalton-parser-readtable
+    (parser:with-reader-context stream
+      (let ((first-form
+              (multiple-value-bind (form presentp)
+                  (parser:maybe-read-form stream source)
+                (unless presentp
+                  (return-from maybe-read-coalton nil))
+                form)))
 
-      (case (cst:raw first-form)
-        (coalton:coalton-toplevel
-          (entry:compile-coalton-toplevel (parser:read-program stream source ':macro)))
+        (case (cst:raw first-form)
+          (coalton:coalton-toplevel
+            (entry:compile-coalton-toplevel (parser:read-program stream source ':macro)))
 
-        (coalton:coalton-codegen
-          (let ((settings:*emit-type-annotations* nil))
-            `',(entry:entry-point (parser:read-program stream source ':macro))))
+          (coalton:coalton-codegen
+            (let ((settings:*emit-type-annotations* nil))
+              `',(entry:entry-point (parser:read-program stream source ':macro))))
 
-        (coalton:coalton-codegen-types
-          (let ((settings:*emit-type-annotations* t))
-            `',(entry:entry-point (parser:read-program stream source ':macro))))
+          (coalton:coalton-codegen-types
+            (let ((settings:*emit-type-annotations* t))
+              `',(entry:entry-point (parser:read-program stream source ':macro))))
 
-        (coalton:coalton-codegen-ast
-          (let* ((settings:*emit-type-annotations* nil)
-                 (ast nil)
-                 (codegen:*codegen-hook* (lambda (op &rest args)
-                                           (when (eql op ':AST)
-                                             (push args ast)))))
-            (entry:entry-point (parser:read-program stream source ':macro))
-            (loop :for (name type value) :in (nreverse ast)
-                  :do (format t "~A :: ~A~%~A~%~%~%" name type value)))
-          nil)
+          (coalton:coalton-codegen-ast
+            (let* ((settings:*emit-type-annotations* nil)
+                   (ast nil)
+                   (codegen:*codegen-hook* (lambda (op &rest args)
+                                             (when (eql op ':AST)
+                                               (push args ast)))))
+              (entry:entry-point (parser:read-program stream source ':macro))
+              (loop :for (name type value) :in (nreverse ast)
+                    :do (format t "~A :: ~A~%~A~%~%~%" name type value)))
+            nil)
 
-        (coalton:coalton
-         (entry:expression-entry-point (parser:read-expressions stream source)))
+          (coalton:coalton
+           (entry:expression-entry-point (parser:read-expressions stream source)))
 
-        ;; Fall back to reading the list manually
-        (t
-         (read-lisp stream source first-form))))))
+          ;; Fall back to reading the list manually.
+          (t
+           (read-lisp stream source first-form)))))))
 
 (defun utf-8-char-width (char)
   "Return the number of UTF-8 octets required to encode CHAR."
@@ -199,32 +207,33 @@ SOURCE provides metadata for the stream argument, for error messages."
   "Read a Coalton toplevel form from STREAM and defer compilation to macroexpansion.
 SOURCE provides metadata for the stream argument, and START is the offset of
 the opening parenthesis that began the current form."
-  (parser:with-reader-context stream
-    (let ((first-form
-            (multiple-value-bind (form presentp)
-                (parser:maybe-read-form stream source)
-              (unless presentp
-                (return-from maybe-read-coalton-deferred nil))
-              form)))
-      (let ((mode (cst:raw first-form)))
-        (case mode
-          ((coalton:coalton-toplevel
-            coalton:coalton-codegen
-            coalton:coalton-codegen-types
-            coalton:coalton-codegen-ast
-            coalton:coalton)
-           ;; Consume the original source form now, but compile it later from
-           ;; the exact source span so repeated compiler passes do not
-           ;; monomorphize or inline the same form more than once.
-           (read-lisp stream source first-form)
-           (make-deferred-coalton-form mode
-                                       source
-                                       (normalized-source-span source
-                                                               mode
-                                                               start
-                                                               (file-position stream))))
-          (t
-           (read-lisp stream source first-form)))))))
+  (with-coalton-parser-readtable
+    (parser:with-reader-context stream
+      (let ((first-form
+              (multiple-value-bind (form presentp)
+                  (parser:maybe-read-form stream source)
+                (unless presentp
+                  (return-from maybe-read-coalton-deferred nil))
+                form)))
+        (let ((mode (cst:raw first-form)))
+          (case mode
+            ((coalton:coalton-toplevel
+              coalton:coalton-codegen
+              coalton:coalton-codegen-types
+              coalton:coalton-codegen-ast
+              coalton:coalton)
+             ;; Consume the original source form now, but compile it later from
+             ;; the exact source span so repeated compiler passes do not
+             ;; monomorphize or inline the same form more than once.
+             (read-lisp stream source first-form)
+             (make-deferred-coalton-form mode
+                                         source
+                                         (normalized-source-span source
+                                                                 mode
+                                                                 start
+                                                                 (file-position stream))))
+            (t
+             (read-lisp stream source first-form))))))))
 
 (defun expand-source-coalton-form-1 (mode source span)
   "Compile the Coalton form identified by MODE from SOURCE at SPAN.
@@ -323,11 +332,63 @@ Eclector bracket reader in parser/reader.lisp."
   (declare (ignore stream char))
   (error "Unmatched close bracket `]`"))
 
+(defun read-cl-short-lambda-char-string (char)
+  (let ((string (string char)))
+    (ecase (readtable-case *readtable*)
+      (:upcase
+       (string-upcase string))
+      (:downcase
+       (string-downcase string))
+      (:preserve
+       string)
+      (:invert
+       (cond
+         ((upper-case-p char)
+          (string-downcase string))
+         ((lower-case-p char)
+          (string-upcase string))
+         (t
+          string))))))
+
+(defun read-cl-short-lambda-char-symbol (char)
+  (intern (read-cl-short-lambda-char-string char) *package*))
+
+(defun read-cl-short-lambda-form (stream char)
+  "Reader macro for `ƒx.body` syntax on the CL readtable."
+  (declare (ignore char))
+  (let ((params nil)
+        (seen-names (make-hash-table :test #'eq)))
+    (loop :for param-char := (read-char stream nil nil)
+          :do
+             (cond
+               ((null param-char)
+                (error "Malformed short lambda: missing `.`"))
+               ((char= #\. param-char)
+                (unless (peek-char t stream nil nil)
+                  (error "Malformed short lambda: missing body expression"))
+                (return (list 'coalton:fn
+                              (nreverse params)
+                              (read stream t nil t))))
+               ((char= #\_ param-char)
+                (push (read-cl-short-lambda-char-symbol param-char) params))
+               ((alpha-char-p param-char)
+                (let ((name (read-cl-short-lambda-char-symbol param-char)))
+                  (when (gethash name seen-names)
+                    (error "Malformed short lambda: duplicate parameter `~A`"
+                           param-char))
+                  (setf (gethash name seen-names) t)
+                  (push name params)))
+               (t
+                (error
+                 "Malformed short lambda: expected alphabetic parameter, `_`, or `.`, got `~A`"
+                 param-char))))))
+
 (named-readtables:defreadtable coalton:coalton
   (:merge :standard)
   (:macro-char #\( 'read-coalton-toplevel-open-paren)
   (:macro-char #\[ 'read-cl-bracket-form)
   (:macro-char #\] 'read-cl-close-bracket)
+  (:macro-char #\ƒ 'read-cl-short-lambda-form)
   (:macro-char #\` (lambda (s c)
                      (let ((*coalton-reader-allowed* nil))
                        (funcall (get-macro-character #\` (named-readtables:ensure-readtable :standard)) s c))))

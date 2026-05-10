@@ -152,6 +152,30 @@
                          (parser:builder-for-marker))))))
       (delete-package *package*))))
 
+(deftest coalton-readtable-syntax-in-lisp-fallback ()
+  (let ((*package* (make-package "COALTON-SYNTAX-FALLBACK-PACKAGE" :use nil)))
+    (unwind-protect
+         (let ((*readtable* (named-readtables:ensure-readtable 'coalton:coalton))
+               (list-symbol (intern "LIST" *package*))
+               (f-symbol (intern "F" *package*))
+               (x-symbol (intern "X" *package*)))
+           (is (equal (list list-symbol
+                            (list (parser:collection-builder-marker) x-symbol))
+                      (read-from-string "(list [x])"))
+               "bracket syntax should survive Lisp fallback after the first symbol")
+           (is (equal (list (list (parser:collection-builder-marker) f-symbol)
+                            x-symbol)
+                      (read-from-string "([f] x)"))
+               "bracket syntax should survive Lisp fallback in operator position")
+           (is (equal (list list-symbol
+                            (list 'coalton:fn (list x-symbol) x-symbol))
+                      (read-from-string "(list ƒx.x)"))
+               "short lambda syntax should survive Lisp fallback")
+           (is (equal (list 'coalton:fn (list x-symbol) x-symbol)
+                      (read-from-string "ƒx.x"))
+               "short lambda syntax should be active on the Coalton readtable"))
+      (delete-package *package*))))
+
 (deftest reader-defers-coalton-compilation ()
   (uiop:with-temporary-file (:stream stream
                              :pathname input-file
