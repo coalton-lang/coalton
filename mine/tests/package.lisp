@@ -67,6 +67,9 @@
                   check-symbol-input-fn-alias
                   check-short-lambda-introducer-highlights-as-fn
                   check-chained-short-lambda-introducers-each-highlight
+                  check-resize-sequence-emits-resize
+                  check-resize-sequence-consumes-before-next-key
+                  check-partial-resize-sequence-is-preserved
                   check-indent-hunchentoot-style-handler-body
                   check-indent-multiple-value-bind-special-form
                   check-indent-lambda-list-keyword-alignment

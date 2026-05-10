@@ -1,5 +1,7 @@
 (cl:defpackage #:mine/term/input
   (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:vec #:coalton/vector))
   (:export
    #:Key
    #:KeyChar #:KeyCtrl #:KeyEnter #:KeyTab #:KeyBackspace
@@ -89,38 +91,6 @@
     (IEvResize UFix UFix)
     IEvNone)
 
-  ;;; Vector helpers (via lisp escape since no local nickname)
-
-  (declare vec-length ((Vector UFix) -> UFix))
-  (define (vec-length v)
-    (lisp (-> UFix) (v)
-      (cl:length v)))
-
-  (declare vec-ref ((Vector UFix) * UFix -> UFix))
-  (define (vec-ref v i)
-    (lisp (-> UFix) (v i)
-      (cl:aref v i)))
-
-  (declare vec-new (Void -> (Vector UFix)))
-  (define (vec-new)
-    (lisp (-> (Vector UFix)) ()
-      (cl:make-array 0 :fill-pointer 0 :adjustable cl:t
-                       :element-type cl:t)))
-
-  (declare vec-from-offset ((Vector UFix) * UFix -> (Vector UFix)))
-  (define (vec-from-offset v start)
-    "Create a new vector containing elements from START to the end."
-    (lisp (-> (Vector UFix)) (v start)
-      (cl:let* ((len (cl:length v))
-                (new-len (cl:max 0 (cl:- len start)))
-                (result (cl:make-array new-len :fill-pointer new-len
-                                               :adjustable cl:t
-                                               :element-type cl:t)))
-        (cl:dotimes (i new-len)
-          (cl:setf (cl:aref result i)
-                   (cl:aref v (cl:+ start i))))
-        result)))
-
   ;;; Byte-to-char conversion
 
   (declare ufix-to-char (UFix -> Char))
@@ -169,7 +139,7 @@
   (define (parse-csi-params buf start)
     "Parse CSI numeric parameters from BUF starting at START.
 Returns (params final-byte next-pos)."
-    (let len = (vec-length buf))
+    (let len = (vec:length buf))
     (lisp (-> (Tuple3 (List UFix) UFix UFix)) (buf start len)
       (cl:let ((params (cl:list 0))
                (pos start))
@@ -239,8 +209,8 @@ Returns (params final-byte next-pos)."
   (declare decode-utf8 ((Vector UFix) * UFix -> (Tuple Char UFix)))
   (define (decode-utf8 buf pos)
     "Decode a UTF-8 character from BUF at POS. Returns (char next-pos)."
-    (let b0 = (vec-ref buf pos))
-    (let len = (vec-length buf))
+    (let b0 = (vec:index-unsafe pos buf))
+    (let len = (vec:length buf))
     (cond
       ;; ASCII
       ((< b0 128)
@@ -249,7 +219,7 @@ Returns (params final-byte next-pos)."
       ((and (>= b0 192) (< b0 224))
        (cond
          ((< (+ pos 1) len)
-          (let b1 = (vec-ref buf (+ pos 1)))
+          (let b1 = (vec:index-unsafe (+ pos 1) buf))
           (let cp = (+ (* (- b0 192) 64) (- b1 128)))
           (Tuple (ufix-to-char cp) (+ pos 2)))
          (True (Tuple #\? (+ pos 1)))))
@@ -257,8 +227,8 @@ Returns (params final-byte next-pos)."
       ((and (>= b0 224) (< b0 240))
        (cond
          ((< (+ pos 2) len)
-          (let b1 = (vec-ref buf (+ pos 1)))
-          (let b2 = (vec-ref buf (+ pos 2)))
+          (let b1 = (vec:index-unsafe (+ pos 1) buf))
+          (let b2 = (vec:index-unsafe (+ pos 2) buf))
           (let cp = (+ (* (- b0 224) 4096)
                        (+ (* (- b1 128) 64) (- b2 128))))
           (Tuple (ufix-to-char cp) (+ pos 3)))
@@ -267,9 +237,9 @@ Returns (params final-byte next-pos)."
       ((and (>= b0 240) (< b0 248))
        (cond
          ((< (+ pos 3) len)
-          (let b1 = (vec-ref buf (+ pos 1)))
-          (let b2 = (vec-ref buf (+ pos 2)))
-          (let b3 = (vec-ref buf (+ pos 3)))
+          (let b1 = (vec:index-unsafe (+ pos 1) buf))
+          (let b2 = (vec:index-unsafe (+ pos 2) buf))
+          (let b3 = (vec:index-unsafe (+ pos 3) buf))
           (let cp = (+ (* (- b0 240) 262144)
                        (+ (* (- b1 128) 4096)
                           (+ (* (- b2 128) 64)
@@ -286,9 +256,9 @@ Returns (params final-byte next-pos)."
   (define (dispatch-csi buf start)
     "Parse a CSI sequence from BUF starting after the '['.
 Returns (event next-pos)."
-    (let len = (vec-length buf))
+    (let len = (vec:length buf))
     ;; Check for SGR mouse: CSI < ...
-    (if (and (< start len) (== (vec-ref buf start) 60))
+    (if (and (< start len) (== (vec:index-unsafe start buf) 60))
         ;; SGR mouse sequence
         (match (parse-csi-params buf start)
           ((Tuple3 params final-byte next)
@@ -377,7 +347,7 @@ Returns (event next-pos)."
             (lisp (-> Void) (rows cols)
               (mine/bindings/terminal:terminal-set-pipe-size rows cols)
               (cl:values))
-            IEvNone))
+            (IEvResize cols rows)))
          (_ (IEvKey (KeyUnknown 116) ModNone))))
       ;; CSI u (progressive keyboard enhancement)
       ;; Kitty protocol sends base (unshifted) codepoints with shift in
@@ -476,8 +446,8 @@ Returns (event next-pos)."
   (define (parse-one buf pos)
     "Parse a single input event from BUF starting at POS.
 Returns (event next-pos)."
-    (let len = (vec-length buf))
-    (let b = (vec-ref buf pos))
+    (let len = (vec:length buf))
+    (let b = (vec:index-unsafe pos buf))
     (cond
       ;; ESC (byte 27) — CSI/SS3 lead-in, or Alt prefix in best-effort mode
       ((== b 27)
@@ -486,7 +456,7 @@ Returns (event next-pos)."
           ;; Bare ESC at end of buffer -- incomplete, return IEvNone
           (Tuple IEvNone pos))
          (True
-          (let next-byte = (vec-ref buf (+ pos 1)))
+          (let next-byte = (vec:index-unsafe (+ pos 1) buf))
           (cond
             ;; ESC [ -> CSI
             ((== next-byte 91)
@@ -499,7 +469,7 @@ Returns (event next-pos)."
                ((>= (+ pos 2) len)
                 (Tuple IEvNone pos))
                (True
-                (let fb = (vec-ref buf (+ pos 2)))
+                (let fb = (vec:index-unsafe (+ pos 2) buf))
                 (Tuple (dispatch-ss3 fb) (+ pos 3)))))
             ;; ESC ESC -> Alt prefix (Option-as-Meta sends ESC before sequences)
             ((== next-byte 27)
@@ -507,19 +477,19 @@ Returns (event next-pos)."
                ((>= (+ pos 2) len)
                 (Tuple IEvNone pos))
                ;; ESC ESC [ -> Alt + CSI sequence
-               ((== (vec-ref buf (+ pos 2)) 91)
+               ((== (vec:index-unsafe (+ pos 2) buf) 91)
                 (if (>= (+ pos 3) len)
                     (Tuple IEvNone pos)
                     (match (dispatch-csi buf (+ pos 3))
                       ((Tuple ev next)
                        (Tuple (%apply-alt ev) next)))))
                ;; ESC ESC O -> Alt + SS3 sequence
-               ((== (vec-ref buf (+ pos 2)) 79)
+               ((== (vec:index-unsafe (+ pos 2) buf) 79)
                 (cond
                   ((>= (+ pos 3) len)
                    (Tuple IEvNone pos))
                   (True
-                   (let fb = (vec-ref buf (+ pos 3)))
+                   (let fb = (vec:index-unsafe (+ pos 3) buf))
                    (Tuple (%apply-alt (dispatch-ss3 fb)) (+ pos 4)))))
                ;; ESC ESC + other -> just ESC
                (True
@@ -575,9 +545,9 @@ Returns (event next-pos)."
   (define (parse-input buf)
     "Parse all available input events from a byte buffer.
 Returns a tuple of (parsed-events remaining-bytes)."
-    (let len = (vec-length buf))
+    (let len = (vec:length buf))
     (if (== len 0)
-        (Tuple Nil (vec-new))
+        (Tuple Nil (vec:new))
         (parse-loop buf 0 len Nil)))
 
   (declare parse-loop
@@ -585,17 +555,13 @@ Returns a tuple of (parsed-events remaining-bytes)."
      -> (Tuple (List InputEvent) (Vector UFix))))
   (define (parse-loop buf pos len acc)
     (if (>= pos len)
-        (Tuple (reverse acc) (vec-new))
+        (Tuple (reverse acc) (vec:new))
         (match (parse-one buf pos)
           ((Tuple (IEvNone) next-pos)
-           ;; TODO: Add parser regression tests for:
-           ;; - ESC[8;40;120t is fully consumed with no remainder.
-           ;; - ESC[8;40;120t followed by `a` still yields the `a` key event.
-           ;; - A partial resize sequence remains in the remainder until completed.
            (if (> next-pos pos)
-               ;; Fully consumed internal control sequence (for example, resize).
+               ;; Fully consumed internal control sequence with no public event.
                (parse-loop buf next-pos len acc)
                ;; Incomplete sequence -- return what we have plus remaining bytes.
-               (Tuple (reverse acc) (vec-from-offset buf pos))))
+               (Tuple (reverse acc) (vec:subseq buf pos len))))
           ((Tuple ev next-pos)
            (parse-loop buf next-pos len (Cons ev acc)))))))
