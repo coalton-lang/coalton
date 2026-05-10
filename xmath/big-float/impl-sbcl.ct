@@ -69,6 +69,30 @@
     (cl:prog1 (mpq->rational q)
       (__gmpq_clear (sb-alien:addr q)))))
 
+(cl:eval-when (:compile-toplevel :load-toplevel)
+  (cl:defmacro define-big-float-tryinto-float (coalton-float lisp-float precision)
+    `(define-instance (TryInto Big-Float ,coalton-float)
+       (define (tryInto a)
+         (lisp (-> (Optional ,coalton-float)) (a)
+           (cl:let ((b (cl:ignore-errors (sb-mpfr:coerce a ',lisp-float))))
+             (cl:cond
+               ((cl:null b) None)
+               ((sb-mpfr:nan-p a) (Some b))
+               ;; SB-MPFR coercion rounds; TryInto only accepts exact finite values.
+               ((cl:let ((sb-mpfr:+mpfr-precision+ ,precision))
+                  (sb-mpfr:= a (sb-mpfr:coerce b 'sb-mpfr:mpfr-float)))
+                (Some b))
+               (cl:t None)))))))
+
+  (cl:defmacro define-big-float-round-to-float (name coalton-float lisp-float)
+    `(progn
+       (declare ,name (Big-Float -> ,coalton-float))
+       (define (,name a)
+         "Round a Big-Float to the nearest representable native float, with ties to even."
+         (lisp (-> ,coalton-float) (a)
+           (cl:let ((sb-mpfr:*mpfr-rnd* :MPFR_RNDN))
+             (sb-mpfr:coerce a ',lisp-float)))))))
+
 ;; Whether the mpfr ceiling function is properly exported
 (cl:eval-when (:compile-toplevel :load-toplevel)
   (cl:if (uiop:featurep :sbcl)
@@ -216,6 +240,11 @@
     (define (into a)
       (lisp (-> Big-Float) (a)
         (sb-mpfr:coerce a 'sb-mpfr:mpfr-float))))
+
+  (define-big-float-tryinto-float F32 cl:single-float 24)
+  (define-big-float-tryinto-float F64 cl:double-float 53)
+  (define-big-float-round-to-float round-to-f32 F32 cl:single-float)
+  (define-big-float-round-to-float round-to-f64 F64 cl:double-float)
 
   ;; quantization and division
   (define-instance (Quantizable Big-Float)
