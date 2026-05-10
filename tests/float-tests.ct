@@ -137,11 +137,43 @@
    (fn (x) (math:acos (* (math:sign x)
                          (min (math:reciprocal (abs x)) (abs x)))))))
 
-(define-test big-float-tryinto-native-floats ()
+(define-test big-float-native-float-conversions ()
   (let exact32 = (the big-float:Big-Float (into 1.25f0)))
   (let exact64 = (the big-float:Big-Float (into 1.25d0)))
   (is (== (the (Optional F32) (tryInto exact32)) (Some 1.25f0)))
   (is (== (the (Optional F64) (tryInto exact64)) (Some 1.25d0)))
+  (is (== (big-float:with-precision-rounding
+            (fn () (the big-float:Big-Float (into 1.25f0)))
+            :precision 1
+            :rounding big-float:rndn)
+          exact32))
+  (is (== (big-float:with-precision-rounding
+            (fn () (the big-float:Big-Float (into 1.25d0)))
+            :precision 1
+            :rounding big-float:rndn)
+          exact64))
+  (is (== (big-float:with-precision-rounding
+            (fn () (math:to-fraction (the big-float:Big-Float (into (the U64 3)))))
+            :precision 1
+            :rounding big-float:rndn)
+          3))
+  (is (== (big-float:with-precision-rounding
+            (fn () (math:to-fraction (the big-float:Big-Float (into (the IFix -3)))))
+            :precision 1
+            :rounding big-float:rndn)
+          -3))
+
+  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the Bit 1)))) 1.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the U8 2)))) 2.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the I8 -3)))) -3.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the U16 4)))) 4.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the I16 -5)))) -5.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the U32 6)))) 6.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the I32 -7)))) -7.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the U64 8)))) 8.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the I64 -9)))) -9.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the UFix 10)))) 10.0d0))
+  (is (== (big-float:round-to-f64 (the big-float:Big-Float (into (the IFix -11)))) -11.0d0))
 
   (let not32 = (big-float:with-precision-rounding
                  (fn () (+ 1 (the big-float:Big-Float (math:^^ 2 -30))))

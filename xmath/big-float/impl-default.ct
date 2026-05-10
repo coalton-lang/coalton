@@ -193,6 +193,10 @@
     BFNegInf
     BFNaN)
 
+  (declare integer->big-float-exact (Integer -> Big-Float))
+  (define (integer->big-float-exact n)
+    (BFValue (Dyadic n 0)))
+
   ;; Can compare non-normalized big-floats or big-floats of different precisions.
   (define-instance (Eq Big-Float)
     (define (== a b)
@@ -366,13 +370,12 @@
         ((== a negative-infinity) BFNegInf)
         ((nan? a) BFNaN)
         (True
-         (normalize
-          (lisp (-> Big-Float) (a)
-            (cl:multiple-value-bind (n k s)
-                (cl:integer-decode-float a)
-              (cl:if (cl:and (cl:= n 0) (cl:= s 0))
-                     BFNegZero
-                     (BFValue (Dyadic (cl:* s n) k))))))))))
+         (lisp (-> Big-Float) (a)
+           (cl:multiple-value-bind (n k s)
+               (cl:integer-decode-float a)
+             (cl:if (cl:and (cl:zerop n) (cl:minusp (cl:float-sign a)))
+                    BFNegZero
+                    (BFValue (Dyadic (cl:* s n) k)))))))))
 
   (define-instance (Into F64 Big-Float)
     (define (into a)
@@ -381,13 +384,12 @@
         ((== a negative-infinity) BFNegInf)
         ((nan? a) BFNaN)
         (True
-         (normalize
-          (lisp (-> Big-Float) (a)
-            (cl:multiple-value-bind (n k s)
-                (cl:integer-decode-float a)
-              (cl:if (cl:and (cl:= n 0) (cl:= s 0))
-                     BFNegZero
-                     (BFValue (Dyadic (cl:* s n) k))))))))))
+         (lisp (-> Big-Float) (a)
+           (cl:multiple-value-bind (n k s)
+               (cl:integer-decode-float a)
+             (cl:if (cl:and (cl:zerop n) (cl:minusp (cl:float-sign a)))
+                    BFNegZero
+                    (BFValue (Dyadic (cl:* s n) k)))))))))
 
   (define-big-float-tryinto-float F32 cl:single-float -0.0f0
                                   cl:least-positive-single-float
@@ -405,7 +407,9 @@
 
   (define-instance (Into Integer Big-Float)
     (define (into a)
-      (fromInt a)))
+      (integer->big-float-exact a)))
+
+  (define-big-float-primitive-conversions)
 
   (define-instance (Into Fraction Big-Float)
     (define (into a)

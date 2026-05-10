@@ -69,7 +69,16 @@
     (cl:prog1 (mpq->rational q)
       (__gmpq_clear (sb-alien:addr q)))))
 
-(cl:eval-when (:compile-toplevel :load-toplevel)
+(cl:eval-when (:compile-toplevel :load-toplevel :execute)
+  (cl:defmacro define-big-float-primitive-conversions ()
+    `(progn
+       ,@(cl:loop :for integer-type :in '(Bit U8 I8 U16 I16 U32 I32 U64 I64 UFix IFix)
+                  :collect
+                  `(define-instance (Into ,integer-type Big-Float)
+                     (inline)
+                     (define (into a)
+                       (integer->big-float-exact (toInteger a)))))))
+
   (cl:defmacro define-big-float-tryinto-float (coalton-float lisp-float precision)
     `(define-instance (TryInto Big-Float ,coalton-float)
        (define (tryInto a)
@@ -188,6 +197,13 @@
   (define-type Big-Float
     "An arbitrary (but fixed) precision floating point number.")
 
+  (declare integer->big-float-exact (Integer -> Big-Float))
+  (define (integer->big-float-exact n)
+    (lisp (-> Big-Float) (n)
+      (cl:let ((sb-mpfr:+mpfr-precision+
+                 (cl:max 1 (cl:integer-length (cl:abs n)))))
+        (sb-mpfr:coerce n 'sb-mpfr:mpfr-float))))
+
   ;; Equality
   (define-instance (Eq Big-Float)
     (define (== a b)
@@ -224,7 +240,7 @@
   ;; Conversion
   (define-instance (Into Integer Big-Float)
     (define (into a)
-      (fromInt a)))
+      (integer->big-float-exact a)))
 
   (define-instance (Into Fraction Big-Float)
     (define (into a)
@@ -234,12 +250,16 @@
   (define-instance (Into F32 Big-Float)
     (define (into a)
       (lisp (-> Big-Float) (a)
-        (sb-mpfr:coerce a 'sb-mpfr:mpfr-float))))
+        (cl:let ((sb-mpfr:+mpfr-precision+ 24))
+          (sb-mpfr:coerce a 'sb-mpfr:mpfr-float)))))
 
   (define-instance (Into F64 Big-Float)
     (define (into a)
       (lisp (-> Big-Float) (a)
-        (sb-mpfr:coerce a 'sb-mpfr:mpfr-float))))
+        (cl:let ((sb-mpfr:+mpfr-precision+ 53))
+          (sb-mpfr:coerce a 'sb-mpfr:mpfr-float)))))
+
+  (define-big-float-primitive-conversions)
 
   (define-big-float-tryinto-float F32 cl:single-float 24)
   (define-big-float-tryinto-float F64 cl:double-float 53)
