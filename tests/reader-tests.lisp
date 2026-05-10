@@ -3,12 +3,9 @@
 (defun read-form-with-source (string)
   (let ((source (source:make-source-string string :name "test")))
     (with-open-stream (stream (source:source-stream source))
-      (let ((eclector.readtable:*readtable*
-             (eclector.readtable:copy-readtable eclector.readtable:*readtable*)))
-        (parser:install-coalton-reader-syntax eclector.readtable:*readtable*)
-        (parser:with-reader-context stream
-          (values (parser:maybe-read-form stream source parser::*coalton-eclector-client*)
-                  source))))))
+      (parser:with-coalton-reader-context stream
+        (values (parser:maybe-read-form stream source parser::*coalton-eclector-client*)
+                source)))))
 
 (defun cst-symbol-spans (form name)
   (labels ((walk (node spans)
