@@ -31,6 +31,7 @@
    (#:bits #:coalton/bits)
    (#:char #:coalton/char)
    (#:string #:coalton/string)
+   (#:format #:coalton/format)
    (#:vector #:coalton/vector)
    (#:queue #:coalton/queue)
    (#:slice #:coalton/slice)

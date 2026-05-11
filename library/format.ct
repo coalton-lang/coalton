@@ -1,0 +1,1241 @@
+(coalton/utils:defstdlib-package #:coalton/format
+  (:use
+   #:coalton
+   #:coalton/builtin
+   #:coalton/functions
+   #:coalton/classes)
+  (:local-nicknames
+   (#:mt #:coalton/math)
+   (:s #:coalton/string)
+   (:sw #:coalton/show)
+   (:iter #:coalton/iterator)
+   (:l #:coalton/list)
+   (:it #:coalton/iterator)
+   (:cr #:coalton/char)
+   (:sy #:coalton/symbol)
+   (:t #:coalton/types)
+   (:tp #:coalton/tuple)
+   (:c #:coalton/cell))
+  (:export
+   #:Str
+   #:Out
+   #:format))
+
+(in-package #:coalton/format)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+;;;;
+;;;; This file provides a statically-typed wrapper around the Common Lisp format function.
+;;;; At compile time, the validity of the control string, the number of arguments, and
+;;;; the types of the arguments are checked. At runtime, Common Lisp's format receives
+;;;; the same control string and, for the most part, the same arguments. The exception is
+;;;; ~a, which uses `show-with-string` first.
+;;;;
+;;;; The code implements a monadic parser to parse the control string and compile Coalton
+;;;; forms that typecheck/transform the arguments. The file is broken up as follows:
+;;;;
+;;;; 0. Build a small monadic parser library. Aslo build a TResult type that's used to
+;;;;    separate recoverable and unrecoverable errors while parsing.
+;;;; 
+;;;; 1. Lex the plain control string into string segments and raw directives, which
+;;;;    just contain character data internally. Validates that the individual components
+;;;;    of the control string follow the grammar, but not that they are real directives,
+;;;;    etc.
+;;;;
+;;;; 2. Parse the raw data into a control string AST, which represents each format
+;;;;    directive as a separate ADT constructor. Validates that individual directives
+;;;;    are well-formed, for example, that the directive character exists.
+;;;;
+;;;; 3. Compile the control string AST into a series of argument code transformation
+;;;;    steps. This is the step that determines that ~C needs to correspond to a Char
+;;;;    argument. Validates inter-directive properties, such as that a ~{ needs to be
+;;;;    followed by a ~}.
+;;;;
+;;;; 4. Iterate over the provided arguments' code in the format macro and transform it
+;;;;    based on the previously compiled transformation steps.
+;;;;    
+
+;;; A "TResult" or a "Three Result" represents three completion states:
+;;; - Ok_   - Computation succeeded
+;;; - Fail_ - Computation failed, but recoverably
+;;; - Err_  - Computation errored, and is unrecoverable.
+
+(coalton-toplevel
+  (define-type (TResult :e :f :a)
+    (Err_  :e)
+    (Fail_ :f)
+    (Ok_   :a))
+
+  (define-instance (Functor (TResult :e :f))
+    (inline)
+    (define (map f res)
+      (match res
+        ((Err_ e) (Err_ e))
+        ((Fail_ f) (Fail_ f))
+        ((Ok_ a) (Ok_ (f a))))))
+
+  (define-instance (Applicative (TResult :e :f))
+    (inline)
+    (define (pure a)
+      (Ok_ a))
+    (inline)
+    (define (lifta2 a-b->c ra rb)
+      (match ra
+        ((Err_ e)
+         (Err_ e))
+        ((Fail_ f)
+         (Fail_ f))
+        ((Ok_ a)
+         (match rb
+           ((Err_ e)
+            (Err_ e))
+           ((Fail_ f)
+            (Fail_ f))
+           ((Ok_ b)
+            (Ok_ (a-b->c a b))))))))
+
+  (define-instance (Monad (TResult :e :f))
+    (inline)
+    (define (>>= resa a->resb)
+      (match resa
+        ((Err_ e)
+         (Err_ e))
+        ((Fail_ f)
+         (Fail_ f))
+        ((Ok_ a)
+         (a->resb a))))))
+
+;;;
+;;; Define the basic parser types and their instances:
+;;; ParseError, ParseRes, and Parser.
+;;;
+
+(coalton-toplevel
+
+  (define-type ParseError
+    (ParseError String))
+
+  (define-instance (sw:Show ParseError)
+    (define (sw:show-to out (ParseError msg))
+      (out
+       (<> "Parse Error: " msg))))
+
+  (repr :enum)
+  (define-type ParseFail
+    OutOfTokensFail
+    ParseFail)
+
+  (declare fail->err (ParseFail -> ParseError))
+  (define (fail->err pf)
+    (ParseError
+     (match pf
+       ((OutOfTokensFail) "Unexpected end of format control string")
+       ((ParseFail) "Malformed control string"))))
+
+  (define-type-alias ParseRes (TResult ParseError ParseFail))
+
+  (declare show-parse-res (ParseRes :a -> Result String :a))
+  (define (show-parse-res parse-res)
+    "Convert a ParseRes to a single-error channel with printable error messages."
+    (match parse-res
+      ((Ok_ a) (Ok a))
+      ((Err_ e) (Err (sw:show-as-string e)))
+      ((Fail_ f) (Err (sw:show-as-string
+                       (fail->err f))))))
+
+  (repr :transparent)
+  (define-type (Parser :t :a)
+    "Parser that converts a list of tokens of type `:t` to a list of `:a` values."
+    (Parser (List :t -> ParseRes (Tuple :a (List :t)))))
+
+  (inline)
+  (declare run-parser (Parser :t :a * List :t -> ParseRes (Tuple :a (List :t))))
+  (define (run-parser (Parser parse) c)
+    (parse c))
+
+  (inline)
+  (declare str->chars (String -> List Char))
+  (define (str->chars str)
+    (it:collect! (it:into-iter (s:chars str))))
+
+  (inline)
+  (declare parse-str (Parser Char :a * String -> ParseRes (Tuple :a (List Char))))
+  (define (parse-str p str)
+    (run-parser p (str->chars str)))
+
+  (inline)
+  (declare fail-parse (ParseFail -> Parser :t :a))
+  (define (fail-parse f)
+    (Parser
+     (fn (_)
+       (Fail_ f))))
+
+  (inline)
+  (declare err-parse (ParseError -> Parser :t :a))
+  (define (err-parse f)
+    (Parser
+     (fn (_)
+       (Err_ f))))
+
+  (inline)
+  (declare parse-result (ParseRes :a -> Parser :t :a))
+  (define (parse-result r)
+    (Parser
+     (fn (t)
+       (map (fn (a)
+              (Tuple a t))
+            r))))
+
+  (declare err-on-fail (Parser :t :a &key (:msg (Optional String))
+                        -> Parser :t :a))
+  (define (err-on-fail p &key (msg None))
+    "Error if `p` failed."
+    (Parser
+     (fn (c)
+       (match (run-parser p c)
+         ((Ok_ a) (Ok_ a))
+         ((Fail_ f) (Err_
+                     (match msg
+                       ((Some msg) (ParseError msg))
+                       ((None)     (fail->err f)))))
+         ((Err_ e) (Err_ e))))))
+
+  (define-instance (Functor (Parser :t))
+    (inline)
+    (define (map f p)
+      (Parser
+       (fn (c)
+         (map (fn ((Tuple a c))
+                (Tuple (f a)
+                       c))
+              (run-parser p c))))))
+
+  (define-instance (Applicative (Parser :t))
+    (inline)
+    (define (pure a)
+      (Parser
+       (fn (c)
+         (Ok_ (Tuple a c)))))
+    (inline)
+    (define (lifta2 a-b->c pa pb)
+      (Parser
+       (fn (input)
+         (do
+          ((Tuple a rest1) <- (run-parser pa input))
+          ((Tuple b rest2) <- (run-parser pb rest1))
+          (Ok_ (Tuple (a-b->c a b) rest2)))))))
+
+  (define-instance (Monad (Parser :t))
+    (inline)
+    (define (>>= pa a->pb)
+      (Parser
+       (fn (c)
+         (do
+          ((Tuple a rest) <- (run-parser pa c))
+          (run-parser (a->pb a) rest))))))
+
+  (define-instance (Alternative (Parser :t))
+    (inline)
+    (define empty
+      (Parser
+       (fn (_)
+         (Fail_ ParseFail))))
+    (inline)
+    (define (alt p1 p2)
+      (Parser
+       (fn (c)
+         (match (run-parser p1 c)
+           ((= res (Ok_ _))
+            res)
+           ((Fail_ _)
+            (run-parser p2 c))
+           ((Err_ e)
+            (Err_ e))))))))
+
+;;;
+;;; Define the generic parser combinators
+;;;
+
+(coalton-toplevel
+  (declare eof (Parser :t Unit))
+  (define eof
+    "Succeed if no tokens remain, fail otherwise."
+    (Parser
+     (fn (tokens)
+       (match tokens
+         ((Nil)
+          (Ok_ (Tuple Unit tokens)))
+         (_
+          (Fail_ ParseFail))))))
+
+  (declare peek (Parser :t :t))
+  (define peek
+    "Look ahead 1 token without parsing forward. Errors if no tokens remain."
+    (Parser
+     (fn (tokens)
+       (match tokens
+         ((Nil)
+          (Fail_ ParseFail))
+         ((Cons t _)
+          (Ok_ (Tuple t tokens)))))))
+
+  (declare next (Parser :t :t))
+  (define next
+    "Parse the next token."
+    (Parser
+     (fn (tokens)
+       (match tokens
+         ((Nil)
+          (Fail_ ParseFail))
+         ((Cons a rest)
+          (Ok_ (Tuple a rest)))))))
+
+  (declare read-if ((:t -> Boolean) -> Parser :t (Optional :t)))
+  (define (read-if pred)
+    "Parse the next token if it satisfies `pred`. Leaves a failing token."
+    (do
+     (t <- peek)
+     (if (pred t)
+         (do
+          next
+          (pure (Some t)))
+         (pure None))))
+
+  (declare read-target (Eq :t => :t -> Parser :t (Optional :t)))
+  (define (read-target target)
+    "Parse the next token if it matches `target`. Leaves a failing token."
+    (read-if (fn (t) (== t target))))
+
+  (declare next-if ((:t -> Boolean) -> Parser :t :t))
+  (define (next-if pred)
+    "Parse the next token if it satisfies `pred`, failing if it does not. Leaves a failing token."
+    (do
+     (t <- peek)
+     (if (pred t)
+         next
+         empty)))
+
+  (declare next-target (Eq :t => :t -> Parser :t :t))
+  (define (next-target target)
+    "Parse the next token if it matches `target`, failing if it does not. Leaves a failing token."
+    (next-if (fn (t) (== t target))))
+
+  (declare many (Parser :t :a -> Parser :t (List :a)))
+  (define (many p)
+    "Repeat `p` until it fails, returning its results."
+    (Parser
+     (fn (tokens)
+       (rec % ((accum Nil)
+               (tokens tokens))
+       (match (run-parser p tokens)
+         ((Ok_ (Tuple a rest))
+          (% (Cons a accum) rest))
+         ((Fail_ _)
+          (Ok_ (Tuple (l:reverse accum)
+                      tokens)))
+         ((Err_ e)
+          (Err_ e)))))))
+
+  (declare many-some (Parser :t (Optional :a) -> Parser :t (List :a)))
+  (define (many-some p)
+    "Repeat `p` until it fails, returning its `Some` results."
+    (Parser
+     (fn (tokens)
+       (rec % ((accum Nil)
+               (tokens tokens))
+       (match (run-parser p tokens)
+         ((Ok_ (Tuple a? rest))
+          (match a?
+            ((None)
+             (% accum rest))
+            ((Some a)
+             (% (Cons a accum) rest))))
+         ((Fail_ _)
+          (Ok_ (Tuple (l:reverse accum)
+                      tokens)))
+         ((Err_ e)
+          (Err_ e)))))))
+
+  (declare at-least-once (Parser :t :a -> Parser :t (List :a)))
+  (define (at-least-once p)
+    "Repeat `p` until it fails, returning its results. Fail if `p` does not succeed at least once."
+    (do
+     (x <- p)
+     (xs <- (many p))
+     (pure (Cons x xs)))))
+
+;;;
+;;; Stage 1: Lexer to transform control string into string segments and raw directives.
+;;;          Validates that the control string follows the rules of the grammar, i.e.
+;;;          that that the control string can't end in a `~`.
+;;;
+
+(coalton-toplevel
+
+  (declare chars->str (List Char -> String))
+  (define (chars->str cs)
+    (lisp (-> String) (cs)
+      (cl:coerce cs 'cl:string)))
+
+  (define-struct DirectiveModifiers
+    (colon Boolean)
+    (at    Boolean))
+
+  (define-struct RawDirective
+    (letter Char)
+    (params (List String))
+    (modifiers DirectiveModifiers))
+
+  (declare modifier? (Char -> Boolean))
+  (define (modifier? c)
+    (or (== c #\:) (== c #\@)))
+
+  (declare lex-directive-modifiers (Parser Char DirectiveModifiers))
+  (define lex-directive-modifiers
+    (alt
+     (do
+      (t1 <- (next-if modifier?))
+      (t2 <- (read-if modifier?))
+      (if (== (Some t1) t2)
+          (err-parse (ParseError "Cannot have duplicate directive modifiers"))
+          (pure (DirectiveModifiers 
+                 (or (== t1 #\:) (== t2 (Some #\:)))
+                 (or (== t1 #\@) (== t2 (Some #\@)))))))
+     (pure (DirectiveModifiers false false))))
+
+  ;; Format parameters are a `,` separated list. They can be empty.
+  ;; Valid characters in a parameter are:
+  ;; - a digit 0-9
+  ;; - any other character, preceeded by a `'`
+  ;; Anything else will be treated as a directive character, even if
+  ;; there isn't a valid directive for that character.
+
+  (declare lex-param-escape (Parser Char Char))
+  (define lex-param-escape
+    (do
+     (next-target #\')
+     next))
+
+  (declare lex-directive-params (Parser Char (List String)))
+  (define lex-directive-params
+    (many
+     (alt
+      (do
+       (param <-
+         (at-least-once
+          (alt lex-param-escape
+               (next-if cr:ascii-digit?))))
+       (read-target #\,)
+       (pure (chars->str param)))
+      (do
+       (next-target #\,)
+       (pure "")))))
+
+  (declare lex-directive (Parser Char (Optional RawDirective)))
+  (define lex-directive
+    "Lex directive. Fails if the first character is not ~"
+    (do
+     (next-target #\~)
+     (params <- lex-directive-params)
+     (modifiers <- lex-directive-modifiers)
+     (directive-char <- next)
+     (pure (Some
+            (RawDirective directive-char params modifiers)))))
+
+  (declare lex-segment (Parser Char (Optional :a)))
+  (define lex-segment
+    "Lex an input segment. Continues until it reaches a '~'. Does not consume the ~"
+    (do
+     (at-least-once
+      (next-if (fn (c) (/= c #\~))))
+     (pure None)))
+
+  (declare lex-control-string (Parser Char (List RawDirective)))
+  (define lex-control-string
+    (take-left
+     (many-some (alt lex-directive
+                     lex-segment))
+     eof))
+  
+  (declare run-lex-control-string (String -> ParseRes (List RawDirective)))
+  (define (run-lex-control-string ctl-str)
+    (map tp:fst
+         (parse-str lex-control-string ctl-str))))
+
+;;;
+;;; Stage 2: Parser to transform raw string and directive representations into
+;;;          discrete directives. Validates individual-derictor rules, i.e. that
+;;;          ~% cannot take any modifiers.
+;;;
+
+(coalton-toplevel
+
+  (repr :enum)
+  (define-type ExclModifiers
+    ExclNeither
+    ExclColon
+    ExclAt)
+
+  ;; NOTE: Directive drops the params, because they're not needed to either
+  ;; validate inter-directive behavior or compile the output arguments.
+  (define-type Directive
+    ;; Strict Directives    < No Modifiers >
+       TildeDirective                           ;; ~~
+       BreakDirective                           ;; ~%
+       FreshlineDirective                       ;; ~&
+       PageSeparatorDirective                   ;; ~|
+       EndCndDirective                          ;; ~]
+       EndJustifyDirective                      ;; ~>
+       EndItrDirective                          ;; ~}
+       EndCaseDirective                         ;; ~) 
+       CaseSeperatorDirective                   ;; ~;
+       EndIfEmptyDirective                      ;; ~^
+    ;; @-Only Directives      < >      @
+      (FixPointDirective            Boolean)    ;; ~F
+      (ExponentDirective            Boolean)    ;; ~E
+      (AutoDecimDirective           Boolean)    ;; ~G
+    ;; :-Only Directives       :      < >
+      (IndentDirective      Boolean        )    ;; ~I
+    ;; Exclusive Directives    :       @   )
+      (MonetaryDirective    ExclModifiers  )    ;; ~$
+      (StartCndDirective    ExclModifiers  )    ;; ~[
+      (NewlineDirective     ExclModifiers  )    ;; ~<Newline>
+      (JumpDirective        ExclModifiers  )    ;; ~*
+    ;; Flexible Directives     :       @
+      (CharacterDirective   Boolean Boolean)    ;; ~C
+      (NumRadixDirective    Boolean Boolean)    ;; ~R
+      (NumDecimalDirective  Boolean Boolean)    ;; ~D
+      (NumBinaryDirective   Boolean Boolean)    ;; ~B
+      (NumOctalDirective    Boolean Boolean)    ;; ~O
+      (NumHexDirective      Boolean Boolean)    ;; ~X
+      (HumanPrintDirective  Boolean Boolean)    ;; ~A
+      (ReadDirective        Boolean Boolean)    ;; ~S
+      (PrinterDirective     Boolean Boolean)    ;; ~W
+      (PpBreakDirective     Boolean Boolean)    ;; ~_
+      (JustifyDirective     Boolean Boolean)    ;; ~<
+      (TabDirective         Boolean Boolean)    ;; ~T
+      (StartItrDirective    Boolean Boolean)    ;; ~{
+      (StartCaseDirective   Boolean Boolean)    ;; ~(
+      (PrintSuffixDirective Boolean Boolean)    ;; ~P
+    ))
+
+(coalton-toplevel
+  (declare no-modifiers (RawDirective -> ParseRes Unit))
+  (define (no-modifiers raw-dir)
+    "Require that raw directive has no modifiers."
+    (if (or (.colon (.modifiers raw-dir))
+            (.at    (.modifiers raw-dir)))
+        (Err_ (ParseError (<> (<> "Directive '" (<> (into (.letter raw-dir))
+                                                    "' "))
+                              "cannot take modifiers")))
+        (Ok_ Unit)))
+
+  (declare check-params (UFix * UFix * Boolean * RawDirective -> ParseRes Unit))
+  (define (check-params min-params max-params unlimited-params raw-dir)
+    "Require that a raw directive has the proper number of params."
+    (let n = (l:length (.params raw-dir)))
+    (if (or unlimited-params
+            (and (>= n min-params)
+                 (<= n max-params)))
+        (Ok_ Unit)
+        (Err_ (ParseError (<> (<> "Directive '" (<> (into (.letter raw-dir))
+                                                    "' "))
+                              (<> "cannot take " (<> (sw:show-as-string n) " parameters")))))))
+
+  (declare strict-directive (Directive * RawDirective
+                             &key (:min-params UFix) (:max-params UFix) (:unlimited-params Boolean)
+                             -> ParseRes Directive))
+  (define (strict-directive dir raw-dir &key (min-params 0) (max-params 0) (unlimited-params False))
+    "Parse `raw-dir` as a possible `dir`. Should only be used with directives that
+cannot take any modifiers."
+    (do
+     (check-params min-params max-params unlimited-params raw-dir)
+     (no-modifiers raw-dir)
+     (pure dir)))
+
+  (declare only-@-directive ((Boolean -> Directive) * RawDirective
+                             &key (:min-params UFix) (:max-params UFix) (:unlimited-params Boolean)
+                             -> ParseRes Directive))
+  (define (only-@-directive dir raw-dir &key (min-params 0) (max-params 0) (unlimited-params False))
+    "Parse `raw-dir` as a `dir`. Should only be used with directives that can
+take @ modifier but not : modifier."
+    (let (DirectiveModifiers colon at) = (.modifiers raw-dir))
+    (if colon
+        (Err_ (ParseError (<> (<> "Directive '" (<> (into (.letter raw-dir))
+                                                    "' "))
+                              "cannot take ':' modifier")))
+        (do
+         (check-params min-params max-params unlimited-params raw-dir)
+         (Ok_ (dir at)))))
+
+  (declare only-colon-dir ((Boolean -> Directive) * RawDirective
+                           &key (:min-params UFix) (:max-params UFix) (:unlimited-params Boolean)
+                           -> ParseRes Directive))
+  (define (only-colon-dir dir raw-dir &key (min-params 0) (max-params 0) (unlimited-params False))
+    "Parse `raw-dir` as a `dir`. Should only be used with directives that can
+take : modifier but not @ modifier."
+    (let (DirectiveModifiers colon at) = (.modifiers raw-dir))
+    (if at
+        (Err_ (ParseError (<> (<> "Directive '" (<> (into (.letter raw-dir))
+                                                    "' "))
+                              "cannot take '@' modifier")))
+        (do
+         (check-params min-params max-params unlimited-params raw-dir)
+         (Ok_ (dir colon)))))
+
+  (declare exclusive-dir ((ExclModifiers -> Directive) * RawDirective
+                           &key (:min-params UFix) (:max-params UFix) (:unlimited-params Boolean)
+                          -> ParseRes Directive))
+  (define (exclusive-dir dir raw-dir &key (min-params 0) (max-params 0) (unlimited-params False))
+    "Parse `raw-dir` as a `dir`. Should only be used with directives that can
+take either modifier, but not both."
+    (let (DirectiveModifiers colon at) = (.modifiers raw-dir))
+    (do
+     (excl-mods <-
+      (match (Tuple colon at)
+        ((Tuple (True) (True))
+         (Err_ (ParseError (<> (<> "Directive '" (<> (into (.letter raw-dir))
+                                                     "' "))
+                               "cannot take both ':' and '@' modifiers"))))
+        ((Tuple (True) (False)) (pure ExclColon))
+        ((Tuple (False) (True)) (pure ExclAt))
+        ((Tuple (False) (False)) (pure ExclNeither))))
+     (check-params min-params max-params unlimited-params raw-dir)
+     (Ok_ (dir excl-mods))))
+
+  (declare flex-directive ((Boolean * Boolean -> Directive) * RawDirective
+                           &key (:min-params UFix) (:max-params UFix) (:unlimited-params Boolean)
+                           -> ParseRes Directive))
+  (define (flex-directive dir raw-dir &key (min-params 0) (max-params 0) (unlimited-params False))
+    "Parse `raw-dir` as a `dir`. Should only be used with directives that can
+take all modifiers."
+    (let (DirectiveModifiers colon at) = (.modifiers raw-dir))
+    (do
+     (check-params min-params max-params unlimited-params raw-dir)
+     (Ok_ (dir colon at))))
+
+  (declare transf-raw-directive (RawDirective -> ParseRes Directive))
+  (define (transf-raw-directive raw-dir)
+    ;; Upcase because format directives are case insensitive
+    (match (cr:upcase (.letter raw-dir))
+      ;; Strict Directives (no modifier) 
+      (#\~ (strict-directive TildeDirective         raw-dir :max-params 1))
+      (#\% (strict-directive BreakDirective         raw-dir :max-params 1))
+      (#\& (strict-directive FreshlineDirective     raw-dir :max-params 1))
+      (#\| (strict-directive PageSeparatorDirective raw-dir :max-params 1))
+      (#\] (strict-directive EndCndDirective        raw-dir))
+      (#\> (strict-directive EndJustifyDirective    raw-dir))
+      (#\} (strict-directive EndItrDirective        raw-dir))
+      (#\) (strict-directive EndCaseDirective       raw-dir))
+      (#\; (strict-directive CaseSeperatorDirective raw-dir))
+      (#\^ (strict-directive EndIfEmptyDirective    raw-dir))
+      ;; @-Only Directives
+      (#\F (only-@-directive FixPointDirective      raw-dir :max-params 5))
+      (#\E (only-@-directive ExponentDirective      raw-dir :max-params 7))
+      (#\G (only-@-directive AutoDecimDirective     raw-dir :max-params 7))
+      ;; :-Only Directives
+      (#\I (only-colon-dir   IndentDirective        raw-dir))
+      ;; Exclusive Directives (: or @, but not both)
+      (#\$ (exclusive-dir    MonetaryDirective      raw-dir :max-params 5))
+      (#\[ (exclusive-dir    StartCndDirective      raw-dir :max-params 1))
+      (#\Newline
+           (exclusive-dir    NewlineDirective       raw-dir))
+      (#\* (exclusive-dir    JumpDirective          raw-dir :min-params 1
+                                                            :max-params 1))
+      ;; Flexible Directives (any modifiers)
+      (#\C (flex-directive   CharacterDirective     raw-dir))
+      (#\R (flex-directive   NumRadixDirective      raw-dir :max-params 5))
+      (#\D (flex-directive   NumDecimalDirective    raw-dir :max-params 4))
+      (#\B (flex-directive   NumBinaryDirective     raw-dir :max-params 4))
+      (#\O (flex-directive   NumOctalDirective      raw-dir :max-params 4))
+      (#\X (flex-directive   NumHexDirective        raw-dir :max-params 4))
+      (#\A (flex-directive   HumanPrintDirective    raw-dir :max-params 4))
+      (#\S (flex-directive   ReadDirective          raw-dir :max-params 4))
+      (#\W (flex-directive   PrinterDirective       raw-dir))
+      (#\_ (flex-directive   PpBreakDirective       raw-dir))
+      (#\< (flex-directive   JustifyDirective       raw-dir :max-params 4))
+      (#\T (flex-directive   TabDirective           raw-dir :max-params 2))
+      (#\{ (flex-directive   StartItrDirective      raw-dir :max-params 1))
+      (#\( (flex-directive   StartCaseDirective     raw-dir))
+      (#\P (flex-directive   PrintSuffixDirective   raw-dir))
+      (_ (Err_ (ParseError (<> "Invalid directive character: "
+                               (into (.letter raw-dir))))))))
+
+  (declare parse-raw-directive (Parser RawDirective Directive))
+  (define parse-raw-directive
+    (do
+     (d <- next)
+     (parse-result (transf-raw-directive d))))
+
+  (declare parse-raw-input (Parser RawDirective (List Directive)))
+  (define parse-raw-input
+    (take-left
+     (many parse-raw-directive)
+     eof))
+
+  (declare parse-control-string (String -> ParseRes (List Directive)))
+  (define (parse-control-string ctl-str)
+    (do
+     (raw-input <- (run-lex-control-string ctl-str))
+     ((Tuple parsed-input _) <- (run-parser parse-raw-input raw-input))
+     (pure parsed-input))))
+
+;;;
+;;; Stage 3: Compile the list of directives into a series of argument-form processing
+;;;          records. Validates inter-directive rules, i.e. each ~{ must have a
+;;;          matching ~}
+;;; 
+
+(coalton-toplevel
+
+  (derive Eq)
+  (define-type ArgTransformation
+    ReqChar
+    AsInt
+    ReqBool
+    ReqNum
+    ReqRuntime
+    ShowAsString
+    (ReqList (List ArgTransformation)))
+
+  (declare is-end-case? (Directive -> Boolean))
+  (define (is-end-case? in)
+    (match in
+      ((EndCaseDirective) True)
+      (_ False)))
+
+  (declare compile-case-clause (Void -> Parser Directive (List ArgTransformation)))
+  (define (compile-case-clause)
+    "Compile the rest of a ~( clause. Assumes the ~( token has already been read."
+    (do
+     (clause-transf-lists <-
+       (many
+        (do
+         (t <- (next-if (fn (t)
+                          (not (is-end-case? t)))))
+         (arg-tfn-for-input t))))
+     (err-on-fail
+      (next-if is-end-case?)
+      :msg (Some "~~~~( directive must be accompanied by a matching ~~~~) directive"))
+     (pure (l:concat clause-transf-lists))))
+
+  (declare is-end-justify? (Directive -> Boolean))
+  (define (is-end-justify? in)
+    (match in
+      ((EndJustifyDirective) True)
+      (_ False)))
+
+  (declare compile-justify-clause (Void -> Parser Directive (List ArgTransformation)))
+  (define (compile-justify-clause)
+    "Compile the rest of a ~< clause. Assumes the ~< token has already been read."
+    (do
+     (clause-transf-lists <-
+       (many
+        (do
+         (t <- (next-if (fn (t)
+                          (not (is-end-justify? t)))))
+         (arg-tfn-for-input t))))
+     (err-on-fail
+      (next-if is-end-justify?)
+      :msg (Some "~~~~< directive must be accompanied by a matching ~~~~> directive"))
+     (pure (l:concat clause-transf-lists))))
+
+  (declare is-end-iter? (Directive -> Boolean))
+  (define (is-end-iter? in)
+    (match in
+      ((EndItrDirective) True)
+      (_ False)))
+
+  (declare is-jump-directive? (Directive -> Boolean))
+  (define (is-jump-directive? in)
+    (match in
+      ((JumpDirective _) True)
+      (_ False)))
+
+  (declare compile-iterator-clause (Void -> Parser Directive (List ArgTransformation)))
+  (define (compile-iterator-clause)
+    "Complie the rest of a ~{ clause. Assume the ~} token has already been read."
+    (do
+     (clause-transf-lists <-
+       (many
+        (do
+         (t <- (next-if (fn (t)
+                          (not (is-end-iter? t)))))
+         (if (is-jump-directive? t)
+             (pure Nil)
+             (arg-tfn-for-input t)))))
+     (err-on-fail
+      (next-if is-end-iter?)
+      :msg (Some "~~~~{ directive must be accompanied by a matching ~~~~} directive"))
+      (pure (make-list (ReqList (l:concat clause-transf-lists))))))
+
+  (declare arg-tfn-for-input (Directive -> Parser Directive (List ArgTransformation)))
+  (define (arg-tfn-for-input dir)
+    (match dir
+      ;; Directives with no arguments
+      ((TildeDirective)          (pure Nil))    ;; ~~
+      ((BreakDirective)          (pure Nil))    ;; ~%
+      ((FreshlineDirective)      (pure Nil))    ;; ~&
+      ((PageSeparatorDirective)  (pure Nil))    ;; ~|
+      ((IndentDirective _)       (pure Nil))    ;; ~I
+      ((PpBreakDirective _ _)    (pure Nil))    ;; ~_
+      ((TabDirective _ _)        (pure Nil))    ;; ~T
+      ((NewlineDirective _)      (pure Nil))    ;; ~<Newline>
+      ((EndIfEmptyDirective)     (pure Nil))    ;; ~^
+
+      ;; Directives with one argument
+      ((CharacterDirective _ _)                 ;; ~C
+       (pure (make-list ReqChar)))
+      ((NumRadixDirective _ _)                  ;; ~R
+       (pure (make-list AsInt)))
+      ((NumDecimalDirective _ _)                ;; ~D
+       (pure (make-list AsInt)))
+      ((NumBinaryDirective _ _)                 ;; ~B
+       (pure (make-list AsInt)))
+      ((NumOctalDirective _ _)                  ;; ~O
+       (pure (make-list AsInt)))
+      ((NumHexDirective _ _)                    ;; ~X
+       (pure (make-list AsInt)))
+      ((FixPointDirective _)                    ;; ~F
+       (pure (make-list ReqNum)))
+      ((ExponentDirective _)                    ;; ~E
+       (pure (make-list ReqNum)))
+      ((AutoDecimDirective _)                   ;; ~G
+       (pure (make-list ReqNum)))
+      ((MonetaryDirective _)                    ;; ~$
+       (pure (make-list ReqNum)))
+      ((HumanPrintDirective _ _)                ;; ~A
+       (pure (make-list ShowAsString)))
+      ((ReadDirective _ _)                      ;; ~S
+       (pure (make-list ReqRuntime)))
+      ((PrinterDirective _ _)                   ;; ~W
+       (pure (make-list ReqRuntime)))
+      ((PrintSuffixDirective _ _)               ;; ~P
+       ;; NOTE: The actual ~P directive is unhinged,
+       ;; and takes literally anything. We're going
+       ;; to at least restrict it to Num.
+       (pure (make-list ReqNum)))
+
+      ;; "Container" directives that need to parse forward
+      ((StartCndDirective _mods)                ;; ~[
+       (err-parse
+        (ParseError "~~~~[ directive not supported")))
+      ((JustifyDirective _ _)                   ;; ~<
+       (compile-justify-clause))
+      ((StartItrDirective _ _)                  ;; ~{
+       (compile-iterator-clause))
+      ((StartCaseDirective _ _)                 ;; ~(
+       (compile-case-clause))
+
+      ;; Invalid top-level directives
+      ;; Note: Hilariously, at some point in the Coalton error pipeline, these
+      ;; wind up getting passed to 'format' so these need to be double-escaped
+      ;; to present it with ~}, etc.
+      ((EndCndDirective)                        ;; ~]
+       (err-parse
+        (ParseError "~~~~] directive can only occur after a matching ~~~~[ directive")))
+      ((EndJustifyDirective)                    ;; ~]
+       (err-parse
+        (ParseError "~~~~> directive can only occur after a matching ~~~~< directive")))
+      ((EndItrDirective)                        ;; ~}
+       (err-parse
+        (ParseError "~~~~} directive can only occur after a matching ~~~~{ directive")))
+      ((JumpDirective _)
+       (err-parse
+        (ParseError "~~~~* directive can only occur inside a ~~~~{ ~~~~} iteration clause")))
+      ((EndCaseDirective)                       ;; ~)
+       (err-parse
+        (ParseError "~~~~) directive can only occur after a matching ~~~~( directive")))
+      ((CaseSeperatorDirective)
+       (err-parse
+        (ParseError "~~~~; can only occur inside ~~~~[ ~~~~] directives")))))
+
+  (declare compile-parsed-input (Parser Directive (List ArgTransformation)))
+  (define compile-parsed-input
+    (map l:concat
+         (take-left
+          (many 
+           (do
+            (i <- next)
+            (arg-tfn-for-input i)))
+          eof)))
+
+  (declare compile-control-string (String -> ParseRes (List ArgTransformation)))
+  (define (compile-control-string ctl-str)
+    (do
+     (parsed-input <- (parse-control-string ctl-str))
+     ((Tuple compiled-arg-fns _)
+      <- (run-parser compile-parsed-input parsed-input))
+     (pure compiled-arg-fns))))
+
+;;;
+;;; Stage 4: Run the argument transformation functions against the argument list.
+;;;          Error if there were any unused arguments. Produce the final
+;;;          Common Lisp format call with the transformed arguments bound in a
+;;;          Coalton let form.
+;;;          
+
+(coalton-toplevel
+  ;;
+  ;; Code Transformation Functions
+  ;; 
+  
+  (repr :native cl:t)
+  (define-type Code
+    "Non-evaluated s-expressions passed into and returned from a macro. Needs to include
+`t` for self-evaluating types like numbers, strings, etc.")
+
+  (inline)
+  (declare sym->code (sy:Symbol -> Code))
+  (define (sym->code s)
+    (lisp (-> Code) (s)
+      s))
+
+  (inline)
+  (declare arg->char (Code -> Code))
+  (define (arg->char c)
+    (lisp (-> Code) (c)
+      `(the Char ,c)))
+
+  (define-class (IntAtRuntime :a))
+  (define-instance (IntAtRuntime Integer))
+  (define-instance (IntAtRuntime I8))
+  (define-instance (IntAtRuntime I16))
+  (define-instance (IntAtRuntime I32))
+  (define-instance (IntAtRuntime I64))
+  (define-instance (IntAtRuntime IFix))
+  (define-instance (IntAtRuntime Bit))
+  (define-instance (IntAtRuntime U8))
+  (define-instance (IntAtRuntime U16))
+  (define-instance (IntAtRuntime U32))
+  (define-instance (IntAtRuntime U64))
+  (define-instance (IntAtRuntime UFix))
+
+  (inline)
+  (declare req-int (IntAtRuntime :a => :a -> :a))
+  (define req-int id)
+
+  (inline)
+  (declare req-int-list (IntAtRuntime :a => List :a -> List :a))
+  (define req-int-list id)
+
+  (inline)
+  (declare arg->int (Code -> Code))
+  (define (arg->int c)
+    (lisp (-> Code) (c)
+      `(req-int ,c)))
+
+  (inline)
+  (declare arg->bool (Code -> Code))
+  (define (arg->bool c)
+    (lisp (-> Code) (c)
+      `(the Boolean ,c)))
+
+  (inline)
+  (declare req-num (Num :a => :a -> :a))
+  (define req-num id)
+
+  (inline)
+  (declare req-num-list (Num :a => List :a -> List :a))
+  (define req-num-list id)
+
+  (inline)
+  (declare arg->num (Code -> Code))
+  (define (arg->num c)
+    (lisp (-> Code) (c)
+      `(req-num ,c)))
+
+  (inline)
+  (declare req-runtime (t:RuntimeRepr :a => :a -> :a))
+  (define req-runtime id)
+
+  (inline)
+  (declare req-runtime-list (t:RuntimeRepr :a => List :a -> List :a))
+  (define req-runtime-list id)
+
+  (inline)
+  (declare arg->runtime (Code -> Code))
+  (define (arg->runtime c)
+    (lisp (-> Code) (c)
+      `(req-runtime ,c)))
+  
+  (inline)
+  (declare arg->show-as-string (Code -> Code))
+  (define (arg->show-as-string c)
+    (lisp (-> Code) (c)
+      `(sw:show-as-string ,c)))
+
+  (declare arg->list (List ArgTransformation -> ParseRes (Code -> ParseRes Code)))
+  (define (arg->list tfns)
+    (let (values req-char? req-int? req-bool? req-num? req-runtime? show-str? req-lst?) =
+      (rec % ((req-char? False) (req-int? False) (req-bool? False) (req-num? False)
+              (req-runtime? False) (show-str? False) (req-lst? False)
+              (rest tfns))
+        (match rest
+          ((Nil) (values req-char? req-int? req-bool? req-num? req-runtime? show-str? req-lst?))
+          ((Cons x xs)
+           (match x
+             ((ReqChar)      (% True req-int? req-bool? req-num? req-runtime? show-str? req-lst? xs))
+             ((AsInt)        (% req-char? True req-bool? req-num? req-runtime? show-str? req-lst? xs))
+             ((ReqBool)      (% req-char? req-int? True req-num? req-runtime? show-str? req-lst? xs))
+             ((ReqNum)       (% req-char? req-int? req-bool? True req-runtime? show-str? req-lst? xs))
+             ((ReqRuntime)   (% req-char? req-int? req-bool? req-num? True show-str? req-lst? xs))
+             ((ShowAsString) (% req-char? req-int? req-bool? req-num? req-runtime? True req-lst? xs))
+             ((ReqList _)    (% req-char? req-int? req-bool? req-num? req-runtime? show-str? True xs)))))))
+    (if (and req-lst? (or req-char? req-int? req-bool? req-num? req-runtime? show-str?))
+        (Err_ (ParseError "Outer list iteration directives can only support treating elements as lists"))
+        (Ok_
+         (fn (c)
+           (let code = (c:new (Ok_ c)))
+           (when req-char?
+             (c:update! (fmap (fn (c_)
+                                (lisp (-> Code) (c_)
+                                  `(the (List Char) ,c_))))
+                        code))
+           (when req-int?
+             (c:update! (fmap (fn (c_)
+                                (lisp (-> Code) (c_)
+                                  `(req-int-list ,c_))))
+                        code))
+           (when req-bool?
+             (c:update! (fmap (fn (c_)
+                                (lisp (-> Code) (c_)
+                                  `(the (List Bool) ,c_))))
+                        code))
+           (when req-num?
+             (c:update! (fmap (fn (c_)
+                                (lisp (-> Code) (c_)
+                                  `(req-num-list ,c_))))
+                        code))
+           (when req-runtime?
+             (c:update! (fmap (fn (c_)
+                                (lisp (-> Code) (c_)
+                                  `(req-runtime-list ,c_))))
+                        code))
+           ;; For primitive types, those should look the same with ~a anyway
+           ;; Important: If show-as-string is run for the primitive types, it
+           ;; will break valid situations where the control string specifies ~a
+           ;; and a primitive-requiring directive, like ~o. Right now, this is
+           ;; only possible in iteration.
+           (when (and show-str?
+                      (not (or req-int? req-num? req-char? req-bool?)))
+             (c:update! (fmap (fn (c_)
+                                (lisp (-> Code) (c_)
+                                  `(map sw:show-as-string ,c_))))
+                        code))
+           (when req-lst?
+             (c:update!
+              (fn (code-this-list?)
+                (do
+                 (code-this-list <- code-this-list?)
+                 (sub-list-code-map-fns <-
+                   (fold (fn (map-fn-code? tfn)
+                           (do
+                            (map-fn-code <- map-fn-code?)
+                            (match tfn
+                              ((ReqList new-tfns)
+                               (do
+                                (let new-lst-sym = (sy:gensym))
+                                (new-fn-fact <- (arg->list new-tfns))
+                                (new-fn-code <- (new-fn-fact (sym->code new-lst-sym)))
+                                (pure
+                                 (lisp (-> Code) (new-lst-sym new-fn-code map-fn-code)
+                                   `(compose
+                                     (fn (,new-lst-sym)
+                                       ,new-fn-code)
+                                     ,map-fn-code)))))
+                              (_
+                               (pure map-fn-code)))))
+                         (Ok_
+                          (lisp (-> Code) ()
+                            'id))
+                         tfns))
+                  (pure
+                   (lisp (-> Code) (sub-list-code-map-fns code-this-list)
+                     `(map ,sub-list-code-map-fns ,code-this-list)))))
+              code))
+           (c:read code)))))
+
+  (define OUT-OF-ARGS-ERR
+    (Err_ (ParseError "Not enough arguments provided for control string")))
+
+  (declare transf-one (List Code * (Code -> Code)
+                      -> ParseRes (Tuple (List Code) (List Code))))
+  (define (transf-one code f)
+    "Transform the head of `code` with `f`.
+Returns: (Remaining code to be transformed * Output Argument)"
+    (match code
+      ((Nil)
+       OUT-OF-ARGS-ERR)
+      ((Cons c rest)
+       (Ok_ (Tuple rest (make-list (f c)))))))
+
+  (declare transf-code (List Code * ArgTransformation
+                        -> ParseRes (Tuple (List Code) (List Code))))
+  (define (transf-code code transf)
+    "Transform from the head of `code` with `transf`.
+Returns: (Remaining code to be transformed * Output Arguments)"
+    (match transf
+      ((ReqChar)           (transf-one code arg->char))
+      ((AsInt)             (transf-one code arg->int))
+      ((ReqBool)           (transf-one code arg->bool))
+      ((ReqNum)            (transf-one code arg->num))
+      ((ReqRuntime)        (transf-one code arg->runtime))
+      ((ShowAsString)      (transf-one code arg->show-as-string))
+      ((ReqList elem-tfns)
+       (do
+        (list-transf <- (arg->list elem-tfns))
+        (match code
+          ((Nil)
+           OUT-OF-ARGS-ERR)
+          ((Cons c rest)
+           (do
+            (transf-results <- (list-transf c))
+            (pure (Tuple rest (make-list transf-results))))))))))
+
+  (declare run-arg-tfns (List Code * List ArgTransformation -> ParseRes (List Code)))
+  (define (run-arg-tfns args arg-tfns)
+    (rec % ((rem-args args)
+            (rem-tfns arg-tfns)
+            (accum Nil))
+      (match rem-tfns
+        ((Nil)
+         (if (l:null? rem-args)
+             (Ok_ accum)
+             (Err_ (ParseError "Unused arguments passed to format"))))
+        ((Cons arg-tnf rest-tfns)
+         (match (transf-code rem-args arg-tnf)
+           ((Err_ e)
+            (Err_ e))
+           ((Fail_ f)
+            (Fail_ f))
+           ((Ok_ (Tuple rest-args processed-args))
+            (% rest-args rest-tfns (<> accum processed-args))))))))
+
+  (declare transform-format-args% (String * List Code -> Result String (List Code)))
+  (define (transform-format-args% ctr-str args)
+    "Given a control string and argument code, produce the transformed argument
+list or fail. Useful for unit testing failures."
+    (show-parse-res
+     (do
+      (arg-tfns <- (compile-control-string ctr-str))
+      (run-arg-tfns args arg-tfns))))
+
+  (declare transform-format-args! (String * List Code -> List Code))
+  (define (transform-format-args! ctr-str args)
+    "Given a control string and argument code, produce the transformed argument
+list. Errors if parsing failed."
+    (match (transform-format-args% ctr-str args)
+      ((Err e) (error e))
+      ((Ok code) code))))
+
+;;;
+;;; Exported Format API
+;;;
+
+(coalton-toplevel
+  (define Str
+    (lisp (-> sy:Symbol) ()
+      'Str))
+  (define Out
+    (lisp (-> sy:Symbol) ()
+      'Out)))
+               
+(defmacro format (target ctrl-str cl:&rest args)
+  "Format `ctrl-str` using `args`. Syntax is the same as Common Lisp format. The number of
+arguments, their types, and the syntax of `ctrl-str` are checked at compile time.
+Directives are case-insensitive.
+
+`target` can be:
+  - `Str`, returns a `String`
+  - `Out`, prints to `*standard-output*`
+  - any `String` or Common Lisp `Stream` value
+
+The following directives are supported with the given argument requirements:
+
+| Directive | Description | Argument |
+| --- | --- | --- |
+| `~~` | Print a tilde | No Argument |
+| `~%` | Print an unconditional newline | No Argument |
+| `~&` | Print a fresh line | No Argument |
+| `~|` | Print a page separator | No Argument |
+| `~^` | Terminate if there are no remaining arguments | No Argument |
+| `~F` | Print floating fixed-point notation | `Num :a` |
+| `~E` | Print floating exponential notation | `Num :a` |
+| `~G` | Print floating general notation | `Num :a` |
+| `~I` | Indent | No Argument |
+| `~$` | Print monetary floating-point notation | `Num :a` |
+| `~<Newline>` | Ignore newline and following whitespace | No Argument |
+| `~C` | Print a character | `Char` |
+| `~R` | Print an integer in radix notation | Native Int type |
+| `~D` | Print an integer in decimal radix | Native Int type |
+| `~B` | Print an integer in binary radix | Native Int type |
+| `~O` | Print an integer in octal radix | Native Int type |
+| `~X` | Print an integer in hexadecimal radix | Native Int type |
+| `~A` | Print for human-readable output | `Show :a` |
+| `~S` | Print using the Lisp printer | `RuntimeRepr :a` |
+| `~W` | Print using the Lisp pretty printer | `RuntimeRepr :a` |
+| `~_` | Print a pretty-printer conditional newline | No Argument |
+| `~T` | Tabulate | No Argument |
+| `~P` | Print a plural suffix | `Num :a` |
+| `~<` | Start justification | No Argument |
+| `~>` | End justification | No Argument |
+| `~{` | Start iteration | `List :a` |
+| `~}` | End iteration | No Argument |
+| `~*` | Jump arguments inside of iteration | No Argument |
+| `~(` | Start case conversion | No Argument |
+| `~)` | End case conversion | No Argument |
+
+Native integer types are:
+  - `Integer`
+  - `I8`
+  - `I16`
+  - `I32`
+  - `I64`
+  - `IFix`
+  - `Bit`
+  - `U8`
+  - `U16`
+  - `U32`
+  - `U64`
+  - `UFix`
+
+The following directives are not supported:
+
+  - `~[`
+  - `~]`
+  - `~;`
+  - `~/`
+  - `~?`"
+  (cl:let* ((target-sym
+              (cl:if (cl:eq target 'cl:t)
+                  'cl:t
+                  (cl:case target
+                    (Str 'cl:nil)
+                    (Out 'cl:t)
+                    (cl:otherwise target))))
+            (return-type
+              (cl:if (cl:eq target 'Str)
+                 'String
+                 'Void))
+            (end-in-void
+              (cl:if (cl:eq target 'Str)
+                cl:nil
+                '((cl:values))))
+            (new-args (transform-format-args! ctrl-str args))
+            (arg-syms (cl:mapcar (cl:lambda (_)
+                                   (cl:declare (cl:ignore _))
+                                   (cl:gensym "format-arg"))
+                                 new-args))
+            (let-forms (cl:loop :for sym :in arg-syms
+                                :for arg-form :in new-args
+                                :collect `(,sym ,arg-form))))
+    `(let (,@let-forms)
+       (lisp (-> ,return-type) (,@arg-syms)
+         (cl:format ,target-sym ,ctrl-str ,@arg-syms)
+         ,@end-in-void))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/FORMAT")

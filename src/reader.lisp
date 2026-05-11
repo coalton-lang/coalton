@@ -94,7 +94,7 @@ This symbol may be bound to a string source in the case of direct evaluation in 
 (defun maybe-read-coalton (stream source)
   "If the first form on STREAM indicates that Coalton code is present, read a program, and perform the indicated operation (compile, codegen, etc.).
 SOURCE provides metadata for the stream argument, for error messages."
-  (parser:with-reader-context stream
+  (parser:with-coalton-reader-context stream
     (let ((first-form
             (multiple-value-bind (form presentp)
                 (parser:maybe-read-form stream source)
@@ -128,7 +128,7 @@ SOURCE provides metadata for the stream argument, for error messages."
         (coalton:coalton
          (entry:expression-entry-point (parser:read-expressions stream source)))
 
-        ;; Fall back to reading the list manually
+        ;; Fall back to reading the list manually.
         (t
          (read-lisp stream source first-form))))))
 
@@ -199,7 +199,7 @@ SOURCE provides metadata for the stream argument, for error messages."
   "Read a Coalton toplevel form from STREAM and defer compilation to macroexpansion.
 SOURCE provides metadata for the stream argument, and START is the offset of
 the opening parenthesis that began the current form."
-  (parser:with-reader-context stream
+  (parser:with-coalton-reader-context stream
     (let ((first-form
             (multiple-value-bind (form presentp)
                 (parser:maybe-read-form stream source)
@@ -323,11 +323,63 @@ Eclector bracket reader in parser/reader.lisp."
   (declare (ignore stream char))
   (error "Unmatched close bracket `]`"))
 
+(defun read-cl-short-lambda-char-string (char)
+  (let ((string (string char)))
+    (ecase (readtable-case *readtable*)
+      (:upcase
+       (string-upcase string))
+      (:downcase
+       (string-downcase string))
+      (:preserve
+       string)
+      (:invert
+       (cond
+         ((upper-case-p char)
+          (string-downcase string))
+         ((lower-case-p char)
+          (string-upcase string))
+         (t
+          string))))))
+
+(defun read-cl-short-lambda-char-symbol (char)
+  (intern (read-cl-short-lambda-char-string char) *package*))
+
+(defun read-cl-short-lambda-form (stream char)
+  "Reader macro for `ƒx.body` syntax on the CL readtable."
+  (declare (ignore char))
+  (let ((params nil)
+        (seen-names (make-hash-table :test #'eq)))
+    (loop :for param-char := (read-char stream nil nil)
+          :do
+             (cond
+               ((null param-char)
+                (error "Malformed short lambda: missing `.`"))
+               ((char= #\. param-char)
+                (unless (peek-char t stream nil nil)
+                  (error "Malformed short lambda: missing body expression"))
+                (return (list 'coalton:fn
+                              (nreverse params)
+                              (read stream t nil t))))
+               ((char= #\_ param-char)
+                (push (read-cl-short-lambda-char-symbol param-char) params))
+               ((alpha-char-p param-char)
+                (let ((name (read-cl-short-lambda-char-symbol param-char)))
+                  (when (gethash name seen-names)
+                    (error "Malformed short lambda: duplicate parameter `~A`"
+                           param-char))
+                  (setf (gethash name seen-names) t)
+                  (push name params)))
+               (t
+                (error
+                 "Malformed short lambda: expected alphabetic parameter, `_`, or `.`, got `~A`"
+                 param-char))))))
+
 (named-readtables:defreadtable coalton:coalton
   (:merge :standard)
   (:macro-char #\( 'read-coalton-toplevel-open-paren)
   (:macro-char #\[ 'read-cl-bracket-form)
   (:macro-char #\] 'read-cl-close-bracket)
+  (:macro-char #\ƒ 'read-cl-short-lambda-form)
   (:macro-char #\` (lambda (s c)
                      (let ((*coalton-reader-allowed* nil))
                        (funcall (get-macro-character #\` (named-readtables:ensure-readtable :standard)) s c))))
