@@ -13,7 +13,8 @@
    #:statusbar-new
    #:statusbar-render
    #:statusbar-update!
-   #:statusbar-set-message!))
+   #:statusbar-set-message!
+   #:statusbar-redraw-delay-ms))
 
 (in-package #:mine/pane/status)
 
@@ -72,6 +73,23 @@
                           (cl:* 3 cl:internal-time-units-per-second))))
     (cell:write! (.message-expiry sb) expiry)
     (values))
+
+  (declare %delay-ms-until (UFix -> UFix))
+  (define (%delay-ms-until deadline)
+    "Return milliseconds until DEADLINE, or 0 if it has already passed."
+    (lisp (-> UFix) (deadline)
+      (cl:let ((now (cl:get-internal-real-time)))
+        (cl:if (cl:<= deadline now)
+               0
+               (cl:ceiling (cl:* 1000 (cl:- deadline now))
+                           cl:internal-time-units-per-second)))))
+
+  (declare statusbar-redraw-delay-ms (StatusBar -> (Optional UFix)))
+  (define (statusbar-redraw-delay-ms sb)
+    "Return the delay until the temporary status message should expire."
+    (match (cell:read (.message sb))
+      ((Some _) (Some (%delay-ms-until (cell:read (.message-expiry sb)))))
+      ((None) None)))
 
   ;;; Rendering
 

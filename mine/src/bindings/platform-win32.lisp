@@ -25,6 +25,7 @@
 ;; WaitForSingleObject return values
 (defconstant +wait-object-0+ 0)
 (defconstant +wait-timeout+  #x102)
+(defconstant +wait-infinite+ #xFFFFFFFF)
 
 ;;; ---- Foreign function bindings (kernel32.dll) ----
 
@@ -242,6 +243,7 @@ Returns (VALUES byte-vector count) or (VALUES NIL 0)."
 
 (defun platform-read-bytes (timeout-ms)
   "Read available bytes from stdin with TIMEOUT-MS wait.
+If TIMEOUT-MS is NIL, wait indefinitely.
 Returns (VALUES byte-vector count) on success, or (VALUES NIL 0)
 on timeout or error."
   (ensure-read-buf)
@@ -249,20 +251,27 @@ on timeout or error."
     ;; Pipe mode: poll with PeekNamedPipe (WaitForSingleObject does not
     ;; respect timeouts on synchronous pipe handles).
     (*stdin-is-pipe*
-     (let ((deadline (+ (get-internal-real-time)
-                        (* timeout-ms
-                           (/ internal-time-units-per-second 1000)))))
-       (loop
-         (when (%pipe-data-available-p)
-           (return (%read-available-bytes)))
-         (when (>= (get-internal-real-time) deadline)
-           (return (values nil 0)))
-         (sleep 0.005))))
+     (cond
+       ((null timeout-ms)
+        (%read-available-bytes))
+       (t
+        (let ((deadline (+ (get-internal-real-time)
+                           (* timeout-ms
+                              (/ internal-time-units-per-second 1000)))))
+          (loop
+            (when (%pipe-data-available-p)
+              (return (%read-available-bytes)))
+            (when (>= (get-internal-real-time) deadline)
+              (return (values nil 0)))
+            (sleep 0.005))))))
     ;; Console mode: use WaitForSingleObject
     (t
      (let ((wait-result (%wait-for-single-object
                          *stdin-handle*
-                         (if (plusp timeout-ms) timeout-ms 0))))
+                         (cond
+                           ((null timeout-ms) +wait-infinite+)
+                           ((plusp timeout-ms) timeout-ms)
+                           (t 0)))))
        (cond
          ((= wait-result +wait-object-0+)
           (%read-available-bytes))

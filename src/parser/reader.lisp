@@ -20,6 +20,7 @@
    #:builder-when-marker
    #:desugar-bracket-builder
    #:with-reader-context
+   #:with-coalton-reader-context
    #:maybe-read-form))
 
 (in-package #:coalton-impl/parser/reader)
@@ -618,6 +619,14 @@
       nil
       'eof
       nil)))
+
+(defmacro with-coalton-reader-context (stream &body body)
+  "Run BODY in a toplevel reader context with Coalton reader syntax installed."
+  `(let ((eclector.readtable:*readtable*
+           (eclector.readtable:copy-readtable eclector.readtable:*readtable*)))
+     (install-coalton-reader-syntax eclector.readtable:*readtable*)
+     (with-reader-context ,stream
+       ,@body)))
 
 (defun maybe-read-form (stream source &optional (eclector-client eclector.base:*client*))
   "Read the next form or return if there is no next form.

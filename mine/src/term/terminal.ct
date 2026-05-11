@@ -17,10 +17,12 @@
    #:terminal-flush
    #:terminal-clear-screen
    #:terminal-read-input
+   #:terminal-read-input-timeout
    #:terminal-wait-for-key
    #:terminal-pause-input!
    #:terminal-resume-input!
-   #:terminal-poll-bytes!))
+   #:terminal-poll-bytes!
+   #:terminal-post-wakeup))
 
 (in-package #:mine/term/terminal)
 
@@ -32,57 +34,114 @@
   (thread    cl:nil :type cl:t)
   (running-p cl:t :type cl:boolean))
 
-(cl:defun %terminal-input-runtime-start (runtime term initial-cols initial-rows)
+(cl:defvar *terminal-input-mailbox* cl:nil
+  "Mailbox for waking the main UI loop from non-terminal threads.")
+
+(cl:defvar *terminal-wakeup-message* (cl:gensym "TERMINAL-WAKEUP-")
+  "Internal sentinel used to wake the main UI loop without a terminal event.")
+
+(cl:define-condition %terminal-input-stop () ())
+
+(cl:defun %terminal-post-wakeup ()
+  "Wake the main UI loop without adding a user-visible input event."
+  (cl:let ((mailbox *terminal-input-mailbox*))
+    (cl:when mailbox
+      (sb-concurrency:send-message mailbox *terminal-wakeup-message*))))
+
+(cl:defun %terminal-post-resize (cl:&optional (mailbox *terminal-input-mailbox*))
+  "Post a resize event using the current terminal dimensions."
+  (cl:when mailbox
+    (cl:multiple-value-bind (rows cols)
+        (mine/bindings/terminal:terminal-get-size)
+      (sb-concurrency:send-message
+       mailbox
+       (mine/term/input:IEvResize cols rows)))))
+
+(cl:defun %terminal-install-resize-handler ()
+  #-win32
+  (sb-sys:enable-interrupt
+   sb-posix:sigwinch
+   (cl:lambda (cl:&rest _)
+     (cl:declare (cl:ignore _))
+     (%terminal-post-resize)))
+  #+win32
+  cl:nil)
+
+(cl:defun %terminal-input-events (messages)
+  (cl:let ((events cl:nil))
+    (cl:dolist (message messages (cl:nreverse events))
+      (cl:unless (cl:eq message *terminal-wakeup-message*)
+        (cl:push message events)))))
+
+(cl:defun %terminal-input-runtime-start (runtime term)
   (cl:let ((thread (%terminal-input-runtime-thread runtime)))
     (cl:when (cl:or (cl:null thread)
                     (cl:not (sb-thread:thread-alive-p thread)))
       (cl:setf (%terminal-input-runtime-running-p runtime) cl:t)
+      (cl:setf *terminal-input-mailbox*
+               (%terminal-input-runtime-mailbox runtime))
       (cl:setf (%terminal-input-runtime-thread runtime)
                (mine/bindings/thread:make-thread
                 "mine-input"
                 (cl:lambda ()
-                  (cl:let ((mailbox (%terminal-input-runtime-mailbox runtime))
-                           (last-cols initial-cols)
-                           (last-rows initial-rows))
-                    (cl:loop
-                      :while (%terminal-input-runtime-running-p runtime)
-                      :do
-                      (cl:let ((events (mine/term/terminal::%poll-raw-input! term)))
-                        (cl:multiple-value-bind (rows cols)
-                            (mine/bindings/terminal:terminal-get-size)
-                          (cl:when (cl:or (cl:/= last-cols cols)
-                                          (cl:/= last-rows rows))
-                            (cl:setf last-cols cols
-                                     last-rows rows)
-                            (sb-concurrency:send-message
-                             mailbox
-                             (mine/term/input:IEvResize cols rows)))
-                          (cl:dolist (event events)
-                            (sb-concurrency:send-message mailbox event)))))))))))
+                  (cl:handler-case
+                      (cl:let ((mailbox (%terminal-input-runtime-mailbox runtime)))
+                        (%terminal-install-resize-handler)
+                        (cl:loop
+                          :while (%terminal-input-runtime-running-p runtime)
+                          :do
+                          (cl:let ((events (mine/term/terminal::%poll-raw-input! term)))
+                            (cl:dolist (event events)
+                              (sb-concurrency:send-message mailbox event)))))
+                    (%terminal-input-stop () cl:nil)))))))
   (cl:values))
 
 (cl:defun %terminal-input-runtime-stop (runtime)
   (cl:setf (%terminal-input-runtime-running-p runtime) cl:nil)
   (cl:let ((thread (%terminal-input-runtime-thread runtime)))
     (cl:when thread
+      (cl:when (sb-thread:thread-alive-p thread)
+        (cl:ignore-errors
+          (sb-thread:interrupt-thread
+           thread
+           (cl:lambda ()
+             (cl:error '%terminal-input-stop)))))
       (cl:ignore-errors
         (sb-thread:join-thread thread :timeout 0.25d0 :default cl:nil))
       (cl:unless (sb-thread:thread-alive-p thread)
         (cl:setf (%terminal-input-runtime-thread runtime) cl:nil))))
+  (cl:when (cl:eq *terminal-input-mailbox*
+                  (%terminal-input-runtime-mailbox runtime))
+    (cl:setf *terminal-input-mailbox* cl:nil))
   (cl:values))
 
 (cl:defun %terminal-input-runtime-read-batch (runtime)
   (cl:let ((mailbox (%terminal-input-runtime-mailbox runtime)))
     (cl:multiple-value-bind (first ok)
-        (sb-concurrency:receive-message mailbox :timeout 0.05d0)
+        (sb-concurrency:receive-message mailbox)
       (cl:if ok
-             (cl:cons first (sb-concurrency:receive-pending-messages mailbox))
+             (%terminal-input-events
+              (cl:cons first (sb-concurrency:receive-pending-messages mailbox)))
+             Nil))))
+
+(cl:defun %terminal-input-runtime-read-batch-timeout (runtime timeout-ms)
+  (cl:let ((mailbox (%terminal-input-runtime-mailbox runtime)))
+    (cl:multiple-value-bind (first ok)
+        (sb-concurrency:receive-message
+         mailbox
+         :timeout (cl:/ timeout-ms 1000.0d0))
+      (cl:if ok
+             (%terminal-input-events
+              (cl:cons first (sb-concurrency:receive-pending-messages mailbox)))
              Nil))))
 
 (cl:defun %terminal-input-runtime-read-one (runtime)
-  (cl:nth-value 0
-                (sb-concurrency:receive-message
-                 (%terminal-input-runtime-mailbox runtime))))
+  (cl:let ((mailbox (%terminal-input-runtime-mailbox runtime)))
+    (cl:loop
+      (cl:multiple-value-bind (message ok)
+          (sb-concurrency:receive-message mailbox)
+        (cl:when (cl:and ok (cl:not (cl:eq message *terminal-wakeup-message*)))
+          (cl:return message))))))
 
 (cl:defun %read-terminal-bytes (timeout-ms)
   "Read available bytes from stdin via the platform layer.
@@ -250,6 +309,21 @@ Rejects kitty < 0.21.0 which has broken F1-F4 encoding."
     (lisp (-> TerminalInputRuntime) ()
       (make-%terminal-input-runtime)))
 
+  (declare terminal-post-wakeup (Void -> Void))
+  (define (terminal-post-wakeup)
+    "Wake the main UI loop without adding a user-visible input event."
+    (lisp (-> Void) ()
+      (%terminal-post-wakeup)
+      (cl:values)))
+
+  (declare %terminal-current-size (Void -> (Tuple UFix UFix)))
+  (define (%terminal-current-size)
+    "Return the current terminal size as (cols, rows)."
+    (lisp (-> (Tuple UFix UFix)) ()
+      (cl:multiple-value-bind (rows cols)
+          (mine/bindings/terminal:terminal-get-size)
+        (Tuple cols rows))))
+
   ;;; Terminal
 
   (define-struct Terminal
@@ -292,23 +366,17 @@ queries the terminal size, and returns a new Terminal with a fresh Screen."
       (mine/bindings/terminal:terminal-flush)
       (cl:values))
     ;; Get terminal size and create screen
-    (let cols = (lisp (-> UFix) ()
-                  (cl:multiple-value-bind (r c)
-                      (mine/bindings/terminal:terminal-get-size)
-                    (cl:declare (cl:ignore r)) c)))
-    (let rows = (lisp (-> UFix) ()
-                  (cl:multiple-value-bind (r c)
-                      (mine/bindings/terminal:terminal-get-size)
-                    (cl:declare (cl:ignore c)) r)))
-    (let runtime = (%terminal-input-runtime-new))
-    (let term = (Terminal (screen:screen-new cols rows)
-                          (cell:new True)
-                          runtime
-                          (cell:new (%make-input-buf))
-                          (cell:new cols)
-                          (cell:new rows)))
-    (%start-input-thread! term cols rows)
-    term)
+    (match (%terminal-current-size)
+      ((Tuple cols rows)
+       (let runtime = (%terminal-input-runtime-new))
+       (let term = (Terminal (screen:screen-new cols rows)
+                             (cell:new True)
+                             runtime
+                             (cell:new (%make-input-buf))
+                             (cell:new cols)
+                             (cell:new rows)))
+       (%start-input-thread! term)
+       term)))
 
   ;;; Shutdown
 
@@ -349,14 +417,11 @@ cursor, and disables raw mode."
   (declare terminal-update-size! (Terminal -> Void))
   (define (terminal-update-size! term)
     "Re-query the terminal size and update cached values."
-    (let cols-cell = (.terminal-cols-cell term))
-    (let rows-cell = (.terminal-rows-cell term))
-    (lisp (-> Void) (cols-cell rows-cell)
-      (cl:multiple-value-bind (r c)
-          (mine/bindings/terminal:terminal-get-size)
-        (coalton/cell:write! cols-cell c)
-        (coalton/cell:write! rows-cell r)
-        (cl:values))))
+    (match (%terminal-current-size)
+      ((Tuple cols rows)
+       (cell:write! (.terminal-cols-cell term) cols)
+       (cell:write! (.terminal-rows-cell term) rows)
+       (values))))
 
   ;;; Flush
 
@@ -380,16 +445,14 @@ cursor, and disables raw mode."
   (declare %make-input-buf (Void -> (Vector UFix)))
   (define (%make-input-buf)
     "Create a fresh input buffer."
-    (lisp (-> (Vector UFix)) ()
-      (cl:make-array 0 :fill-pointer 0 :adjustable cl:t
-                       :element-type cl:t)))
+    (vec:new))
 
-  (declare %start-input-thread! (Terminal * UFix * UFix -> Void))
-  (define (%start-input-thread! term cols rows)
+  (declare %start-input-thread! (Terminal -> Void))
+  (define (%start-input-thread! term)
     "Start the terminal-owned input reader thread."
     (let runtime = (.terminal-input-runtime term))
-    (lisp (-> Void) (runtime term cols rows)
-      (%terminal-input-runtime-start runtime term cols rows)
+    (lisp (-> Void) (runtime term)
+      (%terminal-input-runtime-start runtime term)
       (cl:values)))
 
   (declare %poll-raw-input! (Terminal -> (List input:InputEvent)))
@@ -397,7 +460,7 @@ cursor, and disables raw mode."
     "Read raw bytes, update the internal remainder buffer, and return parsed input events."
     (let prev-buf = (cell:read (.terminal-input-buf term)))
     (let new-bytes = (lisp (-> (Vector UFix)) ()
-                      (%read-terminal-bytes 50)))
+                      (%read-terminal-bytes cl:nil)))
     (let full-buf = (%concat-bufs prev-buf new-bytes))
     (match (input:parse-input full-buf)
       ((Tuple events remainder)
@@ -407,25 +470,22 @@ cursor, and disables raw mode."
   (declare terminal-read-input (Terminal -> (List input:InputEvent)))
   (define (terminal-read-input term)
     "Read available input from the terminal mailbox.
-Wait up to 50ms for the first event, then drain any immediately pending events."
+Block until the first event or internal wakeup, then drain any immediately pending events."
     (let runtime = (.terminal-input-runtime term))
     (lisp (-> (List input:InputEvent)) (runtime)
       (%terminal-input-runtime-read-batch runtime)))
 
+  (declare terminal-read-input-timeout (Terminal * UFix -> (List input:InputEvent)))
+  (define (terminal-read-input-timeout term timeout-ms)
+    "Read terminal input, waiting up to TIMEOUT-MS for the first event."
+    (let runtime = (.terminal-input-runtime term))
+    (lisp (-> (List input:InputEvent)) (runtime timeout-ms)
+      (%terminal-input-runtime-read-batch-timeout runtime timeout-ms)))
+
   (declare %concat-bufs ((Vector UFix) * (Vector UFix) -> (Vector UFix)))
   (define (%concat-bufs a b)
     "Concatenate two byte vectors."
-    (lisp (-> (Vector UFix)) (a b)
-      (cl:let* ((alen (cl:length a))
-                (blen (cl:length b))
-                (total (cl:+ alen blen))
-                (result (cl:make-array total :fill-pointer total
-                                             :adjustable cl:t
-                                             :element-type cl:t)))
-        (cl:dotimes (i alen) (cl:setf (cl:aref result i) (cl:aref a i)))
-        (cl:dotimes (i blen) (cl:setf (cl:aref result (cl:+ alen i))
-                                       (cl:aref b i)))
-        result)))
+    (vec:append a b))
 
   ;;; Blocking key read (for modal dialogs)
 
@@ -451,12 +511,7 @@ directly via TERMINAL-POLL-BYTES!. Pair with TERMINAL-RESUME-INPUT!."
   (declare terminal-resume-input! (Terminal -> Void))
   (define (terminal-resume-input! term)
     "Restart the background input-reader thread after a TERMINAL-PAUSE-INPUT!."
-    (let runtime = (.terminal-input-runtime term))
-    (let cols = (cell:read (.terminal-cols-cell term)))
-    (let rows = (cell:read (.terminal-rows-cell term)))
-    (lisp (-> Void) (runtime term cols rows)
-      (%terminal-input-runtime-start runtime term cols rows)
-      (cl:values)))
+    (%start-input-thread! term))
 
   (declare terminal-poll-bytes! (Terminal * UFix -> (Vector UFix)))
   (define (terminal-poll-bytes! term timeout-ms)

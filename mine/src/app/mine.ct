@@ -4782,14 +4782,60 @@ Render-app is NOT called here; the main loop handles rendering."
 
 ;;; Main loop (single-threaded, consumes queued terminal input)
 
+  (declare %min-redraw-delay ((Optional UFix) * (Optional UFix) -> (Optional UFix)))
+  (define (%min-redraw-delay a b)
+    "Return the earlier of two optional redraw delays."
+    (match a
+      ((None) b)
+      ((Some av)
+       (match b
+         ((None) a)
+         ((Some bv) (Some (min av bv)))))))
+
+  (declare %quick-result-redraw-delay-ms (MineState -> (Optional UFix)))
+  (define (%quick-result-redraw-delay-ms st)
+    "Return the delay until the visible Quick Result popup should expire."
+    (lisp (-> (Optional UFix)) (st)
+      (cl:let* ((box (mine/app/state:get-quick-result-state st))
+                (state (mine/app/state::%native-box-value box))
+                (expiry (cl:and state (cl:getf state :expiry))))
+        (cl:if expiry
+               (cl:let ((now (cl:get-internal-real-time)))
+                 (Some
+                  (cl:if (cl:<= expiry now)
+                         0
+                         (cl:ceiling (cl:* 1000 (cl:- expiry now))
+                                     cl:internal-time-units-per-second))))
+               None))))
+
+  (declare %timed-redraw-delay-ms (MineState -> (Optional UFix)))
+  (define (%timed-redraw-delay-ms st)
+    "Return the next intentional redraw delay, or None when the UI can block."
+    (let busy-delay =
+      (if (and (cell:read (.ms-repl-busy st))
+               (not (cell:read (.ms-io-request-active st)))
+               (not (cell:read (.ms-debugger-active st))))
+          (Some 100)
+          None))
+    (%min-redraw-delay
+     busy-delay
+     (%min-redraw-delay
+      (status:statusbar-redraw-delay-ms (.ms-status st))
+      (%quick-result-redraw-delay-ms st))))
+
   (declare main-loop (MineState * term:Terminal * (ev:Event -> Void) -> Void))
   (define (main-loop st term handler)
-    "Poll terminal for input, dispatch events, process async protocol messages, render."
+    "Wait for input/protocol activity, dispatch events, process async protocol messages, render."
     (cond
       ((cell:read (.ms-quit st)) (values))
       (True
-       ;; Read input events (50ms timeout)
-       (let events = (term:terminal-read-input term))
+       ;; Redraw on the next visible UI deadline (spinner tick, elapsed time,
+       ;; transient message expiry), otherwise block until input or wakeup.
+       (let events = (match (%timed-redraw-delay-ms st)
+                      ((Some delay-ms)
+                       (term:terminal-read-input-timeout term delay-ms))
+                      ((None)
+                       (term:terminal-read-input term))))
        ;; Dispatch key/mouse/resize events
        (dispatch-input-events handler events)
        ;; Process any pending protocol messages (async responses, debugger, etc.)
@@ -5185,7 +5231,8 @@ Handles #:foo, :foo, 'foo, \"foo\", and bare symbols."
   (cl:let ((box (mine/app/state:get-update-check-state st)))
     (mine/app/check-update:start-update-check-thread
      (cl:lambda (state)
-       (cl:setf (mine/app/state::%native-box-value box) state))))
+       (cl:setf (mine/app/state::%native-box-value box) state)
+       (mine/term/terminal:terminal-post-wakeup))))
   (cl:values))
 
 (cl:defun update-check-message-cl (st)
@@ -5217,12 +5264,15 @@ Handles #:foo, :foo, 'foo, \"foo\", and bare symbols."
                           (cl:let ((msg (mine/protocol/server::read-message stream)))
                             (cl:cond
                               (msg
-                               (sb-concurrency:send-message mailbox msg))
+                               (sb-concurrency:send-message mailbox msg)
+                               (mine/term/terminal:terminal-post-wakeup))
                               (cl:t
                                (sb-concurrency:send-message mailbox lost-message)
+                               (mine/term/terminal:terminal-post-wakeup)
                                (cl:return))))
                         (cl:error ()
                           (sb-concurrency:send-message mailbox lost-message)
+                          (mine/term/terminal:terminal-post-wakeup)
                           (cl:return)))))))
         cl:t))))
 
