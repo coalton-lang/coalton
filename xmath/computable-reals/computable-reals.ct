@@ -37,6 +37,7 @@
  (repr :native (cl:or cr:creal cl:rational))
  (define-type CReal)
 
+ (declare set-comparison-threshold! (UFix -> Unit))
  (define (set-comparison-threshold! k)
    "Sets the global `CReal` comparison threshold to k bits after the 'decimal' point.
 
@@ -45,6 +46,7 @@ See `comparison-threshold` for more details."
          (cl:setq *creal-comparison-threshold* k))
    Unit)
 
+ (declare comparison-threshold (Void -> UFix))
  (define (comparison-threshold)
    "Returns the current `CReal` comparison threshold measured as a number
 of bits after the 'decimal' point.

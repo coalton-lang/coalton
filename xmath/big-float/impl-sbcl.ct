@@ -85,24 +85,31 @@
   (repr :native (cl:member :MPFR_RNDNA :MPFR_RNDN :MPFR_RNDZ :MPFR_RNDU :MPFR_RNDD :MPFR_RNDA :MPFR_RNDF))
   (define-type RoundingMode)
 
+  (declare rndna RoundingMode)
   (define rndna
     "RouND to Nearest Away."
     (lisp (-> RoundingMode) () ':MPFR_RNDNA))
+  (declare rndn RoundingMode)
   (define rndn
     "RouND to Nearest, with the even rounding rule."
     (lisp (-> RoundingMode) () ':MPFR_RNDN))
+  (declare rndz RoundingMode)
   (define rndz
     "RouND toward Zero."
     (lisp (-> RoundingMode) () ':MPFR_RNDZ))
+  (declare rndu RoundingMode)
   (define rndu
     "RouND Up, toward positive infinity."
     (lisp (-> RoundingMode) () ':MPFR_RNDU))
+  (declare rndd RoundingMode)
   (define rndd
     "RouND Down, toward negative infinity."
     (lisp (-> RoundingMode) () ':MPFR_RNDD))
+  (declare rnda RoundingMode)
   (define rnda
     "RouND Away from zero."
     (lisp (-> RoundingMode) () ':MPFR_RNDA))
+  (declare rndf RoundingMode)
   (define rndf
     "Faithful rounding (experimental)."
     (lisp (-> RoundingMode) () ':MPFR_RNDF))
@@ -275,6 +282,7 @@
 
 (coalton-toplevel
   
+  (declare bf-pi (Void -> Big-Float))
   (define (bf-pi)
     "Return the value of pi to the currently set precision."
     (lisp (-> Big-Float) ()
@@ -304,6 +312,7 @@
     ;; it will *NOT* get updated.
     (define pi (bf-pi)))
   
+  (declare bf-ee (Void -> Big-Float))
   (define (bf-ee)
     "Return the value of ee = exp(1) to the currently set precision."
     (lisp (-> Big-Float) ()

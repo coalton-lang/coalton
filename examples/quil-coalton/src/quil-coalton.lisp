@@ -304,5 +304,6 @@
            (many0 (alt whitespace parse-quil-comment-line)))))
 
   ;; Now, we can expose the functionality to the world
+  (declare run-quil-parser (String -> Result ParseError QuilProgram))
   (define (run-quil-parser str)
     (run-parser parse-quil-program (make-string-view str))))

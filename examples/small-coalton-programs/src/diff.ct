@@ -34,6 +34,7 @@
            (E* a          (diff x b))))))
 
   ;; We can use `t` just fine since Coalton doesn't import `cl:t`.
+  (declare t sym:Symbol)
   (define t (sym:make-symbol "t"))
 
   (declare d/dt (Num :t => Expr :t -> Expr :t))

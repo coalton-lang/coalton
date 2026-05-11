@@ -25,24 +25,31 @@
 
 (coalton-toplevel
 
+  (declare rndna RoundingMode)
   (define rndna
     "RouND to Nearest Away."
     RoundNearAway)
+  (declare rndn RoundingMode)
   (define rndn
     "RouND to Nearest, with the even rounding rule."
     RoundEven)
+  (declare rndz RoundingMode)
   (define rndz
     "RouND toward Zero."
     RoundToZero)
+  (declare rndu RoundingMode)
   (define rndu
     "RouND Up, toward positive infinity."
     RoundUp)
+  (declare rndd RoundingMode)
   (define rndd
     "RouND Down, toward negative infinity."
     RoundDown)
+  (declare rnda RoundingMode)
   (define rnda
     "RouND Away from zero."
     RoundFromZero)
+  (declare rndf RoundingMode)
   (define rndf
     "Faithful rounding (experimental)."
     RoundFaithful)
