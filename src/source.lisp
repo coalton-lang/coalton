@@ -35,6 +35,7 @@
    #:source-external-format
    #:source-stream
    #:source-warning
+   #:deprecation-warn
    #:span
    #:span-end
    #:span-start
@@ -841,9 +842,24 @@ CR characters elsewhere, including at EOF, are preserved."
 (defmethod severity ((condition source-warning))
   :warn)
 
+(define-condition coalton:deprecation-warning (source-warning style-warning)
+  ()
+  (:documentation "A user-facing warning for deprecated Coalton language features."))
+
+(defmethod severity ((condition coalton:deprecation-warning))
+  ':style-warning)
+
 (defun warn (message note &rest notes)
   "Signal a warning related to one or more source locations."
   (let ((condition (make-condition 'source-warning
+                                   :message message
+                                   :notes (cons note notes))))
+    (emit-source-diagnostic condition)
+    (cl:warn condition)))
+
+(defun deprecation-warn (message note &rest notes)
+  "Signal a deprecation warning related to one or more source locations."
+  (let ((condition (make-condition 'coalton:deprecation-warning
                                    :message message
                                    :notes (cons note notes))))
     (emit-source-diagnostic condition)

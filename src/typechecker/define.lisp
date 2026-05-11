@@ -864,6 +864,30 @@ Returns four values:
                     (tc-note binder "second parameter here")))
         (setf (gethash name seen) binder)))))
 
+(defun exported-symbol-p (symbol)
+  (declare (type symbol symbol)
+           (values boolean &optional))
+  (let ((package (symbol-package symbol)))
+    (and package
+         (eq (nth-value 1 (find-symbol (symbol-name symbol) package))
+             ':external))))
+
+(defun check-exported-defines-have-declares (defines dec-table)
+  (declare (type toplevel-define-list defines)
+           (type hash-table dec-table))
+  (loop :for define :in defines
+        :for name-node := (toplevel-define-name define)
+        :for name := (node-variable-name name-node)
+        :when (and (exported-symbol-p name)
+                   (not (gethash name dec-table)))
+          :do (let ((note
+                      (tc-note name-node
+                               "exported definition ~S has no corresponding declare; this will become an error in a future Coalton release"
+                               name)))
+                (if settings:*coalton-deprecation-warnings-as-errors*
+                    (tc-error "Exported definition without declaration" note)
+                    (source:deprecation-warn "Exported definition without declaration" note)))))
+
 (defun inferred-node-output-types (type node)
   (declare (type tc:ty type)
            (type t node)
@@ -961,6 +985,8 @@ Returns four values:
                       :collect (attach-explicit-binding-type node explicit-type)
                     :else
                       :collect node)))
+
+        (check-exported-defines-have-declares binding-nodes dec-table)
 
         ;; Check types and update environment
         (when (catch 'redef:abort-redef

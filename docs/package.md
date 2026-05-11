@@ -84,6 +84,11 @@ In this case, the `sum-even-numbers` symbol will be exported from
 your package and can be used by other packages that import your
 package.
 
+Exported top-level definitions should have a matching `declare`. Missing
+declarations currently signal `coalton:deprecation-warning` and can be
+promoted to errors with Coalton's `:deprecation-warnings-as-errors`
+configuration option.
+
 ## Lisp Interoperability
 
 Packages defined by `package` are fundamentally structurally compatible
