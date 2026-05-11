@@ -124,7 +124,7 @@
 
   (declare %read-event (term:Terminal -> input:InputEvent))
   (define (%read-event terminal)
-    "Read a single input event with resize detection via polling."
+    "Read a single input event, ignoring internal wakeups."
     (let events = (term:terminal-read-input terminal))
     (match events
       ((Cons ev _) ev)

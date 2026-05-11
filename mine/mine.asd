@@ -54,7 +54,6 @@
    (:module "bindings"
     :serial t
     :components ((:file "platform-package")
-                 (:file "detect-wsl" :if-feature :linux)
                  (:file "platform-unix" :if-feature :unix)
                  (:file "platform-win32" :if-feature :win32)
                  (:file "terminal")))

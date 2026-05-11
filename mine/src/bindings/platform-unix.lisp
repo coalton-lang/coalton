@@ -107,11 +107,13 @@ Falls back to 24x80 if the ioctl fails."
 
 (defun platform-read-bytes (timeout-ms)
   "Read available bytes from stdin with TIMEOUT-MS millisecond wait.
+If TIMEOUT-MS is NIL, wait indefinitely.
 Returns (VALUES byte-vector count) on success, or (VALUES NIL 0) on
 timeout or error."
-  (let ((timeout-secs (if (plusp timeout-ms)
-                          (/ timeout-ms 1000.0d0)
-                          0.0d0)))
+  (let ((timeout-secs (when timeout-ms
+                        (if (plusp timeout-ms)
+                            (/ timeout-ms 1000.0d0)
+                            0.0d0))))
     (cond
       ((sb-sys:wait-until-fd-usable 0 :input timeout-secs)
        ;; Data available — read as many bytes as we can
