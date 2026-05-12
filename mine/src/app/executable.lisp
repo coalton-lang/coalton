@@ -22,12 +22,14 @@
 (defun build ()
   ;; Load SBCL contrib modules so they are available in the saved image.
   ;; sb-alien is part of core SBCL and is always available.
-  ;; sb-perf is Linux-only; sb-simd is x86-64-only.
+  ;; sb-perf is Linux-only.  sb-simd is an x86-64 contrib except on
+  ;; BSD-family SBCL ports where it is built into the core and REQUIRE
+  ;; does not know about it.
   (let ((modules '("sb-bsd-sockets" "sb-cltl2"
                     "sb-concurrency" "sb-cover" "sb-introspect"
                     "sb-md5" "sb-posix" "sb-queue"
                     "sb-rotate-byte" "sb-sprof"
-                    #+x86-64 "sb-simd"
+                    #+(and x86-64 (not bsd)) "sb-simd"
                     #+linux  "sb-perf")))
     (dolist (name modules)
       (require name))
