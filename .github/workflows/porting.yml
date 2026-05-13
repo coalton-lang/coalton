@@ -73,8 +73,10 @@ jobs:
         # CL_SOURCE_REGISTRY: "${{ github.workspace }}//"
         CL_SOURCE_REGISTRY: "/__w/${{ needs.check-image.outputs.repo_name }}/${{ needs.check-image.outputs.repo_name }}//"
 
+    # "uses:" below was actions/checkout@v3 before.
+
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
 
       - name: Run ABCL tests
         if: matrix.LISP_IMPL == 'abcl'
