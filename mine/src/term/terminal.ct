@@ -457,10 +457,16 @@ cursor, and disables raw mode."
 
   (declare %poll-raw-input! (Terminal -> (List input:InputEvent)))
   (define (%poll-raw-input! term)
-    "Read raw bytes, update the internal remainder buffer, and return parsed input events."
+    "Read raw bytes, update the internal remainder buffer, and return parsed input events.
+On Windows, use a short polling timeout instead of a blocking read so that
+the input thread can observe a shutdown request (running-p = NIL) without
+needing another keystroke to unblock ReadFile. Win32 synchronous I/O is
+not interruptible by sb-thread:interrupt-thread, so a blocking read would
+otherwise hold up sb-ext:exit indefinitely."
     (let prev-buf = (cell:read (.terminal-input-buf term)))
     (let new-bytes = (lisp (-> (Vector UFix)) ()
-                      (%read-terminal-bytes cl:nil)))
+                      #+win32 (%read-terminal-bytes 100)
+                      #-win32 (%read-terminal-bytes cl:nil)))
     (let full-buf = (%concat-bufs prev-buf new-bytes))
     (match (input:parse-input full-buf)
       ((Tuple events remainder)

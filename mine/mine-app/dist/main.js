@@ -115,18 +115,22 @@ listen("pty-data", (event) => {
   term.write(new Uint8Array(event.payload));
 });
 
+const currentWindow = window.__TAURI__.window?.getCurrentWindow?.();
+
+// Direct destroy() rather than app.exit(0): on Windows + WebView2 the
+// TAO/wry exit path stalls, leaving the window on screen after mine-core
+// has cleaned up. destroy() goes through the windowing system directly.
 listen("pty-exit", () => {
-  window.__TAURI__.core.invoke("close_window");
+  currentWindow?.destroy();
 });
 
-const currentWindow = window.__TAURI__.window?.getCurrentWindow?.();
 await currentWindow?.onCloseRequested(async (event) => {
   event.preventDefault();
 
   try {
     await invoke("write_pty", { data: "\x11" });
   } catch (_) {
-    await invoke("close_window");
+    await currentWindow.destroy();
   }
 });
 
