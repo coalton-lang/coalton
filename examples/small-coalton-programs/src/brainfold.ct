@@ -286,6 +286,7 @@
     "Evaluates and executes a bf-command string on a fresh state."
     (cell:read (.print-buffer (fst (state:run (eval bf-string) (default))))))
 
+  (declare run-file (String -> String))
   (define (run-file filepath)
     "Loads and executes the brainfold file at the given filepath."
     (run-program (unwrap (file:read-file-to-string filepath)))))
@@ -299,15 +300,18 @@
 
   ;; from https://esolangs.org/wiki/Brainfuck
   
+  (declare hello-world (Void -> String))
   (define (hello-world)
     (run-program
      "++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+."))
 
+  (declare gnarly-hello-world (Void -> String))
   (define (gnarly-hello-world)
     (run-program
      ">++++++++[-<+++++++++>]<.>>+>-[+]++>++>+++[>[->+++<<+++>]<<]>-----.>->+++..+++.>-.<<+[>[+>+]>>]<--------------.>>.+++.------.--------.>+."))
 
   ;; from https://github.com/saulpw/brainfuck/tree/master/tests
 
+  (declare squares (Void -> String))
   (define (squares)
     (run-program "++++[>+++++<-]>[<+++++>-]+<+[>[>+>+<<-]++>>[<<+>>-]>>>[-]++>[-]+>>>+[[-]++++++>>>]<<<[[<++++++++<++>>-]+<.<[>----<-]<]<<[>>>>>[>>>[-]+++++++++<[>-<-]+++++++++>[-[<->-]+[<<<]]<[>+<-]>]<<-]<<-]")))

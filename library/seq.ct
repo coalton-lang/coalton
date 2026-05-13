@@ -75,6 +75,7 @@
       ((RelaxedNode _ _ cst _) (vector:last-unsafe cst))
       ((LeafArray leaves) (vector:length leaves))))
   
+  (declare empty? (Seq :a -> Boolean))
   (define (empty? seq)
     (math:zero? (size seq)))
 
@@ -115,6 +116,7 @@ contains `a`."
            (vector:set! subtree-idx new-subtree newsts)
            (pure (RelaxedNode h fss cst newsts)))))))
 
+  (declare push (Seq :a * :a -> Seq :a))
   (define (push seq a)
     "Push `a` onto the end of `seq`, returning a new `Seq` instance."
     (let (values node in-place?) = (%push seq a))
@@ -125,6 +127,7 @@ contains `a`."
                        (vector:make s (+ (the UFix 1) s))
                        (vector:make seq node)))))
 
+  (declare pop (Seq :a -> Optional (Tuple :a (Seq :a))))
   (define (pop seq)
     "If `seq` is empty, return `None`. Otherwise, the last member of `seq` and
 a new `Seq` instance."
@@ -164,6 +167,7 @@ a new `Seq` instance."
              (vector:set! last-idx newsub newsts)
              (Tuple leaf (RelaxedNode h fss newcst newsts)))))))))
 
+  (declare conc (types:RuntimeRepr :a => Seq :a * Seq :a -> Seq :a))
   (define (conc left right)
     "Concatenate two `Seq`s"
     (cond

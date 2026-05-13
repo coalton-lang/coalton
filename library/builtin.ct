@@ -24,6 +24,7 @@
      (cl:error ,datum ,@arguments)))
 
 (coalton-toplevel
+  (declare undefined (:a -> :b))
   (define (undefined _)
     "A function which can be used in place of any value, throwing an error at runtime."
     (error "Undefined"))

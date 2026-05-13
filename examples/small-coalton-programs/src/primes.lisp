@@ -43,6 +43,7 @@
   (define-type (LazyStream :t)
     (LCons :t (Void -> LazyStream :t)))
 
+  (declare extract ((Ord :n) (Num :n) => :n * LazyStream :elt -> List :elt))
   (define (extract n l)
     "Take `n` primes from the stream `l`."
     (if (<= n 0)
@@ -65,6 +66,7 @@
     "Is `x` a multple of `m`?"
     (== 0 (mod x m)))
 
+  (declare primes (LazyStream Integer))
   (define primes
     "A stream of prime numbers."
     (let ((drop-multiples
@@ -90,6 +92,7 @@
 (cl:in-package #:small-coalton-programs.primes-iterator)
 
 (coalton-toplevel
+  (declare extract! (UFix * iter:Iterator :elt -> List :elt))
   (define (extract! n it)
     "Extract `n` elements from the iterator `it` into a list."
     (iter:collect! (iter:take! n it)))
@@ -107,6 +110,7 @@
          (Tuple (unwrap (iter:next! next-it))
                 next-it)))))
 
+  (declare primes-iter (Void -> iter:Iterator Integer))
   (define (primes-iter)
     "Produce an iterator of all primes in ascending order."
     (map fst (iter:recursive-iter (fn (init+it)

@@ -43,6 +43,7 @@
    #:likely
    #:unlikely
    #:specialize
+   #:deprecation-warning
    #:unable-to-codegen)
 
   ;; Early Types

@@ -287,6 +287,7 @@
 (defun %coalton-diagnostic-severity (condition)
   (ecase (coalton-impl/source:severity condition)
     (:error ':error)
+    (:style-warning ':style-warning)
     (:warn ':warning)))
 
 (defun %coalton-condition-diagnostics (condition request group file-override offset-base synthetic-prefix)

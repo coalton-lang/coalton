@@ -1,7 +1,6 @@
 (cl:defpackage #:fractal-coalton
   (:use #:coalton #:coalton-prelude)
-  (:local-nicknames (#:math #:coalton/math)
-                    (#:bf #:coalton/big-float))
+  (:local-nicknames (#:bf #:coalton/xmath/big-float))
   (:export #:lisp-mandel
            #:max-iter))
 
@@ -33,15 +32,15 @@
   (declare lisp-mandel (UFix * Fraction * Fraction -> F32))
   (define (lisp-mandel prec x y)
     (bf:set-precision! (+ 64 prec))
-    (let ((x-bf (the bf:Big-Float (into x)))
-          (y-bf (the bf:Big-Float (into y))))
+    (let ((x-bf (into x))
+          (y-bf (into y)))
       (match (mandel max-iter x-bf y-bf)
         ((Tuple3 iter x-out y-out)
          (if (== iter max-iter)
-             (unwrap (tryinto iter))
-             (let ((r (math:to-fraction (+ (into (the Integer (into iter))) (smooth x-out y-out)))))
-               (lisp (-> F32) (r)
-                 (cl:coerce (cl:/ r max-iter) 'cl:single-float)))))))))
+             (bf:round-to-f32 (into iter))
+             (bf:round-to-f32
+              (/ (+ (into iter) (smooth x-out y-out))
+                 (into max-iter)))))))))
 
 (cl:defpackage #:fractal
   (:use #:cl)

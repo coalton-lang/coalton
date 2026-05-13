@@ -88,6 +88,7 @@ we map over."
   ;; Finally we run our program.
   ;; 
 
+  (declare run-a-program (Void -> Tuple (vector:Vector Integer) Integer))
   (define (run-a-program)
     "Should return (Tuple #() 18)"
     (st:run (compute-from-vector-inputs a-program)

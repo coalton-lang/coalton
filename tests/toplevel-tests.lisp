@@ -97,3 +97,99 @@
                 (lisp-form (entry:entry-point program)))
            (is (not (declaim-under-locally-p lisp-form))))
       (delete-package package))))
+
+(defun run-file-program-in-fresh-package (package-name text)
+  (when (find-package package-name)
+    (delete-package package-name))
+  (unwind-protect
+       (let ((entry:*global-environment* (tc:make-default-environment))
+             (source (source:make-source-string text :name "test")))
+         (with-open-stream (stream (source:source-stream source))
+           (parser:with-reader-context stream
+             (entry:entry-point (parser:read-program stream source ':file)))))
+    (when (find-package package-name)
+      (delete-package package-name))))
+
+(deftest exported-define-without-declare-signals-deprecation-warning ()
+  "Exported definitions without declares are currently deprecated."
+  (let* ((package-name (format nil "COALTON-EXPORTED-NO-DECLARE-~A" (gensym)))
+         (captured nil))
+    (handler-bind ((coalton:deprecation-warning
+                     (lambda (condition)
+                       (setf captured condition)
+                       (muffle-warning condition))))
+      (run-file-program-in-fresh-package
+       package-name
+       (format nil "(package ~A~%  (export f))~%~%(define (f x) x)"
+               package-name)))
+    (is captured)
+    (is (typep captured 'style-warning))
+    (is (typep captured 'source:source-warning))))
+
+(deftest exported-define-with-declare-does-not-signal-deprecation-warning ()
+  "Exported definitions with declares do not warn."
+  (let* ((package-name (format nil "COALTON-EXPORTED-WITH-DECLARE-~A" (gensym)))
+         (captured nil))
+    (handler-bind ((coalton:deprecation-warning
+                     (lambda (condition)
+                       (setf captured condition)
+                       (muffle-warning condition))))
+      (run-file-program-in-fresh-package
+       package-name
+       (format nil "(package ~A~%  (export f))~%~%(declare f (:a -> :a))~%(define (f x) x)"
+               package-name)))
+    (is (null captured))))
+
+(deftest exported-function-valued-define-without-declare-signals-deprecation-warning ()
+  "Function-valued definitions also require declares."
+  (let* ((package-name (format nil "COALTON-EXPORTED-FN-VALUE-NO-DECLARE-~A" (gensym)))
+         (captured nil))
+    (handler-bind ((coalton:deprecation-warning
+                     (lambda (condition)
+                       (setf captured condition)
+                       (muffle-warning condition))))
+      (run-file-program-in-fresh-package
+       package-name
+       (format nil "(package ~A~%  (export f))~%~%(define f (fn (x) x))"
+               package-name)))
+    (is captured)
+    (is (typep captured 'style-warning))))
+
+(deftest exported-value-without-declare-signals-deprecation-warning ()
+  "All exported definitions require declares, including non-functions."
+  (let* ((package-name (format nil "COALTON-EXPORTED-VALUE-NO-DECLARE-~A" (gensym)))
+         (captured nil))
+    (handler-bind ((coalton:deprecation-warning
+                     (lambda (condition)
+                       (setf captured condition)
+                       (muffle-warning condition))))
+      (run-file-program-in-fresh-package
+       package-name
+       (format nil "(package ~A~%  (export x))~%~%(define x \"value\")"
+               package-name)))
+    (is captured)
+    (is (typep captured 'style-warning))))
+
+(deftest exported-value-with-declare-does-not-signal-deprecation-warning ()
+  "Declared exported non-function definitions do not warn."
+  (let* ((package-name (format nil "COALTON-EXPORTED-VALUE-WITH-DECLARE-~A" (gensym)))
+         (captured nil))
+    (handler-bind ((coalton:deprecation-warning
+                     (lambda (condition)
+                       (setf captured condition)
+                       (muffle-warning condition))))
+      (run-file-program-in-fresh-package
+       package-name
+       (format nil "(package ~A~%  (export x))~%~%(declare x String)~%(define x \"value\")"
+               package-name)))
+    (is (null captured))))
+
+(deftest exported-define-without-declare-can-be-configured-as-error ()
+  "The deprecation can be promoted to an error for migration testing."
+  (let ((package-name (format nil "COALTON-EXPORTED-DECLARE-ERROR-~A" (gensym)))
+        (coalton-impl/settings:*coalton-deprecation-warnings-as-errors* t))
+    (signals coalton-impl/typechecker:tc-error
+      (run-file-program-in-fresh-package
+       package-name
+       (format nil "(package ~A~%  (export f))~%~%(define (f x) x)"
+               package-name)))))

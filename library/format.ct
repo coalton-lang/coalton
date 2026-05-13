@@ -6,16 +6,16 @@
    #:coalton/classes)
   (:local-nicknames
    (#:mt #:coalton/math)
-   (:s #:coalton/string)
-   (:sw #:coalton/show)
-   (:iter #:coalton/iterator)
-   (:l #:coalton/list)
-   (:it #:coalton/iterator)
-   (:cr #:coalton/char)
-   (:sy #:coalton/symbol)
-   (:t #:coalton/types)
-   (:tp #:coalton/tuple)
-   (:c #:coalton/cell))
+   (#:s #:coalton/string)
+   (#:sw #:coalton/show)
+   (#:iter #:coalton/iterator)
+   (#:l #:coalton/list)
+   (#:it #:coalton/iterator)
+   (#:cr #:coalton/char)
+   (#:sy #:coalton/symbol)
+   (#:t #:coalton/types)
+   (#:tp #:coalton/tuple)
+   (#:c #:coalton/cell))
   (:export
    #:Str
    #:Out
@@ -1144,7 +1144,7 @@ list. Errors if parsing failed."
       'Out)))
                
 (defmacro format (target ctrl-str cl:&rest args)
-  "Format `ctrl-str` using `args`. Syntax is the same as Common Lisp format. The number of
+  "Format `ctrl-str` using `args`. Syntax is the same as Common Lisp `format`. The number of
 arguments, their types, and the syntax of `ctrl-str` are checked at compile time.
 Directives are case-insensitive.
 
@@ -1160,7 +1160,7 @@ The following directives are supported with the given argument requirements:
 | `~~` | Print a tilde | No Argument |
 | `~%` | Print an unconditional newline | No Argument |
 | `~&` | Print a fresh line | No Argument |
-| `~|` | Print a page separator | No Argument |
+| <code>~&#124;</code> | Print a page separator | No Argument |
 | `~^` | Terminate if there are no remaining arguments | No Argument |
 | `~F` | Print floating fixed-point notation | `Num :a` |
 | `~E` | Print floating exponential notation | `Num :a` |
