@@ -24,6 +24,18 @@
    #:coalton-impl/codegen/optimizer
    #:optimize-bindings)
   (:import-from
+   #:coalton-impl/codegen/typecheck-node
+   #:typecheck-node)
+  (:import-from
+   #:coalton-impl/codegen/unboxed-return
+   #:apply-unboxed-return-optimization
+   #:unboxed-argument-entry-name
+   #:unboxed-argument-entry-raw-name
+   #:unboxed-combined-entry-name
+   #:unboxed-combined-entry-raw-name
+   #:unboxed-return-entry-name
+   #:unboxed-return-entry-raw-name)
+  (:import-from
    #:coalton-impl/codegen/inliner
    #:function-declared-inline-p)
   (:local-nicknames
@@ -184,56 +196,89 @@ Example:
     (multiple-value-bind (definitions env)
         (optimize-bindings definitions monomorphize-table inline-p-table *package* env)
 
-      (let ((definition-names (mapcar #'car definitions))
-            (block-compile-p
-              (not
-               (loop :for (_ . node) :in definitions
-                     :thereis (and (node-abstraction-p node)
-                                   (/= 1 (tc:function-output-arity (node-type node)))))))
-            (sccs (node-binding-sccs definitions))
-            (lisp-forms (tc:translation-unit-lisp-forms translation-unit)))
+      (multiple-value-bind (definitions
+                            unboxed-return-table
+                            unboxed-argument-table
+                            unboxed-combined-table)
+          (apply-unboxed-return-optimization definitions env)
 
-        (values
-         `(progn
-            ;; Muffle redefinition warnings in SBCL. A corresponding
-            ;; SB-EXT:UNMUFFLE-CONDITIONS appears at the bottom.
-            #+sbcl
-            ,@(when settings:*emit-type-annotations*
-                (list '(declaim (sb-ext:muffle-conditions sb-kernel:redefinition-warning))))
+        (when unboxed-return-table
+          (maphash
+           (lambda (_ entry)
+             (declare (ignore _))
+             (setf (gethash (unboxed-return-entry-raw-name entry) offsets)
+                   (gethash (unboxed-return-entry-name entry) offsets 0)))
+           unboxed-return-table))
 
-            ,@(when (tc:translation-unit-types translation-unit)
-                (list
-                 `(eval-when (:compile-toplevel :load-toplevel :execute)
-                    ,@(loop :for type :in (tc:translation-unit-types translation-unit)
-                            :append (codegen-type-definition type env)))))
+        (when unboxed-argument-table
+          (maphash
+           (lambda (_ entry)
+             (declare (ignore _))
+             (setf (gethash (unboxed-argument-entry-raw-name entry) offsets)
+                   (gethash (unboxed-argument-entry-name entry) offsets 0)))
+           unboxed-argument-table))
 
-            ,@(when (tc:translation-unit-classes translation-unit)
-                (list
-                 `(eval-when (:compile-toplevel :load-toplevel :execute)
-                    ,@(codegen-class-definitions
-                       (tc:translation-unit-classes translation-unit)
-                       env))))
+        (when unboxed-combined-table
+          (maphash
+           (lambda (_ entry)
+             (declare (ignore _))
+             (setf (gethash (unboxed-combined-entry-raw-name entry) offsets)
+                   (gethash (unboxed-combined-entry-name entry) offsets 0)))
+           unboxed-combined-table))
 
-            #+sbcl
-            ,@(when (and (eq sb-ext:*block-compile-default* :specified)
-                         block-compile-p)
-                (list
-                 `(declaim (sb-ext:start-block ,@definition-names))))
+        (loop :for (_ . node) :in definitions
+              :do (typecheck-node node env))
 
-            ,@(compile-definitions sccs definitions lisp-forms offsets env)
+        (let ((definition-names (mapcar #'car definitions))
+              (block-compile-p
+                (not
+                 (loop :for (_ . node) :in definitions
+                       :thereis (and (node-abstraction-p node)
+                                     (/= 1 (tc:function-output-arity (node-type node)))))))
+              (sccs (node-binding-sccs definitions))
+              (lisp-forms (tc:translation-unit-lisp-forms translation-unit)))
 
-            #+sbcl
-            ,@(when (and (eq sb-ext:*block-compile-default* :specified)
-                         block-compile-p)
-                (list
-                 `(declaim (sb-ext:end-block))))
+          (values
+           `(progn
+              ;; Muffle redefinition warnings in SBCL. A corresponding
+              ;; SB-EXT:UNMUFFLE-CONDITIONS appears at the bottom.
+              #+sbcl
+              ,@(when settings:*emit-type-annotations*
+                  (list '(declaim (sb-ext:muffle-conditions sb-kernel:redefinition-warning))))
 
-            #+sbcl
-            ,@(when settings:*emit-type-annotations*
-                (list '(declaim (sb-ext:unmuffle-conditions sb-kernel:redefinition-warning))))
+              ,@(when (tc:translation-unit-types translation-unit)
+                  (list
+                   `(eval-when (:compile-toplevel :load-toplevel :execute)
+                      ,@(loop :for type :in (tc:translation-unit-types translation-unit)
+                              :append (codegen-type-definition type env)))))
 
-            (values))
-         env)))))
+              ,@(when (tc:translation-unit-classes translation-unit)
+                  (list
+                   `(eval-when (:compile-toplevel :load-toplevel :execute)
+                      ,@(codegen-class-definitions
+                         (tc:translation-unit-classes translation-unit)
+                         env))))
+
+              #+sbcl
+              ,@(when (and (eq sb-ext:*block-compile-default* :specified)
+                           block-compile-p)
+                  (list
+                   `(declaim (sb-ext:start-block ,@definition-names))))
+
+              ,@(compile-definitions sccs definitions lisp-forms offsets env)
+
+              #+sbcl
+              ,@(when (and (eq sb-ext:*block-compile-default* :specified)
+                           block-compile-p)
+                  (list
+                   `(declaim (sb-ext:end-block))))
+
+              #+sbcl
+              ,@(when settings:*emit-type-annotations*
+                  (list '(declaim (sb-ext:unmuffle-conditions sb-kernel:redefinition-warning))))
+
+              (values))
+           env))))))
 
 (defun compile-function (name node env &key local-notinline-names)
   (declare (type symbol name)
