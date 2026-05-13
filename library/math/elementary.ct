@@ -102,6 +102,7 @@ For a complex number `z = (complex x y)`, the following identities hold:
     (phase (Complex :a -> :a))
     (polar (Complex :a -> :a * :a)))
 
+  (declare magnitude ((ComplexComponent :a) (Radical :a) => Complex :a -> :a))
   (define (magnitude z)
     "The magnitude of a complex number. For `z = x + yi`,
 

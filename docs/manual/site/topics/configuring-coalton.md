@@ -19,7 +19,8 @@ The `:coalton-config` keyword's symbol-plist is inspected just before the Coalto
                 (:emit-type-annotations           nil)
                 (:print-types                     t)
                 (:print-rewrites                  nil)
-                (:auto-continue-redefinition      t))))
+                (:auto-continue-redefinition      t)
+                (:deprecation-warnings-as-errors  nil))))
   (setf (symbol-plist ':coalton-config) nil)
   (loop :for (key value) :in config
         :do (setf (get ':coalton-config key) value)))
@@ -176,6 +177,14 @@ With `:auto-continue-redefinition` set to `t`, the second definition will succee
 Allowed options:
 - `t`: Automatically continue with incompatible redefinitions.
 - `nil`: Raise an error and provide restart options (default).
+
+### `:deprecation-warnings-as-errors`
+
+This controls whether Coalton language deprecations are signaled as warnings or errors. Deprecation warnings are `coalton:deprecation-warning` conditions and are also Common Lisp `style-warning` conditions, so they can be muffled or handled with ordinary style warning handlers.
+
+Allowed options:
+- `t`: Signal Coalton deprecations as errors.
+- `nil`: Signal Coalton deprecations as warnings (default).
 
 ## Further Reading
 

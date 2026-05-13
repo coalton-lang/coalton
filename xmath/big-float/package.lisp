@@ -33,6 +33,8 @@
 
    #:Big-Float
    #:with-precision-rounding
+   #:round-to-f32
+   #:round-to-f64
 
    #:bf-pi
    #:bf-ee))

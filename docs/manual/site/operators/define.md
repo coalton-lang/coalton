@@ -28,6 +28,8 @@ weight: 40
 
 - Defines a new value or function.
 - Type is automatically inferred, but a `declare` is recommended.
+- Exported top-level definitions without a matching `declare` signal a
+  `coalton:deprecation-warning`; this is planned to become an error.
 - Can be inlined, monomorphized, or specialized.
 - Parameters which are not referenced can be named `_` or `_x` where `x` can be
   any name.

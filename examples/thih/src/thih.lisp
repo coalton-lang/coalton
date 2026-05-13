@@ -45,17 +45,27 @@
   (define-type Tycon
     (Tycon Id Kind))
 
+  (declare tUnit Type)
   (define tUnit (TCon (Tycon (Id "()") Star)))
+  (declare tChar Type)
   (define tChar (TCon (Tycon (Id "Char") Star)))
+  (declare tInt Type)
   (define tInt (TCon (Tycon (Id "Int") Star)))
+  (declare tInteger Type)
   (define tInteger (TCon (Tycon (Id "Integer") Star)))
+  (declare tFloat Type)
   (define tFloat (TCon (Tycon (Id "Float") Star)))
+  (declare tDouble Type)
   (define tDouble (TCon (Tycon (Id "Double") Star)))
 
+  (declare tList Type)
   (define tList (TCon (Tycon (Id "[]") (Kfun Star Star))))
+  (declare tArrow Type)
   (define tArrow (TCon (Tycon (Id "->") (Kfun Star (Kfun Star Star)))))
+  (declare tTuple2 Type)
   (define tTuple2 (TCon (Tycon (Id "(,)") (Kfun Star (Kfun Star Star)))))
 
+  (declare tString Type)
   (define tString (mkList tChar))
 
   ;; Renamed from 'fn' due to keyword collision
@@ -354,9 +364,11 @@
         (True
          (Some (modify ce i (Class (Tuple is Nil))))))))
 
+  (declare addPreludeClasses (ClassEnv -> Optional ClassEnv))
   (define addPreludeClasses
     (compose addCoreClasses addNumClasses))
 
+  (declare addCoreClasses (ClassEnv -> Optional ClassEnv))
   (define addCoreClasses
     (foldr compose
            Some
@@ -370,6 +382,7 @@
             (addClass (Id "Functor") Nil)
             (addClass (Id "Monad") Nil))))
 
+  (declare addNumClasses (ClassEnv -> Optional ClassEnv))
   (define addNumClasses
     (foldr compose
            Some

@@ -25,24 +25,31 @@
 
 (coalton-toplevel
 
+  (declare rndna RoundingMode)
   (define rndna
     "RouND to Nearest Away."
     RoundNearAway)
+  (declare rndn RoundingMode)
   (define rndn
     "RouND to Nearest, with the even rounding rule."
     RoundEven)
+  (declare rndz RoundingMode)
   (define rndz
     "RouND toward Zero."
     RoundToZero)
+  (declare rndu RoundingMode)
   (define rndu
     "RouND Up, toward positive infinity."
     RoundUp)
+  (declare rndd RoundingMode)
   (define rndd
     "RouND Down, toward negative infinity."
     RoundDown)
+  (declare rnda RoundingMode)
   (define rnda
     "RouND Away from zero."
     RoundFromZero)
+  (declare rndf RoundingMode)
   (define rndf
     "Faithful rounding (experimental)."
     RoundFaithful)
@@ -127,6 +134,64 @@
 
 (coalton-toplevel
 
+  (define-type NativeFloatRounding
+    (NativeFloatZero Boolean)
+    (NativeFloatFinite Integer Integer)
+    (NativeFloatOverflow Boolean))
+
+  (declare round-scaled-integer (Integer * Integer -> Integer))
+  (define (round-scaled-integer n shift)
+    (if (< shift 0)
+        (progn
+          (let scale = (lsh 1 (negate shift)))
+          (let (values quo r) = (quotRem n scale))
+          (let twice-rem = (lsh r 1))
+          (cond
+            ((< twice-rem scale) quo)
+            ((> twice-rem scale) (+ quo 1))
+            ((even? quo) quo)
+            (True (+ quo 1))))
+        (lsh n shift)))
+
+  (declare dyadic->native-float-exact
+           (Integer * Integer * Integer * Integer * Integer -> (Optional (Tuple Integer Integer))))
+  (define (dyadic->native-float-exact m k digits min-exp max-exp)
+    (if (== m 0)
+        (Some (Tuple 0 0))
+        (progn
+          (let sign-m = (if (< m 0) -1 1))
+          (let n0 = (abs m))
+          (let zeros = (- (bit-length (bits:and n0 (negate n0))) 1))
+          (let n = (rsh n0 zeros))
+          (let e = (+ k zeros))
+          (let bits = (bit-length n))
+          (if (and (<= bits digits)
+                   (<= min-exp e)
+                   (<= (- e (- digits bits)) max-exp))
+              (Some (Tuple (* sign-m n) e))
+              None))))
+
+  (declare dyadic->native-float-rounded
+           (Integer * Integer * Integer * Integer * Integer -> NativeFloatRounding))
+  (define (dyadic->native-float-rounded m k digits min-exp max-exp)
+    (if (== m 0)
+        (NativeFloatZero False)
+        (progn
+          (let negative? = (< m 0))
+          (let n = (abs m))
+          (let e0 = (max min-exp (- (+ k (bit-length n)) digits)))
+          (let q0 = (round-scaled-integer n (- k e0)))
+          (let limit = (lsh 1 digits))
+          (let (Tuple q e) = (if (== q0 limit)
+                                 (Tuple (rsh q0 1) (+ e0 1))
+                                 (Tuple q0 e0)))
+          (cond
+            ((== q 0) (NativeFloatZero negative?))
+            ((> e max-exp) (NativeFloatOverflow negative?))
+            (True (NativeFloatFinite (if negative? (negate q) q) e)))))))
+
+(coalton-toplevel
+
   (define-type Big-Float
     (BFValue Dyadic)
     BFNegZero
@@ -134,6 +199,10 @@
     BFInf
     BFNegInf
     BFNaN)
+
+  (declare integer->big-float-exact (Integer -> Big-Float))
+  (define (integer->big-float-exact n)
+    (BFValue (Dyadic n 0)))
 
   ;; Can compare non-normalized big-floats or big-floats of different precisions.
   (define-instance (Eq Big-Float)
@@ -308,13 +377,12 @@
         ((== a negative-infinity) BFNegInf)
         ((nan? a) BFNaN)
         (True
-         (normalize
-          (lisp (-> Big-Float) (a)
-            (cl:multiple-value-bind (n k s)
-                (cl:integer-decode-float a)
-              (cl:if (cl:and (cl:= n 0) (cl:= s 0))
-                     BFNegZero
-                     (BFValue (Dyadic (cl:* s n) k))))))))))
+         (lisp (-> Big-Float) (a)
+           (cl:multiple-value-bind (n k s)
+               (cl:integer-decode-float a)
+             (cl:if (cl:and (cl:zerop n) (cl:minusp (cl:float-sign a)))
+                    BFNegZero
+                    (BFValue (Dyadic (cl:* s n) k)))))))))
 
   (define-instance (Into F64 Big-Float)
     (define (into a)
@@ -323,17 +391,32 @@
         ((== a negative-infinity) BFNegInf)
         ((nan? a) BFNaN)
         (True
-         (normalize
-          (lisp (-> Big-Float) (a)
-            (cl:multiple-value-bind (n k s)
-                (cl:integer-decode-float a)
-              (cl:if (cl:and (cl:= n 0) (cl:= s 0))
-                     BFNegZero
-                     (BFValue (Dyadic (cl:* s n) k))))))))))
+         (lisp (-> Big-Float) (a)
+           (cl:multiple-value-bind (n k s)
+               (cl:integer-decode-float a)
+             (cl:if (cl:and (cl:zerop n) (cl:minusp (cl:float-sign a)))
+                    BFNegZero
+                    (BFValue (Dyadic (cl:* s n) k)))))))))
+
+  (define-big-float-tryinto-float F32 cl:single-float -0.0f0
+                                  cl:least-positive-single-float
+                                  cl:most-positive-single-float)
+  (define-big-float-tryinto-float F64 cl:double-float -0.0d0
+                                  cl:least-positive-double-float
+                                  cl:most-positive-double-float)
+
+  (define-big-float-round-to-float round-to-f32 F32 cl:single-float -0.0f0
+                                   cl:least-positive-single-float
+                                   cl:most-positive-single-float)
+  (define-big-float-round-to-float round-to-f64 F64 cl:double-float -0.0d0
+                                   cl:least-positive-double-float
+                                   cl:most-positive-double-float)
 
   (define-instance (Into Integer Big-Float)
     (define (into a)
-      (fromInt a)))
+      (integer->big-float-exact a)))
+
+  (define-big-float-primitive-conversions)
 
   (define-instance (Into Fraction Big-Float)
     (define (into a)
