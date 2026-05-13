@@ -45,6 +45,18 @@ struct PtyState {
     resizer: Mutex<Option<Box<dyn PtyResizer>>>,
 }
 
+#[cfg(target_os = "macos")]
+fn set_utf8_locale(cmd: &mut CommandBuilder) {
+    cmd.env("LANG", "en_US.UTF-8");
+    cmd.env("LC_CTYPE", "UTF-8");
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn set_utf8_locale(cmd: &mut CommandBuilder) {
+    cmd.env("LANG", "C.UTF-8");
+    cmd.env("LC_CTYPE", "C.UTF-8");
+}
+
 #[tauri::command]
 fn spawn_pty(app: AppHandle, state: State<PtyState>, rows: u16, cols: u16) -> Result<(), String> {
     // Idempotent: only the first call spawns. Any subsequent call (e.g. from a
@@ -68,6 +80,7 @@ fn spawn_pty(app: AppHandle, state: State<PtyState>, rows: u16, cols: u16) -> Re
 
         let mut cmd = CommandBuilder::new(&mine_bin);
         cmd.env("TERM", "xterm-256color");
+        set_utf8_locale(&mut cmd);
         let _child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
         drop(pair.slave);
 

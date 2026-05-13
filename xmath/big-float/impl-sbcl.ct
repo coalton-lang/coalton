@@ -69,6 +69,39 @@
     (cl:prog1 (mpq->rational q)
       (__gmpq_clear (sb-alien:addr q)))))
 
+(cl:eval-when (:compile-toplevel :load-toplevel :execute)
+  (cl:defmacro define-big-float-primitive-conversions ()
+    `(progn
+       ,@(cl:loop :for integer-type :in '(Bit U8 I8 U16 I16 U32 I32 U64 I64 UFix IFix)
+                  :collect
+                  `(define-instance (Into ,integer-type Big-Float)
+                     (inline)
+                     (define (into a)
+                       (integer->big-float-exact (toInteger a)))))))
+
+  (cl:defmacro define-big-float-tryinto-float (coalton-float lisp-float precision)
+    `(define-instance (TryInto Big-Float ,coalton-float)
+       (define (tryInto a)
+         (lisp (-> (Optional ,coalton-float)) (a)
+           (cl:let ((b (cl:ignore-errors (sb-mpfr:coerce a ',lisp-float))))
+             (cl:cond
+               ((cl:null b) None)
+               ((sb-mpfr:nan-p a) (Some b))
+               ;; SB-MPFR coercion rounds; TryInto only accepts exact finite values.
+               ((cl:let ((sb-mpfr:+mpfr-precision+ ,precision))
+                  (sb-mpfr:= a (sb-mpfr:coerce b 'sb-mpfr:mpfr-float)))
+                (Some b))
+               (cl:t None)))))))
+
+  (cl:defmacro define-big-float-round-to-float (name coalton-float lisp-float)
+    `(progn
+       (declare ,name (Big-Float -> ,coalton-float))
+       (define (,name a)
+         "Round a Big-Float to the nearest representable native float, with ties to even."
+         (lisp (-> ,coalton-float) (a)
+           (cl:let ((sb-mpfr:*mpfr-rnd* :MPFR_RNDN))
+             (sb-mpfr:coerce a ',lisp-float)))))))
+
 ;; Whether the mpfr ceiling function is properly exported
 (cl:eval-when (:compile-toplevel :load-toplevel)
   (cl:if (uiop:featurep :sbcl)
@@ -85,24 +118,31 @@
   (repr :native (cl:member :MPFR_RNDNA :MPFR_RNDN :MPFR_RNDZ :MPFR_RNDU :MPFR_RNDD :MPFR_RNDA :MPFR_RNDF))
   (define-type RoundingMode)
 
+  (declare rndna RoundingMode)
   (define rndna
     "RouND to Nearest Away."
     (lisp (-> RoundingMode) () ':MPFR_RNDNA))
+  (declare rndn RoundingMode)
   (define rndn
     "RouND to Nearest, with the even rounding rule."
     (lisp (-> RoundingMode) () ':MPFR_RNDN))
+  (declare rndz RoundingMode)
   (define rndz
     "RouND toward Zero."
     (lisp (-> RoundingMode) () ':MPFR_RNDZ))
+  (declare rndu RoundingMode)
   (define rndu
     "RouND Up, toward positive infinity."
     (lisp (-> RoundingMode) () ':MPFR_RNDU))
+  (declare rndd RoundingMode)
   (define rndd
     "RouND Down, toward negative infinity."
     (lisp (-> RoundingMode) () ':MPFR_RNDD))
+  (declare rnda RoundingMode)
   (define rnda
     "RouND Away from zero."
     (lisp (-> RoundingMode) () ':MPFR_RNDA))
+  (declare rndf RoundingMode)
   (define rndf
     "Faithful rounding (experimental)."
     (lisp (-> RoundingMode) () ':MPFR_RNDF))
@@ -164,6 +204,13 @@
   (define-type Big-Float
     "An arbitrary (but fixed) precision floating point number.")
 
+  (declare integer->big-float-exact (Integer -> Big-Float))
+  (define (integer->big-float-exact n)
+    (lisp (-> Big-Float) (n)
+      (cl:let ((sb-mpfr:+mpfr-precision+
+                 (cl:max 1 (cl:integer-length (cl:abs n)))))
+        (sb-mpfr:coerce n 'sb-mpfr:mpfr-float))))
+
   ;; Equality
   (define-instance (Eq Big-Float)
     (define (== a b)
@@ -200,7 +247,7 @@
   ;; Conversion
   (define-instance (Into Integer Big-Float)
     (define (into a)
-      (fromInt a)))
+      (integer->big-float-exact a)))
 
   (define-instance (Into Fraction Big-Float)
     (define (into a)
@@ -210,12 +257,21 @@
   (define-instance (Into F32 Big-Float)
     (define (into a)
       (lisp (-> Big-Float) (a)
-        (sb-mpfr:coerce a 'sb-mpfr:mpfr-float))))
+        (cl:let ((sb-mpfr:+mpfr-precision+ 24))
+          (sb-mpfr:coerce a 'sb-mpfr:mpfr-float)))))
 
   (define-instance (Into F64 Big-Float)
     (define (into a)
       (lisp (-> Big-Float) (a)
-        (sb-mpfr:coerce a 'sb-mpfr:mpfr-float))))
+        (cl:let ((sb-mpfr:+mpfr-precision+ 53))
+          (sb-mpfr:coerce a 'sb-mpfr:mpfr-float)))))
+
+  (define-big-float-primitive-conversions)
+
+  (define-big-float-tryinto-float F32 cl:single-float 24)
+  (define-big-float-tryinto-float F64 cl:double-float 53)
+  (define-big-float-round-to-float round-to-f32 F32 cl:single-float)
+  (define-big-float-round-to-float round-to-f64 F64 cl:double-float)
 
   ;; quantization and division
   (define-instance (Quantizable Big-Float)
@@ -275,6 +331,7 @@
 
 (coalton-toplevel
   
+  (declare bf-pi (Void -> Big-Float))
   (define (bf-pi)
     "Return the value of pi to the currently set precision."
     (lisp (-> Big-Float) ()
@@ -304,6 +361,7 @@
     ;; it will *NOT* get updated.
     (define pi (bf-pi)))
   
+  (declare bf-ee (Void -> Big-Float))
   (define (bf-ee)
     "Return the value of ee = exp(1) to the currently set precision."
     (lisp (-> Big-Float) ()

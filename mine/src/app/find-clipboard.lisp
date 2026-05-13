@@ -24,6 +24,12 @@
 (defvar *clipboard-copy* nil)
 (defvar *clipboard-paste* nil)
 
+(defparameter +macos-utf8-env+
+  (list "LC_CTYPE=UTF-8" "LANG=en_US.UTF-8")
+  "Locale overrides for macOS clipboard tools.
+App-launched processes can lack a UTF-8 locale, in which case pbcopy may
+interpret UTF-8 input bytes as MacRoman.")
+
 (defun %program-available-p (program)
   (handler-case
       (let ((proc (sb-ext:run-program
@@ -64,7 +70,7 @@
 (defun find-clipboard-copy-command ()
   (cond
     ((uiop:os-macosx-p)
-     (list "/usr/bin/pbcopy" nil))
+     (list "/usr/bin/env" (append +macos-utf8-env+ (list "/usr/bin/pbcopy"))))
     ((or (uiop:os-windows-p) (%wsl-p))
      (list "clip.exe" nil))
     ((%wayland-session-p)
@@ -81,7 +87,7 @@
 (defun find-clipboard-paste-command ()
   (cond
     ((uiop:os-macosx-p)
-     (list "/usr/bin/pbpaste" nil))
+     (list "/usr/bin/env" (append +macos-utf8-env+ (list "/usr/bin/pbpaste"))))
     ((or (uiop:os-windows-p) (%wsl-p))
      (list "powershell.exe" (list "-command" "Get-Clipboard")))
     ((%wayland-session-p)

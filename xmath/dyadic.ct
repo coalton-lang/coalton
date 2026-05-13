@@ -92,6 +92,7 @@
          (Dyadic (* n m) (+ j k)))))
     (define (fromInt x) (Dyadic x 0)))
 
+  (declare simplify-integer (Integer -> Dyadic))
   (define (simplify-integer n)
     "Finds the simplest dyadic given an integer."
     (if (== n 0)
@@ -103,6 +104,7 @@
                  (simplify-integer d))
               (Dyadic n 0)))))
 
+  (declare simplify (Dyadic -> Dyadic))
   (define (simplify d)
     "Simplifies a dyadic by maximizing the absolute value of the exponent."
     (match d
@@ -159,6 +161,7 @@ numbers."
   (define-instance (Into Integer Dyadic)
     (define into fromInt))
 
+  (declare scale (Dyadic * Integer -> Dyadic))
   (define (scale x j)
     "Scales a dyadic `x` by $2^{\\mathtt{k}}$."
     (match x

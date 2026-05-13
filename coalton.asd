@@ -153,6 +153,8 @@
                (:module "big-float"
                 :serial t
                 :components ((:file "package")
+                             (:file "portable-big-float-macros"
+                              :if-feature (:or :coalton-portable-bigfloat (:not :sbcl)))
                              (:ct-file "impl-sbcl"
                               :if-feature (:and (:not :coalton-portable-bigfloat) :sbcl))
                              (:ct-file "impl-default"

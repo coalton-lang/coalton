@@ -57,7 +57,10 @@
         (error "mine-tests failed with exit code ~S" exit-code)))))
 
 (defun run-mine-tests ()
-  (dolist (test '(check-diagnostics-locate-style-warning-spans
+  (dolist (test '(check-current-release-tag-prefixes-bare-version
+                  check-current-release-tag-keeps-prefixed-version
+                  check-current-release-tag-accepts-v-prefixed-version
+                  check-diagnostics-locate-style-warning-spans
                   check-diagnostics-use-character-offsets-for-unicode-files
                   check-coalton-source-conditions-expand-to-grouped-diagnostics
                   check-wrapped-coalton-source-conditions-use-note-spans
