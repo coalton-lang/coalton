@@ -1136,9 +1136,11 @@ list. Errors if parsing failed."
 ;;;
 
 (coalton-toplevel
+  (declare Str sy:Symbol)
   (define Str
     (lisp (-> sy:Symbol) ()
       'Str))
+  (declare Out sy:Symbol)
   (define Out
     (lisp (-> sy:Symbol) ()
       'Out)))
