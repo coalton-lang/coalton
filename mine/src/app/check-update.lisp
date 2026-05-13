@@ -12,7 +12,18 @@
 
 (defun current-release-tag ()
   "Return the current mine version as a GitHub release tag."
-  (concatenate 'string "mine-v" mine/version:*mine-version*))
+  (let ((version (string-trim '(#\Space #\Tab #\Newline #\Return)
+                              mine/version:*mine-version*)))
+    (cond
+      ((and (<= 6 (length version))
+            (string-equal "mine-v" version :end2 6))
+       version)
+      ((and (<= 2 (length version))
+            (char-equal #\v (char version 0))
+            (digit-char-p (char version 1)))
+       (concatenate 'string "mine-" version))
+      (t
+       (concatenate 'string "mine-v" version)))))
 
 (defun mine-release-tags (json)
   "Extract mine-v* release tags from GitHub releases API JSON in order."
