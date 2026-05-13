@@ -19,20 +19,24 @@
 (defmacro define-coalton-toplevel-editor-macro (name lambda-list &optional (docstring ""))
   "Define a macro so that Emacs and SLIME see it nicely, and so the forms indent properly. Not intended for actual use in Lisp code."
   (check-type docstring string)
-  `(defmacro ,name ,lambda-list
-     ,docstring
-     (declare (ignore ,@(remove-if (lambda (sym) (char= #\& (char (symbol-name sym) 0)))
-                                   lambda-list)))
-     (error-coalton-toplevel-only ',name)))
+  `(progn
+     (setf (get ',name ':coalton-repl-context) ':toplevel)
+     (defmacro ,name ,lambda-list
+       ,docstring
+       (declare (ignore ,@(remove-if (lambda (sym) (char= #\& (char (symbol-name sym) 0)))
+                                     lambda-list)))
+       (error-coalton-toplevel-only ',name))))
 
 (defmacro define-coalton-editor-macro (name lambda-list &optional (docstring ""))
   "Define a macro so that Emacs and SLIME see it nicely, and so the forms indent properly. Not intended for actual use in Lisp code."
   (check-type docstring string)
-  `(defmacro ,name ,lambda-list
-     ,docstring
-     (declare (ignore ,@(remove-if (lambda (sym) (char= #\& (char (symbol-name sym) 0)))
-                                   lambda-list)))
-     (error-coalton-only ',name)))
+  `(progn
+     (setf (get ',name ':coalton-repl-context) ':expression)
+     (defmacro ,name ,lambda-list
+       ,docstring
+       (declare (ignore ,@(remove-if (lambda (sym) (char= #\& (char (symbol-name sym) 0)))
+                                     lambda-list)))
+       (error-coalton-only ',name))))
 
 
 ;;; Top-Level Forms
@@ -73,21 +77,20 @@
 
 ;;; Attributes
 
-(define-coalton-editor-macro coalton:repr (type &optional arg)
+(define-coalton-toplevel-editor-macro coalton:repr (type &optional arg)
   "Annote a type definition with a runtime representation.")
 
-(define-coalton-editor-macro coalton:derive (&rest classes)
+(define-coalton-toplevel-editor-macro coalton:derive (&rest classes)
   "Derive class instances for structs or types.")
 
-(define-coalton-editor-macro coalton:monomorphize ()
+(define-coalton-toplevel-editor-macro coalton:monomorphize ()
   "Mark a definition for monomorphization.")
 
 
 ;;; Other Constructions
 
-(defmacro coalton:fn (vars &body form)
-  "A lambda abstraction callable within coalton."
-  `(lambda ,vars ,@form))
+(define-coalton-editor-macro coalton:fn (vars &body form)
+  "A lambda abstraction callable within coalton.")
 
 (define-coalton-editor-macro coalton:throw (exception)
     "Throw an exception.")
