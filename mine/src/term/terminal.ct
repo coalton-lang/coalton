@@ -126,14 +126,17 @@
 
 (cl:defun %terminal-input-runtime-read-batch-timeout (runtime timeout-ms)
   (cl:let ((mailbox (%terminal-input-runtime-mailbox runtime)))
-    (cl:multiple-value-bind (first ok)
-        (sb-concurrency:receive-message
-         mailbox
-         :timeout (cl:/ timeout-ms 1000.0d0))
-      (cl:if ok
-             (%terminal-input-events
-              (cl:cons first (sb-concurrency:receive-pending-messages mailbox)))
-             Nil))))
+    (cl:if (cl:zerop timeout-ms)
+           (%terminal-input-events
+            (sb-concurrency:receive-pending-messages mailbox))
+           (cl:multiple-value-bind (first ok)
+               (sb-concurrency:receive-message
+                mailbox
+                :timeout (cl:/ timeout-ms 1000))
+             (cl:if ok
+                    (%terminal-input-events
+                     (cl:cons first (sb-concurrency:receive-pending-messages mailbox)))
+                    Nil)))))
 
 (cl:defun %terminal-input-runtime-read-one (runtime)
   (cl:let ((mailbox (%terminal-input-runtime-mailbox runtime)))
