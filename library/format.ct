@@ -1145,7 +1145,7 @@ list. Errors if parsing failed."
     (lisp (-> sy:Symbol) ()
       'Out)))
                
-(defmacro format (target ctrl-str cl:&rest args)
+(define-expression-macro format (target ctrl-str cl:&rest args)
   "Format `ctrl-str` using `args`. Syntax is the same as Common Lisp `format`. The number of
 arguments, their types, and the syntax of `ctrl-str` are checked at compile time.
 Directives are case-insensitive.

@@ -98,7 +98,7 @@ This is not necessarily identical to `(the String (into x))`."
       (cl:finish-output *show-stream*)
       (cl:values))))
 
-(defmacro show* (cl:&rest items)
+(define-expression-macro show* (cl:&rest items)
   "Show each of the items `items` sequentially."
   `(progn
      ,@(cl:loop :for item :in items :collect `(show ,item))))

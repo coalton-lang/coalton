@@ -18,7 +18,7 @@
 #+coalton-release
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
-(defmacro unreachable (cl:&optional (datum "Unreachable") cl:&rest arguments)
+(define-expression-macro unreachable (cl:&optional (datum "Unreachable") cl:&rest arguments)
   "Signal an error with CL format string DATUM and optional format arguments ARGUMENTS."
   `(lisp (-> :a) ()
      (cl:error ,datum ,@arguments)))

@@ -124,7 +124,7 @@ Print a line to `cl:*standard-output*` in the form \"{STR}: {ITEM}\"."
    "Compute the disjunction of two unary Boolean functions."
    (or (f x) (g x))))
 
-(defmacro conjoin* (cl:&rest predicates)
+(define-expression-macro conjoin* (cl:&rest predicates)
   "Compute the conjuction of `predicates`.
 
 For example, the following expressions are equivalent.
@@ -136,7 +136,7 @@ For example, the following expressions are equivalent.
     `(fn (,x) (and ,@(cl:loop :for predicate :in predicates
                               :collect `(,predicate ,x))))))
 
-(defmacro disjoin* (cl:&rest predicates)
+(define-expression-macro disjoin* (cl:&rest predicates)
   "Compute the disjunction of `predicates`.
 
 For example, the following expressions are equivalent.
