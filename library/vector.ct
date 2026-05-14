@@ -478,7 +478,7 @@
     (inline)
     (define default new)))
 
-(defmacro make (cl:&rest elements)
+(define-expression-macro make (cl:&rest elements)
   "Construct a `Vector' containing the ELEMENTS, in the order listed."
   (cl:let* ((length (cl:length elements))
             (vec (cl:gensym "VEC-")))

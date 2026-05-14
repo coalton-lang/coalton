@@ -6,6 +6,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, State};
 
+#[cfg(windows)]
+use tauri::Manager;
+
 trait PtyResizer: Send + Sync {
     fn resize(&self, rows: u16, cols: u16) -> Result<(), String>;
 }
@@ -115,10 +118,15 @@ fn spawn_pty(app: AppHandle, state: State<PtyState>, rows: u16, cols: u16) -> Re
 
         // Wait for the child process to exit and close the app.
         // On Windows, pipe EOF alone may not fire reliably.
+        // Destroy the window directly rather than calling app.exit(0):
+        // on Windows + WebView2 the TAO exit path does not reliably tear
+        // down the window, leaving a blank shell on screen.
         let exit_app = app.clone();
         std::thread::spawn(move || {
             let _ = child.wait();
-            exit_app.exit(0);
+            if let Some(w) = exit_app.get_webview_window("main") {
+                let _ = w.destroy();
+            }
         });
 
         (Box::new(stdout), Box::new(stdin), resizer)
@@ -216,6 +224,15 @@ fn extract_number(content: &str, key: &str) -> Option<u16> {
 }
 
 #[tauri::command]
+#[cfg(windows)]
+fn close_window(app: AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.destroy();
+    }
+}
+
+#[tauri::command]
+#[cfg(not(windows))]
 fn close_window(app: AppHandle) {
     app.exit(0);
 }

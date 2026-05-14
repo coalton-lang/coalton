@@ -73,6 +73,7 @@
                   check-resize-sequence-emits-resize
                   check-resize-sequence-consumes-before-next-key
                   check-partial-resize-sequence-is-preserved
+                  check-terminal-input-zero-timeout-is-nonblocking
                   check-indent-hunchentoot-style-handler-body
                   check-indent-multiple-value-bind-special-form
                   check-indent-lambda-list-keyword-alignment
