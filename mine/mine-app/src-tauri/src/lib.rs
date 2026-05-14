@@ -4,7 +4,10 @@ use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem, MasterPt
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, State};
+
+#[cfg(windows)]
+use tauri::Manager;
 
 trait PtyResizer: Send + Sync {
     fn resize(&self, rows: u16, cols: u16) -> Result<(), String>;
@@ -221,10 +224,17 @@ fn extract_number(content: &str, key: &str) -> Option<u16> {
 }
 
 #[tauri::command]
+#[cfg(windows)]
 fn close_window(app: AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.destroy();
     }
+}
+
+#[tauri::command]
+#[cfg(not(windows))]
+fn close_window(app: AppHandle) {
+    app.exit(0);
 }
 
 #[cfg(target_os = "macos")]
