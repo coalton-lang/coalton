@@ -792,10 +792,10 @@ CR characters elsewhere, including at EOF, are preserved."
       (print-empty-line stream state)
       (with-slots (help context last-line) state
         (print-notes stream state)
-        (loop :for help :in help
-              :do (print-help stream state help))
-        (loop :for context :in context
-              :do (format stream "note: ~A~%" context))))))
+        (loop :for help-elem :in help
+              :do (print-help stream state help-elem))
+        (loop :for context-elem :in context
+              :do (format stream "note: ~A~%" context-elem))))))
 
 ;; API
 
