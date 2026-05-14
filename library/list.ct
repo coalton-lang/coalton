@@ -855,7 +855,7 @@ This function is equivalent to all size-`n` elements of `(combs l)`."
   (define-instance (Default (List :a))
     (define (default) Nil)))
 
-(defmacro make (cl:&rest elements)
+(define-expression-macro make (cl:&rest elements)
   "Make a homogeneous list of `elements`. Synonym for `coalton:make-list`."
   `(coalton:make-list ,@elements))
 

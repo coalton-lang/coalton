@@ -99,3 +99,13 @@
 (defun check-partial-resize-sequence-is-preserved ()
   (%check (mine-tests/syntax:partial-resize-sequence-is-preserved?)
           "Expected an incomplete resize sequence to remain buffered"))
+
+(defun check-terminal-input-zero-timeout-is-nonblocking ()
+  (let* ((runtime (mine/term/terminal::make-%terminal-input-runtime))
+         (mailbox (mine/term/terminal::%terminal-input-runtime-mailbox runtime)))
+    (%check (null (mine/term/terminal::%terminal-input-runtime-read-batch-timeout runtime 0))
+            "Expected zero-timeout input read on an empty mailbox to return NIL")
+    (sb-concurrency:send-message mailbox :event)
+    (%check (equal '(:event)
+                   (mine/term/terminal::%terminal-input-runtime-read-batch-timeout runtime 0))
+            "Expected zero-timeout input read to drain pending mailbox events")))

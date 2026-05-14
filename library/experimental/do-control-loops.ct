@@ -136,7 +136,7 @@ M-OPERATION yields a value. Returns Unit."
       (do
        ,@body))))
 
-(defmacro do-loop-do-while (m-term? cl:&body body)
+(define-expression-macro do-loop-do-while (m-term? cl:&body body)
   "Before each iteration, evaluate M-TERM?. If it indicates completion, stop; otherwise run BODY.
 Wraps BODY in a 'do' block. Returns Unit."
   `(loop-do-while ,m-term?
@@ -157,7 +157,7 @@ Returns Unit."
     (do
      ,@body)))
 
-(defmacro do-collect ((sym into-itr) cl:&body body)
+(define-expression-macro do-collect ((sym into-itr) cl:&body body)
   "Apply FA->M to each element produced by INTO-ITR and run the resulting monadic action.
 Collect the results."
   `(collect ,into-itr

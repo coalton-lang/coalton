@@ -12,7 +12,10 @@
    #:in-package
    #:defpackage)
 
-  (:export #:defmacro)
+  (:export
+   #:defmacro
+   #:define-expression-macro
+   #:define-toplevel-macro)
 
   (:export #:call-coalton-function)
 
