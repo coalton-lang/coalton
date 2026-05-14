@@ -503,3 +503,14 @@ macro that did not preserve child source spans."
 
 (defmacro coalton:coalton (&rest forms)
   (compile-forms 'coalton:coalton forms))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (dolist (sym '(coalton:coalton-toplevel
+                 coalton:coalton-codegen
+                 coalton:coalton-codegen-types
+                 coalton:coalton-codegen-ast
+                 coalton:pprint-coalton-codegen
+                 coalton:pprint-coalton-codegen-types
+                 coalton:pprint-coalton-codegen-ast
+                 coalton:coalton))
+    (setf (get sym ':coalton-repl-context) ':wrapper)))

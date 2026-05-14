@@ -17,6 +17,7 @@ an error or or something is unclear, please fix it and submit a PR.
 - [Introduction and Getting Started](/manual/topics/introduction/)
 - [Whirlwind Tour of Coalton](/manual/topics/whirlwind-tour/)
 - [Configuring Coalton](/manual/topics/configuring-coalton/)
+- [Macros](/manual/topics/macros/)
 - [Lisp Interop](/manual/topics/lisp-interop/)
 - [Debugging Operators](/manual/topics/debugging/)
 - [Standard Library Reference](/reference/)
@@ -33,6 +34,7 @@ see the [Standard Library Reference](/reference/).
 | **Definitions** | [`define`](/manual/operators/define/) | [`define-class`](/manual/operators/define-class/) | [`define-exception`](/manual/operators/define-exception/) |
 |  | [`define-instance`](/manual/operators/define-instance/) | [`define-resumption`](/manual/operators/define-resumption/) | [`define-struct`](/manual/operators/define-struct/) |
 |  | [`define-type`](/manual/operators/define-type/) | [`define-type-alias`](/manual/operators/define-type-alias/) |  |
+| **Macros** | [`define-expression-macro`](/manual/operators/define-expression-macro/) | [`define-toplevel-macro`](/manual/operators/define-toplevel-macro/) | [`defmacro`](/manual/operators/defmacro/) |
 | **Directives** | [`declare`](/manual/operators/declare/) | [`derive`](/manual/operators/derive/) | [`inline`](/manual/operators/inline/) |
 |  | [`likely`](/manual/operators/likely/) | [`monomorphize`](/manual/operators/monomorphize/) | [`noinline`](/manual/operators/noinline/) |
 |  | [`repr`](/manual/operators/repr/) | [`specialize`](/manual/operators/specialize/) | [`unlikely`](/manual/operators/unlikely/) |

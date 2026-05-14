@@ -2,7 +2,7 @@
 
 ;;;; Macros used to implement the Coalton language
 
-(defmacro as (type cl:&optional (expr cl:nil expr-supplied-p))
+(define-expression-macro as (type cl:&optional (expr cl:nil expr-supplied-p))
   "A syntactic convenience for type casting.
 
     (as <type> <expr>)
@@ -29,7 +29,7 @@ Note that this may copy the object or allocate memory."
              `(fn (,lexpr)
                 (the ,type (,into ,lexpr)))))))
 
-(defmacro try-as (type cl:&optional (expr cl:nil expr-supplied-p))
+(define-expression-macro try-as (type cl:&optional (expr cl:nil expr-supplied-p))
   "A syntactic convenience for type casting.
 
     (try-as <type> <expr>)
@@ -58,7 +58,7 @@ Note that this may copy the object or allocate memory."
              `(fn (,lexpr)
                 (the (,Optional ,type) (,try-into ,lexpr)))))))
 
-(defmacro unwrap-as (type cl:&optional (expr cl:nil expr-supplied-p))
+(define-expression-macro unwrap-as (type cl:&optional (expr cl:nil expr-supplied-p))
   "A syntactic convenience for type casting.
 
     (unwrap-as <type> <expr>)
@@ -87,7 +87,7 @@ Note that this may copy the object or allocate memory."
              `(fn (,lexpr)
                 (the ,type (,unwrap (,try-into ,lexpr))))))))
 
-(defmacro nest (cl:&rest items)
+(define-expression-macro nest (cl:&rest items)
   "A syntactic convenience for function application. Transform
 
     (nest f g h x)
@@ -102,7 +102,7 @@ to
                  (cl:list x acc))
                butlast :from-end cl:t :initial-value (cl:first last))))
 
-(defmacro pipe (cl:&rest items)
+(define-expression-macro pipe (cl:&rest items)
   "A syntactic convenience for function application, sometimes called a \"threading macro\". Transform
 
     (pipe x h g f)
@@ -113,7 +113,7 @@ to
   (cl:assert (cl:<= 2 (cl:list-length items)))
   `(nest ,@(cl:reverse items)))
 
-(defmacro .< (cl:&rest items)
+(define-expression-macro .< (cl:&rest items)
   "Right associative compose operator. Creates a new functions that will run the
 functions right to left when applied. This is the same as the `nest` macro without supplying
 the value. The composition is thus the same order as `compose`.
@@ -123,7 +123,7 @@ the value. The composition is thus the same order as `compose`.
     `(fn (,x)
        (nest ,@items ,x))))
 
-(defmacro .> (cl:&rest items)
+(define-expression-macro .> (cl:&rest items)
   "Left associative compose operator. Creates a new functions that will run the
 functions left to right when applied. This is the same as the `pipe` macro without supplying
 the value. The composition is thus the reverse order of `compose`.
@@ -133,7 +133,7 @@ the value. The composition is thus the reverse order of `compose`.
     `(fn (,x)
        (pipe ,x ,@items))))
 
-(defmacro make-list (cl:&rest forms)
+(define-expression-macro make-list (cl:&rest forms)
   "Create a heterogeneous Coalton `List` of objects. This macro is
 deprecated; use `coalton/list:make`."
   (cl:labels
@@ -148,7 +148,7 @@ deprecated; use `coalton/list:make`."
 Coalton boolean."
   `(cl:and ,expr cl:t))
 
-(defmacro assert (datum cl:&optional (format-string "") cl:&rest format-data)
+(define-expression-macro assert (datum cl:&optional (format-string "") cl:&rest format-data)
   "Signal an error unless `datum` is `True`.
 
 If the assertion fails, the signaled error will apply the `format-data`

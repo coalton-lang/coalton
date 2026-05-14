@@ -1885,8 +1885,9 @@ Uses the preceding (in-package ...) form to determine the compilation package."
              (let req-id = (next-request-id! st))
              (cell:write! (.ms-active-request st) (Some req-id))
              (%track-diagnostic-request! req-id)
+             (let auto-coalton? = (== (cell:read (.ms-repl-lang st)) "Coalton"))
              (let req = (msg:ReqCompileString req-id form-text document-key pkg
-                                             form-start 0 True))
+                                             form-start 0 auto-coalton?))
              (client:connection-send! conn req))))))))
 
   (declare quick-result-form! (MineState -> Void))
@@ -1929,7 +1930,8 @@ Uses the preceding (in-package ...) form to determine the compilation package."
              (cell:write! (.ms-active-request st) (Some req-id))
              (cell:write! (.ms-quick-result-request-id st) (Some req-id))
              (%show-quick-result-pending-for-range! st target-start target-end document-key)
-             (let req = (msg:ReqQuickResult req-id target-text pkg True))
+             (let auto-coalton? = (== (cell:read (.ms-repl-lang st)) "Coalton"))
+             (let req = (msg:ReqQuickResult req-id target-text pkg auto-coalton?))
              (client:connection-send! conn req))))))))
 
 ;;; Create project on disk

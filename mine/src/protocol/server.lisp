@@ -500,10 +500,11 @@ indentation only when the runtime can expose a macro lambda list containing
 
 (defun %coalton-package-p (pkg)
   "True if PKG is a Coalton package.
-Matches \"COALTON\" itself, \"COALTON-PRELUDE\", any \"COALTON/...\" stdlib
-package, or packages that use COALTON."
+Matches \"COALTON\" itself, \"COALTON++\", \"COALTON-PRELUDE\", any
+\"COALTON/...\" stdlib package, or packages that use COALTON."
   (let ((name (package-name pkg)))
     (or (string-equal "COALTON" name)
+        (string-equal "COALTON++" name)
         (string-equal "COALTON-PRELUDE" name)
         (and (>= (length name) 8)
              (string-equal "COALTON/" name :end2 8))
@@ -511,29 +512,76 @@ package, or packages that use COALTON."
           (and coalton-pkg
                (member coalton-pkg (package-use-list pkg)))))))
 
+(defun %coalton-repl-context (sym)
+  (let ((context (and (symbolp sym) (get sym ':coalton-repl-context))))
+    (and (member context '(:wrapper :toplevel :expression) :test #'eq)
+         context)))
+
 (defun %coalton-wrapper-symbol-p (sym)
-  (member sym
-          '(coalton:coalton-toplevel
-            coalton:coalton-codegen
-            coalton:coalton-codegen-types
-            coalton:coalton-codegen-ast
-            coalton:coalton)
-          :test #'eq))
+  (or (eq (%coalton-repl-context sym) ':wrapper)
+      (member sym
+              '(coalton:coalton-toplevel
+                coalton:coalton-codegen
+                coalton:coalton-codegen-types
+                coalton:coalton-codegen-ast
+                coalton:pprint-coalton-codegen
+                coalton:pprint-coalton-codegen-types
+                coalton:pprint-coalton-codegen-ast
+                coalton:coalton)
+              :test #'eq)))
+
+(defun %coalton-symbol-named-p (sym name)
+  (let ((coalton-pkg (find-package "COALTON")))
+    (and coalton-pkg
+         (symbolp sym)
+         (eq (symbol-package sym) coalton-pkg)
+         (string= (symbol-name sym) name))))
+
+(defun %coalton-define-symbol-p (sym)
+  (let ((coalton-pkg (find-package "COALTON")))
+    (and coalton-pkg
+         (symbolp sym)
+         (eq (symbol-package sym) coalton-pkg)
+         (let ((name (symbol-name sym)))
+           (or (string= name "DEFINE")
+               (and (>= (length name) 7)
+                    (string= "DEFINE-" name :end2 7)))))))
 
 (defun %coalton-toplevel-symbol-p (sym)
-  (member sym
-          '(coalton:define
-            coalton:define-type
-            coalton:define-struct
-            coalton:define-type-alias
-            coalton:define-exception
-            coalton:define-resumption
-            coalton:declare
-            coalton:define-class
-            coalton:define-instance
-            coalton:lisp-toplevel
-            coalton:specialize)
-          :test #'eq))
+  (or (eq (%coalton-repl-context sym) ':toplevel)
+      (%coalton-define-symbol-p sym)
+      (%coalton-symbol-named-p sym "DECLARE")
+      (%coalton-symbol-named-p sym "LISP-TOPLEVEL")
+      (%coalton-symbol-named-p sym "SPECIALIZE")
+      (%coalton-symbol-named-p sym "MONOMORPHIZE")
+      (%coalton-symbol-named-p sym "INLINE")
+      (%coalton-symbol-named-p sym "REPR")
+      (%coalton-symbol-named-p sym "DERIVE")))
+
+(defun %coalton-expression-symbol-p (sym)
+  (eq (%coalton-repl-context sym) ':expression))
+
+(defun %coalton-value-symbol-p (sym)
+  (and (symbolp sym)
+       (let ((env (%coalton-env)))
+         (or (coalton-impl/typechecker/environment:lookup-value-type env sym :no-error t)
+             (coalton-impl/typechecker/environment:lookup-constructor env sym :no-error t)))))
+
+(defun %lisp-callable-symbol-p (sym)
+  (and (symbolp sym)
+       (or (macro-function sym)
+           (special-operator-p sym)
+           (fboundp sym))))
+
+(defun %find-runtime-package (package-name)
+  (and (stringp package-name)
+       (or (find-package package-name)
+           (find-package (string-upcase package-name)))))
+
+(defun %auto-coalton-context-p (package-name auto-coalton-p)
+  (let ((pkg (%find-runtime-package package-name)))
+    (values (and auto-coalton-p pkg (%coalton-package-p pkg))
+            pkg)))
 
 (defun %whitespace-or-form-delimiter-p (char)
   (member char '(#\Space #\Tab #\Newline #\Return #\( #\)) :test #'char=))
@@ -605,10 +653,9 @@ package, or packages that use COALTON."
 AUTO-COALTON-P is supplied by the client language mode. Package and nickname
 resolution intentionally happens in the runtime image, where Quicklisp loads and
 user package changes are visible."
-  (let ((pkg (and (stringp package-name)
-                  (or (find-package package-name)
-                      (find-package (string-upcase package-name))))))
-    (if (not (and auto-coalton-p pkg (%coalton-package-p pkg)))
+  (multiple-value-bind (auto-coalton-context-p pkg)
+      (%auto-coalton-context-p package-name auto-coalton-p)
+    (if (not auto-coalton-context-p)
         (values form-string 0)
         (let* ((head-token (%first-list-head-token form-string))
                (head-sym (and head-token (%read-token-symbol head-token pkg))))
@@ -623,6 +670,12 @@ user package changes are visible."
              (values form-string 0))
             ((and head-sym (%coalton-toplevel-symbol-p head-sym))
              (%wrap-with-coalton-toplevel form-string))
+            ((and head-sym (%coalton-expression-symbol-p head-sym))
+             (%wrap-with-coalton form-string))
+            ((and head-sym (%coalton-value-symbol-p head-sym))
+             (%wrap-with-coalton form-string))
+            ((and head-sym (%lisp-callable-symbol-p head-sym))
+             (values form-string 0))
             ((and head-sym (%non-coalton-symbol-p head-sym))
              (values form-string 0))
             (head-token
@@ -855,8 +908,8 @@ user package changes are visible."
                         (declare (ignore _prefix-length))
                         (mine/runtime/eval:debug-eval eval-string package-name
                                                       stream id
-                                                      (let ((pkg (find-package (string-upcase package-name))))
-                                                        (and pkg (%coalton-package-p pkg)))))
+                                                      (%auto-coalton-context-p package-name
+                                                                               auto-coalton-p)))
                     (when (and output (plusp (length output)))
                       (dolist (line (split-string-by-newline output))
                         (write-message stream `(:notify (:output ,line)))))
@@ -884,11 +937,10 @@ user package changes are visible."
         (multiple-value-bind (display error-text)
             (mine/runtime/eval:quick-result
              quick-string package-name
-             (let ((pkg (find-package (string-upcase package-name))))
-               (and pkg (%coalton-package-p pkg))))
-        (if error-text
-            (write-message stream `(:return ,id (:error ,error-text)))
-            (write-message stream `(:return ,id (:ok ,display))))))
+             (%auto-coalton-context-p package-name auto-coalton-p))
+          (if error-text
+              (write-message stream `(:return ,id (:error ,error-text)))
+              (write-message stream `(:return ,id (:ok ,display))))))
     (sb-sys:interactive-interrupt (c)
       (declare (ignore c))
       (write-message stream `(:return ,id (:error "Interrupted."))))
@@ -946,8 +998,7 @@ Uses compile-file + load for correct eval-when toplevel semantics."
                   (multiple-value-bind (result output)
                       (mine/runtime/eval:debug-compile-string
                        compile-string package-name stream id
-                       (let ((pkg (find-package (string-upcase package-name))))
-                         (and pkg (%coalton-package-p pkg))))
+                       (%auto-coalton-context-p package-name auto-coalton-p))
                     (when (and output (plusp (length output)))
                       (dolist (line (split-string-by-newline output))
                         (write-message stream `(:notify (:output ,line)))))

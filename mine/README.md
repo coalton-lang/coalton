@@ -37,15 +37,15 @@ There are also anti-features:
 
 **Mac**: Download the `mine-app` dmg file, open it, and install `mine` into your Applications folder.
 
-**Linux**: Download `mine-core`, unzip it, and put `mine` somewhere your PATH can see.
+**Linux**: Download the `mine-app` AppImage. If it doesn't work due to system dependencies, then instead download `mine-core`, unzip it, and put `mine` somewhere your PATH can see.
 
 > [!NOTE]
-> For Windows and Mac, the `mine-app` comes with everything you need; there are zero dependencies. We recommend this in order to have the smoothest experience possible. If you wish to use your own terminal, or you want to run `mine` over remote SSH connections, you can instead optionally download the `mine-core` variant, which is a single, statically linked executable.
+> For Windows and Mac, the `mine-app` comes with everything you need; there are zero dependencies. We recommend this in order to have the smoothest experience possible. If you wish to use your own terminal, or you want to run `mine` over remote SSH connections, you can instead optionally download the `mine-core` variant, which is a single, statically linked executable sans libc. (Linux also has `mine-app` but it actually does have some implicit system dependencies.)
 
 Once installed, open `mine` and proceed to **F6:Site > Setup Wizard** to get setup!
 
 > [!IMPORTANT]
-> We really recommend running F6:Site > Setup Wizard (or `mine --setup`) before proceeding!
+> We really recommend running F6:Site > Setup Wizard before proceeding!
 
 Quit `mine` with **F1:mine > Quit** menu or press **Ctrl+q**.
 
@@ -99,7 +99,7 @@ Whitespace is arbitrary; add as many spaces and newlines as you please. The poss
 
 - `:structural-editing` [`t`, `nil`]: Enable or disable structural editing by default. Values are `t` (enable, default) or `nil` (disable).
 - `:auto-hide-tree-pane` [`t`, `nil`]: Auto-hide the tree pane when it loses focus. Values are `t` (auto-hide, default) or `nil` (freeze).
-- `:repl-language` [`"coalton"`, `"lisp"`]: The default language to boot the REPL as. The REPL language determines how forms are sent and interpreted by teh REPL.
+- `:repl-language` [`"coalton"`, `"lisp"`]: The default language to boot the REPL as. The REPL language determines how forms are sent and interpreted by the REPL.
 - `:default-package` `<string>`: The default package to boot the REPL in and beam code from files in. Values are any boot-time package name, usually `"COALTON-USER"` (default) or `"CL-USER"`.
 - `:repl-init` `<lisp-form>`: An arbitrary Lisp form to run in the REPL each time it starts up.
     - Examples: `(defvar *repl-started* t)` 

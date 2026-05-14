@@ -26,6 +26,11 @@
             expected-prefix-length
             prefix-length)))
 
+(defun %eval-string-in-package (package string)
+  (let ((*package* package)
+        (*read-eval* nil))
+    (eval (read-from-string string))))
+
 (defun %string-prefix-p (prefix string)
   (and (>= (length string) (length prefix))
        (string= prefix string :end2 (length prefix))))
@@ -57,8 +62,39 @@
                                               :use '("CL")))
          (quick-pkg (%ensure-wrap-test-package "MINE-TEST-QUICKLISP"
                                                :use '("CL"))))
-    (declare (ignore coalton-pkg lisp-pkg))
+    (declare (ignore lisp-pkg))
     (export (intern "QUICKLOAD" quick-pkg) quick-pkg)
+    (%eval-string-in-package
+     coalton-pkg
+     "(coalton:define-expression-macro mine-expression-macro (x) x)")
+    (%eval-string-in-package
+     coalton-pkg
+     "(coalton:define-toplevel-macro mine-toplevel-macro (name value)
+        `(coalton:define ,name ,value))")
+    (%eval-string-in-package
+     coalton-pkg
+     "(cl:defmacro mine-lisp-wrapper-macro (name value)
+        `(coalton:coalton-toplevel (coalton:define ,name ,value)))")
+    (multiple-value-bind (auto-context-p _pkg)
+        (server::%auto-coalton-context-p "MINE-TEST-WRAP-COALTON" nil)
+      (declare (ignore _pkg))
+      (%check (not auto-context-p)
+              "Expected Lisp mode to disable Coalton runtime detection"))
+    (%check-coalton-wrap "(mine-expression-macro 1)"
+                         "MINE-TEST-WRAP-COALTON"
+                         t
+                         "(coalton:coalton (mine-expression-macro 1))"
+                         17)
+    (%check-coalton-wrap "(mine-toplevel-macro answer 42)"
+                         "MINE-TEST-WRAP-COALTON"
+                         t
+                         "(coalton:coalton-toplevel (mine-toplevel-macro answer 42))"
+                         26)
+    (%check-coalton-wrap "(mine-lisp-wrapper-macro answer 42)"
+                         "MINE-TEST-WRAP-COALTON"
+                         t
+                         "(mine-lisp-wrapper-macro answer 42)"
+                         0)
     (%check-coalton-wrap "(mine-test-quicklisp:quickload \"alexandria\")"
                          "MINE-TEST-WRAP-COALTON"
                          t
@@ -89,6 +125,16 @@
                          t
                          "(coalton:coalton-toplevel (declare answer Integer))"
                          26)
+    (%check-coalton-wrap "(monomorphize)"
+                         "MINE-TEST-WRAP-COALTON"
+                         t
+                         "(coalton:coalton-toplevel (monomorphize))"
+                         26)
+    (%check-coalton-wrap "(coalton++:unsafe (+ 1 2))"
+                         "MINE-TEST-WRAP-COALTON"
+                         t
+                         "(coalton:coalton (coalton++:unsafe (+ 1 2)))"
+                         17)
     (%check-coalton-wrap "(coalton (+ 1 2))"
                          "MINE-TEST-WRAP-COALTON"
                          t
@@ -99,6 +145,22 @@
                          t
                          "(coalton:coalton (+ 1 2))"
                          0)
+    (dolist (form '("(coalton-codegen (define answer 42))"
+                    "(coalton-codegen-types (define answer 42))"
+                    "(coalton-codegen-ast (define answer 42))"
+                    "(pprint-coalton-codegen (define (f x) (* x x)))"
+                    "(pprint-coalton-codegen-types (define (f x) (* x x)))"
+                    "(pprint-coalton-codegen-ast (define (f x) (* x x)))"))
+      (%check-coalton-wrap form
+                           "MINE-TEST-WRAP-COALTON"
+                           t
+                           form
+                           0)
+      (%check-coalton-wrap form
+                           "MINE-TEST-WRAP-COALTON"
+                           nil
+                           form
+                           0))
     (%check-coalton-wrap "(+ 1 2)"
                          "COALTON-PRELUDE"
                          t

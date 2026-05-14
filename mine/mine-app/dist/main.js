@@ -115,11 +115,14 @@ listen("pty-data", (event) => {
   term.write(new Uint8Array(event.payload));
 });
 
+const currentWindow = window.__TAURI__.window?.getCurrentWindow?.();
+
+// Delegate final shutdown to Rust: Windows needs direct window destruction,
+// while macOS/Linux should use Tauri's normal app exit path.
 listen("pty-exit", () => {
-  window.__TAURI__.core.invoke("close_window");
+  invoke("close_window");
 });
 
-const currentWindow = window.__TAURI__.window?.getCurrentWindow?.();
 await currentWindow?.onCloseRequested(async (event) => {
   event.preventDefault();
 
