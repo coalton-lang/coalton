@@ -117,11 +117,10 @@ listen("pty-data", (event) => {
 
 const currentWindow = window.__TAURI__.window?.getCurrentWindow?.();
 
-// Direct destroy() rather than app.exit(0): on Windows + WebView2 the
-// TAO/wry exit path stalls, leaving the window on screen after mine-core
-// has cleaned up. destroy() goes through the windowing system directly.
+// Delegate final shutdown to Rust: Windows needs direct window destruction,
+// while macOS/Linux should use Tauri's normal app exit path.
 listen("pty-exit", () => {
-  currentWindow?.destroy();
+  invoke("close_window");
 });
 
 await currentWindow?.onCloseRequested(async (event) => {
@@ -130,7 +129,7 @@ await currentWindow?.onCloseRequested(async (event) => {
   try {
     await invoke("write_pty", { data: "\x11" });
   } catch (_) {
-    await currentWindow.destroy();
+    await invoke("close_window");
   }
 });
 
