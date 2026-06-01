@@ -253,7 +253,7 @@ Returns (VALUES CORE-PATTERN NEW-BINDINGS)."
                                 (tc:fresh-inst
                                  (tc:lookup-value-type env ctor-name))))
             (ctor-type (tc:apply-substitution
-                        (tc:match (tc:function-return-type generic-ctor-type) col-type)
+                        (tc:unify nil (tc:function-return-type generic-ctor-type) col-type)
                         generic-ctor-type))
             (field-types (tc:function-type-arguments ctor-type))
             (classname (tc:constructor-entry-classname ctor-entry))
@@ -437,24 +437,26 @@ Returns (VALUES CORE-PATTERN NEW-BINDINGS)."
                       (pattern:pattern-constructor
                        (let* ((first-ctor (tc:lookup-constructor env (pattern:pattern-constructor-name head-pat)))
                               (type-entry (tc:lookup-type env (tc:constructor-entry-constructs first-ctor)))
-                              (ctor-names nil))
-                         ;; Collect constructors in order of appearance in COL-IDX
+                              (ctor-patterns nil))
+                         ;; Keep one pattern per constructor: GADT cases can refine the column differently.
                          (dolist (row rows)
                            (let ((pat (nth col-idx (match-row-patterns row))))
                              (when (pattern:pattern-constructor-p pat)
-                               (pushnew (pattern:pattern-constructor-name pat) ctor-names :test #'eq))))
-                         (setf ctor-names (nreverse ctor-names))
+                               (pushnew pat ctor-patterns :key #'pattern:pattern-constructor-name :test #'eq))))
+                         (setf ctor-patterns (nreverse ctor-patterns))
                          (let* ((all-ctors (tc:type-entry-constructors type-entry))
+                                (ctor-names (mapcar #'pattern:pattern-constructor-name ctor-patterns))
                                 (complete-p (null (set-difference all-ctors ctor-names :test #'eq)))
                                 (cases
-                                  (loop :for ctor-name :in ctor-names
+                                  (loop :for pat :in ctor-patterns
+                                        :for ctor-name :in ctor-names
                                         :for ctor-entry := (tc:lookup-constructor env ctor-name)
                                         :collect
                                         (multiple-value-bind (field-types field-accessors)
                                             (constructor-fields-info ctor-name
                                                                      ctor-entry
                                                                      (match-column-var col)
-                                                                     (pattern:pattern-type head-pat)
+                                                                     (pattern:pattern-type pat)
                                                                      env)
                                           (let* ((field-columns
                                                    (canonical-field-columns
