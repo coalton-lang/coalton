@@ -14,6 +14,8 @@
    #:substitution-list                  ; TYPE
    #:merge-substitution-lists           ; FUNCTION
    #:compose-substitution-lists         ; FUNCTION
+   #:refined-vars                       ; FUNCTION
+   #:same-substitution-p                ; FUNCTION
    #:apply-substitution                 ; FUNCTION
    ))
 
@@ -114,7 +116,23 @@
   (:method (subst-list (type-list list))
     (mapcar (lambda (x) (apply-substitution subst-list x)) type-list)))
 
+(defun refined-vars (subs vars)
+  "Return tvarsr in VARS that are refined by SUBS."
+  (declare (type substitution-list subs)
+           (type tyvar-list vars)
+           (values tyvar-list))
+  (remove-if (lambda (var)
+               (ty= (apply-substitution subs var) var))
+             vars))
 
+(defun same-substitution-p (a b)
+  "Check if A and B are the same substitution."
+  (declare (type substitution a b)
+           (values boolean))
+  (and (ty= (substitution-from a)
+            (substitution-from b))
+       (ty= (substitution-to a)
+            (substitution-to b))))
 
 (defun pprint-substitution (stream sub &optional colon-p at-sign-p)
   (declare (ignore colon-p)

@@ -7,7 +7,8 @@
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker/stage-1)
    (#:env #:coalton-impl/typechecker/environment)
-   (#:pred #:coalton-impl/typechecker/predicate))
+   (#:pred #:coalton-impl/typechecker/predicate)
+   (#:top #:coalton-impl/parser/toplevel))
   (:export
    #:derive-class-instances              ;; FUNCTION
    #:derive-methods                      ;; GENERIC FUNCTION
@@ -79,6 +80,15 @@ EQL-specialize on symbol `class'."))
   (loop :for type :in (append types structs)
         :for derive := (parser:type-definition-derive type)
         :for classes := (and derive (parser:attribute-derive-classes derive))
+        :do (when (and (top:toplevel-define-type-p type)
+                       (top:toplevel-define-type-gadt-p type)
+                       classes)
+              (parser:parse-error "Invalid derive application"
+                                  (parser:note (source:location-source
+                                                (top:toplevel-define-type-head-location type))
+                                               (source:location-span
+                                                (top:toplevel-define-type-head-location type))
+                                               " cannot apply (derive) to a GADT definition")))
         :unless (null classes)
           :nconc (loop :for class :in (cst:raw classes)
                        :collect (make-toplevel-derivation

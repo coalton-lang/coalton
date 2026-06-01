@@ -82,6 +82,7 @@
 
   ;; Primitive Syntax
   (:export
+   #:Type
    #:fn
    #:&key
    #:match

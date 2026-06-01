@@ -27,6 +27,7 @@
    #:type-definition-aliased-type       ; FUNCTION
    #:type-definition-ctors              ; FUNCTION
    #:type-definition-ctor-name          ; FUNCTION
+   #:type-definition-ctor-signature     ; FUNCTION
    #:type-definition-ctor-field-types   ; FUNCTION
    ))
 
@@ -158,6 +159,15 @@
   (:method ((ctor toplevel-define-struct))
     (declare (values identifier-src))
     (toplevel-define-struct-name ctor)))
+
+(defgeneric type-definition-ctor-signature (ctor)
+  (:method ((ctor constructor))
+    (declare (values (or null qualified-ty)))
+    (constructor-signature ctor))
+
+  (:method ((ctor toplevel-define-struct))
+    (declare (values null))
+    nil))
 
 (defgeneric type-definition-ctor-field-types (ctor)
   (:method ((ctor constructor))
