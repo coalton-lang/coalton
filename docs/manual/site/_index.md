@@ -16,6 +16,7 @@ an error or or something is unclear, please fix it and submit a PR.
 
 - [Introduction and Getting Started](/manual/topics/introduction/)
 - [Coalton Language Guide](/manual/topics/language-guide/)
+- [Advanced Coalton Features](/manual/topics/advanced-features/)
 - [Configuring Coalton](/manual/topics/configuring-coalton/)
 - [Macros](/manual/topics/macros/)
 - [Lisp Interop](/manual/topics/lisp-interop/)
