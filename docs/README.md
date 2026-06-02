@@ -1,7 +1,7 @@
 # Coalton Docs
 
 ## Tutorials
-* [Coalton Language guide](./manual/site/topics/language-guide.md) ([Japanese](./intro-to-coalton.ja.md), [Ukrainian](./intro-to-coalton.ua.md), [Russian](./intro-to-coalton.ru.md))
+* [Coalton Language Guide](./manual/site/topics/language-guide.md) ([Japanese](./intro-to-coalton.ja.md), [Ukrainian](./intro-to-coalton.ua.md), [Russian](./intro-to-coalton.ru.md))
 * [Language Manual source](./manual/site/_index.md) - synced to the website in CI
 * [Glossary of Terms](./glossary.md)
 * [Using Common Lisp Libraries from Coalton](https://coalton-lang.github.io/20250812-lisp-libraries/) - external
