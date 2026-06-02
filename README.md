@@ -104,7 +104,7 @@ Coalton is currently used in production to build defense and [quantum computing 
 
 **Test**: Compile the tests with `(ql:quickload :coalton/tests)`, then run the tests with `(asdf:test-system :coalton)`.
 
-**Learn**: Start with [*Whirlwind Tour of Coalton*](docs/manual/site/topics/whirlwind-tour.md), the [language manual](https://coalton-lang.github.io/manual/), and the [standard library reference](https://coalton-lang.github.io/reference/), and then take a peek at the [examples directory](examples/). It may also be helpful to check out the [introductory blog post](https://coalton-lang.github.io/20211010-introducing-coalton/).
+**Learn**: Start with [*Coalton Language Guide*](docs/manual/site/topics/language-guide.md), the [language manual](https://coalton-lang.github.io/manual/), and the [standard library reference](https://coalton-lang.github.io/reference/), and then take a peek at the [examples directory](examples/). It may also be helpful to check out the [introductory blog post](https://coalton-lang.github.io/20211010-introducing-coalton/).
 
 **Open Source Community**: [Awesome Coalton](https://github.com/Jason94/awesome-coalton) has a list of community-built libraries, applications, and examples, that you can use in your own projects or as examples to learn from.
 
