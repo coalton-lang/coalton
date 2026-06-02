@@ -1,5 +1,5 @@
 ---
-title: "Whirlwind Tour of Coalton"
+title: "Coalton Language Guide"
 description: "A broad, practical tour of Coalton's core language and workflow."
 hideMeta: true
 weight: 20
