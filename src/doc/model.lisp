@@ -21,6 +21,7 @@
    #:coalton/doc/base)
   (:local-nicknames
    (#:tc #:coalton-impl/typechecker)
+   (#:type-string #:coalton-impl/typechecker/type-string)
    (#:source #:coalton-impl/source)
    (#:env #:coalton/doc/environment)
    (#:entry #:coalton-impl/entry))
@@ -227,7 +228,7 @@
   (let ((struct-entry (%struct-entry (type-entry coalton-struct))))
     (mapcar (lambda (field)
               (list (tc:struct-field-name field)
-                    (tc:struct-field-type field)
+                    (type-string:type-to-string (tc:struct-field-type field))
                     (source:docstring field)))
             (tc:struct-entry-fields struct-entry))))
 
@@ -238,7 +239,7 @@
                           (symbol-name name))))
     (format nil "~A~{ ~S~}"
             source-name
-            (tc:type-entry-tyvars entry))))
+            (mapcar #'tc:tyvar-source-name (tc:type-entry-tyvars entry)))))
 
 (defmethod object-type ((self coalton-struct))
   "STRUCT")
