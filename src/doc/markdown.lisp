@@ -178,7 +178,7 @@
             :for (name type docstring) :in (struct-fields object)
             :for symbol := (concatenate 'string "." name)
             :when (eq ':external (nth-value 1 (find-symbol symbol package)))
-              :do (format stream "- <code>~A :: ~S</code>~A~%"
+              :do (format stream "- <code>~A :: ~A</code>~A~%"
                           name
                           type
                           (if docstring
