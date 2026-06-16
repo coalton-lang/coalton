@@ -1,111 +1,155 @@
 {
   description = "A flake for coalton";
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     flake-parts.url = "github:hercules-ci/flake-parts";
+    cl-nix-lite.url = "github:hraban/cl-nix-lite/v0";
+    cl-nix-lite.inputs.nixpkgs.follows = "nixpkgs";
+
+    computable-reals.url = "github:stylewarning/computable-reals";
+    computable-reals.flake = false;
   };
-  outputs = inputs@{ nixpkgs, flake-parts, ... }:
-    flake-parts.lib.mkFlake { inherit inputs; } {
-      imports = [ flake-parts.flakeModules.easyOverlay ];
-      systems = nixpkgs.lib.platforms.all;
-      perSystem = { config, pkgs, system, ... }:
-        let
-          ############ Settings ############
-          ## Project name
-          pname = "coalton";
-          ## Source directory
-          src = ./.;
-          ## Dependencies
-          lispLibs = lisp: with lisp.pkgs; [
+  outputs = inputs@{ nixpkgs, flake-parts, cl-nix-lite, ... }:
+  flake-parts.lib.mkFlake { inherit inputs; } {
+    systems = nixpkgs.lib.platforms.all;
+
+    perSystem = { self', config, pkgs, lib, system, ... }: {
+      _module.args.pkgs = import inputs.nixpkgs {
+        inherit system;
+        overlays = [
+          cl-nix-lite.overlays.default
+        ];
+      };
+
+      packages = with pkgs.lispPackagesLite; rec {
+
+        source-error = lispDerivation {
+          lispSystem = "source-error";
+          src = ./source-error;
+          lispDependencies = [
             alexandria
-            computable-reals
+          ];
+        };
+
+        coalton-compiler = lispDerivation {
+          lispSystem = "coalton-compiler";
+          src = lib.cleanSource ./.;
+          lispDependencies = [
+            alexandria
             concrete-syntax-tree
             eclector
             eclector-concrete-syntax-tree
-            fiasco
             float-features
-            fset
             named-readtables
-            trivial-garbage
+            source-error
             trivial-gray-streams
           ];
-          ## Non-Lisp dependencies
-          nativeLibs = with pkgs; [ mpfr ];
-          ## Supported Lisp implementations
-          lispImpls = [
-            "sbcl"
-            "ccl"
-          ];
-          ##################################
-          systems = [
-            "coalton" # Main ASDF system for Coalton
-            "coalton-compiler" # Compiler ASDF system for Coalton
-            "coalton-asdf" # ASDF extension for .coal file
-            "coalton/testing" # A Helper ASDF system to test software
-          ];
-          version = let
-            txt = builtins.readFile "${src}/VERSION.txt";
-            ver = builtins.replaceStrings [''"''] [""] txt;
-          in ver;
-          isAvailable = impl: let
-            basePkgs = import nixpkgs { inherit system; overlays = []; };
-            lisp = basePkgs.${impl};
-          in (builtins.tryEval lisp).success
-             && (builtins.elem system lisp.meta.platforms)
-             && (!lisp.meta.broken);
-          availableLispImpls = builtins.filter isAvailable lispImpls;
-          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath nativeLibs;
-          bundledPackage = { lisp }: rec {
-            sourceErrorLib = lisp.buildASDFSystem {
-              inherit version;
-              pname = "source-error";
-              src = "${src}/source-error";
-              systems = [ "source-error" ];
-              lispLibs = with lisp.pkgs; [ alexandria ];
-            };
-            mainLib = lisp.buildASDFSystem {
-              inherit pname version src systems nativeLibs;
-              lispLibs = (lispLibs lisp) ++ [ sourceErrorLib ];
-            };
-            lisp' = lisp.withPackages (ps: [ mainLib ]) // {
-              inherit (lisp) meta;
-            };
-          };
-          recipe = {
-            sbcl = bundledPackage {
-              lisp = pkgs.sbcl;
-            };
-            ccl = bundledPackage {
-              lisp = pkgs.ccl;
-            };
-          };
-          packages = impl: [
-            {
-              name = "${impl}-${pname}";
-              value = recipe.${impl}.mainLib;
-            }
-          ];
-          devPackages = impl:
-            pkgs.${impl}.withPackages (ps: lispLibs pkgs.${impl});
-          overlays = impl: [
-            {
-              name = impl;
-              value = pkgs.${impl}.withOverrides
-                (self: super: { ${pname} = config.packages."${impl}-${pname}"; });
-            }
-          ];
-        in {
-          overlayAttrs =
-            builtins.listToAttrs (builtins.concatMap overlays availableLispImpls);
-          devShells.default = pkgs.mkShell {
-            inherit LD_LIBRARY_PATH;
-            shellHook = ''
-              export CL_SOURCE_REGISTRY=$PWD:$PWD/source-error
-            '';
-            packages = builtins.map devPackages availableLispImpls;
-          };
-          packages = builtins.listToAttrs
-            (builtins.concatMap packages availableLispImpls);
         };
+
+        inherit
+            (lispMultiDerivation {
+              src = lib.cleanSource ./.;
+              systems = {
+                coalton-library = {
+                  lispSystem = "coalton/library";
+                  lispDependencies = [
+                    coalton-compiler
+                    trivial-garbage
+                    alexandria
+                  ];
+                };
+
+                coalton = {
+                  lispDependencies = [
+                    coalton-compiler
+                    coalton-library
+                  ];
+                  lispCheckDependencies = [
+                    fiasco
+                    coalton-examples
+                  ];
+                };
+                
+                coalton-examples = {
+                  lispSystems = [
+                    "quil-coalton"
+                    "small-coalton-programs"
+                    "thih-coalton"
+                  ];
+                  lispDependencies = [
+                    coalton
+                  ];
+                  lispCheckDependencies = [ fiasco ];
+                };
+
+                coalton-xmath = {
+                  lispSystem = "coalton/xmath";
+                  lispDependencies = [
+                    coalton
+                    coalton-library
+                    computable-reals
+                  ];
+                };
+
+                coalton-doc = {
+                  lispSystem = "coalton/doc";
+                  lispDependencies = [
+                    coalton
+                    coalton-xmath
+                    html-entities
+                    yason
+                    spinneret
+                  ];
+                };
+              };
+
+              # Technically coalton is always a dependency so any derivation will always
+              # include coalton so this could just hard-code the list, but I like to be
+              # explicit about it for the sake of clarity.
+              propagatedBuildInputs =
+                systems:
+                lib.optionals (builtins.elem "coalton/xmath" systems) [
+                  # Actual dependencies
+                  pkgs.mpfr
+                  #pkgs.libuv
+                  # For the dynamic loading setup hook, even though we don’t even use
+                  # CFFI. Needs better UX.
+                  #cffi
+                ];
+              preBuild =
+                let
+                  testDirectories = [
+                    "$PWD/examples/quil-coalton"
+                    "$PWD/examples/small-coalton-programs"
+                    "$PWD/examples/thih"
+                  ];
+                  testPaths = lib.concatStringsSep ":" testDirectories;
+                in
+                  ''
+                    export CL_SOURCE_REGISTRY="${testPaths}:$CL_SOURCE_REGISTRY"
+                  '';
+            })
+          coalton
+          coalton-library
+          coalton-doc
+          coalton-xmath
+          coalton-examples
+        ;
+      };
+
+      devShells.default = with pkgs.lispPackagesLite;
+            lispDerivation {
+              src = pkgs.lib.cleanSource ./.;
+              lispSystem = "dev";
+              lispDependencies = [
+                self'.packages.coalton
+                self'.packages.coalton-library
+                self'.packages.coalton-xmath
+                self'.packages.coalton-examples
+                self'.packages.coalton-doc
+              ];
+            };
+
     };
+  };
 }
