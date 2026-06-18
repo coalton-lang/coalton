@@ -390,16 +390,6 @@
   (eq (tc:constructor-entry-constructs constructor-entry)
       (tc:type-entry-name type-entry)))
 
-(defun stdlib-p (symbol)
-  "A standard library package is any package with the exact name 'coalton' or whose name starts with 'coalton/'.
-One exception: COALTON/UTILS, this package is internal to the standard library."
-  (let ((pkg (symbol-package symbol)))
-    (unless (null pkg)
-        (let ((name (package-name pkg)))
-          (and (not (string-equal name "COALTON/UTILS"))
-           (or (string-equal name "COALTON")
-               (eql 0 (search "COALTON/" name))))))))
-
 ;;; class coalton-macro
 
 (defclass coalton-macro (coalton-object)

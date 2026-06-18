@@ -108,9 +108,22 @@ If non-nil, restrict to names defined in PACKAGE."
 By default the global environment is queried.
 If non-nil, restrict to instances defined in PACKAGE."
   (remove-if (lambda (class-instance)
-               (and package
-                    (not (exported-symbol-p (tc:ty-predicate-class
-                                             (tc:ty-class-instance-predicate class-instance))
-                                            package t))))
+               (let ((symbol (tc:ty-predicate-class
+                              (tc:ty-class-instance-predicate class-instance)))
+                     (types (mapcan #'tc:flatten-type
+                                    (tc:ty-predicate-types
+                                     (tc:ty-class-instance-predicate class-instance)))))
+                 
+                 (not
+                  (if package
+                      (exported-symbol-p symbol package t)
+                      (labels ((all-in-stdlib-p (ty)
+                                               (typecase ty
+                                                 ((or tc:tyvar tc:function-ty) t)
+                                                 (tc:tycon (stdlib-p (tc:tycon-name ty)))
+                                                 (tc:tapp (every #'all-in-stdlib-p (tc:flatten-type ty)))
+                                                 (t (stdlib-p ty)))))
+                             (every #'all-in-stdlib-p
+                              (cons symbol types)))))))
              (%lm-values (tc:instance-environment-instances
                           (tc:environment-instance-environment environment)))))
