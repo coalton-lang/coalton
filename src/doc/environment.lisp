@@ -102,28 +102,27 @@ If non-nil, restrict to names defined in PACKAGE."
              (%values (tc:environment-name-environment environment))))
 
 (defun find-instances (&key (environment entry:*global-environment*)
-                            (package nil))
+                         (package nil))
   "Return all instances in ENVIRONMENT.
 
 By default the global environment is queried.
 If non-nil, restrict to instances defined in PACKAGE."
-  (remove-if (lambda (class-instance)
-               (let ((symbol (tc:ty-predicate-class
-                              (tc:ty-class-instance-predicate class-instance)))
-                     (types (mapcan #'tc:flatten-type
-                                    (tc:ty-predicate-types
-                                     (tc:ty-class-instance-predicate class-instance)))))
-                 
-                 (not
-                  (if package
-                      (exported-symbol-p symbol package t)
-                      (labels ((all-in-stdlib-p (ty)
-                                               (typecase ty
-                                                 ((or tc:tyvar tc:function-ty) t)
-                                                 (tc:tycon (stdlib-p (tc:tycon-name ty)))
-                                                 (tc:tapp (every #'all-in-stdlib-p (tc:flatten-type ty)))
-                                                 (t (stdlib-p ty)))))
-                             (every #'all-in-stdlib-p
-                              (cons symbol types)))))))
-             (%lm-values (tc:instance-environment-instances
-                          (tc:environment-instance-environment environment)))))
+  (labels
+      ((public-ty-p (ty)
+         (typecase ty
+           ((or tc:tyvar tc:function-ty) t)
+           (tc:tycon (stdlib-p (tc:tycon-name ty)))
+           (tc:tapp (every #'public-ty-p (tc:flatten-type ty)))
+           (t (stdlib-p ty)))))
+
+    (remove-if-not (lambda (instance &aux
+                                       (predicate (tc:ty-class-instance-predicate instance))
+                                       (class (tc:ty-predicate-class predicate)))
+                     (if package
+                         (exported-symbol-p class package t)
+                         (every #'public-ty-p
+                                (cons class
+                                      (mapcan #'tc:flatten-type (tc:ty-predicate-types predicate))))))
+
+                   (%lm-values (tc:instance-environment-instances
+                                (tc:environment-instance-environment environment))))))
