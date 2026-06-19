@@ -5,10 +5,8 @@
     flake-parts.url = "github:hercules-ci/flake-parts";
     cl-nix-lite.url = "github:hraban/cl-nix-lite/v0";
     cl-nix-lite.inputs.nixpkgs.follows = "nixpkgs";
-
-    computable-reals.url = "github:stylewarning/computable-reals";
-    computable-reals.flake = false;
   };
+
   outputs = inputs@{ nixpkgs, flake-parts, cl-nix-lite, ... }:
   flake-parts.lib.mkFlake { inherit inputs; } {
     systems = nixpkgs.lib.platforms.all;
@@ -103,22 +101,16 @@
                 };
               };
 
-              # Technically coalton is always a dependency so any derivation will always
-              # include coalton so this could just hard-code the list, but I like to be
-              # explicit about it for the sake of clarity.
               propagatedBuildInputs =
                 systems:
                 lib.optionals (builtins.elem "coalton/xmath" systems) [
-                  # Actual dependencies
                   pkgs.mpfr
-                  #pkgs.libuv
-                  # For the dynamic loading setup hook, even though we don’t even use
-                  # CFFI. Needs better UX.
-                  #cffi
                 ];
               preBuild =
                 let
                   testDirectories = [
+                    "$PWD/examples/coalton-testing-example-project"
+                    "$PWD/examples/fractal"
                     "$PWD/examples/quil-coalton"
                     "$PWD/examples/small-coalton-programs"
                     "$PWD/examples/thih"
@@ -137,19 +129,7 @@
         ;
       };
 
-      devShells.default = with pkgs.lispPackagesLite;
-            lispDerivation {
-              src = pkgs.lib.cleanSource ./.;
-              lispSystem = "dev";
-              lispDependencies = [
-                self'.packages.coalton
-                self'.packages.coalton-library
-                self'.packages.coalton-xmath
-                self'.packages.coalton-examples
-                self'.packages.coalton-doc
-              ];
-            };
-
+      devShells.default = self'.packages.coalton;
     };
   };
 }
