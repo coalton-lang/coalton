@@ -11,7 +11,7 @@
     allSystems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
     lib = nixpkgs.lib;
 
-    coalton-packages = # Function to build Coalton for a particular lisp
+    packages = # Function to build Coalton for a particular lisp
       { lispPackagesLiteFor, lib, mpfr }:
       lisp':
           with lispPackagesLiteFor lisp'; rec {
@@ -57,7 +57,7 @@
               src = lib.cleanSource ./.;
               systems = {
                 coalton = {
-                  lispSystems = [ "coalton/library" "coalton" "coalton/xmath" "coalton/doc"];
+                  lispSystems = [ "coalton/library" "coalton" "coalton/xmath" "coalton/doc" ];
                   lispDependencies = [
                     coalton-compiler
                     coalton-asdf
@@ -118,17 +118,20 @@
           };
 
     overlay = final: prev: rec {
-      coaltonFor = (final.callPackage coalton-packages {});
-      sbclPackages = prev.sbclPackages or {} // coaltonFor final.sbcl;
+      coaltonFor = (final.callPackage packages {});
 
-      # sbcl = final.wrapLisp {
-      #   pkg = prev.sbcl;
-      #   faslExt = "fasl";
-      #   flags = [
-      #     "--dynamic-space-size"
-      #     "3000"
-      #   ];
-      # };
+      # Re-wrap sbcl to update withPackages
+      sbcl = final.wrapLisp {
+        pkg = prev.sbcl; 
+        faslExt = "fasl";
+        flags = [
+          "--dynamic-space-size"
+          "4096"
+        ];
+        packageOverrides = final': prev': {
+          inherit ((coaltonFor prev.sbcl)) coalton coalton-asdf coalton-compiler source-error coalton-examples;
+        };
+      };
     };
 
     forAllSystems = f: nixpkgs.lib.genAttrs allSystems (system: f {
@@ -139,7 +142,6 @@
           overlay
         ];
       };
-      packages = self.packages.${system};
     });
       in
     {
@@ -151,8 +153,8 @@
 
       overlays.default = lib.composeExtensions cl-nix-lite.overlays.default overlay;
 
-      devShells = forAllSystems ({ pkgs, packages }: {
-        default = packages.coalton;
+      devShells = forAllSystems ({ pkgs }: {
+        default = pkgs.sbclPackages.coalton;
       });
     };
 }

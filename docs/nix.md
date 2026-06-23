@@ -1,7 +1,11 @@
-# Using Coalton in a Nix Project
+# Quickstart
 
-This article explains how to install the latest version of Coalton using a Nix flake and how to use it from SBCL.
 
+
+
+
+
+# Background Information
 ## Nix and Coalton
 
 Nix is a purely functional package management system that works across platforms.
