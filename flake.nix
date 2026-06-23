@@ -38,22 +38,40 @@
               ];
             };
 
+            coalton-asdf = lispDerivation {
+              lispSystem = "coalton-asdf";
+              # Restricting the fileset prevents needless recompilation.
+              src = lib.fileset.toSource { 
+                root = ./.;
+                fileset = lib.fileset.unions [
+                  ./coalton-asdf.asd
+                  ./coalton-asdf.lisp
+                  ./VERSION.txt
+                ];
+              };
+
+              lispDependencies = [ coalton-compiler ];
+            };
+
             inherit (lispMultiDerivation {
               src = lib.cleanSource ./.;
               systems = {
-                coalton-library = {
-                  lispSystem = "coalton/library";
+                coalton = {
+                  lispSystems = [ "coalton/library" "coalton" "coalton/xmath" "coalton/doc"];
                   lispDependencies = [
                     coalton-compiler
+                    coalton-asdf
+                    
                     trivial-garbage
                     alexandria
-                  ];
-                };
 
-                coalton = {
-                  lispDependencies = [
-                    coalton-compiler
-                    coalton-library
+                    # coalton/xmath
+                    computable-reals
+
+                    # coalton/docs
+                    html-entities
+                    yason
+                    spinneret
                   ];
                   lispCheckDependencies = [
                     fiasco
@@ -71,26 +89,6 @@
                     coalton
                   ];
                   lispCheckDependencies = [ fiasco ];
-                };
-
-                coalton-xmath = {
-                  lispSystem = "coalton/xmath";
-                  lispDependencies = [
-                    coalton
-                    coalton-library
-                    computable-reals
-                  ];
-                };
-
-                coalton-doc = {
-                  lispSystem = "coalton/doc";
-                  lispDependencies = [
-                    coalton
-                    coalton-xmath
-                    html-entities
-                    yason
-                    spinneret
-                  ];
                 };
               };
 
@@ -115,16 +113,22 @@
                   '';
             })
               coalton
-              coalton-library
-              coalton-doc
-              coalton-xmath
               coalton-examples
             ;
           };
 
     overlay = final: prev: rec {
       coaltonFor = (final.callPackage coalton-packages {});
-      sbclPackages = prev.sbcl or {} // coaltonFor final.sbcl;
+      sbclPackages = prev.sbclPackages or {} // coaltonFor final.sbcl;
+
+      # sbcl = final.wrapLisp {
+      #   pkg = prev.sbcl;
+      #   faslExt = "fasl";
+      #   flags = [
+      #     "--dynamic-space-size"
+      #     "3000"
+      #   ];
+      # };
     };
 
     forAllSystems = f: nixpkgs.lib.genAttrs allSystems (system: f {
