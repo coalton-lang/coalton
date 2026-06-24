@@ -32,6 +32,12 @@
         (pkgs.coaltonFor pkgs.sbcl)
       );
 
+      templates = {
+        minimal = {
+          path = ./nix/templates/minimal;
+          description = "A minimal template using Coalton.";
+        };
+      };
 
       overlays = {
         default = lib.composeExtensions cl-nix-lite.overlays.default overlay;
