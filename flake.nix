@@ -9,44 +9,34 @@
   outputs = { nixpkgs, cl-nix-lite, ... }:
   let
     allSystems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
-    lib = nixpkgs.lib;
 
-    overlay = final: prev: rec {
-      coaltonFor = (final.callPackage ./nix/coalton.nix {});
-    };
+    mkCoalton = (pkgs: (pkgs.callPackage ./nix/coalton.nix { }));
 
-    forAllSystems = f: lib.genAttrs allSystems (system: f {
+    forAllSystems = f: nixpkgs.lib.genAttrs allSystems (system: f {
       pkgs = import nixpkgs {
         inherit system;
-        overlays = [
-          cl-nix-lite.overlays.default
-          overlay
-        ];
+        overlays = [ cl-nix-lite.overlays.default ];
       };
     });
-      in
-    {
+  in
+  {
 
-      # Output packages built with sbcl
-      packages = forAllSystems ({ pkgs, ... }:
-        (pkgs.coaltonFor pkgs.sbcl)
-      );
+    inherit mkCoalton;
+    # Output packages built with sbcl
+    packages = forAllSystems ({ pkgs, ... }:
+    (mkCoalton pkgs pkgs.sbcl)
+    );
 
-      templates = {
-        minimal = {
-          path = ./nix/templates/minimal;
-          description = "A minimal template using Coalton.";
-        };
+    templates = {
+      starter = {
+        path = ./nix/templates/starter;
+        description = "A Coalton starter project template.";
+        welcomeText = builtins.readFile ./nix/templates/starter/README.md;
       };
-
-      overlays = {
-        default = lib.composeExtensions cl-nix-lite.overlays.default overlay;
-        minimal = overlay;
-      };
-
-
-      devShells = forAllSystems ({ pkgs }: {
-        default = pkgs.sbclPackages.coalton;
-      });
     };
+
+    devShells = forAllSystems ({ pkgs }: {
+      default = pkgs.sbclPackages.coalton;
+    });
+  };
 }

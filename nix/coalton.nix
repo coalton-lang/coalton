@@ -1,8 +1,31 @@
-{ lispPackagesLiteFor, lib, mpfr }:
+{ lispPackagesLiteFor, lib, mpfr, nix-gitignore }:
 
 # Function to build Coalton for a particular lisp
 lisp':
-with lispPackagesLiteFor lisp'; rec {
+with lispPackagesLiteFor lisp'; let
+
+  filterPaths = (paths: src:
+  lib.cleanSourceWith {
+    filter = (path: type:
+    !builtins.elem (builtins.baseNameOf path) paths);
+    inherit src;
+  });
+
+  coaltonSource = (filterPaths 
+    [
+      "nix"
+      "scripts"
+      "docs"
+      "examples"
+      "mine"
+      "tests"
+      ".github"
+      "source-error"
+    ]
+    (nix-gitignore.gitignoreSource [] ../.));
+
+  
+in rec {
   source-error = lispDerivation {
     lispSystem = "source-error";
     src = ../source-error;
@@ -13,7 +36,8 @@ with lispPackagesLiteFor lisp'; rec {
 
   coalton-compiler = lispDerivation {
     lispSystem = "coalton-compiler";
-    src = lib.cleanSource ../.;
+    # XXX A limitation in cl-nix-lite means every derivation must have a different src.
+    src = filterPaths [ "doc" "coalton.asd" ] coaltonSource;
     lispDependencies = [
       alexandria
       concrete-syntax-tree
@@ -41,66 +65,33 @@ with lispPackagesLiteFor lisp'; rec {
     lispDependencies = [ coalton-compiler ];
   };
 
-  inherit (lispMultiDerivation {
-    src = lib.cleanSource ../.;
-    systems = {
-      coalton = {
-        lispSystems = [ "coalton/library" "coalton" "coalton/xmath" "coalton/doc" ];
-        lispDependencies = [
-          coalton-compiler
-          coalton-asdf
+  coalton = lispDerivation {
+    src = coaltonSource;
+    lispSystems = [ "coalton/library" "coalton" "coalton/xmath" "coalton/testing" "coalton/doc" ];
+
+    lispDependencies = [
+      coalton-compiler
+      coalton-asdf
                     
-          trivial-garbage
-          alexandria
+      trivial-garbage
+      alexandria
 
-          # coalton/xmath
-          computable-reals
+      # coalton/xmath
+      computable-reals
 
-          # coalton/docs
-          html-entities
-          yason
-          spinneret
-        ];
-        lispCheckDependencies = [
-          fiasco
-          coalton-examples
-        ];
-      };
-               
-      coalton-examples = {
-        lispSystems = [
-          "quil-coalton"
-          "small-coalton-programs"
-          "thih-coalton"
-        ];
-        lispDependencies = [
-          coalton
-        ];
-        lispCheckDependencies = [ fiasco ];
-      };
-    };
+      # coalton/doc
+      html-entities
+      yason
+      spinneret
 
-    propagatedBuildInputs =
-      systems:
-      lib.optionals (builtins.elem "coalton/xmath" systems) [
-        mpfr
-      ];
-    preBuild =
-      let
-        testDirectories = [
-          "$PWD/examples/coalton-testing-example-project"
-          "$PWD/examples/fractal"
-          "$PWD/examples/quil-coalton"
-          "$PWD/examples/small-coalton-programs"
-          "$PWD/examples/thih"
-        ];
-        testPaths = lib.concatStringsSep ":" testDirectories;
-      in
-        ''
-          export CL_SOURCE_REGISTRY="${testPaths}:$CL_SOURCE_REGISTRY"
-        '';
-  })
-    coalton
-    coalton-examples
-  ;
+      # coalton/testing
+      fiasco
+
+    ];
+
+    propagatedBuildInputs = [
+      # coalton/xmath
+      mpfr
+    ];
+  };
 }
