@@ -3,7 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    coalton.url = "path:/Users/user/common-lisp/coalton";
+    coalton.url = "github:coalton-lang/coalton";
     cl-nix-lite.url = "github:hraban/cl-nix-lite/v0";
   };
 
