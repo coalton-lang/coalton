@@ -45,7 +45,6 @@ error: Invalid recursive bindings
 
 (package coalton-unit-tests/recursive-let)
 
-(repr :native (cl:or cl:null mynullableloop))
 (define-type (MyNullableLoop :elt)
   (NonNull :elt)
   (MyLoop (MyNullableLoop :elt)))
