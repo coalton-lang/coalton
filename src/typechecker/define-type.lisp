@@ -626,6 +626,14 @@ This is conservative and intentionally aligns with mutable native wrappers."
                  (tc-error "Invalid repr :transparent attribute"
                            (tc-note (first (parser:type-definition-ctors type))
                                     "constructors of repr :transparent types must have a single field")))
+
+         ;; Check that repr :native types has no constructor
+         :when (eq repr-type :native)
+           :do (unless (endp (parser:type-definition-ctors type))
+                 (tc-error "Invalid repr :native attribute"
+                           (tc-note type
+                                    "repr :native types cannot have constructors")))
+
          :collect
          (let*
              ((ctors
