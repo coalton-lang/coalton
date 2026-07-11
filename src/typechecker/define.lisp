@@ -1801,7 +1801,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node-integer-literal tc:substitution-list &optional))
-    
+
     (let* ((num
              (util:find-symbol "NUM" "COALTON/CLASSES"))
            (tvar
@@ -2544,7 +2544,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node-resumable tc:substitution-list &optional))
-    
+
     (multiple-value-bind (expr-ty preds accessors expr-node subs)
         (infer-expression-type (parser:node-resumable-expr node)
                                (tc:make-variable)
@@ -2560,7 +2560,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                  :unless (resumption-type-p pat-ty env)
                    :do (tc-error "Invalid resumable case"
                                  (tc-note pat-node "case pattern must construct a resumption type."))
-                 :else 
+                 :else
                    :do (setf subs subs_)
                    :and :collect pat-node))
              ;; Infer type of each branch body, it should unify with the expr/expected type
@@ -2890,7 +2890,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
          (tc-note
           expr-node
           "Not Yet Supported: throw polymorphism.")))
-      
+
       (values
        expected-type
        preds
@@ -2917,7 +2917,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
         (tc-error "Invalid resume-to"
                   (tc-note node "Argument to `resume-to` be a known resumption.")
                   (tc-note node "Not Yet Supported: resume-to polymorphism.")))
-      
+
       (values
        expected-type
        preds
@@ -2967,7 +2967,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                     (tc-note node "Expected type '~A' but 'or' evaluates to '~A'"
                              (type-object-string (tc:apply-substitution subs expected-type))
                              (type-object-string tc:*boolean-type*)))))))
-  
+
   (:method ((node parser:node-and) expected-type subs env)
     (declare (type tc:ty expected-type)
              (type tc:substitution-list subs)
@@ -3489,7 +3489,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 
            (nodes
              (loop :for elem :in (parser:node-do-nodes node)
-                   :collect (etypecase elem 
+                   :collect (etypecase elem
                               ;; Expressions are typechecked normally
                               ;; and then unified against "m a" where
                               ;; "a" is a fresh tyvar each time
@@ -3574,7 +3574,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                 :type (tc:qualify nil ty)
                 :location (source:location node)
                 :nodes nodes
-                :last-node last-node) 
+                :last-node last-node)
                subs))
           (tc:coalton-internal-type-error ()
             (tc-error "Type mismatch"
@@ -4295,7 +4295,7 @@ as a recursive function rather than a recursive value."
                    (or toplevel-define node-let-binding instance-method-definition)
                    tc:substitution-list
                    &optional))
-  
+
   (with-type-string-environment (env)
     ;; Top-level and instance bindings are validated with typed information so that
     ;; implicit dictionary arguments are treated as function parameters.
@@ -4827,26 +4827,36 @@ as a recursive function rather than a recursive value."
                           (let ((type (tc:lookup-type env (tc:constructor-entry-constructs ctor))))
 
                             ;; Recursive constructors are valid on types
-                            ;; without reprs, types with repr lisp and
+                            ;; without reprs AND the constructor is not recursive,
+                            ;; types with repr lisp and
                             ;; the type "List"
-                            (when (or (null (tc:type-entry-explicit-repr type))
+                            (when (or (and (null (tc:type-entry-explicit-repr type))
+                                           (not (eq (tc:constructor-entry-constructs ctor)
+                                                    (tc:type-entry-name type))))
                                       (eq :lisp (tc:type-entry-explicit-repr type))
                                       (eq 'coalton:List (tc:type-entry-name type)))
                               (return-from valid-recursive-constructor-call-p
                                 (reduce
                                  (lambda (a b) (and a b))
                                  (parser:node-application-rands node)
-                                 :key #'valid-recursive-value-p
+                                 :key (lambda (n) (valid-recursive-value-p n t))
                                  :initial-value t))))))))))
 
-               (valid-recursive-value-p (node)
+
+               ;; IN-CONSTRUCTOR: True if the node is within a constructor application,
+               ;; allowing deferred recursive references.
+               (valid-recursive-value-p (node &optional in-constructor)
                  "Returns t if NODE is a valid subcomponent in a recursive value binding group"
-                 ;; Variables are valid nodes
-                 (when (typep node 'parser:node-variable)
-                   (return-from valid-recursive-value-p t))
 
                  (when (valid-recursive-constructor-call-p node)
                    (return-from valid-recursive-value-p t))
+
+                 ;; Variables are valid if we are already inside a constructor call
+                 ;; or if the variable is not being defined in the current recursive group.
+                 (when (typep node 'parser:node-variable)
+                   (return-from valid-recursive-value-p
+                     (or in-constructor
+                         (not (member (parser:node-variable-name node) binding-names :test #'eq)))))
 
                  ;; Nodes are valid if they do not reference variables in the current binding group
                  (not
