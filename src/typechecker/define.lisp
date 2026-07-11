@@ -4845,7 +4845,7 @@ as a recursive function rather than a recursive value."
 
                ;; IN-CONSTRUCTOR: True if the node is within a constructor application,
                ;; allowing deferred recursive references.
-               (valid-recursive-value-p (node in-constructor &optional (visited nil))
+               (valid-recursive-value-p (node &optional in-constructor (visited nil))
                  "Returns t if NODE is a valid subcomponent in a recursive value binding group"
 
                  (when (member node visited :test #'eq)
