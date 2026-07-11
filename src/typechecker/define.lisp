@@ -4845,8 +4845,11 @@ as a recursive function rather than a recursive value."
 
                ;; IN-CONSTRUCTOR: True if the node is within a constructor application,
                ;; allowing deferred recursive references.
-               (valid-recursive-value-p (node &optional in-constructor)
+               (valid-recursive-value-p (node &optional in-constructor (visited nil))
                  "Returns t if NODE is a valid subcomponent in a recursive value binding group"
+
+                 (when (member node visited :test #'eq)
+                   (return-from valid-recursive-value-p t))
 
                  (when (valid-recursive-constructor-call-p node)
                    (return-from valid-recursive-value-p t))
@@ -4859,12 +4862,13 @@ as a recursive function rather than a recursive value."
                          (not (member (parser:node-variable-name node) binding-names :test #'eq)))))
 
                  ;; Nodes are valid if they do not reference variables in the current binding group
-                 (not
-                  (intersection
-                   binding-names
-                   (mapcar #'parser:node-variable-name
-                           (parser:collect-variables node))
-                   :test #'eq))))
+                 (let ((new-visited (cons node visited)))
+                   (not
+                    (intersection
+                     binding-names
+                     (dolist (var-node (parser:collect-variables node))
+                       (unless (valid-recursive-value-p var-node in-constructor new-visited)
+                         (return-from valid-recursive-value-p nil))))))))
 
         (when (every (alexandria:compose #'valid-recursive-constructor-call-p #'parser:binding-value) bindings)
           (return-from check-for-invalid-recursive-scc))
