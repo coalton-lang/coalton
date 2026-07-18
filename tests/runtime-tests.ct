@@ -586,6 +586,9 @@
   (declare *dynamic-runtime-fn* (Integer -> Integer))
   (define *dynamic-runtime-fn* (fn (x) x))
 
+  (declare *dynamic-runtime-captured* Integer)
+  (define *dynamic-runtime-captured* 10)
+
   (define (dynamic-runtime-increment)
     (dynamic-bind ((*dynamic-runtime-counter* (+ *dynamic-runtime-counter* 1)))
       *dynamic-runtime-counter*))
@@ -604,7 +607,18 @@
 
   (define (dynamic-runtime-call n)
     (dynamic-bind ((*dynamic-runtime-fn* (fn (x) (+ x 1))))
-      (*dynamic-runtime-fn* n))))
+      (*dynamic-runtime-fn* n)))
+
+  (define (dynamic-runtime-capture)
+    (let captured = *dynamic-runtime-captured*)
+    (dynamic-bind ((*dynamic-runtime-captured* (* 2 captured)))
+      (Tuple *dynamic-runtime-captured* captured)))
+
+  (define (dynamic-runtime-match-capture)
+    (match *dynamic-runtime-captured*
+      (captured
+       (dynamic-bind ((*dynamic-runtime-captured* (* 2 captured)))
+         (Tuple *dynamic-runtime-captured* captured))))))
 
 (define-test test-dynamic-variables-runtime ()
   (is (== 2 (dynamic-runtime-increment)))
@@ -612,7 +626,9 @@
   (is (== 2 (dynamic-runtime-short-let)))
   (is (== 1 (dynamic-runtime-counter)))
   (is (== (Tuple 20 10) (dynamic-runtime-swap)))
-  (is (== 6 (dynamic-runtime-call 5))))
+  (is (== 6 (dynamic-runtime-call 5)))
+  (is (== (Tuple 20 10) (dynamic-runtime-capture)))
+  (is (== (Tuple 20 10) (dynamic-runtime-match-capture))))
 
 (cl:defpackage #:tail-call-elimination-tests
   (:use #:coalton #:coalton-prelude)

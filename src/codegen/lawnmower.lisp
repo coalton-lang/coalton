@@ -18,7 +18,8 @@ later passes and Lisp compilers see simpler code.")
    #:traverse-with-binding-list)
   (:local-nicknames
    (#:parser #:coalton-impl/parser)
-   (#:tc #:coalton-impl/typechecker))
+   (#:tc #:coalton-impl/typechecker)
+   (#:util #:coalton-impl/util))
   (:export
    #:lawnmow))
 
@@ -150,6 +151,13 @@ push OUTER-BRANCHES into the inner match branches."
               outer-scope-vars))
            (node-match-branches inner-match))))
 
+(defun dynamic-variable-node-p (node)
+  "Return true when NODE reads a dynamically scoped variable."
+  (declare (type node node)
+           (values boolean &optional))
+  (and (node-variable-p node)
+       (util:dynamic-variable-name-p (node-variable-value node))))
+
 (defun alias-binding-target (binding)
   "Return the target variable node for a LET binding of the form (ALIAS TARGET)."
   (declare (type cons binding)
@@ -157,7 +165,8 @@ push OUTER-BRANCHES into the inner match branches."
   (let ((name (car binding))
         (expr (cdr binding)))
     (when (and (node-variable-p expr)
-               (not (eq name (node-variable-value expr))))
+               (not (eq name (node-variable-value expr)))
+               (not (dynamic-variable-node-p expr)))
       expr)))
 
 (defun resolve-alias-target (name aliases)
@@ -401,7 +410,9 @@ The replacement is skipped inside nested binders for the same name."
            (type node value body)
            (values node &optional))
   (multiple-value-bind (count unsafe?) (variable-substitution-info body name value)
-    (if (and (= 1 count) (not unsafe?))
+    (if (and (= 1 count)
+             (not unsafe?)
+             (not (dynamic-variable-node-p value)))
         (substitute-variable-node body name value)
         (make-node-bind
          :type (node-type body)
@@ -780,6 +791,7 @@ Returns a status keyword and a replacement body. Status is one of:
       ;; (bind x y body[x]) -> body[y]
       ((and (node-variable-p expr)
             (not (eq name (node-variable-value expr)))
+            (not (dynamic-variable-node-p expr))
             (alias-bind-safe-p name (node-variable-value expr) body))
        (values
         (substitute-aliases body (list (cons name expr)))
