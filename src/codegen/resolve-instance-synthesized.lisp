@@ -75,7 +75,7 @@
     (make-node-application
      :type (pred-type pred env)
      :properties '()
-     :rator (make-node-variable
+     :rator (make-node-global-variable
              :type (tc:make-function-type (node-type method-node) (pred-type pred env))
              :value (tc:ty-class-codegen-sym runtime-repr-class))
      :rands (list method-node)

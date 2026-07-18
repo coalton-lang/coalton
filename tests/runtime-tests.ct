@@ -589,6 +589,9 @@
   (declare *dynamic-runtime-captured* Integer)
   (define *dynamic-runtime-captured* 10)
 
+  (declare dynamic-runtime-captured-fn (Integer -> Integer))
+  (define dynamic-runtime-captured-fn *dynamic-runtime-fn*)
+
   (define (dynamic-runtime-increment)
     (dynamic-bind ((*dynamic-runtime-counter* (+ *dynamic-runtime-counter* 1)))
       *dynamic-runtime-counter*))
@@ -618,7 +621,24 @@
     (match *dynamic-runtime-captured*
       (captured
        (dynamic-bind ((*dynamic-runtime-captured* (* 2 captured)))
-         (Tuple *dynamic-runtime-captured* captured))))))
+         (Tuple *dynamic-runtime-captured* captured)))))
+
+  (define (dynamic-runtime-pointfree-capture)
+    (dynamic-bind ((*dynamic-runtime-fn* (fn (x) (+ x 1))))
+      (dynamic-runtime-captured-fn 5)))
+
+  (define (dynamic-runtime-composite-match-capture)
+    (match (Tuple (+ *dynamic-runtime-captured* 0) Unit)
+      ((Tuple captured _)
+       (dynamic-bind ((*dynamic-runtime-captured* 20))
+         captured))))
+
+  (define (dynamic-runtime-composite-closure-capture)
+    (match (Tuple (+ *dynamic-runtime-captured* 0) Unit)
+      ((Tuple captured _)
+       (let get-captured = (fn () captured))
+       (dynamic-bind ((*dynamic-runtime-captured* 20))
+         (get-captured))))))
 
 (define-test test-dynamic-variables-runtime ()
   (is (== 2 (dynamic-runtime-increment)))
@@ -628,7 +648,10 @@
   (is (== (Tuple 20 10) (dynamic-runtime-swap)))
   (is (== 6 (dynamic-runtime-call 5)))
   (is (== (Tuple 20 10) (dynamic-runtime-capture)))
-  (is (== (Tuple 20 10) (dynamic-runtime-match-capture))))
+  (is (== (Tuple 20 10) (dynamic-runtime-match-capture)))
+  (is (== 5 (dynamic-runtime-pointfree-capture)))
+  (is (== 10 (dynamic-runtime-composite-match-capture)))
+  (is (== 10 (dynamic-runtime-composite-closure-capture))))
 
 (cl:defpackage #:tail-call-elimination-tests
   (:use #:coalton #:coalton-prelude)
