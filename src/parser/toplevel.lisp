@@ -942,6 +942,14 @@ If the attribute is not unique, or a repr attribute is present, signal a parse e
       ((:monomorphize) monomorphize)
       ((:inline) inline))))
 
+(defun forbid-inline-dynamic-variable (inline name)
+  "Signal a parse error when INLINE targets the dynamic variable NAME."
+  (when (and inline
+             (util:dynamic-variable-name-p name))
+    (parse-error "Invalid target for inline attribute"
+                 (source:note inline
+                              "dynamic variables cannot be declared inline"))))
+
 (defun forbid-attributes (attributes form source)
   "If ATTRIBUTES is non-zero length, signal a parse error using FORM and SOURCE for location context."
   (unless (zerop (length attributes))
@@ -1020,6 +1028,9 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
      (let* ((define (parse-define form source))
             (monomorphize (consume-optimize-attribute :monomorphize attributes define "when parsing define"))
             (inline (consume-optimize-attribute :inline attributes define "when parsing define")))
+       (forbid-inline-dynamic-variable
+        inline
+        (node-variable-name (toplevel-define-name define)))
        (setf (toplevel-define-monomorphize define) monomorphize)
        (setf (toplevel-define-inline define) inline)
        (setf (fill-pointer attributes) 0)
@@ -1030,6 +1041,9 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
      (let* ((declare (parse-declare form source))
             (monomorphize (consume-optimize-attribute :monomorphize attributes declare "when parsing declare"))
             (inline (consume-optimize-attribute :inline attributes declare "when parsing declare")))
+       (forbid-inline-dynamic-variable
+        inline
+        (identifier-src-name (toplevel-declare-name declare)))
        (setf (toplevel-declare-monomorphize declare) monomorphize)
        (setf (toplevel-declare-inline declare) inline)
        (setf (fill-pointer attributes) 0)
