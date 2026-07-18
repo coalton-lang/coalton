@@ -316,9 +316,9 @@ Note that the wrapped traversal pipes the node through three actions
 corresponding to its original class, so it is important to not define
 any node-specific actions that will run after another action which may
 return a node of a different type. For example, if there is an action
-on `:traverse 'node-variable` to substitute variables with arbitrary
+on `:traverse 'node-local-variable` to substitute variables with arbitrary
 other nodes, then it would be inappropriate to also define an action
-`:after 'node-variable`."
+`:after 'node-local-variable`."
   (declare (type node        initial-node)
            (type action-list custom-actions)
            (type list        initial-args)
@@ -433,15 +433,21 @@ bound at the given point."
                          :collect (cons name (funcall *traverse* node new-bound-variables)))
          :subexpr (funcall *traverse* (node-let-subexpr node) new-bound-variables))))
     (action (:traverse node-dynamic-let node bound-variables)
-      (make-node-dynamic-let
-       :type (node-type node)
-       :bindings (loop :for binding :in (node-dynamic-let-bindings node)
-                       :collect (make-node-dynamic-binding
-                                 :name (node-dynamic-binding-name binding)
-                                 :value (funcall *traverse*
-                                                 (node-dynamic-binding-value binding)
-                                                 bound-variables)))
-       :subexpr (funcall *traverse* (node-dynamic-let-subexpr node) bound-variables)))
+      (let ((new-bound-variables
+              (append (mapcar #'node-dynamic-binding-name
+                              (node-dynamic-let-bindings node))
+                      bound-variables)))
+        (make-node-dynamic-let
+         :type (node-type node)
+         :bindings (loop :for binding :in (node-dynamic-let-bindings node)
+                         :collect (make-node-dynamic-binding
+                                   :name (node-dynamic-binding-name binding)
+                                   :value (funcall *traverse*
+                                                   (node-dynamic-binding-value binding)
+                                                   bound-variables)))
+         :subexpr (funcall *traverse*
+                           (node-dynamic-let-subexpr node)
+                           new-bound-variables))))
     (action (:traverse node-match node bound-variables)
       (make-node-match
        :type (node-type node)

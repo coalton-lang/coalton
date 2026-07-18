@@ -222,7 +222,15 @@
              (ignore env))
     (node-literal-value node))
 
-  (:method ((node node-variable) env)
+  (:method ((node node-local-variable) env)
+    (declare (type tc:environment env)
+             (ignore env))
+    (let ((value (node-variable-value node)))
+      (if (local-function-value-reference-p value)
+          (local-function-value-form value)
+          value)))
+
+  (:method ((node node-global-variable) env)
     (declare (type tc:environment env))
     (let ((value (node-variable-value node)))
       (case value
@@ -230,16 +238,17 @@
         ((coalton:True coalton:False coalton:Nil coalton:Unit)
          `(quote ,(eval value)))
         (otherwise
-         (if (local-function-value-reference-p value)
-             (local-function-value-form value)
-             ;; General case: Emit the symbol itself.
-             (alexandria:if-let ((entry (and (not (util:dynamic-variable-name-p value))
-                                             (tc:lookup-function env value :no-error t))))
-               (if (and (not (tc:function-type-p (node-type node)))
-                        (zerop (tc:function-env-entry-arity entry)))
-                   `(funcall ,value)
-                   value)
-               value))))))
+         (alexandria:if-let ((entry (tc:lookup-function env value :no-error t)))
+           (if (and (not (tc:function-type-p (node-type node)))
+                    (zerop (tc:function-env-entry-arity entry)))
+               `(funcall ,value)
+               value)
+           value)))))
+
+  (:method ((node node-dynamic-variable) env)
+    (declare (type tc:environment env)
+             (ignore env))
+    (node-variable-value node))
 
   ;; Keyword dispatch for indirect calls through first-class function values.
   ;; The parallel logic for direct calls is in the node-direct-application

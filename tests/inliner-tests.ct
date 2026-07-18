@@ -494,7 +494,10 @@
 (defun direct-variable-rand-call-to-p (node name)
   (and (typep node '(or ast:node-application ast:node-direct-application))
        (eq (ast:node-rator-name node) name)
-       (every #'ast:node-variable-p (ast:node-rands node))))
+       (every (lambda (rand)
+                (typep rand '(or ast:node-local-variable
+                                 ast:node-global-variable)))
+              (ast:node-rands node))))
 
 (defun application-rands-have-no-abstractions-p (node)
   (every (lambda (rand)
@@ -553,7 +556,8 @@
        (let* ((binding (first (ast:node-let-bindings node)))
               (bound-value (cdr binding))
               (call (ast:node-let-subexpr node)))
-         (is (typep bound-value 'ast:node-variable))
+         (is (typep bound-value '(or ast:node-local-variable
+                                     ast:node-global-variable)))
          (is (not (typep bound-value 'ast:node-abstraction)))
          (is (typep call '(or ast:node-application ast:node-direct-application))))))))
 
@@ -575,7 +579,8 @@
               (call (ast:node-let-subexpr node)))
          (is (not (typep bound-value 'ast:node-abstraction)))
          (is (or (wrapped-nullary-function-wrapper-p bound-value)
-                 (and (typep bound-value 'ast:node-variable)
+                 (and (typep bound-value '(or ast:node-local-variable
+                                              ast:node-global-variable))
                       (direct-variable-rand-call-to-p
                        call
                        'coalton-native-tests::constrained-keyword-nullary-pointfree-target))))
@@ -639,7 +644,7 @@
     (traverse:traverse
      (ast:node-let-subexpr let-node)
      (list
-      (traverse:action (:after ast:node-variable node)
+      (traverse:action (:after ast:node-local-variable node)
         (let ((expected-type
                 (gethash (ast:node-variable-value node) binding-types)))
           (when (and expected-type
@@ -647,6 +652,18 @@
             (incf mismatch-count)))
         (values))))
     mismatch-count))
+
+(deftest let-binding-type-mismatch-detection-test ()
+  (let* ((name (gensym "BOUND-VALUE"))
+         (node (ast:make-node-let
+                :type tc:*boolean-type*
+                :bindings (list (cons name (ast:make-node-literal
+                                            :type tc:*integer-type*
+                                            :value 1)))
+                :subexpr (ast:make-node-local-variable
+                          :type tc:*boolean-type*
+                          :value name))))
+    (is (= 1 (count-let-binding-type-mismatches node)))))
 
 (defun count-let-binding-type-mismatches-in-node (node)
   "Count mismatched let-bound variable uses in all LETs under NODE."

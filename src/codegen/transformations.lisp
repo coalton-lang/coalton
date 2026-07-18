@@ -10,6 +10,7 @@
   (:export
    #:rename-type-variables
    #:node-variables
+   #:node-dynamic-variables
    #:node-free-p))
 
 (in-package #:coalton-impl/codegen/transformations)
@@ -91,23 +92,40 @@ both CL namespaces appearing in `node`"
            (type boolean variable-namespace-only)
            (values parser:identifier-list &optional))
   (let ((node-vars nil))
+    (flet ((collect-variable (node)
+             (setf node-vars
+                   (adjoin (node-variable-value node) node-vars))
+             (values)))
+      (traverse
+       node
+       (list
+        (action (:after node-local-variable) #'collect-variable)
+        (action (:after node-global-variable) #'collect-variable)
+        (action (:after node-dynamic-variable) #'collect-variable)
+        (action (:after node-direct-application node)
+          (unless variable-namespace-only
+            (setf node-vars
+                  (adjoin (node-direct-application-rator node) node-vars)))
+          (values))
+        (action (:after node-lisp node)
+          (alexandria:unionf node-vars
+                             (mapcar #'cdr (node-lisp-vars node)))
+          (values)))))
+    node-vars))
+
+(defun node-dynamic-variables (node)
+  "Return a deduplicated list of dynamically scoped variables read by NODE."
+  (declare (type node node)
+           (values parser:identifier-list &optional))
+  (let ((dynamic-vars nil))
     (traverse
      node
      (list
-      (action (:after node-variable node)
-        (setf node-vars
-              (adjoin (node-variable-value node) node-vars))
-        (values))
-      (action (:after node-direct-application node)
-        (unless variable-namespace-only
-          (setf node-vars
-                (adjoin (node-direct-application-rator node) node-vars)))
-        (values))
-      (action (:after node-lisp node)
-        (alexandria:unionf node-vars
-                           (mapcar #'cdr (node-lisp-vars node)))
+      (action (:after node-dynamic-variable node)
+        (setf dynamic-vars
+              (adjoin (node-variable-value node) dynamic-vars))
         (values))))
-    node-vars))
+    dynamic-vars))
 
 (defun node-free-p (node bound-variables)
   "Return true if every variable in `node` is free with respect to

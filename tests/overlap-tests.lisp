@@ -203,10 +203,10 @@
     (let* ((env entry:*global-environment*)
            (dict-ty (coalton-impl/codegen/resolve-instance:pred-type
                      (tc:make-ty-predicate :class (intern "PICK") :types (list tc:*integer-type*)) env))
-           (dict (ast:make-node-variable :type dict-ty :value (gensym "PASSED-DICT")))
+           (dict (ast:make-node-local-variable :type dict-ty :value (gensym "PASSED-DICT")))
            (call (ast:make-node-application
                   :type tc:*integer-type* :properties nil
-                  :rator (ast:make-node-variable
+                  :rator (ast:make-node-global-variable
                           :value (intern "FORWARD")
                           :type (tc:make-function-type* (list dict-ty tc:*integer-type*) tc:*integer-type*))
                   :rands (list dict (ast:make-node-literal :type tc:*integer-type* :value 42))))
@@ -252,11 +252,12 @@
            (sub (first (tc:lookup-class-instances env (intern "SUB"))))
            (dict (ast:make-node-application
                   :type sub-ty :properties nil
-                  :rator (ast:make-node-variable
+                  :rator (ast:make-node-global-variable
                           :type (tc:make-function-type pick-ty sub-ty)
                           :value (tc:ty-class-instance-codegen-sym sub))
-                  :rands (list (ast:make-node-variable :type pick-ty
-                                                      :value (tc:ty-class-instance-codegen-sym general)))))
+                  :rands (list (ast:make-node-global-variable
+                                :type pick-ty
+                                :value (tc:ty-class-instance-codegen-sym general)))))
            (projection (ast:make-node-field
                         :type pick-ty :dict dict
                         :name (caar (tc:ty-class-superclass-map (tc:lookup-class env (intern "SUB"))))))

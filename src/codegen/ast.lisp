@@ -18,9 +18,16 @@
    #:node-literal-p                     ; FUNCTION
    #:node-literal-value                 ; READER
    #:node-variable                      ; STRUCT
-   #:make-node-variable                 ; CONSTRUCTOR
-   #:node-variable-p                    ; FUNCTION
    #:node-variable-value                ; READER
+   #:node-local-variable                ; STRUCT
+   #:make-node-local-variable           ; CONSTRUCTOR
+   #:node-local-variable-p              ; FUNCTION
+   #:node-global-variable               ; STRUCT
+   #:make-node-global-variable          ; CONSTRUCTOR
+   #:node-global-variable-p             ; FUNCTION
+   #:node-dynamic-variable              ; STRUCT
+   #:make-node-dynamic-variable         ; CONSTRUCTOR
+   #:node-dynamic-variable-p            ; FUNCTION
    #:node-application                   ; STRUCT
    #:make-node-application              ; CONSTRUCTOR
    #:node-application-p                 ; FUNCTION
@@ -253,9 +260,21 @@ coalton symbols (`parser:identifier`)"
   "Literal values like 1 or \"hello\""
   (value (util:required 'value) :type util:literal-value :read-only t))
 
-(defstruct (node-variable (:include node))
-  "Variables like x or y"
+(defstruct (node-variable
+            (:include node)
+            (:constructor nil)
+            (:predicate nil))
+  "Shared representation for variable references."
   (value (util:required 'value) :type parser:identifier :read-only t))
+
+(defstruct (node-local-variable (:include node-variable))
+  "A reference to a local lexically scoped variable.")
+
+(defstruct (node-global-variable (:include node-variable))
+  "A reference to a statically known global variable.")
+
+(defstruct (node-dynamic-variable (:include node-variable))
+  "A runtime read of a dynamically scoped variable.")
 
 (defstruct keyword-param
   "A keyword parameter in a compiled lambda list."
@@ -521,7 +540,7 @@ coalton symbols (`parser:identifier`)"
      (node-application-rands node))))
 
 (defun node-rator-name (node)
-  "Returns the name of the function being called if it is known"
+  "Return the stable local or global callee name when it is known."
   (declare (type (or node-application node-direct-application))
            (values (or null parser:identifier) &optional))
 
@@ -530,8 +549,11 @@ coalton symbols (`parser:identifier`)"
      (node-direct-application-rator node))
 
     (node-application
-     (when (node-variable-p (node-application-rator node))
-       (node-variable-value (node-application-rator node))))))
+     (typecase (node-application-rator node)
+       ((or node-local-variable node-global-variable)
+        (node-variable-value (node-application-rator node)))
+       (t
+        nil)))))
 
 (defun node-rator-type (node)
   (declare (type (or node-application node-direct-application))
