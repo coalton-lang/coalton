@@ -543,7 +543,16 @@ Automatically returns the lisp condition if one is thrown."
     (define (read fs)
       (read-char fs))
     (define (write fs data)
-      (write-char fs data))))
+      (write-char fs data)))
+
+  (define-instance (iter:IntoIterator (FileStream Char) Char)
+    (define (iter:into-iter file)
+      (iter:new
+       (fn ()
+         (match (read file)
+           ((Ok char) (Some char))
+           ((Err (EOF)) None)
+           ((Err the-error) (error the-error))))))))
 
 ;;;
 ;;; File instances for supported Integer/Byte types
@@ -559,7 +568,15 @@ Automatically returns the lisp condition if one is thrown."
               (define (read fs)
                 (%read-byte fs))
               (define (write fs data)
-                (%write-byte fs data))))))
+                (%write-byte fs data)))
+            (define-instance (iter:IntoIterator (FileStream ,type) ,type)
+              (define (iter:into-iter file)
+                (iter:new
+                 (fn ()
+                   (match (read file)
+                     ((Ok data) (Some data))
+                     ((Err (EOF)) None)
+                     ((Err the-error) (error the-error))))))))))
 
 (coalton-toplevel
   (define-file-type IFix)
