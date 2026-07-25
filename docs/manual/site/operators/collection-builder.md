@@ -24,10 +24,10 @@ comprehensions.
 - `[...]` does not denote a specific, single type. It is generic across several
   collection-like types.
 - `[]` is an empty collection builder.
-- Collection builders and comprehensions must be finite.
-- Keys must all have the same type, and values must all have the same type.
+- collection builders and collection comprehensions must be finite.
+- keys must all have the same type, and values must all have the same type.
 - Without a more specific expected type, association builders default to `Seq :t`.
-- Collection builders, especially empty ones, often need [`the`](/manual/operators/the/)
+- collection builders, especially empty ones, often need [`the`](/manual/operators/the/)
   to fix the intended key and value types.
 
 ## Options

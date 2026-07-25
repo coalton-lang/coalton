@@ -27,7 +27,7 @@ comprehensions.
 - Any other bracket form containing `=>` is an association builder or
   association comprehension.
 - Association builders and comprehensions must be finite.
-- Keys must all have the same type, and values must all have the same type.
+- keys must all have the same type, and values must all have the same type.
 - Without a more specific expected type, association builders default to
   `Seq (Tuple :key :value)`.
 - Association builders, especially empty ones, often need [`the`](/manual/operators/the/)
