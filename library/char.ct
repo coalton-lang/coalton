@@ -70,6 +70,11 @@
       (lisp (-> Boolean) (x y)
         (to-boolean (cl:char= x y)))))
 
+  (define-instance (Default Char)
+    (inline)
+    (define (default)
+      #\Space))
+
   (define-instance (Ord Char)
     (inline)
     (define (<=> x y)
