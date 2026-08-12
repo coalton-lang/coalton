@@ -28,6 +28,7 @@
   ;; Result
   ;;
 
+  (inline)
   (declare err-if (Boolean * :err -> Result :err Unit))
   (define (err-if failed? failure)
     "Fail with FAILURE value if FAILED? is True."
@@ -35,6 +36,7 @@
         (Err failure)
         (Ok Unit)))
 
+  (inline)
   (declare opt->result (:err * Optional :a -> Result :err :a))
   (define (opt->result failure opt)
     "Convert OPT to a Result, using FAILURE value if None."
@@ -42,6 +44,7 @@
       ((None) (Err failure))
       ((Some a) (Ok a))))
 
+  (inline)
   (declare ok? (Result :a :b -> Boolean))
   (define (ok? x)
     "Returns TRUE if X is OK"
@@ -49,6 +52,7 @@
       ((Ok _) True)
       ((Err _) False)))
 
+  (inline)
   (declare err? (Result :a :b -> Boolean))
   (define (err? x)
     "Returns TRUE if X is ERR"
@@ -62,6 +66,7 @@
     "Wrap a value inside F-A inside of 'Ok'."
     (map Ok f-a))
 
+  (inline)
   (declare map-err ((:a -> :b) * Result :a :c -> Result :b :c))
   (define (map-err f x)
     "Map over the ERR case"
@@ -69,6 +74,7 @@
       ((Err x) (Err (f x)))
       ((Ok x) (Ok x))))
 
+  (inline)
   (declare ok-or-def (:a * Result :err :a -> :a))
   (define (ok-or-def def res)
     "Take value in RES if it is OK, or DEF if it is ERR."
@@ -76,12 +82,14 @@
       ((Err _) def)
       ((Ok x) x)))
 
+  (inline)
   (declare flatten (Result :a :a -> :a))
   (define (flatten x)
     (match x
       ((Ok x) x)
       ((Err x) x)))
 
+  (inline)
   (declare ok-or-error ((Signalable :err) => (Result :err :a) -> :a))
   (define (ok-or-error res)
     (match res
@@ -93,6 +101,7 @@
   ;;
 
   (define-instance ((Eq :a) (Eq :b) => Eq (Result :a :b))
+    (inline)
     (define (== a b)
       (match (Tuple a b)
         ((Tuple (Ok a) (Ok b)) (== a b))
@@ -119,12 +128,14 @@
     (define mempty (Ok mempty)))
 
   (define-instance (Functor (Result :a))
+    (inline)
     (define (map f x)
       (match x
         ((Ok x) (Ok (f x)))
         ((Err e) (Err e)))))
 
   (define-instance (Applicative (Result :a))
+    (inline)
     (define (pure x) (Ok x))
     (define (liftA2 f a b)
       (match (Tuple a b)
@@ -134,30 +145,47 @@
         ((Tuple _ (Err e)) (Err e)))))
 
   (define-instance (Monad (Result :a))
+    (inline)
     (define (>>= m f)
       (match m
         ((Ok x) (f x))
         ((Err e) (Err e)))))
 
+  (define-instance (Foldable (Result :a))
+    (inline)
+    (define (fold f initial res)
+      (match res
+        ((Err _) initial)
+        ((Ok a) (f initial a))))
+    (inline)
+    (define (foldr f initial res)
+      (match res
+        ((Err _) initial)
+        ((Ok a) (f a initial)))))
+
   (define-instance (Traversable (Result :a))
+    (inline)
     (define (traverse f m)
       (match m
         ((Err x) (pure (Err x)))
         ((Ok y)  (map Ok (f y))))))
 
   (define-instance (Bifunctor Result)
+    (inline)
     (define (bimap f g res)
       (match res
         ((Ok x) (Ok (g x)))
         ((Err e) (Err (f e))))))
 
   (define-instance (Into (Result :a :b) (Optional :b))
+    (inline)
     (define (into res)
       (match res
         ((Ok x) (Some x))
         ((Err _) None))))
 
   (define-instance (Into (Optional :b) (Result Unit :b))
+    (inline)
     (define (into opt)
       (match opt
         ((Some x) (Ok x))
