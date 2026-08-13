@@ -5,5 +5,6 @@
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
   :license "MIT"
   :version (:read-file-form "VERSION.txt")
+  :depends-on ("fiasco") ; redefines fiasco:deftest & fiasco:run-package-tests
   :pathname "compat/"
   :components ((:file "compatibility-layer")))

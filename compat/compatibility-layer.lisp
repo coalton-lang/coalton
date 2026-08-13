@@ -2,7 +2,7 @@
 ;;;; clean up the rest of the code, and hopefully make porting easier.
 (cl:defpackage
     #:coalton-compatibility
-  (:use #:cl)
+  (:use #:cl #:fiasco)
   (:export
    ;; try-* are macros/functions that most probably will never be
    ;; implemented by all Lisps.
@@ -223,3 +223,118 @@
   `(sb-ext:unlock-package ,the-package)
   #+(and (or ecl clasp) (not coalton-without-package-locks))
   `(ext:unlock-package ,the-package))
+
+;;; Run tests in order of definition
+;; Registry to maintain chronological order of definitions
+(defvar *defined-tests* (make-hash-table :test #'equalp)
+  "Maps a name to an ordered list of test symbols.")
+
+;; Extract the original macro function and store it in a new symbol's
+;; macro-function
+(setf (macro-function 'original-fiasco-deftest)
+      (macro-function 'fiasco:deftest))
+
+(defun as-a-string (x)
+  (cond
+    ((stringp x) x)
+    ((packagep x) (package-name x))
+    ((symbolp x) (symbol-name x))
+    (t (format nil "~A" x))))
+
+(defmacro deftest-prelude (&whole whole name args &body body)
+  (destructuring-bind (name &rest test-args &key (in nil in-provided?)
+                                                 timeout &allow-other-keys)
+      (if (listp name) name (list name))
+    (let* ((pkg *package*)
+           (key (as-a-string (if in-provided? in pkg)))
+           (key-info (if in-provided?
+                         (format nil ", targeting ~A (~A)" in key)
+                         "")))
+      #+nil
+      (cl:format cl:*error-output*
+                 "fiasco-deftest-wrapper called in package ~A for name ~A~A~%"
+                 pkg name key-info)
+      ;; in-what is ignored here - is this an issue?
+      (pushnew name
+               (gethash key coalton-compatibility::*defined-tests*)))))
+
+;; Redefine the original symbol's macro-function to a wrapper expander
+(setf (macro-function 'fiasco:deftest)
+      ;; (macro-function 'my-deftest)
+      (lambda (form env)
+        (let* ((prelude-code (funcall
+                              (macro-function 'deftest-prelude)
+                              form env))
+               (expanded-code (funcall
+                               (macro-function 'original-fiasco-deftest)
+                               form env)))
+          `(progn
+             ,@expanded-code))))
+
+(defun get-ordered-tests (package)
+  "Retains the chronological push order by reversing the accumulated list."
+  (let ((key (as-a-string package)))
+    (reverse (gethash key *defined-tests*))))
+
+(defun run-ordered-package-tests
+    (&key
+       (package *package* package-supplied-p)
+       (packages (list *package*) packages-supplied-p)
+       (describe-failures t)
+       verbose
+       (stream *standard-output*)
+       interactive)
+  "Equivalent to fiasco:run-package-tests, but executes tests chronologically.
+Fiasco doc:
+Execute test suite(s) associated with PACKAGE or PACKAGES.
+
+PACKAGE defaults to the current package. Don't supply both both
+PACKAGE and PACKAGES.
+
+See RUN-TESTS for the meaning of the remaining keyword arguments."
+  (assert (not (and packages-supplied-p package-supplied-p))
+          nil
+          "Supply either :PACKAGE or :PACKAGES, not both")
+  #+nil
+  (progn
+    (format *error-output* "coalton-compatibility::*defined-tests* contains:~%")
+    (maphash (lambda (key value)
+               (format *error-output* "~A => ~A~%" key value))
+             *defined-tests*))
+  (let* ((all-packages (if packages-supplied-p packages (list package)))
+         (all-results
+           (mapcar
+            #'(lambda (pkg)
+                (let ((target-package (as-a-string pkg))
+                      ;; Extract the chronologically defined tests
+                      ;; from our tracking registry
+                      (ordered-tests (get-ordered-tests pkg)))
+                  (if (null ordered-tests)
+                      (progn
+                        (format *error-output*
+                                "No ordered tests registered for package ~A.~%"
+                                target-package)
+                        (list t nil))
+                      (progn
+                        (format *error-output*
+                                "Running ordered tests for package ~A:~%~A"
+                                target-package ordered-tests)
+                        ;; Pass the ordered list of test symbols
+                        ;; directly to Fiasco's core runner
+                        (multiple-value-call #'list
+                          (fiasco:run-tests ordered-tests
+                                            :describe-failures describe-failures
+                                            :verbose verbose
+                                            :stream stream
+                                            :interactive interactive))))))
+            all-packages)))
+    (values (and (mapcar #'car all-results))
+            all-results)))
+
+;; Extract the original function object and store it in a new symbol
+(setf (symbol-function 'original-fiasco-run-package-tests)
+      (symbol-function 'fiasco:run-package-tests))
+
+;; Redefine the original symbol to refer to the replacement function
+(setf (symbol-function 'fiasco:run-package-tests)
+      (symbol-function 'run-ordered-package-tests))
