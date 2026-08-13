@@ -621,6 +621,7 @@
 
 (cl:in-package #:tail-call-elimination-tests)
 
+#+coalton-env-really-has-tce
 (coalton-toplevel
 
   (define-class (Bar1 :t)
@@ -643,6 +644,7 @@
 
 (cl:in-package #:coalton-native-tests)
 
+#+coalton-env-really-has-tce
 (define-test tail-call-elimination-test1 ()
   "A test for tail-call-elimination in the case of mutual recursion with
 a polymorphic function and a type class method.

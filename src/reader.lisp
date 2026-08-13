@@ -285,6 +285,10 @@ It ensures the presence of source metadata for STREAM and then calls MAYBE-READ-
     (return-from read-coalton-toplevel-open-paren
       (funcall (get-macro-character #\( (named-readtables:ensure-readtable :standard)) stream char)))
 
+  ;; "The reader macro function may return zero values or one value."
+  ;; (https://www.lispworks.com/documentation/HyperSpec/Body/02_b.htm)
+  ;; - ecl insists on this.
+  (values
   (let ((start (1- (file-position stream))))
     (cond
       (*source*
@@ -308,7 +312,7 @@ It ensures the presence of source metadata for STREAM and then calls MAYBE-READ-
                         :name "repl")))
          (with-open-stream (stream (source:source-stream *source*))
            (read-char stream)
-           (maybe-read-coalton-deferred stream *source* 0)))))))
+           (maybe-read-coalton-deferred stream *source* 0))))))))
 
 (defun read-cl-bracket-form (stream char)
   "Reader macro for `[...]` builder syntax on the CL readtable.

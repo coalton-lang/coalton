@@ -22,7 +22,8 @@
    #:coalton/math/arith)
   (:local-nicknames
    (#:ff #:float-features)
-   (#:bits #:coalton/bits))
+   (#:bits #:coalton/bits)
+   (#:compat #:coalton-compatibility))
   (:export
    #:+fixnum-bits+
    #:+unsigned-fixnum-bits+
@@ -47,8 +48,7 @@
 
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
   (cl:defconstant +fixnum-bits+
-    #+sbcl sb-vm:n-fixnum-bits
-    #-sbcl (cl:1+ (cl:floor (cl:log cl:most-positive-fixnum 2))))
+    (compat:get-fixnum-bits))
   (cl:defconstant +unsigned-fixnum-bits+
     (cl:1- +fixnum-bits+)))
 

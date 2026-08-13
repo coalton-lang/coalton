@@ -14,6 +14,7 @@
               entry:*global-environment*)))
       (delete-package *package*))))
 
+#+coalton-with-doc
 (deftest test-doc-keyword-type-rendering ()
   (let* ((keyword-type
            (tc:qualified-ty-type

@@ -10,7 +10,8 @@
                     (let (#+sbcl (sb-ext:*derive-function-types* t)
                           #+sbcl (sb-ext:*block-compile-default* :specified))
                       (funcall compile)))
-  :depends-on ("alexandria"
+  :depends-on ("coalton-compatibility"
+               "alexandria"
                "concrete-syntax-tree"
                "eclector"
                "eclector-concrete-syntax-tree"

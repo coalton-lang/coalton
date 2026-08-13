@@ -249,9 +249,8 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
            (show:show-to f (aref x i))
            (f " ")
            (% (+ i 1)))))
-      (f "]>")))
+      (f "]>"))))
 
-  (lisp-toplevel ()
     (cl:eval-when (:compile-toplevel :load-toplevel)
       (cl:defmacro define-lisparray-specialization (coalton-type lisp-type)
         "Specialize lisparray access to known primitive types.  This allows the lisp compiler to inline array access."
@@ -285,8 +284,9 @@ WARNING: The consequences are undefined if an uninitialized element is read befo
                (progn
                  (lisp (-> :any) (v i x)
                    (cl:setf (cl:aref (cl:the (cl:simple-array ,lisp-type (cl:*)) v) i) x))
-                 (values))))))))
+                 (values)))))))
 
+(coalton-toplevel
   (define-lisparray-specialization F32 cl:single-float)
   (define-lisparray-specialization F64 cl:double-float)
   (define-lisparray-specialization (complex:Complex F32) (cl:complex cl:single-float))

@@ -1,0 +1,175 @@
+name: Porting (2 abcl, ecl, clasp)
+
+on:
+  # push:
+  #   branches: [ main ]
+  # pull_request:
+  #   branches: [ main ]
+
+  workflow_dispatch:
+
+jobs:
+
+  check-image:
+    runs-on: ubuntu-latest
+    outputs:
+      image_repo_name: ${{ steps.set-repo.outputs.image_repo_name }}
+      repo_name: ${{ steps.set-repo.outputs.repo_name }}
+    steps:
+      - name: Check if primary image exists
+        id: set-repo
+        run: |
+          PRIMARY="ghcr.io/${{ github.repository_owner }}/sbcl-base:latest"
+          OFFICIAL="ghcr.io/coalton-lang/sbcl-base:latest"
+          if docker manifest inspect $PRIMARY > /dev/null 2>&1; then
+            echo Will use PRIMARY image $PRIMARY >&2
+            echo "image_repo_name=${{ github.repository_owner }}" >> $GITHUB_OUTPUT
+          else # Note - for some reason I cannot pull the image from coalton-lang
+            if docker manifest inspect $OFFICIAL > /dev/null 2>&1; then
+              echo Failed to access PRIMARY image $PRIMARY >&2
+              echo Instead will use OFFICIAL image $OFFICIAL >&2
+              echo "image_repo_name=coalton-lang" >> $GITHUB_OUTPUT
+            else
+              echo Failed to access OFFICIAL image $OFFICIAL >&2
+              exit 1
+            fi
+          fi
+          echo repo_name="${GITHUB_REPOSITORY#*/}" >> $GITHUB_OUTPUT
+
+  test:
+    runs-on: ubuntu-latest
+
+    needs: check-image
+
+    strategy:
+      fail-fast: false
+      matrix:
+          ## clasp excluded as it fails (ql:quickload :serapeum)
+        LISP_IMPL: [ "abcl", "clasp",
+                     "ecl" ]
+        COALTON_ENV: ["release", "development"]
+        SAFETY: ["0", "3"]
+        DISABLE_SPECIALIZATION: ["1", "0"]
+        HEURISTIC_INLINING: ["1", "0"]
+        exclude:
+          # Since we don't have a way of switching safety on clasp or ecl, we can
+          # just ignore high safety tests.
+          - LISP_IMPL: "clasp"
+            SAFETY: "3"
+          - LISP_IMPL: "ecl"
+            SAFETY: "3"
+
+    permissions:
+      packages: read
+
+    container:
+      image: ghcr.io/${{ needs.check-image.outputs.image_repo_name }}/${{ matrix.LISP_IMPL }}-port
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        # Tell ASDF to look through our repo recursively
+        # See https://github.com/actions/runner/issues/2058
+        # CL_SOURCE_REGISTRY: "${{ github.workspace }}//"
+        CL_SOURCE_REGISTRY: "/__w/${{ needs.check-image.outputs.repo_name }}/${{ needs.check-image.outputs.repo_name }}//"
+
+    # "uses:" below was actions/checkout@v3 before.
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Run ABCL tests
+        if: matrix.LISP_IMPL == 'abcl'
+        env:
+          COALTON_ENV: ${{ matrix.COALTON_ENV }}
+          COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
+          COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
+        run: |
+          cat <<EOF > run-tests.lisp
+          ;; (cl:handler-case
+            (cl:progn
+              (load "/.abclrc")
+              (ql:update-dist "quicklisp")
+              (ql:quickload :computable-reals) ;; breaks on SAFETY=3
+              ;; (asdf:load-system :computable-reals) ;; breaks on SAFETY=3
+              (setq system:*safety* ${{ matrix.SAFETY }})
+          (setf *debugger-hook*
+            (lambda (c h)
+              (declare (ignore h))
+              (format *error-output* "~&Fatal Error: ~A~%" c)
+              (uiop:print-backtrace :condition c)
+              (uiop:quit 1)))
+              (ql:quickload :coalton/tests)
+              ;; (asdf:load-system :coalton/tests)
+              (asdf:test-system :coalton/tests)
+              ; TODO: Remove this or add tests for these programs.
+              (asdf:load-system :small-coalton-programs)
+              (uiop:quit 0))
+            ;; (cl:error (c)
+              ;; (declare (ignore c))
+              ;; (uiop:quit 1)))
+          EOF
+          echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
+          ls ${CL_SOURCE_REGISTRY}/coalton.asd
+          # abcl --noinform --nosystem --batch --load run-tests.lisp
+          java -Xmx2048m -server -Xrs -cp /bin/abcl.jar org.armedbear.lisp.Main --noinform --nosystem --batch --load run-tests.lisp
+
+      - name: Run Clasp tests
+        if: matrix.LISP_IMPL == 'clasp'
+        env:
+          COALTON_ENV: ${{ matrix.COALTON_ENV }}
+          COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
+          COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
+        run: |
+          cat <<EOF > run-tests.lisp
+          ;;; Clasp cannot find /.clasprc - copy its code here instead.
+          ;; (load "/.clasprc")
+            #-quicklisp (load "/root/quicklisp/setup.lisp")
+            (setf ql:*local-project-directories* (quote ("/extras" "/lisp")))
+          (ql:update-dist "quicklisp")
+          (ql:quickload :eclector)
+          (ql:quickload :eclector-concrete-syntax-tree)
+          (setf *debugger-hook*
+            (lambda (c h)
+              (declare (ignore h))
+              (format *error-output* "~&Fatal Error: ~A~%" c)
+              (uiop:print-backtrace :condition c)
+              (uiop:quit 1)))
+          (ql:quickload :coalton/tests)
+          ;; (asdf:load-system :coalton/tests)
+          (asdf:test-system :coalton/tests)
+          ; TODO: Remove this or add tests for these programs.
+          (asdf:load-system :small-coalton-programs)
+          EOF
+          echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
+          ls ${CL_SOURCE_REGISTRY}/coalton.asd
+          ls -l /.clasprc /root/.clasprc
+          ls -lR /root/quicklisp
+          clasp --script run-tests.lisp
+
+      - name: Run ECL tests
+        if: matrix.LISP_IMPL == 'ecl'
+        env:
+          COALTON_ENV: ${{ matrix.COALTON_ENV }}
+          COALTON_DISABLE_SPECIALIZATION: ${{ matrix.DISABLE_SPECIALIZATION }}
+          COALTON_HEURISTIC_INLINING: ${{ matrix.HEURISTIC_INLINING }}
+        run: |
+          cat <<EOF > run-tests.lisp
+          ;; (ql:quickload :coalton/tests)
+          (load "/.eclrc")
+          (ql:update-dist "quicklisp")
+          (setf *debugger-hook*
+            (lambda (c h)
+              (declare (ignore h))
+              (format *error-output* "~&Fatal Error: ~A~%" c)
+              (uiop:print-backtrace :condition c)
+              (uiop:quit 1)))
+          (ql:quickload :coalton/tests)
+          ;; (asdf:load-system :coalton/tests)
+          (asdf:test-system :coalton/tests)
+          ; TODO: Remove this or add tests for these programs.
+          (asdf:load-system :small-coalton-programs)
+          EOF
+          echo CL_SOURCE_REGISTRY is \"${CL_SOURCE_REGISTRY}\"
+          ls ${CL_SOURCE_REGISTRY}/coalton.asd
+          ecl -q --shell run-tests.lisp
