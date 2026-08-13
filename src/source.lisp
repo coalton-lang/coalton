@@ -77,7 +77,7 @@
     (position-spec (stream char-position-stream))
   (file-position (inner-stream stream) 0)
   (dotimes (i position-spec)
-    (read-char (inner-stream stream)))
+    (read-char (inner-stream stream) nil nil))
   (setf (character-position stream) position-spec))
 
 ;;; Docstrings

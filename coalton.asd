@@ -326,6 +326,7 @@
                (:file "inliner-tests-1") ; must come after inliner-tests
                (:ct-file "deriver-tests")
                (:ct-file "file-tests")
+               (:ct-file "multibyte-tests")
                (:ct-file "experimental-tests")
                (:file "exceptions")
                (:module "monad"

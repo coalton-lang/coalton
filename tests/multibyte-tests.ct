@@ -1,0 +1,26 @@
+(cl:in-package #:coalton-native-tests)
+
+;;; Regression test: compiling a .ct file containing multibyte characters
+;;; on SBCL used to signal READ-END-OF-FILE on the last toplevel form.
+;;;
+;;; On SBCL, file-position on character streams returns byte offsets, so
+;;; the deferred reader records source spans in bytes, but span
+;;; verification seeks treating them as character offsets. A form whose
+;;; byte offset exceeds the file's character count then seeks past EOF.
+;;;
+;;; The block of multibyte comments below is what triggers the bug: it
+;;; must contain more multibyte characters than the last toplevel form
+;;; has characters. Keep it intact.
+
+;;; 中文注释：多字节内容使文件字节偏移超过字符偏移，从而触发上述路径。
+;;; 中文注释：多字节内容使文件字节偏移超过字符偏移，从而触发上述路径。
+;;; 中文注释：多字节内容使文件字节偏移超过字符偏移，从而触发上述路径。
+;;; 中文注释：多字节内容使文件字节偏移超过字符偏移，从而触发上述路径。
+;;; 中文注释：多字节内容使文件字节偏移超过字符偏移，从而触发上述路径。
+;;; 中文注释：多字节内容使文件字节偏移超过字符偏移，从而触发上述路径。
+;;; 中文注释：多字节内容使文件字节偏移超过字符偏移，从而触发上述路径。
+;;; 中文注释：多字节内容使文件字节偏移超过字符偏移，从而触发上述路径。
+
+(coalton-toplevel
+  (define (multibyte-answer)
+    42))
