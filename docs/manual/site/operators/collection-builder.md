@@ -25,10 +25,10 @@ comprehensions.
   collection-like types.
 - `[]` is an empty collection builder.
 - Collection builders and comprehensions must be finite.
-- Keys must all have the same type, and values must all have the same type.
-- Without a more specific expected type, association builders default to `Seq :t`.
+- Elements must all have the same type.
+- Without a more specific expected type, collection builders default to `Seq :t`.
 - Collection builders, especially empty ones, often need [`the`](/manual/operators/the/)
-  to fix the intended key and value types.
+  to fix the intended element type.
 
 ## Options
 
@@ -36,7 +36,8 @@ comprehensions.
 - `:for ⟨var⟩ :in ⟨iter⟩` iterates over an iterator.
 - `:with ⟨var⟩ = ⟨expr⟩` introduces a lexical binding for the remaining clauses.
 - `:when ⟨expr⟩` guards emitted entries.
-- New types can opt-in to this syntax by defining instance of `FromItemizedCollection` and `FromCollectionComprehension`.
+- New types can opt in to this syntax by defining instances of
+  `FromItemizedCollection` and `FromCollectionComprehension`.
 
 ## Example
 
