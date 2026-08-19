@@ -38,17 +38,17 @@
             :bindings
             (list
              (cons alias
-                   (ast:make-node-variable
+                   (ast:make-node-local-variable
                     :type ty
                     :value target)))
             :subexpr
-            (ast:make-node-variable
+            (ast:make-node-local-variable
              :type ty
              :value alias))))
     (multiple-value-bind (new-node changedp)
         (coalton-impl/codegen/lawnmower:lawnmow node)
       (is changedp)
-      (is (typep new-node 'ast:node-variable))
+      (is (typep new-node 'ast:node-local-variable))
       (is (eq target (ast:node-variable-value new-node))))))
 
 (deftest lawnmower-collapses-let-alias-chain ()
@@ -68,11 +68,11 @@
                     :type ty
                     :value 1))
              (cons alias-1
-                   (ast:make-node-variable
+                   (ast:make-node-local-variable
                     :type ty
                     :value value-name))
              (cons alias-2
-                   (ast:make-node-variable
+                   (ast:make-node-local-variable
                     :type ty
                     :value alias-1)))
             :subexpr
@@ -80,12 +80,12 @@
              :type ty
              :properties nil
              :rator
-             (ast:make-node-variable
+             (ast:make-node-local-variable
               :type fn-ty
               :value function-name)
              :rands
              (list
-              (ast:make-node-variable
+              (ast:make-node-local-variable
                :type ty
                :value alias-2))))))
     (multiple-value-bind (new-node changedp)
@@ -99,7 +99,7 @@
               (first
                (ast:node-application-rands
                 (ast:node-let-subexpr new-node)))))
-        (is (typep rand 'ast:node-variable))
+        (is (typep rand 'ast:node-local-variable))
         (is (eq value-name (ast:node-variable-value rand)))))))
 
 (deftest lawnmower-collapses-bind-alias ()
@@ -113,7 +113,7 @@
             :type ty
             :name alias
             :expr
-            (ast:make-node-variable
+            (ast:make-node-local-variable
              :type ty
              :value target)
             :body
@@ -121,12 +121,12 @@
              :type ty
              :properties nil
              :rator
-             (ast:make-node-variable
+             (ast:make-node-local-variable
               :type fn-ty
               :value function-name)
              :rands
              (list
-              (ast:make-node-variable
+              (ast:make-node-local-variable
                :type ty
                :value alias))))))
     (multiple-value-bind (new-node changed?)
@@ -134,7 +134,7 @@
       (is changed?)
       (is (typep new-node 'ast:node-application))
       (let ((rand (first (ast:node-application-rands new-node))))
-        (is (typep rand 'ast:node-variable))
+        (is (typep rand 'ast:node-local-variable))
         (is (eq target (ast:node-variable-value rand)))))))
 
 (deftest lawnmower-sinks-application-through-let-rator ()
@@ -145,7 +145,7 @@
            (ast:make-node-abstraction
             :type fn-ty
             :vars nil
-            :subexpr (ast:make-node-variable
+            :subexpr (ast:make-node-local-variable
                       :type ty
                       :value alias)))
          (node
@@ -194,12 +194,12 @@
                      :type ty
                      :value 1)))
              :subexpr
-             (ast:make-node-variable
+             (ast:make-node-local-variable
               :type fn-ty
               :value target))
             :rands
             (list
-             (ast:make-node-variable
+             (ast:make-node-local-variable
               :type ty
               :value alias)))))
     (multiple-value-bind (new-node changedp)
@@ -221,7 +221,7 @@
             :rator
             (ast:make-node-match
              :type fn-ty
-             :expr (ast:make-node-variable
+             :expr (ast:make-node-local-variable
                     :type ty
                     :value target)
              :branches
@@ -233,7 +233,7 @@
                 :name constructor
                 :patterns nil)
                :body
-               (ast:make-node-variable
+               (ast:make-node-local-variable
                 :type fn-ty
                 :value function-name))))
             :rands nil)))
@@ -262,7 +262,7 @@
                     :type ty
                     :value 1)))
             :subexpr
-            (ast:make-node-variable
+            (ast:make-node-local-variable
              :type ty
              :value name))))
     (multiple-value-bind (new-node changed?)
@@ -289,7 +289,7 @@
              (ast:make-match-branch
               :pattern (lawnmower-constructor-pattern constructor field)
               :body
-              (ast:make-node-variable
+              (ast:make-node-local-variable
                :type ty
                :value field))))))
     (multiple-value-bind (new-node changed?)
@@ -333,7 +333,7 @@
                :type ty
                :properties nil
                :rator
-               (ast:make-node-variable
+               (ast:make-node-local-variable
                 :type fn-ty
                 :value field)
                :rands nil))))))
@@ -363,7 +363,7 @@
              :subexpr
              (lawnmower-constructor-node
               constructor
-              (ast:make-node-variable
+              (ast:make-node-local-variable
                :type ty
                :value inner)))
             :branches
@@ -371,7 +371,7 @@
              (ast:make-match-branch
               :pattern (lawnmower-constructor-pattern constructor field)
               :body
-              (ast:make-node-variable
+              (ast:make-node-local-variable
                :type ty
                :value field))))))
     (multiple-value-bind (new-node changed?)
@@ -408,7 +408,7 @@
              (ast:make-match-branch
               :pattern (lawnmower-constructor-pattern constructor field)
               :body
-              (ast:make-node-variable
+              (ast:make-node-local-variable
                :type ty
                :value captured))))))
     (multiple-value-bind (new-node changed?)
@@ -442,7 +442,7 @@
                :type fn-ty
                :vars nil
                :subexpr
-               (ast:make-node-variable
+               (ast:make-node-local-variable
                 :type ty
                 :value captured))
               ty))
@@ -494,7 +494,7 @@
              :type ty
              :properties nil
              :rator
-             (ast:make-node-variable
+             (ast:make-node-local-variable
               :type fn-ty
               :value function-name)
              :rands nil))))
@@ -503,3 +503,164 @@
       (is changed?)
       (is (typep new-node 'ast:node-literal))
       (is (= 1 (ast:node-literal-value new-node))))))
+
+(deftest codegen-variable-kinds-are-manifest ()
+  (let* ((ty tc:*integer-type*)
+         (name 'coalton-native-tests::*lawnmower-dynamic*)
+         (local (ast:make-node-local-variable :type ty :value name))
+         (global (ast:make-node-global-variable :type ty :value name))
+         (dynamic (ast:make-node-dynamic-variable :type ty :value name)))
+    (is (typep local 'ast:node-variable))
+    (is (typep global 'ast:node-variable))
+    (is (typep dynamic 'ast:node-variable))
+    (is (ast:node-local-variable-p local))
+    (is (ast:node-global-variable-p global))
+    (is (ast:node-dynamic-variable-p dynamic))))
+
+(deftest translation-makes-dynamic-and-local-references-manifest ()
+  (let ((dynamic-count 0)
+        (local-count 0))
+    (traverse:traverse
+     (coalton:lookup-code 'coalton-native-tests::dynamic-runtime-call)
+     (list
+      (traverse:action (:after ast:node-dynamic-variable node)
+        (declare (ignore node))
+        (incf dynamic-count)
+        (values))
+      (traverse:action (:after ast:node-local-variable node)
+        (declare (ignore node))
+        (incf local-count)
+        (values))))
+    (is (= 1 dynamic-count))
+    (is (= 1 local-count))))
+
+(deftest node-dynamic-variables-finds-composite-reads ()
+  (let* ((ty tc:*integer-type*)
+         (fn-ty (tc:make-function-type* (list ty ty) ty))
+         (dynamic-name 'coalton-native-tests::*lawnmower-dynamic*)
+         (node
+           (ast:make-node-application
+            :type ty
+            :properties nil
+            :rator (ast:make-node-global-variable
+                    :type fn-ty
+                    :value 'coalton-native-tests::lawnmower-function)
+            :rands
+            (list
+             (ast:make-node-dynamic-variable
+              :type ty
+              :value dynamic-name)
+             (ast:make-node-application
+              :type ty
+              :properties nil
+              :rator (ast:make-node-global-variable
+                      :type fn-ty
+                      :value 'coalton-native-tests::lawnmower-function)
+              :rands
+              (list
+               (ast:make-node-local-variable
+                :type ty
+                :value 'coalton-native-tests::lawnmower-local)
+               (ast:make-node-dynamic-variable
+                :type ty
+                :value dynamic-name)))))))
+    (is (equal (list dynamic-name)
+               (coalton-impl/codegen/transformations:node-dynamic-variables node)))))
+
+(deftest binding-traversal-tracks-dynamic-rebindings ()
+  (let* ((ty tc:*integer-type*)
+         (dynamic-name 'coalton-native-tests::*lawnmower-dynamic*)
+         (seen-bound-variables nil)
+         (node
+           (ast:make-node-dynamic-let
+            :type ty
+            :bindings
+            (list
+             (ast:make-node-dynamic-binding
+              :name dynamic-name
+              :value (ast:make-node-literal :type ty :value 20)))
+            :subexpr
+            (ast:make-node-dynamic-variable
+             :type ty
+             :value dynamic-name))))
+    (traverse:traverse-with-binding-list
+     node
+     (list
+      (traverse:action (:after ast:node-dynamic-variable node bound-variables)
+        (declare (ignore node))
+        (setf seen-bound-variables bound-variables)
+        (values))))
+    (is (member dynamic-name seen-bound-variables :test #'eq))))
+
+(deftest lawnmower-does-not-alias-dynamic-variables ()
+  (let* ((ty tc:*integer-type*)
+         (alias 'coalton-native-tests::lawnmower-alias)
+         (dynamic-name 'coalton-native-tests::*lawnmower-dynamic*)
+         (node
+           (ast:make-node-bind
+            :type ty
+            :name alias
+            :expr (ast:make-node-dynamic-variable
+                   :type ty
+                   :value dynamic-name)
+            :body
+            (ast:make-node-dynamic-let
+             :type ty
+             :bindings
+             (list
+              (ast:make-node-dynamic-binding
+               :name dynamic-name
+               :value (ast:make-node-literal :type ty :value 20)))
+             :subexpr
+             (ast:make-node-local-variable
+              :type ty
+              :value alias)))))
+    (multiple-value-bind (new-node changed?)
+        (lawnmow-fixed-point node)
+      (declare (ignore changed?))
+      (is (typep new-node 'ast:node-bind))
+      (is (ast:node-dynamic-variable-p (ast:node-bind-expr new-node))))))
+
+(deftest lawnmower-materializes-composite-dynamic-pattern-fields ()
+  (let* ((ty tc:*integer-type*)
+         (fn-ty (tc:make-function-type* (list ty ty) ty))
+         (constructor 'coalton-native-tests::lawnmower-constructor)
+         (field 'coalton-native-tests::lawnmower-field)
+         (dynamic-name 'coalton-native-tests::*lawnmower-dynamic*)
+         (field-value
+           (ast:make-node-application
+            :type ty
+            :properties nil
+            :rator (ast:make-node-global-variable
+                    :type fn-ty
+                    :value 'coalton-native-tests::lawnmower-function)
+            :rands
+            (list
+             (ast:make-node-dynamic-variable :type ty :value dynamic-name)
+             (ast:make-node-literal :type ty :value 0))))
+         (node
+           (ast:make-node-match
+            :type ty
+            :expr (lawnmower-constructor-node constructor field-value)
+            :branches
+            (list
+             (ast:make-match-branch
+              :pattern (lawnmower-constructor-pattern constructor field)
+              :body
+              (ast:make-node-dynamic-let
+               :type ty
+               :bindings
+               (list
+                (ast:make-node-dynamic-binding
+                 :name dynamic-name
+                 :value (ast:make-node-literal :type ty :value 20)))
+               :subexpr
+               (ast:make-node-local-variable :type ty :value field)))))))
+    (multiple-value-bind (new-node changed?)
+        (lawnmow-fixed-point node)
+      (is changed?)
+      (is (typep new-node 'ast:node-bind))
+      (is (equal (list dynamic-name)
+                 (coalton-impl/codegen/transformations:node-dynamic-variables
+                  (ast:node-bind-expr new-node))))
+      (is (typep (ast:node-bind-body new-node) 'ast:node-dynamic-let)))))

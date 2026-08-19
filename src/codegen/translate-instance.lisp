@@ -29,7 +29,7 @@
            (type tc:ty qual-type visible-type)
            (type list dict-nodes)
            (values node &optional))
-  (let ((rator (make-node-variable
+  (let ((rator (make-node-global-variable
                 :type qual-type
                 :value qual-sym)))
     (if (tc:function-type-p visible-type)
@@ -91,7 +91,7 @@
          (ctx-nodes
            (loop :for (pred . ctx-var) :in ctx
                  :for ctx-ty := (pred-type pred env)
-                 :collect (make-node-variable
+                 :collect (make-node-local-variable
                            :type ctx-ty
                            :value ctx-var)))
 
@@ -135,7 +135,7 @@
              ((null ctx)
               (loop :for sym :in method-codegen-syms
                     :for ty :in method-ty
-                    :collect (make-node-variable
+                    :collect (make-node-global-variable
                               :type ty
                               :value sym)))
              (t
@@ -151,7 +151,7 @@
 
          ;; Initial node
          (var-node
-           (make-node-variable
+           (make-node-global-variable
             :type (tc:merge-function-input-types
                    (append
                     superclass-ty

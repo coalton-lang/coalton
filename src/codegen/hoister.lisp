@@ -37,12 +37,12 @@
     nil))
 
 (defun hoist-point-add (node package hoist-point)
-  (declare (values node-variable))
+  (declare (values node-local-variable))
   (if (gethash node (hoist-point-definitions hoist-point))
       (values (gethash node (hoist-point-definitions hoist-point)))
       (progn
         (setf (gethash node (hoist-point-definitions hoist-point))
-              (make-node-variable
+              (make-node-local-variable
                :type (node-type node)
                :value (gentemp "hoisted_" package)))
         (values (gethash node (hoist-point-definitions hoist-point))))))
@@ -84,7 +84,7 @@
   (declare (type node node)
            (type package package)
            (type hoister hoister)
-           (values node-variable &optional))
+           (values node-local-variable &optional))
   (loop :for hoist-point :in (hoister-hoist-points hoister)
         :if (hoist-point-blocks node hoist-point)
           :do (return-from hoist-definition (hoist-point-add node package hoist-point)))

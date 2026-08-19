@@ -120,10 +120,8 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
            (values (or null ast:node-abstraction) &optional))
 
   (a:if-let ((name (ast:node-rator-name application)))
-    (if (util:dynamic-variable-name-p name)
-        nil
-        (let ((abstraction (tc:lookup-code env name :no-error t)))
-          (if (ast:node-abstraction-p abstraction) abstraction nil)))
+    (let ((abstraction (tc:lookup-code env name :no-error t)))
+      (if (ast:node-abstraction-p abstraction) abstraction nil))
     nil))
 
 (defun lookup-anonymous-application-body (application)
@@ -219,7 +217,7 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
                      bindings)
                (push (substitutions:make-ast-substitution
                       :from var
-                      :to (ast:make-node-variable
+                      :to (ast:make-node-local-variable
                            :type binding-type
                            :value new-var))
                      substitutions)))
@@ -328,12 +326,12 @@ is appropriate."
            (values (or null parser:identifier) ast:node-list &optional))
 
   (cond
-    ((ast:node-variable-p (first rands))
+    ((ast:node-global-variable-p (first rands))
      (values (ast:node-variable-value (first rands))
              (rest rands)))
 
     ((and (ast:node-application-p (first rands))
-          (ast:node-variable-p (ast:node-application-rator (first rands))))
+          (ast:node-global-variable-p (ast:node-application-rator (first rands))))
      (values (ast:node-variable-value (ast:node-application-rator (first rands)))
              (append (ast:node-application-rands (first rands)) (rest rands))))
 
@@ -349,7 +347,7 @@ is appropriate."
            (values ast:node &optional))
   (labels ((make-nullary-call (rator)
              (if (and direct-p
-                      (ast:node-variable-p rator))
+                      (ast:node-global-variable-p rator))
                  (ast:make-node-direct-application
                   :type result-type
                   :properties properties
@@ -367,7 +365,7 @@ is appropriate."
       ;; first-class function value. In that case we want the resolved method
       ;; binding itself, not a call to it.
       ((tc:function-type-p result-type)
-       (ast:make-node-variable
+       (ast:make-node-global-variable
         :type result-type
         :value method-name))
 
@@ -380,7 +378,7 @@ is appropriate."
 
       (t
        (make-nullary-call
-        (ast:make-node-variable
+        (ast:make-node-global-variable
          :type (tc:make-function-type* nil result-type)
          :value method-name)))))))
 
@@ -399,7 +397,7 @@ is appropriate."
   (let ((rator (ast:node-application-rator node))
         (rands (ast:node-application-rands node)))
     (multiple-value-bind (dict inner-rands) (extract-dict rands)
-      (if (or (null dict) (not (ast:node-variable-p rator)))
+      (if (or (null dict) (not (ast:node-global-variable-p rator)))
           node
           (let ((method-name (tc:lookup-method-inline env (ast:node-variable-value rator) dict :no-error t)))
             (cond
@@ -422,7 +420,7 @@ is appropriate."
                (ast:make-node-application
                 :type (ast:node-type node)
                 :properties (ast:node-properties node)
-                :rator (ast:make-node-variable
+                :rator (ast:make-node-global-variable
                         :type (tc:make-function-type*
                                (mapcar #'ast:node-type inner-rands)
                                (ast:node-type node))
@@ -466,7 +464,7 @@ is appropriate."
                (ast:make-node-application
                 :type (ast:node-type node)
                 :properties (ast:node-properties node)
-                :rator (ast:make-node-variable
+                :rator (ast:make-node-global-variable
                         :type (tc:make-function-type*
                                (mapcar #'ast:node-type inner-rands)
                                (ast:node-type node))

@@ -39,14 +39,15 @@ If not, returns NIL"
          (if (or (numberp (node-literal-value node)) (characterp (node-literal-value node)))
              node
              nil))
-        ((node-variable-p node)
+        ((node-global-variable-p node)
          (cond ((and (eq 'coalton:Boolean (node-type node))
                      (member (node-variable-value node) '(coalton:True coalton:False)))
                 node)
                ((tc:lookup-instance-by-codegen-sym env (node-variable-value node) :no-error t)
                 node)
-               (t
-                (constant-var-value (node-variable-value node) constant-bindings :no-error t))))
+               (t nil)))
+        ((node-local-variable-p node)
+         (constant-var-value (node-variable-value node) constant-bindings :no-error t))
         ((node-lisp-p node)
          (if (cl:constantp (node-lisp-form node))
              node
@@ -184,7 +185,8 @@ If not, returns NIL"
     (traverse
      node
      (list
-      (action (:after node-variable) #'propagate-constants-node-variable)
+      (action (:after node-local-variable) #'propagate-constants-node-variable)
+      (action (:after node-global-variable) #'propagate-constants-node-variable)
       (action (:traverse node-let) #'propagate-constants-node-let)
       (action (:after node-lisp) #'propagate-constants-node-lisp)
       (action (:after node-direct-application) #'direct-application-better-infer-types))

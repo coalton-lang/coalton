@@ -104,7 +104,7 @@ ARGUMENTS some of which are statically known dictionaries."
   "Does NODE represent an instance dictionary?"
   (cond
     ((and
-      (node-variable-p node)
+      (node-global-variable-p node)
       (tc:lookup-instance-by-codegen-sym env (node-variable-value node) :no-error t))
      t)
 
@@ -115,7 +115,7 @@ ARGUMENTS some of which are statically known dictionaries."
 
     ((and
       (node-application-p node)
-      (node-variable-p (node-application-rator node))
+      (node-global-variable-p (node-application-rator node))
       (tc:lookup-instance-by-codegen-sym env (node-variable-value (node-application-rator node)) :no-error t))
      t)
 
@@ -285,7 +285,7 @@ recompilation, and also maintains a stack of uncompiled candidates."
                              :rator subexpr
                              :rands (loop :for name :in remaining-names
                                           :for ty :in remaining-types
-                                          :collect (make-node-variable
+                                          :collect (make-node-local-variable
                                                     :type ty
                                                     :value name)))))))
               ;; Underapplication
@@ -320,7 +320,7 @@ propagate dictionaries that have been moved by the hoister."
            (type hash-table resolve-table)
            (values node))
 
-  (unless (node-variable-p node)
+  (unless (node-local-variable-p node)
     (return-from resolve-var node))
 
   (let ((resolved (gethash (node-variable-value node) resolve-table)))
@@ -344,9 +344,6 @@ propagate dictionaries that have been moved by the hoister."
                    (rands (node-rands node)))
 
                (unless name
-                 (return-from validate-candidate nil))
-
-               (when (util:dynamic-variable-name-p name)
                  (return-from validate-candidate nil))
 
                (let ((candidate
@@ -391,9 +388,6 @@ propagate dictionaries that have been moved by the hoister."
                (unless name
                  (return-from apply-candidate nil))
 
-               (when (util:dynamic-variable-name-p name)
-                 (return-from apply-candidate nil))
-
                (let ((candidate (valid-candidate-p
                                  name
                                  (loop :for rand :in rands
@@ -422,13 +416,13 @@ propagate dictionaries that have been moved by the hoister."
                                 :do (setf new-type (tc:function-type-to new-type)))))
 
                    (if (null args)
-                       (make-node-variable
+                       (make-node-global-variable
                         :type new-type
                         :value function-name)
                        (make-node-application
                         :type (node-type node)
                         :properties '()
-                        :rator (make-node-variable
+                        :rator (make-node-global-variable
                                 :type (tc:prepend-function-input-types
                                        (reverse arg-tys)
                                        new-type)

@@ -94,7 +94,7 @@
 
          (if (null subdicts)
              ;; If the instance has no superclasses return a variable
-             (make-node-variable
+             (make-node-global-variable
               :type (pred-type pred env)
               :value (tc:ty-class-instance-codegen-sym instance))
 
@@ -102,7 +102,7 @@
              (make-node-application
               :type (pred-type pred env)
               :properties '()
-              :rator (make-node-variable
+              :rator (make-node-global-variable
                       :type (tc:make-function-type* arg-types (pred-type pred env))
                       :value (tc:ty-class-instance-codegen-sym instance))
               :rands subdicts))))
@@ -155,7 +155,7 @@
            (values list &optional))
 
   (when (matching-context-predicate-p pred ctx-pred)
-    (return-from lookup-pred (list (make-node-variable
+    (return-from lookup-pred (list (make-node-global-variable
                                     :type (tc:make-function-type
                                            (pred-type sub-pred env)
                                            (pred-type pred env))
@@ -165,7 +165,7 @@
 
     (when superclass-ret
       (cons
-       (make-node-variable
+       (make-node-global-variable
         :type (tc:make-function-type
                (pred-type sub-pred env)
                (pred-type ctx-pred env))
@@ -175,14 +175,14 @@
 (defun lookup-pred-base (pred ctx-pred ctx-name env)
   (when (matching-context-predicate-p pred ctx-pred)
     (return-from lookup-pred-base
-      (list (make-node-variable
+      (list (make-node-local-variable
              :type (pred-type pred env)
              :value ctx-name))))
 
   (let ((superclass-ret (superclass-accessors pred ctx-pred env)))
     (when superclass-ret
       (cons
-       (make-node-variable
+       (make-node-local-variable
         :type (pred-type ctx-pred env)
         :value ctx-name)
        superclass-ret))))
