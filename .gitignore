@@ -23,3 +23,7 @@ mine/*.log
 *.exe
 mine.AppImage
 mine.core
+
+.direnv/
+result/
+result
