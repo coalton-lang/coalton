@@ -107,7 +107,7 @@ Coalton is currently used in production to build defense and [quantum computing 
 > [!NOTE] 
 > Running the Coalton test suite on SBCL requires [GNU MPFR](https://www.mpfr.org/mpfr-current/mpfr.html#Installing-MPFR) in order to run `Big-Float` tests. If you would like to run tests without installing `gnu-mpfr`, you can use Coalton's portable `Big-Float` implementation by running `(pushnew :coalton-portable-bigfloat *features*)` before loading Coalton.
 
-**Learn**: Start with [*Whirlwind Tour of Coalton*](docs/manual/site/topics/whirlwind-tour.md), the [language manual](https://coalton-lang.github.io/manual/), and the [standard library reference](https://coalton-lang.github.io/reference/), and then take a peek at the [examples directory](examples/). It may also be helpful to check out the [introductory blog post](https://coalton-lang.github.io/20211010-introducing-coalton/).
+**Learn**: Start with [*Coalton Language Guide*](docs/manual/site/topics/language-guide.md), the [language manual](https://coalton-lang.github.io/manual/), and the [standard library reference](https://coalton-lang.github.io/reference/), and then take a peek at the [examples directory](examples/). It may also be helpful to check out the [introductory blog post](https://coalton-lang.github.io/20211010-introducing-coalton/).
 
 **Open Source Community**: [Awesome Coalton](https://github.com/Jason94/awesome-coalton) has a list of community-built libraries, applications, and examples, that you can use in your own projects or as examples to learn from.
 
