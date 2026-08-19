@@ -101,16 +101,27 @@ If non-nil, restrict to names defined in PACKAGE."
                         (not (exported-symbol-p (tc:name-entry-name entry) package (not reexported-symbols))))))
              (%values (tc:environment-name-environment environment))))
 
+(defun public? (ty)
+  "T if TY is public.
+Public means each symbolic component is exported from a standard library package."
+  (etypecase ty
+    ((or tc:tyvar tc:function-ty) t)
+    (tc:tycon (stdlib-p (tc:tycon-name ty)))
+    (tc:ty-predicate (and (stdlib-p (tc:ty-predicate-class ty))
+                          (every #'public? (mapcan #'tc:flatten-type (tc:ty-predicate-types ty)))))
+    (tc:tapp (every #'public? (tc:flatten-type ty)))
+    (symbol (stdlib-p ty))))
+
 (defun find-instances (&key (environment entry:*global-environment*)
-                            (package nil))
+                         (package nil))
   "Return all instances in ENVIRONMENT.
 
 By default the global environment is queried.
 If non-nil, restrict to instances defined in PACKAGE."
-  (remove-if (lambda (class-instance)
-               (and package
-                    (not (exported-symbol-p (tc:ty-predicate-class
-                                             (tc:ty-class-instance-predicate class-instance))
-                                            package t))))
-             (%lm-values (tc:instance-environment-instances
-                          (tc:environment-instance-environment environment)))))
+  (remove-if-not (lambda (instance)
+                   (let ((predicate (tc:ty-class-instance-predicate instance)))
+                     (if package
+                         (exported-symbol-p (tc:ty-predicate-class predicate) package t)
+                         (public? predicate))))
+                 (%lm-values (tc:instance-environment-instances
+                              (tc:environment-instance-environment environment)))))

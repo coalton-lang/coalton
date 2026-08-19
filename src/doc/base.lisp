@@ -13,7 +13,8 @@
    #:*remote*
    #:*local*
 
-   #:exported-symbol-p))
+   #:exported-symbol-p
+   #:stdlib-p))
 
 (in-package #:coalton/doc/base)
 
@@ -64,3 +65,17 @@ matching unrelated symbols from other packages that merely share the same name."
          (eq resolved symbol)
          (or (not check-package)
              (eq (symbol-package symbol) package)))))
+
+(defun stdlib-p (symbol)
+  "T if SYMBOL is exported from a standard library package.
+
+A standard library package is any package with the exact name 'coalton' or whose name starts with 'coalton/'.
+One exception: COALTON/UTILS, this package is internal to the standard library."
+  
+  (let ((pkg (symbol-package symbol)))
+    (unless (null pkg)
+      (let ((name (package-name pkg)))
+        (and (not (string-equal name "COALTON/UTILS"))
+             (or (string-equal name "COALTON")
+                 (eql 0 (search "COALTON/" name)))
+             (exported-symbol-p symbol pkg))))))
