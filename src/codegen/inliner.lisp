@@ -6,6 +6,7 @@
    (#:traverse #:coalton-impl/codegen/traverse)
    (#:transformations #:coalton-impl/codegen/transformations)
    (#:substitutions #:coalton-impl/codegen/ast-substitutions)
+   (#:pattern #:coalton-impl/codegen/pattern)
    (#:settings #:coalton-impl/settings)
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker)
@@ -176,10 +177,152 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
 
 ;;; Inlining
 
-(defun inline-code-from-application (application abstraction)
+(defun pattern-contains-gadt-constructor-p (pat env)
+  "Return T when PAT contains a GADT constructor."
+  (declare (type pattern:pattern pat)
+           (type tc:environment env)
+           (values boolean))
+  (etypecase pat
+    ((or pattern:pattern-var
+         pattern:pattern-wildcard
+         pattern:pattern-literal)
+     nil)
+
+    (pattern:pattern-binding
+     (pattern-contains-gadt-constructor-p
+      (pattern:pattern-binding-pattern pat)
+      env))
+
+    (pattern:pattern-constructor
+     (let ((ctor (tc:lookup-constructor env
+                                        (pattern:pattern-constructor-name pat)
+                                        :no-error t)))
+       (or (and ctor
+                (tc:constructor-entry-gadt-p ctor))
+           (some (lambda (subpat)
+                   (pattern-contains-gadt-constructor-p subpat env))
+                 (pattern:pattern-constructor-patterns pat)))))))
+
+(defun match-needs-gadt-pruning-p (node env)
+  "Returns T when NODE is a match containing a GADT constructor pattern
+that needs pruning.
+
+Inlining can make a previously valid GADT branch impossible by specializing
+the scrutinee."
+  (declare (type ast:node-match node)
+           (type tc:environment env)
+           (values boolean))
+  (some (lambda (branch)
+          (pattern-contains-gadt-constructor-p
+           (ast:match-branch-pattern branch)
+           env))
+        (ast:node-match-branches node)))
+
+(defun pattern-compatible-with-type-p (pat expr-type env)
+  "Return T if PAT can match an expression of EXPR-TYPE.
+
+This is a codegen-AST check. It is used after inlining has
+specialized a previously-valid GADT match."
+  (declare (type pattern:pattern pat)
+           (type tc:ty expr-type)
+           (type tc:environment env)
+           (values boolean))
+
+  (etypecase pat
+    ;; Variables, wildcards, and literals do not refine constructor shape.
+    ;; They are compatible exactly when their pattern type can be unified
+    ;; with the specialized scrutinee type.
+    ((or pattern:pattern-var
+         pattern:pattern-wildcard
+         pattern:pattern-literal)
+     (nth-value 1
+                (tc:try-unify nil
+                                 (pattern:pattern-type pat)
+                                 expr-type)))
+
+    ;; A binding pattern has its own outer pattern type, plus an inner
+    ;; pattern being bound. Both must remain compatible with the narrowed
+    ;; expression type.
+    (pattern:pattern-binding
+     (and
+      (nth-value 1
+                 (tc:try-unify nil
+                                  (pattern:pattern-type pat)
+                                  expr-type))
+      (pattern-compatible-with-type-p
+       (pattern:pattern-binding-pattern pat)
+       expr-type
+       env)))
+
+    ;; A constructor pattern is compatible only if the constructor's result
+    ;; type can unify with the narrowed scrutinee type. If it can, apply that
+    ;; substitution to the constructor argument types and recursively check
+    ;; each subpattern against its corresponding constructor argument.
+    (pattern:pattern-constructor
+     (let* ((ctor-name
+              (pattern:pattern-constructor-name pat))
+            (ctor-type
+              (tc:qualified-ty-type
+               (tc:fresh-inst
+                (tc:lookup-value-type env ctor-name )))))
+       (multiple-value-bind (subs unifies-p)
+           (tc:try-unify nil
+                            (tc:function-return-type ctor-type)
+                            expr-type)
+         (and unifies-p
+              (let* ((ctor-type
+                       (tc:apply-substitution subs ctor-type))
+                     (arg-types
+                       (tc:function-type-arguments ctor-type))
+                     (subpatterns
+                       (pattern:pattern-constructor-patterns pat)))
+                (and (= (length arg-types)
+                        (length subpatterns))
+                     (loop :for subpat :in subpatterns
+                           :for arg-type :in arg-types
+                           :always
+                           (pattern-compatible-with-type-p
+                            subpat
+                            arg-type
+                            env))))))))))
+
+(defun prune-impossible-match-branches (node env)
+  "Remove GADT match branches whose pattern cannot unify with the scrutinee type.
+
+This should only be used on copied/specialized code, such as after inlining.
+The source typechecker is still responsible for rejecting impossible branches
+in written code."
+  (declare (type ast:node node)
+           (type tc:environment env)
+           (values ast:node))
+  (traverse:traverse
+   node
+   (list
+    (traverse:action (:after ast:node-match node)
+      (if (not (match-needs-gadt-pruning-p node env))
+          node
+          (let* ((expr-type (ast:node-type (ast:node-match-expr node)))
+                 (branches (remove-if-not (lambda (branch)
+                                            (pattern-compatible-with-type-p
+                                             (ast:match-branch-pattern branch)
+                                             expr-type
+                                             env))
+                                          (ast:node-match-branches node))))
+
+            ;; If something has gone very wrong, do not turn the match
+            ;; into an empty match and mask the real compiler error.
+            (if branches
+                (ast:make-node-match
+                 :type (ast:node-type node)
+                 :expr (ast:node-match-expr node)
+                 :branches branches)
+                node)))))))
+
+(defun inline-code-from-application (application abstraction env)
   "Swap an application node with a let node where the body is the inlined function."
   (declare (type (or ast:node-application ast:node-direct-application) application)
            (type ast:node-abstraction abstraction)
+           (type tc:environment env)
            (values ast:node-let &optional))
 
   (let* ((fresh-abstraction
@@ -238,12 +381,16 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
              (substitutions:apply-ast-substitution
               substitutions
               (ast:node-abstraction-subexpr fresh-abstraction)
-              t)))
+              t))
+           (specialized-subexpr
+             (tc:apply-substitution new-substitutions new-subexpr)))
       (ast:make-node-let
        :type     (ast:node-type application)
        :bindings (loop :for (name . expr) :in bindings
                        :collect (cons name (tc:apply-substitution new-substitutions expr)))
-       :subexpr  (tc:apply-substitution new-substitutions new-subexpr)))))
+       :subexpr  (prune-impossible-match-branches
+                  specialized-subexpr
+                  env)))))
 
 (defun try-inline-application (application env stack noinline-functions)
   "Try to inline an application node, checking internal traversal stack,
@@ -291,7 +438,8 @@ is appropriate."
        (inline-applications*
         (inline-code-from-application
          application
-         (lookup-global-application-body application env))
+         (lookup-global-application-body application env)
+         env)
         env
         stack
         noinline-functions))
@@ -310,7 +458,8 @@ is appropriate."
        (inline-applications*
         (inline-code-from-application
          application
-         (lookup-anonymous-application-body application))
+         (lookup-anonymous-application-body application)
+         env)
         env
         stack
         noinline-functions))

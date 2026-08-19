@@ -1096,6 +1096,7 @@
              (values constructor))
     (make-constructor
      :name (constructor-name ctor)
+     :signature (rename-type-variables-generic% (constructor-signature ctor) ctx)
      :fields (rename-type-variables-generic% (constructor-fields ctor) ctx)
      :docstring (source:docstring ctor)
      :location (source:location ctor)))

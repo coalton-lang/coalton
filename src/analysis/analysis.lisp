@@ -21,12 +21,14 @@
 (defun check-pattern-exhaustiveness (pattern env)
   (declare (type tc:pattern pattern)
            (type tc:environment env))
-  (let ((missing
-          (find-non-matching-value
-           ;; binding patterns can be collapsed in exhaustiveness check
-           (list (list (collapse-binding-patterns pattern)))
-           1
-           env)))
+  (let* ((pattern (collapse-binding-patterns pattern))
+         (pattern-type (tc:qualified-ty-type (tc:pattern-type pattern)))
+         (missing
+           (find-non-matching-value
+            ;; binding patterns can be collapsed in exhaustiveness check
+            (list (list (collapse-binding-patterns pattern)))
+            (list pattern-type)
+            env)))
     (unless (eq t missing)
       (tc-error "Non-exhaustive match"
                 (source:secondary-note pattern "missing case ~w"
@@ -37,10 +39,12 @@
   (declare (type tc:translation-unit translation-unit)
            (type tc:environment env))
   (flet ((analysis-match-traversal (node)
-           (let ((patterns
+           (let ((scrutinee-type (tc:qualified-ty-type (tc:node-type
+                                                        (tc:node-match-expr node))))
+                 (patterns
                    ;; for exhaustiveness checking, we can collapse
                    ;; binding patterns, (@ VAR PAT) is part of an
-                   ;; exhaustive match expression iff PAT is. 
+                   ;; exhaustive match expression iff PAT is.
                    (loop :for branch :in (tc:node-match-branches node)
                          :for pat := (tc:node-match-branch-pattern branch)
                          :collect (collapse-binding-patterns pat))))
@@ -48,7 +52,9 @@
                    :do (check-for-var-matching-constructor pattern env))
 
              (let ((exhaustive-or-missing
-                     (find-non-matching-value (mapcar #'list patterns) 1 env)))
+                     (find-non-matching-value (mapcar #'list patterns)
+                                              (list scrutinee-type)
+                                              env)))
                (unless (eq t exhaustive-or-missing)
                  (let ((head-note (source:note node "non-exhaustive match"))
                        (tail-notes (if (first exhaustive-or-missing)
@@ -59,7 +65,7 @@
                                        nil)))
                    (apply #'source:warn "non-exhaustive match" (list* head-note tail-notes))))
                (loop :for pattern :in patterns
-                     :unless (useful-pattern-p patterns pattern env) :do
+                     :unless (useful-pattern-p patterns pattern env scrutinee-type) :do
                        (source:warn "Useless match case"
                                     (source:note pattern "useless match case")
                                     (source:note node "in this match")))))

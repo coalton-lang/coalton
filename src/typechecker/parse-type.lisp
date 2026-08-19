@@ -27,6 +27,7 @@
    #:parse-ty-scheme                    ; FUNCTION
    #:infer-type-kinds                   ; FUNCTION
    #:infer-predicate-kinds              ; FUNCTION
+   #:seed-qualified-type-variables      ; FUNCTION
    ))
 
 (in-package #:coalton-impl/typechecker/parse-type)
@@ -612,10 +613,17 @@ the substitution :b +-> T can be inferred.
             (setf ksubs (tc:kunify (tc:kind-of type_) expected-kind ksubs))
             (values (tc:apply-ksubstitution ksubs type_) ksubs))
         (tc:coalton-internal-type-error ()
-          (tc-error "Kind mismatch"
-                    (tc-note type "Expected kind '~S' but got kind '~S'"
-                             expected-kind
-                             (tc:kind-of type_)))))))
+          (let ((actual-kind
+                  (tc:apply-ksubstitution
+                   (tc:kind-monomorphize-subs
+                    (tc:kind-variables
+                     (tc:apply-ksubstitution ksubs (tc:kind-of type_)))
+                    ksubs)
+                   (tc:kind-of type_))))
+            (tc-error "Kind mismatch"
+                      (tc-note type "Expected kind '~S' but got kind '~S'"
+                               expected-kind
+                               actual-kind)))))))
 
   (:method ((type parser:tapp) expected-kind ksubs env)
     (declare (type tc:kind expected-kind)

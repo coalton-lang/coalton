@@ -207,9 +207,9 @@
   (declare (type pattern-list patterns)
            (type tc:ty type)
            (type tc:environment env)
-           (ignore type)
            (values boolean &optional))
   (pe:exhaustive-patterns-p
    (mapcar #'pe:collapse-binding-patterns
            (mapcar #'codegen-pattern->typechecker-pattern patterns))
-   env))
+   env
+   type))

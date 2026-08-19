@@ -1,0 +1,418 @@
+(in-package #:coalton-native-tests)
+
+;;;
+;;; Concrete Type with Unary Constructor
+;;;
+
+(coalton-toplevel
+
+  (define-type Gadt1
+    (Gadt1-1 (Type Gadt1)))
+
+  (declare gadt1-test-func (Gadt1 -> Boolean))
+  (define (gadt1-test-func (Gadt1-1))
+    True))
+
+(define-test test-gadt1-match ()
+  (let result =
+    (match Gadt1-1
+      ((Gadt1-1) True)))
+  (is result))
+
+(define-test test-gadt1-let ()
+  (let (Gadt1-1) = Gadt1-1)
+  (is True))
+
+(define-test test-gadt1-do ()
+  (let result =
+    (coalton/monad/identity:run-identity
+     (do
+      ((Gadt1-1) <- (pure Gadt1-1))
+      (let (Gadt1-1) = Gadt1-1)
+      (pure True))))
+  (is result))
+
+(define-test test-gadt1-func ()
+  (is (gadt1-test-func Gadt1-1)))
+
+;;;
+;;; Concrete Type w/ Single, Single-Arg Concrete Constructor
+;;;
+
+(coalton-toplevel
+
+  (define-type Gadt2
+    (Gadt2-1 (Type (String -> Gadt2))))
+
+  (declare gadt2-equals-str (Gadt2 * String -> Boolean))
+  (define (gadt2-equals-str (Gadt2-1 a) b)
+    (== a b)))
+
+(define-test test-gadt2-match ()
+  (let result =
+    (match (Gadt2-1 "test")
+      ((Gadt2-1 s) s)))
+  (is (== result "test")))
+
+(define-test test-gadt2-let ()
+  (let (Gadt2-1 s) = (Gadt2-1 "test"))
+  (is (== s "test")))
+
+(define-test test-gadt2-do ()
+  (let (Tuple s1 s2) =
+    (coalton/monad/identity:run-identity
+     (do
+      ((Gadt2-1 s1) <- (pure (Gadt2-1 "test1")))
+      (let (Gadt2-1 s2) = (Gadt2-1 "test2"))
+      (pure (Tuple s1 s2)))))
+  (is (== "test1" s1))
+  (is (== "test2" s2)))
+
+(define-test test-gadt2-func ()
+  (is (gadt2-equals-str (Gadt2-1 "test") "test")))
+
+;;;
+;;; Concrete Type w/ Single, Single-Arg Generic Constructor
+;;;
+
+(coalton-toplevel
+
+  (define-type Gadt3
+    (Gadt3-1 (Type (:a -> Gadt3))))
+
+  (declare gadt3-test-func (Gadt3 -> Boolean))
+  (define (gadt3-test-func (Gadt3-1 a))
+    (id a)
+    True))
+
+(define-test test-gadt3-match ()
+  (let result =
+    (match (Gadt3-1 "test")
+      ((Gadt3-1 s)
+       (id s)
+       True)))
+  (is result))
+
+(define-test test-gadt3-let ()
+  (let (Gadt3-1 s) = (Gadt3-1 "test"))
+  (id s)
+  (is True))
+
+(define-test test-gadt3-do ()
+  (let result =
+    (coalton/monad/identity:run-identity
+     (do
+      ((Gadt3-1 s1) <- (pure (Gadt3-1 "test1")))
+      (pure (id s1))
+      (let (Gadt3-1 s2) = (Gadt3-1 "test2"))
+      (pure (id s2))
+      (pure True))))
+  (is result))
+
+(define-test test-gadt3-func ()
+  (is (gadt3-test-func (Gadt3-1 "test"))))
+
+;;;
+;;; Type with One Arg w/ Single, Single-Arg Concrete Constructor
+;;;
+
+(coalton-toplevel
+
+  (define-type (Gadt4 :a)
+    (Gadt4-1 (Type (Integer -> Gadt4 Integer))))
+
+  (declare gadt4-add1->int-match (Gadt4 :a -> Integer))
+  (define (gadt4-add1->int-match g)
+    (match g
+      ((Gadt4-1 x) (1+ x))))
+
+  (declare gadt4-add1->int-abstr (Gadt4 :a -> Integer))
+  (define (gadt4-add1->int-abstr (Gadt4-1 x))
+    (1+ x))
+
+  (declare gadt4-add1->gadt-match (Gadt4 :a -> Gadt4 :a))
+  (define (gadt4-add1->gadt-match g)
+    (match g
+      ((Gadt4-1 x) (Gadt4-1 (1+ x)))))
+
+  (declare gadt4-add1->gadt-abstr (Gadt4 :a -> Gadt4 :a))
+  (define (gadt4-add1->gadt-abstr (Gadt4-1 x))
+    (Gadt4-1 (1+ x)))
+
+  (declare gadt4-add1->gadt-int-match (Gadt4 Integer -> Gadt4 Integer))
+  (define (gadt4-add1->gadt-int-match g)
+    (match g
+      ((Gadt4-1 x) (Gadt4-1 (1+ x)))))
+
+  (declare gadt4-add1->gadt-int-abstr (Gadt4 Integer -> Gadt4 Integer))
+  (define (gadt4-add1->gadt-int-abstr (Gadt4-1 x))
+    (Gadt4-1 (1+ x)))
+  )
+
+(define-test test-gadt4-concrete-match ()
+  (let result = (gadt4-add1->int-match (Gadt4-1 0)))
+  (is (== result 1)))
+
+(define-test test-gadt4-concrete-abstr ()
+  (let result = (gadt4-add1->int-abstr (Gadt4-1 0)))
+  (is (== result 1)))
+
+(define-test test-gadt4-gadt-match ()
+  (let (Gadt4-1 result) = (gadt4-add1->gadt-match (Gadt4-1 0)))
+  (is (== result 1)))
+
+(define-test test-gadt4-gadt-abstr ()
+  (let (Gadt4-1 result) = (gadt4-add1->gadt-abstr (Gadt4-1 0)))
+  (is (== result 1)))
+
+(define-test test-gadt4-gadt-let ()
+  (let (Gadt4-1 result) = (Gadt4-1 0))
+  (is (== result 0)))
+
+(define-test test-gadt4-gadt-do ()
+  (let result =
+    (coalton/monad/identity:run-identity
+     (do
+      ((Gadt4-1 a) <- (pure (Gadt4-1 0)))
+      (let (Gadt4-1 b) = (Gadt4-1 (1+ a)))
+      (pure b))))
+  (is (== result 1)))
+
+(define-test test-gadt4-specifc-type-match ()
+  (let (Gadt4-1 result) = (gadt4-add1->gadt-int-match (Gadt4-1 0)))
+  (is (== result 1)))
+
+(define-test test-gadt4-specific-type-abstr ()
+  (let (Gadt4-1 result) = (gadt4-add1->gadt-int-abstr (Gadt4-1 0)))
+  (is (== result 1)))
+
+;;;
+;;; Type with No Args w/ Multiple Single-Arg Constructors
+;;;
+
+(coalton-toplevel
+  (define-type Gadt5
+    (Gadt5-Int (Type (Integer -> Gadt5)))
+    (Gadt5-Str (Type (String -> Gadt5)))
+    (Gadt5-Any (Type (:a -> Gadt5))))
+
+  (declare gadt5->int (Gadt5 -> Integer))
+  (define (gadt5->int g)
+    (match g
+      ((Gadt5-Int x) x)
+      ((Gadt5-Str s) (as Integer (string:length s)))
+      ((Gadt5-Any _) 0))))
+
+(define-test test-gadt5-match ()
+  (is (== 10 (gadt5->int (Gadt5-Int 10))))
+  (is (== 5 (gadt5->int (Gadt5-Str "12345"))))
+  (is (== 0 (gadt5->int (Gadt5-Any (Some 100))))))
+
+;;;
+;;; Type with Arg w/ Multiple Single-Arg, Concrete Constructors
+;;;
+
+(coalton-toplevel
+  (define-type (Gadt6 :a)
+    (Gadt6-Int (Type (Integer -> Gadt6 Integer)))
+    (Gadt6-Str (Type (String -> Gadt6 String))))
+
+  (declare gadt6-unwrap-int-abstr (Gadt6 Integer -> Integer))
+  (define (gadt6-unwrap-int-abstr (Gadt6-Int x))
+    x)
+
+  (declare gadt6-unwrap-int-match (Gadt6 Integer -> Integer))
+  (define (gadt6-unwrap-int-match g)
+    (match g
+      ((Gadt6-Int x) x)))
+
+  (declare gadt6->int (Gadt6 :a -> Integer))
+  (define (gadt6->int g)
+    (match g
+      ((Gadt6-Int x) x)
+      ((Gadt6-Str s) (as Integer (string:length s))))))
+
+(define-test test-gadt6-unwrap-abstr ()
+  (is (== 10 (gadt6-unwrap-int-abstr (Gadt6-Int 10)))))
+
+(define-test test-gadt6-unwrap-match ()
+  (is (== 10 (gadt6-unwrap-int-match (Gadt6-Int 10)))))
+
+(define-test test-gadt6-match-multiple-noinline ()
+  (is (== 10 (noinline (gadt6->int (Gadt6-Int 10)))))
+  (is (== 5 (noinline (gadt6->int (Gadt6-Str "12345"))))))
+
+(define-test test-gadt6-match-multiple-inline ()
+  (is (== 10 (inline (gadt6->int (Gadt6-Int 10)))))
+  (is (== 5 (inline (gadt6->int (Gadt6-Str "12345"))))))
+
+;;;
+;;; Type with Arg w/ One, Single-Arg, Generic Constructor
+;;;
+
+(coalton-toplevel
+  (define-type (Gadt7 :a)
+    (Gadt7 (Type (:a -> Gadt7 :a))))
+
+  (declare gadt7-unwrap-int-match (Gadt7 Integer -> Integer))
+  (define (gadt7-unwrap-int-match g)
+    (match g
+      ((Gadt7 x) x)))
+
+  (declare gadt7-unwrap-int-abstr (Gadt7 Integer -> Integer))
+  (define (gadt7-unwrap-int-abstr (Gadt7 x))
+    x))
+
+(define-test test-gadt7-unwrap-match ()
+  (is (== 10 (gadt7-unwrap-int-match (Gadt7 10)))))
+
+(define-test test-gadt7-unwrap-abstr ()
+  (is (== 10 (gadt7-unwrap-int-abstr (Gadt7 10)))))
+
+;;;
+;;; Type with Arg w/ Multiple Single-Arg Constructors, including one non-concrete
+;;;
+
+(coalton-toplevel
+  (define-type (Gadt8 :a)
+    (Gadt8-Int (Type (Integer -> Gadt8 Integer)))
+    (Gadt8-Str (Type (String -> Gadt8 String)))
+    (Gadt8-Any (Type (:a -> Gadt8 :a))))
+
+  (declare gadt8->int (Gadt8 :a -> Integer))
+  (define (gadt8->int g)
+    (match g
+      ((Gadt8-Int x) x)
+      ((Gadt8-Str s) (as Integer (string:length s)))
+      ((Gadt8-Any _) 0)))
+
+  (declare gadt8-unwrap-int (Gadt8 Integer -> Integer))
+  (define (gadt8-unwrap-int g)
+    (match g
+      ((Gadt8-Int x) x)
+      ((Gadt8-Any x) x))))
+
+(define-test test-gadt8-match-multiple ()
+  (is (== 10 (gadt8->int (Gadt8-Int 10))))
+  (is (== 5 (gadt8->int (Gadt8-Str "12345"))))
+  (is (== 0 (gadt8->int (Gadt8-Any 10)))))
+
+(define-test test-gadt8-unwrap-narrowed-type ()
+  (is (== 10 (gadt8-unwrap-int (Gadt8-Int 10))))
+  (is (== 10 (gadt8-unwrap-int (Gadt8-Any 10)))))
+
+;;;
+;;; Type with Arg w/ Multiple Single-Arg Concrete Constructors and Polymorphic Return
+;;;
+
+(coalton-toplevel
+  (define-type (Gadt9 :a)
+    (Gadt9-Int (Type (Integer -> Gadt9 Integer)))
+    (Gadt9-Str (Type (String -> Gadt9 String))))
+
+  (declare gadt9-unbox (Gadt9 :a -> :a))
+  (define (gadt9-unbox g)
+    (match g
+      ((Gadt9-Int x) x)
+      ((Gadt9-Str s) s))))
+
+(define-test test-gadt9-polymorphic-unbox ()
+  (is (== 10 (gadt9-unbox (Gadt9-Int 10))))
+  (is (== "abc" (gadt9-unbox (Gadt9-Str "abc")))))
+
+;;;
+;;; Type with Arg w/ Concrete and Generic Constructors
+;;;
+
+(coalton-toplevel
+  (define-type (Gadt10 :a)
+    (Gadt10-Int (Type (Integer -> Gadt10 Integer)))
+    (Gadt10-Str (Type (String -> Gadt10 String)))
+    (Gadt10-Any (Type (:a -> Gadt10 :a))))
+
+  (declare gadt10-unwrap-int-tagged (Gadt10 Integer -> (Tuple Integer Integer)))
+  (define (gadt10-unwrap-int-tagged g)
+    (match g
+      ((Gadt10-Int x) (Tuple 0 x))
+      ((Gadt10-Any x) (Tuple 1 x)))))
+
+(define-test test-gadt10-generic-plus-concrete ()
+  (let (Tuple tag1 value1) = (gadt10-unwrap-int-tagged (Gadt10-Int 10)))
+  (let (Tuple tag2 value2) = (gadt10-unwrap-int-tagged (Gadt10-Any 20)))
+  (is (== 0 tag1))
+  (is (== 10 value1))
+  (is (== 1 tag2))
+  (is (== 20 value2)))
+
+;;;
+;;; Type with Arg w/ Multi-Argument Constructor
+;;;
+
+(coalton-toplevel
+  (define-type (Gadt11 :a)
+    (Gadt11-Multi (Type (Integer * String * Boolean -> Gadt11 Integer))))
+
+  (declare gadt11-fields (Gadt11 Integer -> (Tuple3 Integer String Boolean)))
+  (define (gadt11-fields g)
+    (match g
+      ((Gadt11-Multi i s b) (Tuple3 i s b)))))
+
+(define-test test-gadt11-multi-argument-constructor ()
+  (let (Tuple3 i s b) = (gadt11-fields (Gadt11-Multi 7 "seven" True)))
+  (is (== 7 i))
+  (is (== "seven" s))
+  (is b))
+
+;;;
+;;; Nested GADT Pattern inside Tuple
+;;;
+
+(coalton-toplevel
+  (define-type (Gadt12 :a)
+    (Gadt12-Int (Type (Integer -> Gadt12 Integer)))
+    (Gadt12-Str (Type (String -> Gadt12 String))))
+
+  (declare gadt12-nested-tuple ((Tuple (Gadt12 Integer) (Gadt12 String)) -> (Tuple Integer Integer)))
+  (define (gadt12-nested-tuple pair)
+    (match pair
+      ((Tuple (Gadt12-Int i) (Gadt12-Str s))
+       (Tuple (1+ i) (as Integer (coalton/string:length s)))))))
+
+(define-test test-gadt12-nested-gadt-inside-tuple ()
+  (let (Tuple i len) = (gadt12-nested-tuple (Tuple (Gadt12-Int 10) (Gadt12-Str "abc"))))
+  (is (== 11 i))
+  (is (== 3 len)))
+
+;;;
+;;; Typed Expression Evaluator with If Constructor
+;;;
+
+(coalton-toplevel
+  (define-type (Gadt13-Expr :a)
+    (Gadt13-Int (Type (Integer -> Gadt13-Expr Integer)))
+    (Gadt13-Bool (Type (Boolean -> Gadt13-Expr Boolean)))
+    (Gadt13-Str (Type (String -> Gadt13-Expr String)))
+    (Gadt13-If (Type (Gadt13-Expr Boolean * Gadt13-Expr :a * Gadt13-Expr :a -> Gadt13-Expr :a))))
+
+  (declare gadt13-eval (Gadt13-Expr :a -> :a))
+  (define (gadt13-eval expr)
+    (match expr
+      ((Gadt13-Int i) i)
+      ((Gadt13-Bool b) b)
+      ((Gadt13-Str s) s)
+      ((Gadt13-If test then else)
+       (if (gadt13-eval test)
+           (gadt13-eval then)
+           (gadt13-eval else))))))
+
+(define-test test-gadt13-typed-expression-evaluator-if ()
+  (is (== 1
+          (gadt13-eval
+           (Gadt13-If (Gadt13-Bool True)
+                      (Gadt13-Int 1)
+                      (Gadt13-Int 2)))))
+  (is (== "right"
+          (gadt13-eval
+           (Gadt13-If (Gadt13-Bool False)
+                      (Gadt13-Str "left")
+                      (Gadt13-Str "right"))))))

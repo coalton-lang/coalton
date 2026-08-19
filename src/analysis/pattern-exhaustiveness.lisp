@@ -6,7 +6,6 @@
    (#:util #:coalton-impl/util))
   (:export
    #:non-exhaustive-match-warning
-   #:useless-pattern-warning
    #:exhaustive-patterns-p
    #:useful-pattern-p
    #:find-non-matching-value
@@ -76,22 +75,46 @@
 ;;;
 ;;;
 
-(defun exhaustive-patterns-p (patterns env)
-  "Are PATTERNS exhaustive?"
+(defun make-wildcard-for-type (type)
+  (declare (type tc:ty type)
+           (values tc:pattern-wildcard &optional))
+  (tc:make-pattern-wildcard
+   :type (tc:qualify nil type)))
+
+(defun pattern-bare-type (pattern)
+  (declare (type tc:pattern pattern)
+           (values tc:ty))
+  (tc:qualified-ty-type (tc:pattern-type pattern)))
+
+(defun exhaustive-patterns-p (patterns env column-type)
+  "Are PATTERNS exhaustive for COLUMN-TYPE? In practice, column type only matters
+for GADTs, because ADTs have the same return type for every constructor."
+  (declare (type tc:pattern-list patterns)
+           (type tc:environment env)
+           (type tc:ty column-type)
+           (values boolean))
   (not
    (useful-pattern-clause-p
     (mapcar #'list patterns)
     (list (tc:make-pattern-wildcard
            :type (tc:qualify nil (tc:make-variable))))
+    (list column-type)
     env)))
 
-(defun useful-pattern-p (patterns pattern env)
-  "Is PATTERN useful within list PATTERNS? PATTERN must EQ one element of PATTERNS."
+(defun useful-pattern-p (patterns pattern env column-type)
+  "Is PATTERN useful within list PATTERNS for COLUMN-TYPE? PATTERN must EQ one element
+of PATTERNS."
+  (declare (type tc:pattern-list patterns)
+           (type tc:pattern pattern)
+           (type tc:environment env)
+           (type tc:ty column-type)
+           (values boolean))
   (useful-pattern-clause-p
    (loop :for p :in patterns
          :while (not (eq p pattern))
          :collect (list p))
    (list pattern)
+   (list column-type)
    env))
 
 (defun pattern-matrix-p (x)
@@ -106,17 +129,176 @@
 (deftype pattern-matrix ()
   '(satisfies pattern-matrix-p))
 
-(defun useful-pattern-clause-p (pattern-matrix clause env)
+(defun type-entry-for-column-type (type env)
+  "Return the TYPE-ENTRY for the head type constructor of TYPE, if any."
+  (declare (type tc:ty type)
+           (type tc:environment env)
+           (values (or null tc:type-entry)))
+  (let ((head (first (tc:flatten-type type))))
+    (when (tc:tycon-p head)
+      (tc:lookup-type env (tc:tycon-name head) :no-error t))))
+
+(defun possible-constructor-pattern (constructor-name column-type env)
+  "If CONSTRUCTOR-NAME can construct COLUMN-TYPE, return a synthetic
+PATTERN-CONSTRUCTOR whose subpatterns are typed wildcards. Otherwise return NIL."
+  (declare (type symbol constructor-name)
+           (type tc:ty column-type)
+           (type tc:environment env)
+           (values (or null tc:pattern-constructor)))
+  (let ((scheme (tc:lookup-value-type env constructor-name :no-error t)))
+    (when scheme
+      (let* ((fresh-qual-ty (tc:fresh-inst scheme))
+             (constructor-ty (tc:qualified-ty-type fresh-qual-ty))
+             (return-ty (tc:function-return-type constructor-ty)))
+        (handler-case
+            (let* (;; Unify, don't match. COLUMN-TYPE may itself contain
+                   ;; type variables, and a GADT constructor may unify them.
+                   (subs (tc:unify nil return-ty column-type))
+                   (constructor-ty (tc:apply-substitution subs constructor-ty))
+                   (return-ty (tc:apply-substitution subs return-ty))
+                   (argument-tys (tc:function-type-arguments constructor-ty)))
+              (tc:make-pattern-constructor :type (tc:qualify nil return-ty)
+                                           :name constructor-name
+                                           :patterns (loop :for arg-ty :in argument-tys
+                                                           :collect (make-wildcard-for-type arg-ty))))
+          (tc:coalton-internal-type-error ()
+            nil))))))
+
+(defun type-entry-for-seen-constructor-patterns (patterns env)
+  "Return the TYPE-ENTRY implied by constructor patterns in PATTERNS, if any.
+
+This is needed when COLUMN-TYPE is still a tyvar. In that case the column
+type has no type-constructor head, but the constructors already present in
+the pattern matrix may sitll identify the full ADT signature."
+  (declare (type tc:pattern-list patterns)
+           (type tc:environment env)
+           (values (or null tc:type-entry)))
+  (loop :for pattern :in patterns
+        :when (tc:pattern-constructor-p pattern)
+          :do (let ((entry (type-entry-for-column-type
+                            (pattern-bare-type pattern)
+                            env)))
+                (when (and entry
+                           (member (tc:pattern-constructor-name pattern)
+                                   (tc:type-entry-constructors entry)
+                                   :test #'eq))
+                  (return entry)))))
+
+(defun possible-constructor-patterns (column-type env seen-patterns)
+  "Return synthetic constructor patterns for every constructor that can produce COLUMN-TYPE.
+
+If COLUMN-TYPE has no concrete type-constructor head, use SEEN-PATTERNS as a fallback to
+recover the constructor signature from the matrix itself."
+  (declare (type tc:ty column-type)
+           (type tc:environment env)
+           (type tc:pattern-list seen-patterns)
+           (values tc:pattern-list))
+  (let ((entry (or (type-entry-for-column-type column-type env)
+                   (and (tc:tyvar-p column-type)
+                        (type-entry-for-seen-constructor-patterns
+                         seen-patterns
+                         env)))))
+    (if entry
+        (loop :for constructor-name :in (tc:type-entry-constructors entry)
+              :for pattern := (possible-constructor-pattern constructor-name
+                                                            column-type
+                                                            env)
+              :when pattern
+                :collect pattern)
+        nil)))
+
+(defun first-column-patterns (pattern-matrix)
+  (declare (type pattern-matrix pattern-matrix)
+           (values tc:pattern-list))
+  (loop :for row :in pattern-matrix
+        :for elem := (first row)
+        :when (or (tc:pattern-literal-p elem)
+                  (tc:pattern-constructor-p elem))
+          :collect elem))
+
+(defun first-column-constructors (pattern-matrix)
+  (declare (type pattern-matrix pattern-matrix)
+           (values tc:pattern-list))
+  (loop :for row :in pattern-matrix
+        :for elem := (first row)
+        :when (tc:pattern-constructor-p elem)
+          :collect elem))
+
+(defun constructor-pattern-names (patterns)
+  (declare (type tc:pattern-list patterns)
+           (values util:symbol-list))
+  (loop :for pattern :in patterns
+        :when (tc:pattern-constructor-p pattern)
+          :collect (tc:pattern-constructor-name pattern)))
+
+(defun specialize-column-types (column-types pattern)
+  "Update COLUMN-TYPES after specializing the first column by PATTERN.
+
+For a constructor C with fields T1 ... Tn, the first column is replaced with
+T1 ... Tn. The unification substitution is also applied to the remaining
+columns, which preserves GADT equalities between nested fields."
+  (declare (type tc:ty-list column-types)
+           (type (or tc:pattern-literal tc:pattern-constructor) pattern)
+           (values tc:ty-list boolean))
+  (let ((current-column-type (first column-types)))
+    (handler-case
+        (let* ((subs (tc:unify nil (pattern-bare-type pattern) current-column-type))
+               (new-column-types (etypecase pattern
+                                   (tc:pattern-literal (rest column-types))
+                                   (tc:pattern-constructor
+                                    (append (mapcar #'pattern-bare-type
+                                                    (tc:pattern-constructor-patterns pattern))
+                                            (rest column-types))))))
+          (values (tc:apply-substitution subs new-column-types) t))
+      (tc:coalton-internal-type-error ()
+        (values nil nil)))))
+
+(defun default-column-types-for-constructor (column-types constructor-pattern)
+  "Drop the first column after choosing CONSTRUCTOR-PATTERN for a wildcard
+column. Unlike SPECIALIZE-COLUMN-TYPES, this does not add constructor argument
+types, because the wildcard does not inspect constructor fields.
+
+It only applies the GADT refinement induced by the constructor return type to
+the remaining columns."
+  (declare (type tc:ty-list column-types)
+           (type tc:pattern-constructor constructor-pattern)
+           (values tc:ty-list boolean))
+  (let ((current-column-type (first column-types)))
+    (handler-case
+        (let ((subs (tc:unify nil
+                              (pattern-bare-type constructor-pattern)
+                              current-column-type)))
+          (values (tc:apply-substitution subs (rest column-types)) t))
+      (tc:coalton-internal-type-error ()
+        (values nil nil)))))
+
+(defun missing-constructor-patterns (seen-patterns possible-ctors)
+  "Return possible constructors for COLUMN-TYPE that are not named in SEEN-PATTERNS."
+  (declare (type tc:pattern-list seen-patterns)
+           (type tc:pattern-list possible-ctors)
+           (values tc:pattern-list))
+  (let ((seen-names (constructor-pattern-names seen-patterns)))
+    (remove-if
+     (lambda (constructor-pattern)
+       (member (tc:pattern-constructor-name constructor-pattern)
+               seen-names
+               :test #'eq))
+     possible-ctors)))
+
+(defun useful-pattern-clause-p (pattern-matrix clause column-types env)
   "Is CLAUSE useful with respect to PATTERN-MATRIX?
 
 PATTERN-MATRIX is a list of lists representing a pattern matrix in row-major format.
-CLAUSE is a list representing a row-vector of patterns."
+CLAUSE is a list representing a row-vector of patterns. COLUMN-TYPES is the current
+type of each matrix column."
   (declare (type pattern-matrix pattern-matrix)
            (type tc:pattern-list clause)
+           (type tc:ty-list column-types)
            (type tc:environment env)
            (values boolean &optional))
 
-  ;; NOTE: It is assumed that all rows of PATTERN-MATRIX have the same number of columns.
+  ;; NOTE: It is assumed that all rows of PATTERN-MATRIX have the same number of columns,
+  ;; and that COLUMN-TYPES has the same length as CLAUSE.
   (cond
     ;;
     ;; Check our base cases
@@ -136,40 +318,81 @@ CLAUSE is a list representing a row-vector of patterns."
     ;; Sub-case 1: The first member of CLAUSE is a constructor (or literal).
     ((or (tc:pattern-literal-p (first clause))
          (tc:pattern-constructor-p (first clause)))
-     (useful-pattern-clause-p
-      (specialize-matrix pattern-matrix (first clause))
-      (first (specialize-matrix (list clause) (first clause)))
-      env))
+     (multiple-value-bind (specialized-column-types possible-p)
+         (specialize-column-types column-types (first clause))
+       (when possible-p
+         (let ((specialized-matrix (specialize-matrix pattern-matrix (first clause)))
+               (specialized-clause (specialize-matrix (list clause) (first clause))))
+           (and specialized-clause
+                (useful-pattern-clause-p specialized-matrix
+                                         (first specialized-clause)
+                                         specialized-column-types
+                                         env))))))
 
     ;; Sub-case 2: The first member of CLAUSE is a wildcard (or variable)
     ((or (tc:pattern-wildcard-p (first clause))
          (tc:pattern-var-p (first clause)))
 
-     (let ((first-column-constructors
-             (loop :for row :in pattern-matrix
-                   :for elem := (first row)
-                   :when (or (tc:pattern-literal-p elem)
-                             (tc:pattern-constructor-p elem))
-                     :collect elem)))
+     (let* ((current-column-type (first column-types))
+            (first-column-patterns (first-column-patterns pattern-matrix))
+            (possible-constructors (possible-constructor-patterns current-column-type
+                                                                  env
+                                                                  first-column-patterns)))
        (cond
-         ;; If the constructors form a complete signature then CLAUSE
-         ;; is only useful if it is useful when specialized over the
-         ;; constructor.
-         ((complete-signature-p first-column-constructors env)
-          (loop :for pattern :in first-column-constructors
-                :when (useful-pattern-clause-p
-                       (specialize-matrix pattern-matrix pattern)
-                       (first (specialize-matrix (list clause) pattern))
-                       env)
-                  :do (return t)
-                :finally (return nil)))
-         ;; Otherwise, create a defaulted matrix and recurse, removing
-         ;; the first member of CLAUSE.
-         (t
+         ;; If this column has no known algebraic constructor signature, fall back
+         ;; to the ordinary default matrix case.
+         ((null possible-constructors)
           (useful-pattern-clause-p
            (default-matrix pattern-matrix)
            (rest clause)
-           env)))))
+           (rest column-types)
+           env))
+
+         ;; If the matrix has a complete constructor signature for this colmun,
+         ;; specialize over every possible constructor. This is the normal
+         ;; Maranget rule.
+         ((complete-signature-p first-column-patterns possible-constructors)
+          (loop :for constructor-pattern :in possible-constructors
+                :thereis
+                (multiple-value-bind (specialized-column-types possible-p)
+                    (specialize-column-types column-types constructor-pattern)
+                  (when possible-p
+                    (let ((specialized-clause (specialize-matrix (list clause)
+                                                                 constructor-pattern)))
+                      (and specialized-clause
+                           (useful-pattern-clause-p
+                            (specialize-matrix pattern-matrix constructor-pattern)
+                            (first specialized-clause)
+                            specialized-column-types
+                            env)))))))
+
+         ;; If the signature is incomplete, the useful value can be chosen from
+         ;; one of the missing constructors. Explicit constructor rows cannot match
+         ;; that value, so only the default matrix matters.
+         ;;
+         ;; For GADTs, different missing constructors may refine the remaining
+         ;; columns differently, so try each missing constructor. But do NOT expand
+         ;; into the constructor's fields; the wildcard did not inspect them.
+         (t
+          (let ((defaulted-matrix
+                  (default-matrix pattern-matrix))
+                (defaulted-clause
+                  (rest clause))
+                (missing-constructors
+                  (missing-constructor-patterns
+                   first-column-patterns
+                   possible-constructors)))
+            (loop :for constructor-pattern :in missing-constructors
+                  :thereis
+                  (multiple-value-bind (defaulted-column-types possible-p)
+                      (default-column-types-for-constructor column-types constructor-pattern)
+                    (and possible-p
+                         (useful-pattern-clause-p
+                          defaulted-matrix
+                          defaulted-clause
+                          defaulted-column-types
+                          env)))))))))
+
     (t
      (util:coalton-bug "Not reachable."))))
 
@@ -221,10 +444,10 @@ CLAUSE is a list representing a row-vector of patterns."
                   (t
                    (util:coalton-bug "Not reachable.")))))
 
-(defun complete-signature-p (patterns env)
-  "Do the set of PATTERNS form a complete signature of the constructed type?"
+(defun complete-signature-p (patterns possible-ctors)
+  "Do PATTERNS mention every constructor that can produce COLUMN-TYPE?"
   (declare (type tc:pattern-list patterns)
-           (type tc:environment env)
+           (type tc:pattern-list possible-ctors)
            (values boolean))
   (cond
     ;; Zero constructors cannot form a complete signature.
@@ -238,10 +461,14 @@ CLAUSE is a list representing a row-vector of patterns."
 
     ;; Otherwise ensure that all constructors are accounted for in PATTERNS.
     (t
-     (let* ((constructor-names (mapcar #'tc:pattern-constructor-name patterns))
-            (constructed-type (tc:constructor-entry-constructs (tc:lookup-constructor env (first constructor-names))))
-            (type-constructors (tc:type-entry-constructors (tc:lookup-type env constructed-type))))
-       (null (set-difference type-constructors constructor-names :test #'eq))))))
+     (let ((constructor-names (constructor-pattern-names patterns))
+           (possible-constructor-names (mapcar #'tc:pattern-constructor-name
+                                               possible-ctors)))
+       (and possible-constructor-names
+            (null
+             (set-difference possible-constructor-names
+                             constructor-names
+                             :test #'eq)))))))
 
 (defun default-matrix (pattern-matrix)
   "Default the given PATTERN-MATRIX."
@@ -282,85 +509,95 @@ CLAUSE is a list representing a row-vector of patterns."
      (collapse-binding-patterns
       (tc:pattern-binding-pattern pat)))))
 
-(defun find-non-matching-value (pattern-matrix n env)
-  "Finds an example of a non-matching value for PATTERN-MATRIX or, if
-   PATTERN-MATRIX is exhaustive returns T."
-  (declare (type pattern-matrix pattern-matrix)
-           (type (integer 0) n)
-           (optimize (debug 3)))
-  (cond
-    ;; An empty pattern generates n wildcards.
-    ((and (zerop (length pattern-matrix)))
-     (loop :for i :below n
-           :collect (tc:make-pattern-wildcard
-                     :type (tc:qualify nil (tc:make-variable)))))
-    ;; Zero wildcards with a pattern matrix that has zero columns indicates the matrix is exhaustive.
-    ((and (zerop n)
-          (zerop (length (first pattern-matrix))))
-     t)
-    (t
-     (let ((first-column-constructors
-             (loop :for row :in pattern-matrix
-                   :for elem := (first row)
-                   :when (tc:pattern-constructor-p elem)
-                     :collect elem)))
-       (cond
-         ;; If the constructors in the PATTERN-MATRIX form a complete
-         ;; signature then specialize and return the first
-         ;; non-matching sub-value.
-         ((complete-signature-p first-column-constructors env)
-          (loop :for ctor :in first-column-constructors
-                :for ctor-arity := (length (tc:pattern-constructor-patterns ctor))
-                :for val := (find-non-matching-value
-                             (specialize-matrix pattern-matrix ctor)
-                             (+ ctor-arity n -1)
-                             env)
-                :unless (eq val t)
-                  :do (return (cons (tc:make-pattern-constructor
-                                     :type (tc:pattern-type ctor)
-                                     :name (tc:pattern-constructor-name ctor)
-                                     :patterns (subseq val 0 ctor-arity))
-                                    (subseq val ctor-arity (+ ctor-arity n -1))))
-                :finally (return t)))
-         ;; Otherwise, check the defaulted matrix.
-         (t
-          (let ((val (find-non-matching-value
-                      (default-matrix pattern-matrix)
-                      (1- n)
-                      env)))
-            (cond
-              ;; If this is exhaustive then PATTERN-MATRIX is exhaustive.
-              ((eq val t)
-               t)
-              ;; If there are no constructors then emit a wildcard.
-              ((null first-column-constructors)
-               (cons (tc:make-pattern-wildcard
-                      :type (tc:qualify nil (tc:make-variable)))
-                     val))
-              ;; Or emit a constructor which was not named in this pattern.
-              (t
-               (cons (find-unnamed-constructor first-column-constructors env)
-                     val))))))))))
-
-(defun find-unnamed-constructor (patterns env)
-  "Find and create a pattern constructor with the type of, but not named in PATTERNS."
+(defun find-unnamed-constructor (patterns possible-ctors)
+  "Find and create a pattern constructor for COLUMN-TYPE that is not named in PATTERNS."
   (declare (type tc:pattern-list patterns)
-           (type tc:environment env)
-           (values tc:pattern))
-  (let* ((constructor-names (mapcar #'tc:pattern-constructor-name patterns))
-         (constructed-type (tc:constructor-entry-constructs (tc:lookup-constructor env (first constructor-names))))
-         (type-constructors (tc:type-entry-constructors (tc:lookup-type env constructed-type)))
-         (unnamed-constructor (first (set-difference type-constructors constructor-names :test #'eq)))
-         (unnamed-constructor-entry (tc:lookup-constructor env unnamed-constructor)))
+           (type tc:pattern-list possible-ctors)
+           (values tc:pattern-constructor))
+  (let* ((constructor-names (constructor-pattern-names patterns))
+         (unnamed-constructor (find-if-not (lambda (constructor-pattern)
+                                             (member (tc:pattern-constructor-name constructor-pattern)
+                                                     constructor-names
+                                                     :test #'eq))
+                                           possible-ctors)))
     (unless unnamed-constructor
       (util:coalton-bug "Not reachable."))
 
     ;; NOTE: Here we _could_ reasonably return all missing
     ;; constructors, however that would require additional support in
     ;; the error generation. Instead we just select the first one.
-    (tc:make-pattern-constructor
-     :type (tc:pattern-type (first patterns))
-     :name unnamed-constructor
-     :patterns (loop :for i :below (tc:constructor-entry-arity unnamed-constructor-entry)
-                     :collect (tc:make-pattern-wildcard
-                               :type (tc:qualify nil (tc:make-variable)))))))
+    unnamed-constructor))
+
+(defun find-non-matching-value (pattern-matrix column-types env)
+  "Finds an example of a non-matching value for PATTERN-MATRIX or, if
+   PATTERN-MATRIX is exhaustive returns T.
+
+COLUMN-TYPES is the current type of each pattern-matrix column."
+  (declare (type pattern-matrix pattern-matrix)
+           (type tc:ty-list column-types)
+           (type tc:environment env))
+  (cond
+    ;; An empty pattern matrix misses one wildcard value for each current column.
+    ((zerop (length pattern-matrix))
+     (loop :for column-type :in column-types
+           :collect (make-wildcard-for-type column-type)))
+
+    ;; Zero columns with a non-empty matrix means the matrix is exhaustive.
+    ((and (null column-types)
+          (zerop (length (first pattern-matrix))))
+     t)
+
+    ((null column-types)
+     (util:coalton-bug "Pattern matrix has columns but no column types."))
+
+    (t
+     (let* ((current-column-type (first column-types))
+            (first-column-patterns (first-column-patterns pattern-matrix))
+            (first-column-constructors (first-column-constructors pattern-matrix))
+            (possible-constructors (possible-constructor-patterns current-column-type
+                                                                  env
+                                                                  first-column-patterns)))
+       (cond
+         ;; If the constructors in the PATTERN-MATRIX form a complete signature
+         ;; for the current column type, specialize and return the first
+         ;; non-maching sub value.
+         ((complete-signature-p first-column-patterns possible-constructors)
+          (loop :for constructor-pattern :in possible-constructors
+                :for constructor-arity := (length (tc:pattern-constructor-patterns constructor-pattern))
+                :for val := (multiple-value-bind (specialized-column-types possible-p)
+                                (specialize-column-types column-types constructor-pattern)
+                              (if possible-p
+                                  (find-non-matching-value
+                                   (specialize-matrix pattern-matrix constructor-pattern)
+                                   specialized-column-types
+                                   env)
+                                  t))
+                :unless (eq val t)
+                  :do (return
+                        (cons
+                         (tc:make-pattern-constructor :type (tc:pattern-type constructor-pattern)
+                                                      :name (tc:pattern-constructor-name constructor-pattern)
+                                                      :patterns (subseq val 0 constructor-arity))
+                         (subseq val constructor-arity)))
+                :finally (return t)))
+
+         ;; Otherwise, check the defaulted matrix.
+         (t
+          (let ((val (find-non-matching-value (default-matrix pattern-matrix)
+                                              (rest column-types)
+                                              env)))
+            (cond
+              ;; If this is exhaustive then PATTERN-MATRIX is exhaustive.
+              ((eq val t)
+               t)
+
+              ;; If there are no possible constructors, emit a wildcard.
+              ((null possible-constructors)
+               (cons (make-wildcard-for-type current-column-type)
+                     val))
+
+              ;; Otherwise emit a possible constructor that was not named.
+              (t
+               (cons (find-unnamed-constructor first-column-constructors
+                                               possible-constructors)
+                     val))))))))))

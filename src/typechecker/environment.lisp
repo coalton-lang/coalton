@@ -48,6 +48,7 @@
    #:type-entry-newtype                     ; ACCESSOR
    #:type-entry-exception-p                 ; ACCESSOR
    #:type-entry-resumption-p                ; ACCESSOR
+   #:type-entry-gadt-p                      ; ACCESSOR
    #:type-environment                       ; STRUCT
    #:constructor-entry                      ; STRUCT
    #:make-constructor-entry                 ; ACCESSOR
@@ -57,6 +58,7 @@
    #:constructor-entry-constructs           ; ACCESSOR
    #:constructor-entry-classname            ; ACCESSOR
    #:constructor-entry-compressed-repr      ; ACCESSOR
+   #:constructor-entry-gadt-p               ; ACCESSOR
    #:constructor-entry-list                 ; TYPE
    #:constructor-environment                ; STRUCT
    #:type-alias-entry                       ; STRUCT
@@ -318,7 +320,8 @@
   (docstring  (util:required 'docstring)         :type (or null string)          :read-only t)
   (location   nil                                :type (or null source:location) :read-only t)
   (exception-p nil                               :type boolean                   :read-only nil)
-  (resumption-p nil                              :type boolean                   :read-only nil))
+  (resumption-p nil                              :type boolean                   :read-only nil)
+  (gadt-p       (util:required 'gadt-p)          :type boolean                   :read-only t))
 
 (defmethod source:location ((self type-entry))
   (type-entry-location self))
@@ -357,7 +360,8 @@
             :explicit-repr '(:native cl:boolean)
             :enum-repr t
             :newtype nil
-            :docstring "Either true or false, internally represented by `cl:t` and `cl:nil` respectively."))
+            :docstring "Either true or false, internally represented by `cl:t` and `cl:nil` respectively."
+            :gadt-p nil))
 
           ('coalton:Unit
            (make-type-entry
@@ -371,7 +375,8 @@
             :explicit-repr :enum
             :enum-repr t
             :newtype nil
-            :docstring "The \"unit\" type whose only member is the value `Unit`."))
+            :docstring "The \"unit\" type whose only member is the value `Unit`."
+            :gadt-p nil))
 
           ('coalton:Char
            (make-type-entry
@@ -385,7 +390,8 @@
             :explicit-repr '(:native cl:character)
             :enum-repr nil
             :newtype nil
-            :docstring "A character represented by a Common Lisp `cl:character`."))
+            :docstring "A character represented by a Common Lisp `cl:character`."
+            :gadt-p nil))
 
           ('coalton:Integer
            (make-type-entry
@@ -399,7 +405,8 @@
             :explicit-repr '(:native cl:integer)
             :enum-repr nil
             :newtype nil
-            :docstring "Integer of unbounded size. Represented by a Common Lisp `cl:integer`."))
+            :docstring "Integer of unbounded size. Represented by a Common Lisp `cl:integer`."
+            :gadt-p nil))
 
           ('coalton:F32
            (make-type-entry
@@ -413,7 +420,8 @@
             :explicit-repr '(:native cl:single-float)
             :enum-repr nil
             :newtype nil
-            :docstring "Single-precision floating point number (32 bits in size). Represented by a Common Lisp `cl:single-float`."))
+            :docstring "Single-precision floating point number (32 bits in size). Represented by a Common Lisp `cl:single-float`."
+            :gadt-p nil))
 
           ('coalton:F64
            (make-type-entry
@@ -427,7 +435,8 @@
             :explicit-repr '(:native cl:double-float)
             :enum-repr nil
             :newtype nil
-            :docstring "Double-precision floating point number (64 bits in size). Represented by a Common Lisp `cl:double-float`."))
+            :docstring "Double-precision floating point number (64 bits in size). Represented by a Common Lisp `cl:double-float`."
+            :gadt-p nil))
 
           ('coalton:String
            (make-type-entry
@@ -441,7 +450,8 @@
             :explicit-repr '(:native cl:string)
             :enum-repr nil
             :newtype nil
-            :docstring "String of characters. Represented by Common Lisp `cl:string`."))
+            :docstring "String of characters. Represented by Common Lisp `cl:string`."
+            :gadt-p nil))
 
           ('coalton:Fraction
            (make-type-entry
@@ -455,7 +465,8 @@
             :explicit-repr '(:native cl:rational)
             :enum-repr nil
             :newtype nil
-            :docstring "A ratio of integers always in reduced form. Represented by a Common Lisp `cl:rational`."))
+            :docstring "A ratio of integers always in reduced form. Represented by a Common Lisp `cl:rational`."
+            :gadt-p nil))
 
           ('coalton:Arrow
            (make-type-entry
@@ -469,7 +480,8 @@
             :explicit-repr nil
             :enum-repr nil
             :newtype nil
-            :docstring "A named constructor for function types. `Arrow :a :b` is equivalent to `:a -> :b`."))
+            :docstring "A named constructor for function types. `Arrow :a :b` is equivalent to `:a -> :b`."
+            :gadt-p nil))
 
           ('coalton:List
            (make-type-entry
@@ -483,7 +495,8 @@
             :explicit-repr '(:native cl:list)
             :enum-repr nil
             :newtype nil
-            :docstring "Homogeneous list of objects. Represented as a typical Common Lisp chain of `cl:cons` (or `cl:nil`)."))
+            :docstring "Homogeneous list of objects. Represented as a typical Common Lisp chain of `cl:cons` (or `cl:nil`)."
+            :gadt-p nil))
 
           ('coalton:Optional
            (make-type-entry
@@ -497,7 +510,8 @@
             :explicit-repr '(:native cl:t)
             :enum-repr nil
             :newtype nil
-            :docstring "A type that allows indicating the presence or absence of a value. The underlying representation does not allocate when a value is present (i.e., with `Some`).")))))
+            :docstring "A type that allows indicating the presence or absence of a value. The underlying representation does not allocate when a value is present (i.e., with `Some`)."
+            :gadt-p nil)))))
 
 ;;;
 ;;; Constructor environment
@@ -513,7 +527,8 @@
 
   ;; If this constructor constructs a compressed-repr type then
   ;; compressed-repr is the runtime value of this nullary constructor
-  (compressed-repr (util:required 'compressed-repr) :type t                              :read-only t))
+  (compressed-repr (util:required 'compressed-repr) :type t                              :read-only t)
+  (gadt-p          nil                              :type boolean                        :read-only t))
 
 (defmethod source:docstring ((self constructor-entry))
   (constructor-entry-docstring self))
@@ -546,7 +561,8 @@
             :constructs 'coalton:Boolean
             :classname 'coalton::Boolean/True
             :docstring "Boolean `True`"
-            :compressed-repr 't))
+            :compressed-repr 't
+            :gadt-p nil))
 
           ('coalton:False
            (make-constructor-entry
@@ -556,7 +572,8 @@
             :constructs 'coalton:Boolean
             :classname 'coalton::Boolean/False
             :docstring "Boolean `False`"
-            :compressed-repr 'nil))
+            :compressed-repr 'nil
+            :gadt-p nil))
 
           ('coalton:Unit
           (make-constructor-entry
@@ -566,7 +583,8 @@
             :constructs 'coalton:Unit
             :classname 'coalton::Unit/Unit
             :docstring "`Unit` is the explicit one-value unit type, distinct from zero-value returns `()`."
-            :compressed-repr coalton-impl/constants:+value-of-unit+))
+            :compressed-repr coalton-impl/constants:+value-of-unit+
+            :gadt-p nil))
 
           ('coalton:Cons
            (make-constructor-entry
@@ -576,7 +594,8 @@
             :constructs 'coalton:List
             :classname nil
             :docstring "`Cons` represents a `List` containing a first element (`car`) and a nested `Cons` (`cdr`)."
-            :compressed-repr 'nil))
+            :compressed-repr 'nil
+            :gadt-p nil))
 
           ('coalton:Nil
            (make-constructor-entry
@@ -586,7 +605,8 @@
             :constructs 'coalton:List
             :classname nil
             :docstring "`Nil` represents an empty `List`."
-            :compressed-repr 'nil))
+            :compressed-repr 'nil
+            :gadt-p nil))
 
           ('coalton:Some
            (make-constructor-entry
@@ -596,7 +616,8 @@
             :constructs 'coalton:Optional
             :classname nil
             :docstring "`Some` expresses the presence of a meaningful value."
-            :compressed-repr 'nil))
+            :compressed-repr 'nil
+            :gadt-p nil))
 
           ('coalton:None
            (make-constructor-entry
@@ -606,7 +627,8 @@
             :constructs 'coalton:Optional
             :classname nil
             :docstring "`None` expresses the absence of a meaningful value."
-            :compressed-repr 'nil)))))
+            :compressed-repr 'nil
+            :gadt-p nil)))))
 
 #+(and sbcl coalton-release)
 (declaim (sb-ext:freeze-type constructor-environment))

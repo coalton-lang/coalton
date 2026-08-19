@@ -14,7 +14,8 @@
    (#:algo #:coalton-impl/algorithm)
    (#:parser #:coalton-impl/parser)
    (#:tc #:coalton-impl/typechecker/stage-1)
-   (#:derive #:coalton-impl/typechecker/derive))
+   (#:derive #:coalton-impl/typechecker/derive)
+   (#:pt #:coalton-impl/typechecker/parse-type))
   (:export
    #:toplevel-define-type               ; FUNCTION
    #:type-definition                    ; STRUCT
@@ -31,6 +32,7 @@
    #:type-definition-constructors       ; ACCESSOR
    #:type-definition-constructor-types  ; ACCESSOR
    #:type-definition-docstring          ; ACCESSOR
+   #:type-definition-gadt-p             ; ACCESSOR
    #:type-definition-list               ; TYPE
    ))
 
@@ -62,7 +64,8 @@
   (docstring         (util:required 'docstring)         :type (or null string)          :read-only t)
   (location          (util:required 'location)          :type source:location           :read-only t)
   (exception-p       (util:required 'exception-p)       :type boolean                   :read-only t)
-  (resumption-p      (util:required 'resumption-p)      :type boolean                   :read-only t))
+  (resumption-p      (util:required 'resumption-p)      :type boolean                   :read-only t)
+  (gadt-p            (util:required 'gadt-p)            :type boolean                   :read-only t))
 
 (defmethod source:location ((self type-definition))
   (type-definition-location self))
@@ -419,7 +422,8 @@ This is conservative and intentionally aligns with mutable native wrappers."
           :docstring (source:docstring type)
           :location (source:location parsed-type)
           :exception-p (type-definition-exception-p type)
-          :resumption-p (type-definition-resumption-p type))))
+          :resumption-p (type-definition-resumption-p type)
+          :gadt-p (type-definition-gadt-p type))))
 
   ;; Define the type's constructors in the environment
   (loop :for ctor :in (type-definition-constructors type)
@@ -471,7 +475,9 @@ This is conservative and intentionally aligns with mutable native wrappers."
 
         (ctor-table (make-hash-table :test #'eq))
 
-        (alias-table (make-hash-table :test #'eq)))
+        (alias-table (make-hash-table :test #'eq))
+
+        (ctor-scheme-table (make-hash-table :test #'eq)))
 
     ;; Infer the kinds of each type
     (loop :for type :in types
@@ -480,14 +486,32 @@ This is conservative and intentionally aligns with mutable native wrappers."
                 :for ctor :in (parser:type-definition-ctors type)
                 :for ctor-name
                   := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
-                :for fields
-                  := (loop
-                       :for field :in (parser:type-definition-ctor-field-types ctor)
-                       :collect (multiple-value-bind (type ksubs_)
-                                    (parse-type field env ksubs)
-                                  (setf ksubs ksubs_)
-                                  type))
-                :do (setf (gethash ctor-name ctor-table) fields)))
+                :for ctor-signature
+                  := (parser:type-definition-ctor-signature ctor)
+                :do
+                   (cond
+                     ;; GADTs are typed by their function signature
+                     (ctor-signature
+                      (let ((branch-env (make-partial-type-env
+                                         :env (partial-type-env-env env)
+                                         :ty-table (alexandria:copy-hash-table (partial-type-env-ty-table env)))))
+                        (pt:seed-qualified-type-variables ctor-signature branch-env)
+                        (multiple-value-bind (qual-ty ksubs_)
+                            (infer-type-kinds ctor-signature tc:+kstar+ ksubs branch-env)
+                          (setf ksubs ksubs_)
+                          (setf (gethash ctor-name ctor-scheme-table) qual-ty)
+                          (setf (gethash ctor-name ctor-table)
+                                (tc:function-type-arguments qual-ty)))))
+
+                     ;; ADTs are typed by their constructor fields
+                     (t
+                      (let ((fields (loop
+                                      :for field :in (parser:type-definition-ctor-field-types ctor)
+                                      :collect (multiple-value-bind (type ksubs_)
+                                                   (parse-type field env ksubs)
+                                                 (setf ksubs ksubs_)
+                                                 type))))
+                        (setf (gethash ctor-name ctor-table) fields))))))
 
     ;; Infer the kinds of each type alias.
     (loop :for type :in types
@@ -581,37 +605,61 @@ This is conservative and intentionally aligns with mutable native wrappers."
          :for repr-arg
            := (and repr (eq repr-type :native) (cst:raw (parser:attribute-repr-arg repr)))
 
-
          :for constructor-args
            := (loop
                 :for ctor :in (parser:type-definition-ctors type)
+                :for ctor-name := (parser:identifier-src-name
+                                   (parser:type-definition-ctor-name ctor))
+                :for stored-scheme := (gethash ctor-name ctor-scheme-table)
                 :collect
-                (loop :for parser-field-type
-                        :in (parser:type-definition-ctor-field-types ctor)
-                      :collect (multiple-value-bind (field-type ignored-ksubs)
-                                   (parse-type parser-field-type alias-partial-env ksubs)
-                                 (declare (ignore ignored-ksubs))
-                                 field-type)))
+                (if stored-scheme
+                    ;; GADT constructor: arguments come from the expilict signature
+                    (tc:function-type-arguments
+                     (tc:apply-ksubstitution ksubs stored-scheme))
+
+                    ;; ADT constructor: arguments come from fiedl syntax
+                    (loop :for parser-field-type
+                            :in (parser:type-definition-ctor-field-types ctor)
+                          :collect (multiple-value-bind (field-type ignored-ksubs)
+                                       (parse-type parser-field-type alias-partial-env ksubs)
+                                     (declare (ignore ignored-ksubs))
+                                     field-type))))
 
          :for constructor-types
            := (loop
+                :for ctor :in (parser:type-definition-ctors type)
                 :for ctor-args :in constructor-args
-                :for ty
-                  := (tc:prepend-function-input-types
-                      ctor-args
-                      (tc:apply-type-argument-list
-                       (tc:apply-ksubstitution ksubs (gethash name (partial-type-env-ty-table env)))
-                       tvars))
-                :collect (tc:quantify-using-tvar-order tvars (tc:qualify nil ty)))
+                :for ctor-name := (parser:identifier-src-name
+                                   (parser:type-definition-ctor-name ctor))
+                :for stored-scheme := (gethash ctor-name ctor-scheme-table)
+                :collect
+                (if stored-scheme
+                    ;; GADT constructor: use the explicit constructor type
+                    (let* ((qual-ty (tc:apply-ksubstitution ksubs stored-scheme))
+                           (vars-in-qual (tc:type-variables qual-ty))
+                           (ordered-vars (append tvars
+                                                 (set-difference vars-in-qual
+                                                                 tvars
+                                                                 :test #'tc:ty=))))
+                      (tc:quantify-using-tvar-order ordered-vars qual-ty))
+
+                    ;; ADT constructor
+                    (let ((ty (tc:prepend-function-input-types
+                               ctor-args
+                               (tc:apply-type-argument-list
+                                (tc:apply-ksubstitution ksubs (gethash name (partial-type-env-ty-table env)))
+                                tvars))))
+                      (tc:quantify-using-tvar-order tvars (tc:qualify nil ty)))))
 
          ;; Check that repr :enum types do not have any constructors with fields
          :when (eq repr-type :enum)
            :do (loop
                  :for ctor :in (parser:toplevel-define-type-ctors type)
-                 :unless (endp (parser:constructor-fields ctor))
+                 :for ctor-name
+                   := (parser:identifier-src-name (parser:type-definition-ctor-name ctor))
+                 :unless (endp (gethash ctor-name ctor-table))
                    :do (tc-error "Invalid repr :enum attribute"
-                                 (tc-note (first (parser:constructor-fields ctor))
-                                          "constructors of repr :enum types cannot have fields")))
+                                 (tc-note ctor "Enum constructors cannot have arguments.")))
 
          ;; Check that repr :transparent types have a single constructor
          :when (eq repr-type :transparent)
@@ -640,13 +688,14 @@ This is conservative and intentionally aligns with mutable native wrappers."
                   :collect (tc:make-constructor-entry
                             :name ctor-name
                             :source-name (parser:identifier-src-source-name (parser:type-definition-ctor-name ctor))
-                            :arity (length (parser:type-definition-ctor-field-types ctor))
+                            :arity (length (gethash ctor-name ctor-table))
                             :constructs name
                             :classname classname
                             :docstring ctor-docstring
                             :compressed-repr (if (eq repr-type :enum)
                                                  classname
-                                                 nil))))
+                                                 nil)
+                            :gadt-p (not (null (gethash ctor-name ctor-scheme-table))))))
 
               (type-definition
                 (make-type-definition
@@ -679,7 +728,8 @@ This is conservative and intentionally aligns with mutable native wrappers."
                  :docstring (source:docstring type)
                  :location (source:location type)
                  :exception-p (parser:type-definition-exception-p type)
-                 :resumption-p (parser:type-definition-resumption-p type))))
+                 :resumption-p (parser:type-definition-resumption-p type)
+                 :gadt-p (not (null (some #'tc:constructor-entry-gadt-p ctors))))))
 
            (setf instances
                  ;; Some generated instances depend only on the raw type
