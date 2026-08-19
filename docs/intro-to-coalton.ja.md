@@ -156,7 +156,7 @@ Coalton パッケージ（`#:coalton-user` を含む）は、`#:common-lisp`/`#:
   (define x (addTwo 3))
 
   ;; 無名関数はfnで定義できます
-  (define z (map (fn (x) (+ 2 x)) (make-list 1 2 3 4))))
+  (define z (map (fn (x) (+ 2 x)) [1 2 3 4])))
 ```
 
 ### 関数とカリー化
@@ -195,8 +195,8 @@ Coaltonでは、この機能を最適化して、可能な限りクロージャ�
 
 ```lisp
 (coalton-toplevel
-  ;; リストはmake-listマクロで作れます
-  (define nums (make-list 2 3 4 5)))
+  ;; リストは角括弧構文で作れます
+  (define nums [2 3 4 5]))
 
 (coalton
   ;; Coaltonでは関数はカリー化されます
@@ -397,7 +397,7 @@ COALTON-USER> (describe-type-alias 'Pair)
 フィールドアクセサは値として関数に渡すこともできます:
 
 ```
-(coalton (map .x (make-list (Point 1 2) (Point 2 3))))
+(coalton (map .x [(Point 1 2) (Point 2 3)]))
 ```
 
 構造体にも型パラメータをつけられます：
@@ -753,19 +753,19 @@ COALTON/MATH/REAL> (coalton (the F32 (fromfrac 999/1000)))
 
 ## リスト
 
-Coaltonは内部でLispのリストを使用しています。リストは`make-list`で作成できます。
+Coaltonは内部でLispのリストを使用しています。リストは角括弧構文で作成できます。
 
 ```lisp
 (coalton-toplevel
-  (define x (make-list 1 2 3))
-  (define y (make-list "a" "b" "c")))
+  (define x [1 2 3])
+  (define y ["a" "b" "c"]))
 ```
 
 リストのすべての要素の型は同じでなければいけません。つまり、以下のコードは型エラーを引き起こします。
 
 ```
 COALTON-USER> (coalton-toplevel
-                (define wut (make-list 1.0d0 2.0d0 3.0)))
+                (define wut [1.0d0 2.0d0 3.0]))
 ; error: Type mismatch
 ;   --> repl input:3:4
 ;    |
@@ -1194,7 +1194,7 @@ Coaltonには、Haskellの `do` 表現と類似した動作をする`do`マク�
       (pure c)))
 
     ;; [6+3, 5+3, 4+3, 6+2, 5+2, 4+2, 6+1, 5+1, 4+1]
-   (define xs (f (make-list 1 2 3) (make-list 4 5 6))))
+   (define xs (f [1 2 3] [4 5 6])))
 ```
 
 ## インライン型アノテーション
