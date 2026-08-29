@@ -124,7 +124,7 @@ EXPR-TYPE, returning (VALUES PREDICATE BINDINGS BINDING-TYPES).")
                                     (tc:fresh-inst
                                      (tc:lookup-value-type env ctor-name))))
                 (ctor-type (tc:apply-substitution
-                            (tc:match (tc:function-return-type generic-ctor-type) expr-type)
+                            (tc:unify nil (tc:function-return-type generic-ctor-type) expr-type)
                             generic-ctor-type))
                 (lisp-type-string (format nil "~A/~A" (tc:constructor-entry-constructs ctor) ctor-name)))
            (multiple-value-bind (preds bindings types)

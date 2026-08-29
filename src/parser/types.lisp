@@ -12,6 +12,7 @@
   (:export
    #:ty                                 ; STRUCT
    #:ty-list                            ; TYPE
+   #:ty-tycon-head                      ; FUNCTION
    #:tyvar                              ; STRUCT
    #:make-tyvar                         ; CONSTRUCTOR
    #:tyvar-p                            ; FUNCTION
@@ -38,6 +39,7 @@
    #:function-ty-positional-input-types ; ACCESSOR
    #:function-ty-keyword-input-types    ; ACCESSOR
    #:function-ty-output-types           ; ACCESSOR
+   #:function-ty-return-tycon-head      ; FUNCTION
    #:result-ty                          ; STRUCT
    #:make-result-ty                     ; CONSTRUCTOR
    #:result-ty-output-types             ; ACCESSOR
@@ -103,6 +105,14 @@
                (:copier nil))
   (location (util:required 'location) :type source:location :read-only t))
 
+(defun ty-tycon-head (ty)
+  "Return the tycon head of TY, or NIL."
+  (declare (type ty ty)
+           (values (or null tycon)))
+  (let ((head (first (flatten-type ty))))
+    (when (tycon-p head)
+      head)))
+
 (defmethod source:location ((self ty))
   (ty-location self))
 
@@ -166,6 +176,18 @@
   (positional-input-types (util:required 'positional-input-types) :type ty-list               :read-only t)
   (keyword-input-types    (util:required 'keyword-input-types)    :type keyword-ty-entry-list :read-only t)
   (output-types           (util:required 'output-types)           :type (or null ty-list)     :read-only t))
+
+(defun function-ty-return-tycon-head (ty)
+  "Return the head type constructor of TY's return value. Returns NIL if TY has
+multiple return values or a non-tycon-headed return."
+  (declare (type function-ty ty)
+           (values (or null tycon)))
+  (let ((outputs (function-ty-output-types ty)))
+    (declare (type cons outputs))
+    (when (alexandria:length= 1 outputs)
+      (let ((head (first (flatten-type (first outputs)))))
+        (when (tycon-p head)
+          head)))))
 
 (defstruct (result-ty (:include ty)
                       (:copier nil))

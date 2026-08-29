@@ -8,6 +8,7 @@
    #:coalton-impl/typechecker/predicate)
   (:export
    #:unify                              ; FUNCTION
+   #:try-unify                          ; FUNCTION
    #:match                              ; FUNCTION
    #:predicate-mgu                      ; FUNCTION
    #:predicate-match                    ; FUNCTION
@@ -27,6 +28,20 @@
   (let ((new-substs (mgu (apply-substitution substs type1)
                          (apply-substitution substs type2))))
     (compose-substitution-lists new-substs substs)))
+
+(defun try-unify (subs type1 type2)
+  "Try to unify TYPE1 and TYPE2 under SUBS.
+
+Returns two values:
+  1. The resulting substitutions, or the original substitutions on failure
+  2. Whether unification succeeded."
+  (declare (type substitution-list subs)
+           (type ty type1 type2)
+           (values substitution-list boolean))
+  (handler-case
+      (values (unify subs type1 type2) t)
+    (coalton-internal-type-error ()
+      (values subs nil))))
 
 (defun function-keyword-entry (entries keyword)
   (declare (type keyword keyword)

@@ -289,6 +289,7 @@
                 :serial t
                 :components ((:file "lisp-type-tests")
                              (:file "dictionary-resolution-tests")))
+               (:ct-file "gadt-tests")
                (:file "environment-persist-tests")
                (:file "coalton-tests")
                (:file "shortcut-tailcall-tests")

@@ -1,0 +1,1019 @@
+================================================================================
+1 Define Mixed ADT/GADT
+================================================================================
+
+(package test-package)
+
+(define-type T-dtg1
+  (T-dtg1-1 (Type T-dtg1))
+  T-dtg1-2)
+
+--------------------------------------------------------------------------------
+
+error: Malformed type definition
+  --> test:3:0
+   |
+ 3 |   (define-type T-dtg1
+   |  _^
+ 4 | |   (T-dtg1-1 (Type T-dtg1))
+ 5 | |   T-dtg1-2)
+   | |___________^  cannot define implicitly and explicitly typed constructors
+
+================================================================================
+2 GADT Non-Exhaustive Match
+================================================================================
+
+(package test-package)
+
+(define-type T-dtg2
+  (T2-Int (Type (Integer -> T-dtg2)))
+  (T2-Str (Type (String -> T-dtg2))))
+
+(declare t-dtg2->int (T-dtg2 -> Integer))
+(define (t-dtg2->int g)
+  (match g
+    ((T2-Int x) x)))
+
+--------------------------------------------------------------------------------
+
+warn: non-exhaustive match
+  --> test:9:2
+    |
+ 9  |      (match g
+    |  ____^
+    | | ___-
+ 10 | ||     ((T2-Int x) x)))
+    | ||___________________- missing case (T2-STR "_")
+    | |____________________^ non-exhaustive match
+
+================================================================================
+3 GADT Non-Exhaustive Abstraction
+================================================================================
+
+(package test-package)
+
+(define-type T-dtg3
+  (T3-Int (Type (Integer -> T-dtg3)))
+  (T3-Str (Type (String -> T-dtg3))))
+
+(declare t-dtg3->int-abstr (T-dtg3 -> Integer))
+(define (t-dtg3->int-abstr (T3-Int x))
+  x)
+
+--------------------------------------------------------------------------------
+
+error: Non-exhaustive match
+  --> test:8:27
+   |
+ 8 |  (define (t-dtg3->int-abstr (T3-Int x))
+   |                             ---------- missing case (T3-STR "_")
+
+================================================================================
+4 GADT Improper Constructor Return Type
+================================================================================
+
+(package test-package)
+
+(define-type T-dtg4
+  (T4-Good (Type (Integer -> T-dtg4)))
+  (T4-Bad (Type (Integer -> String))))
+
+--------------------------------------------------------------------------------
+
+error: Malformed GADT constructor
+  --> test:5:3
+   |
+ 5 |    (T4-Bad (Type (Integer -> String))))
+   |     ^^^^^^ GADT constructor must return T-DTG4
+   |            -------------------------- in this type definition
+
+================================================================================
+5 GADT Improper Nullary Constructor
+================================================================================
+
+(package test-package)
+
+(define-type T-dtg5
+  (T5-Good (Type (Integer -> T-dtg5)))
+  (T5-Bad (Type String)))
+
+--------------------------------------------------------------------------------
+
+error: Malformed GADT constructor
+  --> test:5:3
+   |
+ 5 |    (T5-Bad (Type String)))
+   |     ^^^^^^ GADT constructor must return T-DTG5
+   |            ------------- in this type definition
+
+================================================================================
+6 GADT Impossible Match Branch
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg6 :a)
+  (T6-Int (Type (Integer -> T-dtg6 Integer)))
+  (T6-Str (Type (String -> T-dtg6 String))))
+
+(declare 6-unwrap-int (T-dtg6 Integer -> Integer))
+(define (6-unwrap-int g)
+  (match g
+    ((T6-Int x) x)
+    ((T6-Str _) 0)))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:11:5
+    |
+ 11 |      ((T6-Str _) 0)))
+    |       ^^^^^^^^^^ Expected type 'T-dtg6 Integer' but pattern has type 'T-dtg6 String'
+
+================================================================================
+7 GADT Constraint Predicate Normalization
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg7 :a)
+  (T7-Gadt (Type (:a -> T-dtg7 :a))))
+
+(define-class (C-dtg7 :a)
+  (method-dtg7
+   (:a -> :a)))
+
+(declare t-dtg7-constraint-match (C-dtg7 :a => T-dtg7 :a -> T-dtg7 :a))
+(define (t-dtg7-constraint-match x)
+  (match x
+    ((T7-Gadt a)
+     (T7-Gadt (method-dtg7 a)))))
+
+(declare t-dtg7-constraint-let (C-dtg7 :a => T-dtg7 :a -> T-dtg7 :a))
+(define (t-dtg7-constraint-let x)
+  (let (T7-Gadt a) = x)
+  (T7-Gadt (method-dtg7 a)))
+
+(declare t-dtg7-constraint-do ((coalton/classes:Monad :m) (C-dtg7 :a) => :m (T-dtg7 :a) -> :m (T-dtg7 :a)))
+(define (t-dtg7-constraint-do m)
+  (do
+   ((T7-Gadt a) <- m)
+   (coalton/classes:pure (T7-Gadt (method-dtg7 a)))))
+
+(declare t-dtg7-constraint-abstr (C-dtg7 :a => T-dtg7 :a -> T-dtg7 :a))
+(define (t-dtg7-constraint-abstr (T7-Gadt a))
+  (T7-Gadt (method-dtg7 a)))
+
+================================================================================
+8 GADT Constructor With Trailing Form
+================================================================================
+
+(package test-package)
+
+(define-type T-dtg8
+  (T8-Bad (Type (Integer -> T-dtg8)) String))
+
+--------------------------------------------------------------------------------
+
+error: Malformed GADT constructor
+  --> test:4:37
+   |
+ 4 |    (T8-Bad (Type (Integer -> T-dtg8)) String))
+   |            -------------------------- in this constructor definition
+   |                                       ^^^^^^ unexpected trailing form (STRING)
+
+================================================================================
+9 GADT Constructor With Inner Trailing Form
+================================================================================
+
+(package test-package)
+
+(define-type T-dtg9
+  (T9-Bad (Type (Integer -> T-dtg9) String)))
+
+--------------------------------------------------------------------------------
+
+error: Malformed GADT constructor
+  --> test:4:36
+   |
+ 4 |    (T9-Bad (Type (Integer -> T-dtg9) String)))
+   |            --------------------------------- in this constructor definition
+   |                                      ^^^^^^ unexpected trailing form STRING
+
+================================================================================
+10 GADT Constructor With Empty Type Signature
+================================================================================
+
+(package test-package)
+
+(define-type T-dtg10
+  (T10-Bad (Type)))
+
+--------------------------------------------------------------------------------
+
+error: Malformed GADT constructor
+  --> test:4:2
+   |
+ 4 |    (T10-Bad (Type)))
+   |    ^^^^^^^^^^^^^^^^ expected type signature
+   |             ------ in this constructor definition
+
+================================================================================
+11 GADT Nullary Constructor Result With Wrong Arity
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg11 :a)
+  (T11-Bad (Type T-dtg11)))
+
+--------------------------------------------------------------------------------
+
+error: Kind mismatch
+  --> test:4:17
+   |
+ 4 |    (T11-Bad (Type T-dtg11)))
+   |                   ^^^^^^^ Expected kind '*' but got kind '* -> *'
+
+================================================================================
+12 GADT Constructor Result With Too Many Type Arguments
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg12 :a)
+  (T12-Bad (Type (T-dtg12 Integer String))))
+
+--------------------------------------------------------------------------------
+
+error: Kind mismatch
+  --> test:4:17
+   |
+ 4 |    (T12-Bad (Type (T-dtg12 Integer String))))
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^^ Expected kind '* -> *' but got kind '*'
+
+================================================================================
+13 GADT Constructor Returning Multiple Values
+================================================================================
+
+(package test-package)
+
+(define-type T-dtg13
+  (T13-Bad (Type (Integer -> T-dtg13 * T-dtg13))))
+
+--------------------------------------------------------------------------------
+
+error: Malformed GADT constructor
+  --> test:4:3
+   |
+ 4 |    (T13-Bad (Type (Integer -> T-dtg13 * T-dtg13))))
+   |     ^^^^^^^ GADT constructor must return T-DTG13
+   |             ------------------------------------- in this type definition
+
+================================================================================
+14 Derive On GADT
+================================================================================
+
+(package test-package)
+
+(derive coalton/classes:Eq)
+(define-type T-dtg14
+  (T14-Bad (Type (Integer -> T-dtg14))))
+
+--------------------------------------------------------------------------------
+
+error: Invalid derive application
+  --> test:4:13
+   |
+ 4 |  (define-type T-dtg14
+   |               ^^^^^^^  cannot apply (derive) to a GADT definition
+
+================================================================================
+15 Enum Repr On GADT Constructor With Arguments
+================================================================================
+
+(package test-package)
+
+(repr :enum)
+(define-type T-dtg15
+  (T15-Bad (Type (Integer -> T-dtg15))))
+
+--------------------------------------------------------------------------------
+
+error: Invalid repr :enum attribute
+  --> test:5:2
+   |
+ 5 |    (T15-Bad (Type (Integer -> T-dtg15))))
+   |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Enum constructors cannot have arguments.
+
+================================================================================
+16 GADT Constructor Call With Too Few Arguments
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg16 :a :b)
+  (T16-Pair (Type (Integer * String -> T-dtg16 Integer String))))
+
+(declare t-dtg16-bad (T-dtg16 Integer String))
+(define t-dtg16-bad
+  (T16-Pair 1))
+
+--------------------------------------------------------------------------------
+
+error: Argument error
+  --> test:8:2
+   |
+ 8 |    (T16-Pair 1))
+   |    ^^^^^^^^^^^^ Function call has 1 positional arguments but inferred type 'Integer * String -> T-dtg16 Integer String' takes 2
+
+================================================================================
+17 GADT Constructor Pattern With Too Few Arguments
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg17 :a :b)
+  (T17-Pair (Type (Integer * String -> T-dtg17 Integer String))))
+
+(declare t-dtg17-bad (T-dtg17 Integer String -> Integer))
+(define (t-dtg17-bad g)
+  (match g
+    ((T17-Pair x) x)))
+
+--------------------------------------------------------------------------------
+
+error: Argument mismatch
+  --> test:9:5
+   |
+ 9 |      ((T17-Pair x) x)))
+   |       ^^^^^^^^^^^^ Constructor T17-PAIR takes 2 arguments but is given 1
+
+================================================================================
+18 GADT Refined Constructor On Wrong Type
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg18 :a)
+  (T18-Int (Type (Integer -> T-dtg18 Integer)))
+  (T18-Str (Type (String -> T-dtg18 String))))
+
+(declare t-dtg18-bad (T-dtg18 String))
+(define t-dtg18-bad
+  (T18-Int 3))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:9:2
+   |
+ 9 |    (T18-Int 3))
+   |    ^^^^^^^^^^^ Expected type 'T-dtg18 String' but got 'T-dtg18 Integer'
+
+================================================================================
+19 GADT Single of Multiple Constructors In Let Pattern
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg19 :a)
+  (T19-Str1 (Type (String -> T-dtg19 String)))
+  (T19-Str2 (Type (String -> T-dtg19 String))))
+
+(declare t-dtg19-bad (T-dtg19 String -> String))
+(define (t-dtg19-bad x)
+  (let (T19-Str1 s) = x)
+  s)
+
+--------------------------------------------------------------------------------
+
+error: Non-exhaustive match
+  --> test:9:7
+   |
+ 9 |    (let (T19-Str1 s) = x)
+   |         ------------ missing case (T19-STR2 "_")
+
+================================================================================
+20 GADT Single of Multiple Constructors In Abstraction
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg20 :a)
+  (T20-Str1 (Type (String -> T-dtg20 String)))
+  (T20-Str2 (Type (String -> T-dtg20 String))))
+
+(declare t-dtg20-bad (T-dtg20 String -> String))
+(define (t-dtg20-bad (T20-Str1 s))
+  s)
+
+--------------------------------------------------------------------------------
+
+error: Non-exhaustive match
+  --> test:8:21
+   |
+ 8 |  (define (t-dtg20-bad (T20-Str1 s))
+   |                       ------------ missing case (T20-STR2 "_")
+
+================================================================================
+21 GADT Polymorphic Unbox
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg21 :a)
+  (T21-Int (Type (Integer -> T-dtg21 Integer)))
+  (T21-Str (Type (String -> T-dtg21 String))))
+
+(declare t-dtg21-unbox (T-dtg21 :a -> :a))
+(define (t-dtg21-unbox g)
+  (match g
+    ((T21-Int x) x)
+    ((T21-Str s) s)))
+
+================================================================================
+22 GADT Wrong Polymorphic Unbox
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg22 :a)
+  (T22-Int (Type (Integer -> T-dtg22 Integer)))
+  (T22-Str (Type (String -> T-dtg22 String))))
+
+(declare t-dtg22-unbox (T-dtg22 :a -> :a))
+(define (t-dtg22-unbox g)
+  (match g
+    ((T22-Int _) "")
+    ((T22-Str s) s)))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:10:17
+    |
+ 10 |      ((T22-Int _) "")
+    |                   ^^ Expected type 'Integer' but got 'String'
+
+================================================================================
+23 GADT Branch Refinement Does Not Refine Unrelated Return
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg23 :a)
+  (T23-Int (Type (Integer -> T-dtg23 Integer)))
+  (T23-Str (Type (String -> T-dtg23 String))))
+
+(declare t-dtg23-bad (T-dtg23 :a -> :b))
+(define (t-dtg23-bad g)
+  (match g
+    ((T23-Int x) x)
+    ((T23-Str s) s)))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:11:17
+    |
+ 11 |      ((T23-Str s) s)))
+    |                   ^ Expected type 'Integer' but got 'String'
+
+================================================================================
+24 GADT Scrutinee Refinement Refines Same Type Argument
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg24 :a)
+  (T24-Int (Type (Integer -> T-dtg24 Integer)))
+  (T24-Str (Type (String -> T-dtg24 String))))
+
+(declare t-dtg24-good (T-dtg24 :a * :a -> :a))
+(define (t-dtg24-good g x)
+  (match g
+    ((T24-Int _) x)
+    ((T24-Str _) x)))
+
+================================================================================
+25 GADT Scrutinee Refinement Does Not Refine Unrelated Argument
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg25 :a)
+  (T25-Int (Type (Integer -> T-dtg25 Integer)))
+  (T25-Str (Type (String -> T-dtg25 String))))
+
+(declare t-dtg25-bad (T-dtg25 :a * :b -> :b))
+(define (t-dtg25-bad g x)
+  (match g
+    ((T25-Int _) (the Integer x))
+    ((T25-Str _) (the String x))))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:11:29
+    |
+ 11 |      ((T25-Str _) (the String x))))
+    |                               ^ Expected type 'Integer' but got 'String'
+
+================================================================================
+26 GADT Independent Parameters Refine Independently
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg26 :a)
+  (T26-Int (Type (Integer -> T-dtg26 Integer)))
+  (T26-Str (Type (String -> T-dtg26 String))))
+
+(declare t-dtg26-good (T-dtg26 :a * T-dtg26 :b -> Integer))
+(define (t-dtg26-good g h)
+  (match g
+    ((T26-Int x)
+     (match h
+      ((T26-Int y)
+       (let _ = (the Integer x))
+       (let _ = (the Integer y))
+       0)
+      ((T26-Str y)
+       (let _ = (the Integer x))
+       (let _ = (the String y))
+       0)))
+    ((T26-Str x)
+     (match h
+      ((T26-Int y)
+       (let _ = (the String x))
+       (let _ = (the Integer y))
+       0)
+      ((T26-Str y)
+       (let _ = (the String x))
+       (let _ = (the String y))
+       0)))))
+
+================================================================================
+27 GADT Conflicting Parameter Refinements
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg27 :a)
+  (T27-Int (Type (Integer -> T-dtg27 Integer)))
+  (T27-Str (Type (String -> T-dtg27 String))))
+
+(declare t-dtg27-bad (T-dtg27 :a * T-dtg27 :a -> Integer))
+(define (t-dtg27-bad (T27-Int x) (T27-Str _))
+  x)
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:8:33
+   |
+ 8 |  (define (t-dtg27-bad (T27-Int x) (T27-Str _))
+   |                                   ^^^^^^^^^^^ Expected type 'T-dtg27 Integer' but pattern has type 'T-dtg27 String'
+
+================================================================================
+28 GADT Binding Pattern Preserves Refined Whole
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg28 :a)
+  (T28-Int (Type (Integer -> T-dtg28 Integer)))
+  (T28-Str (Type (String -> T-dtg28 String))))
+
+(declare t-dtg28-require-int (T-dtg28 Integer -> Integer))
+(define (t-dtg28-require-int (T28-Int x))
+  x)
+
+(declare t-dtg28-good (T-dtg28 :a -> Integer))
+(define (t-dtg28-good g)
+  (match g
+    ((= whole (T28-Int x))
+     (let _ = (the Integer x))
+     (t-dtg28-require-int whole))
+    ((T28-Str s)
+     (let _ = (the String s))
+     0)))
+
+================================================================================
+29 GADT Binding Pattern With Impossible Refined Whole
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg29 :a)
+  (T29-Int (Type (Integer -> T-dtg29 Integer)))
+  (T29-Str (Type (String -> T-dtg29 String))))
+
+(declare t-dtg29-require-str (T-dtg29 String -> String))
+(define (t-dtg29-require-str (T29-Str s))
+  s)
+
+(declare t-dtg29-bad (T-dtg29 :a -> String))
+(define (t-dtg29-bad g)
+  (match g
+    ((= whole (T29-Int _))
+     (t-dtg29-require-str whole))
+    ((T29-Str s)
+     s)))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:15:26
+    |
+ 15 |       (t-dtg29-require-str whole))
+    |                            ^^^^^ Expected type 'T-dtg29 String' but got 'T-dtg29 Integer'
+
+================================================================================
+30 GADT Existential Must Not Escape Directly
+================================================================================
+
+(package test-package)
+
+(define-type T-dtg30-Hidden
+  (T30-Hidden (Type (:a -> T-dtg30-Hidden))))
+
+(declare t-dtg30-bad (T-dtg30-Hidden -> :a))
+(define (t-dtg30-bad (T30-Hidden x))
+  x)
+
+--------------------------------------------------------------------------------
+
+error: Untouchable existential type escapes GADT pattern scope
+  --> test:7:0
+   |
+ 7 |   (define (t-dtg30-bad (T30-Hidden x))
+   |  _^
+ 8 | |   x)
+   | |____^ Existential type ':A' escapes through result type ':A'
+
+================================================================================
+31 GADT Existential Must Not Escape Through Wrapping Type
+================================================================================
+
+(package test-package)
+
+(define-type T-dtg31-Hidden
+  (T31-Hidden (Type (:a -> T-dtg31-Hidden))))
+
+(declare t-dtg31-bad (T-dtg31-Hidden -> Optional :a))
+(define (t-dtg31-bad (T31-Hidden x))
+  (Some x))
+
+--------------------------------------------------------------------------------
+
+error: Untouchable existential type escapes GADT pattern scope
+  --> test:7:0
+   |
+ 7 |   (define (t-dtg31-bad (T31-Hidden x))
+   |  _^
+ 8 | |   (Some x))
+   | |___________^ Existential type ':A' escapes through result type 'Optional :A'
+
+================================================================================
+32 GADT Existential Must Not Escape Through Closure
+================================================================================
+
+(package test-package)
+
+(define-type T-dtg32-Hidden
+  (T32-Hidden (Type (:a -> T-dtg32-Hidden))))
+
+(declare t-dtg32-bad (T-dtg32-Hidden -> (Void -> :a)))
+(define (t-dtg32-bad (T32-Hidden x))
+  (fn () x))
+
+--------------------------------------------------------------------------------
+
+error: Untouchable existential type escapes GADT pattern scope
+  --> test:7:0
+   |
+ 7 |   (define (t-dtg32-bad (T32-Hidden x))
+   |  _^
+ 8 | |   (fn () x))
+   | |____________^ Existential type ':A' escapes through result type 'Void -> :A'
+
+================================================================================
+33 GADT Existential Must Not Refine To Concrete Type
+================================================================================
+
+(package test-package)
+
+(define-type T-dtg33-Hidden
+  (T33-Hidden (Type (:a -> T-dtg33-Hidden))))
+
+(declare t-gadt33-use-int (Integer -> Unit))
+(define (t-gadt33-use-int _)
+  Unit)
+
+(declare t-dtg33-bad (T-dtg33-Hidden -> Unit))
+(define (t-dtg33-bad (T33-Hidden x))
+  (t-gadt33-use-int x)
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Cannot refine existential type from GADT constructor arguments
+  --> test:11:0
+    |
+ 11 |   (define (t-dtg33-bad (T33-Hidden x))
+    |  _^
+ 12 | |   (t-gadt33-use-int x)
+ 13 | |   Unit)
+    | |_______^ Untouchable existential type ':A' was refined to 'Integer'
+
+================================================================================
+34 GADT Existential May Be Passed Through Id And Discarded
+================================================================================
+
+(package test-package)
+
+(define-type T-dtg34-Hidden
+  (T34-Hidden (Type (:a -> T-dtg34-Hidden))))
+
+(declare t-dtg34-good (T-dtg34-Hidden -> Unit))
+(define (t-dtg34-good (T34-Hidden x))
+  (coalton/functions:id x)
+  Unit)
+
+================================================================================
+35 GADT Existential May Be Repacked
+================================================================================
+
+(package test-package)
+
+(define-type T-dtg35-Hidden
+  (T35-Hidden (Type (:a -> T-dtg35-Hidden))))
+
+(declare t-dtg35-good (T-dtg35-Hidden -> T-dtg35-Hidden))
+(define (t-dtg35-good (T35-Hidden x))
+  (T35-Hidden x))
+
+================================================================================
+36 GADT Existential From Nested Pattern Must Be Untouchable
+================================================================================
+
+(package test-package)
+
+(define-type T-dtg37-Hidden
+  (T37-Hidden (Type (:a -> T-dtg37-Hidden))))
+
+(define-type T-dtg37-Outer
+  (T37-Outer T-dtg37-Hidden))
+
+(declare t-dtg37-bad (T-dtg37-Outer -> Unit))
+(define (t-dtg37-bad (T37-Outer (T37-Hidden x)))
+  (let _ = (the Integer x))
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Cannot refine existential type from GADT constructor arguments
+  --> test:10:0
+    |
+ 10 |   (define (t-dtg37-bad (T37-Outer (T37-Hidden x)))
+    |  _^
+ 11 | |   (let _ = (the Integer x))
+ 12 | |   Unit)
+    | |_______^ Untouchable existential type ':A' was refined to 'Integer'
+
+================================================================================
+37 GADT Existential In Do Pattern May Be Consumed
+================================================================================
+
+(package test-package)
+
+(define-type T-dtg38-Hidden
+  (T38-Hidden (Type (:a -> T-dtg38-Hidden))))
+
+(declare t-dtg38-good ((coalton/classes:Monad :m) => :m T-dtg38-Hidden -> :m Unit))
+(define (t-dtg38-good m)
+  (do
+   ((T38-Hidden x) <- m)
+   (coalton/classes:pure
+    (coalton/functions:id x))
+   (coalton/classes:pure Unit)))
+
+================================================================================
+38 GADT Narrowed Match Does Not Require Impossible Constructors
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg38 :a)
+  (T38-Int (Type (Integer -> T-dtg38 Integer)))
+  (T38-Str (Type (String -> T-dtg38 String))))
+
+(declare t-dtg38-good (T-dtg38 Integer -> Integer))
+(define (t-dtg38-good g)
+  (match g
+    ((T38-Int x) x)))
+
+================================================================================
+39 GADT Polymorphic Match Warns About Possible Constructors
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg39 :a)
+  (T39-Int (Type (Integer -> T-dtg39 Integer)))
+  (T39-Str (Type (String -> T-dtg39 String))))
+
+(declare t-dtg39-warn (T-dtg39 :a -> Integer))
+(define (t-dtg39-warn g)
+  (match g
+    ((T39-Int x) x)))
+
+--------------------------------------------------------------------------------
+
+warn: non-exhaustive match
+  --> test:9:2
+    |
+ 9  |      (match g
+    |  ____^
+    | | ___-
+ 10 | ||     ((T39-Int x) x)))
+    | ||____________________- missing case (T39-STR "_")
+    | |_____________________^ non-exhaustive match
+
+================================================================================
+40 GADT Wildcard After Exhaustive Narrowed Constructor Is Useless
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg40 :a)
+  (T40-Int (Type (Integer -> T-dtg40 Integer)))
+  (T40-Str (Type (String -> T-dtg40 String))))
+
+(declare t-dtg40-warn (T-dtg40 Integer -> Integer))
+(define (t-dtg40-warn g)
+  (match g
+    ((T40-Int x) x)
+    (_ 0)))
+
+--------------------------------------------------------------------------------
+
+warn: Useless match case
+  --> test:11:5
+    |
+ 9  |     (match g
+    |  ___^
+ 10 | |     ((T40-Int x) x)
+ 11 | |     (_ 0)))
+    | |      ^ useless match case
+    | |__________^ in this match
+
+================================================================================
+41 GADT Impossible Constructor Branch Is An Error
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg41 :a)
+  (T41-Int (Type (Integer -> T-dtg41 Integer)))
+  (T41-Str (Type (String -> T-dtg41 String))))
+
+(declare t-dtg41-bad (T-dtg41 Integer -> Integer))
+(define (t-dtg41-bad g)
+  (match g
+    ((T41-Str _) 0)))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:10:5
+    |
+ 10 |      ((T41-Str _) 0)))
+    |       ^^^^^^^^^^^ Expected type 'T-dtg41 Integer' but pattern has type 'T-dtg41 String'
+
+================================================================================
+42 GADT Generic Constructor Required for Exhaustiveness
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg42 :a)
+  (T42-Int (Type (Integer -> T-dtg42 Integer)))
+  (T42-Str (Type (String -> T-dtg42 String)))
+  (T42-Any (Type (:a -> T-dtg42 :a))))
+
+(declare t-dtg42-warn (T-dtg42 Integer -> Integer))
+(define (t-dtg42-warn g)
+  (match g
+    ((T42-Int x) x)))
+
+--------------------------------------------------------------------------------
+
+warn: non-exhaustive match
+  --> test:10:2
+    |
+ 10 |      (match g
+    |  ____^
+    | | ___-
+ 11 | ||     ((T42-Int x) x)))
+    | ||____________________- missing case (T42-ANY "_")
+    | |_____________________^ non-exhaustive match
+
+================================================================================
+43 GADT Generic And Concrete Constructors Exhaust Narrowed Match
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg43 :a)
+  (T43-Int (Type (Integer -> T-dtg43 Integer)))
+  (T43-Str (Type (String -> T-dtg43 String)))
+  (T43-Any (Type (:a -> T-dtg43 :a))))
+
+(declare t-dtg43-good (T-dtg43 Integer -> Integer))
+(define (t-dtg43-good g)
+  (match g
+    ((T43-Int x) x)
+    ((T43-Any x) x)))
+
+================================================================================
+44 GADT Nested Pattern Exhaustiveness in Abstraction Respects Inner Refinements
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg44 :a)
+  (T44-Int (Type (Integer -> T-dtg44 Integer)))
+  (T44-Str (Type (String -> T-dtg44 String))))
+
+(declare t-dtg44-good (T-dtg44 Integer * T-dtg44 String -> Integer))
+(define (t-dtg44-good (T44-Int x) (T44-Str _))
+  x)
+
+================================================================================
+45 GADT Nested Pattern Exhaustiveness in Match Respects Inner Refinements
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg44 :a)
+  (T44-Int (Type (Integer -> T-dtg44 Integer)))
+  (T44-Str (Type (String -> T-dtg44 String))))
+
+(declare t-dtg44-good (T-dtg44 Integer * T-dtg44 String -> Integer))
+(define (t-dtg44-good a b)
+  (match a
+    ((T44-Int x)
+     (match b
+       ((T44-Str _)
+        x)))))
+
+================================================================================
+46 GADT Nested Pattern Rejects Impossible Inner Combination in Match
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg46 :a)
+  (T46-Int (Type (Integer -> T-dtg46 Integer)))
+  (T46-Str (Type (String -> T-dtg46 String))))
+
+(declare t-dtg46-bad (T-dtg46 Integer * T-dtg46 String -> Integer))
+(define (t-dtg46-bad a b)
+  (match a
+    ((T46-Int x)
+     (match b
+      ((T46-Int _)
+       x)))))
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:12:7
+    |
+ 12 |        ((T46-Int _)
+    |         ^^^^^^^^^^^ Expected type 'T-dtg46 String' but pattern has type 'T-dtg46 Integer'
+
+================================================================================
+47 GADT Nested Pattern Rejects Impossible Inner Combination in Abstraction
+================================================================================
+
+(package test-package)
+
+(define-type (T-dtg47 :a)
+  (T47-Int (Type (Integer -> T-dtg47 Integer)))
+  (T47-Str (Type (String -> T-dtg47 String))))
+
+(declare t-dtg47-bad (T-dtg47 Integer * T-dtg47 String -> Integer))
+(define (t-dtg47-bad (T47-Int x) (T47-Int _))
+  x)
+
+--------------------------------------------------------------------------------
+
+error: Type mismatch
+  --> test:8:33
+   |
+ 8 |  (define (t-dtg47-bad (T47-Int x) (T47-Int _))
+   |                                   ^^^^^^^^^^^ Expected type 'T-dtg47 String' but pattern has type 'T-dtg47 Integer'

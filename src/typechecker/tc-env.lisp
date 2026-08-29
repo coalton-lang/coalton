@@ -23,6 +23,7 @@
    #:tc-env-extend-type-variable-scope  ; FUNCTION
    #:tc-env-shadow-definition           ; FUNCTION
    #:tc-env-replace-type                ; FUNCTION
+   #:tc-env-lookup-value-symbol         ; FUNCTION
    ))
 
 (in-package #:coalton-impl/typechecker/tc-env)
@@ -207,3 +208,21 @@ type variables instead of re-instantiating the declared scheme."
           :append (tc:type-variables ty))
     (tc-env-scoped-type-variables env))
    :test #'tc:ty=))
+
+(defun tc-env-lookup-value-symbol (env sym loc)
+  (declare (type tc-env env)
+           (type symbol sym)
+           (type (or source:location null) loc)
+           (values tc:ty tc:ty-predicate-list))
+
+  (let* ((scheme (or (gethash sym (tc-env-ty-table env))
+                     (tc:lookup-value-type (tc-env-env env) sym :no-error t))))
+    (unless scheme
+      (util:coalton-bug "Unknown variable ~a" sym))
+    (let ((q (tc:fresh-inst scheme)))
+      (values (tc:qualified-ty-type q)
+              (loop :for pred in (tc:qualified-ty-predicates q)
+                    :collect (tc:make-ty-predicate
+                              :class (tc:ty-predicate-class pred)
+                              :types (tc:ty-predicate-types pred)
+                              :location loc))))))
