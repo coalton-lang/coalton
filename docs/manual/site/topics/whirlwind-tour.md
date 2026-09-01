@@ -208,10 +208,10 @@ Functions are defined similarly to variables. Unlike Common Lisp, Coalton functi
   (define x (addTwo 3))
 
   ;; Anonymous functions can be defined with fn
-  (define z (map (fn (x) (+ 2 x)) (make-list 1 2 3 4)))
+  (define z (map (fn (x) (+ 2 x)) [1 2 3 4]))
 
   ;; ƒ is short fn syntax
-  (define z-short (map ƒx.(+ 2 x) (make-list 1 2 3 4))))
+  (define z-short (map ƒx.(+ 2 x) [1 2 3 4])))
 ```
 
 ### Top-Level Type Declarations
@@ -270,8 +270,8 @@ Here is an example of using an explicitly constructed function to transform a li
 
 ```lisp
 (coalton-toplevel
-  ;; Lists can be created with the make-list macro
-  (define nums (make-list 2 3 4 5))
+  ;; Lists can be created with bracket syntax
+  (define nums [2 3 4 5])
 
   (define add2
     (fn (x)
@@ -545,7 +545,7 @@ Field accessors can be used to read individual fields:
 Field accessors can be passed by value:
 
 ```lisp
-(coalton (map .x (make-list (Point 1 2) (Point 2 3))))
+(coalton (map .x [(Point 1 2) (Point 2 3)]))
 ```
 
 Structs can also be parametric:
@@ -1047,12 +1047,12 @@ COALTON/MATH/REAL> (coalton (the F32 (fromfrac 999/1000)))
 
 ## Lists
 
-Coalton uses Lisp lists under the hood. Lists can be constructed with `make-list`.
+Coalton uses Lisp lists under the hood. Lists can be constructed with bracket syntax.
 
 ```lisp
 (coalton-toplevel
-  (define x (make-list 1 2 3))
-  (define y (make-list "a" "b" "c")))
+  (define x [1 2 3])
+  (define y ["a" "b" "c"]))
 ```
 
 
@@ -1060,7 +1060,7 @@ Lists must be homogeneous. This means the following produces a type error.
 
 ```
 COALTON-USER> (coalton-toplevel
-                (define wut (make-list 1.0d0 2.0d0 3.0)))
+                (define wut [1.0d0 2.0d0 3.0]))
 ; error: Type mismatch
 ;   --> repl input:3:4
 ;    |
@@ -1863,7 +1863,7 @@ Coalton has a `do` macro that works similarly to do notation in Haskell.
       (pure c)))
 
     ;; [6+3, 5+3, 4+3, 6+2, 5+2, 4+2, 6+1, 5+1, 4+1]
-   (define xs (f (make-list 1 2 3) (make-list 4 5 6))))
+   (define xs (f [1 2 3] [4 5 6])))
 ```
 
 ## Inline Type Annotations

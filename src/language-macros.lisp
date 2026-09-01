@@ -135,7 +135,7 @@ the value. The composition is thus the reverse order of `compose`.
 
 (define-expression-macro make-list (cl:&rest forms)
   "Create a heterogeneous Coalton `List` of objects. This macro is
-deprecated; use `coalton/list:make`."
+deprecated; use `[]` syntax instead."
   (cl:labels
       ((list-helper (forms)
          (cl:if (cl:endp forms)

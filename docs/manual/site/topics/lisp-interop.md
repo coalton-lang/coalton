@@ -137,7 +137,7 @@ For example, we could represent the class of plane traveler like so:
 These will be compiled into symbols:
 
 ```
-COALTON-USER> (coalton (make-list Economy Business First))
+COALTON-USER> (coalton [Economy Business First])
 (TRAVELERCLASS/ECONOMY TRAVELERCLASS/BUSINESS TRAVELERCLASS/FIRST)
 COALTON-USER> cl::(mapcar #'type-of *)
 (COMMON-LISP:SYMBOL COMMON-LISP:SYMBOL COMMON-LISP:SYMBOL)
