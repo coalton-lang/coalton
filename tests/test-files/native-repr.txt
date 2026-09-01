@@ -1,0 +1,29 @@
+================================================================================
+Issue: 2028 repr :native types shouldn't allow constructors
+================================================================================
+
+(package test-package
+  (import coalton-prelude))
+
+(repr :native cl:string)
+(define-type Test
+  (TestConstructor Integer))
+
+--------------------------------------------------------------------------------
+
+error: Invalid repr :native attribute
+  --> test:6:2
+ 6 |     (define-type Test
+   |  ___^
+ 7 | |     (TestConstructor Integer))
+   | |______________________________^ repr :native types cannot have constructors
+
+================================================================================
+repr :native success case
+================================================================================
+
+(package test-package
+  (import coalton-prelude))
+
+(repr :native cl:string)
+(define-type Test)

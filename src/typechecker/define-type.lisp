@@ -605,7 +605,7 @@ This is conservative and intentionally aligns with mutable native wrappers."
                 :collect (tc:quantify-using-tvar-order tvars (tc:qualify nil ty)))
 
          ;; Check that repr :enum types do not have any constructors with fields
-         :when (eq repr-type :enum)
+         :when (eq repr-type ':enum)
            :do (loop
                  :for ctor :in (parser:toplevel-define-type-ctors type)
                  :unless (endp (parser:constructor-fields ctor))
@@ -614,18 +614,26 @@ This is conservative and intentionally aligns with mutable native wrappers."
                                           "constructors of repr :enum types cannot have fields")))
 
          ;; Check that repr :transparent types have a single constructor
-         :when (eq repr-type :transparent)
+         :when (eq repr-type ':transparent)
            :do (unless (= 1 (length (parser:type-definition-ctors type)))
                  (tc-error "Invalid repr :transparent attribute"
                            (tc-note type
                                     "repr :transparent types must have a single constructor")))
 
          ;; Check that the single constructor of a repr :transparent type has a single field
-         :when (eq repr-type :transparent)
+         :when (eq repr-type ':transparent)
            :do (unless (= 1 (length (parser:type-definition-ctor-field-types (first (parser:type-definition-ctors type)))))
                  (tc-error "Invalid repr :transparent attribute"
                            (tc-note (first (parser:type-definition-ctors type))
                                     "constructors of repr :transparent types must have a single field")))
+
+         ;; Check that repr :native types has no constructor
+         :when (eq repr-type ':native)
+           :do (unless (endp (parser:type-definition-ctors type))
+                 (tc-error "Invalid repr :native attribute"
+                           (tc-note type
+                                    "repr :native types cannot have constructors")))
+
          :collect
          (let*
              ((ctors
@@ -653,24 +661,24 @@ This is conservative and intentionally aligns with mutable native wrappers."
                  :name name
                  :type (gethash name (partial-type-env-ty-table env))
                  :runtime-type (cond
-                                 ((eq repr-type :transparent)
+                                 ((eq repr-type ':transparent)
                                   (tc:lisp-type
                                    (tc:function-type-from
                                     (tc:qualified-ty-type
                                      (tc:fresh-inst (first constructor-types))))
                                    (partial-type-env-env env)))
-                                 ((eq repr-type :native)
+                                 ((eq repr-type ':native)
                                   repr-arg)
-                                 ((eq repr-type :enum)
+                                 ((eq repr-type ':enum)
                                   `(member ,@(mapcar #'tc:constructor-entry-compressed-repr ctors)))
                                  (t
                                   name))
                  :aliased-type (gethash name alias-table)
-                 :explicit-repr (if (eq repr-type :native)
+                 :explicit-repr (if (eq repr-type ':native)
                                     (list repr-type repr-arg)
                                     repr-type)
-                 :enum-repr (eq repr-type :enum)
-                 :newtype (eq repr-type :transparent)
+                 :enum-repr (eq repr-type ':enum)
+                 :newtype (eq repr-type ':transparent)
 
                  :constructors ctors
 
