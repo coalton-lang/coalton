@@ -133,6 +133,7 @@
                              (:file "lawnmower")
                              (:file "specializer")
                              (:file "optimizer")
+                             (:file "unboxed-return")
 
                              ;; Entry points
                              (:file "program")
