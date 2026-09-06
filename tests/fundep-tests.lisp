@@ -16,6 +16,39 @@
     (define (get-any x) (get-a x))"
    '("get-any" . "(ClassA :m :a => :m -> :a)")))
 
+(deftest fundep-partially-overlapping-determinants ()
+  (dolist (instances
+            '("(define-instance (C (Tuple :a Integer) :a))
+               (define-instance (C (Tuple String :b) :b))"
+              "(define-instance (C (Tuple String :b) :b))
+               (define-instance (C (Tuple :a Integer) :a))"))
+    (signals tc:tc-error
+      (check-coalton-types
+       (concatenate 'string "(define-class (C :a :b (:a -> :b)))" instances))))
+  ;; Agreement at just one specialization of a determinant is insufficient.
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-class (C :a :b :c (:a -> :b)))
+      (define-instance (C :a :a Boolean))
+      (define-instance (C :b Integer String))"))
+  ;; Both partial relations must remain available when their outputs agree.
+  (check-coalton-types
+   "(define-class (C :a :b :c (:a -> :b)) (m (:a * :c -> :b)))
+    (define-instance (C (Tuple :a Integer) Integer Boolean)
+      (define (m _ _) 1))
+    (define-instance (C (Tuple String :b) Integer String)
+      (define (m _ _) 2))
+    (define first-result (m (Tuple True (the Integer 1)) True))
+    (define second-result (m (Tuple \"x\" True) \"x\"))"
+   '("first-result" . "Integer")
+   '("second-result" . "Integer"))
+  (check-coalton-types
+   "(define-class (C :a :b :c (:a -> :b)) (m (:a * :c -> :b)))
+    (define-instance (C Integer String Boolean) (define (m _ _) \"specific\"))
+    (define-instance (C :a String String) (define (m _ _) \"general\"))
+    (define general-result (m True \"x\"))"
+   '("general-result" . "String")))
+
 (deftest predicate-mgu-refines-shared-variables ()
   (let* ((a (tc:make-variable))
          (b (tc:make-variable))

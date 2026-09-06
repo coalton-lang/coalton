@@ -1881,50 +1881,40 @@ This function will return the single functional dependency
                           (fundep-to fundep)
                           class-variables
                           pred-tys)
-          :do (block update-block
-                ;; Try to find a matching relation for the current fundep
+          :do (let ((redundant-p nil))
+                ;; Check every intersecting determinant, including pairs where
+                ;; neither side is a one-way instance of the other.
                 (dolist (s state)
-                  ;; If the left side matches checking either direction
-                  (when (or (handler-case
-                                (progn
-                                  (match-list (fundep-entry-from s) from-tys)
-                                  t)
-                              (unification-error ()
-                                nil))
-                            (handler-case
-                                (progn
-                                  (match-list from-tys (fundep-entry-from s))
-                                  t)
-                              (unification-error ()
-                                nil)))
-                    (handler-case
-                        (progn
-                          (match-list (fundep-entry-to s) to-tys)
-                          ;; Exit upon finding a match
-                          (return-from update-block))
+                  (let ((fresh (fresh-fundep-entry s)))
+                    (multiple-value-bind (det-subs overlaps-p)
+                        (handler-case
+                            (values (unify-list nil (fundep-entry-from fresh) from-tys) t)
+                          (coalton-internal-type-error () (values nil nil)))
+                      (when overlaps-p
+                        (unless (handler-case
+                                    (let* ((det-types (apply-substitution det-subs from-tys))
+                                           (all-subs (unify-list det-subs (fundep-entry-to fresh) to-tys)))
+                                      ;; Results must agree throughout the determinant
+                                      ;; intersection, without specializing it further.
+                                      (every #'ty= det-types (apply-substitution all-subs from-tys)))
+                                  (coalton-internal-type-error () nil))
+                          (error-fundep-conflict env class pred fundep
+                                                (fundep-entry-from s) from-tys
+                                                (fundep-entry-to s) to-tys)))
+                      (when (match-list-p (append from-tys to-tys)
+                                          (append (fundep-entry-from fresh) (fundep-entry-to fresh)))
+                        (setf redundant-p t)))))
 
-                      ;; If the right side does not match
-                      ;; signal an error
-                      (unification-error ()
-                        (error-fundep-conflict
+                ;; A partial overlap does not cover the new relation.
+                (unless redundant-p
+                  (setf env
+                        (insert-fundep-entry%
                          env
-                         class
-                         pred
-                         fundep
-                         (fundep-entry-from s)
-                         from-tys
-                         (fundep-entry-to s)
-                         to-tys)))))
-
-                ;; Insert a new relation if there wasn't a match
-                (setf env
-                      (insert-fundep-entry%
-                       env
-                       (ty-class-name class)
-                       i
-                       (make-fundep-entry
-                        :from from-tys
-                        :to to-tys))))))
+                         (ty-class-name class)
+                         i
+                         (make-fundep-entry
+                          :from from-tys
+                          :to to-tys)))))))
 
   env)
 
