@@ -2,6 +2,22 @@
 
 (in-package #:coalton-tests)
 
+(deftest test-kind-unification-consistency ()
+  (let* ((a (tc:make-kvariable))
+         (b (tc:make-kvariable))
+         (left (tc:make-kfun :from a :to a))
+         (right (tc:make-kfun :from b :to tc:+kstar+))
+         (subs (tc:kmgu left right)))
+    (is (equalp (tc:apply-ksubstitution subs left) (tc:apply-ksubstitution subs right)))
+    (is (null (tc:kmgu a a)))
+    (signals tc:coalton-internal-type-error (tc:kmgu a left))
+    (signals tc:coalton-internal-type-error (tc:kmgu left a))
+    (signals tc:coalton-internal-type-error
+      (tc:kmgu left (tc:make-kfun :from tc:+kstar+
+                                  :to (tc:make-kfun :from tc:+kstar+ :to tc:+kstar+)))))
+  (signals tc:tc-error
+    (check-coalton-types "(define-type (Bad :f) (Bad (:f :f)))")))
+
 (deftest test-function-initializers-preserve-ascriptions ()
   (signals tc:tc-error
     (check-coalton-types "(define annotated (the (:a -> Integer) (fn (x) x)))"))
