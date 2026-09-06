@@ -68,10 +68,10 @@
 
           :do (loop :for accessor :in accessors
                     :do (multiple-value-bind (matchp subs_)
-                            (solve-accessor accessor env)
+                            (solve-accessor (tc:apply-substitution subs accessor) env)
                           (when matchp
                             (push accessor solved-accessors))
-                          (setf subs (tc:compose-substitution-lists subs subs_))))
+                          (setf subs (tc:compose-substitution-lists subs_ subs))))
 
           :if solved-accessors
             :do (setf accessors
@@ -103,9 +103,18 @@
 
            (type-entry (tc:lookup-type env ty-name))
 
+           ;; Each field lookup instantiates the struct independently. Never
+           ;; return substitutions for the environment's parameter variables.
+           (fresh-subs
+             (loop :for var :in (tc:type-entry-tyvars type-entry)
+                   :collect (tc:make-substitution
+                             :from var
+                             :to (tc:make-variable :kind (tc:kind-of var)))))
+
            (struct-ty (tc:apply-type-argument-list
                        (tc:type-entry-type type-entry)
-                       (tc:type-entry-tyvars type-entry)))
+                       (tc:apply-substitution fresh-subs
+                                              (tc:type-entry-tyvars type-entry))))
 
            (struct-entry (tc:lookup-struct env ty-name :no-error t)))
 
@@ -125,8 +134,21 @@
                              (accessor-field accessor))))
 
         ;; the order of unification matters here
-        (setf subs (tc:unify subs (accessor-to accessor)
-                             (tc:struct-field-type field)))
+        (handler-case
+            (setf subs (tc:unify subs (accessor-to accessor)
+                                 (tc:apply-substitution fresh-subs
+                                                        (tc:struct-field-type field))))
+          (tc:coalton-internal-type-error ()
+            (tc-error "Accessor type mismatch"
+                      (tc-note accessor
+                               "field '~A' has type '~A', but expected '~A'"
+                               (accessor-field accessor)
+                               (type-object-string
+                                (tc:apply-substitution
+                                 subs (tc:apply-substitution fresh-subs
+                                                            (tc:struct-field-type field)))
+                                env)
+                               (type-object-string (accessor-to accessor) env)))))
 
         (values t subs)))))
 
