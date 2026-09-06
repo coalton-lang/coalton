@@ -110,12 +110,14 @@ Returns (PREDS FOUNDP)"
     (simp-loop nil preds)))
 
 (defun reduce-context (env preds subs)
-  (let ((env (apply-substitution subs env))
+  (when (endp preds)
+    (return-from reduce-context nil))
+  (let ((env (if subs (apply-substitution subs env) env))
         (preds (apply-substitution subs preds)))
     (simplify-context
      (lambda (preds pred)
        (super-entail env preds pred))
-     (loop :for pred :in (apply-substitution subs preds)
+     (loop :for pred :in preds
           :unless (entail env nil pred)
             :collect pred))))
 

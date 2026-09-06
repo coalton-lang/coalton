@@ -2,6 +2,21 @@
 
 (in-package #:coalton-tests)
 
+(deftest context-reduction-applies-substitutions-once ()
+  (let* ((a (tc:make-variable))
+         (b (tc:make-variable))
+         (pred (tc:make-ty-predicate :class 'coalton/classes:Num :types (list a)))
+         (subs (list (tc:make-substitution :from a :to b)
+                     (tc:make-substitution :from b :to tc:*integer-type*))))
+    (is (null (tc:reduce-context entry:*global-environment* nil subs)))
+    (let ((reduced (tc:reduce-context entry:*global-environment* (list pred) subs)))
+      (is (= 1 (length reduced)))
+      (is (tc:type-predicate= (first reduced) (tc:apply-substitution subs pred))))
+    (is (null (tc:reduce-context entry:*global-environment*
+                                (list (tc:make-ty-predicate :class 'coalton/classes:Num
+                                                            :types (list tc:*integer-type*))) nil)))
+    (is (tc:type-predicate= pred (first (tc:reduce-context entry:*global-environment* (list pred) nil))))))
+
 (deftest class-method-result-binders-preserve-capabilities ()
   (check-coalton-types
    "(define-class (OutputOf :a) (output-of (:a -> :b)))"
