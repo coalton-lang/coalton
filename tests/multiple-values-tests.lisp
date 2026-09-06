@@ -194,6 +194,19 @@
   (is (null (multiple-value-list
              (eval '(coalton:coalton (coalton-tests/multiple-values:mv-forward-void)))))))
 
+(deftest polymorphic-lisp-output-codegen ()
+  (let ((result-type (tc:make-variable :allow-result-p t)))
+    (dolist (emit-annotations '(nil t))
+      (let ((coalton-impl/settings:*emit-type-annotations* emit-annotations))
+        (dolist (outputs '(nil (42) (42 "answer")))
+          (let* ((node (ast:make-node-lisp
+                        :type result-type
+                        :vars nil
+                        :form (list `(values ,@outputs))))
+                 (code (coalton-impl/codegen/codegen-expression:codegen-expression
+                        node entry:*global-environment*)))
+            (is (equal outputs (multiple-value-list (eval code))))))))))
+
 (deftest direct-multiple-values-runtime ()
   (is (equal '(10 11)
              (multiple-value-list

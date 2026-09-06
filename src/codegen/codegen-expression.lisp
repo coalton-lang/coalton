@@ -374,7 +374,11 @@
     (let* ((forms (node-lisp-form expr))
            (prefix-forms (butlast forms))
            (last-form (car (last forms)))
-           (output-arity (tc:multiple-value-output-arity (node-type expr)))
+           ;; A whole-result variable has unknown arity. Wrapping its last
+           ;; form in (VALUES ...) would truncate multiple results to one.
+           (output-arity (unless (and (tc:tyvar-p (node-type expr))
+                                     (tc:tyvar-allow-result-p (node-type expr)))
+                           (tc:multiple-value-output-arity (node-type expr))))
            (tail-forms
              (case output-arity
                (0
