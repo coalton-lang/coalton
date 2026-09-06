@@ -257,6 +257,7 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
          )
     (or (builder-default-candidates env ambig)
         (loop :for type :in (defaults env)
+              :for subs := (list (make-substitution :from var :to type))
 
               :when (and
                      ;; Check that for the predicates containing VAR, VAR is their only type variable
@@ -277,9 +278,9 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
 
                      ;; Check that the variable would be defaulted to a valid type
                      ;; for the given predicates
-                     (every (lambda (name)
-                              (entail env nil (make-ty-predicate :class name :types (list type))))
-                            pred-names))
+                     (every (lambda (pred)
+                              (entail env nil (apply-substitution subs pred)))
+                            preds))
 
                 :collect type))))
 

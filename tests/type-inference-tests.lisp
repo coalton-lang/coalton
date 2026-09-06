@@ -2,6 +2,28 @@
 
 (in-package #:coalton-tests)
 
+(deftest test-numeric-defaulting-preserves-predicate-structure ()
+  (check-coalton-types
+   "(define-class (C :a) (consume-c (:a -> Unit)))
+    (define-instance (C (List Integer)) (define (consume-c _) Unit))
+    (define defaulted-result (consume-c (make-list 1)))"
+   '("defaulted-result" . "Unit"))
+  (check-coalton-types
+   "(define-class (C :a :b) (consume-c (:a * :b -> Unit)))
+    (define-instance (C (List Integer) String) (define (consume-c _ _) Unit))
+    (define defaulted-result (consume-c (make-list 1) \"x\"))"
+   '("defaulted-result" . "Unit"))
+  (check-coalton-types
+   "(define-class (C :a :b) (consume-c (:a * :b -> Unit)))
+    (define-instance (C Integer Integer) (define (consume-c _ _) Unit))
+    (define defaulted-result (let ((n 1)) (consume-c n n)))"
+   '("defaulted-result" . "Unit"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-class (C :a) (consume-c (:a -> Unit)))
+      (define-instance (C (List String)) (define (consume-c _) Unit))
+      (define invalid-result (consume-c (make-list 1)))")))
+
 (deftest test-kind-unification-consistency ()
   (let* ((a (tc:make-kvariable))
          (b (tc:make-kvariable))
