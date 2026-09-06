@@ -7,6 +7,40 @@
    "(define-class (OutputOf :a) (output-of (:a -> :b)))"
    '("output-of" . "(OutputOf :a => :a -> :b)")))
 
+(deftest fundep-improvement-is-independent-of-predicate-order ()
+  (let ((*package* (make-package (gensym "FUNDEP-ORDER-") :use '("COALTON" "COALTON-PRELUDE"))))
+    (unwind-protect
+         (let ((source (source:make-source-string "(define-class (C :a :b (:a -> :b)))")))
+           (with-open-stream (stream (source:source-stream source))
+             (let ((env (nth-value 1 (entry:entry-point
+                                     (parser:with-reader-context stream
+                                       (parser:read-program stream source))))))
+               (flet ((pred (from to)
+                        (tc:make-ty-predicate :class (intern "C") :types (list from to))))
+                 (let* ((a (tc:make-variable)) (b (tc:make-variable)) (c (tc:make-variable))
+                        (preds (list (pred tc:*integer-type* a)
+                                     (pred tc:*string-type* b)
+                                     (pred tc:*integer-type* c))))
+                   (alexandria:map-permutations
+                    (lambda (permutation)
+                      (let ((subs (nth-value 1 (tc:solve-fundeps env permutation nil))))
+                        (is (tc:ty= (tc:apply-substitution subs a) (tc:apply-substitution subs c)))))
+                    preds))
+                 (signals tc:coalton-internal-type-error
+                   (tc:solve-fundeps env (list (pred tc:*integer-type* tc:*integer-type*)
+                                               (pred tc:*string-type* tc:*string-type*)
+                                               (pred tc:*integer-type* tc:*boolean-type*)) nil))
+                 ;; The last pair makes the first two determinants equal.
+                 (let* ((a (tc:make-variable)) (b (tc:make-variable))
+                        (x (tc:make-variable)) (y (tc:make-variable))
+                        (subs (nth-value 1
+                                         (tc:solve-fundeps
+                                          env (list (pred a x) (pred b y)
+                                                    (pred tc:*integer-type* a)
+                                                    (pred tc:*integer-type* b)) nil))))
+                   (is (tc:ty= (tc:apply-substitution subs x) (tc:apply-substitution subs y))))))))
+      (delete-package *package*))))
+
 (deftest scheme-equality-preserves-function-boundaries ()
   (let* ((left (tc:to-scheme
                 (tc:make-function-ty

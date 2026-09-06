@@ -2248,6 +2248,31 @@ that variable, so this falls back to the full instance list."
         (coalton-internal-type-error ()
           (values subs nil))))))
 
+(defun improve-predicate-fundeps (env preds subs)
+  "Relate every pair of predicates whose determinants are equal under SUBS."
+  (loop :for remaining :on preds
+        :for pred := (first remaining)
+        :for class-name := (ty-predicate-class pred)
+        :for class := (lookup-class env class-name)
+        :for class-vars := (ty-class-class-variables class)
+        :when (ty-class-fundeps class)
+          :do (dolist (other (rest remaining))
+                (when (eq class-name (ty-predicate-class other))
+                  (handler-case
+                      (dolist (fundep (ty-class-fundeps class))
+                        (let ((types (apply-substitution subs (ty-predicate-types pred)))
+                              (other-types (apply-substitution subs (ty-predicate-types other))))
+                          (when (every #'ty=
+                                       (project-elements (fundep-from fundep) class-vars types)
+                                       (project-elements (fundep-from fundep) class-vars other-types))
+                            (setf subs
+                                  (unify-list subs
+                                              (project-elements (fundep-to fundep) class-vars types)
+                                              (project-elements (fundep-to fundep) class-vars other-types))))))
+                    (coalton-internal-type-error ()
+                      (error 'context-fundep-conflict :first-pred pred :second-pred other))))))
+  subs)
+
 (defun solve-fundeps (env preds subs)
   "First, this function creates and applies substitutions to preds based
 on functional dependencies that constrain them with respect to one
@@ -2333,52 +2358,6 @@ predicates with all substitutions applied and the new substitutions."
                                (ty-class-superclasses class)))
                   :collect pred))
 
-      ;; The purpose of this block is to create a substitution list that
-      ;; unifies the expanded predicates from the previous block based
-      ;; on the functional dependencies that constrain them.
-      (loop :for remaining-preds := preds :then (rest remaining-preds)
-            :until (endp remaining-preds)
-            :for pred := (first remaining-preds)
-            :for class-name := (ty-predicate-class pred)
-            :for class := (class-for class-name)
-            :for fundeps := (ty-class-fundeps class)
-            :for other-pred := (find class-name (rest preds)
-                                     :key #'ty-predicate-class
-                                     :test #'eq)
-            :when (and (consp fundeps) (not (null other-pred)))
-              :do (handler-case
-                      (let ((class-vars (ty-class-class-variables class))
-                            (pred-tys (ty-predicate-types pred))
-                            (other-pred-tys (ty-predicate-types other-pred)))
-                        (dolist (fundep fundeps)
-                          (let* ((from (fundep-from fundep))
-                                 (to (fundep-to fundep))
-                                 (pred-from
-                                   (project-elements from
-                                                     class-vars
-                                                     pred-tys))
-                                 (other-pred-from
-                                   (project-elements from
-                                                     class-vars
-                                                     other-pred-tys)))
-                            (when (every #'ty= pred-from other-pred-from)
-                              (let ((pred-to
-                                      (project-elements to
-                                                        class-vars
-                                                        pred-tys))
-                                    (other-pred-to
-                                      (project-elements to
-                                                        class-vars
-                                                        other-pred-tys)))
-                                (setf subs (unify-list subs
-                                                       pred-to
-                                                       other-pred-to)))))))
-                    (unification-error ()
-                      (error 'context-fundep-conflict
-                             :first-pred pred
-                             :second-pred other-pred)))
-            :finally (setf preds (apply-substitution subs preds)))
-
       ;; This block is meant to simplify PREDS if instances exist in the
       ;; environment which constrain them by functional dependencies or by
       ;; repeated variables in an instance head.
@@ -2386,7 +2365,10 @@ predicates with all substitutions applied and the new substitutions."
             :with preds-generated := nil
             :for i :below +fundep-max-depth+
             :do
-               (setf new-subs subs)
+               ;; Repeat pairwise improvement after instance improvement too:
+               ;; either may expose equal determinants for the next pass.
+               (setf new-subs (improve-predicate-fundeps env preds subs))
+               (setf preds (apply-substitution new-subs preds))
 
                (loop :for pred :in preds
                      :for class-name := (ty-predicate-class pred)
