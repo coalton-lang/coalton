@@ -2,6 +2,32 @@
 
 (in-package #:coalton-tests)
 
+(deftest test-loop-bindings-are-monomorphic ()
+  (dolist (loop-name '("for" "for*"))
+    (dolist (declaration '("" "(declare v (Optional :a))"))
+      (signals tc:tc-error
+        (check-coalton-types
+         (format nil
+                 "(define (read-string)
+                    (~A (~A (v None (Some (the Integer 42))))
+                      :returns (the (Optional String) v)
+                      :repeat 1 Unit))"
+                 loop-name declaration))))
+    (check-coalton-types
+     (format nil
+             "(define (read-integer)
+                (~A ((v None (Some (the Integer 42))))
+                  :returns v :repeat 1 Unit))"
+             loop-name)
+     '("read-integer" . "(Void -> Optional Integer)")))
+  ;; Generalizing a dependency before checking another initializer is unsafe too.
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define (read-string)
+        (for ((v None (Some (the Integer 42)))
+              (w (the (Optional String) v) w))
+          :returns w :repeat 1 Unit))")))
+
 (deftest test-explicit-value-restriction ()
   (signals tc:tc-error
     (check-coalton-types

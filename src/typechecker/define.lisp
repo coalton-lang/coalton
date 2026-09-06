@@ -3210,14 +3210,15 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                             (setf (gethash name binding-declare-table)
                                   (gethash name declare-table)))
                           (multiple-value-bind (preds_ accessors_ nodes subs_)
-                              (infer-bindings-type (list init-binding) binding-declare-table subs loop-env)
+                              (infer-bindings-type (list init-binding) binding-declare-table subs loop-env
+                                                   :generalize nil)
                             (setf subs subs_)
                             (setf preds (append preds preds_))
                             (setf accessors (append accessors accessors_))
                             nodes))))
                  (t
                   (multiple-value-bind (preds_ accessors_ nodes subs_)
-                      (infer-bindings-type init-bindings declare-table subs loop-env)
+                      (infer-bindings-type init-bindings declare-table subs loop-env :generalize nil)
                     (setf subs subs_)
                     (setf preds (append preds preds_))
                     (setf accessors (append accessors accessors_))
@@ -4189,7 +4190,8 @@ as a recursive function rather than a recursive value."
   (dolist (binding-scc (binding-sccs bindings))
     (check-for-invalid-recursive-scc binding-scc env binding-function-p)))
 
-(defun infer-bindings-type (bindings dec-table subs env)
+(defun infer-bindings-type (bindings dec-table subs env &key (generalize t))
+  "Infer a binding group. Disable GENERALIZE for mutable loop storage."
   (declare (type list bindings)
            (type hash-table dec-table)
            (type tc:substitution-list subs)
@@ -4207,7 +4209,8 @@ as a recursive function rather than a recursive value."
         :for unparsed-ty :being :the :hash-values :of dec-table
 
         :for scheme := (parse-ty-scheme unparsed-ty (tc-env-parser-env env))
-        :do (tc-env-add-definition env name scheme))
+        :do (tc-env-add-definition env name
+                                   (if generalize scheme (tc:to-scheme (tc:fresh-inst scheme)))))
 
   (when (and bindings
              (eq ':local (binding-recursion-context (first bindings))))
@@ -4255,7 +4258,7 @@ as a recursive function rather than a recursive value."
                    := (loop :for name :in scc
                             :collect (gethash name impl-bindings))
                  :append (multiple-value-bind (preds_ nodes subs_)
-                             (infer-impls-binding-type bindings subs env)
+                             (infer-impls-binding-type bindings subs env :generalize generalize)
                            (setf subs subs_)
                            (setf preds (append preds preds_))
                            nodes)))
@@ -4270,7 +4273,10 @@ as a recursive function rather than a recursive value."
                  :for unparsed-ty := (gethash name dec-table)
 
                  :collect (multiple-value-bind (preds_ node_ subs_)
-                              (infer-expl-binding-type binding
+                              (funcall (if generalize
+                                           #'infer-expl-binding-type
+                                           #'infer-monomorphic-binding-type)
+                                       binding
                                                        scheme
                                                        (source:location
                                                         (parser:binding-name binding))
@@ -4283,6 +4289,27 @@ as a recursive function rather than a recursive value."
             nil
             (append impl-binding-nodes expl-binding-nodes)
             subs)))
+
+(defun infer-monomorphic-binding-type (binding scheme location subs env)
+  "Check a storage initializer against one shared instance of its declaration."
+  (let ((qual-type (tc:ty-scheme-type scheme)))
+    (multiple-value-bind (preds accessors node subs)
+        (infer-binding-type binding (tc:qualified-ty-type qual-type) subs env)
+      (multiple-value-bind (accessors new-subs)
+          (solve-accessors (tc:apply-substitution subs accessors) (tc-env-env env))
+        (setf subs (tc:compose-substitution-lists new-subs subs))
+        (when accessors
+          (tc-error "Ambiguous accessor"
+                    (tc-location location "accessor is ambiguous")))
+        (let ((type (tc:apply-substitution subs (tc:qualified-ty-type qual-type))))
+          (tc-env-replace-type env
+                               (parser:node-variable-name (parser:binding-name binding))
+                               (tc:to-scheme type))
+          (values (tc:apply-substitution subs
+                                         (append preds (tc:qualified-ty-predicates qual-type)))
+                  (attach-explicit-binding-type (tc:apply-substitution subs node)
+                                                (tc:qualify nil type))
+                  subs))))))
 
 (defun infer-expl-binding-type (binding declared-ty location subs env)
   "Infer the type of BINDING and then ensure it matches DECLARED-TY."
@@ -4881,7 +4908,7 @@ as a recursive function rather than a recursive value."
                (loop :for binding :in (rest bindings)
                      :collect (tc-note (parser:binding-name binding) "with definition")))))))
 
-(defun infer-impls-binding-type (bindings subs env)
+(defun infer-impls-binding-type (bindings subs env &key (generalize t))
   "Infer the type's of BINDINGS and then qualify those types into schemes."
   (declare (type (or parser:toplevel-define-list parser:node-let-binding-list) bindings)
            (type tc:substitution-list subs)
@@ -5009,9 +5036,10 @@ as a recursive function rather than a recursive value."
                  (retained-preds (set-difference retained-preds defaultable-preds :test #'eq))
 
                  ;; Check if the monomorphism restriction applies
-                 (restricted (some (lambda (b)
-                                     (not (parser:binding-function-p b)))
-                                   bindings)))
+                 (restricted (or (not generalize)
+                                 (some (lambda (b)
+                                         (not (parser:binding-function-p b)))
+                                       bindings))))
 
 
             (setf subs (tc:compose-substitution-lists
@@ -5079,12 +5107,13 @@ as a recursive function rather than a recursive value."
                       generalizable-candidates
                       :test #'tc:ty=))
                    (generalizable-tvars
-                     (set-difference
-                      generalizable-candidates
-                      ;; Weak variables with non-covariant occurrences remain
-                      ;; monomorphic placeholders until solved.
-                      blocked-weak-tvars
-                      :test #'tc:ty=)))
+                     (and generalize
+                          (set-difference
+                           generalizable-candidates
+                           ;; Weak variables with non-covariant occurrences remain
+                           ;; monomorphic placeholders until solved.
+                           blocked-weak-tvars
+                           :test #'tc:ty=))))
 
               (if restricted
                   (let* ((allowed-tvars (set-difference generalizable-tvars
