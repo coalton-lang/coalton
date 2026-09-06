@@ -324,15 +324,10 @@ apply s type1 == type2")
     (error 'predicate-unification-error :pred1 pred1 :pred2 pred2))
   (handler-case
       (let ((subs nil))
-        (reduce #'merge-substitution-lists
-                (loop :for pred-type1 :in (ty-predicate-types pred1)
-                      :for pred-type2 :in (ty-predicate-types pred2)
-                      :collect (setf subs
-                                     (compose-substitution-lists
-                                      (mgu (apply-substitution subs pred-type1)
-                                           (apply-substitution subs pred-type2))
-                                      subs)))
-                :initial-value nil))
+        (loop :for pred-type1 :in (ty-predicate-types pred1)
+              :for pred-type2 :in (ty-predicate-types pred2)
+              :do (setf subs (unify subs pred-type1 pred-type2)))
+        subs)
     (coalton-internal-type-error ()
       (error 'predicate-unification-error :pred1 pred1 :pred2 pred2))))
 

@@ -1345,6 +1345,11 @@ The `into` method is used only when a conversion can always be performed from on
 
 **Note that `as` only works for conversions via `into`, i.e., conversions that are total.** There is no corresponding syntax for `tryInto`.
 
+Conversions require an `Into` instance even when the source and destination
+types are the same. Coalton does not provide a blanket `Into :a :a` instance.
+Use the value directly, or `the` to constrain its type, when no conversion is
+needed.
+
 ## Polymorphism, Mutation, and the Value Restriction
 
 Coalton infers polymorphic types for implicitly typed `define` and `let` bindings using a syntactic ML-style value restriction plus a relaxed variance check. This ensures the Coalton type system is sound in the presence of mutable data structures.

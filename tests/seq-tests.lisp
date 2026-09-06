@@ -1,5 +1,64 @@
 (in-package #:coalton-native-tests)
 
+(define-test non-overlapping-library-conversions ()
+  (is (== (the Integer (into (the Integer 42))) 42))
+  (is (== (the UFix (into (the UFix 42))) 42))
+  (is (== (the String (into "hello")) "hello"))
+  (let path = (the file:Pathname (into "conversion-test")))
+  (is (== (the file:Pathname (into path)) path))
+  (is (== (coalton/tuple:swap (the (Tuple Integer Integer) (Tuple 1 2))) (Tuple 2 1)))
+  (is (== (the String (into (cell:new "hello"))) "hello"))
+  (is (== (the Integer (into (cell:new (the Integer 42)))) 42))
+  (is (== (the String (into (cell:read (cell:new (the Integer 42))))) "42"))
+  (is (== (the (seq:Seq Integer) (into (the (List Integer) (make-list 1 2)))) (seq:make 1 2)))
+  (is (== (the (seq:Seq Integer) (into (the (vector:Vector Integer) (vector:make 1 2)))) (seq:make 1 2)))
+  (is (== (the (seq:Seq Integer) (into (Some (the Integer 1)))) (seq:make 1)))
+  (is (seq:empty? (the (seq:Seq Integer) (into (the (Optional Integer) None)))))
+  (let z = (the (math:Complex creal:CReal) (into (math:Complex (the Integer 1) 2))))
+  (is (== (math:real-part z) 1))
+  (is (== (math:imag-part z) 2)))
+
+(coalton-toplevel
+  (define-type (ConversionFoldable :a)
+    (ConversionFoldable :a :a))
+
+  (define-instance (Foldable ConversionFoldable)
+    (define (fold f init (ConversionFoldable x y))
+      (f (f init x) y))
+    (define (foldr f init (ConversionFoldable x y))
+      (f x (f y init))))
+
+  (define-type ConversionScalar
+    (ConversionScalar Integer))
+
+  (define-instance (Eq ConversionScalar)
+    (define (== (ConversionScalar x) (ConversionScalar y)) (== x y)))
+
+  (define-instance (Num ConversionScalar)
+    (define (+ (ConversionScalar x) (ConversionScalar y)) (ConversionScalar (+ x y)))
+    (define (- (ConversionScalar x) (ConversionScalar y)) (ConversionScalar (- x y)))
+    (define (* (ConversionScalar x) (ConversionScalar y)) (ConversionScalar (* x y)))
+    (define fromInt ConversionScalar))
+
+  (define-instance (math:ComplexComponent ConversionScalar)
+    (define (math:complex re im) (coalton/math/complex::%Complex re im))
+    (define (math:real-part z)
+      (match z ((coalton/math/complex::%Complex re _) re)))
+    (define (math:imag-part z)
+      (match z ((coalton/math/complex::%Complex _ im) im))))
+
+  (define-instance (Into ConversionScalar creal:CReal)
+    (define (into (ConversionScalar x)) (into x))))
+
+(define-test generic-library-conversions ()
+  ;; User-defined Foldable and scalar instances automatically participate in
+  ;; the library's generic conversions, without container-specific instances.
+  (is (== (the (seq:Seq Integer) (into (ConversionFoldable 3 7))) (seq:make 3 7)))
+  (let z = (the (math:Complex creal:CReal)
+               (into (math:complex (ConversionScalar 3) (ConversionScalar 7)))))
+  (is (== (math:real-part z) 3))
+  (is (== (math:imag-part z) 7)))
+
 (define-test seq-push-and-pop ()
   (let ((seq (the (seq:Seq String) (seq:make "a" "b" "c"))))
     (is (== (Some "a") (seq:get seq 0)))

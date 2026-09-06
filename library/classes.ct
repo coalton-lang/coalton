@@ -457,14 +457,21 @@ When no concrete type is specified, the compiler defaults to `Seq (Tuple :key :v
   (define-class ((Into :a :b) (Into :b :a) => Iso :a :b)
     "Opting into this marker typeclass implies that the instances for `(Into :a :b)` and `(Into :b :a)` form a bijection.")
 
-  (define-instance (Into :a :a)
+  ;; Keep the self-conversions needed by the library explicit. A blanket
+  ;; Into :a :a overlaps with generic container conversions; instance overlap
+  ;; is not currently supported.
+  (define-instance (Into Integer Integer)
+    (define (into x) x))
+
+  (define-instance (Into UFix UFix)
+    (define (into x) x))
+
+  (define-instance (Into String String)
     (define (into x) x))
 
   (define-class (TryInto :a :b)
     "`TRY-INTO` implies some elements of `:a` can be represented exactly by an element of `:b`, but sometimes not. Failed conversions return `None`."
     (tryInto (:a -> (Optional :b))))
-
-  (define-instance (Iso :a :a))
 
   ;;
   ;; Unwrappable for fallible unboxing

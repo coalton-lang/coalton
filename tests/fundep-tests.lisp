@@ -2,6 +2,75 @@
 
 (in-package #:coalton-tests)
 
+(deftest instance-head-improvement-preserves-unknown-shapes ()
+  (check-coalton-types
+   "(define-class (ConvertTo :a :b) (convert-to (:a -> :b)))
+    (define-instance (ConvertTo :a :a) (define (convert-to x) x))
+    (declare convert-any (ConvertTo :a String => :a -> String))
+    (define (convert-any x) (convert-to x))"
+   '("convert-any" . "(ConvertTo :a String => :a -> String)"))
+  (check-coalton-types
+   "(define-type (Box :a) (Box :a))
+    (define-class (ClassA :m :a (:m -> :a)) (get-a (:m -> :a)))
+    (define-instance (ClassA (Box :a) :a) (define (get-a (Box x)) x))
+    (define (get-any x) (get-a x))"
+   '("get-any" . "(ClassA :m :a => :m -> :a)")))
+
+(deftest predicate-mgu-refines-shared-variables ()
+  (let* ((a (tc:make-variable))
+         (b (tc:make-variable))
+         (left (tc:make-ty-predicate :class 'c :types (list a a)))
+         (right (tc:make-ty-predicate :class 'c :types (list b tc:*integer-type*))))
+    (dolist (pair (list (cons left right) (cons right left)))
+      (let ((subs (tc:predicate-mgu (car pair) (cdr pair))))
+        (is (tc:type-predicate= (tc:apply-substitution subs left)
+                                (tc:apply-substitution subs right)))
+        (is (tc:ty= tc:*integer-type* (tc:apply-substitution subs a)))
+        (is (tc:ty= tc:*integer-type* (tc:apply-substitution subs b)))))))
+
+(deftest overlapping-nonlinear-instance-heads ()
+  ;; General Cell unwrapping coexists with the explicit scalar self-conversions.
+  (check-coalton-types
+   "(define unwrapped-string (the String (into (coalton/cell:new \"x\"))))
+    (define unwrapped-integer (the Integer (into (coalton/cell:new (the Integer 42)))))"
+   '("unwrapped-string" . "String")
+   '("unwrapped-integer" . "Integer"))
+  (dolist (instances '("(define-instance (C :a :a)) (define-instance (C :b Integer))"
+                       "(define-instance (C :b Integer)) (define-instance (C :a :a))"))
+    (signals tc:tc-error
+      (check-coalton-types (concatenate 'string "(define-class (C :a :b))" instances))))
+  (check-coalton-types
+   "(define-class (C :a :b))
+    (define-instance (C :a :a))
+    (define-instance (C Integer String))"))
+
+(deftest library-conversion-constraints ()
+  ;; Retain the original generic signatures of the container conversions.
+  (check-coalton-types
+   "(declare build-seq ((Foldable :f) (coalton/types:RuntimeRepr :a)
+                         => :f :a -> coalton/seq:Seq :a))
+    (define (build-seq xs) (into xs))
+    (declare convert-complex ((coalton/math:ComplexComponent :a)
+                              (Into :a coalton/computable-reals:CReal)
+                              => coalton/math:Complex :a
+                              -> coalton/math:Complex coalton/computable-reals:CReal))
+    (define (convert-complex z) (into z))")
+  ;; Arbitrary identity conversion and implicit cell-content conversion are
+  ;; unavailable while the library avoids overlapping instances.
+  (dolist (program
+            '("(declare same (:a -> :a)) (define (same x) (into x))"
+              "(define same (the (Tuple Integer Integer) (into (Tuple 1 2))))"
+              "(define text (the String (into (coalton/cell:new (the Integer 42)))))"))
+    (signals tc:tc-error (check-coalton-types program)))
+  ;; The old Cell-to-String rule conflicts even without a blanket identity.
+  (dolist (instances
+            '("(define-instance (C (coalton/cell:Cell :a) :a))
+               (define-instance (Into :a String => C (coalton/cell:Cell :a) String))"
+              "(define-instance (Into :a String => C (coalton/cell:Cell :a) String))
+               (define-instance (C (coalton/cell:Cell :a) :a))"))
+    (signals tc:tc-error
+      (check-coalton-types (concatenate 'string "(define-class (C :a :b))" instances)))))
+
 (deftest occurs-check-compares-variable-identities ()
   (let* ((a (tc:make-variable))
          (copy (copy-structure a))

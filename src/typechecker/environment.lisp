@@ -2212,7 +2212,19 @@ that variable, so this falls back to the full instance list."
            (lookup-class-instances env (ty-predicate-class pred) :no-error t)))
     (unless foundp
       (return-from improve-predicate-from-instance-head (values subs nil)))
-    (let* ((instance-pred (fresh-pred (ty-class-instance-predicate instance)))
+    (let* (;; Repeated variables inside a structural argument can refine that
+           ;; argument. Relationships between separate class parameters require
+           ;; functional dependencies: e.g. Into :a :a must not specialize a
+           ;; declared Into :b String constraint merely because it is the only
+           ;; instance loaded so far.
+           (instance-pred
+             (make-ty-predicate
+              :class (ty-predicate-class pred)
+              :types (loop :for type :in (ty-predicate-types (ty-class-instance-predicate instance))
+                           :collect (first (ty-predicate-types
+                                            (fresh-pred (make-ty-predicate
+                                                         :class (ty-predicate-class pred)
+                                                         :types (list type))))))))
            (instance-vars (type-variables instance-pred))
            (wanted-pred (apply-substitution subs pred))
            (wanted-vars (type-variables wanted-pred)))
@@ -2220,7 +2232,10 @@ that variable, so this falls back to the full instance list."
         (return-from improve-predicate-from-instance-head (values subs nil)))
       (handler-case
           (let ((full-subs (predicate-mgu instance-pred wanted-pred))
-                (linear-subs (predicate-mgu (linearize-pred instance-pred) wanted-pred)))
+                ;; The wanted type must already have the instance's shape.
+                ;; Unification here would invent that shape merely because
+                ;; there is currently only one applicable instance.
+                (linear-subs (predicate-match (linearize-pred instance-pred) wanted-pred)))
             ;; Only keep wanted substitutions that come from repeated
             ;; instance variables. Substitutions also produced by the
             ;; linearized head are ordinary instance matching, not
