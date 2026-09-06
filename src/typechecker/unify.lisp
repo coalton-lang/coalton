@@ -258,7 +258,7 @@ to the zero-result type."
         (list (make-substitution :from tyvar :to type)))
        (t
         (list (make-substitution :from tyvar :to type)))))
-    ((find tyvar (type-variables type))
+    ((find tyvar (type-variables type) :test #'ty=)
      (error 'infinite-type-unification-error :type type))
     ((not (equalp (kind-of tyvar)
                   (kind-of type)))

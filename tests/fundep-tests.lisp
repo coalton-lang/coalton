@@ -2,6 +2,19 @@
 
 (in-package #:coalton-tests)
 
+(deftest occurs-check-compares-variable-identities ()
+  (let* ((a (tc:make-variable))
+         (copy (copy-structure a))
+         (recursive (tc:make-tapp :from tc:*list-type* :to copy)))
+    (is (tc:ty= a copy))
+    (signals tc:coalton-internal-type-error (tc:unify nil a recursive))
+    (signals tc:coalton-internal-type-error (tc:unify nil recursive a))
+    (let ((b (tc:make-variable)))
+      (signals tc:coalton-internal-type-error
+        (tc:predicate-mgu
+         (tc:make-ty-predicate :class 'c :types (list a recursive))
+         (tc:make-ty-predicate :class 'c :types (list b b)))))))
+
 ;; Fundep parsing
 (deftest define-fundep-classes ()
   (check-coalton-types
