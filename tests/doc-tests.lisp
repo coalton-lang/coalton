@@ -14,6 +14,23 @@
               entry:*global-environment*)))
       (delete-package *package*))))
 
+(deftest test-doc-kind-binder-rendering ()
+  (let ((coalton-impl/settings:*coalton-print-unicode* nil))
+    (dolist (example
+              '(("(forall ((:r Values)) ((Void -> :r) -> :r))"
+                 . "forall (:R Values). (Void -> :R) -> :R")
+                ("(forall ((:a Type)) ((Void -> :a) -> :a))"
+                 . "forall :A. (Void -> :A) -> :A")
+                ("(forall ((:f (Type -> Type)) :a) ((:f :a) -> (:f :a)))"
+                 . "forall (:F (Type -> Type)) :A. :F :A -> :F :A")
+                ("(forall ((:h ((Type -> Type) -> Type)))
+                    ((:h List) -> (:h List)))"
+                 . "forall (:H ((Type -> Type) -> Type)). :H List -> :H List")))
+      (is (string= (cdr example)
+                   (coalton-impl/typechecker/type-string:type-to-string
+                    (parse-doc-test-scheme (car example))
+                    entry:*global-environment*))))))
+
 (deftest test-doc-keyword-type-rendering ()
   (let* ((keyword-type
            (tc:qualified-ty-type

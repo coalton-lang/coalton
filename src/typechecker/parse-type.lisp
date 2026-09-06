@@ -22,7 +22,6 @@
    #:apply-type-alias-substitutions     ; FUNCTION
    #:parse-type                         ; FUNCTION
    #:parse-output-slot-type             ; FUNCTION
-   #:compute-result-capable-type-variables ; FUNCTION
    #:parse-qualified-type               ; FUNCTION
    #:parse-qualified-type-info          ; FUNCTION
    #:parse-ty-scheme                    ; FUNCTION
@@ -48,110 +47,118 @@
 ;;; Entrypoints
 ;;;
 
-(defun compute-result-capable-type-variables (type &optional (root-output-slot-p nil))
-  "Return the set of type variables that denote whole function-output slots.
-
-These binders may unify with result packs (Void or multiple values).
-Any occurrence in an ordinary value position cancels that privilege."
+(defun check-result-variable-positions (type env &optional (root-output-slot-p nil))
+  "Reject Values binders outside whole function or Lisp output slots."
   (declare (type (or parser:ty parser:qualified-ty) type)
+           (type partial-type-env env)
            (type boolean root-output-slot-p)
-           (values hash-table &optional))
-  (let ((result-capable (make-hash-table :test #'eq))
-        (ordinary (make-hash-table :test #'eq)))
-    (labels ((mark (table name)
-               (setf (gethash name table) t))
-             (walk (type output-slot-p)
-               (typecase type
-                 (parser:tyvar
-                  (if output-slot-p
-                      (mark result-capable (parser:tyvar-name type))
-                      (mark ordinary (parser:tyvar-name type))))
-                 (parser:tycon
-                  nil)
-                 (parser:tapp
-                  (walk (parser:tapp-from type) nil)
-                  (walk (parser:tapp-to type) nil))
-                 (parser:keyword-ty-entry
-                  (walk (parser:keyword-ty-entry-type type) nil))
-                 (parser:function-ty
-                  (map nil (lambda (input)
-                             (walk input nil))
-                       (parser:function-ty-positional-input-types type))
-                  (map nil (lambda (entry)
-                             (walk entry nil))
-                       (parser:function-ty-keyword-input-types type))
-                  (let ((outputs (parser:function-ty-output-types type)))
-                    (cond
-                      ((null outputs)
-                       nil)
-                      ;; A single output slot may itself be result-polymorphic.
-                      ;; Components of an explicit output pack are ordinary
-                      ;; value types, not result-pack binders.
-                      ((and (null (cdr outputs))
-                            (not (typep (first outputs) 'parser:result-ty)))
-                       (walk (first outputs) t))
-                      (t
-                       (map nil (lambda (output)
-                                  (walk output nil))
-                            outputs)))))
-                 (parser:result-ty
-                  (map nil (lambda (output)
-                             (walk output nil))
-                       (parser:result-ty-output-types type)))
-                 (parser:qualified-ty
-                  (map nil (lambda (pred)
-                             (walk pred nil))
-                       (parser:qualified-ty-predicates type))
-                  (walk (parser:qualified-ty-type type) nil))
-                 (parser:ty-predicate
-                  (map nil (lambda (pred-type)
-                             (walk pred-type nil))
-                       (parser:ty-predicate-types type)))
-                 (list
-                  (map nil (lambda (elt)
-                             (walk elt nil))
-                       type)))))
-      (walk type root-output-slot-p)
-      (maphash (lambda (name _value)
-                 (declare (ignore _value))
-                 (when (gethash name ordinary)
-                   (remhash name result-capable)))
-               result-capable)
-      result-capable)))
+           (values null))
+  (labels ((walk (type output-slot-p)
+             (typecase type
+               (parser:tyvar
+                (let ((var (gethash (parser:tyvar-name type)
+                                    (partial-type-env-ty-table env))))
+                  (when (and (typep var 'tc:tyvar)
+                             (tc:tyvar-allow-result-p var)
+                             (not output-slot-p))
+                    (tc-error "Invalid Values variable"
+                              (tc-note type
+                                       "Values variable ~S must occupy an entire function or Lisp output slot"
+                                       (or (parser:tyvar-source-name type)
+                                           (parser:tyvar-name type)))))))
+               (parser:tycon
+                nil)
+               (parser:tapp
+                (walk (parser:tapp-from type) nil)
+                (walk (parser:tapp-to type) nil))
+               (parser:keyword-ty-entry
+                (walk (parser:keyword-ty-entry-type type) nil))
+               (parser:function-ty
+                (map nil (lambda (input)
+                           (walk input nil))
+                     (parser:function-ty-positional-input-types type))
+                (map nil (lambda (entry)
+                           (walk entry nil))
+                     (parser:function-ty-keyword-input-types type))
+                (let ((outputs (parser:function-ty-output-types type)))
+                  (cond
+                    ((null outputs)
+                     nil)
+                    ;; A single output slot may itself be result-polymorphic.
+                    ;; Components of an explicit output pack are ordinary
+                    ;; value types, not result-pack binders.
+                    ((and (null (cdr outputs))
+                          (not (typep (first outputs) 'parser:result-ty)))
+                     (walk (first outputs) t))
+                    (t
+                     (map nil (lambda (output)
+                                (walk output nil))
+                          outputs)))))
+               (parser:result-ty
+                (map nil (lambda (output)
+                           (walk output nil))
+                     (parser:result-ty-output-types type)))
+               (parser:qualified-ty
+                (map nil (lambda (pred)
+                           (walk pred nil))
+                     (parser:qualified-ty-predicates type))
+                (walk (parser:qualified-ty-type type) nil))
+               (parser:ty-predicate
+                (map nil (lambda (pred-type)
+                           (walk pred-type nil))
+                     (parser:ty-predicate-types type)))
+               (list
+                (map nil (lambda (elt)
+                           (walk elt nil))
+                     type)))))
+    (walk type root-output-slot-p))
+  nil)
+
+(defun binder-kind (kind)
+  "Translate a parsed binder annotation into an ordinary kind and result flag."
+  (etypecase kind
+    (null (values (tc:make-kvariable) nil))
+    (parser:kind-atom
+     (values tc:+kstar+ (eq (parser:kind-atom-name kind) 'coalton:Values)))
+    (parser:kind-function
+     (values (tc:make-kfun :from (binder-kind (parser:kind-function-from kind))
+                           :to (binder-kind (parser:kind-function-to kind)))
+             nil))))
 
 (defun seed-qualified-type-variables (unparsed-ty partial-env)
   (declare (type parser:qualified-ty unparsed-ty)
            (type partial-type-env partial-env)
            (values tc:tyvar-list boolean &optional))
-  (let ((result-capable-vars (compute-result-capable-type-variables unparsed-ty)))
-    (cond
-      ((parser:qualified-ty-explicit-p unparsed-ty)
-       (let ((explicit-vars (parser:qualified-ty-explicit-variables unparsed-ty)))
-         (check-duplicates
-          explicit-vars
-          #'parser:keyword-src-name
-          (lambda (first second)
-            (tc-error "Duplicate quantified type variable"
-                      (tc-note first "first binding here")
-                      (tc-note second "second binding here"))))
-         (values
-          (loop :for tvar :in explicit-vars
-                :for name := (parser:keyword-src-name tvar)
-                :collect (partial-type-env-add-var partial-env
+  (cond
+    ((parser:qualified-ty-explicit-p unparsed-ty)
+     (let ((explicit-vars (parser:qualified-ty-explicit-variables unparsed-ty)))
+       (check-duplicates
+        explicit-vars
+        #'parser:keyword-src-name
+        (lambda (first second)
+          (tc-error "Duplicate quantified type variable"
+                    (tc-note first "first binding here")
+                    (tc-note second "second binding here"))))
+       (values
+        (loop :for tvar :in explicit-vars
+              :for name := (parser:keyword-src-name tvar)
+              :collect (multiple-value-bind (kind allow-result-p)
+                           (binder-kind (parser:type-variable-binding-kind tvar))
+                         (partial-type-env-add-var partial-env
                                                    name
                                                    (or (parser:keyword-src-source-name tvar)
                                                        name)
-                                                   (gethash name result-capable-vars)))
-          t)))
-      (t
-       (loop :for tvar :in (parser:collect-type-variables unparsed-ty)
-             :for tvar-name := (parser:tyvar-name tvar)
-             :do (partial-type-env-ensure-var partial-env
-                                              tvar-name
-                                              (or (parser:tyvar-source-name tvar)
-                                                  tvar-name)
-                                              (gethash tvar-name result-capable-vars)))
-       (values nil nil)))))
+                                                   allow-result-p
+                                                   kind)))
+        t)))
+    (t
+     (loop :for tvar :in (parser:collect-type-variables unparsed-ty)
+           :for tvar-name := (parser:tyvar-name tvar)
+           :do (partial-type-env-ensure-var partial-env
+                                            tvar-name
+                                            (or (parser:tyvar-source-name tvar)
+                                                tvar-name)))
+     (values nil nil))))
 
 (defun parse-qualified-type-internal (unparsed-ty env)
   (declare (type parser:qualified-ty unparsed-ty)
@@ -163,6 +170,7 @@ Any occurrence in an ordinary value position cancels that privilege."
          (base-env (partial-type-env-env partial-env)))
     (multiple-value-bind (explicit-tvars explicit-p)
         (seed-qualified-type-variables unparsed-ty partial-env)
+      (check-result-variable-positions unparsed-ty partial-env)
       (multiple-value-bind (qual-ty ksubs)
           (infer-type-kinds unparsed-ty tc:+kstar+ nil partial-env)
 
@@ -170,7 +178,8 @@ Any occurrence in an ordinary value position cancels that privilege."
         (setf qual-ty (tc:make-qualified-ty
                        :predicates (tc:qualified-ty-predicates qual-ty)
                        :type (tc:qualified-ty-type qual-ty)))
-        (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables qual-ty) ksubs))
+        (setf ksubs (tc:kind-monomorphize-subs
+                     (tc:kind-variables (cons qual-ty explicit-tvars)) ksubs))
 
         (let* ((qual-ty (tc:apply-ksubstitution ksubs qual-ty))
                (explicit-tvars (mapcar (lambda (tvar)
@@ -284,7 +293,7 @@ Any occurrence in an ordinary value position cancels that privilege."
      :keyword (tc:keyword-ty-entry-keyword entry)
      :type (apply-type-alias-substitutions (tc:keyword-ty-entry-type entry)
                                            (parser:keyword-ty-entry-type parser-entry)
-                                           env)))
+                                          env)))
 
   (:method ((type tc:function-ty) (parser-type parser:function-ty) env)
     (declare
@@ -326,7 +335,7 @@ Any occurrence in an ordinary value position cancels that privilege."
      :predicates (tc:qualified-ty-predicates type)
      :type (apply-type-alias-substitutions (tc:qualified-ty-type type)
                                            (parser:qualified-ty-type parser-type)
-                                           env)))
+                                          env)))
 
   (:method ((type tc:ty) parser-type env)
     (declare (type parser:ty parser-type)
@@ -344,16 +353,16 @@ Any occurrence in an ordinary value position cancels that privilege."
 
   (let ((partial-env (if (typep env 'tc:environment)
                          (make-partial-type-env :env env)
-                         env))
-        (result-capable-vars (compute-result-capable-type-variables parser-ty)))
+                         env)))
 
     (loop :for tvar :in (parser:collect-type-variables parser-ty)
           :for tvar-name := (parser:tyvar-name tvar)
           :do (partial-type-env-ensure-var partial-env
                                            tvar-name
                                            (or (parser:tyvar-source-name tvar)
-                                               tvar-name)
-                                           (gethash tvar-name result-capable-vars)))
+                                               tvar-name)))
+
+    (check-result-variable-positions parser-ty partial-env)
 
     (multiple-value-bind (ty ksubs)
         (infer-type-kinds parser-ty
@@ -370,8 +379,8 @@ Any occurrence in an ordinary value position cancels that privilege."
 (defun parse-output-slot-type (parser-ty env &optional ksubs (kind tc:+kstar+))
   "Parse PARSER-TY as a whole function/lisp output slot.
 
-Unlike PARSE-TYPE, a bare type variable here may denote a result pack
-(for example `(lisp (-> :a) ...)` in a Void context)."
+Unlike PARSE-TYPE, a scoped Values variable may occupy the whole output slot.
+Unbound variables still denote ordinary single-value types."
   (declare (type parser:ty parser-ty)
            (type (or tc:environment partial-type-env) env)
            (type tc:ksubstitution-list ksubs)
@@ -379,16 +388,16 @@ Unlike PARSE-TYPE, a bare type variable here may denote a result pack
            (values tc:ty tc:ksubstitution-list &optional))
   (let ((partial-env (if (typep env 'tc:environment)
                          (make-partial-type-env :env env)
-                         env))
-        (result-capable-vars (compute-result-capable-type-variables parser-ty t)))
+                         env)))
 
     (loop :for tvar :in (parser:collect-type-variables parser-ty)
           :for tvar-name := (parser:tyvar-name tvar)
           :do (partial-type-env-ensure-var partial-env
                                            tvar-name
                                            (or (parser:tyvar-source-name tvar)
-                                               tvar-name)
-                                           (gethash tvar-name result-capable-vars)))
+                                               tvar-name)))
+
+    (check-result-variable-positions parser-ty partial-env t)
 
     (multiple-value-bind (ty ksubs)
         (infer-type-kinds parser-ty
@@ -424,6 +433,7 @@ being assembled."
          (base-env (partial-type-env-env partial-env)))
     (multiple-value-bind (explicit-tvars explicit-p)
         (seed-qualified-type-variables unparsed-ty partial-env)
+      (check-result-variable-positions unparsed-ty partial-env)
       (multiple-value-bind (qual-ty ksubs)
           (infer-type-kinds unparsed-ty tc:+kstar+ ksubs partial-env)
 
@@ -431,7 +441,8 @@ being assembled."
         (setf qual-ty (tc:make-qualified-ty
                        :predicates (tc:qualified-ty-predicates qual-ty)
                        :type (tc:qualified-ty-type qual-ty)))
-        (setf ksubs (tc:kind-monomorphize-subs (tc:kind-variables qual-ty) ksubs))
+        (setf ksubs (tc:kind-monomorphize-subs
+                     (tc:kind-variables (cons qual-ty explicit-tvars)) ksubs))
 
         (let* ((qual-ty (tc:apply-ksubstitution ksubs qual-ty))
                (explicit-tvars (mapcar (lambda (tvar)
@@ -502,7 +513,7 @@ being assembled."
                         ambiguous-vars)
                 (length ambiguous-vars)
                 (type-object-string (tc:make-qualified-ty :predicates preds :type type)
-                                    env))))))
+                                   env))))))
 
 (defun check-for-reducible-by-fundeps (preds ty unparsed-ty env)
   "This check is used to ensure that PREDs cannot be reduced by instance
@@ -545,7 +556,7 @@ the substitution :b +-> T can be inferred.
                             :collect (type-object-string (tc:substitution-to sub) env))
                       (length subs)
                       (type-object-string (tc:make-qualified-ty :predicates preds :type ty)
-                                          env)))))))
+                                         env)))))))
     (tc:context-fundep-conflict (e)
       (tc-error
        "Context conflicts with functional dependencies"
@@ -571,7 +582,7 @@ the substitution :b +-> T can be inferred.
             (with-pprint-variable-context ()
               (format nil "qualified type can be reduced to ~A"
                       (type-object-string (tc:make-qualified-ty :predicates reduced-preds :type ty)
-                                          env)))))))))
+                                         env)))))))))
 
 ;;;
 ;;; Kind Inference

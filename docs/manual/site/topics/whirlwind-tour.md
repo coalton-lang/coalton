@@ -1310,6 +1310,28 @@ the outer one.
 Declarations without `forall` are still implicitly quantified, but their type
 variable names do not become scoped names inside the body.
 
+Binders can also have kind annotations. `(:item Type)` requires an ordinary
+single-value type, while `(:f (Type -> Type))` requires a unary type constructor.
+Bare binders retain ordinary kind inference, including higher kinds.
+
+Use `Values` to quantify an entire sequence of function results:
+
+```lisp
+(coalton-toplevel
+  (declare call-results
+    (forall ((:r Values)) (Void -> :r) -> :r))
+  (define (call-results f) (f)))
+
+(coalton (call-results (fn () (values 42 "answer"))))
+;; Returns two values, 42 and "answer".
+```
+
+The same function can forward zero or one result. In a written type annotation,
+an unannotated variable such as `:r` cannot stand for zero or multiple results.
+Functions without declarations can still infer result polymorphism; their
+printed types display the `Values` binder. See [`forall`](/manual/operators/forall/)
+for kind syntax, scoping, and restrictions.
+
 ### Type Casting, Coercing, and Conversion
 
 Coalton manages type conversions similar to the Common Lisp function `cl:coerce` by way of a type class called `Into` (of the package `#:coalton/classes`) and its sole method `into`. However, the `into` method only takes a single argument. How should Coalton know which data type to convert to? It determines this either by type inference (i.e., by the surrounding context) as in this example, where `substring` expects a `String`:

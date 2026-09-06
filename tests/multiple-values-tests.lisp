@@ -29,8 +29,20 @@
 
 (with-coalton-compilation (:package #:coalton-tests/multiple-values)
   (coalton-toplevel
-    (declare mv-forward-results ((Void -> :a) -> :a))
+    (declare mv-forward-results (forall ((:a Values)) ((Void -> :a) -> :a)))
     (define (mv-forward-results f) (f))
+
+    (declare mv-forward-lisp (forall ((:r Values)) ((Void -> :r) -> :r)))
+    (define (mv-forward-lisp f)
+      (lisp (-> :r) (f)
+        (call-coalton-function f)))
+
+    (define-class (MvCall :a)
+      (mv-call (forall ((:r Values)) (:a * (Void -> :r) -> :r))))
+    (define-instance (MvCall Integer)
+      (define (mv-call _ f)
+        (lisp (-> :r) (f)
+          (call-coalton-function f))))
 
     (declare mv-produce-pair (Void -> Integer * String))
     (define (mv-produce-pair) (values 42 "answer"))
@@ -193,6 +205,38 @@
               (eval '(coalton:coalton (coalton-tests/multiple-values:mv-forward-single))))))
   (is (null (multiple-value-list
              (eval '(coalton:coalton (coalton-tests/multiple-values:mv-forward-void)))))))
+
+(deftest scoped-values-binders-runtime ()
+  (loop :for producer :in '(coalton-tests/multiple-values::mv-produce-void
+                           coalton-tests/multiple-values::mv-produce-single
+                           coalton-tests/multiple-values::mv-produce-pair)
+        :for expected :in '(nil (42) (42 "answer"))
+        :do (dolist (call `((coalton-tests/multiple-values:mv-forward-results ,producer)
+                           (coalton-tests/multiple-values::mv-forward-lisp ,producer)
+                           (coalton-tests/multiple-values::mv-call
+                            (coalton:the coalton:Integer 0) ,producer)
+                           ((coalton/functions:compose
+                             (coalton:fn (_x) (,producer)) coalton/functions:id)
+                            coalton:Unit)
+                           ((coalton/functions:flip
+                             (coalton:fn (_x _y) (,producer)))
+                            coalton:Unit coalton:Unit)
+                           ((coalton/functions:curry
+                             (coalton:fn (_pair) (,producer)))
+                            coalton:Unit coalton:Unit)
+                           ((coalton/functions:uncurry
+                             (coalton:fn (_x _y) (,producer)))
+                            (coalton/classes:Tuple coalton:Unit coalton:Unit))
+                           ((coalton/functions:fix
+                             (coalton:fn (_self _x) (,producer))) coalton:Unit)
+                           (coalton/classes:unwrap-or-else
+                            (coalton:fn (_x) (,producer)) ,producer (coalton:Some coalton:Unit))
+                           (coalton/xmath/big-float:with-precision ,producer)
+                           (coalton/xmath/big-float:with-rounding ,producer)
+                           (coalton/xmath/computable-reals:with-comparison-threshold ,producer)))
+              (is (equal expected
+                         (multiple-value-list (eval `(coalton:coalton ,call))))
+                  "Result forwarding through ~S" call))))
 
 (deftest polymorphic-lisp-output-codegen ()
   (let ((result-type (tc:make-variable :allow-result-p t)))

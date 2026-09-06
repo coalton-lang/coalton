@@ -330,6 +330,22 @@ may mention those scoped type variables:
     x))
 ```
 
+To forward zero, one, or multiple results, bind the output variable with
+`Values`:
+
+```lisp
+(declare call-results-through-lisp
+  (forall ((:r Values)) (Void -> :r) -> :r))
+(define (call-results-through-lisp f)
+  (lisp (-> :r) (f)
+    (call-coalton-function f)))
+```
+
+A fresh variable in a `lisp` annotation, such as an unbound `:item`, denotes
+exactly one value. Only a scoped `Values` binder denotes an arbitrary result
+sequence. Use `Void` or an explicit output sequence when the arity is known.
+See [`forall`](/manual/operators/forall/) for the complete binder rules.
+
 That scoped type-variable visibility stops at the `lisp` boundary. If you embed
 a `(coalton ...)` form inside the raw Lisp body, it is checked as a separate
 Coalton expression and does not inherit lexical type-variable bindings from the

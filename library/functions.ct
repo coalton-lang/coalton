@@ -68,7 +68,7 @@ Print a line to `cl:*standard-output*` in the form \"{STR}: {ITEM}\"."
   ;; Function combinators
   ;;
 
-  (declare fix (((:a -> :b) * :a -> :b) -> (:a -> :b)))
+  (declare fix (forall (:a (:b Values)) (((:a -> :b) * :a -> :b) -> (:a -> :b))))
   (define (fix f)
     "Compute the fixed point of a unary function. This is equivalent to the Y-combinator of the lambda calculus. This combinator allows recursion without specific assignment of names. For example, the factorial function can be written
 
@@ -93,7 +93,7 @@ Print a line to `cl:*standard-output*` in the form \"{STR}: {ITEM}\"."
     ƒ_.a)
 
   (inline)
-  (declare flip ((:a * :b -> :c) -> (:b * :a -> :c)))
+  (declare flip (forall (:a :b (:c Values)) ((:a * :b -> :c) -> (:b * :a -> :c))))
   (define (flip f)
     "Returns a function that takes its arguments in reverse order."
     ƒxy.(f y x))
@@ -105,7 +105,7 @@ Print a line to `cl:*standard-output*` in the form \"{STR}: {ITEM}\"."
     (fold (flip f) y xs))
 
   (inline)
-  (declare compose ((:b -> :c) * (:a -> :b) -> (:a -> :c)))
+  (declare compose (forall (:a :b (:c Values)) ((:b -> :c) * (:a -> :b) -> (:a -> :c))))
   (define (compose f g)
     "Equivalent to `(f (g x))`."
     ƒx.(f (g x))))
@@ -157,13 +157,17 @@ For example, the following expressions are equivalent.
    (not (f x)))
 
  (inline) 
- (declare curry ((Tuple :left :right -> :result) -> (:left * :right -> :result)))
+ (declare curry
+   (forall (:left :right (:result Values))
+     ((Tuple :left :right -> :result) -> (:left * :right -> :result))))
  (define (curry func)
    "Adapt a function on `(Tuple left right)` into a two-argument function."
    (fn (left right)
      (func (Tuple left right))))
 
- (declare uncurry ((:left * :right -> :result) -> (Tuple :left :right -> :result)))
+ (declare uncurry
+   (forall (:left :right (:result Values))
+     ((:left * :right -> :result) -> (Tuple :left :right -> :result))))
  (define (uncurry func)
    "Adapt a two-argument function into one that accepts a single `Tuple`."
    (fn (tpl)

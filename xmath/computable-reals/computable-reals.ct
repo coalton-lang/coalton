@@ -58,7 +58,8 @@ is no guarantee that the `CReal` will be accurate to any precision*."
    (lisp (-> UFix) ()
      *creal-comparison-threshold*))
 
- (declare with-comparison-threshold ((Void -> :a) &key (:bits UFix) -> :a))
+ (declare with-comparison-threshold
+   (forall ((:a Values)) ((Void -> :a) &key (:bits UFix) -> :a)))
  (define (with-comparison-threshold f &key (bits (comparison-threshold)))
    "Call F with a temporary `CReal` comparison threshold of BITS."
    (lisp (-> :a) (f bits)

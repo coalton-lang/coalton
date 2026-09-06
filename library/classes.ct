@@ -61,11 +61,12 @@
  ;;
  (define-class (Signalable :a)
    "Signals errors or warnings by calling their respective lisp conditions."
-   (error "Signal an error with a type-specific error string." (:a -> :b)))
+   (error "Signal an error with a type-specific error string."
+     (forall ((:result Values)) (:a -> :result))))
 
   (define-instance (Signalable String)
     (define (error str)
-      (lisp (-> :a) (str)
+      (lisp (-> :result) (str)
         (cl:error str)))))
 
 
@@ -490,10 +491,12 @@ construct an `Optional`.
 Typical `fail` continuations are:
 - Return a default value, or
 - Signal an error."
-    (unwrap-or-else ((:elt -> :result)
-                     * (Void -> :result)
-                     * (:container :elt)
-                     -> :result)))
+    (unwrap-or-else
+      (forall (:elt (:result Values))
+        ((:elt -> :result)
+         * (Void -> :result)
+         * (:container :elt)
+         -> :result))))
 
   (define-instance (Unwrappable (Result :a))
   (define (unwrap-or-else succeed fail res)

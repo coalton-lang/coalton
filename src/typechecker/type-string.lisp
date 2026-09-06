@@ -274,6 +274,15 @@
                            (write-char #\) stream))
                   (write-string implication-string stream)
                   (write-ty (qualified-ty-type qualified-ty) ':top)))))
+           (write-kind (kind)
+             (etypecase kind
+               (kstar (write-string "Type" stream))
+               (kfun
+                (if (kfun-p (kfun-from kind))
+                    (write-parenthesized (lambda () (write-kind (kfun-from kind))))
+                    (write-kind (kfun-from kind)))
+                (write-string arrow-string stream)
+                (write-kind (kfun-to kind)))))
            (write-scheme (scheme)
              (cond
                ((null (ty-scheme-kinds scheme))
@@ -284,7 +293,17 @@
                   (write-string forall-string stream)
                   (dolist (type types)
                     (write-char #\Space stream)
-                    (write-ty type ':top))
+                    (if (or (tyvar-allow-result-p type)
+                            (not (kstar-p (kind-of type))))
+                        (write-parenthesized
+                         (lambda ()
+                           (write-ty type ':top)
+                           (write-char #\Space stream)
+                           (if (tyvar-allow-result-p type)
+                               (write-string "Values" stream)
+                               (write-parenthesized
+                                (lambda () (write-kind (kind-of type)))))))
+                        (write-ty type ':top)))
                   (write-string ". " stream)
                   (write-type-object new-type)))))
            (write-class-instance (instance)

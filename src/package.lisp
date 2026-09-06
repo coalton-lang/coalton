@@ -7,7 +7,8 @@
   (:import-from
    #:common-lisp
    #:in-package
-   #:defpackage)
+   #:defpackage
+   #:Type)
   (:export
    #:in-package
    #:defpackage)
@@ -55,6 +56,7 @@
    #:=> #:⇒
    #:forall
    #:∀
+   #:Type
    #:Unit
    #:Boolean #:True #:False
    #:Char

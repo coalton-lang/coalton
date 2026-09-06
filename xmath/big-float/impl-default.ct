@@ -96,7 +96,8 @@
       *bf-rounding-mode*))
 
   (declare with-precision-rounding
-           ((Void -> :a) &key (:precision UFix) (:rounding RoundingMode) -> :a))
+    (forall ((:a Values))
+      ((Void -> :a) &key (:precision UFix) (:rounding RoundingMode) -> :a)))
   (define (with-precision-rounding f &key (precision (get-precision)) (rounding (get-rounding-mode)))
     "Call F with a temporary Big-Float PRECISION and ROUNDING mode."
     (lisp (-> :a) (f precision rounding)
@@ -105,13 +106,13 @@
         (call-coalton-function f))))
 
   (declare with-precision
-           ((Void -> :a) &key (:precision UFix) -> :a))
+    (forall ((:a Values)) ((Void -> :a) &key (:precision UFix) -> :a)))
   (define (with-precision f &key (precision (get-precision)))
     "Call F with a temporary Big-Float PRECISION."
     (with-precision-rounding f :precision precision))
 
   (declare with-rounding
-           ((Void -> :a) &key (:rounding RoundingMode) -> :a))
+    (forall ((:a Values)) ((Void -> :a) &key (:rounding RoundingMode) -> :a)))
   (define (with-rounding f &key (rounding (get-rounding-mode)))
     "Call F with a temporary Big-Float ROUNDING mode."
     (with-precision-rounding f :rounding rounding))

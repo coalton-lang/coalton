@@ -467,7 +467,6 @@
 
                    :for method-ty := (parser:method-definition-type method)
                    :for method-explicit-p := (parser:qualified-ty-explicit-p method-ty)
-                   :for result-capable-vars := (compute-result-capable-type-variables method-ty)
 
                    ;; Type variables referenced in ty
                    :for method-tyvars
@@ -547,8 +546,7 @@
                                     env
                                     new-method-tyvar-name
                                     (or (gethash new-method-tyvar-name method-tyvar-source-table)
-                                        new-method-tyvar-name)
-                                    (gethash new-method-tyvar-name result-capable-vars))))
+                                        new-method-tyvar-name))))
 
                    :collect (multiple-value-bind (method-ty_ explicit-tvars explicit-p ksubs_)
                                 (parse-qualified-type-info method-ty env ksubs nil)

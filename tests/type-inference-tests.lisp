@@ -2,9 +2,142 @@
 
 (in-package #:coalton-tests)
 
+(deftest test-forall-kind-annotations ()
+  (check-coalton-types
+   "(declare annotated-id (forall ((:a Type)) (:a -> :a)))
+    (define (annotated-id x) x)
+    (declare unary (forall ((:f (Type -> Type)) :a) ((:f :a) -> (:f :a))))
+    (define (unary x) x)
+    (declare binary (forall ((:f (Type -> Type -> Type)))
+                      ((:f Integer String) -> (:f Integer String))))
+    (define (binary x) x)
+    (declare higher (forall ((:h ((Type -> Type) -> Type)) (:f (Type -> Type)))
+                      ((:h :f) -> (:h :f))))
+    (define (higher x) x)"
+   '("annotated-id" . "(:a -> :a)")
+   '("unary" . "((:f :a) -> (:f :a))")
+   '("binary" . "((:f Integer String) -> (:f Integer String))")
+   '("higher" . "(forall ((:h ((Type -> Type) -> Type)) (:f (Type -> Type)))
+                    ((:h :f) -> (:h :f)))"))
+  ;; Bare binders still infer higher kinds. An explicit Type fixes the kind.
+  (check-coalton-types
+   "(declare keep (forall (:f :a) ((:f :a) -> (:f :a))))
+    (define (keep x) x)")
+  (dolist (declaration
+            '("(forall ((:f Type) :a) ((:f :a) -> (:f :a)))"
+              "(forall ((:a (Type -> Type))) (:a -> :a))"
+              "(forall ((:f (Type -> Type -> Type))) ((:f Integer) -> (:f Integer)))"))
+    (signals tc:tc-error
+      (check-coalton-types
+       (format nil "(declare bad ~A) (define (bad x) x)" declaration)))))
+
+(deftest test-forall-kind-syntax-errors ()
+  (dolist (binder '("(:a)" "(:a Type Type)" "(:a . Type)" "(a Type)"
+                    "(:a :kind)" "(:a Integer)" "(:a (Type Type))"
+                    "(:a (Type ->))" "(:a (-> Type))" "(:a ())"
+                    "(:a (Type . Type))" "(:a (Type -> :kind))"
+                    "(:a (Type -> Values))" "(:a (Values -> Type))"
+                    "(:a ((Type -> Values) -> Type))"))
+    (signals parser:parse-error
+      (check-coalton-types
+       (format nil "(declare bad (forall (~A) (:a -> :a)))
+                    (define (bad x) x)" binder)))))
+
+(deftest test-ordinary-binders-reject-result-packs ()
+  (dolist (declaration '("((Void -> :r) -> :r)"
+                         "(forall (:r) ((Void -> :r) -> :r))"
+                         "(forall ((:r Type)) ((Void -> :r) -> :r))"))
+    (check-coalton-types
+     (format nil "(declare call-one ~A)
+                  (define (call-one f) (f))
+                  (define (good) (call-one (fn () (the Integer 42))))"
+             declaration)
+     '("good" . "(Void -> Integer)"))
+    (dolist (result '("(values)" "(values 1 True)"))
+      (signals tc:tc-error
+        (check-coalton-types
+         (format nil "(declare call-one ~A)
+                      (define (call-one f) (f))
+                      (define (bad) (call-one (fn () ~A)))"
+                 declaration result)))))
+  ;; A fresh type variable in a Lisp annotation also defaults to one value.
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare bad (Void -> Void))
+      (define (bad) (lisp (-> :r) () (cl:values)))")))
+
+(deftest test-values-binder-positions ()
+  (dolist (declaration
+            '("(forall ((:r Values)) (:r -> :r))"
+              "(forall ((:r Values)) (&key (:x :r) -> :r))"
+              "(forall ((:r Values)) (Void -> List :r))"
+              "(forall ((:r Values)) (Void -> :r Integer))"
+              "(forall ((:r Values)) (Void -> Integer * :r))"
+              "(forall ((:r Values)) (Eq :r => Void -> :r))"
+              "(forall ((:r Values)) :r)"))
+    (signals tc:tc-error
+      (check-coalton-types
+       (format nil "(declare bad ~A) (define (bad) (values))" declaration))))
+  ;; Using a result sequence as one value must not silently narrow a binder.
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare bad (forall ((:r Values)) ((Void -> :r) -> :r)))
+      (define (bad f) (id (f)))")))
+
+(deftest test-scoped-kind-annotations ()
+  (check-coalton-types
+   "(declare scoped (forall ((:r Values)) ((Void -> :r) -> :r)))
+    (define (scoped f)
+      (let ((declare forward (Void -> :r))
+            (forward (fn () ((the (Void -> :r) f)))))
+        (forward)))
+    (declare shadowed (forall ((:r Values)) ((Void -> :r) -> :r)))
+    (define (shadowed f)
+      (let ((declare identity (forall ((:r Type)) (:r -> :r)))
+            (identity (fn (x) (the :r x))))
+        (identity 1)
+        (f)))
+    (declare nested (forall ((:a Type)) (forall ((:r Values)) ((:a -> :r) * :a -> :r))))
+    (define (nested f x) (f x))"
+   '("scoped" . "(forall ((:r Values)) ((Void -> :r) -> :r))")
+   '("shadowed" . "(forall ((:r Values)) ((Void -> :r) -> :r))")
+   '("nested" . "(forall (:a (:r Values)) ((:a -> :r) * :a -> :r))"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare bad (forall ((:r Values)) ((Void -> :r) -> :r)))
+      (define (bad f)
+        (let ((declare inner (:r -> :r)) (inner (fn (x) x)))
+          (f)))"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare bad (forall (:r (:r Values)) ((Void -> :r) -> :r)))
+      (define (bad f) (f))")))
+
+(deftest test-class-method-kind-annotations ()
+  (check-coalton-types
+   "(define-class (Call :a)
+      (call (forall ((:r Values)) (:a * (Void -> :r) -> :r))))
+    (define-instance (Call Integer)
+      (define (call _ f)
+        (lisp (-> :r) (f) (coalton:call-coalton-function f))))
+    (declare pair (Void -> Integer * String))
+    (define (pair) (call (the Integer 1) (fn () (values 2 \"two\"))))"
+   '("pair" . "(Void -> Integer * String)"))
+  (check-coalton-types
+   "(define-type (Wrap :f :a) (Wrap (:f :a)))
+    (define-class (Keep :wrapper)
+      (keep (forall ((:f (Type -> Type))) ((:wrapper :f Integer) -> (:wrapper :f Integer)))))
+    (define-instance (Keep Wrap)
+      (define (keep x) (the (Wrap :f Integer) x)))"))
+
 (deftest test-whole-result-polymorphism ()
   (check-coalton-types
-   "(declare forward-results ((Void -> :a) -> :a))
+   "(define (forward-direct f) (f))
+    (define (forward-through-id f) (id (f)))"
+   '("forward-direct" . "(forall ((:r Values)) ((Void -> :r) -> :r))")
+   '("forward-through-id" . "((Void -> :a) -> :a)"))
+  (check-coalton-types
+   "(declare forward-results (forall ((:a Values)) ((Void -> :a) -> :a)))
     (define (forward-results f) (f))
     (declare two-results (Void -> Integer * String))
     (define (two-results) (values 1 \"x\"))
@@ -232,7 +365,7 @@
    "(define (example f)
       (f))"
 
-   '("example" . "((Void -> :a) -> :a)"))
+   '("example" . "(forall ((:a Values)) ((Void -> :a) -> :a))"))
 
   (check-coalton-types
    "(define (example2 f)
@@ -575,21 +708,21 @@
    "(define (f a) (g a))
     (define (g b) (f b))"
 
-   '("f" . "(:a -> :b)")
-   '("g" . "(:a -> :b)"))
+   '("f" . "(forall (:a (:b Values)) (:a -> :b))")
+   '("g" . "(forall (:a (:b Values)) (:a -> :b))"))
 
   ;; Check unusual recursive definitions
   (check-coalton-types
    "(define f
-       (fn (a) (f a)))"
+     (fn (a) (f a)))"
 
-   '("f" . "(:a -> :b)"))
+   '("f" . "(forall (:a (:b Values)) (:a -> :b))"))
 
   (check-coalton-types
    "(define f
        (fn (_a) (f 5)))"
 
-   '("f" . "(Num :a => :a -> :b)")))
+   '("f" . "(forall (:a (:b Values)) (Num :a => :a -> :b))")))
 
 (deftest test-explicit-type-declarations ()
   ;; Check that explicit declarations can reduce the type of a definition
