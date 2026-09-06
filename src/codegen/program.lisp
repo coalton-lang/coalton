@@ -16,7 +16,7 @@
    #:abstraction-lambda-list
    #:annotate-function-body
    #:codegen-expression
-   #:node-output-lisp-types)
+   #:node-output-values-type)
   (:import-from
    #:coalton-impl/codegen/codegen-type-definition
    #:codegen-type-definition)
@@ -283,8 +283,7 @@ Example:
                      (ftype
                       (function
                        ,(function-type-lambda-list node env)
-                       (values ,@(node-output-lisp-types node env)
-                               &optional))
+                       ,(node-output-values-type node env))
                       ,name))))
          ;; Keep emitted definitions globally inline for Lisp callers, but
          ;; stop inline SCC members from recursively inlining each other while

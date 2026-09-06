@@ -2,6 +2,28 @@
 
 (in-package #:coalton-tests)
 
+(deftest test-whole-result-polymorphism ()
+  (check-coalton-types
+   "(declare forward-results ((Void -> :a) -> :a))
+    (define (forward-results f) (f))
+    (declare two-results (Void -> Integer * String))
+    (define (two-results) (values 1 \"x\"))
+    (define (forwarded-results) (forward-results two-results))"
+   '("forwarded-results" . "(Void -> Integer * String)"))
+  (let* ((a (tc:make-variable :allow-result-p t))
+         (poly (tc:make-function-ty :output-types (list a)))
+         (ordinary (tc:make-function-ty :output-types (list (tc:make-variable)))))
+    (dolist (outputs (list nil (list tc:*integer-type*)
+                          (list tc:*integer-type* tc:*string-type*)))
+      (let ((concrete (tc:make-function-ty :output-types outputs)))
+        (dolist (pair (list (cons poly concrete) (cons concrete poly)))
+          (let ((subs (tc:unify nil (car pair) (cdr pair))))
+            (is (tc:ty= (tc:apply-substitution subs poly) concrete))))
+        (is (tc:ty= (tc:apply-substitution (tc:match poly concrete) poly) concrete))
+        (unless (= 1 (length outputs))
+          (signals tc:coalton-internal-type-error (tc:unify nil ordinary concrete))
+          (signals tc:coalton-internal-type-error (tc:match ordinary concrete)))))))
+
 (deftest test-invalid-accessors-report-type-errors ()
   (dolist (source '("(define invalid-field (.field (fn (x) x)))"
                     "(define invalid-field (.field (the Integer 1)))"

@@ -26,6 +26,7 @@
    #:function-declarations              ; FUNCTION
    #:annotate-function-body             ; FUNCTION
    #:node-output-lisp-types             ; FUNCTION
+   #:node-output-values-type           ; FUNCTION
    ))
 
 (in-package #:coalton-impl/codegen/codegen-expression)
@@ -203,6 +204,18 @@
 (defmethod codegen-pattern-test ((test node) expr env)
   `(funcall ,(codegen-expression test env) ,expr))
 
+(defun node-output-values-type (node env)
+  "Return a VALUES type, preserving the unknown arity of whole-result variables."
+  (let* ((type (if (node-abstraction-p node)
+                   (tc:function-return-type (node-type node))
+                   (node-type node)))
+         (types (node-output-lisp-types node env)))
+    (cond
+      ((and (tc:tyvar-p type) (tc:tyvar-allow-result-p type))
+       '(values &rest t))
+      (types `(values ,@types &optional))
+      (t '(values)))))
+
 (defgeneric codegen-expression (node env)
   (:method ((node node-literal) env)
     (declare (type tc:environment env)
@@ -379,10 +392,10 @@
                     ,@tail-forms)
                  `(progn ,@prefix-forms
                          ,@tail-forms)))
-           (return-types (node-output-lisp-types expr env)))
+           (return-type (node-output-values-type expr env)))
       (let ((body
               (if settings:*emit-type-annotations*
-                  `(the (values ,@return-types &optional)
+                  `(the ,return-type
                         ,inner)
                   inner)))
         (if *emit-lisp-type-checks-p*
@@ -808,7 +821,7 @@ forms follow the same binding semantics."
 (defun function-declarations (node env)
   (declare (type node-abstraction node)
            (type tc:environment env))
-  (let ((return-types (node-output-lisp-types node env)))
+  (let ((return-type (node-output-values-type node env)))
     `(declare (ignorable ,@(abstraction-bound-vars node))
               ,@(when settings:*emit-type-annotations*
                   `(,@(loop :for var :in (node-abstraction-vars node)
@@ -816,18 +829,13 @@ forms follow the same binding semantics."
                             :collect `(type ,(tc:lisp-type ty env) ,var))
                     ,@(loop :for param :in (node-abstraction-keyword-params node)
                             :collect `(type boolean ,(keyword-param-supplied-p-var param)))
-                    ,(if return-types
-                         `(values ,@return-types &optional)
-                         '(values)))))))
+                    ,return-type)))))
 
 (defun annotate-function-body (node body env)
   (declare (type node-abstraction node)
            (type tc:environment env)
            (values t &optional))
-  (let ((return-types (node-output-lisp-types node env)))
+  (let ((return-type (node-output-values-type node env)))
     (if settings:*emit-type-annotations*
-        `(the ,(if return-types
-                   `(values ,@return-types &optional)
-                   '(values))
-              ,body)
+        `(the ,return-type ,body)
         body)))

@@ -55,9 +55,8 @@ all match exactly.  Also checks that every keyword in type1 exists in type2.
 Because the keyword counts are equal, this subset check implies set equality:
 same count + type1 ⊆ type2 ⟹ type1 = type2 (as keyword sets).
 
-Output arity is compared after normalizing: a single type-variable output is
-compatible with zero outputs (Void), since unification can bind the variable
-to the zero-result type."
+One result-capable output variable may stand for an entire result pack,
+including zero outputs (Void). Ordinary value variables cannot do so."
   (flet ((fail ()
            (error condition :type1 type1 :type2 type2)))
     (unless (= (length (function-ty-positional-input-types type1))
@@ -68,13 +67,12 @@ to the zero-result type."
       (fail))
     (unless (or (= (length (function-ty-output-types type1))
                    (length (function-ty-output-types type2)))
-                ;; A single tyvar output is compatible with zero outputs (Void).
-                (and (null (function-ty-output-types type1))
-                     (= 1 (length (function-ty-output-types type2)))
-                     (tyvar-p (first (function-ty-output-types type2))))
-                (and (null (function-ty-output-types type2))
-                     (= 1 (length (function-ty-output-types type1)))
-                     (tyvar-p (first (function-ty-output-types type1)))))
+                (some (lambda (outputs)
+                        (and (= 1 (length outputs))
+                             (tyvar-p (first outputs))
+                             (tyvar-allow-result-p (first outputs))))
+                      (list (function-ty-output-types type1)
+                            (function-ty-output-types type2))))
       (fail))
     (unless (eq (function-ty-keyword-open-p type1)
                 (function-ty-keyword-open-p type2))
@@ -101,32 +99,9 @@ to the zero-result type."
                (mgu (apply-substitution subs (keyword-ty-entry-type entry1))
                     (apply-substitution subs (keyword-ty-entry-type entry2)))
                subs))))
-    (let ((ot1 (function-ty-output-types type1))
-          (ot2 (function-ty-output-types type2)))
-      (cond
-        ;; Same arity: unify pairwise
-        ((= (length ot1) (length ot2))
-         (loop :for from-type :in ot1
-               :for to-type :in ot2
-               :do (setf subs
-                         (compose-substitution-lists
-                          (mgu (apply-substitution subs from-type)
-                               (apply-substitution subs to-type))
-                          subs))))
-        ;; One side has a single tyvar, the other is Void: bind the tyvar
-        ((and (null ot1) (= 1 (length ot2)) (tyvar-p (first ot2)))
-         (setf subs
-               (compose-substitution-lists
-                (mgu (apply-substitution subs (first ot2))
-                     (make-result-ty :output-types nil))
-                subs)))
-        ((and (null ot2) (= 1 (length ot1)) (tyvar-p (first ot1)))
-         (setf subs
-               (compose-substitution-lists
-                (mgu (apply-substitution subs (first ot1))
-                     (make-result-ty :output-types nil))
-                subs)))))
-    subs))
+    (unify subs
+           (output-types-result-type (function-ty-output-types type1))
+           (output-types-result-type (function-ty-output-types type2)))))
 
 (defun match-keyword-function-types (type1 type2)
   ;; Match components independently and require their source bindings to agree.

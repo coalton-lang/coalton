@@ -4,6 +4,10 @@
   (:use #:coalton #:coalton-prelude)
   (:export
    #:mv-return-values
+   #:mv-forward-results
+   #:mv-forward-pair
+   #:mv-forward-single
+   #:mv-forward-void
    #:mv-consume-values
    #:mv-lisp-return-values
    #:mv-lisp-consume-values
@@ -25,6 +29,28 @@
 
 (with-coalton-compilation (:package #:coalton-tests/multiple-values)
   (coalton-toplevel
+    (declare mv-forward-results ((Void -> :a) -> :a))
+    (define (mv-forward-results f) (f))
+
+    (declare mv-produce-pair (Void -> Integer * String))
+    (define (mv-produce-pair) (values 42 "answer"))
+    (declare mv-produce-single (Void -> Integer))
+    (define (mv-produce-single) 42)
+    (declare mv-produce-void (Void -> Void))
+    (define (mv-produce-void) (values))
+
+    (declare mv-forward-pair (Void -> Integer * String))
+    (define (mv-forward-pair)
+      (mv-forward-results mv-produce-pair))
+
+    (declare mv-forward-single (Void -> Integer))
+    (define (mv-forward-single)
+      (mv-forward-results mv-produce-single))
+
+    (declare mv-forward-void (Void -> Void))
+    (define (mv-forward-void)
+      (mv-forward-results mv-produce-void))
+
     (declare mv-return-values (Integer -> Integer * Integer))
     (define (mv-return-values x)
       (values x (1+ x)))
@@ -157,6 +183,16 @@
   (declare (type symbol rator)
            (values boolean &optional))
   (eq rator 'coalton-library/classes:tuple))
+
+(deftest forwarded-multiple-values-runtime ()
+  (is (equal '(42 "answer")
+             (multiple-value-list
+              (eval '(coalton:coalton (coalton-tests/multiple-values:mv-forward-pair))))))
+  (is (equal '(42)
+             (multiple-value-list
+              (eval '(coalton:coalton (coalton-tests/multiple-values:mv-forward-single))))))
+  (is (null (multiple-value-list
+             (eval '(coalton:coalton (coalton-tests/multiple-values:mv-forward-void)))))))
 
 (deftest direct-multiple-values-runtime ()
   (is (equal '(10 11)
