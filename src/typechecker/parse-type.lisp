@@ -22,6 +22,7 @@
    #:apply-type-alias-substitutions     ; FUNCTION
    #:parse-type                         ; FUNCTION
    #:parse-output-slot-type             ; FUNCTION
+   #:compute-result-capable-type-variables ; FUNCTION
    #:parse-qualified-type               ; FUNCTION
    #:parse-qualified-type-info          ; FUNCTION
    #:parse-ty-scheme                    ; FUNCTION

@@ -94,7 +94,8 @@ main type, O(n!) otherwise — but predicate lists are small in practice)."
                 (values (ty= type1 type2) map12 map21))
                ;; Quantified variables: check/extend the bijection
                ((typep type1 'tgen)
-                (if (typep type2 'tgen)
+                (if (and (typep type2 'tgen)
+                         (eq (tgen-allow-result-p type1) (tgen-allow-result-p type2)))
                     (bind-tgen (tgen-id type1) (tgen-id type2)
                                kinds1 kinds2 map12 map21)
                     (values nil map12 map21)))
@@ -117,6 +118,10 @@ main type, O(n!) otherwise — but predicate lists are small in practice)."
                ;; Function types
                ((typep type1 'function-ty)
                 (if (and (typep type2 'function-ty)
+                         (= (length (function-ty-positional-input-types type1))
+                            (length (function-ty-positional-input-types type2)))
+                         (= (length (function-ty-output-types type1))
+                            (length (function-ty-output-types type2)))
                          (= (length (function-ty-keyword-input-types type1))
                             (length (function-ty-keyword-input-types type2)))
                          (eq (function-ty-keyword-open-p type1)

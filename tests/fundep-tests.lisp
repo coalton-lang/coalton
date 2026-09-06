@@ -2,6 +2,30 @@
 
 (in-package #:coalton-tests)
 
+(deftest class-method-result-binders-preserve-capabilities ()
+  (check-coalton-types
+   "(define-class (OutputOf :a) (output-of (:a -> :b)))"
+   '("output-of" . "(OutputOf :a => :a -> :b)")))
+
+(deftest scheme-equality-preserves-function-boundaries ()
+  (let* ((left (tc:to-scheme
+                (tc:make-function-ty
+                 :positional-input-types (list tc:*integer-type* tc:*string-type*)
+                 :output-types (list tc:*boolean-type*))))
+         (right (tc:to-scheme
+                 (tc:make-function-ty
+                  :positional-input-types (list tc:*integer-type*)
+                  :output-types (list tc:*string-type* tc:*boolean-type*)))))
+    (is (not (tc:ty-scheme= left right)))
+    (is (not (tc:ty-scheme= right left)))
+    (is (tc:ty-scheme= left left)))
+  (let* ((value-var (tc:make-variable))
+         (result-var (tc:make-variable :allow-result-p t))
+         (value-scheme (tc:quantify (list value-var) (tc:qualify nil value-var)))
+         (result-scheme (tc:quantify (list result-var) (tc:qualify nil result-var))))
+    (is (not (tc:ty-scheme= value-scheme result-scheme)))
+    (is (not (tc:ty-scheme= result-scheme value-scheme)))))
+
 (deftest instance-head-improvement-preserves-unknown-shapes ()
   (check-coalton-types
    "(define-class (ConvertTo :a :b) (convert-to (:a -> :b)))
