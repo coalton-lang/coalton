@@ -40,7 +40,9 @@ specified in `subs`."
        :branches (mapcar
                   (lambda (branch)
                     (make-match-branch
-                     :pattern (tc:apply-substitution subs (match-branch-pattern branch))
+                     ;; Embedded tests have already been visited by TRAVERSE.
+                     :pattern (map-pattern (match-branch-pattern branch)
+                                           :type-function (lambda (type) (tc:apply-substitution subs type)))
                      :body (match-branch-body branch)))
                   (node-match-branches node)))))))
 

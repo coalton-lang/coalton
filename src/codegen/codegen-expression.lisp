@@ -6,7 +6,8 @@
    #:coalton-impl/codegen/codegen-match)
   (:import-from
    #:coalton-impl/codegen/codegen-pattern
-   #:codegen-pattern)
+   #:codegen-pattern
+   #:codegen-pattern-test)
   (:import-from
    #:coalton-impl/codegen/codegen-type-definition
    #:constructor-slot-name)
@@ -198,6 +199,9 @@
     (declare (type tc:environment env)
              (values list &optional))
     (list (tc:lisp-type (node-type node) env))))
+
+(defmethod codegen-pattern-test ((test node) expr env)
+  `(funcall ,(codegen-expression test env) ,expr))
 
 (defgeneric codegen-expression (node env)
   (:method ((node node-literal) env)

@@ -21,6 +21,7 @@
    #:pattern-literal                    ; STRUCT
    #:make-pattern-literal               ; CONSTRUCTOR
    #:pattern-literal-value              ; ACCESSOR
+   #:pattern-literal-test               ; ACCESSOR
    #:pattern-literal-p                  ; FUNCTION
    #:pattern-wildcard                   ; STRUCT
    #:make-pattern-wildcard              ; ACCESSOR
@@ -32,6 +33,7 @@
    #:pattern-constructor-p              ; FUNCTION
    #:pattern-variables                  ; FUNCTION
    #:patterns-exhaustive-p              ; FUNCTION
+   #:map-pattern                       ; FUNCTION
    ))
 
 (in-package #:coalton-impl/codegen/pattern)
@@ -65,7 +67,10 @@
 (defstruct (pattern-literal
             (:include pattern)
             (:copier nil))
-  (value (util:required 'value) :type util:literal-value :read-only t))
+  (value (util:required 'value) :type util:literal-value :read-only t)
+  ;; A unary codegen AST function returning Boolean, or NIL for static literals.
+  ;; AST nodes are defined after patterns, so this slot cannot name NODE here.
+  (test nil :read-only t))
 
 (defstruct (pattern-wildcard
             (:include pattern)
@@ -111,6 +116,25 @@
 ;;; Methods
 ;;;
 
+(defun map-pattern (pattern &key (type-function #'identity) (test-function #'identity))
+  "Copy PATTERN, mapping its types and embedded literal tests."
+  (labels ((walk (pat)
+             (let ((type (funcall type-function (pattern-type pat))))
+               (etypecase pat
+                 (pattern-var (make-pattern-var :type type :name (pattern-var-name pat)))
+                 (pattern-wildcard (make-pattern-wildcard :type type))
+                 (pattern-literal
+                  (make-pattern-literal :type type :value (pattern-literal-value pat)
+                                        :test (and (pattern-literal-test pat)
+                                                   (funcall test-function (pattern-literal-test pat)))))
+                 (pattern-binding
+                  (make-pattern-binding :type type :var (walk (pattern-binding-var pat))
+                                        :pattern (walk (pattern-binding-pattern pat))))
+                 (pattern-constructor
+                  (make-pattern-constructor :type type :name (pattern-constructor-name pat)
+                                            :patterns (mapcar #'walk (pattern-constructor-patterns pat))))))))
+    (walk pattern)))
+
 (defmethod tc:apply-substitution (subs (pattern pattern-var))
   (declare (type tc:substitution-list subs)
            (values pattern-var &optional))
@@ -123,7 +147,9 @@
            (values pattern-literal &optional))
   (make-pattern-literal
    :type (tc:apply-substitution subs (pattern-type pattern))
-   :value (pattern-literal-value pattern)))
+   :value (pattern-literal-value pattern)
+   :test (and (pattern-literal-test pattern)
+              (tc:apply-substitution subs (pattern-literal-test pattern)))))
 
 (defmethod tc:apply-substitution (subs (pattern pattern-wildcard))
   (declare (type tc:substitution-list subs)
@@ -155,7 +181,9 @@
                              (tc:type-variables (pattern-binding-pattern pattern)))))
 
 (defmethod tc:type-variables ((pattern pattern-literal))
-  (tc:type-variables (pattern-type pattern)))
+  (append (tc:type-variables (pattern-type pattern))
+          (and (pattern-literal-test pattern)
+               (tc:type-variables (pattern-literal-test pattern)))))
 
 (defmethod tc:type-variables ((pattern pattern-wildcard))
   (tc:type-variables (pattern-type pattern)))

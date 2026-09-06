@@ -2043,6 +2043,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                               env)
         (declare (ignore pat-ty))
 
+        (setf preds (append preds (pattern-predicates pat-node)))
+
         (values nil         ; return nil as this is always thrown away
                 preds
                 accessors
@@ -2210,7 +2212,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                      body-result-ty
                                      subs
                                      env)
-            (setf preds (append default-preds preds))
+            (setf preds (append (pattern-predicates typed-positional-params) default-preds preds))
             (setf accessors (append default-accessors accessors))
             (let* ((body-ty (tc:apply-substitution subs body-ty))
                    (typed-body
@@ -2423,6 +2425,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                   (infer-pattern-type pattern expr-ty subs env)
                                 (declare (ignore pat-ty))
                                 (setf subs subs_)
+                                (setf preds (append preds (pattern-predicates pat-node)))
                                 pat-node)))
 
              (ret-ty (tc:make-variable :kind tc:+kstar+ :allow-result-p t))
@@ -2497,6 +2500,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                            "Catch branch pattern must be an exception constructor pattern or a wildcard."))
                    :else
                      :do (setf subs subs_)
+                         (setf preds (append preds (pattern-predicates pat-node)))
                      :and :collect pat-node))
                ;; Infer type of each branch body, unifying against RET-TY so
                ;; catch branches can return Void or multiple values when the
@@ -2562,6 +2566,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                  (tc-note pat-node "case pattern must construct a resumption type."))
                  :else 
                    :do (setf subs subs_)
+                       (setf preds (append preds (pattern-predicates pat-node)))
                    :and :collect pat-node))
              ;; Infer type of each branch body, it should unify with the expr/expected type
              (branch-body-nodes
@@ -3451,6 +3456,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                               env)
         (declare (ignore ty_))
 
+        (setf preds (append preds (pattern-predicates pattern)))
+
         (handler-case
             (progn
               (setf subs (tc:unify subs expr-ty expected-type))
@@ -3582,6 +3589,19 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 ;;; Pattern Type Inference
 ;;;
 
+(defun pattern-predicates (pattern)
+  "Collect constraints needed to convert and compare overloaded pattern literals."
+  (typecase pattern
+    (pattern-literal
+     (when (integerp (pattern-literal-value pattern))
+       (list (tc:make-ty-predicate
+              :class (util:find-symbol "NUM" "COALTON/CLASSES")
+              :types (list (tc:qualified-ty-type (pattern-type pattern)))
+              :location (source:location pattern)))))
+    (pattern-binding (pattern-predicates (pattern-binding-pattern pattern)))
+    (pattern-constructor (pattern-predicates (pattern-constructor-patterns pattern)))
+    (list (mapcan #'pattern-predicates pattern))))
+
 (defgeneric infer-pattern-type (pat expected-typ subs env)
   (:documentation "Infer the type of pattern PAT and then unify against EXPECTED-TYPE.
 
@@ -3644,14 +3664,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
              (values tc:ty pattern-literal tc:substitution-list))
 
     (let ((ty (etypecase (parser:pattern-literal-value pat)
-                (integer (let* ((num
-                                  (util:find-symbol "NUM" "COALTON/CLASSES"))
-                                (tvar
-                                  (tc:make-variable))
-                                (pred
-                                  (tc:make-ty-predicate :class num :types (list tvar) :location (source:location pat))))
-                           (setf subs (tc:compose-substitution-lists (tc:default-subs (tc-env-env env) (list tvar) (list pred)) subs))
-                           tvar))
+                (integer (tc:make-variable))
                 (ratio tc:*fraction-type*)
                 (single-float tc:*single-float-type*)
                 (double-float tc:*double-float-type*)

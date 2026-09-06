@@ -9,9 +9,13 @@
    (#:tc #:coalton-impl/typechecker)
    (#:rt #:coalton-impl/runtime))
   (:export
-   #:codegen-pattern))
+   #:codegen-pattern
+   #:codegen-pattern-test))
 
 (in-package #:coalton-impl/codegen/codegen-pattern)
+
+(defgeneric codegen-pattern-test (test expr env)
+  (:documentation "Emit a literal's translated comparison against Lisp EXPR."))
 
 (defgeneric codegen-pattern (pattern expr expr-type env)
   (:documentation "Codegen the match branch PATTERN on lisp value EXPR of (Coalton) type
@@ -39,11 +43,14 @@ EXPR-TYPE, returning (VALUES PREDICATE BINDINGS BINDING-TYPES).")
              binding-types))))
 
   (:method ((pattern pattern-literal) expr expr-type env)
-    (declare (ignore expr-type env))
+    (declare (ignore expr-type))
     (values
-     (if (stringp (pattern-literal-value pattern))
-         `(string= ,(pattern-literal-value pattern) ,expr)
-         `(eql ,(pattern-literal-value pattern) ,expr))
+     (cond
+       ((pattern-literal-test pattern)
+        (codegen-pattern-test (pattern-literal-test pattern) expr env))
+       ((stringp (pattern-literal-value pattern))
+        `(string= ,(pattern-literal-value pattern) ,expr))
+       (t `(eql ,(pattern-literal-value pattern) ,expr)))
      nil
      nil))
 

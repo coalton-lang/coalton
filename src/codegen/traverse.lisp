@@ -155,7 +155,8 @@ nodes."
        :branches (mapcar
                   (lambda (branch)
                     (make-match-branch
-                     :pattern (match-branch-pattern branch)
+                     :pattern (map-pattern (match-branch-pattern branch)
+                                           :test-function (lambda (test) (apply *traverse* test args)))
                      :body (apply *traverse*
                                   (match-branch-body branch)
                                   args)))
@@ -167,7 +168,8 @@ nodes."
        :branches (mapcar
                   (lambda (branch)
                     (make-catch-branch
-                     :pattern (catch-branch-pattern branch)
+                     :pattern (map-pattern (catch-branch-pattern branch)
+                                           :test-function (lambda (test) (apply *traverse* test args)))
                      :body (apply *traverse*
                                   (catch-branch-body branch)
                                   args)))
@@ -180,7 +182,8 @@ nodes."
        :branches (mapcar
                   (lambda (branch)
                     (make-resumable-branch
-                     :pattern (resumable-branch-pattern branch)
+                     :pattern (map-pattern (resumable-branch-pattern branch)
+                                           :test-function (lambda (test) (apply *traverse* test args)))
                      :body (apply *traverse*
                                   (resumable-branch-body branch)
                                   args)))
@@ -446,7 +449,9 @@ bound at the given point."
        :branches (mapcar
                   (lambda (branch)
                     (make-match-branch
-                     :pattern (match-branch-pattern branch)
+                     :pattern (map-pattern (match-branch-pattern branch)
+                                           :test-function (lambda (test)
+                                                            (funcall *traverse* test bound-variables)))
                      :body (funcall *traverse*
                                     (match-branch-body branch)
                                     (append (pattern-variables (match-branch-pattern branch))

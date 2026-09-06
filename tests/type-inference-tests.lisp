@@ -2,6 +2,17 @@
 
 (in-package #:coalton-tests)
 
+(deftest test-integer-patterns-retain-numeric-constraints ()
+  (check-coalton-types
+   "(define (one? x) (match x (1 True) (_ False)))
+    (define (nested-one? x) (match x ((Some 1) True) (_ False)))"
+   '("one?" . "(Num :a => :a -> Boolean)")
+   '("nested-one?" . "(Num :a => Optional :a -> Boolean)"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare one? (String -> Boolean))
+      (define (one? x) (match x (1 True) (_ False)))")))
+
 (deftest test-numeric-defaulting-preserves-predicate-structure ()
   (check-coalton-types
    "(define-class (C :a) (consume-c (:a -> Unit)))

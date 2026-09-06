@@ -292,7 +292,7 @@ expression."
                          :expr (translate-expression (tc:node-bind-expr body-node) ctx env)
                          :branches (list
                                     (make-match-branch
-                                     :pattern (translate-pattern pattern)
+                                     :pattern (translate-pattern pattern ctx env)
                                      :body out-node)))))))
                   (tc:node
                    (make-node-seq
@@ -507,7 +507,8 @@ needs to synthesize those trailing parameters explicitly."
                          (translate-expression
                           (tc:node-abstraction-body last-node)
                           full-ctx
-                          env))
+                          env)
+                         full-ctx env)
                         vars
                         (translate-keyword-params
                          (tc:node-abstraction-keyword-params last-node))))))
@@ -543,7 +544,8 @@ needs to synthesize those trailing parameters explicitly."
                           eta-arg-types
                           eta-keyword-rands
                           full-ctx
-                          env))
+                          env)
+                         full-ctx env)
                         (append vars eta-vars)
                         (append (translate-keyword-params
                                  (tc:binding-keyword-parameters binding))
@@ -829,7 +831,7 @@ Returns a `node'.")
                            :branches
                            (list
                            (make-match-branch
-                            :pattern (translate-pattern pattern)
+                            :pattern (translate-pattern pattern ctx env)
                             :body inner)))))
           (when (and dict-var-names
                      (tc:function-type-p visible-type)
@@ -936,7 +938,7 @@ Returns a `node'.")
        :branches (mapcar
                   (lambda (branch)
                     (make-match-branch
-                     :pattern (translate-pattern (tc:node-match-branch-pattern branch))
+                     :pattern (translate-pattern (tc:node-match-branch-pattern branch) ctx env)
                      :body (translate-expression (tc:node-match-branch-body branch) ctx env)))
                   (tc:node-match-branches expr)))))
 
@@ -954,7 +956,7 @@ Returns a `node'.")
        :branches (mapcar
                   (lambda (branch)
                     (make-catch-branch
-                     :pattern (translate-pattern (tc:node-catch-branch-pattern branch))
+                     :pattern (translate-pattern (tc:node-catch-branch-pattern branch) ctx env)
                      :body (translate-expression (tc:node-catch-branch-body branch) ctx env)))
                   (tc:node-catch-branches expr)))))
 
@@ -972,7 +974,7 @@ Returns a `node'.")
        :branches (mapcar
                   (lambda (branch)
                     (make-resumable-branch
-                     :pattern (translate-pattern (tc:node-resumable-branch-pattern branch))
+                     :pattern (translate-pattern (tc:node-resumable-branch-pattern branch) ctx env)
                      :body (translate-expression (tc:node-resumable-branch-body branch) ctx env)))
                   (tc:node-resumable-branches expr)))))
 
@@ -1371,7 +1373,7 @@ Returns a `node'.")
                                :expr (translate-expression (tc:node-bind-expr elem) ctx env)
                                :branches (list
                                           (make-match-branch
-                                           :pattern (translate-pattern pattern)
+                                           :pattern (translate-pattern pattern ctx env)
                                            :body out-node)))))))
 
                         (tc:node-values-bind
@@ -1414,7 +1416,7 @@ Returns a `node'.")
                                                :branches (list
                                                           (make-match-branch
                                                            :pattern (translate-pattern
-                                                                     (tc:node-do-bind-pattern elem))
+                                                                     (tc:node-do-bind-pattern elem) ctx env)
                                                            :body out-node))))))))
 
                         ;; Same as node-do-bind but without binding
@@ -1447,9 +1449,32 @@ Returns a `node'.")
 
             :finally (return out-node)))))
 
-(defgeneric translate-pattern (pat)
+(defun translate-integer-pattern-test (pat ctx env)
+  (let* ((type (tc:qualified-ty-type (tc:pattern-type pat)))
+         (arg (gensym "PATTERN-VALUE"))
+         (eq-pred (tc:make-ty-predicate :class (util:find-symbol "EQ" "COALTON/CLASSES")
+                                       :types (list type))))
+    (make-node-abstraction
+     :type (tc:make-function-type type tc:*boolean-type*)
+     :vars (list arg)
+     :subexpr
+     (make-node-application
+      :type tc:*boolean-type* :properties nil
+      :rator (make-node-variable
+              :type (tc:make-function-type* (list (pred-type eq-pred env) type type) tc:*boolean-type*)
+              :value (util:find-symbol "==" "COALTON/CLASSES"))
+      :rands (list (resolve-dict eq-pred ctx env)
+                   (make-node-variable :type type :value arg)
+                   (translate-expression
+                    (tc:make-node-integer-literal
+                     :type (tc:qualify nil type)
+                     :value (tc:pattern-literal-value pat)
+                     :location (source:location pat))
+                    ctx env))))))
+
+(defgeneric translate-pattern (pat ctx env)
   (:documentation "Translate the typechecker AST pattern to the codegen AST.")
-  (:method ((pat tc:pattern-var))
+  (:method ((pat tc:pattern-var) ctx env)
     (let ((qual-ty (tc:pattern-type pat)))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
 
@@ -1457,38 +1482,40 @@ Returns a `node'.")
        :type (tc:qualified-ty-type qual-ty)
        :name (tc:pattern-var-name pat))))
 
-  (:method ((pat tc:pattern-binding))
+  (:method ((pat tc:pattern-binding) ctx env)
     (let ((qual-ty (tc:pattern-type pat)))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
 
       (make-pattern-binding
        :type (tc:qualified-ty-type qual-ty)
-       :var (translate-pattern (tc:pattern-binding-var pat))
-       :pattern (translate-pattern (tc:pattern-binding-pattern pat)))))
+       :var (translate-pattern (tc:pattern-binding-var pat) ctx env)
+       :pattern (translate-pattern (tc:pattern-binding-pattern pat) ctx env))))
 
-  (:method ((pat tc:pattern-literal))
+  (:method ((pat tc:pattern-literal) ctx env)
     (let ((qual-ty (tc:pattern-type pat)))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
 
       (make-pattern-literal
        :type (tc:qualified-ty-type qual-ty)
-       :value (tc:pattern-literal-value pat))))
+       :value (tc:pattern-literal-value pat)
+       :test (and (integerp (tc:pattern-literal-value pat))
+                  (translate-integer-pattern-test pat ctx env)))))
 
-  (:method ((pat tc:pattern-wildcard))
+  (:method ((pat tc:pattern-wildcard) ctx env)
     (let ((qual-ty (tc:pattern-type pat)))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
 
       (make-pattern-wildcard
        :type (tc:qualified-ty-type qual-ty))))
 
-  (:method ((pat tc:pattern-constructor))
+  (:method ((pat tc:pattern-constructor) ctx env)
     (let ((qual-ty (tc:pattern-type pat)))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
 
       (make-pattern-constructor
        :type (tc:qualified-ty-type qual-ty)
        :name (tc:pattern-constructor-name pat)
-       :patterns (mapcar #'translate-pattern (tc:pattern-constructor-patterns pat))))))
+       :patterns (mapcar (lambda (child) (translate-pattern child ctx env)) (tc:pattern-constructor-patterns pat))))))
 
 (defun apply-dicts (expr ctx env)
   "If there are predicates on EXPR, then find the typeclass dictionaries
@@ -1550,7 +1577,7 @@ dictionaries applied."
         :rands dicts
         :keyword-rands nil)))))
 
-(defun wrap-with-pattern-params (pattern-params inner)
+(defun wrap-with-pattern-params (pattern-params inner ctx env)
   "Wrap INNER in nested `NODE-MATCH' expressions to pattern match on PATTERN-PARAMS"
   (declare (type list pattern-params)
            (type node inner)
@@ -1565,7 +1592,7 @@ dictionaries applied."
                          :branches
                          (list
                           (make-match-branch
-                           :pattern (translate-pattern pattern)
+                           :pattern (translate-pattern pattern ctx env)
                            :body inner))))
 
         :finally (return inner)))

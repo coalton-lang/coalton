@@ -432,7 +432,8 @@ Returns a status keyword and a replacement body. Status is one of:
      (values ':match (node-seq-2 value body)))
 
     (pattern-literal
-     (if (and (node-literal-p value)
+     (if (and (not (pattern-literal-test pattern))
+              (node-literal-p value)
               (literal-values-match-p (pattern-literal-value pattern)
                                       (node-literal-value value)))
          (values ':match body)
