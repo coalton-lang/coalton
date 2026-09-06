@@ -4380,6 +4380,22 @@ as a recursive function rather than a recursive value."
                                              :test #'tc:ty=)
                                             env-tvars
                                             :test #'tc:ty=))
+               ;; A declaration cannot make an expansive initializer safe to
+               ;; generalize. Qualified bindings receive dictionary parameters,
+               ;; so their initializer is evaluated on each dictionary call.
+               (generalizable-tvars
+                 (if expr-preds
+                     local-tvars
+                     (set-difference
+                      local-tvars
+                      (blocked-weak-type-variables
+                       (weak-binding-type-variables (list binding)
+                                                    (list expr-type)
+                                                    (tc-env-env env))
+                       (list expr-type)
+                       expr-preds
+                       (tc-env-env env))
+                      :test #'tc:ty=)))
                (ordered-explicit-tvars
                  (mapcar (lambda (declared-tvar)
                            (tc:apply-substitution subs declared-tvar))
@@ -4390,11 +4406,11 @@ as a recursive function rather than a recursive value."
                                   (tc:quantify-using-tvar-order
                                    (remove-if-not
                                     (lambda (declared-tvar)
-                                      (find declared-tvar local-tvars :test #'tc:ty=))
+                                      (find declared-tvar generalizable-tvars :test #'tc:ty=))
                                     ordered-explicit-tvars)
                                    output-qual-type
                                    t)
-                                  (tc:quantify local-tvars output-qual-type))))
+                                  (tc:quantify generalizable-tvars output-qual-type))))
 
           (let* ((expr-preds (tc:apply-substitution subs expr-preds))
                  (preds (tc:apply-substitution subs preds))

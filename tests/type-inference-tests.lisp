@@ -2,6 +2,32 @@
 
 (in-package #:coalton-tests)
 
+(deftest test-explicit-value-restriction ()
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare stash (coalton/cell:Cell (Optional :a)))
+      (define stash (coalton/cell:new None))"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare stash (forall (:a) (coalton/cell:Cell (Optional :a))))
+      (define stash (coalton/cell:new None))"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define (read-string)
+        (let ((declare stash (coalton/cell:Cell (Optional :a)))
+              (stash (coalton/cell:new None)))
+          (coalton/cell:write! stash (Some (the Integer 42)))
+          (the (Optional String) (coalton/cell:read stash))))"))
+  (check-coalton-types
+   "(declare stash (coalton/cell:Cell (Optional Integer)))
+    (define stash (coalton/cell:new None))
+    (declare empty-value (Optional :a))
+    (define empty-value (id None))
+    (declare make-stash (Void -> coalton/cell:Cell (Optional :a)))
+    (define (make-stash) (coalton/cell:new None))"
+   '("empty-value" . "(Optional :a)")
+   '("make-stash" . "(Void -> coalton/cell:Cell (Optional :a))")))
+
 (deftest test-type-inference ()
   (check-coalton-types
    "(define f 5)"
