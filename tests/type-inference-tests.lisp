@@ -2,6 +2,18 @@
 
 (in-package #:coalton-tests)
 
+(deftest test-function-initializers-preserve-ascriptions ()
+  (signals tc:tc-error
+    (check-coalton-types "(define annotated (the (:a -> Integer) (fn (x) x)))"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-class (C :a) (method-c (:a -> :a)))
+      (define-instance (C String)
+        (define method-c (the (Integer -> Integer) (fn (x) x))))"))
+  (check-coalton-types
+   "(define annotated (the (Integer -> Integer) (fn (x) x)))"
+   '("annotated" . "(Integer -> Integer)")))
+
 (deftest test-matching-preserves-target-variables ()
   (let* ((a (tc:make-variable))
          (b (tc:make-variable))

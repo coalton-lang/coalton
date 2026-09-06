@@ -5212,7 +5212,8 @@ as a recursive function rather than a recursive value."
                          (initform-abstraction-node
                           (parser:node-body-last-node body)))))
                  (parser:node-the
-                  (initform-abstraction-node (parser:node-the-expr node)))
+                  ;; Recognizing a lambda must not discard its type ascription.
+                  (and (initform-abstraction-node (parser:node-the-expr node)) node))
                  (t
                   nil)))
              (binding-expression ()
