@@ -2759,11 +2759,6 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                  (type-object-string (tc:apply-substitution subs declared-ty))
                                  (type-object-string (tc:apply-substitution subs expr-ty))))))
 
-          ;; SAFETY: If declared-ty and expr-ty unify, and expr-ty is
-          ;; more general than declared-ty then matching should be
-          ;; infallible
-          (setf subs (tc:compose-substitution-lists subs (tc:match expr-ty declared-ty)))
-
           (handler-case
               (progn
                 (setf subs (tc:unify subs expr-ty expected-type))

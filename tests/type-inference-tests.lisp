@@ -2,6 +2,42 @@
 
 (in-package #:coalton-tests)
 
+(deftest test-matching-preserves-target-variables ()
+  (let* ((a (tc:make-variable))
+         (b (tc:make-variable))
+         (left (tc:make-function-ty :positional-input-types (list a) :output-types (list a)))
+         (right (tc:make-function-ty :positional-input-types (list b)
+                                     :output-types (list tc:*integer-type*))))
+    (signals tc:coalton-internal-type-error (tc:match left right))
+    (signals tc:coalton-internal-type-error
+      (tc:match (tc:make-result-ty :output-types (list a a))
+                (tc:make-result-ty :output-types (list b tc:*integer-type*))))
+    (signals tc:coalton-internal-type-error
+      (tc:match
+       (tc:make-function-ty
+        :positional-input-types (list a)
+        :keyword-input-types (list (tc:make-keyword-ty-entry :keyword :x :type a)))
+       (tc:make-function-ty
+        :positional-input-types (list b)
+        :keyword-input-types (list (tc:make-keyword-ty-entry :keyword :x :type tc:*integer-type*)))))
+    (let* ((target (tc:make-function-ty :positional-input-types (list b) :output-types (list b)))
+           (subs (tc:match left target)))
+      (is (tc:ty= (tc:apply-substitution subs left) target))
+      (is (tc:ty= (tc:apply-substitution subs target) target))))
+  (let* ((a (tc:make-variable :allow-result-p t))
+         (poly (tc:make-function-ty :output-types (list a)))
+         (void (tc:make-function-ty :output-types nil)))
+    (signals tc:coalton-internal-type-error (tc:match void poly))
+    (is (tc:ty= (tc:apply-substitution (tc:match poly void) poly) void)))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define (bad-annotation)
+        (let ((annotated (the (:a -> Integer) (fn (x) x)))) annotated))"))
+  (check-coalton-types
+   "(define (good-annotation)
+      (let ((annotated (the (Integer -> Integer) (fn (x) x)))) annotated))"
+   '("good-annotation" . "(Void -> (Integer -> Integer))")))
+
 (deftest test-loop-bindings-are-monomorphic ()
   (dolist (loop-name '("for" "for*"))
     (dolist (declaration '("" "(declare v (Optional :a))"))
