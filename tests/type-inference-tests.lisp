@@ -2,6 +2,12 @@
 
 (in-package #:coalton-tests)
 
+(deftest test-invalid-accessors-report-type-errors ()
+  (dolist (source '("(define invalid-field (.field (fn (x) x)))"
+                    "(define invalid-field (.field (the Integer 1)))"
+                    "(define (ambiguous-field x) (.field x))"))
+    (signals tc:tc-error (check-coalton-types source))))
+
 (deftest test-integer-patterns-retain-numeric-constraints ()
   (check-coalton-types
    "(define (one? x) (match x (1 True) (_ False)))

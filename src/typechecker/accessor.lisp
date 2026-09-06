@@ -42,17 +42,11 @@
   (declare (type tc:ty ty)
            (values tc:ty &optional))
   (cond
-    ((tc:tycon-p ty)
-     ty)
-
-    ((tc:tyvar-p ty)
-     ty)
-
     ((tc:tapp-p ty)
      (base-type (tc:tapp-from ty)))
 
     (t
-     (util:unreachable))))
+     ty)))
 
 (defun solve-accessors (accessors env)
   (declare (type accessor-list accessors)
@@ -96,8 +90,14 @@
 
   (let ((ty (base-type (accessor-from accessor))))
 
-    (unless (tc:tycon-p ty)
+    (when (tc:tyvar-p ty)
       (return-from solve-accessor (values nil nil)))
+
+    (unless (tc:tycon-p ty)
+      (tc-error "Invalid accessor"
+                (tc-note accessor
+                         "struct accessor cannot be applied to a value of type '~A'"
+                         (type-object-string (accessor-from accessor) env))))
 
     (let* ((ty-name (tc:tycon-name ty))
 
