@@ -206,6 +206,20 @@ main type, O(n!) otherwise — but predicate lists are small in practice)."
 ;;; Operations on Schemes
 ;;;
 
+(defun make-quantified-scheme (vars type explicit-p)
+  "Build a scheme with VARS as its ordered binders, preserving their metadata."
+  (let ((subst (loop :for var :in vars
+                     :for id :from 0
+                     :collect (make-substitution
+                               :from var
+                               :to (make-tgen :id id
+                                              :allow-result-p (tyvar-allow-result-p var)
+                                              :source-name (tyvar-source-name var))))))
+    (make-ty-scheme
+     :explicit-p explicit-p
+     :kinds (mapcar #'kind-of vars)
+     :type (apply-substitution subst type))))
+
 (defun quantify (tyvars type)
   "Quantify the TYVARS that occur in TYPE, preserving binder metadata.
 
@@ -215,21 +229,11 @@ programmer-written binders."
   (declare (type tyvar-list tyvars)
            (type qualified-ty type)
            (values ty-scheme))
-  (let* ((vars (remove-if
-                (lambda (x) (not (find x tyvars :test #'ty=)))
-                (type-variables type)))
-         (kinds (mapcar #'kind-of vars))
-         (subst (loop :for var :in vars
-                      :for id :from 0
-                      :collect (make-substitution
-                                :from var
-                                :to (make-tgen :id id
-                                               :allow-result-p (tyvar-allow-result-p var)
-                                               :source-name (tyvar-source-name var))))))
-    (make-ty-scheme
-     :explicit-p nil
-     :kinds kinds
-     :type (apply-substitution subst type))))
+  (make-quantified-scheme
+   (remove-if-not (lambda (var) (find var tyvars :test #'ty=))
+                  (type-variables type))
+   type
+   nil))
 
 (defun ty-scheme-instantiation-types (ty-scheme)
   "Return fresh instantiation variables for TY-SCHEME's quantified binders.
@@ -333,21 +337,11 @@ Only variables that actually occur in TYPE are quantified. When
 EXPLICIT-P is true, the resulting scheme records that it came from an
 explicit FORALL, which is later used to decide whether the binders
 become lexically scoped."
-  (let* ((vars (remove-if
-                (lambda (x) (not (find x (type-variables type) :test #'ty=)))
-                tyvars))
-         (kinds (mapcar #'kind-of vars))
-         (subst (loop :for var :in vars
-                      :for id :from 0
-                      :collect (make-substitution
-                                :from var
-                                :to (make-tgen :id id
-                                               :allow-result-p (tyvar-allow-result-p var)
-                                               :source-name (tyvar-source-name var))))))
-    (make-ty-scheme
-     :explicit-p explicit-p
-     :kinds kinds
-     :type (apply-substitution subst type))))
+  (let ((type-vars (type-variables type)))
+    (make-quantified-scheme
+     (remove-if-not (lambda (var) (find var type-vars :test #'ty=)) tyvars)
+     type
+     explicit-p)))
 
 ;;;
 ;;; Methods

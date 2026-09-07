@@ -2,6 +2,38 @@
 
 (in-package #:coalton-tests)
 
+(deftest test-quantification-preserves-binders ()
+  (let* ((a (tc:make-variable :source-name :a))
+         (f (tc:make-variable :source-name :f
+                              :kind (tc:make-kfun :from tc:+kstar+ :to tc:+kstar+)))
+         (r (tc:make-variable :source-name :r :allow-result-p t))
+         (outer (tc:make-variable))
+         (unused (tc:make-variable))
+         (type (tc:qualify
+                (list (tc:make-ty-predicate :class 'coalton/classes:Eq :types (list a)))
+                (tc:make-function-ty
+                 :positional-input-types (list (tc:make-tapp :from f :to a) outer)
+                 :keyword-input-types (list (tc:make-keyword-ty-entry :keyword :x :type a))
+                 :output-types (list r)))))
+    ;; Implicit quantification follows occurrence order; explicit quantification
+    ;; follows binder order. Neither captures outer variables or adds unused ones.
+    (dolist (explicit-p '(nil t))
+      (let* ((scheme (if explicit-p
+                         (tc:quantify-using-tvar-order (list r f unused a) type t)
+                         (tc:quantify (list r f unused a) type)))
+             (ordered-vars (if explicit-p (list r f a) (list f a r)))
+             (fresh-vars (tc:ty-scheme-instantiation-types scheme)))
+        (is (eq explicit-p (tc:ty-scheme-explicit-p scheme)))
+        (is (= 3 (length fresh-vars)))
+        (is (equal (mapcar #'tc:tyvar-source-name fresh-vars)
+                   (if explicit-p '(:r :f :a) '(:f :a :r))))
+        (is (equal (mapcar #'tc:tyvar-allow-result-p fresh-vars)
+                   (if explicit-p '(t nil nil) '(nil nil t))))
+        (is (equalp (mapcar #'tc:kind-of fresh-vars)
+                    (mapcar #'tc:kind-of ordered-vars)))
+        (is (equalp (list outer) (tc:type-variables scheme)))
+        (is (tc:qualified-ty= type (tc:instantiate ordered-vars (tc:ty-scheme-type scheme))))))))
+
 (deftest test-forall-kind-annotations ()
   (check-coalton-types
    "(declare annotated-id (forall ((:a Type)) (:a -> :a)))
