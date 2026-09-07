@@ -390,6 +390,30 @@
                       (== (== x y) (== q1 q2))
                       (go (+ i 1) seed2)))))))))))
 
+(define-test realalgebraic-integer-polynomial-kernels-test ()
+  (is
+   (rec go ((seed 7123) (i 0))
+     (if (== i 80)
+         True
+         (let ((next (ra-fuzz-next seed)))
+           (let ((a (ra::make-poly (make-list 3 (mod seed 17) 0 (- (mod next 23) 11))))
+                 (b (ra::make-poly (make-list -2 (mod next 13) 5)))
+                 (q (math:general/ (- (mod seed 19) 9) 7)))
+             (let ((product (ra::poly-int-mul a b)))
+               (and (== (ra::poly-eval-desc-fraction product q)
+                        (* (ra::poly-eval-desc-fraction a q) (ra::poly-eval-desc-fraction b q)))
+                    (== (ra::coefficients (ra::poly-int-div-exact product b)) (ra::coefficients a))
+                    (== (ra::coefficients (ra::poly-int-mul b a)) (ra::coefficients product))
+                    (go next (+ i 1)))))))))
+  (is (lisp (-> Boolean) ()
+        (cl:handler-case
+            (cl:progn
+              (coalton:coalton
+                (ra::poly-int-div-exact (ra::make-poly (make-list 1 1))
+                                       (ra::make-poly (make-list 2 1))))
+              cl:nil)
+          (cl:error () cl:t)))))
+
 (define-test realalgebraic-performance-smoke-test ()
   (let s2 = (math:sqrt (the ra:RealAlgebraic (fromInt 2))))
   (let s3 = (math:sqrt (the ra:RealAlgebraic (fromInt 3))))

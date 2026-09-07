@@ -953,29 +953,37 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
          (Poly (coalton/list:append (Cons coeff Nil)
                                     (coalton/list:repeat (to-ufix (max 0 power)) 0))))))
 
+  (declare int-array->poly (array:LispArray Integer -> Poly Integer))
+  (define (int-array->poly a)
+    (poly-trim-desc
+     (Poly (rec collect ((i (array:length a)) (acc Nil))
+             (if (== i 0)
+                 acc
+                 (collect (- i 1) (Cons (array:aref a (- i 1)) acc)))))))
+
   (declare poly-int-mul (Poly Integer * Poly Integer -> Poly Integer))
   (define (poly-int-mul a b)
-    "Multiply two descending integer polynomials."
+    "Dense convolution with O(m*n) integer operations and one output array."
     (let a0 = (poly-trim-desc a))
     (let b0 = (poly-trim-desc b))
-    (let deg-a = (poly-degree-desc a0))
-    (if (or (poly-int-zero? a0)
-            (poly-int-zero? b0))
+    (if (or (poly-int-zero? a0) (poly-int-zero? b0))
         poly-int-zero
-        (match a0
-          ((Poly coeffs)
-           (poly-trim-desc
-            (rec go ((rest coeffs)
-                     (pow deg-a)
-                     (acc poly-int-zero))
-              (match rest
-                ((Nil) acc)
-                ((Cons c more)
-                 (go more
-                     (- pow 1)
-                     (poly-int-add acc
-                                    (poly-int-shift (poly-int-scale c b0) pow)))))))))))
-
+        (let ((ac (coefficients a0)) (bc (coefficients b0)))
+          (let ((out (array:make (- (+ (coalton/list:length ac) (coalton/list:length bc)) 1)
+                                 (the Integer 0))))
+            (rec outer ((xs ac) (i (the UFix 0)))
+              (match xs
+                ((Nil) (values))
+                ((Cons x more)
+                 (when (/= x 0)
+                   (rec inner ((ys bc) (j i))
+                     (match ys
+                       ((Nil) (values))
+                       ((Cons y rest)
+                        (array:set! out j (+ (array:aref out j) (* x y)))
+                        (inner rest (+ j 1))))))
+                 (outer more (+ i 1)))))
+            (int-array->poly out)))))
   (declare poly-int-expt (Poly Integer * Integer -> Poly Integer))
   (define (poly-int-expt p exponent)
     "Exponentiation by squaring for integer polynomials."
@@ -992,34 +1000,43 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
                   (poly-int-mul base base)
                   (quot e 2))))))
 
-  (declare poly-frac->int-exact (Poly Fraction -> (Result String (Poly Integer))))
-  (define (poly-frac->int-exact p)
-    "Convert a rational polynomial to integer coefficients, requiring exact integrality."
-    (let p0 = (poly-frac-trim p))
-    (match p0
-      ((Poly coeffs)
-       (rec go ((rest coeffs)
-                (acc Nil))
-         (match rest
-           ((Nil)
-            (Ok (poly-trim-desc (Poly (coalton/list:reverse acc)))))
-           ((Cons c more)
-            (if (== (denominator c) 1)
-                (go more (Cons (numerator c) acc))
-                (Err "Internal error: non-integer quotient in exact polynomial division."))))))))
-
   (declare poly-int-div-exact (Poly Integer * Poly Integer -> Poly Integer))
   (define (poly-int-div-exact a b)
-    "Exact division in Z[z], signaling an error if the quotient is not integral."
-    (match (poly-frac-divrem (poly-int->frac a)
-                              (poly-int->frac b))
-      ((Tuple q r)
-       (if (poly-frac-zero? r)
-           (match (poly-frac->int-exact q)
-             ((Err msg) (error msg))
-             ((Ok qq) qq))
-           (error "Internal error: non-exact polynomial division in Bareiss determinant.")))))
-
+    "Checked exact long division in Z[t], with no rational coefficients."
+    (let a0 = (poly-trim-desc a))
+    (let b0 = (poly-trim-desc b))
+    (cond
+      ((poly-int-zero? b0) (error "Exact polynomial division by zero."))
+      ((poly-int-zero? a0) poly-int-zero)
+      ((< (poly-degree-desc a0) (poly-degree-desc b0))
+       (error "Non-exact integer polynomial division."))
+      (True
+       (let ac = (coefficients a0))
+       (let bc = (coefficients b0))
+       (let size = (coalton/list:length ac))
+       (let qsize = (+ (- size (coalton/list:length bc)) 1))
+       (let r = (array:make size (the Integer 0)))
+       (let q = (array:make qsize (the Integer 0)))
+       (rec fill ((xs ac) (i (the UFix 0)))
+         (match xs
+           ((Nil) (values))
+           ((Cons c more) (array:set! r i c) (fill more (+ i 1)))))
+       (loops:dotimes (i qsize)
+         (let (values c leftover) = (quotRem (array:aref r i) (poly-int-leading b0)))
+         (when (/= leftover 0)
+           (error "Non-integral quotient in exact polynomial division."))
+         (array:set! q i c)
+         (when (/= c 0)
+           (rec subtract ((xs bc) (j i))
+             (match xs
+               ((Nil) (values))
+               ((Cons d more)
+                (array:set! r j (- (array:aref r j) (* c d)))
+                (subtract more (+ j 1)))))))
+       (loops:dotimes (i size)
+         (when (/= (array:aref r i) 0)
+           (error "Nonzero remainder in exact polynomial division.")))
+       (int-array->poly q))))
   (declare zconst (Integer -> Poly Integer))
   (define (zconst n)
     "Constant polynomial n in Z[z]."
