@@ -244,6 +244,28 @@
   (is (== whole2 -2))
   (is (== frac2 0)))
 
+(define-test realalgebraic-direct-quantization-test ()
+  ;; Large leading coefficient must not force thousands of precision bits
+  ;; just to determine a floor that is already nearly fixed by the interval.
+  (let a = (^ (the Integer 10) 1000))
+  (let x = (unwrap-ok (ra:root (make-list a 0 (negate (+ (* 2 a) 1))) 1 2)))
+  (is (== (floor x) 1))
+  (is (== (ceiling x) 2))
+  (is
+   (rec go ((seed 73519) (i 0))
+     (if (== i 80)
+         True
+         (match (ra-fuzz-fraction seed)
+           ((Tuple next q)
+            (let r = (the ra:RealAlgebraic (into q)))
+            (let (values z rest) = (math:proper r))
+            (let (values expected expected-rest) = (math:proper q))
+            (and (== (floor r) (floor q))
+                 (== (ceiling r) (ceiling q))
+                 (== z expected)
+                 (== rest (the ra:RealAlgebraic (into expected-rest)))
+                 (go next (+ i 1)))))))))
+
 (define-test realalgebraic-printer-test ()
   (let repr = (ra:show sqrt2))
   (is (lisp (-> Boolean) (repr)

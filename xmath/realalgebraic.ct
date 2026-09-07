@@ -1805,60 +1805,30 @@ Returns `None` when `x` is not known to be rational."
       ((Some q) (Some q))
       ((None) None)))
 
-  (declare integer-certificate (RealAlgebraic -> (Optional Integer)))
-  (define (integer-certificate x)
-    "Return a certified exact integer value when one can be proved."
-    (match (rational-certificate x)
-      ((Some q)
-       (if (== (denominator q) 1)
-           (Some (numerator q))
-           None))
-      ((None)
-       None)))
-
   (declare floor-certified (RealAlgebraic -> Integer))
   (define (floor-certified x)
-    "Certified floor computed by refining until both endpoint floors agree."
-    (match (integer-certificate x)
-      ((Some z) z)
-      ((None)
-       (rec go ((a x))
-         (let ((lo-floor (floor (lower-bound a)))
-               (hi-floor (floor (upper-bound a))))
-           (if (== lo-floor hi-floor)
-               lo-floor
-               (go (refine-native a))))))))
+    "Refine until the floor is fixed, checking the intervening integer exactly.
+
+No rationality decision or coefficient-dependent precision is needed."
+    (rec go ((a x))
+      (let l = (floor (lower-bound a)))
+      (let h = (floor (upper-bound a)))
+      (cond
+        ((== l h) l)
+        ((and (== h (+ l 1)) (contains-rational a (fromInt h))) h)
+        (True (go (refine-native a))))))
 
   (declare ceiling-certified (RealAlgebraic -> Integer))
   (define (ceiling-certified x)
-    "Certified ceiling computed by refining until both endpoint ceilings agree."
-    (match (integer-certificate x)
-      ((Some z) z)
-      ((None)
-       (rec go ((a x))
-         (let ((lo-ceil (ceiling (lower-bound a)))
-               (hi-ceil (ceiling (upper-bound a))))
-           (if (== lo-ceil hi-ceil)
-               lo-ceil
-               (go (refine-native a))))))))
+    "The ceiling is the floor, plus one unless x equals that integer."
+    (let z = (floor-certified x))
+    (if (contains-rational x (fromInt z)) z (+ z 1)))
 
   (declare truncate-certified (RealAlgebraic -> Integer))
   (define (truncate-certified x)
-    "Certified truncation toward zero."
-    (match (integer-certificate x)
-      ((Some z) z)
-      ((None)
-       (rec go ((a x))
-         (cond
-           ((< (upper-bound a) 0)
-            (ceiling-certified a))
-           ((> (lower-bound a) 0)
-           (floor-certified a))
-           ((zero-ra? a)
-            0)
-           (True
-            (go (refine-native a)))))))))
-
+    "Certified truncation toward zero, with one integer-boundary test."
+    (let z = (floor-certified x))
+    (if (or (>= z 0) (contains-rational x (fromInt z))) z (+ z 1))))
 (coalton-toplevel
   (define-instance (Eq RealAlgebraic)
     (define (== a b)
