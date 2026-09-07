@@ -121,3 +121,23 @@
     (is (= 42 (codegen-test-eval "(first-or-zero (Wrapped (Some (Tuple 42 43))))")))
     (is (= 0 (codegen-test-eval "(first-or-zero (Wrapped None))")))))
 
+(deftest codegen-inline-loop-initializer-scope ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(inline)
+      (declare sequential-init (Integer -> Integer))
+      (define (sequential-init n)
+        (for* ((i n (+ i 1)) (j i (+ j 1))) :returns j :repeat 1 (values)))
+      (inline)
+      (declare recursive-init (Integer -> Integer))
+      (define (recursive-init n)
+        (for ((j i (+ j 1)) (i n (+ i 1))) :returns j :repeat 1 (values)))
+      (inline)
+      (declare shadow-init (Integer -> Integer))
+      (define (shadow-init i)
+        (for* ((i (+ i 1) (+ i 1)) (j i (+ j i))) :returns j :repeat 1 (values)))")
+    (is (= 11 (codegen-test-eval "(sequential-init 10)")))
+    (is (= 11 (codegen-test-eval "(recursive-init 10)")))
+    (is (= 23 (codegen-test-eval "(shadow-init 10)")))
+    (is (= 32 (codegen-test-eval "(+ (sequential-init 10) (sequential-init 20))")))))
+

@@ -162,7 +162,8 @@ is true."
         (make-node-for
          :type (node-type node)
          :label (node-for-label node)
-         :bindings (loop :for binding :in (node-for-bindings node)
+         :bindings (loop :with init-subs := (if (node-for-sequential-p node) new-subs loop-subs)
+                         :for binding :in (node-for-bindings node)
                          :for name := (node-for-binding-name binding)
                          :collect (make-node-for-binding
                                    :name (if rename-bound-variables
@@ -171,9 +172,11 @@ is true."
                                                (find name loop-subs :key #'ast-substitution-from)))
                                              name)
                                    :type (node-for-binding-type binding)
-                                   :init (funcall *traverse* (node-for-binding-init binding) new-subs)
+                                   :init (funcall *traverse* (node-for-binding-init binding) init-subs)
                                    :step (and (node-for-binding-step binding)
-                                              (funcall *traverse* (node-for-binding-step binding) loop-subs))))
+                                              (funcall *traverse* (node-for-binding-step binding) loop-subs)))
+                         :do (when (and rename-bound-variables (node-for-sequential-p node))
+                               (push (find name loop-subs :key #'ast-substitution-from) init-subs)))
          :sequential-p (node-for-sequential-p node)
          :returns (and (node-for-returns node)
                        (funcall *traverse* (node-for-returns node) loop-subs))

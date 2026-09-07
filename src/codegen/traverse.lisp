@@ -490,13 +490,18 @@ bound at the given point."
         (make-node-for
          :type (node-type node)
          :label (node-for-label node)
-         :bindings (loop :for binding :in (node-for-bindings node)
+         :bindings (loop :with init-bound-variables := (if (node-for-sequential-p node)
+                                                          bound-variables
+                                                          new-bound-variables)
+                         :for binding :in (node-for-bindings node)
                          :collect (make-node-for-binding
                                    :name (node-for-binding-name binding)
                                    :type (node-for-binding-type binding)
-                                   :init (funcall *traverse* (node-for-binding-init binding) bound-variables)
+                                   :init (funcall *traverse* (node-for-binding-init binding) init-bound-variables)
                                    :step (and (node-for-binding-step binding)
-                                              (funcall *traverse* (node-for-binding-step binding) new-bound-variables))))
+                                              (funcall *traverse* (node-for-binding-step binding) new-bound-variables)))
+                         :do (when (node-for-sequential-p node)
+                               (push (node-for-binding-name binding) init-bound-variables)))
          :sequential-p (node-for-sequential-p node)
          :returns (and (node-for-returns node)
                        (funcall *traverse* (node-for-returns node) new-bound-variables))
