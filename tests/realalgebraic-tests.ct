@@ -89,6 +89,18 @@
   (is (< sqrt2 2))
   (is (== sqrt2 sqrt2-alt)))
 
+(define-test realalgebraic-comparison-enclosure-filter-test ()
+  (let a = (unwrap-ok (ra:root (make-list 1 -1) 0 2)))
+  (let b = (unwrap-ok (ra:root (make-list 1 -3) 2 4)))
+  (is (< a b))
+  (is (> b a))
+  ;; Overlap alone proves neither equality nor inequality.
+  (let lower = (unwrap-ok (ra:root (make-list 1 -4 3) 0 5/2)))
+  (let upper = (unwrap-ok (ra:root (make-list 1 -4 3) 3/2 4)))
+  (is (< lower upper))
+  (is (== lower a))
+  (is (== upper b)))
+
 (define-test realalgebraic-division-zero-factor-test ()
   (let one = (unwrap-ok (ra:root (make-list 1 -1 0) 1/2 3/2)))
   (is (== (/ one one) 1))

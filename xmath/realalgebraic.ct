@@ -847,6 +847,14 @@ COEFFS is a list of integer coefficients in descending degree order."
 
   (declare compare-certified (RealAlgebraic * RealAlgebraic -> Ordering))
   (define (compare-certified a b)
+    "Use disjoint open enclosures before computing a polynomial gcd."
+    (cond
+      ((<= (upper-bound a) (lower-bound b)) LT)
+      ((<= (upper-bound b) (lower-bound a)) GT)
+      (True (compare-overlapping a b))))
+
+  (declare compare-overlapping (RealAlgebraic * RealAlgebraic -> Ordering))
+  (define (compare-overlapping a b)
     "Certified comparison in native Coalton.
 
 If intervals overlap, equality is decided rigorously via a gcd+Sturm check.
@@ -859,8 +867,8 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
           (rec go ((x a)
                    (y b))
             (cond
-              ((< (upper-bound x) (lower-bound y)) LT)
-              ((< (upper-bound y) (lower-bound x)) GT)
+              ((<= (upper-bound x) (lower-bound y)) LT)
+              ((<= (upper-bound y) (lower-bound x)) GT)
               (True
                (match (refine-wider x y)
                  ((Tuple nx ny)
@@ -870,8 +878,8 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
             (rec go ((x a)
                      (y b))
               (cond
-                ((< (upper-bound x) (lower-bound y)) LT)
-                ((< (upper-bound y) (lower-bound x)) GT)
+                ((<= (upper-bound x) (lower-bound y)) LT)
+                ((<= (upper-bound y) (lower-bound x)) GT)
                 ((common-root-in-overlap? g sturm x y) EQ)
                 (True
                  (match (refine-wider x y)
