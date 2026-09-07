@@ -135,7 +135,9 @@ Furthermore, `best-approx` returns the simplest fraction, and both functions may
                                   (- e0 (* (fromInt r) e1))
                                   (- p0 (* r p1))
                                   (- q0 (* r q1))))
-                (True (mkFraction p1 q1))))))
+                ;; SBCL cannot prove this branch unreachable for the initial
+                ;; p1=1, q1=0 seed; inlining exposes a spurious division by zero.
+                (True (noinline (mkFraction p1 q1)))))))
       (approximate-rec x 0 1 -1 1 0))))
 
 (cl:defmacro %define-integer-roundings (coalton-type)
