@@ -744,10 +744,17 @@ forms follow the same binding semantics."
                        ,inner)))))
          body))
 
-      ((every (lambda (pair)
-                (data-letrec-able-p (cdr pair)
-                                    env))
-              scc-bindings)
+      ;; Allocate before filling slots only for recursive data bindings.
+      ;; A multi-binding SCC is recursive; a singleton must reference itself.
+      ;; Nonrecursive bindings use normal constructors below, preserving
+      ;; type information needed to optimize calls such as `Some`.
+      ((and (or (cdr scc-bindings)
+                (member (caar scc-bindings)
+                        (node-variables (cdar scc-bindings))
+                        :test #'eq))
+            (every (lambda (pair)
+                     (data-letrec-able-p (cdr pair) env))
+                   scc-bindings))
        (let* ((inner (codegen-recursive-bindings bindings (cdr sccs) env inner-thunk
                                                  binding-decl-table))
               (assignments (loop :for (name . initform) :in scc-bindings
