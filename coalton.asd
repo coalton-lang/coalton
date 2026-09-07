@@ -280,6 +280,7 @@
                (:file "entry-tests")
                (:file "codegen-pattern-tests")
                (:file "codegen-correctness-tests")
+               (:file "scalar-replacement-tests")
                (:file "toplevel-tests")
                (:file "doc-tests")
                (:file "type-inference-tests")

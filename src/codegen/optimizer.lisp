@@ -53,6 +53,9 @@
    #:coalton-impl/codegen/lawnmower
    #:lawnmow)
   (:import-from
+   #:coalton-impl/codegen/scalar-replacement
+   #:scalar-replace)
+  (:import-from
    #:coalton-impl/codegen/specializer
    #:apply-specializations)
   (:local-nicknames
@@ -182,6 +185,11 @@ mapping known function names to their arity."
         (setf bindings
               (loop :for (name . node) :in bindings
                     :collect (cons name (lawnmow-to-fixpoint node))))
+
+        (when (settings:coalton-release-p)
+          (setf bindings
+                (loop :for (name . node) :in bindings
+                      :collect (cons name (scalar-replace node env)))))
 
         ;; Update code db
         (loop :for (name . node) :in bindings
