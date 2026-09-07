@@ -89,6 +89,21 @@
   (is (< sqrt2 2))
   (is (== sqrt2 sqrt2-alt)))
 
+(define-test realalgebraic-division-zero-factor-test ()
+  (let one = (unwrap-ok (ra:root (make-list 1 -1 0) 1/2 3/2)))
+  (is (== (/ one one) 1))
+  (is (== (/ 0 one) 0))
+  (is (== (math:reciprocal one) 1))
+  (let doubled = (+ sqrt2 sqrt2))
+  (is (== (/ doubled doubled) 1))
+  (is (== (* (math:reciprocal doubled) doubled) 1))
+  (is (lisp (-> Boolean) ()
+        (cl:handler-case
+            (cl:progn
+              (coalton:coalton (/ (the ra:RealAlgebraic 0) 0))
+              cl:nil)
+          (cl:error () cl:t)))))
+
 (define-test realalgebraic-arithmetic-test ()
   (is (== (* sqrt2 sqrt2) 2))
   (is (== (/ sqrt2 sqrt2) 1))

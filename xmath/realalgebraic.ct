@@ -1385,10 +1385,21 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
                        (substitute-z-over-t-scaled (defining-polynomial y)))))
 
   (declare poly-for-quot (RealAlgebraic * RealAlgebraic -> Poly Integer))
+  (declare poly-without-zero-roots (Poly Integer -> Poly Integer))
+  (define (poly-without-zero-roots p)
+    "Remove powers of t from a nonzero polynomial by dropping trailing zeros."
+    (Poly (coalton/list:reverse
+           (coefficients
+            (poly-trim-desc
+             (Poly (coalton/list:reverse (coefficients p))))))))
+
   (define (poly-for-quot x y)
     "Construct elimination polynomial for x / y."
+    ;; y is certified nonzero by the caller. A zero root of its defining
+    ;; polynomial is irrelevant and would make the resultant identically
+    ;; zero whenever the numerator polynomial also vanishes at zero.
     (poly-int-primitive
-     (resultant-tpoly (int-poly->tpoly (defining-polynomial y))
+     (resultant-tpoly (int-poly->tpoly (poly-without-zero-roots (defining-polynomial y)))
                        (substitute-z-times-t (defining-polynomial x)))))
 
   (declare interval-sum (RealAlgebraic * RealAlgebraic -> (Tuple Fraction Fraction)))
@@ -1499,12 +1510,11 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
   (declare div-certified (RealAlgebraic * RealAlgebraic -> RealAlgebraic))
   (define (div-certified x y)
     "Certified division."
-    (if (zero-ra? y)
-        (error "Division by zero algebraic number.")
-        (select-operation-root (poly-for-quot x y)
-                                interval-quot
-                                x
-                                y)))
+    (cond
+      ((zero-ra? y) (error "Division by zero algebraic number."))
+      ((zero-ra? x) (from-integer 0))
+      (True
+       (select-operation-root (poly-for-quot x y) interval-quot x y))))
 
   (declare reciprocal-certified (RealAlgebraic -> RealAlgebraic))
   (define (reciprocal-certified x)
