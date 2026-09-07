@@ -292,6 +292,33 @@
       (let ((annotated (the (Integer -> Integer) (fn (x) x)))) annotated))"
    '("good-annotation" . "(Void -> (Integer -> Integer))")))
 
+(deftest test-unification-shares-component-solutions ()
+  (let* ((a (tc:make-variable))
+         (b (tc:make-variable))
+         (generic (tc:make-function-ty
+                   :positional-input-types (list a)
+                   :keyword-input-types (list (tc:make-keyword-ty-entry :keyword :x :type a)
+                                              (tc:make-keyword-ty-entry :keyword :y :type b))
+                   :output-types (list b a)))
+         (concrete (tc:make-function-ty
+                    :positional-input-types (list tc:*integer-type*)
+                    :keyword-input-types (list (tc:make-keyword-ty-entry :keyword :x :type tc:*integer-type*)
+                                               (tc:make-keyword-ty-entry :keyword :y :type tc:*string-type*))
+                    :output-types (list tc:*string-type* tc:*integer-type*)))
+         (subs (tc:unify nil generic concrete)))
+    (is (tc:ty= concrete (tc:apply-substitution subs generic)))
+    (signals tc:coalton-internal-type-error
+      (tc:unify nil generic
+                (tc:make-function-ty
+                 :positional-input-types (tc:function-ty-positional-input-types concrete)
+                 :keyword-input-types (tc:function-ty-keyword-input-types concrete)
+                 :output-types (list tc:*integer-type* tc:*string-type*))))
+    ;; Result components also share substitutions: a repeated variable cannot
+    ;; independently become Integer and String in the same result sequence.
+    (signals tc:coalton-internal-type-error
+      (tc:unify nil (tc:make-result-ty :output-types (list a a))
+                    (tc:make-result-ty :output-types (list tc:*integer-type* tc:*string-type*))))))
+
 (deftest test-loop-bindings-are-monomorphic ()
   (dolist (loop-name '("for" "for*"))
     (dolist (declaration '("" "(declare v (Optional :a))"))

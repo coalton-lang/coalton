@@ -83,22 +83,13 @@ including zero outputs (Void). Ordinary value variables cannot do so."
         (fail)))))
 
 (defun mgu-keyword-function-types (type1 type2)
-  (let ((subs nil))
-    (loop :for from-type :in (function-ty-positional-input-types type1)
-          :for to-type :in (function-ty-positional-input-types type2)
-          :do (setf subs
-                    (compose-substitution-lists
-                     (mgu (apply-substitution subs from-type)
-                          (apply-substitution subs to-type))
-                     subs)))
+  (let ((subs (unify-list nil
+                          (function-ty-positional-input-types type1)
+                          (function-ty-positional-input-types type2))))
     (dolist (entry1 (function-ty-keyword-input-types type1))
       (let ((entry2 (function-keyword-entry (function-ty-keyword-input-types type2)
                                             (keyword-ty-entry-keyword entry1))))
-        (setf subs
-              (compose-substitution-lists
-               (mgu (apply-substitution subs (keyword-ty-entry-type entry1))
-                    (apply-substitution subs (keyword-ty-entry-type entry2)))
-               subs))))
+        (setf subs (unify subs (keyword-ty-entry-type entry1) (keyword-ty-entry-type entry2)))))
     (unify subs
            (output-types-result-type (function-ty-output-types type1))
            (output-types-result-type (function-ty-output-types type2)))))
@@ -123,17 +114,6 @@ including zero outputs (Void). Ordinary value variables cannot do so."
   (unless (= (length (result-ty-output-types type1))
              (length (result-ty-output-types type2)))
     (error condition :type1 type1 :type2 type2)))
-
-(defun mgu-result-types (type1 type2)
-  (let ((subs nil))
-    (loop :for from-type :in (result-ty-output-types type1)
-          :for to-type :in (result-ty-output-types type2)
-          :do (setf subs
-                    (compose-substitution-lists
-                     (mgu (apply-substitution subs from-type)
-                          (apply-substitution subs to-type))
-                     subs)))
-    subs))
 
 (defun match-result-types (type1 type2)
   (match-list (result-ty-output-types type2) (result-ty-output-types type1)))
@@ -161,7 +141,7 @@ including zero outputs (Void). Ordinary value variables cannot do so."
     (mgu-keyword-function-types type1 type2))
   (:method ((type1 result-ty) (type2 result-ty))
     (ensure-compatible-result-types type1 type2 'unification-error)
-    (mgu-result-types type1 type2))
+    (unify-list nil (result-ty-output-types type1) (result-ty-output-types type2)))
   (:method ((type1 tyvar) (type2 ty))
     (bind-variable type1 type2))
   (:method ((type1 ty) (type2 tyvar))
