@@ -10,7 +10,6 @@ later passes and Lisp compilers see simpler code.")
    #:coalton-impl/codegen/ast)
   (:import-from
    #:coalton-impl/codegen/transformations
-   #:node-dynamic-variables
    #:node-variables)
   (:import-from
    #:coalton-impl/codegen/traverse
@@ -360,57 +359,20 @@ The replacement is skipped inside nested binders for the same name."
        :subexpr node)
       node))
 
-(defun variable-substitution-info (body name value)
-  (declare (type node body value)
-           (type parser:identifier name)
-           (values fixnum boolean &optional))
-  (let ((count 0)
-        (unsafe? nil)
-        (value-vars (node-variables value)))
-    (traverse-with-binding-list
-     body
-     (list
-      (action (:after node-local-variable node bound-variables)
-        (when (and (eq name (node-variable-value node))
-                   (not (member name bound-variables :test #'eq)))
-          (incf count)
-          (unless (identifiers-disjoint-p value-vars bound-variables)
-            (setf unsafe? t)))
-        (values))
-      (action (:after node-lisp node bound-variables)
-        (when (loop :for (_ . coalton-var) :in (node-lisp-vars node)
-                    :thereis (and (eq name coalton-var)
-                                  (not (member name bound-variables :test #'eq))))
-          (setf unsafe? t))
-        (values))))
-    (values count unsafe?)))
-
-(defun substitute-variable-node (body name value)
-  (declare (type node body value)
-           (type parser:identifier name)
-           (values node &optional))
-  (traverse-with-binding-list
-   body
-   (list
-    (action (:after node-local-variable node bound-variables)
-      (when (and (eq name (node-variable-value node))
-                 (not (member name bound-variables :test #'eq)))
-        (copy-node value (node-type node)))))))
-
 (defun bind-known-pattern-variable (name value body)
+  "Evaluate VALUE before BODY, even if NAME has only one syntactic use."
   (declare (type parser:identifier name)
            (type node value body)
            (values node &optional))
-  (multiple-value-bind (count unsafe?) (variable-substitution-info body name value)
-    (if (and (= 1 count)
-             (not unsafe?)
-             (null (node-dynamic-variables value)))
-        (substitute-variable-node body name value)
-        (make-node-bind
-         :type (node-type body)
-         :name name
-         :expr (force-value-binding-node value)
-         :body body))))
+  ;; An immediate call evaluates its operator in exactly the binding's place.
+  ;; Other uses may be delayed, repeated, or preceded by effects.
+  (alexandria:if-let ((application (immediate-bound-application-p name body)))
+    (application-with-rator application value)
+    (make-node-bind
+     :type (node-type body)
+     :name name
+     :expr (force-value-binding-node value)
+     :body body)))
 
 (defun rewrite-known-pattern-match (pattern value body)
   "Rewrite a match of known VALUE against PATTERN.

@@ -279,6 +279,7 @@
                 :components ((:file "cursor-tests")))
                (:file "entry-tests")
                (:file "codegen-pattern-tests")
+               (:file "codegen-correctness-tests")
                (:file "toplevel-tests")
                (:file "doc-tests")
                (:file "type-inference-tests")
