@@ -555,41 +555,17 @@ then clearing denominators exactly."
                      (+ count 1)
                      count)))))))
 
-  (declare move-endpoint-off-root (Poly Integer * Fraction * Fraction -> Fraction))
-  (define (move-endpoint-off-root poly endpoint toward)
-    "If an endpoint is a root, move it inward by bisection until it is not."
-    (if (/= (poly-eval-desc-fraction poly endpoint) 0)
-        endpoint
-        (rec go ((x endpoint))
-          (let ((x-next (/ (+ x toward) 2)))
-            (if (/= (poly-eval-desc-fraction poly x-next) 0)
-                x-next
-                (go x-next))))))
-
-  (declare nudge-interval (Poly Integer * Fraction * Fraction -> (Tuple Fraction Fraction)))
-  (define (nudge-interval poly lo hi)
-    "Adjust both endpoints so the polynomial is nonzero there."
-    (cond
-      ((>= lo hi)
-       (Tuple lo hi))
-      (True
-       (let ((l (move-endpoint-off-root poly lo hi)))
-         (let ((h (move-endpoint-off-root poly hi l)))
-           (cond
-             ((>= l h)
-              (error "Interval collapsed while nudging endpoints away from roots."))
-             (True
-              (Tuple l h))))))))
-
   (declare root-count-open (Poly Integer * List (Poly Integer) * Fraction * Fraction -> Integer))
   (define (root-count-open poly sturm lo hi)
-    "Count distinct real roots in `(lo, hi)` using Sturm variations."
+    "Count roots of a square-free polynomial in the open interval `(lo, hi)`.
+
+Ignoring zeros gives the right-hand variation at a root of poly. Thus
+V(lo)-V(hi) counts (lo,hi]; subtract a root at hi to obtain (lo,hi)."
     (if (>= lo hi)
         0
-        (match (nudge-interval poly lo hi)
-          ((Tuple l h)
-           (max 0 (- (sign-variations-at sturm l)
-                     (sign-variations-at sturm h)))))))
+        (- (- (sign-variations-at sturm lo)
+              (sign-variations-at sturm hi))
+           (if (== (poly-eval-desc-fraction poly hi) 0) 1 0))))
 
   (declare try-split-denominator (Poly Integer * Fraction * Fraction * Integer * Integer -> (Optional Fraction)))
   (define (try-split-denominator poly lo hi n i)
@@ -1482,19 +1458,16 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
             ;; Quotient case can fail if denominator enclosure straddles zero.
             (search a (refine-native b)))
            ((Some (Tuple lo hi))
-            (if (>= lo hi)
-                (match (refine-wider a b)
-                  ((Tuple na nb)
-                   (search na nb)))
-                (match (nudge-interval normalized lo hi)
-                  ((Tuple nl nh)
-                   (match (make-realalgebraic-certified normalized sturm nl nh)
-                     ((Ok result)
-                      result)
-                     ((Err _)
-                      (match (refine-wider a b)
-                        ((Tuple na nb)
-                         (search na nb))))))))))))))
+            ;; Never shrink an operation enclosure without proving that it
+            ;; retains the requested result. Endpoint roots are rejected by
+            ;; the constructor; refining the operands eventually excludes
+            ;; every other root of the (nonzero) elimination polynomial.
+            (match (make-realalgebraic-certified normalized sturm lo hi)
+              ((Ok result) result)
+              ((Err _)
+               (match (refine-wider a b)
+                 ((Tuple na nb)
+                  (search na nb)))))))))))
 
   (declare add-certified (RealAlgebraic * RealAlgebraic -> RealAlgebraic))
   (define (add-certified x y)

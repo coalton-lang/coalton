@@ -57,6 +57,26 @@
         (ra-fuzz-nonsquare s1)
         (Tuple s1 n))))
 
+(define-test realalgebraic-operation-enclosure-regression-test ()
+  (let a = (unwrap-ok (ra:root (make-list 1 -4 0) -1 3)))
+  (let b = (unwrap-ok (ra:root (make-list 1 2 0) -1 1)))
+  (is (== (+ a b) 0))
+  ;; Irreducible cubic: the desired difference is in (1,2), while the
+  ;; conjugate incorrectly selected by inward endpoint nudging exceeds 3.
+  (let c = (unwrap-ok (ra:root (make-list 1 0 -3 1) 1 5)))
+  (let d = (unwrap-ok (ra:root (make-list 1 0 -3 1) 0 1)))
+  (is (> (- c d) 1))
+  (is (< (- c d) 2)))
+
+(define-test realalgebraic-open-sturm-endpoints-test ()
+  (let p = (ra::make-poly (make-list 1 -3 2 0)))
+  (let sturm = (ra::sturm-sequence-desc p))
+  (is (== (ra::root-count-open p sturm 0 3) 2))
+  (is (== (ra::root-count-open p sturm -1 2) 2))
+  (is (== (ra::root-count-open p sturm 0 2) 1))
+  (is (== (ra::root-count-open p sturm 0 1) 0))
+  (is (== (ra::root-count-open p sturm 1 1) 0)))
+
 (define-test realalgebraic-construction-and-comparison-test ()
   (let bounds = (ra:isolating-interval sqrt2))
   (match bounds
