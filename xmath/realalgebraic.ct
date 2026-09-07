@@ -1721,16 +1721,34 @@ Rounding is half-up at the final digit, computed with exact integer arithmetic."
 
   (declare decimal-string (UFix * RealAlgebraic -> String))
   (define (decimal-string digits x)
-    "Render a fixed-point decimal approximation of `x`.
+    "Render x correctly rounded to DIGITS decimal places, ties away from zero.
 
-`digits` is the number of digits after the decimal point. Rounding is half-up
-and computed from exact rational arithmetic."
-    (let scale = (pow10 (+ digits 2)))
-    (let tight = (refine-to-width (/ 1 (fromInt scale)) x))
-    (let q = (/ (+ (lower-bound tight)
-                   (upper-bound tight))
-                2))
-    (rational->fixed-decimal q digits))
+Agreement of rounded endpoints certifies the output. A polynomial test at
+the intervening half-integer boundary resolves exact ties without an
+unbounded refinement loop."
+    (let scale = (fromInt (pow10 digits)))
+    (match (linear-rational-root (defining-polynomial x))
+      ((Some q) (rational->fixed-decimal q digits))
+      ((None)
+       (if (zero-ra? x)
+           (rational->fixed-decimal 0 digits)
+           (rec go ((a x))
+             (let lo = (lower-bound a))
+             (let hi = (upper-bound a))
+             (if (and (<= lo 0) (>= hi 0))
+                 (go (refine-native a))
+                 (let ((left (rational->fixed-decimal lo digits))
+                       (right (rational->fixed-decimal hi digits)))
+                   (if (== left right)
+                       left
+                       (let ((negative (< hi 0))
+                             (mag-lo (if (< hi 0) (negate hi) lo)))
+                         (let ((boundary (/ (+ (fromInt (floor (+ (* mag-lo scale) 1/2))) 1/2)
+                                            scale)))
+                           (let ((q (if negative (negate boundary) boundary)))
+                             (if (contains-rational a q)
+                                 (rational->fixed-decimal q digits)
+                                 (go (refine-native a))))))))))))))
 
   (declare candidate-rational-root? (Poly Integer * Fraction * Fraction * Fraction -> Boolean))
   (define (candidate-rational-root? p lo hi q)

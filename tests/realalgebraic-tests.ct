@@ -281,6 +281,20 @@
   (is (== (ra:decimal-string 2 (the ra:RealAlgebraic (into 1/8))) "0.13")) ; 0.125 -> 0.13
   (is (== (ra:decimal-string 0 (the ra:RealAlgebraic (into -5/2))) "-3"))) ; -2.5 -> -3
 
+(define-test realalgebraic-certified-decimal-boundaries-test ()
+  (let lo = 12499/100000)
+  (let hi = 125001/1000000)
+  (is (== (ra:decimal-string 2 (unwrap-ok (ra:root (make-list 8 -1) lo hi))) "0.13"))
+  (is (== (ra:decimal-string 2 (unwrap-ok (ra:root (make-list 8 -17 2) lo hi))) "0.13"))
+  (is (== (ra:decimal-string 2 (unwrap-ok (ra:root (make-list 8 17 2) (negate hi) (negate lo)))) "-0.13"))
+  ;; Irrationals immediately to either side of the rounding discontinuity.
+  (let scale = (^ (the Integer 10) 16))
+  (let above = (unwrap-ok (ra:root (make-list scale 0 -156250000000001) lo hi)))
+  (let below = (unwrap-ok (ra:root (make-list scale 0 -156249999999999) lo hi)))
+  (is (== (ra:decimal-string 2 above) "0.13"))
+  (is (== (ra:decimal-string 2 below) "0.12"))
+  (is (== (ra:decimal-string 2 (unwrap-ok (ra:root (make-list 1 -1 0) -1/1000 1/10000))) "0.00")))
+
 (define-test realalgebraic-fuzz-rational-roundtrip-test ()
   (is
    (rec go ((i 0)
