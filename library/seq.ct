@@ -236,6 +236,18 @@ a new `Seq` instance."
         ((RelaxedNode ht fss cst subs)
          (RelaxedNode ht fss cst (map (fn (sub) (map f sub)) subs))))))
 
+  (define-instance (Foldable Seq)
+    (define (fold f init seq)
+      (match seq
+        ((LeafArray leaves) (fold f init leaves))
+        ((RelaxedNode _ _ _ subs)
+         (fold (fn (acc sub) (fold f acc sub)) init subs))))
+    (define (foldr f init seq)
+      (match seq
+        ((LeafArray leaves) (foldr f init leaves))
+        ((RelaxedNode _ _ _ subs)
+         (foldr (fn (sub acc) (foldr f acc sub)) init subs)))))
+
   (define-instance (types:RuntimeRepr :a => iter:FromIterator (Seq :a) :a)
     (define (iter:collect! it)
       (iter:fold! push (new) it)))

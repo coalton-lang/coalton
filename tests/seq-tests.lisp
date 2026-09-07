@@ -1,5 +1,19 @@
 (in-package #:coalton-native-tests)
 
+(define-test seq-fold-order ()
+  (is (== (fold + 7 (the (seq:Seq Integer) (seq:new))) 7))
+  (is (== (foldr + 7 (the (seq:Seq Integer) (seq:new))) 7))
+  ;; Cross leaf and multi-level branch boundaries, including concatenated trees.
+  (iter:for-each!
+    (fn (count)
+      (let xs = (iter:collect! (iter:up-to (the Integer count))))
+      (let left = (the (seq:Seq Integer) (into (the (List Integer) xs))))
+      (let joined = (seq:conc left (seq:make count (+ count 1))))
+      (let expected = (<> xs (make-list count (+ count 1))))
+      (is (== (fold (fn (acc x) (Cons x acc)) Nil joined) (list:reverse expected)))
+      (is (== (foldr Cons Nil joined) expected)))
+    (iter:into-iter (make-list 1 32 33 1100))))
+
 (define-test library-conversions ()
   (is (== (the Integer (into (the Integer 42))) 42))
   (is (== (the UFix (into (the UFix 42))) 42))
