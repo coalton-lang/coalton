@@ -24,6 +24,15 @@ later passes and Lisp compilers see simpler code.")
 
 (in-package #:coalton-impl/codegen/lawnmower)
 
+(defvar *loop-step-variables* nil
+  "Identifiers assigned by loop steps in the current lawnmower traversal.
+Binders have unique renamed identifiers, so retaining these names after leaving
+a loop is conservative. Reading one takes a snapshot, not an immutable alias.")
+
+(defun stable-alias-target-p (node)
+  (and (typep node '(or node-local-variable node-global-variable))
+       (not (member (node-variable-value node) *loop-step-variables* :test #'eq))))
+
 (defun identifiers-disjoint-p (left right)
   (declare (type parser:identifier-list left right)
            (values boolean &optional))
@@ -156,7 +165,7 @@ push OUTER-BRANCHES into the inner match branches."
            (values (or null node-local-variable node-global-variable) &optional))
   (let ((name (car binding))
         (expr (cdr binding)))
-    (when (and (typep expr '(or node-local-variable node-global-variable))
+    (when (and (stable-alias-target-p expr)
                (not (eq name (node-variable-value expr))))
       expr)))
 
@@ -743,7 +752,7 @@ Returns a status keyword and a replacement body. Status is one of:
        (values (copy-node expr (node-type node)) t))
 
       ;; (bind x y body[x]) -> body[y]
-      ((and (typep expr '(or node-local-variable node-global-variable))
+      ((and (stable-alias-target-p expr)
             (not (eq name (node-variable-value expr)))
             (alias-bind-safe-p name (node-variable-value expr) body))
        (values
@@ -878,11 +887,17 @@ Returns a status keyword and a replacement body. Status is one of:
   "Simplify administrative AST forms left behind by optimization passes."
   (declare (type node node)
            (values node boolean &optional))
-  (let ((changed? nil))
+  (let ((changed? nil)
+        (*loop-step-variables* nil))
     (values
      (traverse
       node
       (list
+       (action (:before node-for node)
+         (dolist (binding (node-for-bindings node))
+           (when (node-for-binding-step binding)
+             (pushnew (node-for-binding-name binding) *loop-step-variables* :test #'eq)))
+         (values))
        (action (:after node-let node)
          (multiple-value-bind (new-node new-changed?) (maybe-collapse-alias-let node)
            (when new-changed?

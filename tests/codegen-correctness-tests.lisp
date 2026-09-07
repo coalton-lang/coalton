@@ -73,3 +73,20 @@
       (codegen-test-eval "(first-arg (fail-argument) (observe 2) (observe 3))"))
     (is (null *codegen-events*))))
 
+(deftest codegen-loop-snapshots-survive-updates ()
+  (with-codegen-test-environment
+    (dolist (loop-name '("for" "for*"))
+      (dolist (binding '("(let ((snapshot i)) BODY)"
+                        "(progn (let snapshot = i) BODY)"
+                        "(match i (snapshot BODY))"))
+        (let* ((save "(coalton/cell:write! saved
+                       (Cons (fn () snapshot) (coalton/cell:read saved)))")
+               (body (concatenate 'string (subseq binding 0 (search "BODY" binding))
+                                  save (subseq binding (+ 4 (search "BODY" binding)))))
+               (functions (codegen-test-eval
+                           (format nil
+                            "(let ((saved (coalton/cell:new Nil)))
+                               (~A ((i (the Integer 0) (+ i 1))) :repeat 3 ~A)
+                               (coalton/cell:read saved))" loop-name body))))
+          (is (equal '(2 1 0) (mapcar #'funcall functions))))))))
+
