@@ -155,6 +155,23 @@
           (the ra:RealAlgebraic (fromInt -3))))
   (is (== (^ root33 5) n33)))
 
+(define-test realalgebraic-radical-interval-selection-test ()
+  (let x = (unwrap-ok (ra:root (make-list 1 -3 2 0) 3/2 5/2)))
+  (is (== (math:sqrt x) sqrt2))
+  (is (== (^ (math:nth-root 3 x) 3) 2))
+  (let negative = (unwrap-ok (ra:root (make-list 1 3 2 0) -5/2 -3/2)))
+  (is (< (math:nth-root 3 negative) 0))
+  (is (== (^ (math:nth-root 3 negative) 3) -2))
+  (is (== (ra::coefficients (ra::poly-compose-nth-power (ra::make-poly (make-list 2 -3 1)) 3))
+          (make-list 2 0 0 -3 0 0 1)))
+  ;; High index exercises selection without any algebraic power/resultant.
+  (let r = (math:nth-root 101 (the ra:RealAlgebraic 2)))
+  (match (ra:isolating-interval r)
+    ((Tuple lo hi)
+     (is (> lo 0))
+     (is (< (^ lo 101) 2))
+     (is (> (^ hi 101) 2)))))
+
 (define-test realalgebraic-radical-domain-test ()
   (is (lisp (-> Boolean) ()
         (cl:handler-case

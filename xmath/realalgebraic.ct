@@ -1768,48 +1768,52 @@ reciprocal at the selected root even when the origin polynomial is reducible."
         (poly-frac-pow-mod (.ra-coordinate x) n (poly-int->frac (.origin-poly (.ra-origin x))))))))
   (declare poly-compose-nth-power (Poly Integer * Integer -> Poly Integer))
   (define (poly-compose-nth-power p n)
-    "Return q(y) = p(y^n) for integer polynomial `p` and `n > 0`."
-    (if (<= n 0)
-        (error "Internal error: expected positive nth-root index.")
-        (match (poly-trim-desc p)
-          ((Poly coeffs)
-           (poly-trim-desc
-            (rec go ((rest coeffs)
-                     (acc poly-int-zero)
-                     (yn (poly-int-monomial 1 n)))
-              (match rest
-                ((Nil) acc)
-                ((Cons c more)
-                 (go more
-                     (poly-int-add (poly-int-mul acc yn)
-                                    (zconst c))
-                     yn)))))))))
+    "Construct p(t^n) by inserting zeros, in time linear in the output length."
+    (when (<= n 0) (error "Internal error: expected positive nth-root index."))
+    (let padding = (to-ufix (- n 1)))
+    (Poly
+     (rec go ((cs (coefficients (poly-trim-desc p))) (acc Nil))
+       (match cs
+         ((Nil) (coalton/list:reverse acc))
+         ((Cons c more)
+          (match more
+            ((Nil) (coalton/list:reverse (Cons c acc)))
+            (_ (go more (rec pad ((k padding) (out (Cons c acc)))
+                          (if (== k 0) out (pad (- k 1) (Cons 0 out))))))))))))
+
+  (declare nth-root-candidate (Integer * RealAlgebraic * RealAlgebraic -> Optional RealAlgebraic))
+  (define (nth-root-candidate n x candidate)
+    "Select a root of p(t^n) by monotone rational interval powering.
+
+Its nth power is already known to be a root of p. Inclusion in x's isolating
+interval therefore proves equality; disjointness disproves it. Since p is
+nonzero at x's endpoints, refinement terminates for every candidate."
+    (let even = (== (rem n 2) 0))
+    (rec go ((r candidate))
+      (cond
+        ((and even (or (<= (upper-bound r) 0) (zero-ra? r))) None)
+        ((and even (< (lower-bound r) 0)) (go (refine-native r)))
+        (True
+         (let (Tuple lo hi) = (interval-power n r))
+         (cond
+           ((or (<= hi (lower-bound x)) (>= lo (upper-bound x))) None)
+           ((and (>= lo (lower-bound x)) (<= hi (upper-bound x))) (Some r))
+           (True (go (refine-native r))))))))
 
   (declare nth-root-certified-positive-index (Integer * RealAlgebraic -> RealAlgebraic))
   (define (nth-root-certified-positive-index n x)
-    "Certified real nth-root for `n > 0` on a domain where a real root exists.
-
-For even `n`, this selects the principal (nonnegative) root."
+    "Select the real nth root, principal and nonnegative for even indices."
     (let p = (poly-compose-nth-power (defining-polynomial x) n))
     (match (real-roots (coefficients p))
-      ((Err _)
-       (error "Internal error: failed to isolate real roots for nth-root."))
+      ((Err msg) (error msg))
       ((Ok roots)
        (rec pick ((rs roots))
          (match rs
-           ((Nil)
-           (error "Internal error: no compatible nth-root candidate found."))
+           ((Nil) (error "Internal error: no compatible nth-root candidate found."))
            ((Cons r more)
-            (if (and (match (compare-certified (pow-ra-positive n r) x)
-                       ((EQ) True)
-                       (_ False))
-                     (or (== (rem n 2) 1)
-                         (match (compare-certified r (from-integer 0))
-                           ((LT) False)
-                           (_ True))))
-                r
-                (pick more))))))))
-
+            (match (nth-root-candidate n x r)
+              ((Some result) result)
+              ((None) (pick more)))))))))
   (declare isolating-interval (RealAlgebraic -> (Tuple Fraction Fraction)))
   (define (isolating-interval x)
     "Return the current rational isolating interval `(lo, hi)` for `x`."
