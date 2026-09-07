@@ -386,17 +386,18 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
        (Poly (map fromInt coeffs)))))
 
   (declare poly-frac-clear-denominators (Poly Fraction -> Poly Integer))
+  (declare poly-frac-denominator (Poly Fraction -> Integer))
+  (define (poly-frac-denominator p)
+    (rec go ((cs (coefficients p)) (acc 1))
+      (match cs
+        ((Nil) acc)
+        ((Cons c more) (go more (lcm acc (denominator c)))))))
+
   (define (poly-frac-clear-denominators p)
     "Multiply by lcm of denominators to recover integer coefficients."
     (let p0 = (poly-frac-trim p))
     (let coeffs = (coefficients p0))
-    (let lden =
-      (rec gather ((rest coeffs)
-                   (acc 1))
-        (match rest
-          ((Nil) acc)
-          ((Cons c more)
-           (gather more (lcm acc (denominator c)))))))
+    (let lden = (poly-frac-denominator p0))
     (poly-trim-desc
      (Poly
       (rec scale ((rest coeffs)
@@ -989,13 +990,15 @@ The gcd and its Sturm sequence are computed once and reused across refinements."
         (rec go ((result poly-int-one)
                  (base (poly-trim-desc p))
                  (e exponent))
-          (if (== e 0)
-              (poly-trim-desc result)
-              (go (if (== (rem e 2) 1)
+          (cond
+            ((== e 0) (poly-trim-desc result))
+            ((== e 1) (poly-int-mul result base))
+            (True
+             (go (if (== (rem e 2) 1)
                       (poly-int-mul result base)
                       result)
                   (poly-int-mul base base)
-                  (quot e 2))))))
+                  (quot e 2)))))))
 
   (declare poly-int-div-exact (Poly Integer * Poly Integer -> Poly Integer))
   (define (poly-int-div-exact a b)
@@ -1541,11 +1544,10 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
   (declare mul-certified (RealAlgebraic * RealAlgebraic -> RealAlgebraic))
   (define (mul-certified x y)
     "Certified multiplication."
-    (select-operation-root (poly-for-prod x y)
-                            (fn (a b)
-                              (Some (interval-prod a b)))
-                            x
-                            y))
+    (if (lisp (-> Boolean) (x y) (cl:eq x y))
+        (pow-ra-positive 2 x)
+        (select-operation-root (poly-for-prod x y)
+                               (fn (a b) (Some (interval-prod a b))) x y)))
 
   (declare div-certified (RealAlgebraic * RealAlgebraic -> RealAlgebraic))
   (define (div-certified x y)
@@ -1567,22 +1569,74 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
                                   one
                                   x))))
 
-  (declare pow-ra-positive (Integer * RealAlgebraic -> RealAlgebraic))
-  (define (pow-ra-positive n x)
-    "Raise `x` to a nonnegative integer power exactly."
-    (if (negative? n)
-        (error "Internal error: expected nonnegative exponent.")
-        (rec go ((result (from-integer 1))
-                 (base x)
-                 (e n))
-          (if (== e 0)
-              result
-              (go (if (== (rem e 2) 1)
-                      (mul-certified result base)
-                      result)
-                  (mul-certified base base)
-                  (quot e 2))))))
+  (declare poly-frac-mul (Poly Fraction * Poly Fraction -> Poly Fraction))
+  (define (poly-frac-mul a b)
+    "Multiply using integer convolution and one shared denominator."
+    (poly-frac-scale (mkFraction 1 (* (poly-frac-denominator a) (poly-frac-denominator b)))
+                     (poly-int->frac (poly-int-mul (poly-frac-clear-denominators a)
+                                                  (poly-frac-clear-denominators b)))))
 
+  (declare poly-frac-pow-mod (Poly Fraction * Integer * Poly Fraction -> Poly Fraction))
+  (define (poly-frac-pow-mod x n modulus)
+    "Power in Q[t]/(modulus); all reduced intermediates have degree < deg(modulus)."
+    (rec go ((result (poly-int->frac poly-int-one))
+             (base (poly-frac-rem x modulus)) (e n))
+      (cond
+        ((== e 0) result)
+        ((== e 1) (poly-frac-rem (poly-frac-mul result base) modulus))
+        (True
+         (go (if (== (rem e 2) 1)
+                 (poly-frac-rem (poly-frac-mul result base) modulus)
+                 result)
+             (poly-frac-rem (poly-frac-mul base base) modulus)
+             (quot e 2))))))
+
+  (declare poly-for-image (Poly Integer * Poly Fraction -> Poly Integer))
+  (define (poly-for-image p value)
+    "Eliminate t from p(t)=0, den*z-num(t)=0. Degree in z is at most deg(p)."
+    (let den = (poly-frac-denominator value))
+    (let num = (poly-frac-clear-denominators value))
+    (resultant-tpoly (int-poly->tpoly p)
+                    (tpoly-sub (tpoly-monomial (poly-int-monomial den 1) 0)
+                               (int-poly->tpoly num))))
+
+  (declare interval-power (Integer * RealAlgebraic -> Tuple Fraction Fraction))
+  (define (interval-power n x)
+    "Enclose a positive integer power, preserving dependence on the one operand."
+    (let lo = (lower-bound x))
+    (let hi = (upper-bound x))
+    (let a = (^ lo n))
+    (let b = (^ hi n))
+    (if (== (rem n 2) 1)
+        (Tuple a b)
+        (Tuple (if (and (<= lo 0) (>= hi 0)) 0 (min a b)) (max a b))))
+
+  (declare pow-ra-positive (Integer * RealAlgebraic -> RealAlgebraic))
+  (declare select-unary-root (Poly Integer * (RealAlgebraic -> Tuple Fraction Fraction)
+                                          * RealAlgebraic -> RealAlgebraic))
+  (define (select-unary-root raw-poly interval-fn x)
+    "Certify a unary image using only refinements of its one operand."
+    (match (poly-int-squarefree-primitive raw-poly)
+      ((Err msg) (error msg))
+      ((Ok p)
+       (let sturm = (sturm-sequence-desc p))
+       (rec go ((a x))
+         (let (Tuple lo hi) = (interval-fn a))
+         (match (make-realalgebraic-certified p sturm lo hi)
+           ((Ok result) result)
+           ((Err _) (go (refine-native a))))))))
+
+  (define (pow-ra-positive n x)
+    "Exact unary power whose defining degree cannot exceed that of x."
+    (cond
+      ((< n 0) (error "Negative algebraic exponent requires ^^."))
+      ((== n 0) (from-integer 1))
+      ((== n 1) x)
+      ((zero-ra? x) (from-integer 0))
+      (True
+       (let p = (defining-polynomial x))
+       (let value = (poly-frac-pow-mod (Poly (make-list 1 0)) n (poly-int->frac p)))
+       (select-unary-root (poly-for-image p value) (fn (a) (interval-power n a)) x))))
   (declare poly-compose-nth-power (Poly Integer * Integer -> Poly Integer))
   (define (poly-compose-nth-power p n)
     "Return q(y) = p(y^n) for integer polynomial `p` and `n > 0`."
@@ -1965,5 +2019,32 @@ No rationality decision or coefficient-dependent precision is needed."
     (define (real-approx bits x)
       (approx bits x))))
 
+;; Specializations cover every built-in Integral exponent type. The generic
+;; Num exponentiation would multiply independent conjugates at each step.
+(cl:defmacro define-algebraic-powers (type)
+  (cl:let ((positive (cl:intern (cl:format cl:nil "POWER-~A" type)))
+           (signed (cl:intern (cl:format cl:nil "SIGNED-POWER-~A" type))))
+    `(coalton-toplevel
+       (declare ,positive (RealAlgebraic * ,type -> RealAlgebraic))
+       (define (,positive x n) (pow-ra-positive (toInteger n) x))
+       (specialize ^ ,positive (RealAlgebraic * ,type -> RealAlgebraic))
+       (declare ,signed (RealAlgebraic * ,type -> RealAlgebraic))
+       (define (,signed x n)
+         (let exponent = (toInteger n))
+         (if (< exponent 0)
+             (reciprocal-certified (pow-ra-positive (negate exponent) x))
+             (pow-ra-positive exponent x)))
+       (specialize ^^ ,signed (RealAlgebraic * ,type -> RealAlgebraic)))))
+
+(define-algebraic-powers Integer)
+(define-algebraic-powers UFix)
+(define-algebraic-powers IFix)
+(define-algebraic-powers U8)
+(define-algebraic-powers U32)
+(define-algebraic-powers U64)
+(define-algebraic-powers I8)
+(define-algebraic-powers I32)
+(define-algebraic-powers I64)
+(define-algebraic-powers Bit)
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/XMATH/REALALGEBRAIC")
