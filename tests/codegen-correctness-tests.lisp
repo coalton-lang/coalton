@@ -90,3 +90,16 @@
                                (coalton/cell:read saved))" loop-name body))))
           (is (equal '(2 1 0) (mapcar #'funcall functions))))))))
 
+(deftest codegen-retains-functions-imported-by-lisp ()
+  (with-codegen-test-environment
+    (is (= 4 (codegen-test-eval
+              "(let ((f (fn (x) (+ x (the Integer 1)))))
+                 (f 2)
+                 (lisp (-> Integer) (f) (cl:funcall f 3)))")))
+    (let ((function (codegen-test-eval
+                     "(let ((f (fn (x) (+ x (the Integer 1)))))
+                        (f 2)
+                        (fn () (lisp (-> Integer) (f) (cl:funcall f 4))))")))
+      (is (= 5 (funcall function)))
+      (is (= 5 (funcall function))))))
+
