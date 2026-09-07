@@ -595,7 +595,11 @@
     (is (typep call '(or ast:node-let
                          ast:node-application
                          ast:node-direct-application)))
-    (is (typep (unwrap-inline-lisp-node call) 'ast:node-lisp))))
+    ;; Read the initialized function binding. Copying its Lisp initializer
+    ;; into the call would evaluate that initializer again on every call.
+    (let ((target (unwrap-inline-lisp-node call)))
+      (is (typep target 'ast:node-global-variable))
+      (is (tc:function-type-p (ast:node-type target))))))
 
 (deftest recursive-inline-test ()
   (check-coalton-types

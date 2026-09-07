@@ -161,3 +161,33 @@
           ((Stop) (observe 9)))"))
     (is (null *codegen-events*))))
 
+(deftest codegen-class-constants-initialize-once ()
+  (with-codegen-test-environment
+    (codegen-test-event-recorder)
+    (codegen-test-compile
+     "(define-class (Stamp :a) (stamp :a))
+      (define-instance (Stamp Integer) (define stamp (observe 9)))
+      (define-class (Counter :a) (counter (coalton/cell:Cell :a)))
+      (define-instance (Counter Integer) (define counter (coalton/cell:new 0)))")
+    (is (equal '(9) *codegen-events*))
+    (setf *codegen-events* nil)
+    (codegen-test-compile
+     "(declare get-stamp (Void -> Integer))
+      (define (get-stamp) stamp)
+      (declare get-counter (Void -> coalton/cell:Cell Integer))
+      (define (get-counter) counter)")
+    (is (= 9 (codegen-test-eval "(get-stamp)")))
+    (is (= 9 (codegen-test-eval "(get-stamp)")))
+    (is (null *codegen-events*))
+    (codegen-test-compile
+     "(define-class (Callback :a) (callback (Void -> :a)))
+      (define-instance (Callback Integer)
+        (define callback (match (observe 7) (_ (fn () 42)))))")
+    (is (equal '(7) *codegen-events*))
+    (setf *codegen-events* nil)
+    (is (= 42 (codegen-test-eval "(the Integer (callback))")))
+    (is (= 42 (codegen-test-eval "(the Integer (callback))")))
+    (is (null *codegen-events*))
+    (codegen-test-eval "(coalton/cell:write! (get-counter) 42)")
+    (is (= 42 (codegen-test-eval "(coalton/cell:read (get-counter))")))))
+

@@ -377,8 +377,9 @@ is appropriate."
       ;; plain values, not as nullary function entries.
       ((and code (not (ast:node-abstraction-p code)))
        (if (tc:function-type-p (ast:node-type code))
-           (make-nullary-call code)
-           code))
+           (make-nullary-call
+            (ast:make-node-global-variable :type (ast:node-type code) :value method-name))
+           (ast:make-node-global-variable :type result-type :value method-name)))
 
       (t
        (make-nullary-call
