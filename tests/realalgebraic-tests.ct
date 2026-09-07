@@ -109,6 +109,13 @@
   (let doubled = (+ sqrt2 sqrt2))
   (is (== (/ doubled doubled) 1))
   (is (== (* (math:reciprocal doubled) doubled) 1))
+  ;; Separate origins force the general quotient resultant, so identity
+  ;; shortcuts cannot hide a spurious common t factor in its inputs.
+  (let numerator = (unwrap-ok (ra:root (make-list 1 0 -2 0) 1 2)))
+  (let denominator = (unwrap-ok (ra:root (make-list 1 0 -3 0) 1 2)))
+  (let quotient = (/ numerator denominator))
+  (is (> quotient 0))
+  (is (== (^ quotient 2) (the ra:RealAlgebraic (into 2/3))))
   (is (lisp (-> Boolean) ()
         (cl:handler-case
             (cl:progn
@@ -127,9 +134,8 @@
 (define-test realalgebraic-exact-cancellation-test ()
   ;; Exact identity (base form):
   ;;   (sqrt(2) + sqrt(3))^2 = 5 + 2*sqrt(6)
-  ;; This directly implies the larger example
-  ;;   (sqrt(2) + sqrt(3))^40 = (5 + 2*sqrt(6))^20
-  ;; while keeping the unit test fast.
+  ;; The full fortieth-power identity is also tested below in
+  ;; realalgebraic-unary-power-degree-test.
   (let lhs =
     (^ (+ (math:sqrt (the ra:RealAlgebraic (fromInt 2)))
           (math:sqrt (the ra:RealAlgebraic (fromInt 3))))
@@ -452,6 +458,60 @@
                    (and (== (ra::coefficients (ra::poly-int-positive-rem a b)) (ra::coefficients expected-rem))
                         (== (ra::coefficients (ra::poly-int-gcd a b)) (ra::coefficients expected-gcd))
                         (go next (+ i 1))))))))))))
+
+(define-test realalgebraic-bareiss-independent-oracle-test ()
+  ;; A determinant of an n-by-n matrix of quadratics has degree <= 2n.
+  ;; Equality at 2n+1 distinct integers therefore proves equality of the
+  ;; entire polynomial, not just agreement of numerical approximations.
+  (is
+   (lisp (-> Boolean) ()
+     (cl:labels
+         ((eval-coeffs (cs z)
+            (cl:reduce (cl:lambda (acc c) (cl:+ (cl:* acc z) c)) cs :initial-value 0))
+          (rational-det (matrix n)
+            ;; Independent Gaussian elimination over Q, including row swaps.
+            (cl:let ((m (cl:copy-seq matrix)) (det 1))
+              (cl:dotimes (k n det)
+                (cl:let ((row (cl:loop for i from k below n
+                                      when (cl:not (cl:zerop (cl:aref m (cl:+ (cl:* i n) k))))
+                                        return i)))
+                  (cl:unless row (cl:return-from rational-det 0))
+                  (cl:unless (cl:= row k)
+                    (cl:dotimes (j n)
+                      (cl:rotatef (cl:aref m (cl:+ (cl:* k n) j))
+                                  (cl:aref m (cl:+ (cl:* row n) j))))
+                    (cl:setf det (cl:- det)))
+                  (cl:let ((pivot (cl:aref m (cl:+ (cl:* k n) k))))
+                    (cl:setf det (cl:* det pivot))
+                    (cl:loop for i from (cl:1+ k) below n
+                             for factor = (cl:/ (cl:aref m (cl:+ (cl:* i n) k)) pivot)
+                             do (cl:loop for j from (cl:1+ k) below n
+                                         do (cl:decf (cl:aref m (cl:+ (cl:* i n) j))
+                                                     (cl:* factor (cl:aref m (cl:+ (cl:* k n) j))))))))))))
+       (cl:let ((seed 92731))
+         (cl:labels ((next-int ()
+                       (cl:setf seed (cl:mod (cl:+ (cl:* seed 1664525) 1013904223) (cl:expt 2 32)))
+                       (cl:- (cl:mod seed 7) 3)))
+           (cl:loop for n from 2 to 6 do
+             (cl:dotimes (trial 6)
+               (cl:let ((cs (cl:make-array (cl:* n n)))
+                        (ps (cl:make-array (cl:* n n))))
+                 (cl:dotimes (i (cl:* n n))
+                   (cl:setf (cl:aref cs i) (cl:list (next-int) (next-int) (next-int))))
+                 ;; Force zero pivots and singular matrices as well.
+                 (cl:when (cl:evenp trial) (cl:setf (cl:aref cs 0) '(0)))
+                 (cl:when (cl:= trial 5)
+                   (cl:dotimes (j n)
+                     (cl:setf (cl:aref cs (cl:+ (cl:* (cl:1- n) n) j)) (cl:aref cs j))))
+                 (cl:dotimes (i (cl:* n n))
+                   (cl:setf (cl:aref ps i) (ra::make-poly (cl:aref cs i))))
+                 (cl:let ((actual (ra::coefficients (ra::bareiss-det-zpoly-arr n ps))))
+                   (cl:assert (cl:<= (cl:1- (cl:length actual)) (cl:* 2 n)))
+                   (cl:loop for z from (cl:- n) to n do
+                     (cl:assert
+                      (cl:= (eval-coeffs actual z)
+                            (rational-det (cl:map 'cl:vector (cl:lambda (c) (eval-coeffs c z)) cs) n)))))))))
+         cl:t)))))
 
 (define-test realalgebraic-affine-and-reciprocal-test ()
   (let translated = (+ (* 2 sqrt2) 3))

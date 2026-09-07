@@ -1,9 +1,13 @@
+;;; See docs/internals/realalgebraic.md for correctness arguments,
+;;; algorithmic complexity, and benchmark results.
+
 (coalton/utils:defstdlib-package #:coalton/xmath/realalgebraic
   (:documentation "Certified real algebraic numbers.
 
 A real algebraic number is represented as a square-free primitive polynomial
 over Z together with a rational isolating interval certified by Sturm's
-theorem. Arithmetic is implemented via resultant-based elimination, and all
+theorem. Arithmetic uses exact polynomial transformations and resultant
+elimination, retaining shared generators to control degree growth. All
 operations (construction, comparison, root selection) are exact.
 
 Construct values with `root` (single root from polynomial + interval),
@@ -47,8 +51,10 @@ provided: Eq, Ord, Num, Reciprocable, Radical, Quantizable, and Real.")
 ;;;    root selection) are certified by exact polynomial arithmetic together
 ;;;    with Sturm root counting.
 ;;;
-;;; 3. Arithmetic (+, -, *, /) is implemented via elimination (resultants).
-;;;    Interval arithmetic + refinement then chooses the correct conjugate.
+;;; 3. Rational affine maps and reciprocals transform certificates directly.
+;;;    Shared generators retain polynomial coordinates in Q[t]/(p), which
+;;;    bounds image degrees by deg(p). Independent generators use resultants.
+;;;    Sound interval arithmetic + refinement selects the correct conjugate.
 
 (coalton-toplevel
   (define-type (Poly :t)
@@ -77,7 +83,10 @@ provided: Eq, Ord, Num, Reciprocable, Radical, Quantizable, and Real.")
 
 `poly` is a square-free primitive defining polynomial in descending degree
 order. `(lo, hi)` is a rational open interval that isolates exactly one real
-root of `poly`. `sturm` caches a Sturm sequence for `poly`."
+root of `poly`, with neither endpoint a root. `sturm` caches a Sturm sequence
+for `poly`. The origin and coordinate preserve dependence between values
+derived from the same selected generator; defining polynomials need not be
+irreducible or minimal."
     (ra-poly "Defining polynomial." (Poly Integer))
     (ra-lo "Lower endpoint of isolating interval." Fraction)
     (ra-hi "Upper endpoint of isolating interval." Fraction)
@@ -1271,7 +1280,8 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
                                               pow))))))))))
 
   ;; ------------------------------------------------------------------
-  ;; Array-based Bareiss determinant (O(n^3) vs O(n^4) list-of-lists)
+  ;; Array-based Bareiss determinant: O(n^3) ring operations. Polynomial
+  ;; degrees and integer coefficient sizes determine their bit costs.
   ;; ------------------------------------------------------------------
 
   (declare arr-get (array:LispArray (Poly Integer) * UFix * UFix * UFix -> Poly Integer))
@@ -2036,7 +2046,7 @@ certifies it. This also handles polynomials with an irrelevant zero root."
            None))))
   (declare rational? (RealAlgebraic -> Boolean))
   (define (rational? x)
-    "Return `True` when `x` is rational, decided by the rational root theorem."
+    "Decide rationality by denominator-bounded continued-fraction reconstruction."
     (match (rational-certificate x)
       ((Some _) True)
       ((None) False)))
@@ -2045,7 +2055,7 @@ certifies it. This also handles polynomials with an irrelevant zero root."
   (define (try-fraction x)
     "Attempt to extract an exact rational value for `x`.
 
-Returns `None` when `x` is not known to be rational."
+Returns `None` exactly when `x` is irrational."
     (match (rational-certificate x)
       ((Some q) (Some q))
       ((None) None)))
@@ -2153,7 +2163,8 @@ No rationality decision or coefficient-dependent precision is needed."
       (approx bits x))))
 
 ;; Specializations cover every built-in Integral exponent type. The generic
-;; Num exponentiation would multiply independent conjugates at each step.
+;; Num algorithm would repeatedly rebuild certificates; these wrappers reduce
+;; the power in one quotient algebra and certify its final image once.
 (cl:defmacro define-algebraic-powers (type)
   (cl:let ((positive (cl:intern (cl:format cl:nil "POWER-~A" type)))
            (signed (cl:intern (cl:format cl:nil "SIGNED-POWER-~A" type))))
