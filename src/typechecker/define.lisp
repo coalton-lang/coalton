@@ -3915,6 +3915,51 @@ fall back to invariant, which is conservative."
              :collect weak-var)
      :test #'tc:ty=)))
 
+(defun generalizable-type-variables (local-tvars weak-tvars expr-tys retained-preds subs env)
+  "Return local variables allowed by the relaxed value restriction after SUBS.
+
+Weak variables with non-covariant occurrences or retained constraints must stay
+monomorphic. Callers separately enforce the monomorphism restriction and decide
+whether the binding permits generalization at all."
+  (declare (type tc:tyvar-list local-tvars weak-tvars)
+           (type tc:ty-list expr-tys)
+           (type tc:ty-predicate-list retained-preds)
+           (type tc:substitution-list subs)
+           (type tc:environment env)
+           (values tc:tyvar-list &optional))
+  (set-difference
+   (tc:type-variables (tc:apply-substitution subs local-tvars))
+   (blocked-weak-type-variables
+    (remove-if-not #'tc:tyvar-p (tc:apply-substitution subs weak-tvars))
+    (tc:apply-substitution subs expr-tys)
+    (tc:apply-substitution subs retained-preds)
+    env)
+   :test #'tc:ty=))
+
+(defun default-builder-context (deferred-preds retained-preds subs env)
+  "Default builder representations and reduce the resulting binding constraints.
+
+Element constraints remain available for the caller's generalization and
+defaulting policy. Both ordinary bindings and dynamic rebinding use this step."
+  (declare (type tc:ty-predicate-list deferred-preds retained-preds)
+           (type tc:substitution-list subs)
+           (type tc:environment env)
+           (values tc:ty-predicate-list tc:ty-predicate-list tc:substitution-list &optional))
+  (let ((coalton-impl/typechecker/context-reduction:*builder-class-cache* nil))
+    (setf subs (tc:compose-substitution-lists
+                (tc:default-builder-subs env nil (append deferred-preds retained-preds))
+                subs))
+    ;; Defaulting a collection determines its builder state through fundeps.
+    ;; Solve them before expanding predicates against concrete instances.
+    (setf subs (nth-value 1 (tc:solve-fundeps env (append deferred-preds retained-preds) subs)))
+    (setf deferred-preds
+          (tc:expand-defaulted-builder-preds env (tc:apply-substitution subs deferred-preds)))
+    (setf retained-preds
+          (tc:expand-defaulted-builder-preds env (tc:apply-substitution subs retained-preds))))
+  (values (tc:reduce-context env deferred-preds nil)
+          (tc:reduce-context env retained-preds nil)
+          subs))
+
 (defun error-non-generalizable-binding (binding scheme)
   "Signal a user-facing error for a top-level weak (non-generalizable) type.
 
@@ -4421,16 +4466,12 @@ as a recursive function rather than a recursive value."
                (generalizable-tvars
                  (if expr-preds
                      local-tvars
-                     (set-difference
+                     (generalizable-type-variables
                       local-tvars
-                      (blocked-weak-type-variables
-                       (weak-binding-type-variables (list binding)
-                                                    (list expr-type)
-                                                    (tc-env-env env))
-                       (list expr-type)
-                       expr-preds
-                       (tc-env-env env))
-                      :test #'tc:ty=)))
+                      (weak-binding-type-variables (list binding)
+                                                   (list expr-type)
+                                                   (tc-env-env env))
+                      (list expr-type) expr-preds nil (tc-env-env env))))
                (ordered-explicit-tvars
                  (mapcar (lambda (declared-tvar)
                            (tc:apply-substitution subs declared-tvar))
@@ -4674,47 +4715,13 @@ value-restriction and variance logic used for implicit bindings."
                             (tc:default-subs (tc-env-env env) nil defaultable-preds)
                             subs))
 
-                (let ((coalton-impl/typechecker/context-reduction:*builder-class-cache* nil))
-                  (setf subs (tc:compose-substitution-lists
-                              (tc:default-builder-subs (tc-env-env env)
-                                                       nil
-                                                       (append deferred-preds retained-preds))
-                              subs))
-                  (setf subs (nth-value 1
-                                        (tc:solve-fundeps (tc-env-env env)
-                                                          (append deferred-preds retained-preds)
-                                                          subs)))
-                  (setf deferred-preds
-                        (tc:expand-defaulted-builder-preds
-                         (tc-env-env env)
-                         (tc:apply-substitution subs deferred-preds)))
-                  (setf retained-preds
-                        (tc:expand-defaulted-builder-preds
-                         (tc-env-env env)
-                         (tc:apply-substitution subs retained-preds))))
-
-                (setf deferred-preds (tc:reduce-context (tc-env-env env) deferred-preds nil))
-                (setf retained-preds (tc:reduce-context (tc-env-env env) retained-preds nil))
+                (multiple-value-setq (deferred-preds retained-preds subs)
+                  (default-builder-context deferred-preds retained-preds subs (tc-env-env env)))
                 (setf expr-ty (tc:apply-substitution subs expr-ty))
 
-                (let* ((generalizable-candidates
-                         (remove-if-not
-                          #'tc:tyvar-p
-                          (tc:type-variables (tc:apply-substitution subs local-tvars))))
-                       (blocked-weak-tvars
-                         (intersection
-                          (blocked-weak-type-variables
-                           (remove-if-not #'tc:tyvar-p
-                                          (tc:apply-substitution subs weak-tvars))
-                           (list (tc:apply-substitution subs expr-ty))
-                           (tc:apply-substitution subs retained-preds)
-                           (tc-env-env env))
-                          generalizable-candidates
-                          :test #'tc:ty=))
-                       (generalizable-tvars
-                         (set-difference generalizable-candidates
-                                         blocked-weak-tvars
-                                         :test #'tc:ty=))
+                (let* ((generalizable-tvars
+                         (generalizable-type-variables
+                          local-tvars weak-tvars (list expr-ty) retained-preds subs (tc-env-env env)))
                        (output-qual-type
                          (if restricted
                              (tc:apply-substitution
@@ -5054,35 +5061,8 @@ as a recursive function rather than a recursive value."
                         (tc:default-subs (tc-env-env env) nil defaultable-preds)
                         subs))
 
-            ;; Builder syntax should default its collection representation
-            ;; even in unrestricted bindings, leaving element predicates alone.
-            (let ((coalton-impl/typechecker/context-reduction:*builder-class-cache* nil))
-              (setf subs (tc:compose-substitution-lists
-                          (tc:default-builder-subs (tc-env-env env)
-                                                   nil
-                                                   (append deferred-preds retained-preds))
-                          subs))
-
-              ;; Once the collection/association type defaults, builder-state
-              ;; variables become determined by the builder class functional
-              ;; dependencies. Solve them before we expand the predicates
-              ;; against concrete instances.
-              (setf subs (nth-value 1
-                                    (tc:solve-fundeps (tc-env-env env)
-                                                      (append deferred-preds retained-preds)
-                                                      subs)))
-
-              (setf deferred-preds
-                    (tc:expand-defaulted-builder-preds
-                     (tc-env-env env)
-                     (tc:apply-substitution subs deferred-preds)))
-              (setf retained-preds
-                    (tc:expand-defaulted-builder-preds
-                     (tc-env-env env)
-                     (tc:apply-substitution subs retained-preds))))
-
-            (setf deferred-preds (tc:reduce-context (tc-env-env env) deferred-preds nil))
-            (setf retained-preds (tc:reduce-context (tc-env-env env) retained-preds nil))
+            (multiple-value-setq (deferred-preds retained-preds subs)
+              (default-builder-context deferred-preds retained-preds subs (tc-env-env env)))
             (setf expr-tys (tc:apply-substitution subs expr-tys))
 
             (when (parser:binding-toplevel-p (first bindings))
@@ -5100,28 +5080,10 @@ as a recursive function rather than a recursive value."
               (setf retained-preds (tc:reduce-context (tc-env-env env) retained-preds subs))
               (setf expr-tys (tc:apply-substitution subs expr-tys)))
 
-            (let* ((generalizable-candidates
-                     (remove-if-not
-                      #'tc:tyvar-p
-                      (tc:type-variables (tc:apply-substitution subs local-tvars))))
-                   (blocked-weak-tvars
-                     (intersection
-                      (blocked-weak-type-variables
-                       (remove-if-not #'tc:tyvar-p
-                                      (tc:apply-substitution subs weak-tvars))
-                       (tc:apply-substitution subs expr-tys)
-                       (tc:apply-substitution subs retained-preds)
-                       (tc-env-env env))
-                      generalizable-candidates
-                      :test #'tc:ty=))
-                   (generalizable-tvars
-                     (and generalize
-                          (set-difference
-                           generalizable-candidates
-                           ;; Weak variables with non-covariant occurrences remain
-                           ;; monomorphic placeholders until solved.
-                           blocked-weak-tvars
-                           :test #'tc:ty=))))
+            (let ((generalizable-tvars
+                    (and generalize
+                         (generalizable-type-variables
+                          local-tvars weak-tvars expr-tys retained-preds subs (tc-env-env env)))))
 
               (if restricted
                   (let* ((allowed-tvars (set-difference generalizable-tvars

@@ -367,9 +367,12 @@
     (declare empty-value (Optional :a))
     (define empty-value (id None))
     (declare make-stash (Void -> coalton/cell:Cell (Optional :a)))
-    (define (make-stash) (coalton/cell:new None))"
+    (define (make-stash) (coalton/cell:new None))
+    (declare qualified-stash (Num :a => coalton/cell:Cell (Optional :a)))
+    (define qualified-stash (coalton/cell:new None))"
    '("empty-value" . "(Optional :a)")
-   '("make-stash" . "(Void -> coalton/cell:Cell (Optional :a))")))
+   '("make-stash" . "(Void -> coalton/cell:Cell (Optional :a))")
+   '("qualified-stash" . "(Num :a => coalton/cell:Cell (Optional :a))")))
 
 (deftest test-type-inference ()
   (check-coalton-types
@@ -1446,6 +1449,40 @@
       (define bad-id
         (dynamic-bind ((*id* ((fn (f) f) (fn (x) x))))
           (Tuple (*id* 1) (*id* True))))")))
+
+(deftest test-dynamic-binding-generalization ()
+  ;; Expansive covariant values can remain polymorphic during rebinding too.
+  (check-coalton-types
+   "(declare *empty* (Optional :a))
+    (define *empty* None)
+    (define use-empty
+      (dynamic-bind ((*empty* (id None)))
+        (Tuple (the (Optional Integer) *empty*) (the (Optional String) *empty*))))"
+   '("use-empty" . "(Tuple (Optional Integer) (Optional String))"))
+  (check-coalton-types
+   "(declare *forward* (forall ((:r Values)) ((Void -> :r) -> :r)))
+    (define *forward* (fn (f) (f)))
+    (define (use-forward)
+      (dynamic-bind ((*forward* (fn (f) (f))))
+        (*forward* (fn () (values)))
+        (*forward* (fn () True))
+        (*forward* (fn () (values (the Integer 42) True)))))"
+   '("use-forward" . "(Void -> Integer * Boolean)")))
+
+(deftest test-dynamic-binding-builders ()
+  ;; The declared collection determines both element types and builder state,
+  ;; for value initializers as well as function initializers.
+  (check-coalton-types
+   "(declare *items* (coalton/seq:Seq Integer))
+    (define *items* [1])
+    (declare *make-items* (Void -> coalton/seq:Seq Integer))
+    (define *make-items* (fn () [1]))
+    (define use-items
+      (dynamic-bind ((*items* [1 2])) *items*))
+    (define use-maker
+      (dynamic-bind ((*make-items* (fn () [1 2]))) (*make-items*)))"
+   '("use-items" . "(coalton/seq:Seq Integer)")
+   '("use-maker" . "(coalton/seq:Seq Integer)")))
 
 (deftest test-function-definition-shorthand ()
   (check-coalton-types
