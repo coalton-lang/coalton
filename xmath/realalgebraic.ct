@@ -474,6 +474,23 @@ then clearing denominators exactly."
       ((> x 0) 1)
       (True 0)))
 
+  (declare poly-sign-at (Poly Integer * Fraction -> Integer))
+  (define (poly-sign-at p x)
+    "Sign of p(u/v), evaluated as the integer v^degree*p(u/v), with v>0.
+
+Homogeneous Horner evaluation avoids rational normalization at every step."
+    (let u = (numerator x))
+    (let v = (denominator x))
+    (match (coefficients p)
+      ((Nil) 0)
+      ((Cons lead rest)
+       (rec go ((cs rest) (acc lead) (vp v))
+         (match cs
+           ((Nil)
+            (cond ((< acc 0) -1) ((> acc 0) 1) (True 0)))
+           ((Cons c more)
+            (go more (+ (* u acc) (* c vp)) (* v vp))))))))
+
   (declare poly-int-derivative (Poly Integer -> Poly Integer))
   (define (poly-int-derivative p)
     "Formal derivative in descending integer representation."
@@ -546,7 +563,7 @@ then clearing denominators exactly."
       (match rest
         ((Nil) count)
         ((Cons p more)
-         (let s = (fraction-signum (poly-eval-desc-fraction p x)))
+          (let s = (poly-sign-at p x))
          (if (== s 0)
              (go more prev count)
              (go more
@@ -565,7 +582,7 @@ V(lo)-V(hi) counts (lo,hi]; subtract a root at hi to obtain (lo,hi)."
         0
         (- (- (sign-variations-at sturm lo)
               (sign-variations-at sturm hi))
-           (if (== (poly-eval-desc-fraction poly hi) 0) 1 0))))
+           (if (== (poly-sign-at poly hi) 0) 1 0))))
 
   (declare try-split-denominator (Poly Integer * Fraction * Fraction * Integer * Integer -> (Optional Fraction)))
   (define (try-split-denominator poly lo hi n i)
@@ -579,7 +596,7 @@ V(lo)-V(hi) counts (lo,hi]; subtract a root at hi to obtain (lo,hi)."
              (denom (fromInt n)))
          (let ((cand (/ (+ (* left-w lo) (* right-w hi)) denom)))
            (cond
-             ((/= (poly-eval-desc-fraction poly cand) 0)
+             ((/= (poly-sign-at poly cand) 0)
               (Some cand))
              (True
               (try-split-denominator poly lo hi n (+ i 1)))))))))
@@ -588,7 +605,7 @@ V(lo)-V(hi) counts (lo,hi]; subtract a root at hi to obtain (lo,hi)."
   (define (find-nonroot-split poly lo hi)
     "Choose a split point in `(lo, hi)` where `poly` is provably nonzero."
     (let mid = (/ (+ lo hi) 2))
-    (if (/= (poly-eval-desc-fraction poly mid) 0)
+    (if (/= (poly-sign-at poly mid) 0)
         mid
         (rec outer ((n 3))
           (match (try-split-denominator poly lo hi n 1)
@@ -596,14 +613,15 @@ V(lo)-V(hi) counts (lo,hi]; subtract a root at hi to obtain (lo,hi)."
             ((None) (outer (+ n 1)))))))
 
   (declare refine-interval-native (Poly Integer * List (Poly Integer) * Fraction * Fraction -> (Tuple Fraction Fraction)))
-  (define (refine-interval-native poly sturm lo hi)
-    "Bisect an isolating interval and keep the unique-root half."
+  (define (refine-interval-native poly _sturm lo hi)
+    "Refine an already certified interval using only signs of poly.
+
+The unique root is simple, so it changes the sign of poly. No further
+Sturm counting is needed after the initial isolation certificate."
     (let split = (find-nonroot-split poly lo hi))
-    (let left-count = (root-count-open poly sturm lo split))
-    (cond
-      ((== left-count 1) (Tuple lo split))
-      ((== left-count 0) (Tuple split hi))
-      (True (error "Internal error: isolating refinement expected one root."))))
+    (if (/= (poly-sign-at poly lo) (poly-sign-at poly split))
+        (Tuple lo split)
+        (Tuple split hi)))
 
   (declare root-bound-desc (Poly Integer -> Integer))
   (define (root-bound-desc p)
@@ -626,14 +644,14 @@ V(lo)-V(hi) counts (lo,hi]; subtract a root at hi to obtain (lo,hi)."
   (declare adjust-lower-bound (Poly Integer * Fraction -> Fraction))
   (define (adjust-lower-bound poly lo)
     "Shift lower bound down until it is not an exact root."
-    (if (/= (poly-eval-desc-fraction poly lo) 0)
+    (if (/= (poly-sign-at poly lo) 0)
         lo
         (adjust-lower-bound poly (- lo 1))))
 
   (declare adjust-upper-bound (Poly Integer * Fraction -> Fraction))
   (define (adjust-upper-bound poly hi)
     "Shift upper bound up until it is not an exact root."
-    (if (/= (poly-eval-desc-fraction poly hi) 0)
+    (if (/= (poly-sign-at poly hi) 0)
         hi
         (adjust-upper-bound poly (+ hi 1))))
 
@@ -682,9 +700,9 @@ V(lo)-V(hi) counts (lo,hi]; subtract a root at hi to obtain (lo,hi)."
        (Err "Defining polynomial must have positive degree."))
       ((>= lo hi)
        (Err "Isolating interval must satisfy lower < upper."))
-      ((== (poly-eval-desc-fraction poly lo) 0)
+      ((== (poly-sign-at poly lo) 0)
        (Err "Lower interval endpoint must not be a root of the defining polynomial."))
-      ((== (poly-eval-desc-fraction poly hi) 0)
+      ((== (poly-sign-at poly hi) 0)
        (Err "Upper interval endpoint must not be a root of the defining polynomial."))
       ((== (root-count-open poly sturm lo hi) 1)
        (Ok (RealAlgebraic poly lo hi sturm)))
@@ -1755,7 +1773,7 @@ unbounded refinement loop."
     "Check whether q is certified to be the represented root."
     (and (< lo q)
          (< q hi)
-         (== (poly-eval-desc-fraction p q) 0)))
+         (== (poly-sign-at p q) 0)))
 
   (declare simplest-rational-closed (Fraction * Fraction -> Fraction))
   (define (simplest-rational-closed lo hi)

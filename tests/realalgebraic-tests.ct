@@ -194,6 +194,31 @@
     ((Err _) (is True))
     ((Ok _) (is False))))
 
+(define-test realalgebraic-sign-refinement-test ()
+  ;; A midpoint root uses a non-root split; roots of either sign and
+  ;; nonmonic polynomials must retain their certified root on every step.
+  (let values = (make-list sqrt2
+                           (unwrap-ok (ra:root (make-list 1 0 -2) -2 -1))
+                           (unwrap-ok (ra:root (make-list 3 -1) 0 2/3))))
+  (is (all (fn (x)
+             (rec go ((r x) (i 0))
+               (if (== i 40)
+                   True
+                   (let ((next (ra:refine r)))
+                     (and (== next x)
+                          (<= (interval-width next) (* 2/3 (interval-width r)))
+                          (go next (+ i 1))))))) values))
+  (is
+   (rec go ((seed 331) (i 0))
+     (if (== i 100)
+         True
+         (match (ra-fuzz-fraction seed)
+           ((Tuple next q)
+            (let p = (ra::make-poly (make-list 7 -3 0 11 -2)))
+            (and (== (ra::poly-sign-at p q)
+                     (ra::fraction-signum (ra::poly-eval-desc-fraction p q)))
+                 (go next (+ i 1)))))))))
+
 (define-test realalgebraic-approx-and-rational-test ()
   (let tight = (ra:refine-to-width 1/1024 sqrt2))
   (is (<= (interval-width tight) 1/1024))
