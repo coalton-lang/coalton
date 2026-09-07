@@ -719,12 +719,7 @@ Returns a `node'.")
 
               (make-node-global-variable
                :type ty
-               :value (alexandria:format-symbol
-                       (symbol-package (tc:tycon-name from-ty))
-                       "~A/~A-_~D"
-                       (tc:tycon-name from-ty)
-                       (tc:tycon-name from-ty)
-                       idx)))))))
+               :value (tc:struct-field-accessor-name (tc:tycon-name from-ty) idx)))))))
 
   (:method ((expr tc:node-application) ctx env)
     (declare (type pred-context ctx)

@@ -73,6 +73,7 @@
    #:struct-field-type                      ; ACCESSOR
    #:struct-field-index                     ; ACCESSOR
    #:struct-field-list                      ; TYPE
+   #:struct-field-accessor-name              ; FUNCTION
    #:struct-entry                           ; STRUCT
    #:make-struct-entry                      ; CONSTRUCTOR
    #:struct-entry-name                      ; ACCESSOR
@@ -673,6 +674,13 @@
 
 (deftype struct-field-list ()
   '(satisfies struct-field-list-p))
+
+(defun struct-field-accessor-name (name index)
+  "Return the generated reader name for field INDEX of struct NAME."
+  (declare (type symbol name)
+           (type fixnum index)
+           (values symbol &optional))
+  (alexandria:format-symbol (symbol-package name) "~A/~A-_~D" name name index))
 
 (defstruct struct-entry
   (name      (util:required 'name)      :type symbol            :read-only t)

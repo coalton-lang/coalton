@@ -26,6 +26,110 @@
     (define (observe x)
       (lisp (-> Integer) (x) (cl:push x coalton-tests::*codegen-events*) x))"))
 
+(deftest codegen-struct-accessors ()
+  (with-codegen-test-environment
+    (codegen-test-event-recorder)
+    (codegen-test-compile
+     "(define-struct Point (x F64) (y F64))
+      (define-struct (Boxed :a) (item :a))
+      (define-struct Callbacks
+        (unary (Integer -> Integer))
+        (nullary (Void -> Integer))
+        (keyed (Integer &key (:offset Integer) -> Integer)))
+      (declare get-x (Point -> F64))
+      (define get-x .x)
+      (declare unbox (Boxed :a -> :a))
+      (define (unbox box) (.item box))
+      (declare get-keyed (Callbacks -> (Integer &key (:offset Integer) -> Integer)))
+      (define (get-keyed callbacks) (.keyed callbacks))
+      (declare add-offset (Integer &key (:offset Integer) -> Integer))
+      (define (add-offset n &key (offset 1)) (+ n offset))
+      (define saved-callbacks
+        (Callbacks (fn (n) (+ n 1)) (fn () 42) add-offset))")
+    (is (= 42.0d0 (codegen-test-eval "(get-x (Point 42.0d0 7.0d0))")))
+    (is (equal '(1.0d0 3.0d0)
+               (codegen-test-eval "(map .x (make-list (Point 1.0d0 2.0d0)
+                                                      (Point 3.0d0 4.0d0)))")))
+    (is (= 42 (codegen-test-eval "(unbox (Boxed (the Integer 42)))")))
+    (is (equal "answer" (codegen-test-eval "(unbox (Boxed \"answer\"))")))
+    (is (= 42.0d0 (codegen-test-eval "(.item (.item (Boxed (Boxed 42.0d0))))")))
+    (is (= 42 (codegen-test-eval "((.unary saved-callbacks) 41)")))
+    (is (= 42 (codegen-test-eval "((.nullary saved-callbacks))")))
+    (is (= 42 (codegen-test-eval "((get-keyed saved-callbacks) 40 :offset 2)")))
+    (is (= 42 (codegen-test-eval "((get-keyed saved-callbacks) 41)")))
+    ;; A reader must evaluate its receiver once, before using the field.
+    (is (= 42 (codegen-test-eval "(.item (Boxed (observe 42)))")))
+    (is (equal '(42) *codegen-events*))
+    (setf *codegen-events* nil)
+    (is (= 3 (codegen-test-eval
+              "((.unary (progn (observe 1) saved-callbacks)) (observe 2))")))
+    (is (equal '(1 2) (reverse *codegen-events*)))))
+
+(deftest codegen-struct-readers-are-direct-across-compilation-units ()
+  (with-codegen-test-environment
+    (let ((initial-env entry:*global-environment*))
+      (multiple-value-bind (source-file fasl-file)
+          (compile-and-load-forms
+           (list `(in-package ,(package-name *package*))
+                 (read-from-string
+                  "(coalton-toplevel (define-struct Point (x F64) (y F64)))")))
+        (unwind-protect
+             (progn
+               ;; Recover the reader metadata from the FASL, not the environment
+               ;; that was modified when compiling the struct definition.
+               (setf entry:*global-environment* initial-env)
+               (load fasl-file)
+               (let ((point (intern "POINT")))
+                 (with-codegen-test-environment
+                   (import point)
+                   (codegen-test-compile
+                    "(declare coordinate-sum (Point -> F64))
+                     (define (coordinate-sum point) (+ (.x point) (.y point)))")
+                   (let ((readers nil))
+                     (traverse:traverse
+                      (tc:lookup-code entry:*global-environment* (intern "COORDINATE-SUM"))
+                      (list
+                       (traverse:action (:after ast:node-direct-application app)
+                         (push (ast:node-direct-application-rator app) readers)
+                         (values))))
+                     ;; FUNCALL through the reader's function-valued global hides
+                     ;; its inline definition and field type from the Lisp compiler.
+                     (dotimes (index 2)
+                       (is (member (tc:struct-field-accessor-name point index) readers))))
+                   (is (= 42.0d0 (codegen-test-eval
+                                  "(coordinate-sum (Point 20.0d0 22.0d0))"))))))
+          (delete-file source-file)
+          (delete-file fasl-file))))))
+
+(deftest codegen-struct-reader-metadata-redefinition ()
+  (with-codegen-test-environment
+    ;; Exercise compiler environment updates without redefining a live Lisp
+    ;; struct, which need not support incompatible layout changes.
+    (labels ((define-type (text)
+               (let ((source (source:make-source-string text)))
+                 (with-open-stream (stream (source:source-stream source))
+                   (multiple-value-bind (form env)
+                       (entry:entry-point
+                        (parser:with-reader-context stream (parser:read-program stream source)))
+                     (declare (ignore form))
+                     (setf entry:*global-environment* env)))))
+             (reader (index)
+               (tc:lookup-function entry:*global-environment*
+                                   (tc:struct-field-accessor-name (intern "POINT") index)
+                                   :no-error t)))
+      (define-type "(define-struct Point (x F64) (y F64))")
+      (is (reader 0))
+      (is (reader 1))
+      (define-type "(define-struct Point (x F64))")
+      (is (reader 0))
+      (is (null (reader 1)))
+      (define-type "(repr :transparent) (define-struct Point (x F64))")
+      (is (null (reader 0)))
+      (define-type "(define-struct Point (x F64))")
+      (is (reader 0))
+      (define-type "(define-type Point (Point F64))")
+      (is (null (reader 0))))))
+
 #+sbcl
 (deftest codegen-block-compilation-preserves-result-arities ()
   (dolist (mode '(nil :specified t))
