@@ -191,3 +191,16 @@
     (codegen-test-eval "(coalton/cell:write! (get-counter) 42)")
     (is (= 42 (codegen-test-eval "(coalton/cell:read (get-counter))")))))
 
+(deftest codegen-dictionary-hoisting-preserves-keywords ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(declare consume-eq (Eq :a => :a * :a -> Boolean))
+      (define (consume-eq x y) (== x y))
+      (declare compare-key (Eq :a => :a &key (:other :a) -> Boolean))
+      (define (compare-key x &key (other x))
+        (consume-eq (Cons x Nil) (Cons other Nil)))")
+    (is (eq coalton:True (codegen-test-eval "(compare-key (the Integer 1))")))
+    (is (eq coalton:True (codegen-test-eval "(compare-key (the Integer 1) :other 1)")))
+    (is (eq coalton:False (codegen-test-eval "(compare-key (the Integer 1) :other 2)")))
+    (is (eq coalton:False (codegen-test-eval "(compare-key \"one\" :other \"two\")")))))
+

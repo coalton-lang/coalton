@@ -503,7 +503,7 @@ speaking, the following kinds of transformations happen:
              (hoist-definition node package hoister))
 
            (handle-push-hoist-point (node)
-             (push-hoist-point (node-abstraction-vars node) hoister)
+             (push-hoist-point (node-abstraction-bound-variables node) hoister)
              nil)
 
            (handle-pop-hoist-point (node)
@@ -514,6 +514,7 @@ speaking, the following kinds of transformations happen:
                    (make-node-abstraction
                     :type (node-type node)
                     :vars (node-abstraction-vars node)
+                    :keyword-params (node-abstraction-keyword-params node)
                     :subexpr (make-node-let
                               :type (node-type (node-abstraction-subexpr node))
                               :bindings hoisted
