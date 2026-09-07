@@ -453,6 +453,48 @@
   (is (== (* (math:reciprocal wide) wide) 1))
   (is (== (ra::degree (+ (the ra:RealAlgebraic (into 17/23)) (into -8/19))) 1)))
 
+(define-test realalgebraic-shared-generator-test ()
+  (let s = (+ sqrt2 (math:sqrt (the ra:RealAlgebraic 3))))
+  (let a = (+ s 1))
+  (let b = (- s 1))
+  (let product = (* a b))
+  (is (== product (- (^ s 2) 1)))
+  (is (== (ra::degree product) 2))
+  ;; The fractional linear map f(x)=(x+1)/(x-1) is an involution.
+  ;; Repeated field arithmetic must stay within the generator's degree.
+  (is
+   (rec go ((x s) (i 0))
+     (if (== i 12)
+         (== x s)
+         (let ((next (/ (+ x 1) (- x 1))))
+           (and (<= (ra::degree next) 4) (go next (+ i 1)))))))
+  ;; A zero divisor at another conjugate must not prevent inversion at
+  ;; the selected root. Here the origin roots are 0,1,2 and x represents 2.
+  (let x = (unwrap-ok (ra:root (make-list 1 -3 2 0) 3/2 5/2)))
+  (let denominator = (- x 1))
+  (is (== (/ x denominator) 2))
+  (let inverse = (math:reciprocal denominator))
+  (is (== (* inverse denominator) 1))
+  (is (<= (ra::degree (^ inverse 2)) (ra::degree inverse))))
+
+(define-test realalgebraic-shared-generator-rational-oracle-test ()
+  ;; Known rational selected root, with two irrational conjugates. Inverting
+  ;; x^2-3 must discard a quadratic zero-divisor factor at those conjugates.
+  (is
+   (rec go ((i (the Integer 1)))
+     (if (> i 18)
+         True
+         (let ((num (if (== (mod i 2) 0) i (negate i)))
+               (den 23))
+           (let ((q (math:general/ num den)))
+             (let ((x (unwrap-ok (ra:root (make-list den (negate num) (* -3 den) (* 3 num))
+                                        (- q 1/100) (+ q 1/100)))))
+               (let ((actual (/ x (- (^ x 2) 3)))
+                     (expected (/ q (- (* q q) 3))))
+                 (and (== (unwrap (the (Optional Fraction) (tryInto actual))) expected)
+                      (<= (ra::degree actual) 3)
+                      (go (+ i 1)))))))))))
+
 (define-test realalgebraic-unary-power-degree-test ()
   (let s = (+ sqrt2 (math:sqrt (the ra:RealAlgebraic 3))))
   (let square = (* s s))

@@ -66,6 +66,12 @@ provided: Eq, Ord, Num, Reciprocable, Radical, Quantizable, and Real.")
     (match p
       ((Poly coeffs) coeffs)))
 
+  (define-struct AlgebraicOrigin
+    "A shared, certified generator for polynomial expressions in one algebraic root."
+    (origin-poly "Square-free primitive polynomial." (Poly Integer))
+    (origin-lo "Original isolating lower endpoint." Fraction)
+    (origin-hi "Original isolating upper endpoint." Fraction))
+
   (define-struct RealAlgebraic
     "Certified real algebraic number.
 
@@ -75,7 +81,9 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
     (ra-poly "Defining polynomial." (Poly Integer))
     (ra-lo "Lower endpoint of isolating interval." Fraction)
     (ra-hi "Upper endpoint of isolating interval." Fraction)
-    (ra-sturm "Cached Sturm sequence for `ra-poly`." (List (Poly Integer))))
+    (ra-sturm "Cached Sturm sequence for `ra-poly`." (List (Poly Integer)))
+    (ra-origin "Shared algebraic generator; identity distinguishes its root." AlgebraicOrigin)
+    (ra-coordinate "Polynomial in the origin's selected root equal to this value." (Poly Fraction)))
 
   (declare poly-trim-desc (Poly Integer -> Poly Integer))
   (define (poly-trim-desc p)
@@ -703,7 +711,8 @@ Sturm counting is needed after the initial isolation certificate."
       ((== (poly-sign-at poly hi) 0)
        (Err "Upper interval endpoint must not be a root of the defining polynomial."))
       ((== (root-count-open poly sturm lo hi) 1)
-       (Ok (RealAlgebraic poly lo hi sturm)))
+       (Ok (RealAlgebraic poly lo hi sturm
+                          (AlgebraicOrigin poly lo hi) (make-poly (make-list 1 0)))))
       (True
        (Err "Interval must isolate exactly one real root."))))
 
@@ -731,7 +740,7 @@ Sturm counting is needed after the initial isolation certificate."
     (let lo = (.ra-lo x))
     (let hi = (.ra-hi x))
     (let (Tuple nlo nhi) = (refine-interval-native poly sturm lo hi))
-    (RealAlgebraic poly nlo nhi sturm))
+    (RealAlgebraic poly nlo nhi sturm (.ra-origin x) (.ra-coordinate x)))
 
   (declare approx-eps (UFix -> Fraction))
   (define (approx-eps bits)
@@ -1529,6 +1538,32 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
       ((Ok x) x)
       ((Err msg) (error msg))))
 
+  (declare with-coordinate (RealAlgebraic * AlgebraicOrigin * Poly Fraction -> RealAlgebraic))
+  (define (with-coordinate result origin value)
+    "Retain the selected generator's embedding across exact arithmetic."
+    (if (== (poly-degree-desc (.ra-poly result)) 1)
+        result
+        (RealAlgebraic (.ra-poly result) (.ra-lo result) (.ra-hi result) (.ra-sturm result)
+                       origin (poly-frac-rem value (poly-int->frac (.origin-poly origin))))))
+
+  (declare combine-certified ((Poly Fraction * Poly Fraction -> Poly Fraction)
+                              * (RealAlgebraic * RealAlgebraic -> Poly Integer)
+                              * (RealAlgebraic * RealAlgebraic -> Optional (Tuple Fraction Fraction))
+                              * RealAlgebraic * RealAlgebraic -> RealAlgebraic))
+  (define (combine-certified op eliminate interval-fn x y)
+    "Preserve dependence for shared generators; eliminate independent operands otherwise."
+    (let ox = (the AlgebraicOrigin (.ra-origin x)))
+    (let oy = (the AlgebraicOrigin (.ra-origin y)))
+    (if (lisp (-> Boolean) (ox oy) (cl:eq ox oy))
+        (let ((value (poly-frac-rem (op (.ra-coordinate x) (.ra-coordinate y))
+                                   (poly-int->frac (.origin-poly ox)))))
+          (if (<= (poly-frac-degree value) 0)
+              (from-fraction (poly-frac-leading value))
+              (with-coordinate
+               (select-operation-root (poly-for-image (.origin-poly ox) value) interval-fn x y)
+               ox value)))
+        (select-operation-root (eliminate x y) interval-fn x y)))
+
   (declare affine-certified (Fraction * Fraction * RealAlgebraic -> RealAlgebraic))
   (define (affine-certified scale offset x)
     "Apply scale*x+offset by invertible polynomial substitution, without a resultant."
@@ -1551,7 +1586,10 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
           (let a = (+ (* scale (lower-bound x)) offset))
           (let b = (+ (* scale (upper-bound x)) offset))
           ;; An invertible affine map preserves square-freeness and isolation.
-          (from-normalized-interval p (min a b) (max a b)))))))
+          (with-coordinate (from-normalized-interval p (min a b) (max a b))
+                           (.ra-origin x)
+                           (poly-frac-add (poly-frac-scale scale (.ra-coordinate x))
+                                          (Poly (make-list offset)))))))))
 
   (declare add-certified (RealAlgebraic * RealAlgebraic -> RealAlgebraic))
   (define (add-certified x y)
@@ -1565,8 +1603,8 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
           (match (linear-rational-root (defining-polynomial y))
             ((Some q) (affine-certified 1 q x))
             ((None)
-             (select-operation-root (poly-for-sum x y)
-                                    (fn (a b) (Some (interval-sum a b))) x y))))))))
+             (combine-certified poly-frac-add poly-for-sum
+                                (fn (a b) (Some (interval-sum a b))) x y))))))))
 
   (declare sub-certified (RealAlgebraic * RealAlgebraic -> RealAlgebraic))
   (define (sub-certified x y)
@@ -1580,8 +1618,8 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
           (match (linear-rational-root (defining-polynomial y))
             ((Some q) (affine-certified 1 (negate q) x))
             ((None)
-             (select-operation-root (poly-for-diff x y)
-                                    (fn (a b) (Some (interval-diff a b))) x y))))))))
+             (combine-certified poly-frac-sub poly-for-diff
+                                (fn (a b) (Some (interval-diff a b))) x y))))))))
 
   (declare mul-certified (RealAlgebraic * RealAlgebraic -> RealAlgebraic))
   (define (mul-certified x y)
@@ -1595,8 +1633,8 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
           (match (linear-rational-root (defining-polynomial y))
             ((Some q) (affine-certified q 0 x))
             ((None)
-             (select-operation-root (poly-for-prod x y)
-                                    (fn (a b) (Some (interval-prod a b))) x y))))))))
+             (combine-certified poly-frac-mul poly-for-prod
+                                (fn (a b) (Some (interval-prod a b))) x y))))))))
 
   (declare div-certified (RealAlgebraic * RealAlgebraic -> RealAlgebraic))
   (define (div-certified x y)
@@ -1611,7 +1649,10 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
           (match (linear-rational-root (defining-polynomial x))
             ((Some q) (affine-certified q 0 (reciprocal-certified y)))
             ((None)
-             (select-operation-root (poly-for-quot x y) interval-quot x y))))))))
+             (combine-certified
+              (fn (a b)
+                (poly-frac-mul a (poly-frac-inverse-mod b (poly-int->frac (.origin-poly (.ra-origin x))))))
+              poly-for-quot interval-quot x y))))))))
 
   (declare reciprocal-certified (RealAlgebraic -> RealAlgebraic))
   (define (reciprocal-certified x)
@@ -1628,7 +1669,10 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
              (let hi = (upper-bound a))
              (if (and (<= lo 0) (>= hi 0))
                  (go (refine-native a))
-                 (from-normalized-interval p (/ 1 hi) (/ 1 lo))))))))
+                 (with-coordinate (from-normalized-interval p (/ 1 hi) (/ 1 lo))
+                                  (.ra-origin x)
+                                  (poly-frac-inverse-mod (.ra-coordinate x)
+                                                        (poly-int->frac (.origin-poly (.ra-origin x)))))))))))
   (declare poly-frac-mul (Poly Fraction * Poly Fraction -> Poly Fraction))
   (define (poly-frac-mul a b)
     "Multiply using integer convolution and one shared denominator."
@@ -1637,6 +1681,28 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
                                                   (poly-frac-clear-denominators b)))))
 
   (declare poly-frac-pow-mod (Poly Fraction * Integer * Poly Fraction -> Poly Fraction))
+  (declare poly-frac-inverse-mod (Poly Fraction * Poly Fraction -> Poly Fraction))
+  (define (poly-frac-inverse-mod value modulus)
+    "Inverse on the nonzero components of a square-free quotient algebra.
+
+The caller must certify that value is nonzero at the selected generator.
+If the gcd is nonconstant, its roots are therefore irrelevant: remove that
+factor and repeat extended Euclid. The returned polynomial agrees with the
+reciprocal at the selected root even when the origin polynomial is reducible."
+    (rec go ((a modulus) (b (poly-frac-rem value modulus))
+             (u poly-frac-zero) (v (poly-int->frac poly-int-one)))
+      (if (poly-frac-zero? b)
+          (if (== (poly-frac-degree a) 0)
+              (poly-frac-rem (poly-frac-scale (/ 1 (poly-frac-leading a)) u) modulus)
+              (match (poly-frac-divrem modulus a)
+                ((Tuple reduced _)
+                 (if (<= (poly-frac-degree reduced) 0)
+                     (error "No nonzero component for algebraic reciprocal.")
+                     (poly-frac-inverse-mod value reduced)))))
+          (match (poly-frac-divrem a b)
+            ((Tuple q r)
+             (go b r v (poly-frac-sub u (poly-frac-mul q v))))))))
+
   (define (poly-frac-pow-mod x n modulus)
     "Power in Q[t]/(modulus); all reduced intermediates have degree < deg(modulus)."
     (rec go ((result (poly-int->frac poly-int-one))
@@ -1696,7 +1762,10 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
       (True
        (let p = (defining-polynomial x))
        (let value = (poly-frac-pow-mod (Poly (make-list 1 0)) n (poly-int->frac p)))
-       (select-unary-root (poly-for-image p value) (fn (a) (interval-power n a)) x))))
+       (with-coordinate
+        (select-unary-root (poly-for-image p value) (fn (a) (interval-power n a)) x)
+        (.ra-origin x)
+        (poly-frac-pow-mod (.ra-coordinate x) n (poly-int->frac (.origin-poly (.ra-origin x))))))))
   (declare poly-compose-nth-power (Poly Integer * Integer -> Poly Integer))
   (define (poly-compose-nth-power p n)
     "Return q(y) = p(y^n) for integer polynomial `p` and `n > 0`."
