@@ -141,3 +141,23 @@
     (is (= 23 (codegen-test-eval "(shadow-init 10)")))
     (is (= 32 (codegen-test-eval "(+ (sequential-init 10) (sequential-init 20))")))))
 
+(deftest codegen-nullary-resumption-evaluates-operand ()
+  (with-codegen-test-environment
+    (codegen-test-event-recorder)
+    (codegen-test-compile "(define-resumption Stop)
+                           (define-resumption (StopWith Integer))")
+    (is (= 42 (codegen-test-eval
+               "(resumable (resume-to (match (observe 7) (_ Stop)))
+                  ((Stop) 42))")))
+    (is (equal '(7) *codegen-events*))
+    (setf *codegen-events* nil)
+    (is (= 8 (codegen-test-eval
+              "(resumable (resume-to (StopWith (observe 8))) ((StopWith x) x))")))
+    (is (equal '(8) *codegen-events*))
+    (setf *codegen-events* nil)
+    (signals simple-error
+      (codegen-test-eval
+       "(resumable (resume-to (progn (lisp (-> Void) () (cl:error \"operand failed\")) Stop))
+          ((Stop) (observe 9)))"))
+    (is (null *codegen-events*))))
+
