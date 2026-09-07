@@ -57,19 +57,16 @@ Requires acyclic superclasses"
                 (apply-substitution subs super-class-pred))))))
 
 (defun by-inst (env pred)
-  "Find the first instance that matches PRED and return resulting predicate constraints
+  "Select the most-specific stable instance for PRED and return its constraints
 
 Returns (PREDS FOUNDP)"
   (declare (type environment env)
            (type ty-predicate pred)
            (values ty-predicate-list boolean))
-  (dolist (inst (lookup-class-instances env (ty-predicate-class pred) :no-error t))
-    (handler-case
-        (let* ((subs (predicate-match (ty-class-instance-predicate inst) pred))
-               (resulting-preds (mapcar (lambda (p) (apply-substitution subs p))
-                                        (ty-class-instance-constraints-expanded inst env))))
-          (return-from by-inst (values resulting-preds t)))
-      (predicate-unification-error () nil)))
+  (multiple-value-bind (inst subs) (lookup-class-instance env pred :no-error t)
+    (when inst
+      (return-from by-inst
+        (values (apply-substitution subs (ty-class-instance-constraints-expanded inst env)) t))))
   (multiple-value-bind (preds foundp)
       (synthesized-class-instance-constraints pred)
     (when foundp

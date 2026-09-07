@@ -147,14 +147,6 @@ value."
     (define (liftA2 f c1 c2)
       (new (f (read c1) (read c2)))))
 
-  (define-instance (Into :a (Cell :a))
-    (inline)
-    (define into new))
-
-  (define-instance (Into (Cell :a) :a)
-    (inline)
-    (define into read))
-
   (define-instance (Default :a => Default (Cell :a))
     (inline)
     (define (default) (new (default)))))

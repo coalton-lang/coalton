@@ -9,7 +9,7 @@
   (:shadow #:id #:find #:const
            #:type #:compose #:alt
            #:split #:reduce #:lift
-           #:forall)
+           #:forall #:overlap)
   (:export
    #:Id
    

@@ -532,6 +532,7 @@ FORM must be a renamed parser AST fragment."
             (resolve-binding form ctx))
            (parser:toplevel-define-instance
             (parser:make-toplevel-define-instance
+             :overlap-p (parser:toplevel-define-instance-overlap-p form)
              :context (parser:toplevel-define-instance-context form)
              :pred (parser:toplevel-define-instance-pred form)
              :methods (mapcar (lambda (method)

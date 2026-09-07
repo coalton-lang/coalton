@@ -204,10 +204,16 @@ is no guarantee that the `CReal` will be accurate to any precision*."
       (match z
         ((complex::%Complex _ b) b))))
 
+  (overlap)
   (define-instance ((complex:ComplexComponent :a) (Into :a CReal) => (Into (Complex :a) (Complex CReal)))
     (define (Into x)
       (Complex (Into (real-part x))
-               (Into (imag-part x))))))
+               (Into (imag-part x)))))
+
+  ;; Resolve the intersection with Into :a :a without rebuilding the number.
+  (overlap)
+  (define-instance (Into (Complex CReal) (Complex CReal))
+    (define (into z) z)))
 
 (coalton-toplevel
 

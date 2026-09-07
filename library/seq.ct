@@ -285,9 +285,15 @@ a new `Seq` instance."
     (define (default)
       (new)))
 
+  (overlap)
   (define-instance ((Foldable :f) (types:RuntimeRepr :a) => Into (:f :a) (Seq :a))
     (define (into fld)
       (fold push (new) fld)))
+
+  ;; Resolve the intersection with Into :a :a without rebuilding the sequence.
+  (overlap)
+  (define-instance (Into (Seq :a) (Seq :a))
+    (define (into seq) seq))
 
 
   (define-instance (Eq :a => Eq (Seq :a))

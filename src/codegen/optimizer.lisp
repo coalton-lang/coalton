@@ -611,8 +611,12 @@ speaking, the following kinds of transformations happen:
 
                     (superclass-pred (tc:apply-substitution subs superclass-pred)))
 
-               ;; Re-resolve the dictionary
-               (resolve-static-dict superclass-pred nil env))))
+               ;; A superclass field carries the evidence chosen when its
+               ;; enclosing dictionary was built. Overlap makes that choice
+               ;; observable, so it cannot be reconstructed from its type.
+               (unless (or (tc:class-has-overlap-p env (tc:ty-predicate-class pred))
+                           (tc:class-has-overlap-p env (tc:ty-predicate-class superclass-pred)))
+                 (resolve-static-dict superclass-pred nil env)))))
 
     (traverse-with-binding-list
      node

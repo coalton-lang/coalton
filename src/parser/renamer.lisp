@@ -972,6 +972,7 @@
 
     (values
      (make-toplevel-define-instance
+      :overlap-p (toplevel-define-instance-overlap-p toplevel)
       :context (toplevel-define-instance-context toplevel)
       :pred (toplevel-define-instance-pred toplevel)
       :methods (rename-variables-generic% (toplevel-define-instance-methods toplevel) ctx)

@@ -26,6 +26,19 @@
 (defvar *global-environment* (tc:make-default-environment))
 
 (defun entry-point (program)
+  (let* ((selections nil)
+         (tc:*defer-instance-validation* t)
+         (tc:*changed-instance-classes* nil)
+         (tc:*instance-selection-hook*
+           (lambda (pred instance)
+             (push (list pred instance (or *compile-file-truename* *load-truename*
+                                          (package-name *package*))) selections))))
+    (multiple-value-bind (code env) (%entry-point program)
+      (setf env (tc:register-instance-selections env selections))
+      (dolist (class tc:*changed-instance-classes*) (tc:validate-instance-selections env class))
+      (values code env))))
+
+(defun %entry-point (program)
   (declare (type parser:program program))
 
   (let ((*package* (parser:program-lisp-package program))
@@ -116,6 +129,23 @@
 
 
 (defun expression-entry-point (node)
+  (let* ((selections nil)
+         (tc:*instance-selection-hook*
+           (lambda (pred instance)
+             (push (list pred instance (or *compile-file-truename* *load-truename*
+                                          (package-name *package*))) selections)))
+         (code (%expression-entry-point node)))
+    (setf *global-environment* (tc:register-instance-selections *global-environment* selections))
+    `(progn
+       (load-time-value
+        (progn
+          (setf *global-environment*
+                (tc:register-instance-selections *global-environment* ,(util:runtime-quote selections)))
+          nil)
+        t)
+       ,code)))
+
+(defun %expression-entry-point (node)
   (declare (type parser:node node))
 
   (let ((env *global-environment*))
@@ -154,7 +184,7 @@
                  (scheme (tc:quantify (tc:type-variables qual-ty) qual-ty)))
 
             (when (null preds)
-              (return-from expression-entry-point
+              (return-from %expression-entry-point
                 (let ((node (codegen:optimize-node
                              (codegen:translate-expression node nil env)
                              env)))
@@ -181,9 +211,12 @@
 (defun make-environment-updater (update-log)
   "Produce source form of the contents of an environment UPDATE-LOG (i.e., calls to functions in typechecker/environment)."
   (let ((updates (remove-duplicates (coerce update-log 'list) :test #'code-update-eql)))
-    `(let ((env *global-environment*))
+    `(let ((env *global-environment*)
+           (tc:*defer-instance-validation* t)
+           (tc:*changed-instance-classes* nil))
        ,@(loop :for (fn . args) :in updates
                :collect `(setf env (,fn env ,@(mapcar #'util:runtime-quote args))))
+       (dolist (class tc:*changed-instance-classes*) (tc:validate-instance-selections env class))
        (setf *global-environment* env)
        (tc:synchronize-type-variable-counter env))))
 

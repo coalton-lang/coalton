@@ -17,6 +17,8 @@
    )
   (:export
    #:overlapping-instance-error                ; CONDITION
+   #:ambiguous-instance-error                  ; CONDITION
+   #:stale-instance-selection-error            ; CONDITION
    #:overlapping-instance-error-inst1          ; ACCESSOR
    #:overlapping-instance-error-inst2          ; ACCESSOR
    #:ambiguous-constraint                      ; CONDITION
@@ -128,6 +130,22 @@
        (format s "Instance ~S overlaps with instance ~S"
                (overlapping-instance-error-inst1 c)
                (overlapping-instance-error-inst2 c))))))
+
+(define-condition ambiguous-instance-error (coalton-internal-type-error)
+  ((pred :initarg :pred :reader ambiguous-instance-error-pred)
+   (instances :initarg :instances :reader ambiguous-instance-error-instances))
+  (:report (lambda (condition stream)
+             (format stream "Ambiguous instance for ~S: incomparable heads ~{~S~^, ~}. Define an instance for their intersection."
+                     (ambiguous-instance-error-pred condition)
+                     (ambiguous-instance-error-instances condition)))))
+
+(define-condition stale-instance-selection-error (error)
+  ((pred :initarg :pred :reader stale-instance-selection-error-pred)
+   (origin :initarg :origin :reader stale-instance-selection-error-origin))
+  (:report (lambda (condition stream)
+             (format stream "Compiled instance choice for ~S from ~A is no longer valid. Recompile affected code in a fresh environment with the complete instance set."
+                     (stale-instance-selection-error-pred condition)
+                     (stale-instance-selection-error-origin condition)))))
 
 ;; Here, functional dependency ambiguity is best explained by example.
 ;; Consider the class defined as (C :a :b (:a -> :b)) and the instance

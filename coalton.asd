@@ -290,6 +290,7 @@
                 :components ((:file "lisp-type-tests")
                              (:file "dictionary-resolution-tests")))
                (:file "environment-persist-tests")
+               (:file "overlap-tests")
                (:file "coalton-tests")
                (:file "shortcut-tailcall-tests")
                (:file "slice-tests")

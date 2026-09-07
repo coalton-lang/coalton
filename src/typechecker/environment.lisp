@@ -106,6 +106,14 @@
    #:ty-class-instance-constraints          ; ACCESSOR
    #:ty-class-instance-predicate            ; ACCESSOR
    #:ty-class-instance-codegen-sym          ; ACCESSOR
+   #:ty-class-instance-overlap-p            ; ACCESSOR
+   #:lookup-class-instance-by-head         ; FUNCTION
+   #:class-has-overlap-p                    ; FUNCTION
+   #:*instance-selection-hook*             ; VARIABLE
+   #:*defer-instance-validation*           ; VARIABLE
+   #:*changed-instance-classes*            ; VARIABLE
+   #:register-instance-selections          ; FUNCTION
+   #:validate-instance-selections          ; FUNCTION
    #:ty-class-instance-method-codegen-syms  ; ACCESSOR
    #:ty-class-instance-method-codegen-inline-p ; ACCESSOR
    #:ty-class-instance-location             ; ACCESSOR
@@ -804,6 +812,7 @@
 ;;;
 
 (defstruct ty-class-instance
+  (overlap-p               nil                                      :type boolean              :read-only t)
   (constraints             (util:required 'constraints)             :type ty-predicate-list      :read-only t)
   (predicate               (util:required 'predicate)               :type ty-predicate           :read-only t)
   (codegen-sym             (util:required 'codegen-sym)             :type symbol                 :read-only t)
@@ -873,6 +882,7 @@ of constraint predicates."
   (declare (type substitution-list subst-list)
            (values ty-class-instance &optional))
   (make-ty-class-instance
+   :overlap-p (ty-class-instance-overlap-p instance)
    :constraints (apply-substitution subst-list (ty-class-instance-constraints instance))
    :predicate (apply-substitution subst-list (ty-class-instance-predicate instance))
    :codegen-sym (ty-class-instance-codegen-sym instance)
@@ -882,6 +892,9 @@ of constraint predicates."
    :location (ty-class-instance-location instance)))
 
 (defstruct instance-environment
+  ;; Compiled choices, indexed by class. Kept in the persistent environment so
+  ;; failed compilation or FASL loading cannot partially install assumptions.
+  (selections   (make-immutable-listmap) :type immutable-listmap :read-only t)
   (instances    (make-immutable-listmap) :type immutable-listmap :read-only t)
   (codegen-syms (make-immutable-map)     :type immutable-map     :read-only t))
 
@@ -1501,16 +1514,88 @@ Returns two values:
           (values nil t)
           (values nil nil)))))
 
+(defvar *instance-selection-hook* nil
+  "NIL or a function collecting assumptions made during instance selection.
+Called with (PREDICATE INSTANCE) when a stable instance is selected, or with
+(:CLOSED-CLASS CLASS-NAME) when an optimizer relies on the absence of marked
+instances in a class and its superclasses. Bind around compilation to collect
+these assumptions for registration in the resulting environment. Validation
+binds this to NIL so that checking an assumption does not record another one.")
+
+(defvar *defer-instance-validation* nil
+  "When true, ADD-INSTANCE postpones validation of recorded instance choices.
+This allows a compilation unit's instance updates to be checked together.
+Overlap permissions and functional dependencies are still checked immediately.
+The caller must bind *CHANGED-INSTANCE-CLASSES* to NIL and validate its classes
+with VALIDATE-INSTANCE-SELECTIONS before publishing the completed environment.")
+
+(defvar *changed-instance-classes* nil
+  "Class names modified by ADD-INSTANCE while validation is deferred.
+ADD-INSTANCE accumulates names with PUSHNEW. Bind to NIL for each batch of
+updates; use the final list to validate recorded choices in the resulting
+environment before installing it. See *DEFER-INSTANCE-VALIDATION*.")
+
+(defun predicate-subsumes-p (general specific)
+  (handler-case
+      (progn (predicate-match (fresh-pred general) (fresh-pred specific)) t)
+    (predicate-unification-error () nil)))
+
+(defun same-instance-head-p (left right)
+  (and (predicate-subsumes-p left right)
+       (predicate-subsumes-p right left)))
+
+(defun instance-more-specific-p (left right)
+  (let ((left (ty-class-instance-predicate left))
+        (right (ty-class-instance-predicate right)))
+    (and (predicate-subsumes-p right left)
+         (not (predicate-subsumes-p left right)))))
+
+(defun lookup-class-instance-by-head (env pred &key no-error)
+  "Find a definition, rather than select evidence for a wanted constraint."
+  (or (find pred (lookup-class-instances env (ty-predicate-class pred) :no-error t)
+            :key #'ty-class-instance-predicate :test #'same-instance-head-p)
+      (unless no-error (error "Unknown instance definition ~S" pred))))
+
+(defun class-has-overlap-p (env class &optional seen)
+  "Whether CLASS or any of its superclasses permits overlapping evidence."
+  (unless (member class seen)
+    (let ((overlap-p
+            (or (some #'ty-class-instance-overlap-p
+                      (lookup-class-instances env class :no-error t))
+                (some (lambda (pred)
+                        (class-has-overlap-p env (ty-predicate-class pred) (cons class seen)))
+                      (ty-class-superclasses (lookup-class env class))))))
+      ;; Optimizers depend on this negative fact too. Marking the class later
+      ;; must invalidate code that was allowed to discard its dictionaries.
+      (when (and (not overlap-p) *instance-selection-hook*)
+        (funcall *instance-selection-hook* :closed-class class))
+      overlap-p)))
+
 (defun lookup-class-instance-in-list (pred instances &key no-error)
-  (declare (type ty-predicate pred)
-           (type list instances))
-  (dolist (instance instances)
-    (handler-case
-        (let ((subs (predicate-match (ty-class-instance-predicate instance) pred)))
-          (return-from lookup-class-instance-in-list (values instance subs)))
-      (predicate-unification-error () nil)))
-  (unless no-error
-    (error "Unknown instance for predicate ~S" pred)))
+  "Select the unique most-specific matching head, independently of context.
+Marked instances are open to future specialization: never discharge a wanted
+predicate containing inference variables through such an instance."
+  (let* ((matches
+           (loop :for instance :in instances
+                 :when (predicate-subsumes-p (ty-class-instance-predicate instance) pred)
+                   :collect instance))
+         (winners
+           (remove-if (lambda (instance)
+                        (some (lambda (other) (instance-more-specific-p other instance)) matches))
+                      matches)))
+    (when (and (cdr winners) (null (type-variables pred)))
+      (error 'ambiguous-instance-error :pred pred
+             :instances (mapcar #'ty-class-instance-predicate winners)))
+    (when (and (= 1 (length winners))
+               (not (and (type-variables pred)
+                         (ty-class-instance-overlap-p (first winners)))))
+      (let* ((instance (first winners))
+             (subs (predicate-match (ty-class-instance-predicate instance) pred)))
+        (when *instance-selection-hook*
+          (funcall *instance-selection-hook* pred instance))
+        (return-from lookup-class-instance-in-list (values instance subs))))
+    (unless no-error
+      (error "No stable instance for predicate ~S; retain its class constraint" pred))))
 
 (defun lookup-class-instance (env pred &key no-error)
   (declare (type environment env))
@@ -1559,58 +1644,109 @@ Returns two values:
            (values ty-list &optional))
   (function-type-arguments (lookup-value-type env name)))
 
+(defun instance-signature= (left right)
+  "Compare the ordered dictionary ABI, including variables shared with the head."
+  (let ((left-preds (cons (ty-class-instance-predicate left) (ty-class-instance-constraints left)))
+        (right-preds (cons (ty-class-instance-predicate right) (ty-class-instance-constraints right))))
+    (and (eq (ty-class-instance-overlap-p left) (ty-class-instance-overlap-p right))
+         (eq (ty-class-instance-codegen-sym left) (ty-class-instance-codegen-sym right))
+         (= (length left-preds) (length right-preds))
+         (every (lambda (a b)
+                  (and (eq (ty-predicate-class a) (ty-predicate-class b))
+                       (= (length (ty-predicate-types a)) (length (ty-predicate-types b)))))
+                left-preds right-preds)
+         (flet ((signature (preds)
+                  (let ((ty (make-function-ty
+                             :positional-input-types (mapcan (lambda (p) (copy-list (ty-predicate-types p))) preds)
+                             :output-types nil)))
+                    (quantify (type-variables ty) (qualify nil ty)))))
+           (ty-scheme= (signature left-preds) (signature right-preds))))))
+
+(defun validate-instance-selection (env selection)
+  (destructuring-bind (pred previous origin) selection
+    (when (eq pred :closed-class)
+      (let ((*instance-selection-hook* nil))
+        (when (class-has-overlap-p env previous)
+          (error 'stale-instance-selection-error :pred previous :origin origin)))
+      (return-from validate-instance-selection))
+    (let* ((*instance-selection-hook* nil)
+           (current (handler-case (lookup-class-instance env pred :no-error t)
+                      (ambiguous-instance-error () nil))))
+      (unless (and current (instance-signature= current previous))
+        (error 'stale-instance-selection-error :pred pred :origin origin)))))
+
+(defun validate-instance-selections (env &optional class)
+  (let ((selections (instance-environment-selections (environment-instance-environment env))))
+    (if class
+        (dolist (selection (immutable-listmap-lookup selections class :no-error t))
+          (validate-instance-selection env selection))
+        (immutable-listmap-foreach
+         (lambda (class selections)
+           (declare (ignore class))
+           (dolist (selection selections) (validate-instance-selection env selection)))
+         selections)))
+  env)
+
+(define-env-updater register-instance-selections (env selections)
+  (let* ((instances (environment-instance-environment env))
+         (recorded (instance-environment-selections instances)))
+    (dolist (selection selections)
+      (let ((class (if (eq (first selection) :closed-class)
+                       (second selection)
+                       (ty-predicate-class (first selection)))))
+        (unless (find selection (immutable-listmap-lookup recorded class :no-error t)
+                      :test (lambda (a b)
+                              (if (or (eq (first a) :closed-class) (eq (first b) :closed-class))
+                                  (and (eq (first a) (first b)) (eq (second a) (second b)))
+                                  (and (same-instance-head-p (first a) (first b))
+                                       (instance-signature= (second a) (second b))))))
+          (validate-instance-selection env selection)
+          (setf recorded (immutable-listmap-push recorded class selection)))))
+    (update-environment env :instance-environment
+                        (make-instance-environment
+                         :instances (instance-environment-instances instances)
+                         :codegen-syms (instance-environment-codegen-syms instances)
+                         :selections recorded))))
+
 (define-env-updater add-instance (env class value)
   (declare (type environment env)
            (type symbol class)
            (type ty-class-instance value))
-  ;; Ensure the class is defined
-  (unless (lookup-class env class)
-    (error "Class ~S does not exist." class))
-
-  (loop :for inst :in (lookup-class-instances env class :no-error t)
-        :for index :from 0
-        :do
-    (when (handler-case (or (predicate-mgu (ty-class-instance-predicate value)
-                                           (ty-class-instance-predicate inst))
-                            t)
-            (predicate-unification-error () nil))
-
-      ;; If we have the same instance then simply overwrite the old one
-      (handler-case
-          (progn
-            (predicate-match (ty-class-instance-predicate value) (ty-class-instance-predicate inst))
-            (predicate-match (ty-class-instance-predicate inst) (ty-class-instance-predicate value))
-
-            (return-from add-instance
-              (update-environment
-               env
-               :instance-environment (make-instance-environment
-                                      :instances (immutable-listmap-replace
-                                                  (instance-environment-instances (environment-instance-environment env))
-                                                  class
-                                                  index
-                                                  value)
-                                      :codegen-syms (immutable-map-set
-                                                     (instance-environment-codegen-syms (environment-instance-environment env))
-                                                     (ty-class-instance-codegen-sym value)
-                                                     value))))
-            )
-        (predicate-unification-error ()
-          (error 'overlapping-instance-error
-                 :inst1 (ty-class-instance-predicate value)
-                 :inst2 (ty-class-instance-predicate inst))))))
-
-  (update-environment
-   env
-   :instance-environment (make-instance-environment
-                          :instances (immutable-listmap-push
-                                      (instance-environment-instances (environment-instance-environment env))
-                                      class
-                                      value)
-                          :codegen-syms (immutable-map-set
-                                         (instance-environment-codegen-syms (environment-instance-environment env))
-                                         (ty-class-instance-codegen-sym value)
-                                         value))))
+  (lookup-class env class)
+  (let ((replacement nil)
+        (instances (environment-instance-environment env)))
+    ;; Check every neighbor, even when replacing an existing definition: removing
+    ;; an overlap marker must not silently leave an unmarked overlapping pair.
+    (loop :for inst :in (lookup-class-instances env class :no-error t)
+          :for index :from 0
+          :do (cond
+                ((same-instance-head-p (ty-class-instance-predicate value)
+                                       (ty-class-instance-predicate inst))
+                 (setf replacement index))
+                ((handler-case
+                     (progn (predicate-mgu (fresh-pred (ty-class-instance-predicate value))
+                                           (fresh-pred (ty-class-instance-predicate inst))) t)
+                   (predicate-unification-error () nil))
+                 (unless (and (ty-class-instance-overlap-p value)
+                              (ty-class-instance-overlap-p inst))
+                   (error 'overlapping-instance-error
+                          :inst1 (ty-class-instance-predicate value)
+                          :inst2 (ty-class-instance-predicate inst))))))
+    (let ((new-env
+            (update-environment
+             env :instance-environment
+             (make-instance-environment
+              :selections (instance-environment-selections instances)
+              :instances (if replacement
+                             (immutable-listmap-replace (instance-environment-instances instances)
+                                                        class replacement value)
+                             (immutable-listmap-push (instance-environment-instances instances) class value))
+              :codegen-syms (immutable-map-set (instance-environment-codegen-syms instances)
+                                             (ty-class-instance-codegen-sym value) value)))))
+      (if *defer-instance-validation*
+          (pushnew class *changed-instance-classes*)
+          (validate-instance-selections new-env class))
+      new-env)))
 
 (define-env-updater set-method-inline (env method instance codegen-sym)
   (declare (type environment env)
@@ -2200,7 +2336,7 @@ that variable, so this falls back to the full instance list."
        (if instances-supplied-p
            instances
            (lookup-class-instances env (ty-predicate-class pred) :no-error t)))
-    (unless foundp
+    (unless (and foundp (not (ty-class-instance-overlap-p instance)))
       (return-from improve-predicate-from-instance-head (values subs nil)))
     (let* (;; Repeated variables inside a structural argument can refine that
            ;; argument. Relationships between separate class parameters require

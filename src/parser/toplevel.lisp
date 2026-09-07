@@ -114,6 +114,7 @@
    #:instance-method-definition-list             ; TYPE
    #:toplevel-define-instance                    ; STRUCT
    #:make-toplevel-define-instance               ; CONSTRUCTOR
+   #:toplevel-define-instance-overlap-p          ; ACCESSOR
    #:toplevel-define-instance-context            ; ACCESSOR
    #:toplevel-define-instance-pred               ; ACCESSOR
    #:toplevel-define-instance-methods            ; ACCESSOR
@@ -245,6 +246,9 @@
   (arg  (util:required 'arg)  :type (or null cst:cst) :read-only t))
 
 (defstruct (attribute-inline
+            (:include attribute)))
+
+(defstruct (attribute-overlap
             (:include attribute)))
 
 (defstruct (attribute-derive
@@ -472,6 +476,7 @@
 (defstruct (toplevel-define-instance
             (:include toplevel-definition)
             (:copier nil))
+  (overlap-p          nil                                 :type boolean                         :read-only nil)
   (context            (util:required 'context)            :type ty-predicate-list               :read-only t)
   (pred               (util:required 'pred)               :type ty-predicate                    :read-only t)
   (methods            (util:required 'methods)            :type instance-method-definition-list :read-only t)
@@ -871,6 +876,9 @@ If the attribute is not unique, or a monomorphize attribute is present, signal a
   (let (repr derive)
     (loop :for attribute :across attributes
           :do (etypecase attribute
+                (attribute-overlap
+                 (parse-error "Invalid target for overlap attribute"
+                              (source:note attribute "overlap must be attached to a define-instance form")))
                 (attribute-repr
                  (when repr
                    (parse-error "Duplicate repr attribute"
@@ -905,6 +913,9 @@ If the attribute is not unique, or a repr attribute is present, signal a parse e
   (let (monomorphize inline)
     (loop :for attribute :across attributes
           :do (etypecase attribute
+                (attribute-overlap
+                 (parse-error "Invalid target for overlap attribute"
+                              (source:note attribute "overlap must be attached to a define-instance form")))
                 (attribute-repr
                  (parse-error "Invalid target for repr attribute"
                               (source:note attribute "repr must be attached to a define-type")
@@ -981,6 +992,14 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
                  (note source (cst:first form) "unexpected list")))
 
   (case (cst:raw (cst:first form))
+    ((coalton:overlap)
+     (unless (cst:null (cst:rest form))
+       (parse-error "Malformed overlap attribute"
+                    (note source form "overlap takes no arguments")))
+     (vector-push-extend
+      (make-attribute-overlap :location (form-location source form)) attributes)
+     nil)
+
     ((coalton:monomorphize)
      (vector-push-extend (parse-monomorphize form source) attributes)
      nil)
@@ -1028,6 +1047,7 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
        t))
 
     ((coalton:define-exception)
+     (forbid-attributes attributes form source)
      (let* ((type (parse-define-type form source :definition-category "exception" :exception-p t)))
 
        (unless (endp (toplevel-define-type-vars type))
@@ -1038,6 +1058,7 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
        t))
 
     ((coalton:define-resumption)
+     (forbid-attributes attributes form source)
      (let* ((type (parse-define-resumption form source)))
 
        (push type (program-types program))
@@ -1071,8 +1092,16 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
        t))
 
     ((coalton:define-instance)
-     (forbid-attributes attributes form source)
      (let ((instance (parse-define-instance form source)))
+       (loop :for attribute :across attributes :do
+         (unless (typep attribute 'attribute-overlap)
+           (parse-error "Invalid attribute for define-instance"
+                        (source:note attribute "only the optional overlap attribute is allowed")))
+         (when (toplevel-define-instance-overlap-p instance)
+           (parse-error "Duplicate overlap attribute"
+                        (source:note attribute "overlap already specified")))
+         (setf (toplevel-define-instance-overlap-p instance) t))
+       (setf (fill-pointer attributes) 0)
        (push instance (program-instances program))
        t))
 

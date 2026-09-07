@@ -70,7 +70,7 @@
 
   (let* ((pred (tc:toplevel-define-instance-pred instance))
 
-         (instance-entry (tc:lookup-class-instance env pred))
+         (instance-entry (tc:lookup-class-instance-by-head env pred))
 
          (method-codegen-syms
            (tc:ty-class-instance-method-codegen-syms instance-entry))

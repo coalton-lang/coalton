@@ -1,5 +1,42 @@
 (in-package #:coalton-tests)
 
+(deftest test-doc-instance-overlap-badges ()
+  (let* ((class (coalton/doc/model::make-coalton-class
+                 (tc:lookup-class entry:*global-environment* 'coalton/classes:Into)))
+         (instances (coalton/doc/model:object-instances class))
+         (marked (find-if #'tc:ty-class-instance-overlap-p instances))
+         (unmarked (find-if-not #'tc:ty-class-instance-overlap-p instances)))
+    (is (not (null marked)))
+    (is (not (null unmarked)))
+    ;; Types and structs use the same instance renderer. A marked singleton
+    ;; must still advertise overlap even without any competing instance.
+    (dolist (object (list class
+                         (make-instance 'coalton/doc/model:coalton-type
+                                        :instances (list marked))
+                         (make-instance 'coalton/doc/model:coalton-struct
+                                        :instances (list unmarked))))
+      (dolist (output (list (coalton/doc/html::instances-html object)
+                           (with-output-to-string (stream)
+                             ;; Hugo delegates its instance lists to Markdown.
+                             (coalton/doc/markdown::write-instances
+                              (coalton/doc/base:make-backend :markdown stream)
+                              object))))
+        (is (= (count-if #'tc:ty-class-instance-overlap-p
+                         (coalton/doc/model:object-instances object))
+               (length (cl-ppcre:all-matches-as-strings
+                        "class=.?instance-overlap-badge" output))))
+        (dolist (instance (coalton/doc/model:object-instances object))
+          (let* ((signature (coalton/doc/markdown::to-markdown instance))
+                 (signature-end (search (concatenate 'string signature "</code>") output)))
+            (is (not (null signature-end)))
+            (when (tc:ty-class-instance-overlap-p instance)
+              (let ((suffix (subseq output (+ signature-end (length signature) 7))))
+                (is (search "instance-overlap-badge" suffix))
+                (is (search "/manual/operators/overlap/" suffix))
+                (is (search "Declared with (overlap)" suffix))
+                ;; The badge follows the closing code tag, not the type text.
+                (is (= 0 (search "<a " suffix)))))))))))
+
 (defun parse-doc-test-scheme (string)
   (let ((*package* (make-package "COALTON-DOC-TEST-PACKAGE"
                                  :use '("COALTON" "COALTON-PRELUDE"))))

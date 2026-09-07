@@ -452,23 +452,72 @@ When no concrete type is specified, the compiler defaults to `Seq (Tuple :key :v
   ;;
 
   (define-class (Into :a :b)
-    "`Into :a :b` implies *every* element of `:a` can be represented by an element of `:b`. This conversion might not be bijective (i.e., there may be elements in `:b` that don't correspond to any in `:a`)."
+    "`Into :a :b` implies *every* element of `:a` can be represented by an element
+of `:b`. This conversion might not be bijective: there may be elements in `:b`
+that don't correspond to any in `:a`.
+
+The library provides an identity instance `Into :a :a` and generic collection
+conversions using `overlap`. These have several consequences for callers and
+instance authors:
+
+- Polymorphic conversions must retain an `Into` constraint whenever the
+  matching instance is marked. Even converting a value to its own type needs
+  that constraint, so the caller can supply the selected conversion:
+
+      (declare same (Into :a :a => :a -> :a))
+      (define (same x) (into x))
+
+  Omitting the declaration lets inference retain the constraint. Explicitly
+  declaring `(:a -> :a)` rejects this definition because it omits the required
+  constraint. To express ordinary identity, simply return `x`.
+
+- A generic instance's context alone does not justify selecting it for a
+  polymorphic call. For example, a wrapper around the collection conversion
+  should retain the conversion itself:
+
+      (declare to-seq
+        (Into (:f :a) (Seq :a) => :f :a -> Seq :a))
+      (define (to-seq xs) (into xs))
+
+  `Foldable :f` and `RuntimeRepr :a` alone are insufficient here.
+  They describe one candidate instance's requirements; a caller may select a
+  more-specific instance with different requirements.
+
+- New instances can overlap the identity instance whenever their source and
+  destination types can become equal. Every distinct instance participating
+  in an overlap must have `(overlap)` immediately before its definition.
+  Sometimes an explicit intersection instance is also needed: the generic
+  `Into (:f :a) (Seq :a)` and identity instances both apply to sequences, so
+  the library supplies `Into (Seq :a) (Seq :a)` to resolve that intersection.
+
+- Selection compares instance heads, independently of their contexts or
+  definition order. The unique most-specific matching head wins, and its
+  constraints must then be satisfied. An unsatisfied constraint does not
+  cause selection to fall back to another instance.
+
+- The identity instance does not make source and destination types determine
+  one another. In particular, specifying the destination type may leave
+  overloaded numeric literals in the source ambiguous. Use `the` to annotate
+  the source type as well when needed.
+
+- Adding a more-specific instance can invalidate concrete calls already
+  compiled against a general instance. This is reported as an error and
+  requires rebuilding affected code in a fresh compiler environment with the
+  complete instance set. Polymorphic code retaining its `Into` constraint can
+  receive a new instance from its callers without recompilation.
+
+See the [overlap manual](/manual/operators/overlap/) for selection examples,
+optimization restrictions, and separate-compilation details."
     (into (:a -> :b)))
 
   (define-class ((Into :a :b) (Into :b :a) => Iso :a :b)
     "Opting into this marker typeclass implies that the instances for `(Into :a :b)` and `(Into :b :a)` form a bijection.")
 
-  ;; Keep the self-conversions needed by the library explicit. A blanket
-  ;; Into :a :a overlaps with generic container conversions; instance overlap
-  ;; is not currently supported.
-  (define-instance (Into Integer Integer)
+  (overlap)
+  (define-instance (Into :a :a)
     (define (into x) x))
 
-  (define-instance (Into UFix UFix)
-    (define (into x) x))
-
-  (define-instance (Into String String)
-    (define (into x) x))
+  (define-instance (Into :a :a => Iso :a :a))
 
   (define-class (TryInto :a :b)
     "`TRY-INTO` implies some elements of `:a` can be represented exactly by an element of `:b`, but sometimes not. Failed conversions return `None`."

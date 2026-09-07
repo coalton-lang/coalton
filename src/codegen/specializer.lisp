@@ -61,6 +61,12 @@
                    (unless specialization
                      (return-from apply-specialization))
 
+                   ;; A type alone does not identify overlapping evidence. Until
+                   ;; specializations carry dictionary proofs, retain the call.
+                   (when (some (lambda (pred)
+                                 (tc:class-has-overlap-p env (tc:ty-predicate-class pred))) preds)
+                     (return-from apply-specialization))
+
                    (unless (>= (length (node-rands node)) num-preds)
                      (util:coalton-bug "Expected function ~A to have at least ~A args when applying specialization." rator-name (length preds)))
 

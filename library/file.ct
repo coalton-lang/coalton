@@ -125,9 +125,6 @@ trailing slash.")
   (define-type Pathname
     "Pathname object. Equivalent to `cl:pathname`")
 
-  (define-instance (Into Pathname Pathname)
-    (define (into p) p))
-
   (define-instance (Into String Pathname)
     (define (into s)
       (lisp (-> Pathname) (s)

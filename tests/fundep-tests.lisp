@@ -135,12 +135,6 @@
         (is (tc:ty= tc:*integer-type* (tc:apply-substitution subs b)))))))
 
 (deftest overlapping-nonlinear-instance-heads ()
-  ;; General Cell unwrapping coexists with the explicit scalar self-conversions.
-  (check-coalton-types
-   "(define unwrapped-string (the String (into (coalton/cell:new \"x\"))))
-    (define unwrapped-integer (the Integer (into (coalton/cell:new (the Integer 42)))))"
-   '("unwrapped-string" . "String")
-   '("unwrapped-integer" . "Integer"))
   (dolist (instances '("(define-instance (C :a :a)) (define-instance (C :b Integer))"
                        "(define-instance (C :b Integer)) (define-instance (C :a :a))"))
     (signals tc:tc-error
@@ -151,24 +145,31 @@
     (define-instance (C Integer String))"))
 
 (deftest library-conversion-constraints ()
-  ;; Retain the original generic signatures of the container conversions.
+  ;; Open conversions retain dictionary parameters in polymorphic wrappers.
   (check-coalton-types
-   "(declare build-seq ((Foldable :f) (coalton/types:RuntimeRepr :a)
-                         => :f :a -> coalton/seq:Seq :a))
+   "(declare build-seq (Into (:f :a) (coalton/seq:Seq :a)
+                        => :f :a -> coalton/seq:Seq :a))
     (define (build-seq xs) (into xs))
-    (declare convert-complex ((coalton/math:ComplexComponent :a)
-                              (Into :a coalton/computable-reals:CReal)
+    (declare convert-complex (Into (coalton/math:Complex :a)
+                                   (coalton/math:Complex coalton/computable-reals:CReal)
                               => coalton/math:Complex :a
                               -> coalton/math:Complex coalton/computable-reals:CReal))
-    (define (convert-complex z) (into z))")
-  ;; Arbitrary identity conversion and implicit cell-content conversion are
-  ;; unavailable while the library avoids overlapping instances.
+    (define (convert-complex z) (into z))
+    (declare same (Into :a :a => :a -> :a))
+    (define (same x) (into x))
+    (declare same-via-iso (Iso :a :a => :a -> :a))
+    (define (same-via-iso x) (into x))
+    (define same-pair (the (Tuple Integer Integer)
+                          (into (the (Tuple Integer Integer) (Tuple 1 2)))))
+    (define text (the String (into (coalton/cell:read (coalton/cell:new (the Integer 42))))))")
+  ;; A fallback's context alone cannot select a polymorphic conversion.
   (dolist (program
             '("(declare same (:a -> :a)) (define (same x) (into x))"
-              "(define same (the (Tuple Integer Integer) (into (Tuple 1 2))))"
-              "(define text (the String (into (coalton/cell:new (the Integer 42)))))"))
+              "(declare build-seq ((Foldable :f) (coalton/types:RuntimeRepr :a)
+                                    => :f :a -> coalton/seq:Seq :a))
+               (define (build-seq xs) (into xs))"))
     (signals tc:tc-error (check-coalton-types program)))
-  ;; The old Cell-to-String rule conflicts even without a blanket identity.
+  ;; Incomparable heads require overlap even when their contexts differ.
   (dolist (instances
             '("(define-instance (C (coalton/cell:Cell :a) :a))
                (define-instance (Into :a String => C (coalton/cell:Cell :a) String))"
@@ -176,6 +177,22 @@
                (define-instance (C (coalton/cell:Cell :a) :a))"))
     (signals tc:tc-error
       (check-coalton-types (concatenate 'string "(define-class (C :a :b))" instances)))))
+
+(deftest cell-conversions-require-explicit-access ()
+  (dolist (program
+            '("(define wrapped (the (coalton/cell:Cell Integer) (into (the Integer 42))))"
+              "(define unwrapped (the Integer (into (coalton/cell:new (the Integer 42)))))"
+              "(define text (the String (into (coalton/cell:new \"42\"))))"
+              "(define text (the String (into (coalton/cell:new (the Integer 42)))))"
+              "(define text (the String (into (coalton/cell:new (coalton/cell:new (the Integer 42))))))"))
+    (signals tc:tc-error (check-coalton-types program)))
+  (check-coalton-types
+   "(define (read-cell c) (coalton/cell:read c))
+    (define (make-cell x) (coalton/cell:new x))
+    (declare cell-text (Into :a String => coalton/cell:Cell :a -> String))
+    (define (cell-text c) (into (coalton/cell:read c)))"
+   '("read-cell" . "(coalton/cell:Cell :a -> :a)")
+   '("make-cell" . "(:a -> coalton/cell:Cell :a)")))
 
 (deftest occurs-check-compares-variable-identities ()
   (let* ((a (tc:make-variable))

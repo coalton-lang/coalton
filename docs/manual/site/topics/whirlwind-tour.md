@@ -1367,10 +1367,10 @@ The `into` method is used only when a conversion can always be performed from on
 
 **Note that `as` only works for conversions via `into`, i.e., conversions that are total.** There is no corresponding syntax for `tryInto`.
 
-Conversions require an `Into` instance even when the source and destination
-types are the same. Coalton does not provide a blanket `Into :a :a` instance.
-Use the value directly, or `the` to constrain its type, when no conversion is
-needed.
+The library provides identity conversions through `Into :a :a`. Some generic
+conversions use [`overlap`](/manual/operators/overlap/), which permits more
+specific instances. Polymorphic functions that call these conversions retain
+an `Into` constraint so their callers can supply the appropriate conversion.
 
 ## Polymorphism, Mutation, and the Value Restriction
 

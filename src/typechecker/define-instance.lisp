@@ -151,23 +151,27 @@ must not collapse distinct variables or specialize one to a concrete type.
            (pred (tc:apply-ksubstitution ksubs pred))
            (context (tc:apply-ksubstitution ksubs context)))
 
-      (let* ((instance-codegen-sym
-               (a:format-symbol
+      (let* ((previous-instance (tc:lookup-class-instance-by-head env pred :no-error t))
+             (instance-codegen-sym
+               (or (and previous-instance (tc:ty-class-instance-codegen-sym previous-instance))
+                   (a:format-symbol
                 *package*
                 "INSTANCE/~A"
                 (with-output-to-string (s)
                   (tc:with-pprint-variable-context ()
                     (let ((*print-escape* t))
-                      (tc:pprint-predicate s pred))))))
+                      (tc:pprint-predicate s pred)))))))
 
              (method-names (mapcar #'tc:ty-class-method-name
                                    (tc:ty-class-unqualified-methods class)))
 
-             (method-codegen-syms (mapcar (lambda (method-name)
+             (method-codegen-syms (or (and previous-instance
+                                          (tc:ty-class-instance-method-codegen-syms previous-instance))
+                                     (mapcar (lambda (method-name)
                                             (a:format-symbol *package* "~A-~S"
                                                              instance-codegen-sym
                                                              method-name))
-                                          method-names))
+                                          method-names)))
 
              (method-codegen-inline-p
                (loop :for method-name :in method-names
@@ -184,6 +188,7 @@ must not collapse distinct variables or specialize one to a concrete type.
 
              (instance-entry
                (tc:make-ty-class-instance
+                :overlap-p (parser:toplevel-define-instance-overlap-p instance)
                 :constraints context
                 :predicate pred
                 :codegen-sym instance-codegen-sym
@@ -238,7 +243,7 @@ must not collapse distinct variables or specialize one to a concrete type.
           (tc:overlapping-instance-error (e)
             (tc-error "Overlapping instance"
                       (tc-location (parser:toplevel-define-instance-head-location instance)
-                                   "instance overlaps with ~A"
+                                   "instance overlaps with ~A; both instances must have an (overlap) attribute"
                                    (type-object-string (tc:overlapping-instance-error-inst2 e) env)))))
 
         (loop :for method-name :in method-names
