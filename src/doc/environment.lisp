@@ -41,10 +41,19 @@
   (tc:lookup-value-type entry:*global-environment*
                         (tc:name-entry-name name-entry)))
 
+(defun instance-types-exported-p (instance)
+  "T if every type constructor in INSTANCE's head is exported."
+  (every (lambda (name)
+           (let ((package (symbol-package name)))
+             (and package (exported-symbol-p name package))))
+         (tc:type-constructors
+          (tc:ty-predicate-types (tc:ty-class-instance-predicate instance)))))
+
 (defun class-instances (ty-class)
-  (tc:lookup-class-instances entry:*global-environment*
-                             (tc:ty-class-name ty-class)
-                             :no-error t))
+  (remove-if-not #'instance-types-exported-p
+                 (tc:lookup-class-instances entry:*global-environment*
+                                            (tc:ty-class-name ty-class)
+                                            :no-error t)))
 
 (defun struct-entry-p (type-entry)
   (let ((name (tc:type-entry-name type-entry)))
@@ -103,14 +112,15 @@ If non-nil, restrict to names defined in PACKAGE."
 
 (defun find-instances (&key (environment entry:*global-environment*)
                             (package nil))
-  "Return all instances in ENVIRONMENT.
+  "Return instances in ENVIRONMENT whose head types are exported.
 
 By default the global environment is queried.
 If non-nil, restrict to instances defined in PACKAGE."
   (remove-if (lambda (class-instance)
-               (and package
-                    (not (exported-symbol-p (tc:ty-predicate-class
-                                             (tc:ty-class-instance-predicate class-instance))
-                                            package t))))
+               (or (not (instance-types-exported-p class-instance))
+                   (and package
+                        (not (exported-symbol-p (tc:ty-predicate-class
+                                                 (tc:ty-class-instance-predicate class-instance))
+                                                package t)))))
              (%lm-values (tc:instance-environment-instances
                           (tc:environment-instance-environment environment)))))
