@@ -204,3 +204,15 @@
     (is (eq coalton:False (codegen-test-eval "(compare-key (the Integer 1) :other 2)")))
     (is (eq coalton:False (codegen-test-eval "(compare-key \"one\" :other \"two\")")))))
 
+(deftest codegen-exception-constructors-as-values ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(define-exception Problem (EmptyProblem) (NumberProblem Integer))
+      (declare raise-problem (Problem -> Integer))
+      (define (raise-problem problem) (throw problem))
+      (declare raise-using ((Integer -> Problem) -> Integer))
+      (define (raise-using constructor) (throw (constructor 42)))")
+    (is (= 1 (codegen-test-eval "(catch (throw EmptyProblem) ((EmptyProblem) 1) (_ 0))")))
+    (is (= 2 (codegen-test-eval "(catch (raise-problem EmptyProblem) ((EmptyProblem) 2) (_ 0))")))
+    (is (= 42 (codegen-test-eval "(catch (raise-using NumberProblem) ((NumberProblem x) x) (_ 0))")))))
+
