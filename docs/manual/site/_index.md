@@ -37,8 +37,8 @@ see the [Standard Library Reference](/reference/).
 | **Macros** | [`define-expression-macro`](/manual/operators/define-expression-macro/) | [`define-toplevel-macro`](/manual/operators/define-toplevel-macro/) | [`defmacro`](/manual/operators/defmacro/) |
 | **Directives** | [`declare`](/manual/operators/declare/) | [`derive`](/manual/operators/derive/) | [`inline`](/manual/operators/inline/) |
 |  | [`likely`](/manual/operators/likely/) | [`monomorphize`](/manual/operators/monomorphize/) | [`noinline`](/manual/operators/noinline/) |
-|  | [`repr`](/manual/operators/repr/) | [`specialize`](/manual/operators/specialize/) | [`unlikely`](/manual/operators/unlikely/) |
-|  | [`unsafe`](/manual/operators/unsafe/) |  |  |
+|  | [`overlap`](/manual/operators/overlap/) | [`repr`](/manual/operators/repr/) | [`specialize`](/manual/operators/specialize/) |
+|  | [`unlikely`](/manual/operators/unlikely/) | [`unsafe`](/manual/operators/unsafe/) |  |
 | **Types** | [`&key`](/manual/operators/keyword-tail/) | [`*`](/manual/operators/star/) | [`->`](/manual/operators/arrow/) |
 |  | [`=>`](/manual/operators/constraint-arrow/) | [`forall`](/manual/operators/forall/) | [`the`](/manual/operators/the/) |
 | **Expressions** | [`=`](/manual/operators/pattern-bind/) | [`[=>]`](/manual/operators/association-builder/) | [`[]`](/manual/operators/collection-builder/) |
