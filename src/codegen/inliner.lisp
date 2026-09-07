@@ -175,10 +175,10 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
 ;;; Inlining
 
 (defun inline-code-from-application (application abstraction)
-  "Swap an application node with a let node where the body is the inlined function."
+  "Bind call arguments sequentially before evaluating the inlined function body."
   (declare (type (or ast:node-application ast:node-direct-application) application)
            (type ast:node-abstraction abstraction)
-           (values ast:node-let &optional))
+           (values ast:node &optional))
 
   (let* ((fresh-abstraction
            (transformations:rename-type-variables abstraction))
@@ -237,11 +237,15 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
               substitutions
               (ast:node-abstraction-subexpr fresh-abstraction)
               t)))
-      (ast:make-node-let
-       :type     (ast:node-type application)
-       :bindings (loop :for (name . expr) :in bindings
-                       :collect (cons name (tc:apply-substitution new-substitutions expr)))
-       :subexpr  (tc:apply-substitution new-substitutions new-subexpr)))))
+      ;; Call operands have an evaluation order; a recursive LET group does not.
+      (loop :with body := (tc:apply-substitution new-substitutions new-subexpr)
+            :for (name . expr) :in (reverse bindings)
+            :do (setf body (ast:make-node-bind
+                           :type (ast:node-type application)
+                           :name name
+                           :expr (tc:apply-substitution new-substitutions expr)
+                           :body body))
+            :finally (return body)))))
 
 (defun try-inline-application (application env stack noinline-functions)
   "Try to inline an application node, checking internal traversal stack,

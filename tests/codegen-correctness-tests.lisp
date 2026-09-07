@@ -48,3 +48,28 @@
               "(match (Tuple (observe 1) (observe 2))
                  ((Tuple x y) (observe 3) (+ x y)))")))
     (is (equal '(1 2 3) (reverse *codegen-events*)))))
+
+(deftest codegen-inline-preserves-argument-order ()
+  (with-codegen-test-environment
+    (codegen-test-event-recorder)
+    (codegen-test-compile
+     "(inline)
+      (declare first-arg (Integer * Integer * Integer -> Integer))
+      (define (first-arg x _y _z) x)
+      (declare call-first (Void -> Integer))
+      (define (call-first) (first-arg (observe 1) (observe 2) (observe 3)))")
+    (is (= 1 (codegen-test-eval "(call-first)")))
+    (is (equal '(1 2 3) (reverse *codegen-events*)))
+    (setf *codegen-events* nil)
+    (is (= 1 (codegen-test-eval
+              "(first-arg (first-arg (observe 1) (observe 2) (observe 3))
+                          (observe 4) (observe 5))")))
+    (is (equal '(1 2 3 4 5) (reverse *codegen-events*)))
+    (setf *codegen-events* nil)
+    (codegen-test-compile
+     "(declare fail-argument (Void -> Integer))
+      (define (fail-argument) (lisp (-> Integer) () (cl:error \"argument failure\")))")
+    (signals simple-error
+      (codegen-test-eval "(first-arg (fail-argument) (observe 2) (observe 3))"))
+    (is (null *codegen-events*))))
+
