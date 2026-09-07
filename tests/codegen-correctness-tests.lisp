@@ -103,3 +103,21 @@
       (is (= 5 (funcall function)))
       (is (= 5 (funcall function))))))
 
+(deftest codegen-transparent-nested-patterns ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(repr :transparent)
+      (define-type IntList (IntList (List Integer)))
+      (declare head-or-zero (IntList -> Integer))
+      (define (head-or-zero xs)
+        (match xs ((IntList (Cons x _)) x) ((IntList (Nil)) 0)))
+      (repr :transparent)
+      (define-type (Wrapped :a) (Wrapped (Optional (Tuple :a :a))))
+      (declare first-or-zero (Wrapped Integer -> Integer))
+      (define (first-or-zero x)
+        (match x ((Wrapped (Some (Tuple a _))) a) ((Wrapped (None)) 0)))")
+    (is (= 42 (codegen-test-eval "(head-or-zero (IntList (make-list 42 43)))")))
+    (is (= 0 (codegen-test-eval "(head-or-zero (IntList Nil))")))
+    (is (= 42 (codegen-test-eval "(first-or-zero (Wrapped (Some (Tuple 42 43))))")))
+    (is (= 0 (codegen-test-eval "(first-or-zero (Wrapped None))")))))
+

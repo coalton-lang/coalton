@@ -74,7 +74,8 @@ EXPR-TYPE, returning (VALUES PREDICATE BINDINGS BINDING-TYPES).")
          (unless (= 1 (length (pattern-constructor-patterns pattern)))
            (util:coalton-bug "Unexpected number of fields in newtype pattern.~%    Expected: 1~%    Received: ~A~%"
                              (length (pattern-constructor-patterns pattern))))
-         (codegen-pattern (first (pattern-constructor-patterns pattern)) expr expr-type env))
+         (let ((inner (first (pattern-constructor-patterns pattern))))
+           (codegen-pattern inner expr (pattern-type inner) env)))
 
         ;; Check Cons directly
         ((eql (pattern-constructor-name pattern) 'coalton:Cons)
