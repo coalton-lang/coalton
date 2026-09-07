@@ -1517,6 +1517,92 @@
    '("seq-default" . "(coalton/seq:Seq Integer)")
    '("assoc-default" . "(coalton/seq:Seq (Tuple Integer Integer))")))
 
+(deftest test-consumed-builder-defaults ()
+  ;; The collection and builder state can both disappear from the result type.
+  ;; Foldable additionally exposes the collection as an applied type, :f :a.
+  (check-coalton-types
+   "(define (ignore-items _) True)
+    (define ignored (ignore-items [True False]))
+    (define itemized (fold (fn (n _) (+ n 1)) (the Integer 0) [True False]))
+    (define association
+      (fold (fn (n _) (+ n 1)) (the Integer 0) [True => False]))
+    (define (comprehension)
+      (fold (fn (n _) (+ n 1)) (the Integer 0)
+        [x :for x :in (coalton/iterator:once True)]))
+    (declare association-comprehension (Void -> Integer))
+    (define (association-comprehension)
+      (fold (fn (n _) (+ n 1)) 0
+        [x => x :for x :in (coalton/iterator:once True)]))"
+   '("ignored" . "Boolean")
+   '("itemized" . "Integer")
+   '("association" . "Integer")
+   '("comprehension" . "(Void -> Integer)")
+   '("association-comprehension" . "(Void -> Integer)")))
+
+(deftest test-consumed-builder-element-constraints ()
+  ;; Defaulting the representation must expose its element constraints before
+  ;; generalization or numeric defaulting, without defaulting the element early.
+  (check-coalton-types
+   "(define (count-items x)
+      (fold (fn (n _) (+ n 1)) (the Integer 0) [x x]))
+    (define (sum-items) (fold + 0 [1 2]))
+    (define numeric-count (fold (fn (n _) (+ n 1)) (the Integer 0) [1 2]))
+    (define (float-sum)
+      (let ((sum (fold + 0 [1 2]))) (+ sum 0.5)))"
+   '("count-items" . "(coalton/types:RuntimeRepr :a => :a -> Integer)")
+   '("sum-items" . "((Num :a) (coalton/types:RuntimeRepr :a) => Void -> :a)")
+   '("numeric-count" . "Integer")
+   '("float-sum" . "(Void -> F32)")))
+
+(deftest test-builder-defaults-respect-declarations ()
+  (check-coalton-types
+   "(declare make-items (FromItemizedCollection :c Boolean :b => Void -> :c))
+    (define (make-items) [True False])
+    (declare count-items (coalton/types:RuntimeRepr :a => :a -> Integer))
+    (define (count-items x) (fold (fn (n _) (+ n 1)) 0 [x x]))
+    (declare same-container
+      (forall (:f :a :b) (FromItemizedCollection (:f :a) :a :b => :f :a -> :f :a)))
+    (define (same-container _xs)
+      (let ((items (the (:f :a) []))) items))
+    (define vector-items (the (coalton/vector:Vector Boolean) (make-items)))"
+   '("make-items" . "(FromItemizedCollection :c Boolean :b => Void -> :c)")
+   '("count-items" . "(coalton/types:RuntimeRepr :a => :a -> Integer)")
+   '("same-container" . "(FromItemizedCollection (:f :a) :a :b => :f :a -> :f :a)")
+   '("vector-items" . "(coalton/vector:Vector Boolean)"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare count-items (:a -> Integer))
+      (define (count-items x) (fold (fn (n _) (+ n 1)) 0 [x x]))")))
+
+(deftest test-builder-defaults-in-standalone-expressions ()
+  (let ((*package* (find-package "COALTON-USER"))
+        (entry:*global-environment* entry:*global-environment*))
+    (dolist (text '("(fold + 0 [1 2 3])"
+                    "(fold + 0 [x :for x :in (coalton/iterator:up-to 4)])"
+                    "(fold (fn (n (Tuple k v)) (+ n (+ k v))) 0 [1 => 2 2 => 1])"
+                    "(fold (fn (n (Tuple k v)) (+ n (+ k v))) 0
+                       [x => x :for x :in (coalton/iterator:up-to 3)])"))
+      (let ((source (source:make-source-string text)))
+        (with-open-stream (stream (source:source-stream source))
+          (is (= 6 (eval (entry:expression-entry-point
+                         (parser:with-reader-context stream
+                           (parser:read-expression stream source)))))))))))
+
+(deftest test-consumed-dynamic-builder-defaults ()
+  (check-coalton-types
+   "(declare *count* Integer)
+    (define *count* 0)
+    (declare *count-items* (Void -> Integer))
+    (define *count-items* (fn () 0))
+    (define use-count
+      (dynamic-bind ((*count* (fold (fn (n _) (+ n 1)) 0 [True False])))
+        *count*))
+    (define use-count-items
+      (dynamic-bind ((*count-items* (fn () (fold (fn (n _) (+ n 1)) 0 [True False]))))
+        (*count-items*)))"
+   '("use-count" . "Integer")
+   '("use-count-items" . "Integer")))
+
 (deftest test-empty-association-builder ()
   (check-coalton-types
    "(define empty-assoc

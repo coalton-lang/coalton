@@ -171,6 +171,9 @@
                          (source:note (first accessors)
                                       "accessor is ambiguous")))
 
+          (multiple-value-setq (preds subs)
+            (tc:default-builder-context env nil preds subs))
+
           (let* ((preds (tc:reduce-context env preds subs))
                  (subs (tc:compose-substitution-lists
                         (tc:default-subs env nil preds)

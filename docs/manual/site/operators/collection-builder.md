@@ -25,10 +25,15 @@ comprehensions.
   collection-like types.
 - `[]` is an empty collection builder.
 - Collection builders and comprehensions must be finite.
-- Keys must all have the same type, and values must all have the same type.
-- Without a more specific expected type, association builders default to `Seq :t`.
+- Elements must all have the same type.
+- Without a more specific expected type, collection builders default to `Seq :t`.
 - Collection builders, especially empty ones, often need [`the`](/manual/operators/the/)
-  to fix the intended key and value types.
+  to fix the intended element type.
+
+Defaulting also applies when a collection is consumed immediately. For example,
+`(fold + 0 [1 2 3])` builds a `Seq Integer` and returns `6`. Choosing `Seq` leaves
+element types to ordinary inference; a surrounding type annotation or function
+signature can still require a different collection type.
 
 ## Options
 

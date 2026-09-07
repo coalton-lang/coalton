@@ -3936,30 +3936,6 @@ whether the binding permits generalization at all."
     env)
    :test #'tc:ty=))
 
-(defun default-builder-context (deferred-preds retained-preds subs env)
-  "Default builder representations and reduce the resulting binding constraints.
-
-Element constraints remain available for the caller's generalization and
-defaulting policy. Both ordinary bindings and dynamic rebinding use this step."
-  (declare (type tc:ty-predicate-list deferred-preds retained-preds)
-           (type tc:substitution-list subs)
-           (type tc:environment env)
-           (values tc:ty-predicate-list tc:ty-predicate-list tc:substitution-list &optional))
-  (let ((coalton-impl/typechecker/context-reduction:*builder-class-cache* nil))
-    (setf subs (tc:compose-substitution-lists
-                (tc:default-builder-subs env nil (append deferred-preds retained-preds))
-                subs))
-    ;; Defaulting a collection determines its builder state through fundeps.
-    ;; Solve them before expanding predicates against concrete instances.
-    (setf subs (nth-value 1 (tc:solve-fundeps env (append deferred-preds retained-preds) subs)))
-    (setf deferred-preds
-          (tc:expand-defaulted-builder-preds env (tc:apply-substitution subs deferred-preds)))
-    (setf retained-preds
-          (tc:expand-defaulted-builder-preds env (tc:apply-substitution subs retained-preds))))
-  (values (tc:reduce-context env deferred-preds nil)
-          (tc:reduce-context env retained-preds nil)
-          subs))
-
 (defun error-non-generalizable-binding (binding scheme)
   "Signal a user-facing error for a top-level weak (non-generalizable) type.
 
@@ -4545,9 +4521,18 @@ as a recursive function rather than a recursive value."
                    (lambda (p) (tc:entail (tc-env-env env) expr-preds p))
                    preds))
 
+            (multiple-value-setq (preds subs)
+              (tc:default-builder-context (tc-env-env env) (append env-tvars local-tvars) preds subs))
+            ;; Expanding a builder can expose requirements already supplied by
+            ;; the declaration, such as RuntimeRepr for a polymorphic element.
+            (setf preds
+                  (remove-if
+                   (lambda (p) (tc:entail (tc-env-env env) (tc:apply-substitution subs expr-preds) p))
+                   preds))
+
             (setf local-tvars
                   (expand-local-tvars env-tvars
-                                      local-tvars
+                                      (tc:type-variables (tc:apply-substitution subs local-tvars))
                                       preds
                                       (tc-env-env env)))
             (setf env-tvars
@@ -4684,10 +4669,11 @@ value-restriction and variance logic used for implicit bindings."
             ;; Keep dynamic rebinding aligned with ordinary implicit bindings by
             ;; reusing the same fundep, defaulting, and weak-variable handling.
             (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
-            (setf preds (tc:apply-substitution subs preds))
+            (multiple-value-setq (preds subs)
+              (tc:default-builder-context (tc-env-env env) (append env-tvars local-tvars) preds subs))
             (setf local-tvars
                   (expand-local-tvars env-tvars
-                                      local-tvars
+                                      (tc:type-variables (tc:apply-substitution subs local-tvars))
                                       preds
                                       (tc-env-env env)))
             (setf env-tvars
@@ -4715,8 +4701,6 @@ value-restriction and variance logic used for implicit bindings."
                             (tc:default-subs (tc-env-env env) nil defaultable-preds)
                             subs))
 
-                (multiple-value-setq (deferred-preds retained-preds subs)
-                  (default-builder-context deferred-preds retained-preds subs (tc-env-env env)))
                 (setf expr-ty (tc:apply-substitution subs expr-ty))
 
                 (let* ((generalizable-tvars
@@ -5026,10 +5010,11 @@ as a recursive function rather than a recursive value."
         ;; instances defined in the environment.
         (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
 
-        (setf preds (tc:apply-substitution subs preds))
+        (multiple-value-setq (preds subs)
+          (tc:default-builder-context (tc-env-env env) env-tvars preds subs))
         (setf local-tvars
               (expand-local-tvars env-tvars
-                                  local-tvars
+                                  (tc:type-variables (tc:apply-substitution subs local-tvars))
                                   preds
                                   (tc-env-env env)))
 
@@ -5061,8 +5046,6 @@ as a recursive function rather than a recursive value."
                         (tc:default-subs (tc-env-env env) nil defaultable-preds)
                         subs))
 
-            (multiple-value-setq (deferred-preds retained-preds subs)
-              (default-builder-context deferred-preds retained-preds subs (tc-env-env env)))
             (setf expr-tys (tc:apply-substitution subs expr-tys))
 
             (when (parser:binding-toplevel-p (first bindings))
