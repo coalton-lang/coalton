@@ -251,3 +251,16 @@
     (is (= 3 (codegen-test-eval "(resumable (observe 3) ((NumberResume _) (observe 1)))")))
     (is (equal '(3) *codegen-events*))))
 
+(deftest codegen-loop-function-bindings-are-assignable ()
+  (with-codegen-test-environment
+    (dolist (loop-name '("for" "for*"))
+      (is (= 2 (codegen-test-eval
+                (format nil "(~A ((f (fn () (the Integer 1)) (fn () 2)))
+                               :returns (f) :repeat 1 (values))" loop-name)))))
+    (is (= 11 (codegen-test-eval
+               "(for ((f (fn () i) f) (i (the Integer 10) (+ i 1)))
+                  :returns (f) :repeat 1 (values))")))
+    (is (= 7 (codegen-test-eval
+              "(for ((f (fn (x) (if (== x (the Integer 0)) 1 (f (- x 1))))
+                        (fn (_) 7)))
+                 :returns (f 3) :repeat 1 (values))")))))

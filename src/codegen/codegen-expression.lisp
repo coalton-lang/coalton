@@ -487,7 +487,8 @@
              (node-binding-sccs init-bindings)
              env
              #'make-loop-body
-             binding-decl-table)))))
+             binding-decl-table
+             t)))))
 
   (:method ((expr node-break) env)
     (declare (type tc:environment env))
@@ -756,16 +757,18 @@
        nil)))
 
 (defun codegen-recursive-bindings (bindings sccs env inner-thunk
-                                    &optional binding-decl-table)
+                                    &optional binding-decl-table function-values-p)
   "Emit recursive binding code for BINDINGS around INNER-THUNK.
 
 This is shared by `let` and the one-time initializer phase of `for` so both
-forms follow the same binding semantics."
+forms follow the same binding semantics. FUNCTION-VALUES-P gives function
+bindings assignable storage for loop steps, including recursive closures."
   (declare (type binding-list bindings)
            (type list sccs)
            (type tc:environment env)
            (type function inner-thunk)
-           (type (or null hash-table) binding-decl-table))
+           (type (or null hash-table) binding-decl-table)
+           (type boolean function-values-p))
 
   (when (null sccs)
     (return-from codegen-recursive-bindings (funcall inner-thunk)))
@@ -783,25 +786,34 @@ forms follow the same binding semantics."
        (let* ((binding-names (mapcar #'car scc-bindings))
               (body
                 (let ((*local-function-value-names*
-                        (append binding-names *local-function-value-names*)))
+                        (if function-values-p
+                            *local-function-value-names*
+                            (append binding-names *local-function-value-names*))))
                   (let ((inner
                           (codegen-recursive-bindings
                            bindings
                            (cdr sccs)
                            env
                            inner-thunk
-                           binding-decl-table)))
-                    `(labels ,(loop :for (name . node) :in scc-bindings
-                                    :collect `(,name
-                                               ,(abstraction-lambda-list node)
-                                               ,(function-declarations node env)
-                                               ,(annotate-function-body
-                                                 node
-                                                 (codegen-expression
-                                                  (node-abstraction-subexpr node)
-                                                  env)
-                                                 env)))
-                       ,inner)))))
+                           binding-decl-table function-values-p)))
+                    (if function-values-p
+                        `(let ,binding-names
+                           (setf ,@(loop :for (name . node) :in scc-bindings
+                                         :append (list name (codegen-expression node env))))
+                           (locally
+                             (declare ,@(recursive-binding-declarations binding-names binding-decl-table))
+                             ,inner))
+                        `(labels ,(loop :for (name . node) :in scc-bindings
+                                        :collect `(,name
+                                                   ,(abstraction-lambda-list node)
+                                                   ,(function-declarations node env)
+                                                   ,(annotate-function-body
+                                                     node
+                                                     (codegen-expression
+                                                      (node-abstraction-subexpr node)
+                                                      env)
+                                                     env)))
+                           ,inner))))))
          body))
 
       ;; Allocate before filling slots only for recursive data bindings.
@@ -816,7 +828,7 @@ forms follow the same binding semantics."
                      (data-letrec-able-p (cdr pair) env))
                    scc-bindings))
        (let* ((inner (codegen-recursive-bindings bindings (cdr sccs) env inner-thunk
-                                                 binding-decl-table))
+                                                 binding-decl-table function-values-p))
               (assignments (loop :for (name . initform) :in scc-bindings
                                  :for ctor-info := (find-constructor initform env)
                                  :appending (loop :for arg :in (node-rands initform)
@@ -852,7 +864,7 @@ forms follow the same binding semantics."
                 (when decls
                   `((declare ,@decls))))
             ,(codegen-recursive-bindings bindings (cdr sccs) env inner-thunk
-                                         binding-decl-table))))
+                                         binding-decl-table function-values-p))))
 
       (t (error "Invalid scc binding group. This should have been detected during typechecking.")))))
 
