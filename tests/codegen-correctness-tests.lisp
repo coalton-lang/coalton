@@ -216,3 +216,38 @@
     (is (= 2 (codegen-test-eval "(catch (raise-problem EmptyProblem) ((EmptyProblem) 2) (_ 0))")))
     (is (= 42 (codegen-test-eval "(catch (raise-using NumberProblem) ((NumberProblem x) x) (_ 0))")))))
 
+(deftest codegen-handler-payload-patterns ()
+  (with-codegen-test-environment
+    (codegen-test-event-recorder)
+    (codegen-test-compile
+     "(define-exception Problem (NumberProblem Integer) (ListProblem (List Integer)))
+      (define-resumption (NumberResume Integer))
+      (define-resumption (ListResume (List Integer)))
+      (define *state* (the Integer 0))")
+    (is (= 20 (codegen-test-eval
+               "(catch (throw (NumberProblem 2))
+                  ((NumberProblem 1) 10) ((NumberProblem _) 20))")))
+    (is (= 30 (codegen-test-eval
+               "(catch (catch (throw (NumberProblem 2)) ((NumberProblem 1) 10))
+                  ((NumberProblem 2) 30))")))
+    (is (= 2 (codegen-test-eval
+              "(catch (throw (ListProblem (make-list 1 2)))
+                 ((ListProblem (Nil)) 0) ((ListProblem (Cons 1 (Cons x _))) x) (_ 3))")))
+    (is (= 20 (codegen-test-eval
+               "(resumable (resume-to (NumberResume 2))
+                  ((NumberResume 1) 10) ((NumberResume _) 20))")))
+    (is (= 30 (codegen-test-eval
+               "(resumable (resumable (resume-to (NumberResume 2)) ((NumberResume 1) 10))
+                  ((NumberResume 2) 30))")))
+    (is (= 2 (codegen-test-eval
+              "(resumable (resume-to (ListResume (make-list 1 2)))
+                 ((ListResume (Nil)) 0) ((ListResume (Cons 1 (Cons x _))) x))")))
+    ;; Resumption bodies run outside the dynamic extent being resumed from.
+    (is (= 0 (codegen-test-eval
+              "(resumable (dynamic-bind ((*state* 9)) (resume-to (NumberResume 2)))
+                 ((NumberResume 2) *state*))")))
+    (signals simple-error
+      (codegen-test-eval "(resumable (resume-to (NumberResume 2)) ((NumberResume 1) 10))"))
+    (is (= 3 (codegen-test-eval "(resumable (observe 3) ((NumberResume _) (observe 1)))")))
+    (is (equal '(3) *codegen-events*))))
+

@@ -518,49 +518,77 @@
                  := (codegen-expression (catch-branch-body branch) env)
                :for lambda-var
                  := (gensym (symbol-name exception-name))
-               :for bindings
-                 := (nth-value 1 (codegen-pattern pattern lambda-var (pattern-type pattern) env))
                ;; NB: if CASE-BODY invokes a restart then control will
                ;; be transferred before the transfer due to
                ;; return-from.
                :for inner-body
                  := `(return-from ,block-label ,case-body)
-               :collect `(,exception-name
-                          (lambda (,lambda-var)
-                            (declare (ignorable ,lambda-var))
-                            (let ,bindings
-                              (declare (ignorable ,@(mapcar #'car bindings)))
-                              ,inner-body))))))
+               :collect (multiple-value-bind (predicate bindings)
+                            (codegen-pattern pattern lambda-var (pattern-type pattern) env)
+                          `(,exception-name
+                            (lambda (,lambda-var)
+                              (declare (ignorable ,lambda-var))
+                              (when ,predicate
+                                (let ,bindings
+                                  (declare (ignorable ,@(mapcar #'car bindings)))
+                                  ,inner-body))))))))
       `(block ,block-label
          (handler-bind ,handler-cases
            ,(codegen-expression (node-catch-expr node) env)))))
 
   (:method ((node node-resumable) env)
     (declare (type tc:environment env))
-    (let* ((clauses
-             (loop
-               :for branch :in (node-resumable-branches node)
-               :for pattern
-                 := (resumable-branch-pattern branch)
-               :for restart-name
-                 := (tc:lisp-type (pattern-type pattern) env)
-               :for resumption-constructor-arity
-                 := (tc:constructor-entry-arity
-                     (tc:lookup-constructor env restart-name))
-               :for restart-var
-                 := (gensym (symbol-name restart-name))
-               :for bindings
-                 := (nth-value 1 (codegen-pattern pattern restart-var (pattern-type pattern) env))
-               :for inner-body := (codegen-expression (resumable-branch-body branch) env)
-
-               :when (plusp resumption-constructor-arity)
-                 :collect `(,restart-name (,restart-var)
-                                          (declare (ignorable ,restart-var))
-                                          (let ,bindings ,inner-body))
-               :else
-                 :collect `(,restart-name () ,inner-body))))
-      `(restart-case ,(codegen-expression (node-resumable-expr node) env)
-         ,@clauses)))
+    (let ((normal-exit (gensym "RESUMABLE-NORMAL-"))
+          (dispatch-exit (gensym "RESUMABLE-DISPATCH-"))
+          (index-var (gensym "BRANCH-"))
+          (payload-var (gensym "RESUMPTION-"))
+          (groups nil)
+          (bodies nil)
+          (outer-restarts nil))
+      ;; Test payloads before unwinding, so an unmatched resumption can be
+      ;; forwarded to an outer handler. Execute the selected body only after
+      ;; unwinding, preserving RESTART-CASE semantics and multiple values.
+      (loop :for branch :in (node-resumable-branches node)
+            :for index :from 0
+            :for pattern := (resumable-branch-pattern branch)
+            :for name := (tc:lisp-type (pattern-type pattern) env)
+            :for arity := (tc:constructor-entry-arity (tc:lookup-constructor env name))
+            :for group := (or (assoc name groups)
+                              (let ((group (list name arity nil)))
+                                (push group groups)
+                                group))
+            :do (multiple-value-bind (predicate bindings)
+                    (codegen-pattern pattern payload-var (pattern-type pattern) env)
+                  (push `(,(if (zerop arity) t predicate)
+                          (return-from ,dispatch-exit
+                            (values ,index ,(if (zerop arity) nil payload-var))))
+                        (third group))
+                  (push `(,index
+                          (let ,bindings
+                            (declare (ignorable ,@(mapcar #'car bindings)))
+                            ,(codegen-expression (resumable-branch-body branch) env)))
+                        bodies)))
+      (let ((restarts
+              (loop :for (name arity tests) :in (nreverse groups)
+                    :for outer := (gensym "OUTER-RESTART-")
+                    :for args := (when (plusp arity) (list payload-var))
+                    :do (push `(,outer (find-restart ',name)) outer-restarts)
+                    :collect
+                    `(,name
+                      (lambda ,args
+                        (cond ,@(nreverse tests)
+                              (t (if ,outer
+                                     (invoke-restart ,outer ,@args)
+                                     (error "No matching resumption handler for ~S." ',name)))))))))
+        `(block ,normal-exit
+           (multiple-value-bind (,index-var ,payload-var)
+               (block ,dispatch-exit
+                 (let ,(nreverse outer-restarts)
+                   (restart-bind ,restarts
+                     (return-from ,normal-exit
+                       ,(codegen-expression (node-resumable-expr node) env)))))
+             (declare (ignorable ,payload-var))
+             (ecase ,index-var ,@(nreverse bodies)))))))
 
   (:method ((expr node-match) env)
     (declare (type tc:environment env))
