@@ -207,6 +207,27 @@
   (is (ra:rational? rational-root))
   (is (== (unwrap (the (Optional Fraction) (tryInto rational-root))) 3/2)))
 
+(define-test realalgebraic-rational-reconstruction-test ()
+  (let one = (unwrap-ok (ra:root (make-list 1 -1 0) 1/2 3/2)))
+  (is (ra:rational? one))
+  (is (== (unwrap (the (Optional Fraction) (tryInto one))) 1))
+  (is (== (floor one) 1))
+  (is (== (ceiling one) 1))
+  ;; Large constant: trial division formerly required about 10^20 steps.
+  (let huge = (^ (the Integer 10) 20))
+  (let irrational = (unwrap-ok (ra:root (make-list 1 0 (negate (+ (* huge huge) 1)))
+                                       (fromInt huge) (fromInt (+ huge 1)))))
+  (is (not (ra:rational? irrational)))
+  (is (== (floor irrational) huge))
+  ;; Nonlinear rational roots of either sign with large denominators.
+  (let den = (+ huge 39))
+  (let pos = (unwrap-ok (ra:root (make-list den (- 0 (+ (* 2 den) 1)) 2) 0 1)))
+  (let neg = (unwrap-ok (ra:root (make-list den (+ (* 2 den) 1) 2) -1 0)))
+  (is (== (unwrap (the (Optional Fraction) (tryInto pos))) (math:general/ 1 den)))
+  (is (== (unwrap (the (Optional Fraction) (tryInto neg))) (math:general/ -1 den)))
+  ;; A closed-interval endpoint may be the simplest rational but is not a root.
+  (is (not (ra:rational? (unwrap-ok (ra:root (make-list 1 0 -2) 1 3/2))))))
+
 (define-test realalgebraic-exact-integer-quantization-test ()
   (let pos-int-root = (unwrap-ok (ra:root (make-list 1 0 -4) 1 3)))
   (let neg-int-root = (unwrap-ok (ra:root (make-list 1 0 -4) -3 -1)))

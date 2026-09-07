@@ -1732,87 +1732,31 @@ and computed from exact rational arithmetic."
                 2))
     (rational->fixed-decimal q digits))
 
-  (declare positive-divisors (Integer -> List Integer))
-  (define (positive-divisors n)
-    "Enumerate positive divisors of |n|."
-    (let n0 = (abs n))
-    (let limit = (isqrt n0))
-    (cond
-      ((== n0 0)
-       Nil)
-      (True
-       (rec go ((k 1)
-                (small Nil)
-                (large Nil))
-         (cond
-           ((> k limit)
-            (coalton/list:append (coalton/list:reverse small) large))
-           ((/= (rem n0 k) 0)
-            (go (+ k 1) small large))
-           ((== (quot n0 k) k)
-            (go (+ k 1) (Cons k small) large))
-           (True
-            (go (+ k 1)
-                (Cons k small)
-                (Cons (quot n0 k) large))))))))
-
-  (declare list-last-int-strict (List Integer -> Integer))
-  (define (list-last-int-strict xs)
-    "Return final list element, or raise for empty input."
-    (match xs
-      ((Nil) (error "Internal error: expected non-empty polynomial coefficients."))
-      ((Cons x (Nil)) x)
-      ((Cons _ rest) (list-last-int-strict rest))))
-
   (declare candidate-rational-root? (Poly Integer * Fraction * Fraction * Fraction -> Boolean))
   (define (candidate-rational-root? p lo hi q)
     "Check whether q is certified to be the represented root."
-    (and (<= lo q)
-         (<= q hi)
+    (and (< lo q)
+         (< q hi)
          (== (poly-eval-desc-fraction p q) 0)))
 
-  (declare try-rational-for-denominator (Poly Integer
-                                          * Fraction
-                                          * Fraction
-                                          * Integer
-                                          * List Integer
-                                          -> (Optional Fraction)))
-  (define (try-rational-for-denominator p lo hi den nums)
-    "Try p/den candidates for all allowed numerators p."
-    (match nums
-      ((Nil) None)
-      ((Cons n more)
-       (cond
-         ((/= (gcd n den) 1)
-          (try-rational-for-denominator p lo hi den more))
-         (True
-          (let ((q (mkFraction n den)))
-            (cond
-              ((candidate-rational-root? p lo hi q)
-               (Some q))
-              (True
-               (let ((nq (negate q)))
-                 (cond
-                   ((candidate-rational-root? p lo hi nq)
-                    (Some nq))
-                   (True
-                    (try-rational-for-denominator p lo hi den more))))))))))))
+  (declare simplest-rational-closed (Fraction * Fraction -> Fraction))
+  (define (simplest-rational-closed lo hi)
+    "Find a rational of minimum denominator in [lo,hi] by continued fractions.
 
-  (declare try-rational-candidates (Poly Integer
-                                     * Fraction
-                                     * Fraction
-                                     * List Integer
-                                     * List Integer
-                                     -> (Optional Fraction)))
-  (define (try-rational-candidates p lo hi dens nums)
-    "Search rational-root-theorem candidates q = p/r with p|a0 and r|an."
-    (match dens
-      ((Nil) None)
-      ((Cons d more)
-       (match (try-rational-for-denominator p lo hi d nums)
-         ((Some q) (Some q))
-         ((None) (try-rational-candidates p lo hi more nums))))))
-
+The integer Mobius transform (a*y+b)/(c*y+d) accumulates the common
+continued-fraction prefix without growing the call stack."
+    (rec go ((l lo) (h hi) (a 1) (b 0) (c 0) (d 1))
+      (let k = (floor l))
+      (cond
+        ((== l (fromInt k))
+         (mkFraction (+ (* a k) b) (+ (* c k) d)))
+        ((< k (floor h))
+         (let j = (+ k 1))
+         (mkFraction (+ (* a j) b) (+ (* c j) d)))
+        (True
+         (go (/ 1 (- h (fromInt k)))
+             (/ 1 (- l (fromInt k)))
+             (+ (* a k) b) a (+ (* c k) d) c)))))
   (declare linear-rational-root (Poly Integer -> (Optional Fraction)))
   (define (linear-rational-root p)
     "Extract exact root for a linear polynomial an*x + a0."
@@ -1825,37 +1769,26 @@ and computed from exact rational arithmetic."
 
   (declare rational-certificate (RealAlgebraic -> (Optional Fraction)))
   (define (rational-certificate x)
-    "Return a certified exact rational value when one can be proved.
+    "Decide rationality by denominator-bounded rational reconstruction.
 
-For degree 1 this is direct. For higher degree we apply the rational root
-theorem and certify by exact substitution in the defining polynomial."
-    (let p0 = (poly-trim-desc (defining-polynomial x)))
-    (let lo = (lower-bound x))
-    (let hi = (upper-bound x))
-    (let deg = (poly-degree-desc p0))
-    (cond
-      ((<= deg 0)
-       None)
-      ((== deg 1)
-       (match (linear-rational-root p0)
-         ((Some q)
-          (if (candidate-rational-root? p0 lo hi q)
-              (Some q)
-              None))
-         ((None) None)))
-      (True
-       (let ((lead (abs (poly-int-leading p0)))
-             (constant (abs (list-last-int-strict (coefficients p0)))))
-         (cond
-           ((== constant 0)
-            (if (candidate-rational-root? p0 lo hi 0)
-                (Some 0)
-                None))
-           (True
-            (let ((dens (positive-divisors lead))
-                  (nums (positive-divisors constant)))
-              (try-rational-candidates p0 lo hi dens nums))))))))
-
+A rational root in lowest terms has denominator at most B=abs(leading
+coefficient). Distinct rationals with denominators <= B differ by at least
+1/B^2. In an interval of width <= 1/(2*B^2), the minimum-denominator
+candidate is therefore the only possible rational root. Exact substitution
+certifies it. This also handles polynomials with an irrelevant zero root."
+    (let p = (defining-polynomial x))
+    (match (linear-rational-root p)
+      ((Some q) (Some q))
+      ((None)
+       (let bound = (abs (poly-int-leading p)))
+       (let tight = (refine-to-width (mkFraction 1 (* 2 (* bound bound))) x))
+       (let lo = (lower-bound tight))
+       (let hi = (upper-bound tight))
+       (let q = (simplest-rational-closed lo hi))
+       (if (and (<= (denominator q) bound)
+                (candidate-rational-root? p lo hi q))
+           (Some q)
+           None))))
   (declare rational? (RealAlgebraic -> Boolean))
   (define (rational? x)
     "Return `True` when `x` is rational, decided by the rational root theorem."
