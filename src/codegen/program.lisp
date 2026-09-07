@@ -185,11 +185,6 @@ Example:
         (optimize-bindings definitions monomorphize-table inline-p-table *package* env)
 
       (let ((definition-names (mapcar #'car definitions))
-            (block-compile-p
-              (not
-               (loop :for (_ . node) :in definitions
-                     :thereis (and (node-abstraction-p node)
-                                   (/= 1 (tc:function-output-arity (node-type node)))))))
             (sccs (node-binding-sccs definitions))
             (lisp-forms (tc:translation-unit-lisp-forms translation-unit)))
 
@@ -215,16 +210,14 @@ Example:
                        env))))
 
             #+sbcl
-            ,@(when (and (eq sb-ext:*block-compile-default* :specified)
-                         block-compile-p)
+            ,@(when (eq sb-ext:*block-compile-default* :specified)
                 (list
                  `(declaim (sb-ext:start-block ,@definition-names))))
 
             ,@(compile-definitions sccs definitions lisp-forms offsets env)
 
             #+sbcl
-            ,@(when (and (eq sb-ext:*block-compile-default* :specified)
-                         block-compile-p)
+            ,@(when (eq sb-ext:*block-compile-default* :specified)
                 (list
                  `(declaim (sb-ext:end-block))))
 

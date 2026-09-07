@@ -26,6 +26,61 @@
     (define (observe x)
       (lisp (-> Integer) (x) (cl:push x coalton-tests::*codegen-events*) x))"))
 
+#+sbcl
+(deftest codegen-block-compilation-preserves-result-arities ()
+  (dolist (mode '(nil :specified t))
+    (dolist (case
+              '(("(declare results (Void -> Void))
+                  (define (results) (values))"
+                 "(results)" nil)
+                ("(declare results (Void -> Integer * String))
+                  (define (results) (values 42 \"answer\"))"
+                 "(results)" (42 "answer"))
+                ("(declare forward-results
+                    (forall ((:r Values)) (Void -> :r) -> :r))
+                  (define (forward-results f) (f))"
+                 "(forward-results (fn () (values (the Integer 42) \"answer\")))"
+                 (42 "answer"))
+                ("(define-class (Sink :a) (sink (:a -> Void)))
+                  (define-instance (Sink Integer) (define (sink _) (values)))"
+                 "(sink (the Integer 42))" nil)))
+      (with-codegen-test-environment
+        (let* ((sb-ext:*block-compile-default* mode)
+               (source
+                 (source:make-source-string
+                  (concatenate
+                   'string
+                   "(declare increment (F64 -> F64))
+                    (define (increment x) (+ x 1.0d0))
+                    (declare twice (F64 -> F64))
+                    (define (twice x) (increment (increment x)))
+                    "
+                   (first case)))))
+          (with-open-stream (stream (source:source-stream source))
+            (multiple-value-bind (form env)
+                (entry:entry-point
+                 (parser:with-reader-context stream (parser:read-program stream source)))
+              (let* ((declarations (loop :for subform :in (rest form)
+                                         :when (and (consp subform) (eq (first subform) 'declaim))
+                                           :append (rest subform)))
+                     (expected-count (if (eq mode :specified) 1 0)))
+                (is (= expected-count (count 'sb-ext:start-block declarations :key #'first)))
+                (is (= expected-count (count 'sb-ext:end-block declarations :key #'first)))
+                (when (eq mode :specified)
+                  (is (member (intern "TWICE")
+                              (rest (assoc 'sb-ext:start-block declarations))))))
+              ;; EVAL alone does not exercise SBCL's file block compiler.
+              (let ((*print-circle* t))
+                (multiple-value-bind (source-file fasl-file)
+                    (compile-and-load-forms
+                     (list `(in-package ,(package-name *package*)) form))
+                  (delete-file source-file)
+                  (delete-file fasl-file)))
+              (setf entry:*global-environment* env)
+              (is (= 42.0d0 (funcall (intern "TWICE") 40.0d0))))
+            (is (equal (third case)
+                       (multiple-value-list (codegen-test-eval (second case)))))))))))
+
 (deftest codegen-match-preserves-evaluation ()
   (with-codegen-test-environment
     (codegen-test-event-recorder)
