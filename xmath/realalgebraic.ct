@@ -1523,52 +1523,112 @@ When NEGATE-Z is True,  sign = (-1)^(pow-i) (t-minus-z)."
                  ((Tuple na nb)
                   (search na nb)))))))))))
 
+  (declare from-normalized-interval (Poly Integer * Fraction * Fraction -> RealAlgebraic))
+  (define (from-normalized-interval p lo hi)
+    (match (make-realalgebraic-certified p (sturm-sequence-desc p) lo hi)
+      ((Ok x) x)
+      ((Err msg) (error msg))))
+
+  (declare affine-certified (Fraction * Fraction * RealAlgebraic -> RealAlgebraic))
+  (define (affine-certified scale offset x)
+    "Apply scale*x+offset by invertible polynomial substitution, without a resultant."
+    (cond
+      ((== scale 0) (from-fraction offset))
+      ((and (== scale 1) (== offset 0)) x)
+      (True
+       (match (linear-rational-root (defining-polynomial x))
+         ((Some q) (from-fraction (+ (* scale q) offset)))
+         ((None)
+          (let substitution = (Poly (make-list (/ 1 scale) (/ (negate offset) scale))))
+          (let transformed =
+            (rec go ((cs (coefficients (defining-polynomial x))) (acc poly-frac-zero))
+              (match cs
+                ((Nil) acc)
+                ((Cons c more)
+                 (go more (poly-frac-add (poly-frac-mul acc substitution)
+                                         (Poly (make-list (fromInt c)))))))))
+          (let p = (poly-int-primitive (poly-frac-clear-denominators transformed)))
+          (let a = (+ (* scale (lower-bound x)) offset))
+          (let b = (+ (* scale (upper-bound x)) offset))
+          ;; An invertible affine map preserves square-freeness and isolation.
+          (from-normalized-interval p (min a b) (max a b)))))))
+
   (declare add-certified (RealAlgebraic * RealAlgebraic -> RealAlgebraic))
   (define (add-certified x y)
-    "Certified addition."
-    (select-operation-root (poly-for-sum x y)
-                            (fn (a b)
-                              (Some (interval-sum a b)))
-                            x
-                            y))
+    (cond
+      ((zero-ra? x) y)
+      ((zero-ra? y) x)
+      (True
+       (match (linear-rational-root (defining-polynomial x))
+         ((Some q) (affine-certified 1 q y))
+         ((None)
+          (match (linear-rational-root (defining-polynomial y))
+            ((Some q) (affine-certified 1 q x))
+            ((None)
+             (select-operation-root (poly-for-sum x y)
+                                    (fn (a b) (Some (interval-sum a b))) x y))))))))
 
   (declare sub-certified (RealAlgebraic * RealAlgebraic -> RealAlgebraic))
   (define (sub-certified x y)
-    "Certified subtraction."
-    (select-operation-root (poly-for-diff x y)
-                            (fn (a b)
-                              (Some (interval-diff a b)))
-                            x
-                            y))
+    (cond
+      ((lisp (-> Boolean) (x y) (cl:eq x y)) (from-integer 0))
+      ((zero-ra? y) x)
+      (True
+       (match (linear-rational-root (defining-polynomial x))
+         ((Some q) (affine-certified -1 q y))
+         ((None)
+          (match (linear-rational-root (defining-polynomial y))
+            ((Some q) (affine-certified 1 (negate q) x))
+            ((None)
+             (select-operation-root (poly-for-diff x y)
+                                    (fn (a b) (Some (interval-diff a b))) x y))))))))
 
   (declare mul-certified (RealAlgebraic * RealAlgebraic -> RealAlgebraic))
   (define (mul-certified x y)
-    "Certified multiplication."
-    (if (lisp (-> Boolean) (x y) (cl:eq x y))
-        (pow-ra-positive 2 x)
-        (select-operation-root (poly-for-prod x y)
-                               (fn (a b) (Some (interval-prod a b))) x y)))
+    (cond
+      ((or (zero-ra? x) (zero-ra? y)) (from-integer 0))
+      ((lisp (-> Boolean) (x y) (cl:eq x y)) (pow-ra-positive 2 x))
+      (True
+       (match (linear-rational-root (defining-polynomial x))
+         ((Some q) (affine-certified q 0 y))
+         ((None)
+          (match (linear-rational-root (defining-polynomial y))
+            ((Some q) (affine-certified q 0 x))
+            ((None)
+             (select-operation-root (poly-for-prod x y)
+                                    (fn (a b) (Some (interval-prod a b))) x y))))))))
 
   (declare div-certified (RealAlgebraic * RealAlgebraic -> RealAlgebraic))
   (define (div-certified x y)
-    "Certified division."
     (cond
       ((zero-ra? y) (error "Division by zero algebraic number."))
       ((zero-ra? x) (from-integer 0))
+      ((lisp (-> Boolean) (x y) (cl:eq x y)) (from-integer 1))
       (True
-       (select-operation-root (poly-for-quot x y) interval-quot x y))))
+       (match (linear-rational-root (defining-polynomial y))
+         ((Some q) (affine-certified (/ 1 q) 0 x))
+         ((None)
+          (match (linear-rational-root (defining-polynomial x))
+            ((Some q) (affine-certified q 0 (reciprocal-certified y)))
+            ((None)
+             (select-operation-root (poly-for-quot x y) interval-quot x y))))))))
 
   (declare reciprocal-certified (RealAlgebraic -> RealAlgebraic))
   (define (reciprocal-certified x)
-    "Certified reciprocal."
+    "Reverse the defining polynomial and reciprocate an interval excluding zero."
     (if (zero-ra? x)
         (error "Division by zero: reciprocal of algebraic zero is undefined.")
-        (let ((one (from-integer 1)))
-          (select-operation-root (poly-for-quot one x)
-                                  interval-quot
-                                  one
-                                  x))))
-
+        (match (linear-rational-root (defining-polynomial x))
+          ((Some q) (from-fraction (/ 1 q)))
+          ((None)
+           (let p = (poly-int-primitive
+                     (Poly (coalton/list:reverse (coefficients (defining-polynomial x))))))
+           (rec go ((a x))
+             (let lo = (lower-bound a))
+             (let hi = (upper-bound a))
+             (if (and (<= lo 0) (>= hi 0))
+                 (go (refine-native a))
+                 (from-normalized-interval p (/ 1 hi) (/ 1 lo))))))))
   (declare poly-frac-mul (Poly Fraction * Poly Fraction -> Poly Fraction))
   (define (poly-frac-mul a b)
     "Multiply using integer convolution and one shared denominator."

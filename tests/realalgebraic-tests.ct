@@ -436,6 +436,23 @@
                         (== (ra::coefficients (ra::poly-int-gcd a b)) (ra::coefficients expected-gcd))
                         (go next (+ i 1))))))))))))
 
+(define-test realalgebraic-affine-and-reciprocal-test ()
+  (let translated = (+ (* 2 sqrt2) 3))
+  (is (== (ra::coefficients (ra::defining-polynomial translated)) (make-list 1 -6 1)))
+  (is (== (/ (- translated 3) 2) sqrt2))
+  (is (== (+ (- 3 sqrt2) sqrt2) 3))
+  (is (== (* (/ sqrt2 -3) -3) sqrt2))
+  (is (== (ra::degree (math:reciprocal sqrt2)) 2))
+  (is (== (* (math:reciprocal sqrt2) sqrt2) 1))
+  ;; Reciprocal drops an irrelevant zero root.
+  (let x = (unwrap-ok (ra:root (make-list 1 -1 0) 1/2 3/2)))
+  (is (== (ra::degree (math:reciprocal x)) 1))
+  (is (== (math:reciprocal x) 1))
+  ;; Refine an enclosure crossing zero before inverting its endpoints.
+  (let wide = (unwrap-ok (ra:root (make-list 1 -4 2) -1 1)))
+  (is (== (* (math:reciprocal wide) wide) 1))
+  (is (== (ra::degree (+ (the ra:RealAlgebraic (into 17/23)) (into -8/19))) 1)))
+
 (define-test realalgebraic-unary-power-degree-test ()
   (let s = (+ sqrt2 (math:sqrt (the ra:RealAlgebraic 3))))
   (let square = (* s s))
