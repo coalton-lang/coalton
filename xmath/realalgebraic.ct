@@ -414,14 +414,8 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
   (declare poly-int-squarefree-nontrivial (Poly Integer -> (Result String (Poly Integer))))
   (define (poly-int-squarefree-nontrivial normalized)
     "Square-free normalization for nonzero, nonconstant integer polynomials."
-    (let pf = (poly-int->frac normalized))
-    (let df = (poly-frac-derivative pf))
-    (let g = (poly-frac-gcd pf df))
-    (match (poly-frac-divrem pf g)
-      ((Tuple q r)
-       (if (poly-frac-zero? r)
-           (Ok (poly-int-primitive (poly-frac-clear-denominators q)))
-           (Err "Internal error: square-free normalization produced non-zero remainder.")))))
+    (let g = (poly-int-gcd normalized (poly-int-derivative normalized)))
+    (Ok (poly-int-primitive (poly-int-div-exact normalized g))))
 
   (declare poly-int-squarefree-primitive (Poly Integer -> (Result String (Poly Integer))))
   (define (poly-int-squarefree-primitive p)
@@ -435,25 +429,33 @@ root of `poly`. `sturm` caches a Sturm sequence for `poly`."
       (True
        (poly-int-squarefree-nontrivial normalized))))
 
+  (declare poly-int-positive-rem (Poly Integer * Poly Integer -> Poly Integer))
+  (define (poly-int-positive-rem a b)
+    "Primitive positive multiple of the rational remainder of a by b.
+
+At each step abs(lc(b))*r - sign(lc(b))*lc(r)*t^k*b cancels the leading
+term. Removing positive content controls growth and preserves the sign
+needed by Sturm sequences, even when b has negative leading coefficient."
+    (let b0 = (poly-trim-desc b))
+    (let db = (poly-degree-desc b0))
+    (let lead = (poly-int-leading b0))
+    (when (== lead 0) (error "Polynomial remainder by zero."))
+    (rec go ((r (poly-int-primitive-preserve-sign a)))
+      (if (or (poly-int-zero? r) (< (poly-degree-desc r) db))
+          r
+          (go (poly-int-primitive-preserve-sign
+               (poly-int-sub (poly-int-scale (abs lead) r)
+                             (poly-int-shift
+                              (poly-int-scale (* (if (< lead 0) -1 1) (poly-int-leading r)) b0)
+                              (- (poly-degree-desc r) db))))))))
+
   (declare poly-int-gcd (Poly Integer * Poly Integer -> Poly Integer))
   (define (poly-int-gcd a b)
-    "Greatest common divisor over Z[x], normalized to primitive form.
-
-This is implemented by embedding into Q[x], computing monic gcd there,
-then clearing denominators exactly."
-    (let a0 = (poly-int-primitive (poly-trim-desc a)))
-    (let b0 = (poly-int-primitive (poly-trim-desc b)))
-    (cond
-      ((poly-int-zero? a0)
-       b0)
-      ((poly-int-zero? b0)
-       a0)
-      (True
-       (poly-int-primitive
-             (poly-frac-clear-denominators
-              (poly-frac-gcd (poly-int->frac a0)
-                             (poly-int->frac b0)))))))
-
+    "Primitive gcd in Z[t] using an integer primitive remainder sequence."
+    (rec go ((p (poly-int-primitive a)) (q (poly-int-primitive b)))
+      (if (poly-int-zero? q)
+          (poly-int-primitive p)
+          (go q (poly-int-positive-rem p q)))))
   (declare poly-eval-desc-fraction (Poly Integer * Fraction -> Fraction))
   (define (poly-eval-desc-fraction p x)
     "Evaluate a descending integer polynomial at rational `x` via Horner's rule."
@@ -525,13 +527,8 @@ Homogeneous Horner evaluation avoids rational normalization at every step."
 
   (declare sturm-next (Poly Integer * Poly Integer -> Poly Integer))
   (define (sturm-next prev curr)
-    "Compute next Sturm polynomial: `-rem(prev, curr)` over Q[x]."
-    (let remf = (poly-frac-rem (poly-int->frac prev)
-                                (poly-int->frac curr)))
-    (if (poly-frac-zero? remf)
-        (Poly (Cons 0 Nil))
-        (poly-int-primitive-preserve-sign
-         (poly-int-neg (poly-frac-clear-denominators remf)))))
+    "Negative rational remainder, scaled only by a positive rational."
+    (poly-int-neg (poly-int-positive-rem prev curr)))
 
   (declare sturm-sequence-desc (Poly Integer -> List (Poly Integer)))
   (define (sturm-sequence-desc p)

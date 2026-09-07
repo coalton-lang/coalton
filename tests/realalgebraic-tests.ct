@@ -414,6 +414,28 @@
               cl:nil)
           (cl:error () cl:t)))))
 
+(define-test realalgebraic-integer-remainder-sequence-test ()
+  ;; Compare the integer PRS with the independent rational Euclidean
+  ;; implementation, including negative leading coefficients and factors.
+  (is
+   (rec go ((seed 4919) (i 0))
+     (if (== i 80)
+         True
+         (let ((next (ra-fuzz-next seed)))
+           (let ((factor (ra::make-poly (make-list 1 -2)))
+                 (a0 (ra::make-poly (make-list 3 (- (mod seed 31) 15) 1)))
+                 (b0 (ra::make-poly (make-list -2 (- (mod next 23) 11)))))
+             (let ((a (ra::poly-int-mul factor a0))
+                   (b (if (== (mod i 2) 0) (ra::poly-int-mul factor b0) b0)))
+               (let ((af (ra::poly-int->frac a)) (bf (ra::poly-int->frac b)))
+                 (let ((expected-rem (ra::poly-int-primitive-preserve-sign
+                                      (ra::poly-frac-clear-denominators (ra::poly-frac-rem af bf))))
+                       (expected-gcd (ra::poly-int-primitive
+                                      (ra::poly-frac-clear-denominators (ra::poly-frac-gcd af bf)))))
+                   (and (== (ra::coefficients (ra::poly-int-positive-rem a b)) (ra::coefficients expected-rem))
+                        (== (ra::coefficients (ra::poly-int-gcd a b)) (ra::coefficients expected-gcd))
+                        (go next (+ i 1))))))))))))
+
 (define-test realalgebraic-performance-smoke-test ()
   (let s2 = (math:sqrt (the ra:RealAlgebraic (fromInt 2))))
   (let s3 = (math:sqrt (the ra:RealAlgebraic (fromInt 3))))
