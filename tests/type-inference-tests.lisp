@@ -2,6 +2,378 @@
 
 (in-package #:coalton-tests)
 
+(deftest test-quantification-preserves-binders ()
+  (let* ((a (tc:make-variable :source-name :a))
+         (f (tc:make-variable :source-name :f
+                              :kind (tc:make-kfun :from tc:+kstar+ :to tc:+kstar+)))
+         (r (tc:make-variable :source-name :r :allow-result-p t))
+         (outer (tc:make-variable))
+         (unused (tc:make-variable))
+         (type (tc:qualify
+                (list (tc:make-ty-predicate :class 'coalton/classes:Eq :types (list a)))
+                (tc:make-function-ty
+                 :positional-input-types (list (tc:make-tapp :from f :to a) outer)
+                 :keyword-input-types (list (tc:make-keyword-ty-entry :keyword :x :type a))
+                 :output-types (list r)))))
+    ;; Implicit quantification follows occurrence order; explicit quantification
+    ;; follows binder order. Neither captures outer variables or adds unused ones.
+    (dolist (explicit-p '(nil t))
+      (let* ((scheme (if explicit-p
+                         (tc:quantify-using-tvar-order (list r f unused a) type t)
+                         (tc:quantify (list r f unused a) type)))
+             (ordered-vars (if explicit-p (list r f a) (list f a r)))
+             (fresh-vars (tc:ty-scheme-instantiation-types scheme)))
+        (is (eq explicit-p (tc:ty-scheme-explicit-p scheme)))
+        (is (= 3 (length fresh-vars)))
+        (is (equal (mapcar #'tc:tyvar-source-name fresh-vars)
+                   (if explicit-p '(:r :f :a) '(:f :a :r))))
+        (is (equal (mapcar #'tc:tyvar-allow-result-p fresh-vars)
+                   (if explicit-p '(t nil nil) '(nil nil t))))
+        (is (equalp (mapcar #'tc:kind-of fresh-vars)
+                    (mapcar #'tc:kind-of ordered-vars)))
+        (is (equalp (list outer) (tc:type-variables scheme)))
+        (is (tc:qualified-ty= type (tc:instantiate ordered-vars (tc:ty-scheme-type scheme))))))))
+
+(deftest test-forall-kind-annotations ()
+  (check-coalton-types
+   "(declare annotated-id (forall ((:a Type)) (:a -> :a)))
+    (define (annotated-id x) x)
+    (declare unary (forall ((:f (Type -> Type)) :a) ((:f :a) -> (:f :a))))
+    (define (unary x) x)
+    (declare binary (forall ((:f (Type -> Type -> Type)))
+                      ((:f Integer String) -> (:f Integer String))))
+    (define (binary x) x)
+    (declare higher (forall ((:h ((Type -> Type) -> Type)) (:f (Type -> Type)))
+                      ((:h :f) -> (:h :f))))
+    (define (higher x) x)"
+   '("annotated-id" . "(:a -> :a)")
+   '("unary" . "((:f :a) -> (:f :a))")
+   '("binary" . "((:f Integer String) -> (:f Integer String))")
+   '("higher" . "(forall ((:h ((Type -> Type) -> Type)) (:f (Type -> Type)))
+                    ((:h :f) -> (:h :f)))"))
+  ;; Bare binders still infer higher kinds. An explicit Type fixes the kind.
+  (check-coalton-types
+   "(declare keep (forall (:f :a) ((:f :a) -> (:f :a))))
+    (define (keep x) x)")
+  (dolist (declaration
+            '("(forall ((:f Type) :a) ((:f :a) -> (:f :a)))"
+              "(forall ((:a (Type -> Type))) (:a -> :a))"
+              "(forall ((:f (Type -> Type -> Type))) ((:f Integer) -> (:f Integer)))"))
+    (signals tc:tc-error
+      (check-coalton-types
+       (format nil "(declare bad ~A) (define (bad x) x)" declaration)))))
+
+(deftest test-forall-kind-syntax-errors ()
+  (dolist (binder '("(:a)" "(:a Type Type)" "(:a . Type)" "(a Type)"
+                    "(:a :kind)" "(:a Integer)" "(:a (Type Type))"
+                    "(:a (Type ->))" "(:a (-> Type))" "(:a ())"
+                    "(:a (Type . Type))" "(:a (Type -> :kind))"
+                    "(:a (Type -> Values))" "(:a (Values -> Type))"
+                    "(:a ((Type -> Values) -> Type))"))
+    (signals parser:parse-error
+      (check-coalton-types
+       (format nil "(declare bad (forall (~A) (:a -> :a)))
+                    (define (bad x) x)" binder)))))
+
+(deftest test-ordinary-binders-reject-result-packs ()
+  (dolist (declaration '("((Void -> :r) -> :r)"
+                         "(forall (:r) ((Void -> :r) -> :r))"
+                         "(forall ((:r Type)) ((Void -> :r) -> :r))"))
+    (check-coalton-types
+     (format nil "(declare call-one ~A)
+                  (define (call-one f) (f))
+                  (define (good) (call-one (fn () (the Integer 42))))"
+             declaration)
+     '("good" . "(Void -> Integer)"))
+    (dolist (result '("(values)" "(values 1 True)"))
+      (signals tc:tc-error
+        (check-coalton-types
+         (format nil "(declare call-one ~A)
+                      (define (call-one f) (f))
+                      (define (bad) (call-one (fn () ~A)))"
+                 declaration result)))))
+  ;; A fresh type variable in a Lisp annotation also defaults to one value.
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare bad (Void -> Void))
+      (define (bad) (lisp (-> :r) () (cl:values)))")))
+
+(deftest test-values-binder-positions ()
+  (dolist (declaration
+            '("(forall ((:r Values)) (:r -> :r))"
+              "(forall ((:r Values)) (&key (:x :r) -> :r))"
+              "(forall ((:r Values)) (Void -> List :r))"
+              "(forall ((:r Values)) (Void -> :r Integer))"
+              "(forall ((:r Values)) (Void -> Integer * :r))"
+              "(forall ((:r Values)) (Eq :r => Void -> :r))"
+              "(forall ((:r Values)) :r)"))
+    (signals tc:tc-error
+      (check-coalton-types
+       (format nil "(declare bad ~A) (define (bad) (values))" declaration))))
+  ;; Using a result sequence as one value must not silently narrow a binder.
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare bad (forall ((:r Values)) ((Void -> :r) -> :r)))
+      (define (bad f) (id (f)))")))
+
+(deftest test-scoped-kind-annotations ()
+  (check-coalton-types
+   "(declare scoped (forall ((:r Values)) ((Void -> :r) -> :r)))
+    (define (scoped f)
+      (let ((declare forward (Void -> :r))
+            (forward (fn () ((the (Void -> :r) f)))))
+        (forward)))
+    (declare shadowed (forall ((:r Values)) ((Void -> :r) -> :r)))
+    (define (shadowed f)
+      (let ((declare identity (forall ((:r Type)) (:r -> :r)))
+            (identity (fn (x) (the :r x))))
+        (identity 1)
+        (f)))
+    (declare nested (forall ((:a Type)) (forall ((:r Values)) ((:a -> :r) * :a -> :r))))
+    (define (nested f x) (f x))"
+   '("scoped" . "(forall ((:r Values)) ((Void -> :r) -> :r))")
+   '("shadowed" . "(forall ((:r Values)) ((Void -> :r) -> :r))")
+   '("nested" . "(forall (:a (:r Values)) ((:a -> :r) * :a -> :r))"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare bad (forall ((:r Values)) ((Void -> :r) -> :r)))
+      (define (bad f)
+        (let ((declare inner (:r -> :r)) (inner (fn (x) x)))
+          (f)))"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare bad (forall (:r (:r Values)) ((Void -> :r) -> :r)))
+      (define (bad f) (f))")))
+
+(deftest test-class-method-kind-annotations ()
+  (check-coalton-types
+   "(define-class (Call :a)
+      (call (forall ((:r Values)) (:a * (Void -> :r) -> :r))))
+    (define-instance (Call Integer)
+      (define (call _ f)
+        (lisp (-> :r) (f) (coalton:call-coalton-function f))))
+    (declare pair (Void -> Integer * String))
+    (define (pair) (call (the Integer 1) (fn () (values 2 \"two\"))))"
+   '("pair" . "(Void -> Integer * String)"))
+  (check-coalton-types
+   "(define-type (Wrap :f :a) (Wrap (:f :a)))
+    (define-class (Keep :wrapper)
+      (keep (forall ((:f (Type -> Type))) ((:wrapper :f Integer) -> (:wrapper :f Integer)))))
+    (define-instance (Keep Wrap)
+      (define (keep x) (the (Wrap :f Integer) x)))"))
+
+(deftest test-whole-result-polymorphism ()
+  (check-coalton-types
+   "(define (forward-direct f) (f))
+    (define (forward-through-id f) (id (f)))"
+   '("forward-direct" . "(forall ((:r Values)) ((Void -> :r) -> :r))")
+   '("forward-through-id" . "((Void -> :a) -> :a)"))
+  (check-coalton-types
+   "(declare forward-results (forall ((:a Values)) ((Void -> :a) -> :a)))
+    (define (forward-results f) (f))
+    (declare two-results (Void -> Integer * String))
+    (define (two-results) (values 1 \"x\"))
+    (define (forwarded-results) (forward-results two-results))"
+   '("forwarded-results" . "(Void -> Integer * String)"))
+  (let* ((a (tc:make-variable :allow-result-p t))
+         (poly (tc:make-function-ty :output-types (list a)))
+         (ordinary (tc:make-function-ty :output-types (list (tc:make-variable)))))
+    (dolist (outputs (list nil (list tc:*integer-type*)
+                          (list tc:*integer-type* tc:*string-type*)))
+      (let ((concrete (tc:make-function-ty :output-types outputs)))
+        (dolist (pair (list (cons poly concrete) (cons concrete poly)))
+          (let ((subs (tc:unify nil (car pair) (cdr pair))))
+            (is (tc:ty= (tc:apply-substitution subs poly) concrete))))
+        (is (tc:ty= (tc:apply-substitution (tc:match poly concrete) poly) concrete))
+        (unless (= 1 (length outputs))
+          (signals tc:coalton-internal-type-error (tc:unify nil ordinary concrete))
+          (signals tc:coalton-internal-type-error (tc:match ordinary concrete)))))))
+
+(deftest test-invalid-accessors-report-type-errors ()
+  (dolist (source '("(define invalid-field (.field (fn (x) x)))"
+                    "(define invalid-field (.field (the Integer 1)))"
+                    "(define (ambiguous-field x) (.field x))"))
+    (signals tc:tc-error (check-coalton-types source))))
+
+(deftest test-integer-patterns-retain-numeric-constraints ()
+  (check-coalton-types
+   "(define (one? x) (match x (1 True) (_ False)))
+    (define (nested-one? x) (match x ((Some 1) True) (_ False)))"
+   '("one?" . "(Num :a => :a -> Boolean)")
+   '("nested-one?" . "(Num :a => Optional :a -> Boolean)"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare one? (String -> Boolean))
+      (define (one? x) (match x (1 True) (_ False)))")))
+
+(deftest test-numeric-defaulting-preserves-predicate-structure ()
+  (check-coalton-types
+   "(define-class (C :a) (consume-c (:a -> Unit)))
+    (define-instance (C (List Integer)) (define (consume-c _) Unit))
+    (define defaulted-result (consume-c (make-list 1)))"
+   '("defaulted-result" . "Unit"))
+  (check-coalton-types
+   "(define-class (C :a :b) (consume-c (:a * :b -> Unit)))
+    (define-instance (C (List Integer) String) (define (consume-c _ _) Unit))
+    (define defaulted-result (consume-c (make-list 1) \"x\"))"
+   '("defaulted-result" . "Unit"))
+  (check-coalton-types
+   "(define-class (C :a :b) (consume-c (:a * :b -> Unit)))
+    (define-instance (C Integer Integer) (define (consume-c _ _) Unit))
+    (define defaulted-result (let ((n 1)) (consume-c n n)))"
+   '("defaulted-result" . "Unit"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-class (C :a) (consume-c (:a -> Unit)))
+      (define-instance (C (List String)) (define (consume-c _) Unit))
+      (define invalid-result (consume-c (make-list 1)))")))
+
+(deftest test-kind-unification-consistency ()
+  (let* ((a (tc:make-kvariable))
+         (b (tc:make-kvariable))
+         (left (tc:make-kfun :from a :to a))
+         (right (tc:make-kfun :from b :to tc:+kstar+))
+         (subs (tc:kmgu left right)))
+    (is (equalp (tc:apply-ksubstitution subs left) (tc:apply-ksubstitution subs right)))
+    (is (null (tc:kmgu a a)))
+    (signals tc:coalton-internal-type-error (tc:kmgu a left))
+    (signals tc:coalton-internal-type-error (tc:kmgu left a))
+    (signals tc:coalton-internal-type-error
+      (tc:kmgu left (tc:make-kfun :from tc:+kstar+
+                                  :to (tc:make-kfun :from tc:+kstar+ :to tc:+kstar+)))))
+  (signals tc:tc-error
+    (check-coalton-types "(define-type (Bad :f) (Bad (:f :f)))")))
+
+(deftest test-function-initializers-preserve-ascriptions ()
+  (signals tc:tc-error
+    (check-coalton-types "(define annotated (the (:a -> Integer) (fn (x) x)))"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-class (C :a) (method-c (:a -> :a)))
+      (define-instance (C String)
+        (define method-c (the (Integer -> Integer) (fn (x) x))))"))
+  (check-coalton-types
+   "(define annotated (the (Integer -> Integer) (fn (x) x)))"
+   '("annotated" . "(Integer -> Integer)")))
+
+(deftest test-matching-preserves-target-variables ()
+  (let* ((a (tc:make-variable))
+         (b (tc:make-variable))
+         (left (tc:make-function-ty :positional-input-types (list a) :output-types (list a)))
+         (right (tc:make-function-ty :positional-input-types (list b)
+                                     :output-types (list tc:*integer-type*))))
+    (signals tc:coalton-internal-type-error (tc:match left right))
+    (signals tc:coalton-internal-type-error
+      (tc:match (tc:make-result-ty :output-types (list a a))
+                (tc:make-result-ty :output-types (list b tc:*integer-type*))))
+    (signals tc:coalton-internal-type-error
+      (tc:match
+       (tc:make-function-ty
+        :positional-input-types (list a)
+        :keyword-input-types (list (tc:make-keyword-ty-entry :keyword :x :type a)))
+       (tc:make-function-ty
+        :positional-input-types (list b)
+        :keyword-input-types (list (tc:make-keyword-ty-entry :keyword :x :type tc:*integer-type*)))))
+    (let* ((target (tc:make-function-ty :positional-input-types (list b) :output-types (list b)))
+           (subs (tc:match left target)))
+      (is (tc:ty= (tc:apply-substitution subs left) target))
+      (is (tc:ty= (tc:apply-substitution subs target) target))))
+  (let* ((a (tc:make-variable :allow-result-p t))
+         (poly (tc:make-function-ty :output-types (list a)))
+         (void (tc:make-function-ty :output-types nil)))
+    (signals tc:coalton-internal-type-error (tc:match void poly))
+    (is (tc:ty= (tc:apply-substitution (tc:match poly void) poly) void)))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define (bad-annotation)
+        (let ((annotated (the (:a -> Integer) (fn (x) x)))) annotated))"))
+  (check-coalton-types
+   "(define (good-annotation)
+      (let ((annotated (the (Integer -> Integer) (fn (x) x)))) annotated))"
+   '("good-annotation" . "(Void -> (Integer -> Integer))")))
+
+(deftest test-unification-shares-component-solutions ()
+  (let* ((a (tc:make-variable))
+         (b (tc:make-variable))
+         (generic (tc:make-function-ty
+                   :positional-input-types (list a)
+                   :keyword-input-types (list (tc:make-keyword-ty-entry :keyword :x :type a)
+                                              (tc:make-keyword-ty-entry :keyword :y :type b))
+                   :output-types (list b a)))
+         (concrete (tc:make-function-ty
+                    :positional-input-types (list tc:*integer-type*)
+                    :keyword-input-types (list (tc:make-keyword-ty-entry :keyword :x :type tc:*integer-type*)
+                                               (tc:make-keyword-ty-entry :keyword :y :type tc:*string-type*))
+                    :output-types (list tc:*string-type* tc:*integer-type*)))
+         (subs (tc:unify nil generic concrete)))
+    (is (tc:ty= concrete (tc:apply-substitution subs generic)))
+    (signals tc:coalton-internal-type-error
+      (tc:unify nil generic
+                (tc:make-function-ty
+                 :positional-input-types (tc:function-ty-positional-input-types concrete)
+                 :keyword-input-types (tc:function-ty-keyword-input-types concrete)
+                 :output-types (list tc:*integer-type* tc:*string-type*))))
+    ;; Result components also share substitutions: a repeated variable cannot
+    ;; independently become Integer and String in the same result sequence.
+    (signals tc:coalton-internal-type-error
+      (tc:unify nil (tc:make-result-ty :output-types (list a a))
+                    (tc:make-result-ty :output-types (list tc:*integer-type* tc:*string-type*))))))
+
+(deftest test-loop-bindings-are-monomorphic ()
+  (dolist (loop-name '("for" "for*"))
+    (dolist (declaration '("" "(declare v (Optional :a))"))
+      (signals tc:tc-error
+        (check-coalton-types
+         (format nil
+                 "(define (read-string)
+                    (~A (~A (v None (Some (the Integer 42))))
+                      :returns (the (Optional String) v)
+                      :repeat 1 Unit))"
+                 loop-name declaration))))
+    (check-coalton-types
+     (format nil
+             "(define (read-integer)
+                (~A ((v None (Some (the Integer 42))))
+                  :returns v :repeat 1 Unit))"
+             loop-name)
+     '("read-integer" . "(Void -> Optional Integer)")))
+  ;; Generalizing a dependency before checking another initializer is unsafe too.
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define (read-string)
+        (for ((v None (Some (the Integer 42)))
+              (w (the (Optional String) v) w))
+          :returns w :repeat 1 Unit))")))
+
+(deftest test-explicit-value-restriction ()
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare stash (coalton/cell:Cell (Optional :a)))
+      (define stash (coalton/cell:new None))"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare stash (forall (:a) (coalton/cell:Cell (Optional :a))))
+      (define stash (coalton/cell:new None))"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define (read-string)
+        (let ((declare stash (coalton/cell:Cell (Optional :a)))
+              (stash (coalton/cell:new None)))
+          (coalton/cell:write! stash (Some (the Integer 42)))
+          (the (Optional String) (coalton/cell:read stash))))"))
+  (check-coalton-types
+   "(declare stash (coalton/cell:Cell (Optional Integer)))
+    (define stash (coalton/cell:new None))
+    (declare empty-value (Optional :a))
+    (define empty-value (id None))
+    (declare make-stash (Void -> coalton/cell:Cell (Optional :a)))
+    (define (make-stash) (coalton/cell:new None))
+    (declare qualified-stash (Num :a => coalton/cell:Cell (Optional :a)))
+    (define qualified-stash (coalton/cell:new None))"
+   '("empty-value" . "(Optional :a)")
+   '("make-stash" . "(Void -> coalton/cell:Cell (Optional :a))")
+   '("qualified-stash" . "(Num :a => coalton/cell:Cell (Optional :a))")))
+
 (deftest test-type-inference ()
   (check-coalton-types
    "(define f 5)"
@@ -55,7 +427,7 @@
    "(define (example f)
       (f))"
 
-   '("example" . "((Void -> :a) -> :a)"))
+   '("example" . "(forall ((:a Values)) ((Void -> :a) -> :a))"))
 
   (check-coalton-types
    "(define (example2 f)
@@ -398,21 +770,21 @@
    "(define (f a) (g a))
     (define (g b) (f b))"
 
-   '("f" . "(:a -> :b)")
-   '("g" . "(:a -> :b)"))
+   '("f" . "(forall (:a (:b Values)) (:a -> :b))")
+   '("g" . "(forall (:a (:b Values)) (:a -> :b))"))
 
   ;; Check unusual recursive definitions
   (check-coalton-types
    "(define f
-       (fn (a) (f a)))"
+     (fn (a) (f a)))"
 
-   '("f" . "(:a -> :b)"))
+   '("f" . "(forall (:a (:b Values)) (:a -> :b))"))
 
   (check-coalton-types
    "(define f
        (fn (_a) (f 5)))"
 
-   '("f" . "(Num :a => :a -> :b)")))
+   '("f" . "(forall (:a (:b Values)) (Num :a => :a -> :b))")))
 
 (deftest test-explicit-type-declarations ()
   ;; Check that explicit declarations can reduce the type of a definition
@@ -1078,6 +1450,40 @@
         (dynamic-bind ((*id* ((fn (f) f) (fn (x) x))))
           (Tuple (*id* 1) (*id* True))))")))
 
+(deftest test-dynamic-binding-generalization ()
+  ;; Expansive covariant values can remain polymorphic during rebinding too.
+  (check-coalton-types
+   "(declare *empty* (Optional :a))
+    (define *empty* None)
+    (define use-empty
+      (dynamic-bind ((*empty* (id None)))
+        (Tuple (the (Optional Integer) *empty*) (the (Optional String) *empty*))))"
+   '("use-empty" . "(Tuple (Optional Integer) (Optional String))"))
+  (check-coalton-types
+   "(declare *forward* (forall ((:r Values)) ((Void -> :r) -> :r)))
+    (define *forward* (fn (f) (f)))
+    (define (use-forward)
+      (dynamic-bind ((*forward* (fn (f) (f))))
+        (*forward* (fn () (values)))
+        (*forward* (fn () True))
+        (*forward* (fn () (values (the Integer 42) True)))))"
+   '("use-forward" . "(Void -> Integer * Boolean)")))
+
+(deftest test-dynamic-binding-builders ()
+  ;; The declared collection determines both element types and builder state,
+  ;; for value initializers as well as function initializers.
+  (check-coalton-types
+   "(declare *items* (coalton/seq:Seq Integer))
+    (define *items* [1])
+    (declare *make-items* (Void -> coalton/seq:Seq Integer))
+    (define *make-items* (fn () [1]))
+    (define use-items
+      (dynamic-bind ((*items* [1 2])) *items*))
+    (define use-maker
+      (dynamic-bind ((*make-items* (fn () [1 2]))) (*make-items*)))"
+   '("use-items" . "(coalton/seq:Seq Integer)")
+   '("use-maker" . "(coalton/seq:Seq Integer)")))
+
 (deftest test-function-definition-shorthand ()
   (check-coalton-types
    "(define f (fn () 5))"
@@ -1110,6 +1516,92 @@
     (define assoc-default [1 => 2 3 => 4])"
    '("seq-default" . "(coalton/seq:Seq Integer)")
    '("assoc-default" . "(coalton/seq:Seq (Tuple Integer Integer))")))
+
+(deftest test-consumed-builder-defaults ()
+  ;; The collection and builder state can both disappear from the result type.
+  ;; Foldable additionally exposes the collection as an applied type, :f :a.
+  (check-coalton-types
+   "(define (ignore-items _) True)
+    (define ignored (ignore-items [True False]))
+    (define itemized (fold (fn (n _) (+ n 1)) (the Integer 0) [True False]))
+    (define association
+      (fold (fn (n _) (+ n 1)) (the Integer 0) [True => False]))
+    (define (comprehension)
+      (fold (fn (n _) (+ n 1)) (the Integer 0)
+        [x :for x :in (coalton/iterator:once True)]))
+    (declare association-comprehension (Void -> Integer))
+    (define (association-comprehension)
+      (fold (fn (n _) (+ n 1)) 0
+        [x => x :for x :in (coalton/iterator:once True)]))"
+   '("ignored" . "Boolean")
+   '("itemized" . "Integer")
+   '("association" . "Integer")
+   '("comprehension" . "(Void -> Integer)")
+   '("association-comprehension" . "(Void -> Integer)")))
+
+(deftest test-consumed-builder-element-constraints ()
+  ;; Defaulting the representation must expose its element constraints before
+  ;; generalization or numeric defaulting, without defaulting the element early.
+  (check-coalton-types
+   "(define (count-items x)
+      (fold (fn (n _) (+ n 1)) (the Integer 0) [x x]))
+    (define (sum-items) (fold + 0 [1 2]))
+    (define numeric-count (fold (fn (n _) (+ n 1)) (the Integer 0) [1 2]))
+    (define (float-sum)
+      (let ((sum (fold + 0 [1 2]))) (+ sum 0.5)))"
+   '("count-items" . "(coalton/types:RuntimeRepr :a => :a -> Integer)")
+   '("sum-items" . "((Num :a) (coalton/types:RuntimeRepr :a) => Void -> :a)")
+   '("numeric-count" . "Integer")
+   '("float-sum" . "(Void -> F32)")))
+
+(deftest test-builder-defaults-respect-declarations ()
+  (check-coalton-types
+   "(declare make-items (FromItemizedCollection :c Boolean :b => Void -> :c))
+    (define (make-items) [True False])
+    (declare count-items (coalton/types:RuntimeRepr :a => :a -> Integer))
+    (define (count-items x) (fold (fn (n _) (+ n 1)) 0 [x x]))
+    (declare same-container
+      (forall (:f :a :b) (FromItemizedCollection (:f :a) :a :b => :f :a -> :f :a)))
+    (define (same-container _xs)
+      (let ((items (the (:f :a) []))) items))
+    (define vector-items (the (coalton/vector:Vector Boolean) (make-items)))"
+   '("make-items" . "(FromItemizedCollection :c Boolean :b => Void -> :c)")
+   '("count-items" . "(coalton/types:RuntimeRepr :a => :a -> Integer)")
+   '("same-container" . "(FromItemizedCollection (:f :a) :a :b => :f :a -> :f :a)")
+   '("vector-items" . "(coalton/vector:Vector Boolean)"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(declare count-items (:a -> Integer))
+      (define (count-items x) (fold (fn (n _) (+ n 1)) 0 [x x]))")))
+
+(deftest test-builder-defaults-in-standalone-expressions ()
+  (let ((*package* (find-package "COALTON-USER"))
+        (entry:*global-environment* entry:*global-environment*))
+    (dolist (text '("(fold + 0 [1 2 3])"
+                    "(fold + 0 [x :for x :in (coalton/iterator:up-to 4)])"
+                    "(fold (fn (n (Tuple k v)) (+ n (+ k v))) 0 [1 => 2 2 => 1])"
+                    "(fold (fn (n (Tuple k v)) (+ n (+ k v))) 0
+                       [x => x :for x :in (coalton/iterator:up-to 3)])"))
+      (let ((source (source:make-source-string text)))
+        (with-open-stream (stream (source:source-stream source))
+          (is (= 6 (eval (entry:expression-entry-point
+                         (parser:with-reader-context stream
+                           (parser:read-expression stream source)))))))))))
+
+(deftest test-consumed-dynamic-builder-defaults ()
+  (check-coalton-types
+   "(declare *count* Integer)
+    (define *count* 0)
+    (declare *count-items* (Void -> Integer))
+    (define *count-items* (fn () 0))
+    (define use-count
+      (dynamic-bind ((*count* (fold (fn (n _) (+ n 1)) 0 [True False])))
+        *count*))
+    (define use-count-items
+      (dynamic-bind ((*count-items* (fn () (fold (fn (n _) (+ n 1)) 0 [True False]))))
+        (*count-items*)))"
+   '("use-count" . "Integer")
+   '("use-count-items" . "Integer")))
 
 (deftest test-empty-association-builder ()
   (check-coalton-types

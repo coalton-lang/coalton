@@ -1,5 +1,11 @@
 (in-package #:coalton-native-tests)
 
+(define-test test-for-specializes-empty-initializer ()
+  (let result =
+    (for ((value None (Some (the Integer 42))))
+      :returns value :repeat 1 Unit))
+  (is (== (Some 42) result)))
+
 (define-test test-for-while-clause ()
   (let sum = (cell:new (the UFix 0)))
   (let countdown =

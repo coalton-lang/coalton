@@ -106,6 +106,20 @@
       (write-section 'coalton-value "Values")
       (write-section 'coalton-macro "Macros"))))
 
+(defun instance-overlap-badge-html (instance)
+  "Render an explicit overlap marker separately from the instance signature.
+Inline styling also works in generated Markdown and Hugo pages without requiring
+the hosting site to install a stylesheet. Renderers that strip styles retain
+the link and its label."
+  (if (tc:ty-class-instance-overlap-p instance)
+      (spinneret:with-html-string
+        (:a :class "instance-overlap-badge"
+            :href "/manual/operators/overlap/"
+            :title "Declared with (overlap); permits overlap with other marked instances."
+            :style "display:inline-flex;align-items:center;margin-left:8px;padding:2px 7px;border:1px solid #bccbea;border-radius:999px;background:#eef3ff;color:#355184;font:600 11px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;vertical-align:baseline;white-space:nowrap;text-decoration:none"
+            "overlap"))
+      ""))
+
 (defun write-instances (backend object)
   (let ((instances (object-instances object)))
     (unless (null instances)
@@ -115,7 +129,8 @@
         (loop :for instance :in instances
               :do (format stream "- <code>")
                   (write-string (to-markdown instance) stream)
-                  (format stream "</code>~:[~;  ~%~:*~A~]~%"
+                  (format stream "</code>~A~:[~;  ~%~:*~A~]~%"
+                          (instance-overlap-badge-html instance)
                           (source:docstring instance)))
         (format stream "~%</details>~%~%")))))
 

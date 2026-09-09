@@ -35,10 +35,11 @@
                            :type ,lisp-type
                            :initarg ,name
                            :accessor ,accessor))
-         (:default-initargs
-          ,@(loop :for field :in fields
-                  :for name := (soc:struct-or-class-field-name field)
-                  :append `(,name (error ""))))))
+         ,@(when fields
+             `((:default-initargs
+                ,@(loop :for field :in fields
+                        :for name := (soc:struct-or-class-field-name field)
+                        :append `(,name (error ""))))))))
 
      (list
       `(defun ,constructor ,field-names
@@ -49,4 +50,13 @@
          (make-instance ',classname ,@(mapcan
                                        (lambda (field)
                                          `(',field ,field))
-                                       field-names)))))))
+                                       field-names))))
+     ;; Constructors are also values: nullary constructors denote an instance,
+     ;; while constructors with fields denote a first-class function.
+     (if fields
+         (list
+          `(global-lexical:define-global-lexical ,constructor function)
+          `(setf ,constructor #',constructor))
+         (list
+          `(global-lexical:define-global-lexical ,constructor ,classname)
+          `(setf ,constructor (,constructor)))))))

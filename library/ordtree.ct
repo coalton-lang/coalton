@@ -67,7 +67,7 @@
       (_ False)))
 
   ;;; aux
-  (declare stray-node (Void -> :a))
+  (declare stray-node (forall ((:a Values)) (Void -> :a)))
   (define (stray-node)
     (lisp (-> :a) ()
       (util:coalton-bug "Encountered ephemeral node during traversal")))

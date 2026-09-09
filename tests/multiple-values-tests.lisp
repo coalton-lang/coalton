@@ -4,6 +4,10 @@
   (:use #:coalton #:coalton-prelude)
   (:export
    #:mv-return-values
+   #:mv-forward-results
+   #:mv-forward-pair
+   #:mv-forward-single
+   #:mv-forward-void
    #:mv-consume-values
    #:mv-lisp-return-values
    #:mv-lisp-consume-values
@@ -25,6 +29,40 @@
 
 (with-coalton-compilation (:package #:coalton-tests/multiple-values)
   (coalton-toplevel
+    (declare mv-forward-results (forall ((:a Values)) ((Void -> :a) -> :a)))
+    (define (mv-forward-results f) (f))
+
+    (declare mv-forward-lisp (forall ((:r Values)) ((Void -> :r) -> :r)))
+    (define (mv-forward-lisp f)
+      (lisp (-> :r) (f)
+        (call-coalton-function f)))
+
+    (define-class (MvCall :a)
+      (mv-call (forall ((:r Values)) (:a * (Void -> :r) -> :r))))
+    (define-instance (MvCall Integer)
+      (define (mv-call _ f)
+        (lisp (-> :r) (f)
+          (call-coalton-function f))))
+
+    (declare mv-produce-pair (Void -> Integer * String))
+    (define (mv-produce-pair) (values 42 "answer"))
+    (declare mv-produce-single (Void -> Integer))
+    (define (mv-produce-single) 42)
+    (declare mv-produce-void (Void -> Void))
+    (define (mv-produce-void) (values))
+
+    (declare mv-forward-pair (Void -> Integer * String))
+    (define (mv-forward-pair)
+      (mv-forward-results mv-produce-pair))
+
+    (declare mv-forward-single (Void -> Integer))
+    (define (mv-forward-single)
+      (mv-forward-results mv-produce-single))
+
+    (declare mv-forward-void (Void -> Void))
+    (define (mv-forward-void)
+      (mv-forward-results mv-produce-void))
+
     (declare mv-return-values (Integer -> Integer * Integer))
     (define (mv-return-values x)
       (values x (1+ x)))
@@ -157,6 +195,61 @@
   (declare (type symbol rator)
            (values boolean &optional))
   (eq rator 'coalton-library/classes:tuple))
+
+(deftest forwarded-multiple-values-runtime ()
+  (is (equal '(42 "answer")
+             (multiple-value-list
+              (eval '(coalton:coalton (coalton-tests/multiple-values:mv-forward-pair))))))
+  (is (equal '(42)
+             (multiple-value-list
+              (eval '(coalton:coalton (coalton-tests/multiple-values:mv-forward-single))))))
+  (is (null (multiple-value-list
+             (eval '(coalton:coalton (coalton-tests/multiple-values:mv-forward-void)))))))
+
+(deftest scoped-values-binders-runtime ()
+  (loop :for producer :in '(coalton-tests/multiple-values::mv-produce-void
+                           coalton-tests/multiple-values::mv-produce-single
+                           coalton-tests/multiple-values::mv-produce-pair)
+        :for expected :in '(nil (42) (42 "answer"))
+        :do (dolist (call `((coalton-tests/multiple-values:mv-forward-results ,producer)
+                           (coalton-tests/multiple-values::mv-forward-lisp ,producer)
+                           (coalton-tests/multiple-values::mv-call
+                            (coalton:the coalton:Integer 0) ,producer)
+                           ((coalton/functions:compose
+                             (coalton:fn (_x) (,producer)) coalton/functions:id)
+                            coalton:Unit)
+                           ((coalton/functions:flip
+                             (coalton:fn (_x _y) (,producer)))
+                            coalton:Unit coalton:Unit)
+                           ((coalton/functions:curry
+                             (coalton:fn (_pair) (,producer)))
+                            coalton:Unit coalton:Unit)
+                           ((coalton/functions:uncurry
+                             (coalton:fn (_x _y) (,producer)))
+                            (coalton/classes:Tuple coalton:Unit coalton:Unit))
+                           ((coalton/functions:fix
+                             (coalton:fn (_self _x) (,producer))) coalton:Unit)
+                           (coalton/classes:unwrap-or-else
+                            (coalton:fn (_x) (,producer)) ,producer (coalton:Some coalton:Unit))
+                           (coalton/xmath/big-float:with-precision ,producer)
+                           (coalton/xmath/big-float:with-rounding ,producer)
+                           (coalton/xmath/computable-reals:with-comparison-threshold ,producer)))
+              (is (equal expected
+                         (multiple-value-list (eval `(coalton:coalton ,call))))
+                  "Result forwarding through ~S" call))))
+
+(deftest polymorphic-lisp-output-codegen ()
+  (let ((result-type (tc:make-variable :allow-result-p t)))
+    (dolist (emit-annotations '(nil t))
+      (let ((coalton-impl/settings:*emit-type-annotations* emit-annotations))
+        (dolist (outputs '(nil (42) (42 "answer")))
+          (let* ((node (ast:make-node-lisp
+                        :type result-type
+                        :vars nil
+                        :form (list `(values ,@outputs))))
+                 (code (coalton-impl/codegen/codegen-expression:codegen-expression
+                        node entry:*global-environment*)))
+            (is (equal outputs (multiple-value-list (eval code))))))))))
 
 (deftest direct-multiple-values-runtime ()
   (is (equal '(10 11)

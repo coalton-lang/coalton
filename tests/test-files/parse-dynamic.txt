@@ -109,3 +109,37 @@ error: Invalid pattern
    |
  5 |      (*x* *x*)))
    |       ^^^ pattern variables cannot use dynamic-variable earmuffs
+
+================================================================================
+104 Dynamic variable definitions cannot be declared inline
+================================================================================
+
+(package test-package)
+
+(inline)
+(define *x* 1)
+
+--------------------------------------------------------------------------------
+
+error: Invalid target for inline attribute
+  --> test:3:0
+   |
+ 3 |  (inline)
+   |  ^^^^^^^^ dynamic variables cannot be declared inline
+
+================================================================================
+105 Dynamic variable declarations cannot be declared inline
+================================================================================
+
+(package test-package)
+
+(inline)
+(declare *x* Integer)
+
+--------------------------------------------------------------------------------
+
+error: Invalid target for inline attribute
+  --> test:3:0
+   |
+ 3 |  (inline)
+   |  ^^^^^^^^ dynamic variables cannot be declared inline

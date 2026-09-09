@@ -56,6 +56,7 @@ jobs:
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
           (asdf:load-system :small-coalton-programs)
+          (asdf:test-system :coalton-raytrace)
           EOF
           sbcl --dynamic-space-size 2048 --non-interactive --load run-tests.lisp
       - name: Run Allegro CL tests
@@ -70,6 +71,7 @@ jobs:
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
           (asdf:load-system :small-coalton-programs)
+          (asdf:test-system :coalton-raytrace)
           EOF
           cat run-tests.lisp | alisp --batch
       - name: Run Clozure CL tests
@@ -86,5 +88,6 @@ jobs:
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
           (asdf:load-system :small-coalton-programs)
+          (asdf:test-system :coalton-raytrace)
           EOF
           ccl64-wrapped.sh --batch --load run-tests.lisp

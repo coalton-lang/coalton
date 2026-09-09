@@ -142,7 +142,7 @@
 (defun compose-ksubstitution-lists (s1 s2)
   "Returns the composition of S1 and S2.
 
-  (apply-ksubstitution s2 (apply-ksubstitution s1 k)) == (apply-ksubstitution (compose-ksubstitutions s1 s2) k)"
+  (apply-ksubstitution s1 (apply-ksubstitution s2 k)) == (apply-ksubstitution (compose-ksubstitution-lists s1 s2) k)"
   (declare (type ksubstitution-list s1)
            (type ksubstitution-list s2)
            (values ksubstitution-list &optional))
@@ -174,23 +174,20 @@
 
   (:method ((kind1 kyvar) (kind2 kind))
     (declare (values ksubstitution-list &optional))
-    (list
-     (make-ksubstitution
-      :from kind1
-      :to kind2)))
+    (cond
+      ((equalp kind1 kind2) nil)
+      ((member kind1 (kind-variables kind2) :test #'equalp)
+       (error 'kunify-error :kind1 kind1 :kind2 kind2))
+      (t (list (make-ksubstitution :from kind1 :to kind2)))))
 
   (:method ((kind1 kind) (kind2 kyvar))
     (declare (values ksubstitution-list &optional))
-    (list
-     (make-ksubstitution
-      :from kind2
-      :to kind1)))
+    (kmgu kind2 kind1))
 
   (:method ((kind1 kfun) (kind2 kfun))
     (declare (values ksubstitution-list &optional))
-    (nconc
-     (kmgu (kfun-from kind1) (kfun-from kind2))
-     (kmgu (kfun-to kind1) (kfun-to kind2))))
+    (kunify (kfun-to kind1) (kfun-to kind2)
+            (kmgu (kfun-from kind1) (kfun-from kind2))))
 
   (:method ((kind1 kind) (kind2 kind))
     (error 'kunify-error

@@ -9,3 +9,4 @@
 *.lisp text eol=lf 
 *.coal text eol=lf
 *.ct text eol=lf
+tests/test-files/*.txt text eol=lf

@@ -31,6 +31,8 @@ method types, local declarations, and inline `lisp` type signatures.
 - In `lisp` forms, the arrow separates the output type list from the embedded
   Lisp variable list.
 - Keyword argument lists can precede `->`.
+- In a [`forall`](/manual/operators/forall/) binder annotation, `->` constructs
+  an arrow kind, such as `(Type -> Type)`. Kind arrows associate to the right.
 
 ## Options
 

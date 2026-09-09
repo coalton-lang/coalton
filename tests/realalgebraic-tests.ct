@@ -57,6 +57,26 @@
         (ra-fuzz-nonsquare s1)
         (Tuple s1 n))))
 
+(define-test realalgebraic-operation-enclosure-regression-test ()
+  (let a = (unwrap-ok (ra:root (make-list 1 -4 0) -1 3)))
+  (let b = (unwrap-ok (ra:root (make-list 1 2 0) -1 1)))
+  (is (== (+ a b) 0))
+  ;; Irreducible cubic: the desired difference is in (1,2), while the
+  ;; conjugate incorrectly selected by inward endpoint nudging exceeds 3.
+  (let c = (unwrap-ok (ra:root (make-list 1 0 -3 1) 1 5)))
+  (let d = (unwrap-ok (ra:root (make-list 1 0 -3 1) 0 1)))
+  (is (> (- c d) 1))
+  (is (< (- c d) 2)))
+
+(define-test realalgebraic-open-sturm-endpoints-test ()
+  (let p = (ra::make-poly (make-list 1 -3 2 0)))
+  (let sturm = (ra::sturm-sequence-desc p))
+  (is (== (ra::root-count-open p sturm 0 3) 2))
+  (is (== (ra::root-count-open p sturm -1 2) 2))
+  (is (== (ra::root-count-open p sturm 0 2) 1))
+  (is (== (ra::root-count-open p sturm 0 1) 0))
+  (is (== (ra::root-count-open p sturm 1 1) 0)))
+
 (define-test realalgebraic-construction-and-comparison-test ()
   (let bounds = (ra:isolating-interval sqrt2))
   (match bounds
@@ -69,6 +89,40 @@
   (is (< sqrt2 2))
   (is (== sqrt2 sqrt2-alt)))
 
+(define-test realalgebraic-comparison-enclosure-filter-test ()
+  (let a = (unwrap-ok (ra:root (make-list 1 -1) 0 2)))
+  (let b = (unwrap-ok (ra:root (make-list 1 -3) 2 4)))
+  (is (< a b))
+  (is (> b a))
+  ;; Overlap alone proves neither equality nor inequality.
+  (let lower = (unwrap-ok (ra:root (make-list 1 -4 3) 0 5/2)))
+  (let upper = (unwrap-ok (ra:root (make-list 1 -4 3) 3/2 4)))
+  (is (< lower upper))
+  (is (== lower a))
+  (is (== upper b)))
+
+(define-test realalgebraic-division-zero-factor-test ()
+  (let one = (unwrap-ok (ra:root (make-list 1 -1 0) 1/2 3/2)))
+  (is (== (/ one one) 1))
+  (is (== (/ 0 one) 0))
+  (is (== (math:reciprocal one) 1))
+  (let doubled = (+ sqrt2 sqrt2))
+  (is (== (/ doubled doubled) 1))
+  (is (== (* (math:reciprocal doubled) doubled) 1))
+  ;; Separate origins force the general quotient resultant, so identity
+  ;; shortcuts cannot hide a spurious common t factor in its inputs.
+  (let numerator = (unwrap-ok (ra:root (make-list 1 0 -2 0) 1 2)))
+  (let denominator = (unwrap-ok (ra:root (make-list 1 0 -3 0) 1 2)))
+  (let quotient = (/ numerator denominator))
+  (is (> quotient 0))
+  (is (== (^ quotient 2) (the ra:RealAlgebraic (into 2/3))))
+  (is (lisp (-> Boolean) ()
+        (cl:handler-case
+            (cl:progn
+              (coalton:coalton (/ (the ra:RealAlgebraic 0) 0))
+              cl:nil)
+          (cl:error () cl:t)))))
+
 (define-test realalgebraic-arithmetic-test ()
   (is (== (* sqrt2 sqrt2) 2))
   (is (== (/ sqrt2 sqrt2) 1))
@@ -80,9 +134,8 @@
 (define-test realalgebraic-exact-cancellation-test ()
   ;; Exact identity (base form):
   ;;   (sqrt(2) + sqrt(3))^2 = 5 + 2*sqrt(6)
-  ;; This directly implies the larger example
-  ;;   (sqrt(2) + sqrt(3))^40 = (5 + 2*sqrt(6))^20
-  ;; while keeping the unit test fast.
+  ;; The full fortieth-power identity is also tested below in
+  ;; realalgebraic-unary-power-degree-test.
   (let lhs =
     (^ (+ (math:sqrt (the ra:RealAlgebraic (fromInt 2)))
           (math:sqrt (the ra:RealAlgebraic (fromInt 3))))
@@ -107,6 +160,23 @@
   (is (== (math:nth-root 3 (the ra:RealAlgebraic (fromInt -27)))
           (the ra:RealAlgebraic (fromInt -3))))
   (is (== (^ root33 5) n33)))
+
+(define-test realalgebraic-radical-interval-selection-test ()
+  (let x = (unwrap-ok (ra:root (make-list 1 -3 2 0) 3/2 5/2)))
+  (is (== (math:sqrt x) sqrt2))
+  (is (== (^ (math:nth-root 3 x) 3) 2))
+  (let negative = (unwrap-ok (ra:root (make-list 1 3 2 0) -5/2 -3/2)))
+  (is (< (math:nth-root 3 negative) 0))
+  (is (== (^ (math:nth-root 3 negative) 3) -2))
+  (is (== (ra::coefficients (ra::poly-compose-nth-power (ra::make-poly (make-list 2 -3 1)) 3))
+          (make-list 2 0 0 -3 0 0 1)))
+  ;; High index exercises selection without any algebraic power/resultant.
+  (let r = (math:nth-root 101 (the ra:RealAlgebraic 2)))
+  (match (ra:isolating-interval r)
+    ((Tuple lo hi)
+     (is (> lo 0))
+     (is (< (^ lo 101) 2))
+     (is (> (^ hi 101) 2)))))
 
 (define-test realalgebraic-radical-domain-test ()
   (is (lisp (-> Boolean) ()
@@ -159,6 +229,31 @@
     ((Err _) (is True))
     ((Ok _) (is False))))
 
+(define-test realalgebraic-sign-refinement-test ()
+  ;; A midpoint root uses a non-root split; roots of either sign and
+  ;; nonmonic polynomials must retain their certified root on every step.
+  (let values = (make-list sqrt2
+                           (unwrap-ok (ra:root (make-list 1 0 -2) -2 -1))
+                           (unwrap-ok (ra:root (make-list 3 -1) 0 2/3))))
+  (is (all (fn (x)
+             (rec go ((r x) (i 0))
+               (if (== i 40)
+                   True
+                   (let ((next (ra:refine r)))
+                     (and (== next x)
+                          (<= (interval-width next) (* 2/3 (interval-width r)))
+                          (go next (+ i 1))))))) values))
+  (is
+   (rec go ((seed 331) (i 0))
+     (if (== i 100)
+         True
+         (match (ra-fuzz-fraction seed)
+           ((Tuple next q)
+            (let p = (ra::make-poly (make-list 7 -3 0 11 -2)))
+            (and (== (ra::poly-sign-at p q)
+                     (ra::fraction-signum (ra::poly-eval-desc-fraction p q)))
+                 (go next (+ i 1)))))))))
+
 (define-test realalgebraic-approx-and-rational-test ()
   (let tight = (ra:refine-to-width 1/1024 sqrt2))
   (is (<= (interval-width tight) 1/1024))
@@ -171,6 +266,27 @@
   (is (not (ra:rational? sqrt2)))
   (is (ra:rational? rational-root))
   (is (== (unwrap (the (Optional Fraction) (tryInto rational-root))) 3/2)))
+
+(define-test realalgebraic-rational-reconstruction-test ()
+  (let one = (unwrap-ok (ra:root (make-list 1 -1 0) 1/2 3/2)))
+  (is (ra:rational? one))
+  (is (== (unwrap (the (Optional Fraction) (tryInto one))) 1))
+  (is (== (floor one) 1))
+  (is (== (ceiling one) 1))
+  ;; Large constant: trial division formerly required about 10^20 steps.
+  (let huge = (^ (the Integer 10) 20))
+  (let irrational = (unwrap-ok (ra:root (make-list 1 0 (negate (+ (* huge huge) 1)))
+                                       (fromInt huge) (fromInt (+ huge 1)))))
+  (is (not (ra:rational? irrational)))
+  (is (== (floor irrational) huge))
+  ;; Nonlinear rational roots of either sign with large denominators.
+  (let den = (+ huge 39))
+  (let pos = (unwrap-ok (ra:root (make-list den (- 0 (+ (* 2 den) 1)) 2) 0 1)))
+  (let neg = (unwrap-ok (ra:root (make-list den (+ (* 2 den) 1) 2) -1 0)))
+  (is (== (unwrap (the (Optional Fraction) (tryInto pos))) (math:general/ 1 den)))
+  (is (== (unwrap (the (Optional Fraction) (tryInto neg))) (math:general/ -1 den)))
+  ;; A closed-interval endpoint may be the simplest rational but is not a root.
+  (is (not (ra:rational? (unwrap-ok (ra:root (make-list 1 0 -2) 1 3/2))))))
 
 (define-test realalgebraic-exact-integer-quantization-test ()
   (let pos-int-root = (unwrap-ok (ra:root (make-list 1 0 -4) 1 3)))
@@ -188,6 +304,28 @@
   (is (== whole2 -2))
   (is (== frac2 0)))
 
+(define-test realalgebraic-direct-quantization-test ()
+  ;; Large leading coefficient must not force thousands of precision bits
+  ;; just to determine a floor that is already nearly fixed by the interval.
+  (let a = (^ (the Integer 10) 1000))
+  (let x = (unwrap-ok (ra:root (make-list a 0 (negate (+ (* 2 a) 1))) 1 2)))
+  (is (== (floor x) 1))
+  (is (== (ceiling x) 2))
+  (is
+   (rec go ((seed 73519) (i 0))
+     (if (== i 80)
+         True
+         (match (ra-fuzz-fraction seed)
+           ((Tuple next q)
+            (let r = (the ra:RealAlgebraic (into q)))
+            (let (values z rest) = (math:proper r))
+            (let (values expected expected-rest) = (math:proper q))
+            (and (== (floor r) (floor q))
+                 (== (ceiling r) (ceiling q))
+                 (== z expected)
+                 (== rest (the ra:RealAlgebraic (into expected-rest)))
+                 (go next (+ i 1)))))))))
+
 (define-test realalgebraic-printer-test ()
   (let repr = (ra:show sqrt2))
   (is (lisp (-> Boolean) (repr)
@@ -202,6 +340,20 @@
   ;; Exact half-up rounding checks at the printed boundary.
   (is (== (ra:decimal-string 2 (the ra:RealAlgebraic (into 1/8))) "0.13")) ; 0.125 -> 0.13
   (is (== (ra:decimal-string 0 (the ra:RealAlgebraic (into -5/2))) "-3"))) ; -2.5 -> -3
+
+(define-test realalgebraic-certified-decimal-boundaries-test ()
+  (let lo = 12499/100000)
+  (let hi = 125001/1000000)
+  (is (== (ra:decimal-string 2 (unwrap-ok (ra:root (make-list 8 -1) lo hi))) "0.13"))
+  (is (== (ra:decimal-string 2 (unwrap-ok (ra:root (make-list 8 -17 2) lo hi))) "0.13"))
+  (is (== (ra:decimal-string 2 (unwrap-ok (ra:root (make-list 8 17 2) (negate hi) (negate lo)))) "-0.13"))
+  ;; Irrationals immediately to either side of the rounding discontinuity.
+  (let scale = (^ (the Integer 10) 16))
+  (let above = (unwrap-ok (ra:root (make-list scale 0 -156250000000001) lo hi)))
+  (let below = (unwrap-ok (ra:root (make-list scale 0 -156249999999999) lo hi)))
+  (is (== (ra:decimal-string 2 above) "0.13"))
+  (is (== (ra:decimal-string 2 below) "0.12"))
+  (is (== (ra:decimal-string 2 (unwrap-ok (ra:root (make-list 1 -1 0) -1/1000 1/10000))) "0.00")))
 
 (define-test realalgebraic-fuzz-rational-roundtrip-test ()
   (is
@@ -260,6 +412,185 @@
                       (== (> x y) (> q1 q2))
                       (== (== x y) (== q1 q2))
                       (go (+ i 1) seed2)))))))))))
+
+(define-test realalgebraic-integer-polynomial-kernels-test ()
+  (is
+   (rec go ((seed 7123) (i 0))
+     (if (== i 80)
+         True
+         (let ((next (ra-fuzz-next seed)))
+           (let ((a (ra::make-poly (make-list 3 (mod seed 17) 0 (- (mod next 23) 11))))
+                 (b (ra::make-poly (make-list -2 (mod next 13) 5)))
+                 (q (math:general/ (- (mod seed 19) 9) 7)))
+             (let ((product (ra::poly-int-mul a b)))
+               (and (== (ra::poly-eval-desc-fraction product q)
+                        (* (ra::poly-eval-desc-fraction a q) (ra::poly-eval-desc-fraction b q)))
+                    (== (ra::coefficients (ra::poly-int-div-exact product b)) (ra::coefficients a))
+                    (== (ra::coefficients (ra::poly-int-mul b a)) (ra::coefficients product))
+                    (go next (+ i 1)))))))))
+  (is (lisp (-> Boolean) ()
+        (cl:handler-case
+            (cl:progn
+              (coalton:coalton
+                (ra::poly-int-div-exact (ra::make-poly (make-list 1 1))
+                                       (ra::make-poly (make-list 2 1))))
+              cl:nil)
+          (cl:error () cl:t)))))
+
+(define-test realalgebraic-integer-remainder-sequence-test ()
+  ;; Compare the integer PRS with the independent rational Euclidean
+  ;; implementation, including negative leading coefficients and factors.
+  (is
+   (rec go ((seed 4919) (i 0))
+     (if (== i 80)
+         True
+         (let ((next (ra-fuzz-next seed)))
+           (let ((factor (ra::make-poly (make-list 1 -2)))
+                 (a0 (ra::make-poly (make-list 3 (- (mod seed 31) 15) 1)))
+                 (b0 (ra::make-poly (make-list -2 (- (mod next 23) 11)))))
+             (let ((a (ra::poly-int-mul factor a0))
+                   (b (if (== (mod i 2) 0) (ra::poly-int-mul factor b0) b0)))
+               (let ((af (ra::poly-int->frac a)) (bf (ra::poly-int->frac b)))
+                 (let ((expected-rem (ra::poly-int-primitive-preserve-sign
+                                      (ra::poly-frac-clear-denominators (ra::poly-frac-rem af bf))))
+                       (expected-gcd (ra::poly-int-primitive
+                                      (ra::poly-frac-clear-denominators (ra::poly-frac-gcd af bf)))))
+                   (and (== (ra::coefficients (ra::poly-int-positive-rem a b)) (ra::coefficients expected-rem))
+                        (== (ra::coefficients (ra::poly-int-gcd a b)) (ra::coefficients expected-gcd))
+                        (go next (+ i 1))))))))))))
+
+(define-test realalgebraic-bareiss-independent-oracle-test ()
+  ;; A determinant of an n-by-n matrix of quadratics has degree <= 2n.
+  ;; Equality at 2n+1 distinct integers therefore proves equality of the
+  ;; entire polynomial, not just agreement of numerical approximations.
+  (is
+   (lisp (-> Boolean) ()
+     (cl:labels
+         ((eval-coeffs (cs z)
+            (cl:reduce (cl:lambda (acc c) (cl:+ (cl:* acc z) c)) cs :initial-value 0))
+          (rational-det (matrix n)
+            ;; Independent Gaussian elimination over Q, including row swaps.
+            (cl:let ((m (cl:copy-seq matrix)) (det 1))
+              (cl:dotimes (k n det)
+                (cl:let ((row (cl:loop for i from k below n
+                                      when (cl:not (cl:zerop (cl:aref m (cl:+ (cl:* i n) k))))
+                                        return i)))
+                  (cl:unless row (cl:return-from rational-det 0))
+                  (cl:unless (cl:= row k)
+                    (cl:dotimes (j n)
+                      (cl:rotatef (cl:aref m (cl:+ (cl:* k n) j))
+                                  (cl:aref m (cl:+ (cl:* row n) j))))
+                    (cl:setf det (cl:- det)))
+                  (cl:let ((pivot (cl:aref m (cl:+ (cl:* k n) k))))
+                    (cl:setf det (cl:* det pivot))
+                    (cl:loop for i from (cl:1+ k) below n
+                             for factor = (cl:/ (cl:aref m (cl:+ (cl:* i n) k)) pivot)
+                             do (cl:loop for j from (cl:1+ k) below n
+                                         do (cl:decf (cl:aref m (cl:+ (cl:* i n) j))
+                                                     (cl:* factor (cl:aref m (cl:+ (cl:* k n) j))))))))))))
+       (cl:let ((seed 92731))
+         (cl:labels ((next-int ()
+                       (cl:setf seed (cl:mod (cl:+ (cl:* seed 1664525) 1013904223) (cl:expt 2 32)))
+                       (cl:- (cl:mod seed 7) 3)))
+           (cl:loop for n from 2 to 6 do
+             (cl:dotimes (trial 6)
+               (cl:let ((cs (cl:make-array (cl:* n n)))
+                        (ps (cl:make-array (cl:* n n))))
+                 (cl:dotimes (i (cl:* n n))
+                   (cl:setf (cl:aref cs i) (cl:list (next-int) (next-int) (next-int))))
+                 ;; Force zero pivots and singular matrices as well.
+                 (cl:when (cl:evenp trial) (cl:setf (cl:aref cs 0) '(0)))
+                 (cl:when (cl:= trial 5)
+                   (cl:dotimes (j n)
+                     (cl:setf (cl:aref cs (cl:+ (cl:* (cl:1- n) n) j)) (cl:aref cs j))))
+                 (cl:dotimes (i (cl:* n n))
+                   (cl:setf (cl:aref ps i) (ra::make-poly (cl:aref cs i))))
+                 (cl:let ((actual (ra::coefficients (ra::bareiss-det-zpoly-arr n ps))))
+                   (cl:assert (cl:<= (cl:1- (cl:length actual)) (cl:* 2 n)))
+                   (cl:loop for z from (cl:- n) to n do
+                     (cl:assert
+                      (cl:= (eval-coeffs actual z)
+                            (rational-det (cl:map 'cl:vector (cl:lambda (c) (eval-coeffs c z)) cs) n)))))))))
+         cl:t)))))
+
+(define-test realalgebraic-affine-and-reciprocal-test ()
+  (let translated = (+ (* 2 sqrt2) 3))
+  (is (== (ra::coefficients (ra::defining-polynomial translated)) (make-list 1 -6 1)))
+  (is (== (/ (- translated 3) 2) sqrt2))
+  (is (== (+ (- 3 sqrt2) sqrt2) 3))
+  (is (== (* (/ sqrt2 -3) -3) sqrt2))
+  (is (== (ra::degree (math:reciprocal sqrt2)) 2))
+  (is (== (* (math:reciprocal sqrt2) sqrt2) 1))
+  ;; Reciprocal drops an irrelevant zero root.
+  (let x = (unwrap-ok (ra:root (make-list 1 -1 0) 1/2 3/2)))
+  (is (== (ra::degree (math:reciprocal x)) 1))
+  (is (== (math:reciprocal x) 1))
+  ;; Refine an enclosure crossing zero before inverting its endpoints.
+  (let wide = (unwrap-ok (ra:root (make-list 1 -4 2) -1 1)))
+  (is (== (* (math:reciprocal wide) wide) 1))
+  (is (== (ra::degree (+ (the ra:RealAlgebraic (into 17/23)) (into -8/19))) 1)))
+
+(define-test realalgebraic-shared-generator-test ()
+  (let s = (+ sqrt2 (math:sqrt (the ra:RealAlgebraic 3))))
+  (let a = (+ s 1))
+  (let b = (- s 1))
+  (let product = (* a b))
+  (is (== product (- (^ s 2) 1)))
+  (is (== (ra::degree product) 2))
+  ;; The fractional linear map f(x)=(x+1)/(x-1) is an involution.
+  ;; Repeated field arithmetic must stay within the generator's degree.
+  (is
+   (rec go ((x s) (i 0))
+     (if (== i 12)
+         (== x s)
+         (let ((next (/ (+ x 1) (- x 1))))
+           (and (<= (ra::degree next) 4) (go next (+ i 1)))))))
+  ;; A zero divisor at another conjugate must not prevent inversion at
+  ;; the selected root. Here the origin roots are 0,1,2 and x represents 2.
+  (let x = (unwrap-ok (ra:root (make-list 1 -3 2 0) 3/2 5/2)))
+  (let denominator = (- x 1))
+  (is (== (/ x denominator) 2))
+  (let inverse = (math:reciprocal denominator))
+  (is (== (* inverse denominator) 1))
+  (is (<= (ra::degree (^ inverse 2)) (ra::degree inverse))))
+
+(define-test realalgebraic-shared-generator-rational-oracle-test ()
+  ;; Known rational selected root, with two irrational conjugates. Inverting
+  ;; x^2-3 must discard a quadratic zero-divisor factor at those conjugates.
+  (is
+   (rec go ((i (the Integer 1)))
+     (if (> i 18)
+         True
+         (let ((num (if (== (mod i 2) 0) i (negate i)))
+               (den 23))
+           (let ((q (math:general/ num den)))
+             (let ((x (unwrap-ok (ra:root (make-list den (negate num) (* -3 den) (* 3 num))
+                                        (- q 1/100) (+ q 1/100)))))
+               (let ((actual (/ x (- (^ x 2) 3)))
+                     (expected (/ q (- (* q q) 3))))
+                 (and (== (unwrap (the (Optional Fraction) (tryInto actual))) expected)
+                      (<= (ra::degree actual) 3)
+                      (go (+ i 1)))))))))))
+
+(define-test realalgebraic-unary-power-degree-test ()
+  (let s = (+ sqrt2 (math:sqrt (the ra:RealAlgebraic 3))))
+  (let square = (* s s))
+  (is (== (ra::degree square) 2))
+  (is (== (ra::degree (^ s (the Integer 16))) 2))
+  (is (== (ra::degree (^ s (the UFix 16))) 2))
+  (is (== (ra::degree (^ s (the Integer 15))) 4))
+  (is (== (ra::degree (^ s (the UFix 15))) 4))
+  (is (== (^ s 16) (^ square 8)))
+  (is (== (^ s 40) (^ (+ 5 (* 2 (math:sqrt (the ra:RealAlgebraic 6)))) 20)))
+  (is (== (* (math:^^ s -3) (^ s 3)) 1))
+  ;; Reduction over Q[t] must handle nonmonic defining polynomials.
+  (let a = (unwrap-ok (ra:root (make-list 2 0 -3) 1 2)))
+  (is (== (^ a 10) (the ra:RealAlgebraic (into 243/32))))
+  (is (== (^ (the ra:RealAlgebraic 0) 0) 1))
+  (is (== (^ a 1) a))
+  (let negative = (unwrap-ok (ra:root (make-list 1 0 -2) -2 -1)))
+  (is (== (^ negative 3) (* 2 negative)))
+  (is (== (^ negative 4) 4)))
 
 (define-test realalgebraic-performance-smoke-test ()
   (let s2 = (math:sqrt (the ra:RealAlgebraic (fromInt 2))))

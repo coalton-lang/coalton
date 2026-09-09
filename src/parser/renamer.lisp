@@ -972,6 +972,7 @@
 
     (values
      (make-toplevel-define-instance
+      :overlap-p (toplevel-define-instance-overlap-p toplevel)
       :context (toplevel-define-instance-context toplevel)
       :pred (toplevel-define-instance-pred toplevel)
       :methods (rename-variables-generic% (toplevel-define-instance-methods toplevel) ctx)
@@ -1099,6 +1100,14 @@
      :fields (rename-type-variables-generic% (constructor-fields ctor) ctx)
      :docstring (source:docstring ctor)
      :location (source:location ctor)))
+
+  (:method ((binding type-variable-binding) ctx)
+    (make-type-variable-binding
+     :name (or (algo:immutable-map-lookup ctx (keyword-src-name binding))
+               (keyword-src-name binding))
+     :source-name (keyword-src-source-name binding)
+     :kind (type-variable-binding-kind binding)
+     :location (source:location binding)))
 
   (:method ((keyword keyword-src) ctx)
     (declare (type algo:immutable-map ctx)

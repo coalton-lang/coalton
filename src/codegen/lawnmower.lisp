@@ -24,6 +24,15 @@ later passes and Lisp compilers see simpler code.")
 
 (in-package #:coalton-impl/codegen/lawnmower)
 
+(defvar *loop-step-variables* nil
+  "Identifiers assigned by loop steps in the current lawnmower traversal.
+Binders have unique renamed identifiers, so retaining these names after leaving
+a loop is conservative. Reading one takes a snapshot, not an immutable alias.")
+
+(defun stable-alias-target-p (node)
+  (and (typep node '(or node-local-variable node-global-variable))
+       (not (member (node-variable-value node) *loop-step-variables* :test #'eq))))
+
 (defun identifiers-disjoint-p (left right)
   (declare (type parser:identifier-list left right)
            (values boolean &optional))
@@ -153,10 +162,10 @@ push OUTER-BRANCHES into the inner match branches."
 (defun alias-binding-target (binding)
   "Return the target variable node for a LET binding of the form (ALIAS TARGET)."
   (declare (type cons binding)
-           (values (or null node-variable) &optional))
+           (values (or null node-local-variable node-global-variable) &optional))
   (let ((name (car binding))
         (expr (cdr binding)))
-    (when (and (node-variable-p expr)
+    (when (and (stable-alias-target-p expr)
                (not (eq name (node-variable-value expr))))
       expr)))
 
@@ -164,7 +173,7 @@ push OUTER-BRANCHES into the inner match branches."
   "Resolve NAME through ALIASES, returning NIL for cyclic alias chains."
   (declare (type parser:identifier name)
            (type list aliases)
-           (values (or null node-variable) &optional))
+           (values (or null node-local-variable node-global-variable) &optional))
   (labels ((resolve (name seen)
              (let ((target (cdr (assoc name aliases :test #'eq))))
                (when target
@@ -196,7 +205,7 @@ push OUTER-BRANCHES into the inner match branches."
 (defun alias-substitution-target (name aliases)
   (declare (type parser:identifier name)
            (type list aliases)
-           (values (or null node-variable) &optional))
+           (values (or null node-local-variable node-global-variable) &optional))
   (cdr (assoc name aliases :test #'eq)))
 
 (defun substitute-aliases (node aliases)
@@ -209,7 +218,7 @@ The replacement is skipped inside nested binders for the same name."
   (traverse-with-binding-list
    node
    (list
-    (action (:after node-variable node bound-variables)
+    (action (:after node-local-variable node bound-variables)
       (let ((name (node-variable-value node)))
         (unless (member name bound-variables :test #'eq)
           (alexandria:when-let ((target (alias-substitution-target name aliases)))
@@ -237,7 +246,7 @@ The replacement is skipped inside nested binders for the same name."
     (traverse-with-binding-list
      body
      (list
-      (action (:after node-variable node bound-variables)
+      (action (:after node-local-variable node bound-variables)
         (when (and (eq name (node-variable-value node))
                    (not (member name bound-variables :test #'eq))
                    (member target bound-variables :test #'eq))
@@ -359,55 +368,20 @@ The replacement is skipped inside nested binders for the same name."
        :subexpr node)
       node))
 
-(defun variable-substitution-info (body name value)
-  (declare (type node body value)
-           (type parser:identifier name)
-           (values fixnum boolean &optional))
-  (let ((count 0)
-        (unsafe? nil)
-        (value-vars (node-variables value)))
-    (traverse-with-binding-list
-     body
-     (list
-      (action (:after node-variable node bound-variables)
-        (when (and (eq name (node-variable-value node))
-                   (not (member name bound-variables :test #'eq)))
-          (incf count)
-          (unless (identifiers-disjoint-p value-vars bound-variables)
-            (setf unsafe? t)))
-        (values))
-      (action (:after node-lisp node bound-variables)
-        (when (loop :for (_ . coalton-var) :in (node-lisp-vars node)
-                    :thereis (and (eq name coalton-var)
-                                  (not (member name bound-variables :test #'eq))))
-          (setf unsafe? t))
-        (values))))
-    (values count unsafe?)))
-
-(defun substitute-variable-node (body name value)
-  (declare (type node body value)
-           (type parser:identifier name)
-           (values node &optional))
-  (traverse-with-binding-list
-   body
-   (list
-    (action (:after node-variable node bound-variables)
-      (when (and (eq name (node-variable-value node))
-                 (not (member name bound-variables :test #'eq)))
-        (copy-node value (node-type node)))))))
-
 (defun bind-known-pattern-variable (name value body)
+  "Evaluate VALUE before BODY, even if NAME has only one syntactic use."
   (declare (type parser:identifier name)
            (type node value body)
            (values node &optional))
-  (multiple-value-bind (count unsafe?) (variable-substitution-info body name value)
-    (if (and (= 1 count) (not unsafe?))
-        (substitute-variable-node body name value)
-        (make-node-bind
-         :type (node-type body)
-         :name name
-         :expr (force-value-binding-node value)
-         :body body))))
+  ;; An immediate call evaluates its operator in exactly the binding's place.
+  ;; Other uses may be delayed, repeated, or preceded by effects.
+  (alexandria:if-let ((application (immediate-bound-application-p name body)))
+    (application-with-rator application value)
+    (make-node-bind
+     :type (node-type body)
+     :name name
+     :expr (force-value-binding-node value)
+     :body body)))
 
 (defun rewrite-known-pattern-match (pattern value body)
   "Rewrite a match of known VALUE against PATTERN.
@@ -432,7 +406,8 @@ Returns a status keyword and a replacement body. Status is one of:
      (values ':match (node-seq-2 value body)))
 
     (pattern-literal
-     (if (and (node-literal-p value)
+     (if (and (not (pattern-literal-test pattern))
+              (node-literal-p value)
               (literal-values-match-p (pattern-literal-value pattern)
                                       (node-literal-value value)))
          (values ':match body)
@@ -596,7 +571,7 @@ Returns a status keyword and a replacement body. Status is one of:
            (type node subexpr)
            (values (or null node-match) &optional))
   (when (and (typep subexpr 'node-match)
-             (node-variable-p (node-match-expr subexpr))
+             (node-local-variable-p (node-match-expr subexpr))
              (eq name (node-variable-value (node-match-expr subexpr)))
              (not (member name (match-free-variables subexpr) :test #'eq)))
     subexpr))
@@ -616,9 +591,12 @@ Returns a status keyword and a replacement body. Status is one of:
     (traverse
      node
      (list
-      (action (:after node-variable node)
+      (action (:after node-local-variable node)
         (when (eq name (node-variable-value node))
           (incf count))
+        (values))
+      (action (:after node-lisp node)
+        (incf count (count name (node-lisp-vars node) :key #'cdr :test #'eq))
         (values))
       (action (:after node-direct-application node)
         (when (eq name (node-direct-application-rator node))
@@ -693,7 +671,7 @@ Returns a status keyword and a replacement body. Status is one of:
   (let ((bindings (node-let-bindings node))
         (subexpr (node-let-subexpr node)))
     (unless (and (typep subexpr 'node-match)
-                 (node-variable-p (node-match-expr subexpr)))
+                 (node-local-variable-p (node-match-expr subexpr)))
       (return-from maybe-inline-let-bound-match-scrutinee
         (values node nil)))
     (let* ((name (node-variable-value (node-match-expr subexpr)))
@@ -771,13 +749,13 @@ Returns a status keyword and a replacement body. Status is one of:
         (body (node-bind-body node)))
     (cond
       ;; (bind x e x) -> e
-      ((and (node-variable-p body)
+      ((and (node-local-variable-p body)
             (eq name (node-variable-value body))
             (not (member name (node-variables expr) :test #'eq)))
        (values (copy-node expr (node-type node)) t))
 
       ;; (bind x y body[x]) -> body[y]
-      ((and (node-variable-p expr)
+      ((and (stable-alias-target-p expr)
             (not (eq name (node-variable-value expr)))
             (alias-bind-safe-p name (node-variable-value expr) body))
        (values
@@ -816,7 +794,7 @@ Returns a status keyword and a replacement body. Status is one of:
         (subexpr (node-let-subexpr node)))
     ;; (let ((x e)) x) -> e
     (if (and (null (cdr bindings))
-             (node-variable-p subexpr)
+             (node-local-variable-p subexpr)
              (eq (caar bindings)
                  (node-variable-value subexpr))
              (not (member (caar bindings)
@@ -912,11 +890,17 @@ Returns a status keyword and a replacement body. Status is one of:
   "Simplify administrative AST forms left behind by optimization passes."
   (declare (type node node)
            (values node boolean &optional))
-  (let ((changed? nil))
+  (let ((changed? nil)
+        (*loop-step-variables* nil))
     (values
      (traverse
       node
       (list
+       (action (:before node-for node)
+         (dolist (binding (node-for-bindings node))
+           (when (node-for-binding-step binding)
+             (pushnew (node-for-binding-name binding) *loop-step-variables* :test #'eq)))
+         (values))
        (action (:after node-let node)
          (multiple-value-bind (new-node new-changed?) (maybe-collapse-alias-let node)
            (when new-changed?

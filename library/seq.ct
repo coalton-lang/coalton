@@ -236,6 +236,18 @@ a new `Seq` instance."
         ((RelaxedNode ht fss cst subs)
          (RelaxedNode ht fss cst (map (fn (sub) (map f sub)) subs))))))
 
+  (define-instance (Foldable Seq)
+    (define (fold f init seq)
+      (match seq
+        ((LeafArray leaves) (fold f init leaves))
+        ((RelaxedNode _ _ _ subs)
+         (fold (fn (acc sub) (fold f acc sub)) init subs))))
+    (define (foldr f init seq)
+      (match seq
+        ((LeafArray leaves) (foldr f init leaves))
+        ((RelaxedNode _ _ _ subs)
+         (foldr (fn (sub acc) (foldr f acc sub)) init subs)))))
+
   (define-instance (types:RuntimeRepr :a => iter:FromIterator (Seq :a) :a)
     (define (iter:collect! it)
       (iter:fold! push (new) it)))
@@ -285,9 +297,15 @@ a new `Seq` instance."
     (define (default)
       (new)))
 
+  (overlap)
   (define-instance ((Foldable :f) (types:RuntimeRepr :a) => Into (:f :a) (Seq :a))
     (define (into fld)
       (fold push (new) fld)))
+
+  ;; Resolve the intersection with Into :a :a without rebuilding the sequence.
+  (overlap)
+  (define-instance (Into (Seq :a) (Seq :a))
+    (define (into seq) seq))
 
 
   (define-instance (Eq :a => Eq (Seq :a))

@@ -2,6 +2,26 @@
 
 (in-package #:coalton-tests)
 
+(deftest test-accessor-equations-share-substitutions ()
+  (dolist (branches '("(.num v) (.text v)" "(.text v) (.num v)"))
+    (signals tc:tc-error
+      (check-coalton-types
+       (format nil
+               "(define-struct Mixed (num Integer) (text String))
+                (define (choose flag)
+                  (let ((v (Mixed 42 ~S)))
+                    (if flag ~A)))"
+               "text" branches))))
+  (check-coalton-types
+   "(define-struct (Boxed :a) (item :a))
+    (define (unbox-both)
+      (Tuple (.item (Boxed (the Integer 42)))
+             (.item (Boxed \"text\"))))
+    (define (unbox-nested)
+      (.item (.item (Boxed (Boxed \"text\")))))"
+   '("unbox-both" . "(Void -> Tuple Integer String)")
+   '("unbox-nested" . "(Void -> String)")))
+
 (deftest test-struct-definition ()
   (check-coalton-types
    "(define-struct Point

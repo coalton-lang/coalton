@@ -321,9 +321,7 @@ error: Invalid attribute for define-instance
   --> test:3:0
    |
  3 |  (repr :enum)
-   |  ^^^^^^^^^^^^ define-instance cannot have attributes
- 4 |  (define-instance (C :a))
-   |  ------------------------ when parsing define-instance
+   |  ^^^^^^^^^^^^ only the optional overlap attribute is allowed
 
 ================================================================================
 110 Malformed instance definition

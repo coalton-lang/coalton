@@ -20,11 +20,13 @@
 
 (define-expression-macro unreachable (cl:&optional (datum "Unreachable") cl:&rest arguments)
   "Signal an error with CL format string DATUM and optional format arguments ARGUMENTS."
-  `(lisp (-> :a) ()
-     (cl:error ,datum ,@arguments)))
+  `((the (forall ((:result Values)) (Void -> :result))
+      (fn ()
+        (lisp (-> :result) ()
+          (cl:error ,datum ,@arguments))))))
 
 (coalton-toplevel
-  (declare undefined (:a -> :b))
+  (declare undefined (forall (:a (:b Values)) (:a -> :b)))
   (define (undefined _)
     "A function which can be used in place of any value, throwing an error at runtime."
     (error "Undefined"))

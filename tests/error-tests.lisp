@@ -95,6 +95,20 @@ help: message 5
     (is (search "Unknown type variable :B" msg))
     (is (search "(declare bad (forall (:a) (:a -> :b)))" msg))))
 
+(deftest values-binder-diagnostics ()
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-values-errors)
+               (declare bad (forall ((:r Values)) (:r -> :r)))
+               (define (bad x) x)")))
+    (is (search "Invalid Values variable" msg))
+    (is (search "Values variable :R must occupy an entire" msg)))
+  (let ((msg (collect-compiler-error
+              "(package coalton-test-values-errors)
+               (declare bad (forall ((:f (Type -> Values))) (Void -> Integer)))
+               (define (bad) 1)")))
+    (is (search "Unsupported kind" msg))
+    (is (search "Values cannot occur inside an arrow kind" msg))))
+
 (deftest explicit-forall-warns-on-unused-type-variables ()
   (let ((msg (collect-compiler-error
               "(package coalton-test-explicit-forall-errors)

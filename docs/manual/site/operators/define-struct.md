@@ -21,6 +21,11 @@ weight: 70
 - A field named `f` is accessed with the operator `.f`.
 - A struct name is conventionally written in CamelCase.
 
+In release mode, the compiler can eliminate a locally constructed struct used
+only for field access. Field initializers still run once, in order. Passing,
+returning, or capturing the struct can prevent this optimization unless inlining
+exposes its field accesses.
+
 ## Example
 
 ```lisp

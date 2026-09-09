@@ -30,6 +30,9 @@ a binding or returning position.
 - The number and types of returned values must match the surrounding expected
   type.
 - Multiple values can be destructured with `let (values ...) = ...`.
+- In a [`forall`](/manual/operators/forall/) binder, `Values` instead annotates
+  a type variable representing an entire result sequence:
+  `(forall ((:r Values)) (Void -> :r) -> :r)`.
 
 ## Example
 

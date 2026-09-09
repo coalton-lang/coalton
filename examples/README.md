@@ -9,3 +9,4 @@ This folder contains example Coalton projects to show off the features as well a
 - `quil-coalton`: A monadic parser for Quil written in Coalton.
 - `thih`: An implementation of *Typing Haskell in Haskell* in Coalton.
 - `fractal`: A crude infinite-zoom Mandelbrot viewer using Coalton, Common Lisp, and SDL2.
+- [`raytrace`](raytrace/): A deterministic path tracer and allocation benchmark using ordinary Coalton records.
