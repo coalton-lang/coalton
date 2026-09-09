@@ -46,6 +46,14 @@
    #:ty-predicate-class                 ; ACCESSOR
    #:ty-predicate-types                 ; ACCESSOR
    #:ty-predicate-list                  ; TYPE
+   #:kind-atom                          ; STRUCT
+   #:kind-atom-name                     ; ACCESSOR
+   #:kind-function                      ; STRUCT
+   #:kind-function-from                 ; ACCESSOR
+   #:kind-function-to                   ; ACCESSOR
+   #:type-variable-binding              ; STRUCT
+   #:make-type-variable-binding         ; CONSTRUCTOR
+   #:type-variable-binding-kind         ; ACCESSOR
    #:qualified-ty                       ; STRUCT
    #:make-qualified-ty                  ; CONSTRUCTOR
    #:qualified-ty-explicit-p           ; ACCESSOR
@@ -93,7 +101,10 @@
 ;;;; qualified-ty := ty
 ;;;;               | "(" ty-predicate "=>" type-list ")"
 ;;;;               | "(" ( "(" ty-predicate ")" )+ "=>" type-list ")"
-;;;;               | "(" ("forall" | "∀") "(" tyvar* ")" qualified-ty ")"
+;;;;               | "(" ("forall" | "∀") "(" binder* ")" qualified-ty ")"
+;;;; binder := tyvar | "(" tyvar kind ")"
+;;;; kind := "Type" | "Values" | "(" kind ("->" kind)+ ")"
+;;;; Kind arrows associate to the right. Values is only allowed on its own.
 ;;;;
 ;;;; Within a forall, the quantified body consumes the rest of the enclosing
 ;;;; list, so both `(forall (:a) (:a -> :a))` and `(forall (:a) :a -> :a)` are
@@ -187,6 +198,22 @@
 (deftype ty-predicate-list ()
   '(satisfies ty-predicate-list-p))
 
+(defstruct (kind (:constructor nil) (:copier nil))
+  (location (util:required 'location) :type source:location :read-only t))
+
+(defmethod source:location ((self kind))
+  (kind-location self))
+
+(defstruct (kind-atom (:include kind) (:copier nil))
+  (name (util:required 'name) :type symbol :read-only t))
+
+(defstruct (kind-function (:include kind) (:copier nil))
+  (from (util:required 'from) :type kind :read-only t)
+  (to (util:required 'to) :type kind :read-only t))
+
+(defstruct (type-variable-binding (:include keyword-src) (:copier nil))
+  (kind nil :type (or null kind) :read-only t))
+
 (defstruct (qualified-ty
             (:predicate nil)
             (:copier nil))
@@ -202,26 +229,63 @@
 (defmethod source:location ((self qualified-ty))
   (qualified-ty-location self))
 
+(defun parse-kind (form source &optional (allow-values-p t))
+  (declare (type cst:cst form)
+           (values kind &optional))
+  (cond
+    ((cst:atom form)
+     (unless (member (cst:raw form) '(coalton:Type coalton:Values) :test #'eq)
+       (parse-error "Invalid kind"
+                    (note source form "expected Type, Values, or an arrow kind")))
+     (when (and (eq (cst:raw form) 'coalton:Values) (not allow-values-p))
+       (parse-error "Unsupported kind"
+                    (note source form "Values cannot occur inside an arrow kind")))
+     (make-kind-atom :name (cst:raw form) :location (form-location source form)))
+    (t
+     (unless (cst:proper-list-p form)
+       (parse-error "Invalid kind"
+                    (note source form "expected a proper list of kinds separated by ->")))
+     (let ((elements (cst:listify form)))
+       (unless (and (>= (length elements) 3) (oddp (length elements)))
+         (parse-error "Invalid kind"
+                      (note source form "expected kinds separated by ->")))
+       (labels ((parse-arrow (elements)
+                  (let ((from (parse-kind (first elements) source nil)))
+                    (if (null (rest elements))
+                        from
+                        (progn
+                          (unless (arrow-marker-p (second elements))
+                            (parse-error "Invalid kind"
+                                         (note source (second elements) "expected -> between kinds")))
+                          (make-kind-function
+                           :from from
+                           :to (parse-arrow (cddr elements))
+                           :location (form-location source form)))))))
+         (parse-arrow elements))))))
+
 (defun parse-forall-type-variable (form source)
   (declare (type cst:cst form)
-           (values keyword-src &optional))
-
-  (when (cst:consp form)
-    (parse-error "Invalid type variable"
-                 (note source form "expected keyword symbol")))
-
-  (unless (keywordp (cst:raw form))
-    (parse-error "Invalid type variable"
-                 (note source form "expected keyword symbol")
-                 (help source form
-                       (lambda (existing)
-                         (concatenate 'string ":" existing))
-                       "add `:` to symbol")))
-
-  (make-keyword-src
-   :name (cst:raw form)
-   :source-name (cst:raw form)
-   :location (form-location source form)))
+           (values type-variable-binding &optional))
+  (let ((variable form)
+        (kind nil))
+    (when (cst:consp form)
+      (unless (and (cst:proper-list-p form) (= 2 (length (cst:listify form))))
+        (parse-error "Invalid type variable binder"
+                     (note source form "expected (:variable kind)")))
+      (setf variable (cst:first form)
+            kind (parse-kind (cst:second form) source)))
+    (unless (and (cst:atom variable) (keywordp (cst:raw variable)))
+      (parse-error "Invalid type variable"
+                   (note source variable "expected keyword symbol")
+                   (help source variable
+                         (lambda (existing)
+                           (concatenate 'string ":" existing))
+                         "add `:` to symbol")))
+    (make-type-variable-binding
+     :name (cst:raw variable)
+     :source-name (cst:raw variable)
+     :kind kind
+     :location (form-location source variable))))
 
 (defun flatten-type (type)
   "If TYPE is a TAPP of the form ((((T1 T2) T3) T4) ...), then return

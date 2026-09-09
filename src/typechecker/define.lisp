@@ -2043,6 +2043,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                               env)
         (declare (ignore pat-ty))
 
+        (setf preds (append preds (pattern-predicates pat-node)))
+
         (values nil         ; return nil as this is always thrown away
                 preds
                 accessors
@@ -2210,7 +2212,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                      body-result-ty
                                      subs
                                      env)
-            (setf preds (append default-preds preds))
+            (setf preds (append (pattern-predicates typed-positional-params) default-preds preds))
             (setf accessors (append default-accessors accessors))
             (let* ((body-ty (tc:apply-substitution subs body-ty))
                    (typed-body
@@ -2423,6 +2425,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                   (infer-pattern-type pattern expr-ty subs env)
                                 (declare (ignore pat-ty))
                                 (setf subs subs_)
+                                (setf preds (append preds (pattern-predicates pat-node)))
                                 pat-node)))
 
              (ret-ty (tc:make-variable :kind tc:+kstar+ :allow-result-p t))
@@ -2497,6 +2500,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                            "Catch branch pattern must be an exception constructor pattern or a wildcard."))
                    :else
                      :do (setf subs subs_)
+                         (setf preds (append preds (pattern-predicates pat-node)))
                      :and :collect pat-node))
                ;; Infer type of each branch body, unifying against RET-TY so
                ;; catch branches can return Void or multiple values when the
@@ -2562,6 +2566,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                  (tc-note pat-node "case pattern must construct a resumption type."))
                  :else 
                    :do (setf subs subs_)
+                       (setf preds (append preds (pattern-predicates pat-node)))
                    :and :collect pat-node))
              ;; Infer type of each branch body, it should unify with the expr/expected type
              (branch-body-nodes
@@ -2758,11 +2763,6 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                         (tc-note node "Declared type '~A' is more general than inferred type '~A'"
                                  (type-object-string (tc:apply-substitution subs declared-ty))
                                  (type-object-string (tc:apply-substitution subs expr-ty))))))
-
-          ;; SAFETY: If declared-ty and expr-ty unify, and expr-ty is
-          ;; more general than declared-ty then matching should be
-          ;; infallible
-          (setf subs (tc:compose-substitution-lists subs (tc:match expr-ty declared-ty)))
 
           (handler-case
               (progn
@@ -3210,14 +3210,15 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                             (setf (gethash name binding-declare-table)
                                   (gethash name declare-table)))
                           (multiple-value-bind (preds_ accessors_ nodes subs_)
-                              (infer-bindings-type (list init-binding) binding-declare-table subs loop-env)
+                              (infer-bindings-type (list init-binding) binding-declare-table subs loop-env
+                                                   :generalize nil)
                             (setf subs subs_)
                             (setf preds (append preds preds_))
                             (setf accessors (append accessors accessors_))
                             nodes))))
                  (t
                   (multiple-value-bind (preds_ accessors_ nodes subs_)
-                      (infer-bindings-type init-bindings declare-table subs loop-env)
+                      (infer-bindings-type init-bindings declare-table subs loop-env :generalize nil)
                     (setf subs subs_)
                     (setf preds (append preds preds_))
                     (setf accessors (append accessors accessors_))
@@ -3455,6 +3456,8 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                               env)
         (declare (ignore ty_))
 
+        (setf preds (append preds (pattern-predicates pattern)))
+
         (handler-case
             (progn
               (setf subs (tc:unify subs expr-ty expected-type))
@@ -3586,6 +3589,19 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
 ;;; Pattern Type Inference
 ;;;
 
+(defun pattern-predicates (pattern)
+  "Collect constraints needed to convert and compare overloaded pattern literals."
+  (typecase pattern
+    (pattern-literal
+     (when (integerp (pattern-literal-value pattern))
+       (list (tc:make-ty-predicate
+              :class (util:find-symbol "NUM" "COALTON/CLASSES")
+              :types (list (tc:qualified-ty-type (pattern-type pattern)))
+              :location (source:location pattern)))))
+    (pattern-binding (pattern-predicates (pattern-binding-pattern pattern)))
+    (pattern-constructor (pattern-predicates (pattern-constructor-patterns pattern)))
+    (list (mapcan #'pattern-predicates pattern))))
+
 (defgeneric infer-pattern-type (pat expected-typ subs env)
   (:documentation "Infer the type of pattern PAT and then unify against EXPECTED-TYPE.
 
@@ -3648,14 +3664,7 @@ Returns (VALUES INFERRED-TYPE NODE SUBSTITUTIONS)")
              (values tc:ty pattern-literal tc:substitution-list))
 
     (let ((ty (etypecase (parser:pattern-literal-value pat)
-                (integer (let* ((num
-                                  (util:find-symbol "NUM" "COALTON/CLASSES"))
-                                (tvar
-                                  (tc:make-variable))
-                                (pred
-                                  (tc:make-ty-predicate :class num :types (list tvar) :location (source:location pat))))
-                           (setf subs (tc:compose-substitution-lists (tc:default-subs (tc-env-env env) (list tvar) (list pred)) subs))
-                           tvar))
+                (integer (tc:make-variable))
                 (ratio tc:*fraction-type*)
                 (single-float tc:*single-float-type*)
                 (double-float tc:*double-float-type*)
@@ -3905,6 +3914,27 @@ fall back to invariant, which is conservative."
                      (not (tc:variance-covariant-p observed-variance)))
              :collect weak-var)
      :test #'tc:ty=)))
+
+(defun generalizable-type-variables (local-tvars weak-tvars expr-tys retained-preds subs env)
+  "Return local variables allowed by the relaxed value restriction after SUBS.
+
+Weak variables with non-covariant occurrences or retained constraints must stay
+monomorphic. Callers separately enforce the monomorphism restriction and decide
+whether the binding permits generalization at all."
+  (declare (type tc:tyvar-list local-tvars weak-tvars)
+           (type tc:ty-list expr-tys)
+           (type tc:ty-predicate-list retained-preds)
+           (type tc:substitution-list subs)
+           (type tc:environment env)
+           (values tc:tyvar-list &optional))
+  (set-difference
+   (tc:type-variables (tc:apply-substitution subs local-tvars))
+   (blocked-weak-type-variables
+    (remove-if-not #'tc:tyvar-p (tc:apply-substitution subs weak-tvars))
+    (tc:apply-substitution subs expr-tys)
+    (tc:apply-substitution subs retained-preds)
+    env)
+   :test #'tc:ty=))
 
 (defun error-non-generalizable-binding (binding scheme)
   "Signal a user-facing error for a top-level weak (non-generalizable) type.
@@ -4189,7 +4219,8 @@ as a recursive function rather than a recursive value."
   (dolist (binding-scc (binding-sccs bindings))
     (check-for-invalid-recursive-scc binding-scc env binding-function-p)))
 
-(defun infer-bindings-type (bindings dec-table subs env)
+(defun infer-bindings-type (bindings dec-table subs env &key (generalize t))
+  "Infer a binding group. Disable GENERALIZE for mutable loop storage."
   (declare (type list bindings)
            (type hash-table dec-table)
            (type tc:substitution-list subs)
@@ -4207,7 +4238,8 @@ as a recursive function rather than a recursive value."
         :for unparsed-ty :being :the :hash-values :of dec-table
 
         :for scheme := (parse-ty-scheme unparsed-ty (tc-env-parser-env env))
-        :do (tc-env-add-definition env name scheme))
+        :do (tc-env-add-definition env name
+                                   (if generalize scheme (tc:to-scheme (tc:fresh-inst scheme)))))
 
   (when (and bindings
              (eq ':local (binding-recursion-context (first bindings))))
@@ -4255,7 +4287,7 @@ as a recursive function rather than a recursive value."
                    := (loop :for name :in scc
                             :collect (gethash name impl-bindings))
                  :append (multiple-value-bind (preds_ nodes subs_)
-                             (infer-impls-binding-type bindings subs env)
+                             (infer-impls-binding-type bindings subs env :generalize generalize)
                            (setf subs subs_)
                            (setf preds (append preds preds_))
                            nodes)))
@@ -4270,7 +4302,10 @@ as a recursive function rather than a recursive value."
                  :for unparsed-ty := (gethash name dec-table)
 
                  :collect (multiple-value-bind (preds_ node_ subs_)
-                              (infer-expl-binding-type binding
+                              (funcall (if generalize
+                                           #'infer-expl-binding-type
+                                           #'infer-monomorphic-binding-type)
+                                       binding
                                                        scheme
                                                        (source:location
                                                         (parser:binding-name binding))
@@ -4283,6 +4318,27 @@ as a recursive function rather than a recursive value."
             nil
             (append impl-binding-nodes expl-binding-nodes)
             subs)))
+
+(defun infer-monomorphic-binding-type (binding scheme location subs env)
+  "Check a storage initializer against one shared instance of its declaration."
+  (let ((qual-type (tc:ty-scheme-type scheme)))
+    (multiple-value-bind (preds accessors node subs)
+        (infer-binding-type binding (tc:qualified-ty-type qual-type) subs env)
+      (multiple-value-bind (accessors new-subs)
+          (solve-accessors (tc:apply-substitution subs accessors) (tc-env-env env))
+        (setf subs (tc:compose-substitution-lists new-subs subs))
+        (when accessors
+          (tc-error "Ambiguous accessor"
+                    (tc-location location "accessor is ambiguous")))
+        (let ((type (tc:apply-substitution subs (tc:qualified-ty-type qual-type))))
+          (tc-env-replace-type env
+                               (parser:node-variable-name (parser:binding-name binding))
+                               (tc:to-scheme type))
+          (values (tc:apply-substitution subs
+                                         (append preds (tc:qualified-ty-predicates qual-type)))
+                  (attach-explicit-binding-type (tc:apply-substitution subs node)
+                                                (tc:qualify nil type))
+                  subs))))))
 
 (defun infer-expl-binding-type (binding declared-ty location subs env)
   "Infer the type of BINDING and then ensure it matches DECLARED-TY."
@@ -4380,6 +4436,18 @@ as a recursive function rather than a recursive value."
                                              :test #'tc:ty=)
                                             env-tvars
                                             :test #'tc:ty=))
+               ;; A declaration cannot make an expansive initializer safe to
+               ;; generalize. Qualified bindings receive dictionary parameters,
+               ;; so their initializer is evaluated on each dictionary call.
+               (generalizable-tvars
+                 (if expr-preds
+                     local-tvars
+                     (generalizable-type-variables
+                      local-tvars
+                      (weak-binding-type-variables (list binding)
+                                                   (list expr-type)
+                                                   (tc-env-env env))
+                      (list expr-type) expr-preds nil (tc-env-env env))))
                (ordered-explicit-tvars
                  (mapcar (lambda (declared-tvar)
                            (tc:apply-substitution subs declared-tvar))
@@ -4390,11 +4458,11 @@ as a recursive function rather than a recursive value."
                                   (tc:quantify-using-tvar-order
                                    (remove-if-not
                                     (lambda (declared-tvar)
-                                      (find declared-tvar local-tvars :test #'tc:ty=))
+                                      (find declared-tvar generalizable-tvars :test #'tc:ty=))
                                     ordered-explicit-tvars)
                                    output-qual-type
                                    t)
-                                  (tc:quantify local-tvars output-qual-type))))
+                                  (tc:quantify generalizable-tvars output-qual-type))))
 
           (let* ((expr-preds (tc:apply-substitution subs expr-preds))
                  (preds (tc:apply-substitution subs preds))
@@ -4453,9 +4521,18 @@ as a recursive function rather than a recursive value."
                    (lambda (p) (tc:entail (tc-env-env env) expr-preds p))
                    preds))
 
+            (multiple-value-setq (preds subs)
+              (tc:default-builder-context (tc-env-env env) (append env-tvars local-tvars) preds subs))
+            ;; Expanding a builder can expose requirements already supplied by
+            ;; the declaration, such as RuntimeRepr for a polymorphic element.
+            (setf preds
+                  (remove-if
+                   (lambda (p) (tc:entail (tc-env-env env) (tc:apply-substitution subs expr-preds) p))
+                   preds))
+
             (setf local-tvars
                   (expand-local-tvars env-tvars
-                                      local-tvars
+                                      (tc:type-variables (tc:apply-substitution subs local-tvars))
                                       preds
                                       (tc-env-env env)))
             (setf env-tvars
@@ -4592,10 +4669,11 @@ value-restriction and variance logic used for implicit bindings."
             ;; Keep dynamic rebinding aligned with ordinary implicit bindings by
             ;; reusing the same fundep, defaulting, and weak-variable handling.
             (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
-            (setf preds (tc:apply-substitution subs preds))
+            (multiple-value-setq (preds subs)
+              (tc:default-builder-context (tc-env-env env) (append env-tvars local-tvars) preds subs))
             (setf local-tvars
                   (expand-local-tvars env-tvars
-                                      local-tvars
+                                      (tc:type-variables (tc:apply-substitution subs local-tvars))
                                       preds
                                       (tc-env-env env)))
             (setf env-tvars
@@ -4623,47 +4701,11 @@ value-restriction and variance logic used for implicit bindings."
                             (tc:default-subs (tc-env-env env) nil defaultable-preds)
                             subs))
 
-                (let ((coalton-impl/typechecker/context-reduction:*builder-class-cache* nil))
-                  (setf subs (tc:compose-substitution-lists
-                              (tc:default-builder-subs (tc-env-env env)
-                                                       nil
-                                                       (append deferred-preds retained-preds))
-                              subs))
-                  (setf subs (nth-value 1
-                                        (tc:solve-fundeps (tc-env-env env)
-                                                          (append deferred-preds retained-preds)
-                                                          subs)))
-                  (setf deferred-preds
-                        (tc:expand-defaulted-builder-preds
-                         (tc-env-env env)
-                         (tc:apply-substitution subs deferred-preds)))
-                  (setf retained-preds
-                        (tc:expand-defaulted-builder-preds
-                         (tc-env-env env)
-                         (tc:apply-substitution subs retained-preds))))
-
-                (setf deferred-preds (tc:reduce-context (tc-env-env env) deferred-preds nil))
-                (setf retained-preds (tc:reduce-context (tc-env-env env) retained-preds nil))
                 (setf expr-ty (tc:apply-substitution subs expr-ty))
 
-                (let* ((generalizable-candidates
-                         (remove-if-not
-                          #'tc:tyvar-p
-                          (tc:type-variables (tc:apply-substitution subs local-tvars))))
-                       (blocked-weak-tvars
-                         (intersection
-                          (blocked-weak-type-variables
-                           (remove-if-not #'tc:tyvar-p
-                                          (tc:apply-substitution subs weak-tvars))
-                           (list (tc:apply-substitution subs expr-ty))
-                           (tc:apply-substitution subs retained-preds)
-                           (tc-env-env env))
-                          generalizable-candidates
-                          :test #'tc:ty=))
-                       (generalizable-tvars
-                         (set-difference generalizable-candidates
-                                         blocked-weak-tvars
-                                         :test #'tc:ty=))
+                (let* ((generalizable-tvars
+                         (generalizable-type-variables
+                          local-tvars weak-tvars (list expr-ty) retained-preds subs (tc-env-env env)))
                        (output-qual-type
                          (if restricted
                              (tc:apply-substitution
@@ -4865,7 +4907,7 @@ as a recursive function rather than a recursive value."
                (loop :for binding :in (rest bindings)
                      :collect (tc-note (parser:binding-name binding) "with definition")))))))
 
-(defun infer-impls-binding-type (bindings subs env)
+(defun infer-impls-binding-type (bindings subs env &key (generalize t))
   "Infer the type's of BINDINGS and then qualify those types into schemes."
   (declare (type (or parser:toplevel-define-list parser:node-let-binding-list) bindings)
            (type tc:substitution-list subs)
@@ -4968,10 +5010,11 @@ as a recursive function rather than a recursive value."
         ;; instances defined in the environment.
         (setf subs (nth-value 1 (tc:solve-fundeps (tc-env-env env) preds subs)))
 
-        (setf preds (tc:apply-substitution subs preds))
+        (multiple-value-setq (preds subs)
+          (tc:default-builder-context (tc-env-env env) env-tvars preds subs))
         (setf local-tvars
               (expand-local-tvars env-tvars
-                                  local-tvars
+                                  (tc:type-variables (tc:apply-substitution subs local-tvars))
                                   preds
                                   (tc-env-env env)))
 
@@ -4993,44 +5036,16 @@ as a recursive function rather than a recursive value."
                  (retained-preds (set-difference retained-preds defaultable-preds :test #'eq))
 
                  ;; Check if the monomorphism restriction applies
-                 (restricted (some (lambda (b)
-                                     (not (parser:binding-function-p b)))
-                                   bindings)))
+                 (restricted (or (not generalize)
+                                 (some (lambda (b)
+                                         (not (parser:binding-function-p b)))
+                                       bindings))))
 
 
             (setf subs (tc:compose-substitution-lists
                         (tc:default-subs (tc-env-env env) nil defaultable-preds)
                         subs))
 
-            ;; Builder syntax should default its collection representation
-            ;; even in unrestricted bindings, leaving element predicates alone.
-            (let ((coalton-impl/typechecker/context-reduction:*builder-class-cache* nil))
-              (setf subs (tc:compose-substitution-lists
-                          (tc:default-builder-subs (tc-env-env env)
-                                                   nil
-                                                   (append deferred-preds retained-preds))
-                          subs))
-
-              ;; Once the collection/association type defaults, builder-state
-              ;; variables become determined by the builder class functional
-              ;; dependencies. Solve them before we expand the predicates
-              ;; against concrete instances.
-              (setf subs (nth-value 1
-                                    (tc:solve-fundeps (tc-env-env env)
-                                                      (append deferred-preds retained-preds)
-                                                      subs)))
-
-              (setf deferred-preds
-                    (tc:expand-defaulted-builder-preds
-                     (tc-env-env env)
-                     (tc:apply-substitution subs deferred-preds)))
-              (setf retained-preds
-                    (tc:expand-defaulted-builder-preds
-                     (tc-env-env env)
-                     (tc:apply-substitution subs retained-preds))))
-
-            (setf deferred-preds (tc:reduce-context (tc-env-env env) deferred-preds nil))
-            (setf retained-preds (tc:reduce-context (tc-env-env env) retained-preds nil))
             (setf expr-tys (tc:apply-substitution subs expr-tys))
 
             (when (parser:binding-toplevel-p (first bindings))
@@ -5048,27 +5063,10 @@ as a recursive function rather than a recursive value."
               (setf retained-preds (tc:reduce-context (tc-env-env env) retained-preds subs))
               (setf expr-tys (tc:apply-substitution subs expr-tys)))
 
-            (let* ((generalizable-candidates
-                     (remove-if-not
-                      #'tc:tyvar-p
-                      (tc:type-variables (tc:apply-substitution subs local-tvars))))
-                   (blocked-weak-tvars
-                     (intersection
-                      (blocked-weak-type-variables
-                       (remove-if-not #'tc:tyvar-p
-                                      (tc:apply-substitution subs weak-tvars))
-                       (tc:apply-substitution subs expr-tys)
-                       (tc:apply-substitution subs retained-preds)
-                       (tc-env-env env))
-                      generalizable-candidates
-                      :test #'tc:ty=))
-                   (generalizable-tvars
-                     (set-difference
-                      generalizable-candidates
-                      ;; Weak variables with non-covariant occurrences remain
-                      ;; monomorphic placeholders until solved.
-                      blocked-weak-tvars
-                      :test #'tc:ty=)))
+            (let ((generalizable-tvars
+                    (and generalize
+                         (generalizable-type-variables
+                          local-tvars weak-tvars expr-tys retained-preds subs (tc-env-env env)))))
 
               (if restricted
                   (let* ((allowed-tvars (set-difference generalizable-tvars
@@ -5172,7 +5170,8 @@ as a recursive function rather than a recursive value."
                          (initform-abstraction-node
                           (parser:node-body-last-node body)))))
                  (parser:node-the
-                  (initform-abstraction-node (parser:node-the-expr node)))
+                  ;; Recognizing a lambda must not discard its type ascription.
+                  (and (initform-abstraction-node (parser:node-the-expr node)) node))
                  (t
                   nil)))
              (binding-expression ()

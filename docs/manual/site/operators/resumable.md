@@ -20,6 +20,9 @@ resumptions.
 - The first subform is the expression that may invoke
   [`resume-to`](/manual/operators/resume-to/).
 - Each branch must match a resumption constructor, not an arbitrary pattern.
+- Patterns on constructor fields are tried in order. If no branch matches the
+  value, it is offered to an enclosing handler for the same resumption. A
+  resumption with no matching handler signals an error.
 - When a matching resumption is signaled, control transfers to the handler body.
 - The result type of each handler must agree with the result type of the whole
   `resumable` expression.

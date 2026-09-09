@@ -1310,6 +1310,28 @@ the outer one.
 Declarations without `forall` are still implicitly quantified, but their type
 variable names do not become scoped names inside the body.
 
+Binders can also have kind annotations. `(:item Type)` requires an ordinary
+single-value type, while `(:f (Type -> Type))` requires a unary type constructor.
+Bare binders retain ordinary kind inference, including higher kinds.
+
+Use `Values` to quantify an entire sequence of function results:
+
+```lisp
+(coalton-toplevel
+  (declare call-results
+    (forall ((:r Values)) (Void -> :r) -> :r))
+  (define (call-results f) (f)))
+
+(coalton (call-results (fn () (values 42 "answer"))))
+;; Returns two values, 42 and "answer".
+```
+
+The same function can forward zero or one result. In a written type annotation,
+an unannotated variable such as `:r` cannot stand for zero or multiple results.
+Functions without declarations can still infer result polymorphism; their
+printed types display the `Values` binder. See [`forall`](/manual/operators/forall/)
+for kind syntax, scoping, and restrictions.
+
 ### Type Casting, Coercing, and Conversion
 
 Coalton manages type conversions similar to the Common Lisp function `cl:coerce` by way of a type class called `Into` (of the package `#:coalton/classes`) and its sole method `into`. However, the `into` method only takes a single argument. How should Coalton know which data type to convert to? It determines this either by type inference (i.e., by the surrounding context) as in this example, where `substring` expects a `String`:
@@ -1344,6 +1366,11 @@ The `the`-`into` pattern is so common that Coalton provides a shorthand called `
 The `into` method is used only when a conversion can always be performed from one type to another. If not values of a type can be converted, then another type class `TryInto` with a method `tryInto` is used. The `tryinto` method returns an `Optional` type, yielding `Some` on success and `None` on failure.
 
 **Note that `as` only works for conversions via `into`, i.e., conversions that are total.** There is no corresponding syntax for `tryInto`.
+
+The library provides identity conversions through `Into :a :a`. Some generic
+conversions use [`overlap`](/manual/operators/overlap/), which permits more
+specific instances. Polymorphic functions that call these conversions retain
+an `Into` constraint so their callers can supply the appropriate conversion.
 
 ## Polymorphism, Mutation, and the Value Restriction
 

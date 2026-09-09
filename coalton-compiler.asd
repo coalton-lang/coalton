@@ -132,6 +132,7 @@
                              (:file "constant-propagation")
                              (:file "inliner")
                              (:file "lawnmower")
+                             (:file "scalar-replacement")
                              (:file "specializer")
                              (:file "optimizer")
 

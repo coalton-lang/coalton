@@ -7,7 +7,8 @@
   (:import-from
    #:common-lisp
    #:in-package
-   #:defpackage)
+   #:defpackage
+   #:Type)
   (:export
    #:in-package
    #:defpackage)
@@ -43,6 +44,7 @@
    #:monomorphize
    #:inline
    #:noinline
+   #:overlap
    #:likely
    #:unlikely
    #:specialize
@@ -55,6 +57,7 @@
    #:=> #:⇒
    #:forall
    #:∀
+   #:Type
    #:Unit
    #:Boolean #:True #:False
    #:Char

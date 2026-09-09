@@ -514,7 +514,8 @@ summary{cursor:pointer;font-weight:600;padding:6px 0}
           (dolist (instance instances)
             (:li :class "instances-item"
              (:code (:raw
-                     (coalton/doc/markdown::to-markdown instance)))))))))))
+                     (coalton/doc/markdown::to-markdown instance)))
+             (:raw (coalton/doc/markdown::instance-overlap-badge-html instance))))))))))
 
 (defun has-docstringp (object)
   "Return T if OBJECT has a non-empty docstring."

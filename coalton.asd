@@ -292,6 +292,8 @@
                 :components ((:file "cursor-tests")))
                (:file "entry-tests")
                (:file "codegen-pattern-tests")
+               (:file "codegen-correctness-tests")
+               (:file "scalar-replacement-tests")
                (:file "toplevel-tests")
                #+coalton-with-doc (:file "doc-tests")
                (:file "type-inference-tests")
@@ -303,6 +305,7 @@
                 :components ((:file "lisp-type-tests")
                              (:file "dictionary-resolution-tests")))
                (:file "environment-persist-tests")
+               (:file "overlap-tests")
                (:file "coalton-tests")
                (:file "shortcut-tailcall-tests")
                (:file "slice-tests")
@@ -339,6 +342,7 @@
                #+coalton-env-has-tce (:file "inliner-tests-1") ; must come after inliner-tests
                (:ct-file "deriver-tests")
                (:ct-file "file-tests")			; #-ecl (partially)
+               (:ct-file "multibyte-tests")
                (:ct-file "experimental-tests")
                (:file "exceptions")
                (:module "monad"

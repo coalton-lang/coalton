@@ -29,9 +29,6 @@
                (unless rator-name
                  (return-from apply-specialization))
 
-               (when (util:dynamic-variable-name-p rator-name)
-                 (return-from apply-specialization))
-
                (let ((from-ty (tc:lookup-value-type env rator-name :no-error t)))
                  (unless from-ty
                    (return-from apply-specialization))
@@ -61,6 +58,12 @@
                    (unless specialization
                      (return-from apply-specialization))
 
+                   ;; A type alone does not identify overlapping evidence. Until
+                   ;; specializations carry dictionary proofs, retain the call.
+                   (when (some (lambda (pred)
+                                 (tc:class-has-overlap-p env (tc:ty-predicate-class pred))) preds)
+                     (return-from apply-specialization))
+
                    (unless (>= (length (node-rands node)) num-preds)
                      (util:coalton-bug "Expected function ~A to have at least ~A args when applying specialization." rator-name (length preds)))
 
@@ -71,7 +74,7 @@
                              (tc:specialization-entry-to specialization)))
                    (cond
                      ((= num-preds (length (node-rands node)))
-                      (make-node-variable
+                      (make-node-global-variable
                        :type rator-type
                        :value (tc:specialization-entry-to specialization)))
 
@@ -79,7 +82,7 @@
                      (make-node-application
                        :type (node-type node)
                        :properties (node-properties node)
-                       :rator (make-node-variable
+                       :rator (make-node-global-variable
                                :type rator-type
                                :value (tc:specialization-entry-to specialization))
                        :rands (subseq (node-rands node) num-preds)

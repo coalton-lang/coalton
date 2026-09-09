@@ -2,6 +2,211 @@
 
 (in-package #:coalton-tests)
 
+(deftest context-reduction-applies-substitutions-once ()
+  (let* ((a (tc:make-variable))
+         (b (tc:make-variable))
+         (pred (tc:make-ty-predicate :class 'coalton/classes:Num :types (list a)))
+         (subs (list (tc:make-substitution :from a :to b)
+                     (tc:make-substitution :from b :to tc:*integer-type*))))
+    (is (null (tc:reduce-context entry:*global-environment* nil subs)))
+    (let ((reduced (tc:reduce-context entry:*global-environment* (list pred) subs)))
+      (is (= 1 (length reduced)))
+      (is (tc:type-predicate= (first reduced) (tc:apply-substitution subs pred))))
+    (is (null (tc:reduce-context entry:*global-environment*
+                                (list (tc:make-ty-predicate :class 'coalton/classes:Num
+                                                            :types (list tc:*integer-type*))) nil)))
+    (is (tc:type-predicate= pred (first (tc:reduce-context entry:*global-environment* (list pred) nil))))))
+
+(deftest class-method-result-binders-preserve-capabilities ()
+  (check-coalton-types
+   "(define-class (OutputOf :a) (output-of (:a -> :b)))"
+   '("output-of" . "(OutputOf :a => :a -> :b)")))
+
+(deftest fundep-improvement-is-independent-of-predicate-order ()
+  (let ((*package* (make-package (gensym "FUNDEP-ORDER-") :use '("COALTON" "COALTON-PRELUDE"))))
+    (unwind-protect
+         (let ((source (source:make-source-string "(define-class (C :a :b (:a -> :b)))")))
+           (with-open-stream (stream (source:source-stream source))
+             (let ((env (nth-value 1 (entry:entry-point
+                                     (parser:with-reader-context stream
+                                       (parser:read-program stream source))))))
+               (flet ((pred (from to)
+                        (tc:make-ty-predicate :class (intern "C") :types (list from to))))
+                 (let* ((a (tc:make-variable)) (b (tc:make-variable)) (c (tc:make-variable))
+                        (preds (list (pred tc:*integer-type* a)
+                                     (pred tc:*string-type* b)
+                                     (pred tc:*integer-type* c))))
+                   (alexandria:map-permutations
+                    (lambda (permutation)
+                      (let ((subs (nth-value 1 (tc:solve-fundeps env permutation nil))))
+                        (is (tc:ty= (tc:apply-substitution subs a) (tc:apply-substitution subs c)))))
+                    preds))
+                 (signals tc:coalton-internal-type-error
+                   (tc:solve-fundeps env (list (pred tc:*integer-type* tc:*integer-type*)
+                                               (pred tc:*string-type* tc:*string-type*)
+                                               (pred tc:*integer-type* tc:*boolean-type*)) nil))
+                 ;; The last pair makes the first two determinants equal.
+                 (let* ((a (tc:make-variable)) (b (tc:make-variable))
+                        (x (tc:make-variable)) (y (tc:make-variable))
+                        (subs (nth-value 1
+                                         (tc:solve-fundeps
+                                          env (list (pred a x) (pred b y)
+                                                    (pred tc:*integer-type* a)
+                                                    (pred tc:*integer-type* b)) nil))))
+                   (is (tc:ty= (tc:apply-substitution subs x) (tc:apply-substitution subs y))))))))
+      (delete-package *package*))))
+
+(deftest scheme-equality-preserves-function-boundaries ()
+  (let* ((left (tc:to-scheme
+                (tc:make-function-ty
+                 :positional-input-types (list tc:*integer-type* tc:*string-type*)
+                 :output-types (list tc:*boolean-type*))))
+         (right (tc:to-scheme
+                 (tc:make-function-ty
+                  :positional-input-types (list tc:*integer-type*)
+                  :output-types (list tc:*string-type* tc:*boolean-type*)))))
+    (is (not (tc:ty-scheme= left right)))
+    (is (not (tc:ty-scheme= right left)))
+    (is (tc:ty-scheme= left left)))
+  (let* ((value-var (tc:make-variable))
+         (result-var (tc:make-variable :allow-result-p t))
+         (value-scheme (tc:quantify (list value-var) (tc:qualify nil value-var)))
+         (result-scheme (tc:quantify (list result-var) (tc:qualify nil result-var))))
+    (is (not (tc:ty-scheme= value-scheme result-scheme)))
+    (is (not (tc:ty-scheme= result-scheme value-scheme)))))
+
+(deftest instance-head-improvement-preserves-unknown-shapes ()
+  (check-coalton-types
+   "(define-class (ConvertTo :a :b) (convert-to (:a -> :b)))
+    (define-instance (ConvertTo :a :a) (define (convert-to x) x))
+    (declare convert-any (ConvertTo :a String => :a -> String))
+    (define (convert-any x) (convert-to x))"
+   '("convert-any" . "(ConvertTo :a String => :a -> String)"))
+  (check-coalton-types
+   "(define-type (Box :a) (Box :a))
+    (define-class (ClassA :m :a (:m -> :a)) (get-a (:m -> :a)))
+    (define-instance (ClassA (Box :a) :a) (define (get-a (Box x)) x))
+    (define (get-any x) (get-a x))"
+   '("get-any" . "(ClassA :m :a => :m -> :a)")))
+
+(deftest fundep-partially-overlapping-determinants ()
+  (dolist (instances
+            '("(define-instance (C (Tuple :a Integer) :a))
+               (define-instance (C (Tuple String :b) :b))"
+              "(define-instance (C (Tuple String :b) :b))
+               (define-instance (C (Tuple :a Integer) :a))"))
+    (signals tc:tc-error
+      (check-coalton-types
+       (concatenate 'string "(define-class (C :a :b (:a -> :b)))" instances))))
+  ;; Agreement at just one specialization of a determinant is insufficient.
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-class (C :a :b :c (:a -> :b)))
+      (define-instance (C :a :a Boolean))
+      (define-instance (C :b Integer String))"))
+  ;; Both partial relations must remain available when their outputs agree.
+  (check-coalton-types
+   "(define-class (C :a :b :c (:a -> :b)) (m (:a * :c -> :b)))
+    (define-instance (C (Tuple :a Integer) Integer Boolean)
+      (define (m _ _) 1))
+    (define-instance (C (Tuple String :b) Integer String)
+      (define (m _ _) 2))
+    (define first-result (m (Tuple True (the Integer 1)) True))
+    (define second-result (m (Tuple \"x\" True) \"x\"))"
+   '("first-result" . "Integer")
+   '("second-result" . "Integer"))
+  (check-coalton-types
+   "(define-class (C :a :b :c (:a -> :b)) (m (:a * :c -> :b)))
+    (define-instance (C Integer String Boolean) (define (m _ _) \"specific\"))
+    (define-instance (C :a String String) (define (m _ _) \"general\"))
+    (define general-result (m True \"x\"))"
+   '("general-result" . "String")))
+
+(deftest predicate-mgu-refines-shared-variables ()
+  (let* ((a (tc:make-variable))
+         (b (tc:make-variable))
+         (left (tc:make-ty-predicate :class 'c :types (list a a)))
+         (right (tc:make-ty-predicate :class 'c :types (list b tc:*integer-type*))))
+    (dolist (pair (list (cons left right) (cons right left)))
+      (let ((subs (tc:predicate-mgu (car pair) (cdr pair))))
+        (is (tc:type-predicate= (tc:apply-substitution subs left)
+                                (tc:apply-substitution subs right)))
+        (is (tc:ty= tc:*integer-type* (tc:apply-substitution subs a)))
+        (is (tc:ty= tc:*integer-type* (tc:apply-substitution subs b)))))))
+
+(deftest overlapping-nonlinear-instance-heads ()
+  (dolist (instances '("(define-instance (C :a :a)) (define-instance (C :b Integer))"
+                       "(define-instance (C :b Integer)) (define-instance (C :a :a))"))
+    (signals tc:tc-error
+      (check-coalton-types (concatenate 'string "(define-class (C :a :b))" instances))))
+  (check-coalton-types
+   "(define-class (C :a :b))
+    (define-instance (C :a :a))
+    (define-instance (C Integer String))"))
+
+(deftest library-conversion-constraints ()
+  ;; Open conversions retain dictionary parameters in polymorphic wrappers.
+  (check-coalton-types
+   "(declare build-seq (Into (:f :a) (coalton/seq:Seq :a)
+                        => :f :a -> coalton/seq:Seq :a))
+    (define (build-seq xs) (into xs))
+    (declare convert-complex (Into (coalton/math:Complex :a)
+                                   (coalton/math:Complex coalton/computable-reals:CReal)
+                              => coalton/math:Complex :a
+                              -> coalton/math:Complex coalton/computable-reals:CReal))
+    (define (convert-complex z) (into z))
+    (declare same (Into :a :a => :a -> :a))
+    (define (same x) (into x))
+    (declare same-via-iso (Iso :a :a => :a -> :a))
+    (define (same-via-iso x) (into x))
+    (define same-pair (the (Tuple Integer Integer)
+                          (into (the (Tuple Integer Integer) (Tuple 1 2)))))
+    (define text (the String (into (coalton/cell:read (coalton/cell:new (the Integer 42))))))")
+  ;; A fallback's context alone cannot select a polymorphic conversion.
+  (dolist (program
+            '("(declare same (:a -> :a)) (define (same x) (into x))"
+              "(declare build-seq ((Foldable :f) (coalton/types:RuntimeRepr :a)
+                                    => :f :a -> coalton/seq:Seq :a))
+               (define (build-seq xs) (into xs))"))
+    (signals tc:tc-error (check-coalton-types program)))
+  ;; Incomparable heads require overlap even when their contexts differ.
+  (dolist (instances
+            '("(define-instance (C (coalton/cell:Cell :a) :a))
+               (define-instance (Into :a String => C (coalton/cell:Cell :a) String))"
+              "(define-instance (Into :a String => C (coalton/cell:Cell :a) String))
+               (define-instance (C (coalton/cell:Cell :a) :a))"))
+    (signals tc:tc-error
+      (check-coalton-types (concatenate 'string "(define-class (C :a :b))" instances)))))
+
+(deftest cell-conversions-require-explicit-access ()
+  (dolist (program
+            '("(define wrapped (the (coalton/cell:Cell Integer) (into (the Integer 42))))"
+              "(define unwrapped (the Integer (into (coalton/cell:new (the Integer 42)))))"
+              "(define text (the String (into (coalton/cell:new \"42\"))))"
+              "(define text (the String (into (coalton/cell:new (the Integer 42)))))"
+              "(define text (the String (into (coalton/cell:new (coalton/cell:new (the Integer 42))))))"))
+    (signals tc:tc-error (check-coalton-types program)))
+  (check-coalton-types
+   "(define (read-cell c) (coalton/cell:read c))
+    (define (make-cell x) (coalton/cell:new x))
+    (declare cell-text (Into :a String => coalton/cell:Cell :a -> String))
+    (define (cell-text c) (into (coalton/cell:read c)))"
+   '("read-cell" . "(coalton/cell:Cell :a -> :a)")
+   '("make-cell" . "(:a -> coalton/cell:Cell :a)")))
+
+(deftest occurs-check-compares-variable-identities ()
+  (let* ((a (tc:make-variable))
+         (copy (copy-structure a))
+         (recursive (tc:make-tapp :from tc:*list-type* :to copy)))
+    (is (tc:ty= a copy))
+    (signals tc:coalton-internal-type-error (tc:unify nil a recursive))
+    (signals tc:coalton-internal-type-error (tc:unify nil recursive a))
+    (let ((b (tc:make-variable)))
+      (signals tc:coalton-internal-type-error
+        (tc:predicate-mgu
+         (tc:make-ty-predicate :class 'c :types (list a recursive))
+         (tc:make-ty-predicate :class 'c :types (list b b)))))))
+
 ;; Fundep parsing
 (deftest define-fundep-classes ()
   (check-coalton-types

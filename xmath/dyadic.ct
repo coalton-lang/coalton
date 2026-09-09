@@ -48,8 +48,8 @@
                   (go (quot y b) (+ k 1))
                   None)))))
 
-  (declare dyadic-compare ((Integer * Integer -> :a)
-                           * Dyadic * Dyadic -> :a))
+  (declare dyadic-compare
+    (forall ((:a Values)) ((Integer * Integer -> :a) * Dyadic * Dyadic -> :a)))
   (define (dyadic-compare f a b)
     "Return the result of a comparision function `f` on two dyadics `a` and
 `b`."

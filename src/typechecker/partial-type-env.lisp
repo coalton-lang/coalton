@@ -35,7 +35,8 @@
   (ty-table    (make-hash-table :test #'eq) :type hash-table     :read-only t)
   (class-table (make-hash-table :test #'eq) :type hash-table     :read-only t))
 
-(defun partial-type-env-add-var (env var &optional (source-name var) (allow-result-p nil))
+(defun partial-type-env-add-var (env var &optional (source-name var) (allow-result-p nil)
+                                                (kind (tc:make-kvariable)))
   "Add a fresh type variable binding for VAR to ENV.
 
 SOURCE-NAME preserves the programmer-written binder name for later
@@ -45,7 +46,7 @@ type variable and overwrites any existing binding for VAR."
            (type symbol var)
            (values tc:tyvar))
   (setf (gethash var (partial-type-env-ty-table env))
-        (tc:make-variable :kind (tc:make-kvariable)
+        (tc:make-variable :kind kind
                           :source-name source-name
                           :allow-result-p allow-result-p)))
 

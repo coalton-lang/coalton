@@ -155,7 +155,8 @@ nodes."
        :branches (mapcar
                   (lambda (branch)
                     (make-match-branch
-                     :pattern (match-branch-pattern branch)
+                     :pattern (map-pattern (match-branch-pattern branch)
+                                           :test-function (lambda (test) (apply *traverse* test args)))
                      :body (apply *traverse*
                                   (match-branch-body branch)
                                   args)))
@@ -167,7 +168,8 @@ nodes."
        :branches (mapcar
                   (lambda (branch)
                     (make-catch-branch
-                     :pattern (catch-branch-pattern branch)
+                     :pattern (map-pattern (catch-branch-pattern branch)
+                                           :test-function (lambda (test) (apply *traverse* test args)))
                      :body (apply *traverse*
                                   (catch-branch-body branch)
                                   args)))
@@ -180,7 +182,8 @@ nodes."
        :branches (mapcar
                   (lambda (branch)
                     (make-resumable-branch
-                     :pattern (resumable-branch-pattern branch)
+                     :pattern (map-pattern (resumable-branch-pattern branch)
+                                           :test-function (lambda (test) (apply *traverse* test args)))
                      :body (apply *traverse*
                                   (resumable-branch-body branch)
                                   args)))
@@ -313,9 +316,9 @@ Note that the wrapped traversal pipes the node through three actions
 corresponding to its original class, so it is important to not define
 any node-specific actions that will run after another action which may
 return a node of a different type. For example, if there is an action
-on `:traverse 'node-variable` to substitute variables with arbitrary
+on `:traverse 'node-local-variable` to substitute variables with arbitrary
 other nodes, then it would be inappropriate to also define an action
-`:after 'node-variable`."
+`:after 'node-local-variable`."
   (declare (type node        initial-node)
            (type action-list custom-actions)
            (type list        initial-args)
@@ -430,15 +433,21 @@ bound at the given point."
                          :collect (cons name (funcall *traverse* node new-bound-variables)))
          :subexpr (funcall *traverse* (node-let-subexpr node) new-bound-variables))))
     (action (:traverse node-dynamic-let node bound-variables)
-      (make-node-dynamic-let
-       :type (node-type node)
-       :bindings (loop :for binding :in (node-dynamic-let-bindings node)
-                       :collect (make-node-dynamic-binding
-                                 :name (node-dynamic-binding-name binding)
-                                 :value (funcall *traverse*
-                                                 (node-dynamic-binding-value binding)
-                                                 bound-variables)))
-       :subexpr (funcall *traverse* (node-dynamic-let-subexpr node) bound-variables)))
+      (let ((new-bound-variables
+              (append (mapcar #'node-dynamic-binding-name
+                              (node-dynamic-let-bindings node))
+                      bound-variables)))
+        (make-node-dynamic-let
+         :type (node-type node)
+         :bindings (loop :for binding :in (node-dynamic-let-bindings node)
+                         :collect (make-node-dynamic-binding
+                                   :name (node-dynamic-binding-name binding)
+                                   :value (funcall *traverse*
+                                                   (node-dynamic-binding-value binding)
+                                                   bound-variables)))
+         :subexpr (funcall *traverse*
+                           (node-dynamic-let-subexpr node)
+                           new-bound-variables))))
     (action (:traverse node-match node bound-variables)
       (make-node-match
        :type (node-type node)
@@ -446,7 +455,9 @@ bound at the given point."
        :branches (mapcar
                   (lambda (branch)
                     (make-match-branch
-                     :pattern (match-branch-pattern branch)
+                     :pattern (map-pattern (match-branch-pattern branch)
+                                           :test-function (lambda (test)
+                                                            (funcall *traverse* test bound-variables)))
                      :body (funcall *traverse*
                                     (match-branch-body branch)
                                     (append (pattern-variables (match-branch-pattern branch))
@@ -479,13 +490,18 @@ bound at the given point."
         (make-node-for
          :type (node-type node)
          :label (node-for-label node)
-         :bindings (loop :for binding :in (node-for-bindings node)
+         :bindings (loop :with init-bound-variables := (if (node-for-sequential-p node)
+                                                          bound-variables
+                                                          new-bound-variables)
+                         :for binding :in (node-for-bindings node)
                          :collect (make-node-for-binding
                                    :name (node-for-binding-name binding)
                                    :type (node-for-binding-type binding)
-                                   :init (funcall *traverse* (node-for-binding-init binding) bound-variables)
+                                   :init (funcall *traverse* (node-for-binding-init binding) init-bound-variables)
                                    :step (and (node-for-binding-step binding)
-                                              (funcall *traverse* (node-for-binding-step binding) new-bound-variables))))
+                                              (funcall *traverse* (node-for-binding-step binding) new-bound-variables)))
+                         :do (when (node-for-sequential-p node)
+                               (push (node-for-binding-name binding) init-bound-variables)))
          :sequential-p (node-for-sequential-p node)
          :returns (and (node-for-returns node)
                        (funcall *traverse* (node-for-returns node) new-bound-variables))

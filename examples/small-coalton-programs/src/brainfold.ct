@@ -250,7 +250,7 @@
   (declare exec-cmds ((List Cmd) -> (state:ST BF-State Unit)))
   (define (exec-cmds cmds)
     "Executes a list of bf-commands."
-    (match (into cmds)
+    (match cmds
       ((Cons x xs)
        (do
         (exec x)

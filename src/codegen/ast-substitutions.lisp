@@ -49,7 +49,7 @@ is true."
   (traverse
    node
    (list
-    (action (:after node-variable node new-subs)
+    (action (:after node-local-variable node new-subs)
       (alexandria:when-let
           ((res (or (find (node-variable-value node) subs :key #'ast-substitution-from)
                     (find (node-variable-value node) new-subs :key #'ast-substitution-from))))
@@ -60,7 +60,7 @@ is true."
                 :for new-var := (gensym (symbol-name coalton-var))
                 :for res := (or (find coalton-var subs :key #'ast-substitution-from)
                                 (find coalton-var new-subs :key #'ast-substitution-from))
-                :if (and res (node-variable-p (ast-substitution-to res)))
+                :if (and res (node-local-variable-p (ast-substitution-to res)))
                   :collect (cons lisp-var (node-variable-value (ast-substitution-to res)))
                     :into lisp-var-bindings
                 :else :if res
@@ -103,7 +103,7 @@ is true."
             :do (when rename-bound-variables
                   (push (make-ast-substitution
                          :from name
-                         :to (make-node-variable
+                         :to (make-node-local-variable
                               :type (node-type expr)
                               :value (gensym (symbol-name name))))
                         new-subs)))
@@ -130,7 +130,7 @@ is true."
               :do (when rename-bound-variables
                     (push (make-ast-substitution
                            :from name
-                           :to (make-node-variable
+                           :to (make-node-local-variable
                                 :type (pop components)
                                 :value (gensym (symbol-name name))))
                           new-subs))))
@@ -155,14 +155,15 @@ is true."
               :do (when rename-bound-variables
                     (push (make-ast-substitution
                            :from name
-                           :to (make-node-variable
+                           :to (make-node-local-variable
                                 :type (node-for-binding-type binding)
                                 :value (gensym (symbol-name name))))
                           loop-subs)))
         (make-node-for
          :type (node-type node)
          :label (node-for-label node)
-         :bindings (loop :for binding :in (node-for-bindings node)
+         :bindings (loop :with init-subs := (if (node-for-sequential-p node) new-subs loop-subs)
+                         :for binding :in (node-for-bindings node)
                          :for name := (node-for-binding-name binding)
                          :collect (make-node-for-binding
                                    :name (if rename-bound-variables
@@ -171,9 +172,11 @@ is true."
                                                (find name loop-subs :key #'ast-substitution-from)))
                                              name)
                                    :type (node-for-binding-type binding)
-                                   :init (funcall *traverse* (node-for-binding-init binding) new-subs)
+                                   :init (funcall *traverse* (node-for-binding-init binding) init-subs)
                                    :step (and (node-for-binding-step binding)
-                                              (funcall *traverse* (node-for-binding-step binding) loop-subs))))
+                                              (funcall *traverse* (node-for-binding-step binding) loop-subs)))
+                         :do (when (and rename-bound-variables (node-for-sequential-p node))
+                               (push (find name loop-subs :key #'ast-substitution-from) init-subs)))
          :sequential-p (node-for-sequential-p node)
          :returns (and (node-for-returns node)
                        (funcall *traverse* (node-for-returns node) loop-subs))

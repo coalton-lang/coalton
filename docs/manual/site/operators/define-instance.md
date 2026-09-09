@@ -22,7 +22,8 @@ type or constrained type pattern.
 - The instance head determines which class/type combination is being
   implemented.
 - All required class methods must be implemented.
-- Instances may not overlap (i.e., only zero or one instance must be valid for a given type)
+- Overlapping instances must all opt in with the [`overlap`](/manual/operators/overlap/)
+  attribute. Resolution requires a unique most-specific matching head.
 
 ## Example
 

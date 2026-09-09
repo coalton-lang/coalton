@@ -1,0 +1,200 @@
+(defpackage #:coalton-raytrace/tests
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames (#:rt #:coalton-raytrace)
+                    (#:bench #:coalton-raytrace/benchmark)
+                    (#:cell #:coalton/cell))
+  (:export #:run-tests))
+
+(in-package #:coalton-raytrace/tests)
+
+(coalton-toplevel
+  (declare close-f64 (F64 * F64 -> Boolean))
+  (define (close-f64 a b) (< (abs (- a b)) 1.0d-9))
+
+  (declare close-vector (rt::Vec3 * rt::Vec3 -> Boolean))
+  (define (close-vector a b)
+    (and (close-f64 (.x a) (.x b))
+         (and (close-f64 (.y a) (.y b)) (close-f64 (.z a) (.z b)))))
+
+  (declare same-hit (Optional rt::Hit * Optional rt::Hit -> Boolean))
+  (define (same-hit a b)
+    (match (Tuple a b)
+      ((Tuple (None) (None)) True)
+      ((Tuple (Some left) (Some right))
+       (and (close-f64 (.distance left) (.distance right))
+            (and (close-vector (.point left) (.point right))
+                 (and (close-vector (.normal left) (.normal right))
+                      (== (.front-face left) (.front-face right))))))
+      (_ False)))
+
+  ;; Independent traversal oracle: no bounding boxes or tree pruning.
+  (declare hit-list (List rt::Sphere * rt::Ray -> Optional rt::Hit))
+  (define (hit-list objects ray)
+    (fold (fn (best object)
+            (match (rt::hit-sphere object ray 0.0001d0 1.0d30)
+              ((None) best)
+              ((Some contact)
+               (match best
+                 ((None) (Some contact))
+                 ((Some previous)
+                  (if (< (.distance contact) (.distance previous)) (Some contact) best))))))
+          None objects))
+
+  (declare check-bvh (Void -> Boolean))
+  (define (check-bvh)
+    (let objects = (rt::scene-spheres))
+    (let tree = (rt::build-world objects 0))
+    (let rng = (cell:new (the U32 829)))
+    (for ((i (the UFix 0) (+ i 1))
+          (correct True
+            (let ((origin (rt::v+ (rt::Vec3 0.0d0 2.0d0 0.0d0)
+                                  (rt::scale 12.0d0 (rt::random-ball rng))))
+                  (direction (rt::normalize (rt::random-ball rng)))
+                  (ray (rt::Ray origin direction)))
+              (and correct (same-hit (hit-list objects ray)
+                                      (rt::hit-world tree ray 0.0001d0 1.0d30))))))
+      :returns correct
+      :repeat 1000
+      (values))))
+
+(cl:defun test-spheres ()
+  (cl:assert
+   (coalton
+    (progn
+      (let object = (rt::Sphere (rt::Vec3 0.0d0 0.0d0 0.0d0) 1.0d0 (rt::Dielectric 1.5d0)))
+      (let ray = (rt::Ray (rt::Vec3 0.0d0 0.0d0 3.0d0) (rt::Vec3 0.0d0 0.0d0 -1.0d0)))
+      (match (rt::hit-sphere object ray 0.0001d0 10.0d0)
+        ((None) False)
+        ((Some contact)
+         (and (close-f64 (.distance contact) 2.0d0)
+              (and (.front-face contact)
+                   (close-vector (.normal contact) (rt::Vec3 0.0d0 0.0d0 1.0d0)))))))))
+  (cl:assert
+   (coalton
+    (progn
+      (let object = (rt::Sphere (rt::Vec3 0.0d0 0.0d0 0.0d0) 1.0d0 (rt::Dielectric 1.5d0)))
+      (let ray = (rt::Ray (rt::Vec3 0.0d0 0.0d0 0.0d0) (rt::Vec3 1.0d0 0.0d0 0.0d0)))
+      (match (rt::hit-sphere object ray 0.0001d0 10.0d0)
+        ((None) False)
+        ((Some contact)
+         (and (close-f64 (.distance contact) 1.0d0)
+              (and (not (.front-face contact))
+                   (close-vector (.normal contact) (rt::Vec3 -1.0d0 0.0d0 0.0d0)))))))))
+  (cl:assert
+   (coalton
+    (progn
+      (let object = (rt::Sphere (rt::Vec3 0.0d0 0.0d0 0.0d0) 1.0d0 (rt::Dielectric 1.5d0)))
+      (let ray = (rt::Ray (rt::Vec3 1.0d0 0.0d0 3.0d0) (rt::Vec3 0.0d0 0.0d0 -1.0d0)))
+      (match (rt::hit-sphere object ray 0.0001d0 10.0d0)
+        ((None) False)
+        ((Some contact) (close-f64 (.distance contact) 3.0d0))))))
+  (cl:assert
+   (coalton
+    (progn
+      (let object = (rt::Sphere (rt::Vec3 0.0d0 0.0d0 0.0d0) 1.0d0 (rt::Dielectric 1.5d0)))
+      (let ray = (rt::Ray (rt::Vec3 0.0d0 0.0d0 3.0d0) (rt::Vec3 0.0d0 0.0d0 -1.0d0)))
+      (match (rt::hit-sphere object ray 2.5d0 5.0d0)
+        ((None) False)
+        ((Some contact) (close-f64 (.distance contact) 4.0d0))))))
+  (cl:assert
+   (coalton
+    (progn
+      (let object = (rt::Sphere (rt::Vec3 0.0d0 0.0d0 0.0d0) 1.0d0 (rt::Dielectric 1.5d0)))
+      (let ray = (rt::Ray (rt::Vec3 2.0d0 0.0d0 3.0d0) (rt::Vec3 0.0d0 0.0d0 -1.0d0)))
+      (match (rt::hit-sphere object ray 0.0001d0 10.0d0) ((None) True) (_ False))))))
+
+(cl:defun test-bounds ()
+  (cl:assert
+   (coalton
+    (progn
+      (let box = (rt::Bounds (rt::Vec3 -1.0d0 -1.0d0 -1.0d0) (rt::Vec3 1.0d0 1.0d0 1.0d0)))
+      (and
+       (rt::hit-bounds box (rt::Ray (rt::Vec3 1.0d0 0.0d0 3.0d0)
+                                  (rt::Vec3 0.0d0 0.0d0 -1.0d0)) 0.0d0 10.0d0)
+       (and
+        (not (rt::hit-bounds box (rt::Ray (rt::Vec3 2.0d0 0.0d0 3.0d0)
+                                        (rt::Vec3 0.0d0 0.0d0 -1.0d0)) 0.0d0 10.0d0))
+        ;; Each slab intersects the ray, but their intervals do not overlap.
+        (not (rt::hit-bounds box (rt::Ray (rt::Vec3 0.0d0 3.0d0 0.0d0)
+                                        (rt::Vec3 1.0d0 -1.0d0 0.0d0)) 0.0d0 10.0d0)))))))
+  (cl:assert (coalton (check-bvh))))
+
+(cl:defun test-scattering ()
+  (cl:assert
+   (coalton
+    (progn
+      (close-vector (rt::reflect (rt::Vec3 0.6d0 -0.8d0 0.0d0) (rt::Vec3 0.0d0 1.0d0 0.0d0))
+                    (rt::Vec3 0.6d0 0.8d0 0.0d0)))))
+  (cl:assert
+   (coalton
+    (progn
+      ;; Snell's law: sin(theta_out) = (2/3) * sin(theta_in).
+      (close-vector (rt::refract (rt::Vec3 0.6d0 -0.8d0 0.0d0)
+                                 (rt::Vec3 0.0d0 1.0d0 0.0d0) (/ 2.0d0 3.0d0))
+                    (rt::Vec3 0.4d0 (negate (sqrt 0.84d0)) 0.0d0)))))
+  (cl:assert (coalton (close-f64 (rt::reflectance 1.0d0 1.5d0) 0.04d0)))
+  (cl:assert
+   (coalton
+    (progn
+      (let rng = (cell:new (the U32 1)))
+      (let point = (rt::Vec3 0.0d0 0.0d0 0.0d0))
+      (let direction = (rt::Vec3 (sqrt 0.75d0) 0.5d0 0.0d0))
+      (let contact = (rt::Hit 1.0d0 point (rt::Vec3 0.0d0 -1.0d0 0.0d0) (rt::Dielectric 1.5d0) False))
+      (match (rt::scatter (rt::Ray point direction) contact rng)
+        ((None) False)
+        ((Some outgoing)
+         (and (close-vector (.direction (.scattered outgoing)) (rt::Vec3 (sqrt 0.75d0) -0.5d0 0.0d0))
+              (== (cell:read rng) 1))))))))
+
+(cl:defun test-random ()
+  (cl:assert
+   (coalton
+    (progn
+      (let rng = (cell:new (the U32 1)))
+      (rt::random-f64 rng)
+      (let first = (cell:read rng))
+      (rt::random-f64 rng)
+      (let second = (cell:read rng))
+      (rt::random-f64 rng)
+      (and (== first 270369) (and (== second 67634689) (== (cell:read rng) 2647435461)))))))
+
+(cl:defun test-render ()
+  (cl:let* ((first (bench:render-frame :width 16 :height 9 :samples 2 :depth 5))
+            (second (bench:render-frame :width 16 :height 9 :samples 2 :depth 5))
+            (changed (bench:render-frame :width 16 :height 9 :samples 2 :depth 5 :seed 12346)))
+    (cl:assert (cl:equalp first second))
+    (cl:assert (cl:not (cl:equalp first changed)))
+    (cl:assert (cl:every (cl:lambda (x) (cl:<= 0d0 x 1d0)) first))
+    (cl:assert (cl:some (cl:lambda (x) (cl:> x 0.5d0)) first))
+    (cl:assert (cl:some (cl:lambda (x) (cl:< x 0.1d0)) first))
+    ;; Reference from the fixed scene/seed, checked on SBCL and CCL. A weighted
+    ;; sum catches spatial changes; selected pixels cover sky, metal, and ground.
+    (cl:assert (cl:< (cl:abs (cl:- (cl:loop for x across first for i from 1 sum (cl:* i x))
+                                    39381.35656104344d0))
+                    1d-7))
+    (cl:loop for index in '(0 1 2 174 175 176 216 217 218 429 430 431)
+             for expected in '(0.7339973267516697d0 0.8403983960510019d0 1d0
+                               0.3386468586177685d0 0.4795813121211702d0 0.49807648711139335d0
+                               0.514762199172722d0 0.6681609019726102d0 0.9d0
+                               0.28780512826604027d0 0.37268307695962416d0 0.5d0)
+             do (cl:assert (cl:< (cl:abs (cl:- (cl:aref first index) expected)) 1d-9))))
+  (cl:assert (cl:= 3 (cl:length (bench:render-frame :width 1 :height 1 :samples 1 :depth 1))))
+  (cl:dolist (options '((:width 0) (:height -1) (:samples 0) (:depth 0) (:seed 0) (:seed 4294967296)))
+    (cl:assert (cl:handler-case (cl:progn (cl:apply #'bench:render-frame options) cl:nil)
+                 (cl:error () cl:t)))))
+
+(cl:defun test-runner ()
+  (cl:let ((cl:*standard-output* (cl:make-broadcast-stream)))
+    (cl:multiple-value-bind (report pixels)
+        (bench:run-benchmark :width 8 :height 4 :samples 2 :depth 3 :trials 2)
+      (cl:assert (cl:= (cl:length (cl:getf report :trials)) 2))
+      (cl:assert (cl:>= (cl:getf report :median-seconds) 0))
+      #+sbcl (cl:assert (cl:> (cl:getf report :median-bytes) 0))
+      (cl:assert (cl:equalp pixels (bench:render-frame :width 8 :height 4 :samples 2 :depth 3)))))
+  (cl:assert (cl:handler-case (cl:progn (bench:run-benchmark :trials 0) cl:nil)
+               (cl:error () cl:t))))
+
+(cl:defun run-tests ()
+  (cl:mapc #'cl:funcall '(test-spheres test-bounds test-scattering test-random test-render test-runner))
+  (cl:format cl:t "~&Ray tracer tests passed.~%")
+  cl:t)

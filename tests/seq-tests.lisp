@@ -1,5 +1,114 @@
 (in-package #:coalton-native-tests)
 
+(define-test seq-fold-order ()
+  (is (== (fold + 7 (the (seq:Seq Integer) (seq:new))) 7))
+  (is (== (foldr + 7 (the (seq:Seq Integer) (seq:new))) 7))
+  ;; Cross leaf and multi-level branch boundaries, including concatenated trees.
+  (iter:for-each!
+    (fn (count)
+      (let xs = (iter:collect! (iter:up-to (the Integer count))))
+      (let left = (the (seq:Seq Integer) (into (the (List Integer) xs))))
+      (let joined = (seq:conc left (seq:make count (+ count 1))))
+      (let expected = (<> xs (make-list count (+ count 1))))
+      (is (== (fold (fn (acc x) (Cons x acc)) Nil joined) (list:reverse expected)))
+      (is (== (foldr Cons Nil joined) expected)))
+    (iter:into-iter (make-list 1 32 33 1100))))
+
+(define-test library-conversions ()
+  (is (== (the Integer (into (the Integer 42))) 42))
+  (is (== (the UFix (into (the UFix 42))) 42))
+  (is (== (the String (into "hello")) "hello"))
+  (let path = (the file:Pathname (into "conversion-test")))
+  (is (== (the file:Pathname (into path)) path))
+  (is (== (coalton/tuple:swap (the (Tuple Integer Integer) (Tuple 1 2))) (Tuple 2 1)))
+  (is (== (the (Tuple Integer Integer) (into (the (Tuple Integer Integer) (Tuple 1 2))))
+          (Tuple 1 2)))
+  (is (== (the (seq:Seq Integer) (into (the (List Integer) (make-list 1 2)))) (seq:make 1 2)))
+  (is (== (the (seq:Seq Integer) (into (the (vector:Vector Integer) (vector:make 1 2)))) (seq:make 1 2)))
+  (is (== (the (seq:Seq Integer) (into (Some (the Integer 1)))) (seq:make 1)))
+  (is (seq:empty? (the (seq:Seq Integer) (into (the (Optional Integer) None)))))
+  (let z = (the (math:Complex creal:CReal) (into (math:Complex (the Integer 1) 2))))
+  (is (== (math:real-part z) 1))
+  (is (== (math:imag-part z) 2)))
+
+(define-test explicit-cell-contents-conversion ()
+  (let c = (cell:new (the Integer 42)))
+  (let text = (the String (into (cell:read c))))
+  (cell:write! c 7)
+  (is (== text "42"))
+  (is (== (the String (into (cell:read c))) "7"))
+  (is (== (cell:read (cell:new "hello")) "hello")))
+
+(coalton-toplevel
+  (define-type (ConversionFoldable :a)
+    (ConversionFoldable :a :a))
+
+  (define-instance (Foldable ConversionFoldable)
+    (define (fold f init (ConversionFoldable x y))
+      (f (f init x) y))
+    (define (foldr f init (ConversionFoldable x y))
+      (f x (f y init))))
+
+  (define-type ConversionScalar
+    (ConversionScalar Integer))
+
+  (define-instance (Eq ConversionScalar)
+    (define (== (ConversionScalar x) (ConversionScalar y)) (== x y)))
+
+  (define-instance (Num ConversionScalar)
+    (define (+ (ConversionScalar x) (ConversionScalar y)) (ConversionScalar (+ x y)))
+    (define (- (ConversionScalar x) (ConversionScalar y)) (ConversionScalar (- x y)))
+    (define (* (ConversionScalar x) (ConversionScalar y)) (ConversionScalar (* x y)))
+    (define fromInt ConversionScalar))
+
+  (define-instance (math:ComplexComponent ConversionScalar)
+    (define (math:complex re im) (coalton/math/complex::%Complex re im))
+    (define (math:real-part z)
+      (match z ((coalton/math/complex::%Complex re _) re)))
+    (define (math:imag-part z)
+      (match z ((coalton/math/complex::%Complex _ im) im))))
+
+  (define-instance (Into ConversionScalar creal:CReal)
+    (define (into (ConversionScalar x)) (into x)))
+
+  (define-instance (Into ConversionScalar String)
+    (define (into (ConversionScalar x)) (into x)))
+
+  (declare conversion-same (Into :a :a => :a -> :a))
+  (define (conversion-same x) (into x))
+
+  (declare conversion-same-via-iso (Iso :a :a => :a -> :a))
+  (define (conversion-same-via-iso x) (into x))
+
+  (declare conversion-to-seq (Into (:f :a) (seq:Seq :a) => :f :a -> seq:Seq :a))
+  (define (conversion-to-seq xs) (into xs)))
+
+(define-test generic-library-conversions ()
+  ;; User-defined Foldable and scalar instances automatically participate in
+  ;; the library's generic conversions, without container-specific instances.
+  (is (== (the (seq:Seq Integer) (into (ConversionFoldable 3 7))) (seq:make 3 7)))
+  (is (== (conversion-to-seq (ConversionFoldable 3 7)) (seq:make 3 7)))
+  (is (== (conversion-same (ConversionScalar 3)) (ConversionScalar 3)))
+  (is (== (conversion-same-via-iso (ConversionScalar 7)) (ConversionScalar 7)))
+  (is (== (the String (into (ConversionScalar 3))) "3"))
+  (let z = (the (math:Complex creal:CReal)
+               (into (math:complex (ConversionScalar 3) (ConversionScalar 7)))))
+  (is (== (math:real-part z) 3))
+  (is (== (math:imag-part z) 7)))
+
+(define-test library-conversion-intersections ()
+  ;; Identity conversions must not rebuild containers or complex numbers.
+  (let xs = (seq:make (ConversionScalar 3) (ConversionScalar 7)))
+  (let ys = (conversion-same xs))
+  (is (lisp (-> Boolean) (xs ys) (cl:eq xs ys)))
+  (let z = (the (math:Complex creal:CReal) (math:Complex 3 7)))
+  (let w = (conversion-same-via-iso z))
+  (is (lisp (-> Boolean) (z w) (cl:eq z w)))
+  (let c = (cell:new (ConversionScalar 3)))
+  (let d = (conversion-same c))
+  (is (lisp (-> Boolean) (c d) (cl:eq c d)))
+  (is (== (cell:read c) (ConversionScalar 3))))
+
 (define-test seq-push-and-pop ()
   (let ((seq (the (seq:Seq String) (seq:make "a" "b" "c"))))
     (is (== (Some "a") (seq:get seq 0)))

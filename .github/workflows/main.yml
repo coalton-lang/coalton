@@ -86,6 +86,7 @@ jobs:
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
           (asdf:load-system :small-coalton-programs)
+          (asdf:test-system :coalton-raytrace)
           EOF
           sbcl --dynamic-space-size 2048 --non-interactive --load run-tests.lisp
       - name: Run Allegro CL tests
@@ -100,6 +101,7 @@ jobs:
           (asdf:test-system :coalton/tests)
           ; TODO: Remove this or add tests for these programs.
           (asdf:load-system :small-coalton-programs)
+          (asdf:test-system :coalton-raytrace)
           EOF
           cat run-tests.lisp | alisp --batch
       - name: Run Clozure CL tests
@@ -112,13 +114,14 @@ jobs:
           cat <<EOF > run-tests.lisp
           (cl:handler-case
             (cl:progn
-          ;; This must be set before loading Coalton.
-          (setf (get :coalton-config :emit-type-annotations) nil)
-          (ql:quickload :coalton/tests)
-          (asdf:test-system :coalton/tests)
-          ; TODO: Remove this or add tests for these programs.
-          (asdf:load-system :small-coalton-programs)
-              (uiop:quit 0))
+             ;; This must be set before loading Coalton.
+             (setf (get :coalton-config :emit-type-annotations) nil)
+             (ql:quickload :coalton/tests)
+             (asdf:test-system :coalton/tests)
+             ; TODO: Remove this or add tests for these programs.
+             (asdf:load-system :small-coalton-programs)
+             (asdf:test-system :coalton-raytrace)
+             (uiop:quit 0))
             (cl:error (c)
               (declare (ignore c))
               (uiop:quit 1)))
