@@ -6,7 +6,8 @@
    #:coalton-impl/codegen/codegen-match)
   (:import-from
    #:coalton-impl/codegen/codegen-pattern
-   #:codegen-pattern)
+   #:codegen-pattern
+   #:codegen-pattern-test)
   (:import-from
    #:coalton-impl/codegen/codegen-type-definition
    #:constructor-slot-name)
@@ -25,6 +26,7 @@
    #:function-declarations              ; FUNCTION
    #:annotate-function-body             ; FUNCTION
    #:node-output-lisp-types             ; FUNCTION
+   #:node-output-values-type           ; FUNCTION
    ))
 
 (in-package #:coalton-impl/codegen/codegen-expression)
@@ -199,13 +201,36 @@
              (values list &optional))
     (list (tc:lisp-type (node-type node) env))))
 
+(defmethod codegen-pattern-test ((test node) expr env)
+  `(funcall ,(codegen-expression test env) ,expr))
+
+(defun node-output-values-type (node env)
+  "Return a VALUES type, preserving the unknown arity of whole-result variables."
+  (let* ((type (if (node-abstraction-p node)
+                   (tc:function-return-type (node-type node))
+                   (node-type node)))
+         (types (node-output-lisp-types node env)))
+    (cond
+      ((and (tc:tyvar-p type) (tc:tyvar-allow-result-p type))
+       '(values &rest t))
+      (types `(values ,@types &optional))
+      (t '(values)))))
+
 (defgeneric codegen-expression (node env)
   (:method ((node node-literal) env)
     (declare (type tc:environment env)
              (ignore env))
     (node-literal-value node))
 
-  (:method ((node node-variable) env)
+  (:method ((node node-local-variable) env)
+    (declare (type tc:environment env)
+             (ignore env))
+    (let ((value (node-variable-value node)))
+      (if (local-function-value-reference-p value)
+          (local-function-value-form value)
+          value)))
+
+  (:method ((node node-global-variable) env)
     (declare (type tc:environment env))
     (let ((value (node-variable-value node)))
       (case value
@@ -213,16 +238,17 @@
         ((coalton:True coalton:False coalton:Nil coalton:Unit)
          `(quote ,(eval value)))
         (otherwise
-         (if (local-function-value-reference-p value)
-             (local-function-value-form value)
-             ;; General case: Emit the symbol itself.
-             (alexandria:if-let ((entry (and (not (util:dynamic-variable-name-p value))
-                                             (tc:lookup-function env value :no-error t))))
-               (if (and (not (tc:function-type-p (node-type node)))
-                        (zerop (tc:function-env-entry-arity entry)))
-                   `(funcall ,value)
-                   value)
-               value))))))
+         (alexandria:if-let ((entry (tc:lookup-function env value :no-error t)))
+           (if (and (not (tc:function-type-p (node-type node)))
+                    (zerop (tc:function-env-entry-arity entry)))
+               `(funcall ,value)
+               value)
+           value)))))
+
+  (:method ((node node-dynamic-variable) env)
+    (declare (type tc:environment env)
+             (ignore env))
+    (node-variable-value node))
 
   ;; Keyword dispatch for indirect calls through first-class function values.
   ;; The parallel logic for direct calls is in the node-direct-application
@@ -357,7 +383,11 @@
     (let* ((forms (node-lisp-form expr))
            (prefix-forms (butlast forms))
            (last-form (car (last forms)))
-           (output-arity (tc:multiple-value-output-arity (node-type expr)))
+           ;; A whole-result variable has unknown arity. Wrapping its last
+           ;; form in (VALUES ...) would truncate multiple results to one.
+           (output-arity (unless (and (tc:tyvar-p (node-type expr))
+                                     (tc:tyvar-allow-result-p (node-type expr)))
+                           (tc:multiple-value-output-arity (node-type expr))))
            (tail-forms
              (case output-arity
                (0
@@ -375,10 +405,10 @@
                     ,@tail-forms)
                  `(progn ,@prefix-forms
                          ,@tail-forms)))
-           (return-types (node-output-lisp-types expr env)))
+           (return-type (node-output-values-type expr env)))
       (let ((body
               (if settings:*emit-type-annotations*
-                  `(the (values ,@return-types &optional)
+                  `(the ,return-type
                         ,inner)
                   inner)))
         (if *emit-lisp-type-checks-p*
@@ -457,7 +487,8 @@
              (node-binding-sccs init-bindings)
              env
              #'make-loop-body
-             binding-decl-table)))))
+             binding-decl-table
+             t)))))
 
   (:method ((expr node-break) env)
     (declare (type tc:environment env))
@@ -488,49 +519,77 @@
                  := (codegen-expression (catch-branch-body branch) env)
                :for lambda-var
                  := (gensym (symbol-name exception-name))
-               :for bindings
-                 := (nth-value 1 (codegen-pattern pattern lambda-var (pattern-type pattern) env))
                ;; NB: if CASE-BODY invokes a restart then control will
                ;; be transferred before the transfer due to
                ;; return-from.
                :for inner-body
                  := `(return-from ,block-label ,case-body)
-               :collect `(,exception-name
-                          (lambda (,lambda-var)
-                            (declare (ignorable ,lambda-var))
-                            (let ,bindings
-                              (declare (ignorable ,@(mapcar #'car bindings)))
-                              ,inner-body))))))
+               :collect (multiple-value-bind (predicate bindings)
+                            (codegen-pattern pattern lambda-var (pattern-type pattern) env)
+                          `(,exception-name
+                            (lambda (,lambda-var)
+                              (declare (ignorable ,lambda-var))
+                              (when ,predicate
+                                (let ,bindings
+                                  (declare (ignorable ,@(mapcar #'car bindings)))
+                                  ,inner-body))))))))
       `(block ,block-label
          (handler-bind ,handler-cases
            ,(codegen-expression (node-catch-expr node) env)))))
 
   (:method ((node node-resumable) env)
     (declare (type tc:environment env))
-    (let* ((clauses
-             (loop
-               :for branch :in (node-resumable-branches node)
-               :for pattern
-                 := (resumable-branch-pattern branch)
-               :for restart-name
-                 := (tc:lisp-type (pattern-type pattern) env)
-               :for resumption-constructor-arity
-                 := (tc:constructor-entry-arity
-                     (tc:lookup-constructor env restart-name))
-               :for restart-var
-                 := (gensym (symbol-name restart-name))
-               :for bindings
-                 := (nth-value 1 (codegen-pattern pattern restart-var (pattern-type pattern) env))
-               :for inner-body := (codegen-expression (resumable-branch-body branch) env)
-
-               :when (plusp resumption-constructor-arity)
-                 :collect `(,restart-name (,restart-var)
-                                          (declare (ignorable ,restart-var))
-                                          (let ,bindings ,inner-body))
-               :else
-                 :collect `(,restart-name () ,inner-body))))
-      `(restart-case ,(codegen-expression (node-resumable-expr node) env)
-         ,@clauses)))
+    (let ((normal-exit (gensym "RESUMABLE-NORMAL-"))
+          (dispatch-exit (gensym "RESUMABLE-DISPATCH-"))
+          (index-var (gensym "BRANCH-"))
+          (payload-var (gensym "RESUMPTION-"))
+          (groups nil)
+          (bodies nil)
+          (outer-restarts nil))
+      ;; Test payloads before unwinding, so an unmatched resumption can be
+      ;; forwarded to an outer handler. Execute the selected body only after
+      ;; unwinding, preserving RESTART-CASE semantics and multiple values.
+      (loop :for branch :in (node-resumable-branches node)
+            :for index :from 0
+            :for pattern := (resumable-branch-pattern branch)
+            :for name := (tc:lisp-type (pattern-type pattern) env)
+            :for arity := (tc:constructor-entry-arity (tc:lookup-constructor env name))
+            :for group := (or (assoc name groups)
+                              (let ((group (list name arity nil)))
+                                (push group groups)
+                                group))
+            :do (multiple-value-bind (predicate bindings)
+                    (codegen-pattern pattern payload-var (pattern-type pattern) env)
+                  (push `(,(if (zerop arity) t predicate)
+                          (return-from ,dispatch-exit
+                            (values ,index ,(if (zerop arity) nil payload-var))))
+                        (third group))
+                  (push `(,index
+                          (let ,bindings
+                            (declare (ignorable ,@(mapcar #'car bindings)))
+                            ,(codegen-expression (resumable-branch-body branch) env)))
+                        bodies)))
+      (let ((restarts
+              (loop :for (name arity tests) :in (nreverse groups)
+                    :for outer := (gensym "OUTER-RESTART-")
+                    :for args := (when (plusp arity) (list payload-var))
+                    :do (push `(,outer (find-restart ',name)) outer-restarts)
+                    :collect
+                    `(,name
+                      (lambda ,args
+                        (cond ,@(nreverse tests)
+                              (t (if ,outer
+                                     (invoke-restart ,outer ,@args)
+                                     (error "No matching resumption handler for ~S." ',name)))))))))
+        `(block ,normal-exit
+           (multiple-value-bind (,index-var ,payload-var)
+               (block ,dispatch-exit
+                 (let ,(nreverse outer-restarts)
+                   (restart-bind ,restarts
+                     (return-from ,normal-exit
+                       ,(codegen-expression (node-resumable-expr node) env)))))
+             (declare (ignorable ,payload-var))
+             (ecase ,index-var ,@(nreverse bodies)))))))
 
   (:method ((expr node-match) env)
     (declare (type tc:environment env))
@@ -603,10 +662,12 @@
              (tc:constructor-entry-arity
               (tc:lookup-constructor env restart-name))))
 
-      `(invoke-restart ',restart-name
-                       ,@(if (zerop resumption-constructor-arity)
-                             nil
-                             (list (codegen-expression (node-resume-to-expr node) env))))))
+      (if (zerop resumption-constructor-arity)
+          `(progn
+             ,(codegen-expression (node-resume-to-expr node) env)
+             (invoke-restart ',restart-name))
+          `(invoke-restart ',restart-name
+                           ,(codegen-expression (node-resume-to-expr node) env)))))
 
   (:method ((expr node-block) env)
     `(block ,(block-label (node-block-name expr))
@@ -696,16 +757,18 @@
        nil)))
 
 (defun codegen-recursive-bindings (bindings sccs env inner-thunk
-                                    &optional binding-decl-table)
+                                    &optional binding-decl-table function-values-p)
   "Emit recursive binding code for BINDINGS around INNER-THUNK.
 
 This is shared by `let` and the one-time initializer phase of `for` so both
-forms follow the same binding semantics."
+forms follow the same binding semantics. FUNCTION-VALUES-P gives function
+bindings assignable storage for loop steps, including recursive closures."
   (declare (type binding-list bindings)
            (type list sccs)
            (type tc:environment env)
            (type function inner-thunk)
-           (type (or null hash-table) binding-decl-table))
+           (type (or null hash-table) binding-decl-table)
+           (type boolean function-values-p))
 
   (when (null sccs)
     (return-from codegen-recursive-bindings (funcall inner-thunk)))
@@ -723,33 +786,49 @@ forms follow the same binding semantics."
        (let* ((binding-names (mapcar #'car scc-bindings))
               (body
                 (let ((*local-function-value-names*
-                        (append binding-names *local-function-value-names*)))
+                        (if function-values-p
+                            *local-function-value-names*
+                            (append binding-names *local-function-value-names*))))
                   (let ((inner
                           (codegen-recursive-bindings
                            bindings
                            (cdr sccs)
                            env
                            inner-thunk
-                           binding-decl-table)))
-                    `(labels ,(loop :for (name . node) :in scc-bindings
-                                    :collect `(,name
-                                               ,(abstraction-lambda-list node)
-                                               ,(function-declarations node env)
-                                               ,(annotate-function-body
-                                                 node
-                                                 (codegen-expression
-                                                  (node-abstraction-subexpr node)
-                                                  env)
-                                                 env)))
-                       ,inner)))))
+                           binding-decl-table function-values-p)))
+                    (if function-values-p
+                        `(let ,binding-names
+                           (setf ,@(loop :for (name . node) :in scc-bindings
+                                         :append (list name (codegen-expression node env))))
+                           (locally
+                             (declare ,@(recursive-binding-declarations binding-names binding-decl-table))
+                             ,inner))
+                        `(labels ,(loop :for (name . node) :in scc-bindings
+                                        :collect `(,name
+                                                   ,(abstraction-lambda-list node)
+                                                   ,(function-declarations node env)
+                                                   ,(annotate-function-body
+                                                     node
+                                                     (codegen-expression
+                                                      (node-abstraction-subexpr node)
+                                                      env)
+                                                     env)))
+                           ,inner))))))
          body))
 
-      ((every (lambda (pair)
-                (data-letrec-able-p (cdr pair)
-                                    env))
-              scc-bindings)
+      ;; Allocate before filling slots only for recursive data bindings.
+      ;; A multi-binding SCC is recursive; a singleton must reference itself.
+      ;; Nonrecursive bindings use normal constructors below, preserving
+      ;; type information needed to optimize calls such as `Some`.
+      ((and (or (cdr scc-bindings)
+                (member (caar scc-bindings)
+                        (node-variables (cdar scc-bindings))
+                        :test #'eq))
+            (every (lambda (pair)
+                     (data-letrec-able-p (cdr pair) env))
+                   scc-bindings))
        (let* ((inner (codegen-recursive-bindings bindings (cdr sccs) env inner-thunk
-                                                 binding-decl-table))
+                                                 binding-decl-table function-values-p))
               (assignments (loop :for (name . initform) :in scc-bindings
                                  :for ctor-info := (find-constructor initform env)
                                  :appending (loop :for arg :in (node-rands initform)
@@ -785,7 +864,7 @@ forms follow the same binding semantics."
                 (when decls
                   `((declare ,@decls))))
             ,(codegen-recursive-bindings bindings (cdr sccs) env inner-thunk
-                                         binding-decl-table))))
+                                         binding-decl-table function-values-p))))
 
       (t (error "Invalid scc binding group. This should have been detected during typechecking.")))))
 
@@ -804,7 +883,7 @@ forms follow the same binding semantics."
 (defun function-declarations (node env)
   (declare (type node-abstraction node)
            (type tc:environment env))
-  (let ((return-types (node-output-lisp-types node env)))
+  (let ((return-type (node-output-values-type node env)))
     `(declare (ignorable ,@(abstraction-bound-vars node))
               ,@(when settings:*emit-type-annotations*
                   `(,@(loop :for var :in (node-abstraction-vars node)
@@ -812,18 +891,13 @@ forms follow the same binding semantics."
                             :collect `(type ,(tc:lisp-type ty env) ,var))
                     ,@(loop :for param :in (node-abstraction-keyword-params node)
                             :collect `(type boolean ,(keyword-param-supplied-p-var param)))
-                    ,(if return-types
-                         `(values ,@return-types &optional)
-                         '(values)))))))
+                    ,return-type)))))
 
 (defun annotate-function-body (node body env)
   (declare (type node-abstraction node)
            (type tc:environment env)
            (values t &optional))
-  (let ((return-types (node-output-lisp-types node env)))
+  (let ((return-type (node-output-values-type node env)))
     (if settings:*emit-type-annotations*
-        `(the ,(if return-types
-                   `(values ,@return-types &optional)
-                   '(values))
-              ,body)
+        `(the ,return-type ,body)
         body)))

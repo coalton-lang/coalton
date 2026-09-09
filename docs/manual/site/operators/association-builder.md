@@ -29,7 +29,7 @@ comprehensions.
 - Association builders and comprehensions must be finite.
 - Keys must all have the same type, and values must all have the same type.
 - Without a more specific expected type, association builders default to
-  `Seq (Tuple :key :value)`.
+  `Seq (Tuple :key :value)`. Key and value types are still inferred from their uses.
 - Association builders, especially empty ones, often need [`the`](/manual/operators/the/)
   to fix the intended key and value types.
 

@@ -7,6 +7,7 @@
   (:export
    #:fst
    #:snd
+   #:swap
    #:sequence-tuple
    #:Tuple3
    #:.first
@@ -128,11 +129,10 @@
         ((GT) GT)
         ((EQ) (<=> a2 b2)))))
 
-  (define-instance (Into (Tuple :a :b) (Tuple :b :a))
-    (define (into (Tuple a b))
-      (Tuple b a)))
-
-  (define-instance (Iso (Tuple :a :b) (Tuple :b :a)))
+  (declare swap (Tuple :a :b -> Tuple :b :a))
+  (define (swap (Tuple a b))
+    "Exchange the two elements of a tuple."
+    (Tuple b a))
 
   (define-instance ((Hash :a) (Hash :b) => Hash (Tuple :a :b))
     (define (hash item)

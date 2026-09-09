@@ -22,7 +22,9 @@ one of its branches.
 - The first subform is the expression that may throw.
 - Each branch matches either an exception constructor pattern or `_` as a
   catch-all.
-- Branch bodies run in order after a matching exception is raised.
+- Patterns are tried in order, including patterns on constructor fields. The
+  first matching branch runs. If none matches, an enclosing handler may handle
+  the exception.
 - All branches must agree on the result type of the `catch` expression.
 
 ## Example

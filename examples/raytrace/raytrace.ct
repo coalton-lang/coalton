@@ -1,0 +1,353 @@
+;;;; A deliberately ordinary, record-based path tracer. Keep the renderer in
+;;;; this file so compiler experiments can use the same compilation unit.
+
+(defpackage #:coalton-raytrace
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames (#:array #:coalton/lisparray)
+                    (#:bits #:coalton/bits)
+                    (#:cell #:coalton/cell)
+                    (#:list #:coalton/list)
+                    (#:int #:coalton/math/integral))
+  (:export #:make-scene #:make-camera #:render!))
+
+(in-package #:coalton-raytrace)
+
+(cl:defparameter *build-settings*
+  '#.(cl:list :mode (cl:if (coalton-impl/settings:coalton-release-p) :release :development)
+              :annotations coalton-impl/settings:*emit-type-annotations*
+              :specialization (cl:not coalton-impl/settings:*coalton-disable-specialization*)
+              :heuristic-inlining coalton-impl/settings:*coalton-heuristic-inlining*
+              :block-compile #+sbcl sb-ext:*block-compile-default* #-sbcl cl:nil)
+  "Compiler settings captured when the renderer was compiled.")
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (define-struct Vec3 (x F64) (y F64) (z F64))
+  (define-struct Ray (origin Vec3) (direction Vec3))
+  (define-type Material
+    (Diffuse Vec3)
+    (Metal Vec3 F64)
+    (Dielectric F64))
+  (define-struct Sphere (center Vec3) (radius F64) (material Material))
+  (define-struct Hit
+    (distance F64) (point Vec3) (normal Vec3)
+    (surface Material) (front-face Boolean))
+  (define-struct Bounce (attenuation Vec3) (scattered Ray))
+  (define-struct Interval (lower F64) (upper F64))
+  (define-struct Bounds (minimum Vec3) (maximum Vec3))
+  (define-type World
+    (Leaf Bounds Sphere)
+    (Branch Bounds World World))
+  (define-struct Camera
+    (eye Vec3) (corner Vec3) (horizontal Vec3) (vertical Vec3))
+
+  (inline)
+  (declare v+ (Vec3 * Vec3 -> Vec3))
+  (define (v+ a b)
+    (Vec3 (+ (.x a) (.x b)) (+ (.y a) (.y b)) (+ (.z a) (.z b))))
+
+  (inline)
+  (declare v- (Vec3 * Vec3 -> Vec3))
+  (define (v- a b)
+    (Vec3 (- (.x a) (.x b)) (- (.y a) (.y b)) (- (.z a) (.z b))))
+
+  (inline)
+  (declare scale (F64 * Vec3 -> Vec3))
+  (define (scale s v)
+    (Vec3 (* s (.x v)) (* s (.y v)) (* s (.z v))))
+
+  (inline)
+  (declare multiply (Vec3 * Vec3 -> Vec3))
+  (define (multiply a b)
+    (Vec3 (* (.x a) (.x b)) (* (.y a) (.y b)) (* (.z a) (.z b))))
+
+  (inline)
+  (declare dot (Vec3 * Vec3 -> F64))
+  (define (dot a b)
+    (+ (* (.x a) (.x b)) (+ (* (.y a) (.y b)) (* (.z a) (.z b)))))
+
+  (declare cross (Vec3 * Vec3 -> Vec3))
+  (define (cross a b)
+    (Vec3 (- (* (.y a) (.z b)) (* (.z a) (.y b)))
+          (- (* (.z a) (.x b)) (* (.x a) (.z b)))
+          (- (* (.x a) (.y b)) (* (.y a) (.x b)))))
+
+  (inline)
+  (declare normalize (Vec3 -> Vec3))
+  (define (normalize v) (scale (/ 1.0d0 (sqrt (dot v v))) v))
+
+  (inline)
+  (declare at (Ray * F64 -> Vec3))
+  (define (at ray t) (v+ (.origin ray) (scale t (.direction ray))))
+
+  (declare component (Vec3 * UFix -> F64))
+  (define (component v axis)
+    (cond ((== axis 0) (.x v))
+          ((== axis 1) (.y v))
+          (True (.z v))))
+
+  ;; Xorshift32: one frame-local mutable state, independent of Lisp RANDOM.
+  (declare random-f64 (cell:Cell U32 -> F64))
+  (define (random-f64 rng)
+    (let old = (cell:read rng))
+    (let a = (bits:xor old (bits:shift 13 old)))
+    (let b = (bits:xor a (bits:shift -17 a)))
+    (let c = (bits:xor b (bits:shift 5 b)))
+    (cell:write! rng c)
+    (/ (int:integral->num c) 4294967296.0d0))
+
+  (declare random-ball (cell:Cell U32 -> Vec3))
+  (define (random-ball rng)
+    (let x = (- (* 2.0d0 (random-f64 rng)) 1.0d0))
+    (let y = (- (* 2.0d0 (random-f64 rng)) 1.0d0))
+    (let z = (- (* 2.0d0 (random-f64 rng)) 1.0d0))
+    (let v = (Vec3 x y z))
+    (let squared = (dot v v))
+    (if (and (> squared 1.0d-20) (< squared 1.0d0))
+        v
+        (random-ball rng)))
+
+  (declare hit-sphere (Sphere * Ray * F64 * F64 -> Optional Hit))
+  (define (hit-sphere sphere ray t-min t-max)
+    (let offset = (v- (.origin ray) (.center sphere)))
+    (let a = (dot (.direction ray) (.direction ray)))
+    (let half-b = (dot offset (.direction ray)))
+    (let c = (- (dot offset offset) (* (.radius sphere) (.radius sphere))))
+    (let discriminant = (- (* half-b half-b) (* a c)))
+    (if (< discriminant 0.0d0)
+        None
+        (let ((root (sqrt discriminant))
+              (near (/ (- (negate half-b) root) a))
+              (far (/ (+ (negate half-b) root) a))
+              (t (if (and (> near t-min) (< near t-max)) near far)))
+          (if (or (<= t t-min) (>= t t-max))
+              None
+              (let ((point (at ray t))
+                    (outward (scale (/ 1.0d0 (.radius sphere))
+                                    (v- point (.center sphere))))
+                    (front (< (dot (.direction ray) outward) 0.0d0)))
+                (Some (Hit t point (if front outward (scale -1.0d0 outward))
+                           (.material sphere) front)))))))
+
+  (declare sphere-bounds (Sphere -> Bounds))
+  (define (sphere-bounds sphere)
+    (let r = (.radius sphere))
+    (let extent = (Vec3 r r r))
+    (Bounds (v- (.center sphere) extent) (v+ (.center sphere) extent)))
+
+  (declare world-bounds (World -> Bounds))
+  (define (world-bounds world)
+    (match world
+      ((Leaf box _) box)
+      ((Branch box _ _) box)))
+
+  (declare union-bounds (Bounds * Bounds -> Bounds))
+  (define (union-bounds a b)
+    (let lo = (.minimum a))
+    (let hi = (.maximum a))
+    (let other-lo = (.minimum b))
+    (let other-hi = (.maximum b))
+    (Bounds (Vec3 (min (.x lo) (.x other-lo))
+                  (min (.y lo) (.y other-lo))
+                  (min (.z lo) (.z other-lo)))
+            (Vec3 (max (.x hi) (.x other-hi))
+                  (max (.y hi) (.y other-hi))
+                  (max (.z hi) (.z other-hi)))))
+
+  ;; Clip the same interval against all three slabs. Treat parallel rays
+  ;; explicitly, including origins on a face: no infinities or 0/0 required.
+  (declare clip-slab (F64 * F64 * F64 * F64 * Interval -> Optional Interval))
+  (define (clip-slab lo hi origin direction span)
+    (if (== direction 0.0d0)
+        (if (or (< origin lo) (> origin hi)) None (Some span))
+        (let ((a (/ (- lo origin) direction))
+              (b (/ (- hi origin) direction))
+              (lower (max (.lower span) (min a b)))
+              (upper (min (.upper span) (max a b))))
+          (if (< upper lower) None (Some (Interval lower upper))))))
+
+  (declare hit-bounds (Bounds * Ray * F64 * F64 -> Boolean))
+  (define (hit-bounds bounds ray t-min t-max)
+    (let lo = (.minimum bounds))
+    (let hi = (.maximum bounds))
+    (let o = (.origin ray))
+    (let d = (.direction ray))
+    (match (clip-slab (.x lo) (.x hi) (.x o) (.x d) (Interval t-min t-max))
+      ((None) False)
+      ((Some x)
+       (match (clip-slab (.y lo) (.y hi) (.y o) (.y d) x)
+         ((None) False)
+         ((Some y)
+          (match (clip-slab (.z lo) (.z hi) (.z o) (.z d) y)
+            ((None) False)
+            ((Some _) True)))))))
+
+  (declare build-world (List Sphere * UFix -> World))
+  (define (build-world spheres axis)
+    (match spheres
+      ((Nil) (error "A ray tracer scene must contain a sphere"))
+      ((Cons object (Nil)) (Leaf (sphere-bounds object) object))
+      (_
+       (let ordered = (list:sortBy
+                        (fn (a b) (<=> (component (.center a) axis)
+                                       (component (.center b) axis)))
+                        spheres))
+       (let middle = (int:div (list:length ordered) 2))
+       (let next-axis = (mod (+ axis 1) 3))
+       (let left = (build-world (list:take middle ordered) next-axis))
+       (let right = (build-world (list:drop middle ordered) next-axis))
+       (Branch (union-bounds (world-bounds left) (world-bounds right)) left right))))
+
+  (declare hit-world (World * Ray * F64 * F64 -> Optional Hit))
+  (define (hit-world world ray t-min t-max)
+    (if (not (hit-bounds (world-bounds world) ray t-min t-max))
+        None
+        (match world
+          ((Leaf _ object) (hit-sphere object ray t-min t-max))
+          ((Branch _ left right)
+           (let first = (hit-world left ray t-min t-max))
+           (let limit = (match first ((None) t-max) ((Some contact) (.distance contact))))
+           (match (hit-world right ray t-min limit)
+             ((None) first)
+             ((Some contact) (Some contact)))))))
+
+  (declare reflect (Vec3 * Vec3 -> Vec3))
+  (define (reflect direction normal)
+    (v- direction (scale (* 2.0d0 (dot direction normal)) normal)))
+
+  (declare refract (Vec3 * Vec3 * F64 -> Vec3))
+  (define (refract direction normal ratio)
+    (let cosine = (min (negate (dot direction normal)) 1.0d0))
+    (let perpendicular = (scale ratio (v+ direction (scale cosine normal))))
+    (let parallel = (scale (negate (sqrt (max 0.0d0 (- 1.0d0 (dot perpendicular perpendicular)))))
+                          normal))
+    (v+ perpendicular parallel))
+
+  (declare reflectance (F64 * F64 -> F64))
+  (define (reflectance cosine ratio)
+    (let r = (/ (- 1.0d0 ratio) (+ 1.0d0 ratio)))
+    (let r0 = (* r r))
+    (let c = (- 1.0d0 cosine))
+    (+ r0 (* (- 1.0d0 r0) (* c (* c (* c (* c c)))))))
+
+  (declare scatter (Ray * Hit * cell:Cell U32 -> Optional Bounce))
+  (define (scatter incoming hit rng)
+    (let normal = (.normal hit))
+    (match (.surface hit)
+      ((Diffuse albedo)
+       (let candidate = (v+ normal (normalize (random-ball rng))))
+       (let direction = (if (< (dot candidate candidate) 1.0d-20) normal candidate))
+       (Some (Bounce albedo (Ray (.point hit) (normalize direction)))))
+      ((Metal albedo roughness)
+       (let direction = (v+ (reflect (.direction incoming) normal)
+                            (scale roughness (random-ball rng))))
+       (if (> (dot direction normal) 0.0d0)
+           (Some (Bounce albedo (Ray (.point hit) (normalize direction))))
+           None))
+      ((Dielectric index)
+       (let ratio = (if (.front-face hit) (/ 1.0d0 index) index))
+       (let direction = (.direction incoming))
+       (let cosine = (min (negate (dot direction normal)) 1.0d0))
+       (let sine = (sqrt (max 0.0d0 (- 1.0d0 (* cosine cosine)))))
+       (let reflected = (or (> (* ratio sine) 1.0d0)
+                            (< (random-f64 rng) (reflectance cosine ratio))))
+       (Some (Bounce (Vec3 1.0d0 1.0d0 1.0d0)
+                      (Ray (.point hit)
+                           (if reflected (reflect direction normal)
+                               (refract direction normal ratio))))))))
+
+  (declare radiance (World * Ray * UFix * cell:Cell U32 -> Vec3))
+  (define (radiance world ray depth rng)
+    (if (== depth 0)
+        (Vec3 0.0d0 0.0d0 0.0d0)
+        (match (hit-world world ray 0.0001d0 1.0d30)
+          ((None)
+           (let t = (* 0.5d0 (+ (.y (.direction ray)) 1.0d0)))
+           (v+ (scale (- 1.0d0 t) (Vec3 1.0d0 1.0d0 1.0d0))
+               (scale t (Vec3 0.5d0 0.7d0 1.0d0))))
+          ((Some contact)
+           (match (scatter ray contact rng)
+             ((None) (Vec3 0.0d0 0.0d0 0.0d0))
+             ((Some outgoing)
+              (multiply (.attenuation outgoing)
+                        (radiance world (.scattered outgoing) (- depth 1) rng))))))))
+
+  (declare make-camera (F64 -> Camera))
+  (define (make-camera aspect)
+    "Construct a fixed pinhole camera with a 40 degree vertical field of view."
+    (let eye = (Vec3 8.0d0 4.0d0 10.0d0))
+    (let backward = (normalize (v- eye (Vec3 0.0d0 0.6d0 -1.0d0))))
+    (let right = (normalize (cross (Vec3 0.0d0 1.0d0 0.0d0) backward)))
+    (let up = (cross backward right))
+    (let height = (* 2.0d0 (tan 0.3490658503988659d0)))
+    (let horizontal = (scale (* aspect height) right))
+    (let vertical = (scale height up))
+    (Camera eye (v- (v- (v- eye (scale 0.5d0 horizontal))
+                       (scale 0.5d0 vertical)) backward)
+            horizontal vertical))
+
+  (declare camera-ray (Camera * F64 * F64 -> Ray))
+  (define (camera-ray camera u v)
+    (Ray (.eye camera)
+         (normalize (v- (v+ (.corner camera)
+                             (v+ (scale u (.horizontal camera)) (scale v (.vertical camera))))
+                        (.eye camera)))))
+
+  (declare scene-spheres (Void -> List Sphere))
+  (define (scene-spheres)
+    (let initial =
+      (make-list
+        (Sphere (Vec3 0.0d0 -1000.0d0 0.0d0) 1000.0d0 (Diffuse (Vec3 0.5d0 0.5d0 0.5d0)))
+        (Sphere (Vec3 -2.2d0 1.0d0 0.0d0) 1.0d0 (Diffuse (Vec3 0.7d0 0.18d0 0.12d0)))
+        (Sphere (Vec3 0.0d0 1.0d0 0.0d0) 1.0d0 (Dielectric 1.5d0))
+        (Sphere (Vec3 2.2d0 1.0d0 0.0d0) 1.0d0 (Metal (Vec3 0.8d0 0.85d0 0.9d0) 0.08d0))))
+    (let rng = (cell:new (the U32 2027)))
+    (for ((i (the UFix 0) (+ i 1))
+          (spheres initial
+            (let ((x (- (* 1.4d0 (int:integral->num (mod i 7))) 4.2d0))
+                  (z (- (* 1.4d0 (int:integral->num (int:div i 7))) 6.6d0)))
+              (if (and (< (abs z) 1.5d0) (< (abs x) 3.5d0))
+                  spheres
+                  (progn
+                    (let red = (+ 0.1d0 (* 0.7d0 (random-f64 rng))))
+                    (let green = (+ 0.1d0 (* 0.7d0 (random-f64 rng))))
+                    (let blue = (+ 0.1d0 (* 0.7d0 (random-f64 rng))))
+                    (let albedo = (Vec3 red green blue))
+                    (let material = (cond ((== (mod i 3) 0) (Diffuse albedo))
+                                         ((== (mod i 3) 1) (Metal albedo 0.25d0))
+                                         (True (Dielectric 1.5d0))))
+                    (Cons (Sphere (Vec3 x 0.3d0 z) 0.3d0 material) spheres))))))
+      :returns spheres
+      :repeat 49
+      (values)))
+
+  (declare make-scene (Void -> World))
+  (define (make-scene)
+    "Build the fixed sphere scene and its median-split bounding-volume hierarchy."
+    (build-world (scene-spheres) 0))
+
+  (declare render! (World * Camera * UFix * UFix * UFix * UFix * U32 * array:LispArray F64 -> Void))
+  (define (render! world camera width height samples depth seed pixels)
+    "Render linear RGB, top row first, into an existing width*height*3 array.
+The runner validates dimensions and settings before entering this hot path."
+    (let rng = (cell:new (if (== seed 0) (the U32 1) seed)))
+    (for ((y (the UFix 0) (+ y 1))) :repeat height
+      (for ((x (the UFix 0) (+ x 1))) :repeat width
+        (let color =
+          (for ((sample (the UFix 0) (+ sample 1))
+                (sum (Vec3 0.0d0 0.0d0 0.0d0)
+                     (progn
+                       (let u = (/ (+ (int:integral->num x) (random-f64 rng))
+                                   (int:integral->num width)))
+                       (let v = (- 1.0d0 (/ (+ (int:integral->num y) (random-f64 rng))
+                                           (int:integral->num height))))
+                       (v+ sum (radiance world (camera-ray camera u v) depth rng)))))
+            :returns (scale (/ 1.0d0 (int:integral->num samples)) sum)
+            :repeat samples
+            (values)))
+        (let index = (* 3 (+ x (* y width))))
+        (array:set! pixels index (.x color))
+        (array:set! pixels (+ index 1) (.y color))
+        (array:set! pixels (+ index 2) (.z color))))))

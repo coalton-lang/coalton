@@ -143,10 +143,10 @@
                      (coalton/doc/markdown::to-markdown
                       (coalton-type-of 'coalton-native-tests::nested-forall-fn)))
       (check-string= "class method type variables"
-                     "forall :MONAD :STATE. NAMETRACKEDCLASS :MONAD :STATE => :MONAD :STATE"
+                     "forall (:MONAD (Type -> Type)) :STATE. NAMETRACKEDCLASS :MONAD :STATE => :MONAD :STATE"
                      (render-type (coalton-type-of 'coalton-native-tests::name-tracked-get)))
       (check-string= "explicit class method forall order"
-                     "forall :WRAPPER :ITEM :RESULT. EXPLICITMETHODCLASS :WRAPPER => :WRAPPER :ITEM -> Proxy :ITEM -> (:ITEM -> :RESULT) -> :RESULT"
+                     "forall (:WRAPPER (Type -> Type)) :ITEM :RESULT. EXPLICITMETHODCLASS :WRAPPER => :WRAPPER :ITEM -> Proxy :ITEM -> (:ITEM -> :RESULT) -> :RESULT"
                      (render-type (coalton-type-of 'coalton-native-tests::explicit-method)))
       (check-string= "keyword arguments retain source syntax"
                      "Integer &key (:extra Integer) (:timeout Integer) -> Integer"

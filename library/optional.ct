@@ -56,6 +56,7 @@
   ;;
 
   (define-instance (Eq :a => Eq (Optional :a))
+    (inline)
     (define (== x y)
       (match (Tuple x y)
         ((Tuple (Some x) (Some y)) (== x y))
@@ -75,6 +76,7 @@
          Eq))))
 
   (define-instance (Semigroup :a => Semigroup (Optional :a))
+    (inline)
     (define (<> a b)
       (match (Tuple a b)
         ((Tuple (Some a) (Some b)) (Some (<> a b)))
@@ -84,6 +86,7 @@
     (define mempty (Some mempty)))
 
   (define-instance (Functor Optional)
+    (inline)
     (define (map f x)
       (match x
         ((Some a) (Some (f a)))
@@ -99,6 +102,7 @@
         (_ None))))
 
   (define-instance (Monad Optional)
+    (inline)
     (define (>>= x f)
       (match x
         ((Some x) (f x))
@@ -110,12 +114,26 @@
 
   (define-instance (Alternative Optional)
     (define empty None)
+    (inline)
     (define (alt x y)
       (match x
         ((Some _) x)
         (_ y))))
 
+  (define-instance (Foldable Optional)
+    (inline)
+    (define (fold f initial opt)
+      (match opt
+        ((None) initial)
+        ((Some a) (f initial a))))
+    (inline)
+    (define (foldr f initial opt)
+      (match opt
+        ((None) initial)
+        ((Some a) (f a initial)))))
+
   (define-instance (Traversable Optional)
+    (inline)
     (define (traverse fa->mb opt)
       (match opt
         ((Some a) (map Some (fa->mb a)))

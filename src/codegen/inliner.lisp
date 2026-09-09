@@ -120,10 +120,8 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
            (values (or null ast:node-abstraction) &optional))
 
   (a:if-let ((name (ast:node-rator-name application)))
-    (if (util:dynamic-variable-name-p name)
-        nil
-        (let ((abstraction (tc:lookup-code env name :no-error t)))
-          (if (ast:node-abstraction-p abstraction) abstraction nil)))
+    (let ((abstraction (tc:lookup-code env name :no-error t)))
+      (if (ast:node-abstraction-p abstraction) abstraction nil))
     nil))
 
 (defun lookup-anonymous-application-body (application)
@@ -177,10 +175,10 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
 ;;; Inlining
 
 (defun inline-code-from-application (application abstraction)
-  "Swap an application node with a let node where the body is the inlined function."
+  "Bind call arguments sequentially before evaluating the inlined function body."
   (declare (type (or ast:node-application ast:node-direct-application) application)
            (type ast:node-abstraction abstraction)
-           (values ast:node-let &optional))
+           (values ast:node &optional))
 
   (let* ((fresh-abstraction
            (transformations:rename-type-variables abstraction))
@@ -219,7 +217,7 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
                      bindings)
                (push (substitutions:make-ast-substitution
                       :from var
-                      :to (ast:make-node-variable
+                      :to (ast:make-node-local-variable
                            :type binding-type
                            :value new-var))
                      substitutions)))
@@ -239,11 +237,15 @@ controlled by `settings:*print-inlining-occurences*' is enabled."
               substitutions
               (ast:node-abstraction-subexpr fresh-abstraction)
               t)))
-      (ast:make-node-let
-       :type     (ast:node-type application)
-       :bindings (loop :for (name . expr) :in bindings
-                       :collect (cons name (tc:apply-substitution new-substitutions expr)))
-       :subexpr  (tc:apply-substitution new-substitutions new-subexpr)))))
+      ;; Call operands have an evaluation order; a recursive LET group does not.
+      (loop :with body := (tc:apply-substitution new-substitutions new-subexpr)
+            :for (name . expr) :in (reverse bindings)
+            :do (setf body (ast:make-node-bind
+                           :type (ast:node-type application)
+                           :name name
+                           :expr (tc:apply-substitution new-substitutions expr)
+                           :body body))
+            :finally (return body)))))
 
 (defun try-inline-application (application env stack noinline-functions)
   "Try to inline an application node, checking internal traversal stack,
@@ -328,12 +330,12 @@ is appropriate."
            (values (or null parser:identifier) ast:node-list &optional))
 
   (cond
-    ((ast:node-variable-p (first rands))
+    ((ast:node-global-variable-p (first rands))
      (values (ast:node-variable-value (first rands))
              (rest rands)))
 
     ((and (ast:node-application-p (first rands))
-          (ast:node-variable-p (ast:node-application-rator (first rands))))
+          (ast:node-global-variable-p (ast:node-application-rator (first rands))))
      (values (ast:node-variable-value (ast:node-application-rator (first rands)))
              (append (ast:node-application-rands (first rands)) (rest rands))))
 
@@ -349,7 +351,7 @@ is appropriate."
            (values ast:node &optional))
   (labels ((make-nullary-call (rator)
              (if (and direct-p
-                      (ast:node-variable-p rator))
+                      (ast:node-global-variable-p rator))
                  (ast:make-node-direct-application
                   :type result-type
                   :properties properties
@@ -367,7 +369,7 @@ is appropriate."
       ;; first-class function value. In that case we want the resolved method
       ;; binding itself, not a call to it.
       ((tc:function-type-p result-type)
-       (ast:make-node-variable
+       (ast:make-node-global-variable
         :type result-type
         :value method-name))
 
@@ -375,12 +377,13 @@ is appropriate."
       ;; plain values, not as nullary function entries.
       ((and code (not (ast:node-abstraction-p code)))
        (if (tc:function-type-p (ast:node-type code))
-           (make-nullary-call code)
-           code))
+           (make-nullary-call
+            (ast:make-node-global-variable :type (ast:node-type code) :value method-name))
+           (ast:make-node-global-variable :type result-type :value method-name)))
 
       (t
        (make-nullary-call
-        (ast:make-node-variable
+        (ast:make-node-global-variable
          :type (tc:make-function-type* nil result-type)
          :value method-name)))))))
 
@@ -399,7 +402,7 @@ is appropriate."
   (let ((rator (ast:node-application-rator node))
         (rands (ast:node-application-rands node)))
     (multiple-value-bind (dict inner-rands) (extract-dict rands)
-      (if (or (null dict) (not (ast:node-variable-p rator)))
+      (if (or (null dict) (not (ast:node-global-variable-p rator)))
           node
           (let ((method-name (tc:lookup-method-inline env (ast:node-variable-value rator) dict :no-error t)))
             (cond
@@ -422,7 +425,7 @@ is appropriate."
                (ast:make-node-application
                 :type (ast:node-type node)
                 :properties (ast:node-properties node)
-                :rator (ast:make-node-variable
+                :rator (ast:make-node-global-variable
                         :type (tc:make-function-type*
                                (mapcar #'ast:node-type inner-rands)
                                (ast:node-type node))
@@ -466,7 +469,7 @@ is appropriate."
                (ast:make-node-application
                 :type (ast:node-type node)
                 :properties (ast:node-properties node)
-                :rator (ast:make-node-variable
+                :rator (ast:make-node-global-variable
                         :type (tc:make-function-type*
                                (mapcar #'ast:node-type inner-rands)
                                (ast:node-type node))

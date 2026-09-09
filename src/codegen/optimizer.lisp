@@ -53,6 +53,9 @@
    #:coalton-impl/codegen/lawnmower
    #:lawnmow)
   (:import-from
+   #:coalton-impl/codegen/scalar-replacement
+   #:scalar-replace)
+  (:import-from
    #:coalton-impl/codegen/specializer
    #:apply-specializations)
   (:local-nicknames
@@ -183,6 +186,11 @@ mapping known function names to their arity."
               (loop :for (name . node) :in bindings
                     :collect (cons name (lawnmow-to-fixpoint node))))
 
+        (when (settings:coalton-release-p)
+          (setf bindings
+                (loop :for (name . node) :in bindings
+                      :collect (cons name (scalar-replace node env)))))
+
         ;; Update code db
         (loop :for (name . node) :in bindings
               :do (setf env (tc:set-code env name node)))
@@ -204,7 +212,8 @@ arity. TABLE will be mutated with additional entries."
            (type hash-table table)      ; Name -> Integer
            (values node &optional))
   (labels ((rewrite-direct-application (node)
-             (when (node-variable-p (node-application-rator node))
+             (when (typep (node-application-rator node)
+                          '(or node-local-variable node-global-variable))
                (let ((name (node-variable-value (node-application-rator node))))
                  (when (and (gethash name table)
                             (= (gethash name table)
@@ -312,7 +321,7 @@ ENV. Return a new node which is optimized."
            (values boolean &optional))
   (let ((escaped? nil))
     (labels ((tracked-variable-p (node bound-variables)
-               (and (node-variable-p node)
+               (and (node-local-variable-p node)
                     (member (node-variable-value node) variables :test #'eq)
                     (not (member (node-variable-value node)
                                  bound-variables
@@ -336,7 +345,7 @@ ENV. Return a new node which is optimized."
         (traverse-with-binding-list
          body
          (list
-          (action (:after node-variable node bound-variables)
+          (action (:after node-local-variable node bound-variables)
             (when (tracked-variable-p node bound-variables)
               (setf escaped? t))
             (values))
@@ -383,7 +392,7 @@ speaking, the following kinds of transformations happen:
   (let (function args num-params)
     (cond
       ;; Node must be a variable of type function
-      ((node-variable-p node)
+      ((typep node '(or node-local-variable node-global-variable))
        (unless (tc:function-type-p (node-type node))
          (return-from pointfree node))
        (setf function node)
@@ -391,7 +400,8 @@ speaking, the following kinds of transformations happen:
 
       ;; Or an application on a function
       ((node-application-p node)
-       (unless (node-variable-p (node-application-rator node))
+       (unless (typep (node-application-rator node)
+                      '(or node-local-variable node-global-variable))
          (return-from pointfree node))
 
        ;; The application must be on a known function
@@ -408,7 +418,7 @@ speaking, the following kinds of transformations happen:
                            (values boolean))
                   (cond
                     ;; Valid pointfree arguments are instances dictionaries
-                    ((node-variable-p node)
+                    ((node-global-variable-p node)
                      (and (tc:lookup-instance-by-codegen-sym env (node-variable-value node) :no-error t) t))
 
                     ;; And expressions that build instance dictionaries
@@ -458,7 +468,7 @@ speaking, the following kinds of transformations happen:
 
            (param-nodes (loop :for name :in param-names
                               :for ty :in param-types
-                              :collect (make-node-variable
+                              :collect (make-node-local-variable
                                         :type ty
                                         :value name)))
 
@@ -485,7 +495,7 @@ speaking, the following kinds of transformations happen:
   (labels ((lift-static-dict (node)
              (unless (and
                       ;; The function is a variable
-                      (node-variable-p (node-application-rator node))
+                      (node-global-variable-p (node-application-rator node))
 
                       ;; The function constructs a typeclass dictionary
                       (tc:lookup-instance-by-codegen-sym
@@ -501,7 +511,7 @@ speaking, the following kinds of transformations happen:
              (hoist-definition node package hoister))
 
            (handle-push-hoist-point (node)
-             (push-hoist-point (node-abstraction-vars node) hoister)
+             (push-hoist-point (node-abstraction-bound-variables node) hoister)
              nil)
 
            (handle-pop-hoist-point (node)
@@ -512,6 +522,7 @@ speaking, the following kinds of transformations happen:
                    (make-node-abstraction
                     :type (node-type node)
                     :vars (node-abstraction-vars node)
+                    :keyword-params (node-abstraction-keyword-params node)
                     :subexpr (make-node-let
                               :type (node-type (node-abstraction-subexpr node))
                               :bindings hoisted
@@ -527,10 +538,10 @@ speaking, the following kinds of transformations happen:
       (action (:after node-abstraction) #'handle-pop-hoist-point)))))
 
 (defun resolve-compount-superclass (node env)
-  (declare (type (or node-application node-direct-application node-variable) node)
+  (declare (type (or node-application node-direct-application node-global-variable) node)
            (type tc:environment env))
 
-  (when (node-variable-p node)
+  (when (node-global-variable-p node)
     (let ((instance (tc:lookup-instance-by-codegen-sym env (node-variable-value node) :no-error t)))
       (cond
         ((null instance)
@@ -583,7 +594,7 @@ speaking, the following kinds of transformations happen:
            (handle-static-superclass (node bound-variables)
              (declare (type util:symbol-list bound-variables))
 
-             (unless (or (node-variable-p (node-field-dict node))
+             (unless (or (node-global-variable-p (node-field-dict node))
                          (node-application-p (node-field-dict node))
                          (node-direct-application-p (node-field-dict node)))
                (return-from handle-static-superclass))
@@ -611,8 +622,12 @@ speaking, the following kinds of transformations happen:
 
                     (superclass-pred (tc:apply-substitution subs superclass-pred)))
 
-               ;; Re-resolve the dictionary
-               (resolve-static-dict superclass-pred nil env))))
+               ;; A superclass field carries the evidence chosen when its
+               ;; enclosing dictionary was built. Overlap makes that choice
+               ;; observable, so it cannot be reconstructed from its type.
+               (unless (or (tc:class-has-overlap-p env (tc:ty-predicate-class pred))
+                           (tc:class-has-overlap-p env (tc:ty-predicate-class superclass-pred)))
+                 (resolve-static-dict superclass-pred nil env)))))
 
     (traverse-with-binding-list
      node
@@ -670,7 +685,7 @@ when possible."
                         :node (node-match-expr node)
                         :body (make-node-match
                                :type (node-type node)
-                               :expr (make-node-variable :type (node-type (node-match-expr node)) :value name)
+                               :expr (make-node-local-variable :type (node-type (node-match-expr node)) :value name)
                                :branches (node-match-branches node))))))))))
 
     (traverse

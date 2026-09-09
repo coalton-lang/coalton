@@ -22,9 +22,7 @@
    #:reduce-context                     ; FUNCTION
    #:split-context                      ; FUNCTION
    #:default-preds                      ; FUNCTION
-   #:*builder-class-cache*              ; VARIABLE
-   #:default-builder-subs               ; FUNCTION
-   #:expand-defaulted-builder-preds     ; FUNCTION
+   #:default-builder-context            ; FUNCTION
    #:default-subs                       ; FUNCTION
    ))
 
@@ -57,19 +55,16 @@ Requires acyclic superclasses"
                 (apply-substitution subs super-class-pred))))))
 
 (defun by-inst (env pred)
-  "Find the first instance that matches PRED and return resulting predicate constraints
+  "Select the most-specific stable instance for PRED and return its constraints
 
 Returns (PREDS FOUNDP)"
   (declare (type environment env)
            (type ty-predicate pred)
            (values ty-predicate-list boolean))
-  (dolist (inst (lookup-class-instances env (ty-predicate-class pred) :no-error t))
-    (handler-case
-        (let* ((subs (predicate-match (ty-class-instance-predicate inst) pred))
-               (resulting-preds (mapcar (lambda (p) (apply-substitution subs p))
-                                        (ty-class-instance-constraints-expanded inst env))))
-          (return-from by-inst (values resulting-preds t)))
-      (predicate-unification-error () nil)))
+  (multiple-value-bind (inst subs) (lookup-class-instance env pred :no-error t)
+    (when inst
+      (return-from by-inst
+        (values (apply-substitution subs (ty-class-instance-constraints-expanded inst env)) t))))
   (multiple-value-bind (preds foundp)
       (synthesized-class-instance-constraints pred)
     (when foundp
@@ -110,12 +105,14 @@ Returns (PREDS FOUNDP)"
     (simp-loop nil preds)))
 
 (defun reduce-context (env preds subs)
-  (let ((env (apply-substitution subs env))
+  (when (endp preds)
+    (return-from reduce-context nil))
+  (let ((env (if subs (apply-substitution subs env) env))
         (preds (apply-substitution subs preds)))
     (simplify-context
      (lambda (preds pred)
        (super-entail env preds pred))
-     (loop :for pred :in (apply-substitution subs preds)
+     (loop :for pred :in preds
           :unless (entail env nil pred)
             :collect pred))))
 
@@ -175,76 +172,43 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
         (setf (getf *builder-class-cache* key) sym)
         sym)))
 
-(defun builder-default-candidates (env ambig)
-  (let* ((var (ambiguity-var ambig))
-         (from-itemized-collection (cached-builder-symbol
-                                    :from-itemized-collection
-                                    (lambda ()
-                                      (first (util:find-symbol? "FROMITEMIZEDCOLLECTION"
-                                                                "COALTON/CLASSES")))))
-         (from-collection-comprehension (cached-builder-symbol
-                                         :from-collection-comprehension
-                                         (lambda ()
-                                           (first (util:find-symbol? "FROMCOLLECTIONCOMPREHENSION"
-                                                                     "COALTON/CLASSES")))))
-         (from-itemized-association (cached-builder-symbol
-                                     :from-itemized-association
-                                     (lambda ()
-                                       (first (util:find-symbol? "FROMITEMIZEDASSOCIATION"
-                                                                 "COALTON/CLASSES")))))
-         (from-association-comprehension (cached-builder-symbol
-                                          :from-association-comprehension
-                                          (lambda ()
-                                            (first (util:find-symbol? "FROMASSOCIATIONCOMPREHENSION"
-                                                                      "COALTON/CLASSES")))))
-         (seq-type (cached-builder-symbol
-                    :seq-type
-                    (lambda () (lookup-type-constructor env "COALTON/SEQ" "SEQ"))))
-         (tuple-type (cached-builder-symbol
-                      :tuple-type
-                      (lambda () (lookup-type-constructor env "COALTON/CLASSES" "TUPLE")))))
-    (loop :for pred :in (ambiguity-preds ambig)
-          :for types := (ty-predicate-types pred)
-          :when (and from-itemized-collection
-                     seq-type
-                     (eq (ty-predicate-class pred) from-itemized-collection)
-                     (>= (length types) 3)
-                     (ty= var (first types)))
-            :do (multiple-value-bind (default-type)
-                    (apply-type-argument seq-type (second types))
-                  (return (list default-type)))
-          :when (and from-collection-comprehension
-                     seq-type
-                     (eq (ty-predicate-class pred) from-collection-comprehension)
-                     (>= (length types) 3)
-                     (ty= var (first types)))
-            :do (multiple-value-bind (default-type)
-                    (apply-type-argument seq-type (second types))
-                  (return (list default-type)))
-          :when (and from-itemized-association
-                     seq-type
-                     tuple-type
-                     (eq (ty-predicate-class pred) from-itemized-association)
-                     (>= (length types) 4)
-                     (ty= var (first types)))
-            :do (multiple-value-bind (tuple-entry-type)
-                    (apply-type-argument-list tuple-type (list (second types)
-                                                               (third types)))
-                  (multiple-value-bind (default-type)
-                      (apply-type-argument seq-type tuple-entry-type)
-                    (return (list default-type))))
-          :when (and from-association-comprehension
-                     seq-type
-                     tuple-type
-                     (eq (ty-predicate-class pred) from-association-comprehension)
-                     (>= (length types) 4)
-                     (ty= var (first types)))
-            :do (multiple-value-bind (tuple-entry-type)
-                    (apply-type-argument-list tuple-type (list (second types)
-                                                               (third types)))
-                  (multiple-value-bind (default-type)
-                      (apply-type-argument seq-type tuple-entry-type)
-                    (return (list default-type)))))))
+(defun builder-class-kind (class)
+  (cond
+    ((member class
+             (cached-builder-symbol
+              :collection-classes
+              (lambda ()
+                (append (util:find-symbol? "FROMITEMIZEDCOLLECTION" "COALTON/CLASSES")
+                        (util:find-symbol? "FROMCOLLECTIONCOMPREHENSION" "COALTON/CLASSES")))))
+     ':collection)
+    ((member class
+             (cached-builder-symbol
+              :association-classes
+              (lambda ()
+                (append (util:find-symbol? "FROMITEMIZEDASSOCIATION" "COALTON/CLASSES")
+                        (util:find-symbol? "FROMASSOCIATIONCOMPREHENSION" "COALTON/CLASSES")))))
+     ':association)))
+
+(defun builder-default-type (env pred)
+  "Return the default collection type for a builder predicate, if available."
+  (let ((kind (builder-class-kind (ty-predicate-class pred))))
+    (when kind
+      (let ((seq-type (cached-builder-symbol
+                       :seq-type
+                       (lambda () (lookup-type-constructor env "COALTON/SEQ" "SEQ"))))
+            (types (ty-predicate-types pred)))
+        (when seq-type
+          (ecase kind
+            (:collection
+             (apply-type-argument seq-type (second types)))
+            (:association
+             (let ((tuple-type (cached-builder-symbol
+                                :tuple-type
+                                (lambda () (lookup-type-constructor env "COALTON/CLASSES" "TUPLE")))))
+               (when tuple-type
+                 (apply-type-argument
+                  seq-type
+                  (apply-type-argument-list tuple-type (list (second types) (third types)))))))))))))
 
 (defun candidates (env ambig)
   (declare (type environment env)
@@ -255,33 +219,33 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
          (pred-names (mapcar #'ty-predicate-class preds)) ; is
          (pred-heads (mapcar #'ty-predicate-types preds)) ; ts
          )
-    (or (builder-default-candidates env ambig)
-        (loop :for type :in (defaults env)
+    (loop :for type :in (defaults env)
+          :for subs := (list (make-substitution :from var :to type))
 
-              :when (and
-                     ;; Check that for the predicates containing VAR, VAR is their only type variable
-                     ;;
-                     ;; NOTE: Haskell has a much stricter check here. Haskell requires that the predicate
-                     ;; is in the form "Pred [var]". Coalton will default the following other predicates
-                     ;;
-                     ;; * multiple variable classes "Pred [var var]" and "Pred [var String]"
-                     ;; * more complex types "Pred [List var]"
-                     (subsetp (type-variables pred-heads) (list var) :test #'ty=)
+          :when (and
+                 ;; Check that for the predicates containing VAR, VAR is their only type variable
+                 ;;
+                 ;; NOTE: Haskell has a much stricter check here. Haskell requires that the predicate
+                 ;; is in the form "Pred [var]". Coalton will default the following other predicates
+                 ;;
+                 ;; * multiple variable classes "Pred [var var]" and "Pred [var String]"
+                 ;; * more complex types "Pred [List var]"
+                 (subsetp (type-variables pred-heads) (list var) :test #'ty=)
 
-                     ;; Check that at least one predicate is a numeric class
-                     (some (lambda (name)
-                             (find name (num-classes) :test #'equalp))
-                           pred-names)
+                 ;; Check that at least one predicate is a numeric class
+                 (some (lambda (name)
+                         (find name (num-classes) :test #'equalp))
+                       pred-names)
 
-                     ;; NOTE: Haskell checks that all predicates are stdlib classes here
+                 ;; NOTE: Haskell checks that all predicates are stdlib classes here
 
-                     ;; Check that the variable would be defaulted to a valid type
-                     ;; for the given predicates
-                     (every (lambda (name)
-                              (entail env nil (make-ty-predicate :class name :types (list type))))
-                            pred-names))
+                 ;; Check that the variable would be defaulted to a valid type
+                 ;; for the given predicates
+                 (every (lambda (pred)
+                          (entail env nil (apply-substitution subs pred)))
+                        preds))
 
-                :collect type))))
+            :collect type)))
 
 (defun defaults (env)
   (declare (type environment env)
@@ -315,53 +279,61 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
           :append (ambiguity-preds ambig)))
 
 (defun default-builder-subs (env tvars preds)
+  "Default unknown collection heads, leaving heads in TVARS for their caller."
   (declare (type environment env)
            (type tyvar-list tvars)
            (type ty-predicate-list preds)
            (values substitution-list &optional))
-  (loop :for ambig :in (ambiguities env tvars preds)
-        :for candidates := (builder-default-candidates env ambig)
-        :when candidates
-          :collect (make-substitution :from (ambiguity-var ambig)
-                                      :to (first candidates))))
+  (loop :with subs := nil
+        :for pred :in preds
+        :for applied-pred := (apply-substitution subs pred)
+        :for default := (builder-default-type env applied-pred)
+        :for collection := (and default (first (ty-predicate-types applied-pred)))
+        :for head := (and collection (first (flatten-type collection)))
+        :when (and default (tyvar-p head) (not (member head tvars :test #'ty=)))
+          ;; Unify the whole type: a Foldable consumer exposes :f :a, and
+          ;; defaulting :f to Seq must also relate :a to the builder's elements.
+          :do (setf subs
+                    (handler-case (unify subs collection default)
+                      ((or unification-error infinite-type-unification-error kind-mismatch-error) ()
+                        subs)))
+        :finally (return subs)))
 
 (defun expand-defaulted-builder-preds (env preds)
   (declare (type environment env)
            (type ty-predicate-list preds)
            (values ty-predicate-list &optional))
-  (let ((from-itemized-collection (cached-builder-symbol
-                                   :from-itemized-collection
-                                   (lambda ()
-                                     (first (util:find-symbol? "FROMITEMIZEDCOLLECTION"
-                                                               "COALTON/CLASSES")))))
-        (from-collection-comprehension (cached-builder-symbol
-                                        :from-collection-comprehension
-                                        (lambda ()
-                                          (first (util:find-symbol? "FROMCOLLECTIONCOMPREHENSION"
-                                                                    "COALTON/CLASSES")))))
-        (from-itemized-association (cached-builder-symbol
-                                    :from-itemized-association
-                                    (lambda ()
-                                      (first (util:find-symbol? "FROMITEMIZEDASSOCIATION"
-                                                                "COALTON/CLASSES")))))
-        (from-association-comprehension (cached-builder-symbol
-                                         :from-association-comprehension
-                                         (lambda ()
-                                           (first (util:find-symbol? "FROMASSOCIATIONCOMPREHENSION"
-                                                                     "COALTON/CLASSES"))))))
-    (loop :for pred :in preds
-          :for class := (ty-predicate-class pred)
-          :if (or (eq class from-itemized-collection)
-                  (eq class from-collection-comprehension)
-                  (eq class from-itemized-association)
-                  (eq class from-association-comprehension))
-            :append (multiple-value-bind (inst-preds foundp)
-                        (by-inst env pred)
-                      (if foundp
-                          inst-preds
-                          (list pred)))
-          :else
-            :collect pred)))
+  (loop :for pred :in preds
+        :if (builder-class-kind (ty-predicate-class pred))
+          :append (multiple-value-bind (inst-preds foundp)
+                      (by-inst env pred)
+                    (if foundp
+                        inst-preds
+                        (list pred)))
+        :else
+          :collect pred))
+
+(defun default-builder-context (env tvars preds subs)
+  "Default builder representations before checking ambiguity or numeric defaults.
+
+TVARS protects collection heads belonging to the surrounding environment or an
+explicit signature. Solve the chosen representations' functional dependencies
+and expose their element constraints for the caller's generalization policy."
+  (declare (type environment env)
+           (type tyvar-list tvars)
+           (type ty-predicate-list preds)
+           (type substitution-list subs)
+           (values ty-predicate-list substitution-list &optional))
+  (let ((*builder-class-cache* nil))
+    (setf preds (reduce-context env preds subs))
+    (setf subs (compose-substitution-lists
+                (default-builder-subs env (type-variables (apply-substitution subs tvars)) preds)
+                subs))
+    ;; The collection determines its builder state; defaulting these variables
+    ;; independently would report a spurious ambiguity in the builder state.
+    (setf subs (nth-value 1 (solve-fundeps env preds subs)))
+    (setf preds (expand-defaulted-builder-preds env (apply-substitution subs preds)))
+    (values (reduce-context env preds nil) subs)))
 
 (defun default-subs (env tvars preds)
   (declare (type environment env)

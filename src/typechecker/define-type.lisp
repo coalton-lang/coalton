@@ -379,6 +379,16 @@ This is conservative and intentionally aligns with mutable native wrappers."
         ((tc:lookup-type-alias env (type-definition-name type) :no-error t)
          (setf env (tc:unset-type-alias env (type-definition-name type)))))
 
+  ;; Remove old reader metadata, including fields dropped by a redefinition
+  ;; or a struct whose new representation is a transparent newtype.
+  (let ((old-struct (tc:lookup-struct env (type-definition-name type) :no-error t)))
+    (when old-struct
+      (dolist (field (tc:struct-entry-fields old-struct))
+        (let ((reader (tc:struct-field-accessor-name (type-definition-name type)
+                                                   (tc:struct-field-index field))))
+          (when (tc:lookup-function env reader :no-error t)
+            (setf env (tc:unset-function env reader)))))))
+
   (cond ((typep parsed-type 'parser:toplevel-define-struct)
          (let ((fields (loop :for field
                                :in (parser:toplevel-define-struct-fields parsed-type)
@@ -396,7 +406,17 @@ This is conservative and intentionally aligns with mutable native wrappers."
                        :name (type-definition-name type)
                        :source-name (parser:identifier-src-source-name (parser:type-definition-name parsed-type))
                        :fields fields
-                       :docstring nil)))))
+                       :docstring nil)))
+           ;; Readers are unary Lisp functions. Register them like constructors
+           ;; so ordinary direct-call conversion can expose their inline bodies
+           ;; and concrete field types to the backend compiler.
+           (unless (type-definition-newtype type)
+             (dolist (field fields)
+               (let ((reader (tc:struct-field-accessor-name (type-definition-name type)
+                                                          (tc:struct-field-index field))))
+                 (setf env (tc:set-function env reader
+                                           (tc:make-function-env-entry
+                                            :name reader :arity 1 :inline-p nil))))))))
         ((tc:lookup-struct env (type-definition-name type) :no-error t)
          (setf env (tc:unset-struct env (type-definition-name type)))))
 

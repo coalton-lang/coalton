@@ -57,7 +57,7 @@
       ((MapPair _ v) v)
       (_ (stray-just-key))))
 
-  (declare stray-just-key (Void -> :a))
+  (declare stray-just-key (forall ((:a Values)) (Void -> :a)))
   (define (stray-just-key)
     (lisp (-> :a) ()
       (coalton-impl/runtime:coalton-bug "Misuse of `JustKey': Cannot read the value of a JustKey")))
