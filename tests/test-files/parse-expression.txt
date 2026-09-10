@@ -323,13 +323,10 @@ warn: non-exhaustive match
 --------------------------------------------------------------------------------
 
 error: Reader error
-  --> test:1:22
+  --> test:3:0
    |
- 1 |   (package test-package)
-   |  _______________________^
- 2 | | 
- 3 | | (define x [x :for x])
-   | |____________________^ reader error: Malformed collection comprehension: missing :IN or :BELOW after :FOR binder
+ 3 |  (define x [x :for x])
+   |  ^^^^^^^^^^^^^^^^^^^^ reader error: Malformed collection comprehension: missing :IN or :BELOW after :FOR binder
 
 ================================================================================
 107 Malformed collection comprehension
@@ -342,13 +339,10 @@ error: Reader error
 --------------------------------------------------------------------------------
 
 error: Reader error
-  --> test:1:22
+  --> test:3:0
    |
- 1 |   (package test-package)
-   |  _______________________^
- 2 | | 
- 3 | | (define x [x :with y])
-   | |_____________________^ reader error: Malformed collection comprehension: missing = after :WITH binder
+ 3 |  (define x [x :with y])
+   |  ^^^^^^^^^^^^^^^^^^^^^ reader error: Malformed collection comprehension: missing = after :WITH binder
 
 ================================================================================
 108 Parse expression
@@ -372,13 +366,10 @@ error: Reader error
 --------------------------------------------------------------------------------
 
 error: Reader error
-  --> test:1:22
+  --> test:3:0
    |
- 1 |   (package test-package)
-   |  _______________________^
- 2 | | 
- 3 | | (define x [x => x :when])
-   | |________________________^ reader error: Malformed association comprehension: missing :WHEN predicate
+ 3 |  (define x [x => x :when])
+   |  ^^^^^^^^^^^^^^^^^^^^^^^^ reader error: Malformed association comprehension: missing :WHEN predicate
 
 ================================================================================
 110 Parse expression
