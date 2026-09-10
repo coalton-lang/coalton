@@ -132,30 +132,6 @@ SOURCE provides metadata for the stream argument, for error messages."
         (t
          (read-lisp stream source first-form))))))
 
-(defun utf-8-char-width (char)
-  "Return the number of UTF-8 octets required to encode CHAR."
-  (let ((code (char-code char)))
-    (cond
-      ((<= code #x7F) 1)
-      ((<= code #x7FF) 2)
-      ((<= code #xFFFF) 3)
-      (t 4))))
-
-(defun file-byte-offset-to-char-offset (file byte-offset)
-  "Convert BYTE-OFFSET in FILE to the corresponding character offset."
-  (with-open-file (stream file
-                          :direction ':input
-                          :element-type 'character
-                          :external-format (source:source-external-format))
-    (loop :with bytes := 0
-          :with chars := 0
-          :while (< bytes byte-offset)
-          :for char := (read-char stream nil nil)
-          :while char
-          :do (incf bytes (utf-8-char-width char))
-              (incf chars)
-          :finally (return chars))))
-
 (defun source-span-matches-mode-p (source mode span)
   "Return true when SPAN in SOURCE starts with MODE."
   (declare (type deferred-coalton-mode mode))
@@ -178,8 +154,8 @@ SOURCE provides metadata for the stream argument, for error messages."
             span
             (let* ((file (source::input-name source))
                    (normalized-span
-                     (cons (file-byte-offset-to-char-offset file start)
-                           (file-byte-offset-to-char-offset file end))))
+                     (cons (source:file-byte-offset-to-char-offset file start)
+                           (source:file-byte-offset-to-char-offset file end))))
               (if (source-span-matches-mode-p source mode normalized-span)
                   normalized-span
                   (util:coalton-bug "Unable to recover source span for ~S in ~A"

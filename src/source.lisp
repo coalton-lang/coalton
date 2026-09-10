@@ -19,6 +19,7 @@
    #:make-location
    #:make-source-error
    #:extract-source-text
+   #:file-byte-offset-to-char-offset
    #:make-source-file
    #:make-source-string
    #:message
@@ -35,6 +36,7 @@
    #:source-external-format
    #:source-stream
    #:source-warning
+   #:stream-span-to-char-span
    #:deprecation-warn
    #:span
    #:span-end
@@ -79,6 +81,48 @@
   (dotimes (i position-spec)
     (read-char (inner-stream stream) nil nil))
   (setf (character-position stream) position-spec))
+
+(defun utf-8-char-width (char)
+  "Return the number of UTF-8 octets required to encode CHAR."
+  (let ((code (char-code char)))
+    (cond
+      ((<= code #x7F) 1)
+      ((<= code #x7FF) 2)
+      ((<= code #xFFFF) 3)
+      (t 4))))
+
+(defun file-byte-offset-to-char-offset (file byte-offset)
+  "Convert BYTE-OFFSET in FILE to the corresponding character offset.
+
+FILE-POSITION reports byte offsets on the streams COMPILE-FILE reads source
+from, while the offsets stored in a location's span are character offsets.
+This converts between the two."
+  (with-open-file (stream file
+                          :direction ':input
+                          :element-type 'character
+                          :external-format (source-external-format))
+    (loop :with bytes := 0
+          :with chars := 0
+          :while (< bytes byte-offset)
+          :for char := (read-char stream nil nil)
+          :while char
+          :do (incf bytes (utf-8-char-width char))
+              (incf chars)
+          :finally (return chars))))
+
+(defun stream-span-to-char-span (stream source span)
+  "Return SPAN expressed in character offsets.
+
+SPAN holds offsets reported by FILE-POSITION on STREAM. Only a
+CHAR-POSITION-STREAM counts characters; other streams positioned over a
+file-backed SOURCE report bytes, and spans are always character offsets, so
+those offsets must be converted."
+  (if (or (typep stream 'char-position-stream)
+          (not (typep source 'source-file)))
+      span
+      (let ((file (input-name source)))
+        (cons (file-byte-offset-to-char-offset file (car span))
+              (file-byte-offset-to-char-offset file (cdr span))))))
 
 ;;; Docstrings
 

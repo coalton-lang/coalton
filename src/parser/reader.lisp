@@ -640,6 +640,11 @@ Returns (VALUES FORM PRESENTP EOFP)"
             (read-char stream)
             (return (values nil nil nil)))
 
+          ;; PEEK-CHAR above skipped leading whitespace, so the next form
+          ;; starts here. Reporting the offset from before the skip would
+          ;; start the span on the previous line.
+          (setf begin (file-position stream))
+
           ;; Otherwise, try to read in the next form
           (multiple-value-call
               (lambda (form type &optional parse-result)
@@ -661,12 +666,15 @@ Returns (VALUES FORM PRESENTP EOFP)"
              stream
              nil 'eof)))
       (eclector.reader:unterminated-list ()
-        (let ((end (file-position stream)))
+        (let ((span (source:stream-span-to-char-span
+                     stream source (cons begin (file-position stream)))))
           (parse-error "Unterminated form"
-                       (source:note (source:make-location source (cons begin end))
-                                    "Missing close parenthesis for form starting at offset ~a" begin))))
+                       (source:note (source:make-location source span)
+                                    "Missing close parenthesis for form starting at offset ~a"
+                                    (source:span-start span)))))
       (error (condition)
-        (let ((end (file-position stream)))
+        (let ((span (source:stream-span-to-char-span
+                     stream source (cons begin (file-position stream)))))
           (parse-error "Reader error"
-                       (source:note (source:make-location source (cons begin end))
+                       (source:note (source:make-location source span)
                                     "reader error: ~a" condition)))))))

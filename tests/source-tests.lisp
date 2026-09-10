@@ -24,6 +24,46 @@
                    (cdr (nth 71 chars)))
             "Second kanji is at char offset, not byte offset")))))
 
+(deftest test-reader-error-reports-character-offsets ()
+  "A reader error in a file with multibyte characters must report character offsets.
+
+FILE-POSITION on the stream COMPILE-FILE reads source from counts bytes, so the
+offsets have to be converted before they can be used as character offsets."
+  (uiop:with-temporary-file (:stream out :pathname path :type "ct"
+                             :direction :output
+                             :external-format :utf-8)
+    (write-string (format nil ";; ~A~%(declare x Char)~%(define x #\\Delete)~%"
+                          "中文中文中文中文中文中文中文中文中文中文")
+                  out)
+    :close-stream
+    (let* ((text (with-open-file (in path :external-format :utf-8)
+                   (let (chars)
+                     (loop :for char := (read-char in nil nil)
+                           :while char
+                           :do (push char chars))
+                     (coerce (nreverse chars) 'string))))
+           (token "#\\Delete")
+           (token-end (+ (search token text) (length token)))
+           (source (source:make-source-file path))
+           (span nil))
+      (handler-case
+          (with-open-stream (stream (source:source-stream source))
+            (loop :do (multiple-value-bind (form presentp)
+                          (parser:maybe-read-form stream source)
+                        (declare (ignore form))
+                        (unless presentp (return)))))
+        (error (condition)
+          (setf span (source:location-span
+                      (source:location (first (source:notes condition)))))))
+      (is (not (null span)) "Expected reading #\\Delete to signal a reader error")
+      (when span
+        (is (= token-end (cdr span))
+            "Reader error end should be the character offset just past ~A, got ~S"
+            token span)
+        (is (char= #\( (char text (car span)))
+            "Reader error span should begin at the offending form's open paren, got ~S"
+            span)))))
+
 (deftest test-source-stream-preserves-crlf-characters ()
   (flet ((stream-contents (stream)
            (loop :for char := (read-char stream nil nil)
