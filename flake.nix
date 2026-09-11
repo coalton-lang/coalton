@@ -85,6 +85,44 @@
               value = recipe.${impl}.mainLib;
             }
           ];
+          mineCoreBin = pkgs.stdenv.mkDerivation {
+            pname = "mine-core";
+            inherit version src;
+            nativeBuildInputs = [ recipe.sbcl.lisp' ];
+            buildInputs = nativeLibs;
+            inherit LD_LIBRARY_PATH;
+            dontConfigure = true;
+            dontStrip = true;
+            buildPhase = ''
+              runHook preBuild
+              cd mine
+              export HOME=$TMPDIR
+              export CL_SOURCE_REGISTRY="$PWD/..//"
+              export ASDF_OUTPUT_TRANSLATIONS="/:$TMPDIR/fasl-cache/"
+              export MINE_VERSION="${version}"
+              sbcl --noinform --non-interactive \
+                --eval '(require :asdf)' \
+                --eval '(require :sb-bsd-sockets)' \
+                --eval '(require :sb-posix)' \
+                --eval "(asdf:initialize-source-registry '(:source-registry (:tree \"$PWD/..\") :inherit-configuration))" \
+                --eval "(asdf:initialize-output-translations '(:output-translations (t (\"$TMPDIR/fasl-cache\" :implementation)) :inherit-configuration))" \
+                --eval '(pushnew :coalton-portable-bigfloat *features*)' \
+                --load coalton-config.lisp \
+                --eval '(asdf:load-system "mine" :verbose t)' \
+                --eval '(mine/app/executable:build)'
+              runHook postBuild
+            '';
+            installPhase = ''
+              runHook preInstall
+              install -Dm755 mine $out/bin/mine-core
+              runHook postInstall
+            '';
+            meta = {
+              description = "TUI IDE for Coalton and Common Lisp (core binary)";
+              platforms = pkgs.lib.platforms.unix;
+              mainProgram = "mine-core";
+            };
+          };
           devPackages = impl:
             pkgs.${impl}.withPackages (ps: lispLibs pkgs.${impl});
           overlays = impl: [
@@ -105,7 +143,10 @@
             packages = builtins.map devPackages availableLispImpls;
           };
           packages = builtins.listToAttrs
-            (builtins.concatMap packages availableLispImpls);
+            (builtins.concatMap packages availableLispImpls)
+            // pkgs.lib.optionalAttrs (builtins.elem "sbcl" availableLispImpls) {
+              mine-core = mineCoreBin;
+            };
         };
     };
 }
