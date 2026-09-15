@@ -77,10 +77,17 @@
 
 (defmethod (setf trivial-gray-streams:stream-file-position)
     (position-spec (stream char-position-stream))
+  "Reposition STREAM to character offset POSITION-SPEC, discarding any
+pushback characters. Return the new position, or NIL when the inner stream
+ends before POSITION-SPEC characters have been read, in which case
+CHARACTER-POSITION is left at that end."
   (file-position (inner-stream stream) 0)
-  (dotimes (i position-spec)
-    (read-char (inner-stream stream) nil nil))
-  (setf (character-position stream) position-spec))
+  (setf (unread-characters stream) nil)
+  (setf (character-position stream) 0)
+  (loop :repeat position-spec
+        :do (when (eq ':eof (read-char stream nil ':eof))
+              (return nil))
+        :finally (return (character-position stream))))
 
 (defun utf-8-char-width (char)
   "Return the number of UTF-8 octets required to encode CHAR."
@@ -91,38 +98,125 @@
       ((<= code #xFFFF) 3)
       (t 4))))
 
-(defun file-byte-offset-to-char-offset (file byte-offset)
+(defun utf-8-byte-span-to-char-span (stream span)
+  "Convert SPAN from byte offsets on STREAM to character offsets, counting each
+character as the UTF-8 octets its code point needs.
+
+That count is checked rather than assumed: whenever it reaches an endpoint of
+SPAN, it is compared with the byte offset STREAM itself reports there, and NIL is
+returned when the two disagree, so that a stream with another external format
+can be measured instead."
+  (let ((start (car span))
+        (end (cdr span)))
+    (loop :with bytes := 0
+          :with characters := 0
+          :with converted-start := nil
+          :do (progn
+                ;; STREAM is positioned at BYTES, the offset of the character
+                ;; about to be read, so that is where the count is checked.
+                (when (and (null converted-start) (<= start bytes))
+                  (setf converted-start characters)
+                  (unless (= bytes (file-position stream))
+                    (return nil)))
+                (when (<= end bytes)
+                  (unless (= bytes (file-position stream))
+                    (return nil))
+                  (return (cons (or converted-start characters) characters)))
+                (let ((char (read-char stream nil nil)))
+                  (unless char
+                    (return (when (= bytes (file-position stream))
+                              (cons (or converted-start characters) characters))))
+                  (incf bytes (utf-8-char-width char))
+                  (incf characters))))))
+
+(defun measured-byte-span-to-char-span (stream span)
+  "Convert SPAN from byte offsets on STREAM to character offsets by reading
+STREAM with its own external format and watching the offset it reports.
+
+This holds for any external format, but FILE-POSITION is a system call on most
+implementations, so it is only used for the streams whose octet widths the
+characters do not describe."
+  (loop :with start := (car span)
+        :with end := (cdr span)
+        :with characters := 0
+        :with converted-start := nil
+        :do (let ((position (file-position stream)))
+              (when (and (null converted-start)
+                         (<= start position))
+                (setf converted-start characters))
+              (when (<= end position)
+                (return (cons (or converted-start characters)
+                              characters))))
+            (unless (read-char stream nil nil)
+              (return (cons (or converted-start characters)
+                            characters)))
+            (incf characters)))
+
+(defun single-octet-byte-span-to-char-span (stream span)
+  "Convert SPAN from byte offsets on STREAM to character offsets for a stream
+whose characters each occupy a single octet, where the two numbering schemes
+coincide.
+
+NIL is returned when a character occupies more than one octet, which STREAM
+shows by holding more octets than it does characters."
+  (let ((characters 0))
+    (loop :for char := (read-char stream nil nil)
+          :while char
+          :do (incf characters))
+    (when (= characters (file-position stream))
+      (cons (min (car span) characters)
+            (min (cdr span) characters)))))
+
+(defun byte-span-to-char-span (stream span)
+  "Convert SPAN from byte offsets on STREAM to character offsets.
+
+STREAM must be positioned at the start of the bytes SPAN refers to, and is read
+once: each endpoint of SPAN converts to the number of characters read before
+STREAM's byte offset reaches it. An endpoint past the end of STREAM converts to
+the stream's character count.
+
+The characters are asked what the offsets mean before STREAM is measured
+character by character, because FILE-POSITION is a system call on most
+implementations."
+  (or (utf-8-byte-span-to-char-span stream span)
+      (progn
+        (file-position stream 0)
+        (or (single-octet-byte-span-to-char-span stream span)
+            (progn
+              (file-position stream 0)
+              (measured-byte-span-to-char-span stream span))))))
+
+(defun file-byte-offset-to-char-offset
+    (file byte-offset &key (external-format (source-external-format)))
   "Convert BYTE-OFFSET in FILE to the corresponding character offset.
 
 FILE-POSITION reports byte offsets on the streams COMPILE-FILE reads source
 from, while the offsets stored in a location's span are character offsets.
-This converts between the two."
+This converts between the two by reading FILE with EXTERNAL-FORMAT; a
+BYTE-OFFSET past the end of FILE converts to FILE's character count."
   (with-open-file (stream file
                           :direction ':input
                           :element-type 'character
-                          :external-format (source-external-format))
-    (loop :with bytes := 0
-          :with chars := 0
-          :while (< bytes byte-offset)
-          :for char := (read-char stream nil nil)
-          :while char
-          :do (incf bytes (utf-8-char-width char))
-              (incf chars)
-          :finally (return chars))))
+                          :external-format external-format)
+    (car (byte-span-to-char-span stream (cons byte-offset byte-offset)))))
 
-(defun stream-span-to-char-span (stream source span)
+(defun stream-span-to-char-span
+    (stream source span &key (external-format (source-external-format)))
   "Return SPAN expressed in character offsets.
 
 SPAN holds offsets reported by FILE-POSITION on STREAM. Only a
 CHAR-POSITION-STREAM counts characters; other streams positioned over a
 file-backed SOURCE report bytes, and spans are always character offsets, so
-those offsets must be converted."
+both endpoints of SPAN are converted in a single pass over SOURCE read with
+EXTERNAL-FORMAT."
   (if (or (typep stream 'char-position-stream)
           (not (typep source 'source-file)))
       span
-      (let ((file (input-name source)))
-        (cons (file-byte-offset-to-char-offset file (car span))
-              (file-byte-offset-to-char-offset file (cdr span))))))
+      (with-open-file (file-stream (input-name source)
+                                   :direction ':input
+                                   :element-type 'character
+                                   :external-format external-format)
+        (byte-span-to-char-span file-stream span))))
 
 ;;; Docstrings
 
@@ -134,11 +228,16 @@ those offsets must be converted."
 (defgeneric source-stream (source)
   (:documentation "Open and return a stream from which source text may be read. The caller is responsible for closing the stream, and the stream's initial position may be greater than zero."))
 
+(defvar *source-external-format*
+  #+sbcl '(:utf-8 :newline :lf)
+  #-sbcl :utf-8
+  "The external format for source files.
+On SBCL, this preserves CRLF as raw CR then LF characters.")
+
 (defun source-external-format ()
   "Return the external format used for source files.
 On SBCL, this preserves CRLF as raw CR then LF characters."
-  #+sbcl '(:utf-8 :newline :lf)
-  #-sbcl :utf-8)
+  *source-external-format*)
 
 (defgeneric source-available-p (source)
   (:documentation "Return T if a stream containing SOURCE's source text can be opened."))

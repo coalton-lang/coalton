@@ -579,10 +579,13 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
           (maybe-read-form stream source *coalton-eclector-client*)
 
         (when (and eofp (eq mode ':macro))
-          (parse-error "Unexpected EOF"
-                       (note source (cons (- (file-position stream) 2)
-                                          (- (file-position stream) 1))
-                             "missing close parenthesis")))
+          (let ((position (file-position stream)))
+            (parse-error "Unexpected EOF"
+                         (note source (source:stream-span-to-char-span
+                                       stream source
+                                       (cons (- position 2)
+                                             (- position 1)))
+                               "missing close parenthesis"))))
 
         (unless presentp
           (return))
@@ -620,10 +623,13 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
         (maybe-read-form stream source *coalton-eclector-client*)
 
       (unless presentp
-        (parse-error "Malformed coalton expression"
-                     (note source (cons (- (file-position stream) 2)
-                                        (- (file-position stream) 1))
-                           "missing expression")))
+        (let ((position (file-position stream)))
+          (parse-error "Malformed coalton expression"
+                       (note source (source:stream-span-to-char-span
+                                     stream source
+                                     (cons (- position 2)
+                                           (- position 1)))
+                             "missing expression"))))
 
       ;; Ensure there is only one form
       (multiple-value-bind (form presentp)
@@ -647,10 +653,13 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
         (maybe-read-form stream source *coalton-eclector-client*)
 
       (unless presentp
-        (parse-error "Malformed coalton expression"
-                     (note source (cons (- (file-position stream) 2)
-                                        (- (file-position stream) 1))
-                           "missing expression")))
+        (let ((position (file-position stream)))
+          (parse-error "Malformed coalton expression"
+                       (note source (source:stream-span-to-char-span
+                                     stream source
+                                     (cons (- position 2)
+                                           (- position 1)))
+                             "missing expression"))))
 
       (let ((additional-forms nil))
         ;; Read multiple forms if present.
@@ -779,11 +788,15 @@ If MODE is :macro, a package form is forbidden, and an explicit check is made fo
     (multiple-value-bind (form presentp)
         (maybe-read-form stream source *coalton-eclector-client*)
       (unless presentp
-        (parse-error "Malformed package declarations"
-                     (source:note (source:make-location source
-                                                        (cons (- (file-position stream) 2)
-                                                              (- (file-position stream) 1)))
-                                  "missing package form")))
+        (let ((position (file-position stream)))
+          (parse-error "Malformed package declarations"
+                       (source:note (source:make-location
+                                     source
+                                     (source:stream-span-to-char-span
+                                      stream source
+                                      (cons (- position 2)
+                                            (- position 1))))
+                                    "missing package form"))))
       (parse-package (cursor:make-cursor form source "Malformed package declaration")))))
 
 (defun make-defpackage (package)

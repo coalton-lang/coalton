@@ -144,23 +144,27 @@ SOURCE provides metadata for the stream argument, for error messages."
         (and presentp
              (eql (cst:raw form) mode))))))
 
-(defun normalized-source-span (source mode start end)
-  "Return a source span whose offsets line up with SOURCE."
+(defun normalized-source-span (stream source mode start end)
+  "Return the source span of the form that STARTS at START and ENDS at END.
+
+START and END are offsets reported by FILE-POSITION on STREAM, and the
+returned span is expressed in the character offsets every location in SOURCE
+uses.
+
+FILE-POSITION reports bytes on the streams COMPILE-FILE reads source from, so
+those offsets must be converted; only a CHAR-POSITION-STREAM, and a string
+source read straight from its input stream, already count characters.
+
+The converted span is checked against MODE before it is returned, because a
+span that no longer lands on its own form would be silently reused later by
+EXPAND-SOURCE-COALTON-FORM-1."
   (declare (type deferred-coalton-mode mode))
-  (let ((span (cons start end)))
-    (if (not (typep source 'source::source-file))
-        span
-        (if (source-span-matches-mode-p source mode span)
-            span
-            (let* ((file (source::input-name source))
-                   (normalized-span
-                     (cons (source:file-byte-offset-to-char-offset file start)
-                           (source:file-byte-offset-to-char-offset file end))))
-              (if (source-span-matches-mode-p source mode normalized-span)
-                  normalized-span
-                  (util:coalton-bug "Unable to recover source span for ~S in ~A"
-                                    mode
-                                    (source:source-name source))))))))
+  (let ((span (source:stream-span-to-char-span stream source (cons start end))))
+    (unless (source-span-matches-mode-p source mode span)
+      (util:coalton-bug "Unable to recover source span for ~S in ~A"
+                        mode
+                        (source:source-name source)))
+    span))
 
 (defun make-deferred-coalton-form (mode source span)
   "Return a macro form that will compile the Coalton form at SPAN in SOURCE once."
@@ -195,7 +199,8 @@ the opening parenthesis that began the current form."
            (read-lisp stream source first-form)
            (make-deferred-coalton-form mode
                                        source
-                                       (normalized-source-span source
+                                       (normalized-source-span stream
+                                                               source
                                                                mode
                                                                start
                                                                (file-position stream))))

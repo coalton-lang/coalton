@@ -232,3 +232,148 @@
                        "struct source-name should preserve the original spelling")))))
         (setf (symbol-function compile-sym) orig-compile
               entry:*global-environment* saved-environment)))))
+
+(defun read-file-characters (file)
+  "Return the characters of FILE, which is what a span's offsets index into."
+  (with-open-file (in file :external-format (source:source-external-format))
+    (let (chars)
+      (loop :for char := (read-char in nil nil)
+            :while char
+            :do (push char chars))
+      (coerce (nreverse chars) 'string))))
+
+(defun read-file-octets (file)
+  "Return the octets of FILE, which is what its byte offsets index into."
+  (with-open-file (in file :element-type '(unsigned-byte 8))
+    (let ((octets (make-array (file-length in) :element-type '(unsigned-byte 8))))
+      (read-sequence octets in)
+      octets)))
+
+(deftest reader-recovers-multibyte-source-spans ()
+  "A deferred form in a file with multibyte characters must keep its own span.
+
+FILE-POSITION reports bytes on the stream COMPILE-FILE reads source from, while
+every span is measured in characters, so the offsets captured for a deferred
+form must be converted before they are recorded. A file may then be arranged in
+which the first form's byte offset, read as a character offset, lands exactly on
+a LATER form: a probe of that span finds another `coalton-toplevel' and passes,
+so guessing whether the offsets are bytes or characters records a span that
+selects the wrong text. Converting at the boundary where the byte offsets are
+produced is what keeps every recorded span honest."
+  (uiop:with-temporary-file (:stream stream
+                             :pathname input-file
+                             :suffix ".lisp"
+                             :direction :output
+                             :external-format (source:source-external-format)
+                             :keep t)
+    ;; CJK before the first form shifts its byte offset past its character
+    ;; offset by exactly the distance to the second form's open paren.
+    (write-string ";; 中文注释源位置换算中文注释源位置换算中文注释源位置换算中文注释源位置换算中文注释源位置换算中文注
+(coalton-toplevel
+  (declare reader-span-f (UFix -> UFix))
+  (define (reader-span-f x) x))
+;; .
+(coalton-toplevel
+  (define (reader-span-g x) (1+ x)))
+" stream)
+    :close-stream
+    (let* ((text (read-file-characters input-file))
+           (octets (read-file-octets input-file))
+           (form-1-start (search "(coalton-toplevel" text))
+           (form-2-start (search "(coalton-toplevel" text :start2 (1+ form-1-start)))
+           ;; The byte offset of the first form, measured in the file itself
+           ;; rather than derived from any encoder.
+           (form-token (map '(vector (unsigned-byte 8)) #'char-code "(coalton-toplevel"))
+           (byte-1-start (search form-token octets)))
+      (is (= form-2-start byte-1-start)
+          "test setup: the first form's byte offset must land on the second form, got ~S and ~S"
+          byte-1-start form-2-start)
+      (with-open-file (stream input-file :external-format (source:source-external-format))
+        ;; COMPILE-FILE reads the file with the Coalton readtable installed and
+        ;; with *PACKAGE* bound to the file's package.
+        (let ((*package* (find-package "COALTON-USER"))
+              (*readtable* (named-readtables:ensure-readtable 'coalton:coalton))
+              (*load-truename* input-file))
+          (let* ((form (read stream nil nil))
+                 (span (fifth form)))
+            (is (eq 'coalton-impl/reader::expand-source-coalton-form (first form))
+                "expected the reader to return a deferred form, got ~S" form)
+            (is (= (car span) form-1-start)
+                "the deferred form's span must start at its own open paren, got ~S"
+                (car span))
+            (is (char= #\) (char text (1- (cdr span))))
+                "the deferred form's span must end just past its close paren, got ~S"
+                (cdr span))
+            (let ((span-text (subseq text (car span) (min (cdr span) (length text)))))
+              (is (search "reader-span-f" span-text)
+                  "the span must select the first form, got ~S" span-text)
+              (is (not (search "reader-span-g" span-text))
+                  "the span must not reach the second form, got ~S" span-text))))))))
+
+(deftest reader-macros-record-character-source-spans ()
+  "The short-lambda and bracket reader macros must record character offsets.
+
+FILE-POSITION reports bytes on the streams COMPILE-FILE reads source from,
+while every span is measured in characters. A form preceded by multibyte text
+therefore reports a raw offset larger than its character offset by the extra
+octets that text occupies, so a span built from the raw offset points past the
+text the form was read from. The expected offsets below are character offsets
+found by searching the decoded file, and the test setup checks that the raw
+byte offset really is different."
+  (uiop:with-temporary-file (:stream stream
+                             :pathname input-file
+                             :suffix ".lisp"
+                             :direction :output
+                             :external-format (source:source-external-format)
+                             :keep t)
+    ;; The CJK comment shifts every later offset by its extra octets, so a span
+    ;; recorded in bytes cannot match the character offsets below.
+    (write-string ";; 中文注释
+[p => q r => s]
+ƒab.c
+" stream)
+    :close-stream
+    (let* ((text (read-file-characters input-file))
+           (bracket-start (search "[" text))
+           (bracket-end (1+ (search "]" text)))
+           (byte-bracket-start (labels ((octets (char)
+                                        (let ((code (char-code char)))
+                                          (cond ((<= code #x7F) 1)
+                                                ((<= code #x7FF) 2)
+                                                ((<= code #xFFFF) 3)
+                                                (t 4)))))
+                                (loop :for char :across (subseq text 0 bracket-start)
+                                      :sum (octets char))))
+           (param-a (search "a" text))
+           (param-b (search "b" text)))
+      (is (< bracket-start byte-bracket-start)
+          "test setup: the form's byte offset must exceed its character offset, got ~S and ~S"
+          byte-bracket-start bracket-start)
+      (with-open-file (stream input-file :external-format (source:source-external-format))
+        ;; COMPILE-FILE reads the file with *PACKAGE* bound to the file's
+        ;; package, and the reader context establishes the Coalton readtable.
+        (let ((source (source:make-source-file input-file))
+              (*package* (find-package "COALTON-USER")))
+          (parser:with-coalton-reader-context stream
+            (multiple-value-bind (bracket-form presentp)
+                (parser:maybe-read-form stream source parser:*coalton-eclector-client*)
+              (is presentp "the bracket form must be read")
+              (is (equal (cons bracket-start bracket-end)
+                         (concrete-syntax-tree:source bracket-form))
+                  "the bracket form's span must start and end at its character offsets, got ~S"
+                  (concrete-syntax-tree:source bracket-form))
+              (is (equal (list (cons bracket-start (1+ bracket-start)))
+                         (cst-symbol-spans bracket-form "%ASSOCIATION-BUILDER"))
+                  "the generated form must span the bracket in character offsets, got ~S"
+                  (cst-symbol-spans bracket-form "%ASSOCIATION-BUILDER"))
+              (multiple-value-bind (short-lambda-form presentp)
+                  (parser:maybe-read-form stream source parser:*coalton-eclector-client*)
+                (is presentp "the short lambda form must be read")
+                (is (equal (list (cons param-a (1+ param-a)))
+                           (cst-symbol-spans short-lambda-form "A"))
+                    "the short lambda parameter span must be character offsets, got ~S"
+                    (cst-symbol-spans short-lambda-form "A"))
+                (is (equal (list (cons param-b (1+ param-b)))
+                           (cst-symbol-spans short-lambda-form "B"))
+                    "the short lambda parameter span must be character offsets, got ~S"
+                    (cst-symbol-spans short-lambda-form "B"))))))))))
