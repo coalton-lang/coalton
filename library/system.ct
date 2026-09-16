@@ -4,7 +4,8 @@
    #:coalton/builtin
    #:coalton/classes)
   (:local-nicknames
-   (#:math #:coalton/math))
+   (#:math #:coalton/math)
+   (#:compat #:coalton-compatibility))
   (:export
    #:gc
    #:sleep)
@@ -111,10 +112,10 @@ This function is not exported as its output is too implementation specific."
     "Returns the number of bytes consed since some unspecified point in time.
 
 The difference between two successive calls to this function represents the number of bytes consed in that period of time."
-    #+sbcl
+    #+|COALTON:HAS-GET-BYTES-CONSED|
     (Some (lisp (-> Integer) ()
-            (sb-ext:get-bytes-consed)))
-    #-sbcl
+            (compat:get-bytes-consed)))
+    #-|COALTON:HAS-GET-BYTES-CONSED|
     None)
 
   ;;;
@@ -278,5 +279,7 @@ Garbage collection will be performed before profiling is performed."
                (Some (uiop:argv0))
                None)))))
 
+;; cannot lock just this package in clasp/ecl, since I also need to change the
+;; respective unlock!
 #+sb-package-locks
-(sb-ext:lock-package "COALTON/SYSTEM")
+(compat:try-lock-package "COALTON/SYSTEM")
