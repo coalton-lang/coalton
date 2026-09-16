@@ -126,6 +126,7 @@ For abcl, the issue is one for which a solution is already in abcl's
 repository but has not yet been included in the latest official
 release (1.9.2 as of this writing), so [a patch for it has been
 provided](https://github.com/coalton-lang/coalton/commit/d683d8037588d3fffb46e1bc1cb9c3fec7f6bb19).
+Indeed, when building abcl from its repository sources (version 1.9.3-dev), then FSet passes all its tests.
 
 For clasp, [the issue seems to be a clasp
 bug](https://github.com/clasp-developers/clasp/issues/1731).
@@ -133,3 +134,33 @@ bug](https://github.com/clasp-developers/clasp/issues/1731).
 Whether any of these is important for Coalton to work correctly on
 abcl/clasp has not been researched further - should be kept in mind
 though if trying to complete the porting to one of these environments.
+
+## Incompatible QuickLisp packages
+
+There are a number of packages used in Coalton (either directly
+through a depends-on ASDF directive in one of the systems it defines,
+or indirectly through the transitive closure of depends-on directives
+of these packages), which either cannot load in one of the other Lisp
+environments at all or fail their self-tests on them.
+
+Through a (rather quick) exploration of the packages that Coalton
+depends directly upon (*not* the transitive closure of depends-on), we
+have discovered the following cases:
+
+- Cannot load at all:
+  - *SBCL*: (none)
+  - *CCL*: (none)
+  - ABCL: (none)
+  - CLASP: `:spinneret` ([most probably due to a bug in `:serapeum`](https://github.com/ruricolist/serapeum/issues/181))
+  - ECL: `:spinneret`
+
+- Testing fails:
+  - *SBCL*: `:concrete-syntax-tree` (testing it causes sbcl to *crash* but
+    passes when using --dynamic-space-size 2048)
+  - *CCL*: (none)
+  - ABCL: `:eclector :yason` (`:eclector` fails its tests but `asdf:test-system` returns `t`)
+  - CLASP: `:trivial-garbage :float-features :fset`
+  - ECL: `:mgl-pax` (causes a segmentation fault)
+
+File `docs/internals/porting-to-other-lisp-environments-test-packages.lisp` contains some preliminary code for testing
+QuickLisp packages used by this project.
