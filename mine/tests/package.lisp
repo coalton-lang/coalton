@@ -24,29 +24,14 @@
 
 (defun run-mine-tests-in-subprocess ()
   (let* ((mine-dir (asdf:system-source-directory "mine-tests"))
-         (repo-root (truename (merge-pathnames "../" mine-dir)))
-         (config-path (merge-pathnames "coalton-config.lisp" mine-dir))
-         (quicklisp-setup (merge-pathnames "quicklisp/setup.lisp" (user-homedir-pathname)))
-         (cache-dir (merge-pathnames "mine-tests-cache/" (uiop:temporary-directory)))
-         (init-registry
-           (format nil
-                   "(asdf:initialize-source-registry '(:source-registry (:tree #P~S) :ignore-inherited-configuration))"
-                   (namestring repo-root)))
          (command
-           (list "env"
-                 (format nil "XDG_CACHE_HOME=~A" (namestring cache-dir))
-                 "sbcl"
+           (list (or (uiop:getenv "SBCL_BIN") "sbcl")
+                 "--dynamic-space-size" "4096"
                  "--noinform"
                  "--no-userinit"
                  "--no-sysinit"
                  "--non-interactive"
-                 "--load" (namestring quicklisp-setup)
-                 "--eval" "(pushnew :coalton-portable-bigfloat *features*)"
-                 "--load" (namestring config-path)
-                 "--eval" init-registry
-                 "--eval" "(asdf:load-system \"mine-tests\")"
-                 "--eval" "(unless (mine-tests:run-mine-tests) (uiop:quit 1))")))
-    (ensure-directories-exist cache-dir)
+                 "--load" (namestring (merge-pathnames "tests/run.lisp" mine-dir)))))
     (multiple-value-bind (_output _error-output exit-code)
         (uiop:run-program command
                           :output *standard-output*
