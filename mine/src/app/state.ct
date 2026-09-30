@@ -32,6 +32,7 @@
    #:.ml-tree
    #:.ml-center
    #:MineState
+   #:mine-state-new
    #:.ms-menu
    #:.ms-status
    #:.ms-pending-error
@@ -208,6 +209,37 @@
     (ms-quick-result-request-id (Cell (Optional msg:RequestId)))
     (ms-bg-proto-thread    NativeBox)
     (ms-update-check-state NativeBox)) ;; CL plist for update-check status
+
+  (declare mine-state-new (cfgt:MineConfig -> MineState))
+  (define (mine-state-new config)
+    "Create application state without opening a terminal or starting the runtime."
+    (let runtime = (lifecycle:runtime-manager-new))
+    (lifecycle:runtime-set-heap-size! runtime (cfgt:.config-repl-heap-size config))
+    (MineState (menubar:menubar-new) (status:statusbar-new)
+               (cell:new None)
+               (editor:editor-pane-new) (mgr:bufmgr-new) (cursor:cursor-new)
+               (repl:repl-pane-new) (tree:tree-pane-new) (focus:focus-new) runtime
+               (cell:new 0) (cell:new (MineLayout TreeHidden CenterEditor))
+               (cell:new (not (cfgt:.config-auto-hide-tree-pane config)))
+               (cell:new 0)
+               (cell:new (cfgt:.config-default-package config)) (cell:new False)
+               (cell:new "")
+               (native-box-new) (native-box-new)
+               (cell:new False) (cell:new "")
+               (native-box-new) (cell:new 0) (native-box-new)
+               (native-box-new)
+               (cell:new None) (cell:new None) (cell:new False)
+               (cell:new 0) (cell:new None)
+               (mini:minibuffer-new)
+               (cell:new (if (== (cfgt:.config-repl-language config) "lisp")
+                             "Lisp" "Coalton"))
+               (cell:new None) (native-box-new)
+               (cell:new (cfgt:.config-structural-editing config)) config
+               (cell:new False) (native-box-new) (complete:completion-new)
+               (cell:new None) (spinner:spinner-new)
+               (cell:new 0) (cell:new 0) (cell:new 0) (cell:new True)
+               (cell:new None) (native-box-new) (cell:new None)
+               (native-box-new) (native-box-new)))
 
 ;;; Named accessors for CL interop
 
