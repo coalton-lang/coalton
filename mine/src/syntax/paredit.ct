@@ -82,25 +82,25 @@
   (define (%ensure-syntax-map! gb)
     "Reuse a source snapshot until its text changes; classify literal spans once."
     (let s = (gap:gap-to-string gb))
-    (when (/= s (source:.source-text (cell:read %source-context)))
+    (when (/= s (.source-text (cell:read %source-context)))
       (let context = (source:scan-source s))
       (let smap = (vec:with-initial-element (+ (str:length s) 1) (the UFix 0)))
-      (rec classify ((tokens (source:.source-tokens context)))
+      (rec classify ((tokens (.source-tokens context)))
         (match tokens
           ((Nil) (values))
           ((Cons token rest)
            (let class =
-             (match (source:.token-kind token)
+             (match (.token-kind token)
                ((source:StringToken) 1)
                ((source:CharacterToken) 4)
                ((source:SymbolToken (True)) 5)
                ((source:CommentToken class) (%class-id class))
                (_ 0)))
            (when (/= class 0)
-             (let start = (+ (source:.token-start token)
+             (let start = (+ (.token-start token)
                             (if (== class 1) 1 0)))
              (rec fill ((pos start))
-               (when (< pos (source:.token-end token))
+               (when (< pos (.token-end token))
                  (vec:set! pos class smap)
                  (fill (+ pos 1)))))
            (classify rest))))
@@ -339,7 +339,7 @@ and character literals."
     (when (> unit-end 0)
       (let unit-start = (gap:gap-editor-unit-prev-pos gb unit-end))
       (record-delete! buffer unit-start unit-end unit-end)
-      (cell:write! (cursor:.pos cs) unit-start)
+      (cell:write! (.pos cs) unit-start)
       (values)))
 
   (declare record-delete-forward-unit! (buf:Buffer * cursor:CursorState * UFix -> Void))
@@ -350,7 +350,7 @@ and character literals."
     (when (< unit-start (gap:gap-length gb))
       (let unit-end = (gap:gap-editor-unit-next-pos gb unit-start))
       (record-delete! buffer unit-start unit-end unit-start)
-      (cell:write! (cursor:.pos cs) unit-start)
+      (cell:write! (.pos cs) unit-start)
       (values)))
 
   ;;; Commands
@@ -367,11 +367,11 @@ Inside strings or line comments, insert a literal open paren."
         (cond
           ((%literal-delimiter-context? gb p)
            (record-insert! buffer p "(" p)
-           (cell:write! (cursor:.pos cs) (+ p 1))
+           (cell:write! (.pos cs) (+ p 1))
            (values))
           (True
            (record-insert! buffer p "()" p)
-           (cell:write! (cursor:.pos cs) (+ p 1))
+           (cell:write! (.pos cs) (+ p 1))
            (values))))))
 
   (declare paredit-close-paren! (buf:Buffer * cursor:CursorState -> Void))
@@ -386,7 +386,7 @@ Inside strings or line comments, insert a literal close paren."
         (cond
           ((%literal-delimiter-context? gb p)
            (record-insert! buffer p ")" p)
-           (cell:write! (cursor:.pos cs) (+ p 1))
+           (cell:write! (.pos cs) (+ p 1))
            (values))
           (True
            (match (find-enclosing-open gb p)
@@ -397,10 +397,10 @@ Inside strings or line comments, insert a literal close paren."
                    ((and (< p close-pos)
                          (%whitespace-only-between? gb p close-pos))
                     (record-delete! buffer p close-pos p)
-                    (cell:write! (cursor:.pos cs) (+ p 1))
+                    (cell:write! (.pos cs) (+ p 1))
                     (values))
                    (True
-                    (cell:write! (cursor:.pos cs) (+ close-pos 1))
+                    (cell:write! (.pos cs) (+ close-pos 1))
                     (values))))
                 ((None) (values))))
              ((None) (values))))))))
@@ -417,11 +417,11 @@ Inside strings or line comments, insert a literal open bracket."
         (cond
           ((%literal-delimiter-context? gb p)
            (record-insert! buffer p "[" p)
-           (cell:write! (cursor:.pos cs) (+ p 1))
+           (cell:write! (.pos cs) (+ p 1))
            (values))
           (True
            (record-insert! buffer p "[]" p)
-           (cell:write! (cursor:.pos cs) (+ p 1))
+           (cell:write! (.pos cs) (+ p 1))
            (values))))))
 
   (declare paredit-close-bracket! (buf:Buffer * cursor:CursorState -> Void))
@@ -433,7 +433,7 @@ Inside strings or line comments, insert a literal close bracket."
     (cond
       ((%literal-delimiter-context? gb p)
        (record-insert! buffer p "]" p)
-       (cell:write! (cursor:.pos cs) (+ p 1))
+       (cell:write! (.pos cs) (+ p 1))
        (values))
       (True
        (%ensure-syntax-map! gb)
@@ -442,7 +442,7 @@ Inside strings or line comments, insert a literal close bracket."
          ((Some open-pos)
           (match (scan-matching-bracket gb open-pos)
             ((Some close-pos)
-             (cell:write! (cursor:.pos cs) (+ close-pos 1))
+             (cell:write! (.pos cs) (+ close-pos 1))
              (values))
             ((None) (values))))
          ((None) (values))))))
@@ -483,23 +483,23 @@ or move past a closing string quote."
         (cond
           ((%unstructured-context? gb p)
            (record-insert! buffer p "\"" p)
-           (cell:write! (cursor:.pos cs) (+ p 1))
+           (cell:write! (.pos cs) (+ p 1))
            (values))
           ((%closing-string-quote-at? gb p)
-           (cell:write! (cursor:.pos cs) (+ p 1))
+           (cell:write! (.pos cs) (+ p 1))
            (values))
           ((%in-string? gb p)
            (record-insert! buffer p "\\\"" p)
-           (cell:write! (cursor:.pos cs) (+ p 2))
+           (cell:write! (.pos cs) (+ p 2))
            (values))
           (True
            (match (gap:gap-char-at gb p)
              ((Some #\")
-              (cell:write! (cursor:.pos cs) (+ p 1))
+              (cell:write! (.pos cs) (+ p 1))
               (values))
              (_
               (record-insert! buffer p "\"\"" p)
-              (cell:write! (cursor:.pos cs) (+ p 1))
+              (cell:write! (.pos cs) (+ p 1))
               (values))))))))
 
   (declare paredit-backspace! (buf:Buffer * cursor:CursorState -> Void))
@@ -513,7 +513,7 @@ Inside strings, parens are treated as normal characters."
         (let raw-p = (cursor:cursor-position cs))
         (let p = (gap:gap-editor-unit-end-pos gb (clamp-position gb raw-p)))
         (unless (== raw-p p)
-          (cell:write! (cursor:.pos cs) p))
+          (cell:write! (.pos cs) p))
         (when (> p 0)
           (cond
             ((%unstructured-context? gb (- p 1))
@@ -523,11 +523,11 @@ Inside strings, parens are treated as normal characters."
              (cond
                ((%escaped-quote-before? gb p)
                 (record-delete! buffer (- p 2) p p)
-                (cell:write! (cursor:.pos cs) (- p 2))
+                (cell:write! (.pos cs) (- p 2))
                 (values))
                ((%escaped-quote-ending-at? gb p)
                 (record-delete! buffer (- p 1) (+ p 1) p)
-                (cell:write! (cursor:.pos cs) (- p 1))
+                (cell:write! (.pos cs) (- p 1))
                 (values))
                (True
               ;; Inside a string: only protect the opening quote
@@ -537,7 +537,7 @@ Inside strings, parens are treated as normal characters."
                  (match (gap:gap-char-at gb p)
                    ((Some #\")
                     (record-delete! buffer (- p 1) (+ p 1) p)
-                    (cell:write! (cursor:.pos cs) (- p 1))
+                    (cell:write! (.pos cs) (- p 1))
                     (values))
                    ;; Non-empty string opening: refuse
                    (_ (values))))
@@ -552,14 +552,14 @@ Inside strings, parens are treated as normal characters."
                  (match (gap:gap-char-at gb p)
                    ((Some #\))
                     (record-delete! buffer (- p 1) (+ p 1) p)
-                    (cell:write! (cursor:.pos cs) (- p 1))
+                    (cell:write! (.pos cs) (- p 1))
                     (values))
                    (_ (values))))
                 ((Some #\[)
                  (match (gap:gap-char-at gb p)
                    ((Some #\])
                     (record-delete! buffer (- p 1) (+ p 1) p)
-                    (cell:write! (cursor:.pos cs) (- p 1))
+                    (cell:write! (.pos cs) (- p 1))
                     (values))
                    (_ (values))))
                 ((Some #\")
@@ -567,17 +567,17 @@ Inside strings, parens are treated as normal characters."
                    ((Some #\")
                     ;; Empty string "": delete both quotes
                     (record-delete! buffer (- p 1) (+ p 1) p)
-                    (cell:write! (cursor:.pos cs) (- p 1))
+                    (cell:write! (.pos cs) (- p 1))
                     (values))
                    (_
                     ;; Closing quote of non-empty string: move into it
-                    (cell:write! (cursor:.pos cs) (- p 1))
+                    (cell:write! (.pos cs) (- p 1))
                     (values))))
                 ((Some #\))
-                 (cell:write! (cursor:.pos cs) (- p 1))
+                 (cell:write! (.pos cs) (- p 1))
                  (values))
                 ((Some #\])
-                 (cell:write! (cursor:.pos cs) (- p 1))
+                 (cell:write! (.pos cs) (- p 1))
                  (values))
                 (_
                  (record-delete-backward-unit! buffer cs p)
@@ -594,7 +594,7 @@ Inside strings, parens are treated as normal characters."
          (match (gap:gap-char-at gb (- p 1))
            ;; Preserve string delimiters during word delete.
            ((Some #\")
-            (cell:write! (cursor:.pos cs) (- p 1))
+            (cell:write! (.pos cs) (- p 1))
             (%paredit-backspace-word-loop! buffer cs target))
            (_
             (record-delete-backward-unit! buffer cs p)
@@ -603,19 +603,19 @@ Inside strings, parens are treated as normal characters."
          (match (gap:gap-char-at gb (- p 1))
            ;; Step over structural delimiters instead of deleting them.
            ((Some #\()
-            (cell:write! (cursor:.pos cs) (- p 1))
+            (cell:write! (.pos cs) (- p 1))
             (%paredit-backspace-word-loop! buffer cs target))
            ((Some #\[)
-            (cell:write! (cursor:.pos cs) (- p 1))
+            (cell:write! (.pos cs) (- p 1))
             (%paredit-backspace-word-loop! buffer cs target))
            ((Some #\))
-            (cell:write! (cursor:.pos cs) (- p 1))
+            (cell:write! (.pos cs) (- p 1))
             (%paredit-backspace-word-loop! buffer cs target))
            ((Some #\])
-            (cell:write! (cursor:.pos cs) (- p 1))
+            (cell:write! (.pos cs) (- p 1))
             (%paredit-backspace-word-loop! buffer cs target))
            ((Some #\")
-            (cell:write! (cursor:.pos cs) (- p 1))
+            (cell:write! (.pos cs) (- p 1))
             (%paredit-backspace-word-loop! buffer cs target))
            (_
             (record-delete-backward-unit! buffer cs p)
@@ -629,7 +629,7 @@ Inside strings, parens are treated as normal characters."
       (fn ()
         (let gb = (buf:buffer-gap buffer))
         (let probe = (cursor:cursor-new))
-        (cell:write! (cursor:.pos probe) (cursor:cursor-position cs))
+        (cell:write! (.pos probe) (cursor:cursor-position cs))
         (cursor:cursor-move-word-left! gb probe)
         (%paredit-backspace-word-loop! buffer cs (cursor:cursor-position probe)))))
 
@@ -644,7 +644,7 @@ Inside strings, parens are treated as normal characters."
         (let raw-p = (cursor:cursor-position cs))
         (let p = (gap:gap-editor-unit-start-pos gb (clamp-position gb raw-p)))
         (unless (== raw-p p)
-          (cell:write! (cursor:.pos cs) p))
+          (cell:write! (.pos cs) p))
         (when (< p (gap:gap-length gb))
           (cond
             ((%unstructured-context? gb p)
@@ -657,7 +657,7 @@ Inside strings, parens are treated as normal characters."
                 (values))
                ((%escaped-quote-ending-at? gb p)
                 (record-delete! buffer (- p 1) (+ p 1) p)
-                (cell:write! (cursor:.pos cs) (- p 1))
+                (cell:write! (.pos cs) (- p 1))
                 (values))
                (True
               ;; Inside a string: only protect the closing quote
@@ -875,7 +875,7 @@ instead of collapsing it to a space."
                  (record-delete! buffer tail-start after-next p)
                  (record-insert! buffer tail-start replacement p)
                  (when (> p tail-start)
-                   (cell:write! (cursor:.pos cs) (+ tail-start (str:length separator))))
+                   (cell:write! (.pos cs) (+ tail-start (str:length separator))))
                  (values))))))))))
 
   (declare paredit-forward-leave! (buf:Buffer * cursor:CursorState -> Void))
@@ -907,7 +907,7 @@ instead of collapsing it to a space."
                     (record-insert! buffer eject-start (<> close-str (<> " " last-text)) p)
                     ;; If cursor was past new close, move it back.
                     (when (> (cursor:cursor-position cs) eject-start)
-                      (cell:write! (cursor:.pos cs) eject-start))
+                      (cell:write! (.pos cs) eject-start))
                     (values))))))))))))
 
   (declare paredit-backward-join! (buf:Buffer * cursor:CursorState -> Void))
@@ -943,7 +943,7 @@ instead of collapsing it to a space."
                  ;; Shift cursor by net length change (cursor is always inside the form).
                  (let old-span = (- (+ open-pos 1) prev-start))
                  (let new-span = (str:length replacement))
-                 (cell:write! (cursor:.pos cs) (+ (- p old-span) new-span))
+                 (cell:write! (.pos cs) (+ (- p old-span) new-span))
                  (values))))))))))
 
   (declare paredit-backward-leave! (buf:Buffer * cursor:CursorState -> Void))
@@ -981,9 +981,9 @@ instead of collapsing it to a space."
                    (let new-span = (str:length replacement))
                    (cond
                      ((< p eject-end)
-                      (cell:write! (cursor:.pos cs) (+ open-pos new-span)))
+                      (cell:write! (.pos cs) (+ open-pos new-span)))
                      (True
-                      (cell:write! (cursor:.pos cs) (+ (- p old-span) new-span)))))
+                      (cell:write! (.pos cs) (+ (- p old-span) new-span)))))
                  (values))))))))))
 
   (declare paredit-shed! (buf:Buffer * cursor:CursorState -> Void))
@@ -1015,7 +1015,7 @@ instead of collapsing it to a space."
                  (let replacement = (if (%needs-space-between? left-outer right-outer) " " ""))
                  (record-delete! buffer open-pos (+ close-pos 1) p)
                  (record-insert! buffer open-pos replacement p)
-                 (cell:write! (cursor:.pos cs) (+ open-pos (str:length replacement)))
+                 (cell:write! (.pos cs) (+ open-pos (str:length replacement)))
                  (values))
                 (True
                  (let left-inner = (gap:gap-char-at gb inner-start))
@@ -1025,7 +1025,7 @@ instead of collapsing it to a space."
                  (let replacement = (<> left-pad (<> inner-text right-pad)))
                  (record-delete! buffer open-pos (+ close-pos 1) p)
                  (record-insert! buffer open-pos replacement p)
-                 (cell:write! (cursor:.pos cs) (+ (- p 1) (str:length left-pad)))
+                 (cell:write! (.pos cs) (+ (- p 1) (str:length left-pad)))
                  (values)))
               (values))))))))
 
@@ -1051,7 +1051,7 @@ instead of collapsing it to a space."
                   ((== open-ch #\")
                    (record-insert! buffer p close-str p)
                    (record-insert! buffer (+ p 1) open-str p)
-                   (cell:write! (cursor:.pos cs) (+ p 1))
+                   (cell:write! (.pos cs) (+ p 1))
                    (values))
                   (True
                    (let split-start = (%skip-ws-back gb p))
@@ -1059,7 +1059,7 @@ instead of collapsing it to a space."
                    (when (and (> split-start open-pos) (<= split-end close-pos))
                      (record-delete! buffer split-start split-end p)
                      (record-insert! buffer split-start (<> close-str (<> " " open-str)) p)
-                     (cell:write! (cursor:.pos cs) (+ split-start 1)))
+                     (cell:write! (.pos cs) (+ split-start 1)))
                    (values))))
               (values))))))))
 
@@ -1088,7 +1088,7 @@ instead of collapsing it to a space."
               (record-delete! buffer open-pos (+ close-pos 1) p)
               (when (> (str:length replacement) 0)
                 (record-insert! buffer open-pos replacement p))
-              (cell:write! (cursor:.pos cs) open-pos)
+              (cell:write! (.pos cs) open-pos)
               (values))))))))
 
   (declare paredit-forward-sexp! (gap:GapBuffer * cursor:CursorState -> Void))
@@ -1098,7 +1098,7 @@ instead of collapsing it to a space."
     (match (scan-forward-sexp gb p)
       ((None) (values))
       ((Some new-pos)
-       (cell:write! (cursor:.pos cs) new-pos)
+       (cell:write! (.pos cs) new-pos)
        (values)
        (values))))
 
@@ -1109,6 +1109,6 @@ instead of collapsing it to a space."
     (match (scan-backward-sexp gb p)
       ((None) (values))
       ((Some new-pos)
-       (cell:write! (cursor:.pos cs) new-pos)
+       (cell:write! (.pos cs) new-pos)
        (values)
        (values)))))

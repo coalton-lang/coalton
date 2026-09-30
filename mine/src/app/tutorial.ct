@@ -570,7 +570,7 @@ Returns the next row after all drawn lines."
      * UFix * UFix * UFix * (Optional Boolean) -> Boolean))
   (define (%tutorial-loop term buffer cs mod-idx ch-idx focus status)
     "Main tutorial event loop. Returns True if user pressed Ctrl+q."
-    (let scr = (term:.terminal-screen term))
+    (let scr = (.terminal-screen term))
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
     (let n-ch = (challenge-count mod-idx))

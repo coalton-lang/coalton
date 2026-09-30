@@ -3,10 +3,7 @@
   (:export
    #:ComponentType #:CTFile #:CTModule #:CTCtFile
    #:Component #:Component
-   #:.component-name #:.component-type #:.component-children
    #:SystemDef #:SystemDef
-   #:.system-name #:.system-depends-on #:.system-components
-   #:.system-description #:.system-pathname
    #:system-has-coalton?))
 
 (in-package #:mine/project/asdf-model)

@@ -32,7 +32,7 @@
   (define (handle-dialog-resize! term)
     "Update terminal and screen size after a resize event."
     (term:terminal-update-size! term)
-    (screen:screen-resize (term:.terminal-screen term)
+    (screen:screen-resize (.terminal-screen term)
                           (term:terminal-cols term)
                           (term:terminal-rows term))
     (values))
@@ -59,7 +59,7 @@ Handles terminal resize by calling REDRAW-FN."
   (declare %draw-about (term:Terminal -> Void))
   (define (%draw-about term)
     "Draw the About dialog content."
-    (let scr = (term:.terminal-screen term))
+    (let scr = (.terminal-screen term))
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
     (let bg = (color:Style color:text-fg
@@ -164,7 +164,7 @@ Handles terminal resize by calling REDRAW-FN."
   (declare %draw-credits (term:Terminal * UFix -> Void))
   (define (%draw-credits term scroll)
     "Draw the Credits dialog with the given scroll offset."
-    (let scr = (term:.terminal-screen term))
+    (let scr = (.terminal-screen term))
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
     (let bg = (color:Style color:text-fg
@@ -315,7 +315,7 @@ scroll; any other key closes."
   (declare alert-dialog (term:Terminal * String * String * (List String) * (term:Terminal -> Void) -> Void))
   (define (alert-dialog term title message help-lines bg-fn)
     "Show a modal alert dialog with a single OK button."
-    (let scr = (term:.terminal-screen term))
+    (let scr = (.terminal-screen term))
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
     (let bg = (color:Style color:text-fg
@@ -379,7 +379,7 @@ scroll; any other key closes."
   (declare confirm-dialog (term:Terminal * String * String * String * (List String) * (term:Terminal -> Void) -> Boolean))
   (define (confirm-dialog term message btn-yes btn-no help-lines bg-fn)
     "Show a modal confirm dialog. Returns True if the user chose yes."
-    (let scr = (term:.terminal-screen term))
+    (let scr = (.terminal-screen term))
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
     (let bg = (color:Style color:text-fg
@@ -509,7 +509,7 @@ scroll; any other key closes."
   (declare new-project-default-location (cfgt:MineConfig -> String))
   (define (new-project-default-location config)
     "Return the first project root from config, or cwd."
-    (let roots = (cfgt:.config-project-roots config))
+    (let roots = (.config-project-roots config))
     (match roots
       ((Cons first _)
        ;; Expand ~/ and ensure trailing /
@@ -532,7 +532,7 @@ scroll; any other key closes."
            (term:Terminal * cfgt:MineConfig -> Optional (Tuple String (Tuple String Boolean))))
   (define (new-project-dialog term config)
     "Show a 3-field form for New Project. Returns (name, (location, is-coalton?)) or None."
-    (let scr = (term:.terminal-screen term))
+    (let scr = (.terminal-screen term))
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
     (let bg = (color:Style color:text-fg
@@ -559,7 +559,7 @@ scroll; any other key closes."
     ;; Pre-fill location from config
     (widget-input:input-widget-set-text! iw-loc (new-project-default-location config))
     ;; Language toggle: True = Coalton, False = Common Lisp
-    (let is-coalton = (cell:new (not (== (cfgt:.config-repl-language config) "lisp"))))
+    (let is-coalton = (cell:new (not (== (.config-repl-language config) "lisp"))))
     ;; field-idx: 0 = name, 1 = location, 2 = language toggle,
     ;;            3 = Create button, 4 = Cancel button
     (%new-project-loop term scr bx by box-w box-h
@@ -724,8 +724,8 @@ scroll; any other key closes."
        (let new-box-h = 9)
        (let new-bx = (lisp (-> UFix) (nc new-box-w) (cl:max 0 (cl:floor (cl:- nc new-box-w) 2))))
        (let new-by = (lisp (-> UFix) (nr new-box-h) (cl:max 0 (cl:floor (cl:- nr new-box-h) 2))))
-       (screen:screen-clear (term:.terminal-screen term))
-       (%new-project-loop term (term:.terminal-screen term) new-bx new-by new-box-w new-box-h
+       (screen:screen-clear (.terminal-screen term))
+       (%new-project-loop term (.terminal-screen term) new-bx new-by new-box-w new-box-h
                           iw-name iw-loc is-coalton
                           bg border-s label-s field-s active-s btn-s btn-sel
                           field-idx))
@@ -739,7 +739,7 @@ scroll; any other key closes."
                           -> Optional (Tuple (Tuple String String) (Tuple String (Tuple String String)))))
   (define (build-form-dialog term init-asd init-output init-log init-entry init-heap)
     "Show a 5-field form for Build Executable. Returns field values or None on cancel."
-    (let scr = (term:.terminal-screen term))
+    (let scr = (.terminal-screen term))
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
     (let bg = (color:Style color:text-fg
@@ -964,8 +964,8 @@ scroll; any other key closes."
        (let new-box-h = 12)
        (let new-bx = (lisp (-> UFix) (nc new-box-w) (cl:max 0 (cl:floor (cl:- nc new-box-w) 2))))
        (let new-by = (lisp (-> UFix) (nr new-box-h) (cl:max 0 (cl:floor (cl:- nr new-box-h) 2))))
-       (screen:screen-clear (term:.terminal-screen term))
-       (%build-form-loop term (term:.terminal-screen term) new-bx new-by new-box-w new-box-h
+       (screen:screen-clear (.terminal-screen term))
+       (%build-form-loop term (.terminal-screen term) new-bx new-by new-box-w new-box-h
                          iw0 iw1 iw2 iw3 iw4
                          bg border-s label-s field-s active-s btn-s btn-sel
                          field-idx))

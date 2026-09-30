@@ -33,63 +33,10 @@
    #:CenterEditorReplSplit
    #:CenterReplFull
    #:MineLayout
-   #:.ml-tree
-   #:.ml-center
    #:MineState
    #:mine-state-new
    #:activate-buffer! #:forget-buffer-view!
-   #:.ms-menu
-   #:.ms-status
-   #:.ms-pending-error
-   #:.ms-editor
-   #:.ms-bufmgr
-   #:.ms-cursor
-   #:.ms-repl
-   #:.ms-tree
-   #:.ms-focus
-   #:.ms-runtime
-   #:.ms-next-req-id
-   #:.ms-layout
-   #:.ms-tree-frozen
-   #:.ms-content-x
-   #:.ms-repl-package
-   #:.ms-repl-busy
-   #:.ms-repl-timing
-   #:.ms-proto-mailbox
-   #:.ms-proto-thread
-   #:.ms-debugger-active
-   #:.ms-debugger-condition
-   #:.ms-debugger-snapshot
-   #:.ms-debugger-selected
-   #:.ms-debugger-request-id
-   #:.ms-jump-stack
-   #:.ms-project-system
-   #:.ms-project-asd-path
-   #:.ms-quit
-   #:.ms-eval-start-time
-   #:.ms-active-request
-   #:.ms-minibuffer
-   #:.ms-repl-lang
-   #:.ms-preview-path
-   #:.ms-diagnostics
-   #:.ms-structural-editing
-   #:.ms-config
-   #:.ms-io-request-active
-   #:.ms-io-request-data
-   #:.ms-completion
-   #:.ms-busy-activity
-   #:.ms-spinner
-   #:.ms-debugger-scroll
-   #:.ms-debugger-body-h
-   #:.ms-debugger-total
-   #:.ms-debugger-follow
-   #:.ms-beam-request-id
-   #:.ms-quick-result-state
-   #:.ms-quick-result-request-id
-   #:.ms-bg-proto-thread
-   #:.ms-update-check-state
-   #:.ms-requests #:get-requests
-   #:.ms-initialization-request #:.ms-after-initialization
+   #:get-requests
    #:get-active-request-cell #:get-debugger-active-cell #:get-io-request-active-cell #:get-tree-pane
    #:get-status-bar
    #:get-pending-error-cell
@@ -228,15 +175,15 @@
   (define (mine-state-new config)
     "Create application state without opening a terminal or starting the runtime."
     (let runtime = (lifecycle:runtime-manager-new))
-    (lifecycle:runtime-set-heap-size! runtime (cfgt:.config-repl-heap-size config))
+    (lifecycle:runtime-set-heap-size! runtime (.config-repl-heap-size config))
     (MineState (menubar:menubar-new) (status:statusbar-new)
                (cell:new None)
                (editor:editor-pane-new) (mgr:bufmgr-new) (cursor:cursor-new)
                (repl:repl-pane-new) (tree:tree-pane-new) (focus:focus-new) runtime
                (cell:new 0) (cell:new (MineLayout TreeHidden CenterEditor))
-               (cell:new (not (cfgt:.config-auto-hide-tree-pane config)))
+               (cell:new (not (.config-auto-hide-tree-pane config)))
                (cell:new 0)
-               (cell:new (cfgt:.config-default-package config)) (cell:new False)
+               (cell:new (.config-default-package config)) (cell:new False)
                (cell:new "")
                (native-box-new) (native-box-new)
                (cell:new False) (cell:new "")
@@ -245,10 +192,10 @@
                (cell:new None) (cell:new None) (cell:new False)
                (cell:new 0) (cell:new None)
                (mini:minibuffer-new)
-               (cell:new (if (== (cfgt:.config-repl-language config) "lisp")
+               (cell:new (if (== (.config-repl-language config) "lisp")
                              "Lisp" "Coalton"))
                (cell:new None) (native-box-new)
-               (cell:new (cfgt:.config-structural-editing config)) config
+               (cell:new (.config-structural-editing config)) config
                (cell:new False) (cell:new None) (complete:completion-new)
                (cell:new None) (spinner:spinner-new)
                (cell:new 0) (cell:new 0) (cell:new 0) (cell:new True)

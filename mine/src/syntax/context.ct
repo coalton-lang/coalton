@@ -11,10 +11,10 @@
    #:Completeness #:SourceComplete #:SourceIncomplete #:SourceMalformed
    #:TokenKind #:SymbolToken #:StringToken #:CharacterToken
    #:OpenToken #:CloseToken #:PrefixToken #:CommentToken #:MalformedToken
-   #:SourceToken #:.token-kind #:.token-start #:.token-end #:.token-complete
+   #:SourceToken
    #:FormKind #:SymbolForm #:StringForm #:CharacterForm #:DelimitedForm #:PrefixedForm
-   #:SourceForm #:.form-kind #:.form-start #:.form-end #:.form-children #:.form-complete
-   #:SourceContext #:.source-text #:.source-tokens #:.source-forms #:.source-completeness
+   #:SourceForm
+   #:SourceContext
    #:source-text #:source-tokens #:source-forms #:source-completeness
    #:token-kind #:token-start #:token-end #:token-complete? #:form-kind
    #:scan-source #:source-class-at #:source-input-ready? #:token-text #:form-text

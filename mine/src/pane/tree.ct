@@ -503,11 +503,11 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
                ((Cons row rest)
                 (cond
                   ((.fr-separator row)
-                   (let sep-y = (+ (wt:.rect-y rect) row-idx))
+                   (let sep-y = (+ (.rect-y rect) row-idx))
                    (let sep-style = (color:Style color:border-fg
                                                   color:black
                                                   color:AttrNone))
-                   (%draw-hsep scr (wt:.rect-x rect) sep-y (wt:.rect-width rect) sep-style)
+                   (%draw-hsep scr (.rect-x rect) sep-y (.rect-width rect) sep-style)
                    (%draw-tree-rows rest scr rect height scr-off2 sel
                                     (+ row-idx 1) (+ flat-idx 1) dirty-fn diag-fn preview-p))
                   (True
@@ -516,8 +516,8 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
                    (let is-dir = (.fr-is-dir row))
                    (let expanded = (.fr-expanded row))
                    (let fpath = (.fr-path row))
-                   (let y = (+ (wt:.rect-y rect) row-idx))
-                   (let x = (+ (wt:.rect-x rect) (* depth 2)))
+                   (let y = (+ (.rect-y rect) row-idx))
+                   (let x = (+ (.rect-x rect) (* depth 2)))
                    ;; Dirty indicator for files
                    (let dirty = (if is-dir False (dirty-fn fpath)))
                    (let diag-rank = (if is-dir 0 (diag-fn fpath)))
@@ -548,31 +548,31 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
                        (True color:default-style)))
                    (let dirty-style =
                      (color:Style color:error-fg
-                                  (color:.style-bg row-style)
-                                  (color:.style-attr row-style)))
+                                  (.style-bg row-style)
+                                  (.style-attr row-style)))
                    (let diag-style =
                      (cond
                        ((== diag-rank 4)
                         (color:Style color:error-fg
-                                     (color:.style-bg row-style)
-                                     (color:.style-attr row-style)))
+                                     (.style-bg row-style)
+                                     (.style-attr row-style)))
                        ((== diag-rank 3)
                         (color:Style color:warning-fg
-                                     (color:.style-bg row-style)
-                                     (color:.style-attr row-style)))
+                                     (.style-bg row-style)
+                                     (.style-attr row-style)))
                        ((== diag-rank 2)
                         (color:Style color:gold
-                                     (color:.style-bg row-style)
-                                     (color:.style-attr row-style)))
+                                     (.style-bg row-style)
+                                     (.style-attr row-style)))
                        ((== diag-rank 1)
                         (color:Style color:accent-fg
-                                     (color:.style-bg row-style)
-                                     (color:.style-attr row-style)))
+                                     (.style-bg row-style)
+                                     (.style-attr row-style)))
                        (True row-style)))
                    ;; Draw marker + name
                    (let name-x = (+ x 4))
-                   (let name-avail = (if (> (+ (wt:.rect-x rect) (wt:.rect-width rect)) name-x)
-                                         (- (+ (wt:.rect-x rect) (wt:.rect-width rect)) name-x)
+                   (let name-avail = (if (> (+ (.rect-x rect) (.rect-width rect)) name-x)
+                                         (- (+ (.rect-x rect) (.rect-width rect)) name-x)
                                          0))
                    (cond
                      ((not is-dir)
@@ -626,7 +626,7 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
   (declare tree-pane-render (TreePane * screen:Screen * wt:Rect * Boolean * (String -> Boolean) * (String -> UFix) -> Void))
   (define (tree-pane-render tp scr rect focused dirty-fn diag-fn)
     "Render the tree pane with titled open-files and project-tree sections."
-    (let height = (wt:.rect-height rect))
+    (let height = (.rect-height rect))
     (let has-tree = (%has-tree? tp))
     (let tree-title-h = (if has-tree 1 0))
     (let chrome = (+ 1 tree-title-h))
@@ -641,9 +641,9 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
     (let sep-style = (color:Style color:border-fg
                                    color:black
                                    color:AttrNone))
-    (let rx = (wt:.rect-x rect))
-    (let ry = (wt:.rect-y rect))
-    (let w = (wt:.rect-width rect))
+    (let rx = (.rect-x rect))
+    (let ry = (.rect-y rect))
+    (let w = (.rect-width rect))
 
     ;; Open Files title
     (%draw-titled-sep scr rx ry w "Open Files" sep-style)
@@ -684,7 +684,7 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
       (let thumb-s = (color:Style color:scrollbar-thumb-fg
                                    color:scrollbar-track-bg
                                    color:AttrNone))
-      (render:draw-scrollbar scr sb-col (wt:.rect-y tree-rect) tree-h total tree-scr
+      (render:draw-scrollbar scr sb-col (.rect-y tree-rect) tree-h total tree-scr
                               track-s thumb-s)))
 
   (declare tree-pane-scrollbar-drag-at! (TreePane * UFix * UFix -> Void))
@@ -750,16 +750,16 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
     (let show-count = (min 9 file-count))
     (let current-idx = (%find-current-file-index files current-path 0))
     ;; Draw numbers
-    (%draw-strip-numbers scr (wt:.rect-x rect) (wt:.rect-y rect)
+    (%draw-strip-numbers scr (.rect-x rect) (.rect-y rect)
                          show-count current-idx 0)
     ;; Draw T indicator below numbers
-    (when (< show-count (wt:.rect-height rect))
-      (let t-y = (+ (wt:.rect-y rect) show-count))
+    (when (< show-count (.rect-height rect))
+      (let t-y = (+ (.rect-y rect) show-count))
       (let t-highlighted = (match current-idx
                              ((Some idx) (>= idx 9))
                              ((None) (> file-count 0))))
       (let t-style = (if t-highlighted
                          (color:with-bg color:default-style color:panel-bg)
                          (color:with-attr color:default-style color:AttrDim)))
-      (screen:screen-set-cell scr t-y (wt:.rect-x rect) #\T t-style))
+      (screen:screen-set-cell scr t-y (.rect-x rect) #\T t-style))
     (values)))

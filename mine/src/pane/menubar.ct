@@ -378,10 +378,10 @@
            None)
           ((Some idx)
            (let dd = (%dropdown-rect mb idx))
-           (let dx = (wt:.rect-x dd))
-           (let dy = (+ (wt:.rect-y dd) 1))
-           (let dw = (wt:.rect-width dd))
-           (let dh = (wt:.rect-height dd))
+           (let dx = (.rect-x dd))
+           (let dy = (+ (.rect-y dd) 1))
+           (let dw = (.rect-width dd))
+           (let dh = (.rect-height dd))
            (cond
              ((and (>= col dx) (and (< col (+ dx dw))
                       (and (>= row dy) (< row (+ dy dh)))))
@@ -435,8 +435,8 @@
   (declare menubar-render (MenuBar * screen:Screen * wt:Rect -> Void))
   (define (menubar-render mb scr rect)
     "Render the menu title bar."
-    (let row = (wt:.rect-y rect))
-    (let max-col = (+ (wt:.rect-x rect) (wt:.rect-width rect)))
+    (let row = (.rect-y rect))
+    (let max-col = (+ (.rect-x rect) (.rect-width rect)))
     ;; Bar style: Aluminium 3 on Aluminium 5
     (let bar-style = (color:Style color:text-dim-fg
                                    color:status-bar-bg
@@ -503,10 +503,10 @@
       ((Some idx)
        (let menu = (%nth-menu mb idx))
        (let content = (%dropdown-rect mb idx))
-          (let cx = (wt:.rect-x content))
-          (let cy = (wt:.rect-y content))
-          (let cw = (wt:.rect-width content))
-          (let ch = (wt:.rect-height content))
+          (let cx = (.rect-x content))
+          (let cy = (.rect-y content))
+          (let cw = (.rect-width content))
+          (let ch = (.rect-height content))
           ;; Border rect (1 char padding around content)
           (let bx = (if (> cx 0) (- cx 1) 0))
           (let by = cy)

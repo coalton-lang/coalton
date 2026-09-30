@@ -12,7 +12,6 @@
    #:screen-new #:screen-resize
    #:screen-set-cell #:screen-set-string
    #:screen-flush #:screen-clear
-   #:.screen-width #:.screen-height
    #:screen-set-cursor
    #:screen-hide-cursor
    #:screen-invalidate-all!))
@@ -180,9 +179,9 @@ Uses a dirty front buffer to force the next flush to re-emit every cell."
   (declare %style-key (color:Style -> UFix))
   (define (%style-key s)
     "Convert a Style to a unique integer for fast equality comparison."
-    (let fg-k = (%color-key (color:.style-fg s)))
-    (let bg-k = (%color-key (color:.style-bg s)))
-    (let attr-k = (match (color:.style-attr s)
+    (let fg-k = (%color-key (.style-fg s)))
+    (let bg-k = (%color-key (.style-bg s)))
+    (let attr-k = (match (.style-attr s)
                     ((color:AttrNone)      0)
                     ((color:AttrBold)      1)
                     ((color:AttrDim)       2)

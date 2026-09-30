@@ -137,7 +137,7 @@
                  (cl:let* ((absolute (cl:merge-pathnames (cl:pathname fpath)))
                            (existing (cl:probe-file absolute)))
                    (cl:if (cl:or (cl:wild-pathname-p absolute)
-                                  (uiop:directory-pathname-p (cl:or existing absolute)))
+                                 (uiop:directory-pathname-p (cl:or existing absolute)))
                           (Err (cl:format cl:nil "Not a file: ~A" fpath))
                           (Ok (cl:namestring (cl:or existing absolute))))))
         (cl:error (condition)

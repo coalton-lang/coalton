@@ -114,7 +114,7 @@
   (define (%handle-resize! terminal)
     "Update terminal size and resize the screen buffer after a resize event."
     (term:terminal-update-size! terminal)
-    (screen:screen-resize (term:.terminal-screen terminal)
+    (screen:screen-resize (.terminal-screen terminal)
                            (term:terminal-cols terminal)
                            (term:terminal-rows terminal))
     (lisp (-> Void) ()
@@ -137,8 +137,8 @@
     (match ev
       ((input:IEvResize _ _)
        (%handle-resize! terminal)
-       (draw-fn (term:.terminal-screen terminal))
-       (screen:screen-hide-cursor (term:.terminal-screen terminal))
+       (draw-fn (.terminal-screen terminal))
+       (screen:screen-hide-cursor (.terminal-screen terminal))
        (term:terminal-flush terminal)
        (%wait-with-redraw terminal draw-fn))
       (_ (values))))
@@ -148,7 +148,7 @@
   (declare draw-centered (screen:Screen * UFix * String * color:Style -> Void))
   (define (draw-centered scr row text style)
     "Draw TEXT horizontally centered on ROW."
-    (let cols = (cell:read (screen:.screen-width scr)))
+    (let cols = (cell:read (.screen-width scr)))
     (let len = (cellw:string-cell-width text))
     (let col = (if (> len cols) 0
                    (lisp (-> UFix) (cols len)
@@ -196,7 +196,7 @@
          ((input:IEvResize _ _)
           (%handle-resize! terminal)
           (let new-row = (draw-question-screen scr title description options selected))
-          (let cols = (cell:read (screen:.screen-width scr)))
+          (let cols = (cell:read (.screen-width scr)))
           (let max-opt-len = (%max-string-length options))
           (let new-col = (if (> (+ max-opt-len 3) cols) 0
                              (lisp (-> UFix) (cols max-opt-len)
@@ -239,8 +239,8 @@
   (define (draw-question-screen scr title description options default)
     "Draw a question screen and return the row where options start."
     (screen:screen-clear scr)
-    (let cols = (cell:read (screen:.screen-width scr)))
-    (let rows = (cell:read (screen:.screen-height scr)))
+    (let cols = (cell:read (.screen-width scr)))
+    (let rows = (cell:read (.screen-height scr)))
 
     ;; Calculate vertical center
     (let desc-lines = (length description))
@@ -374,8 +374,8 @@
   (define (%draw-text-input scr title description text cursor-pos in-buttons button candidates)
     "Draw a text input screen with completions and Accept/Skip buttons."
     (screen:screen-clear scr)
-    (let cols = (cell:read (screen:.screen-width scr)))
-    (let rows = (cell:read (screen:.screen-height scr)))
+    (let cols = (cell:read (.screen-width scr)))
+    (let rows = (cell:read (.screen-height scr)))
     (let desc-lines = (length description))
     (let total-height = (+ desc-lines 9))
     (let start-row = (if (> total-height rows) 1
@@ -431,7 +431,7 @@
     (term:Terminal * String * (List String) * String * UFix * Boolean * UFix * (List String) -> String))
   (define (%text-input-loop terminal title description text cursor-pos in-buttons button cands)
     "Handle text input with tab completion and Accept/Skip buttons."
-    (%draw-text-input (term:.terminal-screen terminal)
+    (%draw-text-input (.terminal-screen terminal)
                        title description text cursor-pos in-buttons button cands)
     (term:terminal-flush terminal)
     (let len = (lisp (-> UFix) (text) (cl:length text)))
@@ -506,10 +506,10 @@
   (declare ask (term:Terminal * String * (List String) * (List String) * UFix -> UFix))
   (define (ask terminal title description options default)
     "Show a full-screen question and return the selected index."
-    (let scr = (term:.terminal-screen terminal))
+    (let scr = (.terminal-screen terminal))
     (let n = (length options))
     (let opt-row = (draw-question-screen scr title description options default))
-    (let cols = (cell:read (screen:.screen-width scr)))
+    (let cols = (cell:read (.screen-width scr)))
     (let max-opt-len = (%max-string-length options))
     (let opt-col = (if (> (+ max-opt-len 3) cols) 0
                        (lisp (-> UFix) (cols max-opt-len)
@@ -533,8 +533,8 @@
   (declare %draw-output (screen:Screen * UFix * UFix * String -> Void))
   (define (%draw-output scr start-row margin text)
     "Render captured output TEXT on the screen buffer starting at START-ROW."
-    (let max-row = (cell:read (screen:.screen-height scr)))
-    (let cols = (cell:read (screen:.screen-width scr)))
+    (let max-row = (cell:read (.screen-height scr)))
+    (let cols = (cell:read (.screen-width scr)))
     (let max-w = (if (> cols (+ margin 2)) (- cols (+ margin 2)) cols))
     (lisp (-> Void) (scr text start-row margin max-row max-w)
       (cl:let ((row start-row))
@@ -556,8 +556,8 @@
   (declare install-quicklisp! (term:Terminal -> Boolean))
   (define (install-quicklisp! terminal)
     "Download and install Quicklisp, showing progress on screen."
-    (let scr = (term:.terminal-screen terminal))
-    (let cols = (cell:read (screen:.screen-width scr)))
+    (let scr = (.terminal-screen terminal))
+    (let cols = (cell:read (.screen-width scr)))
     (let margin = (if (> cols 6) 3 0))
 
     ;; Step 1: Download
@@ -622,22 +622,22 @@
   (declare write-config! (cfg:MineConfig -> Boolean))
   (define (write-config! config)
     "Write CONFIG to ~/.mine. Returns True on success."
-    (let se = (cfg:.config-structural-editing config))
-    (let auto-hide-tree = (cfg:.config-auto-hide-tree-pane config))
-    (let lang = (cfg:.config-repl-language config))
-    (let pkg = (cfg:.config-default-package config))
-    (let check-updates = (cfg:.config-check-for-updates config))
+    (let se = (.config-structural-editing config))
+    (let auto-hide-tree = (.config-auto-hide-tree-pane config))
+    (let lang = (.config-repl-language config))
+    (let pkg = (.config-default-package config))
+    (let check-updates = (.config-check-for-updates config))
     ;; Extract Optional String to a nullable CL string
-    (let init-str = (match (cfg:.config-repl-init config)
+    (let init-str = (match (.config-repl-init config)
                       ((Some s) s)
                       ((None) "")))
-    (let has-init = (match (cfg:.config-repl-init config)
+    (let has-init = (match (.config-repl-init config)
                      ((Some _) True)
                      ((None) False)))
-    (let path-str = (match (cfg:.config-project-roots config)
+    (let path-str = (match (.config-project-roots config)
                       ((Cons p _) p)
                       ((Nil) "")))
-    (let has-paths = (match (cfg:.config-project-roots config)
+    (let has-paths = (match (.config-project-roots config)
                       ((Cons _ _) True)
                       ((Nil) False)))
     (lisp (-> Boolean) (se auto-hide-tree lang pkg check-updates init-str has-init path-str has-paths)
@@ -671,7 +671,7 @@
   (declare %draw-done (screen:Screen -> Void))
   (define (%draw-done scr)
     "Draw the completion screen content."
-    (let rows = (cell:read (screen:.screen-height scr)))
+    (let rows = (cell:read (.screen-height scr)))
     (let mid = (lisp (-> UFix) (rows) (cl:floor rows 2)))
     (screen:screen-clear scr)
     (draw-centered scr (- mid 3) "You're now ready to work in the mines!" style-bold)
@@ -683,7 +683,7 @@
   (declare show-done (term:Terminal -> Void))
   (define (show-done terminal)
     "Show the final completion screen and wait for a key."
-    (let scr = (term:.terminal-screen terminal))
+    (let scr = (.terminal-screen terminal))
     (%draw-done scr)
     (screen:screen-hide-cursor scr)
     (term:terminal-flush terminal)
@@ -694,7 +694,7 @@
   (declare %overlay-bold (screen:Screen * UFix * String * UFix * String -> Void))
   (define (%overlay-bold scr row full-line offset bold-text)
     "Overlay BOLD-TEXT at OFFSET within centered FULL-LINE on ROW."
-    (let cols = (cell:read (screen:.screen-width scr)))
+    (let cols = (cell:read (.screen-width scr)))
     (let len = (lisp (-> UFix) (full-line) (cl:length full-line)))
     (let base-col = (if (> len cols) 0
                         (lisp (-> UFix) (cols len)
@@ -706,7 +706,7 @@
   (declare %draw-tip (screen:Screen -> Void))
   (define (%draw-tip scr)
     "Draw the keyboard/mouse tip screen."
-    (let rows = (cell:read (screen:.screen-height scr)))
+    (let rows = (cell:read (.screen-height scr)))
     (let mid = (lisp (-> UFix) (rows) (cl:floor rows 2)))
     (let start = (if (> rows 16) (- mid 7) 1))
     (screen:screen-clear scr)
@@ -744,7 +744,7 @@
   (declare show-tip (term:Terminal -> Void))
   (define (show-tip terminal)
     "Show the keyboard/mouse tip screen and wait for a key."
-    (let scr = (term:.terminal-screen terminal))
+    (let scr = (.terminal-screen terminal))
     (%draw-tip scr)
     (screen:screen-hide-cursor scr)
     (term:terminal-flush terminal)
@@ -755,8 +755,8 @@
   (declare %draw-welcome (screen:Screen -> Void))
   (define (%draw-welcome scr)
     "Draw the welcome screen content with wizard art."
-    (let rows = (cell:read (screen:.screen-height scr)))
-    (let cols = (cell:read (screen:.screen-width scr)))
+    (let rows = (cell:read (.screen-height scr)))
+    (let cols = (cell:read (.screen-width scr)))
     (let mid = (lisp (-> UFix) (rows) (cl:floor rows 2)))
     (screen:screen-clear scr)
     (draw-centered scr (- mid 1) "mine Setup Wizard" style-bold)
@@ -777,7 +777,7 @@
   (declare show-welcome (term:Terminal -> Void))
   (define (show-welcome terminal)
     "Show the initial welcome screen and wait for a keyboard key."
-    (let scr = (term:.terminal-screen terminal))
+    (let scr = (.terminal-screen terminal))
     (%draw-welcome scr)
     (screen:screen-hide-cursor scr)
     (term:terminal-flush terminal)
@@ -796,8 +796,8 @@
        (match ev
          ((input:IEvResize _ _)
           (%handle-resize! terminal)
-          (draw-fn (term:.terminal-screen terminal))
-          (screen:screen-hide-cursor (term:.terminal-screen terminal))
+          (draw-fn (.terminal-screen terminal))
+          (screen:screen-hide-cursor (.terminal-screen terminal))
           (term:terminal-flush terminal)
           (%wait-key-only terminal draw-fn))
          ((input:IEvMouse _ _ _ _)

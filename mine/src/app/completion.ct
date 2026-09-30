@@ -15,7 +15,7 @@
   (:export
    #:complete-file-path
    #:complete-project-path
-   #:Candidate #:.cand-name #:.cand-kind #:.cand-type-sig
+   #:Candidate
    #:cand-name #:cand-kind #:cand-type-sig
    #:CompletionState
    #:completion-new
@@ -27,8 +27,6 @@
    #:completion-selected-name
    #:completion-filter!
    #:completion-render
-   #:.cs-prefix
-   #:.cs-active
    #:extract-symbol-prefix
    #:extract-symbol-prefix-input
    #:common-prefix))

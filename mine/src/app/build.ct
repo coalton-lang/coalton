@@ -19,7 +19,7 @@
     "If the project defines main in the system's package, return system-name::main. Otherwise \"\"."
     (match (parser:parse-asd-file asd-path)
       ((Some sd)
-       (let src-sub = (model:.system-pathname sd))
+       (let src-sub = (.system-pathname sd))
        (lisp (-> String) (asd-path src-sub system-name)
          (cl:if (cl:eq (mine/app/build::%project-has-main-p asd-path src-sub system-name)
                         coalton:True)

@@ -26,7 +26,7 @@
    #:minibuffer-set-footer-hint!
    #:minibuffer-handle-key!
    #:minibuffer-cancel!
-   #:.input-widget))
+   ))
 
 (in-package #:mine/pane/minibuffer)
 
@@ -85,7 +85,7 @@
   (define (minibuffer-prompt-with-completion! mb prompt-text initial-text cb cfn)
     (widget-input:input-widget-clear! (.input-widget mb))
     (widget-input:input-widget-set-text! (.input-widget mb) initial-text)
-    (cell:write! (widget-input:.iw-prompt (.input-widget mb)) prompt-text)
+    (cell:write! (.iw-prompt (.input-widget mb)) prompt-text)
     (cell:write! (.active mb) True)
     (cell:write! (.callback mb) (Some cb))
     (cell:write! (.completions mb) Nil)
@@ -101,7 +101,7 @@
 completion prompt, but Space also confirms (in addition to Enter), so a user
 who has typed enough of a unique name can press Space to insert."
     (widget-input:input-widget-clear! (.input-widget mb))
-    (cell:write! (widget-input:.iw-prompt (.input-widget mb)) prompt-text)
+    (cell:write! (.iw-prompt (.input-widget mb)) prompt-text)
     (cell:write! (.active mb) True)
     (cell:write! (.callback mb) (Some cb))
     (cell:write! (.completions mb) Nil)
@@ -117,7 +117,7 @@ who has typed enough of a unique name can press Space to insert."
 ON-REPEAT-FN fires when REPEAT-KEY is pressed again.
 ON-NEXT-FN/ON-PREV-FN fire on Down/Up. Enter/Ctrl+g dismiss."
     (widget-input:input-widget-clear! (.input-widget mb))
-    (cell:write! (widget-input:.iw-prompt (.input-widget mb)) prompt-text)
+    (cell:write! (.iw-prompt (.input-widget mb)) prompt-text)
     (cell:write! (.active mb) True)
     (cell:write! (.callback mb) None)
     (cell:write! (.completions mb) Nil)

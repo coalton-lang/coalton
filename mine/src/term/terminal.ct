@@ -12,7 +12,6 @@
    #:best-effort? #:set-best-effort!
    #:probe-kitty-keyboard
    #:terminal-init #:terminal-shutdown
-   #:.terminal-screen
    #:terminal-cols #:terminal-rows #:terminal-update-size!
    #:terminal-flush
    #:terminal-clear-screen

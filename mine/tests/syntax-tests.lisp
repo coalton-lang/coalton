@@ -21,7 +21,7 @@
 (coalton-toplevel
   (declare token-kinds ((coalton:List tok:Token) -> (coalton:List tok:TokenKind)))
   (define (token-kinds toks)
-    (map (fn (t) (tok:.token-kind t)) toks))
+    (map (fn (t) (.token-kind t)) toks))
 
   (declare short-lambda-introducer-highlights-as-fn? (Void -> Boolean))
   (define (short-lambda-introducer-highlights-as-fn?)

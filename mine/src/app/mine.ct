@@ -233,9 +233,9 @@
   (declare render-repl-focus-strip (screen:Screen * wt:Rect -> Void))
   (define (render-repl-focus-strip scr rect)
     "Render the one-line REPL focus strip used by fullscreen editor mode."
-    (when (> (wt:.rect-height rect) 0)
-      (let y = (wt:.rect-y rect))
-      (let x = (wt:.rect-x rect))
+    (when (> (.rect-height rect) 0)
+      (let y = (.rect-y rect))
+      (let x = (.rect-x rect))
       (let bg-style = (color:Style color:text-dimmer-fg
                                    color:repl-bg
                                    color:AttrNone))
@@ -255,16 +255,16 @@
   (declare render-tree-focus-help (screen:Screen * wt:Rect * Boolean -> Void))
   (define (render-tree-focus-help scr rect frozen)
     "Render the focused tree footer hint."
-    (when (> (wt:.rect-height rect) 0)
-      (let y = (wt:.rect-y rect))
-      (let x = (wt:.rect-x rect))
-      (let w = (wt:.rect-width rect))
+    (when (> (.rect-height rect) 0)
+      (let y = (.rect-y rect))
+      (let x = (.rect-x rect))
+      (let w = (.rect-width rect))
       (let text = (if frozen
                       "Ctrl+t to auto-hide"
                       "Ctrl+t to freeze"))
       (let style = (color:Style color:text-dimmer-fg
-                                 color:black
-                                 color:AttrItalic))
+                                color:black
+                                color:AttrItalic))
       (let text-x = (if (> w 2) (+ x 1) x))
       (let text-w = (if (> w 2) (- w 1) w))
       (render:fill-rect scr rect #\Space style)
@@ -281,7 +281,7 @@
   (declare render-app (MineState * term:Terminal -> Void))
   (define (render-app st term)
     "Render the full IDE layout to the terminal screen."
-    (let scr = (term:.terminal-screen term))
+    (let scr = (.terminal-screen term))
     (screen:screen-clear scr)
     (screen:screen-hide-cursor scr)
     (let cols = (term:terminal-cols term))
@@ -331,13 +331,13 @@
       ;; Draw vertical separator
       (render-tree-separator st scr tree-w 1 middle-h))
     ;; Drawing and event handling consume these same pane rectangles.
-    (match (layout:.cg-editor geometry)
+    (match (.cg-editor geometry)
       ((Some rect) (render-editor-pane st scr rect))
       ((None) (values)))
-    (match (layout:.cg-editor-status geometry)
+    (match (.cg-editor-status geometry)
       ((Some rect) (render-editor-status st scr rect))
       ((None) (values)))
-    (match (layout:.cg-repl geometry)
+    (match (.cg-repl geometry)
       ((Some rect)
        (cond
          ((cell:read (.ms-debugger-active st))
@@ -345,10 +345,10 @@
          (True
           (repl:repl-pane-render (.ms-repl st) scr rect))))
       ((None) (values)))
-    (match (layout:.cg-repl-status geometry)
+    (match (.cg-repl-status geometry)
       ((Some rect) (render-repl-status st scr rect))
       ((None) (values)))
-    (match (layout:.cg-repl-strip geometry)
+    (match (.cg-repl-strip geometry)
       ((Some rect) (render-repl-focus-strip scr rect))
       ((None) (values)))
     ;; Update status bar fields
@@ -581,10 +581,10 @@
   (declare render-welcome (MineState * screen:Screen * wt:Rect -> Void))
   (define (render-welcome st scr rect)
     "Render the welcome screen when no file is open."
-    (let rx = (wt:.rect-x rect))
-    (let ry = (wt:.rect-y rect))
-    (let rw = (wt:.rect-width rect))
-    (let rh = (wt:.rect-height rect))
+    (let rx = (.rect-x rect))
+    (let ry = (.rect-y rect))
+    (let rw = (.rect-width rect))
+    (let rh = (.rect-height rect))
     (let bold-blue = (color:Style color:baby-blue color:black color:AttrBold))
     (let bold = (color:Style color:text-fg color:black color:AttrBold))
     (let dim = (color:Style color:text-dim-fg color:black color:AttrNone))
@@ -703,9 +703,9 @@
     "Restore the editor cursor using the exact rectangle used for drawing."
     (let geometry = (layout:center-screen-geometry (.ml-center (cell:read (.ms-layout st)))
                                                   (cell:read (.ms-content-x st))
-                                                  (cell:read (screen:.screen-width scr))
-                                                  (cell:read (screen:.screen-height scr))))
-    (match (Tuple (mgr:bufmgr-current (.ms-bufmgr st)) (layout:.cg-editor geometry))
+                                                  (cell:read (.screen-width scr))
+                                                  (cell:read (.screen-height scr))))
+    (match (Tuple (mgr:bufmgr-current (.ms-bufmgr st)) (.cg-editor geometry))
       ((Tuple (Some buf) (Some rect))
        (match (editor:editor-pane-cursor-position (.ms-editor st) (buf:buffer-gap buf) (.ms-cursor st) rect)
          ((Some (Tuple x y)) (screen:screen-set-cursor scr y x))
@@ -717,8 +717,8 @@
   (declare render-editor-status (MineState * screen:Screen * wt:Rect -> Void))
   (define (render-editor-status st scr rect)
     "Render the editor status line: mode, filename, modified, line:col."
-    (let y = (wt:.rect-y rect))
-    (let x = (wt:.rect-x rect))
+    (let y = (.rect-y rect))
+    (let x = (.rect-x rect))
     (let style = (color:Style color:silver
                               color:onyx
                               color:AttrNone))
@@ -744,7 +744,7 @@
           (let cur-vcol = (gap:visual-col cur-text cur-col tab-w))
           (let pos-str = (<> "Ln " (<> (into (+ cur-line 1)) (<> " Col " (<> (into (+ cur-vcol 1)) " ")))))
           (let pos-len = (cellw:string-cell-width pos-str))
-          (let w = (wt:.rect-width rect))
+          (let w = (.rect-width rect))
           (when (> w pos-len)
             (screen:screen-set-string scr y (+ x (- w pos-len)) pos-str style)))))
       ((None)
@@ -776,8 +776,8 @@
   (declare render-repl-status (MineState * screen:Screen * wt:Rect -> Void))
   (define (render-repl-status st scr rect)
     "Render the REPL status line."
-    (let y = (wt:.rect-y rect))
-    (let x = (wt:.rect-x rect))
+    (let y = (.rect-y rect))
+    (let x = (.rect-x rect))
     (let style = (color:Style color:silver
                               color:onyx
                               color:AttrNone))
@@ -1323,7 +1323,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
 
           (let req = (msg:ReqBeamSystem req-id sys-name asd-path))
           (progn (%send-request! st conn req) (values))
-          (values)))))) 
+          (values))))))
 
 ;;; Debugger helpers (Coalton wrappers around thin CL)
 
@@ -1587,7 +1587,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
   (define (restart-runtime! st)
     "Restart the runtime and replay the configured :repl-init."
     (%clear-runtime-session! st)
-    (cell:write! (.ms-repl-package st) (cfgt:.config-default-package (.ms-config st)))
+    (cell:write! (.ms-repl-package st) (.config-default-package (.ms-config st)))
     (lifecycle:runtime-stop! (.ms-runtime st))
     (lifecycle:runtime-start! (.ms-runtime st))
     (match (lifecycle:runtime-connection (.ms-runtime st))
@@ -1808,7 +1808,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
                                                                (when (and (not (find #\\/ name))
                                                                           (member name loaded :test #'string-equal))
                                                                  (handler-case
-                                                                   (let ((*package* (find-package :asdf-user))
+                                                                   (let ((*package* (find-package ':asdf-user))
                                                                          (*default-pathname-defaults*
                                                                            (uiop:pathname-directory-pathname path)))
                                                                      (load path))
@@ -1841,7 +1841,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
       ((Some conn) (Some conn))
       ((None)
        (repl:repl-pane-append-system! (.ms-repl st) ";; Starting runtime...")
-       (cell:write! (.ms-repl-package st) (cfgt:.config-default-package (.ms-config st)))
+       (cell:write! (.ms-repl-package st) (.config-default-package (.ms-config st)))
        (lifecycle:runtime-start! (.ms-runtime st))
        (match (lifecycle:runtime-connection (.ms-runtime st))
          ((Some conn)
@@ -2146,7 +2146,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
            (MineState * term:Terminal * String * String * String * String -> Void))
   (define (%build-progress-dialog st term script-path log-path output-path heap-size)
     "Spawn a build subprocess and show progress. Blocks until build completes."
-    (let scr = (term:.terminal-screen term))
+    (let scr = (.terminal-screen term))
     (match (%spawn-build-process script-path log-path heap-size)
       ((None)
        (user-error! st "Failed to start build process"))
@@ -2240,7 +2240,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (match ev
          ((input:IEvResize _ _)
           (dialogs:handle-dialog-resize! term)
-          (%build-progress-loop term (term:.terminal-screen term) proc-box all-lines view-scroll))
+          (%build-progress-loop term (.terminal-screen term) proc-box all-lines view-scroll))
          (_ (values))))
       (True
        ;; Short sleep then check for key events (non-blocking)
@@ -2251,10 +2251,10 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (term:terminal-update-size! term)
        (when (or (/= new-cols (term:terminal-cols term))
                  (/= new-rows (term:terminal-rows term)))
-         (screen:screen-resize (term:.terminal-screen term)
+         (screen:screen-resize (.terminal-screen term)
                                (term:terminal-cols term)
                                (term:terminal-rows term)))
-       (%build-progress-loop term (term:.terminal-screen term) proc-box all-lines view-scroll))))
+       (%build-progress-loop term (.terminal-screen term) proc-box all-lines view-scroll))))
 
   (declare %render-build-lines
            (screen:Screen * (List String) * UFix * UFix * UFix * UFix * UFix * color:Style * UFix -> Void))
@@ -2642,7 +2642,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     (let current-layout = (cell:read (.ms-layout st)))
     (let content-x = (if (%layout-tree-visible? current-layout) (+ (%tree-width st (fst size)) 1) 0))
     (let geometry = (layout:center-screen-geometry (.ml-center current-layout) content-x (fst size) (snd size)))
-    (match (Tuple (mgr:bufmgr-current (.ms-bufmgr st)) (layout:.cg-editor geometry))
+    (match (Tuple (mgr:bufmgr-current (.ms-bufmgr st)) (.cg-editor geometry))
       ((Tuple (Some buffer) (Some rect))
        (editor:editor-cursor-page! (.ms-editor st) (buf:buffer-gap buffer) (.ms-cursor st) rect down?))
       (_ (values))))
@@ -3447,11 +3447,11 @@ Uses the preceding (in-package ...) form to determine the compilation package."
   (define (repl-output-rect st geometry)
     (map (fn (rect)
            (if (cell:read (.ms-debugger-active st))
-               (wt:Rect (wt:.rect-x rect) (+ (wt:.rect-y rect) 1)
-                         (wt:.rect-width rect)
-                         (if (> (wt:.rect-height rect) 2) (- (wt:.rect-height rect) 2) 0))
-               (repl:.rg-output (repl:repl-pane-geometry (.ms-repl st) rect))))
-         (layout:.cg-repl geometry)))
+               (wt:Rect (.rect-x rect) (+ (.rect-y rect) 1)
+                        (.rect-width rect)
+                        (if (> (.rect-height rect) 2) (- (.rect-height rect) 2) 0))
+               (.rg-output (repl:repl-pane-geometry (.ms-repl st) rect))))
+         (.cg-repl geometry)))
 
   (declare %scroll-editor-to! (MineState * wt:Rect * UFix -> Void))
   (define (%scroll-editor-to! st rect offset)
@@ -3481,11 +3481,11 @@ Uses the preceding (in-package ...) form to determine the compilation package."
           (repl:repl-pane-scroll-output-up! (.ms-repl st) (lisp (-> UFix) (delta) (cl:- delta))))
          (True
           (repl:repl-pane-scroll-output-down! (.ms-repl st) (lisp (-> UFix) (delta) delta)))))
-      ((layout:optional-rect-contains? (layout:.cg-editor geometry) col row)
-       (match (Tuple (layout:.cg-editor geometry) (mgr:bufmgr-current (.ms-bufmgr st)))
+      ((layout:optional-rect-contains? (.cg-editor geometry) col row)
+       (match (Tuple (.cg-editor geometry) (mgr:bufmgr-current (.ms-bufmgr st)))
          ((Tuple (Some rect) (Some buffer))
           (let total = (editor:editor-pane-total-screen-rows (.ms-editor st) (buf:buffer-gap buffer) rect))
-          (let height = (wt:.rect-height rect))
+          (let height = (.rect-height rect))
           (let current = (editor:editor-pane-scroll-screen-row (.ms-editor st) (buf:buffer-gap buffer) rect))
           (let offset = (lisp (-> UFix) (current delta total height)
                           (cl:max 0 (cl:min (cl:max 0 (cl:- total height)) (cl:+ current delta)))))
@@ -3509,28 +3509,28 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                          (layout:rect-contains? (wt:Rect (- tree-w 1) 1 1 tree-body-h) col row))))
       (tree:tree-pane-scrollbar-drag-at! (.ms-tree st) (- row 1) tree-body-h)
       (return True))
-    (match (layout:.cg-editor geometry)
+    (match (.cg-editor geometry)
       ((Some rect)
        (when (and (layout:rect-contains? rect col row)
-                  (== (+ col 1) (+ (wt:.rect-x rect) (wt:.rect-width rect))))
+                  (== (+ col 1) (+ (.rect-x rect) (.rect-width rect))))
          (match (mgr:bufmgr-current (.ms-bufmgr st))
            ((Some buffer)
             (let total = (editor:editor-pane-total-screen-rows (.ms-editor st) (buf:buffer-gap buffer) rect))
-            (when (and (> total (wt:.rect-height rect))
-                       (> (wt:.rect-width rect) (+ (editor:editor-pane-gutter-width (.ms-editor st) (buf:buffer-gap buffer)) 1)))
-              (%scroll-editor-to! st rect (%scrollbar-compute-offset (- row (wt:.rect-y rect)) total (wt:.rect-height rect)))
+            (when (and (> total (.rect-height rect))
+                       (> (.rect-width rect) (+ (editor:editor-pane-gutter-width (.ms-editor st) (buf:buffer-gap buffer)) 1)))
+              (%scroll-editor-to! st rect (%scrollbar-compute-offset (- row (.rect-y rect)) total (.rect-height rect)))
               (return True)))
            ((None) (values)))))
       ((None) (values)))
     (match (repl-output-rect st geometry)
       ((Some rect)
        (when (and (layout:rect-contains? rect col row)
-                  (== (+ col 1) (+ (wt:.rect-x rect) (wt:.rect-width rect))))
-         (let height = (wt:.rect-height rect))
-         (let rel-y = (- row (wt:.rect-y rect)))
+                  (== (+ col 1) (+ (.rect-x rect) (.rect-width rect))))
+         (let height = (.rect-height rect))
+         (let rel-y = (- row (.rect-y rect)))
          (let total = (if (cell:read (.ms-debugger-active st)) (cell:read (.ms-debugger-total st))
                           (repl:repl-pane-output-line-count (.ms-repl st))))
-         (when (and (> total height) (> (wt:.rect-width rect) 1))
+         (when (and (> total height) (> (.rect-width rect) 1))
            (cond
              ((cell:read (.ms-debugger-active st))
               (dbg-set-scroll! st (%scrollbar-compute-offset rel-y total height)))
@@ -3585,27 +3585,27 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                (True (tree-open-file! st hit-path))))
             ((None) (values))))
          (True (values))))
-      ((layout:optional-rect-contains? (layout:.cg-editor geometry) col row)
+      ((layout:optional-rect-contains? (.cg-editor geometry) col row)
        (%commit-preview! st)
        (%show-editor! st)
-       (match (layout:.cg-editor geometry)
+       (match (.cg-editor geometry)
          ((Some rect) (click-to-cursor! st col row rect))
          ((None) (values))))
-      ((layout:optional-rect-contains? (layout:.cg-editor-status geometry) col row)
+      ((layout:optional-rect-contains? (.cg-editor-status geometry) col row)
        (%show-editor! st))
-      ((or (layout:optional-rect-contains? (layout:.cg-repl-status geometry) col row)
-           (layout:optional-rect-contains? (layout:.cg-repl-strip geometry) col row))
+      ((or (layout:optional-rect-contains? (.cg-repl-status geometry) col row)
+           (layout:optional-rect-contains? (.cg-repl-strip geometry) col row))
        (%focus-repl! st))
-      ((layout:optional-rect-contains? (layout:.cg-repl geometry) col row)
-       (match (layout:.cg-repl geometry)
+      ((layout:optional-rect-contains? (.cg-repl geometry) col row)
+       (match (.cg-repl geometry)
          ((Some rect)
           (%focus-repl! st)
-          (let output-rect = (repl:.rg-output (repl:repl-pane-geometry (.ms-repl st) rect)))
+          (let output-rect = (.rg-output (repl:repl-pane-geometry (.ms-repl st) rect)))
           (cond
             ((and (not (cell:read (.ms-debugger-active st)))
                   (layout:rect-contains? output-rect col row))
-             (let ((line (+ (repl:repl-pane-output-scroll (.ms-repl st)) (- row (wt:.rect-y output-rect)))))
-               (repl:repl-pane-start-selection! (.ms-repl st) line (- col (wt:.rect-x output-rect)))))
+             (let ((line (+ (repl:repl-pane-output-scroll (.ms-repl st)) (- row (.rect-y output-rect)))))
+               (repl:repl-pane-start-selection! (.ms-repl st) line (- col (.rect-x output-rect)))))
             (True
              (repl:repl-pane-clear-selection! (.ms-repl st)))))
          ((None) (values))))
@@ -3719,8 +3719,8 @@ Uses the preceding (in-package ...) form to determine the compilation package."
   (declare %update-find-prompt! (MineState * UFix * UFix -> Void))
   (define (%update-find-prompt! st idx total)
     "Update the minibuffer prompt to show match count."
-    (let iw = (mini:.input-widget (.ms-minibuffer st)))
-    (cell:write! (widget-input:.iw-prompt iw) (find:find-prompt-string idx total))
+    (let iw = (.input-widget (.ms-minibuffer st)))
+    (cell:write! (.iw-prompt iw) (find:find-prompt-string idx total))
     (values))
 
   (declare %find-do-search! (MineState * String * UFix -> Void))
@@ -4342,7 +4342,7 @@ Render-app is NOT called here; the main loop handles rendering."
       (match event
         ((ev:EvResize _cols _rows)
          (term:terminal-update-size! term)
-         (screen:screen-resize (term:.terminal-screen term)
+         (screen:screen-resize (.terminal-screen term)
                                (term:terminal-cols term)
                                (term:terminal-rows term))
          (term:terminal-clear-screen term))
@@ -4435,7 +4435,7 @@ Render-app is NOT called here; the main loop handles rendering."
                  (try-quit! st term)))
               ;; Ctrl+g: refresh terminal (force full redraw)
               ((input:KeyCtrl #\g)
-               (screen:screen-invalidate-all! (term:.terminal-screen term)))
+               (screen:screen-invalidate-all! (.terminal-screen term)))
               ;; Enter in REPL -> eval if complete, else insert newline
               ((input:KeyEnter)
                (match (Tuple (focus:focus-current (.ms-focus st)) mod)
@@ -4485,10 +4485,10 @@ Render-app is NOT called here; the main loop handles rendering."
                        (repl:repl-pane-has-selection? (.ms-repl st)))
                   (match (repl-output-rect st (center-geometry-for-terminal st term))
                     ((Some rect)
-                     (let output-h = (wt:.rect-height rect))
+                     (let output-h = (.rect-height rect))
                      (when (> output-h 0)
-                       (let repl-y = (wt:.rect-y rect))
-                       (let rcol = (if (>= col (wt:.rect-x rect)) (- col (wt:.rect-x rect)) 0))
+                       (let repl-y = (.rect-y rect))
+                       (let rcol = (if (>= col (.rect-x rect)) (- col (.rect-x rect)) 0))
                        (cond
                          ((< row repl-y)
                           (repl:repl-pane-scroll-output-up! (.ms-repl st) 1)
@@ -4504,7 +4504,7 @@ Render-app is NOT called here; the main loop handles rendering."
                     ((None) (values))))
                  (True
                   (when (== (focus:focus-current (.ms-focus st)) focus:FocusEditor)
-                    (match (layout:.cg-editor (center-geometry-for-terminal st term))
+                    (match (.cg-editor (center-geometry-for-terminal st term))
                       ((Some rect) (drag-to-cursor! st col row rect))
                       ((None) (values)))))))
               (_ (values))))
@@ -4609,7 +4609,7 @@ Render-app is NOT called here; the main loop handles rendering."
   (declare start-update-check! (MineState -> Void))
   (define (start-update-check! st)
     "Start the opt-in background update check."
-    (when (cfgt:.config-check-for-updates (.ms-config st))
+    (when (.config-check-for-updates (.ms-config st))
       (lisp (-> Void) (st)
         (start-update-check-thread-cl st)
         (cl:values))))
@@ -4617,7 +4617,7 @@ Render-app is NOT called here; the main loop handles rendering."
   (declare %draw-config-error (term:Terminal * String -> Void))
   (define (%draw-config-error term msg)
     "Draw the config error alert."
-    (let scr = (term:.terminal-screen term))
+    (let scr = (.terminal-screen term))
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
     (let bg = (color:Style color:text-fg
