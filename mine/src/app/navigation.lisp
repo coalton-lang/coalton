@@ -44,7 +44,6 @@
             (user-error st "Jump failed: no file path")
             (return-from jump-to-file nil))
           (let* ((bm (mine/app/state:get-bufmgr st))
-                 (ep (mine/app/state:get-editor-pane st))
                  (cs (mine/app/state:get-cursor-state st))
                  (existing-buf
                    (coalton-optional-value-or-nil
@@ -63,14 +62,13 @@
                       (return-from jump-to-file nil)))))
             (let* ((buf (or existing-buf opened-buf))
                    (gb (mine/buffer/buffer::buffer-gap buf))
-                   (bid (mine/buffer/buffer::buffer-id buf))
                    (safe-offset
                      (max 0
                           (min (or char-offset 0)
                                (mine/buffer/gap::gap-length gb)))))
-              (mine/buffer/manager::bufmgr-switch! bm bid)
-              (mine/pane/editor::editor-pane-set-buffer! ep bid)
-              (mine/edit/cursor::cursor-move-to-position! cs safe-offset)
+              (mine/app/state:activate-buffer! st buf)
+              (mine/edit/cursor:cursor-move-to-buffer-position! gb cs safe-offset)
+              (mine/edit/cursor:cursor-clear-selection! cs)
               (mine/app/layout:show-editor! st)
               (mine/pane/status::statusbar-set-message!
                (mine/app/state:get-status-bar st)
@@ -86,7 +84,6 @@
           (>= (length document-key) 9)
           (string= document-key "buffer://" :end1 9 :end2 9))
      (let* ((bm (mine/app/state:get-bufmgr st))
-            (ep (mine/app/state:get-editor-pane st))
             (cs (mine/app/state:get-cursor-state st))
             (buf (coalton-optional-value-or-nil
                   (mine/buffer/manager::bufmgr-find-by-document-key bm document-key))))
@@ -95,14 +92,13 @@
              (user-error st "Jump skipped: buffer is no longer open")
              nil)
            (let* ((gb (mine/buffer/buffer::buffer-gap buf))
-                  (bid (mine/buffer/buffer::buffer-id buf))
                   (safe-offset
                     (max 0
                          (min (or char-offset 0)
                               (mine/buffer/gap::gap-length gb)))))
-             (mine/buffer/manager::bufmgr-switch! bm bid)
-             (mine/pane/editor::editor-pane-set-buffer! ep bid)
-             (mine/edit/cursor::cursor-move-to-position! cs safe-offset)
+             (mine/app/state:activate-buffer! st buf)
+             (mine/edit/cursor:cursor-move-to-buffer-position! gb cs safe-offset)
+             (mine/edit/cursor:cursor-clear-selection! cs)
              (mine/app/layout:show-editor! st)
              (mine/pane/status::statusbar-set-message!
               (mine/app/state:get-status-bar st)
