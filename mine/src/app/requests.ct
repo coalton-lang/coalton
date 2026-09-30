@@ -1,0 +1,129 @@
+(cl:defpackage #:mine/app/requests
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:cell #:coalton/cell)
+   (#:hm #:coalton/hashmap))
+  (:export
+   #:SourceLocation #:SourceLocation #:location-document #:location-position
+   #:CompletionOrigin #:EditorOrigin #:ReplOrigin
+   #:CompletionSnapshot #:CompletionSnapshot
+   #:snapshot-origin #:snapshot-text #:snapshot-cursor #:snapshot-package #:snapshot-prefix
+   #:snapshot-matches?
+   #:PendingRequest #:PendingHint #:PendingCompletion #:PendingDefinition #:PendingHeap #:PendingDiscard
+   #:RequestState #:request-state-new #:request-state-clear!
+   #:request-register! #:request-take!
+   #:request-hint-text #:request-set-hint-text! #:request-hint-context #:request-set-hint-context!
+   #:request-hint-id #:request-set-hint-id! #:request-heap-text #:request-set-heap-text!
+   #:request-heap-time #:request-set-heap-time!
+   #:request-hint-current? #:request-hint-changed?))
+
+(in-package #:mine/app/requests)
+
+(coalton-toplevel
+  (define-struct SourceLocation
+    (document String)
+    (position UFix))
+
+  (declare location-document (SourceLocation -> String))
+  (define (location-document location) (.document location))
+  (declare location-position (SourceLocation -> UFix))
+  (define (location-position location) (.position location))
+
+  (derive Eq)
+  (define-type CompletionOrigin
+    (EditorOrigin String)
+    ReplOrigin)
+
+  (derive Eq)
+  (define-struct CompletionSnapshot
+    "The editing context that must still match before a completion may insert text."
+    (origin CompletionOrigin)
+    (text String)
+    (cursor UFix)
+    (package String)
+    (prefix String))
+
+  (declare snapshot-origin (CompletionSnapshot -> CompletionOrigin))
+  (define (snapshot-origin snapshot) (.origin snapshot))
+  (declare snapshot-text (CompletionSnapshot -> String))
+  (define (snapshot-text snapshot) (.text snapshot))
+  (declare snapshot-cursor (CompletionSnapshot -> UFix))
+  (define (snapshot-cursor snapshot) (.cursor snapshot))
+  (declare snapshot-package (CompletionSnapshot -> String))
+  (define (snapshot-package snapshot) (.package snapshot))
+  (declare snapshot-prefix (CompletionSnapshot -> String))
+  (define (snapshot-prefix snapshot) (.prefix snapshot))
+
+  (declare snapshot-matches? (CompletionSnapshot * CompletionSnapshot -> Boolean))
+  (define (snapshot-matches? expected current) (== expected current))
+
+  (define-type PendingRequest
+    (PendingHint String String)
+    (PendingCompletion CompletionSnapshot)
+    (PendingDefinition SourceLocation)
+    PendingHeap
+    PendingDiscard)
+
+  (define-struct RequestState
+    "Session-owned request metadata; protocol responses never carry executable callbacks."
+    (pending (Cell (hm:HashMap UFix PendingRequest)))
+    (hint-text (Cell String))
+    (hint-context (Cell (Optional (Tuple String String))))
+    (hint-id (Cell (Optional UFix)))
+    (heap-text (Cell String))
+    (heap-time (Cell UFix)))
+
+  (declare request-state-new (Void -> RequestState))
+  (define (request-state-new)
+    (RequestState (cell:new hm:empty) (cell:new "") (cell:new None)
+                  (cell:new None) (cell:new "") (cell:new 0)))
+
+  (declare request-state-clear! (RequestState -> Void))
+  (define (request-state-clear! state)
+    (cell:write! (.pending state) hm:empty)
+    (cell:write! (.hint-text state) "")
+    (cell:write! (.hint-context state) None)
+    (cell:write! (.hint-id state) None)
+    (cell:write! (.heap-text state) "")
+    (cell:write! (.heap-time state) 0)
+    (values))
+
+  (declare request-register! (RequestState * UFix * PendingRequest -> Void))
+  (define (request-register! state id request)
+    (cell:update! (fn (pending) (hm:insert pending id request)) (.pending state))
+    (values))
+
+  (declare request-take! (RequestState * UFix -> Optional PendingRequest))
+  (define (request-take! state id)
+    (let pending = (cell:read (.pending state)))
+    (let request = (hm:lookup pending id))
+    (cell:write! (.pending state) (hm:remove pending id))
+    request)
+
+  (declare request-hint-text (RequestState -> String))
+  (define (request-hint-text state) (cell:read (.hint-text state)))
+  (declare request-set-hint-text! (RequestState * String -> Void))
+  (define (request-set-hint-text! state text) (cell:write! (.hint-text state) text) (values))
+  (declare request-hint-context (RequestState -> Optional (Tuple String String)))
+  (define (request-hint-context state) (cell:read (.hint-context state)))
+  (declare request-set-hint-context! (RequestState * Optional (Tuple String String) -> Void))
+  (define (request-set-hint-context! state context) (cell:write! (.hint-context state) context) (values))
+  (declare request-hint-id (RequestState -> Optional UFix))
+  (define (request-hint-id state) (cell:read (.hint-id state)))
+  (declare request-set-hint-id! (RequestState * Optional UFix -> Void))
+  (define (request-set-hint-id! state id) (cell:write! (.hint-id state) id) (values))
+  (declare request-hint-current? (RequestState * UFix * String * String -> Boolean))
+  (define (request-hint-current? state id symbol package)
+    (and (== (request-hint-id state) (Some id))
+         (== (request-hint-context state) (Some (Tuple symbol package)))))
+  (declare request-hint-changed? (RequestState * String * String -> Boolean))
+  (define (request-hint-changed? state symbol package)
+    (not (== (request-hint-context state) (Some (Tuple symbol package)))))
+  (declare request-heap-text (RequestState -> String))
+  (define (request-heap-text state) (cell:read (.heap-text state)))
+  (declare request-set-heap-text! (RequestState * String -> Void))
+  (define (request-set-heap-text! state text) (cell:write! (.heap-text state) text) (values))
+  (declare request-heap-time (RequestState -> UFix))
+  (define (request-heap-time state) (cell:read (.heap-time state)))
+  (declare request-set-heap-time! (RequestState * UFix -> Void))
+  (define (request-set-heap-time! state time) (cell:write! (.heap-time state) time) (values)))

@@ -25,7 +25,7 @@
                    "Expected diagnostic to be stale before draining")
            (sb-concurrency:send-message mailbox (list :notify (cons :diagnostic diagnostic)))
            (sb-concurrency:send-message mailbox '(:return 7001 (:ok "done")))
-           (app::%drain-and-parse-messages state)
+           (app::process-protocol-messages! state)
            (%check (null (mine/app/diagnostics:line-diagnostic-spans key 0 2))
                    "A stale diagnostic was restored while draining the mailbox"))
       (mine/app/diagnostics:forget-diagnostic-request 7001)
@@ -33,21 +33,86 @@
 
 (defun check-mailbox-callbacks-run-in-arrival-order ()
   (let* ((state (%test-state))
-         (mailbox (sb-concurrency:make-mailbox))
-         (app::*pending-requests* nil)
-         (seen nil))
-    (setf (mine/app/state::%native-box-value (mine/app/state:get-proto-mailbox state))
-          mailbox)
-    (dolist (id '(8001 8002))
-      (let ((request-id id))
-        (app::%register-pending-request
-         request-id (lambda (state payload)
-                      (declare (ignore state payload))
-                      (push request-id seen))))
-      (sb-concurrency:send-message mailbox (list :return id '(:ok "done"))))
-    (app::%drain-and-parse-messages state)
-    (%check (equal '(8001 8002) (reverse seen))
-            "Callbacks ran out of arrival order: ~S" (reverse seen))))
+         (mailbox (sb-concurrency:make-mailbox)))
+    (setf (mine/app/state::%native-box-value (mine/app/state:get-proto-mailbox state)) mailbox)
+    (coalton/cell:write! (mine/app/state:get-active-request-cell state)
+                        (coalton:Some (mine/protocol/messages:RequestId 8001)))
+    (sb-concurrency:send-message mailbox '(:notify (:package 8001 "first")))
+    (sb-concurrency:send-message mailbox '(:notify (:package 8001 "second")))
+    (app::process-protocol-messages! state)
+    (%check (string= "second" (coalton/cell:read (mine/app/state:get-repl-package-cell state)))
+            "Protocol side effects ran out of arrival order")))
+
+(defun check-completion-rejects-changed-origin ()
+  (with-test-directory (directory)
+    (let* ((state (%test-state))
+           (a (namestring (merge-pathnames "a.lisp" directory)))
+           (b (namestring (merge-pathnames "b.lisp" directory)))
+           (cs (mine/app/state:get-cursor-state state)))
+      (%write-utf8-file a "for")
+      (%write-utf8-file b "for")
+      (app::open-loose-file! state a)
+      (cursor:cursor-move-to-position! cs 3)
+      (let ((snapshot (app::%coalton-optional-value-or-nil (app::%completion-snapshot state))))
+        (app::%register-pending-request state 9001 (mine/app/requests:PendingCompletion snapshot))
+        (app::open-loose-file! state b)
+        (cursor:cursor-move-to-position! cs 3)
+        (app::handle-proto-msg! state (app::%parse-one-message '(:return 9001 (:ok (("format" "fn" ""))))))
+        (%check (string= "for" (gap:gap-to-string (buf:buffer-gap (%test-current-buffer state))))
+                "A delayed completion edited a different document")
+        (app::open-loose-file! state a)
+        (app::%register-pending-request state 9002 (mine/app/requests:PendingCompletion snapshot))
+        (cursor:cursor-move-to-position! cs 2)
+        (app::handle-proto-msg! state (app::%parse-one-message '(:return 9002 (:ok (("format" "fn" ""))))))
+        (%check (string= "for" (gap:gap-to-string (buf:buffer-gap (%test-current-buffer state))))
+                "A delayed completion ignored cursor movement")))))
+
+(defun check-completion-replaces-reader-spelling ()
+  (with-test-directory (directory)
+    (let* ((state (%test-state))
+           (path (namestring (merge-pathnames "escaped.lisp" directory)))
+           (cs (mine/app/state:get-cursor-state state)))
+      (%write-utf8-file path "F\\o")
+      (app::open-loose-file! state path)
+      (cursor:cursor-move-to-position! cs 3)
+      (let ((snapshot (app::%coalton-optional-value-or-nil (app::%completion-snapshot state))))
+        (app::%register-pending-request state 9010 (mine/app/requests:PendingCompletion snapshot))
+        (app::handle-proto-msg! state (app::%parse-one-message '(:return 9010 (:ok (("|Foobar|" "fn" "")))))))
+      (%check (string= "|Foobar|" (gap:gap-to-string (buf:buffer-gap (%test-current-buffer state))))
+              "Completion appended a canonical spelling to the raw escaped prefix")
+      (ops:undo! (%test-current-buffer state) cs)
+      (%check (string= "F\\o" (gap:gap-to-string (buf:buffer-gap (%test-current-buffer state))))
+              "Completion was not a single reversible edit"))))
+
+(defun check-debugger-input-transition-and-invalid-restart ()
+  (let ((state (%test-state)))
+    (coalton/cell:write! (mine/app/state:get-active-request-cell state)
+                        (coalton:Some (mine/protocol/messages:RequestId 9020)))
+    (app::handle-proto-msg! state (app::%parse-one-message '(:io-request 9020 "input")))
+    (app::handle-proto-msg! state
+       (app::%parse-one-message '(:debug 9020 "Interrupted" ((0 "ABORT" "Abort")) ((0 "frame")))))
+    (%check (not (coalton/cell:read (mine/app/state:get-io-request-active-cell state)))
+            "An interrupted input wait still captured debugger keys")
+    (app::dbg-send-restart! state 9)
+    (%check (coalton/cell:read (mine/app/state:get-debugger-active-cell state))
+            "An invalid restart dismissed the debugger")
+    (app::handle-proto-msg! state (app::%parse-one-message '(:io-request 9020 "argument")))
+    (%check (not (coalton/cell:read (mine/app/state:get-debugger-active-cell state)))
+            "An interactive restart failed to yield to input")
+    (app::handle-proto-msg! state (app::%parse-one-message '(:return 9020 (:error "Aborted."))))
+    (%check (not (coalton/cell:read (mine/app/state:get-io-request-active-cell state)))
+            "A completed request left input mode active")))
+
+(defun check-hint-results-stay-with-their-own-request ()
+  (let* ((state (%test-state)) (cache (mine/app/state:get-requests state)))
+    (app::%register-pending-request state 9030 (mine/app/requests:PendingHint "old" "CL-USER"))
+    (app::%register-pending-request state 9031 (mine/app/requests:PendingHint "new" "CL-USER"))
+    (mine/app/requests:request-set-hint-context! cache (coalton:Some (coalton-prelude:Tuple "new" "CL-USER")))
+    (mine/app/requests:request-set-hint-id! cache (coalton:Some 9031))
+    (app::handle-proto-msg! state (app::%parse-one-message '(:return 9031 (:ok "NewType"))))
+    (app::handle-proto-msg! state (app::%parse-one-message '(:return 9030 (:ok "OldType"))))
+    (%check (string= "new :: NewType" (mine/app/requests:request-hint-text cache))
+            "An older hint reply overwrote the current symbol's result")))
 
 (defun check-editor-undo-redo-after-save-is-dirty ()
   (with-test-directory (directory)
@@ -177,6 +242,53 @@
       (%check (equal '(("target" "FIRST") ("other" "SECOND")) (reverse seen-definitions))
               "Definition lookup used package declarations after the cursor: ~S" seen-definitions))))
 
+(defun check-definition-response-reuses-compiled-document ()
+  (with-test-directory (directory)
+    (let* ((state (%test-state))
+           (path (namestring (merge-pathnames "definition.lisp" directory)))
+           (caller-path (namestring (merge-pathnames "caller.lisp" directory)))
+           (mine/app/diagnostics::*diagnostic-store*
+             (mine/app/diagnostic-store:diagnostic-store-new)))
+      (%write-utf8-file path "(defun target () 42)")
+      (%write-utf8-file caller-path "(target)")
+      (app::open-loose-file! state path)
+      (let ((buffer (%test-current-buffer state))
+            (cursor (mine/app/state:get-cursor-state state)))
+        (ops:insert-string! buffer (buf:buffer-undo buffer) cursor
+                            (format nil ";; unsaved~%"))
+        (let* ((snapshot (gap:gap-to-string (buf:buffer-gap buffer)))
+               (offset (search "(defun" snapshot))
+               (temporary (mine/app/diagnostics:write-temp-for-compile
+                           snapshot (buf:buffer-document-key buffer))))
+          (unwind-protect
+               (progn
+                 (mine/app/diagnostics:track-diagnostic-request 9120)
+                 (mine/app/diagnostics:forget-diagnostic-request 9120)
+                 (%check (not (probe-file temporary)) "Finished compile retained its snapshot")
+                 (app::open-loose-file! state caller-path)
+                 (let ((caller (%test-current-buffer state)))
+                   (cursor:cursor-move-to-position! cursor 2)
+                   (app::%apply-definition-response
+                    state
+                    (mine/app/requests:SourceLocation (buf:buffer-document-key caller) 2)
+                    (list ':ok (list (list (cons ':file temporary) (cons ':offset offset)))))
+                   (%check (eq buffer (%test-current-buffer state))
+                           "Definition lookup opened a snapshot instead of reusing its document")
+                   (%check (and (buf:buffer-dirty? buffer)
+                                (string= snapshot (gap:gap-to-string (buf:buffer-gap buffer))))
+                           "Definition lookup replaced unsaved edits")
+                   (%check (= offset (cursor:cursor-position cursor))
+                           "Definition lookup lost the compiled character offset")
+                   (%check (null (app::%coalton-optional-value-or-nil
+                                  (mine/buffer/manager:bufmgr-find-by-path
+                                   (mine/app/state:get-bufmgr state) temporary)))
+                           "Definition lookup created an empty snapshot buffer")
+                   (app::jump-back! state)
+                   (%check (and (eq caller (%test-current-buffer state))
+                                (= 2 (cursor:cursor-position cursor)))
+                           "Jump back did not restore the calling document")))
+            (mine/app/diagnostics:forget-all-diagnostic-requests)))))))
+
 (defun check-runtime-session-shutdown-releases-compile-temporaries ()
   (dolist (exit '(:return :throw :error))
     (let* ((state (%test-state))
@@ -236,11 +348,16 @@
   (dolist (test '(check-package-inspection-does-not-evaluate-source
                   check-mailbox-preserves-diagnostic-generations
                   check-mailbox-callbacks-run-in-arrival-order
+                  check-completion-rejects-changed-origin
+                  check-completion-replaces-reader-spelling
+                  check-debugger-input-transition-and-invalid-restart
+                  check-hint-results-stay-with-their-own-request
                   check-editor-undo-redo-after-save-is-dirty
                   check-preview-keeps-permanently-open-buffer
                   check-streamed-output-keeps-line-boundaries
                   check-streamed-output-extends-unfinished-line
                   check-repl-package-follows-matching-runtime-acknowledgment
+                  check-definition-response-reuses-compiled-document
                   check-runtime-session-shutdown-releases-compile-temporaries
                   check-editor-services-use-package-before-cursor))
     (format t "~&~A~%" test)
