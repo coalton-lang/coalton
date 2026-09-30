@@ -10,6 +10,7 @@
    (#:wt #:mine/widget/types)
    (#:render #:mine/widget/render)
    (#:gap #:mine/buffer/gap)
+   (#:source #:mine/syntax/context)
    (#:cellw #:mine/text/width))
   (:export
    #:complete-file-path
@@ -134,9 +135,9 @@
       ((== (str:length new-prefix) 0)
        (completion-dismiss! cs))
       (True
-       (let lc-prefix = (lowercase new-prefix))
+       (let decoded-prefix = (source:source-symbol-name new-prefix))
        (let filtered = (list:filter
-                         (fn (c) (%string-prefix? lc-prefix (lowercase (.cand-name c))))
+                         (fn (c) (%string-prefix? decoded-prefix (source:source-symbol-name (.cand-name c))))
                          (cell:read (.cs-all cs))))
        (cond
          ((<= (list:length filtered) 1)
@@ -155,15 +156,13 @@
   (declare extract-symbol-prefix (gap:GapBuffer * UFix -> String))
   (define (extract-symbol-prefix gb cursor-pos)
     "Extract the symbol prefix before CURSOR-POS in a gap buffer.
-Scans backward from cursor until a non-symbol character is found."
-    (lisp (-> String) (gb cursor-pos)
-      (%extract-prefix-from-gap gb cursor-pos)))
+Comments, literals, and escaped symbols use the shared source context."
+    (source:source-symbol-prefix (source:scan-source (gap:gap-to-string gb)) cursor-pos))
 
   (declare extract-symbol-prefix-input (String * UFix -> String))
   (define (extract-symbol-prefix-input text cursor)
     "Extract the symbol prefix before CURSOR in a plain string."
-    (lisp (-> String) (text cursor)
-      (%extract-prefix-from-string text cursor)))
+    (source:source-symbol-prefix (source:scan-source text) cursor))
 
 ;;; Common prefix computation
 
@@ -174,24 +173,25 @@ Scans backward from cursor until a non-symbol character is found."
       ((Nil) "")
       ((Cons first (Nil)) (.cand-name first))
       ((Cons first rest)
-       (let name = (.cand-name first))
-       (lisp (-> String) (name rest)
-         (%common-prefix-impl name rest)))))
+       (rec scan ((prefix (.cand-name first)) (remaining rest))
+         (match remaining
+           ((Nil) prefix)
+           ((Cons item more)
+            (let name = (.cand-name item))
+            (let limit = (min (str:length prefix) (str:length name)))
+            (let end =
+              (rec shared ((pos 0))
+                (if (and (< pos limit) (== (str:ref prefix pos) (str:ref name pos)))
+                    (shared (+ pos 1)) pos)))
+            (scan (str:substring prefix 0 end) more)))))))
 
 ;;; Helpers
 
   (declare %string-prefix? (String * String -> Boolean))
   (define (%string-prefix? prefix str)
     "True if STR starts with PREFIX (case-sensitive)."
-    (lisp (-> Boolean) (prefix str)
-      (cl:if (cl:and (cl:<= (cl:length prefix) (cl:length str))
-                     (cl:string= prefix str :end2 (cl:length prefix)))
-             True False)))
-
-  (declare lowercase (String -> String))
-  (define (lowercase s)
-    (lisp (-> String) (s)
-      (cl:string-downcase s)))
+    (and (<= (str:length prefix) (str:length str))
+         (== prefix (str:substring str 0 (str:length prefix)))))
 
 ;;; Rendering
 
@@ -223,66 +223,6 @@ Scans backward from cursor until a non-symbol character is found."
 ) ;; coalton-toplevel
 
 ;;; CL implementations
-
-(cl:defun %symbol-char-p (ch)
-  "Return T if CH is a valid symbol constituent for completion purposes."
-  (cl:and (cl:characterp ch)
-          (cl:not (cl:member ch '(#\Space #\Tab #\Newline #\Return
-                                  #\( #\) #\[ #\] #\{ #\}
-                                  #\' #\` #\, #\" #\; #\#)
-                             :test #'cl:char=))))
-
-(cl:defun %coalton-optional-value-or-nil (value)
-  "Return NIL for Coalton None, otherwise return the wrapped value."
-  (cl:if (coalton-impl/runtime/optional:cl-none-p value)
-         cl:nil
-         (coalton-impl/runtime/optional:unwrap-cl-some value)))
-
-(cl:defun %extract-prefix-from-gap (gb cursor-pos)
-  "Extract symbol prefix from gap buffer before CURSOR-POS."
-  (cl:let ((start cursor-pos))
-    (cl:loop :while (cl:> start 0)
-             :do (cl:let ((ch (%coalton-optional-value-or-nil
-                               (mine/buffer/gap:gap-char-at gb (cl:1- start)))))
-                   (cl:if (cl:and ch (%symbol-char-p ch))
-                          (cl:decf start)
-                          (cl:return))))
-    (cl:if (cl:= start cursor-pos)
-           ""
-           (cl:let ((result (cl:make-string (cl:- cursor-pos start))))
-             (cl:loop :for i :from start :below cursor-pos
-                      :for j :from 0
-                      :do (cl:let ((ch (%coalton-optional-value-or-nil
-                                        (mine/buffer/gap:gap-char-at gb i))))
-                            (cl:setf (cl:char result j) (cl:or ch #\?))))
-             result))))
-
-(cl:defun %extract-prefix-from-string (text cursor)
-  "Extract symbol prefix from plain string TEXT before CURSOR."
-  (cl:let ((start (cl:min cursor (cl:length text))))
-    (cl:loop :while (cl:> start 0)
-             :do (cl:if (%symbol-char-p (cl:char text (cl:1- start)))
-                        (cl:decf start)
-                        (cl:return)))
-    (cl:if (cl:= start (cl:min cursor (cl:length text)))
-           ""
-           (cl:subseq text start (cl:min cursor (cl:length text))))))
-
-(cl:defun %common-prefix-impl (first-name rest-candidates)
-  "Compute common prefix of FIRST-NAME and all candidate names in REST-CANDIDATES."
-  (cl:let ((prefix (cl:string-downcase first-name)))
-    (cl:loop :for cand-cell = rest-candidates :then (cl:cdr cand-cell)
-             :while (cl:consp cand-cell)
-             :do (cl:let* ((cand (cl:car cand-cell))
-                           (name (cl:string-downcase (cand-name cand))))
-                   (cl:let ((end (cl:min (cl:length prefix) (cl:length name))))
-                     (cl:setf prefix
-                              (cl:subseq prefix 0
-                                         (cl:loop :for i :from 0 :below end
-                                                  :while (cl:char= (cl:char prefix i)
-                                                                    (cl:char name i))
-                                                  :finally (cl:return i)))))))
-    prefix))
 
 ;;; Popup rendering
 
