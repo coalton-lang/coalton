@@ -418,7 +418,7 @@
                (let buf-text = (gap:gap-to-string cur-gb))
                (lisp (-> Unit) (st cur-gb cur-pos buf-text default-pkg)
                  (cl:let* ((sym-name (%read-enclosing-symbol cur-gb cur-pos))
-                           (buf-pkg (%detect-buffer-package buf-text default-pkg)))
+                           (buf-pkg (%detect-buffer-package buf-text default-pkg cur-pos)))
                    (cl:multiple-value-bind (resolved-pkg resolved-sym)
                        (%resolve-qualified-name (cl:or sym-name "") buf-pkg)
                      (%update-hint-if-changed st resolved-sym resolved-pkg)))
@@ -2856,7 +2856,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                                                (cl:string-equal ".ct" cur-path
                                                                 :start2 (cl:max 0 (cl:- (cl:length cur-path) 3))))
                                        "COALTON-USER" "CL-USER"))
-                   (buf-pkg (%detect-buffer-package buf-text default-pkg)))
+                   (buf-pkg (%detect-buffer-package buf-text default-pkg cur-pos)))
            (cl:if (cl:and sym-name (cl:plusp (cl:length sym-name)))
                   (cl:multiple-value-bind (resolved-pkg resolved-sym)
                       (%resolve-qualified-name sym-name buf-pkg)

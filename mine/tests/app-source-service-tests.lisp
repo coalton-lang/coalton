@@ -50,8 +50,41 @@
                    "Lost connection's request was retained"))
       (close stream :abort t))))
 
+(defun check-editor-services-use-package-before-cursor ()
+  (with-test-directory (directory)
+    (let* ((state (%test-state))
+           (path (namestring (merge-pathnames "packages.lisp" directory)))
+           (text (format nil "(in-package :first)~%(target )~%(in-package :second)~%(other )"))
+           (terminal (mine-tests/editor-layout::fake-terminal 100 30))
+           (seen-hints nil)
+           (seen-definitions nil))
+      (%write-utf8-file path text)
+      (app::open-loose-file! state path)
+      (%call-with-replaced-runtime-function
+       'app::%request-symbol-hint
+       (lambda (state name package)
+         (declare (ignore state))
+         (push (list name package) seen-hints))
+       (lambda ()
+         (%call-with-replaced-runtime-function
+          'app::%request-remote-definition
+          (lambda (state name package path position)
+            (declare (ignore state path position))
+            (push (list name package) seen-definitions))
+          (lambda ()
+            (dolist (name '("target" "other"))
+              (cursor:cursor-move-to-position! (mine/app/state:get-cursor-state state)
+                                               (+ 2 (search name text)))
+              (app::render-app state terminal)
+              (app::jump-to-definition! state))))))
+      (%check (equal '(("target" "FIRST") ("other" "SECOND")) (reverse seen-hints))
+              "Hints used package declarations after the cursor: ~S" seen-hints)
+      (%check (equal '(("target" "FIRST") ("other" "SECOND")) (reverse seen-definitions))
+              "Definition lookup used package declarations after the cursor: ~S" seen-definitions))))
+
 (defun run-app-source-service-tests ()
   (dolist (test '(check-background-reader-loss-keeps-its-connection
-                  check-background-loss-retires-native-stream))
+                  check-background-loss-retires-native-stream
+                  check-editor-services-use-package-before-cursor))
     (funcall test))
   t)
