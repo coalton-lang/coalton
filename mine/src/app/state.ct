@@ -14,6 +14,7 @@
    (#:focus #:mine/widget/focus)
    (#:lifecycle #:mine/protocol/lifecycle)
    (#:msg #:mine/protocol/messages)
+   (#:requests #:mine/app/requests)
    (#:mini #:mine/pane/minibuffer)
    (#:cfgt #:mine/config/types)
    (#:complete #:mine/app/completion)
@@ -57,9 +58,9 @@
    #:.ms-proto-thread
    #:.ms-debugger-active
    #:.ms-debugger-condition
-   #:.ms-debugger-items
+   #:.ms-debugger-snapshot
    #:.ms-debugger-selected
-   #:.ms-debugger-conn-stream
+   #:.ms-debugger-request-id
    #:.ms-jump-stack
    #:.ms-project-system
    #:.ms-project-asd-path
@@ -86,6 +87,7 @@
    #:.ms-quick-result-request-id
    #:.ms-bg-proto-thread
    #:.ms-update-check-state
+   #:.ms-requests #:get-requests
    #:get-status-bar
    #:get-pending-error-cell
    #:get-editor-pane
@@ -101,13 +103,13 @@
    #:get-proto-thread
    #:get-bg-proto-thread
    #:get-debugger-condition-cell
-   #:get-debugger-items
+   #:get-debugger-snapshot-cell
    #:get-debugger-selected-cell
    #:get-debugger-scroll-cell
    #:get-debugger-body-h-cell
    #:get-debugger-total-cell
    #:get-debugger-follow-cell
-   #:get-conn-stream
+   #:get-debugger-request-id-cell
    #:get-jump-stack
    #:get-next-req-id-cell
    #:get-io-request-data
@@ -183,10 +185,10 @@
     (ms-proto-thread      NativeBox) ;; reader thread handle, or nil
     (ms-debugger-active   (Cell Boolean))
     (ms-debugger-condition (Cell String))
-    (ms-debugger-items    NativeBox) ;; CL list of debugger items, or nil
+    (ms-debugger-snapshot (Cell (Optional msg:DebuggerSnapshot)))
     (ms-debugger-selected (Cell UFix))
-    (ms-debugger-conn-stream NativeBox) ;; socket stream, or (cons msg-id stream)
-    (ms-jump-stack        NativeBox) ;; CL list of (filepath . position)
+    (ms-debugger-request-id (Cell (Optional msg:RequestId)))
+    (ms-jump-stack        (Cell (List requests:SourceLocation)))
     (ms-project-system    (Cell (Optional String)))
     (ms-project-asd-path  (Cell (Optional String)))
     (ms-quit              (Cell Boolean))
@@ -199,7 +201,7 @@
     (ms-structural-editing (Cell Boolean))
     (ms-config             cfgt:MineConfig)
     (ms-io-request-active  (Cell Boolean))
-    (ms-io-request-data    NativeBox) ;; (msg-id . stream) for IO response
+    (ms-io-request-data    (Cell (Optional msg:InputRequest)))
     (ms-completion         complete:CompletionState)
     (ms-busy-activity     (Cell (Optional String)))
     (ms-spinner           spinner:Spinner)
@@ -213,7 +215,8 @@
     (ms-bg-proto-thread    NativeBox)
     (ms-update-check-state NativeBox) ;; CL plist for update-check status
     (ms-editor-views (Cell (hm:HashMap UFix editor:EditorView)))
-    (ms-view-buffer (Cell (Optional buf:BufferId))))
+    (ms-view-buffer (Cell (Optional buf:BufferId)))
+    (ms-requests requests:RequestState))
 
   (declare mine-state-new (cfgt:MineConfig -> MineState))
   (define (mine-state-new config)
@@ -231,8 +234,8 @@
                (cell:new "")
                (native-box-new) (native-box-new)
                (cell:new False) (cell:new "")
-               (native-box-new) (cell:new 0) (native-box-new)
-               (native-box-new)
+               (cell:new None) (cell:new 0) (cell:new None)
+               (cell:new Nil)
                (cell:new None) (cell:new None) (cell:new False)
                (cell:new 0) (cell:new None)
                (mini:minibuffer-new)
@@ -240,12 +243,12 @@
                              "Lisp" "Coalton"))
                (cell:new None) (native-box-new)
                (cell:new (cfgt:.config-structural-editing config)) config
-               (cell:new False) (native-box-new) (complete:completion-new)
+               (cell:new False) (cell:new None) (complete:completion-new)
                (cell:new None) (spinner:spinner-new)
                (cell:new 0) (cell:new 0) (cell:new 0) (cell:new True)
                (cell:new None) (native-box-new) (cell:new None)
                (native-box-new) (native-box-new)
-               (cell:new hm:empty) (cell:new None)))
+               (cell:new hm:empty) (cell:new None) (requests:request-state-new)))
 
   (declare activate-buffer! (MineState * buf:Buffer -> Void))
   (define (activate-buffer! st buffer)
@@ -328,8 +331,8 @@
   (declare get-debugger-condition-cell (MineState -> (Cell String)))
   (define (get-debugger-condition-cell st) (.ms-debugger-condition st))
 
-  (declare get-debugger-items (MineState -> NativeBox))
-  (define (get-debugger-items st) (.ms-debugger-items st))
+  (declare get-debugger-snapshot-cell (MineState -> Cell (Optional msg:DebuggerSnapshot)))
+  (define (get-debugger-snapshot-cell st) (.ms-debugger-snapshot st))
 
   (declare get-debugger-selected-cell (MineState -> (Cell UFix)))
   (define (get-debugger-selected-cell st) (.ms-debugger-selected st))
@@ -346,16 +349,16 @@
   (declare get-debugger-follow-cell (MineState -> (Cell Boolean)))
   (define (get-debugger-follow-cell st) (.ms-debugger-follow st))
 
-  (declare get-conn-stream (MineState -> NativeBox))
-  (define (get-conn-stream st) (.ms-debugger-conn-stream st))
+  (declare get-debugger-request-id-cell (MineState -> Cell (Optional msg:RequestId)))
+  (define (get-debugger-request-id-cell st) (.ms-debugger-request-id st))
 
-  (declare get-jump-stack (MineState -> NativeBox))
+  (declare get-jump-stack (MineState -> Cell (List requests:SourceLocation)))
   (define (get-jump-stack st) (.ms-jump-stack st))
 
   (declare get-next-req-id-cell (MineState -> (Cell UFix)))
   (define (get-next-req-id-cell st) (.ms-next-req-id st))
 
-  (declare get-io-request-data (MineState -> NativeBox))
+  (declare get-io-request-data (MineState -> Cell (Optional msg:InputRequest)))
   (define (get-io-request-data st) (.ms-io-request-data st))
 
   (declare get-layout-cell (MineState -> (Cell MineLayout)))
@@ -369,6 +372,9 @@
 
   (declare get-quick-result-state (MineState -> NativeBox))
   (define (get-quick-result-state st) (.ms-quick-result-state st))
+
+  (declare get-requests (MineState -> requests:RequestState))
+  (define (get-requests st) (.ms-requests st))
 
   (declare get-update-check-state (MineState -> NativeBox))
   (define (get-update-check-state st) (.ms-update-check-state st)))

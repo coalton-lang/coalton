@@ -26,6 +26,7 @@
    (#:status #:mine/pane/status)
    (#:wire #:mine/protocol/wire)
    (#:msg #:mine/protocol/messages)
+   (#:requests #:mine/app/requests)
    (#:client #:mine/protocol/client)
    (#:lifecycle #:mine/protocol/lifecycle)
    (#:tree #:mine/pane/tree)
@@ -54,9 +55,7 @@
    (#:spinner #:mine/widget/spinner)
    (#:hm #:coalton/hashmap))
   (:export
-   #:mine-main
-   #:ProtoMsg #:ProtoReturn #:ProtoOutput #:ProtoOutputChunk #:ProtoPackage
-   #:ProtoDebug #:ProtoIORequest #:ProtoConnectionLost))
+   #:mine-main))
 
 (in-package #:mine/app/mine)
 
@@ -64,27 +63,13 @@
   (cl:require :sb-concurrency))
 
 ;;; CL state referenced by lisp escapes in the Coalton code below.
-(cl:defvar *hint-result* "" "Cached hint string for status bar.")
-(cl:defvar *hint-request-id* nil "Request ID of pending hint query.")
-(cl:defvar *heap-info-result* "" "Cached heap info string from runtime server.")
-(cl:defvar *heap-info-last-time* 0 "Internal-real-time of last heap-info request.")
-(cl:defvar *pending-requests* nil
-  "Alist of (request-id . handler-fn). Handler takes (st raw-payload).")
-(cl:defvar *pending-jump-source* nil "(filepath . position) for jump-back stack.")
 (cl:defvar *restart-into-setup* nil
   "When set to T by the Setup Wizard menu action, mine-main reruns the setup wizard.")
 
 (cl:defun %read-form-head-cl (text)
-  "Return the lowercase head symbol for TEXT when it starts with a list form."
-  (cl:let ((trimmed (cl:string-trim '(#\Space #\Tab #\Newline) text)))
-    (cl:when (cl:and (cl:plusp (cl:length trimmed))
-                     (cl:char= (cl:char trimmed 0) #\())
-      (cl:let* ((space-pos (cl:or (cl:position #\Space trimmed)
-                                  (cl:position #\) trimmed)))
-                (form-head (cl:if space-pos
-                                  (cl:subseq trimmed 1 space-pos)
-                                  (cl:subseq trimmed 1))))
-        (cl:string-downcase form-head)))))
+  (cl:let ((form-name (%coalton-optional-value-or-nil
+                  (source:source-first-head (source:scan-source text)))))
+    (cl:when form-name (cl:string-downcase form-name))))
 
 (cl:defun %classify-form-head-cl (form-head)
   "Return a keyword describing how FORM-HEAD should be treated by Beam Toplevel Form."
@@ -440,7 +425,7 @@
        (let sym-info =
          (cond
            ((> (str:length diag-msg) 0) diag-msg)
-           (True (lisp (-> String) () *hint-result*))))
+           (True (requests:request-hint-text (.ms-requests st)))))
        (status:statusbar-update! (.ms-status st) mode-str fname is-dirty
                                  (+ cur-line 1) (+ cur-col 1)
                                  (cell:read (.ms-repl-package st))
@@ -780,10 +765,10 @@
 
 ;;; REPL status line
 
-  (declare %heap-info (Void -> String))
-  (define (%heap-info)
+  (declare %heap-info (MineState -> String))
+  (define (%heap-info st)
     "Return cached heap info from the runtime server."
-    (lisp (-> String) () *heap-info-result*))
+    (requests:request-heap-text (.ms-requests st)))
 
   (declare render-repl-status (MineState * screen:Screen * wt:Rect -> Void))
   (define (render-repl-status st scr rect)
@@ -867,7 +852,7 @@
     (let col4 = (+ col3 (if (> (str:length timing) 0) (+ 8 (+ (cellw:string-cell-width timing) 2)) 0)))
     ;; Heap (async from runtime server, throttled to every 2s)
     (lisp (-> Unit) (st) (%request-heap-info st) Unit)
-    (let heap = (%heap-info))
+    (let heap = (%heap-info st))
     (screen:screen-set-string scr y col4 "Heap: " label-style)
     (screen:screen-set-string scr y (+ col4 6) heap val-style)
     (values))
@@ -976,7 +961,7 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
           (let auto-coalton? = (== (cell:read (.ms-repl-lang st)) "Coalton"))
           (let req = (msg:ReqEval req-id input-text (cell:read (.ms-repl-package st))
                                  auto-coalton?))
-          (client:connection-send! conn req)
+          (progn (%send-request! st conn req) (values))
           ;; Return immediately -- response will arrive via mailbox
           (values))
          ((None)
@@ -995,15 +980,65 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
 
 ;;; Protocol message types (for CL -> Coalton boundary)
 
-  (define-type ProtoMsg
-    "A parsed protocol message from the runtime."
-    (ProtoReturn msg:RequestId String Boolean) ;; request-id, result-text, is-error?
-    (ProtoOutput String)         ;; output text
-    (ProtoOutputChunk msg:RequestId String)
-    (ProtoPackage msg:RequestId String)
-    (ProtoDebug String NativeBox) ;; condition-text, opaque CL debug data
-    (ProtoIORequest String NativeBox) ;; prompt-text, opaque (msg-id . stream)
-    ProtoConnectionLost)
+  (define-type-alias ProtoMsg msg:Response)
+
+  (declare %completion-snapshot (MineState -> Optional requests:CompletionSnapshot))
+  (define (%completion-snapshot st)
+    (match (focus:focus-current (.ms-focus st))
+      ((focus:FocusRepl)
+       (let text = (repl:repl-pane-get-input (.ms-repl st)))
+       (let pos = (repl:repl-pane-input-cursor (.ms-repl st)))
+       (Some (requests:CompletionSnapshot requests:ReplOrigin text pos
+                                          (cell:read (.ms-repl-package st))
+                                          (complete:extract-symbol-prefix-input text pos))))
+      ((focus:FocusEditor)
+       (match (mgr:bufmgr-current (.ms-bufmgr st))
+         ((None) None)
+         ((Some buffer)
+          (let text = (gap:gap-to-string (buf:buffer-gap buffer)))
+          (let pos = (cursor:cursor-position (.ms-cursor st)))
+          (let context = (source:scan-source text))
+          (let package = (match (source:source-package-before context pos)
+                           ((Some name) name)
+                           ((None) (cell:read (.ms-repl-package st)))))
+          (Some (requests:CompletionSnapshot (requests:EditorOrigin (buf:buffer-document-key buffer))
+                                             text pos package (source:source-symbol-prefix context pos))))))
+      (_ None)))
+
+  (declare %reply-data (Result String wire:SExpr -> wire:RawSExpr))
+  (define (%reply-data result)
+    (match result
+      ((Ok expression)
+       (let raw = (wire:sexpr-to-raw expression))
+       (lisp (-> wire:RawSExpr) (raw) (cl:list :ok raw)))
+      ((Err text) (lisp (-> wire:RawSExpr) (text) (cl:list :error text)))))
+
+  (declare %handle-pending-response!
+    (MineState * UFix * requests:PendingRequest * Result String wire:SExpr -> Void))
+  (define (%handle-pending-response! st id pending result)
+    (let payload = (%reply-data result))
+    (match pending
+      ((requests:PendingDiscard) (values))
+      ((requests:PendingHint symbol package)
+       (when (requests:request-hint-current? (.ms-requests st) id symbol package)
+         (requests:request-set-hint-id! (.ms-requests st) None)
+         (lisp (-> Void) (st symbol payload)
+           (%apply-hint-response st symbol payload) (cl:values))))
+      ((requests:PendingHeap)
+       (lisp (-> Void) (st payload) (%apply-heap-response st payload) (cl:values)))
+      ((requests:PendingDefinition origin)
+       (lisp (-> Void) (st origin payload) (%apply-definition-response st origin payload) (cl:values)))
+      ((requests:PendingCompletion snapshot)
+       (match (%completion-snapshot st)
+         ((Some current)
+          (when (requests:snapshot-matches? snapshot current)
+            (let prefix = (requests:snapshot-prefix snapshot))
+            (let cursor = (requests:snapshot-cursor snapshot))
+            (let is-repl = (== (requests:snapshot-origin snapshot) requests:ReplOrigin))
+            (lisp (-> Void) (st payload prefix cursor is-repl)
+              (%handle-completion-response st payload prefix cursor is-repl) (cl:values))))
+         ((None) (values)))))
+    (values))
 
   (declare %drain-mailbox (MineState -> (List ProtoMsg)))
   (define (%drain-mailbox st)
@@ -1081,7 +1116,26 @@ multiple values get 0>, 1>, etc."
   (declare handle-proto-msg! (MineState * ProtoMsg -> Void))
   (define (handle-proto-msg! st msg)
     (match msg
-      ((ProtoReturn request-id text is-error)
+      ((msg:ResponseReturn request-id result)
+       (lisp (-> Void) (request-id)
+         (mine/app/diagnostics:forget-diagnostic-request (msg:request-id-value request-id))
+         (cl:values))
+       (match (lifecycle:runtime-connection (.ms-runtime st))
+         ((Some conn) (client:connection-finish-request! conn request-id))
+         ((None) (values)))
+       (match (requests:request-take! (.ms-requests st) (msg:request-id-value request-id))
+         ((Some pending)
+          (%handle-pending-response! st (msg:request-id-value request-id) pending result)
+          (return (values)))
+         ((None) (values)))
+       ;; Completed or cancelled editor-service replies must never become REPL results.
+       (when (not (== (cell:read (.ms-active-request st)) (Some request-id)))
+         (return (values)))
+       (let is-error = (match result ((Err _) True) ((Ok _) False)))
+       (let text = (match result
+                    ((Err error) error)
+                    ((Ok (wire:SString text)) text)
+                    ((Ok expression) (wire:encode-sexpr expression))))
        (let texts = (%decode-result-values text))
        (let is-my-request = (match (cell:read (.ms-active-request st))
                               ((Some active-id) (== active-id request-id))
@@ -1127,32 +1181,44 @@ multiple values get 0>, 1>, etc."
                                                   cl:internal-time-units-per-second)))
                                  ""))))
        (when is-my-request
+         (cell:write! (.ms-debugger-active st) False)
+         (cell:write! (.ms-debugger-snapshot st) None)
+         (cell:write! (.ms-debugger-request-id st) None)
+         (when (cell:read (.ms-io-request-active st)) (%deactivate-io-request! st))
          (cell:write! (.ms-repl-timing st) elapsed)
          (cell:write! (.ms-repl-busy st) False)
          (cell:write! (.ms-busy-activity st) None)
          (cell:write! (.ms-active-request st) None))
        (values))
-      ((ProtoOutput text)
+      ((msg:ResponseOutput text)
        (repl:repl-pane-append-output! (.ms-repl st) text))
-      ((ProtoOutputChunk _ text)
+      ((msg:ResponseOutputChunk _ text)
        (repl:repl-pane-append-output-chunk! (.ms-repl st) text))
-      ((ProtoPackage request-id package-name)
+      ((msg:ResponsePackage request-id package-name)
        (when (== (cell:read (.ms-active-request st)) (Some request-id))
          (cell:write! (.ms-repl-package st) package-name)))
-      ((ProtoDebug cond-text debug-data)
+      ((msg:ResponseDebugger snapshot)
+       (when (not (== (cell:read (.ms-active-request st)) (Some (msg:debugger-request-id snapshot))))
+         (return (values)))
+       (when (cell:read (.ms-io-request-active st)) (%deactivate-io-request! st))
+       (let cond-text = (msg:debugger-condition snapshot))
        (cell:write! (.ms-debugger-active st) True)
        (cell:write! (.ms-debugger-condition st) cond-text)
-       (lisp (-> Void) (st debug-data)
-         (%install-debugger-data st debug-data)
-         (cl:values))
+       (cell:write! (.ms-debugger-snapshot st) (Some snapshot))
+       (cell:write! (.ms-debugger-request-id st) (Some (msg:debugger-request-id snapshot)))
+       (cell:write! (.ms-debugger-selected st) 0)
+       (dbg-move-selection! st 1)
+       (cell:write! (.ms-debugger-scroll st) 0)
        (repl:repl-pane-append-output! (.ms-repl st)
                                       (<> ";; Debugger: " cond-text))
        (%focus-repl! st))
-      ((ProtoIORequest prompt-text io-data)
+      ((msg:ResponseInput input-request)
+       (when (not (== (cell:read (.ms-active-request st)) (Some (msg:input-request-id input-request))))
+         (return (values)))
+       (let prompt-text = (msg:input-prompt input-request))
+       (cell:write! (.ms-debugger-active st) False)
        (cell:write! (.ms-io-request-active st) True)
-       (lisp (-> Void) (st io-data)
-         (%install-io-request-data st io-data)
-         (cl:values))
+       (cell:write! (.ms-io-request-data st) (Some input-request))
        ;; Change REPL input prompt to indicate input mode
        (repl:repl-pane-set-prompt! (.ms-repl st)
                                    (if (== (str:length prompt-text) 0)
@@ -1161,7 +1227,21 @@ multiple values get 0>, 1>, etc."
        (repl:repl-pane-append-system! (.ms-repl st) ";; Waiting for input...")
        (ensure-repl-visible! st)
        (%focus-repl! st))
-      ((ProtoConnectionLost)
+      ((msg:ResponseRestartRejected request-id text)
+       (when (== (cell:read (.ms-debugger-request-id st)) (Some request-id))
+         (when (cell:read (.ms-io-request-active st)) (%deactivate-io-request! st))
+         (cell:write! (.ms-debugger-active st) True)
+         (user-error! st text)
+         (%focus-repl! st)))
+      ((msg:ResponseDiagnostic diagnostic)
+       (lisp (-> Void) (st diagnostic)
+         (%receive-diagnostic st (wire:sexpr-to-raw diagnostic))
+         (cl:values)))
+      ((msg:ResponseBackgroundConnectionLost)
+       (lisp (-> Void) (st) (%clear-background-protocol-state st) (cl:values)))
+      ((msg:ResponseConnectionLost)
+       (lisp (-> Void) ()
+         (mine/app/diagnostics:forget-all-diagnostic-requests) (cl:values))
        (let quick-result-was-pending =
          (match (cell:read (.ms-quick-result-request-id st))
            ((Some _) True)
@@ -1174,6 +1254,8 @@ multiple values get 0>, 1>, etc."
        (cell:write! (.ms-beam-request-id st) None)
        (cell:write! (.ms-quick-result-request-id st) None)
        (cell:write! (.ms-active-request st) None)
+       (cell:write! (.ms-debugger-snapshot st) None)
+       (cell:write! (.ms-debugger-request-id st) None)
        (when quick-result-was-pending
          (%show-quick-result! st "Error" "Runtime connection lost" True))
        (when (cell:read (.ms-debugger-active st))
@@ -1189,7 +1271,7 @@ multiple values get 0>, 1>, etc."
          (cl:let ((mgr (mine/app/state:get-runtime-mgr st)))
            (cl:let ((conn (mine/protocol/lifecycle::%runtime-manager-connection mgr)))
              (cl:when conn
-               (cl:setf (mine/protocol/client::%connection-active conn) cl:nil))))
+               (client:connection-deactivate! conn))))
          (cl:values)))))
 
 ;;; Debugger key handling (when REPL focused and debugger active)
@@ -1227,9 +1309,9 @@ Uses a dedicated Beam request so diagnostics can stream independently."
           (let req-id = (next-request-id! st))
           (cell:write! (.ms-active-request st) (Some req-id))
           (cell:write! (.ms-beam-request-id st) (Some req-id))
-          (%track-diagnostic-request! req-id)
+
           (let req = (msg:ReqBeamSystem req-id sys-name asd-path))
-          (client:connection-send! conn req)
+          (progn (%send-request! st conn req) (values))
           (values)))))) 
 
 ;;; Debugger helpers (Coalton wrappers around thin CL)
@@ -1240,7 +1322,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
     (let selected = (cell:read (.ms-debugger-selected st)))
     (let new-sel = (lisp (-> UFix) (st selected direction)
                      (%dbg-next-selectable
-                      (mine/app/state::%native-box-value (mine/app/state:get-debugger-items st))
+                      (%debugger-display-items st)
                       selected direction)))
     (cell:write! (.ms-debugger-selected st) new-sel)
     (cell:write! (.ms-debugger-follow st) True)
@@ -1275,86 +1357,81 @@ Uses a dedicated Beam request so diagnostics can stream independently."
     "Get the restart index of the selected item, or None if not a restart."
     (let selected = (cell:read (.ms-debugger-selected st)))
     (lisp (-> (Optional UFix)) (st selected)
-      (cl:let* ((items (mine/app/state::%native-box-value (mine/app/state:get-debugger-items st)))
+      (cl:let* ((items (%debugger-display-items st))
                 (item (cl:when (cl:and items (cl:< selected (cl:length items)))
                         (cl:nth selected items))))
         (cl:if (cl:and item (cl:eq (cl:first item) :restart))
                (Some (cl:second item))
                None))))
 
+  (declare %send-request! (MineState * client:Connection * msg:Request -> Boolean))
+  (define (%send-request! st conn request)
+    (match (msg:request-foreground-id request)
+      ((Some id) (%track-diagnostic-request! id))
+      ((None) (values)))
+    (if (client:connection-send-checked! conn request)
+        True
+        (progn
+          (handle-proto-msg! st msg:ResponseConnectionLost)
+          (user-error! st "Runtime connection closed while sending the request")
+          False)))
+
+  (declare %send-control-request! (MineState * msg:Request -> Boolean))
+  (define (%send-control-request! st request)
+    (match (lifecycle:runtime-connection (.ms-runtime st))
+      ((Some conn) (%send-request! st conn request))
+      ((None) (user-error! st "No runtime connection") False)))
+
   (declare dbg-send-restart! (MineState * UFix -> Void))
   (define (dbg-send-restart! st restart-idx)
-    "Send a restart choice to the runtime and deactivate debugger."
-    (lisp (-> Void) (st restart-idx)
-      (cl:let ((sp (mine/app/state::%native-box-value (mine/app/state:get-conn-stream st))))
-        (cl:when (cl:consp sp)
-          (cl:handler-case
-              (mine/protocol/server::write-message (cl:cdr sp)
-                                                   `(:debug-restart ,(cl:car sp) ,restart-idx))
-            (cl:error () cl:nil))
-          (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-conn-stream st))
-                   (cl:cdr sp))))
-      (cl:values))
-    (cell:write! (.ms-debugger-active st) False)
-    (repl:repl-pane-append-output! (.ms-repl st)
-                                   (<> ";; Invoked restart " (into restart-idx)))
-    (focus:focus-return! (.ms-focus st))
+    "Keep the debugger available when a restart number is invalid or a send fails."
+    (match (cell:read (.ms-debugger-snapshot st))
+      ((None) (values))
+      ((Some snapshot)
+       (if (list:any (fn (restart) (== restart-idx (msg:restart-index restart)))
+                     (msg:debugger-restarts snapshot))
+           (when (%send-control-request! st (msg:ReqDebugRestart (msg:debugger-request-id snapshot) restart-idx))
+             (cell:write! (.ms-debugger-active st) False)
+             (repl:repl-pane-append-system! (.ms-repl st) (<> ";; Invoked restart " (into restart-idx))))
+           (user-error! st "No such restart"))))
     (values))
 
   (declare dbg-abort! (MineState -> Void))
   (define (dbg-abort! st)
-    "Send abort to runtime and deactivate debugger."
-    (lisp (-> Void) (st)
-      (cl:let ((sp (mine/app/state::%native-box-value (mine/app/state:get-conn-stream st))))
-        (cl:when (cl:consp sp)
-          (cl:handler-case
-              (mine/protocol/server::write-message (cl:cdr sp)
-                                                   `(:debug-abort ,(cl:car sp)))
-            (cl:error () cl:nil))
-          (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-conn-stream st))
-                   (cl:cdr sp))))
-      (cl:values))
-    (cell:write! (.ms-debugger-active st) False)
-    (repl:repl-pane-append-system! (.ms-repl st) ";; Aborted.")
-    (focus:focus-return! (.ms-focus st))
+    (match (cell:read (.ms-debugger-request-id st))
+      ((Some request-id)
+       (when (%send-control-request! st (msg:ReqDebugAbort request-id))
+         (cell:write! (.ms-debugger-active st) False)
+         (repl:repl-pane-append-system! (.ms-repl st) ";; Aborted.")))
+      ((None) (values)))
     (values))
-
-;;; IO request response functions
 
   (declare %deactivate-io-request! (MineState -> Void))
   (define (%deactivate-io-request! st)
-    "Reset IO request state and restore normal REPL prompt."
     (cell:write! (.ms-io-request-active st) False)
+    (cell:write! (.ms-io-request-data st) None)
     (repl:repl-pane-set-prompt! (.ms-repl st) "> ")
     (repl:repl-pane-clear-input! (.ms-repl st))
     (values))
 
   (declare io-send-response! (MineState * String -> Void))
   (define (io-send-response! st text)
-    "Send IO response text to the runtime and deactivate IO request mode."
-    (lisp (-> Void) (st text)
-      (cl:let ((sp (mine/app/state::%native-box-value (mine/app/state:get-io-request-data st))))
-        (cl:when (cl:consp sp)
-          (cl:handler-case
-              (mine/protocol/server::write-message (cl:cdr sp)
-                                                   `(:io-response ,(cl:car sp) ,text))
-            (cl:error () cl:nil))))
-      (cl:values))
-    (%deactivate-io-request! st))
+    (match (cell:read (.ms-io-request-data st))
+      ((Some request)
+       (when (%send-control-request! st (msg:ReqIOResponse (msg:input-request-id request) text))
+         (%deactivate-io-request! st)))
+      ((None) (values)))
+    (values))
 
   (declare io-abort! (MineState -> Void))
   (define (io-abort! st)
-    "Send IO abort to runtime and deactivate IO request mode."
-    (lisp (-> Void) (st)
-      (cl:let ((sp (mine/app/state::%native-box-value (mine/app/state:get-io-request-data st))))
-        (cl:when (cl:consp sp)
-          (cl:handler-case
-              (mine/protocol/server::write-message (cl:cdr sp)
-                                                   `(:io-abort ,(cl:car sp)))
-            (cl:error () cl:nil))))
-      (cl:values))
-    (%deactivate-io-request! st)
-    (repl:repl-pane-append-system! (.ms-repl st) ";; IO cancelled."))
+    (match (cell:read (.ms-io-request-data st))
+      ((Some request)
+       (when (%send-control-request! st (msg:ReqIOAbort (msg:input-request-id request)))
+         (%deactivate-io-request! st)
+         (repl:repl-pane-append-system! (.ms-repl st) ";; IO cancelled.")))
+      ((None) (values)))
+    (values))
 
 ;;; Debugger key dispatch
 
@@ -1394,16 +1471,18 @@ Uses a dedicated Beam request so diagnostics can stream independently."
   (define (%clear-runtime-session! st)
     "Clear state tied to the current runtime connection."
     (lisp (-> Void) (st)
+      (mine/app/diagnostics:forget-all-diagnostic-requests)
       (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-proto-mailbox st)) cl:nil)
       (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-proto-thread st)) cl:nil)
       (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-bg-proto-thread st)) cl:nil)
-      (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-conn-stream st)) cl:nil)
+      (cell:write! (mine/app/state:get-debugger-request-id-cell st) None)
       (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-quick-result-state st)) cl:nil)
-      (cl:setf *pending-requests* cl:nil)
-      (cl:setf *hint-request-id* cl:nil)
-      (cl:setf *pending-jump-source* cl:nil)
+      (requests:request-state-clear! (mine/app/state:get-requests st))
+
+
       (cl:values))
     (cell:write! (.ms-debugger-active st) False)
+    (cell:write! (.ms-debugger-snapshot st) None)
     (cell:write! (.ms-repl-busy st) False)
     (cell:write! (.ms-busy-activity st) None)
     (cell:write! (.ms-beam-request-id st) None)
@@ -1644,7 +1723,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
       (start-proto-reader! st conn)
       (let req-id = (next-request-id! st))
       (let req = (msg:ReqEval req-id init-form "CL-USER" False))
-      (client:connection-send! conn req)
+      (progn (%send-request! st conn req) (values))
       (values)))
 
   (declare ensure-runtime! (MineState -> Optional client:Connection))
@@ -1710,9 +1789,9 @@ If the buffer has unsaved changes, writes to a temp file for compilation."
              (start-proto-reader! st conn)
              (let req-id = (next-request-id! st))
              (cell:write! (.ms-active-request st) (Some req-id))
-             (%track-diagnostic-request! req-id)
+
              (let req = (msg:ReqCompileFile req-id compile-path True))
-             (client:connection-send! conn req))))))))
+             (progn (%send-request! st conn req) (values)))))))))
 
   (declare %truncate-line (String * UFix -> String))
   (define (%truncate-line text max-len)
@@ -1805,11 +1884,11 @@ Uses the preceding (in-package ...) form to determine the compilation package."
              (start-proto-reader! st conn)
              (let req-id = (next-request-id! st))
              (cell:write! (.ms-active-request st) (Some req-id))
-             (%track-diagnostic-request! req-id)
+
              (let auto-coalton? = (== (cell:read (.ms-repl-lang st)) "Coalton"))
              (let req = (msg:ReqCompileString req-id form-text document-key pkg
                                              form-start 0 auto-coalton?))
-             (client:connection-send! conn req))))))))
+             (progn (%send-request! st conn req) (values)))))))))
 
   (declare quick-result-form! (MineState -> Void))
   (define (quick-result-form! st)
@@ -1853,7 +1932,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
              (%show-quick-result-pending-for-range! st target-start target-end document-key)
              (let auto-coalton? = (== (cell:read (.ms-repl-lang st)) "Coalton"))
              (let req = (msg:ReqQuickResult req-id target-text pkg auto-coalton?))
-             (client:connection-send! conn req))))))))
+             (progn (%send-request! st conn req) (values)))))))))
 
 ;;; Create project on disk
 
@@ -2267,16 +2346,19 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       (_ (cell:read (.ms-repl-package st)))))
 
   (declare %indent-rules-for-prepared! (MineState * buf:Buffer * indent:PreparedIndent -> List indent:IndentRuleEntry))
+  (declare %prepared-indent-package (MineState * buf:Buffer * indent:PreparedIndent -> String))
+  (define (%prepared-indent-package st buffer prepared)
+    (match (source:source-package-before (indent:prepared-source prepared) (indent:prepared-position prepared))
+      ((Some package) package)
+      ((None) (%indent-default-package st buffer))))
+
   (define (%indent-rules-for-prepared! st buffer prepared)
     "Resolve metadata against the same source snapshot used to calculate indentation."
     (let heads = (indent:prepared-indent-heads prepared))
     (match heads
       ((Nil) Nil)
       (_
-       (let pkg = (match (source:source-package-before (indent:prepared-source prepared)
-                                                       (indent:prepared-position prepared))
-                    ((Some package) package)
-                    ((None) (%indent-default-package st buffer))))
+       (let pkg = (%prepared-indent-package st buffer prepared))
        (lisp (-> (List indent:IndentRuleEntry)) (st heads pkg)
          (cl:or (%request-indent-rules st heads pkg)
                 (cl:mapcar #'%indent-rule-from-spec
@@ -2355,16 +2437,39 @@ Uses the preceding (in-package ...) form to determine the compilation package."
 
   (declare %reindent-line-range! (MineState * buf:Buffer * undo:UndoTree * cursor:CursorState * UFix * UFix -> Void))
   (define (%reindent-line-range! st buffer tree cs line end-line)
-    "Reindent lines LINE..END-LINE, clamped to the current buffer."
+    "Batch metadata per source package with one bounded budget for the command."
     (let gb = (buf:buffer-gap buffer))
     (let line-count = (gap:gap-line-count gb))
-    (when (and (<= line end-line) (< line line-count))
-      (match (%target-indent-for-line! st buffer line)
-        ((None) (values))
-        ((Some target-indent)
-         (%set-line-indentation! buffer tree cs line target-indent)))
-      (%reindent-line-range! st buffer tree cs (+ line 1) end-line)))
-
+    (match (%indent-mode buffer)
+      ((None) (values))
+      ((Some mode)
+       (let context = (source:scan-source (gap:gap-to-string gb)))
+       (let groups = (cell:new (the (List (Tuple String (List String))) Nil)))
+       (rec collect ((current line))
+         (when (and (<= current end-line) (< current line-count))
+           (let prepared = (indent:prepare-indent-from-source context mode (gap:gap-line-to-pos gb current) False))
+           (let package = (%prepared-indent-package st buffer prepared))
+           (let heads = (indent:prepared-indent-heads prepared))
+           (unless (null heads)
+             (let previous = (match (list:lookup package (cell:read groups))
+                               ((Some found) found) ((None) Nil)))
+             (cell:write! groups
+                          (Cons (Tuple package (list:union heads previous))
+                                (filter (fn ((Tuple key _)) (not (== key package))) (cell:read groups)))))
+           (collect (+ current 1))))
+       (let batches = (cell:read groups))
+       (let rules = (lisp (-> (List (Tuple String (List indent:IndentRuleEntry)))) (st batches)
+                       (%request-indent-rule-batches st batches)))
+       (rec apply-lines ((current line))
+         (when (and (<= current end-line) (< current line-count))
+           ;; Earlier edits change columns; only metadata is retained across lines.
+           (let prepared = (indent:prepare-indent-for-line gb mode current))
+           (let package = (%prepared-indent-package st buffer prepared))
+           (let metadata = (match (list:lookup package rules) ((Some found) found) ((None) Nil)))
+           (match (indent:compute-prepared-indent prepared metadata)
+             ((Some target) (%set-line-indentation! buffer tree cs current target))
+             ((None) (values)))
+           (apply-lines (+ current 1)))))))
   (declare paredit-forward-join-and-indent! (MineState * buf:Buffer -> Void))
   (define (paredit-forward-join-and-indent! st buffer)
     "Forward-join structurally; if a newline was preserved, reindent touched lines."
@@ -2946,8 +3051,12 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        ;; Find the buffer for this path and close if clean
        (match (mgr:bufmgr-find-by-path (.ms-bufmgr st) prev-path)
          ((Some buf)
-          (when (not (buf:buffer-dirty? buf))
-            (mgr:bufmgr-close! (.ms-bufmgr st) (buf:buffer-id buf)))
+          (if (buf:buffer-dirty? buf)
+              (%commit-preview! st)
+              (progn
+                (forget-buffer-view! st (buf:buffer-id buf))
+                (mgr:bufmgr-close! (.ms-bufmgr st) (buf:buffer-id buf))
+                (values)))
           (values))
          ((None) (values)))
        (cell:write! (.ms-preview-path st) None)
@@ -2972,12 +3081,11 @@ Uses the preceding (in-package ...) form to determine the compilation package."
   (declare tree-open-file! (MineState * String -> Void))
   (define (tree-open-file! st fpath)
     "Preview a file from the tree pane. Does not add to open files or switch focus."
-    ;; Close previous preview if clean
-    (%close-preview! st)
     ;; Reuse existing buffer if already open
     (match (mgr:bufmgr-find-by-path (.ms-bufmgr st) fpath)
       ((Some buf)
-       (let bid = (buf:buffer-id buf))
+       (when (not (== (cell:read (.ms-preview-path st)) (buf:buffer-path buf)))
+         (%close-preview! st))
        (activate-buffer! st buf)
        (clamp-cursor-to-buffer! st buf)
        ;; An already open document remains permanently open.
@@ -2986,10 +3094,10 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        ;; Open new buffer
        (match (mgr:bufmgr-open-file! (.ms-bufmgr st) fpath)
          ((Ok buf)
-          (let bid = (buf:buffer-id buf))
+          (%close-preview! st)
           (activate-buffer! st buf)
-          (cell:write! (.ms-preview-path st) (Some fpath))
-          (tree:tree-pane-set-preview-path! (.ms-tree st) (Some fpath))
+          (cell:write! (.ms-preview-path st) (buf:buffer-path buf))
+          (tree:tree-pane-set-preview-path! (.ms-tree st) (buf:buffer-path buf))
           (values))
          ((Err msg)
           (user-error! st msg))))))
@@ -3087,19 +3195,21 @@ Uses the preceding (in-package ...) form to determine the compilation package."
   (declare %completion-accept! (MineState * String -> Void))
   (define (%completion-accept! st name)
     "Replace the current prefix in the buffer with NAME."
-    (let prefix = (cell:read (complete:.cs-prefix (.ms-completion st))))
-    (let suffix = (lisp (-> String) (name prefix)
-                    (cl:if (cl:>= (cl:length name) (cl:length prefix))
-                           (cl:subseq name (cl:length prefix))
-                           "")))
     (match (focus:focus-current (.ms-focus st))
       ((focus:FocusEditor)
        (match (mgr:bufmgr-current (.ms-bufmgr st))
          ((Some buf)
-          (ops:insert-string! buf (buf:buffer-undo buf) (.ms-cursor st) suffix))
+          (let pos = (cursor:cursor-position (.ms-cursor st)))
+          (let prefix = (complete:extract-symbol-prefix (buf:buffer-gap buf) pos))
+          (let start = (- pos (min pos (str:length prefix))))
+          (ops:replace-range! buf (buf:buffer-undo buf) (.ms-cursor st)
+                              start pos name (+ start (str:length name))))
          ((None) (values))))
       ((focus:FocusRepl)
-       (repl:repl-pane-paste-to-input! (.ms-repl st) suffix))
+       (let pos = (repl:repl-pane-input-cursor (.ms-repl st)))
+       (let prefix = (complete:extract-symbol-prefix-input (repl:repl-pane-get-input (.ms-repl st)) pos))
+       (let start = (- pos (min pos (str:length prefix))))
+       (repl:repl-pane-replace-input-range! (.ms-repl st) start pos name))
       (_ (values))))
 
   (declare %trigger-completion! (MineState -> Void))
@@ -3784,10 +3894,13 @@ Enter or Space inserts the matching Unicode character at the cursor."
   (declare open-loose-file! (MineState * String -> Void))
   (define (open-loose-file! st path)
     "Open a file and add it to the open files section above the tree."
-    (%close-preview! st)
     (unless (== path "")
       (match (mgr:bufmgr-open-file! (.ms-bufmgr st) path)
         ((Ok buf)
+         (let path = (match (buf:buffer-path buf) ((Some canonical) canonical) ((None) path)))
+         (if (== (cell:read (.ms-preview-path st)) (Some path))
+             (%commit-preview! st)
+             (%close-preview! st))
          (activate-buffer! st buf)
          ;; Add to tree's open files section
          (let display-name = (lisp (-> String) (path)
@@ -4632,55 +4745,11 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
       None)))
 
 (cl:defun %read-enclosing-symbol (gb cursor-pos)
-  "Read the head symbol of the nearest enclosing form. Returns name string or NIL."
-  (cl:handler-case
-      (cl:let* ((len (mine/buffer/gap:gap-length gb))
-                (paren-pos (%find-enclosing-open-paren gb cursor-pos)))
-        (cl:when paren-pos
-          (%read-symbol-after gb (cl:1+ paren-pos) len)))
-    (cl:error () cl:nil)))
+  (%read-enclosing-symbol-from-string (gap:gap-to-string gb) cursor-pos))
 
 (cl:defun %read-enclosing-symbol-from-string (text cursor-pos)
-  "Read the head symbol of the nearest enclosing form in TEXT."
-  (cl:handler-case
-      (cl:let* ((gb (mine/buffer/gap:gap-from-string text))
-                (safe-pos (cl:max 0 (cl:min cursor-pos (mine/buffer/gap:gap-length gb)))))
-        (%read-enclosing-symbol gb safe-pos))
-    (cl:error () cl:nil)))
-
-
-(cl:defun %find-enclosing-open-paren (gb pos)
-  "Scan backward from POS for the nearest unmatched open paren. Returns position or NIL."
-  (cl:let ((depth 0))
-    (cl:loop :for i :from (cl:1- pos) :downto 0
-             :do (cl:let ((c (mine/app/mine::gap-char-at-cl gb i)))
-                   (cl:cond
-                     ((cl:char= c #\)) (cl:incf depth))
-                     ((cl:char= c #\()
-                      (cl:if (cl:zerop depth)
-                             (cl:return i)
-                             (cl:decf depth)))))
-             :finally (cl:return cl:nil))))
-
-(cl:defun %read-symbol-after (gb start len)
-  "Read a symbol name from GB starting at START. Skips whitespace, reads until delimiter."
-  (cl:let ((i start))
-    ;; Skip whitespace
-    (cl:loop :while (cl:< i len)
-             :for c := (mine/app/mine::gap-char-at-cl gb i)
-             :while (cl:or (cl:char= c #\Space) (cl:char= c #\Tab) (cl:char= c #\Newline))
-             :do (cl:incf i))
-    ;; Collect symbol chars
-    (cl:let ((chars cl:nil))
-      (cl:loop :while (cl:< i len)
-               :for c := (mine/app/mine::gap-char-at-cl gb i)
-               :while (cl:not (cl:or (cl:char= c #\Space) (cl:char= c #\Tab)
-                                      (cl:char= c #\Newline) (cl:char= c #\()
-                                      (cl:char= c #\)) (cl:char= c (cl:code-char 0))))
-               :do (cl:push c chars) (cl:incf i))
-      (cl:if chars
-             (cl:coerce (cl:nreverse chars) 'cl:string)
-             cl:nil))))
+  (%coalton-optional-value-or-nil
+   (source:source-enclosing-head (source:scan-source text) (cl:max 0 (cl:min cursor-pos (cl:length text))))))
 
 (cl:defun %detect-buffer-package (buf-text default-pkg cl:&optional (position (cl:length buf-text)))
   "Inspect source spans without invoking the Lisp reader."
@@ -4689,68 +4758,23 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
            (mine/syntax/context:scan-source buf-text) position))
          default-pkg))
 (cl:defun %resolve-qualified-name (name buf-pkg)
-  "If NAME contains a colon (like 'cell:read'), resolve the package prefix
-using the buffer package's local nicknames. Returns (values pkg-name sym-name).
-If no colon, returns (values buf-pkg name)."
-  (cl:let ((colon-pos (cl:position #\: name)))
-    (cl:if colon-pos
-           (cl:let* ((prefix (cl:subseq name 0 colon-pos))
-                     (sym-part (cl:string-left-trim ":" (cl:subseq name colon-pos)))
-                     ;; Try to resolve the prefix via local nicknames
-                     (primary-pkg (cl:find-package (cl:string-upcase buf-pkg)))
-                     (resolved-pkg
-                       (cl:or
-                        ;; Check local nicknames
-                        (cl:when primary-pkg
-                          (cl:cdr (cl:assoc (cl:string-upcase prefix)
-                                            (sb-ext:package-local-nicknames primary-pkg)
-                                            :test #'cl:string-equal)))
-                        ;; Try as a direct package name
-                        (cl:find-package (cl:string-upcase prefix)))))
-             (cl:if resolved-pkg
-                    (cl:values (cl:package-name resolved-pkg) sym-part)
-                    ;; Can't resolve prefix locally, send prefix as package name
-                    (cl:values prefix sym-part)))
-           (cl:values buf-pkg name))))
-
-;;; Diagnostic navigation helpers live in app/diagnostics.lisp.
+  "Runtime package resolution must use the source package's own local nicknames."
+  (cl:values buf-pkg name))
 
 (cl:defun %read-symbol-at-cursor (gb pos)
-  "Read the symbol at or around cursor position POS in gap buffer GB.
-Returns a string or NIL."
-  (cl:let ((len (mine/buffer/gap:gap-length gb)))
-    ;; Scan backward to find symbol start
-    (cl:let ((start pos))
-      (cl:loop :while (cl:and (cl:> start 0)
-                               (cl:let ((c (mine/app/mine::gap-char-at-cl gb (cl:1- start))))
-                                 (cl:or (cl:alphanumericp c)
-                                        (cl:member c '(#\- #\_ #\! #\? #\* #\+ #\/ #\< #\> #\= #\. #\: #\%)))))
-               :do (cl:decf start))
-      ;; Scan forward to find symbol end
-      (cl:let ((end pos))
-        (cl:loop :while (cl:and (cl:< end len)
-                                 (cl:let ((c (mine/app/mine::gap-char-at-cl gb end)))
-                                   (cl:or (cl:alphanumericp c)
-                                          (cl:member c '(#\- #\_ #\! #\? #\* #\+ #\/ #\< #\> #\= #\. #\: #\%)))))
-                 :do (cl:incf end))
-        (cl:if (cl:> end start)
-               (mine/buffer/gap:gap-substring gb start end)
-               cl:nil)))))
+  (%coalton-optional-value-or-nil
+   (source:source-symbol-at (source:scan-source (gap:gap-to-string gb)) pos)))
 
 (cl:defun %jump-stack-push (st filepath position)
-  "Push (filepath . position) onto the jump stack."
-  (cl:let* ((box (mine/app/state:get-jump-stack st))
-            (stack (mine/app/state::%native-box-value box)))
-    (cl:setf (mine/app/state::%native-box-value box)
-             (cl:cons (cl:cons filepath position) stack))))
+  (cl:let ((stack-cell (mine/app/state:get-jump-stack st)))
+    (cell:write! stack-cell (Cons (requests:SourceLocation filepath position) (cell:read stack-cell)))))
 
 (cl:defun %jump-stack-pop (st)
-  "Pop and return (filepath . position) from the jump stack, or NIL."
-  (cl:let* ((box (mine/app/state:get-jump-stack st))
-            (stack (mine/app/state::%native-box-value box)))
+  (cl:let* ((stack-cell (mine/app/state:get-jump-stack st)) (stack (cell:read stack-cell)))
     (cl:when stack
-      (cl:setf (mine/app/state::%native-box-value box) (cl:cdr stack))
-      (cl:car stack))))
+      (cell:write! stack-cell (cl:cdr stack))
+      (cl:cons (requests:location-document (cl:car stack))
+               (requests:location-position (cl:car stack))))))
 
 ;;; Find compile target (enclosing top-level form, descending through wrappers)
 
@@ -4828,9 +4852,6 @@ Returns a string or NIL."
         cl:t))))
 
 (cl:defun %start-foreground-proto-reader-cl (st conn)
-  "Start the foreground protocol reader and remember its stream for debugger/IO replies."
-  (cl:let ((stream (mine/protocol/client::%connection-stream conn)))
-    (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-conn-stream st)) stream))
   (%start-proto-reader-thread-cl st conn
                                  (mine/app/state:get-proto-thread st)
                                  '(:connection-lost)
@@ -4844,97 +4865,37 @@ Returns a string or NIL."
                                  "mine-bg-proto-reader"))
 
 (cl:defun %clear-background-protocol-state (st)
-  "Forget background protocol state and pending editor-service requests."
+  "Forget session-owned editor requests when the background connection is lost."
   (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-bg-proto-thread st)) cl:nil)
-  (cl:let* ((mgr (mine/app/state:get-runtime-mgr st))
-            (conn (mine/protocol/lifecycle::%runtime-manager-background-connection mgr)))
-    (cl:when conn
-      (cl:setf (mine/protocol/client::%connection-active conn) cl:nil)))
-  (cl:setf *pending-requests* cl:nil)
-  (cl:setf *hint-request-id* cl:nil)
-  (cl:setf *pending-jump-source* cl:nil)
+  (cl:let* ((manager (mine/app/state:get-runtime-mgr st))
+            (conn (mine/protocol/lifecycle::%runtime-manager-background-connection manager)))
+    (cl:when conn (client:connection-deactivate! conn)))
+  (requests:request-state-clear! (mine/app/state:get-requests st))
   (cl:values))
 
 (cl:defun %drain-and-parse-messages (st)
-  "Drain the mailbox and convert raw CL messages to Coalton ProtoMsg values.
-Returns a Coalton List of ProtoMsg."
+  "Decode without side effects, preserving receive order for the main event loop."
   (cl:let ((mailbox (mine/app/state::%native-box-value (mine/app/state:get-proto-mailbox st))))
-    (cl:if (cl:null mailbox)
-           Nil
-           (cl:let ((raw-msgs (sb-concurrency:receive-pending-messages mailbox))
-                    (result Nil))
-             ;; Parsing and callbacks mutate request/diagnostic state, so they
-             ;; must run in receive order even though RESULT is built backward.
-             (cl:dolist (msg raw-msgs)
-               (cl:if (cl:and (cl:consp msg)
-                               (cl:eq (cl:first msg) :background-connection-lost))
-                      (%clear-background-protocol-state st)
-                      ;; Check for pending async request (hint, jump-to-def, etc.)
-                      (cl:let ((handler (cl:when (cl:and (cl:consp msg)
-                                                          (cl:eq (cl:first msg) :return))
-                                          (%pop-pending-request (cl:second msg)))))
-                        (cl:if handler
-                               (cl:funcall handler st (cl:third msg))
-                               (cl:let ((parsed (%parse-one-message msg)))
-                                 (cl:when parsed
-                                   (cl:setf result (Cons parsed result))))))))
-             (coalton/list:reverse result)))))
+    (cl:if mailbox
+           (cl:loop :for raw :in (sb-concurrency:receive-pending-messages mailbox)
+                    :for parsed := (%parse-one-message raw)
+                    :when parsed :collect parsed)
+           cl:nil)))
 
-(cl:defun %parse-one-message (msg)
-  "Parse a raw CL protocol message into a Coalton ProtoMsg."
-  (cl:cond
-    ((cl:and (cl:consp msg) (cl:eq (cl:first msg) :connection-lost))
-     mine/app/mine:ProtoConnectionLost)
-	    ((cl:and (cl:consp msg) (cl:eq (cl:first msg) :return))
-	     (cl:let ((request-id (cl:second msg))
-	              (payload (cl:third msg)))
-	       (mine/app/diagnostics:forget-diagnostic-request request-id)
-	       (cl:cond
-         ((cl:and (cl:consp payload) (cl:eq (cl:first payload) :ok))
-          (mine/app/mine:ProtoReturn
-           (mine/protocol/messages:RequestId request-id)
-           (cl:format cl:nil "~A" (cl:second payload))
-           coalton:False))
-         ((cl:and (cl:consp payload) (cl:eq (cl:first payload) :error))
-          (mine/app/mine:ProtoReturn
-           (mine/protocol/messages:RequestId request-id)
-           (cl:format cl:nil "~A" (cl:second payload))
-           coalton:True))
-         (cl:t cl:nil))))
-    ((cl:and (cl:consp msg) (cl:eq (cl:first msg) :notify))
-     (cl:let ((payload (cl:second msg)))
-       (cl:cond
-         ((cl:and (cl:consp payload) (cl:eq (cl:first payload) :output))
-          (mine/app/mine:ProtoOutput (cl:second payload)))
-         ((cl:and (cl:consp payload) (cl:eq (cl:first payload) :output-chunk))
-          (mine/app/mine:ProtoOutputChunk
-           (mine/protocol/messages:RequestId (cl:second payload)) (cl:third payload)))
-         ((cl:and (cl:consp payload) (cl:eq (cl:first payload) :package))
-          (mine/app/mine:ProtoPackage
-           (mine/protocol/messages:RequestId (cl:second payload)) (cl:third payload)))
-	        ((cl:and (cl:consp payload) (cl:eq (cl:first payload) :diagnostic))
-	          (cl:let ((diagnostic (cl:rest payload)))
-	            (cl:unless (mine/app/diagnostics:diagnostic-stale-p diagnostic)
-	              (mine/app/diagnostics:store-diagnostic diagnostic)
-	              (cl:let ((sev (cl:getf diagnostic :severity))
-	                       (summary (cl:or (cl:getf diagnostic :summary) "")))
-	                (cl:when (mine/app/diagnostics:diagnostic-announcement-p diagnostic)
-	                (mine/app/mine:ProtoOutput
-	                 (cl:format cl:nil ";; ~A: ~A"
-	                            (cl:string-downcase (cl:symbol-name sev))
-                            (cl:subseq summary 0 (cl:min (cl:length summary) 120)))))))))
-         (cl:t cl:nil))))
-    ((cl:and (cl:consp msg) (cl:eq (cl:first msg) :debug))
-     (cl:let ((cond-text (cl:format cl:nil "~A" (cl:third msg))))
-       ;; Pack all debug data into a NativeBox for the Coalton side to install
-       (mine/app/mine:ProtoDebug cond-text
-         (mine/app/state::make-%native-box :value msg))))
-    ((cl:and (cl:consp msg) (cl:eq (cl:first msg) :io-request))
-     (cl:let ((prompt (cl:or (cl:third msg) "")))
-       (mine/app/mine:ProtoIORequest
-         (cl:format cl:nil "~A" prompt)
-         (mine/app/state::make-%native-box :value msg))))
-    (cl:t cl:nil)))
+(cl:defun %parse-one-message (raw)
+  (cl:let ((expression (%coalton-optional-value-or-nil (wire:raw-to-sexpr raw))))
+    (cl:when expression
+      (%coalton-optional-value-or-nil (msg:decode-response expression)))))
+
+(cl:defun %receive-diagnostic (st diagnostic)
+  (cl:unless (mine/app/diagnostics:diagnostic-stale-p diagnostic)
+    (mine/app/diagnostics:store-diagnostic diagnostic)
+    (cl:when (mine/app/diagnostics:diagnostic-announcement-p diagnostic)
+      (repl:repl-pane-append-output!
+       (mine/app/state:get-repl-pane st)
+       (cl:format cl:nil ";; ~(~A~): ~A" (cl:getf diagnostic :severity)
+                  (cl:subseq (cl:or (cl:getf diagnostic :summary) "") 0
+                             (cl:min (cl:length (cl:or (cl:getf diagnostic :summary) "")) 120)))))))
 
 (cl:defun %decode-result-values-cl (text)
   "Decode TEXT into a Coalton list of printed value strings."
@@ -5407,49 +5368,23 @@ Returns a Coalton List of ProtoMsg."
                scr inner-rect clipped row inner-x line-style))
             (cl:incf row)))))))
 
-(cl:defun %install-debugger-data (st debug-data)
-  "Install debugger state from the packed debug data NativeBox."
-  (cl:let* ((msg (mine/app/state::%native-box-value debug-data))
-            (msg-id (cl:second msg))
-            (restarts (cl:fourth msg))
-            (frames (cl:fifth msg))
-            (all-items cl:nil))
-    ;; Build display items
-    (cl:push (cl:list :header 0 "Restarts:") all-items)
-    (cl:dolist (r restarts)
-      (cl:push (cl:list :restart (cl:first r)
-                        (cl:format cl:nil "[~D] ~A" (cl:first r) (cl:third r)))
-               all-items))
-    (cl:push (cl:list :header 0 "") all-items)
-    (cl:push (cl:list :header 0 "Backtrace:") all-items)
-    (cl:dolist (f frames)
-      (cl:push (cl:list :frame (cl:first f) (cl:second f)) all-items))
-    (cl:setf all-items (cl:nreverse all-items))
-    ;; Store in NativeBox fields
-    (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-debugger-items st)) all-items)
-    (coalton/cell:write! (mine/app/state:get-debugger-selected-cell st)
-                         (%dbg-next-selectable all-items 0 1))
-    (coalton/cell:write! (mine/app/state:get-debugger-scroll-cell st) 0)
-    (coalton/cell:write! (mine/app/state:get-debugger-follow-cell st) cl:t)
-    ;; Store (msg-id . stream) for sending restart choice
-    (cl:let ((stream (mine/app/state::%native-box-value (mine/app/state:get-conn-stream st))))
-      (cl:when stream
-        (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-conn-stream st))
-                 (cl:cons msg-id stream))))))
+(cl:defun %debugger-display-items (st)
+  "Project typed debugger data into display rows at the renderer boundary."
+  (cl:let ((snapshot (%coalton-optional-value-or-nil
+                     (cell:read (mine/app/state:get-debugger-snapshot-cell st)))))
+    (cl:when snapshot
+      (cl:append
+       (cl:list (cl:list :header 0 "Restarts:"))
+       (cl:mapcar (cl:lambda (restart)
+                    (cl:list :restart (msg:restart-index restart)
+                             (cl:format cl:nil "[~D] ~A" (msg:restart-index restart)
+                                        (msg:restart-report restart))))
+                  (msg:debugger-restarts snapshot))
+       (cl:list (cl:list :header 0 "") (cl:list :header 0 "Backtrace:"))
+       (cl:mapcar (cl:lambda (frame)
+                    (cl:list :frame (msg:frame-index frame) (msg:frame-description frame)))
+                  (msg:debugger-frames snapshot))))))
 
-;;; IO request helpers (thin CL — only NativeBox access)
-
-(cl:defun %install-io-request-data (st io-data)
-  "Install IO request state from the packed NativeBox.
-Pairs the message ID with the raw socket stream for sending :io-response."
-  (cl:let* ((msg (mine/app/state::%native-box-value io-data))
-            (msg-id (cl:second msg))
-            (stream (mine/app/state::%native-box-value (mine/app/state:get-conn-stream st))))
-    (cl:when stream
-      (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-io-request-data st))
-               (cl:cons msg-id (cl:if (cl:consp stream) (cl:cdr stream) stream))))))
-
-;;; Debugger helpers (thin CL — only NativeBox access)
 
 (cl:defun %dbg-next-selectable (items current direction)
   "Find the next selectable item from CURRENT in DIRECTION (+1 or -1).
@@ -5531,7 +5466,7 @@ where IDX is the index of the item in ITEMS."
             (w (mine/widget/types::rect/rect-_2 rect))
             (h (mine/widget/types::rect/rect-_3 rect))
             (cond-text (coalton/cell:read (mine/app/state:get-debugger-condition-cell st)))
-            (items (mine/app/state::%native-box-value (mine/app/state:get-debugger-items st)))
+            (items (%debugger-display-items st))
             (selected (coalton/cell:read (mine/app/state:get-debugger-selected-cell st)))
             (scroll-cell (mine/app/state:get-debugger-scroll-cell st))
             (follow-cell (mine/app/state:get-debugger-follow-cell st))
@@ -5626,57 +5561,44 @@ where IDX is the index of the item in ITEMS."
 
 ;;; Pending async requests (for subprocess queries that bypass REPL display)
 
-(cl:defun %register-pending-request (rid handler)
-  (cl:push (cl:cons rid handler) *pending-requests*))
+(cl:defun %register-pending-request (st rid metadata)
+  (requests:request-register! (mine/app/state:get-requests st) rid metadata))
 
-(cl:defun %pop-pending-request (rid)
-  "Remove and return the handler for RID, or NIL."
-  (cl:let ((entry (cl:assoc rid *pending-requests* :test #'cl:eql)))
-    (cl:when entry
-      (cl:setf *pending-requests* (cl:remove entry *pending-requests*))
-      (cl:cdr entry))))
+(cl:defun %pop-pending-request (st rid)
+  (%coalton-optional-value-or-nil
+   (requests:request-take! (mine/app/state:get-requests st) rid)))
 
 (cl:defun %next-request-id-cl (st)
-  "Allocate a request ID from CL side. Returns the integer."
-  (cl:let* ((cell (mine/app/state:get-next-req-id-cell st))
-            (rid (coalton/cell:read cell)))
-    (coalton/cell:write! cell (cl:1+ rid))
-    rid))
+  (msg:request-id-value (next-request-id! st)))
 
-(cl:defun %send-to-background-subprocess (st msg)
-  "Send MSG on the runtime background connection."
-  (cl:let* ((mgr (mine/app/state:get-runtime-mgr st))
-            (conn (mine/protocol/lifecycle::%runtime-ensure-background-connection-raw mgr)))
+(cl:defun %send-to-background-subprocess (st request)
+  "The socket is native; the outgoing message remains a checked Coalton Request."
+  (cl:let* ((manager (mine/app/state:get-runtime-mgr st))
+            (conn (mine/protocol/lifecycle::%runtime-ensure-background-connection-raw manager)))
     (cl:when conn
       (%start-background-proto-reader-cl st conn)
-      (cl:let ((stream (mine/protocol/client::%connection-stream conn)))
-        (cl:when (cl:and (cl:streamp stream) (cl:open-stream-p stream))
-          (cl:handler-case
-              (mine/protocol/server::write-message stream msg)
-            (cl:error ()
-              (cl:setf (mine/protocol/client::%connection-active conn) cl:nil)
-              (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-bg-proto-thread st)) cl:nil)
-              cl:nil)))))))
+      (cl:if (client:connection-send-checked! conn request)
+             cl:t
+             (cl:progn (%clear-background-protocol-state st) cl:nil)))))
 
-(cl:defun %sync-runtime-request (st msg)
-  "Send MSG to the runtime over a short-lived connection and return the reply.
-This avoids stealing messages from the foreground/background protocol readers."
-  (cl:let* ((mgr (mine/app/state:get-runtime-mgr st))
-            (proc (mine/protocol/lifecycle::%runtime-manager-process mgr))
-            (port (mine/protocol/lifecycle::%runtime-manager-port mgr)))
-    (cl:when (cl:and proc (sb-ext:process-alive-p proc) (cl:plusp port))
-      (cl:handler-case
-          (cl:let* ((conn (mine/protocol/lifecycle::%runtime-open-connection port))
-                    (stream (mine/protocol/client::%connection-stream conn)))
-            (cl:unwind-protect
-                 (cl:progn
-                   (mine/protocol/server::write-message stream msg)
-                   (mine/protocol/server::read-message stream))
-              (cl:ignore-errors
-                (mine/bindings/socket:socket-close stream))
-              (cl:setf (mine/protocol/client::%connection-active conn) cl:nil)))
-        (cl:error () cl:nil)))))
-
+(cl:defun %sync-runtime-request (st request cl:&optional (timeout-seconds 0.15))
+  "Use a short-lived connection and a bounded budget for editor metadata."
+  (cl:let* ((manager (mine/app/state:get-runtime-mgr st))
+            (process (mine/protocol/lifecycle::%runtime-manager-process manager))
+            (port (mine/protocol/lifecycle::%runtime-manager-port manager))
+            (conn cl:nil))
+    (cl:when (cl:and process (sb-ext:process-alive-p process) (cl:plusp port))
+      (cl:unwind-protect
+           (cl:handler-case
+               (sb-ext:with-timeout timeout-seconds
+                 (cl:setf conn (mine/protocol/lifecycle::%runtime-open-connection port))
+                 (cl:when (client:connection-send-checked! conn request)
+                   (mine/protocol/server::read-message (mine/protocol/client::%connection-stream conn))))
+             (sb-ext:timeout () cl:nil)
+             (cl:error () cl:nil))
+        (cl:when conn
+          (cl:ignore-errors (mine/bindings/socket:socket-close (mine/protocol/client::%connection-stream conn)))
+          (client:connection-deactivate! conn))))))
 (cl:defun %optional-ufix (value)
   (cl:if (cl:and (cl:integerp value) (cl:>= value 0))
          (coalton:Some value)
@@ -5704,12 +5626,12 @@ This avoids stealing messages from the foreground/background protocol readers."
     (cl:error ()
       (mine/syntax/indent:IndentRuleEntry "" mine/syntax/indent:RuleGeneric))))
 
-(cl:defun %request-indent-rules (st heads package-name)
+(cl:defun %request-indent-rules (st heads package-name cl:&optional (timeout-seconds 0.15))
   "Synchronously ask the runtime image for indentation rules for HEADS."
   (cl:let* ((rid (%next-request-id-cl st))
             (reply (%sync-runtime-request
                     st
-                    (cl:list :indent-rules rid heads package-name))))
+                    (msg:ReqIndentRules (msg:RequestId rid) heads package-name) timeout-seconds)))
     (cl:when (cl:and (cl:consp reply)
                      (cl:eq (cl:first reply) :return)
                      (cl:eql (cl:second reply) rid))
@@ -5717,141 +5639,115 @@ This avoids stealing messages from the foreground/background protocol readers."
         (cl:when (cl:and (cl:consp payload) (cl:eq (cl:first payload) :ok))
           (cl:mapcar #'%indent-rule-from-spec (cl:second payload)))))))
 
-(cl:defun %indent-rules-for-line-cl (st heads gb line default-package)
-  "Return runtime-resolved indentation rules for HEADS affecting LINE in GB."
-  (cl:let* ((line-pos (mine/buffer/gap:gap-line-to-pos gb line))
-            (pkg (cl:or (%find-in-package-before gb line-pos) default-package)))
-    (cl:or (%request-indent-rules st heads pkg)
-           cl:nil)))
-
+(cl:defun %request-indent-rule-batches (st batches)
+  "Use one overall budget; missing or late metadata uses local known rules."
+  (cl:let ((deadline (cl:+ (cl:get-internal-real-time)
+                            (cl:ceiling (cl:* 0.15 cl:internal-time-units-per-second)))))
+    (cl:mapcar
+     (cl:lambda (batch)
+       (cl:let* ((package (fst batch)) (heads (snd batch))
+                 (remaining (cl:/ (cl:- deadline (cl:get-internal-real-time))
+                                   cl:internal-time-units-per-second))
+                 (rules (cl:or (cl:when (cl:plusp remaining)
+                                  (%request-indent-rules st heads package remaining))
+                                (cl:mapcar #'%indent-rule-from-spec
+                                           (mine/protocol/server::%indent-rule-specs-for-heads heads package)))))
+         (Tuple package rules)))
+     batches)))
 (cl:defun %send-quick-result-interrupt-cl (st target-id)
-  "Send a request-scoped interrupt for Quick Result TARGET-ID."
   (cl:let ((rid (%next-request-id-cl st)))
-    (%register-pending-request
-     rid
-     (cl:lambda (st payload)
-       (cl:declare (cl:ignore st payload))
-       cl:nil))
+    (%register-pending-request st rid requests:PendingDiscard)
     (cl:let ((sent (%send-to-background-subprocess
-                    st
-                    (cl:list :interrupt-request rid target-id))))
-      (cl:unless sent
-        (%pop-pending-request rid))
+                    st (msg:ReqInterruptRequest (msg:RequestId rid) (msg:RequestId target-id)))))
+      (cl:unless sent (%pop-pending-request st rid))
       sent)))
 
-;;; Async type hint cache
-
-(cl:defvar *hint-last-sym* nil "Last symbol name we queried for hints.")
-(cl:defvar *hint-last-pkg* nil "Last package name for hints.")
-
 (cl:defun %request-symbol-hint (st sym-name pkg-name)
-  "Send a :coalton-type-of query to the subprocess for status bar hints."
-  (cl:when (cl:and sym-name (cl:plusp (cl:length sym-name)))
-    (cl:let ((rid (%next-request-id-cl st)))
-      (cl:setf *hint-request-id* rid)
-      (cl:setf *hint-last-sym* sym-name)
-      (cl:setf *hint-last-pkg* pkg-name)
-      (%register-pending-request rid
-        (cl:lambda (st payload)
-          (cl:declare (cl:ignore st))
-          (cl:setf *hint-request-id* nil)
-          (cl:cond
-            ((cl:and (cl:consp payload) (cl:eq (cl:first payload) :ok))
-             (cl:let ((result (cl:second payload)))
-               (cl:setf *hint-result*
-                 (cl:cond
-                   ;; Coalton type string
-                   ((cl:stringp result)
-                    (cl:format cl:nil "~A :: ~A" *hint-last-sym* result))
-                   ;; Alist from symbol-info
-                   ((cl:consp result)
-                    (cl:let ((ct (cl:cdr (cl:assoc :coalton-type result)))
-                             (al (cl:cdr (cl:assoc :arglist result))))
-                      (cl:cond
-                        (ct (cl:format cl:nil "~A :: ~A" *hint-last-sym* ct))
-                        (al (cl:format cl:nil "(~A ~A)" *hint-last-sym* al))
-                        (cl:t ""))))
-                   (cl:t "")))))
-            (cl:t (cl:setf *hint-result* "")))))
-      (cl:unless (%send-to-background-subprocess st
-                   (cl:list :coalton-type-of rid
-                     (cl:string-upcase sym-name)
-                     (cl:string-upcase pkg-name)))
-        (%pop-pending-request rid)
-        (cl:setf *hint-request-id* nil)))))
+  (cl:let* ((cache (mine/app/state:get-requests st))
+            (rid (%next-request-id-cl st)))
+    (requests:request-set-hint-context! cache (Some (Tuple sym-name pkg-name)))
+    (requests:request-set-hint-id! cache (Some rid))
+    (requests:request-set-hint-text! cache "")
+    (%register-pending-request st rid (requests:PendingHint sym-name pkg-name))
+    (cl:unless (%send-to-background-subprocess
+                st (msg:ReqCoaltonTypeOf (msg:RequestId rid) sym-name pkg-name))
+      (%pop-pending-request st rid)
+      (requests:request-set-hint-id! cache None)
+      (requests:request-set-hint-context! cache None))))
 
 (cl:defun %update-hint-if-changed (st sym-name pkg-name)
-  "If the symbol at cursor changed, request a new hint from the subprocess."
-  (cl:when (cl:or (cl:not (cl:equal sym-name *hint-last-sym*))
-                  (cl:not (cl:equal pkg-name *hint-last-pkg*)))
+  (cl:let ((cache (mine/app/state:get-requests st)))
     (cl:if (cl:and sym-name (cl:plusp (cl:length sym-name)))
-           (%request-symbol-hint st sym-name pkg-name)
+           (cl:when (requests:request-hint-changed? cache sym-name pkg-name)
+             (%request-symbol-hint st sym-name pkg-name))
            (cl:progn
-             (cl:setf *hint-last-sym* nil)
-             (cl:setf *hint-last-pkg* nil)
-             (cl:setf *hint-result* "")))))
+             (requests:request-set-hint-context! cache None)
+             (requests:request-set-hint-id! cache None)
+             (requests:request-set-hint-text! cache "")))))
 
-;;; Async jump-to-definition
-
-;;; Async runtime heap info
+(cl:defun %apply-hint-response (st symbol payload)
+  (requests:request-set-hint-text!
+   (mine/app/state:get-requests st)
+   (cl:if (cl:eq (cl:first payload) :ok)
+          (cl:let ((result (cl:second payload)))
+            (cl:cond
+              ((cl:stringp result) (cl:format cl:nil "~A :: ~A" symbol result))
+              ((cl:consp result)
+               (cl:let ((ct (cl:cdr (cl:assoc :coalton-type result)))
+                        (al (cl:cdr (cl:assoc :arglist result))))
+                 (cl:cond (ct (cl:format cl:nil "~A :: ~A" symbol ct))
+                          (al (cl:format cl:nil "(~A ~A)" symbol al))
+                          (cl:t ""))))
+              (cl:t "")))
+          "")))
 
 (cl:defun %request-heap-info (st)
-  "Send a :heap-info request to the runtime subprocess if enough time has passed."
   (cl:let ((now (cl:get-internal-real-time))
-           (interval (cl:* 2 cl:internal-time-units-per-second)))
-    (cl:when (cl:> (cl:- now *heap-info-last-time*) interval)
-      (cl:setf *heap-info-last-time* now)
+           (cache (mine/app/state:get-requests st)))
+    (cl:when (cl:> (cl:- now (requests:request-heap-time cache))
+                     (cl:* 2 cl:internal-time-units-per-second))
+      (requests:request-set-heap-time! cache now)
       (cl:let ((rid (%next-request-id-cl st)))
-        (%register-pending-request rid
-          (cl:lambda (st payload)
-            (cl:declare (cl:ignore st))
-            (cl:when (cl:and (cl:consp payload) (cl:eq (cl:first payload) :ok))
-              (cl:let ((pair (cl:second payload)))
-                (cl:when (cl:consp pair)
-                  (cl:let* ((used  (cl:car pair))
-                            (total (cl:cdr pair))
-                            (used-gb  (cl:/ used 1073741824.0d0))
-                            (total-gb (cl:/ total 1073741824.0d0))
-                            (pct (cl:if (cl:> total 0)
-                                        (cl:round (cl:* 100 (cl:/ used total)))
-                                        0)))
-                    (cl:setf *heap-info-result*
-                      (cl:format cl:nil "~,1F/~,1F GB (~D%)"
-                                 used-gb total-gb pct))))))))
-        (cl:unless (%send-to-background-subprocess st (cl:list :heap-info rid))
-          (%pop-pending-request rid))))))
+        (%register-pending-request st rid requests:PendingHeap)
+        (cl:unless (%send-to-background-subprocess st (msg:ReqHeapInfo (msg:RequestId rid)))
+          (%pop-pending-request st rid))))))
+
+(cl:defun %apply-heap-response (st payload)
+  (cl:when (cl:eq (cl:first payload) :ok)
+    (cl:let ((pair (cl:second payload)))
+      (cl:when (cl:and (cl:consp pair) (cl:integerp (cl:car pair))
+                       (cl:integerp (cl:cdr pair)) (cl:plusp (cl:cdr pair)))
+        (requests:request-set-heap-text!
+         (mine/app/state:get-requests st)
+         (cl:format cl:nil "~,1F/~,1F GB (~D%)"
+                    (cl:/ (cl:car pair) 1073741824.0d0)
+                    (cl:/ (cl:cdr pair) 1073741824.0d0)
+                    (cl:round (cl:* 100 (cl:/ (cl:car pair) (cl:cdr pair))))))))))
 
 (cl:defun %request-remote-definition (st sym-name pkg-name cur-path cur-pos)
-  "Send a :find-definition request to the subprocess."
   (cl:let ((rid (%next-request-id-cl st)))
-    (cl:setf *pending-jump-source* (cl:cons cur-path cur-pos))
-    (%register-pending-request rid
-      (cl:lambda (st payload)
-        (cl:cond
-          ((cl:and (cl:consp payload) (cl:eq (cl:first payload) :ok))
-           (cl:let ((sources (cl:second payload)))
-             (cl:if (cl:and (cl:consp sources) (cl:consp (cl:first sources)))
-                    (cl:let* ((first-src (cl:first sources))
-                              (file (cl:cdr (cl:assoc :file first-src)))
-                              (offset (cl:or (cl:cdr (cl:assoc :offset first-src)) 0)))
-                      (cl:when (cl:and *pending-jump-source*
-                                       (cl:plusp (cl:length (cl:car *pending-jump-source*))))
-                        (%jump-stack-push st
-                                          (cl:car *pending-jump-source*)
-                                          (cl:cdr *pending-jump-source*)))
-                      (cl:if file
-                             (mine/app/navigation:jump-to-file st file offset)
-                             (%status-msg st "No definition found")))
-                    (%status-msg st "No definition found"))))
-          (cl:t (%status-msg st (cl:format cl:nil "~A" (cl:or (cl:second payload) "No definition found")))))
-        (cl:setf *pending-jump-source* nil)))
-    (cl:unless (%send-to-background-subprocess st
-                 (cl:list :find-definition rid
-                   (cl:string-upcase sym-name)
-                   (cl:string-upcase pkg-name)))
-      (%pop-pending-request rid)
-      (cl:setf *pending-jump-source* nil)
+    (%register-pending-request st rid
+      (requests:PendingDefinition (requests:SourceLocation cur-path cur-pos)))
+    (cl:unless (%send-to-background-subprocess
+                st (msg:ReqFindDefinition (msg:RequestId rid) sym-name pkg-name))
+      (%pop-pending-request st rid)
       (%status-msg st "No runtime connection"))))
+
+(cl:defun %apply-definition-response (st origin payload)
+  (cl:if (cl:eq (cl:first payload) :ok)
+         (cl:let* ((sources (cl:second payload))
+                   (first-src (cl:and (cl:consp sources) (cl:first sources)))
+                   (file (cl:and (cl:consp first-src) (cl:cdr (cl:assoc :file first-src))))
+                   (offset (cl:or (cl:and (cl:consp first-src)
+                                          (cl:cdr (cl:assoc :offset first-src))) 0)))
+           (cl:if (cl:and (cl:stringp file) (cl:integerp offset) (cl:>= offset 0))
+                  (cl:progn
+                    (cl:when (cl:plusp (cl:length (requests:location-document origin)))
+                      (%jump-stack-push st (requests:location-document origin)
+                                          (requests:location-position origin)))
+                    (mine/app/navigation:jump-to-file st file offset))
+                  (%status-msg st "No definition found")))
+         (%status-msg st (cl:format cl:nil "~A" (cl:or (cl:second payload) "No definition found")))))
 
 (cl:defun %status-msg (st text)
   (coalton/cell:write!
@@ -5867,26 +5763,15 @@ This avoids stealing messages from the foreground/background protocol readers."
 ;;; Async symbol completion
 
 (cl:defun %request-completion (st)
-  "Send a :complete request to the subprocess based on current focus context.
-Sends the raw prefix and buffer package to the server, which handles all
-package resolution including local nicknames."
-  (cl:let* ((focus (mine/widget/focus:focus-current (mine/app/state:get-focus-mgr st)))
-            (repl-focus-p (cl:eq focus mine/widget/focus:FocusRepl)))
-    (cl:multiple-value-bind (prefix pkg-name cursor-pos)
-        (cl:if repl-focus-p
-               (%completion-context-repl st)
-               (%completion-context-editor st))
-      (cl:when (cl:and prefix (cl:plusp (cl:length prefix)))
-        (cl:let ((rid (%next-request-id-cl st))
-                 (saved-prefix prefix)
-                 (saved-cursor cursor-pos)
-                 (is-repl repl-focus-p))
-          (%register-pending-request rid
-            (cl:lambda (st payload)
-              (%handle-completion-response st payload saved-prefix saved-cursor is-repl)))
-          (cl:unless (%send-to-background-subprocess st
-                       (cl:list :complete rid prefix pkg-name))
-            (%pop-pending-request rid)))))))
+  "Capture the whole editing context before sending an asynchronous completion."
+  (cl:let ((snapshot (%coalton-optional-value-or-nil (%completion-snapshot st))))
+    (cl:when (cl:and snapshot (cl:plusp (cl:length (requests:snapshot-prefix snapshot))))
+      (cl:let ((rid (%next-request-id-cl st)))
+        (%register-pending-request st rid (requests:PendingCompletion snapshot))
+        (cl:unless (%send-to-background-subprocess
+                    st (msg:ReqComplete (msg:RequestId rid) (requests:snapshot-prefix snapshot)
+                                         (requests:snapshot-package snapshot) 200))
+          (%pop-pending-request st rid))))))
 
 (cl:defun %completion-context-editor (st)
   "Return (values prefix pkg-name cursor-pos) for the editor."
@@ -5931,22 +5816,10 @@ Server returns names already qualified (e.g. \"vec:push-extend\")."
                     (cp-len (cl:length cp))
                     (prefix-len (cl:length saved-prefix))
                     (comp-state (mine/app/state:get-completion st)))
-            ;; Insert unambiguous extension into buffer
-            (cl:when (cl:> cp-len prefix-len)
-              (cl:let ((extension (cl:subseq cp prefix-len)))
-                (cl:if is-repl
-                       (mine/pane/repl:repl-pane-paste-to-input!
-                         (mine/app/state:get-repl-pane st)
-                         extension)
-                       (cl:let ((buf (%coalton-optional-value-or-nil
-                                      (mine/buffer/manager:bufmgr-current
-                                       (mine/app/state:get-bufmgr st)))))
-                         (cl:when buf
-                           (mine/edit/operations:insert-string!
-                             buf
-                             (mine/buffer/buffer:buffer-undo buf)
-                             (mine/app/state:get-cursor-state st)
-                             extension))))))
+            ;; Reader escapes can change spelling length. Replace the source
+            ;; prefix as one edit instead of appending by raw character count.
+            (cl:when (cl:or (cl:= n 1) (cl:> cp-len prefix-len))
+              (%completion-accept! st cp))
             ;; Open popup if multiple candidates remain
             (cl:when (cl:> n 1)
               ;; Compute anchor screen position (approximate)
