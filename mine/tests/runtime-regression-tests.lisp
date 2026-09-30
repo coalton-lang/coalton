@@ -408,6 +408,84 @@
   (%runtime-check (eq coalton:None (mine/protocol/wire:raw-to-sexpr (make-hash-table)))
                   "Unsupported host objects should be rejected"))
 
+(defun %runtime-completion-names (prefix package-name)
+  (let* ((messages (%call-with-runtime-messages
+                    (lambda ()
+                      (mine/protocol/server::handle-complete 96 prefix package-name :test-wire))))
+         (result (third (car (last messages)))))
+    (%runtime-check (eq :ok (first result)) "Completion failed: ~S" result)
+    (mapcar #'first (second result))))
+
+(defun check-runtime-symbol-spelling-and-completion ()
+  (let* ((suffix (string-downcase (symbol-name (gensym))))
+         (context-name (concatenate 'string "mine-context-" suffix))
+         (target-name (concatenate 'string "mine:lower-" suffix))
+         (context (make-package context-name :use '("CL")))
+         (target (make-package target-name :use '("CL")))
+         (case-symbol (intern "case:Name" context))
+         (colon-symbol (intern "FOO:BAR" context))
+         (public (intern "Mixed:Name" target))
+         (private (intern "HIDDEN" target)))
+    (unwind-protect
+         (progn
+           (dolist (symbol (list case-symbol colon-symbol public private))
+             (setf (symbol-function symbol) (lambda (value) value)))
+           (export public target)
+           (sb-ext:add-package-local-nickname "nick:Case" target context)
+           (%runtime-check
+            (eq case-symbol (mine/protocol/server::%find-symbol-flexibly "|case:Name|" context-name))
+            "Escaped symbol spelling or exact package identity was lost")
+           (%runtime-check
+            (eq colon-symbol (mine/protocol/server::%find-symbol-flexibly "foo\\:bar" context-name))
+            "Escaped colon was treated as a package separator")
+           (%runtime-check
+            (eq public (mine/protocol/server::%find-symbol-flexibly
+                        "|nick:Case|:|Mixed:Name|" context-name))
+            "Package-local nickname did not resolve in its source context")
+           (%runtime-check
+            (null (mine/protocol/server::%find-symbol-flexibly
+                   "|nick:Case|:|Mixed:Name|" "CL-USER"))
+            "Lookup borrowed a local nickname from an unrelated package")
+           (%runtime-check
+            (string= "case:Name" (cdr (assoc :name (mine/runtime/introspect:symbol-info
+                                                  "|case:Name|" context-name))))
+            "Symbol information ignored escaped spelling")
+           (%runtime-check
+            (plusp (length (mine/runtime/introspect:function-arglist
+                            "|nick:Case|:|Mixed:Name|" context-name)))
+            "Arglist lookup ignored the source package's local nickname")
+           (%runtime-check
+            (member "|case:Name|" (%runtime-completion-names "|case:" context-name) :test #'string=)
+            "Completion did not preserve a partial vertical-bar symbol escape")
+           (%runtime-check
+            (member "|FOO:BAR|" (%runtime-completion-names "foo\\:" context-name) :test #'string=)
+            "Completion did not emit a readable spelling for an escaped colon")
+           (%runtime-check
+            (member "|nick:Case|:|Mixed:Name|"
+                    (%runtime-completion-names "|nick:Case|:|Mixed" context-name) :test #'string=)
+            "Qualified completion lost escaped case or local nickname identity")
+           (%runtime-check
+            (null (%runtime-completion-names "|nick:Case|:hid" context-name))
+            "Single-colon completion offered an inaccessible internal symbol")
+           (%runtime-check
+            (member "|nick:Case|::hidden"
+                    (%runtime-completion-names "|nick:Case|::hid" context-name) :test #'string=)
+            "Double-colon completion omitted an internal symbol")
+           (%runtime-check
+            (null (%runtime-completion-names "mine-nonexistent-package:car" context-name))
+            "Unknown explicit qualifier fell back to the current package")
+           (%runtime-check
+            (member (concatenate 'string "|" target-name "|:")
+                    (%runtime-completion-names (concatenate 'string "|" target-name) context-name)
+                    :test #'string=)
+            "Package completion did not preserve significant case and colons")
+           (let ((unknown (concatenate 'string "MINE-UNKNOWN-" suffix)))
+             (mine/protocol/server::%read-symbol-token-in-package unknown context-name)
+             (%runtime-check (null (find-symbol (string-upcase unknown) context))
+                             "Introspection interned an unknown source token")))
+      (delete-package context)
+      (delete-package target))))
+
 ;;; A separate SBCL process exercises the real socket/Windows lifecycle.  Only
 ;;; the saved-image launcher is substituted: start, interrupt, and stop use the
 ;;; production manager, client, protocol server, and OS process adapters.
@@ -557,6 +635,7 @@
                   check-runtime-typed-control-requests-and-send-status
                   check-runtime-typed-response-payloads-and-snapshots
                   check-runtime-typed-response-rejects-malformed-data
+                  check-runtime-symbol-spelling-and-completion
                   check-runtime-process-survives-scoped-interruption))
     (handler-case (funcall test)
       (error (condition)

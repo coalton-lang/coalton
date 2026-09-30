@@ -393,50 +393,91 @@ Returns :quit if the server should shut down, T otherwise."
 
 ;;; Handler functions
 
-(defun %find-symbol-flexibly (symbol-name package-name)
-  "Find symbol, trying package-name as direct package or as a local nickname.
-Returns the symbol or NIL."
-  (let* ((upcase-pkg (string-upcase package-name))
-         (upcase-sym (string-upcase symbol-name))
-         (pkg (find-package upcase-pkg)))
-    ;; Direct lookup
-    (when pkg
-      (let ((sym (find-symbol upcase-sym pkg)))
-        (when sym (return-from %find-symbol-flexibly sym))))
-    ;; Try as a local nickname across loaded packages
-    (dolist (p (list-all-packages))
-      (let ((nicknames (ignore-errors (sb-ext:package-local-nicknames p))))
-        (dolist (entry nicknames)
-          (when (string-equal upcase-pkg (car entry))
-            (let* ((real-pkg (cdr entry))
-                   (sym (find-symbol upcase-sym real-pkg)))
-              (when sym
-                (return-from %find-symbol-flexibly sym)))))))
-    nil))
-
 (defun %find-indent-package (package-name)
-  "Find PACKAGE-NAME for indentation resolution.
-Try the exact runtime package name first, then the normal uppercase spelling.
-Never fall back to *PACKAGE*; an unknown package means unknown indentation."
+  "Resolve the exact package context, allowing ordinary uppercase shorthand."
   (and (stringp package-name)
        (or (find-package package-name)
            (find-package (string-upcase package-name)))))
 
+(defun %decode-symbol-spelling (spelling &optional partial-p)
+  "Decode a symbol-name fragment without invoking reader macros or interning.
+Unescaped letters use the standard reader's uppercase convention.  Completion
+prefixes may end inside a vertical-bar escape or after a single escape."
+  (let ((bars-p nil) (escape-p nil) (valid-p t))
+    (let ((name
+            (with-output-to-string (out)
+              (loop for char across spelling do
+                (cond
+                  (escape-p (write-char char out) (setf escape-p nil))
+                  ((char= char #\\) (setf escape-p t))
+                  ((char= char #\|) (setf bars-p (not bars-p)))
+                  (bars-p (write-char char out))
+                  ((find char '(#\: #\Space #\Tab #\Newline #\Return
+                                #\( #\) #\" #\' #\; #\` #\,))
+                   (setf valid-p nil))
+                  (t (write-char (char-upcase char) out)))))))
+      (values name (and valid-p (or partial-p (not (or bars-p escape-p))))))))
+
+(defun %symbol-qualifier-colons (token)
+  "Return positions of colons that are outside symbol escapes."
+  (let ((bars-p nil) (escape-p nil) (positions nil))
+    (loop for char across token for position from 0 do
+      (cond
+        (escape-p (setf escape-p nil))
+        ((char= char #\\) (setf escape-p t))
+        ((char= char #\|) (setf bars-p (not bars-p)))
+        ((and (not bars-p) (char= char #\:)) (push position positions))))
+    (nreverse positions)))
+
+(defun %parse-symbol-token (token package-name &optional partial-p)
+  "Return decoded name, lookup package, raw qualifier, visibility, and validity.
+Package-local nicknames are resolved only within the supplied source package."
+  (let* ((context (%find-indent-package package-name))
+         (colons (%symbol-qualifier-colons token))
+         (count (length colons)))
+    (unless (and context
+                 (or (zerop count) (= count 1)
+                     (and (= count 2) (= (second colons) (1+ (first colons)))
+                          (plusp (first colons)))))
+      (return-from %parse-symbol-token (values "" nil "" :accessible nil)))
+    (let* ((separator (first colons))
+           (symbol-start (if colons (1+ (car (last colons))) 0))
+           (qualifier (subseq token 0 symbol-start))
+           (visibility (if (= count 1) :external :accessible)))
+      (multiple-value-bind (name valid-p)
+          (%decode-symbol-spelling (subseq token symbol-start) partial-p)
+        (unless (and valid-p (or partial-p (< symbol-start (length token))))
+          (return-from %parse-symbol-token (values "" nil qualifier visibility nil)))
+        (cond
+          ((null separator) (values name context qualifier visibility t))
+          ((zerop separator)
+           (values name (find-package "KEYWORD") qualifier visibility t))
+          (t
+           (multiple-value-bind (package-token package-valid-p)
+               (%decode-symbol-spelling (subseq token 0 separator))
+             (let ((*package* context))
+               (values name (and package-valid-p (find-package package-token))
+                       qualifier visibility package-valid-p)))))))))
+
+(defun %find-symbol-flexibly (symbol-token package-name)
+  "Resolve raw SYMBOL-TOKEN in its exact source package without interning it."
+  (multiple-value-bind (name package qualifier visibility valid-p)
+      (%parse-symbol-token symbol-token package-name)
+    (declare (ignore qualifier))
+    (when (and valid-p package)
+      (multiple-value-bind (symbol status) (find-symbol name package)
+        (when (and status (or (eq visibility :accessible) (eq status :external)))
+          (values symbol status))))))
+
 (defun %read-symbol-token-in-package (token package-name)
-  "Read TOKEN as a symbol in PACKAGE-NAME.
-The CL reader is the authority here: it handles imports, shadows, package
-prefixes, and SBCL package-local nicknames relative to *PACKAGE*."
-  (handler-case
-      (let ((pkg (%find-indent-package package-name)))
-        (when pkg
-          (let ((*package* pkg)
-                (*read-eval* nil))
-            (multiple-value-bind (object position)
-                (read-from-string token nil nil)
-              (and (symbolp object)
-                   (= position (length token))
-                   object)))))
-    (error () nil)))
+  "Resolve source symbol spelling for indentation without reader side effects."
+  (%find-symbol-flexibly token package-name))
+
+(defun %symbol-insertion-spelling (name)
+  "Print NAME as a readable symbol fragment, retaining significant case/escapes."
+  (with-standard-io-syntax
+    (let ((*print-readably* nil) (*print-gensym* nil) (*print-case* :downcase))
+      (write-to-string (make-symbol name)))))
 
 (defun %symbol-named-p (sym package-name symbol-name)
   (let ((pkg (find-package package-name)))
@@ -1431,56 +1472,28 @@ Coalton home package) also pass.  CL-only symbols pass only in non-Coalton packa
                (constantp sym)))))
 
 (defun %parse-prefix-qualifier (raw-prefix buffer-package-name)
-  "Parse RAW-PREFIX for a package qualifier, resolving local nicknames.
-Returns (values symbol-prefix lookup-package name-qualifier) where:
-  - SYMBOL-PREFIX is the part after the colon (upcase)
-  - LOOKUP-PACKAGE is the resolved package object
-  - NAME-QUALIFIER is the original qualifier string to prepend to results
-E.g. (\"vec:push\" \"FRACTAL\") -> (values \"PUSH\" #<PKG COALTON/VECTOR> \"vec:\")
-     (\"push\" \"FRACTAL\")     -> (values \"PUSH\" #<PKG FRACTAL> \"\")"
-  (let* ((colon-pos (position #\: raw-prefix :from-end t))
-         ;; Bind *package* to buffer package so find-package resolves local nicknames
-         (buf-pkg (find-package (string-upcase buffer-package-name)))
-         (*package* (or buf-pkg *package*)))
-    (if colon-pos
-        (let* ((sym-part (string-upcase (subseq raw-prefix (1+ colon-pos))))
-               (qualifier-str (subseq raw-prefix 0 (1+ colon-pos)))
-               (pkg-part (string-trim ":" qualifier-str))
-               (pkg (find-package (string-upcase pkg-part))))
-          (values sym-part (or pkg buf-pkg) qualifier-str))
-        (values (string-upcase raw-prefix) buf-pkg ""))))
+  "Decode a completion prefix using the source package's exact reader spelling."
+  (%parse-symbol-token raw-prefix buffer-package-name t))
 
 (defun %matching-package-names (prefix buf-pkg)
-  "Return completion entries for package names/nicknames matching PREFIX.
-Checks local nicknames of BUF-PKG, then global package names and nicknames.
-Each entry is (name-with-colon \"pkg\" \"\")."
-  (let* ((upprefix (string-upcase prefix))
-         (len (length upprefix))
-         (seen (make-hash-table :test 'equal))
-         (matches nil))
-    ;; Local nicknames first
-    (when buf-pkg
-      (dolist (pair (sb-ext:package-local-nicknames buf-pkg))
-        (let ((nick (string-downcase (car pair))))
-          (when (and (>= (length nick) len)
-                     (string-equal upprefix nick :end2 len)
-                     (not (gethash nick seen)))
-            (setf (gethash nick seen) t)
-            (push (list (concatenate 'string nick ":")
-                        "pkg" "")
-                  matches)))))
-    ;; Global packages: name and nicknames
-    (dolist (pkg (list-all-packages))
-      (dolist (name (cons (package-name pkg) (package-nicknames pkg)))
-        (let ((lname (string-downcase name)))
-          (when (and (>= (length lname) len)
-                     (string-equal upprefix lname :end2 len)
-                     (not (gethash lname seen)))
-            (setf (gethash lname seen) t)
-            (push (list (concatenate 'string lname ":")
-                        "pkg" "")
-                  matches)))))
-    matches))
+  "Complete readable package names and source-local nicknames."
+  (multiple-value-bind (decoded valid-p) (%decode-symbol-spelling prefix t)
+    (unless (and valid-p buf-pkg) (return-from %matching-package-names nil))
+    (let ((len (length decoded)) (seen (make-hash-table :test 'equal)) (matches nil))
+      (flet ((consider (name)
+               (when (and (>= (length name) len)
+                          (string= decoded name :end2 len)
+                          (not (gethash name seen)))
+                 (setf (gethash name seen) t)
+                 (push (list (concatenate 'string (%symbol-insertion-spelling name) ":")
+                             "pkg" "")
+                       matches))))
+        (dolist (pair (sb-ext:package-local-nicknames buf-pkg))
+          (consider (car pair)))
+        (dolist (pkg (list-all-packages))
+          (dolist (name (cons (package-name pkg) (package-nicknames pkg)))
+            (consider name))))
+      (sort matches #'string< :key #'first))))
 
 (defun handle-complete (id raw-prefix buffer-package-name stream &optional limit)
   "Handle a :complete request for symbol completion.
@@ -1489,14 +1502,16 @@ BUFFER-PACKAGE-NAME is the package context for resolving local nicknames.
 Returns annotated results: each match is (qualified-name kind type-sig).
 When no colon in prefix, also completes package names/nicknames."
   (handler-case
-      (multiple-value-bind (sym-prefix pkg qualifier)
+      (multiple-value-bind (sym-prefix pkg qualifier visibility valid-p)
           (%parse-prefix-qualifier raw-prefix buffer-package-name)
         (let ((matches nil)
               (has-qualifier (plusp (length qualifier))))
           ;; Symbol completions
-          (when pkg
+          (when (and valid-p pkg)
             (flet ((%prefix-matches-p (sym)
-                     (and (%symbol-defined-p sym pkg)
+                     (and (or (eq visibility :accessible)
+                              (eq :external (nth-value 1 (find-symbol (symbol-name sym) pkg))))
+                          (%symbol-defined-p sym pkg)
                           (>= (length (symbol-name sym))
                                (length sym-prefix))
                           (string= sym-prefix (symbol-name sym)
@@ -1508,7 +1523,7 @@ When no colon in prefix, also completes package names/nicknames."
                    (do-symbols (sym pkg)
                      (when (%prefix-matches-p sym)
                        (let* ((name (concatenate 'string qualifier
-                                      (string-downcase (symbol-name sym))))
+                                      (%symbol-insertion-spelling (symbol-name sym))))
                               (entry (list name
                                           (%symbol-kind-tag sym)
                                           (%symbol-type-sig sym))))
@@ -1525,7 +1540,7 @@ When no colon in prefix, also completes package names/nicknames."
                  ;; Unqualified: all accessible symbols, sorted alphabetically
                  (do-symbols (sym pkg)
                    (when (%prefix-matches-p sym)
-                     (let ((name (string-downcase (symbol-name sym))))
+                     (let ((name (%symbol-insertion-spelling (symbol-name sym))))
                        (unless (find name matches :key #'first :test #'string=)
                          (push (list name
                                      (%symbol-kind-tag sym)
@@ -1533,7 +1548,7 @@ When no colon in prefix, also completes package names/nicknames."
                                matches)))))
                  (setf matches (sort matches #'string< :key #'first))))))
           ;; Package name completions (only when no qualifier present)
-          (unless has-qualifier
+          (when (and valid-p (not has-qualifier))
             (setf matches
                   (nconc matches (%matching-package-names raw-prefix pkg))))
           (when (and (integerp limit) (>= limit 0))
