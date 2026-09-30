@@ -13,6 +13,7 @@
    (#:cellw #:mine/text/width)
    (#:tok #:mine/syntax/token)
    (#:lexer #:mine/syntax/lexer)
+   (#:source #:mine/syntax/context)
    (#:hl #:mine/syntax/highlight)
    (#:paredit #:mine/syntax/paredit)
    (#:list #:coalton/list)
@@ -24,7 +25,6 @@
    #:editor-pane-cursor-position #:editor-pane-completion-anchor
    #:editor-pane-new
    #:editor-pane-set-buffer!
-   #:editor-pane-render
    #:editor-pane-render-with-context
    #:RenderSpan #:.rs-start #:.rs-end #:.rs-rank
    #:EditorRenderContext #:editor-render-context #:render-spans-from-triples
@@ -35,7 +35,6 @@
    #:editor-pane-gutter-width
    #:editor-pane-line-wrap?
    #:editor-pane-toggle-line-wrap!
-   #:set-quick-result-highlight!
    #:wrap-points
    #:segment-for-col
    #:rows-for-line
@@ -48,10 +47,6 @@
    #:editor-cursor-move-down!
    #:editor-pane-effective-wrap-width
    #:wrap-seg-start-vcol
-   #:*lexer-mode*
-   #:*editor-filepath*
-   #:*diag-fn*
-   #:*diag-spans-fn*
    #:search-state-set!
    #:search-state-clear!
    #:search-current-set!
@@ -61,20 +56,6 @@
    #:%editor-scrollbar))
 
 (in-package #:mine/pane/editor)
-
-;;; Legacy application adapters. Render helpers receive explicit typed context.
-(cl:defvar *lexer-mode* 0
-  "Buffer mode: 0=coalton, 1=lisp, 2=plain.")
-(cl:defvar *editor-filepath* cl:nil
-  "Current buffer document key for diagnostics lookup.")
-(cl:defvar *diag-fn* cl:nil
-  "Function (document-key line-start line-end) -> severity-keyword-or-nil.")
-(cl:defvar *diag-spans-fn* cl:nil
-  "Function (document-key line-start line-end) -> list of (start end severity).")
-(cl:defvar *quick-result-highlight-start* cl:nil
-  "Start buffer position of the active Quick Result source highlight.")
-(cl:defvar *quick-result-highlight-end* cl:nil
-  "End buffer position of the active Quick Result source highlight.")
 
 (cl:defun %diagnostic-rank-cl (severity)
   (cl:cond
@@ -270,21 +251,6 @@
     (when now
       (cell:write! (.scroll-col ep) 0))
     (values))
-
-  (declare set-quick-result-highlight! (Optional (Tuple UFix UFix) -> Void))
-  (define (set-quick-result-highlight! range)
-    "Set or clear the transient Quick Result source highlight."
-    (match range
-      ((Some (Tuple start end))
-       (lisp (-> Void) (start end)
-         (cl:setf *quick-result-highlight-start* start)
-         (cl:setf *quick-result-highlight-end* end)
-         (cl:values)))
-      ((None)
-       (lisp (-> Void) ()
-         (cl:setf *quick-result-highlight-start* cl:nil)
-         (cl:setf *quick-result-highlight-end* cl:nil)
-         (cl:values)))))
 
   (declare editor-pane-effective-wrap-width (EditorPane -> UFix))
   (define (editor-pane-effective-wrap-width ep)
@@ -646,22 +612,12 @@ scroll-col is pinned to 0 and vertical scroll is computed in screen rows."
     (screen:screen-set-string scr screen-y (+ x padding) num-str style)
     (values))
 
-  (declare editor-pane-render (EditorPane * screen:Screen * wt:Rect * gap:GapBuffer * cursor:CursorState -> Void))
-  (define (editor-pane-render ep scr rect gb cs)
-    "Compatibility entry point; new callers pass an explicit EditorRenderContext."
-    (let mode = (match (lisp (-> UFix) () *lexer-mode*)
-                  (0 buf:ModeCoalton)
-                  (1 buf:ModeLisp)
-                  (_ buf:ModePlainText)))
-    (let spans = (lisp (-> List RenderSpan) (gb)
-                   (cl:when (cl:and *editor-filepath* *diag-spans-fn*)
-                     (render-spans-from-triples
-                       (cl:funcall *diag-spans-fn* *editor-filepath* 0 (gap:gap-length gb))))))
-    (let quick = (lisp (-> Optional (Tuple UFix UFix)) ()
-                   (cl:if (cl:and *quick-result-highlight-start* *quick-result-highlight-end*)
-                          (Some (Tuple *quick-result-highlight-start* *quick-result-highlight-end*))
-                          None)))
-    (editor-pane-render-with-context ep scr rect gb cs (editor-render-context mode spans quick)))
+  (declare %line-tokens (Optional lexer:SourceHighlight * UFix * UFix -> List tok:Token))
+  (define (%line-tokens highlight start end)
+    "Return the line's colored tokens, or none for plain text."
+    (match highlight
+      ((Some indexed) (lexer:highlight-line-tokens indexed start end))
+      ((None) Nil)))
 
   (declare editor-pane-render-with-context (EditorPane * screen:Screen * wt:Rect * gap:GapBuffer * cursor:CursorState * EditorRenderContext -> Void))
   (define (editor-pane-render-with-context ep scr rect gb cs context)
@@ -723,7 +679,9 @@ segments) and highlights the current visual row."
             (_ None))
           None))
     (let lexer-mode = (render-lexer-mode (.erc-mode context)))
-    (let lexer-state = (lexer:lexer-state-new lexer-mode))
+    (let highlight = (if (== lexer-mode 2) None
+                         (Some (lexer:source-highlight (source:scan-source (gap:gap-to-string gb))
+                                                       lexer-mode))))
     ;; Clear the pane area.
     (render:fill-rect scr rect #\Space color:default-style)
     ;; Compute cursor screen position.
@@ -735,13 +693,7 @@ segments) and highlights the current visual row."
     (lisp (-> Void) (scr gb sr sc show-ln-cl hl-cur-cl cur-line cur-seg-idx
                      line-count height text-x text-width gw wrap-w
                      gutter-style hl-style rect-x0 rect-y0
-                     sel-start sel-end context paren-match lexer-mode lexer-state)
-      ;; Reset lexer state for each render pass, then lex lines from the
-      ;; start of the buffer up to sr to build the correct context.
-      (cl:dotimes (pre-line sr)
-        (cl:when (cl:< pre-line line-count)
-          (mine/syntax/lexer:lex-line lexer-state
-                                      (mine/buffer/gap:gap-line-text gb pre-line) 0)))
+                     sel-start sel-end context paren-match highlight)
       (cl:let ((screen-row 0)
                (line-idx sr)
                (tw mine/buffer/gap::*tab-width*))
@@ -753,7 +705,7 @@ segments) and highlights the current visual row."
                     (line-end (cl:+ line-buf-offset text-len))
                     (line-context (line-render-context context line-buf-offset line-end paren-match))
                     (diag-rank (line-diagnostic-rank line-context))
-                    (tokens (mine/pane/editor::%lex-one-line lexer-state lexer-mode text))
+                    (tokens (mine/pane/editor::%line-tokens highlight line-buf-offset line-end))
                     (pts (cl:if (cl:plusp wrap-w)
                                 (mine/pane/editor::wrap-points text wrap-w tw)
                                 cl:nil))
@@ -1086,12 +1038,6 @@ segments) and highlights the current visual row."
                            scr y (cl:+ text-x (cl:- ch-vcol scroll-vcol))
                            ch s))))))
       (cl:values)))
-
-  (declare %lex-one-line (lexer:LexerState * UFix * String -> List tok:Token))
-  (define (%lex-one-line state mode text)
-    "Advance the lexer state by one logical line and return its tokens.
-For plain-text mode (lexer-mode 2), returns Nil."
-    (if (== mode 2) Nil (lexer:lex-line state text 0)))
 
   (declare draw-line-segment
     (screen:Screen * UFix * UFix * UFix * UFix *

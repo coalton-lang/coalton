@@ -250,14 +250,14 @@
 
   (declare repl-pane-start-selection! (ReplPane * UFix * UFix -> Void))
   (define (repl-pane-start-selection! rp line col)
-    "Start a selection in the output area at (LINE, COL)."
-    (widget-text:text-widget-start-selection! (.output rp) line col)
+    "Start an output selection at logical LINE and rendered column COL."
+    (widget-text:text-widget-start-selection-at-column! (.output rp) line col)
     (values))
 
   (declare repl-pane-extend-selection! (ReplPane * UFix * UFix -> Void))
   (define (repl-pane-extend-selection! rp line col)
-    "Extend the selection in the output area to (LINE, COL)."
-    (widget-text:text-widget-extend-selection! (.output rp) line col)
+    "Extend an output selection to logical LINE and rendered column COL."
+    (widget-text:text-widget-extend-selection-at-column! (.output rp) line col)
     (values))
 
   (declare repl-pane-clear-selection! (ReplPane -> Void))

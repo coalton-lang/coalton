@@ -524,10 +524,10 @@ those files."
 
 (defun render-diagnostic-popup-cl (st scr screen-w screen-h)
   "Render a non-modal diagnostic popup near the editor caret."
-  (let* ((filepath mine/pane/editor::*editor-filepath*)
-         (buf (coalton-optional-value-or-nil
+  (let* ((buf (coalton-optional-value-or-nil
                (mine/buffer/manager:bufmgr-current
-                (mine/app/state:get-bufmgr st)))))
+                (mine/app/state:get-bufmgr st))))
+         (filepath (and buf (mine/buffer/buffer:buffer-document-key buf))))
     (when (and (stringp filepath)
                (plusp (length filepath))
                buf)
