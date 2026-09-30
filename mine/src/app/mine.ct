@@ -3833,12 +3833,13 @@ Enter or Space inserts the matching Unicode character at the cursor."
 
   (declare clamp-cursor-to-buffer! (MineState * buf:Buffer -> Void))
   (define (clamp-cursor-to-buffer! st buffer)
-    "Clamp the shared editor cursor to BUFFER's current length."
+    "Clamp the shared editor cursor to BUFFER's current editor-unit boundaries."
     (let gb = (buf:buffer-gap buffer))
-    (let len = (gap:gap-length gb))
     (let pos = (cursor:cursor-position (.ms-cursor st)))
-    (when (> pos len)
-      (cursor:cursor-move-to-position! (.ms-cursor st) len)))
+    (let bounded = (gap:gap-editor-unit-end-pos gb pos))
+    ;; Preserve a restored view's sticky visual target when it remains valid.
+    (unless (== pos bounded)
+      (cursor:cursor-move-to-buffer-position! gb (.ms-cursor st) bounded)))
 
   (declare %switch-to-open-file! (MineState * String -> Void))
   (define (%switch-to-open-file! st fpath)
