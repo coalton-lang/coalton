@@ -1,7 +1,7 @@
 (defpackage #:mine-tests/source-context
   (:use #:cl)
   (:local-nicknames (#:source #:mine/syntax/context))
-  (:export #:run-source-context-tests #:*source-corpus*))
+  (:export #:run-source-context-tests #:*source-corpus* #:*completion-cases*))
 
 (in-package #:mine-tests/source-context)
 
@@ -119,10 +119,43 @@
     (source:scan-source "#.(progn (incf marker) '(in-package #:wrong))")
     (check (zerop marker) "Source scanning must not execute reader expressions")))
 
+(defparameter *completion-cases*
+  (list (list "(foo bar)" 8 "bar")
+        (list "(foo bar)" 7 "ba")
+        (list "(foo bar)" 0 "")
+        (list "; hidden" 8 "")
+        (list "\"hidden\"" 4 "")
+        (list "#\\Space" 7 "")
+        (list "#|hidden|# (foo)" 5 "")
+        (list "(|two words|)" 12 "|two words|")
+        (list "(p:|with space|)" 15 "p:|with space|")
+        (list "(foo a\\ b)" 9 "a\\ b")
+        (list "|unfinished name" 16 "|unfinished name")
+        (list "foo" 99 "foo")))
+
+(defun check-source-symbols ()
+  (dolist (entry *completion-cases*)
+    (destructuring-bind (text pos expected) entry
+      (check (equal expected (source:source-symbol-prefix (source:scan-source text) pos))
+             "Unexpected source prefix at ~D in ~S" pos text)))
+  (let ((context (source:scan-source "(foo bar)")))
+    (check (equal "bar" (optional-value (source:source-symbol-at context 8)))
+           "Symbol lookup at a closing delimiter should use the preceding symbol")
+    (check (equal "foo" (optional-value (source:source-symbol-at context 1)))
+           "Symbol lookup at its start should include the whole symbol"))
+  (let* ((parts (source:source-symbol-parts "pkg:|Case:Sensitive|"))
+         (package (optional-value (coalton-prelude:fst parts))))
+    (check (and (equal "PKG" package)
+                (equal "Case:Sensitive" (coalton-prelude:snd parts)))
+           "Symbol decoding must preserve escaped case and colons"))
+  (check (equal "f" (optional-value (source:source-first-head (source:scan-source (format nil "; ignored~%(f x)")))))
+         "First-form head detection must ignore leading comments"))
+
 (defun run-source-context-tests ()
   (check-corpus)
   (check-literal-classes)
   (check-package-context)
   (check-form-spans)
   (check-no-reader-evaluation)
+  (check-source-symbols)
   t)

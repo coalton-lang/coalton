@@ -21,7 +21,8 @@
    #:form-head #:form-start #:form-end #:form-children #:form-complete?
    #:source-package-before #:source-enclosing-head
    #:source-outer-form-range #:source-smallest-list-range
-   #:source-form-at #:source-compile-form-range #:source-symbol-name #:source-symbol-parts))
+   #:source-form-at #:source-compile-form-range #:source-symbol-name #:source-symbol-parts
+   #:source-symbol-prefix #:source-prefix-range #:source-symbol-at #:source-first-head))
 
 (in-package #:mine/syntax/context)
 
@@ -389,6 +390,44 @@
   (define (source-input-ready? context)
     (not (== (.source-completeness context) SourceIncomplete)))
 
+  (declare source-symbol-token (SourceContext * UFix * Boolean -> Optional SourceToken))
+  (define (source-symbol-token context position include-start)
+    (let pos = (min position (str:length (.source-text context))))
+    (rec scan ((tokens (.source-tokens context)))
+      (match tokens
+        ((Nil) None)
+        ((Cons token rest)
+         (cond
+           ((> (.token-start token) pos) None)
+           ((and (or (< (.token-start token) pos) include-start)
+                 (<= pos (.token-end token)))
+            (match (.token-kind token)
+              ((SymbolToken _) (Some token))
+              (_
+               ;; At a boundary prefer the next token when the preceding
+               ;; token cannot supply a symbol (for example immediately
+               ;; after an open delimiter).
+               (if (== pos (.token-end token)) (scan rest) None))))
+           (True (scan rest)))))))
+
+  (declare source-prefix-range (SourceContext * UFix -> Optional (Tuple UFix UFix)))
+  (define (source-prefix-range context pos)
+    (map (fn (token) (Tuple (.token-start token) (min pos (.token-end token))))
+         (source-symbol-token context pos False)))
+
+  (declare source-symbol-prefix (SourceContext * UFix -> String))
+  (define (source-symbol-prefix context pos)
+    "Return the raw symbol prefix at POS, excluding comments and literals."
+    (match (source-prefix-range context pos)
+      ((Some (Tuple start end)) (str:substring (.source-text context) start end))
+      ((None) "")))
+
+  (declare source-symbol-at (SourceContext * UFix -> Optional String))
+  (define (source-symbol-at context pos)
+    "Return a symbol's raw spelling at or immediately before POS."
+    (map (fn (token) (token-text context token))
+         (source-symbol-token context pos True)))
+
   (declare form-head (SourceContext * SourceForm -> Optional String))
   (define (form-head context form)
     (match (.form-kind form)
@@ -398,6 +437,12 @@
           (if (== (.form-kind head) SymbolForm) (Some (form-text context head)) None))
          (_ None)))
       (_ None)))
+
+  (declare source-first-head (SourceContext -> Optional String))
+  (define (source-first-head context)
+    (match (.source-forms context)
+      ((Cons form _) (form-head context form))
+      ((Nil) None)))
 
   (declare contains-position? (SourceForm * UFix -> Boolean))
   (define (contains-position? form pos)
