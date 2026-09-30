@@ -34,6 +34,7 @@
    (#:model #:mine/project/asdf-model)
    (#:paredit #:mine/syntax/paredit)
    (#:indent #:mine/syntax/indent)
+   (#:source #:mine/syntax/context)
    (#:mini #:mine/pane/minibuffer)
    (#:widget-input #:mine/widget/input)
    (#:cfg #:mine/config/parser)
@@ -53,7 +54,8 @@
    (#:hm #:coalton/hashmap))
   (:export
    #:mine-main
-   #:ProtoMsg #:ProtoReturn #:ProtoOutput #:ProtoDebug #:ProtoIORequest #:ProtoConnectionLost))
+   #:ProtoMsg #:ProtoReturn #:ProtoOutput #:ProtoOutputChunk #:ProtoPackage
+   #:ProtoDebug #:ProtoIORequest #:ProtoConnectionLost))
 
 (in-package #:mine/app/mine)
 
@@ -1015,8 +1017,6 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
        ;; Display input in output area
        (let prompt-str = (<> (cell:read (.ms-repl-package st)) "> "))
        (%append-input-to-output! st prompt-str input-text)
-       ;; Detect in-package and update local package state only.
-       (%detect-in-package st input-text)
        ;; Send to runtime (non-blocking)
        (match (ensure-runtime! st)
          ((Some conn)
@@ -1058,6 +1058,8 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
     "A parsed protocol message from the runtime."
     (ProtoReturn msg:RequestId String Boolean) ;; request-id, result-text, is-error?
     (ProtoOutput String)         ;; output text
+    (ProtoOutputChunk msg:RequestId String)
+    (ProtoPackage msg:RequestId String)
     (ProtoDebug String NativeBox) ;; condition-text, opaque CL debug data
     (ProtoIORequest String NativeBox) ;; prompt-text, opaque (msg-id . stream)
     ProtoConnectionLost)
@@ -1191,6 +1193,11 @@ multiple values get 0>, 1>, etc."
        (values))
       ((ProtoOutput text)
        (repl:repl-pane-append-output! (.ms-repl st) text))
+      ((ProtoOutputChunk _ text)
+       (repl:repl-pane-append-output-chunk! (.ms-repl st) text))
+      ((ProtoPackage request-id package-name)
+       (when (== (cell:read (.ms-active-request st)) (Some request-id))
+         (cell:write! (.ms-repl-package st) package-name)))
       ((ProtoDebug cond-text debug-data)
        (cell:write! (.ms-debugger-active st) True)
        (cell:write! (.ms-debugger-condition st) cond-text)
@@ -1438,27 +1445,6 @@ Uses a dedicated Beam request so diagnostics can stream independently."
     "Render the debugger view in the REPL area when debugger is active."
     (lisp (-> Void) (st scr rect)
       (%render-debugger-in-repl-cl st scr rect)
-      (cl:values)))
-
-  (declare %detect-in-package (MineState * String -> Void))
-  (define (%detect-in-package st input)
-    "If INPUT is an (in-package ...) form, update the REPL package."
-    (lisp (-> Void) (st input)
-      (cl:handler-case
-          (cl:let ((trimmed (cl:string-trim '(#\Space #\Tab #\Newline) input)))
-            (cl:when (cl:and (cl:> (cl:length trimmed) 13)
-                             (cl:char= (cl:char trimmed 0) #\()
-                             (cl:string-equal (cl:subseq trimmed 1 11) "in-package"))
-              ;; Parse the package name
-              (cl:let* ((form (cl:read-from-string trimmed))
-                        (pkg-arg (cl:cadr form))
-                        (pkg-name (cl:etypecase pkg-arg
-                                    (cl:string pkg-arg)
-                                    (cl:symbol (cl:symbol-name pkg-arg)))))
-                (coalton/cell:write!
-                 (mine/app/state:get-repl-package-cell st)
-                 pkg-name))))
-        (cl:error () cl:nil))
       (cl:values)))
 
 ;;; REPL comma commands
@@ -1802,23 +1788,17 @@ If the buffer has unsaved changes, writes to a temp file for compilation."
     "Find the compile target form around POS.
 Finds the depth-0 form containing POS. If it is a progn or
 coalton-toplevel wrapper, descends to find the sub-form containing POS."
-    (lisp (-> (Optional (Tuple UFix UFix))) (gb pos)
-      (cl:let ((result (%find-compile-target-cl gb pos)))
-        (cl:if result
-               (Some (Tuple (cl:car result) (cl:cdr result)))
-               None))))
+    (source:source-compile-form-range (source:scan-source (gap:gap-to-string gb)) pos))
 
   (declare %find-quick-result-target (gap:GapBuffer * UFix -> Optional (Tuple UFix UFix)))
   (define (%find-quick-result-target gb pos)
     "Find the smallest enclosing list form around POS for Quick Result."
-    (paredit:smallest-enclosing-form-range gb pos))
+    (source:source-smallest-list-range (source:scan-source (gap:gap-to-string gb)) pos))
 
   (declare %find-buffer-package (gap:GapBuffer * UFix -> Optional String))
   (define (%find-buffer-package gb pos)
     "Find the package from the nearest preceding (in-package ...) form."
-    (lisp (-> (Optional String)) (gb pos)
-      (cl:let ((pkg (%find-in-package-before gb pos)))
-        (cl:if pkg (Some pkg) None))))
+    (source:source-package-before (source:scan-source (gap:gap-to-string gb)) pos))
 
   (declare %active-selection-range (gap:GapBuffer * cursor:CursorState -> Optional (Tuple UFix UFix)))
   (define (%active-selection-range gb cs)
@@ -2014,9 +1994,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        ;; Open main file in editor
        (match (mgr:bufmgr-open-file! (.ms-bufmgr st) main-file)
          ((Ok buf)
-          (mgr:bufmgr-switch! (.ms-bufmgr st) (buf:buffer-id buf))
-          (editor:editor-pane-set-buffer! (.ms-editor st) (buf:buffer-id buf))
-          (cursor:cursor-move-to-position! (.ms-cursor st) 0)
+          (activate-buffer! st buf)
           (let display-name = (lisp (-> String) (main-file)
                                 (cl:file-namestring (cl:pathname main-file))))
           (tree:tree-pane-add-open-file! (.ms-tree st) display-name main-file))
@@ -2240,21 +2218,12 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     (match (mgr:bufmgr-current (.ms-bufmgr st))
       ((Some buf)
        (let gb = (buf:buffer-gap buf))
-       (let cur = (cursor:cursor-position (.ms-cursor st)))
        (match (%active-selection-range gb (.ms-cursor st))
          ((Some (Tuple sel-start sel-end))
-          (undo:with-undo-group! (buf:buffer-undo buf)
-            (fn () (cursor:cursor-position (.ms-cursor st)))
-            (fn ()
-              (let text = (gap:gap-substring gb sel-start sel-end))
-              (clipboard:clipboard-copy! text)
-              (gap:gap-delete-range! gb sel-start sel-end)
-              (buf:buffer-mark-dirty! buf)
-              (undo:undo-record! (buf:buffer-undo buf)
-                                 (undo:OpDelete sel-start text) cur sel-start)
-              (cursor:cursor-move-to-buffer-position! gb (.ms-cursor st) sel-start)
-              (cursor:cursor-clear-selection! (.ms-cursor st))
-              (status:statusbar-set-message! (.ms-status st) "Cut"))))
+          (clipboard:clipboard-copy! (gap:gap-substring gb sel-start sel-end))
+          (ops:replace-range! buf (buf:buffer-undo buf) (.ms-cursor st)
+                              sel-start sel-end "" sel-start)
+          (status:statusbar-set-message! (.ms-status st) "Cut"))
          ((None) (values))))
       ((None) (values))))
 
@@ -2356,18 +2325,21 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       ((buf:ModeCoalton) (cell:read (.ms-repl-package st)))
       (_ (cell:read (.ms-repl-package st)))))
 
-  (declare %indent-rules-for-line! (MineState * buf:Buffer * UFix -> List indent:IndentRuleEntry))
-  (define (%indent-rules-for-line! st buffer line)
-    "Ask the runtime image for indentation rules relevant to LINE."
-    (let gb = (buf:buffer-gap buffer))
-    (let heads = (indent:indent-heads-for-line gb line))
+  (declare %indent-rules-for-prepared! (MineState * buf:Buffer * indent:PreparedIndent -> List indent:IndentRuleEntry))
+  (define (%indent-rules-for-prepared! st buffer prepared)
+    "Resolve metadata against the same source snapshot used to calculate indentation."
+    (let heads = (indent:prepared-indent-heads prepared))
     (match heads
       ((Nil) Nil)
       (_
-       (let _conn = (ensure-runtime! st))
-       (let default-package = (%indent-default-package st buffer))
-       (lisp (-> (List indent:IndentRuleEntry)) (st heads gb line default-package)
-         (%indent-rules-for-line-cl st heads gb line default-package)))))
+       (let pkg = (match (source:source-package-before (indent:prepared-source prepared)
+                                                       (indent:prepared-position prepared))
+                    ((Some package) package)
+                    ((None) (%indent-default-package st buffer))))
+       (lisp (-> (List indent:IndentRuleEntry)) (st heads pkg)
+         (cl:or (%request-indent-rules st heads pkg)
+                (cl:mapcar #'%indent-rule-from-spec
+                           (mine/protocol/server::%indent-rule-specs-for-heads heads pkg)))))))
 
   (declare %target-indent-for-line! (MineState * buf:Buffer * UFix -> Optional UFix))
   (define (%target-indent-for-line! st buffer line)
@@ -2376,18 +2348,18 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       ((None) None)
       ((Some mode)
        (let gb = (buf:buffer-gap buffer))
-       (let rules = (%indent-rules-for-line! st buffer line))
-       (Some (indent:compute-indent-with-rules gb mode line rules)))))
+       (let prepared = (indent:prepare-indent-for-line gb mode line))
+       (indent:compute-prepared-indent prepared (%indent-rules-for-prepared! st buffer prepared)))))
 
   (declare %target-blank-indent-at-position! (MineState * buf:Buffer * UFix * UFix -> Optional UFix))
-  (define (%target-blank-indent-at-position! st buffer line pos)
+  (define (%target-blank-indent-at-position! st buffer _line pos)
     "Return indentation for a freshly inserted blank line at POS."
     (match (%indent-mode buffer)
       ((None) None)
       ((Some mode)
        (let gb = (buf:buffer-gap buffer))
-       (let rules = (%indent-rules-for-line! st buffer line))
-       (Some (indent:compute-blank-indent-at-position-with-rules gb mode pos rules)))))
+       (let prepared = (indent:prepare-blank-indent-at-position gb mode pos))
+       (indent:compute-prepared-indent prepared (%indent-rules-for-prepared! st buffer prepared)))))
 
   (declare %cursor-before-close-paren? (gap:GapBuffer * cursor:CursorState -> Boolean))
   (define (%cursor-before-close-paren? gb cs)
@@ -2413,28 +2385,13 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (when cursor-strictly-in-indent
          (cursor:cursor-move-to-position! cs indent-end)))
       (True
-       (when (> current-indent-chars 0)
-         (let deleted =
-           (gap:gap-delete-range! gb line-start indent-end))
-         (buf:buffer-mark-dirty! buffer)
-         (undo:undo-record! tree
-                            (undo:OpDelete line-start deleted)
-                            old-pos line-start))
-       (when (> target-indent 0)
-         (let spaces = (%make-spaces target-indent))
-         (gap:gap-insert-string! gb line-start spaces)
-         (buf:buffer-mark-dirty! buffer)
-         (undo:undo-record! tree
-                            (undo:OpInsert line-start spaces)
-                            line-start (+ line-start target-indent)))
-       (cond
-         (cursor-in-indent
-          (cursor:cursor-move-to-position! cs (+ line-start target-indent)))
-         (cursor-after-indent
-          (cursor:cursor-move-to-position!
-           cs
-           (+ (- old-pos current-indent-chars) target-indent)))
-         (True (values))))))
+       (let new-pos = (cond
+                        (cursor-in-indent (+ line-start target-indent))
+                        (cursor-after-indent (+ (- old-pos current-indent-chars) target-indent))
+                        (True old-pos)))
+       (buf:buffer-replace-range! buffer tree line-start indent-end
+                                  (%make-spaces target-indent) old-pos new-pos)
+       (cursor:cursor-move-to-buffer-position! gb cs new-pos))))
 
   (declare reindent-line! (MineState * buf:Buffer * undo:UndoTree * cursor:CursorState -> Void))
   (define (reindent-line! st buffer tree cs)
@@ -2729,22 +2686,16 @@ Uses the preceding (in-package ...) form to determine the compilation package."
       ((input:KeyCtrl #\z)
        (match (mgr:bufmgr-current (.ms-bufmgr st))
          ((Some buf)
-          (match (undo:undo-undo! (buf:buffer-undo buf))
-            ((Some (undo:UndoEntry entry-ops entry-cursor-before _))
-             (apply-undo-ops (buf:buffer-gap buf) entry-ops)
-             (cursor:cursor-move-to-position! (.ms-cursor st) entry-cursor-before))
-            ((None) (values))))
+          (ops:undo! buf (.ms-cursor st))
+          (values))
          ((None) (values))))
 
       ;; Ctrl+y -> redo
       ((input:KeyCtrl #\y)
        (match (mgr:bufmgr-current (.ms-bufmgr st))
          ((Some buf)
-          (match (undo:undo-redo! (buf:buffer-undo buf))
-            ((Some (undo:UndoEntry entry-ops entry-cursor-before _))
-             (apply-undo-ops (buf:buffer-gap buf) entry-ops)
-             (cursor:cursor-move-to-position! (.ms-cursor st) entry-cursor-before))
-            ((None) (values))))
+          (ops:redo! buf (.ms-cursor st))
+          (values))
          ((None) (values))))
 
       ;; Ctrl+s -> save current file
@@ -3086,20 +3037,16 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     (match (mgr:bufmgr-find-by-path (.ms-bufmgr st) fpath)
       ((Some buf)
        (let bid = (buf:buffer-id buf))
-       (mgr:bufmgr-switch! (.ms-bufmgr st) bid)
-       (editor:editor-pane-set-buffer! (.ms-editor st) bid)
+       (activate-buffer! st buf)
        (clamp-cursor-to-buffer! st buf)
-       (cell:write! (.ms-preview-path st) (Some fpath))
-       (tree:tree-pane-set-preview-path! (.ms-tree st) (Some fpath))
+       ;; An already open document remains permanently open.
        (values))
       ((None)
        ;; Open new buffer
        (match (mgr:bufmgr-open-file! (.ms-bufmgr st) fpath)
          ((Ok buf)
           (let bid = (buf:buffer-id buf))
-          (mgr:bufmgr-switch! (.ms-bufmgr st) bid)
-          (editor:editor-pane-set-buffer! (.ms-editor st) bid)
-          (cursor:cursor-move-to-position! (.ms-cursor st) 0)
+          (activate-buffer! st buf)
           (cell:write! (.ms-preview-path st) (Some fpath))
           (tree:tree-pane-set-preview-path! (.ms-tree st) (Some fpath))
           (values))
@@ -3856,6 +3803,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
     "Close the buffer unconditionally and clean up."
     (let bid = (buf:buffer-id buf))
     (let fpath = (match (buf:buffer-path buf) ((Some p) p) ((None) "")))
+    (forget-buffer-view! st bid)
     (mgr:bufmgr-force-close! (.ms-bufmgr st) bid)
     (when (> (str:length fpath) 0)
       (tree:tree-pane-remove-open-file! (.ms-tree st) fpath))
@@ -3899,8 +3847,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
     (match (mgr:bufmgr-find-by-path (.ms-bufmgr st) fpath)
       ((Some buf)
        (let bid = (buf:buffer-id buf))
-       (mgr:bufmgr-switch! (.ms-bufmgr st) bid)
-       (editor:editor-pane-set-buffer! (.ms-editor st) bid)
+       (activate-buffer! st buf)
        (clamp-cursor-to-buffer! st buf)
        (values))
       ((None)
@@ -3961,19 +3908,19 @@ Enter or Space inserts the matching Unicode character at the cursor."
 
   (declare %do-refresh-file! (MineState * String -> Void))
   (define (%do-refresh-file! st fpath)
-    "Close and reopen a file from disk."
+    "Refresh a document without changing its identity or destroying it on read failure."
     (match (mgr:bufmgr-find-by-path (.ms-bufmgr st) fpath)
       ((Some buf)
-       (mgr:bufmgr-force-close! (.ms-bufmgr st) (buf:buffer-id buf))
-       (match (mgr:bufmgr-open-file! (.ms-bufmgr st) fpath)
-         ((Ok new-buf)
-          (let bid = (buf:buffer-id new-buf))
-          (mgr:bufmgr-switch! (.ms-bufmgr st) bid)
-          (editor:editor-pane-set-buffer! (.ms-editor st) bid)
-          (cursor:cursor-move-to-position! (.ms-cursor st) 0)
+       (match (buf:buffer-refresh-from-file! buf)
+         ((Ok _)
+          (match (mgr:bufmgr-current (.ms-bufmgr st))
+            ((Some current)
+             (when (== (buf:buffer-id current) (buf:buffer-id buf))
+               (clamp-cursor-to-buffer! st buf)
+               (cursor:cursor-clear-selection! (.ms-cursor st))))
+            ((None) (values)))
           (status:statusbar-set-message! (.ms-status st) "Refreshed"))
          ((Err msg)
-          (tree:tree-pane-remove-open-file! (.ms-tree st) fpath)
           (user-error! st msg))))
       ((None) (values))))
 
@@ -3999,9 +3946,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
     (unless (== path "")
       (match (mgr:bufmgr-open-file! (.ms-bufmgr st) path)
         ((Ok buf)
-         (mgr:bufmgr-switch! (.ms-bufmgr st) (buf:buffer-id buf))
-         (editor:editor-pane-set-buffer! (.ms-editor st) (buf:buffer-id buf))
-         (cursor:cursor-move-to-position! (.ms-cursor st) 0)
+         (activate-buffer! st buf)
          ;; Add to tree's open files section
          (let display-name = (lisp (-> String) (path)
                                (cl:file-namestring (cl:pathname path))))
@@ -4049,9 +3994,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
             ((Some fpath)
              (match (mgr:bufmgr-open-file! (.ms-bufmgr st) fpath)
                ((Ok buf)
-                (mgr:bufmgr-switch! (.ms-bufmgr st) (buf:buffer-id buf))
-                (editor:editor-pane-set-buffer! (.ms-editor st) (buf:buffer-id buf))
-                (cursor:cursor-move-to-position! (.ms-cursor st) 0)
+                (activate-buffer! st buf)
                 (let display-name = (lisp (-> String) (fpath)
                                       (cl:file-namestring (cl:pathname fpath))))
                 (tree:tree-pane-add-open-file! (.ms-tree st) display-name fpath))
@@ -4299,9 +4242,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
          ((Some asd-path)
           (match (mgr:bufmgr-open-file! (.ms-bufmgr st) asd-path)
             ((Ok buf)
-             (mgr:bufmgr-switch! (.ms-bufmgr st) (buf:buffer-id buf))
-             (editor:editor-pane-set-buffer! (.ms-editor st) (buf:buffer-id buf))
-             (cursor:cursor-move-to-position! (.ms-cursor st) 0)
+             (activate-buffer! st buf)
              (let display-name = (lisp (-> String) (asd-path)
                                    (cl:file-namestring (cl:pathname asd-path))))
              (tree:tree-pane-add-open-file! (.ms-tree st) display-name asd-path)
@@ -4697,8 +4638,7 @@ Render-app is NOT called here; the main loop handles rendering."
                ((Some fpath)
                 (match (mgr:bufmgr-open-file! bm fpath)
                   ((Ok buf)
-                   (mgr:bufmgr-switch! bm (buf:buffer-id buf))
-                   (editor:editor-pane-set-buffer! ep (buf:buffer-id buf))
+                   (activate-buffer! st buf)
                    (cursor:cursor-move-to-position! cs 0)
                    (let display-name = (lisp (-> String) (fpath)
                                          (cl:file-namestring (cl:pathname fpath))))
@@ -4714,8 +4654,7 @@ Render-app is NOT called here; the main loop handles rendering."
                             (cl:namestring (cl:merge-pathnames (cl:pathname path)))))
           (match (mgr:bufmgr-open-file! bm abs-path)
             ((Ok buf)
-             (mgr:bufmgr-switch! bm (buf:buffer-id buf))
-             (editor:editor-pane-set-buffer! ep (buf:buffer-id buf))
+             (activate-buffer! st buf)
              (cursor:cursor-move-to-position! cs 0)
              ;; Add to open files list
              (let display-name = (lisp (-> String) (abs-path)
@@ -4918,28 +4857,12 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
              (cl:coerce (cl:nreverse chars) 'cl:string)
              cl:nil))))
 
-(cl:defun %detect-buffer-package (buf-text default-pkg)
-  "Find the package name from an (in-package ...) form in the buffer text.
-Returns a package name string, or DEFAULT-PKG if none found."
-  (cl:handler-case
-      (cl:with-input-from-string (s buf-text)
-        (cl:let ((eof (cl:gensym))
-                  (cl:*read-eval* cl:nil)
-                  (cl:*readtable* (cl:copy-readtable cl:nil)))
-          (cl:loop
-            (cl:let ((form (cl:handler-case (cl:read s cl:nil eof)
-                             (cl:error () eof))))
-              (cl:when (cl:eq form eof) (cl:return default-pkg))
-              (cl:when (cl:and (cl:consp form)
-                               (cl:symbolp (cl:car form))
-                               (cl:string-equal (cl:symbol-name (cl:car form))
-                                                "IN-PACKAGE"))
-                (cl:let ((pkg-arg (cl:cadr form)))
-                  (cl:return (cl:etypecase pkg-arg
-                               (cl:string pkg-arg)
-                               (cl:symbol (cl:symbol-name pkg-arg))))))))))
-    (cl:error () default-pkg)))
-
+(cl:defun %detect-buffer-package (buf-text default-pkg cl:&optional (position (cl:length buf-text)))
+  "Inspect source spans without invoking the Lisp reader."
+  (cl:or (%coalton-optional-value-or-nil
+          (mine/syntax/context:source-package-before
+           (mine/syntax/context:scan-source buf-text) position))
+         default-pkg))
 (cl:defun %resolve-qualified-name (name buf-pkg)
   "If NAME contains a colon (like 'cell:read'), resolve the package prefix
 using the buffer package's local nicknames. Returns (values pkg-name sym-name).
@@ -5006,171 +4929,14 @@ Returns a string or NIL."
 
 ;;; Find compile target (enclosing top-level form, descending through wrappers)
 
-(cl:defun %find-matching-close-cl (gb start len)
-  "Find the matching close paren for the open paren at START."
-  (cl:let ((depth 0))
-    (cl:loop :for i :from start :below len
-             :do (cl:let ((c (mine/app/mine::gap-char-at-cl gb i)))
-                   (cl:cond
-                     ((cl:char= c #\() (cl:incf depth))
-                     ((cl:char= c #\))
-                      (cl:decf depth)
-                      (cl:when (cl:zerop depth)
-                        (cl:return-from %find-matching-close-cl (cl:1+ i)))))))
-    ;; Unmatched — return end of buffer
-    len))
-
-(cl:defun %form-head-is-wrapper-p (gb paren-pos len)
-  "Check if the form at PAREN-POS starts with a Beam Toplevel Form wrapper."
-  (cl:let ((start (cl:1+ paren-pos)))
-    ;; Skip whitespace after open paren
-    (cl:loop :while (cl:and (cl:< start len)
-                             (cl:member (mine/app/mine::gap-char-at-cl gb start)
-                                        '(#\Space #\Tab #\Newline)))
-             :do (cl:incf start))
-    ;; Read the head symbol
-    (cl:let ((sym-end start))
-      (cl:loop :while (cl:and (cl:< sym-end len)
-                               (cl:not (cl:member (mine/app/mine::gap-char-at-cl gb sym-end)
-                                                  '(#\Space #\Tab #\Newline #\( #\)))))
-               :do (cl:incf sym-end))
-      (cl:let ((form-head (cl:make-string (cl:- sym-end start))))
-        (cl:dotimes (j (cl:- sym-end start))
-          (cl:setf (cl:char form-head j)
-                   (mine/app/mine::gap-char-at-cl gb (cl:+ start j))))
-        (cl:member (%classify-form-head-cl (cl:string-downcase form-head))
-                   '(:progn-wrapper :coalton-wrapper))))))
-
-(cl:defun %descend-compile-wrapper-cl (gb form-start form-end pos len)
-  "Recursively descend through wrapper forms to the sub-form containing POS."
-  (cl:if (%form-head-is-wrapper-p gb form-start len)
-         (cl:let ((inner (%find-subform-containing gb form-start form-end pos)))
-           (cl:if inner
-                  (%descend-compile-wrapper-cl gb (cl:car inner) (cl:cdr inner) pos len)
-                  (cl:cons form-start form-end)))
-         (cl:cons form-start form-end)))
-
 (cl:defun %find-compile-target-cl (gb pos)
-  "Find the compile-target form around POS.
-Forward-scans from 0 to find the depth-0 form containing POS (inclusive
-of POS on the opening or closing paren). If the form head is a supported
-wrapper, descends to the nested sub-form containing POS.
-Returns (start . end) or NIL."
-  (cl:let* ((len (mine/buffer/gap:gap-length gb))
-            (depth 0)
-            (toplevel-start cl:nil))
-    ;; Forward scan to find the depth-0 form containing POS
-    (cl:loop :for i :from 0 :below len
-             :do (cl:let ((c (mine/app/mine::gap-char-at-cl gb i)))
-                   (cl:cond
-                     ((cl:char= c #\()
-                      (cl:when (cl:zerop depth)
-                        (cl:setf toplevel-start i))
-                      (cl:incf depth))
-                     ((cl:char= c #\))
-                      (cl:decf depth)
-                      (cl:when (cl:and (cl:zerop depth) toplevel-start
-                                       (cl:>= pos toplevel-start)
-                                       (cl:<= pos i))
-                        ;; Found it: toplevel-start .. i+1
-                        (cl:let ((tl-end (cl:1+ i)))
-                          (cl:return-from %find-compile-target-cl
-                            (%descend-compile-wrapper-cl gb toplevel-start tl-end pos len))))
-                      (cl:when (cl:zerop depth)
-                        (cl:setf toplevel-start cl:nil))))))
-    cl:nil))
-
-(cl:defun %find-subform-containing (gb wrapper-start wrapper-end pos)
-  "Find the depth-1 sub-form inside a wrapper (progn/coalton-toplevel) containing POS.
-Returns (start . end) or NIL."
-  (cl:let ((depth 0)
-           (sub-start cl:nil))
-    (cl:loop :for i :from wrapper-start :below wrapper-end
-             :do (cl:let ((c (mine/app/mine::gap-char-at-cl gb i)))
-                   (cl:cond
-                     ((cl:char= c #\()
-                      (cl:incf depth)
-                      (cl:when (cl:= depth 2)
-                        (cl:setf sub-start i)))
-                     ((cl:char= c #\))
-                      (cl:when (cl:and (cl:= depth 2) sub-start
-                                       (cl:>= pos sub-start)
-                                       (cl:<= pos i))
-                        (cl:return-from %find-subform-containing
-                          (cl:cons sub-start (cl:1+ i))))
-                      (cl:decf depth)
-                      (cl:when (cl:= depth 1)
-                        (cl:setf sub-start cl:nil))))))
-    cl:nil))
-
-;;; Find preceding (in-package ...) or (cl:in-package ...) form
+  "CL adapter for the shared, literal-aware form selector."
+  (cl:let ((target-range (%coalton-optional-value-or-nil (%find-compile-target gb pos))))
+    (cl:when target-range
+      (cl:cons (coalton-prelude:fst target-range) (coalton-prelude:snd target-range)))))
 
 (cl:defun %find-in-package-before (gb pos)
-  "Scan backward from POS in gap buffer GB to find the nearest (in-package ...) form.
-Returns the package name as a string, or NIL if not found."
-  (cl:let ((text (mine/buffer/gap:gap-to-string gb))
-           (search-region (cl:subseq (mine/buffer/gap:gap-to-string gb) 0 (cl:min pos (cl:length (mine/buffer/gap:gap-to-string gb))))))
-    (cl:declare (cl:ignore text))
-    ;; Search backward for (in-package or (cl:in-package
-    (cl:let ((best-pos cl:nil)
-             (best-pkg cl:nil))
-      ;; Try both patterns
-      (cl:dolist (pattern '("(in-package " "(cl:in-package "))
-        (cl:let ((plen (cl:length pattern))
-                 (start 0))
-          (cl:loop
-            (cl:let ((found (cl:search pattern search-region
-                                       :start2 start :test #'cl:char-equal)))
-              (cl:unless found (cl:return))
-              ;; Extract the package name argument
-              (cl:let* ((arg-start (cl:+ found plen))
-                        (pkg (%extract-package-arg search-region arg-start)))
-                (cl:when pkg
-                  (cl:when (cl:or (cl:null best-pos) (cl:> found best-pos))
-                    (cl:setf best-pos found)
-                    (cl:setf best-pkg pkg))))
-              (cl:setf start (cl:1+ found))))))
-      best-pkg)))
-
-(cl:defun %extract-package-arg (text start)
-  "Extract a package name from an in-package form argument starting at START.
-Handles #:foo, :foo, 'foo, \"foo\", and bare symbols."
-  ;; Skip whitespace
-  (cl:let ((i start)
-           (len (cl:length text)))
-    (cl:loop :while (cl:and (cl:< i len)
-                             (cl:member (cl:char text i) '(#\Space #\Tab #\Newline)))
-             :do (cl:incf i))
-    (cl:when (cl:>= i len) (cl:return-from %extract-package-arg cl:nil))
-    (cl:let ((ch (cl:char text i)))
-      (cl:cond
-        ;; #:foo
-        ((cl:and (cl:char= ch #\#) (cl:< (cl:1+ i) len) (cl:char= (cl:char text (cl:1+ i)) #\:))
-         (%read-symbol-name text (cl:+ i 2) len))
-        ;; :foo
-        ((cl:char= ch #\:)
-         (%read-symbol-name text (cl:1+ i) len))
-        ;; 'foo or quote
-        ((cl:char= ch #\')
-         (%read-symbol-name text (cl:1+ i) len))
-        ;; "foo"
-        ((cl:char= ch #\")
-         (cl:let ((end (cl:position #\" text :start (cl:1+ i))))
-           (cl:when end (cl:subseq text (cl:1+ i) end))))
-        ;; bare symbol
-        (cl:t
-         (%read-symbol-name text i len))))))
-
-(cl:defun %read-symbol-name (text start len)
-  "Read a symbol name (letters, digits, hyphens, etc.) starting at START."
-  (cl:let ((end start))
-    (cl:loop :while (cl:and (cl:< end len)
-                             (cl:not (cl:member (cl:char text end)
-                                                '(#\Space #\Tab #\Newline #\) #\())))
-             :do (cl:incf end))
-    (cl:when (cl:> end start)
-      (cl:string-upcase (cl:subseq text start end)))))
-
+  (%coalton-optional-value-or-nil (%find-buffer-package gb pos)))
 ;;; Async protocol message processing (CL side)
 
 (cl:defun %ensure-proto-mailbox (st)
@@ -5315,6 +5081,12 @@ Returns a Coalton List of ProtoMsg."
        (cl:cond
          ((cl:and (cl:consp payload) (cl:eq (cl:first payload) :output))
           (mine/app/mine:ProtoOutput (cl:second payload)))
+         ((cl:and (cl:consp payload) (cl:eq (cl:first payload) :output-chunk))
+          (mine/app/mine:ProtoOutputChunk
+           (mine/protocol/messages:RequestId (cl:second payload)) (cl:third payload)))
+         ((cl:and (cl:consp payload) (cl:eq (cl:first payload) :package))
+          (mine/app/mine:ProtoPackage
+           (mine/protocol/messages:RequestId (cl:second payload)) (cl:third payload)))
 	        ((cl:and (cl:consp payload) (cl:eq (cl:first payload) :diagnostic))
 	          (cl:let ((diagnostic (cl:rest payload)))
 	            (cl:unless (mine/app/diagnostics:diagnostic-stale-p diagnostic)
@@ -6303,7 +6075,7 @@ package resolution including local nicknames."
                      (prefix (mine/app/completion:extract-symbol-prefix gb cur-pos))
                      (buf-text (mine/buffer/gap:gap-to-string gb))
                      (default-pkg (coalton/cell:read (mine/app/state:get-repl-package-cell st)))
-                     (pkg (%detect-buffer-package buf-text default-pkg)))
+                     (pkg (%detect-buffer-package buf-text default-pkg cur-pos)))
              (cl:values prefix pkg cur-pos))
            (cl:values nil "CL-USER" 0))))
 

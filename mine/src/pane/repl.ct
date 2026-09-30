@@ -25,6 +25,7 @@
    #:repl-pane-geometry #:repl-pane-input-viewport #:repl-pane-completion-anchor
    #:repl-pane-clear-output!
    #:repl-pane-append-output!
+   #:repl-pane-append-output-chunk!
    #:repl-pane-append-system!
    #:repl-pane-get-input
    #:repl-pane-clear-input!
@@ -101,6 +102,13 @@
   (define (repl-pane-append-system! rp text)
     "Append a system/info line to the REPL output (rendered in dim italic)."
     (widget-text:text-widget-append-system! (.output rp) text)
+    (widget-text:text-widget-scroll-to-bottom! (.output rp))
+    (values))
+
+  (declare repl-pane-append-output-chunk! (ReplPane * String -> Void))
+  (define (repl-pane-append-output-chunk! rp text)
+    "Append exact runtime output without inventing line breaks between chunks."
+    (widget-text:text-widget-append-chunk! (.output rp) text)
     (widget-text:text-widget-scroll-to-bottom! (.output rp))
     (values))
 

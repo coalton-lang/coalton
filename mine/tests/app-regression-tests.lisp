@@ -87,10 +87,44 @@
                       (mine/app/state:get-bufmgr state) a)))
                 "Previewing another file closed a permanently open buffer")))))
 
+(defun check-streamed-output-keeps-line-boundaries ()
+  (let* ((state (%test-state))
+         (pane (mine/app/state:get-repl-pane state))
+         (widget (repl::.output pane)))
+    (mine/widget/text:text-widget-clear! widget)
+    (dolist (chunk (list "a" (format nil "b~%") (format nil "~%") "c"))
+      (app::handle-proto-msg! state
+                             (app::%parse-one-message
+                              (list :notify (list :output-chunk 91 chunk)))))
+    (repl:repl-pane-append-output! pane "=> result")
+    (let* ((lines (coalton/cell:read (mine/widget/text:.tw-lines widget)))
+           (actual (loop for i below (coalton/vector:length lines)
+                         collect (coalton/vector:index-unsafe i lines))))
+      (%check (equal '("ab" "" "c" "=> result") actual)
+              "Streaming inserted or lost line breaks: ~S" actual))))
+
+(defun check-repl-package-follows-matching-runtime-acknowledgment ()
+  (let* ((state (%test-state))
+         (package-cell (mine/app/state:get-repl-package-cell state)))
+    (coalton/cell:write! (mine/app/state:.ms-active-request state)
+                        (coalton:Some (mine/protocol/messages:RequestId 92)))
+    (app::handle-proto-msg! state
+                           (app::%parse-one-message '(:notify (:package 91 "stale"))))
+    (%check (not (string= "stale" (coalton/cell:read package-cell)))
+            "An unrelated request changed the REPL package")
+    (app::handle-proto-msg! state
+                           (app::%parse-one-message '(:notify (:package 92 "exact-case"))))
+    (%check (string= "exact-case" (coalton/cell:read package-cell))
+            "Matching package acknowledgment lost exact package identity")))
+
 (defun run-app-regression-tests ()
   (dolist (test '(check-package-inspection-does-not-evaluate-source
                   check-mailbox-preserves-diagnostic-generations
-                  check-mailbox-callbacks-run-in-arrival-order))
+                  check-mailbox-callbacks-run-in-arrival-order
+                  check-editor-undo-redo-after-save-is-dirty
+                  check-preview-keeps-permanently-open-buffer
+                  check-streamed-output-keeps-line-boundaries
+                  check-repl-package-follows-matching-runtime-acknowledgment))
     (format t "~&~A~%" test)
     (funcall test))
   t)

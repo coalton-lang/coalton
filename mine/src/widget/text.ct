@@ -14,6 +14,7 @@
    #:.tw-sel-anchor #:.tw-sel-end
    #:text-widget-new
    #:text-widget-append!
+   #:text-widget-append-chunk!
    #:text-widget-append-system!
    #:text-widget-clear!
    #:text-widget-render
@@ -41,7 +42,8 @@
     (tw-style       color:Style)
     (tw-sel-anchor  (Cell (Optional (Tuple UFix UFix))))
     (tw-sel-end     (Cell (Optional (Tuple UFix UFix))))
-    (tw-vis-height  (Cell UFix)))
+    (tw-vis-height  (Cell UFix))
+    (tw-stream-open (Cell Boolean)))
 
   (declare text-widget-new (color:Style -> TextWidget))
   (define (text-widget-new style)
@@ -52,7 +54,8 @@
                 style
                 (cell:new None)
                 (cell:new None)
-                (cell:new 20)))
+                (cell:new 20)
+                (cell:new False)))
 
   (declare text-widget-line-count (TextWidget -> UFix))
   (define (text-widget-line-count tw)
@@ -62,6 +65,7 @@
   (declare text-widget-append! (TextWidget * String -> Void))
   (define (text-widget-append! tw line)
     "Append a line to the text widget."
+    (cell:write! (.tw-stream-open tw) False)
     (vec:push! line (cell:read (.tw-lines tw)))
     (vec:push! False (cell:read (.tw-flags tw)))
     (values))
@@ -69,9 +73,41 @@
   (declare text-widget-append-system! (TextWidget * String -> Void))
   (define (text-widget-append-system! tw line)
     "Append a system/info line (rendered in dim italic)."
+    (cell:write! (.tw-stream-open tw) False)
     (vec:push! line (cell:read (.tw-lines tw)))
     (vec:push! True (cell:read (.tw-flags tw)))
     (values))
+
+  (declare append-stream-part! (TextWidget * String * Boolean -> Void))
+  (define (append-stream-part! tw text newline?)
+    (let lines = (cell:read (.tw-lines tw)))
+    (let count = (vec:length lines))
+    (cond
+      ((and (cell:read (.tw-stream-open tw)) (> count 0))
+       (let last = (- count 1))
+       (vec:set! last (<> (vec:index-unsafe last lines) text) lines))
+      ((or newline? (> (str:length text) 0))
+       (vec:push! text lines)
+       (vec:push! False (cell:read (.tw-flags tw)))
+       (values))
+      (True (values)))
+    (when (or newline? (> (str:length text) 0))
+      (cell:write! (.tw-stream-open tw) (not newline?)))
+    (values))
+
+  (declare append-stream-parts! (TextWidget * List String -> Void))
+  (define (append-stream-parts! tw parts)
+    (match parts
+      ((Nil) (values))
+      ((Cons text (Nil)) (append-stream-part! tw text False))
+      ((Cons text rest)
+       (append-stream-part! tw text True)
+       (append-stream-parts! tw rest))))
+
+  (declare text-widget-append-chunk! (TextWidget * String -> Void))
+  (define (text-widget-append-chunk! tw text)
+    "Append streamed text, retaining partial lines across protocol messages."
+    (append-stream-parts! tw (str:split #\Newline text)))
 
   (declare text-widget-clear! (TextWidget -> Void))
   (define (text-widget-clear! tw)
@@ -79,6 +115,8 @@
     (cell:write! (.tw-lines tw) (vec:new))
     (cell:write! (.tw-flags tw) (vec:new))
     (cell:write! (.tw-scroll tw) 0)
+    (cell:write! (.tw-stream-open tw) False)
+    (text-widget-clear-selection! tw)
     (values))
 
   (declare text-widget-scroll-up! (TextWidget * UFix -> Void))
