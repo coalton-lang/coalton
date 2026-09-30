@@ -2,6 +2,8 @@
   (:use #:coalton #:coalton-prelude)
   (:local-nicknames
    (#:gap #:mine/buffer/gap)
+   (#:source #:mine/syntax/context)
+   (#:cellw #:mine/text/width)
    (#:str #:coalton/string)
    (#:list #:coalton/list))
   (:export
@@ -9,6 +11,9 @@
    #:RuleGeneric
    #:RuleKnown
    #:IndentRuleEntry
+   #:PreparedIndent #:prepare-indent-for-line #:prepare-blank-indent-at-position
+   #:prepare-indent-from-source #:prepared-indent-heads #:compute-prepared-indent
+   #:prepared-source #:prepared-position
    #:indent-heads-for-line
    #:compute-indent-with-rules
    #:compute-blank-indent-at-position-with-rules))
@@ -19,11 +24,27 @@
 
   (define-type IndentToken
     (TokAtom UFix UFix UFix String)
+    (TokLiteral UFix UFix UFix)
     (TokList UFix UFix UFix)
     (TokClose UFix UFix UFix))
 
   (define-type IndentContext
-    (Ctx UFix UFix (Optional IndentContext) UFix (List IndentToken)))
+    (Ctx UFix UFix (Optional IndentContext) UFix (List IndentToken) Boolean))
+
+  (define-struct PreparedIndent
+    (prepared-source source:SourceContext)
+    (prepared-position UFix)
+    (prepared-context (Optional IndentContext))
+    (prepared-first-token (Optional IndentToken))
+    (prepared-original-column UFix)
+    (prepared-preserve Boolean)
+    (prepared-supported Boolean))
+
+  (declare prepared-source (PreparedIndent -> source:SourceContext))
+  (define (prepared-source prepared) (.prepared-source prepared))
+
+  (declare prepared-position (PreparedIndent -> UFix))
+  (define (prepared-position prepared) (.prepared-position prepared))
 
   (define-type IndentRule
     "Indentation metadata resolved by the runtime image.
@@ -37,13 +58,11 @@ and DEFMETHOD's qualifier-sensitive lambda list."
   (define-type IndentRuleEntry
     (IndentRuleEntry String IndentRule))
 
-  (declare tab-width UFix)
-  (define tab-width 4)
-
   (declare token-col (IndentToken -> UFix))
   (define (token-col token)
     (match token
       ((TokAtom _ _ col _) col)
+      ((TokLiteral _ _ col) col)
       ((TokList _ _ col) col)
       ((TokClose _ _ col) col)))
 
@@ -68,89 +87,170 @@ and DEFMETHOD's qualifier-sensitive lambda list."
   (declare context-open-col (IndentContext -> UFix))
   (define (context-open-col context)
     (match context
-      ((Ctx _ col _ _ _) col)))
+      ((Ctx _ col _ _ _ _) col)))
 
   (declare context-parent (IndentContext -> Optional IndentContext))
   (define (context-parent context)
     (match context
-      ((Ctx _ _ parent _ _) parent)))
+      ((Ctx _ _ parent _ _ _) parent)))
 
   (declare context-parent-index (IndentContext -> UFix))
   (define (context-parent-index context)
     (match context
-      ((Ctx _ _ _ parent-index _) parent-index)))
+      ((Ctx _ _ _ parent-index _ _) parent-index)))
 
   (declare context-raw-elements (IndentContext -> List IndentToken))
   (define (context-raw-elements context)
     (match context
-      ((Ctx _ _ _ _ elements) elements)))
+      ((Ctx _ _ _ _ elements _) elements)))
+
+  (declare context-literal? (IndentContext -> Boolean))
+  (define (context-literal? context)
+    (match context ((Ctx _ _ _ _ _ literal) literal)))
 
   (declare context-elements (IndentContext -> List IndentToken))
   (define (context-elements context)
     (list:reverse (context-raw-elements context)))
 
-  (declare context-add-element (IndentContext * IndentToken -> IndentContext))
-  (define (context-add-element context token)
-    (match context
-      ((Ctx open-pos open-col parent parent-index elements)
-       (Ctx open-pos open-col parent parent-index (Cons token elements)))))
-
-  (declare current-context (List IndentContext -> Optional IndentContext))
-  (define (current-context stack)
-    (match stack
-      ((Cons context _) (Some context))
-      ((Nil) None)))
-
-  (declare add-element-to-stack (List IndentContext * IndentToken -> List IndentContext))
-  (define (add-element-to-stack stack token)
-    (match stack
-      ((Cons context rest)
-       (Cons (context-add-element context token) rest))
-      ((Nil) Nil)))
-
-  (declare space? (Char -> Boolean))
-  (define (space? ch)
-    (list:member ch [#\Space #\Tab #\Newline #\Return ]))
-
-  (declare delimiter? (Char -> Boolean))
-  (define (delimiter? ch)
-    (or (space? ch)
-        (list:member ch [#\( #\) #\" #\; ])))
-
   (declare advance-col (UFix * Char -> UFix))
   (define (advance-col col ch)
+    (let width = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
     (cond
       ((== ch #\Newline) 0)
-      ((== ch #\Tab) (+ col (- tab-width (mod col tab-width))))
-      (True (+ col 1))))
+      ((== ch #\Tab) (+ col (- width (mod col width))))
+      (True (+ col (cellw:editor-char-cell-width ch)))))
 
-  (declare char-at? (String * UFix * Char -> Boolean))
-  (define (char-at? text pos ch)
-    (match (str:ref text pos)
-      ((Some actual) (== actual ch))
-      ((None) False)))
+  (declare source-column (source:SourceContext * UFix -> UFix))
+  (define (source-column context position)
+    (let text = (source:source-text context))
+    (let start =
+      (rec scan ((pos position))
+        (if (or (== pos 0) (== (str:ref text (- pos 1)) (Some #\Newline)))
+            pos (scan (- pos 1)))))
+    (rec scan ((pos start) (col 0))
+      (if (>= pos position) col
+          (match (str:ref text pos)
+            ((Some ch) (scan (+ pos 1) (advance-col col ch)))
+            ((None) col)))))
 
-  (declare read-atom-end-loop (String * UFix * UFix -> UFix))
-  (define (read-atom-end-loop text pos limit)
-    (if (>= pos limit)
-        pos
-        (match (str:ref text pos)
-          ((Some ch)
-           (if (delimiter? ch)
-               pos
-               (read-atom-end-loop text (+ pos 1) limit)))
-          ((None) pos))))
+  (declare form-token (source:SourceContext * source:SourceForm -> IndentToken))
+  (define (form-token context form)
+    (let start = (source:form-start form))
+    (let end = (source:form-end form))
+    (let col = (source-column context start))
+    (match (source:form-kind form)
+      ((source:SymbolForm) (TokAtom start end col (source:form-text context form)))
+      ((source:DelimitedForm _) (TokList start end col))
+      (_ (TokLiteral start end col))))
 
-  (declare read-atom-end (String * UFix * UFix -> UFix))
-  (define (read-atom-end text start limit)
-    (if (and (< (+ start 2) limit)
-             (char-at? text start #\#)
-             (char-at? text (+ start 1) #\\)
-             (match (str:ref text (+ start 2))
-               ((Some ch) (delimiter? ch))
-               ((None) False)))
-        (+ start 3)
-        (read-atom-end-loop text start limit)))
+  (declare forms-before (source:SourceContext * List source:SourceForm * UFix * List IndentToken
+                        -> List IndentToken))
+  (define (forms-before context forms pos acc)
+    (match forms
+      ((Nil) acc)
+      ((Cons form rest)
+       (if (>= (source:form-start form) pos) acc
+           (forms-before context rest pos (Cons (form-token context form) acc))))))
+
+  (declare form-open-at? (source:SourceForm * UFix -> Boolean))
+  (define (form-open-at? form pos)
+    (and (< (source:form-start form) pos)
+         (or (< pos (source:form-end form))
+             (and (not (source:form-complete? form)) (<= pos (source:form-end form))))))
+
+  (declare context-at (source:SourceContext * List source:SourceForm * Optional IndentContext
+                       * UFix * UFix * Boolean -> Optional IndentContext))
+  (define (context-at source-context forms parent index pos quoted)
+    (match forms
+      ((Nil) parent)
+      ((Cons form rest)
+       (cond
+         ((>= (source:form-start form) pos) parent)
+         ((form-open-at? form pos)
+          (match (source:form-kind form)
+            ((source:DelimitedForm delimiter)
+             (let start = (source:form-start form))
+             (let context = (Ctx start (source-column source-context start) parent index
+                                 (forms-before source-context (source:form-children form) pos Nil)
+                                 (or quoted (not (== delimiter source:ParenDelimiter)))))
+             (context-at source-context (source:form-children form) (Some context) 0 pos False))
+            ((source:PrefixedForm _)
+             (let prefix = (str:ref (source:source-text source-context) (source:form-start form)))
+             (context-at source-context (source:form-children form) parent index pos
+                         (or (== prefix (Some #\')) (== prefix (Some #\`)))))
+            (_ parent)))
+         (True (context-at source-context rest parent (+ index 1) pos quoted))))))
+
+  (declare first-token-at (source:SourceContext * UFix -> Optional IndentToken))
+  (define (first-token-at context pos)
+    (let text = (source:source-text context))
+    (let end =
+      (rec scan ((p pos))
+        (match (str:ref text p)
+          ((None) p)
+          ((Some #\Newline) p)
+          (_ (scan (+ p 1))))))
+    (rec scan ((tokens (source:source-tokens context)))
+      (match tokens
+        ((Nil) None)
+        ((Cons token rest)
+         (let start = (source:token-start token))
+         (cond
+           ((< start pos) (scan rest))
+           ((>= start end) None)
+           (True
+            (let col = (source-column context start))
+            (let token-end = (source:token-end token))
+            (match (source:token-kind token)
+              ((source:CloseToken _) (Some (TokClose start token-end col)))
+              ((source:OpenToken _) (Some (TokList start token-end col)))
+              ((source:SymbolToken _) (Some (TokAtom start token-end col (source:token-text context token))))
+              ((source:CommentToken _) None)
+              (_ (Some (TokLiteral start token-end col))))))))))
+
+  (declare leading-column (source:SourceContext * UFix -> UFix))
+  (define (leading-column context pos)
+    (let text = (source:source-text context))
+    (rec scan ((p pos) (col 0))
+      (match (str:ref text p)
+        ((Some #\Space) (scan (+ p 1) (+ col 1)))
+        ((Some #\Tab) (scan (+ p 1) (advance-col col #\Tab)))
+        (_ col))))
+
+  (declare prepare-indent-from-source (source:SourceContext * UFix * UFix * Boolean -> PreparedIndent))
+  (define (prepare-indent-from-source context mode pos blank)
+    "Prepare once; None from compute-prepared-indent means preserve literal text."
+    (let position = (min pos (str:length (source:source-text context))))
+    (let class = (source:source-class-at context position))
+    ;; Whitespace before a comment/literal opener is outside that literal.
+    ;; Only a token begun on an earlier line can protect this line's prefix.
+    (let inside-token = (list:any
+                         (fn (token)
+                           (and (< (source:token-start token) position)
+                                (<= position (source:token-end token))))
+                         (source:source-tokens context)))
+    (PreparedIndent context position
+                    (context-at context (source:source-forms context) None 0 position False)
+                    (if blank None (first-token-at context position))
+                    (leading-column context position)
+                    (and inside-token (not (== class source:SourceCode)))
+                    (and (> position 0) (<= mode 1))))
+
+  (declare prepare-indent-for-line (gap:GapBuffer * UFix * UFix -> PreparedIndent))
+  (define (prepare-indent-for-line gb mode line)
+    (prepare-indent-from-source (source:scan-source (gap:gap-to-string gb)) mode
+                                (gap:gap-line-to-pos gb line) False))
+
+  (declare prepare-blank-indent-at-position (gap:GapBuffer * UFix * UFix -> PreparedIndent))
+  (define (prepare-blank-indent-at-position gb mode pos)
+    (prepare-indent-from-source (source:scan-source (gap:gap-to-string gb)) mode pos True))
+
+  (declare context-head (IndentContext -> Optional String))
+  (define (context-head context)
+    (if (context-literal? context) None
+        (match (context-elements context)
+          ((Cons (TokAtom _ _ _ text) _) (Some text))
+          (_ None))))
 
   (declare call-keyword? (String -> Boolean))
   (define (call-keyword? text)
@@ -159,190 +259,6 @@ and DEFMETHOD's qualifier-sensitive lambda list."
   (declare lambda-list-keyword? (String -> Boolean))
   (define (lambda-list-keyword? text)
     (== (str:ref text 0) (Some #\&)))
-
-  (declare line-start-loop (String * UFix * UFix * UFix -> UFix))
-  (define (line-start-loop text remaining pos len)
-    (if (== remaining 0)
-        pos
-        (if (>= pos len)
-            len
-            (match (str:ref text pos)
-              ((Some #\Newline)
-               (line-start-loop text (- remaining 1) (+ pos 1) len))
-              (_ (line-start-loop text remaining (+ pos 1) len))))))
-
-  (declare line-start (String * UFix -> UFix))
-  (define (line-start text line)
-    (line-start-loop text line 0 (str:length text)))
-
-  (declare first-token-skip-spaces (String * UFix * UFix * UFix -> Optional IndentToken))
-  (define (first-token-skip-spaces text pos col len)
-    (if (>= pos len)
-        None
-        (match (str:ref text pos)
-          ((Some #\Newline) None)
-          ((Some #\Space)
-           (first-token-skip-spaces text (+ pos 1) (+ col 1) len))
-          ((Some #\Tab)
-           (first-token-skip-spaces text (+ pos 1) (advance-col col #\Tab) len))
-          ((Some #\))
-           (Some (TokClose pos (+ pos 1) col)))
-          ((Some #\()
-           (Some (TokList pos (+ pos 1) col)))
-          ((Some #\")
-           None)
-          ((Some #\;)
-           None)
-          ((Some _)
-           (let end = (read-atom-end text pos len))
-           (Some (TokAtom pos end col (str:substring text pos end))))
-          ((None) None))))
-
-  (declare line-first-token (String * UFix -> Optional IndentToken))
-  (define (line-first-token text start)
-    (first-token-skip-spaces text start 0 (str:length text)))
-
-  (declare skip-line-comment-loop (String * UFix * UFix -> UFix))
-  (define (skip-line-comment-loop text pos limit)
-    (if (>= pos limit)
-        limit
-        (match (str:ref text pos)
-          ((Some #\Newline) pos)
-          (_ (skip-line-comment-loop text (+ pos 1) limit)))))
-
-  (declare skip-line-comment (String * UFix * UFix -> UFix))
-  (define (skip-line-comment text start limit)
-    (skip-line-comment-loop text start limit))
-
-  (declare skip-block-comment-loop (String * UFix * UFix * UFix * UFix -> Tuple UFix UFix))
-  (define (skip-block-comment-loop text pos limit col depth)
-    (if (or (>= pos limit) (== depth 0))
-        (Tuple pos col)
-        (match (str:ref text pos)
-          ((Some #\#)
-           (if (and (< (+ pos 1) limit)
-                    (char-at? text (+ pos 1) #\|))
-               (skip-block-comment-loop
-                text (+ pos 2) limit
-                (advance-col (advance-col col #\#) #\|)
-                (+ depth 1))
-               (skip-block-comment-loop
-                text (+ pos 1) limit (advance-col col #\#) depth)))
-          ((Some #\|)
-           (if (and (< (+ pos 1) limit)
-                    (char-at? text (+ pos 1) #\#))
-               (skip-block-comment-loop
-                text (+ pos 2) limit
-                (advance-col (advance-col col #\|) #\#)
-                (- depth 1))
-               (skip-block-comment-loop
-                text (+ pos 1) limit (advance-col col #\|) depth)))
-          ((Some ch)
-           (skip-block-comment-loop
-            text (+ pos 1) limit (advance-col col ch) depth))
-          ((None) (Tuple pos col)))))
-
-  (declare skip-block-comment (String * UFix * UFix * UFix -> Tuple UFix UFix))
-  (define (skip-block-comment text start limit col)
-    (skip-block-comment-loop text start limit col 1))
-
-  (declare skip-string-loop (String * UFix * UFix * UFix -> Tuple UFix UFix))
-  (define (skip-string-loop text pos limit col)
-    (if (>= pos limit)
-        (Tuple pos col)
-        (match (str:ref text pos)
-          ((Some #\\)
-           (let col1 = (advance-col col #\\))
-           (let pos1 = (+ pos 1))
-           (if (< pos1 limit)
-               (match (str:ref text pos1)
-                 ((Some escaped)
-                  (skip-string-loop text (+ pos 2) limit (advance-col col1 escaped)))
-                 ((None) (Tuple pos1 col1)))
-               (Tuple pos1 col1)))
-          ((Some #\")
-           (Tuple (+ pos 1) (advance-col col #\")))
-          ((Some ch)
-           (skip-string-loop text (+ pos 1) limit (advance-col col ch)))
-          ((None) (Tuple pos col)))))
-
-  (declare skip-string (String * UFix * UFix * UFix -> Tuple UFix UFix))
-  (define (skip-string text start limit col)
-    (skip-string-loop text (+ start 1) limit (advance-col col #\")))
-
-  (declare parse-context-loop (String * UFix * UFix * UFix * List IndentContext -> Optional IndentContext))
-  (define (parse-context-loop text limit pos col stack)
-    (if (>= pos limit)
-        (current-context stack)
-        (match (str:ref text pos)
-          ((Some #\;)
-           (parse-context-loop text limit (skip-line-comment text pos limit) col stack))
-          ((Some #\#)
-           (if (and (< (+ pos 1) limit)
-                    (char-at? text (+ pos 1) #\|))
-               (match (skip-block-comment
-                       text (+ pos 2) limit
-                       (advance-col (advance-col col #\#) #\|))
-                 ((Tuple new-pos new-col)
-                  (parse-context-loop text limit new-pos new-col stack)))
-               (progn
-                 (let end = (read-atom-end text pos limit))
-                 (let updated =
-                   (add-element-to-stack
-                    stack
-                    (TokAtom pos end col (str:substring text pos end))))
-                 (parse-atom-tail text limit pos end col updated))))
-          ((Some #\")
-           (match (skip-string text pos limit col)
-             ((Tuple new-pos new-col)
-              (parse-context-loop text limit new-pos new-col stack))))
-          ((Some #\()
-           (let parent = (current-context stack))
-           (let parent-index =
-             (match parent
-               ((Some parent-context) (list:length (context-raw-elements parent-context)))
-               ((None) 0)))
-           (let parent-updated = (add-element-to-stack stack (TokList pos (+ pos 1) col)))
-           (parse-context-loop
-            text limit (+ pos 1) (advance-col col #\()
-            (Cons (Ctx pos col parent parent-index Nil) parent-updated)))
-          ((Some #\))
-           (parse-context-loop
-            text limit (+ pos 1) (advance-col col #\))
-            (match stack
-              ((Cons _ rest) rest)
-              ((Nil) Nil))))
-          ((Some ch)
-           (if (space? ch)
-               (parse-context-loop text limit (+ pos 1) (advance-col col ch) stack)
-               (progn
-                 (let end = (read-atom-end text pos limit))
-                 (let updated =
-                   (add-element-to-stack
-                    stack
-                    (TokAtom pos end col (str:substring text pos end))))
-                 (parse-atom-tail text limit pos end col updated))))
-          ((None) (current-context stack)))))
-
-  (declare parse-atom-tail (String * UFix * UFix * UFix * UFix * List IndentContext -> Optional IndentContext))
-  (define (parse-atom-tail text limit pos end col stack)
-    (if (>= pos end)
-        (parse-context-loop text limit pos col stack)
-        (match (str:ref text pos)
-          ((Some ch)
-           (parse-atom-tail text limit (+ pos 1) end (advance-col col ch) stack))
-          ((None)
-           (parse-context-loop text limit pos col stack)))))
-
-  (declare parse-context (String * UFix -> Optional IndentContext))
-  (define (parse-context text limit)
-    (parse-context-loop text (min limit (str:length text)) 0 0 Nil))
-
-  (declare context-head (IndentContext -> Optional String))
-  (define (context-head context)
-    (match (context-elements context)
-      ((Cons (TokAtom _ _ _ text) _) (Some text))
-      (_ None)))
 
   (declare rule-entry-head (IndentRuleEntry -> String))
   (define (rule-entry-head entry)
@@ -413,12 +329,13 @@ and DEFMETHOD's qualifier-sensitive lambda list."
   (declare indent-heads-for-line (gap:GapBuffer * UFix -> List String))
   (define (indent-heads-for-line gb line)
     "Return raw form-head tokens whose rules may affect LINE indentation."
-    (if (== line 0)
+    (prepared-indent-heads (prepare-indent-for-line gb 0 line)))
+
+  (declare prepared-indent-heads (PreparedIndent -> List String))
+  (define (prepared-indent-heads prepared)
+    (if (or (.prepared-preserve prepared) (not (.prepared-supported prepared)))
         Nil
-        (progn
-          (let text = (gap:gap-to-string gb))
-          (let start = (line-start text line))
-          (context-heads-loop (parse-context text start) Nil))))
+        (context-heads-loop (.prepared-context prepared) Nil)))
 
   (declare earlier-list-element? (IndentContext * UFix * UFix -> Boolean))
   (define (earlier-list-element? context start end)
@@ -608,6 +525,8 @@ and DEFMETHOD's qualifier-sensitive lambda list."
             ((Some token) (token-close? token))
             ((None) False))
           (context-open-col context-value))
+         ((context-literal? context-value)
+          (first-element-indent context-value (context-elements context-value)))
          ((lambda-context? context-value rules)
           (lambda-indent context-value first-token))
          ((keyword-call-line? first-token)
@@ -617,28 +536,31 @@ and DEFMETHOD's qualifier-sensitive lambda list."
          (True
           (body-or-generic-indent context-value rules))))))
 
+  (declare compute-prepared-indent (PreparedIndent * List IndentRuleEntry -> Optional UFix))
+  (define (compute-prepared-indent prepared rules)
+    "Return None when changing leading whitespace would alter literal text."
+    (cond
+      ((.prepared-preserve prepared) None)
+      ((not (.prepared-supported prepared)) (Some 0))
+      (True
+       (Some (compute-indent-from-context (.prepared-context prepared)
+                                          (.prepared-first-token prepared) rules)))))
+
+  (declare compatible-indent (PreparedIndent * List IndentRuleEntry -> UFix))
+  (define (compatible-indent prepared rules)
+    (match (compute-prepared-indent prepared rules)
+      ((Some col) col)
+      ((None) (.prepared-original-column prepared))))
+
   (declare compute-indent-with-rules (gap:GapBuffer * UFix * UFix * List IndentRuleEntry -> UFix))
   (define (compute-indent-with-rules gb mode line rules)
-    "Compute indentation using runtime-resolved indentation RULES."
-    (if (or (== line 0) (> mode 1))
-        0
-        (progn
-          (let text = (gap:gap-to-string gb))
-          (let start = (line-start text line))
-          (compute-indent-from-context
-           (parse-context text start)
-           (line-first-token text start)
-           rules))))
+    "Compatibility wrapper; preserve existing whitespace inside literals."
+    (compatible-indent (prepare-indent-for-line gb mode line) rules))
 
   (declare compute-blank-indent-at-position-with-rules
            (gap:GapBuffer * UFix * UFix * List IndentRuleEntry -> UFix))
   (define (compute-blank-indent-at-position-with-rules gb mode pos rules)
     "Compute indentation for a blank line inserted at POS."
-    (if (or (== pos 0) (> mode 1))
-        0
-        (compute-indent-from-context
-         (parse-context (gap:gap-to-string gb) pos)
-         None
-         rules)))
+    (compatible-indent (prepare-blank-indent-at-position gb mode pos) rules))
 
 )
