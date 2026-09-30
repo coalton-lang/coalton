@@ -197,6 +197,39 @@
     (%runtime-check (equal '("12") (%runtime-eval-values input "COALTON-USER" t))
                     "Coalton wrapping must be selected separately for each form")))
 
+(defun check-runtime-debugger-interactive-and-invalid-restarts ()
+  (let ((interactive-called nil) (result nil))
+    (let ((messages
+            (%call-with-runtime-messages
+             (lambda ()
+               (setf result
+                     (restart-case
+                         (mine/protocol/server::%enter-debugger
+                          61 (make-condition 'simple-error :format-control "test") :test-wire)
+                       (supply (value)
+                         :report "Supply a value"
+                         :interactive (lambda () (setf interactive-called t) (list 42))
+                         value))))
+             '((:debug-restart 61 999) (:debug-restart 61 0)))))
+      (%runtime-check (and interactive-called (eql result 42))
+                      "Restart arguments were not collected interactively")
+      (%runtime-check
+       (find :debug-restart-rejected messages
+             :key (lambda (message) (and (eq :notify (first message)) (first (second message)))))
+       "Invalid restart should be rejected while keeping the debugger active"))))
+
+(defun check-runtime-beam-errors-reach-debugger ()
+  (let ((messages
+          (%call-with-runtime-messages
+           (lambda ()
+             (mine/protocol/server::handle-beam-system
+              62 (string-downcase (symbol-name (gensym "mine-absent-system-"))) "" :test-wire))
+           '((:debug-abort 62)))))
+    (%runtime-check (find :debug messages :key #'first)
+                    "System-load error was swallowed before reaching the debugger")
+    (%runtime-check (equal '(:return 62 (:error "Aborted.")) (car (last messages)))
+                    "System-load debugger should return a completed abort")))
+
 (defun run-runtime-regression-tests ()
   (dolist (test '(check-runtime-protocol-io-isolation
                   check-runtime-protocol-rejects-reader-evaluation
@@ -204,7 +237,9 @@
                   check-runtime-output-flushes-before-debugger-and-abort
                   check-runtime-multiform-eval-and-history
                   check-runtime-package-identity-and-success-reporting
-                  check-runtime-coalton-multiform-eval))
+                  check-runtime-coalton-multiform-eval
+                  check-runtime-debugger-interactive-and-invalid-restarts
+                  check-runtime-beam-errors-reach-debugger))
     (handler-case (funcall test)
       (error (condition)
         (format *error-output* "~&Runtime regression ~A failed: ~A~%" test condition)

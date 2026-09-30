@@ -807,9 +807,15 @@ user package changes are visible."
           (case (first msg)
             (:debug-restart
               (let ((restart-idx (third msg)))
-                (when (and (integerp restart-idx)
-                           (< restart-idx (length restarts)))
-                  (invoke-restart (nth restart-idx restarts)))))
+                (if (and (eql (second msg) id)
+                         (integerp restart-idx)
+                         (<= 0 restart-idx)
+                         (< restart-idx (length restarts)))
+                    (invoke-restart-interactively (nth restart-idx restarts))
+                    (write-message stream
+                                   (list :notify
+                                         (list :debug-restart-rejected id
+                                               "That restart is not available."))))))
             (:debug-abort
               (let ((abort-restart (find-restart 'abort condition)))
                 (cond
