@@ -47,6 +47,7 @@
    #:repl-pane-copy-selection!
    #:repl-pane-input-cursor
    #:repl-pane-paste-to-input!
+   #:repl-pane-replace-input-range!
    #:repl-pane-insert-newline!
    #:repl-pane-input-complete?
    #:repl-pane-input-line-count
@@ -283,6 +284,18 @@
     (values))
 
   ;;; Structural input editing
+
+  (declare repl-pane-replace-input-range! (ReplPane * UFix * UFix * String -> Void))
+  (define (repl-pane-replace-input-range! rp start end replacement)
+    (let iw = (.input-widget rp))
+    (let text = (widget-input:input-widget-text iw))
+    (let first = (min start (str:length text)))
+    (let last = (max first (min end (str:length text))))
+    (cell:write! (widget-input:.iw-text iw)
+                 (<> (str:substring text 0 first)
+                     (<> replacement (str:substring text last (str:length text)))))
+    (cell:write! (widget-input:.iw-cursor iw) (+ first (str:length replacement)))
+    (values))
 
   (declare %with-repl-input-buffer!
     (ReplPane * (buf:Buffer * cursor:CursorState -> Void) -> Void))
