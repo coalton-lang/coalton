@@ -982,17 +982,12 @@ user package changes are visible."
         (let ((*error-output* stderr-capture))
           (restart-case
               (handler-case
-                  (multiple-value-bind (result output)
-                      (multiple-value-bind (eval-string _prefix-length)
-                          (%wrap-coalton-input form-string package-name auto-coalton-p)
-                        (declare (ignore _prefix-length))
-                        (mine/runtime/eval:debug-eval eval-string package-name
-                                                      stream id
-                                                      (%auto-coalton-context-p package-name
-                                                                               auto-coalton-p)))
+                  (multiple-value-bind (result output final-package)
+                      (mine/runtime/eval:debug-eval form-string package-name stream id auto-coalton-p)
                     (when (and output (plusp (length output)))
                       (dolist (line (split-string-by-newline output))
                         (write-message stream `(:notify (:output ,line)))))
+                    (write-message stream `(:notify (:package ,id ,final-package)))
                     (write-message stream `(:return ,id (:ok ,(or result "NIL")))))
                 (reader-error (c)
                   (write-message stream `(:return ,id (:error ,(format nil "Read error: ~A" c)))))

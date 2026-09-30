@@ -140,10 +140,73 @@
      (equal '((:notify (:output-chunk 42 "a")) (:notify (:output-chunk 42 "bc"))) messages)
      "Output chunks lost explicit flush boundaries or stream ordering: ~S" messages)))
 
+(defun %runtime-eval-values (text &optional (package "CL-USER") coalton-p)
+  (second (mine/protocol/server::decode-protocol-sexp
+           (mine/runtime/eval:debug-eval text package nil nil coalton-p))))
+
+(defun check-runtime-multiform-eval-and-history ()
+  (let ((+ nil) (++ nil) (+++ nil) (* nil) (** nil) (*** nil)
+        (/ nil) (// nil) (/// nil))
+    (%runtime-check (equal '("7") (%runtime-eval-values "(+ 1 2) (+ 3 4)"))
+                    "REPL ignored trailing forms")
+    (%runtime-check (equal '("(+ 3 4)") (%runtime-eval-values "+"))
+                    "+ should refer to the previously evaluated form")
+    (%runtime-check (equal '("-") (%runtime-eval-values "-"))
+                    "- should refer to the form currently being evaluated")
+    (%runtime-eval-values "(values 1 2)")
+    (%runtime-eval-values "(values)")
+    (%runtime-check (equal '("NIL") (%runtime-eval-values "/"))
+                    "/ must record zero values")
+    (%runtime-check (null (%runtime-eval-values "; only a comment"))
+                    "Comment-only input should return no values")))
+
+(defun check-runtime-package-identity-and-success-reporting ()
+  (let* ((name (string-downcase (symbol-name (gensym "mine-exact-package-"))))
+         (package (make-package name :use '("CL")))
+         (missing (symbol-name (gensym "MINE-MISSING-PACKAGE-"))))
+    (unwind-protect
+         (progn
+           (%runtime-check
+            (eq package (mine/runtime/eval::find-evaluation-package name))
+            "Lowercase package resolved to a different package")
+           (let ((messages
+                   (%call-with-runtime-messages
+                    (lambda ()
+                      (mine/protocol/server::handle-eval
+                       51 (format nil "(cl:in-package ~S) (+ 1 2)" name)
+                       "CL-USER" :test-wire nil)))))
+             (%runtime-check (member (list :notify (list :package 51 name)) messages :test #'equal)
+                             "Successful qualified IN-PACKAGE was not reported"))
+           (let ((messages
+                   (%call-with-runtime-messages
+                    (lambda ()
+                      (mine/protocol/server::handle-eval
+                       52 (format nil "(in-package ~S)" missing)
+                       "CL-USER" :test-wire nil)))))
+             (%runtime-check
+              (notany (lambda (message)
+                        (and (eq :notify (first message))
+                             (eq :package (first (second message))))) messages)
+              "Failed package change was reported as successful")
+             (%runtime-check (null (find-package missing)) "Missing package was silently created")))
+      (delete-package package))))
+
+(defun check-runtime-coalton-multiform-eval ()
+  (let* ((name (symbol-name (gensym "MINE-RUNTIME-VALUE-")))
+         (input (format nil "(define ~A 10) (+ ~A 2)" name name)))
+    (%runtime-check (equal '("12") (%runtime-eval-values input "COALTON-USER" t))
+                    "Coalton wrapping must be selected separately for each form")))
+
 (defun run-runtime-regression-tests ()
   (dolist (test '(check-runtime-protocol-io-isolation
                   check-runtime-protocol-rejects-reader-evaluation
                   check-runtime-input-preserves-lines-and-unread
-                  check-runtime-output-flushes-before-debugger-and-abort))
-    (funcall test))
+                  check-runtime-output-flushes-before-debugger-and-abort
+                  check-runtime-multiform-eval-and-history
+                  check-runtime-package-identity-and-success-reporting
+                  check-runtime-coalton-multiform-eval))
+    (handler-case (funcall test)
+      (error (condition)
+        (format *error-output* "~&Runtime regression ~A failed: ~A~%" test condition)
+        (error condition))))
   t)
