@@ -117,6 +117,7 @@
                   check-create-project-rejects-path-like-name
                   check-buffer-manager-any-dirty-sees-non-current-buffer
                   run-runtime-regression-tests
+                  run-quick-result-model-tests
                   run-diagnostic-store-tests
                   run-diagnostic-adapter-tests
                   run-diagnostic-cleanup-tests
@@ -124,13 +125,15 @@
                   run-editor-layout-tests
                   run-editor-render-context-tests
                   run-editor-geometry-integration-tests
+                  run-editor-wrapped-viewport-tests
                   run-source-context-tests
                   run-lexer-context-tests
                   run-paredit-context-tests
                   run-indent-context-tests
                   run-completion-context-tests
                   run-app-regression-tests
-                  run-workflow-tests))
+                  run-workflow-tests
+                  run-app-workflow-extra-tests))
     (format t "~&~A~%" test)
     (funcall test))
   t)

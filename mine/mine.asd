@@ -159,6 +159,7 @@
                  (:ct-file "clipboard")
                  (:ct-file "completion")
                  (:ct-file "requests")
+                 (:ct-file "quick-result")
                  (:ct-file "state")
                  (:ct-file "layout")
                  (:file "navigation")

@@ -37,6 +37,7 @@
    #:repl-pane-scroll-output-up!
    #:repl-pane-scroll-output-down!
    #:repl-pane-output-line-count
+   #:repl-pane-output-lines
    #:repl-pane-output-scroll
    #:repl-pane-set-output-scroll!
    #:repl-pane-start-selection!
@@ -279,6 +280,10 @@
     (values))
 
   ;;; Structural input editing
+
+  (declare repl-pane-output-lines (ReplPane -> List String))
+  (define (repl-pane-output-lines rp)
+    (into (cell:read (widget-text:.tw-lines (.output rp)))))
 
   (declare repl-pane-replace-input-range! (ReplPane * UFix * UFix * String -> Void))
   (define (repl-pane-replace-input-range! rp start end replacement)
