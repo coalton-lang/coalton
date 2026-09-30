@@ -11,7 +11,10 @@
    #:store-track-request! #:store-forget-request! #:store-stale? #:store-add! #:store-announcement!
    #:store-for-file #:store-all #:store-for-range #:store-at-position #:store-rank-for-file
    #:severity-rank #:label-kind-rank #:overlaps-range? #:contains-position? #:better-at-position?
-   #:store-request-count #:store-announcement-count))
+   #:store-request-count #:store-request-ids #:store-announcement-count
+   #:store-add-remap! #:store-clear-pending-remaps! #:store-remap-file
+   #:store-remap-source-file #:store-clear-source-aliases!
+   #:store-request-temporary-files #:store-pending-temporary-files))
 
 (in-package #:mine/app/diagnostic-store)
 
@@ -55,18 +58,23 @@
 
   (define-struct DiagnosticRequest
     (request-generation Integer)
-    (request-announcements (hm:HashMap Integer Boolean)))
+    (request-announcements (hm:HashMap Integer Boolean))
+    (request-remaps (hm:HashMap String String)))
 
   (define-struct DiagnosticStore
     (store-notes (Cell (hm:HashMap String (List Diagnostic))))
     (store-file-generations (Cell (hm:HashMap String Integer)))
     (store-requests (Cell (hm:HashMap Integer DiagnosticRequest)))
-    (store-clock (Cell Integer)))
+    (store-clock (Cell Integer))
+    (store-clear-generation (Cell Integer))
+    (store-pending-remaps (Cell (hm:HashMap String String)))
+    (store-source-aliases (Cell (hm:HashMap String String))))
 
   (declare diagnostic-store-new (Void -> DiagnosticStore))
   (define (diagnostic-store-new)
     (DiagnosticStore (cell:new hm:empty) (cell:new hm:empty)
-                     (cell:new hm:empty) (cell:new 0)))
+                     (cell:new hm:empty) (cell:new 0) (cell:new 0)
+                     (cell:new hm:empty) (cell:new hm:empty)))
 
   (declare next-generation! (DiagnosticStore -> Integer))
   (define (next-generation! store)
@@ -86,16 +94,32 @@
   (define (store-clear-all! store)
     (cell:write! (.store-notes store) hm:empty)
     (cell:write! (.store-file-generations store) hm:empty)
-    ;; Unknown request IDs are stale, so pending pre-reset notifications are
-    ;; discarded without retaining an unbounded set of retired request IDs.
-    (cell:write! (.store-requests store) hm:empty)
+    (cell:write! (.store-clear-generation store) (next-generation! store))
+    ;; Active requests retain ownership of temporary compile files until their
+    ;; return arrives. Clearing diagnostics must not delete a compiler's input.
+    (let requests = (the (List (Tuple Integer DiagnosticRequest))
+                         (iter:collect! (hm:entries (cell:read (.store-requests store))))))
+    (let cleared =
+      (rec clear ((requests requests) (result hm:empty))
+        (match requests
+          ((Nil) result)
+          ((Cons (Tuple id request) rest)
+           (clear rest (hm:insert result id
+                                  (DiagnosticRequest (.request-generation request) hm:empty
+                                                     (.request-remaps request))))))))
+    (cell:write! (.store-requests store) cleared)
     (values))
 
   (declare store-track-request! (DiagnosticStore * Integer -> Void))
   (define (store-track-request! store id)
+    (let remaps = (cell:read (.store-pending-remaps store)))
     (cell:write! (.store-requests store)
                  (hm:insert (cell:read (.store-requests store)) id
-                            (DiagnosticRequest (next-generation! store) hm:empty)))
+                            (DiagnosticRequest (next-generation! store) hm:empty remaps)))
+    ;; Loaded definitions keep these source names after their files are deleted.
+    (cell:write! (.store-source-aliases store)
+                 (hm:union (cell:read (.store-source-aliases store)) remaps))
+    (cell:write! (.store-pending-remaps store) hm:empty)
     (values))
 
   (declare store-forget-request! (DiagnosticStore * Integer -> Void))
@@ -118,7 +142,9 @@
        (match (hm:lookup (cell:read (.store-requests store)) id)
          ((None) True)
          ((Some request)
-          (< (.request-generation request) (file-generation store (.diagnostic-file diagnostic))))))))
+          (< (.request-generation request)
+             (max (cell:read (.store-clear-generation store))
+                  (file-generation store (.diagnostic-file diagnostic)))))))))
 
   (declare store-add! (DiagnosticStore * Diagnostic -> Boolean))
   (define (store-add! store diagnostic)
@@ -162,9 +188,54 @@
                 (cell:write! (.store-requests store)
                              (hm:insert (cell:read (.store-requests store)) id
                                         (DiagnosticRequest (.request-generation request)
-                                                           (hm:insert announcements group True))))
+                                                           (hm:insert announcements group True)
+                                                           (.request-remaps request))))
                 True)))))
          (_ (== (.diagnostic-label-kind diagnostic) PrimaryLabel))))))
+
+  (declare store-add-remap! (DiagnosticStore * String * String -> Void))
+  (define (store-add-remap! store temporary-file document)
+    (cell:write! (.store-pending-remaps store)
+                 (hm:insert (cell:read (.store-pending-remaps store)) temporary-file document))
+    (values))
+
+  (declare store-clear-pending-remaps! (DiagnosticStore -> Void))
+  (define (store-clear-pending-remaps! store)
+    (cell:write! (.store-pending-remaps store) hm:empty)
+    (values))
+
+  (declare store-remap-file (DiagnosticStore * Optional Integer * String -> String))
+  (define (store-remap-file store id file)
+    (let remaps =
+      (match id
+        ((None) (cell:read (.store-pending-remaps store)))
+        ((Some id)
+         (match (hm:lookup (cell:read (.store-requests store)) id)
+           ((Some request) (.request-remaps request))
+           ((None) hm:empty)))))
+    (match (hm:lookup remaps file) ((Some document) document) ((None) file)))
+
+  (declare store-remap-source-file (DiagnosticStore * String -> String))
+  (define (store-remap-source-file store file)
+    "Resolve a runtime source name for the lifetime of its runtime session."
+    (match (hm:lookup (cell:read (.store-source-aliases store)) file)
+      ((Some document) document)
+      ((None) file)))
+
+  (declare store-clear-source-aliases! (DiagnosticStore -> Void))
+  (define (store-clear-source-aliases! store)
+    (cell:write! (.store-source-aliases store) hm:empty)
+    (values))
+
+  (declare store-request-temporary-files (DiagnosticStore * Integer -> List String))
+  (define (store-request-temporary-files store id)
+    (match (hm:lookup (cell:read (.store-requests store)) id)
+      ((None) Nil)
+      ((Some request) (iter:collect! (hm:keys (.request-remaps request))))))
+
+  (declare store-pending-temporary-files (DiagnosticStore -> List String))
+  (define (store-pending-temporary-files store)
+    (iter:collect! (hm:keys (cell:read (.store-pending-remaps store)))))
 
   (declare store-for-file (DiagnosticStore * String -> List Diagnostic))
   (define (store-for-file store file)
@@ -236,6 +307,10 @@
 
   (declare store-request-count (DiagnosticStore -> Integer))
   (define (store-request-count store) (hm:count (cell:read (.store-requests store))))
+
+  (declare store-request-ids (DiagnosticStore -> List Integer))
+  (define (store-request-ids store)
+    (iter:collect! (hm:keys (cell:read (.store-requests store)))))
 
   (declare store-announcement-count (DiagnosticStore -> Integer))
   (define (store-announcement-count store)

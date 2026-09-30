@@ -177,6 +177,61 @@
       (%check (equal '(("target" "FIRST") ("other" "SECOND")) (reverse seen-definitions))
               "Definition lookup used package declarations after the cursor: ~S" seen-definitions))))
 
+(defun check-runtime-session-shutdown-releases-compile-temporaries ()
+  (dolist (exit '(:return :throw :error))
+    (let* ((state (%test-state))
+           (mine/app/diagnostics::*diagnostic-store*
+             (mine/app/diagnostic-store:diagnostic-store-new))
+           (temporary nil)
+           (pending nil)
+           (stopped nil)
+           (failure (make-condition 'simple-error :format-control "Expected TUI failure")))
+      (unwind-protect
+           (progn
+             (setf temporary (mine/app/diagnostics:write-temp-for-compile "(owned)" "buffer://1"))
+             (mine/app/diagnostics:track-diagnostic-request 9130)
+             (setf pending (mine/app/diagnostics:write-temp-for-compile "(pending)" "buffer://2"))
+             (dolist (file (list temporary pending))
+               (%write-utf8-file (compile-file-pathname file) "private output"))
+             (%call-with-replaced-runtime-function
+              'mine/protocol/lifecycle::%runtime-do-stop
+              (lambda (manager)
+                (%check (eq manager (mine/app/state:get-runtime-mgr state))
+                        "Shutdown stopped the wrong runtime")
+                (dolist (file (list temporary pending))
+                  (%check (and (probe-file file) (probe-file (compile-file-pathname file)))
+                          "Shutdown deleted compile files before stopping the runtime"))
+                (setf stopped t))
+              (lambda ()
+                (let ((result
+                        (handler-case
+                            (catch 'tui-exit
+                              (app::%call-with-runtime-session
+                               state
+                               (lambda ()
+                                 (ecase exit
+                                   (:return ':return)
+                                   (:throw (throw 'tui-exit ':throw))
+                                   (:error (error failure))))))
+                          (error (condition)
+                            (if (eq condition failure) ':error (error condition))))))
+                  (%check (eq exit result) "Shutdown changed the session's exit outcome"))))
+             (%check stopped "Shutdown did not stop the runtime")
+             (dolist (file (list temporary pending))
+               (%check (not (probe-file file)) "Shutdown leaked a compile input on ~S" exit)
+               (%check (not (probe-file (compile-file-pathname file)))
+                       "Shutdown leaked a compiled output on ~S" exit)
+               (%check (string= (mine/app/diagnostics::normalize-document-key file)
+                                (mine/app/diagnostics:remap-runtime-source-filepath file))
+                       "Shutdown retained a runtime source alias"))
+             (%check (zerop (mine/app/diagnostic-store:store-request-count
+                             mine/app/diagnostics::*diagnostic-store*))
+                     "Shutdown retained diagnostic requests")
+             (%check (null (mine/app/diagnostic-store:store-pending-temporary-files
+                           mine/app/diagnostics::*diagnostic-store*))
+                     "Shutdown retained pending compile inputs"))
+        (mine/app/diagnostics:forget-all-diagnostic-requests)))))
+
 (defun run-app-regression-tests ()
   (dolist (test '(check-package-inspection-does-not-evaluate-source
                   check-mailbox-preserves-diagnostic-generations
@@ -186,6 +241,7 @@
                   check-streamed-output-keeps-line-boundaries
                   check-streamed-output-extends-unfinished-line
                   check-repl-package-follows-matching-runtime-acknowledgment
+                  check-runtime-session-shutdown-releases-compile-temporaries
                   check-editor-services-use-package-before-cursor))
     (format t "~&~A~%" test)
     (funcall test))

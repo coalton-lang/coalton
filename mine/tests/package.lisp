@@ -119,6 +119,7 @@
                   run-runtime-regression-tests
                   run-diagnostic-store-tests
                   run-diagnostic-adapter-tests
+                  run-diagnostic-cleanup-tests
                   run-editor-regression-tests
                   run-editor-layout-tests
                   run-editor-render-context-tests
@@ -154,3 +155,6 @@
 
 (defun run-diagnostic-adapter-tests ()
   (uiop:symbol-call :mine-tests/diagnostic-adapter :run-diagnostic-adapter-tests))
+
+(defun run-diagnostic-cleanup-tests ()
+  (uiop:symbol-call :mine-tests/diagnostic-adapter :run-diagnostic-cleanup-tests))
