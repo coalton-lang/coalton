@@ -159,6 +159,39 @@
     (%check (buf:buffer-dirty? buffer) "A new branch must not reuse the saved revision")
     (%check (not (ops:redo! buffer cs)) "A real edit should clear redo history")))
 
+(defun check-editor-refresh-normalizes-cursor-units ()
+  (with-test-directory (directory)
+    (let* ((state (%test-state))
+           (path (namestring (merge-pathnames "refresh-units.lisp" directory)))
+           (other (namestring (merge-pathnames "other.lisp" directory)))
+           (cs (mine/app/state:get-cursor-state state)))
+      (%editor-write-source path "abcd")
+      (%editor-write-source other "other")
+      (app::open-loose-file! state path)
+      (cursor:cursor-move-to-position! cs 1)
+      (cursor:cursor-start-selection! cs)
+      (%editor-write-source path (format nil "~C~Cab" #\Return #\Newline))
+      (app::%do-refresh-file! state path)
+      (%check (= 2 (cursor:cursor-position cs))
+              "Successful refresh left the cursor between CR and LF")
+      (%check (coalton-impl/runtime/optional:cl-none-p (cursor:cursor-selection-anchor cs))
+              "Successful refresh retained its old selection")
+      ;; An inactive document is normalized when its saved view is restored.
+      (%editor-write-source path "abcd")
+      (app::%do-refresh-file! state path)
+      (cursor:cursor-move-to-position! cs 1)
+      (cursor:cursor-start-selection! cs)
+      (cursor:cursor-move-to-position! cs 4)
+      (app::open-loose-file! state other)
+      (%editor-write-source path (format nil "~C~C" #\Return #\Newline))
+      (app::%do-refresh-file! state path)
+      (app::open-loose-file! state path)
+      (%check (= 2 (cursor:cursor-position cs))
+              "Restoring a refreshed document failed to clamp its saved cursor")
+      (%check (= 2 (coalton-impl/runtime/optional:unwrap-cl-some
+                    (cursor:cursor-selection-anchor cs)))
+              "Restoring a refreshed document left its saved anchor inside CRLF"))))
+
 (defun check-editor-nested-replacements-form-one-undo-step ()
   (let* ((buffer (buf:buffer-new (buf:BufferId 0) "group"))
          (cs (cursor:cursor-new))
@@ -212,6 +245,7 @@
                   check-editor-document-identity-ignores-file-existence
                   check-editor-open-deduplicates-canonical-paths
                   check-editor-refresh-is-transactional
+                  check-editor-refresh-normalizes-cursor-units
                   check-editor-undo-tracks-saved-revision
                   check-editor-nested-replacements-form-one-undo-step
                   check-editor-replacement-preserves-crlf-units
