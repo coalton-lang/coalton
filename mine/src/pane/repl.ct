@@ -25,6 +25,7 @@
    #:repl-pane-geometry #:repl-pane-input-viewport #:repl-pane-completion-anchor
    #:repl-pane-clear-output!
    #:repl-pane-append-output!
+   #:repl-pane-append-output-chunk!
    #:repl-pane-append-system!
    #:repl-pane-get-input
    #:repl-pane-clear-input!
@@ -36,6 +37,7 @@
    #:repl-pane-scroll-output-up!
    #:repl-pane-scroll-output-down!
    #:repl-pane-output-line-count
+   #:repl-pane-output-lines
    #:repl-pane-output-scroll
    #:repl-pane-set-output-scroll!
    #:repl-pane-start-selection!
@@ -101,6 +103,13 @@
   (define (repl-pane-append-system! rp text)
     "Append a system/info line to the REPL output (rendered in dim italic)."
     (widget-text:text-widget-append-system! (.output rp) text)
+    (widget-text:text-widget-scroll-to-bottom! (.output rp))
+    (values))
+
+  (declare repl-pane-append-output-chunk! (ReplPane * String -> Void))
+  (define (repl-pane-append-output-chunk! rp text)
+    "Append exact runtime output without inventing line breaks between chunks."
+    (widget-text:text-widget-append-chunk! (.output rp) text)
     (widget-text:text-widget-scroll-to-bottom! (.output rp))
     (values))
 
@@ -221,6 +230,10 @@
   (define (repl-pane-output-line-count rp)
     "Return the number of lines in the output."
     (widget-text:text-widget-line-count (.output rp)))
+
+  (declare repl-pane-output-lines (ReplPane -> List String))
+  (define (repl-pane-output-lines rp)
+    (widget-text:text-widget-lines (.output rp)))
 
   (declare repl-pane-output-scroll (ReplPane -> UFix))
   (define (repl-pane-output-scroll rp)

@@ -23,4 +23,5 @@
                (:file "lexer-context-tests")
                (:file "indent-context-tests")
                (:file "completion-context-tests")
-               (:file "app-regression-tests")))
+               (:file "app-regression-tests")
+               (:file "workflow-tests")))

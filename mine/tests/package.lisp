@@ -124,7 +124,8 @@
                   run-lexer-context-tests
                   run-indent-context-tests
                   run-completion-context-tests
-                  run-app-regression-tests))
+                  run-app-regression-tests
+                  run-workflow-tests))
     (format t "~&~A~%" test)
     (funcall test))
   t)

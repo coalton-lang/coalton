@@ -65,7 +65,7 @@
    #:.ms-project-asd-path
    #:.ms-quit
    #:.ms-eval-start-time
-   #:.ms-active-request
+   #:.ms-active-request #:get-active-request-cell
    #:.ms-minibuffer
    #:.ms-repl-lang
    #:.ms-preview-path
@@ -369,6 +369,9 @@
 
   (declare get-quick-result-state (MineState -> NativeBox))
   (define (get-quick-result-state st) (.ms-quick-result-state st))
+
+  (declare get-active-request-cell (MineState -> Cell (Optional msg:RequestId)))
+  (define (get-active-request-cell st) (.ms-active-request st))
 
   (declare get-update-check-state (MineState -> NativeBox))
   (define (get-update-check-state st) (.ms-update-check-state st)))
