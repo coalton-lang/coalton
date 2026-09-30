@@ -9,7 +9,8 @@
   (typep result 'coalton-library/classes::result/err))
 
 (defun %editor-temp-path ()
-  (merge-pathnames (make-pathname :name (format nil "mine-editor-~A" (gensym))
+  (merge-pathnames (make-pathname :name (format nil "mine-editor-~A-~X" (gensym)
+                                              (random most-positive-fixnum (make-random-state t)))
                                 :type "ct")
                   (uiop:temporary-directory)))
 

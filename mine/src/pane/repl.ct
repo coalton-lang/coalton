@@ -486,9 +486,14 @@ Input area grows dynamically based on line count, up to half the pane height."
        (let output-rect = (.rg-output geometry))
        (let output-h = (wt:.rect-height output-rect))
        (let input-rect = (.rg-input geometry))
-       (widget-text:text-widget-render (.output rp) scr output-rect)
-       ;; Scrollbar on output area
        (let total-lines = (widget-text:text-widget-line-count (.output rp)))
+       (let scrollbar? = (and (> total-lines output-h) (> (wt:.rect-width output-rect) 1)))
+       (let text-rect = (if scrollbar?
+                            (wt:Rect (wt:.rect-x output-rect) (wt:.rect-y output-rect)
+                                      (- (wt:.rect-width output-rect) 1) output-h)
+                            output-rect))
+       (widget-text:text-widget-render (.output rp) scr text-rect)
+       ;; Reserve the scrollbar's column so it cannot overwrite output text.
        (let scroll-off = (cell:read (widget-text:.tw-scroll (.output rp))))
        (let sb-col = (- (+ (wt:.rect-x rect) (wt:.rect-width rect)) 1))
        (let track-s = (color:Style color:scrollbar-track-fg
@@ -497,7 +502,8 @@ Input area grows dynamically based on line count, up to half the pane height."
        (let thumb-s = (color:Style color:scrollbar-thumb-fg
                                      color:scrollbar-track-bg
                                      color:AttrNone))
-       (render:draw-scrollbar scr sb-col (wt:.rect-y rect) output-h
-                               total-lines scroll-off track-s thumb-s)
+       (when scrollbar?
+         (render:draw-scrollbar scr sb-col (wt:.rect-y rect) output-h
+                                 total-lines scroll-off track-s thumb-s))
        (widget-input:input-widget-render (.input-widget rp) scr input-rect)
        (values)))))

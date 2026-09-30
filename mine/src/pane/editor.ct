@@ -17,6 +17,7 @@
    (#:hl #:mine/syntax/highlight)
    (#:paredit #:mine/syntax/paredit)
    (#:list #:coalton/list)
+   (#:int #:coalton/math/integral)
    (#:vec #:coalton/vector)
    (#:seq #:coalton/seq))
   (:export
@@ -33,6 +34,9 @@
    #:editor-pane-scroll-row
    #:editor-pane-scroll-col
    #:editor-pane-set-scroll-row!
+   #:editor-pane-scroll-screen-row #:editor-pane-total-screen-rows
+   #:editor-pane-scroll-to! #:editor-pane-screen-to-buffer-position
+   #:editor-pane-render-scrollbar
    #:editor-pane-gutter-width
    #:editor-pane-line-wrap?
    #:editor-pane-toggle-line-wrap!
@@ -47,6 +51,7 @@
    #:cursor-move-down-wrap!
    #:editor-cursor-move-up!
    #:editor-cursor-move-down!
+   #:editor-cursor-page!
    #:editor-pane-effective-wrap-width
    #:wrap-seg-start-vcol
    #:*lexer-mode*
@@ -58,8 +63,7 @@
    #:search-current-set!
    #:search-match-index
    #:search-next-from
-   #:search-prev-from
-   #:%editor-scrollbar))
+   #:search-prev-from))
 
 (in-package #:mine/pane/editor)
 
@@ -149,6 +153,7 @@
     "The main source-code editing pane."
     (buffer-id            (Cell (Optional buf:BufferId)))
     (scroll-row           (Cell UFix))
+    (scroll-segment       (Cell UFix))
     (scroll-col           (Cell UFix))
     (show-line-numbers    (Cell Boolean))
     (highlight-current-line (Cell Boolean))
@@ -158,17 +163,24 @@
   (define-struct EditorView
     (saved-cursor cursor:CursorSnapshot)
     (saved-scroll-row UFix)
+    (saved-scroll-segment UFix)
     (saved-scroll-col UFix))
 
   (declare editor-pane-save-view (EditorPane * cursor:CursorState -> EditorView))
   (define (editor-pane-save-view ep cs)
     (EditorView (cursor:cursor-snapshot cs)
-                (cell:read (.scroll-row ep)) (cell:read (.scroll-col ep))))
+                (cell:read (.scroll-row ep)) (cell:read (.scroll-segment ep))
+                (cell:read (.scroll-col ep))))
 
   (declare editor-pane-restore-view! (EditorPane * gap:GapBuffer * cursor:CursorState * EditorView -> Void))
   (define (editor-pane-restore-view! ep gb cs saved)
     (cursor:cursor-restore! gb cs (.saved-cursor saved))
     (cell:write! (.scroll-row ep) (min (.saved-scroll-row saved) (- (gap:gap-line-count gb) 1)))
+    (let tab-width = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
+    (let segments = (rows-for-line (gap:gap-line-text gb (cell:read (.scroll-row ep)))
+                                   (max 1 (cell:read (.last-text-width ep))) tab-width))
+    (cell:write! (.scroll-segment ep) (if (editor-pane-line-wrap? ep)
+                                         (min (.saved-scroll-segment saved) (- segments 1)) 0))
     (cell:write! (.scroll-col ep) (if (editor-pane-line-wrap? ep) 0 (.saved-scroll-col saved)))
     (values))
 
@@ -176,22 +188,25 @@
   (define (editor-pane-cursor-position ep gb cs rect)
     "Return the visible cursor in screen coordinates, using the actual pane rectangle."
     (let gutter = (editor-pane-gutter-width ep gb))
-    (let width = (wt:.rect-width rect))
-    (when (or (<= width gutter) (== (wt:.rect-height rect) 0))
+    (let text-width = (pane-text-width ep gb rect))
+    (when (or (== text-width 0) (== (wt:.rect-height rect) 0))
       (return None))
-    (let wrap-w = (if (editor-pane-line-wrap? ep) (- width gutter) 0))
+    (let wrap-w = (if (editor-pane-line-wrap? ep) text-width 0))
     (let tab-w = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
     (match (cursor:cursor-line-col cs gb)
       ((Tuple line col)
        (let scroll-row = (editor-pane-scroll-row ep))
        (when (< line scroll-row) (return None))
-       (let row = (cursor-screen-row-offset gb scroll-row line col wrap-w tab-w))
+       (let raw-row = (cursor-screen-row-offset gb scroll-row line col wrap-w tab-w))
+       (let segment = (if (> wrap-w 0) (cell:read (.scroll-segment ep)) 0))
+       (when (< raw-row segment) (return None))
+       (let row = (- raw-row segment))
        (let vcol = (gap:visual-col (gap:gap-line-text gb line) col tab-w))
        (let origin = (if (> wrap-w 0)
                          (wrap-seg-start-vcol gb line col wrap-w tab-w)
                          (editor-pane-scroll-col ep)))
        (if (or (>= row (wt:.rect-height rect))
-               (or (< vcol origin) (>= (- vcol origin) (- width gutter))))
+               (or (< vcol origin) (>= (- vcol origin) text-width)))
            None
            (Some (Tuple (+ (+ (wt:.rect-x rect) gutter) (- vcol origin))
                         (+ (wt:.rect-y rect) row)))))))
@@ -217,6 +232,7 @@
     (EditorPane (cell:new None)
                 (cell:new 0)
                 (cell:new 0)
+                (cell:new 0)
                 (cell:new True)
                 (cell:new True)
                 (cell:new False)
@@ -229,6 +245,7 @@
     "Attach a buffer to this editor pane."
     (cell:write! (.buffer-id ep) (Some id))
     (cell:write! (.scroll-row ep) 0)
+    (cell:write! (.scroll-segment ep) 0)
     (cell:write! (.scroll-col ep) 0)
     (values))
 
@@ -242,6 +259,7 @@
   (declare editor-pane-set-scroll-row! (EditorPane * UFix -> Void))
   (define (editor-pane-set-scroll-row! ep row)
     (cell:write! (.scroll-row ep) row)
+    (cell:write! (.scroll-segment ep) 0)
     (values))
 
   (declare editor-pane-scroll-col (EditorPane -> UFix))
@@ -268,6 +286,7 @@
     "Flip the line-wrap flag. When turning on, reset horizontal scroll to 0."
     (let now = (not (cell:read (.line-wrap-enabled ep))))
     (cell:write! (.line-wrap-enabled ep) now)
+    (cell:write! (.scroll-segment ep) 0)
     (when now
       (cell:write! (.scroll-col ep) 0))
     (values))
@@ -314,8 +333,28 @@ Returns the number of digits plus one for a separator space."
   ;;;
   ;;; Rendering under line-wrap splits a logical buffer line into consecutive
   ;;; "wrap segments" whose visual columns each fit within WRAP-W cells. Scroll
-  ;;; row remains a buffer-line index, so the scrollbar and scroll-wheel math
-  ;;; are unchanged; wrap only affects how many screen rows a line occupies.
+  ;;; origin is a logical line plus an intra-line wrap segment. This permits
+  ;;; scrolling a single line that occupies more than one whole viewport.
+
+  (declare wrap-points-loop (String * UFix * UFix * UFix * UFix * UFix * Vector UFix -> Void))
+  (define (wrap-points-loop text index column origin width tab-width points)
+    (cond
+      ((>= index (str:length text))
+       (vec:push! index points)
+       ;; Keep an insertion cell visible after a line that fills its last row.
+       (when (and (> index 0) (>= (- column origin) width))
+         (vec:push! index points))
+       (values))
+      (True
+       (let ch = (str:ref-unchecked text index))
+       (let span = (if (== ch #\Tab) (- tab-width (int:mod column tab-width))
+                       (cellw:editor-char-cell-width ch)))
+       (let next = (+ column span))
+       (if (and (> (- next origin) width) (> column origin))
+           (progn
+             (vec:push! index points)
+             (wrap-points-loop text index column column width tab-width points))
+           (wrap-points-loop text (+ index 1) next origin width tab-width points)))))
 
   (declare wrap-points (String * UFix * UFix -> (vec:Vector UFix)))
   (define (wrap-points text wrap-w tab-w)
@@ -323,31 +362,11 @@ Returns the number of digits plus one for a separator space."
 Length is always >= 2: the first entry is 0 and the last is (length TEXT).
 Consecutive pairs (points[i], points[i+1]) give the char-range of segment
 i. Tabs expand to TAB-W stops; each segment's cumulative visual width
-fits within WRAP-W. At least one char advances per segment (guard against
-chars wider than WRAP-W)."
+fits within WRAP-W. A trailing empty segment provides a cursor cell when
+the final character fills its row. Oversized characters still advance."
     (let v = (vec:new))
-    (lisp (-> Void) (v text wrap-w tab-w)
-      (cl:let* ((len (cl:length text))
-                (safe-w (cl:max 1 wrap-w))
-                (i 0)
-                (vcol 0))
-        (vec:push! 0 v)
-        (cl:loop :while (cl:< i len) :do
-          (cl:let* ((ch (cl:char text i))
-                    (ch-width (cl:if (cl:char= ch #\Tab)
-                                     (cl:- (cl:* (cl:1+ (cl:floor vcol tab-w)) tab-w)
-                                           vcol)
-                                     (mine/text/width:editor-char-cell-width-cl ch)))
-                    (new-vcol (cl:+ vcol ch-width)))
-            (cl:cond
-              ((cl:and (cl:> new-vcol safe-w) (cl:plusp vcol))
-               (vec:push! i v)
-               (cl:setf vcol 0))
-              (cl:t
-               (cl:setf vcol new-vcol)
-               (cl:incf i)))))
-        (vec:push! len v)
-        (cl:values)))
+    (vec:push! 0 v)
+    (wrap-points-loop text 0 0 0 (max 1 wrap-w) (max 1 tab-w) v)
     v)
 
   (declare rows-for-line (String * UFix * UFix -> UFix))
@@ -466,6 +485,98 @@ disables wrapping (segment is the whole line)."
 
   ;;; Wrap-aware vertical movement
 
+  (declare pane-text-width (EditorPane * gap:GapBuffer * wt:Rect -> UFix))
+  (define (pane-text-width ep gb rect)
+    "Reserve a scrollbar column whenever there is room for one beside the text."
+    (let width = (wt:.rect-width rect))
+    (let gutter = (editor-pane-gutter-width ep gb))
+    (cond
+      ((> width (+ gutter 1)) (- (- width gutter) 1))
+      ((> width gutter) 1)
+      (True 0)))
+
+  (declare pane-wrap-width (EditorPane * gap:GapBuffer * wt:Rect -> UFix))
+  (define (pane-wrap-width ep gb rect)
+    (if (editor-pane-line-wrap? ep)
+        (max 1 (pane-text-width ep gb rect))
+        0))
+
+  (declare editor-pane-total-screen-rows (EditorPane * gap:GapBuffer * wt:Rect -> UFix))
+  (define (editor-pane-total-screen-rows ep gb rect)
+    (let tab-width = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
+    (rows-between gb 0 (gap:gap-line-count gb) (pane-wrap-width ep gb rect) tab-width))
+
+  (declare editor-pane-scroll-screen-row (EditorPane * gap:GapBuffer * wt:Rect -> UFix))
+  (define (editor-pane-scroll-screen-row ep gb rect)
+    "Return the viewport origin in visual rows, including partial logical lines."
+    (let line = (min (editor-pane-scroll-row ep) (- (gap:gap-line-count gb) 1)))
+    (let width = (pane-wrap-width ep gb rect))
+    (let tab-width = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
+    (let segment = (if (== width 0) 0
+                       (min (cell:read (.scroll-segment ep))
+                            (- (rows-for-line (gap:gap-line-text gb line) width tab-width) 1))))
+    (+ (rows-between gb 0 line width tab-width) segment))
+
+  (declare set-scroll-screen-row! (EditorPane * gap:GapBuffer * wt:Rect * UFix -> Void))
+  (define (set-scroll-screen-row! ep gb rect row)
+    (let width = (pane-wrap-width ep gb rect))
+    (let tab-width = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
+    (let target = (min row (- (editor-pane-total-screen-rows ep gb rect) 1)))
+    (match (screen-row-to-line-seg gb 0 target width tab-width)
+      ((Some (Tuple4 line start _end _column))
+       (cell:write! (.scroll-row ep) line)
+       (cell:write! (.scroll-segment ep)
+                    (if (== width 0) 0
+                        (segment-for-col (wrap-points (gap:gap-line-text gb line) width tab-width) start)))
+       (values))
+      ((None) (values))))
+
+  (declare editor-pane-screen-to-buffer-position (EditorPane * gap:GapBuffer * wt:Rect * UFix * UFix -> UFix))
+  (define (editor-pane-screen-to-buffer-position ep gb rect x y)
+    "Map the viewport to a document position, including its initial wrap segment."
+    (let width = (pane-wrap-width ep gb rect))
+    (let tab-width = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
+    (let row = (+ (editor-pane-scroll-screen-row ep gb rect)
+                  (if (>= y (wt:.rect-y rect)) (- y (wt:.rect-y rect)) 0)))
+    (let left = (+ (wt:.rect-x rect) (editor-pane-gutter-width ep gb)))
+    (let column = (if (>= x left) (- x left) 0))
+    (match (screen-row-to-line-seg gb 0 row width tab-width)
+      ((Some (Tuple4 line start end origin))
+       (let target = (+ column (if (== width 0) (editor-pane-scroll-col ep) origin)))
+       (let char = (gap:char-for-vcol (gap:gap-line-text gb line) target tab-width))
+       (+ (gap:gap-line-to-pos gb line) (max start (min end char))))
+      ((None) (gap:gap-length gb))))
+
+  (declare editor-pane-scroll-to! (EditorPane * gap:GapBuffer * cursor:CursorState * wt:Rect * UFix -> Void))
+  (define (editor-pane-scroll-to! ep gb cs rect row)
+    "Scroll to a visual row and keep the cursor within the resulting viewport."
+    (let height = (wt:.rect-height rect))
+    (when (== height 0) (return (values)))
+    (let total = (editor-pane-total-screen-rows ep gb rect))
+    (let offset = (min row (if (> total height) (- total height) 0)))
+    (set-scroll-screen-row! ep gb rect offset)
+    (let width = (pane-wrap-width ep gb rect))
+    (let tab-width = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
+    (match (cursor:cursor-line-col cs gb)
+      ((Tuple line column)
+       (let current = (cursor-screen-row-offset gb 0 line column width tab-width))
+       (let target-row = (max offset (min current (+ offset (- height 1)))))
+       (when (not (== target-row current))
+         (let previous-target = (cell:read (cursor:.target-col cs)))
+         (let current-origin = (wrap-seg-start-vcol gb line column width tab-width))
+         (let target-x = (if (>= previous-target current-origin) (- previous-target current-origin) 0))
+         (match (screen-row-to-line-seg gb 0 target-row width tab-width)
+           ((Some (Tuple4 target-line start end origin))
+            (let text = (gap:gap-line-text gb target-line))
+            (let target-column = (if (== width 0) previous-target (+ origin target-x)))
+            (let maximum = (if (and (< end (str:length text)) (> end start)) (- end 1) end))
+            (let char = (max start (min maximum (gap:char-for-vcol text target-column tab-width))))
+            (cursor:cursor-move-to-buffer-position! gb cs (+ (gap:gap-line-to-pos gb target-line) char))
+            (cell:write! (cursor:.target-col cs) target-column)
+            (values))
+           ((None) (values))))))
+    (values))
+
   (declare %wrap-move-to-seg
     (gap:GapBuffer * cursor:CursorState * UFix * UFix * UFix * UFix * UFix -> Void))
   (define (%wrap-move-to-seg gb cs new-line new-seg tgt-disp-x wrap-w tab-w)
@@ -572,21 +683,24 @@ line, moves to first segment of next line."
       (True
        (cursor:cursor-move-down! gb cs))))
 
-  ;;; Ensure cursor visible
+  (declare move-wrap-rows! (gap:GapBuffer * cursor:CursorState * UFix * UFix * Boolean -> Void))
+  (define (move-wrap-rows! gb cs width count down?)
+    (when (> count 0)
+      (if down? (cursor-move-down-wrap! gb cs width) (cursor-move-up-wrap! gb cs width))
+      (move-wrap-rows! gb cs width (- count 1) down?))
+    (values))
 
-  (declare %advance-sr-for-wrap
-    (gap:GapBuffer * UFix * UFix * UFix * UFix * UFix * UFix -> UFix))
-  (define (%advance-sr-for-wrap gb sr cur-line cur-col view-h wrap-w tab-w)
-    "Walk scroll-row forward one buffer line at a time until the cursor
-segment fits within view-height. Never advances past cur-line."
+  (declare editor-cursor-page! (EditorPane * gap:GapBuffer * cursor:CursorState * wt:Rect * Boolean -> Void))
+  (define (editor-cursor-page! ep gb cs rect down?)
+    "Move by half the actual editor viewport, measured in rendered rows."
+    (let count = (max 1 (int:div (wt:.rect-height rect) 2)))
+    (let width = (pane-wrap-width ep gb rect))
     (cond
-      ((>= sr cur-line) cur-line)
-      ((< (cursor-screen-row-offset gb sr cur-line cur-col wrap-w tab-w)
-          view-h)
-       sr)
-      (True
-       (%advance-sr-for-wrap gb (+ sr 1) cur-line cur-col
-                             view-h wrap-w tab-w))))
+      ((> width 0) (move-wrap-rows! gb cs width count down?))
+      (down? (cursor:cursor-move-page-down! gb cs count))
+      (True (cursor:cursor-move-page-up! gb cs count))))
+
+  ;;; Ensure cursor visible
 
   (declare editor-pane-ensure-visible! (EditorPane * cursor:CursorState * gap:GapBuffer * wt:Rect -> Void))
   (define (editor-pane-ensure-visible! ep cs gb rect)
@@ -598,14 +712,8 @@ scroll-col is pinned to 0 and vertical scroll is computed in screen rows."
     (let lc = (cursor:cursor-line-col cs gb))
     (let cur-line = (fst lc))
     (let cur-col = (snd lc))
-    (let line-count = (gap:gap-line-count gb))
-    (let gw = (if (cell:read (.show-line-numbers ep))
-                  (gutter-width line-count)
-                  0))
     (let view-height = (wt:.rect-height rect))
-    (let view-width = (if (> (wt:.rect-width rect) gw)
-                          (- (wt:.rect-width rect) gw)
-                          1))
+    (let view-width = (max 1 (pane-text-width ep gb rect)))
     (let sr = (cell:read (.scroll-row ep)))
     (let sc = (cell:read (.scroll-col ep)))
     (let wrap-on = (cell:read (.line-wrap-enabled ep)))
@@ -613,16 +721,14 @@ scroll-col is pinned to 0 and vertical scroll is computed in screen rows."
     (cell:write! (.last-text-width ep) view-width)
     (cond
       (wrap-on
-       ;; Wrap mode: scroll vertically in screen rows; lock horizontal scroll.
-       (when (> sc 0) (cell:write! (.scroll-col ep) 0))
-       (let sr1 = (if (< cur-line sr) cur-line sr))
-       (when (not (== sr1 sr))
-         (cell:write! (.scroll-row ep) sr1))
-       (let sr2 = (cell:read (.scroll-row ep)))
-       (let new-sr = (%advance-sr-for-wrap gb sr2 cur-line cur-col
-                                           view-height view-width tab-w))
-       (when (not (== new-sr sr2))
-         (cell:write! (.scroll-row ep) new-sr)))
+       (cell:write! (.scroll-col ep) 0)
+       (let current = (cursor-screen-row-offset gb 0 cur-line cur-col view-width tab-w))
+       (let origin = (editor-pane-scroll-screen-row ep gb rect))
+       (let target = (cond
+                       ((< current origin) current)
+                       ((>= current (+ origin view-height)) (+ 1 (- current view-height)))
+                       (True origin)))
+       (set-scroll-screen-row! ep gb rect target))
       (True
        ;; Non-wrap mode: row-per-line and horizontal scroll (vcol).
        (when (< cur-line sr)
@@ -670,6 +776,7 @@ scroll-col is pinned to 0 and vertical scroll is computed in screen rows."
 Shows line numbers in the gutter (with a continuation arrow for wrapped
 segments) and highlights the current visual row."
     (let sr = (cell:read (.scroll-row ep)))
+    (let scroll-segment = (if (editor-pane-line-wrap? ep) (cell:read (.scroll-segment ep)) 0))
     (let sc = (cell:read (.scroll-col ep)))
     (let show-ln = (cell:read (.show-line-numbers ep)))
     (let hl-cur = (cell:read (.highlight-current-line ep)))
@@ -685,9 +792,7 @@ segments) and highlights the current visual row."
       (screen:screen-hide-cursor scr)
       (return (values)))
     (let text-x = (+ (wt:.rect-x rect) gw))
-    (let text-width = (if (> (wt:.rect-width rect) gw)
-                          (- (wt:.rect-width rect) gw)
-                          1))
+    (let text-width = (pane-text-width ep gb rect))
     (let tab-w = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
     ;; wrap-w is the segment width when wrap is on, else 0 (no wrap).
     (let wrap-w = (if wrap-on text-width 0))
@@ -737,7 +842,7 @@ segments) and highlights the current visual row."
     (lisp (-> Void) (scr gb sr sc show-ln-cl hl-cur-cl cur-line cur-seg-idx
                      line-count height text-x text-width gw wrap-w
                      gutter-style hl-style rect-x0 rect-y0
-                     sel-start sel-end context paren-match source-tokens)
+                     sel-start sel-end context paren-match source-tokens scroll-segment)
       (cl:let ((screen-row 0)
                (line-idx sr)
                (tw mine/buffer/gap::*tab-width*))
@@ -756,7 +861,7 @@ segments) and highlights the current visual row."
                     (n-segs (cl:if pts
                                    (cl:max 1 (cl:- (cl:length pts) 1))
                                    1)))
-            (cl:dotimes (seg-idx n-segs)
+            (cl:loop :for seg-idx :from (cl:if (cl:= line-idx sr) scroll-segment 0) :below n-segs :do
               (cl:when (cl:< screen-row height)
                 (cl:let* ((y (cl:+ rect-y0 screen-row))
                           (is-first (cl:zerop seg-idx))
@@ -836,8 +941,11 @@ segments) and highlights the current visual row."
       ((Some (Tuple x y)) (screen:screen-set-cursor scr y x))
       ((None) (screen:screen-hide-cursor scr))))
 
-  (declare %editor-scrollbar (screen:Screen * wt:Rect * gap:GapBuffer * UFix -> Void))
-  (define (%editor-scrollbar scr rect gb scroll-row)
+  (declare editor-pane-render-scrollbar (EditorPane * screen:Screen * wt:Rect * gap:GapBuffer -> Void))
+  (define (editor-pane-render-scrollbar ep scr rect gb)
+    (when (or (<= (wt:.rect-width rect) (+ (editor-pane-gutter-width ep gb) 1))
+              (== (wt:.rect-height rect) 0))
+      (return (values)))
     (let sb-col = (- (+ (wt:.rect-x rect) (wt:.rect-width rect)) 1))
     (let track-s = (color:Style color:scrollbar-track-fg
                                  color:scrollbar-track-bg
@@ -846,7 +954,8 @@ segments) and highlights the current visual row."
                                  color:scrollbar-track-bg
                                  color:AttrNone))
     (render:draw-scrollbar scr sb-col (wt:.rect-y rect) (wt:.rect-height rect)
-                           (gap:gap-line-count gb) scroll-row
+                           (editor-pane-total-screen-rows ep gb rect)
+                           (editor-pane-scroll-screen-row ep gb rect)
                            track-s thumb-s)))
 
 ;;; Search highlight state: set by find.ct, read by draw loop.
