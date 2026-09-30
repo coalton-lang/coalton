@@ -221,24 +221,6 @@
     (let end = (%line-end s row))
     (str:substring s start end))
 
-  (declare %ensure-cursor-visible! (InputWidget * UFix -> Void))
-  (define (%ensure-cursor-visible! iw height)
-    "Adjust scroll so the cursor row is visible within HEIGHT rows."
-    (let text = (cell:read (.iw-text iw)))
-    (let cursor = (cell:read (.iw-cursor iw)))
-    (let crow = (%cursor-row text cursor))
-    (let scroll = (cell:read (.iw-scroll iw)))
-    (cond
-      ;; Cursor above viewport -- scroll up
-      ((< crow scroll)
-       (cell:write! (.iw-scroll iw) crow)
-       (values))
-      ;; Cursor below viewport -- scroll down
-      ((>= crow (+ scroll height))
-       (cell:write! (.iw-scroll iw) (+ 1 (- crow height)))
-       (values))
-      (True (values))))
-
   (declare input-widget-render (InputWidget * screen:Screen * wt:Rect -> Void))
   (define (input-widget-render iw scr rect)
     "Render the input widget. Supports multi-line text with vertical scrolling.
@@ -276,7 +258,7 @@ Prompt is shown on the first visible line; continuation lines are indented."
     ;; Position cursor
     (match (.iv-cursor viewport)
       ((Some (Tuple x y)) (screen:screen-set-cursor scr y x))
-      ((None) (values)))
+      ((None) (screen:screen-hide-cursor scr)))
     (values))
 
   (declare %render-lines
