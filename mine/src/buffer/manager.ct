@@ -5,7 +5,8 @@
    (#:gap #:mine/buffer/gap)
    (#:cell #:coalton/cell)
    (#:hm #:coalton/hashmap)
-   (#:iter #:coalton/iterator))
+   (#:iter #:coalton/iterator)
+   (#:str #:coalton/string))
   (:export
    #:BufferManager
    #:bufmgr-new
@@ -14,6 +15,7 @@
    #:bufmgr-close!
    #:bufmgr-force-close!
    #:bufmgr-close-under-path!
+   #:bufmgr-buffers-under-path
    #:bufmgr-find-by-path
    #:bufmgr-find-by-document-key
    #:bufmgr-current
@@ -123,33 +125,38 @@ Returns True if closed successfully."
          ((None) (values))))))
 
   (declare bufmgr-close-under-path! (BufferManager * String -> Void))
-  (define (bufmgr-close-under-path! mgr dir-prefix)
-    "Close all buffers whose file path starts with DIR-PREFIX."
-    (let tbl = (cell:read (.buffers mgr)))
-    (let limit = (cell:read (.next-id mgr)))
-    (close-under-path tbl mgr dir-prefix 0 limit)
+  (define (bufmgr-close-under-path! mgr directory)
+    "Close clean buffers within DIRECTORY, preserving every unsaved document."
+    (rec close ((buffers (bufmgr-buffers-under-path mgr directory)))
+      (match buffers
+        ((Nil) (values))
+        ((Cons buffer rest)
+         (bufmgr-close! mgr (buf:buffer-id buffer))
+         (close rest))))
     (values))
 
-  (declare close-under-path (hm:HashMap UFix buf:Buffer * BufferManager * String * UFix * UFix -> Void))
-  (define (close-under-path tbl mgr prefix i limit)
-    (when (< i limit)
-      (match (hm:lookup tbl i)
-        ((Some b)
-         (when (path-starts-with? b prefix)
-           (bufmgr-force-close! mgr (buf:BufferId i))))
-        ((None) (values)))
-      (close-under-path tbl mgr prefix (+ i 1) limit)))
-
-  (declare path-starts-with? (buf:Buffer * String -> Boolean))
-  (define (path-starts-with? b prefix)
-    (match (buf:buffer-path b)
-      ((None) False)
-      ((Some p)
-       (lisp (-> Boolean) (p prefix)
-         (cl:let ((plen (cl:length prefix)))
-           (cl:if (cl:and (cl:<= plen (cl:length p))
-                          (cl:string= p prefix :end1 plen))
-                  True False))))))
+  (declare bufmgr-buffers-under-path (BufferManager * String -> List buf:Buffer))
+  (define (bufmgr-buffers-under-path mgr directory)
+    "Snapshot documents within DIRECTORY using canonical identities and a directory boundary."
+    (let prefix =
+      (lisp (-> (Optional String)) (directory)
+        (cl:handler-case
+            (cl:if (cl:zerop (cl:length directory))
+                   None
+                   (Some (mine/buffer/buffer::%normalize-file-document-key
+                          (cl:namestring (uiop:ensure-directory-pathname directory)))))
+          (cl:error () None))))
+    (match prefix
+      ((None) Nil)
+      ((Some key)
+       (rec collect ((entries (hm:entries (cell:read (.buffers mgr)))) (found Nil))
+         (match (iter:next! entries)
+           ((None) found)
+           ((Some (Tuple _ buffer))
+            (let document = (buf:buffer-document-key buffer))
+            (let inside? = (and (<= (str:length key) (str:length document))
+                                (== key (str:substring document 0 (str:length key)))))
+            (collect entries (if inside? (Cons buffer found) found))))))))
 
   ;;; Lookup
 
