@@ -155,7 +155,9 @@ Returns the parsed S-expression, or NIL on EOF/error."
    (msg-id         :initarg :msg-id         :accessor tis-msg-id)
    (stdout-capture :initarg :stdout-capture :accessor tis-stdout-capture)
    (buffer         :initform ""             :accessor tis-buffer)
-   (buffer-pos     :initform 0             :accessor tis-buffer-pos))
+   (buffer-pos     :initform 0             :accessor tis-buffer-pos)
+   (unread-char    :initform nil           :accessor tis-unread-char)
+   (eof-p          :initform nil           :accessor tis-eof-p))
   (:documentation
    "A Gray stream that routes reads through the wire protocol to the TUI.
 When CL code calls READ-LINE or READ on this stream, it sends an :io-request
@@ -180,61 +182,60 @@ Returns the input text string, or NIL for EOF/abort."
       (let ((msg (read-message wire)))
         (cond
           ((null msg) (return nil))
-          ((and (consp msg) (eq (first msg) :io-response))
+          ((and (consp msg) (eq (first msg) :io-response) (eql (second msg) id))
            (return (third msg)))
-          ((and (consp msg) (eq (first msg) :io-abort))
+          ((and (consp msg) (eq (first msg) :io-abort) (eql (second msg) id))
            (return nil))
           (t
            (%reject-unexpected-message-during-wait wire msg "input")))))))
 
-(defmethod sb-gray:stream-read-line ((stream tui-input-stream))
-  "Read a line from the TUI. Returns (values string eof-p)."
-  (let ((text (%request-input-from-tui stream "")))
-    (if text
-        (values text nil)
-        (values "" t))))
-
 (defmethod sb-gray:stream-read-char ((stream tui-input-stream))
-  "Read a single character, requesting a new line from TUI when buffer is exhausted.
-Non-empty responses are buffered as-is (no trailing newline) so that
-single-char readers like y-or-n-p don't see a phantom newline.
-Empty responses (user pressed Enter with no text) return #\\Newline,
-which serves as a token delimiter for READ."
-  (let ((buf (tis-buffer stream))
-        (pos (tis-buffer-pos stream)))
-    (if (< pos (length buf))
-        ;; Dispense from buffer
-        (prog1 (char buf pos)
-          (setf (tis-buffer-pos stream) (1+ pos)))
-        ;; Buffer exhausted -- request a new line
-        (let ((text (%request-input-from-tui stream "")))
-          (cond
-            ((null text) :eof)
-            ((zerop (length text))
-             ;; Empty response = Enter key = newline delimiter
-             (setf (tis-buffer stream) "")
-             (setf (tis-buffer-pos stream) 0)
-             #\Newline)
-            (t
-             (setf (tis-buffer stream) text)
-             (setf (tis-buffer-pos stream) 1)
-             (char text 0)))))))
+  "Read submitted lines as a single character stream, including their newlines."
+  (cond
+    ((tis-unread-char stream)
+     (prog1 (tis-unread-char stream) (setf (tis-unread-char stream) nil)))
+    ((< (tis-buffer-pos stream) (length (tis-buffer stream)))
+     (prog1 (char (tis-buffer stream) (tis-buffer-pos stream))
+       (incf (tis-buffer-pos stream))))
+    ((tis-eof-p stream) :eof)
+    (t
+     (let ((text (%request-input-from-tui stream "")))
+       (cond
+         ((null text)
+          (setf (tis-eof-p stream) t)
+          :eof)
+         (t
+          (setf (tis-buffer stream) (concatenate 'string text (string #\Newline))
+                (tis-buffer-pos stream) 0)
+          (sb-gray:stream-read-char stream)))))))
+
+(defmethod sb-gray:stream-read-line ((stream tui-input-stream))
+  "Read through the shared character buffer so mixed reads preserve input."
+  (let ((eof-p nil))
+    (values
+     (with-output-to-string (out)
+       (loop for ch = (sb-gray:stream-read-char stream)
+             do (cond
+                  ((eq ch :eof) (setf eof-p t) (return))
+                  ((char= ch #\Newline) (return))
+                  (t (write-char ch out)))))
+     eof-p)))
 
 (defmethod sb-gray:stream-unread-char ((stream tui-input-stream) char)
-  "Push back a character by decrementing the buffer position."
-  (declare (ignore char))
-  (when (> (tis-buffer-pos stream) 0)
-    (decf (tis-buffer-pos stream)))
+  "Push back CHAR, including a newline or a character crossing a refill."
+  (when (tis-unread-char stream)
+    (error "Cannot unread more than one character"))
+  (setf (tis-unread-char stream) char)
   nil)
 
 (defmethod sb-gray:stream-listen ((stream tui-input-stream))
-  "Return T if there are buffered characters available."
-  (< (tis-buffer-pos stream) (length (tis-buffer stream))))
+  (or (not (null (tis-unread-char stream)))
+      (< (tis-buffer-pos stream) (length (tis-buffer stream)))))
 
 (defmethod sb-gray:stream-clear-input ((stream tui-input-stream))
-  "Discard any buffered input."
-  (setf (tis-buffer stream) "")
-  (setf (tis-buffer-pos stream) 0)
+  (setf (tis-buffer stream) ""
+        (tis-buffer-pos stream) 0
+        (tis-unread-char stream) nil)
   nil)
 
 ;;; Message dispatch
