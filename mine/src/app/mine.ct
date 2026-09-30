@@ -3844,7 +3844,6 @@ Enter or Space inserts the matching Unicode character at the cursor."
     "Switch the editor to display the buffer for FPATH."
     (match (mgr:bufmgr-find-by-path (.ms-bufmgr st) fpath)
       ((Some buf)
-       (let bid = (buf:buffer-id buf))
        (activate-buffer! st buf)
        (clamp-cursor-to-buffer! st buf)
        (values))
@@ -4592,10 +4591,7 @@ Render-app is NOT called here; the main loop handles rendering."
     (let st = (mine-state-new config))
     (let bm = (.ms-bufmgr st))
     (let cs = (.ms-cursor st))
-    (let ep = (.ms-editor st))
-    (let rp = (.ms-repl st))
     (let fm = (.ms-focus st))
-    (let rm = (.ms-runtime st))
     (let tp = (.ms-tree st))
     (start-update-check! st)
     ;; Open a file if given on the command line
