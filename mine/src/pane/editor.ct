@@ -63,10 +63,10 @@
 
 (cl:defun %diagnostic-rank-cl (severity)
   (cl:cond
-    ((cl:eq severity :error) 4)
-    ((cl:eq severity :warning) 3)
-    ((cl:eq severity :style-warning) 2)
-    ((cl:eq severity :note) 1)
+    ((cl:eq severity ':error) 4)
+    ((cl:eq severity ':warning) 3)
+    ((cl:eq severity ':style-warning) 2)
+    ((cl:eq severity ':note) 1)
     (cl:t 0)))
 
 (coalton-toplevel
@@ -315,11 +315,12 @@ Returns the number of digits plus one for a separator space."
        (let span = (if (== ch #\Tab) (- tab-width (int:mod column tab-width))
                        (cellw:editor-char-cell-width ch)))
        (let next = (+ column span))
-       (if (and (> (- next origin) width) (> column origin))
-           (progn
-             (vec:push! index points)
-             (wrap-points-loop text index column column width tab-width points))
-           (wrap-points-loop text (+ index 1) next origin width tab-width points)))))
+       (cond
+         ((and (> (- next origin) width) (> column origin))
+          (vec:push! index points)
+          (wrap-points-loop text index column column width tab-width points))
+         (True
+          (wrap-points-loop text (+ index 1) next origin width tab-width points))))))
 
   (declare wrap-points (String * UFix * UFix -> (vec:Vector UFix)))
   (define (wrap-points text wrap-w tab-w)
@@ -526,7 +527,7 @@ disables wrapping (segment is the whole line)."
       ((Tuple line column)
        (let current = (cursor-screen-row-offset gb 0 line column width tab-width))
        (let target-row = (max offset (min current (+ offset (- height 1)))))
-       (when (not (== target-row current))
+       (unless (== target-row current)
          (let previous-target = (cell:read (cursor:.target-col cs)))
          (let current-origin = (wrap-seg-start-vcol gb line column width tab-width))
          (let target-x = (if (>= previous-target current-origin) (- previous-target current-origin) 0))
@@ -651,7 +652,9 @@ line, moves to first segment of next line."
   (declare move-wrap-rows! (gap:GapBuffer * cursor:CursorState * UFix * UFix * Boolean -> Void))
   (define (move-wrap-rows! gb cs width count down?)
     (when (> count 0)
-      (if down? (cursor-move-down-wrap! gb cs width) (cursor-move-up-wrap! gb cs width))
+      (cond
+        (down? (cursor-move-down-wrap! gb cs width))
+        (True (cursor-move-up-wrap! gb cs width)))
       (move-wrap-rows! gb cs width (- count 1) down?))
     (values))
 
@@ -832,28 +835,30 @@ segments) and highlights the current visual row."
                   (cl:when (cl:plusp show-ln-cl)
                     (cl:cond
                       (is-first
-                       (cl:if (cl:plusp diag-rank)
-                              (cl:let ((diag-style
-                                         (cl:cond
-                                           ((cl:= diag-rank 4)
-                                            (mine/term/color::Style
-                                              mine/term/color::error-fg
-                                              mine/term/color::black
-                                              mine/term/color::AttrBold))
-                                           ((cl:= diag-rank 3)
-                                            (mine/term/color::Style
-                                              mine/term/color::warning-fg
-                                              mine/term/color::black
-                                              mine/term/color::AttrNone))
-                                           (cl:t
-                                            (mine/term/color::Style
-                                              mine/term/color::info-fg
-                                              mine/term/color::black
-                                              mine/term/color::AttrNone)))))
-                                (mine/pane/editor::render-line-number
-                                 scr y (cl:1+ line-idx) rect-x0 gw diag-style))
-                              (mine/pane/editor::render-line-number
-                               scr y (cl:1+ line-idx) rect-x0 gw gutter-style)))
+                       (cl:cond
+                         ((cl:plusp diag-rank)
+                          (cl:let ((diag-style
+                                     (cl:cond
+                                       ((cl:= diag-rank 4)
+                                        (mine/term/color::Style
+                                         mine/term/color::error-fg
+                                         mine/term/color::black
+                                         mine/term/color::AttrBold))
+                                       ((cl:= diag-rank 3)
+                                        (mine/term/color::Style
+                                         mine/term/color::warning-fg
+                                         mine/term/color::black
+                                         mine/term/color::AttrNone))
+                                       (cl:t
+                                        (mine/term/color::Style
+                                         mine/term/color::info-fg
+                                         mine/term/color::black
+                                         mine/term/color::AttrNone)))))
+                            (mine/pane/editor::render-line-number
+                             scr y (cl:1+ line-idx) rect-x0 gw diag-style)))
+                         (cl:t
+                          (mine/pane/editor::render-line-number
+                           scr y (cl:1+ line-idx) rect-x0 gw gutter-style))))
                       (cl:t
                        ;; Continuation segment: bent-arrow marker right-aligned in gutter.
                        (cl:when (cl:>= gw 2)
@@ -1013,13 +1018,15 @@ segments) and highlights the current visual row."
     (let v = (vec:new))
     (let vc = (cell:new 0))
     (lisp (-> Void) (text text-len v vc tab-w)
-        (cl:dotimes (i text-len)
-          (vec:push! (coalton/cell:read vc) v)
-          (cl:let ((ch (cl:char text i)))
-            (cl:if (cl:char= ch #\Tab)
-                 (coalton/cell:write! vc (cl:* (cl:1+ (cl:floor (coalton/cell:read vc) tab-w)) tab-w))
-                 (coalton/cell:write! vc (cl:+ (coalton/cell:read vc)
-                                               (mine/text/width:editor-char-cell-width-cl ch))))))
+      (cl:dotimes (i text-len)
+        (vec:push! (coalton/cell:read vc) v)
+        (cl:let ((ch (cl:char text i)))
+          (coalton/cell:write!
+           vc
+           (cl:if (cl:char= ch #\Tab)
+                  (cl:* (cl:1+ (cl:floor (coalton/cell:read vc) tab-w)) tab-w)
+                  (cl:+ (coalton/cell:read vc)
+                        (mine/text/width:editor-char-cell-width-cl ch))))))
       (vec:push! (coalton/cell:read vc) v)
       (cl:values))
     v)
@@ -1116,28 +1123,29 @@ segments) and highlights the current visual row."
                   (s (mine/pane/editor::%pick-style
                       context abs-pos sel-start sel-end style
                       sel-style search-style search-cur-style)))
-          (cl:if (cl:char= ch #\Tab)
-                 (cl:let ((next-vcol (cl:* (cl:1+ (cl:floor ch-vcol tab-w)) tab-w)))
-                   (cl:loop :for v :from ch-vcol :below next-vcol
-                            :do (cl:when (cl:and (cl:>= v scroll-vcol)
-                                                 (cl:< v vis-vcol-end))
-                                  (mine/term/screen:screen-set-cell
-                                   scr y (cl:+ text-x (cl:- v scroll-vcol))
-                                   #\Space s))))
-                 (cl:if display-text
-                        (cl:loop :for j :from 0 :below (cl:length display-text)
-                                 :for v := (cl:+ ch-vcol j)
-                                 :do (cl:when (cl:and (cl:>= v scroll-vcol)
-                                                      (cl:< v vis-vcol-end))
-                                       (mine/term/screen:screen-set-cell
-                                        scr y (cl:+ text-x (cl:- v scroll-vcol))
-                                        (cl:char display-text j) s)))
-                        (cl:when (cl:and (cl:plusp ch-width)
-                                         (cl:>= ch-vcol scroll-vcol)
-                                         (cl:<= (cl:+ ch-vcol ch-width) vis-vcol-end))
-                          (mine/term/screen:screen-set-cell
-                           scr y (cl:+ text-x (cl:- ch-vcol scroll-vcol))
-                           ch s))))))
+          (cl:cond
+            ((cl:char= ch #\Tab)
+             (cl:let ((next-vcol (cl:* (cl:1+ (cl:floor ch-vcol tab-w)) tab-w)))
+               (cl:loop :for v :from ch-vcol :below next-vcol
+                        :do (cl:when (cl:and (cl:>= v scroll-vcol)
+                                            (cl:< v vis-vcol-end))
+                              (mine/term/screen:screen-set-cell
+                               scr y (cl:+ text-x (cl:- v scroll-vcol))
+                               #\Space s)))))
+            (display-text
+             (cl:loop :for j :from 0 :below (cl:length display-text)
+                      :for v := (cl:+ ch-vcol j)
+                      :do (cl:when (cl:and (cl:>= v scroll-vcol)
+                                          (cl:< v vis-vcol-end))
+                            (mine/term/screen:screen-set-cell
+                             scr y (cl:+ text-x (cl:- v scroll-vcol))
+                             (cl:char display-text j) s))))
+            ((cl:and (cl:plusp ch-width)
+                     (cl:>= ch-vcol scroll-vcol)
+                     (cl:<= (cl:+ ch-vcol ch-width) vis-vcol-end))
+             (mine/term/screen:screen-set-cell
+              scr y (cl:+ text-x (cl:- ch-vcol scroll-vcol))
+              ch s)))))
       (cl:values)))
 
   (declare draw-line-segment

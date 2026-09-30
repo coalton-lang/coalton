@@ -25,8 +25,7 @@ CURSOR-AFTER is an absolute position in the resulting document."
     (let before = (gap:gap-editor-unit-end-pos gb (cursor:cursor-position cs)))
     (let range =
       (if (== start end)
-          (progn
-            (let p = (gap:gap-editor-unit-end-pos gb start))
+          (let ((p (gap:gap-editor-unit-end-pos gb start)))
             (Tuple p p))
           (gap:gap-expand-range-to-editor-units gb (min start end) (max start end))))
     (match range

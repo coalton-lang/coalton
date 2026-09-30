@@ -380,35 +380,40 @@ ordinary input-widget handler."
                        (fn (buffer cs)
                          (paredit:paredit-delete! buffer cs))))
       ((Tuple (input:KeyChar #\() _)
-       (if (%plain-char-modifier? modifier)
-           (%repl-paredit! rp
-                           (fn (buffer cs)
-                             (paredit:paredit-open-paren! buffer cs)))
-           wt:Ignored))
+       (cond
+         ((%plain-char-modifier? modifier)
+          (%repl-paredit! rp
+                         (fn (buffer cs)
+                           (paredit:paredit-open-paren! buffer cs))))
+         (True wt:Ignored)))
       ((Tuple (input:KeyChar #\)) _)
-       (if (%plain-char-modifier? modifier)
-           (%repl-paredit! rp
-                           (fn (buffer cs)
-                             (paredit:paredit-close-paren! buffer cs)))
-           wt:Ignored))
+       (cond
+         ((%plain-char-modifier? modifier)
+          (%repl-paredit! rp
+                         (fn (buffer cs)
+                           (paredit:paredit-close-paren! buffer cs))))
+         (True wt:Ignored)))
       ((Tuple (input:KeyChar #\[) _)
-       (if (%plain-char-modifier? modifier)
-           (%repl-paredit! rp
-                           (fn (buffer cs)
-                             (paredit:paredit-open-bracket! buffer cs)))
-           wt:Ignored))
+       (cond
+         ((%plain-char-modifier? modifier)
+          (%repl-paredit! rp
+                         (fn (buffer cs)
+                           (paredit:paredit-open-bracket! buffer cs))))
+         (True wt:Ignored)))
       ((Tuple (input:KeyChar #\]) _)
-       (if (%plain-char-modifier? modifier)
-           (%repl-paredit! rp
-                           (fn (buffer cs)
-                             (paredit:paredit-close-bracket! buffer cs)))
-           wt:Ignored))
+       (cond
+         ((%plain-char-modifier? modifier)
+          (%repl-paredit! rp
+                         (fn (buffer cs)
+                           (paredit:paredit-close-bracket! buffer cs))))
+         (True wt:Ignored)))
       ((Tuple (input:KeyChar #\") _)
-       (if (%plain-char-modifier? modifier)
-           (%repl-paredit! rp
-                           (fn (buffer cs)
-                             (paredit:paredit-doublequote! buffer cs)))
-           wt:Ignored))
+       (cond
+         ((%plain-char-modifier? modifier)
+          (%repl-paredit! rp
+                         (fn (buffer cs)
+                           (paredit:paredit-doublequote! buffer cs))))
+         (True wt:Ignored)))
       ((Tuple (input:KeyChar #\f) (input:ModAlt))
        (%repl-paredit! rp
                        (fn (buffer cs)

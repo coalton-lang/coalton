@@ -104,9 +104,9 @@
                (len (cl:length s)))
         (cl:dotimes (i row pos)
           (cl:let ((nl (cl:position #\Newline s :start pos)))
-            (cl:if nl
-                   (cl:setf pos (cl:1+ nl))
-                   (cl:return len))))
+            (cl:cond
+              (nl (cl:setf pos (cl:1+ nl)))
+              (cl:t (cl:return len)))))
         pos)))
 
   (declare %line-end (String * UFix -> UFix))
@@ -272,10 +272,12 @@ Prompt is shown on the first visible line; continuation lines are indented."
                   (row (cl:+ y0 vi)))
           (cl:when (cl:< line-idx nlines)
             ;; Draw prompt on first line, spaces on continuation lines
-            (cl:if (cl:zerop line-idx)
-                   (render:draw-text-clipped scr (wt:Rect x0 row plen 1) prompt row x0 ps)
-                   (screen:screen-set-string scr row x0
-                     (cl:make-string plen :initial-element #\Space) ts))
+            (cl:cond
+              ((cl:zerop line-idx)
+               (render:draw-text-clipped scr (wt:Rect x0 row plen 1) prompt row x0 ps))
+              (cl:t
+               (screen:screen-set-string scr row x0
+                 (cl:make-string plen :initial-element #\Space) ts)))
             ;; Get line text
             (cl:let* ((line-text (mine/widget/input::%get-line text line-idx))
                       (line-len (gap:visual-col line-text (cl:length line-text) mine/buffer/gap::*tab-width*))

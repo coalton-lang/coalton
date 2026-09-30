@@ -17,4 +17,4 @@
             (uiop:temporary-directory))))
      (ensure-directories-exist ,directory)
      (unwind-protect (progn ,@body)
-       (uiop:delete-directory-tree ,directory :validate t :if-does-not-exist :ignore))))
+       (uiop:delete-directory-tree ,directory :validate t :if-does-not-exist ':ignore))))
