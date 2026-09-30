@@ -1841,19 +1841,7 @@ If the buffer has unsaved changes, writes to a temp file for compilation."
          ((Some fpath)
           (when (%block-runtime-foreground-request! st)
             (return (values)))
-          ;; If dirty, write buffer contents to a temp file for compilation
           (let dirty = (buf:buffer-dirty? buf))
-          (let compile-path =
-            (cond
-              (dirty
-	               (let buf-text = (gap:gap-to-string (buf:buffer-gap buf)))
-	               (lisp (-> String) (buf-text fpath)
-	                 (mine/app/diagnostics:write-temp-for-compile buf-text fpath)))
-	              (True
-	               (lisp (-> Void) ()
-	                 (mine/app/diagnostics:clear-compile-file-remap)
-	                 (cl:values))
-	               fpath)))
           (repl:repl-pane-append-output! (.ms-repl st)
                                          (if dirty
                                              (<> ";; Compiling (unsaved) " fpath)
@@ -1865,6 +1853,19 @@ If the buffer has unsaved changes, writes to a temp file for compilation."
           (match (ensure-runtime! st)
             ((None) (values))
             ((Some conn)
+             ;; Runtime startup sends and tracks :repl-init before the compile
+             ;; request owns any temporary source or diagnostic remapping.
+             (let compile-path =
+               (cond
+                 (dirty
+                  (let buf-text = (gap:gap-to-string (buf:buffer-gap buf)))
+                  (lisp (-> String) (buf-text fpath)
+                    (mine/app/diagnostics:write-temp-for-compile buf-text fpath)))
+                 (True
+                  (lisp (-> Void) ()
+                    (mine/app/diagnostics:clear-compile-file-remap)
+                    (cl:values))
+                  fpath)))
              (cell:write! (.ms-repl-busy st) True)
              (cell:write! (.ms-busy-activity st) (Some "Beam"))
              (cell:write! (.ms-eval-start-time st)

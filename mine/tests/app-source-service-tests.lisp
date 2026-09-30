@@ -82,9 +82,60 @@
       (%check (equal '(("target" "FIRST") ("other" "SECOND")) (reverse seen-definitions))
               "Definition lookup used package declarations after the cursor: ~S" seen-definitions))))
 
+(defun check-compile-temporary-belongs-to-compile-after-startup ()
+  (with-test-directory (directory)
+    (let* ((state (%test-state))
+           (path (namestring (merge-pathnames "unsaved.lisp" directory)))
+           (wire-path (merge-pathnames "protocol.bin" directory))
+           (initialization-id 9110)
+           (mine/app/diagnostics::*diagnostic-store*
+             (mine/app/diagnostic-store:diagnostic-store-new)))
+      (%write-utf8-file path "original")
+      (app::open-loose-file! state path)
+      (let ((buffer (%test-current-buffer state)))
+        (ops:insert-string! buffer (buf:buffer-undo buffer)
+                            (mine/app/state:get-cursor-state state) "unsaved ")
+        (with-open-file (wire wire-path :direction :output :element-type '(unsigned-byte 8))
+          (let ((connection (mine/protocol/client::make-%connection :stream wire :active t)))
+            (unwind-protect
+                 (%call-with-replaced-runtime-function
+                  'mine/protocol/lifecycle::%runtime-get-connection
+                  (lambda (manager)
+                    (declare (ignore manager))
+                    ;; Model initialization being tracked while ensure-runtime!
+                    ;; establishes the first connection for this command.
+                    (mine/app/diagnostics:track-diagnostic-request initialization-id)
+                    (coalton:Some connection))
+                  (lambda ()
+                    (%call-with-replaced-runtime-function
+                     'app::%start-foreground-proto-reader-cl
+                     (lambda (state connection) (declare (ignore state connection)) t)
+                     (lambda () (app::compile-file! state)))
+                    (let* ((request (app::%coalton-optional-value-or-nil
+                                     (coalton/cell:read (mine/app/state:get-active-request-cell state))))
+                           (compile-id (mine/protocol/messages:request-id-value request))
+                           (temporary-files
+                             (mine/app/diagnostic-store:store-request-temporary-files
+                              mine/app/diagnostics::*diagnostic-store* compile-id)))
+                      (%check (null (mine/app/diagnostic-store:store-request-temporary-files
+                                     mine/app/diagnostics::*diagnostic-store* initialization-id))
+                              "Initialization captured the pending compile source")
+                      (%check (= 1 (length temporary-files)) "Compile request did not own its source")
+                      (let ((temporary (first temporary-files)))
+                        (mine/app/diagnostics:forget-diagnostic-request initialization-id)
+                        (%check (probe-file temporary) "Completing initialization deleted compile input")
+                        (%check (string= (buf:buffer-document-key buffer)
+                                         (mine/app/diagnostics::remap-diagnostic-filepath temporary compile-id))
+                                "Compile diagnostic did not map to the unsaved document")
+                        (mine/app/diagnostics:forget-diagnostic-request compile-id)
+                        (%check (not (probe-file temporary)) "Completing compilation leaked its source")))))
+              (mine/app/diagnostics:forget-all-diagnostic-requests))))))))
+
 (defun run-app-source-service-tests ()
   (dolist (test '(check-background-reader-loss-keeps-its-connection
                   check-background-loss-retires-native-stream
-                  check-editor-services-use-package-before-cursor))
+                  check-editor-services-use-package-before-cursor
+                  check-compile-temporary-belongs-to-compile-after-startup))
+    (format t "~&~A~%" test)
     (funcall test))
   t)
