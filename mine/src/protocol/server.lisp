@@ -1104,14 +1104,10 @@ user package changes are visible."
                               stream &optional auto-coalton-p)
   "Handle a :compile-string request with interactive debugger support.
 Uses compile-file + load for correct eval-when toplevel semantics."
-  (multiple-value-bind (compile-string runtime-prefix-length)
-      (%wrap-coalton-input form-string package-name auto-coalton-p)
-    (let ((stderr-capture (make-string-output-stream))
-          (diag-state (%make-diagnostic-state))
-          (file-override (and (stringp document-key) (plusp (length document-key)) document-key))
-          (synthetic-prefix (+ (length (mine/runtime/eval:compile-string-source-prefix package-name))
-                               (or client-prefix-length 0)
-                               runtime-prefix-length)))
+  (let ((stderr-capture (make-string-output-stream))
+        (diag-state (%make-diagnostic-state))
+        (file-override (and (stringp document-key) (plusp (length document-key)) document-key))
+        (synthetic-prefix (or client-prefix-length 0)))
     (catch '%debugger-abort
       (handler-bind
           ((serious-condition
@@ -1140,23 +1136,30 @@ Uses compile-file + load for correct eval-when toplevel semantics."
                                        :offset-base position
                                        :synthetic-prefix synthetic-prefix)
                  (%muffle-warning-if-possible w)))))
-        (let ((*error-output* stderr-capture)
-              (coalton-impl/source:*source-diagnostic-hook*
-                (%source-diagnostic-hook id diag-state
-                                         :file-override file-override
-                                         :offset-base position
-                                         :synthetic-prefix synthetic-prefix)))
+        (let ((*error-output* stderr-capture))
           (restart-case
               (handler-case
-                  (multiple-value-bind (result output)
-                      (mine/runtime/eval:debug-compile-string
-                       compile-string package-name stream id
-                       (%auto-coalton-context-p package-name auto-coalton-p))
-                    (when (and output (plusp (length output)))
-                      (dolist (line (split-string-by-newline output))
-                        (write-message stream `(:notify (:output ,line)))))
-                    (%flush-diagnostics stream diag-state)
-                    (write-message stream `(:return ,id (:ok ,(or result "T")))))
+                  ;; Package lookup and source preparation can fail before
+                  ;; compilation starts; they need the same reply boundary.
+                  (multiple-value-bind (compile-string runtime-prefix-length)
+                      (%wrap-coalton-input form-string package-name auto-coalton-p)
+                    (setf synthetic-prefix
+                          (+ (length (mine/runtime/eval:compile-string-source-prefix package-name))
+                             (or client-prefix-length 0) runtime-prefix-length))
+                    (let ((coalton-impl/source:*source-diagnostic-hook*
+                            (%source-diagnostic-hook id diag-state
+                                                     :file-override file-override
+                                                     :offset-base position
+                                                     :synthetic-prefix synthetic-prefix)))
+                      (multiple-value-bind (result output)
+                          (mine/runtime/eval:debug-compile-string
+                           compile-string package-name stream id
+                           (%auto-coalton-context-p package-name auto-coalton-p))
+                        (when (and output (plusp (length output)))
+                          (dolist (line (split-string-by-newline output))
+                            (write-message stream `(:notify (:output ,line)))))
+                        (%flush-diagnostics stream diag-state)
+                        (write-message stream `(:return ,id (:ok ,(or result "T")))))))
                 (reader-error (c)
                   (%collect-diagnostics c id diag-state
                                         :file-override file-override
@@ -1187,7 +1190,7 @@ Uses compile-file + load for correct eval-when toplevel semantics."
               :report "Continue, returning NIL"
               (%flush-stderr-capture stderr-capture stream)
               (%flush-diagnostics stream diag-state)
-              (write-message stream `(:return ,id (:ok "T")))))))))))
+              (write-message stream `(:return ,id (:ok "T"))))))))))
 
 (defun %ct-file-p (filename)
   "Return T if FILENAME has a .ct extension."
