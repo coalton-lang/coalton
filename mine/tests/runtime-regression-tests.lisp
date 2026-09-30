@@ -50,6 +50,190 @@
      (error () t))
    "Protocol reader accepted trailing data"))
 
+(defclass runtime-octet-output-stream (sb-gray:fundamental-binary-output-stream)
+  ((octets :initform (make-array 0 :element-type '(unsigned-byte 8)
+                                 :adjustable t :fill-pointer 0)
+           :reader runtime-stream-octets)
+   (write-hook :initform nil :accessor runtime-stream-write-hook)
+   (yield-p :initarg :yield-p :initform nil :reader runtime-stream-yield-p)))
+
+(defmethod stream-element-type ((stream runtime-octet-output-stream))
+  '(unsigned-byte 8))
+
+(defmethod sb-gray:stream-write-byte ((stream runtime-octet-output-stream) byte)
+  (vector-push-extend byte (runtime-stream-octets stream))
+  (let ((hook (runtime-stream-write-hook stream)))
+    (when hook
+      (setf (runtime-stream-write-hook stream) nil)
+      (funcall hook)))
+  (when (runtime-stream-yield-p stream)
+    (sb-thread:thread-yield))
+  byte)
+
+(defun %runtime-decode-frames (stream)
+  (let ((octets (runtime-stream-octets stream))
+        (position 0)
+        (messages nil))
+    (loop while (< position (length octets))
+          do (%runtime-check (<= (+ position 6) (length octets))
+                             "Incomplete protocol frame header")
+             (let* ((header (sb-ext:octets-to-string octets :external-format ':utf-8
+                                                           :start position :end (+ position 6)))
+                    (length (parse-integer header :radix 16))
+                    (end (+ position 6 length)))
+               (%runtime-check (<= end (length octets)) "Incomplete protocol frame payload")
+               (push (mine/protocol/server::decode-protocol-sexp
+                      (sb-ext:octets-to-string octets :external-format ':utf-8
+                                                    :start (+ position 6) :end end))
+                     messages)
+               (setf position end)))
+    (nreverse messages)))
+
+(defun check-runtime-protocol-frames-defer-interrupts ()
+  (let* ((stream (make-instance 'runtime-octet-output-stream))
+         (paused (sb-thread:make-semaphore))
+         (resume (sb-thread:make-semaphore))
+         (iterations 16)
+         (output '(:notify (:output-chunk 301 "output λ")))
+         (debug '(:debug 301 "interrupt" nil nil))
+         (thread nil)
+         (worker-error nil))
+    (unwind-protect
+         (progn
+           (setf thread
+                 (sb-thread:make-thread
+                  (lambda ()
+                    (handler-case
+                        (dotimes (i iterations)
+                          (setf (runtime-stream-write-hook stream)
+                                (lambda ()
+                                  ;; Queue the interrupt after the first byte,
+                                  ;; without relying on scheduler timing.
+                                  (sb-thread:signal-semaphore paused)
+                                  (%runtime-check
+                                   (sb-thread:wait-on-semaphore resume :timeout 1)
+                                   "Interrupted writer was not resumed")))
+                          (%runtime-check (mine/protocol/server::write-message stream output)
+                                          "Output frame write failed"))
+                      (serious-condition (condition) (setf worker-error condition))))
+                  :name "mine-frame-interrupt-regression"))
+           (dotimes (i iterations)
+             (%runtime-check (sb-thread:wait-on-semaphore paused :timeout 1)
+                             "Writer did not reach a partial frame: ~A" worker-error)
+             (sb-thread:interrupt-thread
+              thread
+              (lambda ()
+                (%runtime-check (mine/protocol/server::write-message stream debug)
+                                "Interrupt frame write failed")))
+             (sb-thread:signal-semaphore resume))
+           (%runtime-check
+            (not (eq ':timeout (sb-thread:join-thread thread :timeout 1 :default ':timeout)))
+            "Interrupted frame writer did not finish")
+           (%runtime-check (null worker-error) "Frame writer failed: ~A" worker-error)
+           (let ((messages (%runtime-decode-frames stream)))
+             (%runtime-check (= iterations (count output messages :test #'equal))
+                             "Output frames were lost: ~S" messages)
+             (%runtime-check (= iterations (count debug messages :test #'equal))
+                             "Interrupt frames were lost: ~S" messages)
+             (%runtime-check (= (* 2 iterations) (length messages))
+                             "Unexpected protocol frames: ~S" messages)))
+      (when (and thread (sb-thread:thread-alive-p thread))
+        (sb-thread:terminate-thread thread)))))
+
+(defun check-runtime-protocol-frames-serialize-writers ()
+  (let ((stream (make-instance 'runtime-octet-output-stream :yield-p t))
+        (threads nil)
+        (worker-errors (make-array 3 :initial-element nil)))
+    (unwind-protect
+         (progn
+           (dotimes (i 3)
+             (let ((index i))
+               (push (sb-thread:make-thread
+                      (lambda ()
+                        (handler-case
+                            (dotimes (j 8)
+                              (%runtime-check
+                               (mine/protocol/server::write-message
+                                stream (list ':notify (list ':output-chunk index "concurrent λ")))
+                               "Concurrent frame write failed"))
+                          (serious-condition (condition)
+                            (setf (aref worker-errors index) condition))))
+                      :name "mine-frame-writer-regression")
+                     threads)))
+           (dolist (thread threads)
+             (%runtime-check
+              (not (eq ':timeout (sb-thread:join-thread thread :timeout 1 :default ':timeout)))
+              "Concurrent frame writer did not finish"))
+           (%runtime-check (every #'null worker-errors)
+                           "Concurrent frame writers failed: ~S" worker-errors)
+           (let ((messages (%runtime-decode-frames stream)))
+             (%runtime-check (= 24 (length messages)) "Concurrent frames were lost")
+             (dotimes (i 3)
+               (%runtime-check
+                (= 8 (count (list ':notify (list ':output-chunk i "concurrent λ"))
+                            messages :test #'equal))
+                "Concurrent writer ~D lost frames" i))))
+      (dolist (thread threads)
+        (when (sb-thread:thread-alive-p thread)
+          (sb-thread:terminate-thread thread))))))
+
+(defun check-runtime-terminal-reply-retires-request ()
+  (let ((stream (make-instance 'runtime-octet-output-stream)))
+    (dolist (result '((:ok "done") (:error "Aborted.")))
+      (unwind-protect
+           (progn
+             (mine/protocol/server::%remember-active-request 302)
+             (%runtime-check
+              (mine/protocol/server::write-message stream '(:notify (:output-chunk 302 "output")))
+              "Output notification write failed")
+             (mine/protocol/server::%reject-unexpected-message-during-wait
+              stream '(:eval 303 "1" "CL-USER") "input")
+             (mine/protocol/server::dispatch-message '(:interrupt-request 304 999) stream)
+             (%runtime-check
+              (eq sb-thread:*current-thread* (mine/protocol/server::%active-request-thread 302))
+              "Unrelated replies retired the active request")
+             (setf (runtime-stream-write-hook stream)
+                   (lambda ()
+                     (%runtime-check (null (mine/protocol/server::%active-request-thread 302))
+                                     "Request was still interruptible when its reply began")))
+             (%runtime-check
+              (mine/protocol/server::write-message stream (list ':return 302 result))
+              "Terminal reply write failed")
+             (%runtime-check (null (mine/protocol/server::%active-request-thread 302))
+                             "Completed request remained registered")
+             (%runtime-check (null (mine/protocol/server::%interrupt-active-request 302))
+                             "Completed request accepted a late interrupt"))
+        (mine/protocol/server::%forget-active-request 302)))))
+
+(defun check-runtime-unrelated-reply-preserves-active-request ()
+  (let ((stream (make-instance 'runtime-octet-output-stream))
+        (ready (sb-thread:make-semaphore))
+        (finish (sb-thread:make-semaphore))
+        (thread nil))
+    (unwind-protect
+         (progn
+           (setf thread
+                 (sb-thread:make-thread
+                  (lambda ()
+                    (mine/protocol/server::%with-active-request (303)
+                      (sb-thread:signal-semaphore ready)
+                      (sb-thread:wait-on-semaphore finish :timeout 1)))
+                  :name "mine-unrelated-reply-regression"))
+           (%runtime-check (sb-thread:wait-on-semaphore ready :timeout 1)
+                           "Other request did not become active")
+           (mine/protocol/server::%reject-unexpected-message-during-wait
+            stream '(:eval 303 "1" "CL-USER") "the debugger")
+           (%runtime-check (eq thread (mine/protocol/server::%active-request-thread 303))
+                           "Nested protocol rejection retired another thread's request")
+           (mine/protocol/server::dispatch-message '(:interrupt-request 303 999) stream)
+           (%runtime-check (eq thread (mine/protocol/server::%active-request-thread 303))
+                           "Interrupt reply retired another thread's request"))
+      (sb-thread:signal-semaphore finish)
+      (when thread
+        (%runtime-check
+         (not (eq ':timeout (sb-thread:join-thread thread :timeout 1 :default ':timeout)))
+         "Other request did not finish")))))
+
 (defun %call-with-replaced-runtime-function (name replacement function)
   (let ((original (symbol-function name)))
     (unwind-protect
@@ -255,9 +439,246 @@
     (%runtime-check (equal '(:return 62 (:error "Aborted.")) (car (last messages)))
                     "System-load debugger should return a completed abort")))
 
+(defun check-runtime-request-scoped-interruption ()
+  (let ((thread nil) (worker-error nil))
+    (unwind-protect
+         (let ((messages
+                 (%call-with-runtime-messages
+                  (lambda ()
+                    (setf thread
+                          (sb-thread:make-thread
+                           (lambda ()
+                             (handler-case
+                                 (mine/protocol/server::dispatch-message
+                                  '(:eval 71 "(loop (sleep 1))" "CL-USER" nil) :test-wire)
+                               (serious-condition (condition) (setf worker-error condition))))
+                           :name "mine-interrupt-regression"))
+                    (let ((deadline (+ (get-internal-real-time) (* 3 internal-time-units-per-second))))
+                      (loop until (mine/protocol/server::%active-request-thread 71)
+                            do (%runtime-check (< (get-internal-real-time) deadline)
+                                               "Evaluation did not register its active request")
+                               (sleep 0.01)))
+                    (%runtime-check (mine/protocol/server::%interrupt-active-request 71)
+                                    "Request-scoped interrupt was not delivered")
+                    (%runtime-check
+                     (not (eq :timeout (sb-thread:join-thread thread :timeout 5 :default :timeout)))
+                     "Interrupted evaluation did not finish"))
+                  '((:debug-abort 71)))))
+           (%runtime-check (null worker-error) "Worker failed: ~A" worker-error)
+           (%runtime-check (null (mine/protocol/server::%active-request-thread 71))
+                           "Completed request remained interruptible")
+           (%runtime-check (equal '(:return 71 (:error "Aborted.")) (car (last messages)))
+                           "Interrupted REPL evaluation should recover through its debugger"))
+      (when (and thread (sb-thread:thread-alive-p thread))
+        (sb-thread:terminate-thread thread)))))
+
+(defun check-runtime-registers-every-foreground-request ()
+  (dolist (entry '((mine/protocol/server::handle-compile-string
+                    (:compile-string 72 "(+ 1 2)" "buffer" "CL-USER" 0 0 nil))
+                   (mine/protocol/server::handle-compile-file
+                    (:compile-file 72 "file.lisp" t))
+                   (mine/protocol/server::handle-beam-system
+                    (:beam-system 72 "system" ""))))
+    (%call-with-replaced-runtime-function
+     (first entry)
+     (lambda (&rest args)
+       (declare (ignore args))
+       (%runtime-check (eq sb-thread:*current-thread*
+                           (mine/protocol/server::%active-request-thread 72))
+                       "Foreground request was not registered"))
+     (lambda () (mine/protocol/server::dispatch-message (second entry) :test-wire)))
+    (%runtime-check (null (mine/protocol/server::%active-request-thread 72))
+                    "Foreground request registration leaked")))
+
+(defun check-runtime-typed-control-requests-and-send-status ()
+  (let* ((rid (mine/protocol/messages:RequestId 81))
+         (request (mine/protocol/messages:ReqInterruptRequest rid (mine/protocol/messages:RequestId 71))))
+    (%runtime-check
+     (equal '(:interrupt-request 81 71)
+            (mine/protocol/server::decode-protocol-sexp
+             (mine/protocol/wire:encode-sexpr (mine/protocol/messages:request-to-sexpr request))))
+     "Typed interrupt request has the wrong wire shape"))
+  (%runtime-check
+   (equal '(:indent-rules 82 ("let" "when") "CL-USER")
+          (mine/protocol/server::decode-protocol-sexp
+           (mine/protocol/wire:encode-sexpr
+            (mine/protocol/messages:request-to-sexpr
+             (mine/protocol/messages:ReqIndentRules
+              (mine/protocol/messages:RequestId 82) '("let" "when") "CL-USER")))))
+   "Typed indentation request has the wrong wire shape")
+  (%call-with-runtime-wire-file
+   (lambda (stream)
+     (let* ((conn (mine/protocol/client::make-%connection :stream stream :active t))
+            (rid (mine/protocol/messages:RequestId 83))
+            (request (mine/protocol/messages:ReqEval rid "1" "CL-USER" coalton:False)))
+       (%runtime-check (mine/protocol/client:connection-send-checked! conn request)
+                       "Expected successful typed send")
+       (mine/protocol/client:connection-finish-request! conn (mine/protocol/messages:RequestId 82))
+       (%runtime-check (= 83 (mine/protocol/client::%connection-foreground-request-id conn))
+                       "Unrelated return cleared the interrupt target")
+       (mine/protocol/client:connection-finish-request! conn rid)
+       (%runtime-check (null (mine/protocol/client::%connection-foreground-request-id conn))
+                       "Matching return did not clear the interrupt target")
+       (close stream)
+       (%runtime-check (not (mine/protocol/client:connection-send-checked! conn request))
+                       "Closed connection reported successful delivery")))))
+
+;;; A separate SBCL process exercises the real socket/Windows lifecycle.  Only
+;;; the saved-image launcher is substituted: start, interrupt, and stop use the
+;;; production manager, client, protocol server, and OS process adapters.
+
+(defun %runtime-child-source-directories ()
+  (remove-duplicates
+   (loop for name in (asdf:registered-systems)
+         for system = (asdf:find-system name nil)
+         for source = (and system (asdf:system-source-file system))
+         when source collect (uiop:pathname-directory-pathname source))
+   :test #'equal))
+
+(defun %call-with-runtime-process (function)
+  (uiop:with-temporary-file (:stream bootstrap :pathname bootstrap-path :type "lisp")
+    (with-standard-io-syntax
+      (dolist (form
+                (append
+                 (list '(require :asdf) '(require :sb-bsd-sockets) '(require :sb-introspect)
+                       `(asdf:initialize-source-registry
+                         '(:source-registry
+                           ,@(mapcar (lambda (path) (list :directory path))
+                                     (%runtime-child-source-directories))
+                           :ignore-inherited-configuration))
+                       `(setf (symbol-plist :coalton-config)
+                              ',(copy-list (symbol-plist :coalton-config))))
+                 (when (member :coalton-portable-bigfloat *features*)
+                   '((pushnew :coalton-portable-bigfloat *features*)))
+                 '((let ((*standard-output* *error-output*))
+                     (asdf:load-system "mine/runtime"))
+                   (mine/runtime/server-main:main))))
+        (write form :stream bootstrap)
+        (terpri bootstrap)))
+    :close-stream
+    (uiop:with-temporary-file (:stream errors :pathname error-path :type "log")
+      (finish-output errors)
+      :close-stream
+      (let ((manager (mine/protocol/lifecycle::make-%runtime-manager)))
+        (unwind-protect
+             (handler-case
+                 (%call-with-replaced-runtime-function
+                  'mine/bindings/process:spawn-subprocess
+                  (lambda (program args)
+                    (declare (ignore program args))
+                    (sb-ext:run-program
+                     (namestring sb-ext:*runtime-pathname*)
+                     (list "--noinform" "--no-userinit" "--no-sysinit"
+                           "--script" (namestring bootstrap-path))
+                     :input nil :output :stream :error error-path
+                     :if-error-exists :supersede :wait nil :search t))
+                  (lambda ()
+                    (%runtime-check (mine/protocol/lifecycle::%runtime-do-start manager)
+                                    "Controlled runtime process did not start")
+                    (funcall function manager)))
+               (error (condition)
+                 (error "Runtime process test failed: ~A~%Child stderr:~%~A"
+                        condition (uiop:read-file-string error-path))))
+          (mine/protocol/lifecycle::%runtime-do-stop manager))))))
+
+(defun %runtime-read-until (manager predicate)
+  (let ((stream (mine/protocol/client::%connection-stream
+                 (mine/protocol/lifecycle::%runtime-manager-connection manager))))
+    (sb-ext:with-timeout 5
+      (loop for message = (mine/protocol/server::read-message stream)
+            do (%runtime-check message "Runtime connection ended unexpectedly")
+            when (funcall predicate message) return message))))
+
+(defun %runtime-process-send-eval (manager id text)
+  (%runtime-check
+   (mine/protocol/client:connection-send-checked!
+    (mine/protocol/lifecycle::%runtime-manager-connection manager)
+    (mine/protocol/messages:ReqEval (mine/protocol/messages:RequestId id)
+                                    text "CL-USER" coalton:False))
+   "Could not send evaluation ~D to runtime process" id))
+
+(defun %runtime-process-return (manager id)
+  (let ((message (%runtime-read-until
+                  manager (lambda (message)
+                            (and (eq :return (first message)) (eql id (second message)))))))
+    (mine/protocol/client:connection-finish-request!
+     (mine/protocol/lifecycle::%runtime-manager-connection manager)
+     (mine/protocol/messages:RequestId id))
+    message))
+
+(defun %runtime-process-check-definition (manager id)
+  (%runtime-process-send-eval manager id "(mine-regression-retained-definition)")
+  (let ((message (%runtime-process-return manager id)))
+    (%runtime-check
+     (and (eq :ok (first (third message)))
+          (equal '(:values ("42"))
+                 (mine/protocol/server::decode-protocol-sexp (second (third message)))))
+     "Runtime lost the previously defined function: ~S" message))
+  (%runtime-check (mine/protocol/lifecycle:runtime-process-alive? manager)
+                  "Cancellation terminated the runtime process")
+  (%runtime-check (not (mine/protocol/lifecycle:runtime-interrupt! manager))
+                  "Completed request remained the lifecycle interrupt target"))
+
+(defun %runtime-process-interrupt-and-abort (manager id)
+  (%runtime-check (mine/protocol/lifecycle:runtime-interrupt! manager)
+                  "Lifecycle did not deliver a scoped interrupt for request ~D" id)
+  (%runtime-read-until manager (lambda (message)
+                                (and (eq :debug (first message)) (eql id (second message)))))
+  (%runtime-check
+   (mine/protocol/client:connection-send-checked!
+    (mine/protocol/lifecycle::%runtime-manager-connection manager)
+    (mine/protocol/messages:ReqDebugAbort (mine/protocol/messages:RequestId id)))
+   "Could not send debugger abort for request ~D" id)
+  (%runtime-check (equal (list :return id '(:error "Aborted."))
+                         (%runtime-process-return manager id))
+                  "Interrupted request ~D did not finish through debugger abort" id))
+
+(defun check-runtime-process-survives-scoped-interruption ()
+  (%call-with-runtime-process
+   (lambda (manager)
+     (%runtime-process-send-eval
+      manager 101 "(defun mine-regression-retained-definition () 42)")
+     (%runtime-check (eq :ok (first (third (%runtime-process-return manager 101))))
+                     "Could not define function in controlled runtime")
+     ;; READ-LINE is blocked in the input protocol, while a separate connection
+     ;; carries the interrupt.  The original connection then accepts DEBUG-ABORT.
+     (%runtime-process-send-eval manager 102 "(read-line)")
+     (%runtime-read-until manager (lambda (message)
+                                   (and (eq :io-request (first message))
+                                        (eql 102 (second message)))))
+     (%runtime-process-interrupt-and-abort manager 102)
+     (%runtime-process-check-definition manager 103)
+     ;; A flushed marker proves the looping evaluation is active before Ctrl-C.
+     (%runtime-process-send-eval
+      manager 104 "(progn (write-string \"loop-started\") (force-output) (loop))")
+     (%runtime-read-until manager (lambda (message)
+                                   (equal '(:notify (:output-chunk 104 "loop-started"))
+                                          message)))
+     (%runtime-process-interrupt-and-abort manager 104)
+     (%runtime-process-check-definition manager 105))))
+
+(defun check-runtime-interrupt-timeout-is-recoverable ()
+  (let* ((connection (mine/protocol/client::make-%connection
+                      :active t :foreground-request-id 110))
+         (manager (mine/protocol/lifecycle::make-%runtime-manager :connection connection)))
+    (%call-with-replaced-runtime-function
+     'mine/protocol/lifecycle::%runtime-open-connection
+     (lambda (port) (declare (ignore port)) (error 'sb-ext:timeout))
+     (lambda ()
+       (%runtime-check (not (mine/protocol/lifecycle:runtime-interrupt! manager))
+                       "An interrupt transport timeout should report failure")))
+    (%runtime-check (mine/protocol/client::%connection-active connection)
+                    "Control connection timeout deactivated the foreground session")
+    (%runtime-check (= 110 (mine/protocol/client::%connection-foreground-request-id connection))
+                    "Unsent interrupt lost the active request target")))
+
 (defun run-runtime-regression-tests ()
   (dolist (test '(check-runtime-protocol-io-isolation
                   check-runtime-protocol-rejects-reader-evaluation
+                  check-runtime-protocol-frames-defer-interrupts
+                  check-runtime-protocol-frames-serialize-writers
+                  check-runtime-terminal-reply-retires-request
+                  check-runtime-unrelated-reply-preserves-active-request
                   check-runtime-input-preserves-lines-and-unread
                   check-runtime-output-flushes-before-debugger-and-abort
                   check-runtime-multiform-eval-and-history
@@ -266,7 +687,12 @@
                   check-runtime-package-identity-and-success-reporting
                   check-runtime-coalton-multiform-eval
                   check-runtime-debugger-interactive-and-invalid-restarts
-                  check-runtime-beam-errors-reach-debugger))
+                  check-runtime-beam-errors-reach-debugger
+                  check-runtime-request-scoped-interruption
+                  check-runtime-registers-every-foreground-request
+                  check-runtime-typed-control-requests-and-send-status
+                  check-runtime-process-survives-scoped-interruption
+                  check-runtime-interrupt-timeout-is-recoverable))
     (handler-case (funcall test)
       (error (condition)
         (format *error-output* "~&Runtime regression ~A failed: ~A~%" test condition)
