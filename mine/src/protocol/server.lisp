@@ -81,8 +81,19 @@ Returns the parsed S-expression, or NIL on EOF/error."
     (end-of-file () nil)
     (error () nil)))
 
+(defvar *stream-write-locks* (make-hash-table :test #'eq :weakness ':key))
+
+(defvar *stream-write-locks-lock*
+  (mine/bindings/thread:make-mutex "mine-stream-write-locks"))
+
+(defun %stream-write-lock (stream)
+  (mine/bindings/thread:with-mutex (*stream-write-locks-lock*)
+    (or (gethash stream *stream-write-locks*)
+        (setf (gethash stream *stream-write-locks*)
+              (mine/bindings/thread:make-mutex "mine-stream-write")))))
+
 (defun write-message (stream sexp)
-  "Write SEXP to STREAM using the 6-byte hex header protocol."
+  "Write an interrupt-safe frame, retiring owned requests before terminal replies."
   (handler-case
       (let* ((text (encode-protocol-sexp sexp))
              (octets (sb-ext:string-to-octets text :external-format ':utf-8))
@@ -91,11 +102,19 @@ Returns the parsed S-expression, or NIL on EOF/error."
                   (error "Protocol message exceeds the six-digit frame limit")))
              (header (sb-ext:string-to-octets
                       (format nil "~6,'0X" length)
-                      :external-format ':utf-8)))
+                      :external-format ':utf-8))
+             (frame (concatenate '(vector (unsigned-byte 8)) header octets)))
         (declare (ignore _))
-        (write-sequence header stream)
-        (write-sequence octets stream)
-        (force-output stream)
+        ;; User-created output threads can share a connection. Defer interrupts
+        ;; until its writer lock is released, so debugger writes cannot nest.
+        ;; Blocking IO here is safe: the local socket is continuously drained
+        ;; by the editor's reader thread.
+        (sb-sys:without-interrupts
+          (mine/bindings/thread:with-mutex ((%stream-write-lock stream))
+            (when (and (consp sexp) (eq (first sexp) ':return))
+              (%retire-active-request (second sexp)))
+            (write-sequence frame stream)
+            (force-output stream)))
         t)
     (error () nil)))
 
@@ -123,6 +142,12 @@ Returns the parsed S-expression, or NIL on EOF/error."
   (mine/bindings/thread:with-mutex (*active-request-threads-lock*)
     (remhash id *active-request-threads*)))
 
+(defun %retire-active-request (id)
+  "Stop accepting interrupts for ID only when its owning thread replies."
+  (mine/bindings/thread:with-mutex (*active-request-threads-lock*)
+    (when (eq (gethash id *active-request-threads*) sb-thread:*current-thread*)
+      (remhash id *active-request-threads*))))
+
 (defmacro %with-active-request ((id) &body body)
   "Run BODY while ID can be interrupted by :interrupt-request."
   `(unwind-protect
@@ -145,7 +170,9 @@ Returns the parsed S-expression, or NIL on EOF/error."
       (sb-thread:interrupt-thread
        thread
        (lambda ()
-         (error 'sb-sys:interactive-interrupt)))
+         ;; A delayed interrupt must not spill into the next request on this thread.
+         (when (eq (%active-request-thread id) sb-thread:*current-thread*)
+           (error 'sb-sys:interactive-interrupt))))
       t)))
 
 ;;; TUI output stream
@@ -325,7 +352,8 @@ Returns :quit if the server should shut down, T otherwise."
 
       (:eval
        (destructuring-bind (id form-string package-name &optional auto-coalton-p) (rest msg)
-         (handle-eval id form-string package-name stream auto-coalton-p)))
+         (%with-active-request (id)
+           (handle-eval id form-string package-name stream auto-coalton-p))))
 
       (:quick-result
        (destructuring-bind (id form-string package-name &optional auto-coalton-p) (rest msg)
@@ -342,16 +370,19 @@ Returns :quit if the server should shut down, T otherwise."
        (destructuring-bind (id string document-key package-name position client-prefix-length
                                &optional auto-coalton-p)
            (rest msg)
-         (handle-compile-string id string document-key package-name position
-                                client-prefix-length stream auto-coalton-p)))
+         (%with-active-request (id)
+           (handle-compile-string id string document-key package-name position
+                                  client-prefix-length stream auto-coalton-p))))
 
       (:compile-file
        (destructuring-bind (id filename load-p) (rest msg)
-         (handle-compile-file id filename load-p stream)))
+         (%with-active-request (id)
+           (handle-compile-file id filename load-p stream))))
 
       (:beam-system
        (destructuring-bind (id system-name asd-path) (rest msg)
-         (handle-beam-system id system-name asd-path stream)))
+         (%with-active-request (id)
+           (handle-beam-system id system-name asd-path stream))))
 
       (:type-of
        (destructuring-bind (id symbol-name package-name) (rest msg)
@@ -362,8 +393,8 @@ Returns :quit if the server should shut down, T otherwise."
          (handle-find-definition id symbol-name package-name stream)))
 
       (:complete
-       (destructuring-bind (id prefix package-name) (rest msg)
-         (handle-complete id prefix package-name stream)))
+       (destructuring-bind (id prefix package-name &optional limit) (rest msg)
+         (handle-complete id prefix package-name stream limit)))
 
       (:arglist
        (destructuring-bind (id function-name package-name) (rest msg)
@@ -1191,6 +1222,10 @@ Binds IO streams so interactive reads (y-or-n-p, read, etc.) work via the TUI."
         (write-message stream
                        `(:return ,id
                          (:error ,(format nil "~A" c)))))
+      (sb-sys:interactive-interrupt ()
+        (%drain-runtime-output stdout-capture)
+        (%flush-diagnostics stream diag-state)
+        (write-message stream (list :return id (list :error "Interrupted."))))
       (error (c)
         ;; Send any captured output even on error
         (let ((output (%drain-runtime-output stdout-capture)))
@@ -1472,7 +1507,7 @@ Each entry is (name-with-colon \"pkg\" \"\")."
                   matches)))))
     matches))
 
-(defun handle-complete (id raw-prefix buffer-package-name stream)
+(defun handle-complete (id raw-prefix buffer-package-name stream &optional limit)
   "Handle a :complete request for symbol completion.
 RAW-PREFIX may contain a package qualifier (e.g. \"vec:push\").
 BUFFER-PACKAGE-NAME is the package context for resolving local nicknames.
@@ -1526,6 +1561,8 @@ When no colon in prefix, also completes package names/nicknames."
           (unless has-qualifier
             (setf matches
                   (nconc matches (%matching-package-names raw-prefix pkg))))
+          (when (and (integerp limit) (>= limit 0))
+            (setf matches (subseq matches 0 (min limit (length matches)))))
           (write-message stream
                          `(:return ,id (:ok ,matches)))))
     (error (c)
