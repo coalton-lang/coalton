@@ -144,6 +144,14 @@
     (check (equal text (range-text context (source:source-smallest-list-range context 10)))
            "Smallest enclosing list must preserve short-lambda prefixes")))
 
+(defun check-bracket-heads ()
+  (dolist (text '("[in-package :wrong]" "#(in-package :wrong)"))
+    (let ((context (source:scan-source text)))
+      (check (null (optional-value (source:source-first-head context)))
+             "Bracket and vector data must not supply a callable head")
+      (check (null (optional-value (source:source-package-before context (length text))))
+             "Bracket and vector data must not change the package"))))
+
 (defparameter *completion-cases*
   (list (list "(foo bar)" 8 "bar")
         (list "(foo bar)" 7 "ba")
@@ -196,6 +204,7 @@
   (check-form-spans)
   (check-no-reader-evaluation)
   (check-short-lambda-spans)
+  (check-bracket-heads)
   (check-source-symbols)
   (check-shared-scans)
   t)

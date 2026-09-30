@@ -2,14 +2,17 @@
   (:use #:coalton #:coalton-prelude)
   (:local-nicknames
    (#:tok #:mine/syntax/token)
+   (#:source #:mine/syntax/context)
    (#:cell #:coalton/cell)
    (#:str #:coalton/string)
    (#:char #:coalton/char)
-   (#:list #:coalton/list))
+   (#:list #:coalton/list)
+   (#:vec #:coalton/vector))
   (:export
    #:LexerState
    #:lexer-state-new
-   #:lex-line))
+   #:lex-line #:lex-source #:tokens-for-line
+   #:SourceHighlight #:source-highlight #:highlight-line-tokens))
 
 (in-package #:mine/syntax/lexer)
 
@@ -500,4 +503,163 @@ with absolute buffer positions."
     (let result = (cell:new (the (List tok:Token) Nil)))
     (let i = (cell:new (the UFix 0)))
     (lex-line-impl! state line-text line-offset line-len result i)
-    (reverse (cell:read result))))
+    (reverse (cell:read result)))
+
+  (declare source-token-colors (source:SourceContext * source:SourceToken * LexerState -> List tok:Token))
+  (define (source-token-colors context token state)
+    "Apply color categories to an already-scanned source token."
+    (let start = (source:.token-start token))
+    (let end = (source:.token-end token))
+    (let single = (fn (kind) [ (tok:Token kind start end) ]))
+    (match (source:.token-kind token)
+      ((source:StringToken) (single tok:TokString))
+      ((source:CharacterToken) (single tok:TokChar))
+      ((source:CommentToken (source:SourceLineComment)) (single tok:TokComment))
+      ((source:CommentToken _) (single tok:TokBlockComment))
+      ((source:SymbolToken (True)) (single tok:TokSymbol))
+      ((source:OpenToken (source:BracketDelimiter)) (single tok:TokOpenBracket))
+      ((source:OpenToken (source:VectorDelimiter))
+       [ (tok:Token tok:TokSharpSign start (- end 1))
+         (tok:Token tok:TokOpenParen (- end 1) end) ])
+      ((source:OpenToken _) (single tok:TokOpenParen))
+      ((source:CloseToken (source:BracketDelimiter)) (single tok:TokCloseBracket))
+      ((source:CloseToken _) (single tok:TokCloseParen))
+      (_
+       ;; Atom and reader-prefix color conventions remain independent from
+       ;; lexical boundaries: this slice cannot contain an active literal.
+       (lex-line state (source:token-text context token) start))))
+
+  (declare add-color-tokens (List tok:Token * List tok:Token -> List tok:Token))
+  (define (add-color-tokens tokens reversed)
+    (match tokens
+      ((Nil) reversed)
+      ((Cons token rest)
+       (let result =
+         (match reversed
+           ((Cons previous more)
+            (if (and (== (tok:.token-kind token) tok:TokSymbol)
+                     (== (tok:.token-kind previous) tok:TokSymbol)
+                     (== (tok:.token-end previous) (tok:.token-start token)))
+                (Cons (tok:Token tok:TokSymbol (tok:.token-start previous) (tok:.token-end token)) more)
+                (Cons token reversed)))
+           ((Nil) [token])))
+       (add-color-tokens rest result))))
+
+  (declare lex-tokens (source:SourceContext * LexerState * List source:SourceToken * UFix * UFix
+                       -> List tok:Token))
+  (define (lex-tokens context state tokens position limit)
+    "Color TOKENS until one starts at or after LIMIT. POSITION is where the
+token preceding TOKENS ends; gaps between tokens are colored as whitespace."
+    (let len = (str:length (.source-text context)))
+    (rec scan ((tokens tokens) (position position) (reversed Nil))
+      (match tokens
+        ((Nil)
+         (list:reverse
+           (if (< position len) (Cons (tok:Token tok:TokWhitespace position len) reversed) reversed)))
+        ((Cons token rest)
+         (let start = (source:.token-start token))
+         (let with-space =
+           (if (< position start) (Cons (tok:Token tok:TokWhitespace position start) reversed) reversed))
+         (if (>= start limit)
+             (list:reverse with-space)
+             (scan rest (.token-end token)
+                   (add-color-tokens (source-token-colors context token state) with-space)))))))
+
+  (declare lex-source (source:SourceContext * UFix -> List tok:Token))
+  (define (lex-source context mode)
+    "Color a source snapshot once, retaining absolute positions and literal spans."
+    (lex-tokens context (lexer-state-new mode) (.source-tokens context) 0
+                (str:length (.source-text context))))
+
+  (declare tokens-for-line (List tok:Token * UFix * UFix -> List tok:Token))
+  (define (tokens-for-line tokens start end)
+    "Clip absolute TOKENS to [START, END), returning offsets relative to START."
+    (rec scan ((remaining tokens) (reversed Nil))
+      (match remaining
+        ((Nil) (list:reverse reversed))
+        ((Cons token rest)
+         (cond
+           ((>= (tok:.token-start token) end) (list:reverse reversed))
+           ((<= (tok:.token-end token) start) (scan rest reversed))
+           (True
+            (scan rest
+                  (Cons (tok:Token (tok:.token-kind token)
+                                   (- (max start (tok:.token-start token)) start)
+                                   (- (min end (tok:.token-end token)) start))
+                        reversed))))))))
+
+  ;;; Line-at-a-time highlighting
+
+  (define-struct SourceHighlight
+    "A source snapshot indexed so each displayed line is colored on demand."
+    (highlight-context source:SourceContext)
+    (highlight-mode UFix)
+    ;; Element I is the snapshot's token list from its Ith token onward.
+    (highlight-tails (vec:Vector (List source:SourceToken))))
+
+  (declare token-tails (List source:SourceToken -> vec:Vector (List source:SourceToken)))
+  (define (token-tails tokens)
+    (let tails = (vec:with-capacity (list:length tokens)))
+    (rec collect ((remaining tokens))
+      (match remaining
+        ((Nil) tails)
+        ((Cons _ rest)
+         (vec:push! remaining tails)
+         (collect rest)))))
+
+  (declare same-snapshot? (source:SourceContext * source:SourceContext -> Boolean))
+  (define (same-snapshot? a b)
+    (lisp (-> Boolean) (a b)
+      (to-boolean (cl:eq a b))))
+
+  ;; Replaced as a whole, so concurrent readers never see a partial index.
+  (declare %last-highlight (Cell (Optional SourceHighlight)))
+  (define %last-highlight (cell:new None))
+
+  (declare index-source! (source:SourceContext * UFix -> SourceHighlight))
+  (define (index-source! context mode)
+    (let highlight = (SourceHighlight context mode (token-tails (.source-tokens context))))
+    (cell:write! %last-highlight (Some highlight))
+    highlight)
+
+  (declare source-highlight (source:SourceContext * UFix -> SourceHighlight))
+  (define (source-highlight context mode)
+    "Index CONTEXT for line coloring; frames showing the same snapshot share one index."
+    (match (cell:read %last-highlight)
+      ((Some highlight)
+       (if (and (== mode (.highlight-mode highlight))
+                (same-snapshot? context (.highlight-context highlight)))
+           highlight
+           (index-source! context mode)))
+      ((None) (index-source! context mode))))
+
+  (declare tail-end (List source:SourceToken -> UFix))
+  (define (tail-end tail)
+    (match tail
+      ((Cons token _) (.token-end token))
+      ((Nil) 0)))
+
+  (declare highlight-line-tokens (SourceHighlight * UFix * UFix -> List tok:Token))
+  (define (highlight-line-tokens highlight start end)
+    "Return the tokens of the line [START, END) relative to START, as clipping
+LEX-SOURCE would, while lexing only the source tokens that overlap the line."
+    (let tails = (.highlight-tails highlight))
+    (let count = (vec:length tails))
+    ;; Token ends never decrease, so bisect for the first token ending after START.
+    (let index =
+      (rec search ((low 0) (high count))
+        (if (>= low high)
+            low
+            (let ((middle (lisp (-> UFix) (low high) (cl:floor (cl:+ low high) 2))))
+              (if (> (tail-end (vec:index-unsafe middle tails)) start)
+                  (search low middle)
+                  (search (+ middle 1) high))))))
+    ;; Atoms cannot open strings or block comments, so a fresh lexer state
+    ;; matches the one LEX-SOURCE threads through every token. A symbol that
+    ;; LEX-SOURCE merges with one ending at or before START clips identically.
+    (tokens-for-line
+     (lex-tokens (.highlight-context highlight) (lexer-state-new (.highlight-mode highlight))
+                 (if (< index count) (vec:index-unsafe index tails) Nil)
+                 (if (== index 0) 0 (tail-end (vec:index-unsafe (- index 1) tails)))
+                 end)
+     start end)))

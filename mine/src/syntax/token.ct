@@ -14,7 +14,8 @@
    #:TokArrow #:TokOperator
    #:TokUnknown
    #:Token #:Token
-   #:.token-kind #:.token-start #:.token-end))
+   #:.token-kind #:.token-start #:.token-end
+   #:token-kind #:token-start #:token-end))
 
 (in-package #:mine/syntax/token)
 
@@ -61,4 +62,11 @@
     "A lexical token with kind and absolute buffer positions."
     (token-kind  TokenKind)
     (token-start UFix)
-    (token-end   UFix)))
+    (token-end   UFix))
+
+  (declare token-kind (Token -> TokenKind))
+  (define (token-kind token) (.token-kind token))
+  (declare token-start (Token -> UFix))
+  (define (token-start token) (.token-start token))
+  (declare token-end (Token -> UFix))
+  (define (token-end token) (.token-end token)))
