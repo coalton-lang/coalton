@@ -11,6 +11,8 @@
   :components ((:file "package")
                (:file "check-update-tests")
                (:file "diagnostics-tests")
+               (:file "diagnostic-store-tests")
+               (:file "diagnostic-adapter-tests")
                (:file "fixtures")
                (:file "project-tests")
                (:file "syntax-tests")

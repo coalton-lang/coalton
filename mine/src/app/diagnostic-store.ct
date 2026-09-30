@@ -1,0 +1,248 @@
+(cl:defpackage #:mine/app/diagnostic-store
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames (#:cell #:coalton/cell) (#:hm #:coalton/hashmap)
+                    (#:list #:coalton/list) (#:iter #:coalton/iterator))
+  (:export
+   #:Severity #:DiagnosticError #:DiagnosticWarning #:DiagnosticStyleWarning #:DiagnosticNote #:DiagnosticUnknown
+   #:LabelKind #:PrimaryLabel #:SecondaryLabel #:HelpLabel #:UnknownLabel
+   #:Diagnostic #:diagnostic-file #:diagnostic-start #:diagnostic-end #:diagnostic-severity
+   #:diagnostic-summary #:diagnostic-label #:diagnostic-label-kind #:diagnostic-request #:diagnostic-group
+   #:DiagnosticStore #:diagnostic-store-new #:store-clear-file! #:store-clear-all!
+   #:store-track-request! #:store-forget-request! #:store-stale? #:store-add! #:store-announcement!
+   #:store-for-file #:store-all #:store-for-range #:store-at-position #:store-rank-for-file
+   #:severity-rank #:label-kind-rank #:overlaps-range? #:contains-position? #:better-at-position?
+   #:store-request-count #:store-announcement-count))
+
+(in-package #:mine/app/diagnostic-store)
+
+(coalton-toplevel
+  (derive Eq)
+  (define-type Severity
+    DiagnosticError DiagnosticWarning DiagnosticStyleWarning DiagnosticNote DiagnosticUnknown)
+
+  (derive Eq)
+  (define-type LabelKind PrimaryLabel SecondaryLabel HelpLabel UnknownLabel)
+
+  (define-struct Diagnostic
+    (diagnostic-file String)
+    (diagnostic-start UFix)
+    (diagnostic-end UFix)
+    (diagnostic-severity Severity)
+    (diagnostic-summary String)
+    (diagnostic-label String)
+    (diagnostic-label-kind LabelKind)
+    (diagnostic-request (Optional Integer))
+    (diagnostic-group (Optional Integer)))
+
+  (declare diagnostic-file (Diagnostic -> String))
+  (define (diagnostic-file d) (.diagnostic-file d))
+  (declare diagnostic-start (Diagnostic -> UFix))
+  (define (diagnostic-start d) (.diagnostic-start d))
+  (declare diagnostic-end (Diagnostic -> UFix))
+  (define (diagnostic-end d) (.diagnostic-end d))
+  (declare diagnostic-severity (Diagnostic -> Severity))
+  (define (diagnostic-severity d) (.diagnostic-severity d))
+  (declare diagnostic-summary (Diagnostic -> String))
+  (define (diagnostic-summary d) (.diagnostic-summary d))
+  (declare diagnostic-label (Diagnostic -> String))
+  (define (diagnostic-label d) (.diagnostic-label d))
+  (declare diagnostic-label-kind (Diagnostic -> LabelKind))
+  (define (diagnostic-label-kind d) (.diagnostic-label-kind d))
+  (declare diagnostic-request (Diagnostic -> Optional Integer))
+  (define (diagnostic-request d) (.diagnostic-request d))
+  (declare diagnostic-group (Diagnostic -> Optional Integer))
+  (define (diagnostic-group d) (.diagnostic-group d))
+
+  (define-struct DiagnosticRequest
+    (request-generation Integer)
+    (request-announcements (hm:HashMap Integer Boolean)))
+
+  (define-struct DiagnosticStore
+    (store-notes (Cell (hm:HashMap String (List Diagnostic))))
+    (store-file-generations (Cell (hm:HashMap String Integer)))
+    (store-requests (Cell (hm:HashMap Integer DiagnosticRequest)))
+    (store-clock (Cell Integer)))
+
+  (declare diagnostic-store-new (Void -> DiagnosticStore))
+  (define (diagnostic-store-new)
+    (DiagnosticStore (cell:new hm:empty) (cell:new hm:empty)
+                     (cell:new hm:empty) (cell:new 0)))
+
+  (declare next-generation! (DiagnosticStore -> Integer))
+  (define (next-generation! store)
+    (let generation = (+ (cell:read (.store-clock store)) 1))
+    (cell:write! (.store-clock store) generation)
+    generation)
+
+  (declare store-clear-file! (DiagnosticStore * String -> Void))
+  (define (store-clear-file! store file)
+    "A new compile or edit invalidates diagnostics from all preceding requests."
+    (cell:write! (.store-notes store) (hm:remove (cell:read (.store-notes store)) file))
+    (cell:write! (.store-file-generations store)
+                 (hm:insert (cell:read (.store-file-generations store)) file (next-generation! store)))
+    (values))
+
+  (declare store-clear-all! (DiagnosticStore -> Void))
+  (define (store-clear-all! store)
+    (cell:write! (.store-notes store) hm:empty)
+    (cell:write! (.store-file-generations store) hm:empty)
+    ;; Unknown request IDs are stale, so pending pre-reset notifications are
+    ;; discarded without retaining an unbounded set of retired request IDs.
+    (cell:write! (.store-requests store) hm:empty)
+    (values))
+
+  (declare store-track-request! (DiagnosticStore * Integer -> Void))
+  (define (store-track-request! store id)
+    (cell:write! (.store-requests store)
+                 (hm:insert (cell:read (.store-requests store)) id
+                            (DiagnosticRequest (next-generation! store) hm:empty)))
+    (values))
+
+  (declare store-forget-request! (DiagnosticStore * Integer -> Void))
+  (define (store-forget-request! store id)
+    "Release both the generation snapshot and the request's announcement groups."
+    (cell:write! (.store-requests store) (hm:remove (cell:read (.store-requests store)) id))
+    (values))
+
+  (declare file-generation (DiagnosticStore * String -> Integer))
+  (define (file-generation store file)
+    (match (hm:lookup (cell:read (.store-file-generations store)) file)
+      ((Some generation) generation)
+      ((None) 0)))
+
+  (declare store-stale? (DiagnosticStore * Diagnostic -> Boolean))
+  (define (store-stale? store diagnostic)
+    (match (.diagnostic-request diagnostic)
+      ((None) False)
+      ((Some id)
+       (match (hm:lookup (cell:read (.store-requests store)) id)
+         ((None) True)
+         ((Some request)
+          (< (.request-generation request) (file-generation store (.diagnostic-file diagnostic))))))))
+
+  (declare store-add! (DiagnosticStore * Diagnostic -> Boolean))
+  (define (store-add! store diagnostic)
+    "Reject stale results at the storage boundary, including out-of-order compiles."
+    (cond
+      ((or (== (.diagnostic-file diagnostic) "") (store-stale? store diagnostic)) False)
+      (True
+       (let file = (.diagnostic-file diagnostic))
+       (let existing = (match (hm:lookup (cell:read (.store-notes store)) file)
+                         ((Some notes) notes) ((None) Nil)))
+       (let previous =
+         (match (.diagnostic-request diagnostic)
+           ((None) existing)
+           ((Some id)
+            (match (hm:lookup (cell:read (.store-requests store)) id)
+              ((None) Nil)
+              ((Some request)
+               (let generation = (.request-generation request))
+               (let newer = (> generation (file-generation store file)))
+               (cell:write! (.store-file-generations store)
+                            (hm:insert (cell:read (.store-file-generations store)) file generation))
+               (if newer Nil existing))))))
+       (cell:write! (.store-notes store)
+                    (hm:insert (cell:read (.store-notes store)) file (Cons diagnostic previous)))
+       True)))
+
+  (declare store-announcement! (DiagnosticStore * Diagnostic -> Boolean))
+  (define (store-announcement! store diagnostic)
+    (cond
+      ((store-stale? store diagnostic) False)
+      (True
+       (match (Tuple (.diagnostic-request diagnostic) (.diagnostic-group diagnostic))
+         ((Tuple (Some id) (Some group))
+          (match (hm:lookup (cell:read (.store-requests store)) id)
+            ((None) False)
+            ((Some request)
+             (let announcements = (.request-announcements request))
+             (cond
+               ((some? (hm:lookup announcements group)) False)
+               (True
+                (cell:write! (.store-requests store)
+                             (hm:insert (cell:read (.store-requests store)) id
+                                        (DiagnosticRequest (.request-generation request)
+                                                           (hm:insert announcements group True))))
+                True)))))
+         (_ (== (.diagnostic-label-kind diagnostic) PrimaryLabel))))))
+
+  (declare store-for-file (DiagnosticStore * String -> List Diagnostic))
+  (define (store-for-file store file)
+    (match (hm:lookup (cell:read (.store-notes store)) file)
+      ((Some notes) (list:reverse notes))
+      ((None) Nil)))
+
+  (declare store-all (DiagnosticStore -> List Diagnostic))
+  (define (store-all store)
+    (let entries = (the (List (Tuple String (List Diagnostic)))
+                        (iter:collect! (hm:entries (cell:read (.store-notes store))))))
+    (list:concat (map (fn ((Tuple _ notes)) (list:reverse notes)) entries)))
+
+  (declare severity-rank (Severity -> UFix))
+  (define (severity-rank severity)
+    (match severity
+      ((DiagnosticError) 4) ((DiagnosticWarning) 3) ((DiagnosticStyleWarning) 2)
+      ((DiagnosticNote) 1) ((DiagnosticUnknown) 0)))
+
+  (declare label-kind-rank (LabelKind -> UFix))
+  (define (label-kind-rank kind)
+    (match kind
+      ((PrimaryLabel) 3) ((SecondaryLabel) 2) ((HelpLabel) 1) ((UnknownLabel) 0)))
+
+  (declare overlaps-range? (UFix * UFix * UFix * UFix -> Boolean))
+  (define (overlaps-range? start end range-start range-end)
+    (if (== start end)
+        (and (<= range-start start) (<= start range-end))
+        (and (< start range-end) (> end range-start))))
+
+  (declare contains-position? (UFix * UFix * UFix -> Boolean))
+  (define (contains-position? start end pos)
+    (if (== start end) (== start pos) (and (<= start pos) (< pos end))))
+
+  (declare store-for-range (DiagnosticStore * String * UFix * UFix -> List Diagnostic))
+  (define (store-for-range store file start end)
+    (list:filter (fn (d) (overlaps-range? (.diagnostic-start d) (.diagnostic-end d) start end))
+                 (store-for-file store file)))
+
+  (declare better-at-position? (Diagnostic * Diagnostic -> Boolean))
+  (define (better-at-position? candidate best)
+    (let rank = (severity-rank (.diagnostic-severity candidate)))
+    (let best-rank = (severity-rank (.diagnostic-severity best)))
+    (let span = (- (.diagnostic-end candidate) (.diagnostic-start candidate)))
+    (let best-span = (- (.diagnostic-end best) (.diagnostic-start best)))
+    (cond
+      ((/= rank best-rank) (> rank best-rank))
+      ((/= span best-span) (< span best-span))
+      (True (> (label-kind-rank (.diagnostic-label-kind candidate))
+               (label-kind-rank (.diagnostic-label-kind best))))))
+
+  (declare store-at-position (DiagnosticStore * String * UFix -> Optional Diagnostic))
+  (define (store-at-position store file pos)
+    (rec scan ((notes (store-for-file store file)) (best None))
+      (match notes
+        ((Nil) best)
+        ((Cons note rest)
+         (if (and (contains-position? (.diagnostic-start note) (.diagnostic-end note) pos)
+                  (match best ((None) True) ((Some current) (better-at-position? note current))))
+             (scan rest (Some note))
+             (scan rest best))))))
+
+  (declare store-rank-for-file (DiagnosticStore * String -> UFix))
+  (define (store-rank-for-file store file)
+    (rec scan ((notes (store-for-file store file)) (best 0))
+      (match notes
+        ((Nil) best)
+        ((Cons note rest) (scan rest (max best (severity-rank (.diagnostic-severity note))))))))
+
+  (declare store-request-count (DiagnosticStore -> Integer))
+  (define (store-request-count store) (hm:count (cell:read (.store-requests store))))
+
+  (declare store-announcement-count (DiagnosticStore -> Integer))
+  (define (store-announcement-count store)
+    (let requests = (the (List (Tuple Integer DiagnosticRequest))
+                         (iter:collect! (hm:entries (cell:read (.store-requests store))))))
+    (rec count ((requests requests) (total 0))
+      (match requests
+        ((Nil) total)
+        ((Cons (Tuple _ request) rest)
+         (count rest (+ total (hm:count (.request-announcements request)))))))))
