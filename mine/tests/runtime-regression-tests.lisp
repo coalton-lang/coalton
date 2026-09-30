@@ -191,6 +191,30 @@
              (%runtime-check (null (find-package missing)) "Missing package was silently created")))
       (delete-package package))))
 
+(defun check-runtime-compile-preparation-errors-return-replies ()
+  (let ((package-name (symbol-name (gensym "MINE-ABSENT-COMPILE-PACKAGE-"))))
+    (dolist (auto-coalton-p '(nil t))
+      (let* ((messages
+               (%call-with-runtime-messages
+                (lambda ()
+                  (mine/protocol/server::dispatch-message
+                   (list :compile-string 53 "(+ 1 2)" "buffer://missing-package"
+                         package-name 0 0 auto-coalton-p)
+                   :test-wire))))
+             (returns (remove :return messages :key #'first :test-not #'eq))
+             (reply (first returns)))
+        (%runtime-check (= 1 (length returns))
+                        "Compile preparation did not complete exactly once: ~S" messages)
+        (%runtime-check (and (eql 53 (second reply))
+                             (eq :error (first (third reply)))
+                             (stringp (second (third reply)))
+                             (search "Package error:" (second (third reply))))
+                        "Compile preparation did not return a structured package error: ~S" reply)
+        (%runtime-check (null (mine/protocol/server::%active-request-thread 53))
+                        "Failed compile preparation leaked its active request")))
+    (%runtime-check (null (find-package package-name))
+                    "Invalid compilation package was silently created")))
+
 (defun check-runtime-coalton-multiform-eval ()
   (let* ((name (symbol-name (gensym "MINE-RUNTIME-VALUE-")))
          (input (format nil "(define ~A 10) (+ ~A 2)" name name)))
@@ -636,7 +660,22 @@
                                    (equal '(:notify (:output-chunk 104 "loop-started"))
                                           message)))
      (%runtime-process-interrupt-and-abort manager 104)
-     (%runtime-process-check-definition manager 105))))
+     (%runtime-process-check-definition manager 105)
+     ;; An unloaded source package fails during compile preparation. It must
+     ;; produce an error reply, leaving this connection and its definitions usable.
+     (%runtime-check
+      (mine/protocol/client:connection-send-checked!
+       (mine/protocol/lifecycle::%runtime-manager-connection manager)
+       (mine/protocol/messages:ReqCompileString
+        (mine/protocol/messages:RequestId 106) "(+ 1 2)" "buffer://missing-package"
+        (symbol-name (gensym "MINE-ABSENT-COMPILE-PACKAGE-")) 0 0 coalton:False))
+      "Could not send compile request with an unloaded package")
+     (let ((reply (%runtime-process-return manager 106)))
+       (%runtime-check (and (eq :error (first (third reply)))
+                            (stringp (second (third reply)))
+                            (search "Package error:" (second (third reply))))
+                       "Missing compile package did not produce a structured error: ~S" reply))
+     (%runtime-process-check-definition manager 107))))
 
 (defun check-runtime-failed-start-cleans-child ()
   (let ((manager (mine/protocol/lifecycle::make-%runtime-manager))
@@ -691,6 +730,7 @@
                   check-runtime-output-flushes-before-debugger-and-abort
                   check-runtime-multiform-eval-and-history
                   check-runtime-package-identity-and-success-reporting
+                  check-runtime-compile-preparation-errors-return-replies
                   check-runtime-coalton-multiform-eval
                   check-runtime-debugger-interactive-and-invalid-restarts
                   check-runtime-beam-errors-reach-debugger
