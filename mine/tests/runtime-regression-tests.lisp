@@ -631,7 +631,7 @@
      (%runtime-process-check-definition manager 103)
      ;; A flushed marker proves the looping evaluation is active before Ctrl-C.
      (%runtime-process-send-eval
-      manager 104 "(progn (write-string \"loop-started\") (force-output) (loop (sleep 1)))")
+      manager 104 "(progn (write-string \"loop-started\") (force-output) (loop))")
      (%runtime-read-until manager (lambda (message)
                                    (equal '(:notify (:output-chunk 104 "loop-started"))
                                           message)))
