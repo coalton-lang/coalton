@@ -1,7 +1,8 @@
 (cl:defpackage #:mine/protocol/messages
   (:use #:coalton #:coalton-prelude)
   (:local-nicknames
-   (#:wire #:mine/protocol/wire))
+   (#:wire #:mine/protocol/wire)
+   (#:str #:coalton/string))
   (:export
    #:RequestId #:RequestId
    #:Request
@@ -12,7 +13,14 @@
    #:ReqPing #:ReqQuit #:ReqHeapInfo #:ReqTypeOf #:ReqIndentRules
    #:ReqInterruptRequest #:ReqDebugRestart #:ReqDebugAbort #:ReqIOResponse #:ReqIOAbort
    #:request-foreground-id
-   #:request-to-sexpr))
+   #:request-to-sexpr #:request-id-value
+   #:Restart #:restart-index #:restart-name #:restart-report
+   #:StackFrame #:frame-index #:frame-description
+   #:DebuggerSnapshot #:debugger-request-id #:debugger-condition #:debugger-restarts #:debugger-frames
+   #:InputRequest #:input-request-id #:input-prompt
+   #:Response #:ResponseReturn #:ResponseOutput #:ResponseOutputChunk #:ResponsePackage
+   #:ResponseRestartRejected #:ResponseDebugger #:ResponseInput #:ResponseDiagnostic
+   #:ResponseConnectionLost #:ResponseBackgroundConnectionLost #:decode-response))
 
 (in-package #:mine/protocol/messages)
 
@@ -149,5 +157,164 @@
       ((ReqQuit (RequestId id))
        (wire:SList (make-list (wire:SAtom ":QUIT")
                               (wire:SInteger (into id)))))))
+
+  ;;; Typed replies. Only the socket boundary deals with host Lisp objects.
+
+  (declare request-id-value (RequestId -> UFix))
+  (define (request-id-value (RequestId number)) number)
+
+  (define-struct Restart
+    (restart-index UFix)
+    (restart-name String)
+    (restart-report String))
+
+  (define-struct StackFrame
+    (frame-index UFix)
+    (frame-description String))
+
+  (define-struct DebuggerSnapshot
+    (debugger-request-id RequestId)
+    (debugger-condition String)
+    (debugger-restarts (List Restart))
+    (debugger-frames (List StackFrame)))
+
+  (define-struct InputRequest
+    (input-request-id RequestId)
+    (input-prompt String))
+
+  (declare restart-index (Restart -> UFix))
+  (define restart-index .restart-index)
+  (declare restart-name (Restart -> String))
+  (define restart-name .restart-name)
+  (declare restart-report (Restart -> String))
+  (define restart-report .restart-report)
+  (declare frame-index (StackFrame -> UFix))
+  (define frame-index .frame-index)
+  (declare frame-description (StackFrame -> String))
+  (define frame-description .frame-description)
+  (declare debugger-request-id (DebuggerSnapshot -> RequestId))
+  (define debugger-request-id .debugger-request-id)
+  (declare debugger-condition (DebuggerSnapshot -> String))
+  (define debugger-condition .debugger-condition)
+  (declare debugger-restarts (DebuggerSnapshot -> List Restart))
+  (define debugger-restarts .debugger-restarts)
+  (declare debugger-frames (DebuggerSnapshot -> List StackFrame))
+  (define debugger-frames .debugger-frames)
+  (declare input-request-id (InputRequest -> RequestId))
+  (define input-request-id .input-request-id)
+  (declare input-prompt (InputRequest -> String))
+  (define input-prompt .input-prompt)
+
+  (define-type Response
+    (ResponseReturn RequestId (Result String wire:SExpr))
+    (ResponseOutput String)
+    (ResponseOutputChunk RequestId String)
+    (ResponsePackage RequestId String)
+    (ResponseRestartRejected RequestId String)
+    (ResponseDebugger DebuggerSnapshot)
+    (ResponseInput InputRequest)
+    (ResponseDiagnostic wire:SExpr)
+    ResponseConnectionLost
+    ResponseBackgroundConnectionLost)
+
+  (declare %decode-ufix (wire:SExpr -> Optional UFix))
+  (define (%decode-ufix expr)
+    (match expr
+      ((wire:SInteger number) (tryInto number))
+      (_ None)))
+
+  (declare %decode-request-id (wire:SExpr -> Optional RequestId))
+  (define (%decode-request-id expr)
+    (map RequestId (%decode-ufix expr)))
+
+  (declare %decode-restart (wire:SExpr -> Optional Restart))
+  (define (%decode-restart expr)
+    (match expr
+      ((wire:SList (Cons index (Cons (wire:SString name) (Cons (wire:SString report) (Nil)))))
+       (map (fn (number) (Restart number name report)) (%decode-ufix index)))
+      (_ None)))
+
+  (declare %decode-frame (wire:SExpr -> Optional StackFrame))
+  (define (%decode-frame expr)
+    (match expr
+      ((wire:SList (Cons index (Cons (wire:SString description) (Nil))))
+       (map (fn (number) (StackFrame number description)) (%decode-ufix index)))
+      (_ None)))
+
+  (declare %decode-return (List wire:SExpr -> Optional Response))
+  (define (%decode-return fields)
+    (match fields
+      ((Cons rid (Cons (wire:SList (Cons (wire:SAtom tag) (Cons payload (Nil)))) (Nil)))
+       (do
+         (request-id <- (%decode-request-id rid))
+         (cond
+           ((== (str:upcase tag) ":OK") (Some (ResponseReturn request-id (Ok payload))))
+           ((== (str:upcase tag) ":ERROR")
+            (match payload
+              ((wire:SString text) (Some (ResponseReturn request-id (Err text))))
+              (_ None)))
+           (True None))))
+      (_ None)))
+
+  (declare %decode-debugger (List wire:SExpr -> Optional Response))
+  (define (%decode-debugger fields)
+    (match fields
+      ((Cons rid (Cons (wire:SString condition) (Cons restarts (Cons frames (Nil)))))
+       (do
+         (request-id <- (%decode-request-id rid))
+         (restart-items <- (wire:sexpr-list-items restarts))
+         (frame-items <- (wire:sexpr-list-items frames))
+         (decoded-restarts <- (traverse %decode-restart restart-items))
+         (decoded-frames <- (traverse %decode-frame frame-items))
+         (Some (ResponseDebugger
+                (DebuggerSnapshot request-id condition decoded-restarts decoded-frames)))))
+      (_ None)))
+
+  (declare %decode-notification (List wire:SExpr -> Optional Response))
+  (define (%decode-notification fields)
+    (match fields
+      ((Cons (wire:SList (Cons (wire:SAtom raw-tag) arguments)) (Nil))
+       (let tag = (str:upcase raw-tag))
+       (cond
+         ((== tag ":DIAGNOSTIC") (Some (ResponseDiagnostic (wire:SList arguments))))
+         ((== tag ":OUTPUT")
+          (match arguments
+            ((Cons (wire:SString text) (Nil)) (Some (ResponseOutput text)))
+            (_ None)))
+         (True
+          (match arguments
+            ((Cons rid (Cons (wire:SString text) (Nil)))
+             (do
+               (request-id <- (%decode-request-id rid))
+               (cond
+                 ((== tag ":OUTPUT-CHUNK") (Some (ResponseOutputChunk request-id text)))
+                 ((== tag ":PACKAGE") (Some (ResponsePackage request-id text)))
+                 ((== tag ":DEBUG-RESTART-REJECTED") (Some (ResponseRestartRejected request-id text)))
+                 (True None))))
+            (_ None)))))
+      (_ None)))
+
+  (declare decode-response (wire:SExpr -> Optional Response))
+  (define (decode-response expr)
+    "Validate a reply at the boundary, preserving nested payloads as typed data."
+    (match expr
+      ((wire:SList (Cons (wire:SAtom raw-tag) fields))
+       (let tag = (str:upcase raw-tag))
+       (cond
+         ((== tag ":RETURN") (%decode-return fields))
+         ((== tag ":NOTIFY") (%decode-notification fields))
+         ((== tag ":DEBUG") (%decode-debugger fields))
+         ((== tag ":IO-REQUEST")
+          (match fields
+            ((Cons rid (Cons (wire:SString prompt) (Nil)))
+             (map (fn (request-id) (ResponseInput (InputRequest request-id prompt)))
+                  (%decode-request-id rid)))
+            (_ None)))
+         ((== tag ":CONNECTION-LOST")
+          (match fields ((Nil) (Some ResponseConnectionLost)) (_ None)))
+         ((== tag ":BACKGROUND-CONNECTION-LOST")
+          (match fields ((Nil) (Some ResponseBackgroundConnectionLost)) (_ None)))
+         (True None)))
+      (_ None)))
 
   )
