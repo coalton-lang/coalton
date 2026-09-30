@@ -8,15 +8,15 @@
   (let ((path (merge-pathnames (format nil "mine-runtime-wire-~A.bin" (gensym))
                               (uiop:temporary-directory))))
     (unwind-protect
-         (with-open-file (stream path :direction :io :element-type '(unsigned-byte 8)
-                                     :if-exists :supersede :if-does-not-exist :create)
+         (with-open-file (stream path :direction ':io :element-type '(unsigned-byte 8)
+                                     :if-exists ':supersede :if-does-not-exist ':create)
            (funcall function stream))
       (ignore-errors (delete-file path)))))
 
 (defun check-runtime-protocol-io-isolation ()
   (let ((*print-base* 16) (*print-radix* t) (*print-length* 1) (*print-level* 1)
         (*read-base* 16) (*readtable* (copy-readtable nil)))
-    (setf (readtable-case *readtable*) :preserve)
+    (setf (readtable-case *readtable*) ':preserve)
     (%call-with-runtime-wire-file
      (lambda (stream)
        (%runtime-check
@@ -34,7 +34,7 @@
            (payload (mine/runtime/eval::%encode-result-values
                     (list (list 1 2)) (find-package "CL-USER"))))
       (%runtime-check
-       (equal (list :values (list "(1 ...)"))
+       (equal (list ':values (list "(1 ...)"))
               (mine/protocol/server::decode-protocol-sexp payload))
        "Nested value transport must preserve payload structure and user value printing"))))
 
@@ -93,8 +93,8 @@
    (= 1 (%call-with-tui-responses
          '(nil)
          (lambda (stream)
-           (%runtime-check (eq :eof (read-char stream nil :eof)) "Expected EOF")
-           (%runtime-check (eq :eof (read-char stream nil :eof)) "Expected persistent EOF"))))
+           (%runtime-check (eq ':eof (read-char stream nil ':eof)) "Expected EOF")
+           (%runtime-check (eq ':eof (read-char stream nil ':eof)) "Expected persistent EOF"))))
    "EOF should not repeatedly request input"))
 
 (defun %call-with-runtime-messages (function &optional replies)
@@ -118,19 +118,19 @@
             (lambda ()
               (mine/protocol/server::handle-eval
                41 "(progn (write-string \"before-error\") (error \"boom\"))"
-               "CL-USER" :test-wire nil))
+               "CL-USER" ':test-wire nil))
             '((:debug-abort 41))))
          (first (first messages)))
     (%runtime-check (equal '(:notify (:output-chunk 41 "before-error")) first)
                     "Expected stdout before debugger, got ~S" first)
-    (%runtime-check (eq :debug (first (second messages))) "Expected interactive debugger")
+    (%runtime-check (eq ':debug (first (second messages))) "Expected interactive debugger")
     (%runtime-check (equal '(:return 41 (:error "Aborted.")) (car (last messages)))
                     "Expected an abort reply"))
   (let ((messages
           (%call-with-runtime-messages
            (lambda ()
              (mine/protocol/server::call-with-tui-io
-              :test-wire 42
+              ':test-wire 42
               (lambda ()
                 (write-string "a")
                 (force-output)
@@ -174,19 +174,19 @@
                     (lambda ()
                       (mine/protocol/server::handle-eval
                        51 (format nil "(cl:in-package ~S) (+ 1 2)" name)
-                       "CL-USER" :test-wire nil)))))
-             (%runtime-check (member (list :notify (list :package 51 name)) messages :test #'equal)
+                       "CL-USER" ':test-wire nil)))))
+             (%runtime-check (member (list ':notify (list ':package 51 name)) messages :test #'equal)
                              "Successful qualified IN-PACKAGE was not reported"))
            (let ((messages
                    (%call-with-runtime-messages
                     (lambda ()
                       (mine/protocol/server::handle-eval
                        52 (format nil "(in-package ~S)" missing)
-                       "CL-USER" :test-wire nil)))))
+                       "CL-USER" ':test-wire nil)))))
              (%runtime-check
               (notany (lambda (message)
-                        (and (eq :notify (first message))
-                             (eq :package (first (second message))))) messages)
+                        (and (eq ':notify (first message))
+                             (eq ':package (first (second message))))) messages)
               "Failed package change was reported as successful")
              (%runtime-check (null (find-package missing)) "Missing package was silently created")))
       (delete-package package))))
@@ -198,15 +198,15 @@
                (%call-with-runtime-messages
                 (lambda ()
                   (mine/protocol/server::dispatch-message
-                   (list :compile-string 53 "(+ 1 2)" "buffer://missing-package"
+                   (list ':compile-string 53 "(+ 1 2)" "buffer://missing-package"
                          package-name 0 0 auto-coalton-p)
-                   :test-wire))))
-             (returns (remove :return messages :key #'first :test-not #'eq))
+                   ':test-wire))))
+             (returns (remove ':return messages :key #'first :test-not #'eq))
              (reply (first returns)))
         (%runtime-check (= 1 (length returns))
                         "Compile preparation did not complete exactly once: ~S" messages)
         (%runtime-check (and (eql 53 (second reply))
-                             (eq :error (first (third reply)))
+                             (eq ':error (first (third reply)))
                              (stringp (second (third reply)))
                              (search "Package error:" (second (third reply))))
                         "Compile preparation did not return a structured package error: ~S" reply)
@@ -229,7 +229,7 @@
                (setf result
                      (restart-case
                          (mine/protocol/server::%enter-debugger
-                          61 (make-condition 'simple-error :format-control "test") :test-wire)
+                          61 (make-condition 'simple-error :format-control "test") ':test-wire)
                        (supply (value)
                          :report "Supply a value"
                          :interactive (lambda () (setf interactive-called t) (list 42))
@@ -238,8 +238,8 @@
       (%runtime-check (and interactive-called (eql result 42))
                       "Restart arguments were not collected interactively")
       (%runtime-check
-       (find :debug-restart-rejected messages
-             :key (lambda (message) (and (eq :notify (first message)) (first (second message)))))
+       (find ':debug-restart-rejected messages
+             :key (lambda (message) (and (eq ':notify (first message)) (first (second message)))))
        "Invalid restart should be rejected while keeping the debugger active"))))
 
 (defun check-runtime-beam-errors-reach-debugger ()
@@ -247,9 +247,9 @@
           (%call-with-runtime-messages
            (lambda ()
              (mine/protocol/server::handle-beam-system
-              62 (string-downcase (symbol-name (gensym "mine-absent-system-"))) "" :test-wire))
+              62 (string-downcase (symbol-name (gensym "mine-absent-system-"))) "" ':test-wire))
            '((:debug-abort 62)))))
-    (%runtime-check (find :debug messages :key #'first)
+    (%runtime-check (find ':debug messages :key #'first)
                     "System-load error was swallowed before reaching the debugger")
     (%runtime-check (equal '(:return 62 (:error "Aborted.")) (car (last messages)))
                     "System-load debugger should return a completed abort")))
@@ -265,7 +265,7 @@
                            (lambda ()
                              (handler-case
                                  (mine/protocol/server::dispatch-message
-                                  '(:eval 71 "(loop (sleep 1))" "CL-USER" nil) :test-wire)
+                                  '(:eval 71 "(loop (sleep 1))" "CL-USER" nil) ':test-wire)
                                (serious-condition (condition) (setf worker-error condition))))
                            :name "mine-interrupt-regression"))
                     (let ((deadline (+ (get-internal-real-time) (* 3 internal-time-units-per-second))))
@@ -276,7 +276,7 @@
                     (%runtime-check (mine/protocol/server::%interrupt-active-request 71)
                                     "Request-scoped interrupt was not delivered")
                     (%runtime-check
-                     (not (eq :timeout (sb-thread:join-thread thread :timeout 5 :default :timeout)))
+                     (not (eq ':timeout (sb-thread:join-thread thread :timeout 5 :default ':timeout)))
                      "Interrupted evaluation did not finish"))
                   '((:debug-abort 71)))))
            (%runtime-check (null worker-error) "Worker failed: ~A" worker-error)
@@ -301,7 +301,7 @@
        (%runtime-check (eq sb-thread:*current-thread*
                            (mine/protocol/server::%active-request-thread 72))
                        "Foreground request was not registered"))
-     (lambda () (mine/protocol/server::dispatch-message (second entry) :test-wire)))
+     (lambda () (mine/protocol/server::dispatch-message (second entry) ':test-wire)))
     (%runtime-check (null (mine/protocol/server::%active-request-thread 72))
                     "Foreground request registration leaked")))
 
@@ -372,7 +372,7 @@
          ((coalton:Some (mine/protocol/messages:ResponseDebugger snapshot))
           (coalton:make-list
            (coalton-prelude:into (mine/protocol/messages:request-id-value
-                          (mine/protocol/messages:debugger-request-id snapshot)))
+                                  (mine/protocol/messages:debugger-request-id snapshot)))
            (mine/protocol/messages:debugger-condition snapshot)
            (coalton:match (mine/protocol/messages:debugger-restarts snapshot)
              ((coalton:Cons restart coalton:_)
@@ -387,7 +387,7 @@
 
 (defun check-runtime-typed-response-payloads-and-snapshots ()
   (let ((payload '((:name . "foo") (:arglist x &optional y) (:heap . (12 . 4096)))))
-    (%runtime-check (equal payload (%typed-response-payload (list :return 91 (list :ok payload))))
+    (%runtime-check (equal payload (%typed-response-payload (list ':return 91 (list ':ok payload))))
                     "Typed return boundary lost dotted pairs or nested metadata")
     (%runtime-check (equal payload (%typed-wire-roundtrip payload))
                     "Raw S-expression conversion failed its alist round trip"))
@@ -411,7 +411,7 @@
 
 (defun check-runtime-typed-response-rejects-malformed-data ()
   (dolist (message (list '(:return -1 (:ok nil))
-                         (list :return (ash 1 100) '(:ok nil))
+                         (list ':return (ash 1 100) '(:ok nil))
                          '(:return "1" (:ok nil))
                          '(:return 1 (:error nil))
                          '(:return 1 (:ok))
@@ -425,7 +425,7 @@
                          '(:connection-lost 1)))
     (%runtime-check (not (%typed-response-valid? message))
                     "Malformed reply was accepted: ~S" message))
-  (let ((cycle (list :cycle)))
+  (let ((cycle (list ':cycle)))
     (setf (cdr cycle) cycle)
     (%runtime-check (eq coalton:None (mine/protocol/wire:raw-to-sexpr cycle))
                     "Circular host data should be rejected"))
@@ -435,9 +435,9 @@
 (defun %runtime-completion-names (prefix package-name)
   (let* ((messages (%call-with-runtime-messages
                     (lambda ()
-                      (mine/protocol/server::handle-complete 96 prefix package-name :test-wire))))
+                      (mine/protocol/server::handle-complete 96 prefix package-name ':test-wire))))
          (result (third (car (last messages)))))
-    (%runtime-check (eq :ok (first result)) "Completion failed: ~S" result)
+    (%runtime-check (eq ':ok (first result)) "Completion failed: ~S" result)
     (mapcar #'first (second result))))
 
 (defun check-runtime-symbol-spelling-and-completion ()
@@ -471,7 +471,7 @@
                    "|nick:Case|:|Mixed:Name|" "CL-USER"))
             "Lookup borrowed a local nickname from an unrelated package")
            (%runtime-check
-            (string= "case:Name" (cdr (assoc :name (mine/runtime/introspect:symbol-info
+            (string= "case:Name" (cdr (assoc ':name (mine/runtime/introspect:symbol-info
                                                   "|case:Name|" context-name))))
             "Symbol information ignored escaped spelling")
            (%runtime-check
@@ -527,16 +527,16 @@
     (with-standard-io-syntax
       (dolist (form
                 (append
-                 (list '(require :asdf)
+                 (list '(require ':asdf)
                        `(asdf:initialize-source-registry
                          '(:source-registry
-                           ,@(mapcar (lambda (path) (list :directory path))
+                           ,@(mapcar (lambda (path) (list ':directory path))
                                      (%runtime-child-source-directories))
                            :ignore-inherited-configuration))
-                       `(setf (symbol-plist :coalton-config)
-                              ',(copy-list (symbol-plist :coalton-config))))
-                 (when (member :coalton-portable-bigfloat *features*)
-                   '((pushnew :coalton-portable-bigfloat *features*)))
+                       `(setf (symbol-plist ':coalton-config)
+                              ',(copy-list (symbol-plist ':coalton-config))))
+                 (when (member ':coalton-portable-bigfloat *features*)
+                   '((pushnew ':coalton-portable-bigfloat *features*)))
                  '((let ((*standard-output* *error-output*))
                      (asdf:load-system "mine/runtime"))
                    (mine/runtime/server-main:main))))
@@ -557,8 +557,8 @@
                                     (namestring sb-ext:*runtime-pathname*)
                                     (list "--noinform" "--no-userinit" "--no-sysinit"
                                           "--script" (namestring bootstrap-path))
-                                    :input nil :output :stream :error error-path
-                                    :if-error-exists :supersede :wait nil :search t))
+                                    :input nil :output ':stream :error error-path
+                                    :if-error-exists ':supersede :wait nil :search t))
                           (ready-p nil))
                       (unwind-protect
                            (progn
@@ -605,7 +605,7 @@
 (defun %runtime-process-return (manager id)
   (let ((message (%runtime-read-until
                   manager (lambda (message)
-                            (and (eq :return (first message)) (eql id (second message)))))))
+                            (and (eq ':return (first message)) (eql id (second message)))))))
     (mine/protocol/client:connection-finish-request!
      (mine/protocol/lifecycle::%runtime-manager-connection manager)
      (mine/protocol/messages:RequestId id))
@@ -615,7 +615,7 @@
   (%runtime-process-send-eval manager id "(mine-regression-retained-definition)")
   (let ((message (%runtime-process-return manager id)))
     (%runtime-check
-     (and (eq :ok (first (third message)))
+     (and (eq ':ok (first (third message)))
           (equal '(:values ("42"))
                  (mine/protocol/server::decode-protocol-sexp (second (third message)))))
      "Runtime lost the previously defined function: ~S" message))
@@ -628,13 +628,13 @@
   (%runtime-check (mine/protocol/lifecycle:runtime-interrupt! manager)
                   "Lifecycle did not deliver a scoped interrupt for request ~D" id)
   (%runtime-read-until manager (lambda (message)
-                                (and (eq :debug (first message)) (eql id (second message)))))
+                                (and (eq ':debug (first message)) (eql id (second message)))))
   (%runtime-check
    (mine/protocol/client:connection-send-checked!
     (mine/protocol/lifecycle::%runtime-manager-connection manager)
     (mine/protocol/messages:ReqDebugAbort (mine/protocol/messages:RequestId id)))
    "Could not send debugger abort for request ~D" id)
-  (%runtime-check (equal (list :return id '(:error "Aborted."))
+  (%runtime-check (equal (list ':return id '(:error "Aborted."))
                          (%runtime-process-return manager id))
                   "Interrupted request ~D did not finish through debugger abort" id))
 
@@ -643,13 +643,13 @@
    (lambda (manager)
      (%runtime-process-send-eval
       manager 101 "(defun mine-regression-retained-definition () 42)")
-     (%runtime-check (eq :ok (first (third (%runtime-process-return manager 101))))
+     (%runtime-check (eq ':ok (first (third (%runtime-process-return manager 101))))
                      "Could not define function in controlled runtime")
      ;; READ-LINE is blocked in the input protocol, while a separate connection
      ;; carries the interrupt.  The original connection then accepts DEBUG-ABORT.
      (%runtime-process-send-eval manager 102 "(read-line)")
      (%runtime-read-until manager (lambda (message)
-                                   (and (eq :io-request (first message))
+                                   (and (eq ':io-request (first message))
                                         (eql 102 (second message)))))
      (%runtime-process-interrupt-and-abort manager 102)
      (%runtime-process-check-definition manager 103)
@@ -671,7 +671,7 @@
         (symbol-name (gensym "MINE-ABSENT-COMPILE-PACKAGE-")) 0 0 coalton:False))
       "Could not send compile request with an unloaded package")
      (let ((reply (%runtime-process-return manager 106)))
-       (%runtime-check (and (eq :error (first (third reply)))
+       (%runtime-check (and (eq ':error (first (third reply)))
                             (stringp (second (third reply)))
                             (search "Package error:" (second (third reply))))
                        "Missing compile package did not produce a structured error: ~S" reply))
@@ -709,7 +709,7 @@
        (%runtime-process-send-eval manager 108 "42")
        (let ((reply (%runtime-process-return manager 108)))
          (%runtime-check
-          (and (eq :ok (first (third reply)))
+          (and (eq ':ok (first (third reply)))
                (equal '(:values ("42"))
                       (mine/protocol/server::decode-protocol-sexp (second (third reply)))))
           "Replacement runtime was not usable: ~S" reply))))))
@@ -727,7 +727,7 @@
                    (namestring sb-ext:*runtime-pathname*)
                    '("--noinform" "--no-userinit" "--no-sysinit" "--non-interactive"
                      "--eval" "(progn (format t \"1~%\") (force-output) (sleep 30))")
-                   :input nil :output :stream :error :stream :wait nil :search t)))
+                   :input nil :output ':stream :error ':stream :wait nil :search t)))
           (lambda ()
             (%call-with-replaced-runtime-function
              'mine/protocol/lifecycle::%runtime-open-connection

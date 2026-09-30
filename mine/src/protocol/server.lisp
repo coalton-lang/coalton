@@ -7,7 +7,7 @@
 (in-package #:mine/protocol/server)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (require :sb-introspect))
+  (require ':sb-introspect))
 
 ;;; Uninteresting warnings
 ;;;
@@ -37,7 +37,7 @@
 (defun encode-protocol-sexp (object)
   "Encode protocol data independently of the user's printer settings."
   (with-standard-io-syntax
-    (let ((*print-case* :downcase))
+    (let ((*print-case* ':downcase))
       (prin1-to-string object))))
 
 (defun decode-protocol-sexp (text)
@@ -165,7 +165,7 @@ Returns the parsed S-expression, or NIL on EOF/error."
       (let ((text (coerce buffer 'simple-string)))
         (setf (fill-pointer buffer) 0)
         (write-message (tos-wire-stream stream)
-                       (list :notify (list :output-chunk (tos-msg-id stream) text))))))
+                       (list ':notify (list ':output-chunk (tos-msg-id stream) text))))))
   nil)
 
 (defmethod sb-gray:stream-write-char ((stream tui-output-stream) char)
@@ -191,9 +191,12 @@ Returns the parsed S-expression, or NIL on EOF/error."
 
 (defun %drain-runtime-output (stream)
   "Flush live output, or return text from a legacy string capture."
-  (if (typep stream 'tui-output-stream)
-      (progn (finish-output stream) "")
-      (get-output-stream-string stream)))
+  (cond
+    ((typep stream 'tui-output-stream)
+     (finish-output stream)
+     "")
+    (t
+     (get-output-stream-string stream))))
 
 (defun call-with-tui-io (wire-stream msg-id function)
   "Run FUNCTION with ordered interactive IO; flush even after a nonlocal exit."
@@ -245,9 +248,9 @@ Returns the input text string, or NIL for EOF/abort."
       (let ((msg (read-message wire)))
         (cond
           ((null msg) (return nil))
-          ((and (consp msg) (eq (first msg) :io-response) (eql (second msg) id))
+          ((and (consp msg) (eq (first msg) ':io-response) (eql (second msg) id))
            (return (third msg)))
-          ((and (consp msg) (eq (first msg) :io-abort) (eql (second msg) id))
+          ((and (consp msg) (eq (first msg) ':io-abort) (eql (second msg) id))
            (return nil))
           (t
            (%reject-unexpected-message-during-wait wire msg "input")))))))
@@ -260,13 +263,13 @@ Returns the input text string, or NIL for EOF/abort."
     ((< (tis-buffer-pos stream) (length (tis-buffer stream)))
      (prog1 (char (tis-buffer stream) (tis-buffer-pos stream))
        (incf (tis-buffer-pos stream))))
-    ((tis-eof-p stream) :eof)
+    ((tis-eof-p stream) ':eof)
     (t
      (let ((text (%request-input-from-tui stream "")))
        (cond
          ((null text)
           (setf (tis-eof-p stream) t)
-          :eof)
+          ':eof)
          (t
           (setf (tis-buffer stream) (concatenate 'string text (string #\Newline))
                 (tis-buffer-pos stream) 0)
@@ -279,9 +282,13 @@ Returns the input text string, or NIL for EOF/abort."
      (with-output-to-string (out)
        (loop for ch = (sb-gray:stream-read-char stream)
              do (cond
-                  ((eq ch :eof) (setf eof-p t) (return))
-                  ((char= ch #\Newline) (return))
-                  (t (write-char ch out)))))
+                  ((eq ch ':eof)
+                   (setf eof-p t)
+                   (return))
+                  ((char= ch #\Newline)
+                   (return))
+                  (t
+                   (write-char ch out)))))
      eof-p)))
 
 (defmethod sb-gray:stream-unread-char ((stream tui-input-stream) char)
@@ -337,9 +344,11 @@ Returns :quit if the server should shut down, T otherwise."
 
       (:interrupt-request
        (destructuring-bind (id target-id) (rest msg)
-         (if (%interrupt-active-request target-id)
-             (write-message stream `(:return ,id (:ok t)))
-             (write-message stream `(:return ,id (:error "No active request"))))))
+         (cond
+           ((%interrupt-active-request target-id)
+            (write-message stream `(:return ,id (:ok t))))
+           (t
+            (write-message stream `(:return ,id (:error "No active request")))))))
 
       (:compile-string
        (destructuring-bind (id string document-key package-name position client-prefix-length
@@ -408,7 +417,9 @@ prefixes may end inside a vertical-bar escape or after a single escape."
             (with-output-to-string (out)
               (loop for char across spelling do
                 (cond
-                  (escape-p (write-char char out) (setf escape-p nil))
+                  (escape-p
+                   (write-char char out)
+                   (setf escape-p nil))
                   ((char= char #\\) (setf escape-p t))
                   ((char= char #\|) (setf bars-p (not bars-p)))
                   (bars-p (write-char char out))
@@ -439,11 +450,11 @@ Package-local nicknames are resolved only within the supplied source package."
                  (or (zerop count) (= count 1)
                      (and (= count 2) (= (second colons) (1+ (first colons)))
                           (plusp (first colons)))))
-      (return-from %parse-symbol-token (values "" nil "" :accessible nil)))
+      (return-from %parse-symbol-token (values "" nil "" ':accessible nil)))
     (let* ((separator (first colons))
            (symbol-start (if colons (1+ (car (last colons))) 0))
            (qualifier (subseq token 0 symbol-start))
-           (visibility (if (= count 1) :external :accessible)))
+           (visibility (if (= count 1) ':external ':accessible)))
       (multiple-value-bind (name valid-p)
           (%decode-symbol-spelling (subseq token symbol-start) partial-p)
         (unless (and valid-p (or partial-p (< symbol-start (length token))))
@@ -466,7 +477,7 @@ Package-local nicknames are resolved only within the supplied source package."
     (declare (ignore qualifier))
     (when (and valid-p package)
       (multiple-value-bind (symbol status) (find-symbol name package)
-        (when (and status (or (eq visibility :accessible) (eq status :external)))
+        (when (and status (or (eq visibility ':accessible) (eq status ':external)))
           (values symbol status))))))
 
 (defun %read-symbol-token-in-package (token package-name)
@@ -476,7 +487,7 @@ Package-local nicknames are resolved only within the supplied source package."
 (defun %symbol-insertion-spelling (name)
   "Print NAME as a readable symbol fragment, retaining significant case/escapes."
   (with-standard-io-syntax
-    (let ((*print-readably* nil) (*print-gensym* nil) (*print-case* :downcase))
+    (let ((*print-readably* nil) (*print-gensym* nil) (*print-case* ':downcase))
       (write-to-string (make-symbol name)))))
 
 (defun %symbol-named-p (sym package-name symbol-name)
@@ -719,10 +730,12 @@ Matches \"COALTON\" itself, \"COALTON++\", \"COALTON-PRELUDE\", any
                                     '(#\Space #\Tab #\Newline #\Return)
                                     :test #'char=))
                   :do (incf pos))
-            (if (and (< pos end) (char= (char text pos) #\;))
-                (let ((line-end (position #\Newline text :start pos)))
-                  (setf pos (if line-end (1+ line-end) end)))
-                (return pos))))
+            (cond
+              ((and (< pos end) (char= (char text pos) #\;))
+               (let ((line-end (position #\Newline text :start pos)))
+                 (setf pos (if line-end (1+ line-end) end))))
+              (t
+               (return pos)))))
 
 (defun %first-list-head-token (text)
   "Return the first symbol token after TEXT's opening list paren, or NIL."
@@ -853,25 +866,27 @@ user package changes are visible."
         (when (consp msg)
           (case (first msg)
             (:debug-restart
-              (let ((restart-idx (third msg)))
-                (if (and (eql (second msg) id)
-                         (integerp restart-idx)
-                         (<= 0 restart-idx)
-                         (< restart-idx (length restarts)))
-                    (invoke-restart-interactively (nth restart-idx restarts))
-                    (write-message stream
-                                   (list :notify
-                                         (list :debug-restart-rejected id
-                                               "That restart is not available."))))))
+             (let ((restart-idx (third msg)))
+               (cond
+                 ((and (eql (second msg) id)
+                       (integerp restart-idx)
+                       (<= 0 restart-idx)
+                       (< restart-idx (length restarts)))
+                  (invoke-restart-interactively (nth restart-idx restarts)))
+                 (t
+                  (write-message stream
+                                 (list ':notify
+                                       (list ':debug-restart-rejected id
+                                             "That restart is not available.")))))))
             (:debug-abort
-              (let ((abort-restart (find-restart 'abort condition)))
-                (cond
-                  (abort-restart
-                   (invoke-restart abort-restart))
-                  (t
-                   (write-message stream
-                     `(:return ,id (:error ,(format nil "Aborted: ~A" condition-text))))
-                   (throw '%debugger-abort nil)))))
+             (let ((abort-restart (find-restart 'abort condition)))
+               (cond
+                 (abort-restart
+                  (invoke-restart abort-restart))
+                 (t
+                  (write-message stream
+                                 `(:return ,id (:error ,(format nil "Aborted: ~A" condition-text))))
+                  (throw '%debugger-abort nil)))))
             (otherwise
              (%reject-unexpected-message-during-wait stream msg "the debugger"))))))))
 
@@ -1066,9 +1081,11 @@ user package changes are visible."
             (mine/runtime/eval:quick-result
              quick-string package-name
              (%auto-coalton-context-p package-name auto-coalton-p))
-          (if error-text
-              (write-message stream `(:return ,id (:error ,error-text)))
-              (write-message stream `(:return ,id (:ok ,display))))))
+          (cond
+            (error-text
+             (write-message stream `(:return ,id (:error ,error-text))))
+            (t
+             (write-message stream `(:return ,id (:ok ,display)))))))
     (sb-sys:interactive-interrupt (c)
       (declare (ignore c))
       (write-message stream `(:return ,id (:error "Interrupted."))))
@@ -1244,7 +1261,7 @@ Binds IO streams so interactive reads (y-or-n-p, read, etc.) work via the TUI."
       (sb-sys:interactive-interrupt ()
         (%drain-runtime-output stdout-capture)
         (%flush-diagnostics stream diag-state)
-        (write-message stream (list :return id (list :error "Interrupted."))))
+        (write-message stream (list ':return id (list ':error "Interrupted."))))
       (error (c)
         ;; Send any captured output even on error
         (let ((output (%drain-runtime-output stdout-capture)))
@@ -1399,13 +1416,15 @@ Returns (((:file . path) (:offset . n))) or NIL."
                                   sym type)))
                           (setf all-sources (nconc all-sources s)))
                       (error () nil)))
-                  (if all-sources
-                      (write-message stream
-                                     `(:return ,id
-                                       (:ok ,(%format-sources all-sources))))
-                      (write-message stream
-                                     `(:return ,id
-                                       (:error "No definition found")))))))))))
+                  (cond
+                    (all-sources
+                     (write-message stream
+                                    `(:return ,id
+                                      (:ok ,(%format-sources all-sources)))))
+                    (t
+                     (write-message stream
+                                    `(:return ,id
+                                      (:error "No definition found"))))))))))))
     (error (c)
       (write-message stream
                      `(:return ,id
@@ -1512,8 +1531,8 @@ When no colon in prefix, also completes package names/nicknames."
           ;; Symbol completions
           (when (and valid-p pkg)
             (flet ((%prefix-matches-p (sym)
-                     (and (or (eq visibility :accessible)
-                              (eq :external (nth-value 1 (find-symbol (symbol-name sym) pkg))))
+                     (and (or (eq visibility ':accessible)
+                              (eq ':external (nth-value 1 (find-symbol (symbol-name sym) pkg))))
                           (%symbol-defined-p sym pkg)
                           (>= (length (symbol-name sym))
                                (length sym-prefix))

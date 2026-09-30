@@ -44,12 +44,14 @@
     (let sent = (lisp (-> Boolean) (conn payload)
                   (cl:handler-case
                       (cl:let ((stream (%connection-stream conn)))
-                        (cl:if (cl:and (%connection-active conn) stream (cl:open-stream-p stream))
-                               (cl:progn (mine/bindings/socket:socket-write-string stream payload) True)
-                               (cl:progn
-                                 (cl:setf (%connection-active conn) cl:nil
-                                          (%connection-foreground-request-id conn) cl:nil)
-                                 False)))
+                        (cl:cond
+                          ((cl:and (%connection-active conn) stream (cl:open-stream-p stream))
+                           (mine/bindings/socket:socket-write-string stream payload)
+                           True)
+                          (cl:t
+                           (cl:setf (%connection-active conn) cl:nil
+                                    (%connection-foreground-request-id conn) cl:nil)
+                           False)))
                     (cl:error ()
                       (cl:setf (%connection-active conn) cl:nil
                                (%connection-foreground-request-id conn) cl:nil)

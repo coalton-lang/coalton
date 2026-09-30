@@ -124,7 +124,7 @@
                       (stream (mine/protocol/client::%connection-stream control)))
               (cl:unwind-protect
                    (cl:when (mine/protocol/server::write-message
-                             stream (cl:list :interrupt-request 0 target))
+                             stream (cl:list ':interrupt-request 0 target))
                      (cl:equal '(:return 0 (:ok cl:t))
                                (mine/protocol/server::read-message stream)))
                 (cl:ignore-errors (cl:close stream)))))
