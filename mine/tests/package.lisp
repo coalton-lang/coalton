@@ -134,7 +134,8 @@
                   run-app-regression-tests
                   run-workflow-tests
                   run-app-workflow-extra-tests
-                  run-app-runtime-session-tests))
+                  run-app-runtime-session-tests
+                  run-app-source-service-tests))
     (format t "~&~A~%" test)
     (funcall test))
   t)

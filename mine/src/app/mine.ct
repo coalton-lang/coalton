@@ -4876,6 +4876,10 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
             (state (mine/app/state::%native-box-value box)))
     (mine/app/check-update:update-check-available-p state)))
 
+(cl:defstruct %protocol-reader-loss
+  connection
+  message)
+
 (cl:defun %start-proto-reader-thread-cl (st conn thread-box lost-message thread-name)
   "Start a reader for CONN, forwarding raw protocol messages into ST's mailbox."
   (cl:block done
@@ -4884,7 +4888,8 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
     (cl:let ((stream (mine/protocol/client::%connection-stream conn)))
       (cl:unless (cl:and (cl:streamp stream) (cl:open-stream-p stream))
         (cl:return-from done cl:nil))
-      (cl:let ((mailbox (%ensure-proto-mailbox st)))
+      (cl:let ((mailbox (%ensure-proto-mailbox st))
+                (loss (make-%protocol-reader-loss :connection conn :message lost-message)))
         (cl:setf (mine/app/state::%native-box-value thread-box)
                  (mine/bindings/thread:make-thread
                   thread-name
@@ -4897,11 +4902,11 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
                                (sb-concurrency:send-message mailbox msg)
                                (mine/term/terminal:terminal-post-wakeup))
                               (cl:t
-                               (sb-concurrency:send-message mailbox lost-message)
+                               (sb-concurrency:send-message mailbox loss)
                                (mine/term/terminal:terminal-post-wakeup)
                                (cl:return))))
                         (cl:error ()
-                          (sb-concurrency:send-message mailbox lost-message)
+                          (sb-concurrency:send-message mailbox loss)
                           (mine/term/terminal:terminal-post-wakeup)
                           (cl:return)))))))
         cl:t))))
@@ -4921,10 +4926,17 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
 
 (cl:defun %clear-background-protocol-state (st)
   "Forget session-owned editor requests when the background connection is lost."
-  (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-bg-proto-thread st)) cl:nil)
   (cl:let* ((manager (mine/app/state:get-runtime-mgr st))
             (conn (mine/protocol/lifecycle::%runtime-manager-background-connection manager)))
-    (cl:when conn (client:connection-deactivate! conn)))
+    (cl:when conn
+      (client:connection-deactivate! conn)
+      ;; Closing the old stream lets its reader finish. Its delayed EOF carries
+      ;; CONN, so it cannot invalidate a replacement opened on the next render.
+      (cl:let ((stream (mine/protocol/client::%connection-stream conn)))
+        (cl:when stream (cl:ignore-errors (cl:close stream :abort cl:t))))
+      (cl:setf (mine/protocol/client::%connection-stream conn) cl:nil))
+    (cl:setf (mine/protocol/lifecycle::%runtime-manager-background-connection manager) cl:nil))
+  (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-bg-proto-thread st)) cl:nil)
   (requests:request-state-clear! (mine/app/state:get-requests st))
   (cl:values))
 
@@ -4933,7 +4945,18 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
   (cl:let ((mailbox (mine/app/state::%native-box-value (mine/app/state:get-proto-mailbox st))))
     (cl:if mailbox
            (cl:loop :for raw :in (sb-concurrency:receive-pending-messages mailbox)
-                    :for parsed := (%parse-one-message raw)
+                    :for message :=
+                      (cl:if (%protocol-reader-loss-p raw)
+                             (cl:let* ((manager (mine/app/state:get-runtime-mgr st))
+                                       (message (%protocol-reader-loss-message raw))
+                                       (current
+                                         (cl:if (cl:eq (cl:first message) :background-connection-lost)
+                                                (mine/protocol/lifecycle::%runtime-manager-background-connection manager)
+                                                (mine/protocol/lifecycle::%runtime-manager-connection manager))))
+                               (cl:when (cl:eq current (%protocol-reader-loss-connection raw))
+                                 message))
+                             raw)
+                    :for parsed := (cl:when message (%parse-one-message message))
                     :when parsed :collect parsed)
            cl:nil)))
 
