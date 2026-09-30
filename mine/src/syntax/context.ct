@@ -450,7 +450,7 @@
   (declare form-head (SourceContext * SourceForm -> Optional String))
   (define (form-head context form)
     (match (.form-kind form)
-      ((DelimitedForm ParenDelimiter)
+      ((DelimitedForm (ParenDelimiter))
        (match (.form-children form)
          ((Cons head _)
           (if (== (.form-kind head) SymbolForm) (Some (form-text context head)) None))
