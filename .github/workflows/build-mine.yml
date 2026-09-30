@@ -33,6 +33,9 @@ jobs:
 
       # --- Build ---
 
+      - name: Test mine
+        run: sbcl --dynamic-space-size 4096 --noinform --non-interactive --load mine/tests/run.lisp
+
       - name: Build mine (Unix)
         if: runner.os != 'Windows'
         run: bash mine/ci/build-mine.sh

@@ -425,7 +425,7 @@
     (with-standard-io-syntax
       (dolist (form
                 (append
-                 (list '(require :asdf) '(require :sb-bsd-sockets) '(require :sb-introspect)
+                 (list '(require :asdf)
                        `(asdf:initialize-source-registry
                          '(:source-registry
                            ,@(mapcar (lambda (path) (list :directory path))
