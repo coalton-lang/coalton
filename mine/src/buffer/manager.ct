@@ -56,20 +56,25 @@
   (define (bufmgr-open-file! mgr fpath)
     "Open a file, create a buffer, and register it.
 If the file does not exist, creates an empty buffer with that path (not written to disk until saved)."
-    (cond
-      ((fs:directory? fpath)
-       (Err (<> "Not a file: " fpath)))
-      (True
-       (let file-exists = (lisp (-> Boolean) (fpath)
-                            (cl:if (cl:probe-file fpath) True False)))
-       (let bid = (alloc-id mgr))
-       (let b = (if file-exists
-                    (buf:buffer-from-file bid fpath)
-                    (buf:buffer-new-file bid fpath)))
-       (match bid
-         ((buf:BufferId n)
-          (cell:update! (fn (buffers) (hm:insert buffers n b)) (.buffers mgr))))
-       (Ok b))))
+    (match (buf:buffer-resolve-path fpath)
+      ((Err message) (Err message))
+      ((Ok path)
+       (match (bufmgr-find-by-path mgr path)
+         ((Some buffer) (Ok buffer))
+         ((None)
+          (match (buf:buffer-file-exists? path)
+            ((Err message) (Err message))
+            ((Ok exists?)
+             (let n = (cell:read (.next-id mgr)))
+             (let bid = (buf:BufferId n))
+             (match (if exists?
+                        (buf:buffer-from-file bid path)
+                        (Ok (buf:buffer-new-file bid path)))
+               ((Err message) (Err message))
+               ((Ok buffer)
+                (cell:update! (fn (buffers) (hm:insert buffers n buffer)) (.buffers mgr))
+                (cell:write! (.next-id mgr) (+ n 1))
+                (Ok buffer))))))))))
 
   ;;; Save
 
@@ -174,8 +179,10 @@ Returns True if closed successfully."
 
   (declare bufmgr-find-by-path (BufferManager * String -> Optional buf:Buffer))
   (define (bufmgr-find-by-path mgr fpath)
-    "Find a buffer by its file path."
-    (find-by-path-in (hm:entries (cell:read (.buffers mgr))) fpath))
+    "Find an open buffer by canonical document identity."
+    (let key = (lisp (-> String) (fpath)
+                 (cl:or (mine/buffer/buffer::%normalize-file-document-key fpath) "")))
+    (bufmgr-find-by-document-key mgr key))
 
   (declare find-by-path-in (iter:Iterator (Tuple UFix buf:Buffer) * String -> Optional buf:Buffer))
   (define (find-by-path-in entries fpath)
@@ -243,6 +250,6 @@ Returns True if closed successfully."
   (declare bufmgr-path-dirty? (BufferManager * String -> Boolean))
   (define (bufmgr-path-dirty? mgr fpath)
     "Return True if any open buffer with path FPATH is dirty."
-    (let tbl = (cell:read (.buffers mgr)))
-    (let limit = (cell:read (.next-id mgr)))
-    (scan-ids tbl fpath 0 limit)))
+    (match (bufmgr-find-by-path mgr fpath)
+      ((Some buffer) (buf:buffer-dirty? buffer))
+      ((None) False))))
