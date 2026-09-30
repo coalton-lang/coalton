@@ -282,6 +282,7 @@
     "Render the full IDE layout to the terminal screen."
     (let scr = (term:.terminal-screen term))
     (screen:screen-clear scr)
+    (screen:screen-hide-cursor scr)
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
     ;; Menu bar: top row
