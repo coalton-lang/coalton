@@ -68,10 +68,12 @@
                          (%runtime-open-connection port)
                        (cl:error () cl:nil)))
             cl:t)))
-    (cl:error (c)
+    (cl:serious-condition (c)
+      ;; WITH-TIMEOUT is a serious condition, not an ERROR. A failed launch must
+      ;; release the child even when the port handshake times out.
+      (%runtime-do-stop mgr)
       (cl:format cl:*error-output* "~&;; runtime-start! failed: ~A~%" c)
       (cl:force-output cl:*error-output*)
-      (cl:setf (%runtime-manager-running mgr) cl:nil)
       cl:nil)))
 
 (cl:defun %runtime-do-stop (mgr)

@@ -529,20 +529,38 @@
                   'mine/bindings/process:spawn-subprocess
                   (lambda (program args)
                     (declare (ignore program args))
-                    (sb-ext:run-program
-                     (namestring sb-ext:*runtime-pathname*)
-                     (list "--noinform" "--no-userinit" "--no-sysinit"
-                           "--script" (namestring bootstrap-path))
-                     :input nil :output :stream :error error-path
-                     :if-error-exists :supersede :wait nil :search t))
+                    (let ((process (sb-ext:run-program
+                                    (namestring sb-ext:*runtime-pathname*)
+                                    (list "--noinform" "--no-userinit" "--no-sysinit"
+                                          "--script" (namestring bootstrap-path))
+                                    :input nil :output :stream :error error-path
+                                    :if-error-exists :supersede :wait nil :search t))
+                          (ready-p nil))
+                      (unwind-protect
+                           (progn
+                             ;; Loading source into pristine SBCL takes longer than
+                             ;; launching the production saved image. Leave the port
+                             ;; unread so the real lifecycle handshake still reads it.
+                             (sb-ext:with-timeout 60
+                               (loop until (listen (sb-ext:process-output process))
+                                     do (%runtime-check (sb-ext:process-alive-p process)
+                                                        "Runtime child exited while loading")
+                                        (sleep 0.01)))
+                             (setf ready-p t)
+                             process)
+                        (unless ready-p
+                          (mine/bindings/process:process-kill process)
+                          (sb-ext:process-close process)))))
                   (lambda ()
                     (%runtime-check (mine/protocol/lifecycle::%runtime-do-start manager)
                                     "Controlled runtime process did not start")
                     (funcall function manager)))
-               (error (condition)
+               (serious-condition (condition)
                  (error "Runtime process test failed: ~A~%Child stderr:~%~A"
                         condition (uiop:read-file-string error-path))))
-          (mine/protocol/lifecycle::%runtime-do-stop manager))))))
+          (let ((process (mine/protocol/lifecycle::%runtime-manager-process manager)))
+            (mine/protocol/lifecycle::%runtime-do-stop manager)
+            (when process (sb-ext:process-close process))))))))
 
 (defun %runtime-read-until (manager predicate)
   (let ((stream (mine/protocol/client::%connection-stream
@@ -620,6 +638,37 @@
      (%runtime-process-interrupt-and-abort manager 104)
      (%runtime-process-check-definition manager 105))))
 
+(defun check-runtime-failed-start-cleans-child ()
+  (let ((manager (mine/protocol/lifecycle::make-%runtime-manager))
+        (process nil))
+    (unwind-protect
+         (%call-with-replaced-runtime-function
+          'mine/bindings/process:spawn-subprocess
+          (lambda (program args)
+            (declare (ignore program args))
+            (setf process
+                  (sb-ext:run-program
+                   (namestring sb-ext:*runtime-pathname*)
+                   '("--noinform" "--no-userinit" "--no-sysinit" "--non-interactive"
+                     "--eval" "(progn (format t \"1~%\") (force-output) (sleep 30))")
+                   :input nil :output :stream :error :stream :wait nil :search t)))
+          (lambda ()
+            (%call-with-replaced-runtime-function
+             'mine/protocol/lifecycle::%runtime-open-connection
+             (lambda (port) (declare (ignore port)) (error 'sb-ext:timeout))
+             (lambda ()
+               (let ((*error-output* (make-string-output-stream)))
+                 (%runtime-check (not (mine/protocol/lifecycle::%runtime-do-start manager))
+                                 "Timed-out startup should report failure"))))
+            (%runtime-check (and process (not (sb-ext:process-alive-p process)))
+                            "Failed startup left its child process running")
+            (%runtime-check (null (mine/protocol/lifecycle::%runtime-manager-process manager))
+                            "Failed startup retained its process handle")))
+      (mine/protocol/lifecycle::%runtime-do-stop manager)
+      (when process
+        (mine/bindings/process:process-kill process)
+        (sb-ext:process-close process)))))
+
 (defun run-runtime-regression-tests ()
   (dolist (test '(check-runtime-protocol-io-isolation
                   check-runtime-protocol-rejects-reader-evaluation
@@ -636,7 +685,8 @@
                   check-runtime-typed-response-payloads-and-snapshots
                   check-runtime-typed-response-rejects-malformed-data
                   check-runtime-symbol-spelling-and-completion
-                  check-runtime-process-survives-scoped-interruption))
+                  check-runtime-process-survives-scoped-interruption
+                  check-runtime-failed-start-cleans-child))
     (handler-case (funcall test)
       (error (condition)
         (format *error-output* "~&Runtime regression ~A failed: ~A~%" test condition)
