@@ -34,6 +34,22 @@
 
 ;;; Wire format
 
+(defun encode-protocol-sexp (object)
+  "Encode protocol data independently of the user's printer settings."
+  (with-standard-io-syntax
+    (let ((*print-case* :downcase))
+      (prin1-to-string object))))
+
+(defun decode-protocol-sexp (text)
+  "Read exactly one protocol object without reader evaluation or user syntax."
+  (with-standard-io-syntax
+    (let ((*read-eval* nil))
+      (multiple-value-bind (object end) (read-from-string text)
+        (unless (every (lambda (ch) (find ch '(#\Space #\Tab #\Newline #\Return)))
+                       (subseq text end))
+          (error "Trailing data in protocol message"))
+        object))))
+
 (defun read-message (stream)
   "Read one message from STREAM using the 6-byte hex header protocol.
 Returns the parsed S-expression, or NIL on EOF/error."
@@ -45,8 +61,7 @@ Returns the parsed S-expression, or NIL on EOF/error."
             (return-from read-message nil)))
         (let* ((header-string (sb-ext:octets-to-string
                                header :external-format ':utf-8))
-               (length (parse-integer header-string :radix 16
-                                                    :junk-allowed t)))
+               (length (parse-integer header-string :radix 16)))
           (when (or (null length) (<= length 0))
             (return-from read-message nil))
           ;; Read the payload
@@ -59,7 +74,7 @@ Returns the parsed S-expression, or NIL on EOF/error."
                          payload :external-format ':utf-8)))
               ;; Parse the S-expression
               (handler-case
-                  (read-from-string text)
+                  (decode-protocol-sexp text)
                 (error (c)
                   (declare (ignore c))
                   nil))))))
@@ -69,13 +84,15 @@ Returns the parsed S-expression, or NIL on EOF/error."
 (defun write-message (stream sexp)
   "Write SEXP to STREAM using the 6-byte hex header protocol."
   (handler-case
-      (let* ((text (let ((*print-case* ':downcase))
-                     (prin1-to-string sexp)))
+      (let* ((text (encode-protocol-sexp sexp))
              (octets (sb-ext:string-to-octets text :external-format ':utf-8))
              (length (length octets))
+             (_ (when (> length #xffffff)
+                  (error "Protocol message exceeds the six-digit frame limit")))
              (header (sb-ext:string-to-octets
                       (format nil "~6,'0X" length)
                       :external-format ':utf-8)))
+        (declare (ignore _))
         (write-sequence header stream)
         (write-sequence octets stream)
         (force-output stream)
