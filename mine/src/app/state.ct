@@ -120,6 +120,7 @@
    #:get-completion
    #:get-content-x-cell
    #:get-quick-result-state
+   #:get-quick-result-request-id-cell
    #:get-update-check-state))
 
 (in-package #:mine/app/state)
@@ -221,7 +222,7 @@
     (ms-view-buffer (Cell (Optional buf:BufferId)))
     (ms-requests requests:RequestState)
     (ms-initialization-request (Cell (Optional msg:RequestId)))
-    (ms-after-initialization (Cell (Optional msg:Request))))
+    (ms-after-initialization (Cell (Optional (Tuple msg:Request Boolean)))))
 
   (declare mine-state-new (cfgt:MineConfig -> MineState))
   (define (mine-state-new config)
@@ -378,6 +379,9 @@
 
   (declare get-quick-result-state (MineState -> Cell qr:QuickResultState))
   (define (get-quick-result-state st) (.ms-quick-result-state st))
+
+  (declare get-quick-result-request-id-cell (MineState -> Cell (Optional msg:RequestId)))
+  (define (get-quick-result-request-id-cell st) (.ms-quick-result-request-id st))
 
   (declare get-requests (MineState -> requests:RequestState))
   (define (get-requests st) (.ms-requests st))
