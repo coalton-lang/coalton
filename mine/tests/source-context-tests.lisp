@@ -22,6 +22,11 @@
    (list "brackets and vectors" "(f [1 2] #(3 4))" source:SourceComplete)
    (list "reader prefixes" "'(a) `(,b ,@c) #'(lambda (x) x) #.(f) #2A((1)) #+sbcl (f)" source:SourceComplete)
    (list "character followed by symbol" "(list #\\)foo)" source:SourceComplete)
+   (list "short lambda" "ƒx.(+ x 1)" source:SourceComplete)
+   (list "chained short lambdas" "ƒx.ƒy.(+ x y)" source:SourceComplete)
+   (list "unfinished short lambda parameters" "ƒxy" source:SourceIncomplete)
+   (list "unfinished short lambda body" "ƒx." source:SourceIncomplete)
+   (list "malformed short lambda parameters" "ƒx (f)" source:SourceMalformed)
    (list "unfinished string" "(f \"a" source:SourceIncomplete)
    (list "unfinished escape" "(f \"a\\" source:SourceIncomplete)
    (list "unfinished block comment" "#| a #| b |#" source:SourceIncomplete)
@@ -119,6 +124,14 @@
     (source:scan-source "#.(progn (incf marker) '(in-package #:wrong))")
     (check (zerop marker) "Source scanning must not execute reader expressions")))
 
+(defun check-short-lambda-spans ()
+  (let* ((text "ƒx.ƒy.(+ x y)")
+         (context (source:scan-source text)))
+    (check (equal text (range-text context (source:source-compile-form-range context 10)))
+           "Compile selection must preserve chained short-lambda prefixes")
+    (check (equal text (range-text context (source:source-smallest-list-range context 10)))
+           "Smallest enclosing list must preserve short-lambda prefixes")))
+
 (defparameter *completion-cases*
   (list (list "(foo bar)" 8 "bar")
         (list "(foo bar)" 7 "ba")
@@ -157,5 +170,6 @@
   (check-package-context)
   (check-form-spans)
   (check-no-reader-evaluation)
+  (check-short-lambda-spans)
   (check-source-symbols)
   t)

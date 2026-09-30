@@ -10,7 +10,7 @@
    #:Delimiter #:ParenDelimiter #:BracketDelimiter #:VectorDelimiter
    #:Completeness #:SourceComplete #:SourceIncomplete #:SourceMalformed
    #:TokenKind #:SymbolToken #:StringToken #:CharacterToken
-   #:OpenToken #:CloseToken #:PrefixToken #:CommentToken
+   #:OpenToken #:CloseToken #:PrefixToken #:CommentToken #:MalformedToken
    #:SourceToken #:.token-kind #:.token-start #:.token-end #:.token-complete
    #:FormKind #:SymbolForm #:StringForm #:CharacterForm #:DelimitedForm #:PrefixedForm
    #:SourceForm #:.form-kind #:.form-start #:.form-end #:.form-children #:.form-complete
@@ -49,7 +49,8 @@
     (OpenToken Delimiter)
     (CloseToken Delimiter)
     (PrefixToken UFix)
-    (CommentToken SourceClass))
+    (CommentToken SourceClass)
+    MalformedToken)
 
   (define-struct SourceToken
     (token-kind TokenKind)
@@ -102,7 +103,7 @@
   (declare delimiter? (Char -> Boolean))
   (define (delimiter? ch)
     (or (whitespace? ch)
-        (list:member ch [#\( #\) #\[ #\] #\" #\; #\' #\` #\, ])))
+        (list:member ch [#\( #\) #\[ #\] #\" #\; #\' #\` #\, #\ƒ ])))
 
   (declare char-at? (String * UFix * Char -> Boolean))
   (define (char-at? text pos ch)
@@ -169,6 +170,16 @@
            pos))
       ((None) pos)))
 
+  (declare short-lambda-end (String * UFix -> Tuple UFix Completeness))
+  (define (short-lambda-end text pos)
+    (match (str:ref text pos)
+      ((None) (Tuple pos SourceIncomplete))
+      ((Some #\.) (Tuple (+ pos 1) SourceComplete))
+      ((Some ch)
+       (if (or (char:alpha? ch) (== ch #\_))
+           (short-lambda-end text (+ pos 1))
+           (Tuple pos SourceMalformed)))))
+
   (declare scan-token (String * UFix -> SourceToken))
   (define (scan-token text pos)
     (let len = (str:length text))
@@ -183,6 +194,11 @@
       ((Some #\]) (SourceToken (CloseToken BracketDelimiter) pos (+ pos 1) True))
       ((Some #\') (SourceToken (PrefixToken 1) pos (+ pos 1) True))
       ((Some #\`) (SourceToken (PrefixToken 1) pos (+ pos 1) True))
+      ((Some #\ƒ)
+       (match (short-lambda-end text (+ pos 1))
+         ((Tuple end status)
+          (SourceToken (if (== status SourceMalformed) MalformedToken (PrefixToken 1))
+                       pos end (not (== status SourceIncomplete))))))
       ((Some #\,)
        (SourceToken (PrefixToken 1) pos
                     (if (or (char-at? text (+ pos 1) #\@)
@@ -309,9 +325,12 @@
             ((Tuple3 children remaining malformed)
              (Tuple3 (SourceForm (PrefixedForm count) start
                                  (last-form-end children end) children
-                                 (and (== (list:length children) count)
+                                 (and (.token-complete token)
+                                      (== (list:length children) count)
                                       (children-complete? children)))
                      remaining malformed))))
+         ((MalformedToken)
+          (Tuple3 (SourceForm SymbolForm start end Nil True) rest True))
          ((CloseToken _)
           (Tuple3 (SourceForm SymbolForm start end Nil True) rest True))
          (_
