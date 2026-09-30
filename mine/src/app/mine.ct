@@ -4923,7 +4923,9 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
 Returns a package name string, or DEFAULT-PKG if none found."
   (cl:handler-case
       (cl:with-input-from-string (s buf-text)
-        (cl:let ((eof (cl:gensym)))
+        (cl:let ((eof (cl:gensym))
+                  (cl:*read-eval* cl:nil)
+                  (cl:*readtable* (cl:copy-readtable cl:nil)))
           (cl:loop
             (cl:let ((form (cl:handler-case (cl:read s cl:nil eof)
                              (cl:error () eof))))
@@ -5270,7 +5272,9 @@ Returns a Coalton List of ProtoMsg."
            Nil
            (cl:let ((raw-msgs (sb-concurrency:receive-pending-messages mailbox))
                     (result Nil))
-             (cl:dolist (msg (cl:reverse raw-msgs))
+             ;; Parsing and callbacks mutate request/diagnostic state, so they
+             ;; must run in receive order even though RESULT is built backward.
+             (cl:dolist (msg raw-msgs)
                (cl:if (cl:and (cl:consp msg)
                                (cl:eq (cl:first msg) :background-connection-lost))
                       (%clear-background-protocol-state st)
@@ -5283,7 +5287,7 @@ Returns a Coalton List of ProtoMsg."
                                (cl:let ((parsed (%parse-one-message msg)))
                                  (cl:when parsed
                                    (cl:setf result (Cons parsed result))))))))
-             result))))
+             (coalton/list:reverse result)))))
 
 (cl:defun %parse-one-message (msg)
   "Parse a raw CL protocol message into a Coalton ProtoMsg."
