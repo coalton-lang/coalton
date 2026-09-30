@@ -642,13 +642,8 @@ and character literals."
 
   (declare record-insert! (buf:Buffer * UFix * String * UFix -> Void))
   (define (record-insert! buffer pos text cursor-before)
-    (let gb = (buf:buffer-gap buffer))
-    (gap:gap-insert-string! gb pos text)
-    (buf:buffer-mark-dirty! buffer)
-    (undo:undo-record! (buf:buffer-undo buffer)
-      (undo:OpInsert pos text)
-      cursor-before
-      (+ pos (str:length text)))
+    (buf:buffer-replace-range! buffer (buf:buffer-undo buffer)
+                               pos pos text cursor-before (+ pos (str:length text)))
     (values))
 
   (declare clamp-position (gap:GapBuffer * UFix -> UFix))
@@ -661,12 +656,9 @@ and character literals."
     (match (gap:gap-expand-range-to-editor-units gb start end)
       ((Tuple del-start del-end)
        (when (> del-end del-start)
-         (let deleted = (gap:gap-delete-range! gb del-start del-end))
-         (buf:buffer-mark-dirty! buffer)
-         (undo:undo-record! (buf:buffer-undo buffer)
-           (undo:OpDelete del-start deleted)
-           cursor-before
-           del-start))))
+         (buf:buffer-replace-range! buffer (buf:buffer-undo buffer)
+                                    del-start del-end "" cursor-before del-start)
+         (values))))
     (values))
 
   (declare record-delete-backward-unit! (buf:Buffer * cursor:CursorState * UFix -> Void))

@@ -5,130 +5,107 @@
    (#:buf #:mine/buffer/buffer)
    (#:cursor #:mine/edit/cursor)
    (#:undo #:mine/edit/undo)
-   (#:cell #:coalton/cell)
    (#:str #:coalton/string))
   (:export
-   #:insert-char!
-   #:insert-string!
-   #:delete-backward!
-   #:delete-backward-word!
-   #:delete-forward!))
+   #:replace-range!
+   #:undo! #:redo!
+   #:insert-char! #:insert-string!
+   #:delete-backward! #:delete-backward-word! #:delete-forward!))
 
 (in-package #:mine/edit/operations)
 
 (coalton-toplevel
 
-  ;;; Internal helpers
+  (declare replace-range! (buf:Buffer * undo:UndoTree * cursor:CursorState
+                           * UFix * UFix * String * UFix -> Void))
+  (define (replace-range! buffer tree cs start end text cursor-after)
+    "Apply one editor replacement, preserving CRLF units and coherent undo state.
+CURSOR-AFTER is an absolute position in the resulting document."
+    (let gb = (buf:buffer-gap buffer))
+    (let before = (gap:gap-editor-unit-end-pos gb (cursor:cursor-position cs)))
+    (let range =
+      (if (== start end)
+          (progn
+            (let p = (gap:gap-editor-unit-end-pos gb start))
+            (Tuple p p))
+          (gap:gap-expand-range-to-editor-units gb (min start end) (max start end))))
+    (match range
+      ((Tuple first last)
+       (buf:buffer-replace-range! buffer tree first last text before cursor-after)
+       (cursor:cursor-move-to-buffer-position! gb cs cursor-after)
+       (cursor:cursor-clear-selection! cs)
+       (values))))
 
-  (declare clamp-position (gap:GapBuffer * UFix -> UFix))
-  (define (clamp-position gb pos)
-    "Clamp POS to the valid insertion range for GB."
-    (min pos (gap:gap-length gb)))
-
-  ;;; insert-char!
-
-  (declare insert-char! (buf:Buffer * undo:UndoTree * cursor:CursorState
-                          * Char -> Void))
+  (declare insert-char! (buf:Buffer * undo:UndoTree * cursor:CursorState * Char -> Void))
   (define (insert-char! buffer tree cs ch)
-    "Insert a single character at the cursor position.
-Records the operation for undo and advances the cursor."
-    (let old-p = (cursor:cursor-position cs))
-    (let gb = (buf:buffer-gap buffer))
-    (let p = (gap:gap-editor-unit-end-pos gb (clamp-position gb old-p)))
-    (when (not (== old-p p))
-      (cursor:cursor-move-to-buffer-position! gb cs p))
-    (gap:gap-insert-char! gb p ch)
-    (buf:buffer-mark-dirty! buffer)
-    (let text = (into ch))
-    (let cursor-after = (gap:gap-editor-unit-end-pos gb (+ p 1)))
-    (undo:undo-record! tree (undo:OpInsert p text) p cursor-after)
-    (cursor:cursor-move-to-buffer-position! gb cs cursor-after))
+    (insert-string! buffer tree cs (into ch)))
 
-  ;;; insert-string!
-
-  (declare insert-string! (buf:Buffer * undo:UndoTree * cursor:CursorState
-                            * String -> Void))
+  (declare insert-string! (buf:Buffer * undo:UndoTree * cursor:CursorState * String -> Void))
   (define (insert-string! buffer tree cs text)
-    "Insert a string at the cursor position.
-Records the operation for undo and advances the cursor."
-    (let old-p = (cursor:cursor-position cs))
+    "Insert text at a clamped editor-unit boundary as one undo step."
     (let gb = (buf:buffer-gap buffer))
-    (let p = (gap:gap-editor-unit-end-pos gb (clamp-position gb old-p)))
-    (when (not (== old-p p))
-      (cursor:cursor-move-to-buffer-position! gb cs p))
-    (undo:with-undo-group! tree
-      (fn () (cursor:cursor-position cs))
-      (fn ()
-        (let len = (str:length text))
-        (gap:gap-insert-string! gb p text)
-        (buf:buffer-mark-dirty! buffer)
-        (let cursor-after = (gap:gap-editor-unit-end-pos gb (+ p len)))
-        (undo:undo-record! tree (undo:OpInsert p text) p cursor-after)
-        ;; Move cursor to end of inserted text.
-        (cursor:cursor-move-to-buffer-position! gb cs cursor-after)
-        (values))))
+    (let pos = (gap:gap-editor-unit-end-pos gb (cursor:cursor-position cs)))
+    (replace-range! buffer tree cs pos pos text (+ pos (str:length text))))
 
-  ;;; delete-backward!
-
-  (declare delete-backward! (buf:Buffer * undo:UndoTree * cursor:CursorState
-                              -> Void))
+  (declare delete-backward! (buf:Buffer * undo:UndoTree * cursor:CursorState -> Void))
   (define (delete-backward! buffer tree cs)
-    "Delete one editor unit before the cursor (backspace).
-Does nothing if the cursor is at position 0."
-    (let old-p = (cursor:cursor-position cs))
     (let gb = (buf:buffer-gap buffer))
-    (let p = (gap:gap-editor-unit-end-pos gb (clamp-position gb old-p)))
-    (when (not (== old-p p))
-      (cursor:cursor-move-to-buffer-position! gb cs p))
-    (when (> p 0)
-      (let raw-del-pos = (gap:gap-editor-unit-prev-pos gb p))
-      (match (gap:gap-expand-range-to-editor-units gb raw-del-pos p)
-        ((Tuple del-pos del-end)
-         (let text = (gap:gap-delete-range! gb del-pos del-end))
-         (buf:buffer-mark-dirty! buffer)
-         (undo:undo-record! tree (undo:OpDelete del-pos text) p del-pos)
-         (cursor:cursor-move-to-buffer-position! gb cs del-pos)))))
+    (let pos = (gap:gap-editor-unit-end-pos gb (cursor:cursor-position cs)))
+    (cursor:cursor-move-to-buffer-position! gb cs pos)
+    (when (> pos 0)
+      (let start = (gap:gap-editor-unit-prev-pos gb pos))
+      (replace-range! buffer tree cs start pos "" start)))
 
-  (declare delete-backward-word! (buf:Buffer * undo:UndoTree * cursor:CursorState
-                                   -> Void))
+  (declare delete-backward-word! (buf:Buffer * undo:UndoTree * cursor:CursorState -> Void))
   (define (delete-backward-word! buffer tree cs)
-    "Delete backward to the previous word boundary."
-    (let raw-old-pos = (cursor:cursor-position cs))
     (let gb = (buf:buffer-gap buffer))
-    (let old-pos = (gap:gap-editor-unit-end-pos gb (clamp-position gb raw-old-pos)))
-    (when (not (== raw-old-pos old-pos))
-      (cursor:cursor-move-to-buffer-position! gb cs old-pos))
-    (when (> old-pos 0)
+    (let pos = (gap:gap-editor-unit-end-pos gb (cursor:cursor-position cs)))
+    (cursor:cursor-move-to-buffer-position! gb cs pos)
+    (when (> pos 0)
       (cursor:cursor-move-word-left! gb cs)
-      (let new-pos = (cursor:cursor-position cs))
-      (when (< new-pos old-pos)
-        (match (gap:gap-expand-range-to-editor-units gb new-pos old-pos)
-          ((Tuple del-pos del-end)
-           (let text = (gap:gap-delete-range! gb del-pos del-end))
-           (buf:buffer-mark-dirty! buffer)
-           (undo:undo-record! tree (undo:OpDelete del-pos text) old-pos del-pos)
-           (cursor:cursor-move-to-buffer-position! gb cs del-pos))))))
+      (let start = (cursor:cursor-position cs))
+      (cursor:cursor-move-to-buffer-position! gb cs pos)
+      (replace-range! buffer tree cs start pos "" start)))
 
-  ;;; delete-forward!
-
-  (declare delete-forward! (buf:Buffer * undo:UndoTree * cursor:CursorState
-                             -> Void))
+  (declare delete-forward! (buf:Buffer * undo:UndoTree * cursor:CursorState -> Void))
   (define (delete-forward! buffer tree cs)
-    "Delete one editor unit at the cursor position (delete key).
-Does nothing if the cursor is at the end of the buffer."
-    (let old-p = (cursor:cursor-position cs))
     (let gb = (buf:buffer-gap buffer))
-    (let p = (gap:gap-editor-unit-start-pos gb (clamp-position gb old-p)))
-    (when (not (== old-p p))
-      (cursor:cursor-move-to-buffer-position! gb cs p))
-    (let len = (gap:gap-length gb))
-    (when (< p len)
-      (let raw-del-end = (gap:gap-editor-unit-next-pos gb p))
-      (match (gap:gap-expand-range-to-editor-units gb p raw-del-end)
-        ((Tuple del-pos del-end)
-         (let text = (gap:gap-delete-range! gb del-pos del-end))
-         (buf:buffer-mark-dirty! buffer)
-         (undo:undo-record! tree (undo:OpDelete del-pos text) p del-pos)
-         (cursor:cursor-move-to-buffer-position! gb cs del-pos)))))
+    (let pos = (gap:gap-editor-unit-start-pos gb (cursor:cursor-position cs)))
+    (cursor:cursor-move-to-buffer-position! gb cs pos)
+    (when (< pos (gap:gap-length gb))
+      (replace-range! buffer tree cs pos (gap:gap-editor-unit-next-pos gb pos) "" pos)))
 
-)
+  (declare apply-inverse-ops! (gap:GapBuffer * List undo:EditOp -> Void))
+  (define (apply-inverse-ops! gb edits)
+    (match edits
+      ((Nil) (values))
+      ((Cons op rest)
+       (match op
+         ((undo:OpInsert pos text)
+          (gap:gap-delete-range! gb pos (+ pos (str:length text)))
+          (values))
+         ((undo:OpDelete pos text)
+          (gap:gap-insert-string! gb pos text)))
+       (apply-inverse-ops! gb rest))))
+
+  (declare apply-history! (buf:Buffer * cursor:CursorState * Optional undo:UndoEntry -> Boolean))
+  (define (apply-history! buffer cs entry)
+    (match entry
+      ((None) False)
+      ((Some (undo:UndoEntry edits before _))
+       (let gb = (buf:buffer-gap buffer))
+       (apply-inverse-ops! gb edits)
+       (cursor:cursor-move-to-buffer-position! gb cs before)
+       (cursor:cursor-clear-selection! cs)
+       (buf:buffer-sync-dirty! buffer)
+       True)))
+
+  (declare undo! (buf:Buffer * cursor:CursorState -> Boolean))
+  (define (undo! buffer cs)
+    "Undo a document transaction, updating cursor, dirty state, and diagnostics."
+    (apply-history! buffer cs (undo:undo-undo! (buf:buffer-undo buffer))))
+
+  (declare redo! (buf:Buffer * cursor:CursorState -> Boolean))
+  (define (redo! buffer cs)
+    "Redo a document transaction, updating cursor, dirty state, and diagnostics."
+    (apply-history! buffer cs (undo:undo-redo! (buf:buffer-undo buffer)))))
