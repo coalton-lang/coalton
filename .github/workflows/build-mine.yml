@@ -45,6 +45,9 @@ jobs:
         shell: pwsh
         run: .\mine\ci\build-mine.ps1
 
+      - name: Test saved executable
+        run: ./mine/${{ matrix.binary }} --run-lisp-script mine/tests/image-smoke.lisp
+
       # --- Upload ---
 
       - name: Upload artifact
