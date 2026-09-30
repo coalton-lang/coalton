@@ -84,6 +84,13 @@ success."
         (values nil nil (format nil "Error: ~A" c))))))
 
 (defun debug-eval (form-string package-name &optional wire-stream msg-id coalton-p)
+  (if wire-stream
+      (mine/protocol/server::call-with-tui-io
+       wire-stream msg-id
+       (lambda () (%debug-eval form-string package-name wire-stream msg-id coalton-p)))
+      (%debug-eval form-string package-name nil msg-id coalton-p)))
+
+(defun %debug-eval (form-string package-name &optional wire-stream msg-id coalton-p)
   "Evaluate FORM-STRING in PACKAGE-NAME via plain EVAL for interactive use.
 Lets errors propagate to the caller's handler-bind (for debugger support).
 When WIRE-STREAM and MSG-ID are provided, binds *standard-input*, *query-io*,
@@ -95,8 +102,8 @@ Returns (values result-string output-string) on success."
                      (*read-eval* nil)
                      (*readtable* (if coalton-p (%coalton-readtable) *readtable*)))
                  (read-from-string form-string)))
-         (stdout-capture (make-string-output-stream))
-         (stderr-capture (make-string-output-stream))
+         (stdout-capture (if wire-stream *standard-output* (make-string-output-stream)))
+         (stderr-capture (if wire-stream *error-output* (make-string-output-stream)))
          (tis (when wire-stream
                 (make-instance 'mine/protocol/server::tui-input-stream
                   :wire-stream wire-stream :msg-id msg-id
@@ -106,10 +113,10 @@ Returns (values result-string output-string) on success."
                                          stdout-capture
                                          (make-broadcast-stream
                                            *standard-output* stdout-capture)))
-                  (*error-output* (make-broadcast-stream
-                                    *error-output* stderr-capture))
-                  (*trace-output* (make-broadcast-stream
-                                    *trace-output* stderr-capture))
+                  (*error-output* (if wire-stream stderr-capture
+                                     (make-broadcast-stream *error-output* stderr-capture)))
+                  (*trace-output* (if wire-stream stderr-capture
+                                     (make-broadcast-stream *trace-output* stderr-capture)))
                   (*standard-input* (if tis tis *standard-input*))
                   (*query-io* (if tis
                                   (make-two-way-stream tis *standard-output*)
@@ -127,8 +134,8 @@ Returns (values result-string output-string) on success."
                        /// // // / / vals))
                vals))))
     (let ((all-output (concatenate 'string
-                        (get-output-stream-string stdout-capture)
-                        (get-output-stream-string stderr-capture))))
+                        (mine/protocol/server::%drain-runtime-output stdout-capture)
+                        (mine/protocol/server::%drain-runtime-output stderr-capture))))
       (values (%encode-result-values result-values pkg)
               all-output))))
 
@@ -177,6 +184,13 @@ errors, and deliberately does not enter the interactive debugger."
     (format nil "(in-package ~S)~%" (package-name pkg))))
 
 (defun debug-compile-string (form-string package-name &optional wire-stream msg-id coalton-p)
+  (if wire-stream
+      (mine/protocol/server::call-with-tui-io
+       wire-stream msg-id
+       (lambda () (%debug-compile-string form-string package-name wire-stream msg-id coalton-p)))
+      (%debug-compile-string form-string package-name nil msg-id coalton-p)))
+
+(defun %debug-compile-string (form-string package-name &optional wire-stream msg-id coalton-p)
   "Compile FORM-STRING via compile-file + load for correct eval-when semantics.
 Lets errors propagate to the caller's handler-bind (for debugger support).
 When WIRE-STREAM and MSG-ID are provided, binds *standard-input*, *query-io*,
@@ -187,8 +201,8 @@ Unlike debug-eval, this preserves toplevel form semantics but does not
 return expression values (load returns T)."
   (let* ((pkg (find-or-make-package package-name))
          (file-prefix (compile-string-source-prefix package-name))
-         (stdout-capture (make-string-output-stream))
-         (stderr-capture (make-string-output-stream))
+         (stdout-capture (if wire-stream *standard-output* (make-string-output-stream)))
+         (stderr-capture (if wire-stream *error-output* (make-string-output-stream)))
          (tis (when wire-stream
                 (make-instance 'mine/protocol/server::tui-input-stream
                   :wire-stream wire-stream :msg-id msg-id
@@ -206,10 +220,10 @@ return expression values (load returns T)."
                                      stdout-capture
                                      (make-broadcast-stream
                                        *standard-output* stdout-capture)))
-              (*error-output* (make-broadcast-stream
-                                *error-output* stderr-capture))
-              (*trace-output* (make-broadcast-stream
-                                *trace-output* stderr-capture))
+              (*error-output* (if wire-stream stderr-capture
+                                     (make-broadcast-stream *error-output* stderr-capture)))
+              (*trace-output* (if wire-stream stderr-capture
+                                     (make-broadcast-stream *trace-output* stderr-capture)))
               (*standard-input* (if tis tis *standard-input*))
               (*query-io* (if tis
                               (make-two-way-stream tis *standard-output*)
@@ -226,8 +240,8 @@ return expression values (load returns T)."
                  (setf result-values (multiple-value-list (load fasl)))
               (ignore-errors (delete-file fasl)))))))
     (let ((all-output (concatenate 'string
-                        (get-output-stream-string stdout-capture)
-                        (get-output-stream-string stderr-capture))))
+                        (mine/protocol/server::%drain-runtime-output stdout-capture)
+                        (mine/protocol/server::%drain-runtime-output stderr-capture))))
       (values (%encode-result-values result-values pkg)
               all-output))))
 
