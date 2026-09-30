@@ -14,6 +14,7 @@
    #:.tw-sel-anchor #:.tw-sel-end
    #:text-widget-new
    #:text-widget-append!
+   #:text-widget-append-chunk!
    #:text-widget-append-system!
    #:text-widget-clear!
    #:text-widget-render
@@ -21,6 +22,7 @@
    #:text-widget-scroll-down!
    #:text-widget-scroll-to-bottom!
    #:text-widget-line-count
+   #:text-widget-lines
    #:text-widget-start-selection!
    #:text-widget-extend-selection!
    #:text-widget-clear-selection!
@@ -41,7 +43,8 @@
     (tw-style       color:Style)
     (tw-sel-anchor  (Cell (Optional (Tuple UFix UFix))))
     (tw-sel-end     (Cell (Optional (Tuple UFix UFix))))
-    (tw-vis-height  (Cell UFix)))
+    (tw-vis-height  (Cell UFix))
+    (tw-stream-open (Cell Boolean)))
 
   (declare text-widget-new (color:Style -> TextWidget))
   (define (text-widget-new style)
@@ -52,16 +55,63 @@
                 style
                 (cell:new None)
                 (cell:new None)
-                (cell:new 20)))
+                (cell:new 20)
+                (cell:new False)))
 
   (declare text-widget-line-count (TextWidget -> UFix))
   (define (text-widget-line-count tw)
     "Return the number of lines in the text widget."
     (vec:length (cell:read (.tw-lines tw))))
 
+  (declare %extend-open-line (String * String -> String))
+  (define (%extend-open-line line text)
+    "Return LINE followed by TEXT, extending LINE in place when it is already open."
+    ;; Output can stream many chunks before a newline arrives. Growing one
+    ;; adjustable string geometrically keeps each append proportional to TEXT
+    ;; instead of copying the whole unfinished line.
+    (lisp (-> String) (line text)
+      (cl:let* ((start (cl:length line))
+                (end (cl:+ start (cl:length text)))
+                (open (cl:if (cl:and (cl:adjustable-array-p line)
+                                     (cl:array-has-fill-pointer-p line))
+                             line
+                             (cl:make-array start
+                                            :element-type 'cl:character
+                                            :adjustable cl:t
+                                            :fill-pointer start
+                                            :initial-contents line))))
+        (cl:when (cl:> end (cl:array-dimension open 0))
+          (cl:setf open (cl:adjust-array open (cl:max end (cl:* 2 (cl:array-dimension open 0))))))
+        (cl:setf (cl:fill-pointer open) end)
+        (cl:replace open text :start1 start)
+        open)))
+
+  (declare %finished-line (String -> String))
+  (define (%finished-line line)
+    "Return LINE as a simple string that later output cannot extend."
+    (lisp (-> String) (line)
+      (cl:coerce line 'cl:simple-string)))
+
+  (declare %finish-stream-line! (TextWidget -> Void))
+  (define (%finish-stream-line! tw)
+    "Close the line receiving streamed output, storing it as a simple string."
+    (let lines = (cell:read (.tw-lines tw)))
+    (let count = (vec:length lines))
+    (when (and (cell:read (.tw-stream-open tw)) (> count 0))
+      (let last = (- count 1))
+      (vec:set! last (%finished-line (vec:index-unsafe last lines)) lines))
+    (cell:write! (.tw-stream-open tw) False)
+    (values))
+
+  (declare text-widget-lines (TextWidget -> List String))
+  (define (text-widget-lines tw)
+    "Return the lines, copying any line that streamed output may still extend."
+    (map %finished-line (into (cell:read (.tw-lines tw)))))
+
   (declare text-widget-append! (TextWidget * String -> Void))
   (define (text-widget-append! tw line)
     "Append a line to the text widget."
+    (%finish-stream-line! tw)
     (vec:push! line (cell:read (.tw-lines tw)))
     (vec:push! False (cell:read (.tw-flags tw)))
     (values))
@@ -69,9 +119,42 @@
   (declare text-widget-append-system! (TextWidget * String -> Void))
   (define (text-widget-append-system! tw line)
     "Append a system/info line (rendered in dim italic)."
+    (%finish-stream-line! tw)
     (vec:push! line (cell:read (.tw-lines tw)))
     (vec:push! True (cell:read (.tw-flags tw)))
     (values))
+
+  (declare append-stream-part! (TextWidget * String * Boolean -> Void))
+  (define (append-stream-part! tw text newline?)
+    (let lines = (cell:read (.tw-lines tw)))
+    (let count = (vec:length lines))
+    (cond
+      ((and (cell:read (.tw-stream-open tw)) (> count 0))
+       (let last = (- count 1))
+       (vec:set! last (%extend-open-line (vec:index-unsafe last lines) text) lines)
+       (when newline?
+         (%finish-stream-line! tw)))
+      ((or newline? (> (str:length text) 0))
+       (vec:push! (if newline? text (%extend-open-line "" text)) lines)
+       (vec:push! False (cell:read (.tw-flags tw)))
+       (cell:write! (.tw-stream-open tw) (not newline?))
+       (values))
+      (True (values)))
+    (values))
+
+  (declare append-stream-parts! (TextWidget * List String -> Void))
+  (define (append-stream-parts! tw parts)
+    (match parts
+      ((Nil) (values))
+      ((Cons text (Nil)) (append-stream-part! tw text False))
+      ((Cons text rest)
+       (append-stream-part! tw text True)
+       (append-stream-parts! tw rest))))
+
+  (declare text-widget-append-chunk! (TextWidget * String -> Void))
+  (define (text-widget-append-chunk! tw text)
+    "Append streamed text, retaining partial lines across protocol messages."
+    (append-stream-parts! tw (str:split #\Newline text)))
 
   (declare text-widget-clear! (TextWidget -> Void))
   (define (text-widget-clear! tw)
@@ -79,6 +162,8 @@
     (cell:write! (.tw-lines tw) (vec:new))
     (cell:write! (.tw-flags tw) (vec:new))
     (cell:write! (.tw-scroll tw) 0)
+    (cell:write! (.tw-stream-open tw) False)
+    (text-widget-clear-selection! tw)
     (values))
 
   (declare text-widget-scroll-up! (TextWidget * UFix -> Void))
