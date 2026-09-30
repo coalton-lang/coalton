@@ -677,6 +677,43 @@
                        "Missing compile package did not produce a structured error: ~S" reply))
      (%runtime-process-check-definition manager 107))))
 
+(defun check-runtime-restart-retires-disconnected-child ()
+  (%call-with-runtime-process
+   (lambda (manager)
+     (let* ((old-process (mine/protocol/lifecycle::%runtime-manager-process manager))
+            (old-output (sb-ext:process-output old-process))
+            (old-connection (mine/protocol/lifecycle::%runtime-manager-connection manager))
+            (old-background (mine/protocol/lifecycle::%runtime-manager-background-connection manager))
+            (old-stream (mine/protocol/client::%connection-stream old-connection))
+            (old-background-stream (mine/protocol/client::%connection-stream old-background)))
+       ;; This is the state after a foreground transport failure, before the
+       ;; child has exited or released either manager-owned connection.
+       (mine/protocol/client:connection-deactivate! old-connection)
+       (%runtime-check (sb-ext:process-alive-p old-process)
+                       "Expected the disconnected child to remain alive before replacement")
+       (%runtime-check (mine/protocol/lifecycle:runtime-start! manager)
+                       "Could not replace the disconnected runtime")
+       (%runtime-check (not (sb-ext:process-alive-p old-process))
+                       "Runtime startup orphaned its previous child")
+       (%runtime-check (not (open-stream-p old-output))
+                       "Runtime startup left the previous process output handle open")
+       (dolist (stream (list old-stream old-background-stream))
+         (%runtime-check (not (open-stream-p stream))
+                         "Runtime startup left a previous protocol stream open"))
+       (dolist (connection (list old-connection old-background))
+         (%runtime-check (and (not (mine/protocol/client::%connection-active connection))
+                              (null (mine/protocol/client::%connection-stream connection)))
+                         "Retired connection still exposes an active stream"))
+       (%runtime-check (not (eq old-process (mine/protocol/lifecycle::%runtime-manager-process manager)))
+                       "Replacement runtime retained the previous process handle")
+       (%runtime-process-send-eval manager 108 "42")
+       (let ((reply (%runtime-process-return manager 108)))
+         (%runtime-check
+          (and (eq :ok (first (third reply)))
+               (equal '(:values ("42"))
+                      (mine/protocol/server::decode-protocol-sexp (second (third reply)))))
+          "Replacement runtime was not usable: ~S" reply))))))
+
 (defun check-runtime-failed-start-cleans-child ()
   (let ((manager (mine/protocol/lifecycle::make-%runtime-manager))
         (process nil))
@@ -741,6 +778,7 @@
                   check-runtime-typed-response-rejects-malformed-data
                   check-runtime-symbol-spelling-and-completion
                   check-runtime-process-survives-scoped-interruption
+                  check-runtime-restart-retires-disconnected-child
                   check-runtime-failed-start-cleans-child
                   check-runtime-interrupt-timeout-is-recoverable))
     (handler-case (funcall test)

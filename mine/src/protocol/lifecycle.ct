@@ -39,6 +39,9 @@
 
 (cl:defun %runtime-do-start (mgr)
   "Start a runtime subprocess and connect. Returns T on success, NIL on failure."
+  ;; A disconnected child may still be alive. Retire every resource owned by
+  ;; this manager before replacing its handles with a new runtime.
+  (%runtime-do-stop mgr)
   (cl:handler-case
       (cl:let* ((abspath (mine/bindings/process:reexec-program))
                 (heap-mb (%runtime-manager-heap-size mgr))
@@ -80,24 +83,31 @@
   "Stop the runtime subprocess."
   (cl:let ((conn (%runtime-manager-connection mgr)))
     (cl:when conn
+      (client:connection-deactivate! conn)
       (cl:handler-case
           (cl:let ((stream (mine/protocol/client::%connection-stream conn)))
             (cl:when stream
               (mine/protocol/server::write-message stream '(:quit 0))))
         (cl:error () cl:nil))
       (cl:handler-case (cl:close (mine/protocol/client::%connection-stream conn))
-        (cl:error () cl:nil))))
+        (cl:error () cl:nil))
+      (cl:setf (mine/protocol/client::%connection-stream conn) cl:nil)))
   (cl:let ((conn (%runtime-manager-background-connection mgr)))
     (cl:when conn
+      (client:connection-deactivate! conn)
       (cl:handler-case (cl:close (mine/protocol/client::%connection-stream conn))
-        (cl:error () cl:nil))))
+        (cl:error () cl:nil))
+      (cl:setf (mine/protocol/client::%connection-stream conn) cl:nil)))
   (cl:let ((proc (%runtime-manager-process mgr)))
     (cl:when proc
       (cl:handler-case (mine/bindings/process:process-kill proc)
+        (cl:error () cl:nil))
+      (cl:handler-case (sb-ext:process-close proc)
         (cl:error () cl:nil))))
   (cl:setf (%runtime-manager-connection mgr) cl:nil)
   (cl:setf (%runtime-manager-background-connection mgr) cl:nil)
   (cl:setf (%runtime-manager-process mgr) cl:nil)
+  (cl:setf (%runtime-manager-port mgr) 0)
   (cl:setf (%runtime-manager-running mgr) cl:nil)
   (cl:values))
 
