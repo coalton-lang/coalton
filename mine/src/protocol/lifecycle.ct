@@ -118,7 +118,7 @@
                      (cl:equal '(:return 0 (:ok cl:t))
                                (mine/protocol/server::read-message stream)))
                 (cl:ignore-errors (cl:close stream)))))
-        (cl:error () cl:nil)))))
+        (cl:serious-condition () cl:nil)))))
 
 (cl:defun %runtime-get-connection (mgr)
   "Get the connection if active, or None."

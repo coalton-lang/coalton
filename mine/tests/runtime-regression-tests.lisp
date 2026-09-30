@@ -669,6 +669,21 @@
         (mine/bindings/process:process-kill process)
         (sb-ext:process-close process)))))
 
+(defun check-runtime-interrupt-timeout-is-recoverable ()
+  (let* ((connection (mine/protocol/client::make-%connection
+                      :active t :foreground-request-id 110))
+         (manager (mine/protocol/lifecycle::make-%runtime-manager :connection connection)))
+    (%call-with-replaced-runtime-function
+     'mine/protocol/lifecycle::%runtime-open-connection
+     (lambda (port) (declare (ignore port)) (error 'sb-ext:timeout))
+     (lambda ()
+       (%runtime-check (not (mine/protocol/lifecycle:runtime-interrupt! manager))
+                       "An interrupt transport timeout should report failure")))
+    (%runtime-check (mine/protocol/client::%connection-active connection)
+                    "Control connection timeout deactivated the foreground session")
+    (%runtime-check (= 110 (mine/protocol/client::%connection-foreground-request-id connection))
+                    "Unsent interrupt lost the active request target")))
+
 (defun run-runtime-regression-tests ()
   (dolist (test '(check-runtime-protocol-io-isolation
                   check-runtime-protocol-rejects-reader-evaluation
@@ -686,7 +701,8 @@
                   check-runtime-typed-response-rejects-malformed-data
                   check-runtime-symbol-spelling-and-completion
                   check-runtime-process-survives-scoped-interruption
-                  check-runtime-failed-start-cleans-child))
+                  check-runtime-failed-start-cleans-child
+                  check-runtime-interrupt-timeout-is-recoverable))
     (handler-case (funcall test)
       (error (condition)
         (format *error-output* "~&Runtime regression ~A failed: ~A~%" test condition)
