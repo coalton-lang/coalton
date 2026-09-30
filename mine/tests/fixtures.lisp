@@ -12,7 +12,8 @@
   "Run BODY with a fresh temporary directory and remove only that directory."
   `(let ((,directory
            (merge-pathnames
-            (format nil "mine-regression-~A/" (symbol-name (gensym)))
+            (format nil "mine-regression-~A-~X/" (symbol-name (gensym))
+                    (random most-positive-fixnum (make-random-state t)))
             (uiop:temporary-directory))))
      (ensure-directories-exist ,directory)
      (unwind-protect (progn ,@body)
