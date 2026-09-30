@@ -19,4 +19,5 @@
                (:file "runtime-regression-tests")
                (:file "editor-regression-tests")
                (:file "source-context-tests")
+               (:file "indent-context-tests")
                (:file "app-regression-tests")))

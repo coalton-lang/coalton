@@ -134,6 +134,7 @@
                   run-runtime-regression-tests
                   run-editor-regression-tests
                   run-source-context-tests
+                  run-indent-context-tests
                   run-app-regression-tests))
     (format t "~&~A~%" test)
     (funcall test))
@@ -141,3 +142,6 @@
 
 (defun run-source-context-tests ()
   (uiop:symbol-call :mine-tests/source-context :run-source-context-tests))
+
+(defun run-indent-context-tests ()
+  (uiop:symbol-call :mine-tests/indent-context :run-indent-context-tests))
