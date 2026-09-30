@@ -30,7 +30,7 @@
       ((SString s) (encode-string-literal s))
       ((SInteger n)
        (lisp (-> String) (n)
-         (cl:write-to-string n)))
+         (cl:with-standard-io-syntax (cl:write-to-string n))))
       ((SList items) (<> "(" (<> (encode-list-items items) ")")))
       ((SNil) "nil")))
 
@@ -66,6 +66,8 @@
     (let payload = (encode-sexpr expr))
     (lisp (-> String) (payload)
       (cl:let ((len (cl:length (sb-ext:string-to-octets payload :external-format :utf-8))))
+        (cl:when (cl:> len #xffffff)
+          (cl:error "Protocol message exceeds the six-digit frame limit"))
         (cl:format cl:nil "~6,'0X~A" len payload))))
 
   )

@@ -20,11 +20,12 @@
 
 (defun %encode-result-values (values package)
   "Encode VALUES for transport to the TUI while preserving value boundaries."
-  (prin1-to-string (list :values (%format-result-values values package))))
+  (mine/protocol/server::encode-protocol-sexp
+   (list :values (%format-result-values values package))))
 
 (defun %quick-result-payload-string (values output package)
   "Encode output and printed values for Quick Result."
-  (prin1-to-string
+  (mine/protocol/server::encode-protocol-sexp
    (list :quick-result
          :output output
          :values (%format-result-values values package))))
