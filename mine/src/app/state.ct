@@ -256,7 +256,8 @@
       (match (cell:read (.ms-view-buffer st))
         ((Some (buf:BufferId previous))
          (let saved = (editor:editor-pane-save-view (.ms-editor st) (.ms-cursor st)))
-         (cell:update! (fn (views) (hm:insert views previous saved)) (.ms-editor-views st)))
+         (cell:update! (fn (views) (hm:insert views previous saved)) (.ms-editor-views st))
+         (values))
         ((None) (values)))
       (match bid
         ((buf:BufferId id)
