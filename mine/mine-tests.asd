@@ -29,4 +29,5 @@
                (:file "completion-context-tests")
                (:file "app-regression-tests")
                (:file "workflow-tests")
-               (:file "app-workflow-extra-tests")))
+               (:file "app-workflow-extra-tests")
+               (:file "app-runtime-session-tests")))

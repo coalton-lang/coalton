@@ -133,7 +133,8 @@
                   run-completion-context-tests
                   run-app-regression-tests
                   run-workflow-tests
-                  run-app-workflow-extra-tests))
+                  run-app-workflow-extra-tests
+                  run-app-runtime-session-tests))
     (format t "~&~A~%" test)
     (funcall test))
   t)
