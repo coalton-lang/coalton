@@ -18,6 +18,7 @@
    (#:mini #:mine/pane/minibuffer)
    (#:cfgt #:mine/config/types)
    (#:complete #:mine/app/completion)
+   (#:qr #:mine/app/quick-result)
    (#:spinner #:mine/widget/spinner))
   (:export
    #:NativeBox
@@ -88,7 +89,7 @@
    #:.ms-bg-proto-thread
    #:.ms-update-check-state
    #:.ms-requests #:get-requests
-   #:get-debugger-active-cell #:get-io-request-active-cell
+   #:get-debugger-active-cell #:get-io-request-active-cell #:get-tree-pane
    #:get-status-bar
    #:get-pending-error-cell
    #:get-editor-pane
@@ -211,7 +212,7 @@
     (ms-debugger-total    (Cell UFix))
     (ms-debugger-follow   (Cell Boolean))
     (ms-beam-request-id   (Cell (Optional msg:RequestId)))
-    (ms-quick-result-state  NativeBox) ;; CL plist for transient result popup
+    (ms-quick-result-state (Cell qr:QuickResultState))
     (ms-quick-result-request-id (Cell (Optional msg:RequestId)))
     (ms-bg-proto-thread    NativeBox)
     (ms-update-check-state NativeBox) ;; CL plist for update-check status
@@ -247,7 +248,7 @@
                (cell:new False) (cell:new None) (complete:completion-new)
                (cell:new None) (spinner:spinner-new)
                (cell:new 0) (cell:new 0) (cell:new 0) (cell:new True)
-               (cell:new None) (native-box-new) (cell:new None)
+               (cell:new None) (cell:new qr:QuickResultHidden) (cell:new None)
                (native-box-new) (native-box-new)
                (cell:new hm:empty) (cell:new None) (requests:request-state-new)))
 
@@ -371,7 +372,7 @@
   (declare get-content-x-cell (MineState -> (Cell UFix)))
   (define (get-content-x-cell st) (.ms-content-x st))
 
-  (declare get-quick-result-state (MineState -> NativeBox))
+  (declare get-quick-result-state (MineState -> Cell qr:QuickResultState))
   (define (get-quick-result-state st) (.ms-quick-result-state st))
 
   (declare get-requests (MineState -> requests:RequestState))
@@ -383,6 +384,8 @@
   (define (get-debugger-active-cell st) (.ms-debugger-active st))
   (declare get-io-request-active-cell (MineState -> Cell Boolean))
   (define (get-io-request-active-cell st) (.ms-io-request-active st))
+  (declare get-tree-pane (MineState -> tree:TreePane))
+  (define (get-tree-pane st) (.ms-tree st))
 
   (declare get-update-check-state (MineState -> NativeBox))
   (define (get-update-check-state st) (.ms-update-check-state st)))
