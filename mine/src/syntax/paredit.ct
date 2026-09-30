@@ -5,7 +5,9 @@
    (#:gap #:mine/buffer/gap)
    (#:cursor #:mine/edit/cursor)
    (#:undo #:mine/edit/undo)
+   (#:source #:mine/syntax/context)
    (#:cell #:coalton/cell)
+   (#:vec #:coalton/vector)
    (#:str #:coalton/string)
    (#:char #:coalton/char)
    (#:list #:coalton/list))
@@ -36,91 +38,6 @@
 
 (in-package #:mine/syntax/paredit)
 
-;;; CL-side syntax map — classifies each buffer position.
-;;; 0=code  1=string  2=line-comment  3=block-comment  4=char-literal
-
-(cl:defvar *syntax-map* cl:nil)
-
-(cl:defun %build-syntax-map-from-string (str)
-  "Populate *syntax-map* from buffer-contents string STR."
-  (cl:let* ((n (cl:length str))
-            (smap (cl:make-array n :element-type '(cl:unsigned-byte 8)
-                                   :initial-element 0))
-            (i 0))
-    (cl:flet ((mark (pos cls)
-                (cl:when (cl:< pos n)
-                  (cl:setf (cl:aref smap pos) cls))))
-      (cl:loop
-        (cl:when (cl:>= i n) (cl:return))
-        (cl:let ((ch (cl:char str i)))
-          (cl:cond
-            ;; ---- String literal ----
-            ((cl:char= ch #\")
-             ;; opening quote stays 0 (code)
-             (cl:incf i)
-             (cl:loop
-               (cl:when (cl:>= i n) (cl:return))
-               (cl:let ((c (cl:char str i)))
-                 (cl:cond
-                   ((cl:char= c #\\)
-                    (mark i 1) (mark (cl:1+ i) 1) (cl:incf i 2))
-                   ((cl:char= c #\")
-                    (mark i 1) (cl:incf i) (cl:return))  ; closing quote = 1
-                   (cl:t
-                    (mark i 1) (cl:incf i))))))
-            ;; ---- # dispatch ----
-            ((cl:and (cl:char= ch #\#) (cl:< (cl:1+ i) n))
-             (cl:let ((nx (cl:char str (cl:1+ i))))
-               (cl:cond
-                 ;; Block comment #| ... |#  (nestable)
-                 ((cl:char= nx #\|)
-                  (mark i 3) (mark (cl:1+ i) 3) (cl:incf i 2)
-                  (cl:let ((depth 1))
-                    (cl:declare (cl:type cl:fixnum depth))
-                    (cl:loop
-                      (cl:when (cl:or (cl:>= i n) (cl:zerop depth))
-                        (cl:return))
-                      (cl:let ((c (cl:char str i)))
-                        (cl:cond
-                          ((cl:and (cl:char= c #\|)
-                                   (cl:< (cl:1+ i) n)
-                                   (cl:char= (cl:char str (cl:1+ i)) #\#))
-                           (mark i 3) (mark (cl:1+ i) 3)
-                           (cl:incf i 2) (cl:decf depth))
-                          ((cl:and (cl:char= c #\#)
-                                   (cl:< (cl:1+ i) n)
-                                   (cl:char= (cl:char str (cl:1+ i)) #\|))
-                           (mark i 3) (mark (cl:1+ i) 3)
-                           (cl:incf i 2) (cl:incf depth))
-                          (cl:t (mark i 3) (cl:incf i)))))))
-                 ;; Character literal  #\x  or  #\Space
-                 ((cl:char= nx #\\)
-                  (mark i 4) (mark (cl:1+ i) 4) (cl:incf i 2)
-                  (cl:when (cl:< i n)
-                    (cl:let ((c (cl:char str i)))
-                      (mark i 4) (cl:incf i)
-                      (cl:when (cl:alpha-char-p c)
-                        (cl:loop
-                          (cl:when (cl:>= i n) (cl:return))
-                          (cl:if (cl:alphanumericp (cl:char str i))
-                                 (cl:progn (mark i 4) (cl:incf i))
-                                 (cl:return)))))))
-                 ;; Other # dispatch — just code
-                 (cl:t (cl:incf i)))))
-            ;; ---- Line comment ----
-            ((cl:char= ch #\;)
-             (mark i 2) (cl:incf i)
-             (cl:loop
-               (cl:when (cl:>= i n) (cl:return))
-               (cl:let ((c (cl:char str i)))
-                 (cl:if (cl:char= c #\Newline)
-                        (cl:progn (cl:incf i) (cl:return))   ; newline = code
-                        (cl:progn (mark i 2) (cl:incf i))))))
-            ;; ---- Regular code ----
-            (cl:t (cl:incf i))))))
-    (cl:setf *syntax-map* smap)
-    (cl:values)))
-
 (coalton-toplevel
 
   ;;; Internal character predicates
@@ -146,40 +63,75 @@
                 (%whitespace-only-between? gb (+ start 1) end)))
           ((None) False))))
 
-  ;;; Syntax map helpers — classify buffer positions for syntax awareness
+  ;;; Shared source context and constant-time character classification.
+
+  (define %source-context (cell:new (source:scan-source "")))
+  (define %syntax-map (cell:new (vec:with-initial-element 1 (the UFix 0))))
+
+  (declare %class-id (source:SourceClass -> UFix))
+  (define (%class-id class)
+    (match class
+      ((source:SourceCode) 0)
+      ((source:SourceString) 1)
+      ((source:SourceLineComment) 2)
+      ((source:SourceBlockComment) 3)
+      ((source:SourceCharacter) 4)
+      ((source:SourceEscapedSymbol) 5)))
+
+  (declare %code-class-map (UFix -> vec:Vector UFix))
+  (define (%code-class-map size)
+    "Return SIZE positions classified as code. The map spans the buffer, so it
+is filled natively rather than element by element."
+    (lisp (-> (vec:Vector UFix)) (size)
+      (cl:make-array size :initial-element 0 :fill-pointer size :adjustable cl:t)))
 
   (declare %ensure-syntax-map! (gap:GapBuffer -> Void))
   (define (%ensure-syntax-map! gb)
-    "Build the syntax classification map for the buffer."
+    "Reuse a source snapshot until its text changes; classify literal spans once."
     (let s = (gap:gap-to-string gb))
-    (lisp (-> Void) (s)
-      (%build-syntax-map-from-string s)
-      (cl:values))
+    (when (/= s (source:.source-text (cell:read %source-context)))
+      (let context = (source:scan-source s))
+      (let smap = (%code-class-map (+ (str:length s) 1)))
+      (rec classify ((tokens (source:.source-tokens context)))
+        (match tokens
+          ((Nil) (values))
+          ((Cons token rest)
+           (let class =
+             (match (source:.token-kind token)
+               ((source:StringToken) 1)
+               ((source:CharacterToken) 4)
+               ((source:SymbolToken (True)) 5)
+               ((source:CommentToken class) (%class-id class))
+               (_ 0)))
+           (when (/= class 0)
+             (let start = (+ (source:.token-start token)
+                            (if (== class 1) 1 0)))
+             (rec fill ((pos start))
+               (when (< pos (source:.token-end token))
+                 (vec:set! pos class smap)
+                 (fill (+ pos 1)))))
+           (classify rest))))
+      (vec:set! (str:length s) (%class-id (source:source-class-at context (str:length s))) smap)
+      (cell:write! %source-context context)
+      (cell:write! %syntax-map smap))
     (values))
 
   (declare %code-at? (UFix -> Boolean))
   (define (%code-at? pos)
     "True if POS is a code position (not inside string/comment/char-literal)."
-    (lisp (-> Boolean) (pos)
-      (cl:if (cl:and *syntax-map* (cl:< pos (cl:length *syntax-map*)))
-             (cl:zerop (cl:aref *syntax-map* pos))
-             cl:t)))
+    (== 0 (%syntax-class-at pos)))
 
   (declare %in-string-at? (UFix -> Boolean))
   (define (%in-string-at? pos)
     "True if POS is inside a string literal (class 1 in syntax map)."
-    (lisp (-> Boolean) (pos)
-      (cl:if (cl:and *syntax-map* (cl:< pos (cl:length *syntax-map*)))
-             (cl:= 1 (cl:aref *syntax-map* pos))
-             cl:nil)))
+    (== 1 (%syntax-class-at pos)))
 
   (declare %syntax-class-at (UFix -> UFix))
   (define (%syntax-class-at pos)
-    "Return the syntax class at POS (0=code,1=str,2=line-cmt,3=block-cmt,4=char-lit)."
-    (lisp (-> UFix) (pos)
-      (cl:if (cl:and *syntax-map* (cl:< pos (cl:length *syntax-map*)))
-             (cl:aref *syntax-map* pos)
-             0)))
+    "Return the syntax class at POS (0=code,1=str,2=line-cmt,3=block-cmt,4=char,5=escaped-symbol)."
+    (match (vec:index pos (cell:read %syntax-map))
+      ((Some class) class)
+      ((None) 0)))
 
   (declare %region-start (UFix -> UFix))
   (define (%region-start pos)
@@ -214,330 +166,48 @@
           ((Some #\") (Some (+ sp 1)))
           (_ (%scan-str-fwd gb (+ sp 1) buf-len)))))
 
-  (declare %scan-str-back (gap:GapBuffer * UFix -> Optional UFix))
-  (define (%scan-str-back gb sp)
-    (if (== sp 0) None
-        (match (gap:gap-char-at gb (- sp 1))
-          ((Some #\")
-           (if (and (> sp 1)
-                    (match (gap:gap-char-at gb (- sp 2))
-                      ((Some #\\) True)
-                      (_ False)))
-               (%scan-str-back gb (- sp 2))
-               (Some (- sp 1))))
-          ((Some #\\) (%scan-str-back gb (- sp 2)))
-          (_ (%scan-str-back gb (- sp 1))))))
-
-  (declare %scan-atom-fwd (gap:GapBuffer * UFix * UFix -> UFix))
-  (define (%scan-atom-fwd gb ap buf-len)
-    (if (>= ap buf-len) ap
-        (match (gap:gap-char-at gb ap)
-          ((Some ac) (if (delimiter? ac) ap (%scan-atom-fwd gb (+ ap 1) buf-len)))
-          (_ ap))))
-
-  (declare %scan-atom-back (gap:GapBuffer * UFix -> UFix))
-  (define (%scan-atom-back gb ap)
-    (if (== ap 0) 0
-        (match (gap:gap-char-at gb (- ap 1))
-          ((Some ac) (if (delimiter? ac) ap (%scan-atom-back gb (- ap 1))))
-          (_ ap))))
-
   (declare scan-forward-sexp (gap:GapBuffer * UFix -> Optional UFix))
   (define (scan-forward-sexp gb pos)
-    "From POS, skip forward over one S-expression."
-    (let buf-len = (gap:gap-length gb))
-    (let p = (%skip-ws-fwd gb pos buf-len))
-    (if (>= p buf-len) None
-        (match (gap:gap-char-at gb p)
-          ((Some #\()
-           (match (find-matching-close gb p)
-             ((Some close-pos) (Some (+ close-pos 1)))
-             ((None) None)))
-          ((Some #\[)
-           (match (scan-matching-bracket gb p)
-             ((Some close-pos) (Some (+ close-pos 1)))
-             ((None) None)))
-          ((Some #\") (%scan-str-fwd gb (+ p 1) buf-len))
-          ((Some #\') (scan-forward-sexp gb (+ p 1)))
-          ((Some #\`) (scan-forward-sexp gb (+ p 1)))
-          ((Some #\)) None)
-          ((Some #\]) None)
-          ((Some #\;)
-           ;; Line comment — skip it and try next sexp
-           (scan-forward-sexp gb (%skip-comment-fwd gb (+ p 1) buf-len)))
-          ((Some #\#)
-           (if (< (+ p 1) buf-len)
-               (match (gap:gap-char-at gb (+ p 1))
-                 ;; Block comment — skip and try next sexp
-                 ((Some #\|)
-                  (scan-forward-sexp gb
-                    (%skip-block-comment-fwd gb (+ p 2) buf-len 1)))
-                 ;; Character literal — it IS a sexp
-                 ((Some #\\)
-                  (Some (%skip-char-literal-fwd gb (+ p 2) buf-len)))
-                 ;; #' (function) — like quote, recurse
-                 ((Some #\')
-                  (scan-forward-sexp gb (+ p 2)))
-                 ;; Other # dispatch — treat as atom
-                 (_ (let end = (%scan-atom-fwd gb p buf-len))
-                    (if (== end p) None (Some end))))
-               ;; # at end of buffer
-               (Some (+ p 1))))
-          ((Some _)
-           (let end = (%scan-atom-fwd gb p buf-len))
-           (if (== end p) None (Some end)))
-          (_ None))))
+    "From POS, skip forward over one source form."
+    (%ensure-syntax-map! gb)
+    (map snd (source:source-forward-form-range (cell:read %source-context) pos)))
 
   (declare scan-backward-sexp (gap:GapBuffer * UFix -> Optional UFix))
   (define (scan-backward-sexp gb pos)
-    "From POS, skip backward over one S-expression."
+    "From POS, skip backward over one source form, including its reader prefixes."
     (%ensure-syntax-map! gb)
-    (%scan-backward-sexp-impl gb pos))
-
-  (declare %scan-backward-sexp-impl (gap:GapBuffer * UFix -> Optional UFix))
-  (define (%scan-backward-sexp-impl gb pos)
-    (let p = (%skip-ws-back gb pos))
-    (cond
-      ((== p 0) None)
-      (True
-       (let pp = (- p 1))
-       (let cls = (%syntax-class-at pp))
-       (cond
-         ;; In a comment — skip past it like whitespace, try again
-         ((or (== cls 2) (== cls 3))
-          (%scan-backward-sexp-impl gb (%region-start pp)))
-         ;; In a char literal — the whole literal is one sexp
-         ((== cls 4)
-          (Some (%region-start pp)))
-         ;; Code — normal dispatch
-         (True
-          (match (gap:gap-char-at gb pp)
-            ((Some #\))
-             (match (scan-matching-open-paren gb pp)
-               ((Some open-pos) (Some open-pos))
-               ((None) None)))
-            ((Some #\])
-             (match (scan-matching-open-bracket gb pp)
-               ((Some open-pos) (Some open-pos))
-               ((None) None)))
-            ((Some #\") (%scan-str-back gb pp))
-            ((Some #\() None)
-            ((Some #\[) None)
-            ((Some _)
-             (let start = (%scan-atom-back gb p))
-             (if (== start p) None (Some start)))
-            (_ None)))))))
+    (map fst (source:source-backward-form-range (cell:read %source-context) pos)))
 
   ;;; Matching delimiter helpers
 
-  ;; Forward delimiter scanning helper
-  (declare %skip-string-fwd (gap:GapBuffer * UFix * UFix -> UFix))
-  (define (%skip-string-fwd gb sp buf-len)
-    "Skip forward past a string literal."
-    (if (>= sp buf-len) sp
-        (match (gap:gap-char-at gb sp)
-          ((Some #\\) (%skip-string-fwd gb (+ sp 2) buf-len))
-          ((Some #\") (+ sp 1))
-          (_ (%skip-string-fwd gb (+ sp 1) buf-len)))))
-
-  (declare %skip-comment-fwd (gap:GapBuffer * UFix * UFix -> UFix))
-  (define (%skip-comment-fwd gb cp buf-len)
-    "Skip forward past a line comment."
-    (if (>= cp buf-len) cp
-        (match (gap:gap-char-at gb cp)
-          ((Some #\Newline) (+ cp 1))
-          (_ (%skip-comment-fwd gb (+ cp 1) buf-len)))))
-
-  (declare %skip-block-comment-fwd (gap:GapBuffer * UFix * UFix * UFix -> UFix))
-  (define (%skip-block-comment-fwd gb p buf-len nesting)
-    "Skip forward past a #|...|# block comment. P is after the opening #|.
-NESTING starts at 1."
-    (cond
-      ((>= p buf-len) p)
-      ((== nesting 0) p)
-      (True
-       (match (gap:gap-char-at gb p)
-         ((Some #\|)
-          (if (< (+ p 1) buf-len)
-              (match (gap:gap-char-at gb (+ p 1))
-                ((Some #\#)
-                 (%skip-block-comment-fwd gb (+ p 2) buf-len (- nesting 1)))
-                (_ (%skip-block-comment-fwd gb (+ p 1) buf-len nesting)))
-              p))
-         ((Some #\#)
-          (if (< (+ p 1) buf-len)
-              (match (gap:gap-char-at gb (+ p 1))
-                ((Some #\|)
-                 (%skip-block-comment-fwd gb (+ p 2) buf-len (+ nesting 1)))
-                (_ (%skip-block-comment-fwd gb (+ p 1) buf-len nesting)))
-              p))
-         (_ (%skip-block-comment-fwd gb (+ p 1) buf-len nesting))))))
-
-  (declare %skip-char-literal-fwd (gap:GapBuffer * UFix * UFix -> UFix))
-  (define (%skip-char-literal-fwd gb p buf-len)
-    "Skip forward past a character literal. P is after the #\\."
-    (if (>= p buf-len) p
-        (match (gap:gap-char-at gb p)
-          ((Some ch)
-           (let after = (+ p 1))
-           (if (and (char:alpha? ch)
-                    (< after buf-len)
-                    (match (gap:gap-char-at gb after)
-                      ((Some nc) (or (char:alpha? nc) (char:digit? nc)))
-                      (_ False)))
-               ;; Named character like #\Space — skip all alphanumeric
-               (%skip-named-char-fwd gb after buf-len)
-               after))
-          (_ p))))
-
-  (declare %skip-named-char-fwd (gap:GapBuffer * UFix * UFix -> UFix))
-  (define (%skip-named-char-fwd gb p buf-len)
-    (if (>= p buf-len) p
-        (match (gap:gap-char-at gb p)
-          ((Some ch)
-           (if (or (char:alpha? ch) (char:digit? ch))
-               (%skip-named-char-fwd gb (+ p 1) buf-len)
-               p))
-          (_ p))))
-
-  (declare %scan-close (gap:GapBuffer * UFix * UFix * (Cell UFix) -> Optional UFix))
-  (define (%scan-close gb p buf-len depth)
-    "Scan forward for matching close paren."
-    (if (>= p buf-len) None
-        (match (gap:gap-char-at gb p)
-          ((Some #\()
-           (cell:write! depth (+ (cell:read depth) 1))
-           (%scan-close gb (+ p 1) buf-len depth))
-          ((Some #\))
-           (let d = (cell:read depth))
-           (cond
-             ((== d 1) (Some p))
-             (True
-              (cell:write! depth (- d 1))
-              (%scan-close gb (+ p 1) buf-len depth))))
-          ((Some #\") (%scan-close gb (%skip-string-fwd gb (+ p 1) buf-len) buf-len depth))
-          ((Some #\;) (%scan-close gb (%skip-comment-fwd gb (+ p 1) buf-len) buf-len depth))
-          ((Some #\#)
-           (if (< (+ p 1) buf-len)
-               (match (gap:gap-char-at gb (+ p 1))
-                 ((Some #\|)
-                  (%scan-close gb (%skip-block-comment-fwd gb (+ p 2) buf-len 1) buf-len depth))
-                 ((Some #\\)
-                  (%scan-close gb (%skip-char-literal-fwd gb (+ p 2) buf-len) buf-len depth))
-                 (_ (%scan-close gb (+ p 1) buf-len depth)))
-               (%scan-close gb (+ p 1) buf-len depth)))
-          (_ (%scan-close gb (+ p 1) buf-len depth)))))
-
   (declare find-matching-close (gap:GapBuffer * UFix -> Optional UFix))
   (define (find-matching-close gb pos)
-    "Given POS of an open paren, find the matching close paren."
+    "Given an open paren, find its matching close through shared source spans."
     (%ensure-syntax-map! gb)
-    (cond
-      ((not (%code-at? pos)) None)
-      (True
-       (let buf-len = (gap:gap-length gb))
-       (%scan-close gb (+ pos 1) buf-len (cell:new 1)))))
-
-  (declare %scan-close-bracket (gap:GapBuffer * UFix * UFix * (Cell UFix) -> Optional UFix))
-  (define (%scan-close-bracket gb p buf-len depth)
-    "Scan forward for matching close bracket."
-    (if (>= p buf-len) None
-        (match (gap:gap-char-at gb p)
-          ((Some #\[)
-           (cell:write! depth (+ (cell:read depth) 1))
-           (%scan-close-bracket gb (+ p 1) buf-len depth))
-          ((Some #\])
-           (let d = (cell:read depth))
-           (cond
-             ((== d 1) (Some p))
-             (True
-              (cell:write! depth (- d 1))
-              (%scan-close-bracket gb (+ p 1) buf-len depth))))
-          ((Some #\") (%scan-close-bracket gb (%skip-string-fwd gb (+ p 1) buf-len) buf-len depth))
-          ((Some #\;) (%scan-close-bracket gb (%skip-comment-fwd gb (+ p 1) buf-len) buf-len depth))
-          ((Some #\#)
-           (if (< (+ p 1) buf-len)
-               (match (gap:gap-char-at gb (+ p 1))
-                 ((Some #\|)
-                  (%scan-close-bracket gb (%skip-block-comment-fwd gb (+ p 2) buf-len 1) buf-len depth))
-                 ((Some #\\)
-                  (%scan-close-bracket gb (%skip-char-literal-fwd gb (+ p 2) buf-len) buf-len depth))
-                 (_ (%scan-close-bracket gb (+ p 1) buf-len depth)))
-               (%scan-close-bracket gb (+ p 1) buf-len depth)))
-          (_ (%scan-close-bracket gb (+ p 1) buf-len depth)))))
+    (if (== (gap:gap-char-at gb pos) (Some #\())
+        (source:source-matching-delimiter (cell:read %source-context) pos)
+        None))
 
   (declare scan-matching-bracket (gap:GapBuffer * UFix -> Optional UFix))
   (define (scan-matching-bracket gb pos)
-    "Given POS of an open bracket, find the matching close bracket."
     (%ensure-syntax-map! gb)
-    (cond
-      ((not (%code-at? pos)) None)
-      (True
-       (%scan-close-bracket gb (+ pos 1) (gap:gap-length gb) (cell:new 1)))))
-
-  (declare %scan-open-paren (gap:GapBuffer * UFix * (Cell UFix) -> Optional UFix))
-  (define (%scan-open-paren gb p depth)
-    "Scan backward for matching open paren."
-    (cond
-      ((== p 0) None)
-      (True
-       (let pp = (- p 1))
-       (cond
-         ((not (%code-at? pp))
-          (%scan-open-paren gb (%region-start pp) depth))
-         (True
-          (match (gap:gap-char-at gb pp)
-            ((Some #\))
-             (cell:write! depth (+ (cell:read depth) 1))
-             (%scan-open-paren gb pp depth))
-            ((Some #\()
-             (let d = (cell:read depth))
-             (cond
-               ((== d 1) (Some pp))
-               (True
-                (cell:write! depth (- d 1))
-                (%scan-open-paren gb pp depth))))
-            (_ (%scan-open-paren gb pp depth))))))))
+    (if (== (gap:gap-char-at gb pos) (Some #\[))
+        (source:source-matching-delimiter (cell:read %source-context) pos)
+        None))
 
   (declare scan-matching-open-paren (gap:GapBuffer * UFix -> Optional UFix))
   (define (scan-matching-open-paren gb pos)
-    "Given POS of a close paren, find the matching open paren."
     (%ensure-syntax-map! gb)
-    (cond
-      ((not (%code-at? pos)) None)
-      (True (%scan-open-paren gb pos (cell:new 1)))))
-
-  (declare %scan-open-bracket (gap:GapBuffer * UFix * (Cell UFix) -> Optional UFix))
-  (define (%scan-open-bracket gb p depth)
-    "Scan backward for matching open bracket."
-    (cond
-      ((== p 0) None)
-      (True
-       (let pp = (- p 1))
-       (cond
-         ((not (%code-at? pp))
-          (%scan-open-bracket gb (%region-start pp) depth))
-         (True
-          (match (gap:gap-char-at gb pp)
-            ((Some #\])
-             (cell:write! depth (+ (cell:read depth) 1))
-             (%scan-open-bracket gb pp depth))
-            ((Some #\[)
-             (let d = (cell:read depth))
-             (cond
-               ((== d 1) (Some pp))
-               (True
-                (cell:write! depth (- d 1))
-                (%scan-open-bracket gb pp depth))))
-            (_ (%scan-open-bracket gb pp depth))))))))
+    (if (== (gap:gap-char-at gb pos) (Some #\)))
+        (source:source-matching-delimiter (cell:read %source-context) pos)
+        None))
 
   (declare scan-matching-open-bracket (gap:GapBuffer * UFix -> Optional UFix))
   (define (scan-matching-open-bracket gb pos)
-    "Given POS of a close bracket, find the matching open bracket."
     (%ensure-syntax-map! gb)
-    (cond
-      ((not (%code-at? pos)) None)
-      (True (%scan-open-bracket gb pos (cell:new 1)))))
+    (if (== (gap:gap-char-at gb pos) (Some #\]))
+        (source:source-matching-delimiter (cell:read %source-context) pos)
+        None))
 
   (declare %scan-enclosing-open (gap:GapBuffer * UFix * (Cell IFix) -> Optional UFix))
   (define (%scan-enclosing-open gb p depth)
@@ -586,11 +256,37 @@ and character literals."
     (and (> pos 0)
          (== 2 (%syntax-class-at (- pos 1)))))
 
+  (declare %token-start-at? (UFix -> Boolean))
+  (define (%token-start-at? pos)
+    "True when a token of the current source snapshot begins at POS."
+    (rec scan ((tokens (.source-tokens (cell:read %source-context))))
+      (match tokens
+        ((Cons token rest)
+         (if (< (.token-start token) pos)
+             (scan rest)
+             (== (.token-start token) pos)))
+        ((Nil) False))))
+
+  (declare %cursor-class-at (UFix -> UFix))
+  (define (%cursor-class-at pos)
+    "Return the syntax class of the literal enclosing a cursor at POS."
+    ;; The syntax map includes the first character of a comment, character,
+    ;; or escaped symbol, but a cursor before that character is still in code.
+    (let class = (%syntax-class-at pos))
+    (if (and (>= class 2) (%token-start-at? pos)) 0 class))
+
   (declare %literal-delimiter-context? (gap:GapBuffer * UFix -> Boolean))
   (define (%literal-delimiter-context? gb pos)
     "True when delimiter keys should insert text instead of editing structure."
-    (or (%in-string? gb pos)
+    (%ensure-syntax-map! gb)
+    (or (/= 0 (%cursor-class-at pos))
         (%in-line-comment? gb pos)))
+
+  (declare %unstructured-context? (gap:GapBuffer * UFix -> Boolean))
+  (define (%unstructured-context? gb pos)
+    "Comments, characters, and escaped symbols contain literal delimiter text."
+    (%ensure-syntax-map! gb)
+    (or (>= (%cursor-class-at pos) 2) (%in-line-comment? gb pos)))
 
   (declare %escaped-at? (gap:GapBuffer * UFix * Boolean -> Boolean))
   (define (%escaped-at? gb pos escaped?)
@@ -811,7 +507,7 @@ or move past a closing string quote."
         (let gb = (buf:buffer-gap buffer))
         (let p = (cursor:cursor-position cs))
         (cond
-          ((%in-line-comment? gb p)
+          ((%unstructured-context? gb p)
            (record-insert! buffer p "\"" p)
            (cell:write! (cursor:.pos cs) (+ p 1))
            (values))
@@ -846,7 +542,7 @@ Inside strings, parens are treated as normal characters."
           (cell:write! (cursor:.pos cs) p))
         (when (> p 0)
           (cond
-            ((%in-line-comment? gb p)
+            ((%unstructured-context? gb (- p 1))
              (record-delete-backward-unit! buffer cs p)
              (values))
             ((%in-string? gb p)
@@ -975,7 +671,7 @@ Inside strings, parens are treated as normal characters."
           (cell:write! (cursor:.pos cs) p))
         (when (< p (gap:gap-length gb))
           (cond
-            ((%in-line-comment? gb p)
+            ((%unstructured-context? gb p)
              (record-delete-forward-unit! buffer cs p)
              (values))
             ((%in-string? gb p)
@@ -1103,19 +799,9 @@ Inside strings, parens are treated as normal characters."
 
   (declare smallest-enclosing-form-range (gap:GapBuffer * UFix -> Optional (Tuple UFix UFix)))
   (define (smallest-enclosing-form-range gb p)
-    "Return the innermost enclosing list form range around gap P."
+    "Return the innermost complete list with any attached reader prefixes."
     (%ensure-syntax-map! gb)
-    (let open-pos =
-      (match (gap:gap-char-at gb p)
-        ((Some #\() (Some p))
-        ((Some #\[) (Some p))
-        (_ (%current-list-open gb p))))
-    (match open-pos
-      ((None) None)
-      ((Some start)
-       (match (%matching-close-for gb start)
-         ((Some close) (Some (Tuple start (+ close 1))))
-         ((None) None)))))
+    (source:source-smallest-list-range (cell:read %source-context) p))
 
   (declare %open-str-for (Char -> String))
   (define (%open-str-for open-ch)

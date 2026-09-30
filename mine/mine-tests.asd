@@ -21,6 +21,7 @@
                (:file "editor-layout-tests")
                (:file "source-context-tests")
                (:file "lexer-context-tests")
+               (:file "paredit-context-tests")
                (:file "indent-context-tests")
                (:file "completion-context-tests")
                (:file "app-regression-tests")

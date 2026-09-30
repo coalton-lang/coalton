@@ -23,7 +23,8 @@
    #:source-package-before #:source-enclosing-head
    #:source-outer-form-range #:source-smallest-list-range
    #:source-form-at #:source-compile-form-range #:source-symbol-name #:source-symbol-parts
-   #:source-symbol-prefix #:source-prefix-range #:source-symbol-at #:source-first-head))
+   #:source-symbol-prefix #:source-prefix-range #:source-symbol-at #:source-first-head
+   #:source-forward-form-range #:source-backward-form-range #:source-matching-delimiter))
 
 (in-package #:mine/syntax/context)
 
@@ -336,7 +337,12 @@
          ((OpenToken delimiter)
           (match (parse-children rest len delimiter Nil False)
             ((Tuple4 children remaining close malformed)
-             (let closed = (match close ((Some _) True) ((None) False)))
+             (let closed = (match close
+                             ((Some closing)
+                              (match (.token-kind closing)
+                                ((CloseToken close) (compatible-close? delimiter close))
+                                (_ False)))
+                             ((None) False)))
              (let form-end = (match close ((Some closing) (.token-end closing)) ((None) len)))
              (Tuple3 (SourceForm (DelimitedForm delimiter) start form-end children
                                  (and closed (children-complete? children)))
@@ -539,15 +545,84 @@
   (define (source-outer-form-range context pos)
     (map form-range (source-form-at context pos)))
 
+  (declare forward-form-range (List SourceForm * UFix -> Optional (Tuple UFix UFix)))
+  (define (forward-form-range forms pos)
+    (match forms
+      ((Nil) None)
+      ((Cons form rest)
+       (cond
+         ((>= pos (.form-end form)) (forward-form-range rest pos))
+         ((<= pos (.form-start form)) (complete-form-range form))
+         (True
+          (match (.form-kind form)
+            ((DelimitedForm _) (forward-form-range (.form-children form) pos))
+            ((PrefixedForm _)
+             (match (.form-children form)
+               ((Cons child _)
+                (if (< pos (.form-start child)) (complete-form-range form)
+                    (forward-form-range (.form-children form) pos)))
+               ((Nil) None)))
+            (_ (complete-form-range form))))))))
+
+  (declare source-forward-form-range (SourceContext * UFix -> Optional (Tuple UFix UFix)))
+  (define (source-forward-form-range context pos)
+    "The next form from POS, descending into the containing list when necessary."
+    (forward-form-range (.source-forms context) pos))
+
+  (declare backward-form-range (List SourceForm * UFix -> Optional (Tuple UFix UFix)))
+  (define (backward-form-range reversed pos)
+    (match reversed
+      ((Nil) None)
+      ((Cons form rest)
+       (cond
+         ((>= (.form-start form) pos) (backward-form-range rest pos))
+         ((<= (.form-end form) pos) (complete-form-range form))
+         (True
+          (match (.form-kind form)
+            ((DelimitedForm _) (backward-form-range (list:reverse (.form-children form)) pos))
+            ((PrefixedForm _) (backward-form-range (list:reverse (.form-children form)) pos))
+            (_ (complete-form-range form))))))))
+
+  (declare source-backward-form-range (SourceContext * UFix -> Optional (Tuple UFix UFix)))
+  (define (source-backward-form-range context pos)
+    "The preceding form from POS, preserving its reader prefixes."
+    (backward-form-range (list:reverse (.source-forms context)) pos))
+
+  (declare matching-form-delimiter (SourceContext * SourceForm * UFix -> Optional UFix))
+  (define (matching-form-delimiter context form pos)
+    (let pair =
+      (match (.form-kind form)
+        ((DelimitedForm delimiter)
+         (let open = (if (== delimiter VectorDelimiter)
+                         (dispatch-letter-pos (.source-text context) (+ (.form-start form) 1))
+                         (.form-start form)))
+         (let close = (if (> (.form-end form) 0) (- (.form-end form) 1) 0))
+         (cond
+           ((not (.form-complete form)) None)
+           ((== pos open) (Some close))
+           ((== pos close) (Some open))
+           (True None)))
+        (_ None)))
+    (match pair
+      ((Some _) pair)
+      ((None)
+       (match (find-form (.form-children form) pos)
+         ((Some child) (matching-form-delimiter context child pos))
+         ((None) None)))))
+
+  (declare source-matching-delimiter (SourceContext * UFix -> Optional UFix))
+  (define (source-matching-delimiter context pos)
+    "Match a code list delimiter, respecting mixed delimiters and literal spans."
+    (match (source-form-at context pos)
+      ((Some form) (matching-form-delimiter context form pos))
+      ((None) None)))
+
   (declare smallest-list-range (SourceForm * UFix -> Optional (Tuple UFix UFix)))
   (declare prefixed-list? (SourceForm -> Boolean))
   (define (prefixed-list? form)
     (match (.form-kind form)
       ((DelimitedForm _) True)
-      ((PrefixedForm 1)
-       (match (.form-children form)
-         ((Cons child (Nil)) (prefixed-list? child))
-         (_ False)))
+      ((PrefixedForm _) (list:any prefixed-list? (.form-children form)))
       (_ False)))
 
   (define (smallest-list-range form pos)
@@ -557,12 +632,13 @@
     (match (.form-kind form)
       ((PrefixedForm _)
        ;; Preserve a prefix when the selected list is its immediate operand.
-       (match (Tuple inner (.form-children form))
-         ((Tuple (Some (Tuple start _)) (Cons child (Nil)))
-          (if (== start (.form-start child)) (Some (form-range form)) inner))
-         ((Tuple (None) (Cons child (Nil)))
-          (if (and (.form-complete form) (prefixed-list? child)) (Some (form-range form)) None))
-         (_ inner)))
+       (match inner
+         ((Some (Tuple start _))
+          (if (list:any (fn (child) (== start (.form-start child))) (.form-children form))
+              (complete-form-range form) inner))
+         ((None)
+          (if (and (.form-complete form) (list:any prefixed-list? (.form-children form)))
+              (Some (form-range form)) None))))
       ((DelimitedForm _)
        (match inner
          ((Some _) inner)
