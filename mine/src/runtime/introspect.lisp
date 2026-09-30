@@ -7,11 +7,8 @@
 ;;; Helpers
 
 (defun %find-symbol-in-package (symbol-name package-name)
-  "Find the symbol named SYMBOL-NAME in PACKAGE-NAME.
-Returns the symbol or NIL."
-  (let ((pkg (find-package (string-upcase package-name))))
-    (when pkg
-      (find-symbol (string-upcase symbol-name) pkg))))
+  "Resolve raw symbol spelling in its exact source package context."
+  (mine/protocol/server::%find-symbol-flexibly symbol-name package-name))
 
 (defun %symbol-type (sym)
   "Classify SYM as :function, :macro, :special-form, :generic-function,
