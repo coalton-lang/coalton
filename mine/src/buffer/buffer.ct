@@ -132,14 +132,16 @@
     "Resolve a file path before registering a buffer; preserve failures as errors."
     (lisp (-> (Result String String)) (fpath)
       (cl:handler-case
-          (cl:if (cl:zerop (cl:length fpath))
-                 (Err "No file path")
-                 (cl:let* ((absolute (cl:merge-pathnames (cl:pathname fpath)))
-                           (existing (cl:probe-file absolute)))
-                   (cl:if (cl:or (cl:wild-pathname-p absolute)
-                                 (uiop:directory-pathname-p (cl:or existing absolute)))
-                          (Err (cl:format cl:nil "Not a file: ~A" fpath))
-                          (Ok (cl:namestring (cl:or existing absolute))))))
+          (cl:cond
+            ((cl:zerop (cl:length fpath))
+             (Err "No file path"))
+            (cl:t
+             (cl:let* ((absolute (cl:merge-pathnames (cl:pathname fpath)))
+                       (existing (cl:probe-file absolute)))
+               (cl:if (cl:or (cl:wild-pathname-p absolute)
+                             (uiop:directory-pathname-p (cl:or existing absolute)))
+                      (Err (cl:format cl:nil "Not a file: ~A" fpath))
+                      (Ok (cl:namestring (cl:or existing absolute)))))))
         (cl:error (condition)
           (Err (cl:format cl:nil "~A" condition))))))
 

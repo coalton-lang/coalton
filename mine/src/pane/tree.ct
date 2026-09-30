@@ -140,7 +140,7 @@ When a project tree exists, returns a fixed height so the tree never shifts."
       (cell:write! (.open-files tp) (Cons (Tuple display-name fpath) existing))
       ;; Adjust open-selected since we prepended at index 0
       ;; Only shift if there were already files (otherwise keep at 0 for the new file)
-      (when (not (== existing Nil))
+      (unless (== existing Nil)
         (cell:write! (.open-selected tp) (+ (cell:read (.open-selected tp)) 1)))
       (values))
     (values))
@@ -149,8 +149,8 @@ When a project tree exists, returns a fixed height so the tree never shifts."
   (define (tree-pane-remove-open-file! tp fpath)
     "Remove a loose file by path."
     (cell:write! (.open-files tp)
-      (list:filter (fn (entry) (not (== (snd entry) fpath)))
-                   (cell:read (.open-files tp))))
+                 (list:filter (fn (entry) (not (== (snd entry) fpath)))
+                              (cell:read (.open-files tp))))
     ;; Clamp open-selected to bounds
     (let new-count = (length (cell:read (.open-files tp))))
     (when (and (> (cell:read (.open-selected tp)) 0)
@@ -165,14 +165,14 @@ When a project tree exists, returns a fixed height so the tree never shifts."
   (define (tree-pane-remove-open-files-under! tp dir-prefix)
     "Remove open files whose path starts with DIR-PREFIX."
     (cell:write! (.open-files tp)
-      (list:filter (fn (entry)
-                     (let p = (snd entry))
-                     (lisp (-> Boolean) (p dir-prefix)
-                       (cl:let ((plen (cl:length dir-prefix)))
-                         (cl:if (cl:and (cl:<= plen (cl:length p))
-                                        (cl:string= p dir-prefix :end1 plen))
-                                False True))))
-                   (cell:read (.open-files tp))))
+                 (list:filter (fn (entry)
+                                (let p = (snd entry))
+                                (lisp (-> Boolean) (p dir-prefix)
+                                  (cl:let ((plen (cl:length dir-prefix)))
+                                    (cl:if (cl:and (cl:<= plen (cl:length p))
+                                                   (cl:string= p dir-prefix :end1 plen))
+                                           False True))))
+                              (cell:read (.open-files tp))))
     (let new-count = (length (cell:read (.open-files tp))))
     (when (and (> (cell:read (.open-selected tp)) 0)
                (>= (cell:read (.open-selected tp)) new-count))
@@ -322,7 +322,7 @@ When a project tree exists, returns a fixed height so the tree never shifts."
   (declare tree-pane-toggle-expand! (TreePane -> Void))
   (define (tree-pane-toggle-expand! tp)
     "Toggle expand/collapse on the selected tree node. No-op if in open section."
-    (when (not (cell:read (.in-open-sec tp)))
+    (unless (cell:read (.in-open-sec tp))
       (match (cell:read (.root tp))
         ((None) (values))
         ((Some node)
@@ -431,13 +431,14 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
        (let flat-idx = (+ tree-scroll tree-row))
        (let tree-rows = (flatten-tree (cell:read (.root tp))))
        (let tree-count = (length tree-rows))
-       (if (>= flat-idx tree-count)
-           None
-           (match (%item-hit-test-row (list:nth flat-idx tree-rows) col)
-             ((Some path)
-              (cell:write! (.selected tp) flat-idx)
-              (Some path))
-             ((None) None))))))
+       (cond
+         ((>= flat-idx tree-count) None)
+         (True
+          (match (%item-hit-test-row (list:nth flat-idx tree-rows) col)
+            ((Some path)
+             (cell:write! (.selected tp) flat-idx)
+             (Some path))
+            ((None) None)))))))
 
   (declare tree-pane-scroll-delta! (TreePane * UFix * IFix * UFix -> Void))
   (define (tree-pane-scroll-delta! tp row delta height)
@@ -491,103 +492,105 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
       ((Nil) (values))
       ((Cons _ _)
        (when (< row-idx height)
-         (if (< flat-idx scr-off2)
-             ;; Skip rows before scroll offset
-             (%draw-tree-rows (match items
-               ((Cons _ rest) rest)
-                                ((Nil) Nil))
-                              scr rect height scr-off2 sel row-idx (+ flat-idx 1) dirty-fn diag-fn preview-p)
-             ;; Draw this row
-             (match items
-               ((Nil) (values))
-               ((Cons row rest)
-                (cond
-                  ((.fr-separator row)
-                   (let sep-y = (+ (.rect-y rect) row-idx))
-                   (let sep-style = (color:Style color:border-fg
-                                                  color:black
-                                                  color:AttrNone))
-                   (%draw-hsep scr (.rect-x rect) sep-y (.rect-width rect) sep-style)
-                   (%draw-tree-rows rest scr rect height scr-off2 sel
-                                    (+ row-idx 1) (+ flat-idx 1) dirty-fn diag-fn preview-p))
-                  (True
-                   (let depth = (.fr-depth row))
-                   (let name = (.fr-name row))
-                   (let is-dir = (.fr-is-dir row))
-                   (let expanded = (.fr-expanded row))
-                   (let fpath = (.fr-path row))
-                   (let y = (+ (.rect-y rect) row-idx))
-                   (let x = (+ (.rect-x rect) (* depth 2)))
-                   ;; Dirty indicator for files
-                   (let dirty = (if is-dir False (dirty-fn fpath)))
-                   (let diag-rank = (if is-dir 0 (diag-fn fpath)))
-                   (let dirty-ch = (if dirty "*" " "))
-                   (let diag-prefix = (cond
-                                        ((== diag-rank 4) "!!")
-                                        ((== diag-rank 3) " !")
-                                        (True "  ")))
-                   (let diag-bullet = (if (> diag-rank 0) "●" " "))
-                   ;; Directory expand/collapse marker
-                   (let dir-marker =
-                     (if is-dir
-                         (if expanded "▾   " "▸   ")
-                         ""))
-                   ;; Check if this is a preview file
-                   (let is-preview = (match preview-p
-                                       ((Some pp) (== pp fpath))
-                                       ((None) False)))
-                   ;; Style: selected=reverse, dir=bold, preview=italic
-                   (let row-style =
-                     (cond
-                       ((== flat-idx sel)
-                        (color:with-attr color:default-style color:AttrReverse))
-                       (is-dir
-                        (color:with-attr color:default-style color:AttrBold))
-                       (is-preview
-                        (color:with-attr color:default-style color:AttrItalic))
-                       (True color:default-style)))
-                   (let dirty-style =
-                     (color:Style color:error-fg
-                                  (.style-bg row-style)
-                                  (.style-attr row-style)))
-                   (let diag-style =
-                     (cond
-                       ((== diag-rank 4)
-                        (color:Style color:error-fg
-                                     (.style-bg row-style)
-                                     (.style-attr row-style)))
-                       ((== diag-rank 3)
-                        (color:Style color:warning-fg
-                                     (.style-bg row-style)
-                                     (.style-attr row-style)))
-                       ((== diag-rank 2)
-                        (color:Style color:gold
-                                     (.style-bg row-style)
-                                     (.style-attr row-style)))
-                       ((== diag-rank 1)
-                        (color:Style color:accent-fg
-                                     (.style-bg row-style)
-                                     (.style-attr row-style)))
-                       (True row-style)))
-                   ;; Draw marker + name
-                   (let name-x = (+ x 4))
-                   (let name-avail = (if (> (+ (.rect-x rect) (.rect-width rect)) name-x)
-                                         (- (+ (.rect-x rect) (.rect-width rect)) name-x)
-                                         0))
-                   (cond
-                     ((not is-dir)
-                      (screen:screen-set-string scr y x dirty-ch
-                                                (if dirty dirty-style row-style))
-                      (screen:screen-set-string scr y (+ x 1) diag-prefix
-                                                (if (> diag-rank 0) diag-style row-style))
-                      (screen:screen-set-string scr y (+ x 3) diag-bullet
-                                                (if (> diag-rank 0) diag-style row-style))
-                      (render:draw-text-clipped scr (wt:Rect name-x y name-avail 1) name y name-x row-style))
-                     (True
-                      (screen:screen-set-string scr y x dir-marker row-style)
-                      (render:draw-text-clipped scr (wt:Rect name-x y name-avail 1) name y name-x row-style)))
-                   (%draw-tree-rows rest scr rect height scr-off2 sel
-                                    (+ row-idx 1) (+ flat-idx 1) dirty-fn diag-fn preview-p))))))))))
+         (cond
+           ((< flat-idx scr-off2)
+            ;; Skip rows before scroll offset
+            (%draw-tree-rows (match items
+                              ((Cons _ rest) rest)
+                              ((Nil) Nil))
+                             scr rect height scr-off2 sel row-idx (+ flat-idx 1) dirty-fn diag-fn preview-p))
+           (True
+            ;; Draw this row
+            (match items
+              ((Nil) (values))
+              ((Cons row rest)
+               (cond
+                 ((.fr-separator row)
+                  (let sep-y = (+ (.rect-y rect) row-idx))
+                  (let sep-style = (color:Style color:border-fg
+                                                color:black
+                                                color:AttrNone))
+                  (%draw-hsep scr (.rect-x rect) sep-y (.rect-width rect) sep-style)
+                  (%draw-tree-rows rest scr rect height scr-off2 sel
+                                   (+ row-idx 1) (+ flat-idx 1) dirty-fn diag-fn preview-p))
+                 (True
+                  (let depth = (.fr-depth row))
+                  (let name = (.fr-name row))
+                  (let is-dir = (.fr-is-dir row))
+                  (let expanded = (.fr-expanded row))
+                  (let fpath = (.fr-path row))
+                  (let y = (+ (.rect-y rect) row-idx))
+                  (let x = (+ (.rect-x rect) (* depth 2)))
+                  ;; Dirty indicator for files
+                  (let dirty = (if is-dir False (dirty-fn fpath)))
+                  (let diag-rank = (if is-dir 0 (diag-fn fpath)))
+                  (let dirty-ch = (if dirty "*" " "))
+                  (let diag-prefix = (cond
+                                       ((== diag-rank 4) "!!")
+                                       ((== diag-rank 3) " !")
+                                       (True "  ")))
+                  (let diag-bullet = (if (> diag-rank 0) "●" " "))
+                  ;; Directory expand/collapse marker
+                  (let dir-marker =
+                    (if is-dir
+                        (if expanded "▾   " "▸   ")
+                        ""))
+                  ;; Check if this is a preview file
+                  (let is-preview = (match preview-p
+                                      ((Some pp) (== pp fpath))
+                                      ((None) False)))
+                  ;; Style: selected=reverse, dir=bold, preview=italic
+                  (let row-style =
+                    (cond
+                      ((== flat-idx sel)
+                       (color:with-attr color:default-style color:AttrReverse))
+                      (is-dir
+                       (color:with-attr color:default-style color:AttrBold))
+                      (is-preview
+                       (color:with-attr color:default-style color:AttrItalic))
+                      (True color:default-style)))
+                  (let dirty-style =
+                    (color:Style color:error-fg
+                                 (.style-bg row-style)
+                                 (.style-attr row-style)))
+                  (let diag-style =
+                    (cond
+                      ((== diag-rank 4)
+                       (color:Style color:error-fg
+                                    (.style-bg row-style)
+                                    (.style-attr row-style)))
+                      ((== diag-rank 3)
+                       (color:Style color:warning-fg
+                                    (.style-bg row-style)
+                                    (.style-attr row-style)))
+                      ((== diag-rank 2)
+                       (color:Style color:gold
+                                    (.style-bg row-style)
+                                    (.style-attr row-style)))
+                      ((== diag-rank 1)
+                       (color:Style color:accent-fg
+                                    (.style-bg row-style)
+                                    (.style-attr row-style)))
+                      (True row-style)))
+                  ;; Draw marker + name
+                  (let name-x = (+ x 4))
+                  (let name-avail = (if (> (+ (.rect-x rect) (.rect-width rect)) name-x)
+                                        (- (+ (.rect-x rect) (.rect-width rect)) name-x)
+                                        0))
+                  (cond
+                    ((not is-dir)
+                     (screen:screen-set-string scr y x dirty-ch
+                                               (if dirty dirty-style row-style))
+                     (screen:screen-set-string scr y (+ x 1) diag-prefix
+                                               (if (> diag-rank 0) diag-style row-style))
+                     (screen:screen-set-string scr y (+ x 3) diag-bullet
+                                               (if (> diag-rank 0) diag-style row-style))
+                     (render:draw-text-clipped scr (wt:Rect name-x y name-avail 1) name y name-x row-style))
+                    (True
+                     (screen:screen-set-string scr y x dir-marker row-style)
+                     (render:draw-text-clipped scr (wt:Rect name-x y name-avail 1) name y name-x row-style)))
+                  (%draw-tree-rows rest scr rect height scr-off2 sel
+                                   (+ row-idx 1) (+ flat-idx 1) dirty-fn diag-fn preview-p)))))))))))
 
   (declare %draw-hsep (screen:Screen * UFix * UFix * UFix * color:Style -> Void))
   (define (%draw-hsep scr x y w style)
@@ -608,7 +611,7 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
       ((>= w (+ title-len 4))
        (screen:screen-set-cell scr y x #\─ style)
        (screen:screen-set-string scr y (+ x 1)
-         (str:concat " " (str:concat title " ")) style)
+                                 (str:concat " " (str:concat title " ")) style)
        (%draw-hsep-loop scr (+ x (+ 3 title-len)) y (+ x w) style))
       (True
        (%draw-hsep-loop scr x y (+ x w) style))))
@@ -639,8 +642,8 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
 
     (let preview-p = (cell:read (.preview-path tp)))
     (let sep-style = (color:Style color:border-fg
-                                   color:black
-                                   color:AttrNone))
+                                  color:black
+                                  color:AttrNone))
     (let rx = (.rect-x rect))
     (let ry = (.rect-y rect))
     (let w = (.rect-width rect))
@@ -658,7 +661,7 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
       (let in-open = (cell:read (.in-open-sec tp)))
       (let draw-sel = (if (and focused in-open) open-sel 99999999))
       (%draw-tree-rows open-rows scr open-rect open-h open-scr draw-sel
-                        0 0 dirty-fn diag-fn preview-p))
+                       0 0 dirty-fn diag-fn preview-p))
 
     ;; Project Tree title
     (when (> tree-title-h 0)
@@ -674,18 +677,18 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
       (let in-open = (cell:read (.in-open-sec tp)))
       (let draw-sel = (if (and focused (not in-open)) tree-sel 99999999))
       (%draw-tree-rows tree-rows scr tree-rect tree-h tree-scr draw-sel
-                        0 0 dirty-fn diag-fn preview-p)
+                       0 0 dirty-fn diag-fn preview-p)
       ;; Scrollbar for tree section
       (let total = (length tree-rows))
       (let sb-col = (- (+ rx w) 1))
       (let track-s = (color:Style color:scrollbar-track-fg
-                                   color:scrollbar-track-bg
-                                   color:AttrNone))
+                                  color:scrollbar-track-bg
+                                  color:AttrNone))
       (let thumb-s = (color:Style color:scrollbar-thumb-fg
-                                   color:scrollbar-track-bg
-                                   color:AttrNone))
+                                  color:scrollbar-track-bg
+                                  color:AttrNone))
       (render:draw-scrollbar scr sb-col (.rect-y tree-rect) tree-h total tree-scr
-                              track-s thumb-s)))
+                             track-s thumb-s)))
 
   (declare tree-pane-scrollbar-drag-at! (TreePane * UFix * UFix -> Void))
   (define (tree-pane-scrollbar-drag-at! tp row-in-pane pane-height)
@@ -709,7 +712,7 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
       (cell:write! (.selected tp) new-scroll))
     (values))
 
-;;; Collapsed strip rendering
+  ;;; Collapsed strip rendering
 
   (declare %find-current-file-index
     ((List (Tuple String String)) * (Optional String) * UFix -> (Optional UFix)))

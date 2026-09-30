@@ -203,9 +203,9 @@
          (progn
            (ensure-directories-exist launcher)
            (with-open-file (stream launcher
-                                   :direction :output
-                                   :if-exists :supersede
-                                   :if-does-not-exist :create)
+                                   :direction ':output
+                                   :if-exists ':supersede
+                                   :if-does-not-exist ':create)
              (write-string "" stream))
            (let ((*default-pathname-defaults* root)
                  (expected (namestring (truename launcher))))

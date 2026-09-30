@@ -108,8 +108,8 @@ Format: [MODE] optional current project, temporary messages, and symbol info."
       ((None) (values)))
     ;; Aluminium 3 on Aluminium 5 — subtle, tango-consistent
     (let style = (color:Style color:text-dim-fg
-                               color:status-bar-bg
-                               color:AttrNone))
+                              color:status-bar-bg
+                              color:AttrNone))
     ;; Fill the entire row.
     (render:fill-rect scr rect #\Space style)
     ;; Build the left portion: [MODE]
@@ -131,8 +131,8 @@ Format: [MODE] optional current project, temporary messages, and symbol info."
       (let sym-display = (<> " " sym))
       (let sym-width = (cellw:string-cell-width sym-display))
       (let sym-style = (color:Style color:text-fg
-                                     color:status-bar-bg
-                                     color:AttrNone))
+                                    color:status-bar-bg
+                                    color:AttrNone))
       (when (< (+ left-len sym-width) w)
         (screen:screen-set-string scr y (+ (.rect-x rect) left-len) sym-display sym-style)))
     (values)))
