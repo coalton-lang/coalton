@@ -16,4 +16,5 @@
                (:file "syntax-tests")
                (:file "indent-tests")
                (:file "repl-tests")
-               (:file "runtime-regression-tests")))
+               (:file "runtime-regression-tests")
+               (:file "app-regression-tests")))
