@@ -135,9 +135,9 @@
       ((== (str:length new-prefix) 0)
        (completion-dismiss! cs))
       (True
-       (let lc-prefix = (lowercase new-prefix))
+       (let decoded-prefix = (source:source-symbol-name new-prefix))
        (let filtered = (list:filter
-                         (fn (c) (%string-prefix? lc-prefix (lowercase (.cand-name c))))
+                         (fn (c) (%string-prefix? decoded-prefix (source:source-symbol-name (.cand-name c))))
                          (cell:read (.cs-all cs))))
        (cond
          ((<= (list:length filtered) 1)
@@ -173,11 +173,11 @@ Comments, literals, and escaped symbols use the shared source context."
       ((Nil) "")
       ((Cons first (Nil)) (.cand-name first))
       ((Cons first rest)
-       (rec scan ((prefix (str:downcase (.cand-name first))) (remaining rest))
+       (rec scan ((prefix (.cand-name first)) (remaining rest))
          (match remaining
            ((Nil) prefix)
-           ((Cons candidate more)
-            (let name = (str:downcase (.cand-name candidate)))
+           ((Cons item more)
+            (let name = (.cand-name item))
             (let limit = (min (str:length prefix) (str:length name)))
             (let end =
               (rec shared ((pos 0))
@@ -192,10 +192,6 @@ Comments, literals, and escaped symbols use the shared source context."
     "True if STR starts with PREFIX (case-sensitive)."
     (and (<= (str:length prefix) (str:length str))
          (== prefix (str:substring str 0 (str:length prefix)))))
-
-  (declare lowercase (String -> String))
-  (define (lowercase s)
-    (str:downcase s))
 
 ;;; Rendering
 
