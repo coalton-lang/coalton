@@ -12,6 +12,7 @@
    #:diagnostics-message-for-position
    #:diagnostics-message-for-range
    #:forget-diagnostic-request
+   #:forget-all-diagnostic-requests
    #:invalidate-diagnostics-for-file
    #:jump-adjacent-diagnostic
    #:line-diagnostic-spans
@@ -26,8 +27,6 @@
 
 (defvar *diagnostic-store* (store:diagnostic-store-new)
   "Typed diagnostics and request lifecycle state for this editor session.")
-(defvar *compile-file-remap* nil
-  "When non-nil, a cons (temp-document-key . real-document-key) for remapping file diagnostics.")
 
 (defun coalton-optional-value-or-nil (value)
   "Return NIL for Coalton None, otherwise return the wrapped value."
@@ -72,7 +71,7 @@
   (let* ((start (protocol-offset (getf plist :start)))
          (end (max start (protocol-offset (getf plist :end))))
          (summary (protocol-string (getf plist :summary))))
-    (store:Diagnostic (or (remap-diagnostic-filepath (getf plist :file)) "")
+    (store:Diagnostic (or (remap-diagnostic-filepath (getf plist :file) (getf plist :request)) "")
                       start end (protocol-severity (getf plist :severity))
                       summary (protocol-string (getf plist :label) summary)
                       (protocol-label-kind (getf plist :label-kind))
@@ -132,37 +131,49 @@
   "Clear every stored diagnostic and reset REPL announcement tracking."
   (store:store-clear-all! *diagnostic-store*))
 
+(defun delete-compile-temporary (file)
+  "Remove a private compile input and its default compiled output."
+  (ignore-errors (delete-file (compile-file-pathname file)))
+  (ignore-errors (delete-file file)))
+
 (defun clear-compile-file-remap ()
-  "Clear the temporary compile-file remap state."
-  (setf *compile-file-remap* nil))
+  "Discard temporary files not yet attached to a request."
+  (dolist (file (store:store-pending-temporary-files *diagnostic-store*))
+    (delete-compile-temporary file))
+  (store:store-clear-pending-remaps! *diagnostic-store*))
 
 (defun track-diagnostic-request (request-id)
   "Record the current edit generation for REQUEST-ID."
   (store:store-track-request! *diagnostic-store* request-id))
 
 (defun forget-diagnostic-request (request-id)
-  "Drop REQUEST-ID from the diagnostic request tracking table."
+  "Release a finished request's metadata and private compile files."
+  (dolist (file (store:store-request-temporary-files *diagnostic-store* request-id))
+    (delete-compile-temporary file))
   (store:store-forget-request! *diagnostic-store* request-id))
+
+(defun forget-all-diagnostic-requests ()
+  "Release request metadata and private files when a runtime session ends."
+  (dolist (id (store:store-request-ids *diagnostic-store*))
+    (forget-diagnostic-request id))
+  (clear-compile-file-remap))
 
 (defun diagnostic-announcement-p (plist)
   "Return T if PLIST should produce a one-line REPL announcement."
   (store:store-announcement! *diagnostic-store* (plist-diagnostic plist)))
 
 (defun write-temp-for-compile (text original-path)
-  "Write TEXT to a temporary file preserving the extension of ORIGINAL-PATH.
-Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
-  (let* ((ext (pathname-type (pathname original-path)))
-         (base (pathname-name (pathname original-path)))
-         (tmp-path (merge-pathnames
-                    (make-pathname :name (format nil "mine-beam-~A" base) :type ext)
-                    (uiop:temporary-directory))))
-    (with-open-file (s tmp-path :direction :output
-                       :if-exists :supersede
-                       :external-format (coalton-impl/source:source-external-format))
-      (write-string text s))
-    (setf *compile-file-remap*
-          (cons (normalize-document-key (namestring tmp-path))
-                (normalize-document-key original-path)))
+  "Write a unique compile input; attach its document mapping to the next request."
+  (clear-compile-file-remap)
+  (uiop:with-temporary-file (:stream stream :pathname tmp-path
+                             :prefix "mine-beam-"
+                             :type (pathname-type (pathname original-path))
+                             :direction :output :keep t
+                             :external-format (coalton-impl/source:source-external-format))
+    (write-string text stream)
+    (store:store-add-remap! *diagnostic-store*
+                            (normalize-document-key (namestring tmp-path))
+                            (normalize-document-key original-path))
     (namestring tmp-path)))
 
 (defun diagnostic-severity-rank (severity)
@@ -172,13 +183,10 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
   "Return the worst stored diagnostic severity rank for FILEPATH."
   (store:store-rank-for-file *diagnostic-store* (or (normalize-document-key filepath) "")))
 
-(defun remap-diagnostic-filepath (raw-filepath)
+(defun remap-diagnostic-filepath (raw-filepath &optional request-id)
   (let ((document-key (normalize-document-key raw-filepath)))
-    (if (and document-key
-             *compile-file-remap*
-             (string= document-key (car *compile-file-remap*)))
-        (cdr *compile-file-remap*)
-        document-key)))
+    (when document-key
+      (store:store-remap-file *diagnostic-store* (optional-integer request-id) document-key))))
 
 (defun diagnostic-stale-p (plist)
   "Reject results from an older edit/compile or a finished request."
