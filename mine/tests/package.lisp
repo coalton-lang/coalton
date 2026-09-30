@@ -124,6 +124,7 @@
                   run-editor-layout-tests
                   run-editor-render-context-tests
                   run-editor-geometry-integration-tests
+                  run-editor-wrapped-viewport-tests
                   run-source-context-tests
                   run-lexer-context-tests
                   run-paredit-context-tests
