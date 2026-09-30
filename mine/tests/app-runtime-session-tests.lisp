@@ -1,19 +1,28 @@
 (in-package #:mine-tests)
 
 (defun %call-with-app-connection (function)
-  (let* ((state (%test-state))
-         (output (make-string-output-stream))
-         (connection (mine/protocol/client::make-%connection :stream output :active t)))
-    (setf (mine/protocol/lifecycle::%runtime-manager-connection
-           (mine/app/state:get-runtime-mgr state)) connection)
-    (unwind-protect (funcall function state connection output)
-      (mine/app/diagnostics:forget-all-diagnostic-requests)
-      (close output))))
+  (with-test-directory (directory)
+    (with-open-file (output (merge-pathnames "session-wire.bin" directory)
+                            :direction :io :element-type '(unsigned-byte 8)
+                            :if-exists :supersede :if-does-not-exist :create)
+      (let* ((state (%test-state))
+             (connection (mine/protocol/client::make-%connection :stream output :active t)))
+        (setf (mine/protocol/lifecycle::%runtime-manager-connection
+               (mine/app/state:get-runtime-mgr state)) connection)
+        (unwind-protect (funcall function state connection (cons output 0))
+          (mine/app/diagnostics:forget-all-diagnostic-requests))))))
 
 (defun %app-sent-messages (output)
-  (with-input-from-string (stream (get-output-stream-string output))
-    (loop for message = (mine/protocol/server::read-message stream)
-          while message collect message)))
+  (let* ((stream (car output))
+         (end (file-position stream)))
+    (file-position stream (cdr output))
+    (unwind-protect
+         (loop while (< (file-position stream) end)
+               for message = (mine/protocol/server::read-message stream)
+               do (%check message "Malformed outbound request frame")
+               collect message)
+      (setf (cdr output) end)
+      (file-position stream end))))
 
 (defun %active-app-id (state)
   (let ((request (app::%coalton-optional-value-or-nil
@@ -24,13 +33,13 @@
   (%call-with-app-connection
    (lambda (state connection output)
      (app::%start-initialization! state connection "initialization")
-     (%check (= 0 (%active-app-id state)) "Initialization is not the active request")
+     (%check (eql 0 (%active-app-id state)) "Initialization is not the active request")
      (app::%send-request! state connection
        (mine/protocol/messages:ReqEval (mine/protocol/messages:RequestId 901)
                                        "user-form" "old-package" coalton:False))
      (%check (equal '((:eval 0 "initialization" "CL-USER" nil)) (%app-sent-messages output))
              "The first evaluation was sent before initialization completed")
-     (%check (= 0 (mine/protocol/client::%connection-foreground-request-id connection))
+     (%check (eql 0 (mine/protocol/client::%connection-foreground-request-id connection))
              "A deferred request stole the initialization interrupt target")
      (app::handle-proto-msg! state (app::%parse-one-message '(:io-request 0 "init input")))
      (%check (coalton/cell:read (mine/app/state:get-io-request-active-cell state))
@@ -41,7 +50,7 @@
              "Initialization debugger was discarded")
      (app::handle-proto-msg! state (app::%parse-one-message '(:notify (:package 0 "exact-init-package"))))
      (app::handle-proto-msg! state (app::%parse-one-message '(:return 0 (:ok "(:values ())"))))
-     (%check (= 901 (%active-app-id state)) "Deferred evaluation was not activated")
+     (%check (eql 901 (%active-app-id state)) "Deferred evaluation was not activated")
      (%check (equal '((:eval 901 "user-form" "exact-init-package" nil)) (%app-sent-messages output))
              "Deferred REPL evaluation did not inherit the acknowledged package")
      (app::handle-proto-msg! state (app::%parse-one-message '(:return 901 (:ok "(:values (\"42\"))"))))
@@ -72,7 +81,7 @@
     (%call-with-replaced-runtime-function
      'app::%send-quick-result-interrupt-cl (lambda (&rest args) (declare (ignore args)) nil)
      (lambda () (app::%cancel-quick-result! state)))
-    (%check (= 903 (%active-app-id state)) "Failed cancellation forgot the live foreground evaluation")
+    (%check (eql 903 (%active-app-id state)) "Failed cancellation forgot the live foreground evaluation")
     (%check (not (coalton-impl/runtime/optional:cl-none-p
                   (coalton/cell:read (mine/app/state:get-quick-result-request-id-cell state))))
             "Failed cancellation cannot be retried")))
