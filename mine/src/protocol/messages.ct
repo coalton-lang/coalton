@@ -9,7 +9,9 @@
    #:ReqQuickResult
    #:ReqCompileString #:ReqCompileFile #:ReqBeamSystem
    #:ReqCoaltonTypeOf #:ReqFindDefinition #:ReqArglist
-   #:ReqPing #:ReqQuit
+   #:ReqPing #:ReqQuit #:ReqHeapInfo #:ReqTypeOf #:ReqIndentRules
+   #:ReqInterruptRequest #:ReqDebugRestart #:ReqDebugAbort #:ReqIOResponse #:ReqIOAbort
+   #:request-foreground-id
    #:request-to-sexpr))
 
 (in-package #:mine/protocol/messages)
@@ -37,8 +39,26 @@
     (ReqCoaltonTypeOf RequestId String String)
     (ReqFindDefinition RequestId String String)
     (ReqArglist RequestId String String)
+    (ReqHeapInfo RequestId)
+    (ReqTypeOf RequestId String String)
+    (ReqIndentRules RequestId (List String) String)
+    (ReqInterruptRequest RequestId RequestId)
+    (ReqDebugRestart RequestId UFix)
+    (ReqDebugAbort RequestId)
+    (ReqIOResponse RequestId String)
+    (ReqIOAbort RequestId)
     (ReqPing RequestId)
     (ReqQuit RequestId))
+
+  (declare request-foreground-id (Request -> Optional RequestId))
+  (define (request-foreground-id request)
+    (match request
+      ((ReqEval id _ _ _) (Some id))
+      ((ReqQuickResult id _ _ _) (Some id))
+      ((ReqCompileString id _ _ _ _ _ _) (Some id))
+      ((ReqCompileFile id _ _) (Some id))
+      ((ReqBeamSystem id _ _) (Some id))
+      (_ None)))
 
   ;;; Request -> SExpr serialization
 
@@ -102,6 +122,27 @@
                               (wire:SInteger (into id))
                               (wire:SString func)
                               (wire:SString pkg))))
+      ((ReqHeapInfo (RequestId id))
+       (wire:SList (make-list (wire:SAtom ":HEAP-INFO") (wire:SInteger (into id)))))
+      ((ReqTypeOf (RequestId id) symbol package)
+       (wire:SList (make-list (wire:SAtom ":TYPE-OF") (wire:SInteger (into id))
+                              (wire:SString symbol) (wire:SString package))))
+      ((ReqIndentRules (RequestId id) heads package)
+       (wire:SList (make-list (wire:SAtom ":INDENT-RULES") (wire:SInteger (into id))
+                              (wire:SList (map wire:SString heads)) (wire:SString package))))
+      ((ReqInterruptRequest (RequestId id) (RequestId target))
+       (wire:SList (make-list (wire:SAtom ":INTERRUPT-REQUEST") (wire:SInteger (into id))
+                              (wire:SInteger (into target)))))
+      ((ReqDebugRestart (RequestId id) index)
+       (wire:SList (make-list (wire:SAtom ":DEBUG-RESTART") (wire:SInteger (into id))
+                              (wire:SInteger (into index)))))
+      ((ReqDebugAbort (RequestId id))
+       (wire:SList (make-list (wire:SAtom ":DEBUG-ABORT") (wire:SInteger (into id)))))
+      ((ReqIOResponse (RequestId id) text)
+       (wire:SList (make-list (wire:SAtom ":IO-RESPONSE") (wire:SInteger (into id))
+                              (wire:SString text))))
+      ((ReqIOAbort (RequestId id))
+       (wire:SList (make-list (wire:SAtom ":IO-ABORT") (wire:SInteger (into id)))))
       ((ReqPing (RequestId id))
        (wire:SList (make-list (wire:SAtom ":PING")
                               (wire:SInteger (into id)))))

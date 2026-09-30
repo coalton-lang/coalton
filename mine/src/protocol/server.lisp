@@ -145,7 +145,9 @@ Returns the parsed S-expression, or NIL on EOF/error."
       (sb-thread:interrupt-thread
        thread
        (lambda ()
-         (error 'sb-sys:interactive-interrupt)))
+         ;; A delayed interrupt must not spill into the next request on this thread.
+         (when (eq (%active-request-thread id) sb-thread:*current-thread*)
+           (error 'sb-sys:interactive-interrupt))))
       t)))
 
 ;;; TUI output stream
@@ -325,7 +327,8 @@ Returns :quit if the server should shut down, T otherwise."
 
       (:eval
        (destructuring-bind (id form-string package-name &optional auto-coalton-p) (rest msg)
-         (handle-eval id form-string package-name stream auto-coalton-p)))
+         (%with-active-request (id)
+           (handle-eval id form-string package-name stream auto-coalton-p))))
 
       (:quick-result
        (destructuring-bind (id form-string package-name &optional auto-coalton-p) (rest msg)
@@ -342,16 +345,19 @@ Returns :quit if the server should shut down, T otherwise."
        (destructuring-bind (id string document-key package-name position client-prefix-length
                                &optional auto-coalton-p)
            (rest msg)
-         (handle-compile-string id string document-key package-name position
-                                client-prefix-length stream auto-coalton-p)))
+         (%with-active-request (id)
+           (handle-compile-string id string document-key package-name position
+                                  client-prefix-length stream auto-coalton-p))))
 
       (:compile-file
        (destructuring-bind (id filename load-p) (rest msg)
-         (handle-compile-file id filename load-p stream)))
+         (%with-active-request (id)
+           (handle-compile-file id filename load-p stream))))
 
       (:beam-system
        (destructuring-bind (id system-name asd-path) (rest msg)
-         (handle-beam-system id system-name asd-path stream)))
+         (%with-active-request (id)
+           (handle-beam-system id system-name asd-path stream))))
 
       (:type-of
        (destructuring-bind (id symbol-name package-name) (rest msg)
@@ -362,8 +368,8 @@ Returns :quit if the server should shut down, T otherwise."
          (handle-find-definition id symbol-name package-name stream)))
 
       (:complete
-       (destructuring-bind (id prefix package-name) (rest msg)
-         (handle-complete id prefix package-name stream)))
+       (destructuring-bind (id prefix package-name &optional limit) (rest msg)
+         (handle-complete id prefix package-name stream limit)))
 
       (:arglist
        (destructuring-bind (id function-name package-name) (rest msg)
@@ -1191,6 +1197,10 @@ Binds IO streams so interactive reads (y-or-n-p, read, etc.) work via the TUI."
         (write-message stream
                        `(:return ,id
                          (:error ,(format nil "~A" c)))))
+      (sb-sys:interactive-interrupt ()
+        (%drain-runtime-output stdout-capture)
+        (%flush-diagnostics stream diag-state)
+        (write-message stream (list :return id (list :error "Interrupted."))))
       (error (c)
         ;; Send any captured output even on error
         (let ((output (%drain-runtime-output stdout-capture)))
@@ -1472,7 +1482,7 @@ Each entry is (name-with-colon \"pkg\" \"\")."
                   matches)))))
     matches))
 
-(defun handle-complete (id raw-prefix buffer-package-name stream)
+(defun handle-complete (id raw-prefix buffer-package-name stream &optional limit)
   "Handle a :complete request for symbol completion.
 RAW-PREFIX may contain a package qualifier (e.g. \"vec:push\").
 BUFFER-PACKAGE-NAME is the package context for resolving local nicknames.
@@ -1526,6 +1536,8 @@ When no colon in prefix, also completes package names/nicknames."
           (unless has-qualifier
             (setf matches
                   (nconc matches (%matching-package-names raw-prefix pkg))))
+          (when (and (integerp limit) (>= limit 0))
+            (setf matches (subseq matches 0 (min limit (length matches)))))
           (write-message stream
                          `(:return ,id (:ok ,matches)))))
     (error (c)

@@ -230,6 +230,90 @@
     (%runtime-check (equal '(:return 62 (:error "Aborted.")) (car (last messages)))
                     "System-load debugger should return a completed abort")))
 
+(defun check-runtime-request-scoped-interruption ()
+  (let ((thread nil) (worker-error nil))
+    (unwind-protect
+         (let ((messages
+                 (%call-with-runtime-messages
+                  (lambda ()
+                    (setf thread
+                          (sb-thread:make-thread
+                           (lambda ()
+                             (handler-case
+                                 (mine/protocol/server::dispatch-message
+                                  '(:eval 71 "(loop (sleep 1))" "CL-USER" nil) :test-wire)
+                               (serious-condition (condition) (setf worker-error condition))))
+                           :name "mine-interrupt-regression"))
+                    (let ((deadline (+ (get-internal-real-time) (* 3 internal-time-units-per-second))))
+                      (loop until (mine/protocol/server::%active-request-thread 71)
+                            do (%runtime-check (< (get-internal-real-time) deadline)
+                                               "Evaluation did not register its active request")
+                               (sleep 0.01)))
+                    (%runtime-check (mine/protocol/server::%interrupt-active-request 71)
+                                    "Request-scoped interrupt was not delivered")
+                    (%runtime-check
+                     (not (eq :timeout (sb-thread:join-thread thread :timeout 5 :default :timeout)))
+                     "Interrupted evaluation did not finish"))
+                  '((:debug-abort 71)))))
+           (%runtime-check (null worker-error) "Worker failed: ~A" worker-error)
+           (%runtime-check (null (mine/protocol/server::%active-request-thread 71))
+                           "Completed request remained interruptible")
+           (%runtime-check (equal '(:return 71 (:error "Aborted.")) (car (last messages)))
+                           "Interrupted REPL evaluation should recover through its debugger"))
+      (when (and thread (sb-thread:thread-alive-p thread))
+        (sb-thread:terminate-thread thread)))))
+
+(defun check-runtime-registers-every-foreground-request ()
+  (dolist (entry '((mine/protocol/server::handle-compile-string
+                    (:compile-string 72 "(+ 1 2)" "buffer" "CL-USER" 0 0 nil))
+                   (mine/protocol/server::handle-compile-file
+                    (:compile-file 72 "file.lisp" t))
+                   (mine/protocol/server::handle-beam-system
+                    (:beam-system 72 "system" ""))))
+    (%call-with-replaced-runtime-function
+     (first entry)
+     (lambda (&rest args)
+       (declare (ignore args))
+       (%runtime-check (eq sb-thread:*current-thread*
+                           (mine/protocol/server::%active-request-thread 72))
+                       "Foreground request was not registered"))
+     (lambda () (mine/protocol/server::dispatch-message (second entry) :test-wire)))
+    (%runtime-check (null (mine/protocol/server::%active-request-thread 72))
+                    "Foreground request registration leaked")))
+
+(defun check-runtime-typed-control-requests-and-send-status ()
+  (let* ((rid (mine/protocol/messages:RequestId 81))
+         (request (mine/protocol/messages:ReqInterruptRequest rid (mine/protocol/messages:RequestId 71))))
+    (%runtime-check
+     (equal '(:interrupt-request 81 71)
+            (mine/protocol/server::decode-protocol-sexp
+             (mine/protocol/wire:encode-sexpr (mine/protocol/messages:request-to-sexpr request))))
+     "Typed interrupt request has the wrong wire shape"))
+  (%runtime-check
+   (equal '(:indent-rules 82 ("let" "when") "CL-USER")
+          (mine/protocol/server::decode-protocol-sexp
+           (mine/protocol/wire:encode-sexpr
+            (mine/protocol/messages:request-to-sexpr
+             (mine/protocol/messages:ReqIndentRules
+              (mine/protocol/messages:RequestId 82) '("let" "when") "CL-USER")))))
+   "Typed indentation request has the wrong wire shape")
+  (%call-with-runtime-wire-file
+   (lambda (stream)
+     (let* ((conn (mine/protocol/client::make-%connection :stream stream :active t))
+            (rid (mine/protocol/messages:RequestId 83))
+            (request (mine/protocol/messages:ReqEval rid "1" "CL-USER" coalton:False)))
+       (%runtime-check (mine/protocol/client:connection-send-checked! conn request)
+                       "Expected successful typed send")
+       (mine/protocol/client:connection-finish-request! conn (mine/protocol/messages:RequestId 82))
+       (%runtime-check (= 83 (mine/protocol/client::%connection-foreground-request-id conn))
+                       "Unrelated return cleared the interrupt target")
+       (mine/protocol/client:connection-finish-request! conn rid)
+       (%runtime-check (null (mine/protocol/client::%connection-foreground-request-id conn))
+                       "Matching return did not clear the interrupt target")
+       (close stream)
+       (%runtime-check (not (mine/protocol/client:connection-send-checked! conn request))
+                       "Closed connection reported successful delivery")))))
+
 (defun run-runtime-regression-tests ()
   (dolist (test '(check-runtime-protocol-io-isolation
                   check-runtime-protocol-rejects-reader-evaluation
@@ -239,7 +323,10 @@
                   check-runtime-package-identity-and-success-reporting
                   check-runtime-coalton-multiform-eval
                   check-runtime-debugger-interactive-and-invalid-restarts
-                  check-runtime-beam-errors-reach-debugger))
+                  check-runtime-beam-errors-reach-debugger
+                  check-runtime-request-scoped-interruption
+                  check-runtime-registers-every-foreground-request
+                  check-runtime-typed-control-requests-and-send-status))
     (handler-case (funcall test)
       (error (condition)
         (format *error-output* "~&Runtime regression ~A failed: ~A~%" test condition)
