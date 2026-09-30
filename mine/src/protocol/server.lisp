@@ -148,6 +148,67 @@ Returns the parsed S-expression, or NIL on EOF/error."
          (error 'sb-sys:interactive-interrupt)))
       t)))
 
+;;; TUI output stream
+
+(defclass tui-output-stream (sb-gray:fundamental-character-output-stream)
+  ((wire-stream :initarg :wire-stream :reader tos-wire-stream)
+   (msg-id :initarg :msg-id :reader tos-msg-id)
+   (buffer :initform (make-array 0 :element-type 'character :adjustable t :fill-pointer 0)
+           :reader tos-buffer)
+   (column :initform 0 :accessor tos-column)))
+
+(defun %flush-tui-output (stream)
+  (let ((buffer (tos-buffer stream)))
+    (when (plusp (length buffer))
+      (let ((text (coerce buffer 'simple-string)))
+        (setf (fill-pointer buffer) 0)
+        (write-message (tos-wire-stream stream)
+                       (list :notify (list :output-chunk (tos-msg-id stream) text))))))
+  nil)
+
+(defmethod sb-gray:stream-write-char ((stream tui-output-stream) char)
+  (vector-push-extend char (tos-buffer stream))
+  (setf (tos-column stream) (if (char= char #\Newline) 0 (1+ (tos-column stream))))
+  (when (or (char= char #\Newline) (>= (length (tos-buffer stream)) 4096))
+    (%flush-tui-output stream))
+  char)
+
+(defmethod sb-gray:stream-write-string ((stream tui-output-stream) string &optional (start 0) end)
+  (loop for i from start below (or end (length string))
+        do (sb-gray:stream-write-char stream (char string i)))
+  string)
+
+(defmethod sb-gray:stream-force-output ((stream tui-output-stream))
+  (%flush-tui-output stream))
+
+(defmethod sb-gray:stream-finish-output ((stream tui-output-stream))
+  (%flush-tui-output stream))
+
+(defmethod sb-gray:stream-line-column ((stream tui-output-stream))
+  (tos-column stream))
+
+(defun %drain-runtime-output (stream)
+  "Flush live output, or return text from a legacy string capture."
+  (if (typep stream 'tui-output-stream)
+      (progn (finish-output stream) "")
+      (get-output-stream-string stream)))
+
+(defun call-with-tui-io (wire-stream msg-id function)
+  "Run FUNCTION with ordered interactive IO; flush even after a nonlocal exit."
+  (let* ((output (make-instance 'tui-output-stream :wire-stream wire-stream :msg-id msg-id))
+         (input (make-instance 'tui-input-stream :wire-stream wire-stream :msg-id msg-id
+                              :stdout-capture output))
+         (interactive (make-two-way-stream input output))
+         (*standard-output* output)
+         (*error-output* output)
+         (*trace-output* output)
+         (*standard-input* input)
+         (*query-io* interactive)
+         (*terminal-io* interactive)
+         (*debug-io* interactive))
+    (unwind-protect (funcall function)
+      (finish-output output))))
+
 ;;; TUI input stream (Gray stream for interactive IO)
 
 (defclass tui-input-stream (sb-gray:fundamental-character-input-stream)
@@ -172,7 +233,7 @@ Returns the input text string, or NIL for EOF/abort."
         (capture (tis-stdout-capture tis)))
     ;; Flush pending output (e.g., y-or-n-p prompt text) before requesting input
     (when capture
-      (let ((text (get-output-stream-string capture)))
+      (let ((text (%drain-runtime-output capture)))
         (when (plusp (length text))
           (dolist (line (split-string-by-newline text))
             (when (plusp (length line))
@@ -707,6 +768,7 @@ user package changes are visible."
 
 (defun %enter-debugger (id condition stream)
   "Enter interactive debug mode. Send debug info to TUI, wait for restart choice."
+  (force-output *standard-output*)
   (let* ((condition-text (handler-case (format nil "~A" condition)
                            (error () "[unprintable condition]")))
          (restarts (compute-restarts condition))
@@ -763,7 +825,7 @@ user package changes are visible."
 (defun %flush-stderr-capture (stderr-capture stream)
   "Send any captured stderr output as :notify messages, then reset the stream."
   (handler-case
-      (let ((text (get-output-stream-string stderr-capture)))
+      (let ((text (%drain-runtime-output stderr-capture)))
         (when (plusp (length text))
           (dolist (line (split-string-by-newline text))
             (when (plusp (length line))
@@ -1061,12 +1123,15 @@ Uses compile-file + load for correct eval-when toplevel semantics."
          (string-equal ".ct" filename :start2 (- len 3)))))
 
 (defun handle-compile-file (id filename load-p stream)
+  (call-with-tui-io stream id (lambda () (%handle-compile-file id filename load-p stream))))
+
+(defun %handle-compile-file (id filename load-p stream)
   "Handle a :compile-file request. Captures structured diagnostics.
 For .ct files, uses LOAD instead of COMPILE-FILE since Coalton's compiler
 runs during macroexpansion and needs the full runtime environment.
 Binds IO streams so interactive reads (y-or-n-p, read, etc.) work via the TUI."
   (let* ((diag-state (%make-diagnostic-state))
-         (stdout-capture (make-string-output-stream))
+         (stdout-capture *standard-output*)
          (tis (make-instance 'tui-input-stream
                 :wire-stream stream :msg-id id
                 :stdout-capture stdout-capture)))
@@ -1106,7 +1171,7 @@ Binds IO streams so interactive reads (y-or-n-p, read, etc.) work via the TUI."
                    (when (and load-p output-file)
                      (load output-file)))))))
           ;; Send any captured output
-          (let ((output (get-output-stream-string stdout-capture)))
+          (let ((output (%drain-runtime-output stdout-capture)))
             (when (plusp (length output))
               (dolist (line (split-string-by-newline output))
                 (write-message stream `(:notify (:output ,line))))))
@@ -1117,7 +1182,7 @@ Binds IO streams so interactive reads (y-or-n-p, read, etc.) work via the TUI."
                              (:ok ,(format nil "Compiled ~A (~D diagnostic~:P)"
                                            filename diagnostic-count))))))
       (sb-c:compiler-error (c)
-        (let ((output (get-output-stream-string stdout-capture)))
+        (let ((output (%drain-runtime-output stdout-capture)))
           (when (plusp (length output))
             (dolist (line (split-string-by-newline output))
               (write-message stream `(:notify (:output ,line))))))
@@ -1127,7 +1192,7 @@ Binds IO streams so interactive reads (y-or-n-p, read, etc.) work via the TUI."
                          (:error ,(format nil "~A" c)))))
       (error (c)
         ;; Send any captured output even on error
-        (let ((output (get-output-stream-string stdout-capture)))
+        (let ((output (%drain-runtime-output stdout-capture)))
           (when (plusp (length output))
             (dolist (line (split-string-by-newline output))
               (write-message stream `(:notify (:output ,line))))))
@@ -1137,8 +1202,11 @@ Binds IO streams so interactive reads (y-or-n-p, read, etc.) work via the TUI."
                          (:error ,(format nil "~A" c))))))))
 
 (defun handle-beam-system (id system-name asd-path stream)
+  (call-with-tui-io stream id (lambda () (%handle-beam-system id system-name asd-path stream))))
+
+(defun %handle-beam-system (id system-name asd-path stream)
   "Handle a :beam-system request with structured diagnostics and debugger support."
-  (let ((stderr-capture (make-string-output-stream))
+  (let ((stderr-capture *standard-output*)
         (diag-state (%make-diagnostic-state)))
     (catch '%debugger-abort
       (handler-bind
@@ -1173,7 +1241,7 @@ Binds IO streams so interactive reads (y-or-n-p, read, etc.) work via the TUI."
                       (mine/runtime/asdf:beam-system
                        system-name
                        (and (stringp asd-path) (plusp (length asd-path)) asd-path))
-                    (let ((output (get-output-stream-string stderr-capture))
+                    (let ((output (%drain-runtime-output stderr-capture))
                           (diagnostic-error (%diagnostic-error-summary diag-state)))
                       (when (plusp (length output))
                         (dolist (line (split-string-by-newline output))
