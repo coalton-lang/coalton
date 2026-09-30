@@ -112,86 +112,16 @@
     (t
      (jump-to-file st document-key char-offset))))
 
+(defun %completion-anchor (st is-repl prefix)
+  "Read native terminal dimensions at the boundary; layout policies are Coalton."
+  (multiple-value-bind (rows cols) (mine/bindings/terminal:terminal-get-size)
+    (coalton-optional-value-or-nil
+     (mine/app/layout:completion-anchor st is-repl prefix cols rows))))
+
 (defun completion-anchor-col (st is-repl prefix)
-  "Compute the screen column for the completion popup anchor."
-  (if is-repl
-      (let* ((rp (mine/app/state:get-repl-pane st))
-             (cursor (mine/pane/repl:repl-pane-input-cursor rp))
-             (prompt-len (mine/text/width:string-cell-width-cl
-                          (mine/pane/repl:repl-pane-prompt-text rp)))
-             (text (mine/pane/repl:repl-pane-get-input rp))
-             (text-before (subseq text 0 (min cursor (length text))))
-             (vcol (mine/text/width:string-cell-width-cl text-before))
-             (content-x (coalton/cell:read (mine/app/state:get-content-x-cell st))))
-        (+ content-x prompt-len
-           (max 0 (- vcol (length prefix)))))
-      (let* ((cs (mine/app/state:get-cursor-state st))
-             (buf (coalton-optional-value-or-nil
-                   (mine/buffer/manager:bufmgr-current
-                    (mine/app/state:get-bufmgr st)))))
-        (if buf
-            (let* ((gb (mine/buffer/buffer:buffer-gap buf))
-                   (ep (mine/app/state:get-editor-pane st))
-                   (lc (mine/edit/cursor:cursor-line-col cs gb))
-                   (cur-col (coalton-prelude:snd lc))
-                   (line (coalton-prelude:fst lc))
-                   (line-text (mine/buffer/gap:gap-line-text gb line))
-                   (tab-w mine/buffer/gap::*tab-width*)
-                   (vcol (mine/buffer/gap:visual-col line-text cur-col tab-w))
-                   (sc (mine/pane/editor:editor-pane-scroll-col ep))
-                   (gw (mine/pane/editor:editor-pane-gutter-width ep gb))
-                   (wrap-w (mine/pane/editor:editor-pane-effective-wrap-width ep))
-                   (seg-vcol (mine/pane/editor:wrap-seg-start-vcol
-                              gb line cur-col wrap-w tab-w))
-                   (origin (+ sc seg-vcol))
-                   (eff-x (max 0 (- vcol origin)))
-                   (content-x (coalton/cell:read (mine/app/state:get-content-x-cell st))))
-              (+ content-x gw (max 0 (- eff-x (length prefix)))))
-            0))))
+  (let ((anchor (%completion-anchor st is-repl prefix)))
+    (if anchor (coalton-prelude:fst anchor) 0)))
 
 (defun completion-anchor-row (st is-repl)
-  "Compute the screen row for the completion popup anchor."
-  (if is-repl
-      (let* ((rp (mine/app/state:get-repl-pane st))
-             (text (mine/pane/repl:repl-pane-get-input rp))
-             (cursor (mine/pane/repl:repl-pane-input-cursor rp))
-             (cursor-row (count #\Newline text :end (min cursor (length text))))
-             (rows (mine/bindings/terminal:terminal-get-size))
-             (middle-h (max 1 (- rows 2)))
-             (layout (coalton/cell:read
-                      (mine/app/state:get-layout-cell st)))
-             (repl-full (mine/app/layout:layout-repl-full? layout))
-             (repl-h (if repl-full
-                         (max 1 (- middle-h 1))
-                         (max 3 (floor middle-h 3))))
-             (editor-h (if repl-full
-                           0
-                           (if (> middle-h (+ repl-h 2))
-                               (- middle-h (+ repl-h 2))
-                               1)))
-             (repl-y (if repl-full
-                         1
-                         (+ 1 editor-h 1)))
-             (input-lines (mine/pane/repl:repl-pane-input-line-count rp))
-             (max-input-h (max 1 (floor repl-h 2)))
-             (input-h (max 1 (min input-lines max-input-h)))
-             (output-h (- repl-h input-h))
-             (input-y (+ repl-y output-h)))
-        (+ input-y cursor-row))
-      (let* ((cs (mine/app/state:get-cursor-state st))
-             (buf (coalton-optional-value-or-nil
-                   (mine/buffer/manager:bufmgr-current
-                    (mine/app/state:get-bufmgr st)))))
-        (if buf
-            (let* ((gb (mine/buffer/buffer:buffer-gap buf))
-                   (lc (mine/edit/cursor:cursor-line-col cs gb))
-                   (cur-line (coalton-prelude:fst lc))
-                   (cur-col (coalton-prelude:snd lc))
-                   (ep (mine/app/state:get-editor-pane st))
-                   (sr (mine/pane/editor:editor-pane-scroll-row ep))
-                   (wrap-w (mine/pane/editor:editor-pane-effective-wrap-width ep))
-                   (tab-w mine/buffer/gap::*tab-width*)
-                   (row-off (mine/pane/editor:cursor-screen-row-offset
-                             gb sr cur-line cur-col wrap-w tab-w)))
-              (+ 1 row-off))
-            1))))
+  (let ((anchor (%completion-anchor st is-repl "")))
+    (if anchor (coalton-prelude:snd anchor) 0)))

@@ -6,6 +6,8 @@
    (#:status #:mine/pane/status)
    (#:editor #:mine/pane/editor)
    (#:mgr #:mine/buffer/manager)
+   (#:buf #:mine/buffer/buffer)
+   (#:hm #:coalton/hashmap)
    (#:cursor #:mine/edit/cursor)
    (#:repl #:mine/pane/repl)
    (#:tree #:mine/pane/tree)
@@ -33,6 +35,7 @@
    #:.ml-center
    #:MineState
    #:mine-state-new
+   #:activate-buffer! #:forget-buffer-view!
    #:.ms-menu
    #:.ms-status
    #:.ms-pending-error
@@ -208,7 +211,9 @@
     (ms-quick-result-state  NativeBox) ;; CL plist for transient result popup
     (ms-quick-result-request-id (Cell (Optional msg:RequestId)))
     (ms-bg-proto-thread    NativeBox)
-    (ms-update-check-state NativeBox)) ;; CL plist for update-check status
+    (ms-update-check-state NativeBox) ;; CL plist for update-check status
+    (ms-editor-views (Cell (hm:HashMap UFix editor:EditorView)))
+    (ms-view-buffer (Cell (Optional buf:BufferId))))
 
   (declare mine-state-new (cfgt:MineConfig -> MineState))
   (define (mine-state-new config)
@@ -239,7 +244,42 @@
                (cell:new None) (spinner:spinner-new)
                (cell:new 0) (cell:new 0) (cell:new 0) (cell:new True)
                (cell:new None) (native-box-new) (cell:new None)
-               (native-box-new) (native-box-new)))
+               (native-box-new) (native-box-new)
+               (cell:new hm:empty) (cell:new None)))
+
+  (declare activate-buffer! (MineState * buf:Buffer -> Void))
+  (define (activate-buffer! st buffer)
+    "Switch documents while preserving each document's cursor, selection, and viewport."
+    (let bid = (buf:buffer-id buffer))
+    (when (not (== (cell:read (.ms-view-buffer st)) (Some bid)))
+      (complete:completion-dismiss! (.ms-completion st))
+      (match (cell:read (.ms-view-buffer st))
+        ((Some (buf:BufferId previous))
+         (let saved = (editor:editor-pane-save-view (.ms-editor st) (.ms-cursor st)))
+         (cell:update! (fn (views) (hm:insert views previous saved)) (.ms-editor-views st))
+         (values))
+        ((None) (values)))
+      (match bid
+        ((buf:BufferId id)
+         (let saved = (match (hm:lookup (cell:read (.ms-editor-views st)) id)
+                        ((Some saved) saved)
+                        ((None) (editor:editor-pane-save-view (editor:editor-pane-new)
+                                                               (cursor:cursor-new)))))
+         (editor:editor-pane-set-buffer! (.ms-editor st) bid)
+         (editor:editor-pane-restore-view! (.ms-editor st) (buf:buffer-gap buffer)
+                                           (.ms-cursor st) saved)))
+      (cell:write! (.ms-view-buffer st) (Some bid)))
+    (mgr:bufmgr-switch! (.ms-bufmgr st) bid)
+    (values))
+
+  (declare forget-buffer-view! (MineState * buf:BufferId -> Void))
+  (define (forget-buffer-view! st bid)
+    (match bid
+      ((buf:BufferId id)
+       (cell:update! (fn (views) (hm:remove views id)) (.ms-editor-views st))))
+    (when (== (cell:read (.ms-view-buffer st)) (Some bid))
+      (cell:write! (.ms-view-buffer st) None))
+    (values))
 
 ;;; Named accessors for CL interop
 

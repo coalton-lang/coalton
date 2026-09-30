@@ -3055,6 +3055,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (match (mgr:bufmgr-find-by-path (.ms-bufmgr st) prev-path)
          ((Some buf)
           (when (not (buf:buffer-dirty? buf))
+            (forget-buffer-view! st (buf:buffer-id buf))
             (mgr:bufmgr-close! (.ms-bufmgr st) (buf:buffer-id buf)))
           (values))
          ((None) (values)))

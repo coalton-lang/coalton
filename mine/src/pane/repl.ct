@@ -21,6 +21,8 @@
    #:ReplPane
    #:repl-pane-new
    #:repl-pane-render
+   #:ReplGeometry #:.rg-output #:.rg-input
+   #:repl-pane-geometry #:repl-pane-input-viewport #:repl-pane-completion-anchor
    #:repl-pane-clear-output!
    #:repl-pane-append-output!
    #:repl-pane-append-system!
@@ -419,30 +421,50 @@ only when at the first/last line."
 
   ;;; Rendering
 
+  (define-struct ReplGeometry
+    (rg-output wt:Rect)
+    (rg-input wt:Rect))
+
+  (declare repl-pane-geometry (ReplPane * wt:Rect -> ReplGeometry))
+  (define (repl-pane-geometry rp rect)
+    "Split the actual REPL rectangle into output and input, including tiny panes."
+    (let h = (wt:.rect-height rect))
+    (let max-input = (max 1 (lisp (-> UFix) (h) (cl:floor h 2))))
+    (let input-h = (min h (min (repl-pane-input-line-count rp) max-input)))
+    (let output-h = (- h input-h))
+    (ReplGeometry (wt:Rect (wt:.rect-x rect) (wt:.rect-y rect)
+                           (wt:.rect-width rect) output-h)
+                  (wt:Rect (wt:.rect-x rect) (+ (wt:.rect-y rect) output-h)
+                           (wt:.rect-width rect) input-h)))
+
+  (declare repl-pane-input-viewport (ReplPane * wt:Rect -> widget-input:InputViewport))
+  (define (repl-pane-input-viewport rp rect)
+    (widget-input:input-widget-viewport (.input-widget rp)
+                                         (.rg-input (repl-pane-geometry rp rect))))
+
+  (declare repl-pane-completion-anchor (ReplPane * wt:Rect * String -> Optional (Tuple UFix UFix)))
+  (define (repl-pane-completion-anchor rp rect prefix)
+    (widget-input:input-widget-completion-anchor (.input-widget rp)
+                                                  (.rg-input (repl-pane-geometry rp rect))
+                                                  prefix))
+
   (declare repl-pane-render (ReplPane * screen:Screen * wt:Rect -> Void))
   (define (repl-pane-render rp scr rect)
     "Render the REPL pane: output takes top area, input takes bottom.
 Input area grows dynamically based on line count, up to half the pane height."
     (let h = (wt:.rect-height rect))
-    (let input-lines = (widget-input:input-widget-line-count (.input-widget rp)))
-    ;; Input height: at least 1, at most half the pane
-    (let max-input-h = (max 1 (lisp (-> UFix) (h) (cl:floor h 2))))
-    (let input-h = (max 1 (min input-lines max-input-h)))
+    (when (or (== h 0) (== (wt:.rect-width rect) 0))
+      (return (values)))
+    (let geometry = (repl-pane-geometry rp rect))
     (cond
       ;; Not enough room -- just draw the input.
       ((<= h 1)
        (widget-input:input-widget-render (.input-widget rp) scr rect))
       ;; Split: output above, input below.
       (True
-       (let output-h = (- h input-h))
-       (let output-rect = (wt:Rect (wt:.rect-x rect)
-                                     (wt:.rect-y rect)
-                                     (wt:.rect-width rect)
-                                     output-h))
-       (let input-rect = (wt:Rect (wt:.rect-x rect)
-                                    (+ (wt:.rect-y rect) output-h)
-                                    (wt:.rect-width rect)
-                                    input-h))
+       (let output-rect = (.rg-output geometry))
+       (let output-h = (wt:.rect-height output-rect))
+       (let input-rect = (.rg-input geometry))
        (widget-text:text-widget-render (.output rp) scr output-rect)
        ;; Scrollbar on output area
        (let total-lines = (widget-text:text-widget-line-count (.output rp)))
