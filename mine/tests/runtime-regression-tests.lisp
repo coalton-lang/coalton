@@ -50,8 +50,56 @@
      (error () t))
    "Protocol reader accepted trailing data"))
 
+(defun %call-with-replaced-runtime-function (name replacement function)
+  (let ((original (symbol-function name)))
+    (unwind-protect
+         (progn (setf (symbol-function name) replacement) (funcall function))
+      (setf (symbol-function name) original))))
+
+(defun %call-with-tui-responses (responses function)
+  (let ((requests 0))
+    (%call-with-replaced-runtime-function
+     'mine/protocol/server::%request-input-from-tui
+     (lambda (stream prompt)
+       (declare (ignore stream prompt))
+       (incf requests)
+       (pop responses))
+     (lambda ()
+       (funcall function (make-instance 'mine/protocol/server:tui-input-stream))))
+    requests))
+
+(defun check-runtime-input-preserves-lines-and-unread ()
+  (%runtime-check
+   (= 1 (%call-with-tui-responses
+         '("42")
+         (lambda (stream) (%runtime-check (= 42 (read stream)) "READ joined submissions"))))
+   "READ should consume one submitted numeric line")
+  (%runtime-check
+   (= 1 (%call-with-tui-responses
+         '("abc")
+         (lambda (stream)
+           (%runtime-check (char= #\a (read-char stream)) "Wrong first character")
+           (%runtime-check (string= "bc" (read-line stream)) "READ-LINE discarded buffered text"))))
+   "READ-LINE must use remaining buffered characters")
+  (%call-with-tui-responses
+   '("")
+   (lambda (stream)
+     (%runtime-check (char= #\Newline (read-char stream)) "Empty line lost its newline")
+     (unread-char #\Newline stream)
+     (%runtime-check (listen stream) "Unread newline should be available")
+     (multiple-value-bind (text eof-p) (read-line stream)
+       (%runtime-check (and (string= text "") (not eof-p)) "Unread newline was not restored"))))
+  (%runtime-check
+   (= 1 (%call-with-tui-responses
+         '(nil)
+         (lambda (stream)
+           (%runtime-check (eq :eof (read-char stream nil :eof)) "Expected EOF")
+           (%runtime-check (eq :eof (read-char stream nil :eof)) "Expected persistent EOF"))))
+   "EOF should not repeatedly request input"))
+
 (defun run-runtime-regression-tests ()
   (dolist (test '(check-runtime-protocol-io-isolation
-                  check-runtime-protocol-rejects-reader-evaluation))
+                  check-runtime-protocol-rejects-reader-evaluation
+                  check-runtime-input-preserves-lines-and-unread))
     (funcall test))
   t)
