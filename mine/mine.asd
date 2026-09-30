@@ -99,6 +99,7 @@
     :pathname "syntax"
     :serial t
     :components ((:ct-file "token")
+                 (:ct-file "context")
                  (:ct-file "lexer")
                  (:ct-file "highlight")
                  (:ct-file "indent")))
