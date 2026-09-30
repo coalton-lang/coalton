@@ -29,7 +29,7 @@
     ((cl:< (cl:char-code ch) 32) 0)
     ((cl:plusp (sb-unicode:combining-class ch)) 0)
     ((cl:let ((eaw (sb-unicode:east-asian-width ch)))
-       (cl:or (cl:eq eaw :w) (cl:eq eaw :f)))
+       (cl:or (cl:eq eaw ':w) (cl:eq eaw ':f)))
      2)
     (cl:t 1)))
 
@@ -153,9 +153,7 @@
   (define (string-cell-width text)
     "Return the display width of TEXT in terminal cells."
     (lisp (-> UFix) (text)
-      (string-cell-width-cl text)))
-
-  )
+      (string-cell-width-cl text))))
 
 (cl:defun editor-control-char-representation-cl (ch)
   "Return a visible editor representation for non-printing CH, or NIL."
