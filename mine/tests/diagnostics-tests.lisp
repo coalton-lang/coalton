@@ -537,63 +537,66 @@
             "Expected one-cell Quick Result clipping to show only the ellipsis")))
 
 (defun check-quick-result-popup-layout-prioritizes-results ()
-  (let* ((layout (mine/app/mine::%quick-result-layout
-                  (list :output (format nil "one~%two~%three")
-                        :values '("VALUE"))
-                  4)))
-    (%check (string= (getf layout ':title) "Output")
+  (let* ((layout (mine/app/quick-result:quick-result-layout
+                  (mine/app/quick-result:quick-result-succeed
+                   mine/app/quick-result:QuickResultHidden (format nil "one~%two~%three") '("VALUE") 0)
+                  4 "")))
+    (%check (string= (mine/app/quick-result:layout-title layout) "Output")
             "Expected Output frame title, got ~S" layout)
-    (%check (equal (getf layout ':output-lines)
+    (%check (equal (mine/app/quick-result:layout-output-lines layout)
                    (list "one" (format nil "~C 2 lines omitted" (code-char 8230))))
             "Expected output to truncate first, got ~S" layout)
-    (%check (getf layout ':output-omitted)
+    (%check (mine/app/quick-result:layout-output-omitted? layout)
             "Expected output omitted marker, got ~S" layout)
-    (%check (getf layout ':separator)
+    (%check (mine/app/quick-result:layout-separator? layout)
             "Expected Result separator, got ~S" layout)
-    (%check (equal (getf layout ':result-lines) '("VALUE"))
+    (%check (equal (mine/app/quick-result:layout-result-lines layout) '("VALUE"))
             "Expected result line to remain visible, got ~S" layout)
-    (%check (not (getf layout ':result-omitted))
+    (%check (not (mine/app/quick-result:layout-result-omitted? layout))
             "Expected no result omitted marker, got ~S" layout))
-  (let ((layout (mine/app/mine::%quick-result-layout
-                 '(:output "" :values ("VALUE"))
-                 3)))
-    (%check (string= (getf layout ':title) "Result")
+  (let ((layout (mine/app/quick-result:quick-result-layout
+                 (mine/app/quick-result:quick-result-succeed
+                  mine/app/quick-result:QuickResultHidden "" '("VALUE") 0)
+                 3 "")))
+    (%check (string= (mine/app/quick-result:layout-title layout) "Result")
             "Expected Result frame title without output, got ~S" layout)
-    (%check (not (getf layout ':separator))
+    (%check (not (mine/app/quick-result:layout-separator? layout))
             "Expected no separator without output, got ~S" layout)
-    (%check (equal (getf layout ':result-lines) '("VALUE"))
+    (%check (equal (mine/app/quick-result:layout-result-lines layout) '("VALUE"))
             "Expected value result line, got ~S" layout))
-  (let ((layout (mine/app/mine::%quick-result-layout
-                 '(:output "" :values nil)
-                 3)))
-    (%check (getf layout ':no-values)
+  (let ((layout (mine/app/quick-result:quick-result-layout
+                 (mine/app/quick-result:quick-result-succeed
+                  mine/app/quick-result:QuickResultHidden "" nil 0)
+                 3 "")))
+    (%check (mine/app/quick-result:layout-no-values? layout)
             "Expected no-values marker, got ~S" layout)
-    (%check (equal (getf layout ':result-lines) '("No values"))
+    (%check (equal (mine/app/quick-result:layout-result-lines layout) '("No values"))
             "Expected No values display line, got ~S" layout))
-  (let ((layout (mine/app/mine::%quick-result-layout
-                 '(:output "" :values ("first" "second" "third"))
-                 2)))
-    (%check (equal (getf layout ':result-lines)
+  (let ((layout (mine/app/quick-result:quick-result-layout
+                 (mine/app/quick-result:quick-result-succeed
+                  mine/app/quick-result:QuickResultHidden "" '("first" "second" "third") 0)
+                 2 "")))
+    (%check (equal (mine/app/quick-result:layout-result-lines layout)
                    (list "first" (format nil "~C 2 lines omitted" (code-char 8230))))
             "Expected result overflow to use an omitted-line marker, got ~S" layout)
-    (%check (getf layout ':result-omitted)
+    (%check (mine/app/quick-result:layout-result-omitted? layout)
             "Expected result omitted marker, got ~S" layout))
-  (let ((layout (mine/app/mine::%quick-result-layout
-                 '(:title "Quick Result" :pending :busy)
+  (let ((layout (mine/app/quick-result:quick-result-layout
+                 (mine/app/quick-result:QuickResultPending coalton:None)
                  3
                  "*")))
-    (%check (string= (getf layout ':title) "Quick Result")
+    (%check (string= (mine/app/quick-result:layout-title layout) "Quick Result")
             "Expected Quick Result pending title, got ~S" layout)
-    (%check (getf layout ':pending)
+    (%check (mine/app/quick-result:layout-pending? layout)
             "Expected pending Quick Result layout, got ~S" layout)
-    (%check (equal (getf layout ':result-lines)
+    (%check (equal (mine/app/quick-result:layout-result-lines layout)
                    '("Busy *" "Esc/Ctrl+g cancels"))
             "Expected pending Quick Result busy rows, got ~S" layout))
-  (let ((layout (mine/app/mine::%quick-result-layout
-                 '(:title "Quick Result" :pending :interrupting)
+  (let ((layout (mine/app/quick-result:quick-result-layout
+                 (mine/app/quick-result:QuickResultInterrupting coalton:None)
                  3
                  "*")))
-    (%check (equal (getf layout ':result-lines)
+    (%check (equal (mine/app/quick-result:layout-result-lines layout)
                    '("Interrupting *" "Waiting for runtime"))
             "Expected pending Quick Result interrupt rows, got ~S" layout)))
 

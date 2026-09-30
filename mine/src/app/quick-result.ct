@@ -1,0 +1,261 @@
+(cl:defpackage #:mine/app/quick-result
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:list #:coalton/list)
+   (#:str #:coalton/string)
+   (#:wire #:mine/protocol/wire))
+  (:export
+   #:SourceHighlight #:QuickResultState
+   #:QuickResultHidden #:QuickResultPending #:QuickResultInterrupting
+   #:QuickResultSuccess #:QuickResultError
+   #:quick-result-begin #:quick-result-interrupt
+   #:quick-result-succeed #:quick-result-fail #:quick-result-succeed-payload
+   #:quick-result-expire #:quick-result-visible? #:quick-result-error? #:quick-result-pending?
+   #:quick-result-highlight-range #:quick-result-redraw-delay #:quick-result-now-ms
+   #:QuickResultPayload #:payload-output #:payload-values #:decode-quick-result-payload
+   #:QuickResultLayout #:quick-result-layout #:quick-result-max-body-lines
+   #:layout-title #:layout-output-lines #:layout-output-omitted? #:layout-separator?
+   #:layout-result-lines #:layout-result-omitted? #:layout-pending? #:layout-no-values?))
+
+(in-package #:mine/app/quick-result)
+
+(coalton-toplevel
+
+  (derive Eq)
+  (define-struct SourceHighlight
+    (highlight-document String)
+    (highlight-start UFix)
+    (highlight-end UFix))
+
+  (derive Eq)
+  (define-type QuickResultState
+    "Transient evaluation state. Deadlines use monotonic milliseconds."
+    QuickResultHidden
+    (QuickResultPending (Optional SourceHighlight))
+    (QuickResultInterrupting (Optional SourceHighlight))
+    (QuickResultSuccess (List String) (List String) UFix (Optional SourceHighlight))
+    (QuickResultError String String UFix (Optional SourceHighlight)))
+
+  (declare %highlight (QuickResultState -> Optional SourceHighlight))
+  (define (%highlight state)
+    (match state
+      ((QuickResultHidden) None)
+      ((QuickResultPending span) span)
+      ((QuickResultInterrupting span) span)
+      ((QuickResultSuccess _ _ _ span) span)
+      ((QuickResultError _ _ _ span) span)))
+
+  (declare %expiry (QuickResultState -> Optional UFix))
+  (define (%expiry state)
+    (match state
+      ((QuickResultSuccess _ _ expiry _) (Some expiry))
+      ((QuickResultError _ _ expiry _) (Some expiry))
+      (_ None)))
+
+  (declare quick-result-begin (String * UFix * UFix -> QuickResultState))
+  (define (quick-result-begin document start end)
+    (QuickResultPending
+     (if (< start end) (Some (SourceHighlight document start end)) None)))
+
+  (declare quick-result-interrupt (QuickResultState -> QuickResultState))
+  (define (quick-result-interrupt state)
+    "Keep the source highlight while cancellation is in progress."
+    (match state
+      ((QuickResultPending span) (QuickResultInterrupting span))
+      (_ state)))
+
+  (declare quick-result-succeed (QuickResultState * String * List String * UFix -> QuickResultState))
+  (define (quick-result-succeed state output values now-ms)
+    (QuickResultSuccess (%display-lines output False) values (+ now-ms 8000) (%highlight state)))
+
+  (declare quick-result-fail (QuickResultState * String * String * UFix -> QuickResultState))
+  (define (quick-result-fail state title text now-ms)
+    (QuickResultError title text (+ now-ms 8000) (%highlight state)))
+
+  (declare quick-result-expire (QuickResultState * UFix -> QuickResultState))
+  (define (quick-result-expire state now-ms)
+    (match (%expiry state)
+      ((Some expiry) (if (>= now-ms expiry) QuickResultHidden state))
+      ((None) state)))
+
+  (declare quick-result-visible? (QuickResultState * UFix -> Boolean))
+  (define (quick-result-visible? state now-ms)
+    (match (quick-result-expire state now-ms)
+      ((QuickResultHidden) False)
+      (_ True)))
+
+  (declare quick-result-error? (QuickResultState -> Boolean))
+  (define (quick-result-error? state)
+    (match state ((QuickResultError _ _ _ _) True) (_ False)))
+
+  (declare quick-result-pending? (QuickResultState -> Boolean))
+  (define (quick-result-pending? state)
+    (match state
+      ((QuickResultPending _) True)
+      ((QuickResultInterrupting _) True)
+      (_ False)))
+
+  (declare quick-result-highlight-range
+           (QuickResultState * String * UFix -> Optional (Tuple UFix UFix)))
+  (define (quick-result-highlight-range state document now-ms)
+    (match (%highlight (quick-result-expire state now-ms))
+      ((Some (SourceHighlight source start end))
+       (if (== source document) (Some (Tuple start end)) None))
+      ((None) None)))
+
+  (declare quick-result-redraw-delay (QuickResultState * UFix -> Optional UFix))
+  (define (quick-result-redraw-delay state now-ms)
+    (map (fn (expiry) (if (> expiry now-ms) (- expiry now-ms) 0)) (%expiry state)))
+
+  (declare quick-result-now-ms (Void -> UFix))
+  (define (quick-result-now-ms)
+    "The only clock adapter; all state transitions accept time explicitly."
+    (lisp (-> UFix) ()
+      (cl:floor (cl:* 1000 (cl:get-internal-real-time)) cl:internal-time-units-per-second)))
+
+  ;;; Legacy nested payload decoding retains typed output and value boundaries.
+
+  (define-struct QuickResultPayload
+    (qr-output String)
+    (qr-values (List String)))
+
+  (declare payload-output (QuickResultPayload -> String))
+  (define (payload-output payload) (.qr-output payload))
+  (declare payload-values (QuickResultPayload -> List String))
+  (define (payload-values payload) (.qr-values payload))
+
+  (declare %string-value (wire:SExpr -> Optional String))
+  (define (%string-value expr)
+    (match expr ((wire:SString text) (Some text)) (_ None)))
+
+  (declare decode-quick-result-payload (wire:SExpr -> Optional QuickResultPayload))
+  (define (decode-quick-result-payload expr)
+    (match expr
+      ((wire:SList
+        (Cons (wire:SAtom tag)
+          (Cons (wire:SAtom output-tag)
+            (Cons (wire:SString output)
+              (Cons (wire:SAtom values-tag) (Cons values (Nil)))))))
+       (if (and (== (str:upcase tag) ":QUICK-RESULT")
+                (and (== (str:upcase output-tag) ":OUTPUT")
+                     (== (str:upcase values-tag) ":VALUES")))
+           (do
+             (items <- (wire:sexpr-list-items values))
+             (strings <- (traverse %string-value items))
+             (Some (QuickResultPayload output strings)))
+           None))
+      (_ None)))
+
+  (declare quick-result-succeed-payload
+           (QuickResultState * Optional wire:SExpr * String * UFix -> QuickResultState))
+  (define (quick-result-succeed-payload state payload fallback now-ms)
+    "Decode legacy nested transport data; keep an undecodable reply readable."
+    (match payload
+      ((Some expr)
+       (match (decode-quick-result-payload expr)
+         ((Some decoded)
+          (quick-result-succeed state (payload-output decoded) (payload-values decoded) now-ms))
+         ((None) (quick-result-succeed state "" (make-list fallback) now-ms))))
+      ((None) (quick-result-succeed state "" (make-list fallback) now-ms))))
+
+  ;;; Layout policy is independent of rendering and terminal access.
+
+  (derive Eq)
+  (define-struct QuickResultLayout
+    (qr-title String)
+    (qr-output-lines (List String))
+    (qr-output-omitted Boolean)
+    (qr-separator Boolean)
+    (qr-result-lines (List String))
+    (qr-result-omitted Boolean)
+    (qr-pending Boolean)
+    (qr-no-values Boolean))
+
+  (declare layout-title (QuickResultLayout -> String))
+  (define (layout-title layout) (.qr-title layout))
+  (declare layout-output-lines (QuickResultLayout -> List String))
+  (define (layout-output-lines layout) (.qr-output-lines layout))
+  (declare layout-output-omitted? (QuickResultLayout -> Boolean))
+  (define (layout-output-omitted? layout) (.qr-output-omitted layout))
+  (declare layout-separator? (QuickResultLayout -> Boolean))
+  (define (layout-separator? layout) (.qr-separator layout))
+  (declare layout-result-lines (QuickResultLayout -> List String))
+  (define (layout-result-lines layout) (.qr-result-lines layout))
+  (declare layout-result-omitted? (QuickResultLayout -> Boolean))
+  (define (layout-result-omitted? layout) (.qr-result-omitted layout))
+  (declare layout-pending? (QuickResultLayout -> Boolean))
+  (define (layout-pending? layout) (.qr-pending layout))
+  (declare layout-no-values? (QuickResultLayout -> Boolean))
+  (define (layout-no-values? layout) (.qr-no-values layout))
+
+  (declare %display-lines (String * Boolean -> List String))
+  (define (%display-lines text include-empty?)
+    (if (== text "")
+        (if include-empty? (make-list "") Nil)
+        ;; A trailing newline terminates the previous row, rather than adding
+        ;; another blank row. Interior empty rows still contribute to height.
+        (let ((lines (str:split #\Newline text)))
+          (match (list:reverse lines)
+            ((Cons last rest) (if (== last "") (list:reverse rest) lines))
+            ((Nil) Nil)))))
+
+  (declare %value-lines (List String -> List String))
+  (define (%value-lines values)
+    (match values
+      ((Nil) (make-list "No values"))
+      (_ (concatmap (fn (value) (%display-lines value True)) values))))
+
+  (declare %omitted-line (UFix -> String))
+  (define (%omitted-line count)
+    (<> "… " (<> (into count) (if (== count 1) " line omitted" " lines omitted"))))
+
+  (declare %truncate-lines (List String * UFix * Boolean -> Tuple (List String) Boolean))
+  (define (%truncate-lines lines cap preserve-first?)
+    (let count = (list:length lines))
+    (cond
+      ((== cap 0) (Tuple Nil False))
+      ((<= count cap) (Tuple lines False))
+      ((and (== cap 1) preserve-first?) (Tuple (list:take 1 lines) False))
+      (True
+       (let kept = (- cap 1))
+       (Tuple (append (list:take kept lines) (make-list (%omitted-line (- count kept)))) True))))
+
+  (declare %result-layout (String * List String * UFix * Boolean -> QuickResultLayout))
+  (define (%result-layout title lines cap no-values?)
+    (match (%truncate-lines lines cap True)
+      ((Tuple results omitted?)
+       (QuickResultLayout title Nil False False results omitted? False no-values?))))
+
+  (declare %pending-layout (Boolean * UFix * String -> QuickResultLayout))
+  (define (%pending-layout interrupting? cap spinner)
+    (let verb = (if interrupting? "Interrupting" "Busy"))
+    (let hint = (if interrupting? "Waiting for runtime" "Esc/Ctrl+g cancels"))
+    (let first = (<> verb (if (== spinner "") "" (<> " " spinner))))
+    (QuickResultLayout "Quick Result" Nil False False
+                       (if (> cap 1) (make-list first hint) (make-list first)) False True False))
+
+  (declare quick-result-layout (QuickResultState * UFix * String -> QuickResultLayout))
+  (define (quick-result-layout state max-body-lines spinner)
+    "Fit visible sections into CAP, preserving result rows before output."
+    (let cap = (max 1 max-body-lines))
+    (match state
+      ((QuickResultHidden) (QuickResultLayout "" Nil False False Nil False False False))
+      ((QuickResultPending _) (%pending-layout False cap spinner))
+      ((QuickResultInterrupting _) (%pending-layout True cap spinner))
+      ((QuickResultError title text _ _) (%result-layout title (%display-lines text True) cap False))
+      ((QuickResultSuccess output values _ _)
+       (let results = (%value-lines values))
+       (let no-values? = (== (list:length values) 0))
+       (if (or (== (list:length output) 0) (< cap 3))
+           (%result-layout "Result" results cap no-values?)
+           (let ((result-cap (min (list:length results) (- cap 2)))
+                 (output-cap (- (- cap 1) result-cap)))
+             (match (Tuple (%truncate-lines output output-cap False)
+                           (%truncate-lines results result-cap True))
+               ((Tuple (Tuple visible-output output-omitted?) (Tuple visible-results result-omitted?))
+                (QuickResultLayout "Output" visible-output output-omitted? True
+                                   visible-results result-omitted? False no-values?))))))))
+
+  (declare quick-result-max-body-lines (UFix -> UFix))
+  (define (quick-result-max-body-lines screen-height)
+    (if (> screen-height 5) (- screen-height 5) 1)))
