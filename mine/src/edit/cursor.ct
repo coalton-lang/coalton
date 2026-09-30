@@ -139,8 +139,9 @@
   (declare cursor-move-right! (gap:GapBuffer * CursorState -> Void))
   (define (cursor-move-right! gb cs)
     "Move cursor one editor unit to the right."
-    (let p = (cursor-position cs))
+    (let p = (min (cursor-position cs) (gap:gap-length gb)))
     (let len = (gap:gap-length gb))
+    (set-pos! cs p)
     (when (< p len)
       (set-pos! cs (gap:gap-editor-unit-next-pos gb p)))
     (update-target-col-from-pos! cs gb))
@@ -148,18 +149,18 @@
   (declare cursor-move-word-left! (gap:GapBuffer * CursorState -> Void))
   (define (cursor-move-word-left! gb cs)
     "Move cursor left to the previous word boundary."
-    (let p = (cursor-position cs))
+    (let p = (gap:gap-editor-unit-start-pos gb (cursor-position cs)))
     (let new-p = (%skip-word-left gb (%skip-non-word-left gb p)))
-    (set-pos! cs new-p)
+    (set-pos! cs (gap:gap-editor-unit-start-pos gb new-p))
     (update-target-col-from-pos! cs gb))
 
   (declare cursor-move-word-right! (gap:GapBuffer * CursorState -> Void))
   (define (cursor-move-word-right! gb cs)
     "Move cursor right to the next word boundary."
-    (let p = (cursor-position cs))
+    (let p = (gap:gap-editor-unit-end-pos gb (cursor-position cs)))
     (let len = (gap:gap-length gb))
     (let new-p = (%skip-word-right gb (%skip-non-word-right gb p len) len))
-    (set-pos! cs new-p)
+    (set-pos! cs (gap:gap-editor-unit-end-pos gb new-p))
     (update-target-col-from-pos! cs gb))
 
   ;;; Vertical movement
@@ -227,8 +228,8 @@ Note: caller should clamp new-pos to buffer length."
 
   (declare cursor-move-to-buffer-position! (gap:GapBuffer * CursorState * UFix -> Void))
   (define (cursor-move-to-buffer-position! gb cs new-pos)
-    "Set cursor to an absolute buffer position and update target column."
-    (set-pos! cs (min new-pos (gap:gap-length gb)))
+    "Set a clamped editor-unit position and update the visual target column."
+    (set-pos! cs (gap:gap-editor-unit-end-pos gb new-pos))
     (update-target-col-from-pos! cs gb))
 
   ;;; Page movement
@@ -241,9 +242,9 @@ Note: caller should clamp new-pos to buffer length."
        (let target-line = (if (>= line height) (- line height) 0))
        (let target-start = (gap:gap-line-to-pos gb target-line))
        (let target-text = (gap:gap-line-text gb target-line))
-       (let target-len = (str:length target-text))
+       (let tab-w = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
        (let tc = (cell:read (.target-col cs)))
-       (let new-col = (min tc target-len))
+       (let new-col = (gap:char-for-vcol target-text tc tab-w))
        (set-pos! cs (+ target-start new-col)))))
 
   (declare cursor-move-page-down! (gap:GapBuffer * CursorState * UFix -> Void))
@@ -255,9 +256,9 @@ Note: caller should clamp new-pos to buffer length."
        (let target-line = (min (+ line height) (- total-lines 1)))
        (let target-start = (gap:gap-line-to-pos gb target-line))
        (let target-text = (gap:gap-line-text gb target-line))
-       (let target-len = (str:length target-text))
+       (let tab-w = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
        (let tc = (cell:read (.target-col cs)))
-       (let new-col = (min tc target-len))
+       (let new-col = (gap:char-for-vcol target-text tc tab-w))
        (set-pos! cs (+ target-start new-col)))))
 
   ;;; Selection
