@@ -74,6 +74,12 @@
 (cl:defvar *restart-into-setup* nil
   "When set to T by the Setup Wizard menu action, mine-main reruns the setup wizard.")
 
+(cl:defun %call-with-runtime-session (st function)
+  "Stop the runtime before releasing session resources on return or unwind."
+  (cl:unwind-protect (cl:funcall function)
+    (lifecycle:runtime-stop! (mine/app/state:get-runtime-mgr st))
+    (%clear-runtime-session! st)))
+
 (cl:defun %read-form-head-cl (text)
   "Return the lowercase head symbol for TEXT when it starts with a list form."
   (cl:let ((trimmed (cl:string-trim '(#\Space #\Tab #\Newline) text)))
@@ -1395,6 +1401,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
   (define (%clear-runtime-session! st)
     "Clear state tied to the current runtime connection."
     (lisp (-> Void) (st)
+      (mine/app/diagnostics:forget-all-diagnostic-requests)
       (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-proto-mailbox st)) cl:nil)
       (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-proto-thread st)) cl:nil)
       (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-bg-proto-thread st)) cl:nil)
@@ -1417,8 +1424,8 @@ Uses a dedicated Beam request so diagnostics can stream independently."
   (declare restart-runtime! (MineState -> Boolean))
   (define (restart-runtime! st)
     "Restart the runtime and replay the configured :repl-init."
-    (%clear-runtime-session! st)
     (lifecycle:runtime-stop! (.ms-runtime st))
+    (%clear-runtime-session! st)
     (lifecycle:runtime-start! (.ms-runtime st))
     (match (lifecycle:runtime-connection (.ms-runtime st))
       ((Some conn)
@@ -2664,10 +2671,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (let gb = (buf:buffer-gap buf))
        (let cur-pos = (cursor:cursor-position (.ms-cursor st)))
        (let buf-text = (gap:gap-to-string gb))
-       ;; Extract current file path (for jump stack) on Coalton side
-       (let cur-path = (match (buf:buffer-path buf)
-                         ((Some p) p)
-                         ((None) "")))
+       (let cur-path = (buf:buffer-document-key buf))
        (lisp (-> Void) (st gb cur-pos buf-text cur-path)
          (cl:let* ((sym-name (%read-symbol-at-cursor gb cur-pos))
                    (default-pkg (cl:if (cl:and (cl:stringp cur-path)
@@ -2689,7 +2693,9 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     (lisp (-> Void) (st)
       (cl:let ((entry (%jump-stack-pop st)))
         (cl:if entry
-               (mine/app/navigation:jump-to-file st (cl:car entry) (cl:cdr entry))
+               (mine/app/navigation:jump-to-document-key
+                st (mine/app/diagnostics:remap-runtime-source-filepath (cl:car entry))
+                (cl:cdr entry))
                (user-error! st "Jump stack empty")))
       (cl:values)))
 
@@ -4418,6 +4424,13 @@ Render-app is NOT called here; the main loop handles rendering."
   (define (run-tui args)
     "Initialize and run the TUI editor."
     (let term = (term:terminal-init))
+    (lisp (-> Void) (args term)
+      (cl:unwind-protect (%run-tui-with-terminal args term)
+        (term:terminal-shutdown term))
+      (cl:values)))
+
+  (declare %run-tui-with-terminal ((List String) * term:Terminal -> Void))
+  (define (%run-tui-with-terminal args term)
     ;; Load configuration
     (let config = (match (cfg:load-config ".mine")
                     ((Ok c) c)
@@ -4431,6 +4444,13 @@ Render-app is NOT called here; the main loop handles rendering."
 	      (cl:values))
     ;; Create application state
     (let st = (mine-state-new config))
+    (lisp (-> Void) (args term st)
+      (%call-with-runtime-session
+       st (cl:lambda () (%run-tui-session args term st)))
+      (cl:values)))
+
+  (declare %run-tui-session ((List String) * term:Terminal * MineState -> Void))
+  (define (%run-tui-session args term st)
     (let bm = (.ms-bufmgr st))
     (let cs = (.ms-cursor st))
     (let fm = (.ms-focus st))
@@ -4495,10 +4515,7 @@ Render-app is NOT called here; the main loop handles rendering."
     (term:terminal-flush term)
     ;; Main loop: consume terminal events and protocol replies on the main thread
     (let handler = (make-handler st term))
-    (main-loop st term handler)
-    ;; Shutdown: stop the runtime server if running
-    (lifecycle:runtime-stop! (.ms-runtime st))
-    (term:terminal-shutdown term))
+    (main-loop st term handler))
 
 ;;; Main loop (single-threaded, consumes queued terminal input)
 
@@ -5838,7 +5855,8 @@ This avoids stealing messages from the foreground/background protocol readers."
                                           (cl:car *pending-jump-source*)
                                           (cl:cdr *pending-jump-source*)))
                       (cl:if file
-                             (mine/app/navigation:jump-to-file st file offset)
+                             (mine/app/navigation:jump-to-document-key
+                              st (mine/app/diagnostics:remap-runtime-source-filepath file) offset)
                              (%status-msg st "No definition found")))
                     (%status-msg st "No definition found"))))
           (cl:t (%status-msg st (cl:format cl:nil "~A" (cl:or (cl:second payload) "No definition found")))))
