@@ -154,7 +154,13 @@
     (check (= 0 (optional-value (source:source-matching-delimiter context (1- (length text)))))
            "Matching must work backward through mixed delimiter types"))
   (check (null (optional-value (source:source-matching-delimiter (source:scan-source "([)]") 0)))
-         "Crossed delimiters must not supply a structural match"))
+         "Crossed delimiters must not supply a structural match")
+  (let* ((text "#+sbcl (f)") (context (source:scan-source text)))
+    (check (equal text (range-text context (source:source-smallest-list-range context 8)))
+           "Quick selection must preserve a conditional reader prefix"))
+  (check (null (optional-value
+                (source:source-smallest-list-range (source:scan-source "#+(and sbcl)") 5)))
+         "A conditional without its body must not select its feature expression as code"))
 
 (defparameter *completion-cases*
   (list (list "(foo bar)" 8 "bar")

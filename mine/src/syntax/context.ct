@@ -568,10 +568,7 @@
   (define (prefixed-list? form)
     (match (.form-kind form)
       ((DelimitedForm _) True)
-      ((PrefixedForm 1)
-       (match (.form-children form)
-         ((Cons child (Nil)) (prefixed-list? child))
-         (_ False)))
+      ((PrefixedForm _) (list:any prefixed-list? (.form-children form)))
       (_ False)))
 
   (define (smallest-list-range form pos)
@@ -581,12 +578,13 @@
     (match (.form-kind form)
       ((PrefixedForm _)
        ;; Preserve a prefix when the selected list is its immediate operand.
-       (match (Tuple inner (.form-children form))
-         ((Tuple (Some (Tuple start _)) (Cons child (Nil)))
-          (if (== start (.form-start child)) (Some (form-range form)) inner))
-         ((Tuple (None) (Cons child (Nil)))
-          (if (and (.form-complete form) (prefixed-list? child)) (Some (form-range form)) None))
-         (_ inner)))
+       (match inner
+         ((Some (Tuple start _))
+          (if (list:any (fn (child) (== start (.form-start child))) (.form-children form))
+              (complete-form-range form) inner))
+         ((None)
+          (if (and (.form-complete form) (list:any prefixed-list? (.form-children form)))
+              (Some (form-range form)) None))))
       ((DelimitedForm _)
        (match inner
          ((Some _) inner)
