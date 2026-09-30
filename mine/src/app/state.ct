@@ -261,7 +261,7 @@
   (define (activate-buffer! st buffer)
     "Switch documents while preserving each document's cursor, selection, and viewport."
     (let bid = (buf:buffer-id buffer))
-    (when (not (== (cell:read (.ms-view-buffer st)) (Some bid)))
+    (unless (== (cell:read (.ms-view-buffer st)) (Some bid))
       (complete:completion-dismiss! (.ms-completion st))
       (match (cell:read (.ms-view-buffer st))
         ((Some (buf:BufferId previous))

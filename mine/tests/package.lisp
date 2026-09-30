@@ -141,25 +141,25 @@
   t)
 
 (defun run-source-context-tests ()
-  (uiop:symbol-call :mine-tests/source-context :run-source-context-tests))
+  (uiop:symbol-call ':mine-tests/source-context ':run-source-context-tests))
 
 (defun run-indent-context-tests ()
-  (uiop:symbol-call :mine-tests/indent-context :run-indent-context-tests))
+  (uiop:symbol-call ':mine-tests/indent-context ':run-indent-context-tests))
 
 (defun run-completion-context-tests ()
-  (uiop:symbol-call :mine-tests/completion-context :run-completion-context-tests))
+  (uiop:symbol-call ':mine-tests/completion-context ':run-completion-context-tests))
 
 (defun run-lexer-context-tests ()
-  (uiop:symbol-call :mine-tests/lexer-context :run-lexer-context-tests))
+  (uiop:symbol-call ':mine-tests/lexer-context ':run-lexer-context-tests))
 
 (defun run-paredit-context-tests ()
-  (uiop:symbol-call :mine-tests/paredit-context :run-paredit-context-tests))
+  (uiop:symbol-call ':mine-tests/paredit-context ':run-paredit-context-tests))
 
 (defun run-diagnostic-store-tests ()
-  (uiop:symbol-call :mine-tests/diagnostic-store :run-diagnostic-store-tests))
+  (uiop:symbol-call ':mine-tests/diagnostic-store ':run-diagnostic-store-tests))
 
 (defun run-diagnostic-adapter-tests ()
-  (uiop:symbol-call :mine-tests/diagnostic-adapter :run-diagnostic-adapter-tests))
+  (uiop:symbol-call ':mine-tests/diagnostic-adapter ':run-diagnostic-adapter-tests))
 
 (defun run-diagnostic-cleanup-tests ()
-  (uiop:symbol-call :mine-tests/diagnostic-adapter :run-diagnostic-cleanup-tests))
+  (uiop:symbol-call ':mine-tests/diagnostic-adapter ':run-diagnostic-cleanup-tests))

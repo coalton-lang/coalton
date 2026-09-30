@@ -13,7 +13,7 @@
            (app::%start-background-proto-reader-cl state old)
            (let ((thread (mine/app/state::%native-box-value
                           (mine/app/state:get-bg-proto-thread state))))
-             (sb-thread:join-thread thread :timeout 2 :default :timeout)
+             (sb-thread:join-thread thread :timeout 2 :default ':timeout)
              (%check (not (sb-thread:thread-alive-p thread)) "EOF reader did not stop"))
            ;; EOF has reached the mailbox, but a render replaced the connection
            ;; before the main event loop had a chance to drain it.
@@ -95,7 +95,7 @@
       (let ((buffer (%test-current-buffer state)))
         (ops:insert-string! buffer (buf:buffer-undo buffer)
                             (mine/app/state:get-cursor-state state) "unsaved ")
-        (with-open-file (wire wire-path :direction :output :element-type '(unsigned-byte 8))
+        (with-open-file (wire wire-path :direction ':output :element-type '(unsigned-byte 8))
           (let ((connection (mine/protocol/client::make-%connection :stream wire :active t)))
             (unwind-protect
                  (%call-with-replaced-runtime-function
