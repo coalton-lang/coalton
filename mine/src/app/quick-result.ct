@@ -9,7 +9,7 @@
    #:QuickResultHidden #:QuickResultPending #:QuickResultInterrupting
    #:QuickResultSuccess #:QuickResultError
    #:quick-result-begin #:quick-result-interrupt
-   #:quick-result-succeed #:quick-result-fail
+   #:quick-result-succeed #:quick-result-fail #:quick-result-succeed-payload
    #:quick-result-expire #:quick-result-visible? #:quick-result-error? #:quick-result-pending?
    #:quick-result-highlight-range #:quick-result-redraw-delay #:quick-result-now-ms
    #:QuickResultPayload #:payload-output #:payload-values #:decode-quick-result-payload
@@ -145,6 +145,18 @@
              (Some (QuickResultPayload output strings)))
            None))
       (_ None)))
+
+  (declare quick-result-succeed-payload
+           (QuickResultState * Optional wire:SExpr * String * UFix -> QuickResultState))
+  (define (quick-result-succeed-payload state payload fallback now-ms)
+    "Decode legacy nested transport data; keep an undecodable reply readable."
+    (match payload
+      ((Some expr)
+       (match (decode-quick-result-payload expr)
+         ((Some decoded)
+          (quick-result-succeed state (payload-output decoded) (payload-values decoded) now-ms))
+         ((None) (quick-result-succeed state "" (make-list fallback) now-ms))))
+      ((None) (quick-result-succeed state "" (make-list fallback) now-ms))))
 
   ;;; Layout policy is independent of rendering and terminal access.
 

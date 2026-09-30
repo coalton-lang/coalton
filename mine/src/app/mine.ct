@@ -47,6 +47,7 @@
    (#:kbdbg #:mine/app/keyboard-debugger)
    (#:clipboard #:mine/app/clipboard)
    (#:complete #:mine/app/completion)
+   (#:qr #:mine/app/quick-result)
    (#:find #:mine/app/find)
    (#:dialogs #:mine/app/dialogs)
    (#:build #:mine/app/build)
@@ -1476,10 +1477,8 @@ Uses a dedicated Beam request so diagnostics can stream independently."
       (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-proto-thread st)) cl:nil)
       (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-bg-proto-thread st)) cl:nil)
       (cell:write! (mine/app/state:get-debugger-request-id-cell st) None)
-      (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-quick-result-state st)) cl:nil)
+      (cell:write! (mine/app/state:get-quick-result-state st) qr:QuickResultHidden)
       (requests:request-state-clear! (mine/app/state:get-requests st))
-
-
       (cl:values))
     (cell:write! (.ms-debugger-active st) False)
     (cell:write! (.ms-debugger-snapshot st) None)
@@ -1558,38 +1557,27 @@ Uses a dedicated Beam request so diagnostics can stream independently."
 
   (declare %show-quick-result-pending-for-range! (MineState * UFix * UFix * String -> Void))
   (define (%show-quick-result-pending-for-range! st start end document-key)
-    "Show the Quick Result pending popup and highlight the submitted source range."
-    (lisp (-> Void) (st start end document-key)
-      (%set-quick-result-pending-popup-with-range st start end document-key)
-      (cl:values)))
+    "Show the pending popup and highlight the submitted source range."
+    (cell:write! (.ms-quick-result-state st) (qr:quick-result-begin document-key start end))
+    (values))
 
   (declare %show-quick-result-interrupting! (MineState -> Void))
   (define (%show-quick-result-interrupting! st)
-    "Show the Quick Result interrupting popup."
-    (lisp (-> Void) (st)
-      (%set-quick-result-interrupting-popup st)
-      (cl:values)))
+    (cell:update! qr:quick-result-interrupt (.ms-quick-result-state st))
+    (values))
 
   (declare %clear-quick-result! (MineState -> Void))
   (define (%clear-quick-result! st)
-    "Clear the transient Quick Result popup."
-    (lisp (-> Void) (st)
-      (%clear-quick-result-popup st)
-      (cl:values)))
+    (cell:write! (.ms-quick-result-state st) qr:QuickResultHidden)
+    (values))
 
   (define (%quick-result-highlight-range st document-key)
-    "Return the current Quick Result source highlight range for DOCUMENT-KEY."
-    (lisp (-> (Optional (Tuple UFix UFix))) (st document-key)
-      (cl:let ((qr-highlight-range (%quick-result-highlight-range-cl st document-key)))
-        (cl:if qr-highlight-range
-               (Some (Tuple (cl:car qr-highlight-range) (cl:cdr qr-highlight-range)))
-               None))))
+    (qr:quick-result-highlight-range (cell:read (.ms-quick-result-state st))
+                                     document-key (qr:quick-result-now-ms)))
 
   (declare %quick-result-popup-visible? (MineState -> Boolean))
   (define (%quick-result-popup-visible? st)
-    "True when the transient Quick Result popup is visible."
-    (lisp (-> Boolean) (st)
-      (cl:if (%quick-result-popup-visible-p st) True False)))
+    (qr:quick-result-visible? (cell:read (.ms-quick-result-state st)) (qr:quick-result-now-ms)))
 
   (declare %quick-result-pending? (MineState -> Boolean))
   (define (%quick-result-pending? st)
@@ -4591,21 +4579,9 @@ Render-app is NOT called here; the main loop handles rendering."
          ((None) a)
          ((Some bv) (Some (min av bv)))))))
 
-  (declare %quick-result-redraw-delay-ms (MineState -> (Optional UFix)))
+  (declare %quick-result-redraw-delay-ms (MineState -> Optional UFix))
   (define (%quick-result-redraw-delay-ms st)
-    "Return the delay until the visible Quick Result popup should expire."
-    (lisp (-> (Optional UFix)) (st)
-      (cl:let* ((box (mine/app/state:get-quick-result-state st))
-                (state (mine/app/state::%native-box-value box))
-                (expiry (cl:and state (cl:getf state :expiry))))
-        (cl:if expiry
-               (cl:let ((now (cl:get-internal-real-time)))
-                 (Some
-                  (cl:if (cl:<= expiry now)
-                         0
-                         (cl:ceiling (cl:* 1000 (cl:- expiry now))
-                                     cl:internal-time-units-per-second))))
-               None))))
+    (qr:quick-result-redraw-delay (cell:read (.ms-quick-result-state st)) (qr:quick-result-now-ms)))
 
   (declare %timed-redraw-delay-ms (MineState -> (Optional UFix)))
   (define (%timed-redraw-delay-ms st)
@@ -4883,279 +4859,25 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
        (cl:error ()
          (cl:list text))))))
 
-(cl:defun %parse-quick-result-payload (text)
-  "Decode the Quick Result payload string into output and value strings."
-  (cl:handler-case
-      (cl:let ((cl:*read-eval* cl:nil))
-        (cl:multiple-value-bind (payload pos)
-            (cl:read-from-string text)
-          (cl:if (cl:and (cl:= pos (cl:length text))
-                         (cl:consp payload)
-                         (cl:eq (cl:first payload) :quick-result))
-                 (cl:let* ((plist (cl:rest payload))
-                           (output (cl:getf plist :output ""))
-                           (values (cl:getf plist :values cl:nil)))
-                   (cl:values
-                    (cl:if (cl:stringp output) output "")
-                    (cl:if (cl:and (cl:listp values)
-                                   (cl:every #'cl:stringp values))
-                           values
-                           (cl:list text))))
-                 (cl:values "" (cl:list text)))))
-    (cl:error ()
-      (cl:values "" (cl:list text)))))
-
-(cl:defun %quick-result-highlight-plist (state)
-  "Return the source highlight keys from Quick Result STATE, when valid."
-  (cl:let ((start (cl:getf state :range-start))
-           (end (cl:getf state :range-end))
-           (document-key (cl:getf state :document-key)))
-    (cl:if (cl:and (cl:integerp start)
-                   (cl:integerp end)
-                   (cl:< start end)
-                   (cl:stringp document-key))
-           (cl:list :range-start start
-                    :range-end end
-                    :document-key document-key)
-           cl:nil)))
-
-(cl:defun %quick-result-highlight-range-cl (st document-key)
-  "Return (START . END) for the active Quick Result source highlight."
-  (cl:let* ((box (mine/app/state:get-quick-result-state st))
-            (state (mine/app/state::%native-box-value box)))
-    (cl:when state
-      (cl:let ((expiry (cl:getf state :expiry)))
-        (cl:when (cl:and expiry
-                         (cl:>= (cl:get-internal-real-time) expiry))
-          (%clear-quick-result-popup st)
-          (cl:return-from %quick-result-highlight-range-cl cl:nil)))
-      (cl:let ((start (cl:getf state :range-start))
-               (end (cl:getf state :range-end))
-               (state-document-key (cl:getf state :document-key)))
-        (cl:when (cl:and (cl:integerp start)
-                         (cl:integerp end)
-                         (cl:< start end)
-                         (cl:stringp state-document-key)
-                         (cl:stringp document-key)
-                         (cl:string= state-document-key document-key))
-          (cl:cons start end))))))
-
 (cl:defun %set-quick-result-popup (st title text error-p)
-  "Store transient Quick Result popup state on ST."
-  (cl:let* ((box (mine/app/state:get-quick-result-state st))
-            (old-state (mine/app/state::%native-box-value box))
-            (highlight (%quick-result-highlight-plist old-state))
-            (text (cl:if (cl:stringp text) text (cl:princ-to-string text)))
-            (expiry (cl:+ (cl:get-internal-real-time)
-                          (cl:* 8 cl:internal-time-units-per-second))))
-    (cl:if error-p
-           (cl:setf (mine/app/state::%native-box-value box)
-                    (cl:append
-                     (cl:list :title (cl:if (cl:stringp title) title "Error")
-                              :text text
-                              :error cl:t
-                              :expiry expiry)
-                     highlight))
-           (cl:multiple-value-bind (output values)
-               (%parse-quick-result-payload text)
-             (cl:setf (mine/app/state::%native-box-value box)
-                      (cl:append
-                       (cl:list :title (cl:if (cl:plusp (cl:length output))
-                                              "Output"
-                                              "Result")
-                                :output output
-                                :values values
-                                :error cl:nil
-                                :expiry expiry)
-                       highlight))))))
-
-(cl:defun %set-quick-result-pending-state (st mode cl:&optional highlight)
-  "Store Quick Result pending state on ST."
-  (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-quick-result-state st))
-           (cl:append
-            (cl:list :title "Quick Result"
-                     :pending mode
-                     :error cl:nil
-                     :expiry cl:nil)
-            highlight)))
-
-(cl:defun %set-quick-result-pending-popup-with-range (st start end document-key)
-  "Store the Quick Result busy popup state and source highlight range on ST."
-  (%set-quick-result-pending-state
-   st
-   :busy
-   (cl:if (cl:and (cl:integerp start)
-                  (cl:integerp end)
-                  (cl:< start end)
-                  (cl:stringp document-key))
-          (cl:list :range-start start
-                   :range-end end
-                   :document-key document-key)
-          cl:nil)))
-
-(cl:defun %set-quick-result-interrupting-popup (st)
-  "Store the Quick Result interrupting popup state on ST."
-  (%set-quick-result-pending-state st :interrupting))
-
-(cl:defun %clear-quick-result-popup (st)
-  "Clear transient Quick Result popup state on ST."
-  (cl:setf (mine/app/state::%native-box-value (mine/app/state:get-quick-result-state st)) cl:nil))
-
-(cl:defun %quick-result-popup-visible-p (st)
-  "Return true when the transient Quick Result popup has visible state."
-  (cl:not (cl:null (mine/app/state::%native-box-value (mine/app/state:get-quick-result-state st)))))
-
-(cl:defun %quick-result-popup-lines (text include-empty-p)
-  "Split TEXT into display lines for the Quick Result popup."
-  (cl:let ((len (cl:length text))
-           (start 0)
-           (lines cl:nil))
-    (cl:cond
-      ((cl:zerop len)
-       (cl:if include-empty-p (cl:list "") cl:nil))
-      (cl:t
-       (cl:loop
-         :while (cl:< start len)
-         :for end = (cl:position #\Newline text :start start)
-         :do (cl:push (cl:subseq text start (cl:or end len)) lines)
-             (cl:setf start (cl:if end (cl:1+ end) len)))
-       (cl:nreverse lines)))))
-
-(cl:defun %quick-result-value-lines (values)
-  "Flatten printed value strings into display lines."
-  (cl:if (cl:null values)
-         (cl:list "No values")
-         (cl:let ((lines cl:nil))
-           (cl:dolist (value values)
-             (cl:dolist (line (%quick-result-popup-lines value cl:t))
-               (cl:push line lines)))
-           (cl:or (cl:nreverse lines) (cl:list "No values")))))
-
-(cl:defun %quick-result-omitted-line (n-lines)
-  "Return the vertical truncation summary line."
-  (cl:format cl:nil
-             "~C ~D line~:P omitted"
-             (cl:code-char 8230)
-             n-lines))
-
-(cl:defun %quick-result-truncate-output-lines (lines max-lines)
-  "Truncate output lines vertically, ending with an omitted-line count."
-  (cl:let ((n-lines (cl:length lines)))
-    (cl:cond
-      ((cl:<= max-lines 0) (cl:values cl:nil cl:nil))
-      ((cl:<= n-lines max-lines) (cl:values lines cl:nil))
-      ((cl:= max-lines 1)
-       (cl:values (cl:list (%quick-result-omitted-line n-lines)) cl:t))
-      (cl:t
-       (cl:let* ((kept (cl:1- max-lines))
-                 (omitted (cl:- n-lines kept)))
-         (cl:values
-          (cl:append (cl:subseq lines 0 kept)
-                     (cl:list (%quick-result-omitted-line omitted)))
-          cl:t))))))
-
-(cl:defun %quick-result-truncate-result-lines (lines max-lines)
-  "Truncate result lines, keeping at least the first result line when possible."
-  (cl:let ((n-lines (cl:length lines)))
-    (cl:cond
-      ((cl:<= max-lines 0) (cl:values cl:nil cl:nil))
-      ((cl:<= n-lines max-lines) (cl:values lines cl:nil))
-      ((cl:= max-lines 1) (cl:values (cl:list (cl:first lines)) cl:nil))
-      (cl:t
-       (cl:let* ((kept (cl:1- max-lines))
-                 (omitted (cl:- n-lines kept)))
-         (cl:values
-          (cl:append (cl:subseq lines 0 kept)
-                     (cl:list (%quick-result-omitted-line omitted)))
-          cl:t))))))
-
-(cl:defun %quick-result-layout (state max-body-lines cl:&optional (spinner-text ""))
-  "Compute visible Quick Result sections, preserving result rows before output."
-  (cl:let* ((cap (cl:max 1 max-body-lines))
-            (error-p (cl:getf state :error)))
-    (cl:cond
-      ((cl:getf state :pending)
-       (cl:let* ((interrupting-p (cl:eq (cl:getf state :pending) :interrupting))
-                 (verb (cl:if interrupting-p "Interrupting" "Busy"))
-                 (hint (cl:if interrupting-p
-                               "Waiting for runtime"
-                               "Esc/Ctrl+g cancels"))
-                 (spinner (cl:if (cl:and (cl:stringp spinner-text)
-                                         (cl:plusp (cl:length spinner-text)))
-                                  (cl:concatenate 'cl:string " " spinner-text)
-                                  ""))
-                 (lines (cl:if (cl:> cap 1)
-                                (cl:list (cl:concatenate 'cl:string verb spinner)
-                                         hint)
-                                (cl:list (cl:concatenate 'cl:string verb spinner)))))
-         (cl:list :title "Quick Result"
-                  :output-lines cl:nil
-                  :output-omitted cl:nil
-                  :separator cl:nil
-                  :result-lines lines
-                  :result-omitted cl:nil
-                  :pending cl:t
-                  :no-values cl:nil)))
-      (error-p
-           (cl:let* ((text (cl:or (cl:getf state :text) ""))
-                     (lines (%quick-result-popup-lines text cl:t)))
-             (cl:multiple-value-bind (result-lines result-omitted-p)
-                 (%quick-result-truncate-result-lines lines cap)
-               (cl:list :title (cl:or (cl:getf state :title) "Error")
-                        :output-lines cl:nil
-                        :output-omitted cl:nil
-                        :separator cl:nil
-                        :result-lines result-lines
-                        :result-omitted result-omitted-p
-                        :no-values cl:nil))))
-      (cl:t
-           (cl:let* ((output (cl:or (cl:getf state :output) ""))
-                     (output-lines (%quick-result-popup-lines output cl:nil))
-                     (values (cl:getf state :values cl:nil))
-                     (no-values-p (cl:null values))
-                     (result-lines (%quick-result-value-lines values)))
-             (cl:if (cl:null output-lines)
-                    (cl:multiple-value-bind (truncated-results result-omitted-p)
-                        (%quick-result-truncate-result-lines result-lines cap)
-                      (cl:list :title "Result"
-                               :output-lines cl:nil
-                               :output-omitted cl:nil
-                               :separator cl:nil
-                               :result-lines truncated-results
-                               :result-omitted result-omitted-p
-                               :no-values no-values-p))
-                    (cl:if (cl:= cap 1)
-                           (cl:multiple-value-bind (truncated-results result-omitted-p)
-                               (%quick-result-truncate-result-lines result-lines 1)
-                             (cl:list :title "Result"
-                                      :output-lines cl:nil
-                                      :output-omitted cl:nil
-                                      :separator cl:nil
-                                      :result-lines truncated-results
-                                      :result-omitted result-omitted-p
-                                      :no-values no-values-p))
-                           (cl:let* ((result-cap
-                                       (cl:min (cl:length result-lines)
-                                               (cl:max 1 (cl:- cap 2))))
-                                      (output-cap
-                                       (cl:max 1 (cl:- cap 1 result-cap))))
-                             (cl:multiple-value-bind (truncated-output output-omitted-p)
-                                 (%quick-result-truncate-output-lines
-                                  output-lines output-cap)
-                               (cl:multiple-value-bind (truncated-results result-omitted-p)
-                                   (%quick-result-truncate-result-lines
-                                    result-lines result-cap)
-                                 (cl:list :title "Output"
-                                          :output-lines truncated-output
-                                          :output-omitted output-omitted-p
-                                          :separator cl:t
-                                          :result-lines truncated-results
-                                          :result-omitted result-omitted-p
-                                          :no-values no-values-p)))))))))))
+  "Adapt legacy reply strings at the typed Quick Result boundary."
+  (cl:let* ((state-cell (mine/app/state:get-quick-result-state st))
+            (old-state (cell:read state-cell))
+            (now (qr:quick-result-now-ms))
+            (text (cl:if (cl:stringp text) text (cl:princ-to-string text))))
+    (cell:write!
+     state-cell
+     (cl:if error-p
+            (qr:quick-result-fail old-state (cl:if (cl:stringp title) title "Error") text now)
+            (qr:quick-result-succeed-payload
+             old-state
+             (cl:handler-case
+                 (wire:raw-to-sexpr (mine/protocol/server::decode-protocol-sexp text))
+               (cl:error () None))
+             text now)))))
 
 (cl:defun %quick-result-max-body-lines (screen-h)
-  "Return the maximum popup body rows for a terminal height."
-  (cl:max 1 (cl:- screen-h 5)))
+  (qr:quick-result-max-body-lines (cl:max 0 screen-h)))
 
 (cl:defun %quick-result-ellipsize (text width)
   "Return TEXT clipped to WIDTH cells, appending a single-cell ellipsis if cut."
@@ -5194,25 +4916,22 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
 
 (cl:defun %render-quick-result-popup-cl (st scr screen-w screen-h spinner-text)
   "Render the transient Quick Result popup near the editor caret."
-  (cl:let* ((box (mine/app/state:get-quick-result-state st))
-            (state (mine/app/state::%native-box-value box)))
-    (cl:when state
-      (cl:let ((expiry (cl:getf state :expiry)))
-        (cl:when (cl:and expiry
-                         (cl:>= (cl:get-internal-real-time) expiry))
-          (%clear-quick-result-popup st)
-          (cl:return-from %render-quick-result-popup-cl cl:nil)))
-      (cl:let* ((error-p (cl:getf state :error))
+  (cl:let* ((state-cell (mine/app/state:get-quick-result-state st))
+            (now (qr:quick-result-now-ms))
+            (state (qr:quick-result-expire (cell:read state-cell) now)))
+    (cell:write! state-cell state)
+    (cl:when (qr:quick-result-visible? state now)
+      (cl:let* ((error-p (qr:quick-result-error? state))
                 (max-body-lines (%quick-result-max-body-lines screen-h))
-                (layout (%quick-result-layout state max-body-lines spinner-text))
-                (title (cl:getf layout :title))
-                (output-lines (cl:getf layout :output-lines))
-                (output-omitted-p (cl:getf layout :output-omitted))
-                (separator-p (cl:getf layout :separator))
-                (result-lines (cl:getf layout :result-lines))
-                (result-omitted-p (cl:getf layout :result-omitted))
-                (pending-p (cl:getf layout :pending))
-                (no-values-p (cl:getf layout :no-values))
+                (layout (qr:quick-result-layout state max-body-lines spinner-text))
+                (title (qr:layout-title layout))
+                (output-lines (qr:layout-output-lines layout))
+                (output-omitted-p (qr:layout-output-omitted? layout))
+                (separator-p (qr:layout-separator? layout))
+                (result-lines (qr:layout-result-lines layout))
+                (result-omitted-p (qr:layout-result-omitted? layout))
+                (pending-p (qr:layout-pending? layout))
+                (no-values-p (qr:layout-no-values? layout))
                 (body-lines (cl:append output-lines result-lines))
                 (max-content-w (cl:max 18 (cl:min 72 (cl:max 10 (cl:- screen-w 6)))))
                 (title-w (mine/text/width:string-cell-width-cl title))

@@ -149,5 +149,31 @@
 
 (in-package #:mine-tests)
 
+(defun check-quick-result-app-state-boundary ()
+  (let* ((state (mine/app/state:mine-state-new (mine/config/parser:default-config)))
+         (state-cell (mine/app/state:get-quick-result-state state)))
+    (mine/app/mine::%show-quick-result-pending-for-range! state 2 9 "document")
+    (mine/app/mine::%show-quick-result-interrupting! state)
+    (%check (mine/quick-result-tests::%range-matches?
+             (mine/app/mine::%quick-result-highlight-range state "document") 2 9)
+            "App cancellation lost the typed source range")
+    (let ((*read-base* 16) (*readtable* (copy-readtable nil)))
+      (setf (readtable-case *readtable*) :preserve)
+      (mine/app/mine::%set-quick-result-popup
+       state "Result" "(:quick-result :output \"printed\" :values (\"42\"))" nil))
+    (let ((layout (mine/app/quick-result:quick-result-layout (coalton/cell:read state-cell) 4 "")))
+      (%check (equal '("printed") (mine/app/quick-result:layout-output-lines layout))
+              "App adapter did not decode structured output")
+      (%check (equal '("42") (mine/app/quick-result:layout-result-lines layout))
+              "App adapter did not preserve values"))
+    (mine/app/mine::%set-quick-result-popup state "Error" "failed" t)
+    (%check (mine/app/quick-result:quick-result-error? (coalton/cell:read state-cell))
+            "App adapter did not store typed error state")
+    (mine/app/mine::%clear-quick-result! state)
+    (%check (not (mine/app/mine::%quick-result-popup-visible? state))
+            "App clear did not hide the popup")))
+
 (defun run-quick-result-model-tests ()
-  (mine/quick-result-tests:run-tests))
+  (mine/quick-result-tests:run-tests)
+  (check-quick-result-app-state-boundary)
+  t)
