@@ -57,7 +57,7 @@
 (defun %find-diagnostic (diagnostics predicate)
   (find-if predicate diagnostics))
 
-(defun %collect-server-messages (thunk)
+(defun %collect-server-messages (thunk &optional replies)
   (uiop:with-temporary-file (:pathname pathname :keep t)
     (unwind-protect
          (progn
@@ -65,7 +65,14 @@
                                    :direction :output
                                    :if-exists :supersede
                                    :element-type '(unsigned-byte 8))
-             (funcall thunk stream))
+             (let ((reader (symbol-function 'server::read-message)))
+               (unwind-protect
+                    (progn
+                      (setf (symbol-function 'server::read-message)
+                            (lambda (input)
+                              (if (eq input stream) (pop replies) (funcall reader input))))
+                      (funcall thunk stream))
+                 (setf (symbol-function 'server::read-message) reader))))
            (with-open-file (stream pathname
                                    :direction :input
                                    :element-type '(unsigned-byte 8))
@@ -681,7 +688,8 @@
                     "main"))
            (let* ((messages (%collect-server-messages
                              (lambda (stream)
-                               (server::handle-beam-system 11 system-name (namestring asd-path) stream))))
+                               (server::handle-beam-system 11 system-name (namestring asd-path) stream))
+                             '((:debug-abort 11))))
                   (return-message (find-if (lambda (message)
                                              (and (consp message)
                                                   (eq (first message) ':return)))
@@ -706,10 +714,12 @@
              (%check (< (getf diagnostic ':start) (getf diagnostic ':end))
                      "Expected a non-empty Coalton diagnostic span, got ~S"
                      diagnostic)
-             (%check (string= (getf diagnostic ':summary)
-                              (second (third return-message)))
-                     "Expected return text to mirror the diagnostic summary: ~S / ~S"
-                     diagnostic
-                     return-message)))
+             (let ((debugger-position (position :debug messages :key #'first)))
+               (%check debugger-position "Expected an interactive debugger: ~S" messages)
+               (%check (< (position diagnostic-message messages :test #'equal)
+                          debugger-position)
+                       "Expected source diagnostics before entering the debugger: ~S" messages))
+             (%check (equal '(:return 11 (:error "Aborted.")) return-message)
+                     "Expected the user's debugger abort to finish the request: ~S" return-message)))
       (ignore-errors (asdf:clear-system system-name))
       (ignore-errors (uiop:delete-directory-tree dir :validate t)))))
