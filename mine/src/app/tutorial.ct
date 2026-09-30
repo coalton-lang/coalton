@@ -74,8 +74,8 @@
                :do (cl:incf pos))
       (cl:when (cl:>= pos len) (cl:return (cl:nreverse forms)))
       (cl:multiple-value-bind (form new-pos)
-          (cl:read-from-string s cl:nil :eof :start pos)
-        (cl:when (cl:eq form :eof) (cl:return (cl:nreverse forms)))
+          (cl:read-from-string s cl:nil ':eof :start pos)
+        (cl:when (cl:eq form ':eof) (cl:return (cl:nreverse forms)))
         (cl:push form forms)
         (cl:setf pos new-pos)))))
 
@@ -103,13 +103,14 @@
                                         (cl:char/= (cl:char line pos) #\Space))
                         :do (cl:incf pos))
                (cl:let ((word (cl:subseq line word-start pos)))
-                 (cl:if (cl:zerop (cl:length current))
-                        (cl:setf current word)
-                        (cl:if (cl:<= (cl:+ (cl:length current) 1 (cl:length word)) width)
-                               (cl:setf current (cl:concatenate 'cl:string current " " word))
-                               (cl:progn
-                                 (cl:push current result)
-                                 (cl:setf current word)))))))
+                 (cl:cond
+                   ((cl:zerop (cl:length current))
+                    (cl:setf current word))
+                   ((cl:<= (cl:+ (cl:length current) 1 (cl:length word)) width)
+                    (cl:setf current (cl:concatenate 'cl:string current " " word)))
+                   (cl:t
+                    (cl:push current result)
+                    (cl:setf current word))))))
            (cl:unless (cl:zerop (cl:length current))
              (cl:push current result))
            (cl:nreverse result))))
@@ -122,11 +123,13 @@
   (cl:loop :with pos = 0
            :with len = (cl:length line)
            :collect (cl:let ((found (cl:search " --> " line :start2 pos)))
-                      (cl:if found
-                             (cl:prog1 (cl:subseq line pos found)
-                               (cl:setf pos (cl:+ found 5)))
-                             (cl:prog1 (cl:subseq line pos)
-                               (cl:setf pos len))))
+                      (cl:cond
+                        (found
+                         (cl:prog1 (cl:subseq line pos found)
+                           (cl:setf pos (cl:+ found 5))))
+                        (cl:t
+                         (cl:prog1 (cl:subseq line pos)
+                           (cl:setf pos len)))))
            :while (cl:< pos len)))
 
 (cl:defun %press-part-p (s)

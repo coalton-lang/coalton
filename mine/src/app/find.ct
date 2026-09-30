@@ -18,7 +18,7 @@
 
 (coalton-toplevel
 
-;;; Search engine
+  ;;; Search engine
 
   (declare find-match-positions (String * String * UFix * seq:Seq UFix -> seq:Seq UFix))
   (define (find-match-positions needle text start-pos matches)
@@ -42,9 +42,9 @@ Stores match positions in editor search state. Returns the total count."
       (True
        (let text = (gap:gap-to-string gb))
        (let matches = (find-match-positions (str:downcase needle)
-                                             (str:downcase text)
-                                             0
-                                             (seq:new)))
+                                            (str:downcase text)
+                                            0
+                                            (seq:new)))
        (let count = (seq:size matches))
        (ed:search-state-set! matches nlen)
        count)))

@@ -28,7 +28,7 @@ If the file does not exist, returns defaults. If malformed, returns Err."
            (Ok (cfg:MineConfig cl:t cl:t "coalton" "COALTON-USER" None 4096 Nil cl:nil)))
           (cl:t
            (cl:handler-case
-               (cl:with-open-file (in resolved :direction :input)
+               (cl:with-open-file (in resolved :direction ':input)
                  (cl:let* ((plist (cl:read in))
                            (se  (cl:getf plist ':structural-editing cl:t))
                            (ah  (cl:getf plist ':auto-hide-tree-pane cl:t))

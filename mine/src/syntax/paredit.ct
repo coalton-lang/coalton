@@ -530,58 +530,58 @@ Inside strings, parens are treated as normal characters."
                 (cell:write! (.pos cs) (- p 1))
                 (values))
                (True
-              ;; Inside a string: only protect the opening quote
-              (match (gap:gap-char-at gb (- p 1))
-                ((Some #\")
-                 ;; At opening quote boundary: check for empty string
-                 (match (gap:gap-char-at gb p)
-                   ((Some #\")
-                    (record-delete! buffer (- p 1) (+ p 1) p)
-                    (cell:write! (.pos cs) (- p 1))
-                    (values))
-                   ;; Non-empty string opening: refuse
-                   (_ (values))))
-                ;; Normal char inside string (including parens): delete it
-                (_
-                 (record-delete-backward-unit! buffer cs p)
-                 (values))))))
+                ;; Inside a string: only protect the opening quote
+                (match (gap:gap-char-at gb (- p 1))
+                  ((Some #\")
+                   ;; At opening quote boundary: check for empty string
+                   (match (gap:gap-char-at gb p)
+                     ((Some #\")
+                      (record-delete! buffer (- p 1) (+ p 1) p)
+                      (cell:write! (.pos cs) (- p 1))
+                      (values))
+                     ;; Non-empty string opening: refuse
+                     (_ (values))))
+                  ;; Normal char inside string (including parens): delete it
+                  (_
+                   (record-delete-backward-unit! buffer cs p)
+                   (values))))))
             (True
-              ;; Outside a string: full paredit behavior
-              (match (gap:gap-char-at gb (- p 1))
-                ((Some #\()
-                 (match (gap:gap-char-at gb p)
-                   ((Some #\))
-                    (record-delete! buffer (- p 1) (+ p 1) p)
-                    (cell:write! (.pos cs) (- p 1))
-                    (values))
-                   (_ (values))))
-                ((Some #\[)
-                 (match (gap:gap-char-at gb p)
-                   ((Some #\])
-                    (record-delete! buffer (- p 1) (+ p 1) p)
-                    (cell:write! (.pos cs) (- p 1))
-                    (values))
-                   (_ (values))))
-                ((Some #\")
-                 (match (gap:gap-char-at gb p)
-                   ((Some #\")
-                    ;; Empty string "": delete both quotes
-                    (record-delete! buffer (- p 1) (+ p 1) p)
-                    (cell:write! (.pos cs) (- p 1))
-                    (values))
-                   (_
-                    ;; Closing quote of non-empty string: move into it
-                    (cell:write! (.pos cs) (- p 1))
-                    (values))))
-                ((Some #\))
-                 (cell:write! (.pos cs) (- p 1))
-                 (values))
-                ((Some #\])
-                 (cell:write! (.pos cs) (- p 1))
-                 (values))
-                (_
-                 (record-delete-backward-unit! buffer cs p)
-                 (values)))))))))
+             ;; Outside a string: full paredit behavior
+             (match (gap:gap-char-at gb (- p 1))
+               ((Some #\()
+                (match (gap:gap-char-at gb p)
+                  ((Some #\))
+                   (record-delete! buffer (- p 1) (+ p 1) p)
+                   (cell:write! (.pos cs) (- p 1))
+                   (values))
+                  (_ (values))))
+               ((Some #\[)
+                (match (gap:gap-char-at gb p)
+                  ((Some #\])
+                   (record-delete! buffer (- p 1) (+ p 1) p)
+                   (cell:write! (.pos cs) (- p 1))
+                   (values))
+                  (_ (values))))
+               ((Some #\")
+                (match (gap:gap-char-at gb p)
+                  ((Some #\")
+                   ;; Empty string "": delete both quotes
+                   (record-delete! buffer (- p 1) (+ p 1) p)
+                   (cell:write! (.pos cs) (- p 1))
+                   (values))
+                  (_
+                   ;; Closing quote of non-empty string: move into it
+                   (cell:write! (.pos cs) (- p 1))
+                   (values))))
+               ((Some #\))
+                (cell:write! (.pos cs) (- p 1))
+                (values))
+               ((Some #\])
+                (cell:write! (.pos cs) (- p 1))
+                (values))
+               (_
+                (record-delete-backward-unit! buffer cs p)
+                (values)))))))))
 
   (declare %paredit-backspace-word-loop! (buf:Buffer * cursor:CursorState * UFix -> Void))
   (define (%paredit-backspace-word-loop! buffer cs target)
@@ -660,35 +660,35 @@ Inside strings, parens are treated as normal characters."
                 (cell:write! (.pos cs) (- p 1))
                 (values))
                (True
-              ;; Inside a string: only protect the closing quote
-              (match (gap:gap-char-at gb p)
-                ((Some #\")
-                 ;; At closing quote: no-op
-                 (values))
-                ;; Normal char inside string (including parens): delete it
-                (_
-                 (record-delete-forward-unit! buffer cs p)
-                 (values))))))
+                ;; Inside a string: only protect the closing quote
+                (match (gap:gap-char-at gb p)
+                  ((Some #\")
+                   ;; At closing quote: no-op
+                   (values))
+                  ;; Normal char inside string (including parens): delete it
+                  (_
+                   (record-delete-forward-unit! buffer cs p)
+                   (values))))))
             (True
-              ;; Outside a string: full paredit behavior
-              (match (gap:gap-char-at gb p)
-                ((Some #\)) (values))
-                ((Some #\]) (values))
-                ((Some #\()
-                 (match (gap:gap-char-at gb (+ p 1))
-                   ((Some #\)) (record-delete! buffer p (+ p 2) p))
-                   (_ (values))))
-                ((Some #\[)
-                 (match (gap:gap-char-at gb (+ p 1))
-                   ((Some #\]) (record-delete! buffer p (+ p 2) p))
-                   (_ (values))))
-                ((Some #\")
-                 (match (gap:gap-char-at gb (+ p 1))
-                   ((Some #\") (record-delete! buffer p (+ p 2) p))
-                   (_ (values))))
-                (_
-                 (record-delete-forward-unit! buffer cs p)
-                 (values)))))))))
+             ;; Outside a string: full paredit behavior
+             (match (gap:gap-char-at gb p)
+               ((Some #\)) (values))
+               ((Some #\]) (values))
+               ((Some #\()
+                (match (gap:gap-char-at gb (+ p 1))
+                  ((Some #\)) (record-delete! buffer p (+ p 2) p))
+                  (_ (values))))
+               ((Some #\[)
+                (match (gap:gap-char-at gb (+ p 1))
+                  ((Some #\]) (record-delete! buffer p (+ p 2) p))
+                  (_ (values))))
+               ((Some #\")
+                (match (gap:gap-char-at gb (+ p 1))
+                  ((Some #\") (record-delete! buffer p (+ p 2) p))
+                  (_ (values))))
+               (_
+                (record-delete-forward-unit! buffer cs p)
+                (values)))))))))
 
   (declare %current-string-open (gap:GapBuffer * UFix -> Optional UFix))
   (define (%current-string-open gb p)
@@ -1099,7 +1099,6 @@ instead of collapsing it to a space."
       ((None) (values))
       ((Some new-pos)
        (cell:write! (.pos cs) new-pos)
-       (values)
        (values))))
 
   (declare paredit-backward-sexp! (gap:GapBuffer * cursor:CursorState -> Void))
@@ -1110,5 +1109,4 @@ instead of collapsing it to a space."
       ((None) (values))
       ((Some new-pos)
        (cell:write! (.pos cs) new-pos)
-       (values)
        (values)))))

@@ -366,10 +366,9 @@ scroll; any other key closes."
       ((input:IEvKey (input:KeyChar #\o) _) (values))
       ((input:IEvKey (input:KeyChar #\O) _) (values))
       ((input:IEvMouse (input:MousePress) _ click-col click-row)
-       (if (and (== click-row ok-y)
-                (and (>= click-col ok-x) (< click-col (+ ok-x ok-len))))
-           (values)
-           (alert-dialog term title message help-lines bg-fn)))
+       (unless (and (== click-row ok-y)
+                    (and (>= click-col ok-x) (< click-col (+ ok-x ok-len))))
+         (alert-dialog term title message help-lines bg-fn)))
       ((input:IEvResize _ _)
        (handle-dialog-resize! term)
        (bg-fn term)
@@ -653,10 +652,14 @@ scroll; any other key closes."
       ((input:IEvKey (input:KeyTab) _) (recur next-field))
       ;; Down -> next field (within fields)
       ((input:IEvKey (input:KeyDown) _)
-       (if (< field-idx 3) (recur (+ field-idx 1)) (recur field-idx)))
+       (cond
+         ((< field-idx 3) (recur (+ field-idx 1)))
+         (True (recur field-idx))))
       ;; Up -> prev field
       ((input:IEvKey (input:KeyUp) _)
-       (if (and (> field-idx 0) (<= field-idx 3)) (recur (- field-idx 1)) (recur field-idx)))
+       (cond
+         ((and (> field-idx 0) (<= field-idx 3)) (recur (- field-idx 1)))
+         (True (recur field-idx))))
       ;; Enter
       ((input:IEvKey (input:KeyEnter) _)
        (cond
@@ -898,10 +901,14 @@ scroll; any other key closes."
          (True (recur next-field))))
       ;; Down -> next field
       ((input:IEvKey (input:KeyDown) _)
-       (if (< field-idx 5) (recur (+ field-idx 1)) (recur field-idx)))
+       (cond
+         ((< field-idx 5) (recur (+ field-idx 1)))
+         (True (recur field-idx))))
       ;; Up -> prev field
       ((input:IEvKey (input:KeyUp) _)
-       (if (and (> field-idx 0) (<= field-idx 5)) (recur (- field-idx 1)) (recur field-idx)))
+       (cond
+         ((and (> field-idx 0) (<= field-idx 5)) (recur (- field-idx 1)))
+         (True (recur field-idx))))
       ;; Enter
       ((input:IEvKey (input:KeyEnter) _)
        (cond

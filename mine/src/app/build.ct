@@ -68,7 +68,7 @@ in a package matching SYSTEM-NAME."
           (cl:dolist (file (cl:directory
                              (cl:merge-pathnames
                                (cl:make-pathname :directory '(:relative :wild-inferiors)
-                                                  :name :wild :type ext)
+                                                  :name ':wild :type ext)
                                src-path)))
             (cl:handler-case
                 (cl:let ((text (uiop:read-file-string file)))
@@ -196,9 +196,9 @@ Directory entry and CheckSum."
   (cl:declare (cl:ignorable path))
   #+(or darwin win32)
   (cl:handler-case
-      (cl:with-open-file (f path :direction :io
-                                  :element-type '(cl:unsigned-byte 8)
-                                  :if-exists :overwrite)
+      (cl:with-open-file (f path :direction ':io
+                                 :element-type '(cl:unsigned-byte 8)
+                                 :if-exists ':overwrite)
         (cl:let ((magic (%read-u32-le f 0)))
           (cl:cond
             #+darwin
@@ -248,9 +248,9 @@ Directory entry and CheckSum."
                          "MINE/BINDINGS/PROCESS" "MINE/BINDINGS/SOCKET"
                          "MINE/BINDINGS/TERMINAL"
                          "MINE/EVENT/TYPES")))
-    (cl:with-open-file (out path :direction :output
-                                 :if-exists :supersede
-                                 :if-does-not-exist :create)
+    (cl:with-open-file (out path :direction ':output
+                                 :if-exists ':supersede
+                                 :if-does-not-exist ':create)
       (cl:write-line "(in-package :cl-user)" out)
       (cl:terpri out)
       (cl:format out "(let* ((asd-path ~S)~%" asd-path)
