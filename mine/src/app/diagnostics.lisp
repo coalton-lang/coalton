@@ -42,10 +42,10 @@
     (t store:DiagnosticUnknown)))
 
 (defun severity-keyword (severity)
-  (cond ((eq severity store:DiagnosticError) :error)
-        ((eq severity store:DiagnosticWarning) :warning)
-        ((eq severity store:DiagnosticStyleWarning) :style-warning)
-        ((eq severity store:DiagnosticNote) :note)))
+  (cond ((eq severity store:DiagnosticError) ':error)
+        ((eq severity store:DiagnosticWarning) ':warning)
+        ((eq severity store:DiagnosticStyleWarning) ':style-warning)
+        ((eq severity store:DiagnosticNote) ':note)))
 
 (defun protocol-label-kind (kind)
   (case kind
@@ -53,9 +53,9 @@
     (:help store:HelpLabel) (t store:UnknownLabel)))
 
 (defun label-kind-keyword (kind)
-  (cond ((eq kind store:PrimaryLabel) :primary)
-        ((eq kind store:SecondaryLabel) :secondary)
-        ((eq kind store:HelpLabel) :help)))
+  (cond ((eq kind store:PrimaryLabel) ':primary)
+        ((eq kind store:SecondaryLabel) ':secondary)
+        ((eq kind store:HelpLabel) ':help)))
 
 (defun optional-integer (value)
   (if (integerp value) (coalton:Some value) coalton:None))
@@ -68,25 +68,25 @@
 
 (defun plist-diagnostic (plist)
   "Decode protocol fields once before crossing into typed storage."
-  (let* ((start (protocol-offset (getf plist :start)))
-         (end (max start (protocol-offset (getf plist :end))))
-         (summary (protocol-string (getf plist :summary))))
-    (store:Diagnostic (or (remap-diagnostic-filepath (getf plist :file) (getf plist :request)) "")
-                      start end (protocol-severity (getf plist :severity))
-                      summary (protocol-string (getf plist :label) summary)
-                      (protocol-label-kind (getf plist :label-kind))
-                      (optional-integer (getf plist :request))
-                      (optional-integer (getf plist :group)))))
+  (let* ((start (protocol-offset (getf plist ':start)))
+         (end (max start (protocol-offset (getf plist ':end))))
+         (summary (protocol-string (getf plist ':summary))))
+    (store:Diagnostic (or (remap-diagnostic-filepath (getf plist ':file) (getf plist ':request)) "")
+                      start end (protocol-severity (getf plist ':severity))
+                      summary (protocol-string (getf plist ':label) summary)
+                      (protocol-label-kind (getf plist ':label-kind))
+                      (optional-integer (getf plist ':request))
+                      (optional-integer (getf plist ':group)))))
 
 (defun diagnostic-plist (diagnostic)
   "Present a diagnostic to legacy rendering code without storing plist state."
-  (list :file (store:diagnostic-file diagnostic)
-        :start (store:diagnostic-start diagnostic) :end (store:diagnostic-end diagnostic)
-        :severity (severity-keyword (store:diagnostic-severity diagnostic))
-        :summary (store:diagnostic-summary diagnostic) :label (store:diagnostic-label diagnostic)
-        :label-kind (label-kind-keyword (store:diagnostic-label-kind diagnostic))
-        :request (coalton-optional-value-or-nil (store:diagnostic-request diagnostic))
-        :group (coalton-optional-value-or-nil (store:diagnostic-group diagnostic))))
+  (list ':file (store:diagnostic-file diagnostic)
+        ':start (store:diagnostic-start diagnostic) ':end (store:diagnostic-end diagnostic)
+        ':severity (severity-keyword (store:diagnostic-severity diagnostic))
+        ':summary (store:diagnostic-summary diagnostic) ':label (store:diagnostic-label diagnostic)
+        ':label-kind (label-kind-keyword (store:diagnostic-label-kind diagnostic))
+        ':request (coalton-optional-value-or-nil (store:diagnostic-request diagnostic))
+        ':group (coalton-optional-value-or-nil (store:diagnostic-group diagnostic))))
 
 (defun diagnostics-for-file (filepath)
   (mapcar #'diagnostic-plist
@@ -168,7 +168,7 @@
   (uiop:with-temporary-file (:stream stream :pathname tmp-path
                              :prefix "mine-beam-"
                              :type (pathname-type (pathname original-path))
-                             :direction :output :keep t
+                             :direction ':output :keep t
                              :external-format (coalton-impl/source:source-external-format))
     (write-string text stream)
     (store:store-add-remap! *diagnostic-store*
@@ -211,16 +211,16 @@
 (defun line-diagnostic-spans (filepath line-start line-end)
   "Return line-overlapping diagnostics as (start end severity) triples."
   (loop :for note :in (diagnostics-for-range filepath line-start line-end)
-        :collect (list (getf note :start)
-                       (getf note :end)
-                       (getf note :severity))))
+        :collect (list (getf note ':start)
+                       (getf note ':end)
+                       (getf note ':severity))))
 
 (defun diagnostic-severity-for-range (filepath start end)
   "Return the worst diagnostic severity overlapping [START, END], or NIL."
   (let ((best-severity nil)
         (best-rank 0))
     (dolist (note (diagnostics-for-range filepath start end) best-severity)
-      (let* ((severity (getf note :severity))
+      (let* ((severity (getf note ':severity))
              (rank (diagnostic-severity-rank severity)))
         (when (> rank best-rank)
           (setf best-rank rank)
@@ -232,11 +232,11 @@
          (notes (diagnostics-for-file document-key)))
     (or
      (loop :for note :in notes
-           :for diag-start = (getf note :start)
-           :for diag-end = (getf note :end)
+           :for diag-start = (getf note ':start)
+           :for diag-end = (getf note ':end)
            :when (diagnostic-contains-position-p diag-start diag-end position)
-           :return (or (getf note :summary)
-                       (getf note :label)
+           :return (or (getf note ':summary)
+                       (getf note ':label)
                        ""))
      "")))
 
@@ -244,8 +244,8 @@
   "Return the first diagnostic summary overlapping [START, END], or empty string."
   (let ((notes (diagnostics-for-range filepath start end)))
     (if notes
-        (or (getf (first notes) :summary)
-            (getf (first notes) :label)
+        (or (getf (first notes) ':summary)
+            (getf (first notes) ':label)
             "")
         "")))
 
@@ -299,8 +299,8 @@
       (current-note
        (loop :for entry :in locations
              :when (diagnostic-location< current-file
-                                         (getf current-note :start 0)
-                                         (getf current-note :end 0)
+                                         (getf current-note ':start 0)
+                                         (getf current-note ':end 0)
                                          (first entry)
                                          (second entry)
                                          (third entry))
@@ -326,8 +326,8 @@
                                      (second entry)
                                      (third entry)
                                      current-file
-                                     (getf current-note :start 0)
-                                     (getf current-note :end 0))
+                                     (getf current-note ':start 0)
+                                     (getf current-note ':end 0))
            (setf best entry))))
       (t
        (dolist (entry locations best)
@@ -404,14 +404,16 @@ those files."
                    ((zerop (length word))
                     nil)
                    ((zerop (length current))
-                    (if (<= (length word) width)
-                        (setf current word)
-                        (loop :for start :from 0 :below (length word) :by width
-                              :do (push (subseq word
-                                                start
-                                                (min (length word)
-                                                     (+ start width)))
-                                        result))))
+                    (cond
+                      ((<= (length word) width)
+                       (setf current word))
+                      (t
+                       (loop :for start :from 0 :below (length word) :by width
+                             :do (push (subseq word
+                                               start
+                                               (min (length word)
+                                                    (+ start width)))
+                                       result)))))
                    ((<= (+ (length current) 1 (length word)) width)
                     (setf current (concatenate 'string current " " word)))
                    (t
@@ -499,10 +501,10 @@ those files."
              (position (mine/edit/cursor:cursor-position cs))
              (diagnostic (diagnostic-at-position filepath position)))
         (when diagnostic
-          (let* ((severity (getf diagnostic :severity))
+          (let* ((severity (getf diagnostic ':severity))
                  (title (diagnostic-popup-title severity))
-                 (summary (or (getf diagnostic :summary) ""))
-                 (label (or (getf diagnostic :label) ""))
+                 (summary (or (getf diagnostic ':summary) ""))
+                 (label (or (getf diagnostic ':label) ""))
                  (body-text (cond
                               ((and (plusp (length summary))
                                     (plusp (length label))

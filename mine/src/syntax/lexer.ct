@@ -354,13 +354,15 @@
     (scan-while! i text len sym-char?)
     (let kw-text = (str:substring text (+ pos 1) (cell:read i)))
     (let kw-len = (str:length kw-text))
-    (if (and (== (.lex-mode state) 0)
-             (== kw-len 1)
-             (match (str:ref kw-text 0)
-               ((Some c) (char:ascii-lowercase? c))
-               ((None) False)))
-        (emit! result line-offset tok:TokTypeVariable pos (cell:read i))
-        (emit! result line-offset tok:TokKeyword pos (cell:read i))))
+    (cond
+      ((and (== (.lex-mode state) 0)
+            (== kw-len 1)
+            (match (str:ref kw-text 0)
+              ((Some c) (char:ascii-lowercase? c))
+              ((None) False)))
+       (emit! result line-offset tok:TokTypeVariable pos (cell:read i)))
+      (True
+       (emit! result line-offset tok:TokKeyword pos (cell:read i)))))
 
   (declare handle-number! ((Cell UFix) * String * UFix * (Cell (List tok:Token)) * UFix * UFix * Char -> Void))
   (define (handle-number! i text len result line-offset pos ch)

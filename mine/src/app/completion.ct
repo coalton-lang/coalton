@@ -446,7 +446,7 @@ Comments, literals, and escaped symbols use the shared source context."
 Directories get a trailing /."
   (cl:handler-case
       (cl:let* ((dir (cl:pathname dir-path))
-                (wild (cl:make-pathname :name :wild :type :wild :defaults dir))
+                (wild (cl:make-pathname :name ':wild :type ':wild :defaults dir))
                 (entries (cl:directory wild :resolve-symlinks cl:nil)))
         (cl:remove cl:nil
           (cl:mapcar
