@@ -5,9 +5,7 @@
    (#:gap #:mine/buffer/gap)
    (#:cell #:coalton/cell)
    (#:hm #:coalton/hashmap)
-   (#:iter #:coalton/iterator)
-   (#:file #:coalton/file)
-   (#:fs #:mine/utils/file-system))
+   (#:iter #:coalton/iterator))
   (:export
    #:BufferManager
    #:bufmgr-new
@@ -41,14 +39,6 @@
     (BufferManager (cell:new hm:empty)
                    (cell:new 0)
                    (cell:new None)))
-
-  ;;; Internal: allocate an id
-
-  (declare alloc-id (BufferManager -> buf:BufferId))
-  (define (alloc-id mgr)
-    (let n = (cell:read (.next-id mgr)))
-    (cell:write! (.next-id mgr) (+ n 1))
-    (buf:BufferId n))
 
   ;;; Creating buffers
 
@@ -184,15 +174,6 @@ Returns True if closed successfully."
                  (cl:or (mine/buffer/buffer::%normalize-file-document-key fpath) "")))
     (bufmgr-find-by-document-key mgr key))
 
-  (declare find-by-path-in (iter:Iterator (Tuple UFix buf:Buffer) * String -> Optional buf:Buffer))
-  (define (find-by-path-in entries fpath)
-    (match (iter:next! entries)
-      ((Some (Tuple _ buf))
-       (match (buf:buffer-path buf)
-         ((Some p) (if (== p fpath) (Some buf) (find-by-path-in entries fpath)))
-         ((None) (find-by-path-in entries fpath))))
-      ((None) None)))
-
   (declare bufmgr-find-by-document-key (BufferManager * String -> Optional buf:Buffer))
   (define (bufmgr-find-by-document-key mgr document-key)
     "Find a buffer by its stable document key."
@@ -227,25 +208,6 @@ Returns True if closed successfully."
   (define (bufmgr-any-dirty? mgr)
     "Return True if any open buffer is dirty."
     (any-dirty-in (hm:entries (cell:read (.buffers mgr)))))
-
-  (declare check-buf-dirty (buf:Buffer * String -> Boolean))
-  (define (check-buf-dirty b fpath)
-    "Return True if buffer B has path FPATH and is dirty."
-    (match (buf:buffer-path b)
-      ((Some p) (and (== p fpath) (buf:buffer-dirty? b)))
-      ((None) False)))
-
-  (declare scan-ids (hm:HashMap UFix buf:Buffer * String * UFix * UFix -> Boolean))
-  (define (scan-ids tbl fpath i limit)
-    "Probe buffer ids 0..limit looking for a dirty buffer matching fpath."
-    (if (>= i limit)
-        False
-        (match (hm:lookup tbl i)
-          ((Some b)
-           (if (check-buf-dirty b fpath)
-               True
-               (scan-ids tbl fpath (+ i 1) limit)))
-          ((None) (scan-ids tbl fpath (+ i 1) limit)))))
 
   (declare bufmgr-path-dirty? (BufferManager * String -> Boolean))
   (define (bufmgr-path-dirty? mgr fpath)
