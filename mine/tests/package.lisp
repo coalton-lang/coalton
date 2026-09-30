@@ -133,7 +133,11 @@
                   check-buffer-manager-any-dirty-sees-non-current-buffer
                   run-runtime-regression-tests
                   run-editor-regression-tests
+                  run-source-context-tests
                   run-app-regression-tests))
     (format t "~&~A~%" test)
     (funcall test))
   t)
+
+(defun run-source-context-tests ()
+  (uiop:symbol-call :mine-tests/source-context :run-source-context-tests))
