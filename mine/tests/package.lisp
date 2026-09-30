@@ -134,6 +134,7 @@
                   run-runtime-regression-tests
                   run-editor-regression-tests
                   run-editor-layout-tests
+                  run-editor-render-context-tests
                   run-source-context-tests
                   run-lexer-context-tests
                   run-indent-context-tests

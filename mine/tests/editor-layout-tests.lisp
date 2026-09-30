@@ -4,6 +4,11 @@
    (#:layout #:mine/app/layout)
    (#:wt #:mine/widget/types)
    (#:input #:mine/widget/input)
+   (#:editor #:mine/pane/editor)
+   (#:buf #:mine/buffer/buffer)
+   (#:color #:mine/term/color)
+   (#:seq #:coalton/seq)
+   (#:vec #:coalton/vector)
    (#:cell #:coalton/cell)
    (#:screen #:mine/term/screen)))
 
@@ -34,7 +39,26 @@
   (declare screen-cursor (screen:Screen -> Tuple UFix UFix))
   (define (screen-cursor scr)
     (Tuple (cell:read (screen::.screen-cursor-col scr))
-           (cell:read (screen::.screen-cursor-row scr)))))
+           (cell:read (screen::.screen-cursor-row scr))))
+
+  (declare screen-cell-background (screen:Screen * UFix * UFix -> color:Color))
+  (define (screen-cell-background scr x y)
+    (let index = (+ (* y (cell:read (screen:.screen-width scr))) x))
+    (color:.style-bg (screen::.screen-cell-style
+                     (vec:index-unsafe index (cell:read (screen::.screen-back scr))))))
+
+  (declare screen-cell-character (screen:Screen * UFix * UFix -> Char))
+  (define (screen-cell-character scr x y)
+    (let index = (+ (* y (cell:read (screen:.screen-width scr))) x))
+    (screen::.screen-cell-ch (vec:index-unsafe index (cell:read (screen::.screen-back scr)))))
+
+  (declare captured-search-context (List editor:RenderSpan -> editor:EditorRenderContext))
+  (define (captured-search-context spans)
+    (editor:search-state-set! (seq:push (seq:new) 0) 1)
+    (editor:search-current-set! 0)
+    (let context = (editor:editor-render-context buf:ModePlainText spans (Some (Tuple 2 3))))
+    (editor:search-state-clear!)
+    context))
 
 (named-readtables:in-readtable :standard)
 (in-package #:mine-tests)
@@ -119,4 +143,57 @@
                   check-editor-input-viewport-matches-rendering
                   check-editor-view-round-trip))
     (funcall test))
+  t)
+
+(defun check-editor-render-context-isolation ()
+  (let* ((ep (mine/pane/editor:editor-pane-new))
+         (gb (gap:gap-from-string "abc"))
+         (cs (cursor:cursor-new))
+         (rect (wt:Rect 1 1 18 2))
+         (scr (mine/term/screen:screen-new 24 5))
+         (text-x (+ 1 (mine/pane/editor:editor-pane-gutter-width ep gb)))
+         (spans (mine/pane/editor:render-spans-from-triples '((1 2 :error) (3 3 :warning))))
+         (context (mine-tests/editor-layout::captured-search-context spans)))
+    (mine/pane/editor:editor-pane-render-with-context ep scr rect gb cs context)
+    (loop for offset from 0
+          for color in (list mine/term/color:search-current-bg mine/term/color:dark-red
+                             mine/term/color:slate mine/term/color:brown)
+          do (%check (equalp color (mine-tests/editor-layout::screen-cell-background scr (+ text-x offset) 1))
+                     "Render context should apply its captured style at offset ~D" offset))
+    (mine/pane/editor:editor-pane-render-with-context
+     ep scr rect gb cs (mine/pane/editor:editor-render-context buf:ModePlainText nil coalton:None))
+    (loop for offset from 0 to 3
+          do (%check (equalp mine/term/color:current-line-bg
+                              (mine-tests/editor-layout::screen-cell-background scr (+ text-x offset) 1))
+                     "A fresh render context should not inherit previous highlights at offset ~D" offset))
+    (mine/term/screen:screen-clear scr)
+    (mine/term/screen:screen-set-cell scr 1 3 #\X mine/term/color:default-style)
+    (mine/pane/editor:editor-pane-render-with-context
+     ep scr (wt:Rect 1 1 2 1) gb cs context)
+    (%check (char= #\X (mine-tests/editor-layout::screen-cell-character scr 3 1))
+            "A pane narrower than its gutter must not paint into a neighboring pane")))
+
+(defun check-editor-navigation-preserves-document-views ()
+  (with-test-directory (directory)
+    (let* ((state (%test-state))
+           (manager (mine/app/state:get-bufmgr state))
+           (cursor (mine/app/state:get-cursor-state state))
+           (first (%editor-result-ok
+                   (mine/buffer/manager:bufmgr-open-file! manager (namestring (merge-pathnames "first.lisp" directory)))))
+           (second (%editor-result-ok
+                    (mine/buffer/manager:bufmgr-open-file! manager (namestring (merge-pathnames "second.lisp" directory))))))
+      (gap:gap-reset! (buf:buffer-gap first) "first buffer")
+      (gap:gap-reset! (buf:buffer-gap second) (format nil "a~C~Cb" #\Return #\Newline))
+      (mine/app/state:activate-buffer! state first)
+      (cursor:cursor-move-to-buffer-position! (buf:buffer-gap first) cursor 6)
+      (%check (mine/app/navigation:jump-to-document-key state (buf:buffer-document-key second) 2)
+              "Navigation should find an existing buffer")
+      (%check (= 3 (cursor:cursor-position cursor)) "Navigation should clamp offsets to CRLF units")
+      (mine/app/state:activate-buffer! state first)
+      (%check (= 6 (cursor:cursor-position cursor))
+              "Navigation activation should preserve the view of the departed document"))))
+
+(defun run-editor-render-context-tests ()
+  (check-editor-render-context-isolation)
+  (check-editor-navigation-preserves-document-views)
   t)
