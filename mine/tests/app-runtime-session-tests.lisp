@@ -37,8 +37,11 @@
      (app::%send-request! state connection
        (mine/protocol/messages:ReqEval (mine/protocol/messages:RequestId 901)
                                        "user-form" "old-package" coalton:False))
-     (%check (equal '((:eval 0 "initialization" "CL-USER" nil)) (%app-sent-messages output))
-             "The first evaluation was sent before initialization completed")
+     (let ((sent (%app-sent-messages output)))
+       (%check (and (= 1 (length sent)) (eq :eval (first (first sent)))
+                    (eql 0 (second (first sent)))
+                    (search "initialization" (third (first sent))))
+               "The first evaluation was sent before initialization completed"))
      (%check (eql 0 (mine/protocol/client::%connection-foreground-request-id connection))
              "A deferred request stole the initialization interrupt target")
      (app::handle-proto-msg! state (app::%parse-one-message '(:io-request 0 "init input")))
@@ -73,6 +76,27 @@
                    (repl:repl-pane-output-lines (mine/app/state:get-repl-pane state)))
              "A cancelled deferred request was not explained"))))
 
+(defun check-initialization-preserves-default-package-unless-explicitly-changed ()
+  (dolist (example '(("(cl:values 42)" "COALTON-USER")
+                     ("(cl:in-package :cl-user) (cl:values 42)" "COMMON-LISP-USER")))
+    (%call-with-app-connection
+     (lambda (state connection output)
+       (app::%start-initialization! state connection (first example))
+       (let ((message (first (%app-sent-messages output))))
+         (%check (equal '("CL-USER" nil) (cdddr message))
+                 "Initialization must use the Common Lisp reader context")
+         (multiple-value-bind (result ignored-output package)
+             (mine/runtime/eval::%debug-eval (third message) (fourth message))
+           (declare (ignore ignored-output))
+           (%check (equal '(:values ("42")) (mine/protocol/server::decode-protocol-sexp result))
+                   "Initialization did not evaluate the Lisp form")
+           (%check (string= (second example) package)
+                   "Initialization chose ~A instead of ~A" package (second example))
+           (app::handle-proto-msg! state (app::%parse-one-message `(:notify (:package 0 ,package))))
+           (app::handle-proto-msg! state (app::%parse-one-message `(:return 0 (:ok ,result))))
+           (%check (string= package (coalton/cell:read (mine/app/state:get-repl-package-cell state)))
+                   "The acknowledged initialization package was not retained")))))))
+
 (defun check-failed-cancellation-preserves-foreground-request ()
   (let* ((state (%test-state))
          (id (mine/protocol/messages:RequestId 903)))
@@ -102,6 +126,7 @@
 (defun run-app-runtime-session-tests ()
   (dolist (test '(check-initialization-owns-prompts-and-defers-first-evaluation
                   check-initialization-failure-cancels-deferred-request
+                  check-initialization-preserves-default-package-unless-explicitly-changed
                   check-failed-cancellation-preserves-foreground-request
                   check-runtime-restart-resets-obsolete-package))
     (format t "~&~A~%" test)

@@ -1710,12 +1710,22 @@ Uses a dedicated Beam request so diagnostics can stream independently."
   (declare %start-initialization! (MineState * client:Connection * String -> Void))
   (define (%start-initialization! st conn code)
     (let id = (next-request-id! st))
+    (let package = (cell:read (.ms-repl-package st)))
+    ;; Read configuration and generated setup as Common Lisp, but seed the
+    ;; runtime package with the configured default before executing either.
+    ;; An explicit IN-PACKAGE in the user's init remains authoritative.
+    (let source =
+      (lisp (-> String) (package code)
+        (cl:with-standard-io-syntax
+          (cl:format cl:nil
+                     "(cl:progn (cl:setf cl:*package* (cl:or (cl:find-package ~S) (cl:find-package ~S) (cl:error 'cl:package-error :package ~S))) ~A)"
+                     package (cl:string-upcase package) package code))))
     (cell:write! (.ms-initialization-request st) (Some id))
     (cell:write! (.ms-active-request st) (Some id))
     (cell:write! (.ms-repl-busy st) True)
     (cell:write! (.ms-busy-activity st) (Some "Initializing"))
     (cell:write! (.ms-eval-start-time st) (lisp (-> UFix) () (cl:get-internal-real-time)))
-    (%send-request! st conn (msg:ReqEval id code "CL-USER" False))
+    (%send-request! st conn (msg:ReqEval id source "CL-USER" False))
     (values))
 
   (declare %send-repl-init! (MineState * client:Connection -> Void))
