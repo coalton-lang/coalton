@@ -1,0 +1,597 @@
+(cl:defpackage #:mine/syntax/context
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:str #:coalton/string)
+   (#:list #:coalton/list)
+   (#:char #:coalton/char))
+  (:export
+   #:SourceClass #:SourceCode #:SourceString #:SourceLineComment
+   #:SourceBlockComment #:SourceCharacter #:SourceEscapedSymbol
+   #:Delimiter #:ParenDelimiter #:BracketDelimiter #:VectorDelimiter
+   #:Completeness #:SourceComplete #:SourceIncomplete #:SourceMalformed
+   #:TokenKind #:SymbolToken #:StringToken #:CharacterToken
+   #:OpenToken #:CloseToken #:PrefixToken #:CommentToken
+   #:SourceToken #:.token-kind #:.token-start #:.token-end #:.token-complete
+   #:FormKind #:SymbolForm #:StringForm #:CharacterForm #:DelimitedForm #:PrefixedForm
+   #:SourceForm #:.form-kind #:.form-start #:.form-end #:.form-children #:.form-complete
+   #:SourceContext #:.source-text #:.source-tokens #:.source-forms #:.source-completeness
+   #:source-text #:source-tokens #:source-forms #:source-completeness
+   #:token-kind #:token-start #:token-end #:token-complete? #:form-kind
+   #:scan-source #:source-class-at #:source-input-ready? #:token-text #:form-text
+   #:form-head #:form-start #:form-end #:form-children #:form-complete?
+   #:source-package-before #:source-enclosing-head
+   #:source-outer-form-range #:source-smallest-list-range
+   #:source-form-at #:source-compile-form-range #:source-symbol-name #:source-symbol-parts))
+
+(in-package #:mine/syntax/context)
+
+(coalton-toplevel
+
+  (derive Eq)
+  (define-type SourceClass
+    SourceCode SourceString SourceLineComment SourceBlockComment
+    SourceCharacter SourceEscapedSymbol)
+
+  (derive Eq)
+  (define-type Delimiter
+    ParenDelimiter BracketDelimiter VectorDelimiter)
+
+  (derive Eq)
+  (define-type Completeness
+    SourceComplete SourceIncomplete SourceMalformed)
+
+  (derive Eq)
+  (define-type TokenKind
+    (SymbolToken Boolean)
+    StringToken
+    CharacterToken
+    (OpenToken Delimiter)
+    (CloseToken Delimiter)
+    (PrefixToken UFix)
+    (CommentToken SourceClass))
+
+  (define-struct SourceToken
+    (token-kind TokenKind)
+    (token-start UFix)
+    (token-end UFix)
+    (token-complete Boolean))
+
+  (derive Eq)
+  (define-type FormKind
+    SymbolForm StringForm CharacterForm
+    (DelimitedForm Delimiter)
+    (PrefixedForm UFix))
+
+  (define-struct SourceForm
+    (form-kind FormKind)
+    (form-start UFix)
+    (form-end UFix)
+    (form-children (List SourceForm))
+    (form-complete Boolean))
+
+  (define-struct SourceContext
+    (source-text String)
+    (source-tokens (List SourceToken))
+    (source-forms (List SourceForm))
+    (source-completeness Completeness))
+
+  (declare source-text (SourceContext -> String))
+  (define (source-text context) (.source-text context))
+  (declare source-tokens (SourceContext -> List SourceToken))
+  (define (source-tokens context) (.source-tokens context))
+  (declare source-forms (SourceContext -> List SourceForm))
+  (define (source-forms context) (.source-forms context))
+  (declare source-completeness (SourceContext -> Completeness))
+  (define (source-completeness context) (.source-completeness context))
+  (declare token-kind (SourceToken -> TokenKind))
+  (define (token-kind token) (.token-kind token))
+  (declare token-start (SourceToken -> UFix))
+  (define (token-start token) (.token-start token))
+  (declare token-end (SourceToken -> UFix))
+  (define (token-end token) (.token-end token))
+  (declare token-complete? (SourceToken -> Boolean))
+  (define (token-complete? token) (.token-complete token))
+  (declare form-kind (SourceForm -> FormKind))
+  (define (form-kind form) (.form-kind form))
+
+  (declare whitespace? (Char -> Boolean))
+  (define (whitespace? ch)
+    (list:member ch [#\Space #\Tab #\Newline #\Return #\Page ]))
+
+  (declare delimiter? (Char -> Boolean))
+  (define (delimiter? ch)
+    (or (whitespace? ch)
+        (list:member ch [#\( #\) #\[ #\] #\" #\; #\' #\` #\, ])))
+
+  (declare char-at? (String * UFix * Char -> Boolean))
+  (define (char-at? text pos ch)
+    (== (str:ref text pos) (Some ch)))
+
+  ;; The scanner never invokes the Lisp reader. It accepts unfinished editor
+  ;; input, retaining both its spans and the state at the end of each literal.
+  (declare string-end (String * UFix -> Tuple UFix Boolean))
+  (define (string-end text pos)
+    (match (str:ref text pos)
+      ((None) (Tuple pos False))
+      ((Some #\\)
+       (if (< (+ pos 1) (str:length text))
+           (string-end text (+ pos 2))
+           (Tuple (+ pos 1) False)))
+      ((Some #\") (Tuple (+ pos 1) True))
+      (_ (string-end text (+ pos 1)))))
+
+  (declare comment-end (String * UFix -> UFix))
+  (define (comment-end text pos)
+    (match (str:ref text pos)
+      ((None) pos)
+      ((Some #\Newline) pos)
+      (_ (comment-end text (+ pos 1)))))
+
+  (declare block-end (String * UFix * UFix -> Tuple UFix Boolean))
+  (define (block-end text pos depth)
+    (cond
+      ((== depth 0) (Tuple pos True))
+      ((>= pos (str:length text)) (Tuple pos False))
+      ((and (char-at? text pos #\#) (char-at? text (+ pos 1) #\|))
+       (block-end text (+ pos 2) (+ depth 1)))
+      ((and (char-at? text pos #\|) (char-at? text (+ pos 1) #\#))
+       (block-end text (+ pos 2) (- depth 1)))
+      (True (block-end text (+ pos 1) depth))))
+
+  (declare symbol-end (String * UFix * Boolean * Boolean -> Tuple3 UFix Boolean Boolean))
+  (define (symbol-end text pos in-bars escaped)
+    (match (str:ref text pos)
+      ((None) (Tuple3 pos (not in-bars) escaped))
+      ((Some #\\)
+       (if (< (+ pos 1) (str:length text))
+           (symbol-end text (+ pos 2) in-bars True)
+           (Tuple3 (+ pos 1) False True)))
+      ((Some #\|) (symbol-end text (+ pos 1) (not in-bars) True))
+      ((Some ch)
+       (if (and (not in-bars) (delimiter? ch))
+           (Tuple3 pos True escaped)
+           (symbol-end text (+ pos 1) in-bars escaped)))))
+
+  (declare plain-atom-end (String * UFix -> UFix))
+  (define (plain-atom-end text pos)
+    (match (str:ref text pos)
+      ((None) pos)
+      ((Some ch)
+       (if (delimiter? ch) pos (plain-atom-end text (+ pos 1))))))
+
+  (declare dispatch-letter-pos (String * UFix -> UFix))
+  (define (dispatch-letter-pos text pos)
+    (match (str:ref text pos)
+      ((Some ch)
+       (if (char:ascii-digit? ch)
+           (dispatch-letter-pos text (+ pos 1))
+           pos))
+      ((None) pos)))
+
+  (declare scan-token (String * UFix -> SourceToken))
+  (define (scan-token text pos)
+    (let len = (str:length text))
+    (match (str:ref text pos)
+      ((Some #\;) (SourceToken (CommentToken SourceLineComment) pos (comment-end text pos) True))
+      ((Some #\")
+       (match (string-end text (+ pos 1))
+         ((Tuple end complete) (SourceToken StringToken pos end complete))))
+      ((Some #\() (SourceToken (OpenToken ParenDelimiter) pos (+ pos 1) True))
+      ((Some #\)) (SourceToken (CloseToken ParenDelimiter) pos (+ pos 1) True))
+      ((Some #\[) (SourceToken (OpenToken BracketDelimiter) pos (+ pos 1) True))
+      ((Some #\]) (SourceToken (CloseToken BracketDelimiter) pos (+ pos 1) True))
+      ((Some #\') (SourceToken (PrefixToken 1) pos (+ pos 1) True))
+      ((Some #\`) (SourceToken (PrefixToken 1) pos (+ pos 1) True))
+      ((Some #\,)
+       (SourceToken (PrefixToken 1) pos
+                    (if (or (char-at? text (+ pos 1) #\@)
+                            (char-at? text (+ pos 1) #\.))
+                        (+ pos 2) (+ pos 1)) True))
+      ((Some #\#)
+       (let dispatch = (dispatch-letter-pos text (+ pos 1)))
+       (cond
+         ((char-at? text (+ pos 1) #\|)
+          (match (block-end text (+ pos 2) 1)
+            ((Tuple end complete)
+             (SourceToken (CommentToken SourceBlockComment) pos end complete))))
+         ((char-at? text (+ pos 1) #\\)
+          ;; The first character is literal even when it is a delimiter.
+          (let first-char = (+ pos 2))
+          (let end = (match (str:ref text first-char)
+                       ((Some ch)
+                        (if (delimiter? ch) (+ first-char 1)
+                            (plain-atom-end text (+ first-char 1))))
+                       ((None) len)))
+          (SourceToken CharacterToken pos end (< first-char len)))
+         ((char-at? text dispatch #\()
+          (SourceToken (OpenToken VectorDelimiter) pos (+ dispatch 1) True))
+         ((or (char-at? text dispatch #\+) (char-at? text dispatch #\-))
+          (SourceToken (PrefixToken 2) pos (+ dispatch 1) True))
+         ((match (str:ref text dispatch)
+            ((Some ch) (list:member ch [#\' #\. #\= #\S #\s #\A #\a #\C #\c ]))
+            ((None) False))
+          (SourceToken (PrefixToken 1) pos (+ dispatch 1) True))
+         (True
+          (match (symbol-end text pos False False)
+            ((Tuple3 end complete escaped)
+             (SourceToken (SymbolToken escaped) pos end (and complete (< dispatch len))))))))
+      (_
+       (match (symbol-end text pos False False)
+         ((Tuple3 end complete escaped)
+          (SourceToken (SymbolToken escaped) pos end complete))))))
+
+  (declare scan-tokens (String * UFix * List SourceToken -> List SourceToken))
+  (define (scan-tokens text pos acc)
+    (match (str:ref text pos)
+      ((None) (list:reverse acc))
+      ((Some ch)
+       (if (whitespace? ch)
+           (scan-tokens text (+ pos 1) acc)
+           (progn
+             (let token = (scan-token text pos))
+             (scan-tokens text (.token-end token) (Cons token acc)))))))
+
+  (declare comment-token? (SourceToken -> Boolean))
+  (define (comment-token? token)
+    (match (.token-kind token)
+      ((CommentToken _) True)
+      (_ False)))
+
+  (declare compatible-close? (Delimiter * Delimiter -> Boolean))
+  (define (compatible-close? open close)
+    (or (== open close)
+        (and (== open VectorDelimiter) (== close ParenDelimiter))))
+
+  ;; Parsing only groups token spans. Malformed close delimiters are retained
+  ;; as a status so the REPL can submit them and show a reader error immediately.
+  (declare parse-form (List SourceToken * UFix -> Tuple3 SourceForm (List SourceToken) Boolean))
+  (declare parse-children (List SourceToken * UFix * Delimiter * List SourceForm * Boolean
+                          -> Tuple4 (List SourceForm) (List SourceToken) (Optional SourceToken) Boolean))
+  (declare parse-prefix-children (List SourceToken * UFix * UFix * List SourceForm * Boolean
+                                 -> Tuple3 (List SourceForm) (List SourceToken) Boolean))
+
+  (define (parse-children tokens len delimiter acc malformed)
+    (match tokens
+      ((Nil) (Tuple4 (list:reverse acc) Nil None malformed))
+      ((Cons token rest)
+       (match (.token-kind token)
+         ((CloseToken close)
+          (Tuple4 (list:reverse acc) rest (Some token)
+                  (or malformed (not (compatible-close? delimiter close)))))
+         (_
+          (match (parse-form tokens len)
+            ((Tuple3 form remaining bad)
+             (parse-children remaining len delimiter (Cons form acc) (or malformed bad)))))))))
+
+  (define (parse-prefix-children tokens len count acc malformed)
+    (cond
+      ((== count 0) (Tuple3 (list:reverse acc) tokens malformed))
+      (True
+       (match tokens
+         ((Nil) (Tuple3 (list:reverse acc) Nil malformed))
+         ((Cons token _)
+          (match (.token-kind token)
+            ((CloseToken _) (Tuple3 (list:reverse acc) tokens malformed))
+            (_
+             (match (parse-form tokens len)
+               ((Tuple3 form remaining bad)
+                (parse-prefix-children remaining len (- count 1) (Cons form acc)
+                                       (or malformed bad)))))))))))
+
+  (declare children-complete? (List SourceForm -> Boolean))
+  (define (children-complete? children)
+    (list:all .form-complete children))
+
+  (declare last-form-end (List SourceForm * UFix -> UFix))
+  (define (last-form-end forms fallback)
+    (match forms
+      ((Nil) fallback)
+      ((Cons form rest) (last-form-end rest (.form-end form)))))
+
+  (define (parse-form tokens len)
+    (match tokens
+      ((Nil) (Tuple3 (SourceForm SymbolForm len len Nil False) Nil False))
+      ((Cons token rest)
+       (let start = (.token-start token))
+       (let end = (.token-end token))
+       (match (.token-kind token)
+         ((OpenToken delimiter)
+          (match (parse-children rest len delimiter Nil False)
+            ((Tuple4 children remaining close malformed)
+             (let closed = (match close ((Some _) True) ((None) False)))
+             (let form-end = (match close ((Some closing) (.token-end closing)) ((None) len)))
+             (Tuple3 (SourceForm (DelimitedForm delimiter) start form-end children
+                                 (and closed (children-complete? children)))
+                     remaining malformed))))
+         ((PrefixToken count)
+          (match (parse-prefix-children rest len count Nil False)
+            ((Tuple3 children remaining malformed)
+             (Tuple3 (SourceForm (PrefixedForm count) start
+                                 (last-form-end children end) children
+                                 (and (== (list:length children) count)
+                                      (children-complete? children)))
+                     remaining malformed))))
+         ((CloseToken _)
+          (Tuple3 (SourceForm SymbolForm start end Nil True) rest True))
+         (_
+          (let kind = (match (.token-kind token)
+                        ((StringToken) StringForm)
+                        ((CharacterToken) CharacterForm)
+                        (_ SymbolForm)))
+          (Tuple3 (SourceForm kind start end Nil (.token-complete token)) rest False))))))
+
+  (declare parse-forms (List SourceToken * UFix * List SourceForm * Boolean
+                       -> Tuple (List SourceForm) Boolean))
+  (define (parse-forms tokens len acc malformed)
+    (match tokens
+      ((Nil) (Tuple (list:reverse acc) malformed))
+      (_
+       (match (parse-form tokens len)
+         ((Tuple3 form remaining bad)
+          (parse-forms remaining len (Cons form acc) (or malformed bad)))))))
+
+  (declare scan-source (String -> SourceContext))
+  (define (scan-source text)
+    (let tokens = (scan-tokens text 0 Nil))
+    (let form-tokens = (list:filter (fn (token) (not (comment-token? token))) tokens))
+    (match (parse-forms form-tokens (str:length text) Nil False)
+      ((Tuple forms malformed)
+       (SourceContext text tokens forms
+                      (cond
+                        (malformed SourceMalformed)
+                        ((and (children-complete? forms) (list:all .token-complete tokens)) SourceComplete)
+                        (True SourceIncomplete))))))
+
+  (declare token-text (SourceContext * SourceToken -> String))
+  (define (token-text context token)
+    (str:substring (.source-text context) (.token-start token) (.token-end token)))
+
+  (declare form-text (SourceContext * SourceForm -> String))
+  (define (form-text context form)
+    (str:substring (.source-text context) (.form-start form) (.form-end form)))
+
+  (declare form-start (SourceForm -> UFix))
+  (define (form-start form) (.form-start form))
+  (declare form-end (SourceForm -> UFix))
+  (define (form-end form) (.form-end form))
+  (declare form-children (SourceForm -> List SourceForm))
+  (define (form-children form) (.form-children form))
+  (declare form-complete? (SourceForm -> Boolean))
+  (define (form-complete? form) (.form-complete form))
+
+  (declare token-class-at (SourceToken * UFix -> SourceClass))
+  (define (token-class-at token pos)
+    (match (.token-kind token)
+      ((StringToken) (if (== pos (.token-start token)) SourceCode SourceString))
+      ((CharacterToken) SourceCharacter)
+      ((SymbolToken escaped) (if escaped SourceEscapedSymbol SourceCode))
+      ((CommentToken class) class)
+      (_ SourceCode)))
+
+  (declare source-class-at (SourceContext * UFix -> SourceClass))
+  (define (source-class-at context pos)
+    "Classify a character position, including an unfinished literal at EOF."
+    (rec scan ((tokens (.source-tokens context)))
+      (match tokens
+        ((Nil) SourceCode)
+        ((Cons token rest)
+         (cond
+           ((< pos (.token-start token)) SourceCode)
+           ((or (< pos (.token-end token))
+                (and (== pos (.token-end token))
+                     (not (.token-complete token))))
+            (token-class-at token pos))
+           (True (scan rest)))))))
+
+  (declare source-input-ready? (SourceContext -> Boolean))
+  (define (source-input-ready? context)
+    (not (== (.source-completeness context) SourceIncomplete)))
+
+  (declare form-head (SourceContext * SourceForm -> Optional String))
+  (define (form-head context form)
+    (match (.form-kind form)
+      ((DelimitedForm ParenDelimiter)
+       (match (.form-children form)
+         ((Cons head _)
+          (if (== (.form-kind head) SymbolForm) (Some (form-text context head)) None))
+         (_ None)))
+      (_ None)))
+
+  (declare contains-position? (SourceForm * UFix -> Boolean))
+  (define (contains-position? form pos)
+    (and (<= (.form-start form) pos)
+         (or (< pos (.form-end form))
+             (and (not (.form-complete form)) (== pos (.form-end form))))))
+
+  (declare find-form (List SourceForm * UFix -> Optional SourceForm))
+  (define (find-form forms pos)
+    (list:find (fn (form) (contains-position? form pos)) forms))
+
+  (declare source-form-at (SourceContext * UFix -> Optional SourceForm))
+  (define (source-form-at context pos)
+    (find-form (.source-forms context) pos))
+
+  (declare form-range (SourceForm -> Tuple UFix UFix))
+  (define (form-range form)
+    (Tuple (.form-start form) (.form-end form)))
+
+  (declare source-outer-form-range (SourceContext * UFix -> Optional (Tuple UFix UFix)))
+  (define (source-outer-form-range context pos)
+    (map form-range (source-form-at context pos)))
+
+  (declare smallest-list-range (SourceForm * UFix -> Optional (Tuple UFix UFix)))
+  (declare prefixed-list? (SourceForm -> Boolean))
+  (define (prefixed-list? form)
+    (match (.form-kind form)
+      ((DelimitedForm _) True)
+      ((PrefixedForm 1)
+       (match (.form-children form)
+         ((Cons child (Nil)) (prefixed-list? child))
+         (_ False)))
+      (_ False)))
+
+  (define (smallest-list-range form pos)
+    (let inner = (match (find-form (.form-children form) pos)
+                  ((Some child) (smallest-list-range child pos))
+                  ((None) None)))
+    (match (.form-kind form)
+      ((PrefixedForm _)
+       ;; Preserve a prefix when the selected list is its immediate operand.
+       (match (Tuple inner (.form-children form))
+         ((Tuple (Some (Tuple start _)) (Cons child (Nil)))
+          (if (== start (.form-start child)) (Some (form-range form)) inner))
+         ((Tuple (None) (Cons child (Nil)))
+          (if (prefixed-list? child) (Some (form-range form)) None))
+         (_ inner)))
+      ((DelimitedForm _)
+       (match inner
+         ((Some _) inner)
+         ((None) (Some (form-range form)))))
+      (_ None)))
+
+  (declare source-smallest-list-range (SourceContext * UFix -> Optional (Tuple UFix UFix)))
+  (define (source-smallest-list-range context pos)
+    (match (source-form-at context pos)
+      ((Some form) (smallest-list-range form pos))
+      ((None) None)))
+
+  (declare enclosing-head (SourceContext * SourceForm * UFix -> Optional String))
+  (define (enclosing-head context form pos)
+    (let inner = (match (find-form (.form-children form) pos)
+                  ((Some child) (enclosing-head context child pos))
+                  ((None) None)))
+    (match inner
+      ((Some _) inner)
+      ((None) (form-head context form))))
+
+  (declare source-enclosing-head (SourceContext * UFix -> Optional String))
+  (define (source-enclosing-head context pos)
+    (match (source-form-at context pos)
+      ((Some form) (enclosing-head context form pos))
+      ((None) None)))
+
+  (declare uppercase-char (Char -> Char))
+  (define (uppercase-char ch)
+    (lisp (-> Char) (ch) (cl:char-upcase ch)))
+
+  (declare source-symbol-name (String -> String))
+  (define (source-symbol-name text)
+    "Decode symbol escapes without interning or reading any form."
+    (rec scan ((pos 0) (bars False) (acc ""))
+      (match (str:ref text pos)
+        ((None) acc)
+        ((Some #\\)
+         (match (str:ref text (+ pos 1))
+           ((Some ch) (scan (+ pos 2) bars (<> acc (into ch))))
+           ((None) acc)))
+        ((Some #\|) (scan (+ pos 1) (not bars) acc))
+        ((Some ch)
+         (scan (+ pos 1) bars (<> acc (into (if bars ch (uppercase-char ch)))))))))
+
+  (declare source-symbol-parts (String -> Tuple (Optional String) String))
+  (define (source-symbol-parts text)
+    "Split only unescaped package markers; preserve the reader's symbol case."
+    (let colon =
+      (rec scan ((pos 0) (bars False))
+        (match (str:ref text pos)
+          ((None) None)
+          ((Some #\\) (scan (+ pos 2) bars))
+          ((Some #\|) (scan (+ pos 1) (not bars)))
+          ((Some #\:) (if bars (scan (+ pos 1) bars) (Some pos)))
+          (_ (scan (+ pos 1) bars)))))
+    (match colon
+      ((None) (Tuple None (source-symbol-name text)))
+      ((Some pos)
+       (let start = (if (char-at? text (+ pos 1) #\:) (+ pos 2) (+ pos 1)))
+       (Tuple (Some (source-symbol-name (str:substring text 0 pos)))
+              (source-symbol-name (str:substring text start (str:length text)))))))
+
+  (declare named-head? (String * String * List String -> Boolean))
+  (define (named-head? head name packages)
+    (match (source-symbol-parts head)
+      ((Tuple package symbol)
+       (and (== symbol name)
+            (match package
+              ((None) True)
+              ((Some pkg) (list:member pkg packages)))))))
+
+  (declare string-value (String -> String))
+  (define (string-value text)
+    (rec scan ((pos 1) (acc ""))
+      (if (>= (+ pos 1) (str:length text)) acc
+          (match (str:ref text pos)
+            ((Some #\\)
+             (match (str:ref text (+ pos 1))
+               ((Some ch) (scan (+ pos 2) (<> acc (into ch))))
+               ((None) acc)))
+            ((Some ch) (scan (+ pos 1) (<> acc (into ch))))
+            ((None) acc)))))
+
+  (declare package-argument (SourceContext * SourceForm -> Optional String))
+  (define (package-argument context form)
+    (match (.form-kind form)
+      ((StringForm) (Some (string-value (form-text context form))))
+      ((SymbolForm)
+       (let raw = (form-text context form))
+       (let start = (cond
+                      ((and (char-at? raw 0 #\#) (char-at? raw 1 #\:)) 2)
+                      ((char-at? raw 0 #\:) 1)
+                      (True 0)))
+       (let name = (str:substring raw start (str:length raw)))
+       (Some (snd (source-symbol-parts name))))
+      ((PrefixedForm 1)
+       (if (char-at? (.source-text context) (.form-start form) #\')
+           (match (.form-children form)
+             ((Cons child (Nil)) (package-argument context child))
+             (_ None))
+           None))
+      (_ None)))
+
+  (declare source-package-before (SourceContext * UFix -> Optional String))
+  (define (source-package-before context pos)
+    "Find the nearest completed top-level IN-PACKAGE before POS."
+    (rec scan ((forms (.source-forms context)) (package None))
+      (match forms
+        ((Nil) package)
+        ((Cons form rest)
+         (if (> (.form-end form) pos) package
+             (progn
+               (let found =
+                 (match (form-head context form)
+                   ((Some head)
+                    (if (and (.form-complete form)
+                             (named-head? head "IN-PACKAGE" ["CL" "COMMON-LISP"]))
+                        (match (.form-children form)
+                          ((Cons _ (Cons arg (Nil))) (package-argument context arg))
+                          (_ None))
+                        None))
+                   ((None) None)))
+               (scan rest (match found ((Some _) found) ((None) package)))))))))
+
+  (declare compile-wrapper? (SourceContext * SourceForm -> Boolean))
+  (define (compile-wrapper? context form)
+    (match (form-head context form)
+      ((Some head)
+       (or (named-head? head "PROGN" ["CL" "COMMON-LISP"])
+           (named-head? head "COALTON-TOPLEVEL" ["COALTON"])
+           (named-head? head "COALTON" ["COALTON"])))
+      ((None) False)))
+
+  (declare compile-form-range (SourceContext * SourceForm * UFix -> Tuple UFix UFix))
+  (define (compile-form-range context form pos)
+    (if (compile-wrapper? context form)
+        (match (find-form (.form-children form) pos)
+          ((Some child)
+           (match (.form-kind child)
+             ((DelimitedForm _) (compile-form-range context child pos))
+             ((PrefixedForm _) (form-range child))
+             (_ (form-range form))))
+          ((None) (form-range form)))
+        (form-range form)))
+
+  (declare source-compile-form-range (SourceContext * UFix -> Optional (Tuple UFix UFix)))
+  (define (source-compile-form-range context pos)
+    (match (source-form-at context pos)
+      ((Some form) (Some (compile-form-range context form pos)))
+      ((None) None)))
+)
