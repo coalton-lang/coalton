@@ -408,6 +408,140 @@
   (%runtime-check (eq coalton:None (mine/protocol/wire:raw-to-sexpr (make-hash-table)))
                   "Unsupported host objects should be rejected"))
 
+;;; A separate SBCL process exercises the real socket/Windows lifecycle.  Only
+;;; the saved-image launcher is substituted: start, interrupt, and stop use the
+;;; production manager, client, protocol server, and OS process adapters.
+
+(defun %runtime-child-source-directories ()
+  (remove-duplicates
+   (loop for name in (asdf:registered-systems)
+         for system = (asdf:find-system name nil)
+         for source = (and system (asdf:system-source-file system))
+         when source collect (uiop:pathname-directory-pathname source))
+   :test #'equal))
+
+(defun %call-with-runtime-process (function)
+  (uiop:with-temporary-file (:stream bootstrap :pathname bootstrap-path :type "lisp")
+    (with-standard-io-syntax
+      (dolist (form
+                (append
+                 (list '(require :asdf) '(require :sb-bsd-sockets) '(require :sb-introspect)
+                       `(asdf:initialize-source-registry
+                         '(:source-registry
+                           ,@(mapcar (lambda (path) (list :directory path))
+                                     (%runtime-child-source-directories))
+                           :ignore-inherited-configuration))
+                       `(setf (symbol-plist :coalton-config)
+                              ',(copy-list (symbol-plist :coalton-config))))
+                 (when (member :coalton-portable-bigfloat *features*)
+                   '((pushnew :coalton-portable-bigfloat *features*)))
+                 '((let ((*standard-output* *error-output*))
+                     (asdf:load-system "mine/runtime"))
+                   (mine/runtime/server-main:main))))
+        (write form :stream bootstrap)
+        (terpri bootstrap)))
+    :close-stream
+    (uiop:with-temporary-file (:stream errors :pathname error-path :type "log")
+      (finish-output errors)
+      :close-stream
+      (let ((manager (mine/protocol/lifecycle::make-%runtime-manager)))
+        (unwind-protect
+             (handler-case
+                 (%call-with-replaced-runtime-function
+                  'mine/bindings/process:spawn-subprocess
+                  (lambda (program args)
+                    (declare (ignore program args))
+                    (sb-ext:run-program
+                     (namestring sb-ext:*runtime-pathname*)
+                     (list "--noinform" "--no-userinit" "--no-sysinit"
+                           "--script" (namestring bootstrap-path))
+                     :input nil :output :stream :error error-path
+                     :if-error-exists :supersede :wait nil :search t))
+                  (lambda ()
+                    (%runtime-check (mine/protocol/lifecycle::%runtime-do-start manager)
+                                    "Controlled runtime process did not start")
+                    (funcall function manager)))
+               (error (condition)
+                 (error "Runtime process test failed: ~A~%Child stderr:~%~A"
+                        condition (uiop:read-file-string error-path))))
+          (mine/protocol/lifecycle::%runtime-do-stop manager))))))
+
+(defun %runtime-read-until (manager predicate)
+  (let ((stream (mine/protocol/client::%connection-stream
+                 (mine/protocol/lifecycle::%runtime-manager-connection manager))))
+    (sb-ext:with-timeout 5
+      (loop for message = (mine/protocol/server::read-message stream)
+            do (%runtime-check message "Runtime connection ended unexpectedly")
+            when (funcall predicate message) return message))))
+
+(defun %runtime-process-send-eval (manager id text)
+  (%runtime-check
+   (mine/protocol/client:connection-send-checked!
+    (mine/protocol/lifecycle::%runtime-manager-connection manager)
+    (mine/protocol/messages:ReqEval (mine/protocol/messages:RequestId id)
+                                    text "CL-USER" coalton:False))
+   "Could not send evaluation ~D to runtime process" id))
+
+(defun %runtime-process-return (manager id)
+  (let ((message (%runtime-read-until
+                  manager (lambda (message)
+                            (and (eq :return (first message)) (eql id (second message)))))))
+    (mine/protocol/client:connection-finish-request!
+     (mine/protocol/lifecycle::%runtime-manager-connection manager)
+     (mine/protocol/messages:RequestId id))
+    message))
+
+(defun %runtime-process-check-definition (manager id)
+  (%runtime-process-send-eval manager id "(mine-regression-retained-definition)")
+  (let ((message (%runtime-process-return manager id)))
+    (%runtime-check
+     (and (eq :ok (first (third message)))
+          (equal '(:values ("42"))
+                 (mine/protocol/server::decode-protocol-sexp (second (third message)))))
+     "Runtime lost the previously defined function: ~S" message))
+  (%runtime-check (mine/protocol/lifecycle:runtime-process-alive? manager)
+                  "Cancellation terminated the runtime process")
+  (%runtime-check (not (mine/protocol/lifecycle:runtime-interrupt! manager))
+                  "Completed request remained the lifecycle interrupt target"))
+
+(defun %runtime-process-interrupt-and-abort (manager id)
+  (%runtime-check (mine/protocol/lifecycle:runtime-interrupt! manager)
+                  "Lifecycle did not deliver a scoped interrupt for request ~D" id)
+  (%runtime-read-until manager (lambda (message)
+                                (and (eq :debug (first message)) (eql id (second message)))))
+  (%runtime-check
+   (mine/protocol/client:connection-send-checked!
+    (mine/protocol/lifecycle::%runtime-manager-connection manager)
+    (mine/protocol/messages:ReqDebugAbort (mine/protocol/messages:RequestId id)))
+   "Could not send debugger abort for request ~D" id)
+  (%runtime-check (equal (list :return id '(:error "Aborted."))
+                         (%runtime-process-return manager id))
+                  "Interrupted request ~D did not finish through debugger abort" id))
+
+(defun check-runtime-process-survives-scoped-interruption ()
+  (%call-with-runtime-process
+   (lambda (manager)
+     (%runtime-process-send-eval
+      manager 101 "(defun mine-regression-retained-definition () 42)")
+     (%runtime-check (eq :ok (first (third (%runtime-process-return manager 101))))
+                     "Could not define function in controlled runtime")
+     ;; READ-LINE is blocked in the input protocol, while a separate connection
+     ;; carries the interrupt.  The original connection then accepts DEBUG-ABORT.
+     (%runtime-process-send-eval manager 102 "(read-line)")
+     (%runtime-read-until manager (lambda (message)
+                                   (and (eq :io-request (first message))
+                                        (eql 102 (second message)))))
+     (%runtime-process-interrupt-and-abort manager 102)
+     (%runtime-process-check-definition manager 103)
+     ;; A flushed marker proves the looping evaluation is active before Ctrl-C.
+     (%runtime-process-send-eval
+      manager 104 "(progn (write-string \"loop-started\") (force-output) (loop (sleep 1)))")
+     (%runtime-read-until manager (lambda (message)
+                                   (equal '(:notify (:output-chunk 104 "loop-started"))
+                                          message)))
+     (%runtime-process-interrupt-and-abort manager 104)
+     (%runtime-process-check-definition manager 105))))
+
 (defun run-runtime-regression-tests ()
   (dolist (test '(check-runtime-protocol-io-isolation
                   check-runtime-protocol-rejects-reader-evaluation
@@ -422,7 +556,8 @@
                   check-runtime-registers-every-foreground-request
                   check-runtime-typed-control-requests-and-send-status
                   check-runtime-typed-response-payloads-and-snapshots
-                  check-runtime-typed-response-rejects-malformed-data))
+                  check-runtime-typed-response-rejects-malformed-data
+                  check-runtime-process-survives-scoped-interruption))
     (handler-case (funcall test)
       (error (condition)
         (format *error-output* "~&Runtime regression ~A failed: ~A~%" test condition)
