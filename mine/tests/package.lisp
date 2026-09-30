@@ -117,6 +117,8 @@
                   check-create-project-rejects-path-like-name
                   check-buffer-manager-any-dirty-sees-non-current-buffer
                   run-runtime-regression-tests
+                  run-diagnostic-store-tests
+                  run-diagnostic-adapter-tests
                   run-editor-regression-tests
                   run-editor-layout-tests
                   run-editor-render-context-tests
@@ -146,3 +148,9 @@
 
 (defun run-paredit-context-tests ()
   (uiop:symbol-call :mine-tests/paredit-context :run-paredit-context-tests))
+
+(defun run-diagnostic-store-tests ()
+  (uiop:symbol-call :mine-tests/diagnostic-store :run-diagnostic-store-tests))
+
+(defun run-diagnostic-adapter-tests ()
+  (uiop:symbol-call :mine-tests/diagnostic-adapter :run-diagnostic-adapter-tests))

@@ -167,6 +167,7 @@
                  (:ct-file "symbols")
                  (:ct-file "keyboard-debugger")
                  (:ct-file "diagnostic-scope")
+                 (:ct-file "diagnostic-store")
                  (:file "diagnostics")
                  (:file "check-update")
                  (:ct-file "mine")
