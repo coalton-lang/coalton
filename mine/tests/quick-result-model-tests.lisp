@@ -1,0 +1,153 @@
+(defpackage #:mine/quick-result-tests
+  (:use #:cl)
+  (:local-nicknames (#:qr #:mine/app/quick-result))
+  (:export #:run-tests))
+
+(in-package #:mine/quick-result-tests)
+
+(defun %check (value control &rest arguments)
+  (unless value (error (apply #'format nil control arguments))))
+
+(coalton:coalton-toplevel
+  (coalton:declare %range-matches?
+                   ((coalton:Optional (coalton-prelude:Tuple coalton:UFix coalton:UFix))
+                    coalton-prelude:* coalton:UFix coalton-prelude:* coalton:UFix coalton:-> coalton:Boolean))
+  (coalton:define (%range-matches? range expected-start expected-end)
+    (coalton:match range
+      ((coalton:Some (coalton-prelude:Tuple start end))
+       (coalton:and (coalton-prelude:== start expected-start) (coalton-prelude:== end expected-end)))
+      ((coalton:None) coalton:False)))
+
+  (coalton:declare %delay-matches?
+                   ((coalton:Optional coalton:UFix) coalton-prelude:* coalton:UFix coalton:-> coalton:Boolean))
+  (coalton:define (%delay-matches? delay expected)
+    (coalton:match delay
+      ((coalton:Some actual) (coalton-prelude:== actual expected))
+      ((coalton:None) coalton:False)))
+
+  (coalton:declare %decode-payload
+                   (mine/protocol/wire:RawSExpr coalton:-> coalton:Optional qr:QuickResultPayload))
+  (coalton:define (%decode-payload raw)
+    (coalton:do
+      (expr coalton:<- (mine/protocol/wire:raw-to-sexpr raw))
+      (qr:decode-quick-result-payload expr)))
+
+  (coalton:declare %decoded-output (mine/protocol/wire:RawSExpr coalton:-> coalton:String))
+  (coalton:define (%decoded-output raw)
+    (coalton:match (%decode-payload raw)
+      ((coalton:Some payload) (qr:payload-output payload))
+      ((coalton:None) "invalid")))
+
+  (coalton:declare %decoded-values (mine/protocol/wire:RawSExpr coalton:-> coalton:List coalton:String))
+  (coalton:define (%decoded-values raw)
+    (coalton:match (%decode-payload raw)
+      ((coalton:Some payload) (qr:payload-values payload))
+      ((coalton:None) (coalton:make-list "invalid")))))
+
+(defun check-transitions-and-expiry ()
+  (let* ((pending (qr:quick-result-begin "document-a" 2 9))
+         (interrupting (qr:quick-result-interrupt pending))
+         (success (qr:quick-result-succeed pending "" '("42") 1000))
+         (failure (qr:quick-result-fail interrupting "Error" "Interrupted." 2000)))
+    (%check (qr:quick-result-visible? pending 1000000) "Pending state should not expire")
+    (%check (qr:quick-result-pending? interrupting) "Interrupting state should remain pending")
+    (%check (%range-matches? (qr:quick-result-highlight-range interrupting "document-a" 10) 2 9)
+            "Interrupting lost its source highlight")
+    (%check (eq coalton:None (qr:quick-result-highlight-range success "document-b" 1001))
+            "Highlight leaked into a different document")
+    (%check (%range-matches? (qr:quick-result-highlight-range failure "document-a" 9999) 2 9)
+            "Completed cancellation lost its source highlight")
+    (%check (qr:quick-result-error? failure) "Failure should have error styling")
+    (%check (not (qr:quick-result-pending? success)) "Success remained pending")
+    (%check (qr:quick-result-visible? success 8999) "Success expired too early")
+    (%check (not (qr:quick-result-visible? success 9000)) "Success did not expire at its deadline")
+    (%check (eq coalton:None (qr:quick-result-highlight-range success "document-a" 9000))
+            "Expired source highlight remained visible")
+    (%check (%delay-matches? (qr:quick-result-redraw-delay success 1001) 7999)
+            "Wrong expiry redraw delay")
+    (%check (%delay-matches? (qr:quick-result-redraw-delay success 9001) 0)
+            "Expired popup should redraw immediately")
+    (%check (eq coalton:None (qr:quick-result-redraw-delay pending 1000))
+            "Pending state should not schedule expiry")
+    (%check (not (qr:quick-result-visible? (qr:quick-result-expire success 9000) 0))
+            "Expire transition did not clear completed state")
+    (%check (eq coalton:None
+                (qr:quick-result-highlight-range (qr:quick-result-begin "document-a" 9 2)
+                                                "document-a" 0))
+            "Reversed source range was accepted")))
+
+(defun check-layout-preserves-results ()
+  (let* ((state (qr:quick-result-succeed qr:QuickResultHidden
+                                        (format nil "one~%two~%three") '("VALUE") 0))
+         (layout (qr:quick-result-layout state 4 "")))
+    (%check (string= "Output" (qr:layout-title layout)) "Expected output title")
+    (%check (equal (list "one" "… 2 lines omitted") (qr:layout-output-lines layout))
+            "Output should truncate before result lines")
+    (%check (qr:layout-output-omitted? layout) "Missing output omission flag")
+    (%check (qr:layout-separator? layout) "Missing result separator")
+    (%check (equal '("VALUE") (qr:layout-result-lines layout)) "Result disappeared")
+    (%check (not (qr:layout-result-omitted? layout)) "Result was incorrectly marked omitted"))
+  (let ((layout (qr:quick-result-layout
+                 (qr:quick-result-succeed qr:QuickResultHidden "" '("VALUE") 0) 3 "")))
+    (%check (string= "Result" (qr:layout-title layout)) "Result-only title is wrong")
+    (%check (not (qr:layout-separator? layout)) "Result-only popup has a separator")
+    (%check (equal '("VALUE") (qr:layout-result-lines layout)) "Value boundary changed"))
+  (let ((layout (qr:quick-result-layout
+                 (qr:quick-result-succeed qr:QuickResultHidden "" nil 0) 3 "")))
+    (%check (qr:layout-no-values? layout) "Missing no-values marker")
+    (%check (equal '("No values") (qr:layout-result-lines layout)) "Wrong no-values text"))
+  (let ((layout (qr:quick-result-layout
+                 (qr:quick-result-succeed qr:QuickResultHidden "" '("first" "second" "third") 0)
+                 2 "")))
+    (%check (equal '("first" "… 2 lines omitted") (qr:layout-result-lines layout))
+            "Result overflow lost its omission count")
+    (%check (qr:layout-result-omitted? layout) "Missing result omission flag"))
+  (let* ((pending (qr:quick-result-begin "document" 0 1))
+         (busy-layout (qr:quick-result-layout pending 3 "*"))
+         (interrupt-layout (qr:quick-result-layout (qr:quick-result-interrupt pending) 3 "*")))
+    (%check (string= "Quick Result" (qr:layout-title busy-layout)) "Wrong pending title")
+    (%check (qr:layout-pending? busy-layout) "Missing pending layout flag")
+    (%check (equal '("Busy *" "Esc/Ctrl+g cancels") (qr:layout-result-lines busy-layout))
+            "Wrong busy layout text")
+    (%check (equal '("Interrupting *" "Waiting for runtime")
+                   (qr:layout-result-lines interrupt-layout))
+            "Wrong interrupt layout text")))
+
+(defun check-layout-fits-small-terminal ()
+  (let* ((text (format nil "one~%~%two~%three~%"))
+         (state (qr:quick-result-succeed qr:QuickResultHidden text '("first" "second" "third") 0)))
+    (loop for cap from 1 to 8
+          for layout = (qr:quick-result-layout state cap "")
+          for body-rows = (+ (length (qr:layout-output-lines layout))
+                            (if (qr:layout-separator? layout) 1 0)
+                            (length (qr:layout-result-lines layout)))
+          do (%check (<= body-rows cap) "Popup needs ~D rows in a ~D-row allowance" body-rows cap)
+             (%check (string= "first" (first (qr:layout-result-lines layout)))
+                     "A small terminal hid the first result"))
+    (let ((layout (qr:quick-result-layout state 8 "")))
+      (%check (equal '("one" "" "two" "three") (qr:layout-output-lines layout))
+              "Blank output rows or trailing newline were handled incorrectly")))
+  (%check (> (qr:quick-result-max-body-lines 30) 8) "Tall terminal did not allow extra rows")
+  (%check (= (qr:quick-result-max-body-lines 3) 1) "Short terminal lost its minimum row"))
+
+(defun check-typed-payload-boundaries ()
+  (let ((payload '(:quick-result :output "printed" :values ("one" "two"))))
+    (%check (string= "printed" (%decoded-output payload)) "Payload lost output")
+    (%check (equal '("one" "two") (%decoded-values payload)) "Payload lost separate values"))
+  (%check (null (%decoded-values '(:quick-result :output "" :values nil)))
+          "Zero values became a NIL result value")
+  (dolist (payload '((:quick-result :output 42 :values nil)
+                    (:quick-result :output "" :values (42))
+                    (:quick-result :output "" :values ("one" . "two"))
+                    (:quick-result :output "" :values nil :extra t)))
+    (%check (eq coalton:None (%decode-payload payload)) "Malformed payload was accepted: ~S" payload)))
+
+(defun run-tests ()
+  (mapc #'funcall '(check-transitions-and-expiry check-layout-preserves-results
+                   check-layout-fits-small-terminal check-typed-payload-boundaries))
+  t)
+
+(in-package #:mine-tests)
+
+(defun run-quick-result-model-tests ()
+  (mine/quick-result-tests:run-tests))
