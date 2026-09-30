@@ -4024,6 +4024,46 @@ Enter or Space inserts the matching Unicode character at the cursor."
          ((None)
           (user-error! st (<> "Failed to parse: " asd-path)))))))
 
+  (declare %close-project-documents! (MineState * String -> Void))
+  (define (%close-project-documents! st directory)
+    "Close clean project documents and keep unsaved documents reachable in open files."
+    (let manager = (.ms-bufmgr st))
+    (%close-preview! st)
+    (rec close-documents ((buffers (mgr:bufmgr-buffers-under-path manager directory)))
+      (match buffers
+        ((Nil) (values))
+        ((Cons buffer rest)
+         (if (buf:buffer-dirty? buffer)
+             (match (buf:buffer-path buffer)
+               ((None) (values))
+               ((Some path)
+                (let listed? =
+                  (list:any (fn ((Tuple _ listed-path))
+                              (match (mgr:bufmgr-find-by-path manager listed-path)
+                                ((Some listed) (== (buf:buffer-id listed) (buf:buffer-id buffer)))
+                                ((None) False)))
+                            (tree:tree-pane-open-files (.ms-tree st))))
+                (unless listed?
+                  (tree:tree-pane-add-open-file! (.ms-tree st) (buf:buffer-name buffer) path))))
+             (%do-close-buffer! st buffer))
+         (close-documents rest))))
+    ;; Match aliases through the manager instead of comparing raw path prefixes.
+    (rec remove-closed ((files (tree:tree-pane-open-files (.ms-tree st))))
+      (match files
+        ((Nil) (values))
+        ((Cons (Tuple _ path) rest)
+         (match (mgr:bufmgr-find-by-path manager path)
+           ((Some _) (values))
+           ((None) (tree:tree-pane-remove-open-file! (.ms-tree st) path)))
+         (remove-closed rest))))
+    (match (mgr:bufmgr-current manager)
+      ((Some _) (values))
+      ((None)
+       (match (tree:tree-pane-open-files (.ms-tree st))
+         ((Cons (Tuple _ path) _) (%switch-to-open-file! st path))
+         ((Nil) (values)))))
+    (values))
+
 ;;; Menu action dispatch
 
 ;;; Site actions
@@ -4143,12 +4183,9 @@ Enter or Space inserts the matching Unicode character at the cursor."
             (lisp (-> String) (asd)
               (cl:namestring
                (cl:make-pathname :name cl:nil :type cl:nil :defaults asd))))
-          (mgr:bufmgr-close-under-path! (.ms-bufmgr st) project-dir)
-          (tree:tree-pane-remove-open-files-under! (.ms-tree st) project-dir)
+          (%close-project-documents! st project-dir)
           (cell:write! (.ms-project-system st) None)
           (cell:write! (.ms-project-asd-path st) None)
-          (cell:write! (.ms-preview-path st) None)
-          (tree:tree-pane-set-preview-path! (.ms-tree st) None)
           (tree:tree-pane-clear-root! (.ms-tree st))
           (%show-editor! st)
           (status:statusbar-set-message! (.ms-status st) "Project closed"))

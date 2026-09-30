@@ -154,6 +154,89 @@
                     (cursor:cursor-selection-anchor cs)))
               "Restoring a refreshed document left its saved anchor inside CRLF"))))
 
+(defun check-editor-bulk-close-keeps-dirty-and-sibling-documents ()
+  (with-test-directory (directory)
+    (let* ((project (merge-pathnames "Project/" directory))
+           (sibling (merge-pathnames "Project-extra/" directory))
+           (dirty-path (merge-pathnames "dirty.lisp" project))
+           (clean-path (merge-pathnames "clean.lisp" project))
+           (other-path (merge-pathnames "other.lisp" sibling))
+           (manager (mine/buffer/manager:bufmgr-new))
+           (cs (cursor:cursor-new)))
+      (ensure-directories-exist project)
+      (ensure-directories-exist sibling)
+      (dolist (path (list dirty-path clean-path other-path))
+        (%editor-write-source path "original"))
+      (let ((dirty (%editor-result-ok (mine/buffer/manager:bufmgr-open-file! manager (namestring dirty-path))))
+            (other (%editor-result-ok (mine/buffer/manager:bufmgr-open-file! manager (namestring other-path)))))
+        (%editor-result-ok (mine/buffer/manager:bufmgr-open-file! manager (namestring clean-path)))
+        (ops:insert-string! dirty (buf:buffer-undo dirty) cs "unsaved ")
+        (let ((without-separator (string-right-trim '(#\/ #\\) (namestring project))))
+          (mine/buffer/manager:bufmgr-close-under-path!
+           manager #+win32 (string-upcase without-separator) #-win32 without-separator))
+        (%check (eq dirty (app::%coalton-optional-value-or-nil
+                           (mine/buffer/manager:bufmgr-find-by-path manager (namestring dirty-path))))
+                "Closing a directory discarded an unsaved document")
+        (%check (coalton-impl/runtime/optional:cl-none-p
+                 (mine/buffer/manager:bufmgr-find-by-path manager (namestring clean-path)))
+                "Canonical directory lookup failed to close a clean document")
+        (%check (eq other (app::%coalton-optional-value-or-nil
+                           (mine/buffer/manager:bufmgr-find-by-path manager (namestring other-path))))
+                "A directory prefix closed a similarly named sibling directory")
+        (%check (ops:undo! dirty cs) "Bulk close lost the retained document's undo history")))))
+
+(defun check-editor-project-close-retains-unsaved-files ()
+  (with-test-directory (directory)
+    (let* ((project (merge-pathnames "Project/" directory))
+           (asd (namestring (merge-pathnames "demo.asd" project)))
+           (clean-path (namestring (merge-pathnames "clean.lisp" project)))
+           (dirty-path (namestring (merge-pathnames "dirty.lisp" project)))
+           (preview-path (namestring (merge-pathnames "preview.lisp" project)))
+           (outside-path (namestring (merge-pathnames "outside.lisp" directory)))
+           (state (%test-state))
+           (manager (mine/app/state:get-bufmgr state))
+           (cs (mine/app/state:get-cursor-state state))
+           (tree (mine/app/state:get-tree-pane state)))
+      (ensure-directories-exist project)
+      (%editor-write-source asd "(asdf:defsystem \"demo\" :components ((:file \"clean\")))")
+      (dolist (path (list clean-path dirty-path preview-path outside-path))
+        (%editor-write-source path "original"))
+      (app::open-loose-file! state outside-path)
+      (let ((outside (%test-current-buffer state)))
+        (app::open-project-at-path! state asd)
+        (%check (string= "clean.lisp" (buf:buffer-name (%test-current-buffer state)))
+                "Project fixture failed to open its clean document")
+        (app::open-loose-file! state dirty-path)
+        (let ((dirty (%test-current-buffer state)))
+          (ops:insert-string! dirty (buf:buffer-undo dirty) cs "unsaved ")
+          (app::tree-open-file! state preview-path)
+          (let ((preview (%test-current-buffer state)))
+            (ops:insert-string! preview (buf:buffer-undo preview) cs "preview edit ")
+            (app::dispatch-menu-action! state
+              (uiop:symbol-call :mine-tests/editor-layout :fake-terminal 80 24)
+              mine/pane/menubar:ActionCloseProject)
+            (dolist (buffer (list dirty preview outside))
+              (let ((path (app::%coalton-optional-value-or-nil (buf:buffer-path buffer))))
+                (%check (eq buffer (app::%coalton-optional-value-or-nil
+                                    (mine/buffer/manager:bufmgr-find-by-path manager path)))
+                        "Project close removed a retained document: ~A" path)
+                (%check (find path (mine/pane/tree:tree-pane-open-files tree)
+                              :key #'coalton-prelude:snd :test #'string=)
+                        "Project close left a retained document inaccessible: ~A" path)))
+            (%check (eq preview (%test-current-buffer state))
+                    "Project close lost the active dirty preview")
+            (%check (string= "preview edit original" (gap:gap-to-string (buf:buffer-gap preview)))
+                    "Project close changed the retained preview's edits")
+            (%check (coalton-impl/runtime/optional:cl-none-p
+                     (mine/buffer/manager:bufmgr-find-by-path manager clean-path))
+                    "Project close kept a clean project document")
+            (%check (not (find clean-path (mine/pane/tree:tree-pane-open-files tree)
+                               :key #'coalton-prelude:snd :test #'string=))
+                    "Project close left a closed document in Open Files")
+            (ops:undo! preview cs)
+            (%check (string= "original" (gap:gap-to-string (buf:buffer-gap preview)))
+                    "Project close discarded a dirty preview's undo history")))))))
+
 (defun check-editor-nested-replacements-form-one-undo-step ()
   (let* ((buffer (buf:buffer-new (buf:BufferId 0) "group"))
          (cs (cursor:cursor-new))
@@ -207,6 +290,8 @@
                   check-editor-open-deduplicates-canonical-paths
                   check-editor-refresh-is-transactional
                   check-editor-refresh-normalizes-cursor-units
+                  check-editor-bulk-close-keeps-dirty-and-sibling-documents
+                  check-editor-project-close-retains-unsaved-files
                   check-editor-undo-tracks-saved-revision
                   check-editor-nested-replacements-form-one-undo-step
                   check-editor-replacement-preserves-crlf-units
