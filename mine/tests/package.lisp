@@ -133,6 +133,7 @@
                   check-buffer-manager-any-dirty-sees-non-current-buffer
                   run-runtime-regression-tests
                   run-editor-regression-tests
+                  run-editor-layout-tests
                   run-source-context-tests
                   run-indent-context-tests
                   run-app-regression-tests))

@@ -6,6 +6,7 @@
    (#:str #:coalton/string))
   (:export
    #:CursorState
+   #:CursorSnapshot #:cursor-snapshot #:cursor-restore!
    #:cursor-new
    #:cursor-position #:cursor-line-col
    #:cursor-move-left! #:cursor-move-right!
@@ -34,6 +35,26 @@
     (pos (cell:Cell UFix))
     (target-col (cell:Cell UFix))
     (selection (cell:Cell (Optional UFix))))
+
+  (define-struct CursorSnapshot
+    (saved-position UFix)
+    (saved-target-col UFix)
+    (saved-selection (Optional UFix)))
+
+  (declare cursor-snapshot (CursorState -> CursorSnapshot))
+  (define (cursor-snapshot cs)
+    (CursorSnapshot (cursor-position cs) (cell:read (.target-col cs))
+                    (cursor-selection-anchor cs)))
+
+  (declare cursor-restore! (gap:GapBuffer * CursorState * CursorSnapshot -> Void))
+  (define (cursor-restore! gb cs saved)
+    "Restore view-local cursor state, clamping positions to current editor units."
+    (cursor-move-to-buffer-position! gb cs (.saved-position saved))
+    (when (== (cursor-position cs) (.saved-position saved))
+      (cell:write! (.target-col cs) (.saved-target-col saved)))
+    (cell:write! (.selection cs)
+                 (map (fn (pos) (gap:gap-editor-unit-end-pos gb pos)) (.saved-selection saved)))
+    (values))
 
   ;;; Constructor and accessors
 
