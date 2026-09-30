@@ -122,6 +122,7 @@
                   run-editor-render-context-tests
                   run-source-context-tests
                   run-lexer-context-tests
+                  run-paredit-context-tests
                   run-indent-context-tests
                   run-completion-context-tests
                   run-app-regression-tests
@@ -141,3 +142,6 @@
 
 (defun run-lexer-context-tests ()
   (uiop:symbol-call :mine-tests/lexer-context :run-lexer-context-tests))
+
+(defun run-paredit-context-tests ()
+  (uiop:symbol-call :mine-tests/paredit-context :run-paredit-context-tests))
