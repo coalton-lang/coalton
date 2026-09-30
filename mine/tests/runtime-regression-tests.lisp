@@ -691,20 +691,38 @@
                   'mine/bindings/process:spawn-subprocess
                   (lambda (program args)
                     (declare (ignore program args))
-                    (sb-ext:run-program
-                     (namestring sb-ext:*runtime-pathname*)
-                     (list "--noinform" "--no-userinit" "--no-sysinit"
-                           "--script" (namestring bootstrap-path))
-                     :input nil :output :stream :error error-path
-                     :if-error-exists :supersede :wait nil :search t))
+                    (let ((process (sb-ext:run-program
+                                    (namestring sb-ext:*runtime-pathname*)
+                                    (list "--noinform" "--no-userinit" "--no-sysinit"
+                                          "--script" (namestring bootstrap-path))
+                                    :input nil :output :stream :error error-path
+                                    :if-error-exists :supersede :wait nil :search t))
+                          (ready-p nil))
+                      (unwind-protect
+                           (progn
+                             ;; Loading source into pristine SBCL takes longer than
+                             ;; launching the production saved image. Leave the port
+                             ;; unread so the real lifecycle handshake still reads it.
+                             (sb-ext:with-timeout 60
+                               (loop until (listen (sb-ext:process-output process))
+                                     do (%runtime-check (sb-ext:process-alive-p process)
+                                                        "Runtime child exited while loading")
+                                        (sleep 0.01)))
+                             (setf ready-p t)
+                             process)
+                        (unless ready-p
+                          (mine/bindings/process:process-kill process)
+                          (sb-ext:process-close process)))))
                   (lambda ()
                     (%runtime-check (mine/protocol/lifecycle::%runtime-do-start manager)
                                     "Controlled runtime process did not start")
                     (funcall function manager)))
-               (error (condition)
+               (serious-condition (condition)
                  (error "Runtime process test failed: ~A~%Child stderr:~%~A"
                         condition (uiop:read-file-string error-path))))
-          (mine/protocol/lifecycle::%runtime-do-stop manager))))))
+          (let ((process (mine/protocol/lifecycle::%runtime-manager-process manager)))
+            (mine/protocol/lifecycle::%runtime-do-stop manager)
+            (when process (sb-ext:process-close process))))))))
 
 (defun %runtime-read-until (manager predicate)
   (let ((stream (mine/protocol/client::%connection-stream
@@ -781,6 +799,74 @@
                                           message)))
      (%runtime-process-interrupt-and-abort manager 104)
      (%runtime-process-check-definition manager 105))))
+
+(defun check-runtime-restart-retires-disconnected-child ()
+  (%call-with-runtime-process
+   (lambda (manager)
+     (let* ((old-process (mine/protocol/lifecycle::%runtime-manager-process manager))
+            (old-output (sb-ext:process-output old-process))
+            (old-connection (mine/protocol/lifecycle::%runtime-manager-connection manager))
+            (old-background (mine/protocol/lifecycle::%runtime-manager-background-connection manager))
+            (old-stream (mine/protocol/client::%connection-stream old-connection))
+            (old-background-stream (mine/protocol/client::%connection-stream old-background)))
+       ;; This is the state after a foreground transport failure, before the
+       ;; child has exited or released either manager-owned connection.
+       (mine/protocol/client:connection-deactivate! old-connection)
+       (%runtime-check (sb-ext:process-alive-p old-process)
+                       "Expected the disconnected child to remain alive before replacement")
+       (%runtime-check (mine/protocol/lifecycle:runtime-start! manager)
+                       "Could not replace the disconnected runtime")
+       (%runtime-check (not (sb-ext:process-alive-p old-process))
+                       "Runtime startup orphaned its previous child")
+       (%runtime-check (not (open-stream-p old-output))
+                       "Runtime startup left the previous process output handle open")
+       (dolist (stream (list old-stream old-background-stream))
+         (%runtime-check (not (open-stream-p stream))
+                         "Runtime startup left a previous protocol stream open"))
+       (dolist (connection (list old-connection old-background))
+         (%runtime-check (and (not (mine/protocol/client::%connection-active connection))
+                              (null (mine/protocol/client::%connection-stream connection)))
+                         "Retired connection still exposes an active stream"))
+       (%runtime-check (not (eq old-process (mine/protocol/lifecycle::%runtime-manager-process manager)))
+                       "Replacement runtime retained the previous process handle")
+       (%runtime-process-send-eval manager 108 "42")
+       (let ((reply (%runtime-process-return manager 108)))
+         (%runtime-check
+          (and (eq :ok (first (third reply)))
+               (equal '(:values ("42"))
+                      (mine/protocol/server::decode-protocol-sexp (second (third reply)))))
+          "Replacement runtime was not usable: ~S" reply))))))
+
+(defun check-runtime-failed-start-cleans-child ()
+  (let ((manager (mine/protocol/lifecycle::make-%runtime-manager))
+        (process nil))
+    (unwind-protect
+         (%call-with-replaced-runtime-function
+          'mine/bindings/process:spawn-subprocess
+          (lambda (program args)
+            (declare (ignore program args))
+            (setf process
+                  (sb-ext:run-program
+                   (namestring sb-ext:*runtime-pathname*)
+                   '("--noinform" "--no-userinit" "--no-sysinit" "--non-interactive"
+                     "--eval" "(progn (format t \"1~%\") (force-output) (sleep 30))")
+                   :input nil :output :stream :error :stream :wait nil :search t)))
+          (lambda ()
+            (%call-with-replaced-runtime-function
+             'mine/protocol/lifecycle::%runtime-open-connection
+             (lambda (port) (declare (ignore port)) (error 'sb-ext:timeout))
+             (lambda ()
+               (let ((*error-output* (make-string-output-stream)))
+                 (%runtime-check (not (mine/protocol/lifecycle::%runtime-do-start manager))
+                                 "Timed-out startup should report failure"))))
+            (%runtime-check (and process (not (sb-ext:process-alive-p process)))
+                            "Failed startup left its child process running")
+            (%runtime-check (null (mine/protocol/lifecycle::%runtime-manager-process manager))
+                            "Failed startup retained its process handle")))
+      (mine/protocol/lifecycle::%runtime-do-stop manager)
+      (when process
+        (mine/bindings/process:process-kill process)
+        (sb-ext:process-close process)))))
 
 (defun check-runtime-interrupt-timeout-is-recoverable ()
   (let* ((connection (mine/protocol/client::make-%connection
@@ -867,6 +953,8 @@
                   check-runtime-typed-response-rejects-malformed-data
                   check-runtime-symbol-spelling-and-completion
                   check-runtime-process-survives-scoped-interruption
+                  check-runtime-restart-retires-disconnected-child
+                  check-runtime-failed-start-cleans-child
                   check-runtime-interrupt-timeout-is-recoverable))
     (handler-case (funcall test)
       (error (condition)
