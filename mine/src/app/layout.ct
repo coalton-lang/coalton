@@ -13,6 +13,7 @@
    #:CenterGeometry
    #:.cg-editor #:.cg-editor-status #:.cg-repl #:.cg-repl-status #:.cg-repl-strip
    #:center-geometry #:center-screen-geometry
+   #:rect-contains? #:optional-rect-contains?
    #:completion-anchor
    #:show-editor!))
 
@@ -27,6 +28,17 @@
     (cg-repl (Optional wt:Rect))
     (cg-repl-status (Optional wt:Rect))
     (cg-repl-strip (Optional wt:Rect)))
+
+  (declare rect-contains? (wt:Rect * UFix * UFix -> Boolean))
+  (define (rect-contains? rect x y)
+    (and (and (>= x (wt:.rect-x rect)) (< x (+ (wt:.rect-x rect) (wt:.rect-width rect))))
+         (and (>= y (wt:.rect-y rect)) (< y (+ (wt:.rect-y rect) (wt:.rect-height rect))))))
+
+  (declare optional-rect-contains? (Optional wt:Rect * UFix * UFix -> Boolean))
+  (define (optional-rect-contains? rect x y)
+    (match rect
+      ((Some rect) (rect-contains? rect x y))
+      ((None) False)))
 
   (declare slice-rect (wt:Rect * UFix * UFix -> Optional wt:Rect))
   (define (slice-rect rect offset height)

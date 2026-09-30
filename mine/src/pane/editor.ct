@@ -13,6 +13,7 @@
    (#:cellw #:mine/text/width)
    (#:tok #:mine/syntax/token)
    (#:lexer #:mine/syntax/lexer)
+   (#:source #:mine/syntax/context)
    (#:hl #:mine/syntax/highlight)
    (#:paredit #:mine/syntax/paredit)
    (#:list #:coalton/list)
@@ -723,7 +724,8 @@ segments) and highlights the current visual row."
             (_ None))
           None))
     (let lexer-mode = (render-lexer-mode (.erc-mode context)))
-    (let lexer-state = (lexer:lexer-state-new lexer-mode))
+    (let source-tokens = (if (== lexer-mode 2) Nil
+                             (lexer:lex-source (source:scan-source (gap:gap-to-string gb)) lexer-mode)))
     ;; Clear the pane area.
     (render:fill-rect scr rect #\Space color:default-style)
     ;; Compute cursor screen position.
@@ -735,13 +737,7 @@ segments) and highlights the current visual row."
     (lisp (-> Void) (scr gb sr sc show-ln-cl hl-cur-cl cur-line cur-seg-idx
                      line-count height text-x text-width gw wrap-w
                      gutter-style hl-style rect-x0 rect-y0
-                     sel-start sel-end context paren-match lexer-mode lexer-state)
-      ;; Reset lexer state for each render pass, then lex lines from the
-      ;; start of the buffer up to sr to build the correct context.
-      (cl:dotimes (pre-line sr)
-        (cl:when (cl:< pre-line line-count)
-          (mine/syntax/lexer:lex-line lexer-state
-                                      (mine/buffer/gap:gap-line-text gb pre-line) 0)))
+                     sel-start sel-end context paren-match source-tokens)
       (cl:let ((screen-row 0)
                (line-idx sr)
                (tw mine/buffer/gap::*tab-width*))
@@ -753,7 +749,7 @@ segments) and highlights the current visual row."
                     (line-end (cl:+ line-buf-offset text-len))
                     (line-context (line-render-context context line-buf-offset line-end paren-match))
                     (diag-rank (line-diagnostic-rank line-context))
-                    (tokens (mine/pane/editor::%lex-one-line lexer-state lexer-mode text))
+                    (tokens (lexer:tokens-for-line source-tokens line-buf-offset line-end))
                     (pts (cl:if (cl:plusp wrap-w)
                                 (mine/pane/editor::wrap-points text wrap-w tw)
                                 cl:nil))
@@ -1086,12 +1082,6 @@ segments) and highlights the current visual row."
                            scr y (cl:+ text-x (cl:- ch-vcol scroll-vcol))
                            ch s))))))
       (cl:values)))
-
-  (declare %lex-one-line (lexer:LexerState * UFix * String -> List tok:Token))
-  (define (%lex-one-line state mode text)
-    "Advance the lexer state by one logical line and return its tokens.
-For plain-text mode (lexer-mode 2), returns Nil."
-    (if (== mode 2) Nil (lexer:lex-line state text 0)))
 
   (declare draw-line-segment
     (screen:Screen * UFix * UFix * UFix * UFix *
