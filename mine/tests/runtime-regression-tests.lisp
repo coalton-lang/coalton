@@ -97,9 +97,53 @@
            (%runtime-check (eq :eof (read-char stream nil :eof)) "Expected persistent EOF"))))
    "EOF should not repeatedly request input"))
 
+(defun %call-with-runtime-messages (function &optional replies)
+  (let ((messages nil))
+    (%call-with-replaced-runtime-function
+     'mine/protocol/server::write-message
+     (lambda (stream message)
+       (declare (ignore stream))
+       (push message messages)
+       t)
+     (lambda ()
+       (%call-with-replaced-runtime-function
+        'mine/protocol/server::read-message
+        (lambda (stream) (declare (ignore stream)) (pop replies))
+        function)))
+    (nreverse messages)))
+
+(defun check-runtime-output-flushes-before-debugger-and-abort ()
+  (let* ((messages
+           (%call-with-runtime-messages
+            (lambda ()
+              (mine/protocol/server::handle-eval
+               41 "(progn (write-string \"before-error\") (error \"boom\"))"
+               "CL-USER" :test-wire nil))
+            '((:debug-abort 41))))
+         (first (first messages)))
+    (%runtime-check (equal '(:notify (:output-chunk 41 "before-error")) first)
+                    "Expected stdout before debugger, got ~S" first)
+    (%runtime-check (eq :debug (first (second messages))) "Expected interactive debugger")
+    (%runtime-check (equal '(:return 41 (:error "Aborted.")) (car (last messages)))
+                    "Expected an abort reply"))
+  (let ((messages
+          (%call-with-runtime-messages
+           (lambda ()
+             (mine/protocol/server::call-with-tui-io
+              :test-wire 42
+              (lambda ()
+                (write-string "a")
+                (force-output)
+                (write-string "b" *error-output*)
+                (write-string "c" *trace-output*)))))))
+    (%runtime-check
+     (equal '((:notify (:output-chunk 42 "a")) (:notify (:output-chunk 42 "bc"))) messages)
+     "Output chunks lost explicit flush boundaries or stream ordering: ~S" messages)))
+
 (defun run-runtime-regression-tests ()
   (dolist (test '(check-runtime-protocol-io-isolation
                   check-runtime-protocol-rejects-reader-evaluation
-                  check-runtime-input-preserves-lines-and-unread))
+                  check-runtime-input-preserves-lines-and-unread
+                  check-runtime-output-flushes-before-debugger-and-abort))
     (funcall test))
   t)
