@@ -32,7 +32,8 @@
    #:paredit-forward-sexp!
    #:paredit-backward-sexp!
    #:scan-matching-open-paren
-   #:scan-matching-open-bracket))
+   #:scan-matching-open-bracket
+   #:range-balanced?))
 
 (in-package #:mine/syntax/paredit)
 
@@ -188,6 +189,88 @@
       ((== pos 0) 0)
       ((%code-at? (- pos 1)) pos)
       (True (%region-start (- pos 1)))))
+
+  ;;; Range balance check
+
+  (declare %range-delimiters-balanced? (gap:GapBuffer * UFix * UFix * UFix * UFix -> Boolean))
+  (define (%range-delimiters-balanced? gb pos end parens brackets)
+    "Walk [POS, END) and track paren and bracket depth at code positions.
+Return True when both depths end at zero and never go negative."
+    (let next = (+ pos 1))
+    (cond
+      ((>= pos end)
+       (and (== parens 0) (== brackets 0)))
+      ((not (%code-at? pos))
+       (%range-delimiters-balanced? gb next end parens brackets))
+      (True
+       (match (gap:gap-char-at gb pos)
+         ((Some #\()
+          (%range-delimiters-balanced? gb next end (+ parens 1) brackets))
+         ((Some #\))
+          (if (== parens 0)
+              False
+              (%range-delimiters-balanced? gb next end (- parens 1) brackets)))
+         ((Some #\[)
+          (%range-delimiters-balanced? gb next end parens (+ brackets 1)))
+         ((Some #\])
+          (if (== brackets 0)
+              False
+              (%range-delimiters-balanced? gb next end parens (- brackets 1))))
+         (_ (%range-delimiters-balanced? gb next end parens brackets))))))
+
+  (declare %region-end (gap:GapBuffer * UFix -> UFix))
+  (define (%region-end gb pos)
+    "First code position at or after POS, or the buffer length."
+    (if (or (>= pos (gap:gap-length gb)) (%code-at? pos))
+        pos
+        (%region-end gb (+ pos 1))))
+
+  (declare %newline-or-end? (gap:GapBuffer * UFix -> Boolean))
+  (define (%newline-or-end? gb pos)
+    (match (gap:gap-char-at gb pos)
+      ((Some ch) (or (== ch #\Newline) (== ch #\Return)))
+      ((None) True)))
+
+  (declare %region-safe? (gap:GapBuffer * UFix * UFix -> Boolean))
+  (define (%region-safe? gb s e)
+    "True when a delete of [S, E) does not break a string, comment, or
+character literal. Class 1 is a string. Classes 2, 3 and 4 are regions
+that start with their own opener (comment, block comment, char literal)."
+    (let cs = (%syntax-class-at s))
+    (let ce = (%syntax-class-at e))
+    (cond
+      ;; Strings: both ends inside the same kind of context.
+      ((or (== cs 1) (== ce 1)) (== cs ce))
+      ((and (== cs 0) (== ce 0)) True)
+      ;; From code into a region: nothing of the region may go.
+      ((== cs 0) (== e (%region-start e)))
+      ;; A character literal goes as a whole or not at all.
+      ((== cs 4) (and (== s (%region-start s)) (>= e (%region-end gb s))))
+      ;; From a region opener: the whole region must go.
+      ((== s (%region-start s)) (>= e (%region-end gb s)))
+      ;; From inside a region: stay inside it.
+      (True (<= e (%region-end gb s)))))
+
+  (declare %comment-terminator-safe? (gap:GapBuffer * UFix * UFix -> Boolean))
+  (define (%comment-terminator-safe? gb s e)
+    "A delete that starts at the newline that ends a line comment must not
+turn the next line into comment text."
+    (if (and (> s 0) (== (%syntax-class-at (- s 1)) 2) (%code-at? s))
+        (or (== (%syntax-class-at e) 2) (%newline-or-end? gb e))
+        True))
+
+  (declare range-balanced? (gap:GapBuffer * UFix * UFix -> Boolean))
+  (define (range-balanced? gb start end)
+    "True when a delete of [START, END) keeps delimiters balanced.
+Parens and brackets count only at code positions. The delete must not
+remove one side of a string, comment, or character literal."
+    (%ensure-syntax-map! gb)
+    (let len = (gap:gap-length gb))
+    (let s = (min start len))
+    (let e = (min end len))
+    (and (%range-delimiters-balanced? gb s e 0 0)
+         (%region-safe? gb s e)
+         (%comment-terminator-safe? gb s e)))
 
   ;;; Core helpers: S-expression scanning
 

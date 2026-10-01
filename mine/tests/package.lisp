@@ -111,6 +111,7 @@
                   check-repl-structural-doublequote-in-string
                   check-repl-structural-escaped-quote-deletes-as-unit
                   check-paredit-matching-ignores-delimiters-in-strings
+                  check-paredit-range-balanced
                   check-repl-structural-editing-alt-sexp-motion
                   check-repl-hint-symbol-extraction
                   check-editor-completion-prefix-extraction

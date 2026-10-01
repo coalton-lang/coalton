@@ -18,6 +18,7 @@
    #:bufmgr-close-under-path!
    #:bufmgr-find-by-path
    #:bufmgr-find-by-document-key
+   #:bufmgr-get
    #:bufmgr-current
    #:bufmgr-switch!
    #:bufmgr-any-dirty?
