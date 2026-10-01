@@ -109,6 +109,7 @@ Whitespace is arbitrary; add as many spaces and newlines as you please. The poss
 - `:repl-heap-size-megabytes` `<integer>`: The number of megabytes of memory the REPL should get. Defaults to 4096 MiB.
 - `:app-font-family` `<string>`: The font family to use in the mine desktop app. Defaults to `"Iosevka Fixed Slab Extended"` which comes pre-installed with the app.
 - `:app-font-size` `<integer>`: The font size in pixels to use in the mine desktop app. Defaults to `14`.
+- `:evil-mode` [`t`, `nil`]: Enable vim-style modal keybindings in the editor ("Evil Mode"). Values are `t` (enable) or `nil` (disable, default). Toggle at run time with **F3:Editor > Toggle Evil Mode**. `Ctrl+r` stays the REPL toggle, so redo is `Ctrl+y`. With structural editing on, deletes that would unbalance delimiters are blocked. In `--best-effort` mode (no kitty keyboard protocol) `Esc` followed quickly by another key can arrive as `Alt+key`.
 
 ## License
 

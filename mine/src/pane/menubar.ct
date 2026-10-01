@@ -24,6 +24,7 @@
    #:ActionKeyboardDebugger
    #:ActionToggleStructural
    #:ActionToggleLineWrap
+   #:ActionToggleEvil
    #:ActionOpenFiles
    #:ActionNewProject
    #:ActionAddFile #:ActionAddDependency
@@ -81,6 +82,7 @@
     ActionKeyboardDebugger
     ActionToggleStructural
     ActionToggleLineWrap
+    ActionToggleEvil
     ActionOpenFiles
     ActionNewProject
     ActionAddFile
@@ -145,6 +147,7 @@
       (MenuItem "Focus/Maximize Editor" "Ctrl+e" ActionFocusEditor)
       (MenuItem "Toggle Structural"  "Ctrl+p" ActionToggleStructural)
       (MenuItem "Toggle Line Wrap"   "" ActionToggleLineWrap)
+      (MenuItem "Toggle Evil Mode"   "" ActionToggleEvil)
       (MenuItem "Structural Lessons"  "" ActionLesson))))
 
   (declare %repl-menu (Void -> MenuDef))

@@ -9,7 +9,8 @@
    #:.config-repl-init
    #:.config-repl-heap-size
    #:.config-project-roots
-   #:.config-check-for-updates))
+   #:.config-check-for-updates
+   #:.config-evil-mode))
 
 (in-package #:mine/config/types)
 
@@ -24,4 +25,5 @@
     (config-repl-init          (Optional String))
     (config-repl-heap-size     UFix)
     (config-project-roots      (List String))
-    (config-check-for-updates  Boolean)))
+    (config-check-for-updates  Boolean)
+    (config-evil-mode          Boolean)))

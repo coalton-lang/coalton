@@ -15,7 +15,8 @@
    (#:mini #:mine/pane/minibuffer)
    (#:cfgt #:mine/config/types)
    (#:complete #:mine/app/completion)
-   (#:spinner #:mine/widget/spinner))
+   (#:spinner #:mine/widget/spinner)
+   (#:evil #:mine/edit/evil))
   (:export
    #:NativeBox
    #:native-box-new
@@ -82,6 +83,7 @@
    #:.ms-quick-result-request-id
    #:.ms-bg-proto-thread
    #:.ms-update-check-state
+   #:.ms-evil
    #:get-status-bar
    #:get-pending-error-cell
    #:get-editor-pane
@@ -207,7 +209,8 @@
     (ms-quick-result-state  NativeBox) ;; CL plist for transient result popup
     (ms-quick-result-request-id (Cell (Optional msg:RequestId)))
     (ms-bg-proto-thread    NativeBox)
-    (ms-update-check-state NativeBox)) ;; CL plist for update-check status
+    (ms-update-check-state NativeBox) ;; CL plist for update-check status
+    (ms-evil              evil:EvilState))
 
 ;;; Named accessors for CL interop
 

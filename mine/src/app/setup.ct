@@ -10,7 +10,8 @@
    (#:cellw #:mine/text/width)
    (#:render #:mine/widget/render)
    (#:wt #:mine/widget/types)
-   (#:cfg #:mine/config/types))
+   (#:cfg #:mine/config/types)
+   (#:cfgp #:mine/config/parser))
   (:export
    #:run-setup))
 
@@ -627,6 +628,7 @@
     (let lang = (cfg:.config-repl-language config))
     (let pkg = (cfg:.config-default-package config))
     (let check-updates = (cfg:.config-check-for-updates config))
+    (let evil-mode = (cfg:.config-evil-mode config))
     ;; Extract Optional String to a nullable CL string
     (let init-str = (match (cfg:.config-repl-init config)
                       ((Some s) s)
@@ -640,7 +642,7 @@
     (let has-paths = (match (cfg:.config-project-roots config)
                       ((Cons _ _) True)
                       ((Nil) False)))
-    (lisp (-> Boolean) (se auto-hide-tree lang pkg check-updates init-str has-init path-str has-paths)
+    (lisp (-> Boolean) (se auto-hide-tree lang pkg check-updates evil-mode init-str has-init path-str has-paths)
       (cl:let ((path (cl:merge-pathnames ".mine"
                                           (cl:user-homedir-pathname))))
         (cl:handler-case
@@ -658,6 +660,8 @@
                 (cl:format out " :default-package ~S~%" pkg)
                 (cl:format out " :check-for-updates ~A~%"
                            (cl:if check-updates "t" "nil"))
+                (cl:when evil-mode
+                  (cl:format out " :evil-mode t~%"))
                 (cl:when has-init
                   (cl:format out " :repl-init ~A~%" init-str))
                 (cl:when has-paths
@@ -933,8 +937,12 @@
     ;; Tip screen
     (show-tip terminal)
 
-    ;; Write config and show result
-    (let config = (cfg:MineConfig se True lang pkg init 4096 project-roots check-updates))
+    ;; Write config and show result. Keep the evil mode setting from an
+    ;; existing config file; the wizard does not ask about it.
+    (let evil-mode = (match (cfgp:load-config ".mine")
+                       ((Ok existing) (cfg:.config-evil-mode existing))
+                       ((Err _) False)))
+    (let config = (cfg:MineConfig se True lang pkg init 4096 project-roots check-updates evil-mode))
     (let _ok = (write-config! config))
     (show-done terminal)
 

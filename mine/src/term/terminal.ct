@@ -16,6 +16,7 @@
    #:terminal-cols #:terminal-rows #:terminal-update-size!
    #:terminal-flush
    #:terminal-clear-screen
+   #:terminal-set-cursor-shape!
    #:terminal-read-input
    #:terminal-read-input-timeout
    #:terminal-wait-for-key
@@ -39,6 +40,9 @@
 
 (cl:defvar *terminal-wakeup-message* (cl:gensym "TERMINAL-WAKEUP-")
   "Internal sentinel used to wake the main UI loop without a terminal event.")
+
+(cl:defvar *cursor-shape* 0
+  "Last cursor shape sent to the terminal: 0 default, 1 block, 2 bar.")
 
 (cl:define-condition %terminal-input-stop () ())
 
@@ -396,10 +400,12 @@ cursor, and disables raw mode."
     (let teardown = (<> (esc:disable-keyboard-enhancement)
                         (<> (esc:disable-bracketed-paste)
                             (<> (esc:disable-mouse-tracking)
-                                (<> (esc:cursor-show)
-                                    (<> (esc:sgr-reset)
-                                        (esc:leave-alt-screen)))))))
+                                (<> (esc:cursor-shape-default)
+                                    (<> (esc:cursor-show)
+                                        (<> (esc:sgr-reset)
+                                            (esc:leave-alt-screen))))))))
     (lisp (-> Void) (teardown)
+      (cl:setf *cursor-shape* 0)
       (mine/bindings/terminal:terminal-write-string teardown)
       (mine/bindings/terminal:terminal-flush)
       (mine/bindings/terminal:terminal-disable-raw-mode)
@@ -442,6 +448,24 @@ cursor, and disables raw mode."
       (mine/bindings/terminal:terminal-write-string s)
       (mine/bindings/terminal:terminal-flush)
       (cl:values)))
+
+  (declare terminal-set-cursor-shape! (Terminal * UFix -> Void))
+  (define (terminal-set-cursor-shape! _term shape)
+    "Set the cursor shape: 0 = default, 1 = block, 2 = bar.
+Writes the escape only when the shape changes."
+    (let changed = (lisp (-> Boolean) (shape)
+                     (cl:if (cl:eql *cursor-shape* shape)
+                            cl:nil
+                            (cl:progn (cl:setf *cursor-shape* shape) cl:t))))
+    (when changed
+      (let s = (cond
+                 ((== shape 1) (esc:cursor-shape-block))
+                 ((== shape 2) (esc:cursor-shape-bar))
+                 (True (esc:cursor-shape-default))))
+      (lisp (-> Void) (s)
+        (mine/bindings/terminal:terminal-write-string s)
+        (mine/bindings/terminal:terminal-flush)
+        (cl:values))))
 
   ;;; Input reading (via byte reads + input parser)
 
