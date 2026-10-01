@@ -1,0 +1,1240 @@
+(cl:defpackage #:mine/edit/evil
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames
+   (#:gap #:mine/buffer/gap)
+   (#:buf #:mine/buffer/buffer)
+   (#:cursor #:mine/edit/cursor)
+   (#:ops #:mine/edit/operations)
+   (#:undo #:mine/edit/undo)
+   (#:paredit #:mine/syntax/paredit)
+   (#:input #:mine/term/input)
+   (#:cell #:coalton/cell)
+   (#:str #:coalton/string)
+   (#:char #:coalton/char))
+  (:export
+   #:EvilMode #:EvilNormal #:EvilInsert #:EvilVisual #:EvilVisualLine
+   #:EvilCmd
+   #:EvilCmdOpenBelow #:EvilCmdOpenAbove #:EvilCmdUndo #:EvilCmdExPrompt
+   #:EvilCmdSearch #:EvilCmdSearchNext #:EvilCmdSearchPrev
+   #:EvilCmdSave #:EvilCmdQuit #:EvilCmdSaveQuit
+   #:EvilCmdGotoLine #:EvilCmdMessage
+   #:EvilResult #:EvilPassThrough #:EvilHandled #:EvilEdited #:EvilCommand
+   #:EvilState
+   #:evil-new
+   #:evil-enabled? #:evil-set-enabled!
+   #:evil-mode #:evil-mode-label
+   #:evil-reset!
+   #:evil-insert-group-buffer
+   #:evil-close-insert-group!
+   #:evil-handle-key!
+   #:evil-result-label
+   #:evil-parse-ex))
+
+(in-package #:mine/edit/evil)
+
+;;; Evil mode: modal vim-style keybindings for the editor pane.
+;;;
+;;; This module works on a Buffer and a CursorState only. It knows nothing
+;;; about the terminal or the application state. Keys it cannot handle
+;;; alone come back as EvilPassThrough (the normal editor handler runs)
+;;; or as an EvilCommand (the application runs the action).
+
+(coalton-toplevel
+
+  ;;; Modes, commands, results
+
+  (repr :enum)
+  (derive Eq)
+  (define-type EvilMode
+    "The active evil editing mode."
+    EvilNormal
+    EvilInsert
+    EvilVisual
+    EvilVisualLine)
+
+  (derive Eq)
+  (define-type EvilCmd
+    "An action that needs application state. The application runs it."
+    EvilCmdOpenBelow
+    EvilCmdOpenAbove
+    EvilCmdUndo
+    EvilCmdExPrompt
+    EvilCmdSearch
+    EvilCmdSearchNext
+    EvilCmdSearchPrev
+    EvilCmdSave
+    EvilCmdQuit
+    EvilCmdSaveQuit
+    (EvilCmdGotoLine UFix)
+    (EvilCmdMessage String))
+
+  (derive Eq)
+  (define-type EvilResult
+    "What the evil layer did with a key.
+EvilEdited means the buffer text changed."
+    EvilPassThrough
+    EvilHandled
+    EvilEdited
+    (EvilCommand EvilCmd))
+
+  (define-type EvilPending
+    "A key that waits for one more key."
+    PendingNone
+    (PendingOperator Char UFix)
+    PendingG
+    (PendingOperatorG Char UFix)
+    PendingReplace)
+
+  (repr :enum)
+  (derive Eq)
+  (define-type Motion
+    "A cursor motion."
+    MotionLeft
+    MotionRight
+    MotionUp
+    MotionDown
+    MotionDownFirstNonBlank
+    MotionWordForward
+    MotionWordBackward
+    MotionWordEnd
+    MotionLineStart
+    MotionFirstNonBlank
+    MotionLineEnd
+    MotionBufferStart
+    MotionBufferEnd)
+
+  (define-type OpRange
+    "The text an operator works on."
+    (CharRange UFix UFix)
+    (LineRange UFix UFix))
+
+  (define-struct EvilState
+    "Mutable evil state. One instance lives in the application state."
+    (enabled             (Cell Boolean))
+    (mode                (Cell EvilMode))
+    (count               (Cell UFix))
+    (pending             (Cell EvilPending))
+    (register            (Cell String))
+    (register-linewise   (Cell Boolean))
+    (insert-group-buffer (Cell (Optional buf:BufferId)))
+    (visual-anchor-line  (Cell UFix)))
+
+  ;;; Constructor and accessors
+
+  (declare evil-new (Boolean -> EvilState))
+  (define (evil-new enabled)
+    "Create evil state in normal mode with an empty register."
+    (EvilState (cell:new enabled)
+               (cell:new EvilNormal)
+               (cell:new 0)
+               (cell:new PendingNone)
+               (cell:new "")
+               (cell:new False)
+               (cell:new None)
+               (cell:new 0)))
+
+  (declare evil-enabled? (EvilState -> Boolean))
+  (define (evil-enabled? es)
+    (cell:read (.enabled es)))
+
+  (declare evil-set-enabled! (EvilState * Boolean -> Void))
+  (define (evil-set-enabled! es flag)
+    (cell:write! (.enabled es) flag)
+    (values))
+
+  (declare evil-mode (EvilState -> EvilMode))
+  (define (evil-mode es)
+    (cell:read (.mode es)))
+
+  (declare evil-mode-label (EvilState -> String))
+  (define (evil-mode-label es)
+    "Status bar text for the current mode."
+    (match (cell:read (.mode es))
+      ((EvilNormal) "NORMAL")
+      ((EvilInsert) "INSERT")
+      ((EvilVisual) "VISUAL")
+      ((EvilVisualLine) "V-LINE")))
+
+  (declare evil-result-label (EvilResult -> String))
+  (define (evil-result-label r)
+    "Short text for a result, for the status line and for tests."
+    (match r
+      ((EvilPassThrough) "pass")
+      ((EvilHandled) "handled")
+      ((EvilEdited) "edited")
+      ((EvilCommand cmd)
+       (match cmd
+         ((EvilCmdOpenBelow) "open-below")
+         ((EvilCmdOpenAbove) "open-above")
+         ((EvilCmdUndo) "undo")
+         ((EvilCmdExPrompt) "ex-prompt")
+         ((EvilCmdSearch) "search")
+         ((EvilCmdSearchNext) "search-next")
+         ((EvilCmdSearchPrev) "search-prev")
+         ((EvilCmdSave) "save")
+         ((EvilCmdQuit) "quit")
+         ((EvilCmdSaveQuit) "save-quit")
+         ((EvilCmdGotoLine n) (<> "goto-line:" (into n)))
+         ((EvilCmdMessage msg) (<> "message:" msg))))))
+
+  (declare evil-insert-group-buffer (EvilState -> Optional buf:BufferId))
+  (define (evil-insert-group-buffer es)
+    "The buffer that holds an open insert-session undo group, if any."
+    (cell:read (.insert-group-buffer es)))
+
+  (declare %reset-count! (EvilState -> Void))
+  (define (%reset-count! es)
+    (cell:write! (.count es) 0)
+    (values))
+
+  (declare %reset-pending! (EvilState -> Void))
+  (define (%reset-pending! es)
+    (cell:write! (.pending es) PendingNone)
+    (%reset-count! es))
+
+  (declare evil-reset! (EvilState -> Void))
+  (define (evil-reset! es)
+    "Return to normal mode and drop any pending key or count."
+    (cell:write! (.mode es) EvilNormal)
+    (%reset-pending! es))
+
+  (declare evil-close-insert-group! (EvilState * Optional buf:Buffer * UFix -> Void))
+  (define (evil-close-insert-group! es maybe-buffer cursor-end)
+    "Close the insert-session undo group. MAYBE-BUFFER is the buffer that
+owns the group, or None when that buffer is gone."
+    (match (cell:read (.insert-group-buffer es))
+      ((None) (values))
+      ((Some id)
+       (match maybe-buffer
+         ((Some b)
+          (when (== (buf:buffer-id b) id)
+            (undo:undo-end-group! (buf:buffer-undo b) cursor-end)))
+         ((None) (values)))
+       (cell:write! (.insert-group-buffer es) None)
+       (values))))
+
+  ;;; Small helpers
+
+  (declare %repeat! (UFix * (Void -> Void) -> Void))
+  (define (%repeat! n action)
+    "Run ACTION N times."
+    (when (> n 0)
+      (action)
+      (%repeat! (- n 1) action)))
+
+  (declare %iterate (UFix * (UFix -> UFix) * UFix -> UFix))
+  (define (%iterate n f x)
+    "Apply F to X, N times."
+    (if (== n 0)
+        x
+        (%iterate (- n 1) f (f x))))
+
+  (declare %count-or-1 (UFix -> UFix))
+  (define (%count-or-1 n)
+    (if (== n 0) 1 n))
+
+  (declare %digit-value (Char -> Optional UFix))
+  (define (%digit-value ch)
+    (let code = (char:char-code ch))
+    (if (and (>= code 48) (<= code 57))
+        (Some (- code 48))
+        None))
+
+  (declare %blank? (Char -> Boolean))
+  (define (%blank? ch)
+    (or (== ch #\Space) (== ch #\Tab)))
+
+  (declare %delimiter-char? (Char -> Boolean))
+  (define (%delimiter-char? ch)
+    (or (== ch #\() (== ch #\)) (== ch #\[) (== ch #\]) (== ch #\")))
+
+  (declare %syntax-char? (Char -> Boolean))
+  (define (%syntax-char? ch)
+    "Chars that change how the reader sees the text around them."
+    (or (%delimiter-char? ch)
+        (== ch #\;) (== ch #\#) (== ch #\\) (== ch #\|)))
+
+  (declare %string-has-syntax-char? (String -> Boolean))
+  (define (%string-has-syntax-char? text)
+    (lisp (-> Boolean) (text)
+      (cl:if (cl:find-if (cl:lambda (c) (cl:find c "()[]\";#\\|")) text)
+             cl:t
+             cl:nil)))
+
+  (declare %delimiter-at? (gap:GapBuffer * UFix -> Boolean))
+  (define (%delimiter-at? gb pos)
+    (match (gap:gap-char-at gb pos)
+      ((Some ch) (%delimiter-char? ch))
+      ((None) False)))
+
+  (declare %repeat-string (String * UFix -> String))
+  (define (%repeat-string text n)
+    (lisp (-> String) (text n)
+      (cl:with-output-to-string (s)
+        (cl:dotimes (i n)
+          (cl:write-string text s)))))
+
+  (declare %newline String)
+  (define %newline (into #\Newline))
+
+  (declare %ends-with-newline? (String -> Boolean))
+  (define (%ends-with-newline? text)
+    (lisp (-> Boolean) (text)
+      (cl:let ((n (cl:length text)))
+        (cl:if (cl:and (cl:plusp n)
+                       (cl:char= (cl:char text (cl:1- n)) #\Newline))
+               cl:t
+               cl:nil))))
+
+  (declare %strip-trailing-newline (String -> String))
+  (define (%strip-trailing-newline text)
+    (lisp (-> String) (text)
+      (cl:string-right-trim '(#\Newline #\Return) text)))
+
+  ;;; Line geometry
+
+  (declare %line-of (gap:GapBuffer * UFix -> UFix))
+  (define (%line-of gb pos)
+    (match (gap:gap-pos-to-line-col gb pos)
+      ((Tuple line _) line)))
+
+  (declare %last-line (gap:GapBuffer -> UFix))
+  (define (%last-line gb)
+    (- (gap:gap-line-count gb) 1))
+
+  (declare %clamp-line (gap:GapBuffer * UFix -> UFix))
+  (define (%clamp-line gb line)
+    (min line (%last-line gb)))
+
+  (declare %line-start (gap:GapBuffer * UFix -> UFix))
+  (define (%line-start gb line)
+    (gap:gap-line-to-pos gb line))
+
+  (declare %line-end (gap:GapBuffer * UFix -> UFix))
+  (define (%line-end gb line)
+    "Position of the line terminator of LINE, or the buffer length."
+    (gap:gap-line-end-pos gb line))
+
+  (declare %next-line-start (gap:GapBuffer * UFix -> UFix))
+  (define (%next-line-start gb line)
+    "Start of the line after LINE, or the buffer length for the last line."
+    (if (< (+ line 1) (gap:gap-line-count gb))
+        (gap:gap-line-to-pos gb (+ line 1))
+        (gap:gap-length gb)))
+
+  (declare %skip-blanks (gap:GapBuffer * UFix * UFix -> UFix))
+  (define (%skip-blanks gb pos end)
+    (if (>= pos end)
+        pos
+        (match (gap:gap-char-at gb pos)
+          ((Some ch)
+           (if (%blank? ch)
+               (%skip-blanks gb (+ pos 1) end)
+               pos))
+          ((None) pos))))
+
+  (declare %first-non-blank (gap:GapBuffer * UFix -> UFix))
+  (define (%first-non-blank gb line)
+    (%skip-blanks gb (%line-start gb line) (%line-end gb line)))
+
+  (declare %buffer-ends-with-newline? (gap:GapBuffer -> Boolean))
+  (define (%buffer-ends-with-newline? gb)
+    (let len = (gap:gap-length gb))
+    (if (== len 0)
+        False
+        (match (gap:gap-char-at gb (- len 1))
+          ((Some ch) (== ch #\Newline))
+          ((None) False))))
+
+  (declare %left-in-line (gap:GapBuffer * UFix -> UFix))
+  (define (%left-in-line gb pos)
+    "One editor unit left, but not before the line start."
+    (let ls = (%line-start gb (%line-of gb pos)))
+    (if (> pos ls)
+        (gap:gap-editor-unit-prev-pos gb pos)
+        pos))
+
+  (declare %right-in-line (gap:GapBuffer * UFix -> UFix))
+  (define (%right-in-line gb pos)
+    "One editor unit right, but not past the line terminator."
+    (let le = (%line-end gb (%line-of gb pos)))
+    (if (< pos le)
+        (min le (gap:gap-editor-unit-next-pos gb pos))
+        pos))
+
+  (declare %advance-in-line (gap:GapBuffer * UFix * UFix * UFix -> Optional UFix))
+  (define (%advance-in-line gb pos le n)
+    "Move N units right inside the line that ends at LE.
+Return None when the line has fewer than N units after POS."
+    (cond
+      ((== n 0) (Some pos))
+      ((>= pos le) None)
+      (True (%advance-in-line gb (min le (gap:gap-editor-unit-next-pos gb pos)) le (- n 1)))))
+
+  ;;; Word motions (same word boundaries as Ctrl+Left and Ctrl+Right)
+
+  (declare %word-at? (gap:GapBuffer * UFix -> Boolean))
+  (define (%word-at? gb pos)
+    (match (gap:gap-char-at gb pos)
+      ((Some ch) (cursor:word-char? ch))
+      ((None) False)))
+
+  (declare %skip-word-right (gap:GapBuffer * UFix * UFix -> UFix))
+  (define (%skip-word-right gb pos len)
+    (if (and (< pos len) (%word-at? gb pos))
+        (%skip-word-right gb (+ pos 1) len)
+        pos))
+
+  (declare %skip-non-word-right (gap:GapBuffer * UFix * UFix -> UFix))
+  (define (%skip-non-word-right gb pos len)
+    (if (and (< pos len) (not (%word-at? gb pos)))
+        (%skip-non-word-right gb (+ pos 1) len)
+        pos))
+
+  (declare %skip-word-left (gap:GapBuffer * UFix -> UFix))
+  (define (%skip-word-left gb pos)
+    (if (and (> pos 0) (%word-at? gb (- pos 1)))
+        (%skip-word-left gb (- pos 1))
+        pos))
+
+  (declare %skip-non-word-left (gap:GapBuffer * UFix -> UFix))
+  (define (%skip-non-word-left gb pos)
+    (if (and (> pos 0) (not (%word-at? gb (- pos 1))))
+        (%skip-non-word-left gb (- pos 1))
+        pos))
+
+  (declare %word-forward (gap:GapBuffer * UFix -> UFix))
+  (define (%word-forward gb pos)
+    "Start of the next word after POS (vim w)."
+    (let len = (gap:gap-length gb))
+    (%skip-non-word-right gb (%skip-word-right gb pos len) len))
+
+  (declare %word-backward (gap:GapBuffer * UFix -> UFix))
+  (define (%word-backward gb pos)
+    "Start of the word before POS (vim b)."
+    (%skip-word-left gb (%skip-non-word-left gb pos)))
+
+  (declare %word-end (gap:GapBuffer * UFix -> UFix))
+  (define (%word-end gb pos)
+    "Last char of the word at or after POS+1 (vim e)."
+    (let len = (gap:gap-length gb))
+    (let start = (min len (+ pos 1)))
+    (let q = (%skip-non-word-right gb start len))
+    (let r = (%skip-word-right gb q len))
+    (if (> r q) (- r 1) pos))
+
+  ;;; Motions
+
+  (declare %motion-of (Char -> Optional Motion))
+  (define (%motion-of ch)
+    (match ch
+      (#\h (Some MotionLeft))
+      (#\l (Some MotionRight))
+      (#\Space (Some MotionRight))
+      (#\j (Some MotionDown))
+      (#\k (Some MotionUp))
+      (#\+ (Some MotionDownFirstNonBlank))
+      (#\w (Some MotionWordForward))
+      (#\b (Some MotionWordBackward))
+      (#\e (Some MotionWordEnd))
+      (#\0 (Some MotionLineStart))
+      (#\^ (Some MotionFirstNonBlank))
+      (#\$ (Some MotionLineEnd))
+      (#\G (Some MotionBufferEnd))
+      (_ None)))
+
+  (declare %set-pos! (gap:GapBuffer * cursor:CursorState * UFix -> Void))
+  (define (%set-pos! gb cs pos)
+    "Move the cursor and refresh its sticky column."
+    (cursor:cursor-move-to-buffer-position! gb cs pos))
+
+  (declare %move! (gap:GapBuffer * cursor:CursorState * Motion * UFix -> Void))
+  (define (%move! gb cs motion cnt)
+    "Move the cursor by MOTION. CNT is the typed count, 0 when none."
+    (let n = (%count-or-1 cnt))
+    (let pos = (cursor:cursor-position cs))
+    (let line = (%line-of gb pos))
+    (match motion
+      ((MotionLeft)
+       (%set-pos! gb cs (%iterate n (fn (p) (%left-in-line gb p)) pos)))
+      ((MotionRight)
+       (%set-pos! gb cs (%iterate n (fn (p) (%right-in-line gb p)) pos)))
+      ((MotionUp)
+       (%repeat! n (fn () (cursor:cursor-move-up! gb cs))))
+      ((MotionDown)
+       (%repeat! n (fn () (cursor:cursor-move-down! gb cs))))
+      ((MotionDownFirstNonBlank)
+       (%set-pos! gb cs (%first-non-blank gb (%clamp-line gb (+ line n)))))
+      ((MotionWordForward)
+       (%set-pos! gb cs (%iterate n (fn (p) (%word-forward gb p)) pos)))
+      ((MotionWordBackward)
+       (%set-pos! gb cs (%iterate n (fn (p) (%word-backward gb p)) pos)))
+      ((MotionWordEnd)
+       (%set-pos! gb cs (%iterate n (fn (p) (%word-end gb p)) pos)))
+      ((MotionLineStart)
+       (%set-pos! gb cs (%line-start gb line)))
+      ((MotionFirstNonBlank)
+       (%set-pos! gb cs (%first-non-blank gb line)))
+      ((MotionLineEnd)
+       (%set-pos! gb cs (%line-end gb (%clamp-line gb (+ line (- n 1))))))
+      ((MotionBufferStart)
+       (let target = (if (== cnt 0) 0 (%clamp-line gb (- cnt 1))))
+       (%set-pos! gb cs (%first-non-blank gb target)))
+      ((MotionBufferEnd)
+       (let target = (if (== cnt 0) (%last-line gb) (%clamp-line gb (- cnt 1))))
+       (%set-pos! gb cs (%first-non-blank gb target)))))
+
+  (declare %line-range (gap:GapBuffer * UFix * UFix -> OpRange))
+  (define (%line-range gb a b)
+    "Line range over lines A..B in either order, clamped to the buffer."
+    (LineRange (%clamp-line gb (min a b)) (%clamp-line gb (max a b))))
+
+  (declare %motion-range (gap:GapBuffer * UFix * Motion * UFix -> Optional OpRange))
+  (define (%motion-range gb pos motion cnt)
+    "The text an operator at POS covers with MOTION. None when empty."
+    (let n = (%count-or-1 cnt))
+    (let len = (gap:gap-length gb))
+    (let line = (%line-of gb pos))
+    (match motion
+      ((MotionLeft)
+       (let target = (%iterate n (fn (p) (%left-in-line gb p)) pos))
+       (if (< target pos) (Some (CharRange target pos)) None))
+      ((MotionRight)
+       (let le = (%line-end gb line))
+       (let target = (%iterate n (fn (p) (if (< p le) (min le (gap:gap-editor-unit-next-pos gb p)) p)) pos))
+       (if (> target pos) (Some (CharRange pos target)) None))
+      ((MotionUp)
+       (if (== line 0)
+           None
+           (Some (%line-range gb (if (>= line n) (- line n) 0) line))))
+      ((MotionDown)
+       (if (== line (%last-line gb))
+           None
+           (Some (%line-range gb line (+ line n)))))
+      ((MotionDownFirstNonBlank)
+       (if (== line (%last-line gb))
+           None
+           (Some (%line-range gb line (+ line n)))))
+      ((MotionWordForward)
+       ;; A w motion that ends on a later line stops at the end of the
+       ;; line that holds the last word moved over.
+       (let raw = (%iterate n (fn (p) (%word-forward gb p)) pos))
+       (let target = (cond
+                       ((== raw pos) len)
+                       ((> (%line-of gb raw) line)
+                        (max pos (%line-end gb (- (%line-of gb raw) 1))))
+                       (True raw)))
+       (if (> target pos) (Some (CharRange pos target)) None))
+      ((MotionWordBackward)
+       (let target = (%iterate n (fn (p) (%word-backward gb p)) pos))
+       (if (< target pos) (Some (CharRange target pos)) None))
+      ((MotionWordEnd)
+       (let target = (%iterate n (fn (p) (%word-end gb p)) pos))
+       (Some (CharRange pos (min len (+ target 1)))))
+      ((MotionLineStart)
+       (let ls = (%line-start gb line))
+       (if (< ls pos) (Some (CharRange ls pos)) None))
+      ((MotionFirstNonBlank)
+       (let fnb = (%first-non-blank gb line))
+       (if (== fnb pos) None (Some (CharRange (min fnb pos) (max fnb pos)))))
+      ((MotionLineEnd)
+       (let le = (%line-end gb (%clamp-line gb (+ line (- n 1)))))
+       (if (> le pos) (Some (CharRange pos le)) None))
+      ((MotionBufferStart)
+       (let target = (if (== cnt 0) 0 (%clamp-line gb (- cnt 1))))
+       (Some (%line-range gb target line)))
+      ((MotionBufferEnd)
+       (let target = (if (== cnt 0) (%last-line gb) (%clamp-line gb (- cnt 1))))
+       (Some (%line-range gb line target)))))
+
+  ;;; Normal-mode cursor rule
+
+  (declare %clamp-normal! (gap:GapBuffer * cursor:CursorState -> Void))
+  (define (%clamp-normal! gb cs)
+    "In normal mode the cursor never sits on the line terminator.
+Keeps the sticky column so j and k still aim at the typed column."
+    (let pos = (min (cursor:cursor-position cs) (gap:gap-length gb)))
+    (let line = (%line-of gb pos))
+    (let ls = (%line-start gb line))
+    (let le = (%line-end gb line))
+    (cell:write! (cursor:.pos cs)
+                 (if (and (> le ls) (>= pos le))
+                     (gap:gap-editor-unit-prev-pos gb le)
+                     pos))
+    (values))
+
+  ;;; Visual mode helpers
+
+  (declare %visual? (EvilState -> Boolean))
+  (define (%visual? es)
+    (let m = (cell:read (.mode es)))
+    (or (== m EvilVisual) (== m EvilVisualLine)))
+
+  (declare %set-anchor! (gap:GapBuffer * cursor:CursorState * UFix * UFix -> Void))
+  (define (%set-anchor! gb cs anchor pos)
+    "Set the selection anchor to ANCHOR and the cursor to POS."
+    (cell:write! (cursor:.pos cs) anchor)
+    (cursor:cursor-start-selection! cs)
+    (%set-pos! gb cs pos))
+
+  (declare %repin-visual-line! (EvilState * gap:GapBuffer * cursor:CursorState -> Void))
+  (define (%repin-visual-line! es gb cs)
+    "Make the selection cover whole lines from the anchor line to the cursor line."
+    (let al = (cell:read (.visual-anchor-line es)))
+    (let cl = (%line-of gb (cursor:cursor-position cs)))
+    (if (>= cl al)
+        (%set-anchor! gb cs (%line-start gb al) (%line-end gb cl))
+        (%set-anchor! gb cs (%line-end gb al) (%line-start gb cl))))
+
+  (declare %start-visual-line! (EvilState * gap:GapBuffer * cursor:CursorState -> EvilResult))
+  (define (%start-visual-line! es gb cs)
+    (cell:write! (.visual-anchor-line es) (%line-of gb (cursor:cursor-position cs)))
+    (cell:write! (.mode es) EvilVisualLine)
+    (%repin-visual-line! es gb cs)
+    EvilHandled)
+
+  (declare %exit-visual! (EvilState * gap:GapBuffer * cursor:CursorState -> EvilResult))
+  (define (%exit-visual! es gb cs)
+    (cursor:cursor-clear-selection! cs)
+    (cell:write! (.mode es) EvilNormal)
+    (%clamp-normal! gb cs)
+    EvilHandled)
+
+  (declare %visual-range (EvilState * gap:GapBuffer * cursor:CursorState -> OpRange))
+  (define (%visual-range es gb cs)
+    "The selected text. Charwise selections include the char under the cursor."
+    (let pos = (cursor:cursor-position cs))
+    (match (cell:read (.mode es))
+      ((EvilVisualLine)
+       (let al = (cell:read (.visual-anchor-line es)))
+       (%line-range gb al (%line-of gb pos)))
+      (_
+       (let anchor = (match (cursor:cursor-selection-anchor cs)
+                       ((Some a) a)
+                       ((None) pos)))
+       (let a = (min anchor pos))
+       (let b = (max anchor pos))
+       (CharRange a (min (gap:gap-length gb) (+ b 1))))))
+
+  (declare %after-motion! (EvilState * gap:GapBuffer * cursor:CursorState -> Void))
+  (define (%after-motion! es gb cs)
+    (match (cell:read (.mode es))
+      ((EvilNormal) (%clamp-normal! gb cs))
+      ((EvilVisualLine) (%repin-visual-line! es gb cs))
+      (_ (values))))
+
+  (declare %motion-key! (EvilState * gap:GapBuffer * cursor:CursorState * Motion * UFix -> EvilResult))
+  (define (%motion-key! es gb cs motion cnt)
+    (%move! gb cs motion cnt)
+    (%after-motion! es gb cs)
+    (%reset-count! es)
+    EvilHandled)
+
+  ;;; Operators
+
+  (declare %blocked (Void -> EvilResult))
+  (define (%blocked)
+    (EvilCommand (EvilCmdMessage "Blocked: structural editing keeps delimiters balanced")))
+
+  (declare %range-bounds (gap:GapBuffer * OpRange -> Tuple UFix UFix))
+  (define (%range-bounds gb rng)
+    "Buffer positions [start, end) that RNG covers."
+    (match rng
+      ((CharRange s e) (Tuple s e))
+      ((LineRange lo hi) (Tuple (%line-start gb lo) (%next-line-start gb hi)))))
+
+  (declare %range-text (gap:GapBuffer * OpRange -> String))
+  (define (%range-text gb rng)
+    "Text of RNG. A line range always ends with a newline."
+    (match (%range-bounds gb rng)
+      ((Tuple s e)
+       (let text = (gap:gap-substring gb s e))
+       (match rng
+         ((LineRange _ _)
+          (if (%ends-with-newline? text) text (<> text %newline)))
+         ((CharRange _ _) text)))))
+
+  (declare %range-ok? (gap:GapBuffer * OpRange * Boolean -> Boolean))
+  (define (%range-ok? gb rng structural)
+    "True when a delete of RNG is allowed. With STRUCTURAL on, the range
+must keep delimiters balanced."
+    (if structural
+        (match (%range-bounds gb rng)
+          ((Tuple s e) (paredit:range-balanced? gb s e)))
+        True))
+
+  (declare %yank! (EvilState * gap:GapBuffer * OpRange -> Void))
+  (define (%yank! es gb rng)
+    (cell:write! (.register es) (%range-text gb rng))
+    (cell:write! (.register-linewise es)
+                 (match rng
+                   ((LineRange _ _) True)
+                   ((CharRange _ _) False)))
+    (values))
+
+  (declare %delete-range! (EvilState * buf:Buffer * cursor:CursorState * OpRange -> Void))
+  (define (%delete-range! es buffer cs rng)
+    "Yank RNG into the register, then delete it. A line range that reaches
+the last line also takes the newline before it."
+    (let gb = (buf:buffer-gap buffer))
+    (let tree = (buf:buffer-undo buffer))
+    (%yank! es gb rng)
+    (match (%range-bounds gb rng)
+      ((Tuple s e)
+       (let start = (match rng
+                      ((LineRange _ _)
+                       (if (and (== e (gap:gap-length gb)) (> s 0)) (- s 1) s))
+                      ((CharRange _ _) s)))
+       (ops:delete-range! buffer tree cs start e)
+       (match rng
+         ((LineRange lo _)
+          (%set-pos! gb cs (%first-non-blank gb (%clamp-line gb lo))))
+         ((CharRange _ _) (values))))))
+
+  (declare %begin-insert! (EvilState * buf:Buffer * cursor:CursorState -> Void))
+  (define (%begin-insert! es buffer cs)
+    "Enter insert mode. Open an undo group so the whole insert session
+undoes as one step."
+    (undo:undo-begin-group! (buf:buffer-undo buffer) (cursor:cursor-position cs))
+    (cell:write! (.insert-group-buffer es) (Some (buf:buffer-id buffer)))
+    (cell:write! (.mode es) EvilInsert)
+    (%reset-pending! es))
+
+  (declare %leave-insert! (EvilState * buf:Buffer * cursor:CursorState -> EvilResult))
+  (define (%leave-insert! es buffer cs)
+    "Escape from insert mode: close the undo group and step left."
+    (let gb = (buf:buffer-gap buffer))
+    (evil-close-insert-group! es (Some buffer) (cursor:cursor-position cs))
+    (let pos = (min (cursor:cursor-position cs) (gap:gap-length gb)))
+    (let ls = (%line-start gb (%line-of gb pos)))
+    (%set-pos! gb cs (if (> pos ls) (gap:gap-editor-unit-prev-pos gb pos) pos))
+    (cell:write! (.mode es) EvilNormal)
+    (%reset-pending! es)
+    (%clamp-normal! gb cs)
+    EvilHandled)
+
+  (declare %run-operator! (EvilState * buf:Buffer * cursor:CursorState * Char * OpRange * Boolean -> EvilResult))
+  (define (%run-operator! es buffer cs op rng structural)
+    "Apply operator OP (d, c or y) to RNG."
+    (let gb = (buf:buffer-gap buffer))
+    (let tree = (buf:buffer-undo buffer))
+    (match op
+      (#\y
+       (%yank! es gb rng)
+       (match rng
+         ((CharRange s _) (%set-pos! gb cs (min s (cursor:cursor-position cs))))
+         ((LineRange _ _) (values)))
+       (%clamp-normal! gb cs)
+       EvilHandled)
+      (#\d
+       (if (not (%range-ok? gb rng structural))
+           (%blocked)
+           (progn
+             (undo:with-undo-group! tree
+               (fn () (cursor:cursor-position cs))
+               (fn () (%delete-range! es buffer cs rng)))
+             (%clamp-normal! gb cs)
+             EvilEdited)))
+      (#\c
+       (if (not (%range-ok? gb rng structural))
+           (%blocked)
+           (progn
+             ;; Open the insert group first so the delete and the typed
+             ;; text undo together.
+             (%begin-insert! es buffer cs)
+             (%yank! es gb rng)
+             (match rng
+               ((LineRange lo hi)
+                ;; Change the text of the lines; keep the last terminator.
+                (ops:delete-range! buffer tree cs (%line-start gb lo) (%line-end gb hi)))
+               ((CharRange s e)
+                (ops:delete-range! buffer tree cs s e)))
+             EvilEdited)))
+      (_ EvilHandled)))
+
+  (declare %run-operator-opt! (EvilState * buf:Buffer * cursor:CursorState * Char * Optional OpRange * Boolean -> EvilResult))
+  (define (%run-operator-opt! es buffer cs op maybe-rng structural)
+    (match maybe-rng
+      ((None) EvilHandled)
+      ((Some rng) (%run-operator! es buffer cs op rng structural))))
+
+  (declare %finish-operator! (EvilState * buf:Buffer * cursor:CursorState * Char * Optional OpRange * Boolean -> EvilResult))
+  (define (%finish-operator! es buffer cs op maybe-rng structural)
+    (%reset-pending! es)
+    (%run-operator-opt! es buffer cs op maybe-rng structural))
+
+  (declare %set-operator! (EvilState * Char * UFix -> EvilResult))
+  (define (%set-operator! es op cnt)
+    (cell:write! (.pending es) (PendingOperator op cnt))
+    (%reset-count! es)
+    EvilHandled)
+
+  (declare %visual-operator! (EvilState * buf:Buffer * cursor:CursorState * Char * Boolean -> EvilResult))
+  (define (%visual-operator! es buffer cs op structural)
+    "Apply OP to the selection and return to normal mode."
+    (let gb = (buf:buffer-gap buffer))
+    (let rng = (%visual-range es gb cs))
+    (%reset-count! es)
+    (if (and (not (== op #\y)) (not (%range-ok? gb rng structural)))
+        (%blocked)
+        (progn
+          (cursor:cursor-clear-selection! cs)
+          (cell:write! (.mode es) EvilNormal)
+          (match rng
+            ((LineRange lo _) (%set-pos! gb cs (%line-start gb lo)))
+            ((CharRange s _) (%set-pos! gb cs s)))
+          (%run-operator! es buffer cs op rng structural))))
+
+  ;;; Single-key edits
+
+  (declare %x! (EvilState * buf:Buffer * cursor:CursorState * UFix * Boolean -> EvilResult))
+  (define (%x! es buffer cs n structural)
+    "Delete N chars under and after the cursor, inside the line."
+    (let gb = (buf:buffer-gap buffer))
+    (let tree = (buf:buffer-undo buffer))
+    (let pos = (cursor:cursor-position cs))
+    (let le = (%line-end gb (%line-of gb pos)))
+    (%reset-count! es)
+    (cond
+      ((>= pos le) EvilHandled)
+      (True
+       (let end = (%iterate n (fn (p) (if (< p le) (min le (gap:gap-editor-unit-next-pos gb p)) p)) pos))
+       (let rng = (CharRange pos end))
+       (cond
+         ((%range-ok? gb rng structural)
+          (undo:with-undo-group! tree
+            (fn () pos)
+            (fn () (%delete-range! es buffer cs rng)))
+          (%clamp-normal! gb cs)
+          EvilEdited)
+         ((and (== n 1) (%delimiter-at? gb pos))
+          ;; Let paredit decide: it removes an empty pair and keeps a lone delimiter.
+          (paredit:paredit-delete! buffer cs)
+          (%clamp-normal! gb cs)
+          EvilEdited)
+         (True (%blocked))))))
+
+  (declare %big-x! (EvilState * buf:Buffer * cursor:CursorState * UFix * Boolean -> EvilResult))
+  (define (%big-x! es buffer cs n structural)
+    "Delete N chars before the cursor, inside the line."
+    (let gb = (buf:buffer-gap buffer))
+    (let tree = (buf:buffer-undo buffer))
+    (let pos = (cursor:cursor-position cs))
+    (let start = (%iterate n (fn (p) (%left-in-line gb p)) pos))
+    (%reset-count! es)
+    (cond
+      ((== start pos) EvilHandled)
+      (True
+       (let rng = (CharRange start pos))
+       (cond
+         ((%range-ok? gb rng structural)
+          (undo:with-undo-group! tree
+            (fn () pos)
+            (fn () (%delete-range! es buffer cs rng)))
+          (%clamp-normal! gb cs)
+          EvilEdited)
+         ((and (== n 1) (%delimiter-at? gb start))
+          (paredit:paredit-backspace! buffer cs)
+          (%clamp-normal! gb cs)
+          EvilEdited)
+         (True (%blocked))))))
+
+  (declare %paste! (EvilState * buf:Buffer * cursor:CursorState * Boolean * UFix -> EvilResult))
+  (define (%paste! es buffer cs after n)
+    "Put the register N times after (or before) the cursor."
+    (let gb = (buf:buffer-gap buffer))
+    (let tree = (buf:buffer-undo buffer))
+    (let reg = (cell:read (.register es)))
+    (%reset-count! es)
+    (cond
+      ((== (str:length reg) 0) EvilHandled)
+      (True
+       (let text = (%repeat-string reg n))
+       (let pos = (cursor:cursor-position cs))
+       (let line = (%line-of gb pos))
+       (let len = (gap:gap-length gb))
+       (undo:with-undo-group! tree
+         (fn () (cursor:cursor-position cs))
+         (fn ()
+           (cond
+             ((cell:read (.register-linewise es))
+              (cond
+                (after
+                 (let at = (%next-line-start gb line))
+                 (cond
+                   ((and (== at len) (not (%buffer-ends-with-newline? gb)))
+                    ;; The last line has no terminator: add one, then the
+                    ;; text without its final newline.
+                    (%set-pos! gb cs len)
+                    (ops:insert-string! buffer tree cs
+                                        (<> %newline (%strip-trailing-newline text))))
+                   (True
+                    (%set-pos! gb cs at)
+                    (ops:insert-string! buffer tree cs text)))
+                 (%set-pos! gb cs (%first-non-blank gb (%clamp-line gb (+ line 1)))))
+                (True
+                 (%set-pos! gb cs (%line-start gb line))
+                 (ops:insert-string! buffer tree cs text)
+                 (%set-pos! gb cs (%first-non-blank gb line)))))
+             (True
+              (let le = (%line-end gb line))
+              (let at = (if (and after (< pos le))
+                            (min le (gap:gap-editor-unit-next-pos gb pos))
+                            pos))
+              (%set-pos! gb cs at)
+              (ops:insert-string! buffer tree cs text)
+              (let after-pos = (cursor:cursor-position cs))
+              (%set-pos! gb cs (if (> after-pos at)
+                                   (gap:gap-editor-unit-prev-pos gb after-pos)
+                                   at))))))
+       (%clamp-normal! gb cs)
+       EvilEdited)))
+
+  (declare %join-once! (buf:Buffer * cursor:CursorState * Boolean -> Boolean))
+  (define (%join-once! buffer cs structural)
+    "Join the next line onto the cursor line with one space.
+Return False when there is no next line or the join is blocked."
+    (let gb = (buf:buffer-gap buffer))
+    (let tree = (buf:buffer-undo buffer))
+    (let line = (%line-of gb (cursor:cursor-position cs)))
+    (let ls = (%line-start gb line))
+    (let le = (%line-end gb line))
+    (let fnb = (if (< (+ line 1) (gap:gap-line-count gb))
+                   (%first-non-blank gb (+ line 1))
+                   le))
+    (cond
+      ((>= (+ line 1) (gap:gap-line-count gb)) False)
+      ((and structural (not (paredit:range-balanced? gb le fnb))) False)
+      (True
+       (ops:delete-range! buffer tree cs le fnb)
+      (let prev-blank = (if (> le ls)
+                            (match (gap:gap-char-at gb (- le 1))
+                              ((Some ch) (%blank? ch))
+                              ((None) False))
+                            True))
+      (let next-close = (match (gap:gap-char-at gb le)
+                          ((Some ch) (or (== ch #\)) (== ch #\Newline) (== ch #\Return)))
+                          ((None) True)))
+       (when (not (or prev-blank next-close))
+         (ops:insert-string! buffer tree cs " "))
+       (%set-pos! gb cs le)
+       True)))
+
+  (declare %join-loop! (buf:Buffer * cursor:CursorState * UFix * Boolean * UFix -> UFix))
+  (define (%join-loop! buffer cs times structural joined)
+    "Join up to TIMES lines. Return how many joins happened."
+    (if (== times 0)
+        joined
+        (if (%join-once! buffer cs structural)
+            (%join-loop! buffer cs (- times 1) structural (+ joined 1))
+            joined)))
+
+  (declare %join! (EvilState * buf:Buffer * cursor:CursorState * UFix * Boolean -> EvilResult))
+  (define (%join! es buffer cs n structural)
+    "Join N lines (at least two) into one."
+    (let gb = (buf:buffer-gap buffer))
+    (let tree = (buf:buffer-undo buffer))
+    (let times = (if (> n 1) (- n 1) 1))
+    (let line = (%line-of gb (cursor:cursor-position cs)))
+    (let has-next = (< (+ line 1) (gap:gap-line-count gb)))
+    (%reset-count! es)
+    (let joined = (cell:new 0))
+    (undo:with-undo-group! tree
+      (fn () (cursor:cursor-position cs))
+      (fn () (cell:write! joined (%join-loop! buffer cs times structural 0)) (values)))
+    (%clamp-normal! gb cs)
+    (cond
+      ((and structural has-next (== (cell:read joined) 0)) (%blocked))
+      ((== (cell:read joined) 0) EvilHandled)
+      (True EvilEdited)))
+
+  (declare %replace! (EvilState * buf:Buffer * cursor:CursorState * Char * Boolean -> EvilResult))
+  (define (%replace! es buffer cs ch structural)
+    "Replace N chars under the cursor with CH."
+    (let gb = (buf:buffer-gap buffer))
+    (let tree = (buf:buffer-undo buffer))
+    (let n = (%count-or-1 (cell:read (.count es))))
+    (let pos = (cursor:cursor-position cs))
+    (let le = (%line-end gb (%line-of gb pos)))
+    (%reset-pending! es)
+    (match (%advance-in-line gb pos le n)
+      ((None) EvilHandled)
+      ((Some end)
+       (let old = (gap:gap-substring gb pos end))
+       (cond
+         ((and structural
+               (or (%syntax-char? ch)
+                   (%string-has-syntax-char? old)
+                   (not (paredit:range-balanced? gb pos end))))
+          (%blocked))
+         (True
+          (undo:with-undo-group! tree
+            (fn () pos)
+            (fn ()
+              (ops:delete-range! buffer tree cs pos end)
+              (ops:insert-string! buffer tree cs (%repeat-string (into ch) n))))
+          (let after-pos = (cursor:cursor-position cs))
+          (%set-pos! gb cs (if (> after-pos pos)
+                               (gap:gap-editor-unit-prev-pos gb after-pos)
+                               pos))
+          (%clamp-normal! gb cs)
+          EvilEdited)))))
+
+  ;;; Key dispatch
+
+  (declare %visual-key! (EvilState * buf:Buffer * cursor:CursorState * Char * Boolean -> EvilResult))
+  (define (%visual-key! es buffer cs ch structural)
+    "A non-motion key in visual mode."
+    (let gb = (buf:buffer-gap buffer))
+    (match ch
+      (#\d (%visual-operator! es buffer cs #\d structural))
+      (#\x (%visual-operator! es buffer cs #\d structural))
+      (#\X (%visual-operator! es buffer cs #\d structural))
+      (#\y (%visual-operator! es buffer cs #\y structural))
+      (#\c (%visual-operator! es buffer cs #\c structural))
+      (#\s (%visual-operator! es buffer cs #\c structural))
+      (#\v
+       (if (== (cell:read (.mode es)) EvilVisual)
+           (%exit-visual! es gb cs)
+           (progn
+             (cell:write! (.mode es) EvilVisual)
+             EvilHandled)))
+      (#\V
+       (if (== (cell:read (.mode es)) EvilVisualLine)
+           (%exit-visual! es gb cs)
+           (%start-visual-line! es gb cs)))
+      (_
+       (%reset-count! es)
+       EvilHandled)))
+
+  (declare %normal-plain! (EvilState * buf:Buffer * cursor:CursorState * Char * UFix * Boolean -> EvilResult))
+  (define (%normal-plain! es buffer cs ch cnt structural)
+    "A non-motion key in normal mode. CNT is the typed count, 0 when none."
+    (let gb = (buf:buffer-gap buffer))
+    (let n = (%count-or-1 cnt))
+    (let pos = (cursor:cursor-position cs))
+    (let line = (%line-of gb pos))
+    (match ch
+      (#\g
+       (cell:write! (.pending es) PendingG)
+       EvilHandled)
+      (#\d (%set-operator! es #\d cnt))
+      (#\c (%set-operator! es #\c cnt))
+      (#\y (%set-operator! es #\y cnt))
+      (#\x (%x! es buffer cs n structural))
+      (#\X (%big-x! es buffer cs n structural))
+      (#\s
+       (%reset-count! es)
+       (%run-operator-opt! es buffer cs #\c (%motion-range gb pos MotionRight cnt) structural))
+      (#\S
+       (%reset-count! es)
+       (%run-operator! es buffer cs #\c (%line-range gb line (+ line (- n 1))) structural))
+      (#\D
+       (%reset-count! es)
+       (%run-operator-opt! es buffer cs #\d (%motion-range gb pos MotionLineEnd cnt) structural))
+      (#\C
+       (%reset-count! es)
+       (%run-operator-opt! es buffer cs #\c (%motion-range gb pos MotionLineEnd cnt) structural))
+      (#\Y
+       (%reset-count! es)
+       (%run-operator! es buffer cs #\y (%line-range gb line (+ line (- n 1))) structural))
+      (#\p (%paste! es buffer cs True n))
+      (#\P (%paste! es buffer cs False n))
+      (#\J (%join! es buffer cs n structural))
+      (#\r
+       (cell:write! (.pending es) PendingReplace)
+       EvilHandled)
+      (#\u
+       (%reset-count! es)
+       (EvilCommand EvilCmdUndo))
+      (#\i
+       (%begin-insert! es buffer cs)
+       EvilHandled)
+      (#\a
+       (let le = (%line-end gb line))
+       (when (< pos le)
+         (%set-pos! gb cs (min le (gap:gap-editor-unit-next-pos gb pos))))
+       (%begin-insert! es buffer cs)
+       EvilHandled)
+      (#\I
+       (%set-pos! gb cs (%first-non-blank gb line))
+       (%begin-insert! es buffer cs)
+       EvilHandled)
+      (#\A
+       (%set-pos! gb cs (%line-end gb line))
+       (%begin-insert! es buffer cs)
+       EvilHandled)
+      (#\o
+       (%begin-insert! es buffer cs)
+       (EvilCommand EvilCmdOpenBelow))
+      (#\O
+       (%begin-insert! es buffer cs)
+       (EvilCommand EvilCmdOpenAbove))
+      (#\v
+       (%reset-count! es)
+       (cursor:cursor-start-selection! cs)
+       (cell:write! (.mode es) EvilVisual)
+       EvilHandled)
+      (#\V
+       (%reset-count! es)
+       (%start-visual-line! es gb cs))
+      (#\:
+       (%reset-count! es)
+       (EvilCommand EvilCmdExPrompt))
+      (#\/
+       (%reset-count! es)
+       (EvilCommand EvilCmdSearch))
+      (#\n
+       (%reset-count! es)
+       (EvilCommand EvilCmdSearchNext))
+      (#\N
+       (%reset-count! es)
+       (EvilCommand EvilCmdSearchPrev))
+      (_
+       (%reset-count! es)
+       EvilHandled)))
+
+  (declare %plain-key! (EvilState * buf:Buffer * cursor:CursorState * Char * Boolean -> EvilResult))
+  (define (%plain-key! es buffer cs ch structural)
+    "A key with nothing pending: a count digit, a motion, or a command."
+    (let gb = (buf:buffer-gap buffer))
+    (let cnt = (cell:read (.count es)))
+    (match (%digit-value ch)
+      ((Some d)
+       (if (and (== d 0) (== cnt 0))
+           (%motion-key! es gb cs MotionLineStart 0)
+           (progn
+             (cell:write! (.count es) (+ (* 10 cnt) d))
+             EvilHandled)))
+      ((None)
+       (match (%motion-of ch)
+         ((Some motion) (%motion-key! es gb cs motion cnt))
+         ((None)
+          (if (%visual? es)
+              (%visual-key! es buffer cs ch structural)
+              (%normal-plain! es buffer cs ch cnt structural)))))))
+
+  (declare %operator-key! (EvilState * buf:Buffer * cursor:CursorState * Char * UFix * Char * Boolean -> EvilResult))
+  (define (%operator-key! es buffer cs op opcount ch structural)
+    "The key after an operator: a motion, the operator again, g, or a digit."
+    (let gb = (buf:buffer-gap buffer))
+    (let pos = (cursor:cursor-position cs))
+    (let line = (%line-of gb pos))
+    (let cnt = (cell:read (.count es)))
+    (match (%digit-value ch)
+      ((Some d)
+       (if (and (== d 0) (== cnt 0))
+           (%finish-operator! es buffer cs op (%motion-range gb pos MotionLineStart 0) structural)
+           (progn
+             (cell:write! (.count es) (+ (* 10 cnt) d))
+             EvilHandled)))
+      ((None)
+       (let total = (* (%count-or-1 opcount) (%count-or-1 cnt)))
+       (let line-cnt = (if (and (== opcount 0) (== cnt 0)) 0 total))
+       (cond
+         ((== ch op)
+          (%finish-operator! es buffer cs op
+                             (Some (%line-range gb line (+ line (- total 1))))
+                             structural))
+         ((== ch #\g)
+          (cell:write! (.pending es) (PendingOperatorG op line-cnt))
+          EvilHandled)
+         (True
+          (match (%motion-of ch)
+            ((Some motion)
+             ;; cw changes to the end of the word, like ce.
+             (let m = (if (and (== op #\c) (== motion MotionWordForward))
+                          MotionWordEnd
+                          motion))
+             (let use-cnt = (if (== motion MotionBufferEnd) line-cnt total))
+             (%finish-operator! es buffer cs op (%motion-range gb pos m use-cnt) structural))
+            ((None)
+             (%reset-pending! es)
+             EvilHandled)))))))
+
+  (declare %normal-char! (EvilState * buf:Buffer * cursor:CursorState * Char * Boolean -> EvilResult))
+  (define (%normal-char! es buffer cs ch structural)
+    "A printable key in normal or visual mode."
+    (let gb = (buf:buffer-gap buffer))
+    (let pos = (cursor:cursor-position cs))
+    (match (cell:read (.pending es))
+      ((PendingNone) (%plain-key! es buffer cs ch structural))
+      ((PendingOperator op opcount) (%operator-key! es buffer cs op opcount ch structural))
+      ((PendingOperatorG op line-cnt)
+       (if (== ch #\g)
+           (%finish-operator! es buffer cs op (%motion-range gb pos MotionBufferStart line-cnt) structural)
+           (progn
+             (%reset-pending! es)
+             EvilHandled)))
+      ((PendingG)
+       (cond
+         ((== ch #\g)
+          (cell:write! (.pending es) PendingNone)
+          (%motion-key! es gb cs MotionBufferStart (cell:read (.count es))))
+         (True
+          (%reset-pending! es)
+          EvilHandled)))
+      ((PendingReplace) (%replace! es buffer cs ch structural))))
+
+  (declare %special-as-char! (EvilState * buf:Buffer * cursor:CursorState * Char * Boolean -> EvilResult))
+  (define (%special-as-char! es buffer cs ch structural)
+    "Enter, Backspace and Delete act as +, h and x when no key is pending."
+    (match (cell:read (.pending es))
+      ((PendingNone) (%normal-char! es buffer cs ch structural))
+      (_
+       (%reset-pending! es)
+       EvilHandled)))
+
+  (declare %escape! (EvilState * buf:Buffer * cursor:CursorState -> EvilResult))
+  (define (%escape! es buffer cs)
+    (%reset-pending! es)
+    (if (%visual? es)
+        (%exit-visual! es (buf:buffer-gap buffer) cs)
+        EvilHandled))
+
+  (declare evil-handle-key! (EvilState * buf:Buffer * cursor:CursorState * input:Key * input:Modifier * Boolean -> EvilResult))
+  (define (evil-handle-key! es buffer cs key mod structural)
+    "Handle one key in the editor. STRUCTURAL is true when structural
+editing applies to BUFFER. Ctrl and Alt keys always pass through."
+    (match (cell:read (.mode es))
+      ((EvilInsert)
+       (match key
+         ((input:KeyEscape) (%leave-insert! es buffer cs))
+         (_ EvilPassThrough)))
+      (_
+       (match key
+         ((input:KeyChar ch)
+          (if (or (== mod input:ModNone) (== mod input:ModShift))
+              (%normal-char! es buffer cs ch structural)
+              EvilPassThrough))
+         ((input:KeyEscape) (%escape! es buffer cs))
+         ((input:KeyEnter) (%special-as-char! es buffer cs #\+ structural))
+         ((input:KeyBackspace) (%special-as-char! es buffer cs #\h structural))
+         ((input:KeyDelete) (%special-as-char! es buffer cs #\x structural))
+         (_ EvilPassThrough)))))
+
+  ;;; Ex commands
+
+  (declare %all-digits? (String -> Boolean))
+  (define (%all-digits? text)
+    (lisp (-> Boolean) (text)
+      (cl:if (cl:and (cl:plusp (cl:length text))
+                     (cl:every #'cl:digit-char-p text))
+             cl:t
+             cl:nil)))
+
+  (declare %parse-ufix (String -> UFix))
+  (define (%parse-ufix text)
+    (lisp (-> UFix) (text)
+      (cl:parse-integer text)))
+
+  (declare evil-parse-ex (String -> Optional EvilCmd))
+  (define (evil-parse-ex text)
+    "Parse the text typed after a colon. None for an unknown command."
+    (let cmd = (lisp (-> String) (text) (cl:string-trim " " text)))
+    (cond
+      ((== cmd "w") (Some EvilCmdSave))
+      ((or (== cmd "q") (== cmd "q!")) (Some EvilCmdQuit))
+      ((or (== cmd "wq") (== cmd "x")) (Some EvilCmdSaveQuit))
+      ((%all-digits? cmd) (Some (EvilCmdGotoLine (%parse-ufix cmd))))
+      (True None))))
