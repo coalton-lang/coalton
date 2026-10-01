@@ -115,6 +115,11 @@
     :serial t
     :components ((:ct-file "paredit")))
 
+   ;; Evil mode (depends on edit/operations, syntax/paredit)
+   (:module "edit-evil"
+    :pathname "edit"
+    :components ((:ct-file "evil")))
+
    ;; Widget framework
    (:module "widget"
     :serial t
