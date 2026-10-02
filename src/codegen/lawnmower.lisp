@@ -581,7 +581,7 @@ Returns a status keyword and a replacement body. Status is one of:
            (type binding-list bindings)
            (values boolean &optional))
   (loop :for (_ . expr) :in bindings
-        :thereis (member name (node-variables expr) :test #'eq)))
+        :thereis (not (null (member name (node-variables expr) :test #'eq)))))
 
 (defun node-name-occurrence-count (node name)
   (declare (type node node)
