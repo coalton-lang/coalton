@@ -270,6 +270,17 @@ reconstruct the full codegen-visible function type here."
    :type (tc:output-types-result-type nil)
    :nodes nil))
 
+(defun discard-node-values (node)
+  "Discard NODE's results, preserving tail position when it already returns Void."
+  (declare (type node node)
+           (values node &optional))
+  (if (null (tc:multiple-value-output-types (node-type node)))
+      node
+      (let ((zero-values (zero-values-node)))
+        (make-node-seq
+         :type (node-type zero-values)
+         :nodes (list node zero-values)))))
+
 (defun translate-body-elements-into (body-nodes tail-node ctx env)
   "Translate BODY-NODES and sequence them in front of TAIL-NODE.
 
@@ -1207,10 +1218,8 @@ Returns a `node'.")
                              :type tc:*boolean-type*
                              :name true-value
                              :patterns nil)
-                   :body (make-node-seq
-                          :type result-ty
-                          :nodes (list (translate-expression (tc:node-when-body expr) ctx env)
-                                       (zero-values-node))))
+                   :body (discard-node-values
+                          (translate-expression (tc:node-when-body expr) ctx env)))
                   (make-match-branch
                    :pattern (make-pattern-constructor
                              :type tc:*boolean-type*
@@ -1244,10 +1253,8 @@ Returns a `node'.")
                              :type tc:*boolean-type*
                              :name false-value
                              :patterns nil)
-                   :body (make-node-seq
-                          :type result-ty
-                          :nodes (list (translate-expression (tc:node-unless-body expr) ctx env)
-                                       (zero-values-node))))))))
+                   :body (discard-node-values
+                          (translate-expression (tc:node-unless-body expr) ctx env)))))))
 
   (:method ((expr tc:node-for) ctx env)
     (declare (type pred-context ctx)

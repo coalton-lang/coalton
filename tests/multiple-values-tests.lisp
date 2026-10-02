@@ -20,7 +20,16 @@
    #:mv-rec-single
    #:mv-rec-pair
    #:mv-rec-nested-void
-   #:mv-rec-mutual-void))
+   #:mv-rec-mutual-void
+   #:mv-rec-when-visits
+   #:mv-rec-unless-visits))
+
+(defvar *mv-rec-visits* 0)
+
+(defun coalton-tests/multiple-values::%mv-record-visit (i)
+  (assert (= i *mv-rec-visits*))
+  (incf *mv-rec-visits*)
+  (values))
 
 (defun coalton-tests/multiple-values::%mv-lisp-return-helper (x)
   (declare (type integer x)
@@ -99,6 +108,25 @@
       "rec that returns zero values (Void)."
       (rec go ((i 0))
         (when (< i n)
+          (go (+ i 1)))))
+
+    (declare mv-record-visit (UFix -> Void))
+    (define (mv-record-visit i)
+      (lisp (-> Void) (i)
+        (coalton-tests/multiple-values::%mv-record-visit i)))
+
+    (declare mv-rec-when-visits (UFix -> Void))
+    (define (mv-rec-when-visits n)
+      (rec go ((i 0))
+        (when (< i n)
+          (mv-record-visit i)
+          (go (+ i 1)))))
+
+    (declare mv-rec-unless-visits (UFix -> Void))
+    (define (mv-rec-unless-visits n)
+      (rec go ((i 0))
+        (unless (>= i n)
+          (mv-record-visit i)
           (go (+ i 1)))))
 
     (declare mv-rec-single (UFix -> UFix))
@@ -304,6 +332,40 @@
        (multiple-value-list
         (eval '(coalton:coalton
                 (coalton-tests/multiple-values:mv-rec-mutual-void 5)))))))
+
+(deftest rec-void-conditionals-preserve-tail-calls ()
+  ;; Appending (VALUES) after an already-Void body turns these calls into
+  ;; non-tail recursion. Large effectful loops exercise the generated code,
+  ;; while the visit recorder checks that every iteration still runs in order.
+  (dolist (function '(coalton-tests/multiple-values:mv-rec-when-visits
+                      coalton-tests/multiple-values:mv-rec-unless-visits))
+    (dolist (count '(0 1 262144))
+      (let ((*mv-rec-visits* 0))
+        (is (null (multiple-value-list
+                   (eval `(coalton:coalton (,function ,count))))))
+        (is (= count *mv-rec-visits*))))))
+
+(deftest conditionals-discard-results ()
+  ;; A non-Void body still runs exactly once in the selected branch and its
+  ;; results must not escape. Exercise both single and multiple result arities.
+  (dolist (operator '(coalton:when coalton:unless))
+    (dolist (test '(coalton:True coalton:False))
+      (loop :for types :in '((coalton:Integer)
+                             (coalton:Integer * coalton:Integer))
+            :for results :in '((42) (42 43)) :do
+        (let ((*mv-rec-visits* 0))
+          (is (null
+               (multiple-value-list
+                (eval `(coalton:coalton
+                        (,operator ,test
+                          (coalton:lisp (coalton:-> ,@types) ()
+                            (incf *mv-rec-visits*)
+                            (values ,@results))))))))
+          (is (= (if (eq (eq operator 'coalton:when)
+                         (eq test 'coalton:True))
+                     1
+                     0)
+                 *mv-rec-visits*)))))))
 
 (deftest multiple-values-to-tuple-runtime ()
   (is (= 10
