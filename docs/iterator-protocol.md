@@ -22,7 +22,7 @@ Any type that implements `IntoIterator` can be converted into an iterator with `
 
 ```lisp
 (coalton-toplevel
-  (define list-iter (iter:into-iter (make-list 1 2 3)))
+  (define list-iter (iter:into-iter [1 2 3]))
   (define vec-iter  (iter:into-iter (vec:make 10 20 30)))
   (define str-iter  (iter:into-iter "hello")))
 ```
@@ -105,11 +105,11 @@ Iterators are consumed by calling `next!` repeatedly. Most users will not call `
 
 ```lisp
 ;; Find the first even number
-(iter:find! even? (iter:into-iter (make-list 1 3 4 5)))
+(iter:find! even? (iter:into-iter [1 3 4 5]))
 ;; => (Some 4)
 
 ;; Find the index of an element
-(iter:index-of! (== 3) (iter:into-iter (make-list 1 2 3 4)))
+(iter:index-of! (== 3) (iter:into-iter [1 2 3 4]))
 ;; => (Some 2)
 ```
 
@@ -119,8 +119,8 @@ Iterators are consumed by calling `next!` repeatedly. Most users will not call `
 (iter:count!  (iter:up-to 10))               ;; => 10
 (iter:every!  positive? (iter:up-to 10))      ;; => False (0 is not positive)
 (iter:any!    even? (iter:up-to 10))          ;; => True
-(iter:max!    (iter:into-iter (make-list 3 1 4 1 5)))  ;; => (Some 5)
-(iter:min!    (iter:into-iter (make-list 3 1 4 1 5)))  ;; => (Some 1)
+(iter:max!    (iter:into-iter [3 1 4 1 5]))  ;; => (Some 5)
+(iter:min!    (iter:into-iter [3 1 4 1 5]))  ;; => (Some 1)
 ```
 
 ## Transforming Iterators
@@ -163,7 +163,7 @@ Transformations create new iterators that lazily apply operations as elements ar
 ;; Zip two iterators into pairs
 (iter:collect!
   (iter:zip! (iter:up-to 3)
-             (iter:into-iter (make-list "a" "b" "c"))))
+             (iter:into-iter ["a" "b" "c"])))
 ;; => ((Tuple 0 "a") (Tuple 1 "b") (Tuple 2 "c"))
 
 ;; Zip with a custom combiner
@@ -182,13 +182,13 @@ Transformations create new iterators that lazily apply operations as elements ar
 ;; Flatten nested iterators
 (iter:collect!
   (iter:flatten! (map (fn (x) (iter:up-to x))
-                      (iter:into-iter (make-list 1 2 3)))))
+                      (iter:into-iter [1 2 3]))))
 ;; => (0 0 1 0 1 2)
 
 ;; Flat-map (map then flatten)
 (iter:collect!
   (iter:flat-map! (fn (x) (iter:repeat-for 2 x))
-                  (iter:into-iter (make-list 1 2 3))))
+                  (iter:into-iter [1 2 3])))
 ;; => (1 1 2 2 3 3)
 ```
 
