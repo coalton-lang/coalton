@@ -63,7 +63,7 @@
 (cl:defun %find-all-system-names (path)
   "Read the .asd file and return a list of all defsystem names."
   (cl:handler-case
-      (cl:with-open-file (s path :direction :input)
+      (cl:with-open-file (s path :direction ':input)
         (cl:let ((eof (cl:gensym))
                  (names cl:nil))
           (cl:loop

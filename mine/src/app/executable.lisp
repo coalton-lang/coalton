@@ -43,7 +43,7 @@
   ;; Remove Quicklisp from the image so the runtime can detect whether
   ;; the *user* has it installed, rather than always finding the
   ;; build-time copy.
-  (setf *features* (remove :quicklisp *features*))
+  (setf *features* (remove ':quicklisp *features*))
   (when (find-package "QUICKLISP-CLIENT")
     (delete-package "QUICKLISP-CLIENT"))
   (when (find-package "QUICKLISP")
@@ -63,9 +63,11 @@
   (let ((to-remove nil))
     (asdf:map-systems
      (lambda (s)
-       (if (asdf:component-loaded-p s)
-           (asdf:register-immutable-system (asdf:component-name s))
-           (push (asdf:component-name s) to-remove))))
+       (cond
+         ((asdf:component-loaded-p s)
+          (asdf:register-immutable-system (asdf:component-name s)))
+         (t
+          (push (asdf:component-name s) to-remove)))))
     (dolist (name to-remove)
       (asdf:clear-system name)))
   (setf mine/version:*mine-version* (%detect-version))
@@ -81,9 +83,9 @@
                              ;; Write error + backtrace to log file before unwinding
                              (ignore-errors
                                (with-open-file (f "mine-error.log"
-                                                   :direction :output
-                                                   :if-exists :supersede
-                                                   :if-does-not-exist :create)
+                                                  :direction ':output
+                                                  :if-exists ':supersede
+                                                  :if-does-not-exist ':create)
                                  (format f "MINE ERROR: ~A~%~%Backtrace:~%" c)
                                  (sb-debug:print-backtrace :stream f :count 30)))
                              ;; Restore terminal and print to stdout
@@ -100,12 +102,13 @@
     ;; be code-signed (Apple notarization, Windows Authenticode).
     ;; The build scripts set this env var when SBCL_SRC_DIR points to an
     ;; SBCL source tree containing the embedding tool.
-    (if (uiop:getenvp "MINE_SAVE_CORE")
-        (progn
-          (format t "~&;; Saving mine.core for embedded-core linking~%")
-          (sb-ext:save-lisp-and-die "mine.core" :toplevel toplevel :purify t))
-        (sb-ext:save-lisp-and-die
-         #+win32 "mine.exe" #-win32 "mine"
-         :toplevel toplevel
-         :executable t
-         :purify t))))
+    (cond
+      ((uiop:getenvp "MINE_SAVE_CORE")
+       (format t "~&;; Saving mine.core for embedded-core linking~%")
+       (sb-ext:save-lisp-and-die "mine.core" :toplevel toplevel :purify t))
+      (t
+       (sb-ext:save-lisp-and-die
+        #+win32 "mine.exe" #-win32 "mine"
+        :toplevel toplevel
+        :executable t
+        :purify t)))))

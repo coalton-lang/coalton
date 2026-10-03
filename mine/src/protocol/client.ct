@@ -5,7 +5,10 @@
    (#:wire #:mine/protocol/wire))
   (:export
    #:Connection
-   #:connection-send!))
+   #:connection-send!
+   #:connection-send-checked!
+   #:connection-finish-request!
+   #:connection-deactivate!))
 
 (in-package #:mine/protocol/client)
 
@@ -15,7 +18,8 @@
   (stream cl:nil :type (cl:or cl:null cl:stream))
   (host   "" :type cl:string)
   (port   0  :type cl:fixnum)
-  (active cl:nil :type cl:boolean))
+  (active cl:nil :type cl:boolean)
+  (foreground-request-id cl:nil :type (cl:or cl:null cl:integer)))
 
 (coalton-toplevel
 
@@ -27,17 +31,52 @@
 
   ;;; Send
 
+  (declare connection-send-checked! (Connection * msg:Request -> Boolean))
+  (define (connection-send-checked! conn req)
+    "Send REQ and return False if the connection cannot accept it."
+    (let payload = (wire:wire-encode (msg:request-to-sexpr req)))
+    (match (msg:request-foreground-id req)
+      ((Some (msg:RequestId rid))
+       (lisp (-> Void) (conn rid)
+         (cl:setf (%connection-foreground-request-id conn) rid)
+         (cl:values)))
+      ((None) (values)))
+    (let sent = (lisp (-> Boolean) (conn payload)
+                  (cl:handler-case
+                      (cl:let ((stream (%connection-stream conn)))
+                        (cl:cond
+                          ((cl:and (%connection-active conn) stream (cl:open-stream-p stream))
+                           (mine/bindings/socket:socket-write-string stream payload)
+                           True)
+                          (cl:t
+                           (cl:setf (%connection-active conn) cl:nil
+                                    (%connection-foreground-request-id conn) cl:nil)
+                           False)))
+                    (cl:error ()
+                      (cl:setf (%connection-active conn) cl:nil
+                               (%connection-foreground-request-id conn) cl:nil)
+                      False))))
+    sent)
+
   (declare connection-send! (Connection * msg:Request -> Void))
   (define (connection-send! conn req)
-    "Serialize a request and write it to the socket with the wire header."
-    (let sexpr = (msg:request-to-sexpr req))
-    (let payload = (wire:wire-encode sexpr))
-    (lisp (-> Void) (conn payload)
-      (cl:let ((stream (%connection-stream conn)))
-        (cl:when stream
-          (cl:handler-case
-              (mine/bindings/socket:socket-write-string stream payload)
-            (cl:error () cl:nil))))
+    (connection-send-checked! conn req)
+    (values))
+
+  (declare connection-finish-request! (Connection * msg:RequestId -> Void))
+  (define (connection-finish-request! conn (msg:RequestId rid))
+    "Forget a completed foreground request without clearing a newer request."
+    (lisp (-> Void) (conn rid)
+      (cl:when (cl:eql rid (%connection-foreground-request-id conn))
+        (cl:setf (%connection-foreground-request-id conn) cl:nil))
+      (cl:values)))
+
+  (declare connection-deactivate! (Connection -> Void))
+  (define (connection-deactivate! conn)
+    "Forget connection state after EOF or a failed send."
+    (lisp (-> Void) (conn)
+      (cl:setf (%connection-active conn) cl:nil
+               (%connection-foreground-request-id conn) cl:nil)
       (cl:values)))
 
 )

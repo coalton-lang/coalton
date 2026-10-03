@@ -144,13 +144,13 @@
 
 (defun %normalize-severity (condition)
   (typecase condition
-    (sb-c:compiler-error :error)
-    (sb-c:fatal-compiler-error :error)
-    (sb-ext:compiler-note :note)
-    (style-warning :style-warning)
-    (warning :warning)
-    (error :error)
-    (t :note)))
+    (sb-c:compiler-error ':error)
+    (sb-c:fatal-compiler-error ':error)
+    (sb-ext:compiler-note ':note)
+    (style-warning ':style-warning)
+    (warning ':warning)
+    (error ':error)
+    (t ':note)))
 
 (defun %string-prefix-equal-p (prefix text)
   (and (stringp text)
@@ -247,11 +247,11 @@
 (defun %compiler-condition-diagnostics (condition request group file-override offset-base synthetic-prefix)
   (let ((real-condition (%real-condition condition)))
     (multiple-value-bind (file start end)
-      (%compiler-condition-span condition)
-      (when (not start)
+        (%compiler-condition-span condition)
+      (unless start
         (multiple-value-setq (file start end)
           (%reader-error-span real-condition)))
-      (when (not start)
+      (unless start
         (multiple-value-setq (file start end)
           (%compiler-context-point-span)))
       (multiple-value-bind (mapped-file mapped-start mapped-end)

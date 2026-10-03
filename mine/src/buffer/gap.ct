@@ -9,7 +9,7 @@
    (#:cellw #:mine/text/width))
   (:export
    #:GapBuffer
-   #:gap-new #:gap-from-string
+   #:gap-new #:gap-from-string #:gap-reset!
    #:gap-length #:gap-char-at
    #:gap-crlf-at?
    #:gap-editor-unit-start-pos #:gap-editor-unit-end-pos
@@ -223,6 +223,17 @@ Rebuild the line-starts vector by compacting in place: keep entries
     (gap-insert-string! gb 0 s)
     gb)
 
+  (declare gap-reset! (GapBuffer * String -> Void))
+  (define (gap-reset! gb text)
+    "Replace all text, preserving the identity of GB. Build the replacement first."
+    (let replacement = (gap-from-string text))
+    (cell:write! (.data gb) (cell:read (.data replacement)))
+    (cell:write! (.gap-start gb) (cell:read (.gap-start replacement)))
+    (cell:write! (.gap-end gb) (cell:read (.gap-end replacement)))
+    (cell:write! (.len gb) (cell:read (.len replacement)))
+    (cell:write! (.line-starts gb) (cell:read (.line-starts replacement)))
+    (values))
+
   ;;; Accessors
 
   (declare gap-length (GapBuffer -> UFix))
@@ -289,11 +300,12 @@ buffer character."
     "Return the previous editor-unit boundary before POS.
 When POS is immediately after LF in a CRLF sequence, this skips back
 over both raw characters."
+    (let bounded = (min pos (gap-length gb)))
     (cond
-      ((== pos 0) 0)
-      ((and (>= pos 2) (gap-crlf-at? gb (- pos 2)))
-       (- pos 2))
-      (True (- pos 1))))
+      ((== bounded 0) 0)
+      ((and (>= bounded 2) (gap-crlf-at? gb (- bounded 2)))
+       (- bounded 2))
+      (True (- bounded 1))))
 
   (declare gap-expand-range-to-editor-units (GapBuffer * UFix * UFix -> (Tuple UFix UFix)))
   (define (gap-expand-range-to-editor-units gb start end)
@@ -474,12 +486,10 @@ position, so the CRLF terminator is omitted from line text."
   (define (visual-col-loop text limit i vcol tab-w)
     (if (>= i limit)
         vcol
-        (progn
-          (let ch = (str:ref-unchecked text i))
-          (let next-vcol =
-            (if (== ch #\Tab)
-                (next-tab-stop vcol tab-w)
-                (+ vcol (cellw:editor-char-cell-width ch))))
+        (let ((ch (str:ref-unchecked text i))
+              (next-vcol (if (== ch #\Tab)
+                             (next-tab-stop vcol tab-w)
+                             (+ vcol (cellw:editor-char-cell-width ch)))))
           (visual-col-loop text limit (+ i 1) next-vcol tab-w))))
 
   (declare visual-col (String * UFix * UFix -> UFix))
@@ -492,12 +502,10 @@ expanding tabs to the next tab stop of width TAB-W."
   (define (char-for-vcol-loop text len i vcol vcol-target tab-w)
     (if (>= i len)
         len
-        (progn
-          (let ch = (str:ref-unchecked text i))
-          (let next-vcol =
-            (if (== ch #\Tab)
-                (next-tab-stop vcol tab-w)
-                (+ vcol (cellw:editor-char-cell-width ch))))
+        (let ((ch (str:ref-unchecked text i))
+              (next-vcol (if (== ch #\Tab)
+                             (next-tab-stop vcol tab-w)
+                             (+ vcol (cellw:editor-char-cell-width ch)))))
           (if (> next-vcol vcol-target)
               i
               (char-for-vcol-loop text len (+ i 1) next-vcol vcol-target tab-w)))))

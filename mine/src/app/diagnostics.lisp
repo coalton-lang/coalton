@@ -1,5 +1,6 @@
 (defpackage #:mine/app/diagnostics
   (:use #:cl)
+  (:local-nicknames (#:store #:mine/app/diagnostic-store))
   (:export
    #:clear-all-diagnostics
    #:clear-compile-file-remap
@@ -11,6 +12,7 @@
    #:diagnostics-message-for-position
    #:diagnostics-message-for-range
    #:forget-diagnostic-request
+   #:forget-all-diagnostic-requests
    #:invalidate-diagnostics-for-file
    #:jump-adjacent-diagnostic
    #:line-diagnostic-spans
@@ -21,25 +23,74 @@
 
 (in-package #:mine/app/diagnostics)
 
-;;; CL diagnostics state referenced by lisp escapes in the Coalton code.
+;;; Protocol and rendering adapters around the typed diagnostic store.
 
-(defvar *diagnostics-table* (make-hash-table :test 'equal)
-  "Hash table: document key (string) -> list of diagnostic plists.")
-(defvar *reported-diagnostic-groups* (make-hash-table :test 'equal)
-  "Hash table of (request . group) pairs already announced in the REPL.")
-(defvar *diagnostic-file-generations* (make-hash-table :test 'equal)
-  "Hash table: document key (string) -> latest edit generation that invalidated diagnostics.")
-(defvar *diagnostic-request-generations* (make-hash-table :test 'eql)
-  "Hash table: request id (integer) -> diagnostic generation snapshot at request start.")
-(defvar *diagnostic-generation-clock* 0
-  "Monotonic counter used to invalidate stale diagnostics after edits.")
-(defvar *compile-file-remap* nil
-  "When non-nil, a cons (temp-document-key . real-document-key) for remapping file diagnostics.")
+(defvar *diagnostic-store* (store:diagnostic-store-new)
+  "Typed diagnostics and request lifecycle state for this editor session.")
 
 (defun coalton-optional-value-or-nil (value)
   "Return NIL for Coalton None, otherwise return the wrapped value."
   (unless (coalton-impl/runtime/optional:cl-none-p value)
     (coalton-impl/runtime/optional:unwrap-cl-some value)))
+
+(defun protocol-severity (severity)
+  (case severity
+    (:error store:DiagnosticError)
+    (:warning store:DiagnosticWarning)
+    (:style-warning store:DiagnosticStyleWarning)
+    (:note store:DiagnosticNote)
+    (t store:DiagnosticUnknown)))
+
+(defun severity-keyword (severity)
+  (cond ((eq severity store:DiagnosticError) ':error)
+        ((eq severity store:DiagnosticWarning) ':warning)
+        ((eq severity store:DiagnosticStyleWarning) ':style-warning)
+        ((eq severity store:DiagnosticNote) ':note)))
+
+(defun protocol-label-kind (kind)
+  (case kind
+    (:primary store:PrimaryLabel) (:secondary store:SecondaryLabel)
+    (:help store:HelpLabel) (t store:UnknownLabel)))
+
+(defun label-kind-keyword (kind)
+  (cond ((eq kind store:PrimaryLabel) ':primary)
+        ((eq kind store:SecondaryLabel) ':secondary)
+        ((eq kind store:HelpLabel) ':help)))
+
+(defun optional-integer (value)
+  (if (integerp value) (coalton:Some value) coalton:None))
+
+(defun protocol-offset (value)
+  (if (integerp value) (max 0 (min most-positive-fixnum value)) 0))
+
+(defun protocol-string (value &optional (fallback ""))
+  (if (stringp value) value fallback))
+
+(defun plist-diagnostic (plist)
+  "Decode protocol fields once before crossing into typed storage."
+  (let* ((start (protocol-offset (getf plist ':start)))
+         (end (max start (protocol-offset (getf plist ':end))))
+         (summary (protocol-string (getf plist ':summary))))
+    (store:Diagnostic (or (remap-diagnostic-filepath (getf plist ':file) (getf plist ':request)) "")
+                      start end (protocol-severity (getf plist ':severity))
+                      summary (protocol-string (getf plist ':label) summary)
+                      (protocol-label-kind (getf plist ':label-kind))
+                      (optional-integer (getf plist ':request))
+                      (optional-integer (getf plist ':group)))))
+
+(defun diagnostic-plist (diagnostic)
+  "Present a diagnostic to legacy rendering code without storing plist state."
+  (list ':file (store:diagnostic-file diagnostic)
+        ':start (store:diagnostic-start diagnostic) ':end (store:diagnostic-end diagnostic)
+        ':severity (severity-keyword (store:diagnostic-severity diagnostic))
+        ':summary (store:diagnostic-summary diagnostic) ':label (store:diagnostic-label diagnostic)
+        ':label-kind (label-kind-keyword (store:diagnostic-label-kind diagnostic))
+        ':request (coalton-optional-value-or-nil (store:diagnostic-request diagnostic))
+        ':group (coalton-optional-value-or-nil (store:diagnostic-group diagnostic))))
+
+(defun diagnostics-for-file (filepath)
+  (mapcar #'diagnostic-plist
+          (store:store-for-file *diagnostic-store* (or (normalize-document-key filepath) ""))))
 
 (defun user-error (st text)
   "Queue a user-facing modal error."
@@ -70,162 +121,106 @@
   "Clear all diagnostics for a document before a new compile."
   (let ((document-key (normalize-document-key filepath)))
     (when document-key
-      (remhash document-key *diagnostics-table*))))
+      (store:store-clear-file! *diagnostic-store* document-key))))
 
 (defun invalidate-diagnostics-for-file (filepath)
   "Clear FILEPATH diagnostics and mark any older request results as stale."
-  (let ((document-key (normalize-document-key filepath)))
-    (when document-key
-      (clear-diagnostics-for-file document-key)
-      (incf *diagnostic-generation-clock*)
-      (setf (gethash document-key *diagnostic-file-generations*)
-            *diagnostic-generation-clock*))))
+  (clear-diagnostics-for-file filepath))
 
 (defun clear-all-diagnostics ()
   "Clear every stored diagnostic and reset REPL announcement tracking."
-  (clrhash *diagnostics-table*)
-  (clrhash *reported-diagnostic-groups*))
+  (store:store-clear-all! *diagnostic-store*))
+
+(defun delete-compile-temporary (file)
+  "Remove a private compile input and its default compiled output."
+  (ignore-errors (delete-file (compile-file-pathname file)))
+  (ignore-errors (delete-file file)))
 
 (defun clear-compile-file-remap ()
-  "Clear the temporary compile-file remap state."
-  (setf *compile-file-remap* nil))
+  "Discard temporary files not yet attached to a request."
+  (dolist (file (store:store-pending-temporary-files *diagnostic-store*))
+    (delete-compile-temporary file))
+  (store:store-clear-pending-remaps! *diagnostic-store*))
 
 (defun track-diagnostic-request (request-id)
   "Record the current edit generation for REQUEST-ID."
-  (setf (gethash request-id *diagnostic-request-generations*)
-        *diagnostic-generation-clock*))
+  (store:store-track-request! *diagnostic-store* request-id))
 
 (defun forget-diagnostic-request (request-id)
-  "Drop REQUEST-ID from the diagnostic request tracking table."
-  (remhash request-id *diagnostic-request-generations*))
+  "Release a finished request's metadata and private compile files."
+  (dolist (file (store:store-request-temporary-files *diagnostic-store* request-id))
+    (delete-compile-temporary file))
+  (store:store-forget-request! *diagnostic-store* request-id))
+
+(defun forget-all-diagnostic-requests ()
+  "Release request metadata and private files when a runtime session ends."
+  (dolist (id (store:store-request-ids *diagnostic-store*))
+    (forget-diagnostic-request id))
+  (clear-compile-file-remap))
 
 (defun diagnostic-announcement-p (plist)
   "Return T if PLIST should produce a one-line REPL announcement."
-  (let ((request (getf plist :request))
-        (group (getf plist :group)))
-    (cond
-      ((and request group)
-       (let ((key (cons request group)))
-         (unless (gethash key *reported-diagnostic-groups*)
-           (setf (gethash key *reported-diagnostic-groups*) t)
-           t)))
-      (t
-       (eq (getf plist :label-kind) :primary)))))
+  (store:store-announcement! *diagnostic-store* (plist-diagnostic plist)))
 
 (defun write-temp-for-compile (text original-path)
-  "Write TEXT to a temporary file preserving the extension of ORIGINAL-PATH.
-Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
-  (let* ((ext (pathname-type (pathname original-path)))
-         (base (pathname-name (pathname original-path)))
-         (tmp-path (merge-pathnames
-                    (make-pathname :name (format nil "mine-beam-~A" base) :type ext)
-                    (uiop:temporary-directory))))
-    (with-open-file (s tmp-path :direction :output
-                       :if-exists :supersede
-                       :external-format (coalton-impl/source:source-external-format))
-      (write-string text s))
-    (setf *compile-file-remap*
-          (cons (normalize-document-key (namestring tmp-path))
-                (normalize-document-key original-path)))
+  "Write a unique compile input; attach its document mapping to the next request."
+  (clear-compile-file-remap)
+  (uiop:with-temporary-file (:stream stream :pathname tmp-path
+                             :prefix "mine-beam-"
+                             :type (pathname-type (pathname original-path))
+                             :direction ':output :keep t
+                             :external-format (coalton-impl/source:source-external-format))
+    (write-string text stream)
+    (store:store-add-remap! *diagnostic-store*
+                            (normalize-document-key (namestring tmp-path))
+                            (normalize-document-key original-path))
     (namestring tmp-path)))
 
 (defun diagnostic-severity-rank (severity)
-  (cond
-    ((eq severity :error) 4)
-    ((eq severity :warning) 3)
-    ((eq severity :style-warning) 2)
-    ((eq severity :note) 1)
-    (t 0)))
+  (store:severity-rank (protocol-severity severity)))
 
 (defun diagnostic-rank-for-file (filepath)
   "Return the worst stored diagnostic severity rank for FILEPATH."
-  (let ((document-key (normalize-document-key filepath))
-        (best 0))
-    (dolist (note (gethash document-key *diagnostics-table*) best)
-      (setf best
-            (max best
-                 (diagnostic-severity-rank (getf note :severity)))))))
+  (store:store-rank-for-file *diagnostic-store* (or (normalize-document-key filepath) "")))
 
-(defun remap-diagnostic-filepath (raw-filepath)
+(defun remap-diagnostic-filepath (raw-filepath &optional request-id)
   (let ((document-key (normalize-document-key raw-filepath)))
-    (if (and document-key
-             *compile-file-remap*
-             (string= document-key (car *compile-file-remap*)))
-        (cdr *compile-file-remap*)
-        document-key)))
+    (when document-key
+      (store:store-remap-file *diagnostic-store* (optional-integer request-id) document-key))))
 
 (defun diagnostic-stale-p (plist)
-  "Return T if PLIST belongs to a request older than the file's latest edit."
-  (let* ((request-id (getf plist :request))
-         (document-key (remap-diagnostic-filepath (getf plist :file))))
-    (when (and request-id document-key)
-      (multiple-value-bind (request-generation presentp)
-          (gethash request-id *diagnostic-request-generations*)
-        (and presentp
-             (> (gethash document-key *diagnostic-file-generations* 0)
-                request-generation))))))
+  "Reject results from an older edit/compile or a finished request."
+  (store:store-stale? *diagnostic-store* (plist-diagnostic plist)))
 
 (defun diagnostic-overlaps-range-p (diag-start diag-end range-start range-end)
-  (if (= diag-start diag-end)
-      (and (<= range-start diag-start)
-           (<= diag-start range-end))
-      (and (< diag-start range-end)
-           (> diag-end range-start))))
+  (store:overlaps-range? diag-start diag-end range-start range-end))
 
 (defun diagnostic-contains-position-p (diag-start diag-end pos)
-  (if (= diag-start diag-end)
-      (= diag-start pos)
-      (and (<= diag-start pos)
-           (< pos diag-end))))
+  (store:contains-position? diag-start diag-end pos))
 
 (defun store-diagnostic (plist)
-  "Store a diagnostic plist from the protocol."
-  (let* ((raw-filepath (getf plist :file))
-         (document-key (remap-diagnostic-filepath raw-filepath))
-         (start (or (getf plist :start) 0))
-         (end (or (getf plist :end) 0))
-         (severity (getf plist :severity))
-         (summary (or (getf plist :summary) ""))
-         (label (or (getf plist :label) summary))
-         (label-kind (getf plist :label-kind))
-         (group (getf plist :group))
-         (diagnostic (list :file document-key
-                           :start start
-                           :end end
-                           :severity severity
-                           :summary summary
-                           :label label
-                           :label-kind label-kind
-                           :group group)))
-    (when (and (stringp document-key)
-               (plusp (length document-key)))
-      (setf (gethash document-key *diagnostics-table*)
-            (nconc (gethash document-key *diagnostics-table*)
-                   (list diagnostic))))))
+  "Decode and store a protocol diagnostic, rejecting stale results."
+  (store:store-add! *diagnostic-store* (plist-diagnostic plist)))
 
 (defun diagnostics-for-range (filepath start end)
-  "Return diagnostics for FILEPATH overlapping [START, END]."
-  (let* ((document-key (normalize-document-key filepath))
-         (notes (gethash document-key *diagnostics-table*)))
-    (loop :for note :in notes
-          :for diag-start = (getf note :start)
-          :for diag-end = (getf note :end)
-          :when (diagnostic-overlaps-range-p diag-start diag-end start end)
-          :collect note)))
+  "Return diagnostic views overlapping [START, END]."
+  (mapcar #'diagnostic-plist
+          (store:store-for-range *diagnostic-store* (or (normalize-document-key filepath) "")
+                                 start end)))
 
 (defun line-diagnostic-spans (filepath line-start line-end)
   "Return line-overlapping diagnostics as (start end severity) triples."
   (loop :for note :in (diagnostics-for-range filepath line-start line-end)
-        :collect (list (getf note :start)
-                       (getf note :end)
-                       (getf note :severity))))
+        :collect (list (getf note ':start)
+                       (getf note ':end)
+                       (getf note ':severity))))
 
 (defun diagnostic-severity-for-range (filepath start end)
   "Return the worst diagnostic severity overlapping [START, END], or NIL."
   (let ((best-severity nil)
         (best-rank 0))
     (dolist (note (diagnostics-for-range filepath start end) best-severity)
-      (let* ((severity (getf note :severity))
+      (let* ((severity (getf note ':severity))
              (rank (diagnostic-severity-rank severity)))
         (when (> rank best-rank)
           (setf best-rank rank)
@@ -234,14 +229,14 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
 (defun diagnostics-message-for-position (filepath position)
   "Return the first diagnostic summary covering POSITION, or empty string."
   (let* ((document-key (normalize-document-key filepath))
-         (notes (gethash document-key *diagnostics-table*)))
+         (notes (diagnostics-for-file document-key)))
     (or
      (loop :for note :in notes
-           :for diag-start = (getf note :start)
-           :for diag-end = (getf note :end)
+           :for diag-start = (getf note ':start)
+           :for diag-end = (getf note ':end)
            :when (diagnostic-contains-position-p diag-start diag-end position)
-           :return (or (getf note :summary)
-                       (getf note :label)
+           :return (or (getf note ':summary)
+                       (getf note ':label)
                        ""))
      "")))
 
@@ -249,50 +244,24 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
   "Return the first diagnostic summary overlapping [START, END], or empty string."
   (let ((notes (diagnostics-for-range filepath start end)))
     (if notes
-        (or (getf (first notes) :summary)
-            (getf (first notes) :label)
+        (or (getf (first notes) ':summary)
+            (getf (first notes) ':label)
             "")
         "")))
 
 (defun diagnostic-label-kind-rank (kind)
-  (case kind
-    (:primary 3)
-    (:secondary 2)
-    (:help 1)
-    (t 0)))
-
-(defun diagnostic-span-length (note)
-  (max 0 (- (getf note :end 0)
-            (getf note :start 0))))
+  (store:label-kind-rank (protocol-label-kind kind)))
 
 (defun diagnostic-better-at-position-p (candidate best)
-  "Return T if CANDIDATE should win over BEST for a cursor-position popup."
-  (let ((candidate-rank (diagnostic-severity-rank (getf candidate :severity)))
-        (best-rank (diagnostic-severity-rank (getf best :severity))))
-    (cond
-      ((> candidate-rank best-rank) t)
-      ((< candidate-rank best-rank) nil)
-      (t
-       (let ((candidate-span (diagnostic-span-length candidate))
-             (best-span (diagnostic-span-length best)))
-         (cond
-           ((< candidate-span best-span) t)
-           ((> candidate-span best-span) nil)
-           (t
-            (> (diagnostic-label-kind-rank (getf candidate :label-kind))
-               (diagnostic-label-kind-rank (getf best :label-kind))))))))))
+  (store:better-at-position? (plist-diagnostic candidate) (plist-diagnostic best)))
 
 (defun diagnostic-at-position (filepath position)
-  "Return the best diagnostic plist covering POSITION in FILEPATH, or NIL."
-  (let ((document-key (normalize-document-key filepath))
-        (best nil))
-    (dolist (note (gethash document-key *diagnostics-table*) best)
-      (let ((diag-start (getf note :start))
-            (diag-end (getf note :end)))
-        (when (diagnostic-contains-position-p diag-start diag-end position)
-          (when (or (null best)
-                    (diagnostic-better-at-position-p note best))
-            (setf best note)))))))
+  "Return the best diagnostic view covering POSITION in FILEPATH, or NIL."
+  (let ((diagnostic (coalton-optional-value-or-nil
+                     (store:store-at-position *diagnostic-store*
+                                               (or (normalize-document-key filepath) "")
+                                               position))))
+    (when diagnostic (diagnostic-plist diagnostic))))
 
 ;;; Diagnostics navigation
 
@@ -308,18 +277,13 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
   "Return a sorted list of unique diagnostic locations as (FILE START END)."
   (let ((seen (make-hash-table :test 'equal))
         (locations nil))
-    (maphash
-     (lambda (document-key notes)
-       (when (and (stringp document-key)
-                  (plusp (length document-key)))
-         (dolist (note notes)
-           (let* ((start (or (getf note :start) 0))
-                  (end (or (getf note :end) start))
-                  (key (list document-key start end)))
-             (unless (gethash key seen)
-               (setf (gethash key seen) t)
-               (push key locations))))))
-     *diagnostics-table*)
+    (dolist (note (store:store-all *diagnostic-store*))
+      (let ((key (list (store:diagnostic-file note)
+                       (store:diagnostic-start note)
+                       (store:diagnostic-end note))))
+        (unless (gethash key seen)
+          (setf (gethash key seen) t)
+          (push key locations))))
     (sort locations
           (lambda (a b)
             (diagnostic-location< (first a) (second a) (third a)
@@ -335,8 +299,8 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
       (current-note
        (loop :for entry :in locations
              :when (diagnostic-location< current-file
-                                         (getf current-note :start 0)
-                                         (getf current-note :end 0)
+                                         (getf current-note ':start 0)
+                                         (getf current-note ':end 0)
                                          (first entry)
                                          (second entry)
                                          (third entry))
@@ -362,8 +326,8 @@ Sets *COMPILE-FILE-REMAP* and returns the temporary file path string."
                                      (second entry)
                                      (third entry)
                                      current-file
-                                     (getf current-note :start 0)
-                                     (getf current-note :end 0))
+                                     (getf current-note ':start 0)
+                                     (getf current-note ':end 0))
            (setf best entry))))
       (t
        (dolist (entry locations best)
@@ -440,14 +404,16 @@ those files."
                    ((zerop (length word))
                     nil)
                    ((zerop (length current))
-                    (if (<= (length word) width)
-                        (setf current word)
-                        (loop :for start :from 0 :below (length word) :by width
-                              :do (push (subseq word
-                                                start
-                                                (min (length word)
-                                                     (+ start width)))
-                                        result))))
+                    (cond
+                      ((<= (length word) width)
+                       (setf current word))
+                      (t
+                       (loop :for start :from 0 :below (length word) :by width
+                             :do (push (subseq word
+                                               start
+                                               (min (length word)
+                                                    (+ start width)))
+                                       result)))))
                    ((<= (+ (length current) 1 (length word)) width)
                     (setf current (concatenate 'string current " " word)))
                    (t
@@ -524,10 +490,10 @@ those files."
 
 (defun render-diagnostic-popup-cl (st scr screen-w screen-h)
   "Render a non-modal diagnostic popup near the editor caret."
-  (let* ((filepath mine/pane/editor::*editor-filepath*)
-         (buf (coalton-optional-value-or-nil
+  (let* ((buf (coalton-optional-value-or-nil
                (mine/buffer/manager:bufmgr-current
-                (mine/app/state:get-bufmgr st)))))
+                (mine/app/state:get-bufmgr st))))
+         (filepath (and buf (mine/buffer/buffer:buffer-document-key buf))))
     (when (and (stringp filepath)
                (plusp (length filepath))
                buf)
@@ -535,10 +501,10 @@ those files."
              (position (mine/edit/cursor:cursor-position cs))
              (diagnostic (diagnostic-at-position filepath position)))
         (when diagnostic
-          (let* ((severity (getf diagnostic :severity))
+          (let* ((severity (getf diagnostic ':severity))
                  (title (diagnostic-popup-title severity))
-                 (summary (or (getf diagnostic :summary) ""))
-                 (label (or (getf diagnostic :label) ""))
+                 (summary (or (getf diagnostic ':summary) ""))
+                 (label (or (getf diagnostic ':label) ""))
                  (body-text (cond
                               ((and (plusp (length summary))
                                     (plusp (length label))

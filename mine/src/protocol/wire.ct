@@ -2,7 +2,8 @@
   (:use #:coalton #:coalton-prelude)
   (:export
    #:SExpr
-   #:SAtom #:SString #:SInteger #:SList #:SNil
+   #:SAtom #:SString #:SInteger #:SList #:SPair #:SNil
+   #:RawSExpr #:raw-to-sexpr #:sexpr-to-raw #:sexpr-list-items
    #:encode-sexpr
    #:wire-encode))
 
@@ -12,12 +13,14 @@
 
   ;;; SExpr -- wire-format S-expression representation
 
+  (derive Eq)
   (define-type SExpr
     "S-expression for the protocol wire format."
     (SAtom String)
     (SString String)
     (SInteger Integer)
     (SList (List SExpr))
+    (SPair SExpr SExpr)
     SNil)
 
   ;;; Encoding
@@ -30,8 +33,10 @@
       ((SString s) (encode-string-literal s))
       ((SInteger n)
        (lisp (-> String) (n)
-         (cl:write-to-string n)))
+         (cl:with-standard-io-syntax (cl:write-to-string n))))
       ((SList items) (<> "(" (<> (encode-list-items items) ")")))
+      ((SPair head tail)
+       (<> "(" (<> (encode-sexpr head) (<> " . " (<> (encode-sexpr tail) ")")))))
       ((SNil) "nil")))
 
   (declare encode-string-literal (String -> String))
@@ -65,7 +70,79 @@
     "Encode an SExpr with a 6-byte uppercase hex length header."
     (let payload = (encode-sexpr expr))
     (lisp (-> String) (payload)
-      (cl:let ((len (cl:length (sb-ext:string-to-octets payload :external-format :utf-8))))
+      (cl:let ((len (cl:length (sb-ext:string-to-octets payload :external-format ':utf-8))))
+        (cl:when (cl:> len #xffffff)
+          (cl:error "Protocol message exceeds the six-digit frame limit"))
         (cl:format cl:nil "~6,'0X~A" len payload))))
 
+  ;;; Native data conversion is restricted to this transport boundary.
+
+  (repr :native cl:t)
+  (define-type RawSExpr
+    "An unvalidated Common Lisp protocol object at the socket boundary.")
+
+  (declare sexpr-cons (SExpr * SExpr -> SExpr))
+  (define (sexpr-cons head tail)
+    (match tail
+      ((SNil) (SList (Cons head Nil)))
+      ((SList rest) (SList (Cons head rest)))
+      (_ (SPair head tail))))
+
+  (declare sexpr-list-items (SExpr -> Optional (List SExpr)))
+  (define (sexpr-list-items expr)
+    (match expr
+      ((SNil) (Some Nil))
+      ((SList items) (Some items))
+      (_ None)))
+
+  (declare raw-to-sexpr (RawSExpr -> Optional SExpr))
+  (define (raw-to-sexpr raw)
+    "Validate host data and convert it without serializing and reading it again."
+    (lisp (-> (Optional SExpr)) (raw)
+      (%raw-to-sexpr-cl raw)))
+
+  (declare sexpr-to-raw (SExpr -> RawSExpr))
+  (define (sexpr-to-raw expr)
+    "Convert typed transport data for the remaining Common Lisp adapters."
+    (match expr
+      ((SString value) (lisp (-> RawSExpr) (value) value))
+      ((SInteger value) (lisp (-> RawSExpr) (value) value))
+      ((SNil) (lisp (-> RawSExpr) () cl:nil))
+      ((SAtom token)
+       (lisp (-> RawSExpr) (token)
+         (cl:with-standard-io-syntax
+           (cl:let ((cl:*read-eval* cl:nil))
+             (cl:multiple-value-bind (object end) (cl:read-from-string token)
+               (cl:unless (cl:and (cl:symbolp object) (cl:= end (cl:length token)))
+                 (cl:error "Invalid protocol atom ~S" token))
+               object)))))
+      ((SList items)
+       (let raw-items = (map sexpr-to-raw items))
+       (lisp (-> RawSExpr) (raw-items) raw-items))
+      ((SPair head tail)
+       (let raw-head = (sexpr-to-raw head))
+       (let raw-tail = (sexpr-to-raw tail))
+       (lisp (-> RawSExpr) (raw-head raw-tail) (cl:cons raw-head raw-tail)))))
+
   )
+
+(cl:defun %raw-to-sexpr-cl (raw)
+  "Convert the small host S-expression domain, rejecting objects and cycles."
+  (cl:let ((active (cl:make-hash-table :test #'cl:eq)))
+    (cl:labels ((convert (object)
+                  (cl:cond
+                    ((cl:null object) SNil)
+                    ((cl:stringp object) (SString object))
+                    ((cl:integerp object) (SInteger object))
+                    ((cl:symbolp object)
+                     (SAtom (cl:with-standard-io-syntax (cl:write-to-string object))))
+                    ((cl:consp object)
+                     (cl:when (cl:gethash object active)
+                       (cl:error "Circular protocol object"))
+                     (cl:setf (cl:gethash object active) cl:t)
+                     (cl:unwind-protect
+                          (sexpr-cons (convert (cl:car object)) (convert (cl:cdr object)))
+                       (cl:remhash object active)))
+                    (cl:t (cl:error "Unsupported protocol object")))))
+      (cl:handler-case (Some (convert raw))
+        (cl:error () None)))))

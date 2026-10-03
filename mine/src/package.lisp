@@ -9,7 +9,7 @@
 ;;; in the saved image -- otherwise the runtime subprocess inherits stale
 ;;; packages that conflict with a fresh load of quicklisp/setup.lisp.
 
-(setf *features* (remove :quicklisp *features*))
+(setf *features* (remove ':quicklisp *features*))
 ;; Clear ASDF's loaded-system state so :repl-init can reload from scratch.
 ;; Without this, ASDF considers quicklisp "already loaded" and skips the
 ;; load-op, leaving the QUICKLISP package undefined.
@@ -46,8 +46,7 @@
    #:process-alive-p
    #:process-kill
    #:process-wait
-   #:process-exit-code
-))
+   #:process-exit-code))
 
 (defpackage #:mine/bindings/thread
   (:use #:cl)

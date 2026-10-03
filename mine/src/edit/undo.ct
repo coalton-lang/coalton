@@ -7,6 +7,9 @@
    #:UndoEntry #:UndoEntry
    #:UndoTree
    #:undo-tree-new
+   #:undo-reset!
+   #:undo-mark-saved!
+   #:undo-at-saved?
    #:undo-begin-group!
    #:undo-end-group!
    #:with-undo-group!
@@ -35,13 +38,23 @@
 
   ;;; UndoTree
 
+  (define-struct HistoryEntry
+    "Internal history node: public operation group plus its document revisions."
+    (entry UndoEntry)
+    (before UFix)
+    (after UFix))
+
   (define-struct UndoTree
     "Undo/redo stacks with optional operation grouping."
-    (undo-stack (cell:Cell (List UndoEntry)))
-    (redo-stack (cell:Cell (List UndoEntry)))
+    (undo-stack (cell:Cell (List HistoryEntry)))
+    (redo-stack (cell:Cell (List HistoryEntry)))
     (current-group (cell:Cell (Optional (List EditOp))))
     (group-cursor-start (cell:Cell UFix))
-    (group-depth (cell:Cell UFix)))
+    (group-depth (cell:Cell UFix))
+    (group-revision-start (cell:Cell UFix))
+    (revision (cell:Cell UFix))
+    (next-revision (cell:Cell UFix))
+    (saved-revision (cell:Cell UFix)))
 
   ;;; Constructor
 
@@ -52,7 +65,42 @@
               (cell:new Nil)
               (cell:new None)
               (cell:new 0)
+              (cell:new 0)
+              (cell:new 0)
+              (cell:new 0)
+              (cell:new 1)
               (cell:new 0)))
+
+  (declare undo-reset! (UndoTree -> Void))
+  (define (undo-reset! tree)
+    "Discard history when replacing a document from an external source."
+    (cell:write! (.undo-stack tree) Nil)
+    (cell:write! (.redo-stack tree) Nil)
+    (cell:write! (.current-group tree) None)
+    (cell:write! (.group-cursor-start tree) 0)
+    (cell:write! (.group-depth tree) 0)
+    (cell:write! (.group-revision-start tree) 0)
+    (cell:write! (.revision tree) 0)
+    (cell:write! (.next-revision tree) 1)
+    (cell:write! (.saved-revision tree) 0)
+    (values))
+
+  (declare undo-mark-saved! (UndoTree -> Void))
+  (define (undo-mark-saved! tree)
+    "Remember the exact history revision written to disk."
+    (cell:write! (.saved-revision tree) (cell:read (.revision tree)))
+    (values))
+
+  (declare undo-at-saved? (UndoTree -> Boolean))
+  (define (undo-at-saved? tree)
+    (== (cell:read (.saved-revision tree)) (cell:read (.revision tree))))
+
+  (declare advance-revision! (UndoTree -> Void))
+  (define (advance-revision! tree)
+    (let revision = (cell:read (.next-revision tree)))
+    (cell:write! (.revision tree) revision)
+    (cell:write! (.next-revision tree) (+ revision 1))
+    (values))
 
   ;;; Internal helpers
 
@@ -78,7 +126,8 @@
     (let depth = (cell:read (.group-depth tree)))
     (when (== depth 0)
       (cell:write! (.current-group tree) (Some Nil))
-      (cell:write! (.group-cursor-start tree) cursor-start))
+      (cell:write! (.group-cursor-start tree) cursor-start)
+      (cell:write! (.group-revision-start tree) (cell:read (.revision tree))))
     (cell:write! (.group-depth tree) (+ depth 1))
     (values))
 
@@ -97,7 +146,10 @@
              (let entry = (UndoEntry ops
                                      (cell:read (.group-cursor-start tree))
                                      cursor-end))
-             (cell:push! (.undo-stack tree) entry)
+             (cell:push! (.undo-stack tree)
+                         (HistoryEntry entry
+                                       (cell:read (.group-revision-start tree))
+                                       (cell:read (.revision tree))))
              (values))))
          ((None) (values)))
        (cell:write! (.current-group tree) None)
@@ -112,15 +164,18 @@
   (define (with-undo-group! tree get-cursor action)
     "Run ACTION so all recorded edits become a single undo step."
     (undo-begin-group! tree (get-cursor))
-    (action)
-    (undo-end-group! tree (get-cursor))
-    (values))
+    (lisp (-> Void) (tree get-cursor action)
+      (cl:unwind-protect (coalton:call-coalton-function action)
+        (undo-end-group! tree (coalton:call-coalton-function get-cursor)))
+      (cl:values)))
 
   (declare undo-record! (UndoTree * EditOp * UFix * UFix -> Void))
   (define (undo-record! tree op cbefore cafter)
     "Record a single edit operation. Clears the redo stack.
 If grouping is active, appends to the current group.
 Otherwise, creates a single-op undo entry."
+    (let before = (cell:read (.revision tree)))
+    (advance-revision! tree)
     ;; Clear redo stack on new edits
     (cell:write! (.redo-stack tree) Nil)
     (match (cell:read (.current-group tree))
@@ -131,7 +186,8 @@ Otherwise, creates a single-op undo entry."
       ;; No grouping: push a single-op entry onto the undo stack
       ((None)
        (let entry = (UndoEntry (Cons op Nil) cbefore cafter))
-       (cell:push! (.undo-stack tree) entry)
+       (cell:push! (.undo-stack tree)
+                   (HistoryEntry entry before (cell:read (.revision tree))))
        (values))))
 
   ;;; Undo / Redo
@@ -142,9 +198,12 @@ Otherwise, creates a single-op undo entry."
 The caller is responsible for applying the reversed operations to the buffer."
     (match (cell:pop! (.undo-stack tree))
       ((None) None)
-      ((Some entry)
+      ((Some history)
+       (let entry = (.entry history))
        (let rev = (reverse-entry entry))
-       (cell:push! (.redo-stack tree) rev)
+       (cell:push! (.redo-stack tree)
+                   (HistoryEntry rev (.after history) (.before history)))
+       (cell:write! (.revision tree) (.before history))
        (Some entry))))
 
   (declare undo-redo! (UndoTree -> (Optional UndoEntry)))
@@ -155,9 +214,12 @@ to the buffer (interpreted as the inverse of an original edit, exactly
 like `undo-undo!`)."
     (match (cell:pop! (.redo-stack tree))
       ((None) None)
-      ((Some entry)
+      ((Some history)
+       (let entry = (.entry history))
        (let rev = (reverse-entry entry))
-       (cell:push! (.undo-stack tree) rev)
+       (cell:push! (.undo-stack tree)
+                   (HistoryEntry rev (.after history) (.before history)))
+       (cell:write! (.revision tree) (.before history))
        (Some entry))))
 
 )

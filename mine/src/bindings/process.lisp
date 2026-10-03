@@ -47,8 +47,8 @@ Returns the sb-ext:process object."
   (sb-ext:run-program program args
                       :wait nil
                       :input nil
-                      :output :stream
-                      :error :stream
+                      :output ':stream
+                      :error ':stream
                       :search t))
 
 ;;; Queries

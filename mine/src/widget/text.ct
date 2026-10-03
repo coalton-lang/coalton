@@ -7,13 +7,13 @@
    (#:render #:mine/widget/render)
    (#:cell #:coalton/cell)
    (#:vec #:coalton/vector)
+   (#:cellw #:mine/text/width)
    (#:str #:coalton/string))
   (:export
    #:TextWidget #:TextWidget
-   #:.tw-lines #:.tw-scroll #:.tw-style
-   #:.tw-sel-anchor #:.tw-sel-end
    #:text-widget-new
    #:text-widget-append!
+   #:text-widget-append-chunk!
    #:text-widget-append-system!
    #:text-widget-clear!
    #:text-widget-render
@@ -23,6 +23,8 @@
    #:text-widget-line-count
    #:text-widget-start-selection!
    #:text-widget-extend-selection!
+   #:text-widget-char-for-column
+   #:text-widget-start-selection-at-column! #:text-widget-extend-selection-at-column!
    #:text-widget-clear-selection!
    #:text-widget-has-selection?
    #:text-widget-selected-text))
@@ -41,7 +43,8 @@
     (tw-style       color:Style)
     (tw-sel-anchor  (Cell (Optional (Tuple UFix UFix))))
     (tw-sel-end     (Cell (Optional (Tuple UFix UFix))))
-    (tw-vis-height  (Cell UFix)))
+    (tw-vis-height  (Cell UFix))
+    (tw-stream-open (Cell Boolean)))
 
   (declare text-widget-new (color:Style -> TextWidget))
   (define (text-widget-new style)
@@ -52,7 +55,8 @@
                 style
                 (cell:new None)
                 (cell:new None)
-                (cell:new 20)))
+                (cell:new 20)
+                (cell:new False)))
 
   (declare text-widget-line-count (TextWidget -> UFix))
   (define (text-widget-line-count tw)
@@ -62,6 +66,7 @@
   (declare text-widget-append! (TextWidget * String -> Void))
   (define (text-widget-append! tw line)
     "Append a line to the text widget."
+    (cell:write! (.tw-stream-open tw) False)
     (vec:push! line (cell:read (.tw-lines tw)))
     (vec:push! False (cell:read (.tw-flags tw)))
     (values))
@@ -69,9 +74,41 @@
   (declare text-widget-append-system! (TextWidget * String -> Void))
   (define (text-widget-append-system! tw line)
     "Append a system/info line (rendered in dim italic)."
+    (cell:write! (.tw-stream-open tw) False)
     (vec:push! line (cell:read (.tw-lines tw)))
     (vec:push! True (cell:read (.tw-flags tw)))
     (values))
+
+  (declare append-stream-part! (TextWidget * String * Boolean -> Void))
+  (define (append-stream-part! tw text newline?)
+    (let lines = (cell:read (.tw-lines tw)))
+    (let count = (vec:length lines))
+    (cond
+      ((and (cell:read (.tw-stream-open tw)) (> count 0))
+       (let last = (- count 1))
+       (vec:set! last (<> (vec:index-unsafe last lines) text) lines))
+      ((or newline? (> (str:length text) 0))
+       (vec:push! text lines)
+       (vec:push! False (cell:read (.tw-flags tw)))
+       (values))
+      (True (values)))
+    (when (or newline? (> (str:length text) 0))
+      (cell:write! (.tw-stream-open tw) (not newline?)))
+    (values))
+
+  (declare append-stream-parts! (TextWidget * List String -> Void))
+  (define (append-stream-parts! tw parts)
+    (match parts
+      ((Nil) (values))
+      ((Cons text (Nil)) (append-stream-part! tw text False))
+      ((Cons text rest)
+       (append-stream-part! tw text True)
+       (append-stream-parts! tw rest))))
+
+  (declare text-widget-append-chunk! (TextWidget * String -> Void))
+  (define (text-widget-append-chunk! tw text)
+    "Append streamed text, retaining partial lines across protocol messages."
+    (append-stream-parts! tw (str:split #\Newline text)))
 
   (declare text-widget-clear! (TextWidget -> Void))
   (define (text-widget-clear! tw)
@@ -79,6 +116,8 @@
     (cell:write! (.tw-lines tw) (vec:new))
     (cell:write! (.tw-flags tw) (vec:new))
     (cell:write! (.tw-scroll tw) 0)
+    (cell:write! (.tw-stream-open tw) False)
+    (text-widget-clear-selection! tw)
     (values))
 
   (declare text-widget-scroll-up! (TextWidget * UFix -> Void))
@@ -95,8 +134,8 @@
     (let count  = (text-widget-line-count tw))
     (let new-scroll = (+ cur n))
     (cell:write! (.tw-scroll tw) (if (> count 0)
-                                    (min new-scroll (- count 1))
-                                    0))
+                                     (min new-scroll (- count 1))
+                                     0))
     (values))
 
   (declare text-widget-scroll-to-bottom! (TextWidget -> Void))
@@ -105,10 +144,26 @@
     (let count = (text-widget-line-count tw))
     (let visible = (cell:read (.tw-vis-height tw)))
     (cell:write! (.tw-scroll tw)
-      (if (> count visible) (- count visible) 0))
+                 (if (> count visible) (- count visible) 0))
     (values))
 
   ;;; Selection
+
+  (declare text-widget-char-for-column (TextWidget * UFix * UFix -> UFix))
+  (define (text-widget-char-for-column tw line column)
+    "Convert a rendered column to a character boundary, including zero-width suffixes."
+    (match (vec:index line (cell:read (.tw-lines tw)))
+      ((Some text)
+       (lisp (-> UFix) (text column) (cellw:string-chars-fitting-cl text 0 column)))
+      ((None) 0)))
+
+  (declare text-widget-start-selection-at-column! (TextWidget * UFix * UFix -> Void))
+  (define (text-widget-start-selection-at-column! tw line column)
+    (text-widget-start-selection! tw line (text-widget-char-for-column tw line column)))
+
+  (declare text-widget-extend-selection-at-column! (TextWidget * UFix * UFix -> Void))
+  (define (text-widget-extend-selection-at-column! tw line column)
+    (text-widget-extend-selection! tw line (text-widget-char-for-column tw line column)))
 
   (declare text-widget-start-selection! (TextWidget * UFix * UFix -> Void))
   (define (text-widget-start-selection! tw line col)
@@ -202,8 +257,8 @@
                                 color:AttrItalic)
                               style))
         (render:draw-text-clipped scr rect line
-                                  (+ (wt:.rect-y rect) i)
-                                  (wt:.rect-x rect)
+                                  (+ (.rect-y rect) i)
+                                  (.rect-x rect)
                                   line-style))
       (%text-render-rows lines flags scr rect scroll h style count (+ i 1))))
 
@@ -214,9 +269,9 @@
     "Overlay selection highlight on rendered text."
     (match (Tuple sel-start sel-end)
       ((Tuple (Tuple sl sc) (Tuple el ec))
-       (let rx = (wt:.rect-x rect))
-       (let ry = (wt:.rect-y rect))
-       (let rw = (wt:.rect-width rect))
+       (let rx = (.rect-x rect))
+       (let ry = (.rect-y rect))
+       (let rw = (.rect-width rect))
        (let count = (vec:length lines))
        (lisp (-> Void) (scr lines scroll h sl sc el ec rx ry rw count hl-style)
          (cl:loop :for i :from 0 :below h :do
@@ -228,18 +283,19 @@
                          (len (cl:length line))
                          (col-start (cl:if (cl:= line-idx sl) (cl:min sc len) 0))
                          (col-end (cl:if (cl:= line-idx el) (cl:min ec len) len))
+                         (visual-start (cellw:string-cell-width-cl (cl:subseq line 0 col-start)))
+                         (visual-end (cellw:string-cell-width-cl (cl:subseq line 0 col-end)))
                          ;; For full-line selection (middle lines), extend to fill width
-                         (draw-end (cl:if (cl:and (cl:/= line-idx el) (cl:< len rw))
-                                          rw col-end)))
-                 (cl:when (cl:> draw-end col-start)
+                         (draw-end (cl:if (cl:/= line-idx el) (cl:max rw visual-end) visual-end)))
+                 (cl:when (cl:> draw-end visual-start)
                    ;; Draw the selected text portion with highlight
                    (cl:let ((sub (cl:subseq line col-start (cl:min col-end len))))
                      (cl:when (cl:> (cl:length sub) 0)
-                       (screen:screen-set-string scr (cl:+ ry i) (cl:+ rx col-start)
-                                                 sub hl-style)))
+                       (render:draw-text-clipped scr (wt:Rect rx ry rw h) sub
+                                                 (cl:+ ry i) (cl:+ rx visual-start) hl-style)))
                    ;; Fill trailing space on full-line selections
-                   (cl:when (cl:> draw-end (cl:max col-end len))
-                     (cl:loop :for c :from (cl:+ rx (cl:max col-end len))
+                   (cl:when (cl:> draw-end visual-end)
+                     (cl:loop :for c :from (cl:+ rx visual-end)
                               :below (cl:+ rx (cl:min draw-end rw)) :do
                        (screen:screen-set-cell scr (cl:+ ry i) c #\Space hl-style))))))))
          (cl:values)))))
@@ -249,7 +305,7 @@
     "Render visible lines within RECT, respecting scroll offset."
     (let lines  = (cell:read (.tw-lines tw)))
     (let scroll = (cell:read (.tw-scroll tw)))
-    (let h      = (wt:.rect-height rect))
+    (let h      = (.rect-height rect))
     (let style  = (.tw-style tw))
     ;; Track visible height for scroll-to-bottom
     (cell:write! (.tw-vis-height tw) h)

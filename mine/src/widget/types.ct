@@ -2,7 +2,6 @@
   (:use #:coalton #:coalton-prelude)
   (:export
    #:Rect #:Rect
-   #:.rect-x #:.rect-y #:.rect-width #:.rect-height
    #:EventResult #:Consumed #:Ignored))
 
 (in-package #:mine/widget/types)

@@ -57,7 +57,7 @@ interpret UTF-8 input bytes as MacRoman.")
       (%non-empty-env-p "WSL_INTEROP")
       ;; Fallback for WSL1: kernel release string contains "microsoft".
       (ignore-errors
-        (with-open-file (s "/proc/sys/kernel/osrelease" :direction :input)
+        (with-open-file (s "/proc/sys/kernel/osrelease" :direction ':input)
           (search "microsoft" (read-line s nil "")
                   :test #'char-equal)))))
 

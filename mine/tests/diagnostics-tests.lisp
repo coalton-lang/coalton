@@ -2,10 +2,10 @@
 
 (defun %write-utf8-file (pathname text)
   (with-open-file (stream pathname
-                          :direction :output
-                          :if-exists :supersede
-                          :if-does-not-exist :create
-                          :external-format :utf-8)
+                          :direction ':output
+                          :if-exists ':supersede
+                          :if-does-not-exist ':create
+                          :external-format ':utf-8)
     (write-string text stream)))
 
 (defun %muffle-warning-if-possible (condition)
@@ -57,17 +57,26 @@
 (defun %find-diagnostic (diagnostics predicate)
   (find-if predicate diagnostics))
 
-(defun %collect-server-messages (thunk)
+(defun %collect-server-messages (thunk &optional replies)
   (uiop:with-temporary-file (:pathname pathname :keep t)
     (unwind-protect
          (progn
            (with-open-file (stream pathname
-                                   :direction :output
-                                   :if-exists :supersede
+                                   :direction ':output
+                                   :if-exists ':supersede
                                    :element-type '(unsigned-byte 8))
-             (funcall thunk stream))
+             (let ((reader (symbol-function 'server::read-message)))
+               (unwind-protect
+                    (progn
+                      (setf (symbol-function 'server::read-message)
+                            (lambda (input)
+                              (cond
+                                ((eq input stream) (pop replies))
+                                (t (funcall reader input)))))
+                      (funcall thunk stream))
+                 (setf (symbol-function 'server::read-message) reader))))
            (with-open-file (stream pathname
-                                   :direction :input
+                                   :direction ':input
                                    :element-type '(unsigned-byte 8))
              (loop :for message = (server::read-message stream)
                    :while message
@@ -76,7 +85,7 @@
 
 (defun %read-server-messages-from-file (pathname)
   (with-open-file (stream pathname
-                          :direction :input
+                          :direction ':input
                           :element-type '(unsigned-byte 8))
     (loop :for message = (server::read-message stream)
           :while message
@@ -394,13 +403,13 @@
              (progn
                (setf quick-stream
                      (open quick-path
-                           :direction :output
-                           :if-exists :supersede
+                           :direction ':output
+                           :if-exists ':supersede
                            :element-type '(unsigned-byte 8)))
                (setf interrupt-stream
                      (open interrupt-path
-                           :direction :output
-                           :if-exists :supersede
+                           :direction ':output
+                           :if-exists ':supersede
                            :element-type '(unsigned-byte 8)))
                (setf worker
                      (sb-thread:make-thread
@@ -420,11 +429,12 @@
                (force-output interrupt-stream)
                (let ((done nil))
                  (loop :repeat 50
-                       :do (if (sb-thread:thread-alive-p worker)
-                               (sleep 0.05)
-                               (progn
-                                 (setf done t)
-                                 (return))))
+                       :do (cond
+                             ((sb-thread:thread-alive-p worker)
+                              (sleep 0.05))
+                             (t
+                              (setf done t)
+                              (return))))
                  (%check done
                          "Expected request-scoped interrupt to stop Quick Result evaluation"))
                (close quick-stream)
@@ -530,63 +540,66 @@
             "Expected one-cell Quick Result clipping to show only the ellipsis")))
 
 (defun check-quick-result-popup-layout-prioritizes-results ()
-  (let* ((layout (mine/app/mine::%quick-result-layout
-                  (list :output (format nil "one~%two~%three")
-                        :values '("VALUE"))
-                  4)))
-    (%check (string= (getf layout ':title) "Output")
+  (let* ((layout (mine/app/quick-result:quick-result-layout
+                  (mine/app/quick-result:quick-result-succeed
+                   mine/app/quick-result:QuickResultHidden (format nil "one~%two~%three") '("VALUE") 0)
+                  4 "")))
+    (%check (string= (mine/app/quick-result:layout-title layout) "Output")
             "Expected Output frame title, got ~S" layout)
-    (%check (equal (getf layout ':output-lines)
+    (%check (equal (mine/app/quick-result:layout-output-lines layout)
                    (list "one" (format nil "~C 2 lines omitted" (code-char 8230))))
             "Expected output to truncate first, got ~S" layout)
-    (%check (getf layout ':output-omitted)
+    (%check (mine/app/quick-result:layout-output-omitted? layout)
             "Expected output omitted marker, got ~S" layout)
-    (%check (getf layout ':separator)
+    (%check (mine/app/quick-result:layout-separator? layout)
             "Expected Result separator, got ~S" layout)
-    (%check (equal (getf layout ':result-lines) '("VALUE"))
+    (%check (equal (mine/app/quick-result:layout-result-lines layout) '("VALUE"))
             "Expected result line to remain visible, got ~S" layout)
-    (%check (not (getf layout ':result-omitted))
+    (%check (not (mine/app/quick-result:layout-result-omitted? layout))
             "Expected no result omitted marker, got ~S" layout))
-  (let ((layout (mine/app/mine::%quick-result-layout
-                 '(:output "" :values ("VALUE"))
-                 3)))
-    (%check (string= (getf layout ':title) "Result")
+  (let ((layout (mine/app/quick-result:quick-result-layout
+                 (mine/app/quick-result:quick-result-succeed
+                  mine/app/quick-result:QuickResultHidden "" '("VALUE") 0)
+                 3 "")))
+    (%check (string= (mine/app/quick-result:layout-title layout) "Result")
             "Expected Result frame title without output, got ~S" layout)
-    (%check (not (getf layout ':separator))
+    (%check (not (mine/app/quick-result:layout-separator? layout))
             "Expected no separator without output, got ~S" layout)
-    (%check (equal (getf layout ':result-lines) '("VALUE"))
+    (%check (equal (mine/app/quick-result:layout-result-lines layout) '("VALUE"))
             "Expected value result line, got ~S" layout))
-  (let ((layout (mine/app/mine::%quick-result-layout
-                 '(:output "" :values nil)
-                 3)))
-    (%check (getf layout ':no-values)
+  (let ((layout (mine/app/quick-result:quick-result-layout
+                 (mine/app/quick-result:quick-result-succeed
+                  mine/app/quick-result:QuickResultHidden "" nil 0)
+                 3 "")))
+    (%check (mine/app/quick-result:layout-no-values? layout)
             "Expected no-values marker, got ~S" layout)
-    (%check (equal (getf layout ':result-lines) '("No values"))
+    (%check (equal (mine/app/quick-result:layout-result-lines layout) '("No values"))
             "Expected No values display line, got ~S" layout))
-  (let ((layout (mine/app/mine::%quick-result-layout
-                 '(:output "" :values ("first" "second" "third"))
-                 2)))
-    (%check (equal (getf layout ':result-lines)
+  (let ((layout (mine/app/quick-result:quick-result-layout
+                 (mine/app/quick-result:quick-result-succeed
+                  mine/app/quick-result:QuickResultHidden "" '("first" "second" "third") 0)
+                 2 "")))
+    (%check (equal (mine/app/quick-result:layout-result-lines layout)
                    (list "first" (format nil "~C 2 lines omitted" (code-char 8230))))
             "Expected result overflow to use an omitted-line marker, got ~S" layout)
-    (%check (getf layout ':result-omitted)
+    (%check (mine/app/quick-result:layout-result-omitted? layout)
             "Expected result omitted marker, got ~S" layout))
-  (let ((layout (mine/app/mine::%quick-result-layout
-                 '(:title "Quick Result" :pending :busy)
+  (let ((layout (mine/app/quick-result:quick-result-layout
+                 (mine/app/quick-result:QuickResultPending coalton:None)
                  3
                  "*")))
-    (%check (string= (getf layout ':title) "Quick Result")
+    (%check (string= (mine/app/quick-result:layout-title layout) "Quick Result")
             "Expected Quick Result pending title, got ~S" layout)
-    (%check (getf layout ':pending)
+    (%check (mine/app/quick-result:layout-pending? layout)
             "Expected pending Quick Result layout, got ~S" layout)
-    (%check (equal (getf layout ':result-lines)
+    (%check (equal (mine/app/quick-result:layout-result-lines layout)
                    '("Busy *" "Esc/Ctrl+g cancels"))
             "Expected pending Quick Result busy rows, got ~S" layout))
-  (let ((layout (mine/app/mine::%quick-result-layout
-                 '(:title "Quick Result" :pending :interrupting)
+  (let ((layout (mine/app/quick-result:quick-result-layout
+                 (mine/app/quick-result:QuickResultInterrupting coalton:None)
                  3
                  "*")))
-    (%check (equal (getf layout ':result-lines)
+    (%check (equal (mine/app/quick-result:layout-result-lines layout)
                    '("Interrupting *" "Waiting for runtime"))
             "Expected pending Quick Result interrupt rows, got ~S" layout)))
 
@@ -681,7 +694,8 @@
                     "main"))
            (let* ((messages (%collect-server-messages
                              (lambda (stream)
-                               (server::handle-beam-system 11 system-name (namestring asd-path) stream))))
+                               (server::handle-beam-system 11 system-name (namestring asd-path) stream))
+                             '((:debug-abort 11))))
                   (return-message (find-if (lambda (message)
                                              (and (consp message)
                                                   (eq (first message) ':return)))
@@ -706,10 +720,12 @@
              (%check (< (getf diagnostic ':start) (getf diagnostic ':end))
                      "Expected a non-empty Coalton diagnostic span, got ~S"
                      diagnostic)
-             (%check (string= (getf diagnostic ':summary)
-                              (second (third return-message)))
-                     "Expected return text to mirror the diagnostic summary: ~S / ~S"
-                     diagnostic
-                     return-message)))
+             (let ((debugger-position (position ':debug messages :key #'first)))
+               (%check debugger-position "Expected an interactive debugger: ~S" messages)
+               (%check (< (position diagnostic-message messages :test #'equal)
+                          debugger-position)
+                       "Expected source diagnostics before entering the debugger: ~S" messages))
+             (%check (equal '(:return 11 (:error "Aborted.")) return-message)
+                     "Expected the user's debugger abort to finish the request: ~S" return-message)))
       (ignore-errors (asdf:clear-system system-name))
       (ignore-errors (uiop:delete-directory-tree dir :validate t)))))

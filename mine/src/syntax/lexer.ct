@@ -2,6 +2,7 @@
   (:use #:coalton #:coalton-prelude)
   (:local-nicknames
    (#:tok #:mine/syntax/token)
+   (#:source #:mine/syntax/context)
    (#:cell #:coalton/cell)
    (#:str #:coalton/string)
    (#:char #:coalton/char)
@@ -9,7 +10,7 @@
   (:export
    #:LexerState
    #:lexer-state-new
-   #:lex-line))
+   #:lex-line #:lex-source #:tokens-for-line))
 
 (in-package #:mine/syntax/lexer)
 
@@ -141,8 +142,8 @@
   (define (emit! result line-offset kind start end)
     "Push a token onto the result list."
     (cell:write! result
-      (Cons (tok:Token kind (+ line-offset start) (+ line-offset end))
-            (cell:read result)))
+                 (Cons (tok:Token kind (+ line-offset start) (+ line-offset end))
+                                  (cell:read result)))
     (values))
 
   (declare emit-single! ((Cell UFix) * (Cell (List tok:Token)) * UFix * tok:TokenKind * UFix -> Void))
@@ -223,7 +224,7 @@
         ;; #| opens nested comment
         ((and (== c1 (Some #\#)) (== c2 (Some #\|)))
          (cell:write! (.in-block-comment state)
-           (+ (cell:read (.in-block-comment state)) 1))
+                      (+ (cell:read (.in-block-comment state)) 1))
          (advance-by! i 2)
          (scan-block-comment! i text len state))
         ;; |# closes comment level
@@ -353,13 +354,15 @@
     (scan-while! i text len sym-char?)
     (let kw-text = (str:substring text (+ pos 1) (cell:read i)))
     (let kw-len = (str:length kw-text))
-    (if (and (== (.lex-mode state) 0)
-             (== kw-len 1)
-             (match (str:ref kw-text 0)
-               ((Some c) (char:ascii-lowercase? c))
-               ((None) False)))
-        (emit! result line-offset tok:TokTypeVariable pos (cell:read i))
-        (emit! result line-offset tok:TokKeyword pos (cell:read i))))
+    (cond
+      ((and (== (.lex-mode state) 0)
+            (== kw-len 1)
+            (match (str:ref kw-text 0)
+              ((Some c) (char:ascii-lowercase? c))
+              ((None) False)))
+       (emit! result line-offset tok:TokTypeVariable pos (cell:read i)))
+      (True
+       (emit! result line-offset tok:TokKeyword pos (cell:read i)))))
 
   (declare handle-number! ((Cell UFix) * String * UFix * (Cell (List tok:Token)) * UFix * UFix * Char -> Void))
   (define (handle-number! i text len result line-offset pos ch)
@@ -500,4 +503,78 @@ with absolute buffer positions."
     (let result = (cell:new (the (List tok:Token) Nil)))
     (let i = (cell:new (the UFix 0)))
     (lex-line-impl! state line-text line-offset line-len result i)
-    (reverse (cell:read result))))
+    (reverse (cell:read result)))
+
+  (declare source-token-colors (source:SourceContext * source:SourceToken * LexerState -> List tok:Token))
+  (define (source-token-colors context token state)
+    "Apply color categories to an already-scanned source token."
+    (let start = (.token-start token))
+    (let end = (.token-end token))
+    (let single = (fn (kind) [ (tok:Token kind start end) ]))
+    (match (.token-kind token)
+      ((source:StringToken) (single tok:TokString))
+      ((source:CharacterToken) (single tok:TokChar))
+      ((source:CommentToken (source:SourceLineComment)) (single tok:TokComment))
+      ((source:CommentToken _) (single tok:TokBlockComment))
+      ((source:SymbolToken (True)) (single tok:TokSymbol))
+      ((source:OpenToken (source:BracketDelimiter)) (single tok:TokOpenBracket))
+      ((source:OpenToken (source:VectorDelimiter))
+       [ (tok:Token tok:TokSharpSign start (- end 1))
+         (tok:Token tok:TokOpenParen (- end 1) end) ])
+      ((source:OpenToken _) (single tok:TokOpenParen))
+      ((source:CloseToken (source:BracketDelimiter)) (single tok:TokCloseBracket))
+      ((source:CloseToken _) (single tok:TokCloseParen))
+      (_
+       ;; Atom and reader-prefix color conventions remain independent from
+       ;; lexical boundaries: this slice cannot contain an active literal.
+       (lex-line state (source:token-text context token) start))))
+
+  (declare add-color-tokens (List tok:Token * List tok:Token -> List tok:Token))
+  (define (add-color-tokens tokens reversed)
+    (match tokens
+      ((Nil) reversed)
+      ((Cons token rest)
+       (let result =
+         (match reversed
+           ((Cons previous more)
+            (if (and (== (.token-kind token) tok:TokSymbol)
+                     (== (.token-kind previous) tok:TokSymbol)
+                     (== (.token-end previous) (.token-start token)))
+                (Cons (tok:Token tok:TokSymbol (.token-start previous) (.token-end token)) more)
+                (Cons token reversed)))
+           ((Nil) [token])))
+       (add-color-tokens rest result))))
+
+  (declare lex-source (source:SourceContext * UFix -> List tok:Token))
+  (define (lex-source context mode)
+    "Color a source snapshot once, retaining absolute positions and literal spans."
+    (let state = (lexer-state-new mode))
+    (let len = (str:length (.source-text context)))
+    (rec scan ((tokens (.source-tokens context)) (position 0) (reversed Nil))
+      (match tokens
+        ((Nil)
+         (list:reverse
+           (if (< position len) (Cons (tok:Token tok:TokWhitespace position len) reversed) reversed)))
+        ((Cons token rest)
+         (let start = (.token-start token))
+         (let with-space =
+           (if (< position start) (Cons (tok:Token tok:TokWhitespace position start) reversed) reversed))
+         (scan rest (.token-end token)
+               (add-color-tokens (source-token-colors context token state) with-space))))))
+
+  (declare tokens-for-line (List tok:Token * UFix * UFix -> List tok:Token))
+  (define (tokens-for-line tokens start end)
+    "Clip absolute TOKENS to [START, END), returning offsets relative to START."
+    (rec scan ((remaining tokens) (reversed Nil))
+      (match remaining
+        ((Nil) (list:reverse reversed))
+        ((Cons token rest)
+         (cond
+           ((>= (.token-start token) end) (list:reverse reversed))
+           ((<= (.token-end token) start) (scan rest reversed))
+           (True
+            (scan rest
+                  (Cons (tok:Token (.token-kind token)
+                                   (- (max start (.token-start token)) start)
+                                   (- (min end (.token-end token)) start))
+                        reversed)))))))))

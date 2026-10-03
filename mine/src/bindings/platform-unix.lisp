@@ -115,7 +115,7 @@ timeout or error."
                             (/ timeout-ms 1000.0d0)
                             0.0d0))))
     (cond
-      ((sb-sys:wait-until-fd-usable 0 :input timeout-secs)
+      ((sb-sys:wait-until-fd-usable 0 ':input timeout-secs)
        ;; Data available — read as many bytes as we can
        (let* ((sap (sb-alien:alien-sap (ensure-read-buf)))
               (n (sb-unix:unix-read 0 sap +read-buf-size+)))

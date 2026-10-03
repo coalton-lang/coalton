@@ -12,5 +12,6 @@
     "True if PATH exists and is a directory."
     (lisp (-> Boolean) (path)
       (cl:let ((p (cl:probe-file path)))
-        (cl:and p (cl:not (cl:pathname-name p))
-                  (cl:not (cl:pathname-type p)))))))
+        (cl:and p
+                (cl:not (cl:pathname-name p))
+                (cl:not (cl:pathname-type p)))))))

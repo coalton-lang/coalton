@@ -3,7 +3,7 @@
 ;;; Runtime server (no terminal dependency)
 (asdf:defsystem "mine/runtime"
   :description "Runtime server for the mine IDE."
-  :depends-on ("coalton" "coalton/xmath")
+  :depends-on ("coalton" "coalton/xmath" "sb-bsd-sockets" "sb-introspect")
   :defsystem-depends-on ("coalton-asdf")
   :pathname "src/"
   :serial t
@@ -99,6 +99,7 @@
     :pathname "syntax"
     :serial t
     :components ((:ct-file "token")
+                 (:ct-file "context")
                  (:ct-file "lexer")
                  (:ct-file "highlight")
                  (:ct-file "indent")))
@@ -157,6 +158,8 @@
                  (:file "find-clipboard")
                  (:ct-file "clipboard")
                  (:ct-file "completion")
+                 (:ct-file "requests")
+                 (:ct-file "quick-result")
                  (:ct-file "state")
                  (:ct-file "layout")
                  (:file "navigation")
@@ -166,6 +169,7 @@
                  (:ct-file "symbols")
                  (:ct-file "keyboard-debugger")
                  (:ct-file "diagnostic-scope")
+                 (:ct-file "diagnostic-store")
                  (:file "diagnostics")
                  (:file "check-update")
                  (:ct-file "mine")

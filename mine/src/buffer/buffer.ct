@@ -12,6 +12,9 @@
    #:Mark #:Mark
    #:Buffer
    #:buffer-new #:buffer-new-file #:buffer-from-file
+   #:buffer-read-file #:buffer-resolve-path #:buffer-file-exists?
+   #:buffer-refresh-from-file!
+   #:buffer-replace-range! #:buffer-sync-dirty!
    #:buffer-id #:buffer-name #:buffer-path #:buffer-document-key
    #:buffer-gap #:buffer-undo #:buffer-dirty? #:buffer-mode
    #:buffer-mark-dirty! #:buffer-mark-clean!))
@@ -26,10 +29,12 @@
   (cl:when (cl:and (cl:stringp fpath)
                    (cl:plusp (cl:length fpath)))
     (cl:handler-case
-        (cl:let ((truename (cl:probe-file fpath)))
-          (cl:if truename
-                 (cl:namestring truename)
-                 fpath))
+        (cl:let* ((absolute (cl:merge-pathnames (cl:pathname fpath)))
+                  (truename (cl:probe-file absolute))
+                  (key (cl:namestring (cl:or truename absolute))))
+          ;; Windows file identities are case-insensitive.
+          #+win32 (cl:string-downcase key)
+          #-win32 key)
       (cl:error () fpath))))
 
 (coalton-toplevel
@@ -92,13 +97,17 @@
   (declare buffer-new-file (BufferId * String -> Buffer))
   (define (buffer-new-file bid fpath)
     "Create an empty buffer for a new file at FPATH (not yet on disk)."
+    (make-file-buffer bid fpath ""))
+
+  (declare make-file-buffer (BufferId * String * String -> Buffer))
+  (define (make-file-buffer bid fpath contents)
     (let bname = (lisp (-> String) (fpath)
                    (cl:file-namestring fpath)))
     (let m = (detect-mode fpath))
     (Buffer bid
             (cell:new bname)
             (cell:new (Some fpath))
-            (gap:gap-new)
+            (gap:gap-from-string contents)
             (undo:undo-tree-new)
             (cell:new False)
             (cell:new False)
@@ -118,34 +127,71 @@
        ModeLisp)
       (True ModePlainText)))
 
-  (declare buffer-from-file (BufferId * String -> Buffer))
+  (declare buffer-resolve-path (String -> Result String String))
+  (define (buffer-resolve-path fpath)
+    "Resolve a file path before registering a buffer; preserve failures as errors."
+    (lisp (-> (Result String String)) (fpath)
+      (cl:handler-case
+          (cl:cond
+            ((cl:zerop (cl:length fpath))
+             (Err "No file path"))
+            (cl:t
+             (cl:let* ((absolute (cl:merge-pathnames (cl:pathname fpath)))
+                       (existing (cl:probe-file absolute)))
+               (cl:if (cl:or (cl:wild-pathname-p absolute)
+                             (uiop:directory-pathname-p (cl:or existing absolute)))
+                      (Err (cl:format cl:nil "Not a file: ~A" fpath))
+                      (Ok (cl:namestring (cl:or existing absolute)))))))
+        (cl:error (condition)
+          (Err (cl:format cl:nil "~A" condition))))))
+
+  (declare buffer-file-exists? (String -> Result String Boolean))
+  (define (buffer-file-exists? fpath)
+    (lisp (-> (Result String Boolean)) (fpath)
+      (cl:handler-case
+          (Ok (cl:if (cl:probe-file fpath) True False))
+        (cl:error (condition)
+          (Err (cl:format cl:nil "~A" condition))))))
+
+  (declare buffer-read-file (String -> Result String String))
+  (define (buffer-read-file fpath)
+    "Read source text without confusing an I/O or decoding error with an empty file."
+    (lisp (-> (Result String String)) (fpath)
+      (cl:handler-case
+          (cl:with-open-file (s fpath :direction ':input
+                                      :element-type 'cl:character
+                                      :external-format (coalton-impl/source:source-external-format))
+            (Ok (cl:with-output-to-string (out)
+                  (cl:loop :for ch = (cl:read-char s cl:nil cl:nil)
+                           :while ch :do (cl:write-char ch out)))))
+        (cl:error (condition)
+          (Err (cl:format cl:nil "~A" condition))))))
+
+  (declare buffer-from-file (BufferId * String -> Result String Buffer))
   (define (buffer-from-file bid fpath)
-    "Create a buffer by reading a file from FPATH."
-    (let contents = (lisp (-> String) (fpath)
-                      (cl:handler-case
-                          (cl:with-open-file (s fpath
-                                                :direction :input
-                                                :element-type 'cl:character
-                                                :external-format (coalton-impl/source:source-external-format))
-                            (cl:let ((out (cl:make-string-output-stream)))
-                              (cl:loop :for ch = (cl:read-char s cl:nil cl:nil)
-                                       :while ch
-                                       :do (cl:write-char ch out))
-                              (cl:get-output-stream-string out)))
-                        (cl:error () ""))))
-    (let bname = (lisp (-> String) (fpath)
-                   (cl:file-namestring fpath)))
-    (let gb = (gap:gap-from-string contents))
-    (let m = (detect-mode fpath))
-    (Buffer bid
-            (cell:new bname)
-            (cell:new (Some fpath))
-            gb
-            (undo:undo-tree-new)
-            (cell:new False)
-            (cell:new False)
-            (cell:new m)
-            (cell:new Nil)))
+    "Create a buffer only after the entire file has been read successfully."
+    (match (buffer-resolve-path fpath)
+      ((Err message) (Err message))
+      ((Ok path)
+       (match (buffer-read-file path)
+         ((Err message) (Err message))
+         ((Ok contents) (Ok (make-file-buffer bid path contents)))))))
+
+  (declare buffer-refresh-from-file! (Buffer -> Result String Unit))
+  (define (buffer-refresh-from-file! buffer)
+    "Reload the file transactionally. A failed read leaves text and history intact."
+    (match (buffer-path buffer)
+      ((None) (Err "Buffer has no file path"))
+      ((Some path)
+       (match (buffer-read-file path)
+         ((Err message) (Err message))
+         ((Ok text)
+          (gap:gap-reset! (buffer-gap buffer) text)
+          (undo:undo-reset! (buffer-undo buffer))
+          ;; Refresh changes the document even though its new contents are clean.
+          (buffer-mark-dirty! buffer)
+          (buffer-mark-clean! buffer)
+          (Ok Unit))))))
 
   ;;; Accessors
 
@@ -191,6 +237,28 @@
 
   ;;; Mutators
 
+  (declare buffer-replace-range! (Buffer * undo:UndoTree * UFix * UFix * String * UFix * UFix -> Boolean))
+  (define (buffer-replace-range! buffer tree start end text cursor-before cursor-after)
+    "Replace an exact character range as one undo step. Identical text is a no-op.
+Callers performing editor gestures normalize CRLF boundaries before calling."
+    (let gb = (buffer-gap buffer))
+    (let first = (min (min start end) (gap:gap-length gb)))
+    (let last = (min (max start end) (gap:gap-length gb)))
+    (let deleted = (gap:gap-substring gb first last))
+    (cond
+      ((== deleted text) False)
+      (True
+       (undo:undo-begin-group! tree cursor-before)
+       (when (> last first)
+         (gap:gap-delete-range! gb first last)
+         (undo:undo-record! tree (undo:OpDelete first deleted) cursor-before cursor-after))
+       (when (> (str:length text) 0)
+         (gap:gap-insert-string! gb first text)
+         (undo:undo-record! tree (undo:OpInsert first text) cursor-before cursor-after))
+       (undo:undo-end-group! tree (gap:gap-editor-unit-end-pos gb cursor-after))
+       (buffer-mark-dirty! buffer)
+       True)))
+
   (declare buffer-mark-dirty! (Buffer -> Void))
   (define (buffer-mark-dirty! buf)
     (cell:write! (.dirty buf) True)
@@ -203,7 +271,15 @@
 
   (declare buffer-mark-clean! (Buffer -> Void))
   (define (buffer-mark-clean! buf)
+    (undo:undo-mark-saved! (buffer-undo buf))
     (cell:write! (.dirty buf) False)
+    (values))
+
+  (declare buffer-sync-dirty! (Buffer -> Void))
+  (define (buffer-sync-dirty! buf)
+    "Notify document observers after undo/redo and restore saved-state cleanliness."
+    (buffer-mark-dirty! buf)
+    (cell:write! (.dirty buf) (not (undo:undo-at-saved? (buffer-undo buf))))
     (values))
 
 )

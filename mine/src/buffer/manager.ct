@@ -6,8 +6,7 @@
    (#:cell #:coalton/cell)
    (#:hm #:coalton/hashmap)
    (#:iter #:coalton/iterator)
-   (#:file #:coalton/file)
-   (#:fs #:mine/utils/file-system))
+   (#:str #:coalton/string))
   (:export
    #:BufferManager
    #:bufmgr-new
@@ -16,6 +15,7 @@
    #:bufmgr-close!
    #:bufmgr-force-close!
    #:bufmgr-close-under-path!
+   #:bufmgr-buffers-under-path
    #:bufmgr-find-by-path
    #:bufmgr-find-by-document-key
    #:bufmgr-current
@@ -42,34 +42,31 @@
                    (cell:new 0)
                    (cell:new None)))
 
-  ;;; Internal: allocate an id
-
-  (declare alloc-id (BufferManager -> buf:BufferId))
-  (define (alloc-id mgr)
-    (let n = (cell:read (.next-id mgr)))
-    (cell:write! (.next-id mgr) (+ n 1))
-    (buf:BufferId n))
-
   ;;; Creating buffers
 
   (declare bufmgr-open-file! (BufferManager * String -> Result String buf:Buffer))
   (define (bufmgr-open-file! mgr fpath)
     "Open a file, create a buffer, and register it.
 If the file does not exist, creates an empty buffer with that path (not written to disk until saved)."
-    (cond
-      ((fs:directory? fpath)
-       (Err (<> "Not a file: " fpath)))
-      (True
-       (let file-exists = (lisp (-> Boolean) (fpath)
-                            (cl:if (cl:probe-file fpath) True False)))
-       (let bid = (alloc-id mgr))
-       (let b = (if file-exists
-                    (buf:buffer-from-file bid fpath)
-                    (buf:buffer-new-file bid fpath)))
-       (match bid
-         ((buf:BufferId n)
-          (cell:update! (fn (buffers) (hm:insert buffers n b)) (.buffers mgr))))
-       (Ok b))))
+    (match (buf:buffer-resolve-path fpath)
+      ((Err message) (Err message))
+      ((Ok path)
+       (match (bufmgr-find-by-path mgr path)
+         ((Some buffer) (Ok buffer))
+         ((None)
+          (match (buf:buffer-file-exists? path)
+            ((Err message) (Err message))
+            ((Ok exists?)
+             (let n = (cell:read (.next-id mgr)))
+             (let bid = (buf:BufferId n))
+             (match (cond
+                      (exists? (buf:buffer-from-file bid path))
+                      (True (Ok (buf:buffer-new-file bid path))))
+               ((Err message) (Err message))
+               ((Ok buffer)
+                (cell:update! (fn (buffers) (hm:insert buffers n buffer)) (.buffers mgr))
+                (cell:write! (.next-id mgr) (+ n 1))
+                (Ok buffer))))))))))
 
   ;;; Save
 
@@ -87,12 +84,12 @@ If the file does not exist, creates an empty buffer with that path (not written 
             (lisp (-> (Result String Unit)) (fpath contents)
               (cl:handler-case
                   (cl:progn
-                   (cl:with-open-file (s fpath :direction :output
-                                              :if-exists :supersede
-                                              :if-does-not-exist :create
-                                              :external-format (coalton-impl/source:source-external-format))
-                     (cl:write-string contents s))
-                   (Ok Unit))
+                    (cl:with-open-file (s fpath :direction ':output
+                                                :if-exists ':supersede
+                                                :if-does-not-exist ':create
+                                                :external-format (coalton-impl/source:source-external-format))
+                      (cl:write-string contents s))
+                    (Ok Unit))
                 (cl:error (c)
                   (Err (cl:format cl:nil "~A" c))))))
           (match result
@@ -128,33 +125,39 @@ Returns True if closed successfully."
          ((None) (values))))))
 
   (declare bufmgr-close-under-path! (BufferManager * String -> Void))
-  (define (bufmgr-close-under-path! mgr dir-prefix)
-    "Close all buffers whose file path starts with DIR-PREFIX."
-    (let tbl = (cell:read (.buffers mgr)))
-    (let limit = (cell:read (.next-id mgr)))
-    (close-under-path tbl mgr dir-prefix 0 limit)
+  (define (bufmgr-close-under-path! mgr directory)
+    "Close clean buffers within DIRECTORY, preserving every unsaved document."
+    (rec close ((buffers (bufmgr-buffers-under-path mgr directory)))
+      (match buffers
+        ((Nil) (values))
+        ((Cons buffer rest)
+         (bufmgr-close! mgr (buf:buffer-id buffer))
+         (close rest))))
     (values))
 
-  (declare close-under-path (hm:HashMap UFix buf:Buffer * BufferManager * String * UFix * UFix -> Void))
-  (define (close-under-path tbl mgr prefix i limit)
-    (when (< i limit)
-      (match (hm:lookup tbl i)
-        ((Some b)
-         (when (path-starts-with? b prefix)
-           (bufmgr-force-close! mgr (buf:BufferId i))))
-        ((None) (values)))
-      (close-under-path tbl mgr prefix (+ i 1) limit)))
-
-  (declare path-starts-with? (buf:Buffer * String -> Boolean))
-  (define (path-starts-with? b prefix)
-    (match (buf:buffer-path b)
-      ((None) False)
-      ((Some p)
-       (lisp (-> Boolean) (p prefix)
-         (cl:let ((plen (cl:length prefix)))
-           (cl:if (cl:and (cl:<= plen (cl:length p))
-                          (cl:string= p prefix :end1 plen))
-                  True False))))))
+  (declare bufmgr-buffers-under-path (BufferManager * String -> List buf:Buffer))
+  (define (bufmgr-buffers-under-path mgr directory)
+    "Snapshot documents within DIRECTORY using canonical identities and a directory boundary."
+    (let prefix =
+      (lisp (-> (Optional String)) (directory)
+        (cl:handler-case
+            (cl:cond
+              ((cl:zerop (cl:length directory)) None)
+              (cl:t
+               (Some (mine/buffer/buffer::%normalize-file-document-key
+                      (cl:namestring (uiop:ensure-directory-pathname directory))))))
+          (cl:error () None))))
+    (match prefix
+      ((None) Nil)
+      ((Some key)
+       (rec collect ((entries (hm:entries (cell:read (.buffers mgr)))) (found Nil))
+         (match (iter:next! entries)
+           ((None) found)
+           ((Some (Tuple _ buffer))
+            (let document = (buf:buffer-document-key buffer))
+            (let inside? = (and (<= (str:length key) (str:length document))
+                                (== key (str:substring document 0 (str:length key)))))
+            (collect entries (if inside? (Cons buffer found) found))))))))
 
   ;;; Lookup
 
@@ -174,17 +177,10 @@ Returns True if closed successfully."
 
   (declare bufmgr-find-by-path (BufferManager * String -> Optional buf:Buffer))
   (define (bufmgr-find-by-path mgr fpath)
-    "Find a buffer by its file path."
-    (find-by-path-in (hm:entries (cell:read (.buffers mgr))) fpath))
-
-  (declare find-by-path-in (iter:Iterator (Tuple UFix buf:Buffer) * String -> Optional buf:Buffer))
-  (define (find-by-path-in entries fpath)
-    (match (iter:next! entries)
-      ((Some (Tuple _ buf))
-       (match (buf:buffer-path buf)
-         ((Some p) (if (== p fpath) (Some buf) (find-by-path-in entries fpath)))
-         ((None) (find-by-path-in entries fpath))))
-      ((None) None)))
+    "Find an open buffer by canonical document identity."
+    (let key = (lisp (-> String) (fpath)
+                 (cl:or (mine/buffer/buffer::%normalize-file-document-key fpath) "")))
+    (bufmgr-find-by-document-key mgr key))
 
   (declare bufmgr-find-by-document-key (BufferManager * String -> Optional buf:Buffer))
   (define (bufmgr-find-by-document-key mgr document-key)
@@ -221,28 +217,9 @@ Returns True if closed successfully."
     "Return True if any open buffer is dirty."
     (any-dirty-in (hm:entries (cell:read (.buffers mgr)))))
 
-  (declare check-buf-dirty (buf:Buffer * String -> Boolean))
-  (define (check-buf-dirty b fpath)
-    "Return True if buffer B has path FPATH and is dirty."
-    (match (buf:buffer-path b)
-      ((Some p) (and (== p fpath) (buf:buffer-dirty? b)))
-      ((None) False)))
-
-  (declare scan-ids (hm:HashMap UFix buf:Buffer * String * UFix * UFix -> Boolean))
-  (define (scan-ids tbl fpath i limit)
-    "Probe buffer ids 0..limit looking for a dirty buffer matching fpath."
-    (if (>= i limit)
-        False
-        (match (hm:lookup tbl i)
-          ((Some b)
-           (if (check-buf-dirty b fpath)
-               True
-               (scan-ids tbl fpath (+ i 1) limit)))
-          ((None) (scan-ids tbl fpath (+ i 1) limit)))))
-
   (declare bufmgr-path-dirty? (BufferManager * String -> Boolean))
   (define (bufmgr-path-dirty? mgr fpath)
     "Return True if any open buffer with path FPATH is dirty."
-    (let tbl = (cell:read (.buffers mgr)))
-    (let limit = (cell:read (.next-id mgr)))
-    (scan-ids tbl fpath 0 limit)))
+    (match (bufmgr-find-by-path mgr fpath)
+      ((Some buffer) (buf:buffer-dirty? buffer))
+      ((None) False))))

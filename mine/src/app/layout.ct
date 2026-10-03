@@ -2,14 +2,102 @@
   (:use #:coalton #:coalton-prelude #:mine/app/state)
   (:local-nicknames
    (#:cell #:coalton/cell)
-   (#:focus #:mine/widget/focus))
+   (#:focus #:mine/widget/focus)
+   (#:wt #:mine/widget/types)
+   (#:repl #:mine/pane/repl)
+   (#:editor #:mine/pane/editor)
+   (#:mgr #:mine/buffer/manager)
+   (#:buf #:mine/buffer/buffer))
   (:export
    #:layout-repl-full?
+   #:CenterGeometry
+   #:center-geometry #:center-screen-geometry
+   #:rect-contains? #:optional-rect-contains?
+   #:completion-anchor
    #:show-editor!))
 
 (in-package #:mine/app/layout)
 
 (coalton-toplevel
+
+  (define-struct CenterGeometry
+    "Nonoverlapping center-pane rectangles; absent panes have no hit target."
+    (cg-editor (Optional wt:Rect))
+    (cg-editor-status (Optional wt:Rect))
+    (cg-repl (Optional wt:Rect))
+    (cg-repl-status (Optional wt:Rect))
+    (cg-repl-strip (Optional wt:Rect)))
+
+  (declare rect-contains? (wt:Rect * UFix * UFix -> Boolean))
+  (define (rect-contains? rect x y)
+    (and (and (>= x (.rect-x rect)) (< x (+ (.rect-x rect) (.rect-width rect))))
+         (and (>= y (.rect-y rect)) (< y (+ (.rect-y rect) (.rect-height rect))))))
+
+  (declare optional-rect-contains? (Optional wt:Rect * UFix * UFix -> Boolean))
+  (define (optional-rect-contains? rect x y)
+    (match rect
+      ((Some rect) (rect-contains? rect x y))
+      ((None) False)))
+
+  (declare slice-rect (wt:Rect * UFix * UFix -> Optional wt:Rect))
+  (define (slice-rect rect offset height)
+    (if (or (== height 0) (== (.rect-width rect) 0))
+        None
+        (Some (wt:Rect (.rect-x rect) (+ (.rect-y rect) offset)
+                       (.rect-width rect) height))))
+
+  (declare center-geometry (CenterLayout * wt:Rect -> CenterGeometry))
+  (define (center-geometry center rect)
+    "Lay out the center within RECT; all rectangles fit even at tiny sizes."
+    (let h = (.rect-height rect))
+    (let status-h = (if (> h 1) 1 0))
+    (let body-h = (- h status-h))
+    (match center
+      ((CenterEditorFull)
+       (CenterGeometry (slice-rect rect 0 h) None None None None))
+      ((CenterEditorFullReplRow)
+       (CenterGeometry (slice-rect rect 0 body-h) None None None
+                       (slice-rect rect body-h status-h)))
+      ((CenterEditor)
+       (CenterGeometry (slice-rect rect 0 body-h)
+                       (slice-rect rect body-h status-h) None None None))
+      ((CenterReplFull)
+       (CenterGeometry None None (slice-rect rect 0 body-h)
+                       (slice-rect rect body-h status-h) None))
+      ((CenterEditorReplSplit)
+       (let editor-status-h = (if (>= h 4) 1 0))
+       (let repl-status-h = (if (>= h 3) 1 0))
+       (let bodies = (- (- h editor-status-h) repl-status-h))
+       (let desired-repl = (max 3 (lisp (-> UFix) (h) (cl:floor h 3))))
+       (let repl-h = (min desired-repl (if (> bodies 1) (- bodies 1) bodies)))
+       (let editor-h = (- bodies repl-h))
+       (let repl-y = (+ editor-h editor-status-h))
+       (CenterGeometry (slice-rect rect 0 editor-h)
+                       (slice-rect rect editor-h editor-status-h)
+                       (slice-rect rect repl-y repl-h)
+                       (slice-rect rect (+ repl-y repl-h) repl-status-h) None))))
+
+  (declare center-screen-geometry (CenterLayout * UFix * UFix * UFix -> CenterGeometry))
+  (define (center-screen-geometry center content-x cols rows)
+    "Center geometry between the menu and status bars for current terminal dimensions."
+    (let x = (min content-x cols))
+    (center-geometry center (wt:Rect x (min 1 rows) (- cols x)
+                                     (if (> rows 2) (- rows 2) 0))))
+
+  (declare completion-anchor (MineState * Boolean * String * UFix * UFix -> Optional (Tuple UFix UFix)))
+  (define (completion-anchor st is-repl prefix cols rows)
+    "Find the completion origin through the same layout and viewport used to draw."
+    (let geometry = (center-screen-geometry (.ml-center (cell:read (.ms-layout st)))
+                                            (cell:read (.ms-content-x st)) cols rows))
+    (if is-repl
+        (match (.cg-repl geometry)
+          ((Some rect) (repl:repl-pane-completion-anchor (.ms-repl st) rect prefix))
+          ((None) None))
+        (match (Tuple (.cg-editor geometry) (mgr:bufmgr-current (.ms-bufmgr st)))
+          ((Tuple (Some rect) (Some buffer))
+           (editor:editor-pane-completion-anchor (.ms-editor st) (buf:buffer-gap buffer)
+                                                 (.ms-cursor st) rect prefix))
+          (_ None))))
 
   (declare layout-repl-full? (MineLayout -> Boolean))
   (define (layout-repl-full? layout)
