@@ -96,7 +96,9 @@ Coalton is currently used in production to build defense and [quantum computing 
 >
 > The version of Coalton that may be in Quicklisp may not be up-to-date.
 
-**Prepare**: Install [SBCL](http://www.sbcl.org/platform-table.html) (on macOS with Homebrew: `brew install sbcl`). Install Quicklisp by following instructions [here](https://www.quicklisp.org/beta/#installation). (The step command involving `gpg` is not needed.) After installing Quicklisp, you should have a `quicklisp` folder which will make installing Coalton easier.
+
+**Prepare**: Install [SBCL](http://www.sbcl.org/platform-table.html) (on macOS with Homebrew: `brew install sbcl`). Install Quicklisp by following instructions [here](https://www.quicklisp.org/beta/#installation). (The step command involving `gpg` is not needed.) After installing Quicklisp, you should have a `quicklisp` folder which will make installing Coalton easier. 
+_If you use Nix, see [here](docs/nix.md) for a quickstart guide._
 
 **Install**: Clone this repository into a place your Lisp can see (e.g., `~/quicklisp/local-projects/`).
 
