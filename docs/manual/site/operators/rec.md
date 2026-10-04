@@ -34,6 +34,15 @@ weight: 180
   with `fn` instead.
 - `⟨body⟩` has an implicit `progn`.
 
+When the types of a `rec` loop are known, typeclass dictionaries supplied by
+context-free global instances do not become parameters of its local recursive
+function. For example, arithmetic on known `F64` values and a known `UFix`
+counter can use the same specialized operations as `for`. Polymorphic loops
+retain their unresolved dictionaries. Instances that still require dictionary
+construction also retain them, because construction can evaluate method values;
+this preserves their construction order and frequency. Ordinary instance
+selection and development-mode method redefinition still apply.
+
 ## Example
 
 ```lisp

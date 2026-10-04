@@ -20,7 +20,8 @@
   (:local-nicknames
    (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util)
-   (#:tc #:coalton-impl/typechecker))
+   (#:tc #:coalton-impl/typechecker)
+   (#:tc-traverse #:coalton-impl/typechecker/traverse))
   (:export
    #:translate-toplevel                   ; FUNCTION
    #:translate-expression                 ; FUNCTION
@@ -269,6 +270,17 @@ reconstruct the full codegen-visible function type here."
   (make-node-values
    :type (tc:output-types-result-type nil)
    :nodes nil))
+
+(defun discard-node-values (node)
+  "Discard NODE's results, preserving tail position when it already returns Void."
+  (declare (type node node)
+           (values node &optional))
+  (if (null (tc:multiple-value-output-types (node-type node)))
+      node
+      (let ((zero-values (zero-values-node)))
+        (make-node-seq
+         :type (node-type zero-values)
+         :nodes (list node zero-values)))))
 
 (defun translate-body-elements-into (body-nodes tail-node ctx env)
   "Translate BODY-NODES and sequence them in front of TAIL-NODE.
@@ -602,6 +614,61 @@ direct-call shape needed by later tail-call and direct-application passes."
      ctx
      env)))
 
+(defun reduce-local-function-contexts (expr env)
+  "Remove global instance dictionaries after all enclosing types have unified.
+
+Keep the same predicate positions at every reference, including polymorphic
+instantiations. Reducing references independently could remove dictionaries
+that the generic function still requires. Contextual dictionaries must retain
+their order and multiplicity: their construction can evaluate method values."
+  (declare (type tc:node-let expr)
+           (type tc:environment env)
+           (values tc:node-let &optional))
+  (let ((retained-positions (make-hash-table :test #'eq)))
+    (dolist (binding (tc:node-let-bindings expr))
+      (when (tc:node-abstraction-p (tc:node-let-binding-value binding))
+        (let* ((name (tc:node-let-binding-name binding))
+               (preds (tc:qualified-ty-predicates (tc:node-type name)))
+               (positions
+                 (loop :for pred :in preds
+                       :for position :from 0
+                       :for instance := (tc:lookup-class-instance env pred :no-error t)
+                       ;; Match RESOLVE-STATIC-DICT's global-variable case.
+                       ;; Do not simplify duplicates or superclasses here:
+                       ;; that can discard effectful dictionary construction.
+                       :unless (and instance
+                                    (null (tc:ty-class-instance-constraints-expanded instance env)))
+                         :collect position)))
+          (when (< (length positions) (length preds))
+            (setf (gethash (tc:node-variable-name name) retained-positions)
+                  (cons (length preds) positions))))))
+    (when (zerop (hash-table-count retained-positions))
+      (return-from reduce-local-function-contexts expr))
+    (labels ((rewrite-reference (var)
+               (let ((positions (gethash (tc:node-variable-name var) retained-positions)))
+                 (if positions
+                     (let* ((type (tc:node-type var))
+                            (preds (tc:qualified-ty-predicates type)))
+                       (assert (= (first positions) (length preds)))
+                       (tc:make-node-variable
+                        :name (tc:node-variable-name var)
+                        :location (source:location var)
+                        :type (tc:qualify (mapcar (lambda (index) (nth index preds))
+                                                 (rest positions))
+                                          (tc:qualified-ty-type type))))
+                     var))))
+      (tc-traverse:traverse
+       (tc:make-node-let
+        :type (tc:node-type expr)
+        :location (source:location expr)
+        :bindings (loop :for binding :in (tc:node-let-bindings expr)
+                        :collect (tc:make-node-let-binding
+                                  :name (rewrite-reference (tc:node-let-binding-name binding))
+                                  :value (tc:node-let-binding-value binding)
+                                  :location (source:location binding)))
+        :body (tc:node-let-body expr))
+       (tc-traverse:make-traverse-block :variable #'rewrite-reference)))))
+
 (defgeneric translate-expression (expr ctx env)
   (:documentation "Translate typechecker AST node EXPR to the codegen AST.
 
@@ -865,7 +932,8 @@ Returns a `node'.")
              (type tc:environment env)
              (values node))
 
-    (let ((qual-ty (tc:node-type expr)))
+    (let* ((expr (reduce-local-function-contexts expr env))
+           (qual-ty (tc:node-type expr)))
       (assert (null (tc:qualified-ty-predicates qual-ty)))
 
       (make-node-let
@@ -1207,10 +1275,8 @@ Returns a `node'.")
                              :type tc:*boolean-type*
                              :name true-value
                              :patterns nil)
-                   :body (make-node-seq
-                          :type result-ty
-                          :nodes (list (translate-expression (tc:node-when-body expr) ctx env)
-                                       (zero-values-node))))
+                   :body (discard-node-values
+                          (translate-expression (tc:node-when-body expr) ctx env)))
                   (make-match-branch
                    :pattern (make-pattern-constructor
                              :type tc:*boolean-type*
@@ -1244,10 +1310,8 @@ Returns a `node'.")
                              :type tc:*boolean-type*
                              :name false-value
                              :patterns nil)
-                   :body (make-node-seq
-                          :type result-ty
-                          :nodes (list (translate-expression (tc:node-unless-body expr) ctx env)
-                                       (zero-values-node))))))))
+                   :body (discard-node-values
+                          (translate-expression (tc:node-unless-body expr) ctx env)))))))
 
   (:method ((expr tc:node-for) ctx env)
     (declare (type pred-context ctx)

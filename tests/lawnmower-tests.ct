@@ -1,5 +1,26 @@
 (in-package #:coalton-tests)
 
+(deftest mutual-bindings-with-local-rec ()
+  "Eliminating nonrecursive REC lambdas must preserve their enclosing mutual bindings."
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(declare mutual (UFix -> Boolean))
+      (define (mutual count)
+        (let ((even-step (fn (n)
+                          (rec next ((i n))
+                            (if (== i 0)
+                                True
+                                (odd-step (- i 1))))))
+              (odd-step (fn (n)
+                         (rec next ((i n))
+                           (if (== i 0)
+                               False
+                               (even-step (- i 1)))))))
+          (even-step count)))")
+    (is (eq coalton:True (codegen-test-eval "(mutual 0)")))
+    (is (eq coalton:True (codegen-test-eval "(mutual 8)")))
+    (is (eq coalton:False (codegen-test-eval "(mutual 9)")))))
+
 (defun lawnmow-fixed-point (node)
   (loop :with current := node
         :with changed-any? := nil
