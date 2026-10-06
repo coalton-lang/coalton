@@ -1,12 +1,12 @@
 ---
 title: "repr"
-description: "Representation attribute for types and structs."
+description: "Representation attribute for types, structs, and exceptions."
 hideMeta: true
 weight: 70
 ---
 
 `repr` is a toplevel attribute that changes the runtime representation of a
-type or struct.
+type, struct, or exception.
 
 ## Syntax
 
@@ -19,8 +19,8 @@ type or struct.
 
 ## Semantics
 
-- `repr` must appear immediately before a compatible `define-type` or
-  `define-struct`.
+- `repr` must appear immediately before a compatible `define-type`,
+  `define-struct`, or `define-exception`.
 - `:enum` chooses a special representation of a non-parametric type based
    off of symbols. This allows efficient storage and fast matching.
 - `:transparent` creates a no-overhead type when the type definition is
@@ -33,6 +33,9 @@ type or struct.
   of the type is on the Lisp side. It is used for making interfaces to
   Lisp code.
 - `define-struct` only supports transparent representation.
+- `define-exception` only supports native representation, which makes an
+  existing Lisp condition type an exception type. See
+  [`define-exception`](/manual/operators/define-exception/).
 - Representation choice affects generated Lisp layout, interop, and some
   optimizations.
 

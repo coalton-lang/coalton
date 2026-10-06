@@ -13,6 +13,7 @@ one of its branches.
 ```lisp
 (catch ⟨expr⟩
   ((⟨exception-ctor⟩ ⟨pattern⟩ ...) ⟨handler-body⟩ ...)
+  ((the ⟨exception-type⟩ ⟨var-or-_⟩) ⟨handler-body⟩ ...)
   ...
   (_ ⟨fallback-body⟩ ...))
 ```
@@ -20,8 +21,14 @@ one of its branches.
 ## Semantics
 
 - The first subform is the expression that may throw.
-- Each branch matches either an exception constructor pattern or `_` as a
-  catch-all.
+- Each branch matches an exception constructor pattern, every exception of a
+  given type, or `_` as a catch-all.
+- A branch written `(the ⟨exception-type⟩ var)` catches any exception of that
+  type and binds it to `var`, which can be rethrown with
+  [`throw`](/manual/operators/throw/). For a native exception (see
+  [`define-exception`](/manual/operators/define-exception/)), this includes
+  conditions of Lisp subtypes of its condition type.
+- A `_` branch catches every Lisp `error`, including Coalton exceptions.
 - Patterns are tried in order, including patterns on constructor fields. The
   first matching branch runs. If none matches, an enclosing handler may handle
   the exception.
@@ -34,4 +41,10 @@ one of its branches.
   (catch (Ok (crack egg))
     ((DeadlyEgg _) (Err (DeadlyEgg egg)))
     ((UnCracked _) (Err (UnCracked egg)))))
+
+(define (crack-or-rethrow egg)
+  (catch (crack egg)
+    ((the BadEgg e)
+     (trace "bad egg")
+     (throw e))))
 ```

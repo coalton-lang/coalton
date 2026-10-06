@@ -101,6 +101,7 @@
    #:node-match-branches                ; ACCESSOR
    #:node-catch-branch                  ; STRUCT
    #:make-node-catch-branch             ; CONSTRUCTOR
+   #:node-catch-branch-exception-type   ; ACCESSOR
    #:node-catch-branch-pattern          ; ACCESSOR
    #:node-catch-branch-body             ; ACCESSOR
    #:node-catch-branch-list             ; TYPE
@@ -472,9 +473,12 @@
 
 (defstruct (node-catch-branch
             (:copier nil))
-  (pattern  (util:required 'pattern)  :type pattern         :read-only t)
-  (body     (util:required 'body)     :type node-body       :read-only t)
-  (location (util:required 'location) :type source:location :read-only t))
+  ;; EXCEPTION-TYPE is the exception type caught by a branch written
+  ;; `((the T pat) ...)`, or NIL for constructor and wildcard branches.
+  (exception-type (util:required 'exception-type) :type (or null tc:ty) :read-only t)
+  (pattern        (util:required 'pattern)        :type pattern         :read-only t)
+  (body           (util:required 'body)           :type node-body       :read-only t)
+  (location       (util:required 'location)       :type source:location :read-only t))
 
 (defmethod source:location ((self node-catch-branch))
   (node-catch-branch-location self))
@@ -754,6 +758,7 @@
   (declare (type tc:substitution-list subs)
            (values node-catch-branch))
   (make-node-catch-branch
+   :exception-type (node-catch-branch-exception-type node)
    :pattern (tc:apply-substitution subs (node-catch-branch-pattern node))
    :body (tc:apply-substitution subs (node-catch-branch-body node))
    :location (source:location node)))

@@ -1074,13 +1074,35 @@ If the parsed form is an attribute (e.g., repr or monomorphize), add it to to AT
        t))
 
     ((coalton:define-exception)
-     (forbid-attributes attributes form source)
-     (let* ((type (parse-define-type form source :definition-category "exception" :exception-p t)))
+     (let* ((type (parse-define-type form source :definition-category "exception" :exception-p t))
+            (repr (consume-type-attribute :repr attributes type "when parsing define-exception"))
+            (derive (consume-type-attribute :derive attributes type "when parsing define-exception")))
+
+       (when derive
+         (parse-error "Invalid attribute for define-exception"
+                      (source:note derive "define-exception cannot have a derive attribute")
+                      (secondary-note source form "when parsing define-exception")))
 
        (unless (endp (toplevel-define-type-vars type))
          (parse-error "Invalid define-exception"
                       (note source form "Exception types do not accept type variables.")))
 
+       (when repr
+         (unless (eq :native (keyword-src-name (attribute-repr-type repr)))
+           (parse-error "Invalid attribute for define-exception"
+                        (source:note repr "define-exception only accepts (repr :native <lisp-condition-type>)")
+                        (secondary-note source form "when parsing define-exception")))
+
+         ;; A native exception is an existing Lisp condition type, so it
+         ;; has no Coalton constructors to define.
+         (unless (endp (toplevel-define-type-ctors type))
+           (parse-error "Invalid define-exception"
+                        (source:note (first (toplevel-define-type-ctors type))
+                                     "exceptions with repr :native cannot have constructors")
+                        (source:secondary-note repr "repr :native declared here"))))
+
+       (setf (toplevel-define-type-repr type) repr)
+       (setf (fill-pointer attributes) 0)
        (push type (program-types program))
        t))
 

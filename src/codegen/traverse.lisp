@@ -168,6 +168,7 @@ nodes."
        :branches (mapcar
                   (lambda (branch)
                     (make-catch-branch
+                     :exception-type (catch-branch-exception-type branch)
                      :pattern (map-pattern (catch-branch-pattern branch)
                                            :test-function (lambda (test) (apply *traverse* test args)))
                      :body (apply *traverse*

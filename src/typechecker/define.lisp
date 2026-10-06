@@ -1120,6 +1120,24 @@ Returns four values:
                          (entry   (tc:lookup-type (tc-env-env env) ty-name)))
     (tc:type-entry-resumption-p entry)))
 
+(defun parse-catch-exception-type (type env)
+  "Parse TYPE, the type in a `((the TYPE pat) ...)` catch branch, and ensure
+that it denotes an exception type."
+  (declare (type parser:ty type)
+           (type tc-env env)
+           (values tc:ty &optional))
+  ;; Exception types have no parameters, and a handler cannot test type
+  ;; arguments at runtime, so the caught type must be fully known.
+  (when (parser:collect-type-variables type)
+    (tc-error "Invalid catch type"
+              (tc-note type "the caught type cannot contain type variables")))
+  (let ((ty (parse-type type (tc-env-parser-env env))))
+    (unless (exception-type-p ty env)
+      (tc-error "Invalid catch type"
+                (tc-note type "type '~A' is not an exception type"
+                         (type-object-string ty env))))
+    ty))
+
 (defun node-output-arity (node)
   (declare (type t node)
            (values fixnum &optional))
@@ -2528,14 +2546,26 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                  env)
         (declare (ignore expr-ty))
 
-        (let* (;; Infer type of each pattern, ensuring it is an exception type
+        (let* (;; Parse the exception type of each `(the T pat)` branch.
+               (exception-types
+                 (loop
+                   :for branch :in (parser:node-catch-branches node)
+                   :for type := (parser:node-catch-branch-exception-type branch)
+                   :collect (and type (parse-catch-exception-type type env))))
+               ;; Infer type of each pattern, ensuring it is an exception type
                (branch-pat-nodes
                  (loop
                    :for branch :in (parser:node-catch-branches node)
+                   :for exception-type :in exception-types
                    :for pattern := (parser:node-catch-branch-pattern branch)
                    :for (pat-ty pat-node subs_)
-                     := (multiple-value-list (infer-pattern-type pattern (tc:make-variable) subs env))
-                   :unless (or (exception-type-p pat-ty env)
+                     := (multiple-value-list
+                         (infer-pattern-type pattern
+                                             (or exception-type (tc:make-variable))
+                                             subs
+                                             env))
+                   :unless (or exception-type
+                               (exception-type-p pat-ty env)
                                (typep pattern 'parser:pattern-wildcard))
                      :do (tc-error
                           "Invalid catch case"
@@ -2564,9 +2594,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                (branch-nodes
                  (loop
                    :for branch :in (parser:node-catch-branches node)
+                   :for exception-type :in exception-types
                    :for pat-node :in branch-pat-nodes
                    :for branch-body-node :in branch-body-nodes
                    :collect (make-node-catch-branch
+                             :exception-type exception-type
                              :pattern pat-node
                              :body branch-body-node
                              :location (source:location branch)))))

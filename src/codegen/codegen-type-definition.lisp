@@ -25,9 +25,21 @@
   (alexandria:format-symbol (symbol-package (tc:constructor-entry-classname constructor-entry))
                             "_~D" i))
 
+(defun native-exception-p (def)
+  "Is DEF an exception type represented by an existing Lisp condition type?"
+  (let ((repr (tc:type-definition-explicit-repr def)))
+    (and (tc:type-definition-exception-p def)
+         (consp repr)
+         (eq :native (first repr)))))
+
 (defun codegen-type-definition (def env)
   (append
    (cond
+     ;; The Lisp condition type already exists, and a native exception
+     ;; has no constructors, so there is nothing to define.
+     ((native-exception-p def)
+      nil)
+
      ((tc:type-definition-enum-repr def)
       (loop :for constructor :in (tc:type-definition-constructors def)
             :append

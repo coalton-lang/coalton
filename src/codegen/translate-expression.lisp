@@ -1034,6 +1034,7 @@ Returns a `node'.")
        :branches (mapcar
                   (lambda (branch)
                     (make-catch-branch
+                     :exception-type (tc:node-catch-branch-exception-type branch)
                      :pattern (translate-pattern (tc:node-catch-branch-pattern branch) ctx env)
                      :body (translate-expression (tc:node-catch-branch-body branch) ctx env)))
                   (tc:node-catch-branches expr)))))

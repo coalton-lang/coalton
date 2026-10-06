@@ -125,3 +125,109 @@
     (vector:push! n v))
 
   (is (== 2000 (vector:length v))))
+
+;;;
+;;; Exceptions represented by existing Lisp condition types
+;;;
+
+;; Defined at compile time for the (repr :native widget-failure) attribute
+;; below, which checks the type when it is compiled.
+(cl:eval-when (:compile-toplevel :load-toplevel :execute)
+  (cl:define-condition widget-failure (cl:error)
+    ((code :initarg :code :reader widget-failure-code))
+    (:report (cl:lambda (condition stream)
+               (cl:format stream "widget failed with code ~D"
+                          (widget-failure-code condition))))))
+
+(coalton-toplevel
+  (repr :native cl:division-by-zero)
+  (define-exception DivisionByZero
+    "Lisp's DIVISION-BY-ZERO condition.")
+
+  (repr :native cl:arithmetic-error)
+  (define-exception ArithmeticError)
+
+  (repr :native widget-failure)
+  (define-exception WidgetFailure)
+
+  (declare lisp-divide (Integer * Integer -> Fraction))
+  (define (lisp-divide a b)
+    (lisp (-> Fraction) (a b)
+      (cl:/ a b)))
+
+  (declare division-operands (DivisionByZero -> (List Integer)))
+  (define (division-operands e)
+    (lisp (-> (List Integer)) (e)
+      (cl:arithmetic-error-operands e)))
+
+  (declare make-widget-failure (Integer -> WidgetFailure))
+  (define (make-widget-failure code)
+    (lisp (-> WidgetFailure) (code)
+      (cl:make-condition 'widget-failure :code code)))
+
+  (declare failure-code (WidgetFailure -> Integer))
+  (define (failure-code e)
+    (lisp (-> Integer) (e)
+      (widget-failure-code e)))
+
+  (declare throw-widget-failure (Integer -> Integer))
+  (define (throw-widget-failure code)
+    (throw (make-widget-failure code))))
+
+(define-test test-catch-native-exception ()
+  (is (== (Ok 3)
+          (catch (Ok (lisp-divide 6 2))
+            ((the DivisionByZero e) (Err (division-operands e))))))
+  (is (== (Err (make-list 6 0))
+          (catch (Ok (lisp-divide 6 0))
+            ((the DivisionByZero e) (Err (division-operands e)))))))
+
+(define-test test-catch-native-exception-order ()
+  ;; The first branch whose type matches wins, and a branch for a Lisp
+  ;; superclass also catches conditions of its subclasses.
+  (is (== 1 (catch (lisp-divide 1 0)
+              ((the DivisionByZero _) 1)
+              ((the ArithmeticError _) 2))))
+  (is (== 2 (catch (lisp-divide 1 0)
+              ((the ArithmeticError _) 2)
+              ((the DivisionByZero _) 1)))))
+
+(define-test test-throw-native-exception ()
+  ;; Throwing and rethrowing signal the same condition object.
+  (let failure = (make-widget-failure 42))
+  (let inner = (cell:new None))
+  (is (catch (the Boolean (catch (the Boolean (throw failure))
+                            ((the WidgetFailure e)
+                             (cell:write! inner (Some e))
+                             (throw e))))
+        ((the WidgetFailure e)
+         (match (cell:read inner)
+           ((Some original)
+            (lisp (-> Boolean) (e original failure)
+              (cl:and (cl:eq e original) (cl:eq e failure))))
+           ((None) False)))))
+  (is (== 42 (catch (throw-widget-failure 42)
+               ((the WidgetFailure e) (failure-code e)))))
+  ;; Uncaught native exceptions reach Lisp handlers unchanged.
+  (is (== 7 (lisp (-> Integer) ()
+              (cl:handler-case (throw-widget-failure 7)
+                (widget-failure (c) (widget-failure-code c)))))))
+
+(define-test test-catch-exception-by-type ()
+  ;; A (the T var) branch catches every constructor of T, including
+  ;; through a type alias, and binds the exception itself.
+  (let cook-or-explain =
+    (fn (egg)
+      (catch (progn (cook egg) "cooked")
+        ((the MadEgg e)
+         (match e
+           ((UnCracked _) "uncracked")
+           ((DeadlyEgg _) "deadly"))))))
+  (is (== "cooked" (cook-or-explain (Goose True False))))
+  (is (== "uncracked" (cook-or-explain (Goose False False))))
+  (is (== "deadly" (cook-or-explain Xenomorph)))
+  ;; Rethrowing a bound exception preserves its constructor.
+  (is (== "deadly"
+          (catch (catch (progn (crack Xenomorph) "cracked")
+                   ((the BadEgg e) (throw e)))
+            ((DeadlyEgg _) "deadly")))))
