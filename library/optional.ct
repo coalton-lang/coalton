@@ -112,6 +112,13 @@
     (define (fail _)
       None))
 
+  (define-instance (Fallible Optional)
+    (inline)
+    (define (split-failure opt)
+      (match opt
+        ((Some x) (Ok x))
+        ((None) (Err None)))))
+
   (define-instance (Alternative Optional)
     (define empty None)
     (inline)

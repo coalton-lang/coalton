@@ -1,0 +1,9 @@
+================================================================================
+1 need is available without the prelude
+================================================================================
+
+(package coalton-unit-tests/need)
+
+(declare join ((Optional (Optional Integer)) -> (Optional Integer)))
+(define (join x)
+  (need x))

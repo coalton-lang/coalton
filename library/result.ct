@@ -198,6 +198,13 @@ computation that threw it is unwound before `try` returns."
         ((Err x) (pure (Err x)))
         ((Ok y)  (map Ok (f y))))))
 
+  (define-instance (Fallible (Result :a))
+    (inline)
+    (define (split-failure res)
+      (match res
+        ((Ok x) (Ok x))
+        ((Err e) (Err (Err e))))))
+
   (define-instance (Bifunctor Result)
     (inline)
     (define (bimap f g res)

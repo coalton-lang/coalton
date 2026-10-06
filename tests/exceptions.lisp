@@ -401,3 +401,59 @@
   (is (lisp (-> Boolean) ()
         (cl:handler-case (coalton (the Boolean (error "from Coalton")))
           (coalton/classes:panic () cl:t)))))
+
+;;;
+;;; Returning failures early with NEED
+;;;
+
+(coalton-toplevel
+  (declare parse-number (String -> (Result String Integer)))
+  (define (parse-number s)
+    (match (string:parse-int s)
+      ((Some n) (Ok n))
+      ((None) (Err (<> "not a number: " s)))))
+
+  (declare add-parsed (String * String -> (Result String Integer)))
+  (define (add-parsed a b)
+    (let x = (need (parse-number a)))
+    (let y = (need (parse-number b)))
+    (Ok (+ x y)))
+
+  (declare sum-parsed ((List String) -> (Result String Integer)))
+  (define (sum-parsed strings)
+    (let total = (cell:new 0))
+    (for ((rest strings (list:cdr rest)))
+      :until (list:null? rest)
+      (cell:write! total (+ (cell:read total)
+                            (need (parse-number (list:car rest))))))
+    (Ok (cell:read total)))
+
+  (declare sum-first-two ((List Integer) -> (Optional Integer)))
+  (define (sum-first-two xs)
+    (let a = (need (list:head xs)))
+    (let b = (need (list:head (need (list:tail xs)))))
+    (Some (+ a b)))
+
+  (declare successors ((List String) -> (List (Optional Integer))))
+  (define (successors strings)
+    ;; NEED inside a function literal returns from the function literal.
+    (map (fn (s) (Some (+ 1 (need (string:parse-int s)))))
+         strings))
+
+  (declare retry-result (UFix -> (Result Retry UFix)))
+  (define (retry-result n)
+    ;; NEED does not catch exceptions, but composes with TRY.
+    (Ok (+ 1 (need (result:try (fn () (fail-until n 3))))))))
+
+(define-test test-need ()
+  (is (== (Ok 5) (add-parsed "2" "3")))
+  (is (== (Err "not a number: x") (add-parsed "2" "x")))
+  (is (== (Err "not a number: y") (add-parsed "y" "x")))
+  (is (== (Ok 6) (sum-parsed (make-list "1" "2" "3"))))
+  (is (== (Err "not a number: two") (sum-parsed (make-list "1" "two" "3"))))
+  (is (== (Some 3) (sum-first-two (make-list 1 2 7))))
+  (is (== None (sum-first-two (make-list 1))))
+  (is (== None (sum-first-two Nil)))
+  (is (== (make-list (Some 2) None (Some 4)) (successors (make-list "1" "x" "3"))))
+  (is (== (Ok 6) (result:map-err retry-number (retry-result 5))))
+  (is (== (Err 1) (result:map-err retry-number (retry-result 1)))))
