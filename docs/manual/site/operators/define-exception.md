@@ -41,7 +41,9 @@ signaled with [`throw`](/manual/operators/throw/).
   in `(eval-when (:compile-toplevel :load-toplevel :execute) ...)`. Values
   are usually obtained by catching them with a
   `(the ⟨name⟩ var)` branch of [`catch`](/manual/operators/catch/), or
-  constructed in a [`lisp`](/manual/operators/lisp/) form.
+  constructed in a [`lisp`](/manual/operators/lisp/) form. The
+  `coalton/exception` package defines native exceptions for common standard
+  Lisp condition types.
 - `define-exception` accepts no other attributes.
 
 ## Example

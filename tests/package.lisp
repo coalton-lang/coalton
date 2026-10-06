@@ -44,6 +44,7 @@
    (#:ordtree #:coalton/ordtree)
    (#:ordmap #:coalton/ordmap)
    (#:result #:coalton/result)
+   (#:exception #:coalton/exception)
    (#:seq #:coalton/seq)
    (#:file #:coalton/file)
    (#:creal #:coalton/computable-reals)

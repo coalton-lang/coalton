@@ -2212,7 +2212,18 @@ An existing Lisp condition type can be used as an exception type by giving `defi
     ((the DivisionByZero _) 0)))
 ```
 
-Unlike the wildcard branch above, this catches only division by zero. See the [Lisp interoperation guide](/manual/topics/lisp-interop/) for more.
+Unlike the wildcard branch above, this catches only division by zero.
+
+The `coalton/exception` package defines exception types for common standard Lisp conditions, so such definitions are often unnecessary:
+
+```lisp
+(declare checked-divide (Integer * Integer -> (Result String Fraction)))
+(define (checked-divide r m)
+  (catch (Ok (lisp (-> Fraction) (r m) (cl:/ r m)))
+    ((the exception:ArithmeticError e) (Err (exception:message e)))))
+```
+
+`exception:LispError` covers every Lisp `error`, so a `(the exception:LispError e)` branch is a wildcard branch that binds what it catches. `exception:message` returns an exception's Lisp report, and `exception:cast` converts an exception to a more specific type when it has one, such as an `ArithmeticError` to a `DivisionByZero`. See the [Lisp interoperation guide](/manual/topics/lisp-interop/) for more.
 
 #### Cleaning Up
 
@@ -2301,12 +2312,13 @@ handles it.
 For the time being, the following caveats apply;
 
 1. A wildcard `_` branch catches every Lisp `error` but cannot bind
-   it. To bind a Lisp condition, first make its type an exception
-   type with `(repr :native ...)`, then catch it with a
-   `(the T var)` branch. Native exceptions have no constructors, so
-   their contents must be read with `lisp` forms, and since Coalton
-   has no subtyping, a condition caught as `ArithmeticError` cannot
-   be used where a `DivisionByZero` is expected.
+   it. To bind a Lisp condition, catch it with a `(the T var)` branch
+   for a native exception type, such as `exception:LispError` or a
+   type defined with `(repr :native ...)`. Native exceptions have no
+   constructors, so their contents must be read with `lisp` forms,
+   and since Coalton has no subtyping, a condition caught as
+   `ArithmeticError` must be converted with `exception:cast` before
+   it can be used where a `DivisionByZero` is expected.
    
 2. `resumable` branches are even more restrictive. You cannot match
    against anything _other_ than a resumption constructor pattern.

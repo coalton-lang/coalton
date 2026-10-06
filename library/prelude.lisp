@@ -269,6 +269,7 @@
    (#:optionalt #:coalton/monad/optionalt)
    (#:iter #:coalton/iterator)
    (#:sys #:coalton/system)
+   (#:exception #:coalton/exception)
    (#:file #:coalton/file)
    (#:experimental #:coalton/experimental)
    (#:loops #:coalton/experimental/loops)
