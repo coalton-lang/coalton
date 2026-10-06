@@ -103,6 +103,7 @@
                 :components ((:file "pattern-exhaustiveness")
                              (:file "unused-variables")
                              (:file "underapplied-values")
+                             (:file "discarded-results")
                              (:file "analysis")
                              (:file "package")))
                (:module "codegen"

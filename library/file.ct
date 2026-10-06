@@ -659,8 +659,9 @@ Automatically returns the lisp condition if one is thrown."
   (declare write-line ((FileStream Char) * String -> (Result FileError Unit)))
   (define (write-line stream s)
     "Writes a string with an appended newline to a filestream of type Char."
-    (write-vector stream (iter:collect! (Str:chars s)))
-    (write stream #\NewLine)))
+    (do
+     (write-vector stream (iter:collect! (Str:chars s)))
+     (write stream #\NewLine))))
 
 ;;;
 ;;; Temporary files and directories

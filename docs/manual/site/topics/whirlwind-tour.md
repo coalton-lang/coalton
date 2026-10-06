@@ -1646,6 +1646,22 @@ Function definitions create an implicit `progn` block
     (<> x_ y_)))
 ```
 
+The values of all but the last form of a `progn` block are discarded. Discarding a `Result` would silently ignore the error it may hold, so Coalton warns about it. To ignore the error on purpose, bind the `Result` to `_`:
+
+```lisp
+(coalton-toplevel
+  (declare check (Integer -> (Result String Unit)))
+  (define (check x)
+    (if (> x 0) (Ok Unit) (Err "not positive")))
+
+  (define (f x)
+    (check x)            ; warning: Discarded Result
+    (let _ = (check x))  ; no warning
+    x))
+```
+
+The same applies to the last form of a `when` or `unless` body or of a loop body, whose value is also discarded.
+
 ## Dynamic Variables
 
 Coalton also supports dynamically scoped variables, similar to Common Lisp

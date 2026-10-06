@@ -9,6 +9,9 @@
   (:import-from
    #:coalton-impl/analysis/underapplied-values
    #:find-underapplied-values)
+  (:import-from
+   #:coalton-impl/analysis/discarded-results
+   #:find-discarded-results)
   (:local-nicknames
    (#:source #:coalton-impl/source)
    (#:util #:coalton-impl/util)
@@ -90,6 +93,7 @@
             :do (tc:traverse (tc:toplevel-define-body define) analysis-traverse-block)
             :do (find-unused-variables define)
             :do (find-underapplied-values define)
+            :do (find-discarded-results define)
             :do (loop :for pattern :in (tc:binding-parameters define)
                       :do (check-pattern-exhaustiveness pattern env)))
 
@@ -99,6 +103,7 @@
               :do (tc:traverse (tc:instance-method-definition-body method) analysis-traverse-block)
               :do (find-underapplied-values method)
               :do (find-underapplied-values method)
+              :do (find-discarded-results method)
               :do (loop :for pattern :in (tc:binding-parameters method)
                         :do (check-pattern-exhaustiveness pattern env)))))))
 
