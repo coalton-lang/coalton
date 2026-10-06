@@ -731,3 +731,26 @@ must be distinguished even though the predicate-only variables are ambiguous."
     (define (mul-vec x y)
       (mul x (Vec y)))"
    '("mul-vec" . "(Mul :a (Vec :b) (Vec :c) => :a * :b -> Vec :c)")))
+
+(deftest fundep-solving-reduces-predicates-together ()
+  ;; Independent instance reductions share a round, so the round limit
+  ;; bounds the depth of improvement rather than the number of predicates.
+  (let ((*package* (make-package (gensym "FUNDEP-BREADTH-") :use '("COALTON" "COALTON-PRELUDE"))))
+    (unwind-protect
+         (let ((source (source:make-source-string "(define-class (C :a :b (:a -> :b)))")))
+           (with-open-stream (stream (source:source-stream source))
+             (let* ((env (nth-value 1 (entry:entry-point
+                                       (parser:with-reader-context stream
+                                         (parser:read-program stream source)))))
+                    (fundep-pred (tc:make-ty-predicate
+                                  :class (intern "C")
+                                  :types (list (tc:make-variable) (tc:make-variable))))
+                    (preds (cons fundep-pred
+                                 (loop :repeat (* 2 tc:+fundep-max-depth+)
+                                       :collect (tc:make-ty-predicate
+                                                 :class 'coalton/classes:Eq
+                                                 :types (list tc:*integer-type*))))))
+               (let ((solved (tc:solve-fundeps env preds nil)))
+                 (is (= 1 (length solved)))
+                 (is (tc:type-predicate= fundep-pred (first solved)))))))
+      (delete-package *package*))))

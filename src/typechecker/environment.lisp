@@ -2559,15 +2559,16 @@ predicates with all substitutions applied and the new substitutions."
                      ;; If there are super-predicates then add those
                      ;; predicates into the list of preds and remove
                      ;; this predicate from the list since it will give
-                     ;; us no new type information. Additionally,
-                     ;; restart the current check to avoid terminating
-                     ;; early when no subs are generated.
+                     ;; us no new type information. The new predicates
+                     ;; are examined in the next round, so every round
+                     ;; reduces each predicate that an instance matches
+                     ;; and rounds measure the depth of the reductions.
                      :for instance := (lookup-class-instance-in-list
                                        pred
                                        instance-candidates
                                        :no-error t)
 
-                     :when instance
+                     :if instance
                        ;; Since we allow for type variables in the
                        ;; constraints which do not appear in the
                        ;; predicate, we need to create a full fresh set of
@@ -2589,17 +2590,16 @@ predicates with all substitutions applied and the new substitutions."
                                      preds))
 
                              (setf preds (remove pred preds :test #'eq))
-                             (setf preds-generated t)
-                             (return))
+                             (setf preds-generated t))
 
-                     :do (multiple-value-bind (improved-subs improvedp)
-                             (improve-predicate-with-index pred new-subs index)
-                           (when improvedp
-                             (setf new-subs improved-subs)
-                             (return)))
-
-                     :when (ty-class-fundeps class)
-                       :do (setf new-subs (generate-fundep-subs% env (apply-substitution new-subs pred) new-subs)))
+                     :else
+                       :do (multiple-value-bind (improved-subs improvedp)
+                               (improve-predicate-with-index pred new-subs index)
+                             (when improvedp
+                               (setf new-subs improved-subs)
+                               (return)))
+                           (when (ty-class-fundeps class)
+                             (setf new-subs (generate-fundep-subs% env (apply-substitution new-subs pred) new-subs))))
                (if (and (not preds-generated)
                         (or (equalp new-subs subs)
                             (null preds)))
