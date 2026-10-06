@@ -1,0 +1,61 @@
+================================================================================
+1 A discarded Result is a warning
+================================================================================
+
+(package coalton-unit-tests/discarded-results
+  (import coalton-prelude))
+
+(declare check (Boolean -> (Result String Unit)))
+(define (check ok?)
+  (if ok? (Ok Unit) (Err "failed")))
+
+(define (twice)
+  (check True)
+  (check False))
+
+--------------------------------------------------------------------------------
+
+warn: Discarded Result
+  --> test:9:2
+   |
+ 9 |    (check True)
+   |    ^^^^^^^^^^^^ the error in this Result is ignored; discard it explicitly with (let _ = ...) to ignore this warning
+
+================================================================================
+2 The last form of a when body is discarded
+================================================================================
+
+(package coalton-unit-tests/discarded-results
+  (import coalton-prelude))
+
+(declare check (Boolean -> (Result String Unit)))
+(define (check ok?)
+  (if ok? (Ok Unit) (Err "failed")))
+
+(declare maybe-check (Boolean -> Void))
+(define (maybe-check b)
+  (when b
+    (check b)))
+
+--------------------------------------------------------------------------------
+
+warn: Discarded Result
+  --> test:11:4
+    |
+ 11 |      (check b)))
+    |      ^^^^^^^^^ the error in this Result is ignored; discard it explicitly with (let _ = ...) to ignore this warning
+
+================================================================================
+3 A Result can be discarded explicitly
+================================================================================
+
+(package coalton-unit-tests/discarded-results
+  (import coalton-prelude))
+
+(declare check (Boolean -> (Result String Unit)))
+(define (check ok?)
+  (if ok? (Ok Unit) (Err "failed")))
+
+(define (twice)
+  (let _ = (check True))
+  (check False))
