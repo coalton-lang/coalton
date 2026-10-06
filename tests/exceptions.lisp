@@ -360,3 +360,44 @@
   (is (some? (cook-or-skip (Goose False False))))
   (is (== 5 (handle (fail-or-use-value)
               ((Retry _) (resume-any (UseValue 5)))))))
+
+;;;
+;;; Panics
+;;;
+
+(coalton-toplevel
+  (declare panic-text (Panic -> String))
+  (define (panic-text p)
+    (lisp (-> String) (p)
+      (cl:princ-to-string p)))
+
+  (declare panic-message-of ((Void -> Integer) -> String))
+  (define (panic-message-of thunk)
+    (catch (progn (thunk) "no panic")
+      ((the Panic p) (panic-text p))))
+
+  (declare check-large (Integer -> Unit))
+  (define (check-large x)
+    (assert (> x 10) "x was ~A, 100% ~~ too small" x)))
+
+(define-test test-panic ()
+  ;; Messages are never treated as format control strings.
+  (is (== "100% ~ done" (panic-message-of (fn () (error "100% ~ done")))))
+  (is (== "missing ~/config"
+          (panic-message-of (fn () (expect "missing ~/config" (the (Optional Integer) None))))))
+  (is (== "bad state 42" (panic-message-of (fn () (unreachable "bad state ~A" 42)))))
+  (is (== "Undefined" (panic-message-of (fn () (undefined Unit)))))
+  (is (lisp (-> Boolean) ()
+        (cl:and (cl:search "Unexpected"
+                           (coalton (panic-message-of (fn () (unwrap (the (Optional Integer) None))))))
+                cl:t)))
+  (is (lisp (-> Boolean) ()
+        (cl:and (cl:search "failed: x was 3, 100% ~ too small"
+                           (coalton (panic-message-of (fn () (check-large 3) 0))))
+                cl:t)))
+  ;; Wildcard branches still catch panics, as they catch every Lisp error.
+  (is (== -1 (catch (the Integer (error "x")) (_ -1))))
+  ;; Lisp code can handle panics by their condition type.
+  (is (lisp (-> Boolean) ()
+        (cl:handler-case (coalton (the Boolean (error "from Coalton")))
+          (coalton/classes:panic () cl:t)))))
