@@ -122,6 +122,10 @@
    #:node-progn                         ; STRUCT
    #:make-node-progn                    ; CONSTRUCTOR
    #:node-progn-body                    ; ACCESSOR
+   #:node-protect                       ; STRUCT
+   #:make-node-protect                  ; CONSTRUCTOR
+   #:node-protect-expr                  ; ACCESSOR
+   #:node-protect-cleanup               ; ACCESSOR
    #:node-unsafe                        ; STRUCT
    #:make-node-unsafe                   ; CONSTRUCTOR
    #:node-unsafe-body                   ; ACCESSOR
@@ -415,6 +419,12 @@
             (:include node)
             (:copier nil))
   (body (util:required 'body) :type node-body :read-only t))
+
+(defstruct (node-protect
+            (:include node)
+            (:copier nil))
+  (expr    (util:required 'expr)    :type node      :read-only t)
+  (cleanup (util:required 'cleanup) :type node-body :read-only t))
 
 ;; node-the does not exist in this AST!
 
@@ -809,6 +819,15 @@
    :type (tc:apply-substitution subs (node-type node))
    :location (source:location node)
    :body (tc:apply-substitution subs (node-unsafe-body node))))
+
+(defmethod tc:apply-substitution (subs (node node-protect))
+  (declare (type tc:substitution-list subs)
+           (values node-protect))
+  (make-node-protect
+   :type (tc:apply-substitution subs (node-type node))
+   :location (source:location node)
+   :expr (tc:apply-substitution subs (node-protect-expr node))
+   :cleanup (tc:apply-substitution subs (node-protect-cleanup node))))
 
 (defmethod tc:apply-substitution (subs (node node-block))
   (declare (type tc:substitution-list subs)

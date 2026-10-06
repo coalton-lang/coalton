@@ -232,6 +232,14 @@
              (values tc:ty &optional))
     (typecheck-node (catch-branch-body expr) env))
 
+  (:method ((expr node-protect) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (let ((type (node-type expr)))
+      (tc:unify nil type (typecheck-node (node-protect-expr expr) env))
+      (typecheck-node (node-protect-cleanup expr) env)
+      type))
+
   (:method ((expr node-catch) env)
     (declare (type tc:environment env)
              (values tc:ty))

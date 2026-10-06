@@ -38,6 +38,7 @@ Other differences are outlined in this table:
 | `lambda`           | `fn`       |
 | `handler-case`     | `catch`    |
 | `handler-bind`     | `handle`   |
+| `unwind-protect`   | `protect`  |
 | `error`, `signal`  | `throw`    |
 | condition, error   | exception  |
 | restart            | resumption |

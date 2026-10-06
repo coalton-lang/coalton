@@ -161,6 +161,11 @@ nodes."
                                   (match-branch-body branch)
                                   args)))
                   (node-match-branches node))))
+    (action (:traverse node-protect node &rest args)
+      (make-node-protect
+       :type (node-type node)
+       :expr (apply *traverse* (node-protect-expr node) args)
+       :cleanup (apply *traverse* (node-protect-cleanup node) args)))
     (action (:traverse node-catch node &rest args)
       (make-node-catch
        :type (node-type node)

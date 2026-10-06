@@ -61,5 +61,6 @@
   (%run-tests "parse-resume-to.txt")
   (%run-tests "parse-catch.txt")
   (%run-tests "parse-handle.txt")
+  (%run-tests "parse-protect.txt")
   (%run-tests "define-exception.txt")
   (%run-tests "parse-resumable.txt"))

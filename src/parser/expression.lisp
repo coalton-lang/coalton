@@ -118,6 +118,10 @@
    #:node-catch-branch-pattern          ; ACCESSOR
    #:node-catch-branch-body             ; ACCESSOR
    #:node-catch-branch-list             ; TYPE
+   #:node-protect                       ; STRUCT
+   #:make-node-protect                  ; CONSTRUCTOR
+   #:node-protect-expr                  ; ACCESSOR
+   #:node-protect-cleanup               ; ACCESSOR
    #:node-catch                         ; STRUCT
    #:make-node-catch                    ; CONSTRUCTOR
    #:node-catch-in-place-p              ; ACCESSOR
@@ -1003,6 +1007,13 @@ after variable renaming and before type inference."
   (expr       (util:required 'expr)       :type node                   :read-only t)
   (branches   (util:required 'branches)   :type node-catch-branch-list :read-only t))
 
+(defstruct (node-protect
+            (:include node)
+            (:copier nil))
+  "Evaluate EXPR, and then CLEANUP however control leaves EXPR."
+  (expr    (util:required 'expr)    :type node      :read-only t)
+  (cleanup (util:required 'cleanup) :type node-body :read-only t))
+
 (defun node-catch-operator-name (node)
   "Return the name of the operator that NODE was written with, for messages."
   (declare (type node-catch node)
@@ -1493,6 +1504,24 @@ after variable renaming and before type inference."
       :branches (loop :for branches := (cst:nthrest 2 form) :then (cst:rest branches)
                       :while (cst:consp branches)
                       :collect (parse-resumable-branch (cst:first branches) source))
+      :location (form-location source form)))
+
+    ((and (cst:atom (cst:first form))
+          (eq 'coalton:protect (cst:raw (cst:first form))))
+
+     ;; (protect)
+     (unless (cst:consp (cst:rest form))
+       (parse-error "Malformed protect expression"
+                    (note-end source (cst:first form) "expected expression")))
+
+     ;; (protect expr)
+     (unless (cst:consp (cst:rest (cst:rest form)))
+       (parse-error "Malformed protect expression"
+                    (note-end source (cst:second form) "expected cleanup forms")))
+
+     (make-node-protect
+      :expr (parse-expression (cst:second form) source)
+      :cleanup (parse-body (cst:nthrest 2 form) form source)
       :location (form-location source form)))
 
     ((and (cst:atom (cst:first form))

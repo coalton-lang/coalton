@@ -94,6 +94,7 @@
    #:resumable
    #:catch
    #:handle
+   #:protect
    #:dynamic-bind
    #:let
    #:let*

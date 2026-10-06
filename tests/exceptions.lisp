@@ -457,3 +457,102 @@
   (is (== (make-list (Some 2) None (Some 4)) (successors (make-list "1" "x" "3"))))
   (is (== (Ok 6) (result:map-err retry-number (retry-result 5))))
   (is (== (Err 1) (result:map-err retry-number (retry-result 1)))))
+
+;;;
+;;; Cleanup with PROTECT
+;;;
+
+(coalton-toplevel
+  (declare *protect-trail* (cell:Cell (List String)))
+  (define *protect-trail* (cell:new Nil))
+
+  (declare trail-note (String -> Unit))
+  (define (trail-note s)
+    (cell:write! *protect-trail* (Cons s (cell:read *protect-trail*)))
+    Unit)
+
+  (declare take-trail (Void -> (List String)))
+  (define (take-trail)
+    (let notes = (reverse (cell:read *protect-trail*)))
+    (cell:write! *protect-trail* Nil)
+    notes)
+
+  (declare protect-normally (Void -> UFix))
+  (define (protect-normally)
+    (protect (progn (trail-note "body") 1)
+      (trail-note "cleanup")))
+
+  (declare protect-throw (Void -> UFix))
+  (define (protect-throw)
+    (catch (protect (progn (trail-note "body") (fail-until 0 1))
+             (trail-note "cleanup"))
+      ((Retry _) (trail-note "caught") 2)))
+
+  (declare protect-return (Boolean -> UFix))
+  (define (protect-return early?)
+    (protect (progn
+               (when early?
+                 (return 3))
+               (trail-note "late")
+               4)
+      (trail-note "cleanup")))
+
+  (declare protect-break (Void -> UFix))
+  (define (protect-break)
+    (let ((cleanups (cell:new 0)))
+      (for ((i 0 (+ i 1)))
+        :until (>= i 10)
+        (protect (when (== i 3)
+                   (break))
+          (cell:write! cleanups (+ 1 (cell:read cleanups)))))
+      (cell:read cleanups)))
+
+  (declare protect-values (Void -> (Tuple UFix UFix)))
+  (define (protect-values)
+    (let (values a b) = (protect (values 5 6) (trail-note "cleanup")))
+    (Tuple a b)))
+
+(define-test test-protect ()
+  (is (== 1 (protect-normally)))
+  (is (== (make-list "body" "cleanup") (take-trail)))
+  ;; The cleanup runs while CATCH unwinds, before its branch.
+  (is (== 2 (protect-throw)))
+  (is (== (make-list "body" "cleanup" "caught") (take-trail)))
+  (is (== 3 (protect-return True)))
+  (is (== (make-list "cleanup") (take-trail)))
+  (is (== 4 (protect-return False)))
+  (is (== (make-list "late" "cleanup") (take-trail)))
+  (is (== 4 (protect-break)))
+  (is (== (Tuple 5 6) (protect-values)))
+  (is (== (make-list "cleanup") (take-trail))))
+
+(define-test test-with-open-file-closes-on-throw ()
+  ;; WITH-OPEN-FILE closes its stream even when its function throws.
+  ;; The file exists before it is opened, because CCL's OPEN-STREAM-P
+  ;; stays true for a stream closed with :ABORT whose file OPEN created
+  ;; or superseded.
+  (let saved = (the (cell:Cell (Optional (file:FileStream Char)))
+                    (cell:new None)))
+  (let caught =
+    (file:with-temp-directory
+     (fn (directory)
+       (let path = (file:merge directory "closes-on-throw.txt"))
+       (need (file:with-open-file path
+               (fn (stream) (file:write-string stream "x"))
+               :direction file:Output
+               :if-exists file:Supersede))
+       (Ok (catch (unwrap (file:with-open-file path
+                            (fn (stream)
+                              (cell:write! saved (Some stream))
+                              (throw (Retry 7)))
+                            :direction file:Output
+                            :if-exists file:Append))
+             ((Retry n) n))))))
+  (is (match caught
+        ((Ok 7) True)
+        (_ False)))
+  (is (match (cell:read saved)
+        ((Some stream)
+         (lisp (-> Boolean) (stream)
+           (cl:not (cl:open-stream-p stream))))
+        ((None) False))))

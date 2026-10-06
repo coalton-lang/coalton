@@ -615,10 +615,20 @@ for its effect. The result holds `Unit` rather than the value of FORM."
                            (:if-exists IfExists)
                            -> (Result FileError :b)))
   (define (with-open-file path thunk &key (direction Input) (if-exists EError))
-    "Open PATH, run THUNK on the stream, and then close it."
-    (bracket (open path :direction direction :if-exists if-exists)
-             close
-             thunk))
+    "Open PATH, run THUNK on the stream, and then close it.
+
+If THUNK returns `Ok` but closing the stream fails, return the error from closing it. If THUNK exits without returning, for example by throwing an exception, close the stream with `abort` instead."
+    (let stream = (need (open path :direction direction :if-exists if-exists)))
+    (let returned? = (cell:new False))
+    (protect
+        (let ((result (thunk stream)))
+          (cell:write! returned? True)
+          (match (Tuple result (close stream))
+            ((Tuple (Ok _) (Err e)) (Err e))
+            (_ result)))
+      (unless (cell:read returned?)
+        (let _ = (abort stream))
+        Unit)))
 
   (declare read-vector ((File :a)
                         =>
@@ -735,21 +745,19 @@ File extensions need to include `.`, like \".txt\"."
                            (:extension String)
                            -> (Result FileError :b)))
   (define (with-temp-file thunk &key (extension ""))
-    "Perform THUNK on a temporary file, optionally ending in EXTENSION."
+    "Perform THUNK on a stream for a temporary file, optionally ending in EXTENSION. The stream is closed and the file deleted afterwards."
     (let file = (%make-temp-file-pathname extension))
-    (bracket
-     (open file :direction Bidirectional :if-exists Overwrite)
-     (fn (_)
-       (delete-file! file))
-     thunk))
+    (protect (with-open-file file thunk :direction Bidirectional :if-exists Overwrite)
+      (let _ = (delete-file! file))
+      Unit))
 
   (declare with-temp-directory ((Pathname -> (Result FileError :a)) -> (Result FileError :a)))
   (define (with-temp-directory thunk)
-    "Performs an operation `thunk` inside a temporary directory."
-    (bracket
-     (create-temp-directory!)
-     remove-directory-recursive!
-     thunk)))
+    "Performs an operation `thunk` inside a temporary directory, which is removed with its contents afterwards."
+    (let directory = (need (create-temp-directory!)))
+    (protect (thunk directory)
+      (let _ = (remove-directory-recursive! directory))
+      Unit)))
 
 ;;;
 ;;; Top-level functions, i.e. those that don't require FileStream or File knowledge

@@ -1349,6 +1349,11 @@ other, so they can be inferred monomorphically before the recursive body."
              (parser:node-unsafe
               (check-body (parser:node-unsafe-body node) tailp))
 
+             ;; Both run inside the UNWIND-PROTECT.
+             (parser:node-protect
+              (or (check-node (parser:node-protect-expr node) nil)
+                  (check-body (parser:node-protect-cleanup node) nil)))
+
              (parser:node-the
               (check-node (parser:node-the-expr node) tailp))
 
@@ -2715,6 +2720,41 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
         :location (source:location node)
        :body body-node)
        subs)))
+
+  (:method ((node parser:node-protect) expected-type subs env)
+    (declare (type tc:ty expected-type)
+             (type tc:substitution-list subs)
+             (type tc-env env)
+             (values tc:ty tc:ty-predicate-list accessor-list node-protect tc:substitution-list &optional))
+
+    ;; PROTECT returns the values of its protected expression, which may be
+    ;; Void or multiple values, and discards those of its cleanup forms.
+    (let ((ret-ty (tc:make-variable :kind tc:+kstar+ :allow-result-p t)))
+      (multiple-value-bind (expr-ty preds accessors expr-node subs)
+          (infer-expression-type (parser:node-protect-expr node) ret-ty subs env)
+        (declare (ignore expr-ty))
+        (multiple-value-bind (cleanup-ty cleanup-preds cleanup-accessors cleanup-node subs)
+            (infer-expression-type (parser:node-protect-cleanup node)
+                                   (tc:make-variable :kind tc:+kstar+ :allow-result-p t)
+                                   subs
+                                   env)
+          (declare (ignore cleanup-ty))
+          (handler-case
+              (progn
+                (setf subs (tc:unify subs ret-ty expected-type))
+                (let ((type (tc:apply-substitution subs ret-ty)))
+                  (values
+                   type
+                   (append preds cleanup-preds)
+                   (append accessors cleanup-accessors)
+                   (make-node-protect
+                    :type (tc:qualify nil type)
+                    :location (source:location node)
+                    :expr expr-node
+                    :cleanup cleanup-node)
+                   subs)))
+            (tc:coalton-internal-type-error ()
+              (standard-expression-type-mismatch-error node subs expected-type ret-ty)))))))
 
   (:method ((node parser:node-block) expected-type subs env)
     (declare (type tc:ty expected-type)

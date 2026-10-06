@@ -2212,6 +2212,20 @@ An existing Lisp condition type can be used as an exception type by giving `defi
 
 Unlike the wildcard branch above, this catches only division by zero. See the [Lisp interoperation guide](/manual/topics/lisp-interop/) for more.
 
+#### Cleaning Up
+
+`protect` runs cleanup forms however control leaves an expression, whether it returns, throws, or exits with `return` or `break`:
+
+```lisp
+(define (process-file path)
+  (let stream = (need (file:open path)))
+  (protect (process stream)
+    (let _ = (file:close stream))
+    Unit))
+```
+
+The values of the cleanup forms are discarded, so the `Result` returned by `file:close` is discarded explicitly.
+
 #### Defining, Invoking, and Handling Resumptions 
 
 Resumptions let the code that handles an error choose how the code

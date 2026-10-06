@@ -236,6 +236,10 @@
                  (parser:node-unsafe
                   (traverse (parser:node-unsafe-body node) local-bindings))
 
+                 (parser:node-protect
+                  (traverse (parser:node-protect-expr node) local-bindings)
+                  (traverse (parser:node-protect-cleanup node) local-bindings))
+
                  ;; Do notation - bind shadows sequentially
                  (parser:node-do
                   (let ((current-locals local-bindings))

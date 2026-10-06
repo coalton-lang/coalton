@@ -239,3 +239,31 @@ error: Invalid rec
 help: Use `let` + `fn` instead if you need non-tail recursion or want to pass the recursive function around.
  11 |       ((Step j) (go (+ j 1))))))
     |                  --
+
+================================================================================
+110 rec call in a protect expression is not a tail call
+================================================================================
+
+(package coalton-unit-tests/recursive-let)
+
+(define (bad n)
+  (rec go ((i 0))
+    (protect (if (>= i n)
+                 i
+                 (go (+ i 1)))
+      Unit)))
+
+--------------------------------------------------------------------------------
+
+error: Invalid rec
+  --> test:7:18
+   |
+ 4 |    (rec go ((i 0))
+   |         -- `rec` binds go here
+ 5 |      (protect (if (>= i n)
+ 6 |                   i
+ 7 |                   (go (+ i 1)))
+   |                    ^^ this use of recursive operator go is not a direct tail call
+help: Use `let` + `fn` instead if you need non-tail recursion or want to pass the recursive function around.
+ 7 |                  (go (+ i 1)))
+   |                   --

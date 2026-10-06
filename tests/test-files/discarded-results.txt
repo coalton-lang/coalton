@@ -59,3 +59,44 @@ warn: Discarded Result
 (define (twice)
   (let _ = (check True))
   (check False))
+
+================================================================================
+4 The last cleanup form of protect is discarded
+================================================================================
+
+(package coalton-unit-tests/discarded-results
+  (import coalton-prelude))
+
+(declare check (Boolean -> (Result String Unit)))
+(define (check ok?)
+  (if ok? (Ok Unit) (Err "failed")))
+
+(declare checked (Integer -> Integer))
+(define (checked x)
+  (protect x
+    (check False)))
+
+--------------------------------------------------------------------------------
+
+warn: Discarded Result
+  --> test:11:4
+    |
+ 11 |      (check False)))
+    |      ^^^^^^^^^^^^^ the error in this Result is ignored; discard it explicitly with (let _ = ...) to ignore this warning
+
+================================================================================
+5 A Result in a protect cleanup can be discarded explicitly
+================================================================================
+
+(package coalton-unit-tests/discarded-results
+  (import coalton-prelude))
+
+(declare check (Boolean -> (Result String Unit)))
+(define (check ok?)
+  (if ok? (Ok Unit) (Err "failed")))
+
+(declare checked (Integer -> Integer))
+(define (checked x)
+  (protect x
+    (let _ = (check False))
+    Unit))

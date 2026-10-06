@@ -33,6 +33,7 @@
   (catch              #'identity :type function :read-only t)
   (progn              #'identity :type function :read-only t)
   (unsafe             #'identity :type function :read-only t)
+  (protect            #'identity :type function :read-only t)
   (block-node         #'identity :type function :read-only t)
   (return-from-node   #'identity :type function :read-only t)
   (values             #'identity :type function :read-only t)
@@ -286,6 +287,18 @@
       :type (node-type node)
       :location (source:location node)
       :body (traverse (node-unsafe-body node) block))))
+
+  (:method ((node node-protect) block)
+    (declare (type traverse-block block)
+             (values node &optional))
+
+    (funcall
+     (traverse-protect block)
+     (make-node-protect
+      :type (node-type node)
+      :location (source:location node)
+      :expr (traverse (node-protect-expr node) block)
+      :cleanup (traverse (node-protect-cleanup node) block))))
 
   (:method ((node node-block) block)
     (declare (type traverse-block block)
