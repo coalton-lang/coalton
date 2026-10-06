@@ -298,3 +298,43 @@
   (is (== 2 (catch (handle (fail-until 0 1)
                      ((Retry 5) 1))
               ((Retry _) 2)))))
+
+;;;
+;;; The Exception class
+;;;
+
+(coalton-toplevel
+  ;; Inferred as (Exception :e => :e -> :a).
+  (define (rethrow-any e)
+    (throw e))
+
+  (declare retry-number (Retry -> UFix))
+  (define (retry-number (Retry n))
+    n))
+
+(define-test test-exception-class ()
+  ;; THROW is polymorphic over exception types.
+  (is (== 7 (catch (the UFix (rethrow-any (Retry 7)))
+              ((Retry n) n))))
+  (is (== 8 (catch (the Integer (rethrow-any (make-widget-failure 8)))
+              ((the WidgetFailure e) (failure-code e)))))
+
+  ;; TRY returns exceptions of the requested type in ERR, and lets others
+  ;; propagate.
+  (is (== (Ok 4)
+          (result:map-err retry-number (result:try (fn () (fail-until 4 4))))))
+  (is (== (Err 3)
+          (result:map-err retry-number (result:try (fn () (fail-until 3 4))))))
+  (is (== "deadly"
+          (catch (progn
+                   (the (Result Retry Egg) (result:try (fn () (crack Xenomorph))))
+                   "not thrown")
+            ((DeadlyEgg _) "deadly"))))
+  (is (== (Err (make-list 1 0))
+          (result:map-err division-operands
+                          (result:try (fn () (lisp-divide 1 0))))))
+
+  ;; OK-OR-THROW is the inverse of TRY.
+  (is (== 5 (result:ok-or-throw (the (Result Retry UFix) (Ok 5)))))
+  (is (== 6 (catch (result:ok-or-throw (the (Result Retry UFix) (Err (Retry 6))))
+              ((Retry n) n)))))

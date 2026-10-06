@@ -375,6 +375,15 @@
     (is (= 2 (codegen-test-eval "(catch (raise-problem EmptyProblem) ((EmptyProblem) 2) (_ 0))")))
     (is (= 42 (codegen-test-eval "(catch (raise-using NumberProblem) ((NumberProblem x) x) (_ 0))")))))
 
+(deftest exception-redefinition-keeps-exception-status ()
+  ;; Redefining a type does not remove its instances, so an exception type
+  ;; cannot become an ordinary type while keeping its Exception instance.
+  (with-codegen-test-environment
+    (codegen-test-compile "(define-exception Problem (Problem Integer))")
+    (codegen-test-compile "(define-exception Problem (Problem Integer) (OtherProblem String))")
+    (signals tc:tc-error
+      (codegen-test-compile "(define-type Problem (Problem Integer))"))))
+
 (deftest codegen-handler-payload-patterns ()
   (with-codegen-test-environment
     (codegen-test-event-recorder)

@@ -2966,16 +2966,36 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                subs
                                env)
 
-      (unless (exception-type-p exception-ty env)
-        (tc-error
-         "Invalid throw"
-         (tc-note
-          expr-node
-          "Argument to `throw` must be a known exception.")
-         (tc-note
-          expr-node
-          "Not Yet Supported: throw polymorphism.")))
-      
+      (let ((exception-ty (tc:apply-substitution subs exception-ty))
+            (exception-class (exception-class-name)))
+        (cond
+          ;; A known type must be an exception type.
+          ((not (tc:tyvar-p exception-ty))
+           (unless (exception-type-p exception-ty env)
+             (tc-error
+              "Invalid throw"
+              (tc-note
+               expr-node
+               "type '~A' is not an exception type"
+               (type-object-string exception-ty env)))))
+
+          ;; Otherwise, require an Exception instance, which makes THROW
+          ;; polymorphic over exception types.
+          ((and exception-class
+                (tc:lookup-class (tc-env-env env) exception-class :no-error t))
+           (push (tc:make-ty-predicate
+                  :class exception-class
+                  :types (list exception-ty)
+                  :location (source:location node))
+                 preds))
+
+          (t
+           (tc-error
+            "Invalid throw"
+            (tc-note
+             expr-node
+             "Argument to `throw` must be a known exception.")))))
+
       (values
        expected-type
        preds
