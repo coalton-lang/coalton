@@ -78,6 +78,7 @@
                              (:ct-file "complex")
                              (:ct-file "elementary")
                              (:file "package")))
+               (:ct-file "bits-fields")
                (:ct-file "randomaccess")
                (:ct-file "cell")
                (:ct-file "tuple")
