@@ -1,9 +1,9 @@
 (in-package #:coalton-native-tests)
 
 ;;; The tests below check the laws documented on `bits:Bits`,
-;;; `bits:ldb`, and `bits:dpb` against a reference model: the
-;;; operations on unbounded integers, computed directly in Common Lisp,
-;;; followed by the reduction `wrap` into the type.
+;;; `bits:ldb`, `bits:dpb`, and `bits:ReverseBits` against a reference
+;;; model: the operations on unbounded integers, computed directly in
+;;; Common Lisp, followed by the reduction `wrap` into the type.
 
 (coalton-toplevel
   (declare %logand (Integer * Integer -> Integer))
@@ -32,6 +32,16 @@
   (declare %dpb (Integer * UFix * UFix * Integer -> Integer))
   (define (%dpb n s p a)
     (lisp (-> Integer) (n s p a) (cl:dpb n (cl:byte (cl:min s 1024) (cl:min p 1024)) a)))
+
+  (declare %reverse (UFix * Integer -> Integer))
+  (define (%reverse w a)
+    "The low `w` bits of `a` in reverse order."
+    (lisp (-> Integer) (w a)
+      (cl:loop :with result := 0
+               :for i :below w
+               :when (cl:logbitp i a)
+                 :do (cl:setf result (cl:logior result (cl:ash 1 (cl:- w i 1))))
+               :finally (cl:return result))))
 
   (declare %wrap-unsigned (UFix * Integer -> :t))
   (define (%wrap-unsigned w n)
@@ -226,7 +236,17 @@
        (and (== (bits:dpb (bits:ldb s p a) s p a) a)
             (== (bits:dpb m s p (bits:dpb n s p a)) (bits:dpb m s p a))
             (or (> (+ s p) w)
-                (== (bits:ldb s p (bits:dpb n s p a)) (bits:ldb s 0 n))))))))
+                (== (bits:ldb s p (bits:dpb n s p a)) (bits:ldb s 0 n)))))))
+
+  (declare %reverse-laws ((bits:ReverseBits :t) (Integral :t) => UFix * (Integer -> :t) * :t * UFix -> Boolean))
+  (define (%reverse-laws w wrap x n)
+    "Bit `i` of `(reverse-bits x)` is bit `w - 1 - i` of `x`, and
+`(reverse-n-bits n x)` is `(reverse-bits x)` shifted by `n - w`."
+    (let ((reversed (bits:reverse-bits x)))
+      (and (== (math:toInteger reversed) (%reverse w (math:toInteger x)))
+           (== (bits:reverse-bits reversed) x)
+           (== (bits:reverse-n-bits n x)
+               (wrap (%ash (math:toInteger reversed) (- (math:toInteger n) (math:toInteger w)))))))))
 
 ;;; For each instance, `define-bits-law-test` defines the laws compiled
 ;;; with the methods inlined, and a test that checks every law both ways.
@@ -298,6 +318,21 @@
   :non-negative-counts (list:filter (fn (k) (>= k 0)) %bounded-shift-counts)
   :fields %bounded-field-bounds)
 
+(coalton-toplevel
+  (monomorphize)
+  (declare %u64-inlined-reverse-laws (U64 * UFix -> Boolean))
+  (define (%u64-inlined-reverse-laws x n)
+    (%reverse-laws 64 %wrap-u64 x n)))
+
+(define-test bits-reverse-laws ()
+  (let ns = %field-bounds)
+  (is (== None (%find-2 (fn (x n) (%reverse-laws 8 %wrap-u8 x n)) (map %wrap-u8 %integer-samples) ns)))
+  (is (== None (%find-2 (fn (x n) (%reverse-laws 16 %wrap-u16 x n)) (map %wrap-u16 %integer-samples) ns)))
+  (is (== None (%find-2 (fn (x n) (%reverse-laws 32 %wrap-u32 x n)) (map %wrap-u32 %integer-samples) ns)))
+  (is (== None (%find-2 (fn (x n) (%reverse-laws %ufix-width %wrap-ufix x n)) (map %wrap-ufix %integer-samples) ns)))
+  (is (== None (%find-2 (fn (x n) (%reverse-laws 64 %wrap-u64 x n)) %u64-samples ns)))
+  (is (== None (%find-2 %u64-inlined-reverse-laws %u64-samples ns))))
+
 (define-test bits-fixed-width-edge-cases ()
   ;; Results always fit the width, including where earlier versions
   ;; returned out-of-range values or failed.
@@ -315,7 +350,10 @@
   (is (== 0 (bits:dpb (the U8 1) 1 8 (the U8 0))))
   (is (== 0 (bits:dpb (the Bit 1) 1 1 (the Bit 0))))
   (is (== 0 (bits:dpb (the UFix 1) 1 %ufix-width (the UFix 0))))
-  (is (== -2 (bits:shift 1 (lisp (-> IFix) () cl:most-positive-fixnum)))))
+  (is (== -2 (bits:shift 1 (lisp (-> IFix) () cl:most-positive-fixnum))))
+  (is (== 0 (bits:reverse-n-bits 0 (the U64 5))))
+  (is (== 9223372036854775808 (bits:reverse-n-bits 65 (the U64 3))))
+  (is (== 0 (bits:reverse-n-bits 1000000000000 (the U64 3)))))
 
 ;;; A `Bits` instance whose representation is not a Lisp integer: `ldb`
 ;;; and `dpb` are defined in terms of the methods, so they work for it.
