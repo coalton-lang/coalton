@@ -69,12 +69,12 @@ are floored and truncated division, respectively."
 
   (declare rsh ((Integral :n) (Bits :b) => :b * :n -> :b))
   (define (rsh x n)
-    "Right shift X by N"
+    "Shift `x` right by `n` bits, or left by `-n` bits when `n` is negative. This is `(bits:shift (negate (toInteger n)) x)`, so on fixed-width types the result fits the width as described for `bits:Bits`."
     (bits:shift (negate (toInteger n)) x))
 
   (declare lsh ((Integral :n) (Bits :b) => :b * :n -> :b))
   (define (lsh x n)
-    "Left shift X by N"
+    "Shift `x` left by `n` bits, or right by `-n` bits when `n` is negative. This is `(bits:shift (toInteger n) x)`, so on fixed-width types the result fits the width as described for `bits:Bits`."
     (bits:shift (toInteger n) x))
 
   (declare even? (Integral :a => :a -> Boolean))
