@@ -24,6 +24,9 @@ resumptions.
   value, it is offered to an enclosing handler for the same resumption. A
   resumption with no matching handler signals an error.
 - When a matching resumption is signaled, control transfers to the handler body.
+- Resumptions are usually invoked by a [`handle`](/manual/operators/handle/)
+  branch that intercepts an exception thrown inside the `resumable`
+  expression.
 - The result type of each handler must agree with the result type of the whole
   `resumable` expression.
 

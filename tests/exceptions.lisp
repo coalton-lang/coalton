@@ -58,7 +58,9 @@
                           Xenomorph
                           (Goose False False)))
         (do
-         (cooked <- (catch (make-breakfast-with moocow)
+         ;; HANDLE runs its branches before unwinding, so they can resume
+         ;; to the resumptions established by MAKE-BREAKFAST-WITH.
+         (cooked <- (handle (make-breakfast-with moocow)
                       ((DeadlyEgg _)      (resume-to skip))
                       ((UnCracked egg-y)  (resume-to (ServeRaw egg-y)))))
          (pure (vector:push! cooked eggs))))
@@ -231,3 +233,68 @@
           (catch (catch (progn (crack Xenomorph) "cracked")
                    ((the BadEgg e) (throw e)))
             ((DeadlyEgg _) "deadly")))))
+
+;;;
+;;; CATCH branches run after unwinding; HANDLE branches run before
+;;;
+
+(coalton-toplevel
+  (define-exception Retry
+    (Retry UFix))
+
+  (define-resumption (UseValue UFix))
+
+  (declare *handler-depth* UFix)
+  (define *handler-depth* 0)
+
+  (declare fail-until (UFix * UFix -> UFix))
+  (define (fail-until i limit)
+    (if (< i limit)
+        (throw (Retry i))
+        i))
+
+  (declare retry-from (UFix * UFix -> UFix))
+  (define (retry-from i limit)
+    (catch (fail-until i limit)
+      ((Retry j) (retry-from (+ j 1) limit))))
+
+  (declare fail-or-use-value (Void -> UFix))
+  (define (fail-or-use-value)
+    (resumable (fail-until 0 1)
+      ((UseValue v) v))))
+
+(define-test test-catch-unwinds-before-branch ()
+  ;; The branch runs in the dynamic environment of the CATCH.
+  (is (== 0 (catch (dynamic-bind ((*handler-depth* 9))
+                     (throw (Retry 0)))
+              ((Retry _) *handler-depth*))))
+  ;; Each retry runs after the previous attempt has unwound.
+  (is (== 1000 (retry-from 0 1000)))
+  ;; A resumption established outside the CATCH is still available.
+  (is (== 7 (resumable (catch (fail-until 0 1)
+                         ((Retry _) (resume-to (UseValue 7))))
+              ((UseValue v) v))))
+  ;; One established inside it has been unwound by the time the branch runs.
+  (is (== 99 (catch (catch (fail-or-use-value)
+                      ((Retry _) (resume-to (UseValue 5))))
+               (_ 99)))))
+
+(define-test test-handle ()
+  ;; The branch runs before unwinding, so it can resume.
+  (is (== 5 (handle (fail-or-use-value)
+              ((Retry _) (resume-to (UseValue 5))))))
+  ;; The branch runs in the dynamic environment of the THROW.
+  (is (== 9 (handle (dynamic-bind ((*handler-depth* 9))
+                      (throw (Retry 0)))
+              ((Retry _) *handler-depth*))))
+  ;; A branch that finishes normally returns its value from HANDLE.
+  (is (== 10 (handle (fail-until 0 1)
+               ((Retry j) (+ j 10)))))
+  (is (== 20 (handle (fail-until 0 1)
+               ((the Retry e)
+                (match e
+                  ((Retry j) (+ j 20)))))))
+  ;; Exceptions that match no branch keep propagating.
+  (is (== 2 (catch (handle (fail-until 0 1)
+                     ((Retry 5) 1))
+              ((Retry _) 2)))))

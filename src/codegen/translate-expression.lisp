@@ -1030,6 +1030,7 @@ Returns a `node'.")
 
       (make-node-catch
        :type (tc:qualified-ty-type qual-ty)
+       :in-place-p (tc:node-catch-in-place-p expr)
        :expr (translate-expression (tc:node-catch-expr expr) ctx env)
        :branches (mapcar
                   (lambda (branch)

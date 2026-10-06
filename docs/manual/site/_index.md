@@ -51,8 +51,8 @@ see the [Standard Library Reference](/reference/).
 |  | [`for*`](/manual/operators/for-star/) | [`rec`](/manual/operators/rec/) |  |
 | **Control** | [`<-`](/manual/operators/do-bind/) | [`do`](/manual/operators/do/) | [`progn`](/manual/operators/progn/) |
 |  | [`return`](/manual/operators/return/) |  |  |
-| **Exceptions** | [`catch`](/manual/operators/catch/) | [`resumable`](/manual/operators/resumable/) | [`resume-to`](/manual/operators/resume-to/) |
-|  | [`throw`](/manual/operators/throw/) |  |  |
+| **Exceptions** | [`catch`](/manual/operators/catch/) | [`handle`](/manual/operators/handle/) | [`resumable`](/manual/operators/resumable/) |
+|  | [`resume-to`](/manual/operators/resume-to/) | [`throw`](/manual/operators/throw/) |  |
 | **Convenience** | [`.<`](/manual/operators/compose-right/) | [`.>`](/manual/operators/compose-left/) | [`as`](/manual/operators/as/) |
 |  | [`nest`](/manual/operators/nest/) | [`pipe`](/manual/operators/pipe/) | [`try-as`](/manual/operators/try-as/) |
 |  | [`unwrap-as`](/manual/operators/unwrap-as/) |  |  |

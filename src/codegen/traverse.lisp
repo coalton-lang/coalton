@@ -164,6 +164,7 @@ nodes."
     (action (:traverse node-catch node &rest args)
       (make-node-catch
        :type (node-type node)
+       :in-place-p (node-catch-in-place-p node)
        :expr (apply *traverse* (node-catch-expr node) args)
        :branches (mapcar
                   (lambda (branch)

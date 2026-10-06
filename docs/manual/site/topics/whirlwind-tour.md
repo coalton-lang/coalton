@@ -2095,7 +2095,8 @@ Briefly, the relevant syntactic forms are:
 
 - `define-exception`: Defines an exception type. Other than its name, the syntax is identical to `define-type`
 - `define-resumption`: Defines a named resumption type. 
-- `catch`: An expression for catching and handling exceptions. Handlers pattern match on exception constructors.
+- `catch`: An expression for catching and handling exceptions. Handlers pattern match on exception constructors and run after unwinding to the `catch`.
+- `handle`: Like `catch`, but handlers run where the exception was thrown, before unwinding, so they can resume.
 - `throw`: Signals an exception.
 - `resumable`: An expression that intercepts and handles a possible resumption. Again, resumption cases are executed by pattern matching on intercepted resumption constructors.
 - `resume-to`: An expression that takes a resumption instance.  Transfers control to a `resumable` block that includes a handler for the indicated resumption.
@@ -2176,8 +2177,9 @@ Unlike the wildcard branch above, this catches only division by zero. See the [L
 
 #### Defining, Invoking, and Handling Resumptions 
 
-Resumptions allow the coalton programmer to recover from an error
-without unwinding the call stack.
+Resumptions let the code that handles an error choose how the code
+that threw it should recover, without first unwinding the call stack
+to the handler.
 
 The `define-resumption` form accepts a single "Constructor". The name
 of the constructor is also the name of the type of the resumption.
@@ -2204,7 +2206,9 @@ The following example, building on the above, should elucidate
     ((SkipEgg) None)))
 ```
 
-Now define a function that makes breakfast for `n` people.  It tries to cook each egg, but if it errors by encountering a deadly egg, it resumes `make-breakfast` by skipping that egg. 
+Now define a function that makes breakfast for `n` people.  It tries to cook each egg, but if it errors by encountering a deadly egg, it resumes `make-breakfast-with` by skipping that egg. 
+
+The resumption is established inside the expression being handled, so the handler must run before unwinding. That is what `handle` does; a `catch` branch would only run after `make-breakfast-with` had been unwound.
 
 ```lisp 
 (declare make-breakfast-for (UFix -> (Vector Egg)))
@@ -2215,7 +2219,7 @@ Now define a function that makes breakfast for `n` people.  It tries to cook eac
       :repeat n
       (let egg = (if (== 0 (mod i 5)) Xenomorph (Goose False False)))
       (do
-       (cooked <- (catch (make-breakfast-with egg)
+       (cooked <- (handle (make-breakfast-with egg)
                     ((DeadlyEgg _)    (resume-to skip))))
        (pure (vector:push! cooked eggs))))
     eggs))
@@ -2234,7 +2238,7 @@ make-breakfast-for
 ```
 
 But `cook` signals a `DeadlyEgg` error on `Xenomorph`
-eggs. `make-breakfast-for` catches that error and resumes to
+eggs. `make-breakfast-for` handles that error and resumes to
 `SkipEgg`, where `make-breakfast-with` receives that resumption and
 handles it.
 

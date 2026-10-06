@@ -216,6 +216,97 @@
       (types `(values ,@types &optional))
       (t '(values)))))
 
+(defun catch-branch-handler-type (branch env)
+  "Return the Lisp type of the conditions that BRANCH of a `catch` or
+`handle` expression can match."
+  (declare (type catch-branch branch)
+           (type tc:environment env))
+  (let ((pattern (catch-branch-pattern branch))
+        (exception-type (catch-branch-exception-type branch)))
+    (cond
+      ;; `(the T pat)` branches catch the runtime type of T.
+      (exception-type
+       (tc:lisp-type exception-type env))
+      ;; Constructor patterns catch their constructor's class.
+      ((pattern-constructor-p pattern)
+       (tc:constructor-entry-classname
+        (tc::lookup-constructor env (pattern-constructor-name pattern))))
+      ;; Wildcard patterns catch every CL:ERROR.
+      (t
+       (check-type pattern (or pattern-wildcard pattern-var))
+       'error))))
+
+(defun codegen-catch (node env)
+  "Generate code for a `catch` expression.
+
+Branch patterns are tested where the exception was thrown, so an exception
+that matches no branch propagates without unwinding. The selected branch runs
+after unwinding to the `catch` form, in the dynamic environment of the
+`catch` form."
+  (declare (type node-catch node)
+           (type tc:environment env))
+  (let ((normal-exit (gensym "CATCH-NORMAL-"))
+        (dispatch-exit (gensym "CATCH-DISPATCH-"))
+        (index-var (gensym "BRANCH-"))
+        (condition-var (gensym "CONDITION-"))
+        (handlers nil)
+        (bodies nil))
+    (loop :for branch :in (node-catch-branches node)
+          :for index :from 0
+          :for pattern := (catch-branch-pattern branch)
+          :do (multiple-value-bind (predicate bindings)
+                  (codegen-pattern pattern condition-var (pattern-type pattern) env)
+                (push `(,(catch-branch-handler-type branch env)
+                        (lambda (,condition-var)
+                          (declare (ignorable ,condition-var))
+                          (when ,predicate
+                            (return-from ,dispatch-exit
+                              (values ,index ,condition-var)))))
+                      handlers)
+                (push `(,index
+                        (let ,bindings
+                          (declare (ignorable ,@(mapcar #'car bindings)))
+                          ,(codegen-expression (catch-branch-body branch) env)))
+                      bodies)))
+    `(block ,normal-exit
+       (multiple-value-bind (,index-var ,condition-var)
+           (block ,dispatch-exit
+             (handler-bind ,(nreverse handlers)
+               (return-from ,normal-exit
+                 ,(codegen-expression (node-catch-expr node) env))))
+         (declare (ignorable ,condition-var))
+         (ecase ,index-var ,@(nreverse bodies))))))
+
+(defun codegen-handle (node env)
+  "Generate code for a `handle` expression.
+
+A matching branch runs inside its handler, where the exception was thrown and
+before anything unwinds, so it can transfer control to a resumption
+established by the code that threw. If the branch finishes normally, its
+value is returned from the `handle` form."
+  (declare (type node-catch node)
+           (type tc:environment env))
+  (let ((block-label (gensym "HANDLE-BLOCK-"))
+        (condition-var (gensym "CONDITION-")))
+    `(block ,block-label
+       (handler-bind
+           ,(loop :for branch :in (node-catch-branches node)
+                  :for pattern := (catch-branch-pattern branch)
+                  :collect (multiple-value-bind (predicate bindings)
+                               (codegen-pattern pattern condition-var (pattern-type pattern) env)
+                             `(,(catch-branch-handler-type branch env)
+                               (lambda (,condition-var)
+                                 (declare (ignorable ,condition-var))
+                                 (when ,predicate
+                                   (let ,bindings
+                                     (declare (ignorable ,@(mapcar #'car bindings)))
+                                     ;; If the body transfers control, e.g. by
+                                     ;; invoking a resumption, it does so before
+                                     ;; this exit.
+                                     (return-from ,block-label
+                                       ,(codegen-expression (catch-branch-body branch) env))))))))
+         ,(codegen-expression (node-catch-expr node) env)))))
+
 (defgeneric codegen-expression (node env)
   (:method ((node node-literal) env)
     (declare (type tc:environment env)
@@ -500,50 +591,9 @@
 
   (:method ((node node-catch) env)
     (declare (type tc:environment env))
-    (let* ((block-label   (gensym "CATCH-BLOCK"))
-           (handler-cases
-             (loop
-               :for branch :in (node-catch-branches node)
-               :for pattern
-                 := (catch-branch-pattern branch)
-               :for exception-type
-                 := (catch-branch-exception-type branch)
-               ;; `(the T pat)` branches catch the runtime type of T,
-               ;; constructor patterns catch their constructor's class,
-               ;; and wildcard patterns catch every CL:ERROR.
-               :for handler-type
-                 := (if exception-type
-                        (tc:lisp-type exception-type env)
-                        (etypecase pattern
-                          (pattern-constructor
-                           (let* ((ctor-name (pattern-constructor-name pattern))
-                                  (ctor      (tc::lookup-constructor env ctor-name)))
-                             (tc:constructor-entry-classname ctor)))
-                          ((or pattern-wildcard pattern-var)
-                           'error)))
-               :for case-body
-                 := (codegen-expression (catch-branch-body branch) env)
-               :for lambda-var
-                 := (gensym (if (symbolp handler-type)
-                                (symbol-name handler-type)
-                                "CONDITION"))
-               ;; NB: if CASE-BODY invokes a restart then control will
-               ;; be transferred before the transfer due to
-               ;; return-from.
-               :for inner-body
-                 := `(return-from ,block-label ,case-body)
-               :collect (multiple-value-bind (predicate bindings)
-                            (codegen-pattern pattern lambda-var (pattern-type pattern) env)
-                          `(,handler-type
-                            (lambda (,lambda-var)
-                              (declare (ignorable ,lambda-var))
-                              (when ,predicate
-                                (let ,bindings
-                                  (declare (ignorable ,@(mapcar #'car bindings)))
-                                  ,inner-body))))))))
-      `(block ,block-label
-         (handler-bind ,handler-cases
-           ,(codegen-expression (node-catch-expr node) env)))))
+    (if (node-catch-in-place-p node)
+        (codegen-handle node env)
+        (codegen-catch node env)))
 
   (:method ((node node-resumable) env)
     (declare (type tc:environment env))

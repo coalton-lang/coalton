@@ -36,7 +36,8 @@ Other differences are outlined in this table:
 |:-------------------|:-----------|
 | `defun`            | `define`   |
 | `lambda`           | `fn`       |
-| `handler-bind`     | `catch`    |
+| `handler-case`     | `catch`    |
+| `handler-bind`     | `handle`   |
 | `error`, `signal`  | `throw`    |
 | condition, error   | exception  |
 | restart            | resumption |

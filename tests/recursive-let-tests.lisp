@@ -92,19 +92,28 @@
               (coalton-tests/recursive-let-tests::rec-tail-under-or 5)))))
 
 (deftest rec-catch-tail-calls-are-allowed ()
+  ;; CATCH runs a branch after unwinding, so a recursive call in a branch
+  ;; is a tail call and the loop runs in constant stack space.
   (with-coalton-compilation (:package #:coalton-tests/recursive-let-tests)
     (coalton-toplevel
+      (define-exception RecStep
+        (RecStep UFix))
+
       (declare rec-tail-under-catch (UFix -> UFix * UFix))
       (define (rec-tail-under-catch n)
         (rec go ((i 0))
           (catch (if (>= i n)
                      (values i (* i i))
-                     (go (+ i 1)))
-            (_ (values 0 0)))))))
+                     (throw (RecStep i)))
+            ((RecStep j) (go (+ j 1))))))))
   (is (equal '(5 25)
              (multiple-value-list
               (eval '(coalton:coalton
-                      (coalton-tests/recursive-let-tests::rec-tail-under-catch 5)))))))
+                      (coalton-tests/recursive-let-tests::rec-tail-under-catch 5))))))
+  (is (equal '(100000 10000000000)
+             (multiple-value-list
+              (eval '(coalton:coalton
+                      (coalton-tests/recursive-let-tests::rec-tail-under-catch 100000)))))))
 
 (defun rec-test-local-function-arities (name)
   "Return the arities of local functions in NAME's generated IR."

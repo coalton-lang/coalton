@@ -1120,20 +1120,22 @@ Returns four values:
                          (entry   (tc:lookup-type (tc-env-env env) ty-name)))
     (tc:type-entry-resumption-p entry)))
 
-(defun parse-catch-exception-type (type env)
-  "Parse TYPE, the type in a `((the TYPE pat) ...)` catch branch, and ensure
-that it denotes an exception type."
+(defun parse-catch-exception-type (type name env)
+  "Parse TYPE, the type in a `((the TYPE pat) ...)` branch of a `catch` or
+`handle` expression, and ensure that it denotes an exception type. NAME is
+the operator of the expression, used in error messages."
   (declare (type parser:ty type)
+           (type string name)
            (type tc-env env)
            (values tc:ty &optional))
   ;; Exception types have no parameters, and a handler cannot test type
   ;; arguments at runtime, so the caught type must be fully known.
   (when (parser:collect-type-variables type)
-    (tc-error "Invalid catch type"
+    (tc-error (format nil "Invalid ~A type" name)
               (tc-note type "the caught type cannot contain type variables")))
   (let ((ty (parse-type type (tc-env-parser-env env))))
     (unless (exception-type-p ty env)
-      (tc-error "Invalid catch type"
+      (tc-error (format nil "Invalid ~A type" name)
                 (tc-note type "type '~A' is not an exception type"
                          (type-object-string ty env))))
     ty))
@@ -1370,9 +1372,13 @@ other, so they can be inferred monomorphically before the recursive body."
                         :when bad :return bad)))
 
              (parser:node-catch
-              (or (check-node (parser:node-catch-expr node) tailp)
+              ;; The guarded expression runs inside the handlers, and the
+              ;; branches of `handle` run before unwinding, so neither is a
+              ;; tail position. `catch` branches run after unwinding.
+              (or (check-node (parser:node-catch-expr node) nil)
                   (loop :for branch :in (parser:node-catch-branches node)
-                        :for bad := (check-body (parser:node-catch-branch-body branch) tailp)
+                        :for bad := (check-body (parser:node-catch-branch-body branch)
+                                                (and tailp (not (parser:node-catch-in-place-p node))))
                         :when bad :return bad)))
 
              (parser:node-resumable
@@ -2535,10 +2541,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
              (type tc:substitution-list subs)
              (type tc-env env)
              (values tc:ty tc:ty-predicate-list accessor-list node-catch tc:substitution-list &optional))
-    (let ((ret-ty (tc:make-variable :kind tc:+kstar+ :allow-result-p t)))
-      ;; On the non-throwing path, CATCH returns its guarded expression
-      ;; directly, so the guarded expression and each branch share the same
-      ;; result type.
+    (let ((ret-ty (tc:make-variable :kind tc:+kstar+ :allow-result-p t))
+          (name (parser:node-catch-operator-name node)))
+      ;; On the non-throwing path, CATCH and HANDLE return their guarded
+      ;; expression directly, so the guarded expression and each branch
+      ;; share the same result type.
       (multiple-value-bind (expr-ty preds accessors expr-node subs)
           (infer-expression-type (parser:node-catch-expr node)
                                  ret-ty
@@ -2551,7 +2558,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                  (loop
                    :for branch :in (parser:node-catch-branches node)
                    :for type := (parser:node-catch-branch-exception-type branch)
-                   :collect (and type (parse-catch-exception-type type env))))
+                   :collect (and type (parse-catch-exception-type type name env))))
                ;; Infer type of each pattern, ensuring it is an exception type
                (branch-pat-nodes
                  (loop
@@ -2568,10 +2575,11 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                (exception-type-p pat-ty env)
                                (typep pattern 'parser:pattern-wildcard))
                      :do (tc-error
-                          "Invalid catch case"
+                          (format nil "Invalid ~A case" name)
                           (tc-note
                            pat-node
-                           "Catch branch pattern must be an exception constructor pattern or a wildcard."))
+                           "~@(~A~) branch pattern must be an exception constructor pattern or a wildcard."
+                           name))
                    :else
                      :do (setf subs subs_)
                          (setf preds (append preds (pattern-predicates pat-node)))
@@ -2613,6 +2621,7 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                    (make-node-catch
                     :type (tc:qualify nil type)
                     :location (source:location node)
+                    :in-place-p (parser:node-catch-in-place-p node)
                     :expr expr-node
                     :branches branch-nodes)
                    subs)))

@@ -179,3 +179,63 @@ error: Invalid rec
 help: Use `let` + `fn` instead if you need non-tail recursion or want to pass the recursive function around.
  5 |     (let ((f go))
    |              --
+
+================================================================================
+108 rec call in a catch expression is not a tail call
+================================================================================
+
+(package coalton-unit-tests/recursive-let)
+
+(define (bad n)
+  (rec go ((i 0))
+    (catch (if (>= i n)
+               i
+               (go (+ i 1)))
+      (_ 0))))
+
+--------------------------------------------------------------------------------
+
+error: Invalid rec
+  --> test:7:16
+   |
+ 4 |    (rec go ((i 0))
+   |         -- `rec` binds go here
+ 5 |      (catch (if (>= i n)
+ 6 |                 i
+ 7 |                 (go (+ i 1)))
+   |                  ^^ this use of recursive operator go is not a direct tail call
+help: Use `let` + `fn` instead if you need non-tail recursion or want to pass the recursive function around.
+ 7 |                (go (+ i 1)))
+   |                 --
+
+================================================================================
+109 rec call in a handle branch is not a tail call
+================================================================================
+
+(package coalton-unit-tests/recursive-let)
+
+(define-exception Step
+  (Step UFix))
+
+(define (bad n)
+  (rec go ((i 0))
+    (handle (if (>= i n)
+                i
+                (throw (Step i)))
+      ((Step j) (go (+ j 1))))))
+
+--------------------------------------------------------------------------------
+
+error: Invalid rec
+  --> test:11:17
+    |
+ 7  |    (rec go ((i 0))
+    |         -- `rec` binds go here
+ 8  |      (handle (if (>= i n)
+ ...
+ 10 |                  (throw (Step i)))
+ 11 |        ((Step j) (go (+ j 1))))))
+    |                   ^^ this use of recursive operator go is not a direct tail call
+help: Use `let` + `fn` instead if you need non-tail recursion or want to pass the recursive function around.
+ 11 |       ((Step j) (go (+ j 1))))))
+    |                  --

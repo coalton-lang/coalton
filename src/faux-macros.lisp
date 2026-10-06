@@ -98,6 +98,9 @@
 (define-coalton-editor-macro coalton:catch (expr &body handler-patterns)
     "Exception handling expression.")
 
+(define-coalton-editor-macro coalton:handle (expr &body handler-patterns)
+    "Exception handling expression whose handlers run before unwinding.")
+
 (define-coalton-editor-macro coalton:dynamic-bind (bindings &body body)
     "Dynamically rebind Coalton dynamic variables.")
 

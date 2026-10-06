@@ -1424,7 +1424,7 @@ standard call
       :repeat n
       (let egg = (if (== 0 (mod i 5)) Xenomorph (Goose False False)))
       (do
-       (cooked <- (catch (make-breakfast-with egg)
+       (cooked <- (handle (make-breakfast-with egg)
                     ((DeadlyEgg _)    (resume-to skip))))
        (pure (vector:push! cooked eggs))))
     eggs))
