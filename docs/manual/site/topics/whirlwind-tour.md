@@ -1779,6 +1779,17 @@ Functions can be returned from early with `return`.
     (into n)))
 ```
 
+`need` returns early when a `Result` or `Optional` holds a failure. It takes the value of an `Ok` or `Some`, and otherwise returns the `Err` or `None` from the enclosing function, much like Rust's `?` operator:
+
+```lisp
+(coalton-toplevel
+  (declare add-parsed (String * String -> (Result String Integer)))
+  (define (add-parsed a b)
+    (let x = (need (parse-number a)))
+    (let y = (need (parse-number b)))
+    (Ok (+ x y))))
+```
+
 ## Type Classes
 
 Coalton supports type classes.

@@ -87,6 +87,28 @@ Note that this may copy the object or allocate memory."
              `(fn (,lexpr)
                 (the ,type (,unwrap (,try-into ,lexpr))))))))
 
+(define-expression-macro need (expr)
+  "Take the value held by EXPR, a `Fallible` container such as a `Result` or an `Optional`. If EXPR holds a failure instead, such as an `Err` or `None`, return that failure from the enclosing function, whose result must be a container of the same kind.
+
+    (need <expr>)
+
+is equivalent to
+
+    (match (split-failure <expr>)
+      ((Ok value) value)
+      ((Err failure) (return failure)))
+
+`need` does not catch exceptions; use `coalton/result:try` to turn thrown exceptions into `Result` values first."
+  (cl:let ((split-failure (cl:ignore-errors (cl:find-symbol "SPLIT-FAILURE" "COALTON/CLASSES")))
+           (ok (cl:ignore-errors (cl:find-symbol "OK" "COALTON/CLASSES")))
+           (err (cl:ignore-errors (cl:find-symbol "ERR" "COALTON/CLASSES"))))
+    (cl:assert (cl:and split-failure ok err) ()
+               "`need` macro does not have access to `split-failure` yet.")
+    (alexandria:with-gensyms (value failure)
+      `(match (,split-failure ,expr)
+         ((,ok ,value) ,value)
+         ((,err ,failure) (return ,failure))))))
+
 (define-expression-macro nest (cl:&rest items)
   "A syntactic convenience for function application. Transform
 

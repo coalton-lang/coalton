@@ -46,6 +46,7 @@
    #:TryInto
    #:Iso
    #:Unwrappable #:unwrap-or-else #:with-default #:unwrap #:unwrap-into #:expect #:as-optional
+   #:Fallible #:split-failure
    #:default #:defaulting-unwrap #:default?))
 
 (in-package #:coalton/classes)
@@ -639,6 +640,16 @@ Typical `fail` continuations are:
                     (fn () None)
                     container))
 
+
+  ;;
+  ;; Fallible for returning failures early with NEED
+  ;;
+
+  (define-class (Fallible :f)
+    "Containers that hold either a value or a failure, such as `Result` and `Optional`. `need` uses this class to return failures from functions early."
+    (split-failure
+     "Return the value in CONTAINER in `Ok`, or its failure in `Err`. The failure is given a new value type so that it can be returned from a function whose result holds a different type of value."
+     ((:f :a) -> (Result (:f :b) :a))))
 
   ;;
   ;; Default

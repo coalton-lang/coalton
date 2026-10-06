@@ -122,6 +122,7 @@
    #:as
    #:try-as
    #:unwrap-as
+   #:need
    #:nest
    #:pipe
    #:.<
