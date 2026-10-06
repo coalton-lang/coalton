@@ -350,7 +350,7 @@
   (is (== 0 (bits:dpb (the U8 1) 1 8 (the U8 0))))
   (is (== 0 (bits:dpb (the Bit 1) 1 1 (the Bit 0))))
   (is (== 0 (bits:dpb (the UFix 1) 1 %ufix-width (the UFix 0))))
-  (is (== -2 (bits:shift 1 (lisp (-> IFix) () cl:most-positive-fixnum))))
+  (is (== -2 (bits:shift 1 (the IFix math:maxBound))))
   (is (== 0 (bits:reverse-n-bits 0 (the U64 5))))
   (is (== 9223372036854775808 (bits:reverse-n-bits 65 (the U64 3))))
   (is (== 0 (bits:reverse-n-bits 1000000000000 (the U64 3)))))

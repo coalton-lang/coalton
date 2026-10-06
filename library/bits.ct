@@ -8,7 +8,8 @@
    #:coalton)
   (:import-from
    #:coalton/classes
-   #:Eq)
+   #:Eq
+   #:Into)
   (:import-from
    #:coalton/internal/rbit
    #:rbit)
@@ -96,47 +97,7 @@ do not, because the zeros shifted in become ones under `not`."
     (not   "The bitwise complement of a value."
            (:int -> :int))
     (shift "Shift a value left by `k` bits, or right by `-k` bits when `k` is negative. See `Bits` for how the result fits the width."
-           (Integer * :int -> :int)))
-
-  (inline)
-  (declare ldb (Bits :a => UFix * UFix * :a -> :a))
-  (define (ldb size position x)
-    "Extract the `size`-bit field of `x` that starts at bit `position`:
-
-```
-(ldb size position x) = wrap (ldb (byte size position) x)
-```
-
-where the right-hand side is the Common Lisp `ldb` and `wrap` is as in
-`Bits`. A field that is narrower than the type and lies within its
-width is returned as a non-negative value."
-    (and (shift (lisp (-> Integer) (position) (cl:- position)) x)
-         (not (shift (lisp (-> Integer) (size) size) (not (xor x x))))))
-
-  (inline)
-  (declare dpb (Bits :a => :a * UFix * UFix * :a -> :a))
-  (define (dpb new size position x)
-    "Replace the `size`-bit field of `x` that starts at bit `position` with the low `size` bits of `new`:
-
-```
-(dpb new size position x) = wrap (dpb new (byte size position) x)
-```
-
-where the right-hand side is the Common Lisp `dpb` and `wrap` is as in
-`Bits`. Together with `ldb`, it satisfies the following laws for all
-values `a`, `n`, and `m`, sizes `s`, and positions `p`, where `w` is the
-width of the type:
-
-```
-(dpb (ldb s p a) s p a) = a
-(dpb m s p (dpb n s p a)) = (dpb m s p a)
-(ldb s p (dpb n s p a)) = (ldb s 0 n)    ; when s + p <= w
-```"
-    (let ((p (lisp (-> Integer) (position) position))
-          (field (not (shift (lisp (-> Integer) (size) size) (not (xor x x))))))
-      (let ((mask (shift p field)))
-        (or (and x (not mask))
-            (and (shift p new) mask))))))
+           (Integer * :int -> :int))))
 
 (coalton-toplevel
 
