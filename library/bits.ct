@@ -140,34 +140,52 @@ width of the type:
 (coalton-toplevel
 
   (define-class (ReverseBits :t)
-    "A type class for number types that support bit reversal."
+    "Bit reversal for fixed-width unsigned integer types.
+
+For a type of width `w`, bit `i` of `(reverse-bits x)` is bit
+`w - 1 - i` of `x`, for every `i` below `w`. The function
+`reverse-n-bits` reverses only the low `n` bits of its argument:
+
+```
+(reverse-bits (reverse-bits x)) = x
+(reverse-n-bits n x) = (shift (- n w) (reverse-bits x))
+```
+
+where `shift` is the `Bits` method. In particular,
+`(reverse-n-bits w x) = (reverse-bits x)` and
+`(reverse-n-bits 0 x) = 0`. When `n` is less than `w`, the result holds
+the low `n` bits of `x` in reverse order, with zeros above them."
     (reverse-bits
-     "Reverse the bits of `x`."
+     "Reverse the order of all the bits of `x`."
      (:t -> :t))
     (reverse-n-bits
-     "Reverse the first `n` bits of `x` and set the rest to 0."
+     "Reverse the low `n` bits of `x`, clearing the bits above them. See `ReverseBits`."
      (UFix * :t -> :t))))
 
 (cl:defmacro define-reverse-bits (type nbits)
-  "Define an instance of `ReverseBits` for the Coalton type `type` of size `nbits`."
-  (cl:let* ((shift (cl:- 64 (cl:the (cl:integer 0 64) (cl:eval nbits)))))
+  "Define an instance of `ReverseBits` for the unsigned Coalton type `type` of width `nbits`."
+  (cl:let* ((width (cl:the (cl:integer 1 64) (cl:eval nbits)))
+            (mask (cl:1- (cl:ash 1 width))))
     `(coalton-toplevel
        (define-instance (ReverseBits ,type)
          (inline)
          (define (reverse-bits x)
            (lisp (-> ,type) (x)
-             (cl:ash (cl:the (cl:unsigned-byte 64) (rbit x))
-                     ,(cl:- shift))))
+             (cl:ash (rbit x) ,(cl:- width 64))))
          (inline)
          (define (reverse-n-bits n x)
            (lisp (-> ,type) (n x)
-             (cl:ash (cl:the (cl:unsigned-byte 64) (rbit x))
-                     (cl:the (cl:integer -63 0) (cl:- n 64)))))))))
+             (cl:let ((reversed (cl:ash (rbit x) ,(cl:- width 64))))
+               (cl:cond
+                 ((cl:<= n ,width)
+                  (cl:ash reversed (cl:- n ,width)))
+                 ((cl:< n ,(cl:* 2 width))
+                  (cl:logand (cl:ash reversed (cl:- n ,width)) ,mask))
+                 (cl:t
+                  0)))))))))
 
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
   (cl:defconstant +n-ufix-bits+ (cl:integer-length cl:most-negative-fixnum)))
-
-(cl:declaim (cl:optimize (cl:speed 3) (cl:safety 0) (cl:compilation-speed 0)))
 
 (define-reverse-bits U8 8)
 (define-reverse-bits U16 16)
