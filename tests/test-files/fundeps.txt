@@ -214,3 +214,41 @@ error: Context conflicts with functional dependencies
    |
  8 |  (declare f ((C :a String) (D :a Integer) => :a))
    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the predicates C :A String and C :A Integer conflict with functional dependencies
+
+================================================================================
+111 Instance conflicts with its own context
+================================================================================
+
+(package coalton-unit-test/fundeps)
+
+(define-class (C :a :b (:a -> :b)))
+
+(define-instance (C :a :b => C :a (List :b)))
+
+--------------------------------------------------------------------------------
+
+error: Instance fundep conflict
+  --> test:5:17
+   |
+ 5 |  (define-instance (C :a :b => C :a (List :b)))
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ instance requires C :A :B, which conflicts with C :A (List :B) under functional dependencies
+
+================================================================================
+112 Instance context conflicts with functional dependencies
+================================================================================
+
+(package coalton-unit-test/fundeps)
+
+(define-class (C :a :b (:a -> :b)))
+
+(define-class (D :a))
+
+(define-instance ((C :a String) (C :a Integer) => D :a))
+
+--------------------------------------------------------------------------------
+
+error: Instance fundep conflict
+  --> test:7:17
+   |
+ 7 |  (define-instance ((C :a String) (C :a Integer) => D :a))
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ instance requires C :A Integer, which conflicts with C :A String under functional dependencies

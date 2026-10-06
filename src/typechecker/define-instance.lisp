@@ -239,6 +239,22 @@ must not collapse distinct variables or specialize one to a concrete type.
                                          (print-object e s))))))))
 
         (handler-case
+            (tc:check-instance-fundep-consistency env pred context)
+          (tc:context-fundep-conflict (e)
+            ;; In this case, an instance conflicts with its own context,
+            ;; so it cannot apply without violating a functional dependency.
+            ;; For example,
+            ;;   (define-class (C :a :b (:a -> :b)))
+            ;;   (define-instance (C :a :b => C :a (List :b)))
+            ;; Here, the instance requires C :a :b whenever it provides
+            ;; C :a (List :b), but :a cannot determine both :b and (List :b).
+            (tc-error "Instance fundep conflict"
+                      (tc-location (parser:toplevel-define-instance-head-location instance)
+                                   "instance requires ~A, which conflicts with ~A under functional dependencies"
+                                   (type-object-string (tc:context-fundep-conflict-second-pred e) env)
+                                   (type-object-string (tc:context-fundep-conflict-first-pred e) env)))))
+
+        (handler-case
             (setf env (tc:add-instance env class-name instance-entry))
           (tc:overlapping-instance-error (e)
             (tc-error "Overlapping instance"

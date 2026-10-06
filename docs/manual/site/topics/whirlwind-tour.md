@@ -2016,6 +2016,8 @@ A class `C` can be given a functional dependency `(:a -> :b)` like so:
 
 If the instance `(C String Integer)` was defined, then it would be invalid to define `(C String Char)` because there are multiple values of `:b` for the same value of `:a`.
 
+An instance must also agree with its own context. The instance `(C :a :b => C :a (List :b))` is invalid: whenever it provides `C :a (List :b)`, it requires `C :a :b`, so the same `:a` would determine both `:b` and `(List :b)`.
+
 Classes can have multiple functional dependencies, each dependency can list multiple class variables on each side `(:a :b -> :c :d :e)`, and dependencies can be recursive `(:a -> :b) (:b -> :a)`.
 
 ## Specialization

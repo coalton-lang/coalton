@@ -201,6 +201,7 @@
    #:collect-fundeps                        ; FUNCTION
    #:collect-fundep-vars                    ; FUNCTION
    #:update-instance-fundeps                ; FUNCTION
+   #:check-instance-fundep-consistency      ; FUNCTION
    #:solve-fundeps                          ; FUNCTION
    #:synchronize-type-variable-counter      ; FUNCTION
    ))
@@ -2061,6 +2062,40 @@ This function will return the single functional dependency
                           :to to-tys)))))))
 
   env)
+
+(defun check-instance-fundep-consistency (env pred context)
+  "Signal CONTEXT-FUNDEP-CONFLICT if the head PRED and the CONTEXT of an
+instance, including their superclasses, conflict with functional
+dependencies.
+
+An instance only applies when its context holds, so its head and its
+context must hold together. For example, with the class
+
+  (define-class (C :a :b (:a -> :b)))
+
+the instance (C :a :b => C :a (List :b)) requires C :a :b whenever it
+provides C :a (List :b), but :a cannot determine both :b and (List :b).
+Its context covers the dependent :b, so the coverage check in
+UPDATE-INSTANCE-FUNDEPS accepts it, yet improving with it never
+terminates: every C :a :x determines :x to be (List :y) for some
+C :a :y."
+  (declare (type environment env)
+           (type ty-predicate pred)
+           (type ty-predicate-list context)
+           (values null &optional))
+  (labels ((expand (pred)
+             (let* ((class (lookup-class env (ty-predicate-class pred)))
+                    (subs (predicate-match (ty-class-predicate class) pred)))
+               (cons pred
+                     (loop :for superclass :in (ty-class-superclasses class)
+                           :append (expand (apply-substitution subs superclass)))))))
+    ;; Improvement only unifies existing variables, so this reaches a
+    ;; fixed point.
+    (loop :with preds := (mapcan #'expand (cons pred context))
+          :for subs := nil :then new-subs
+          :for new-subs := (improve-predicate-fundeps env preds subs)
+          :until (equalp new-subs subs)))
+  nil)
 
 (defun error-fundep-conflict (env class pred fundep old-from-tys new-from-tys old-to-tys new-to-tys)
   "Finds a conflicting instance and signals an error"
