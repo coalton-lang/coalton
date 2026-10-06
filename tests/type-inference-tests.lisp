@@ -557,6 +557,18 @@
    '("throw-poly-error" . "(Integer -> Integer)"))
 
   (check-coalton-types
+   "(define-resumption (PolyResume Integer))
+
+    (define (resume-any r)
+      (resume-to r))
+
+    (define (resume-poly x)
+      (the Integer (resume-any (PolyResume x))))"
+
+   '("resume-any" . "(forall (:a (:b Values)) (Resumption :a => :a -> :b))")
+   '("resume-poly" . "(Integer -> Integer)"))
+
+  (check-coalton-types
    "(define-exception TestException
       (TestException Integer))
 

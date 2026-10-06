@@ -2,6 +2,7 @@
   (:import-from #:coalton-impl/util #:coalton-bug)
   (:mix-reexport
    #:coalton-impl/runtime/function
-   #:coalton-impl/runtime/optional)
+   #:coalton-impl/runtime/optional
+   #:coalton-impl/runtime/resumption)
   (:export
    #:coalton-bug))

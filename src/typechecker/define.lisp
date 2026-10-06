@@ -3018,11 +3018,31 @@ Returns (VALUES INFERRED-TYPE PREDICATES NODE SUBSTITUTIONS)")
                                subs
                                env)
 
-      (unless (resumption-type-p resumption-ty env)
-        (tc-error "Invalid resume-to"
-                  (tc-note node "Argument to `resume-to` be a known resumption.")
-                  (tc-note node "Not Yet Supported: resume-to polymorphism.")))
-      
+      (let ((resumption-ty (tc:apply-substitution subs resumption-ty))
+            (resumption-class (resumption-class-name)))
+        (cond
+          ;; A known type must be a resumption type.
+          ((not (tc:tyvar-p resumption-ty))
+           (unless (resumption-type-p resumption-ty env)
+             (tc-error "Invalid resume-to"
+                       (tc-note expr-node
+                                "type '~A' is not a resumption type"
+                                (type-object-string resumption-ty env)))))
+
+          ;; Otherwise, require a Resumption instance, which makes
+          ;; RESUME-TO polymorphic over resumption types.
+          ((and resumption-class
+                (tc:lookup-class (tc-env-env env) resumption-class :no-error t))
+           (push (tc:make-ty-predicate
+                  :class resumption-class
+                  :types (list resumption-ty)
+                  :location (source:location node))
+                 preds))
+
+          (t
+           (tc-error "Invalid resume-to"
+                     (tc-note expr-node "Argument to `resume-to` must be a known resumption.")))))
+
       (values
        expected-type
        preds

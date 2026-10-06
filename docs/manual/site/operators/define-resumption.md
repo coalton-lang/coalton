@@ -23,6 +23,10 @@ weight: 54
   resumption type's name.
 - Unlike exceptions, resumptions are intended to transfer control to an
   enclosing `resumable` handler via [`resume-to`](/manual/operators/resume-to/).
+- Every resumption type is an instance of the `Resumption` class, which
+  `resume-to` requires. Instances of `Resumption` cannot be written manually,
+  and a resumption type cannot be redefined as a type that is not a
+  resumption.
 - Optional docstrings are allowed.
 
 ## Example
