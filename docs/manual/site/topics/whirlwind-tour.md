@@ -2157,6 +2157,14 @@ A branch written `(the T var)` catches every exception of type `T` and binds it,
 
 A bound exception can be rethrown unchanged with `(throw e)`.
 
+The functions `coalton/result:try` and `coalton/result:ok-or-throw` convert between exceptions and `Result` values, so the same function can also be written as:
+
+```lisp
+(declare crack-safely (Egg -> (Result BadEgg Egg)))
+(define (crack-safely egg)
+  (result:try (fn () (crack egg))))
+```
+
 #### Catching Lisp Conditions
 
 An existing Lisp condition type can be used as an exception type by giving `define-exception` a `(repr :native ...)` attribute and no constructors. The Lisp type must be a subtype of `cl:serious-condition`.
@@ -2245,11 +2253,12 @@ handles it.
 
 For the time being, the following caveats apply;
 
-1. No support for polymorphism for `throw` or `resume-to`
-   expressions. E.g. the following will not compile without type
-   annotation:
-   - `(define (th a) (throw a))` 
+1. No support for polymorphism for `resume-to` expressions. E.g. the
+   following will not compile without a type annotation:
    - `(define (res a) (resume-to a))`
+
+   `throw` is polymorphic over exception types: `(define (th a) (throw a))`
+   has the type `Exception :e => :e -> :a`.
 
 2. A wildcard `_` branch catches every Lisp `error` but cannot bind
    it. To bind a Lisp condition, first make its type an exception
@@ -2262,11 +2271,11 @@ For the time being, the following caveats apply;
 3. `resumable` branches are even more restrictive. You cannot match
    against anything _other_ than a resumption constructor pattern.
 
-4. No type class is associated with exception-signaling forms. We are
-   pursuing different approaches to static checking of forms that
-   might hop the call stack. In the end, a type class approach may win
-   out. Whatever we do, we will endeavor to make it compatible with
-   the existing syntax and semantics.
+4. The `Exception` class identifies the types that can be thrown,
+   but a function's type does not say which exceptions it may throw.
+   We are pursuing different approaches to static checking of forms
+   that might hop the call stack. Whatever we do, we will endeavor to
+   make it compatible with the existing syntax and semantics.
 
 
    

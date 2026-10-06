@@ -6,6 +6,7 @@
   (:export
    #:Signalable
    #:error
+   #:Exception
    #:Tuple
    #:Optional #:Some #:None
    #:Result #:Ok #:Err
@@ -67,7 +68,16 @@
   (define-instance (Signalable String)
     (define (error str)
       (lisp (-> :result) (str)
-        (cl:error str)))))
+        (cl:error str))))
+
+  ;;
+  ;; Exceptions
+  ;;
+
+  (define-class (types:RuntimeRepr :e => Exception :e)
+    "Types whose values can be thrown with `throw` and caught with `catch` or `handle`.
+
+Every type defined with `define-exception` is an instance, and instances cannot be written manually. A value of an exception type is a Lisp condition whose type is the `runtime-repr` of the exception type."))
 
 
 (coalton-toplevel

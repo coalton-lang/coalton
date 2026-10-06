@@ -6,7 +6,8 @@
    #:coalton/optional) 
   (:local-nicknames
    (#:cell #:coalton/cell)
-   (#:iter #:coalton/iterator))
+   (#:iter #:coalton/iterator)
+   (#:types #:coalton/types))
   (:export
    #:ok?
    #:err?
@@ -16,7 +17,9 @@
    #:flatten
    #:opt->result
    #:err-if
-   #:ok-or-error))
+   #:ok-or-error
+   #:ok-or-throw
+   #:try))
 
 (in-package #:coalton/result)
 
@@ -95,6 +98,31 @@
     (match res
       ((Ok elt) elt)
       ((Err r) (error r))))
+
+  (inline)
+  (declare ok-or-throw ((Exception :err) => (Result :err :a) -> :a))
+  (define (ok-or-throw res)
+    "Take the value in RES if it is OK, or throw its exception if it is ERR."
+    (match res
+      ((Ok elt) elt)
+      ((Err e) (throw e))))
+
+  (declare try (forall (:err :a) ((Exception :err) => (Void -> :a) -> (Result :err :a))))
+  (define (try thunk)
+    "Call THUNK and return its value in OK. If THUNK throws an exception of type
+:ERR, return the exception in ERR instead. Other exceptions propagate.
+
+As with `catch`, the exception's type is tested where it is thrown, and the
+computation that threw it is unwound before `try` returns."
+    (let exception-type = (types:runtime-repr (the (types:Proxy :err) types:Proxy)))
+    (lisp (-> (Result :err :a)) (thunk exception-type)
+      (cl:block try
+        (cl:handler-bind
+            ((cl:serious-condition
+               (cl:lambda (condition)
+                 (cl:when (cl:typep condition exception-type)
+                   (cl:return-from try (Err condition))))))
+          (Ok (call-coalton-function thunk))))))
   
   ;;
   ;; Instances

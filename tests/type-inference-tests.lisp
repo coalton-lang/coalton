@@ -540,6 +540,23 @@
    '("catch-void" . "(Boolean -> Void)"))
 
   (check-coalton-types
+   "(define-exception PolyThrowError
+      (PolyThrowError Integer))
+
+    (define (rethrow e)
+      (throw e))
+
+    (define (rethrow-integer e)
+      (the Integer (throw e)))
+
+    (define (throw-poly-error x)
+      (the Integer (rethrow (PolyThrowError x))))"
+
+   '("rethrow" . "(forall (:a (:b Values)) (Exception :a => :a -> :b))")
+   '("rethrow-integer" . "(Exception :a => :a -> Integer)")
+   '("throw-poly-error" . "(Integer -> Integer)"))
+
+  (check-coalton-types
    "(define-exception TestException
       (TestException Integer))
 

@@ -26,7 +26,7 @@ value.
   inside a `resumable` expression. A [`catch`](/manual/operators/catch/)
   branch runs after unwinding, so it can only resume to resumptions
   established outside the `catch`.
-- Like `throw`, `resume-to` is not currently polymorphic without an explicit
+- Unlike `throw`, `resume-to` is not currently polymorphic without an explicit
   type.
 
 ## Example

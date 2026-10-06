@@ -29,6 +29,10 @@ signaled with [`throw`](/manual/operators/throw/).
 - Exception types do not accept type variables.
 - Exception constructors are ordinary constructors and can be created outside
   `throw`.
+- Every exception type is an instance of the `Exception` class, which
+  [`throw`](/manual/operators/throw/) requires. Instances of `Exception` cannot
+  be written manually, and an exception type cannot be redefined as a type
+  that is not an exception.
 - With `(repr :native ⟨lisp-condition-type⟩)`, the exception type is an
   existing Lisp condition type instead of a new one. The Lisp type must be a
   subtype of `cl:serious-condition`, and the exception cannot have

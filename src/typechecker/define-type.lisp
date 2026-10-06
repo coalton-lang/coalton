@@ -349,6 +349,17 @@ This is conservative and intentionally aligns with mutable native wrappers."
            (type tc:environment env)
            (values tc:environment))
 
+  ;; Redefining a type does not remove its instances, and THROW relies on
+  ;; every instance of Exception being an exception type.
+  (let ((old-type (tc:lookup-type env (type-definition-name type) :no-error t)))
+    (when (and old-type
+               (tc:type-entry-exception-p old-type)
+               (not (type-definition-exception-p type)))
+      (tc-error "Invalid redefinition"
+                (tc-note parsed-type
+                         "exception type ~A cannot be redefined as a type that is not an exception"
+                         (type-definition-name type)))))
+
   ;; If the type was previously defined, then undefine all
   ;; constructors that were defined only on the old version of the
   ;; type.
@@ -745,8 +756,27 @@ signaled with the expectation that they may be ignored."
   (declare (type type-definition type)
            (type partial-type-env env)
            (values parser:toplevel-define-instance-list))
-  (declare (ignore env))
-  (maybe-runtime-repr-instance type))
+  ;; The RuntimeRepr instance precedes the Exception instance, which
+  ;; requires it as a superclass instance.
+  (append (maybe-runtime-repr-instance type)
+          (maybe-exception-instance type env)))
+
+(defun maybe-exception-instance (type env)
+  "Return the generated `Exception` instance for TYPE if it is an exception
+type and the `Exception` class is defined. These are the only instances of
+`Exception`."
+  (declare (type type-definition type)
+           (type partial-type-env env)
+           (values parser:toplevel-define-instance-list &optional))
+  (let ((class (exception-class-name)))
+    (when (and (type-definition-exception-p type)
+               class
+               (tc:lookup-class (partial-type-env-env env) class :no-error t))
+      (list (generated-instance-definition
+             type
+             class
+             nil
+             :ty (generated-instance-applied-type type nil))))))
 
 (defun maybe-runtime-repr-instance (type)
   (declare (type type-definition type))
