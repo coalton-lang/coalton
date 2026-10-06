@@ -8,7 +8,7 @@
    #:coalton)
   (:import-from
    #:coalton/classes
-   #:Num)
+   #:Eq)
   (:import-from
    #:coalton/internal/rbit
    #:rbit)
@@ -31,7 +31,7 @@
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (coalton-toplevel
-  (define-class (Num :int => Bits :int)
+  (define-class (Eq :int => Bits :int)
     "Bitwise operations on integers viewed as two's-complement bit strings.
 
 Each instance type has a width `w`, the number of bits in its
@@ -65,7 +65,8 @@ left by `w` or more bits gives 0. Shifting right by `w` or more bits
 gives 0 for non-negative values and -1 for negative values.
 
 These laws follow, for all values `a`, `b`, and `c`, all integers `i`,
-and all non-negative integers `j` and `k`:
+and all non-negative integers `j` and `k`, where 0 stands for the value
+with no bits set, which is `(xor a a)`:
 
 ```
 (and a b) = (and b a)    (and a (and b c)) = (and (and a b) c)
@@ -110,7 +111,7 @@ where the right-hand side is the Common Lisp `ldb` and `wrap` is as in
 `Bits`. A field that is narrower than the type and lies within its
 width is returned as a non-negative value."
     (and (shift (lisp (-> Integer) (position) (cl:- position)) x)
-         (not (shift (lisp (-> Integer) (size) size) (not 0)))))
+         (not (shift (lisp (-> Integer) (size) size) (not (xor x x))))))
 
   (inline)
   (declare dpb (Bits :a => :a * UFix * UFix * :a -> :a))
@@ -132,7 +133,7 @@ width of the type:
 (ldb s p (dpb n s p a)) = (ldb s 0 n)    ; when s + p <= w
 ```"
     (let ((p (lisp (-> Integer) (position) position))
-          (field (not (shift (lisp (-> Integer) (size) size) (not 0)))))
+          (field (not (shift (lisp (-> Integer) (size) size) (not (xor x x))))))
       (let ((mask (shift p field)))
         (or (and x (not mask))
             (and (shift p new) mask))))))
