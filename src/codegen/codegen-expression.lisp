@@ -506,19 +506,27 @@
                :for branch :in (node-catch-branches node)
                :for pattern
                  := (catch-branch-pattern branch)
-               ;; wildcard and variable patterns catch all 'error cases
-               :for exception-name
-                 := (etypecase pattern
-                      (pattern-constructor
-                       (let* ((ctor-name              (pattern-constructor-name pattern))
-                              (ctor                   (tc::lookup-constructor env ctor-name)))
-                         (tc:constructor-entry-classname ctor)))
-                      ((or pattern-wildcard pattern-var)
-                       'error))
+               :for exception-type
+                 := (catch-branch-exception-type branch)
+               ;; `(the T pat)` branches catch the runtime type of T,
+               ;; constructor patterns catch their constructor's class,
+               ;; and wildcard patterns catch every CL:ERROR.
+               :for handler-type
+                 := (if exception-type
+                        (tc:lisp-type exception-type env)
+                        (etypecase pattern
+                          (pattern-constructor
+                           (let* ((ctor-name (pattern-constructor-name pattern))
+                                  (ctor      (tc::lookup-constructor env ctor-name)))
+                             (tc:constructor-entry-classname ctor)))
+                          ((or pattern-wildcard pattern-var)
+                           'error)))
                :for case-body
                  := (codegen-expression (catch-branch-body branch) env)
                :for lambda-var
-                 := (gensym (symbol-name exception-name))
+                 := (gensym (if (symbolp handler-type)
+                                (symbol-name handler-type)
+                                "CONDITION"))
                ;; NB: if CASE-BODY invokes a restart then control will
                ;; be transferred before the transfer due to
                ;; return-from.
@@ -526,7 +534,7 @@
                  := `(return-from ,block-label ,case-body)
                :collect (multiple-value-bind (predicate bindings)
                             (codegen-pattern pattern lambda-var (pattern-type pattern) env)
-                          `(,exception-name
+                          `(,handler-type
                             (lambda (,lambda-var)
                               (declare (ignorable ,lambda-var))
                               (when ,predicate

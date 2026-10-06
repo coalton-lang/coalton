@@ -223,6 +223,7 @@
     (funcall
      (traverse-catch-branch block)
      (make-node-catch-branch
+      :exception-type (node-catch-branch-exception-type node)
       :pattern (node-catch-branch-pattern node)
       :body (traverse (node-catch-branch-body node) block)
       :location (source:location node))))

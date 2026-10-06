@@ -14,6 +14,9 @@ signaled with [`throw`](/manual/operators/throw/).
 (define-exception ⟨name⟩
   ⟨constructor⟩...)
 
+(repr :native ⟨lisp-condition-type⟩)
+(define-exception ⟨name⟩)
+
 ;; ⟨constructor⟩ := ⟨constructor-name⟩
 ;;                | (⟨constructor-name⟩ ⟨arg-type⟩ ...)
 ```
@@ -26,6 +29,16 @@ signaled with [`throw`](/manual/operators/throw/).
 - Exception types do not accept type variables.
 - Exception constructors are ordinary constructors and can be created outside
   `throw`.
+- With `(repr :native ⟨lisp-condition-type⟩)`, the exception type is an
+  existing Lisp condition type instead of a new one. The Lisp type must be a
+  subtype of `cl:serious-condition`, and the exception cannot have
+  constructors. The Lisp type must be defined when the `define-exception`
+  form is compiled, so a `define-condition` in the same file must be wrapped
+  in `(eval-when (:compile-toplevel :load-toplevel :execute) ...)`. Values
+  are usually obtained by catching them with a
+  `(the ⟨name⟩ var)` branch of [`catch`](/manual/operators/catch/), or
+  constructed in a [`lisp`](/manual/operators/lisp/) form.
+- `define-exception` accepts no other attributes.
 
 ## Example
 
@@ -33,4 +46,8 @@ signaled with [`throw`](/manual/operators/throw/).
 (define-exception BadEgg
   (UnCracked Egg)
   (DeadlyEgg Egg))
+
+(repr :native cl:division-by-zero)
+(define-exception DivisionByZero
+  "Lisp's DIVISION-BY-ZERO condition.")
 ```

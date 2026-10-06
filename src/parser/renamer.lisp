@@ -478,6 +478,7 @@
 
       (values
        (make-node-catch-branch
+        :exception-type (node-catch-branch-exception-type node)
         :pattern (rename-variables-generic% (node-catch-branch-pattern node) new-ctx)
         :body (rename-variables-generic% (node-catch-branch-body node) new-ctx)
         :location (source:location node))

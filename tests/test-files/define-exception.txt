@@ -1,0 +1,123 @@
+================================================================================
+100 Native exceptions
+================================================================================
+
+(package test-package)
+
+(repr :native cl:error)
+(define-exception LispError
+  "Any Lisp error.")
+
+(repr :native cl:division-by-zero)
+(define-exception DivisionByZero)
+
+(declare safe-divide (Integer * Integer -> Integer))
+(define (safe-divide a b)
+  (catch (lisp (-> Integer) (a b) (cl:/ a b))
+    ((the DivisionByZero _) 0)
+    ((the LispError e) (throw e))))
+
+(declare rethrow (LispError -> Integer))
+(define (rethrow e)
+  (throw e))
+
+================================================================================
+101 Native exception that is not a serious condition
+================================================================================
+
+(package test-package)
+
+(repr :native cl:warning)
+(define-exception LispWarning)
+
+--------------------------------------------------------------------------------
+
+error: Invalid repr :native attribute
+  --> test:3:0
+   |
+ 3 |  (repr :native cl:warning)
+   |  ^^^^^^^^^^^^^^^^^^^^^^^^^ native exceptions must be serious conditions, but COMMON-LISP:WARNING is not a subtype of COMMON-LISP:SERIOUS-CONDITION
+
+================================================================================
+102 Native exception with an unknown Lisp type
+================================================================================
+
+(package test-package)
+
+(repr :native no-such-condition)
+(define-exception Missing)
+
+--------------------------------------------------------------------------------
+
+error: Invalid repr :native attribute
+  --> test:3:0
+   |
+ 3 |  (repr :native no-such-condition)
+   |  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ TEST-PACKAGE::NO-SUCH-CONDITION is not a known Lisp condition type at compile time; a condition defined in the same file must be wrapped in (EVAL-WHEN (:COMPILE-TOPLEVEL :LOAD-TOPLEVEL :EXECUTE) ...)
+
+================================================================================
+103 Native exception with constructors
+================================================================================
+
+(package test-package)
+
+(repr :native cl:error)
+(define-exception LispError
+  (LispError String))
+
+--------------------------------------------------------------------------------
+
+error: Invalid define-exception
+  --> test:5:2
+   |
+ 3 |  (repr :native cl:error)
+   |  ----------------------- repr :native declared here
+ 4 |  (define-exception LispError
+ 5 |    (LispError String))
+   |    ^^^^^^^^^^^^^^^^^^ exceptions with repr :native cannot have constructors
+
+================================================================================
+104 Exception with a non-native repr
+================================================================================
+
+(package test-package)
+
+(repr :enum)
+(define-exception Mood
+  Happy
+  Sad)
+
+--------------------------------------------------------------------------------
+
+error: Invalid attribute for define-exception
+  --> test:3:0
+   |
+ 3 |   (repr :enum)
+   |   ^^^^^^^^^^^^ define-exception only accepts (repr :native <lisp-condition-type>)
+ 4 |   (define-exception Mood
+   |  _-
+ 5 | |   Happy
+ 6 | |   Sad)
+   | |______- when parsing define-exception
+
+================================================================================
+105 Exception with a derive attribute
+================================================================================
+
+(package test-package)
+
+(derive Eq)
+(define-exception Problem
+  (Problem Integer))
+
+--------------------------------------------------------------------------------
+
+error: Invalid attribute for define-exception
+  --> test:3:0
+   |
+ 3 |   (derive Eq)
+   |   ^^^^^^^^^^^ define-exception cannot have a derive attribute
+ 4 |   (define-exception Problem
+   |  _-
+ 5 | |   (Problem Integer))
+   | |____________________- when parsing define-exception

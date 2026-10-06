@@ -302,6 +302,7 @@ FORM must be a renamed parser AST fragment."
              :branches
              (mapcar (lambda (branch)
                        (parser:make-node-catch-branch
+                        :exception-type (parser:node-catch-branch-exception-type branch)
                         :pattern (parser:node-catch-branch-pattern branch)
                         :body (resolve-body (parser:node-catch-branch-body branch) ctx)
                         :location (source:location branch)))

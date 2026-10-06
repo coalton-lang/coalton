@@ -98,6 +98,7 @@
    #:node-match-branches                ; READER
    #:catch-branch                       ; STRUCT
    #:make-catch-branch                  ; CONSTRUCTOR
+   #:catch-branch-exception-type        ; READER
    #:catch-branch-pattern               ; READER
    #:catch-branch-body                  ; READER
    #:catch-branch-list                  ; TYPE
@@ -391,8 +392,11 @@ coalton symbols (`parser:identifier`)"
 
 (defstruct catch-branch
   "A branch of a catch expression."
-  (pattern (util:required 'pattern) :type pattern :read-only t)
-  (body    (util:required 'body)    :type node    :read-only t))
+  ;; EXCEPTION-TYPE is the type caught by a `((the T pat) ...)` branch, or
+  ;; NIL when the branch's pattern determines what it catches.
+  (exception-type (util:required 'exception-type) :type (or null tc:ty) :read-only t)
+  (pattern        (util:required 'pattern)        :type pattern         :read-only t)
+  (body           (util:required 'body)           :type node            :read-only t))
 
 (defmethod make-load-form ((self catch-branch) &optional env)
   (make-load-form-saving-slots self :environment env))

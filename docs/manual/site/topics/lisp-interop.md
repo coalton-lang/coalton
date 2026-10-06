@@ -181,6 +181,43 @@ Here, we used `lisp` to actually construct, type, and return our `RandomState` o
 
 See [`Vector`](https://github.com/coalton-lang/coalton/blob/main/library/vector.lisp) for a more extensive example.
 
+### Catching Lisp conditions with native exceptions
+
+`(REPR :NATIVE <type>)` can also be attached to `define-exception` to make an existing Lisp condition type a Coalton exception type. Such an exception has no constructors, and `<type>` must be a subtype of `cl:serious-condition`, such as any subtype of `cl:error`. `<type>` must also be defined when the `define-exception` form is compiled, so a `define-condition` in the same file must be evaluated at compile time too:
+
+```
+(cl:eval-when (:compile-toplevel :load-toplevel :execute)
+  (cl:define-condition widget-failure (cl:error) ()))
+
+(coalton-toplevel
+  (repr :native widget-failure)
+  (define-exception WidgetFailure))
+```
+
+Standard condition types are always defined:
+
+```
+(repr :native cl:division-by-zero)
+(define-exception DivisionByZero)
+
+(repr :native cl:arithmetic-error)
+(define-exception ArithmeticError)
+
+(declare operands (DivisionByZero -> (List Integer)))
+(define (operands e)
+  (lisp (-> (List Integer)) (e)
+    (cl:arithmetic-error-operands e)))
+
+(declare safe-divide (Integer * Integer -> (Result (List Integer) Fraction)))
+(define (safe-divide a b)
+  (catch (Ok (lisp (-> Fraction) (a b) (cl:/ a b)))
+    ((the DivisionByZero e) (Err (operands e)))))
+```
+
+A `catch` branch written `((the T var) ...)` catches every condition of type `T`, including conditions of Lisp subtypes: a branch for `ArithmeticError` also catches a `cl:division-by-zero`. Branches are tried in order, so put narrower types first. A caught condition can be inspected with `lisp` forms and rethrown unchanged with `throw`.
+
+Coalton only knows what you declare about a native condition's slots, so make sure accessor functions return what their types promise. For example, `cl:file-error-pathname` may return a string rather than a `cl:pathname`.
+
 ## Promises of `define`
 
 Consider the following definitions:

@@ -58,4 +58,5 @@
   (%run-tests "parse-throw.txt")
   (%run-tests "parse-resume-to.txt")
   (%run-tests "parse-catch.txt")
+  (%run-tests "define-exception.txt")
   (%run-tests "parse-resumable.txt"))

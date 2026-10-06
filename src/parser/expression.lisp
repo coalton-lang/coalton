@@ -114,6 +114,7 @@
    #:node-match-branches                ; ACCESSOR
    #:node-catch-branch                  ; STRUCT
    #:make-node-catch-branch             ; CONSTRUCTOR
+   #:node-catch-branch-exception-type   ; ACCESSOR
    #:node-catch-branch-pattern          ; ACCESSOR
    #:node-catch-branch-body             ; ACCESSOR
    #:node-catch-branch-list             ; TYPE
@@ -973,9 +974,13 @@ after variable renaming and before type inference."
 
 (defstruct (node-catch-branch
             (:copier nil))
-  (pattern  (util:required 'pattern)  :type pattern         :read-only t)
-  (body     (util:required 'body)     :type node-body       :read-only t)
-  (location (util:required 'location) :type source:location :read-only t))
+  ;; EXCEPTION-TYPE is non-NIL for branches written `((the T pat) ...)`,
+  ;; which catch every exception of type T. PATTERN is then a variable
+  ;; or wildcard.
+  (exception-type (util:required 'exception-type) :type (or null ty)    :read-only t)
+  (pattern        (util:required 'pattern)        :type pattern         :read-only t)
+  (body           (util:required 'body)           :type node-body       :read-only t)
+  (location       (util:required 'location)       :type source:location :read-only t))
 
 (defmethod source:location ((self node-catch-branch))
   (node-catch-branch-location self))
@@ -2417,6 +2422,46 @@ after variable renaming and before type inference."
    :body (parse-body (cst:rest form) form source)
    :location (form-location source form)))
 
+(defun catch-type-pattern-form-p (form)
+  "Is FORM a typed catch pattern, `(the T pat)`?"
+  (declare (type cst:cst form)
+           (values boolean &optional))
+  (and (cst:consp form)
+       (cst:atom (cst:first form))
+       (eq 'coalton:the (cst:raw (cst:first form)))))
+
+(defun parse-catch-type-pattern (form source)
+  "Parse the typed catch pattern FORM, `(the T pat)`, returning the type T and the pattern PAT."
+  (declare (type cst:cst form)
+           (values ty pattern &optional))
+
+  (unless (cst:proper-list-p form)
+    (parse-error "Malformed catch branch"
+                 (note source form "unexpected dotted list")))
+
+  ;; (the)
+  (unless (cst:consp (cst:rest form))
+    (parse-error "Malformed catch branch"
+                 (note-end source (cst:first form) "expected exception type")))
+
+  ;; (the T)
+  (unless (cst:consp (cst:rest (cst:rest form)))
+    (parse-error "Malformed catch branch"
+                 (note-end source (cst:second form) "expected variable or wildcard")))
+
+  ;; (the T pat ...)
+  (when (cst:consp (cst:rest (cst:rest (cst:rest form))))
+    (parse-error "Malformed catch branch"
+                 (note source (cst:first (cst:rest (cst:rest (cst:rest form))))
+                       "unexpected trailing form")))
+
+  (let ((type (parse-type (cst:second form) source))
+        (pattern (parse-pattern (cst:third form) source)))
+    (unless (typep pattern '(or pattern-var pattern-wildcard))
+      (parse-error "Malformed catch branch"
+                   (note source (cst:third form) "expected variable or wildcard")))
+    (values type pattern)))
+
 (defun parse-catch-branch (form source)
   (declare (type cst:cst form)
            (values node-catch-branch &optional))
@@ -2434,20 +2479,31 @@ after variable renaming and before type inference."
     (parse-error "Malformed catch branch"
                  (note-end source (cst:first form) "expected body")))
 
+  (when (catch-type-pattern-form-p (cst:first form))
+    (return-from parse-catch-branch
+      (multiple-value-bind (exception-type pattern)
+          (parse-catch-type-pattern (cst:first form) source)
+        (make-node-catch-branch
+         :exception-type exception-type
+         :pattern pattern
+         :body (parse-body (cst:rest form) form source)
+         :location (form-location source form)))))
+
   (let ((pattern (parse-pattern (cst:first form) source)))
     (when (pattern-var-p pattern)
       (parse-error
        "Malformed catch branch"
        (note source (cst:first form)
-             "Not Yet Allowed: Catching an exception with a pattern variable")))
+             "use (the <exception-type> var) to bind a caught exception")))
 
     (unless (typep pattern '(or pattern-constructor pattern-wildcard))
       (parse-error
        "Malformed catch branch"
        (note source (cst:first form)
-             "branch must be either an exception type constructor or a wildcard.")))
+             "branch must be an exception constructor pattern, (the <exception-type> var), or a wildcard.")))
 
     (make-node-catch-branch
+     :exception-type nil
      :pattern pattern
      :body (parse-body (cst:rest form) form source)
      :location (form-location source form))))

@@ -51,4 +51,116 @@ error: Malformed catch branch
   --> test:5:5
    |
  5 |      (X Unit))
-   |       ^ Not Yet Allowed: Catching an exception with a pattern variable
+   |       ^ use (the <exception-type> var) to bind a caught exception
+
+================================================================================
+103 Malformed typed catch branch
+================================================================================
+
+(package test-package)
+
+(define (f)
+  (catch (g)
+    ((the) Unit))
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Malformed catch branch
+  --> test:5:9
+   |
+ 5 |      ((the) Unit))
+   |           ^ expected exception type
+
+================================================================================
+104 Malformed typed catch branch
+================================================================================
+
+(package test-package)
+
+(define (f)
+  (catch (g)
+    ((the BadEgg) Unit))
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Malformed catch branch
+  --> test:5:16
+   |
+ 5 |      ((the BadEgg) Unit))
+   |                  ^ expected variable or wildcard
+
+================================================================================
+105 Malformed typed catch branch
+================================================================================
+
+(package test-package)
+
+(define (f)
+  (catch (g)
+    ((the BadEgg e extra) Unit))
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Malformed catch branch
+  --> test:5:19
+   |
+ 5 |      ((the BadEgg e extra) Unit))
+   |                     ^^^^^ unexpected trailing form
+
+================================================================================
+106 Typed catch branch with a constructor pattern
+================================================================================
+
+(package test-package)
+
+(define (f)
+  (catch (g)
+    ((the BadEgg (DeadlyEgg x)) Unit))
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Malformed catch branch
+  --> test:5:17
+   |
+ 5 |      ((the BadEgg (DeadlyEgg x)) Unit))
+   |                   ^^^^^^^^^^^^^ expected variable or wildcard
+
+================================================================================
+107 Typed catch branch with a non-exception type
+================================================================================
+
+(package test-package)
+
+(define (f x)
+  (catch x
+    ((the Integer e) e)))
+
+--------------------------------------------------------------------------------
+
+error: Invalid catch type
+  --> test:5:10
+   |
+ 5 |      ((the Integer e) e)))
+   |            ^^^^^^^ type 'Integer' is not an exception type
+
+================================================================================
+108 Typed catch branch with a type variable
+================================================================================
+
+(package test-package)
+
+(define (f x)
+  (catch x
+    ((the (List :a) _) x)))
+
+--------------------------------------------------------------------------------
+
+error: Invalid catch type
+  --> test:5:10
+   |
+ 5 |      ((the (List :a) _) x)))
+   |            ^^^^^^^^^ the caught type cannot contain type variables

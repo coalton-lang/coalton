@@ -2145,6 +2145,33 @@ More generally
     ((UnCracked _) (Err (UnCracked egg)))))
 ```
 
+A branch written `(the T var)` catches every exception of type `T` and binds it, so `crack-safely` can also be written without listing constructors:
+
+```lisp
+(declare crack-safely (Egg -> (Result BadEgg Egg)))
+(define (crack-safely egg)
+  (catch (Ok (crack egg))
+    ((the BadEgg e) (Err e))))
+```
+
+A bound exception can be rethrown unchanged with `(throw e)`.
+
+#### Catching Lisp Conditions
+
+An existing Lisp condition type can be used as an exception type by giving `define-exception` a `(repr :native ...)` attribute and no constructors. The Lisp type must be a subtype of `cl:serious-condition`.
+
+```lisp
+(repr :native cl:division-by-zero)
+(define-exception DivisionByZero)
+
+(declare divide-or-zero (Integer * Integer -> Fraction))
+(define (divide-or-zero r m)
+  (catch (lisp (-> Fraction) (r m) (cl:/ r m))
+    ((the DivisionByZero _) 0)))
+```
+
+Unlike the wildcard branch above, this catches only division by zero. See the [Lisp interoperation guide](/manual/topics/lisp-interop/) for more.
+
 #### Defining, Invoking, and Handling Resumptions 
 
 Resumptions allow the coalton programmer to recover from an error
@@ -2220,13 +2247,13 @@ For the time being, the following caveats apply;
    - `(define (th a) (throw a))` 
    - `(define (res a) (resume-to a))`
 
-2. No way to `catch` a Lisp condition and bind it to a variable in a
-   `catch` handler case. However Lisp conditions can be caught using a
-   wildcard pattern. In particular, this means that you cannot rethrow
-   a Lisp exception.  Furthermore, you may only rethrow an exception by
-   re-constructing one.  E.g.
-   - `(catch (bad-thing) (_ Unit))` 
-   - `(catch (bad-thing) ((MyBad x) (trace "my bad") (throw (MyBad x))))`
+2. A wildcard `_` branch catches every Lisp `error` but cannot bind
+   it. To bind a Lisp condition, first make its type an exception
+   type with `(repr :native ...)`, then catch it with a
+   `(the T var)` branch. Native exceptions have no constructors, so
+   their contents must be read with `lisp` forms, and since Coalton
+   has no subtyping, a condition caught as `ArithmeticError` cannot
+   be used where a `DivisionByZero` is expected.
    
 3. `resumable` branches are even more restrictive. You cannot match
    against anything _other_ than a resumption constructor pattern.

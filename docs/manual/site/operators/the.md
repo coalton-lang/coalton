@@ -21,6 +21,9 @@ weight: 100
 - Unlike `declare`, `the` works directly at expression sites.
 - `the` accepts explicit `forall` binders; when present, those type variables
   are scoped over the enclosed expression.
+- In a branch of [`catch`](/manual/operators/catch/), `(the ⟨type⟩ var)` is
+  not an expression: it catches every exception of type `⟨type⟩` and binds it
+  to `var`.
 
 ## Example
 
