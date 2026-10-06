@@ -678,3 +678,56 @@ must be distinguished even though the predicate-only variables are ambiguous."
     (inline)
     (define (use-a wrapper)
       (use-a (.inner-base-type wrapper))))"))
+
+(deftest fundep-instance-conflicts-with-own-context ()
+  ;; See https://github.com/coalton-lang/coalton/issues/2068
+  (flet ((program (fundep)
+           (format nil
+                   "(define-struct (Env :input :world)
+                      (input :input)
+                      (world :world))
+
+                    (define-type (Decision :act :final)
+                      (Done :final)
+                      (StepAct :act))
+
+                    (define-class ((Monad :m) => Foo :m :act :input :world :final ~A)
+                      (call-model (:input -> :m (Decision :act :final)))
+                      (exec-action (:act * (Env :input :world) -> :m (Env :input :world))))
+
+                    (define-instance ((Foo :m :act :input :world :final)
+                                      => Foo (coalton/monad/statet:StateT (Env :input :world) :m)
+                                             :act :input :world :final)
+                      (define (call-model inp)
+                        (coalton/monad/statet:lift-stateT (call-model inp)))
+                      (define (exec-action act env)
+                        (coalton/monad/statet:lift-stateT (exec-action act env))))"
+                   fundep)))
+    ;; The head and its context share the determinant :act, so :m would
+    ;; have to be (StateT (Env :input :world) :m).
+    (is (search "Instance fundep conflict"
+                (handler-case
+                    (progn
+                      (check-coalton-types (program "(:act -> :m :input :world :final)"))
+                      "")
+                  (tc:tc-error (e)
+                    (princ-to-string e)))))
+    (check-coalton-types (program "(:m :input :act -> :world :final)"))
+    (check-coalton-types (program "(:m -> :act :input :world :final)"))))
+
+(deftest fundep-improvement-through-instance-context ()
+  ;; The context of this instance determines the dependent of its head,
+  ;; and improvement through it terminates when the determinant shrinks.
+  (check-coalton-types
+   "(define-type (Vec :a) (Vec :a))
+
+    (define-class (Mul :a :b :c (:a :b -> :c))
+      (mul (:a * :b -> :c)))
+
+    (define-instance (Mul :a :b :c => Mul :a (Vec :b) (Vec :c))
+      (define (mul a (Vec b))
+        (Vec (mul a b))))
+
+    (define (mul-vec x y)
+      (mul x (Vec y)))"
+   '("mul-vec" . "(Mul :a (Vec :b) (Vec :c) => :a * :b -> Vec :c)")))
