@@ -23,6 +23,7 @@
    #:check-duplicates                   ; FUNCTION
    #:check-package                      ; FUNCTION
    #:exception-class-name               ; FUNCTION
+   #:resumption-class-name              ; FUNCTION
    #:with-pprint-variable-scope         ; MACRO
    #:with-pprint-variable-context       ; MACRO
    ))
@@ -39,6 +40,13 @@ if the package defining it does not exist yet."
   (let ((package (find-package "COALTON/CLASSES")))
     (and package
          (values (find-symbol "EXCEPTION" package)))))
+
+(defun resumption-class-name ()
+  "Return the symbol naming the standard library's `Resumption` class, or NIL
+if the package defining it does not exist yet."
+  (let ((package (find-package "COALTON/CLASSES")))
+    (and package
+         (values (find-symbol "RESUMPTION" package)))))
 
 ;;;
 ;;; Pretty printer control

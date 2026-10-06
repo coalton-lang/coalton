@@ -17,8 +17,11 @@ value.
 
 ## Semantics
 
-- The argument must be a known resumption value, usually from
-  [`define-resumption`](/manual/operators/define-resumption/).
+- The argument's type must be an instance of the `Resumption` class, which
+  holds exactly for types defined with
+  [`define-resumption`](/manual/operators/define-resumption/). `resume-to` has
+  the type `Resumption :r => :r -> :a`, so functions that resume with a value
+  of unknown type are polymorphic over resumption types.
 - Control leaves the current computation and enters the matching `resumable`
   branch.
 - `resume-to` is typically called from a [`handle`](/manual/operators/handle/)
@@ -26,8 +29,6 @@ value.
   inside a `resumable` expression. A [`catch`](/manual/operators/catch/)
   branch runs after unwinding, so it can only resume to resumptions
   established outside the `catch`.
-- Unlike `throw`, `resume-to` is not currently polymorphic without an explicit
-  type.
 
 ## Example
 

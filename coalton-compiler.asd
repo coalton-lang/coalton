@@ -52,6 +52,7 @@
                 :serial t
                 :components ((:file "function")
                              (:file "optional")
+                             (:file "resumption")
                              (:file "package")))
                (:module "typechecker"
                 :serial t

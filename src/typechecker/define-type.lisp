@@ -349,16 +349,23 @@ This is conservative and intentionally aligns with mutable native wrappers."
            (type tc:environment env)
            (values tc:environment))
 
-  ;; Redefining a type does not remove its instances, and THROW relies on
-  ;; every instance of Exception being an exception type.
+  ;; Redefining a type does not remove its instances, and THROW and
+  ;; RESUME-TO rely on every instance of Exception and Resumption being an
+  ;; exception or resumption type.
   (let ((old-type (tc:lookup-type env (type-definition-name type) :no-error t)))
-    (when (and old-type
-               (tc:type-entry-exception-p old-type)
-               (not (type-definition-exception-p type)))
-      (tc-error "Invalid redefinition"
-                (tc-note parsed-type
-                         "exception type ~A cannot be redefined as a type that is not an exception"
-                         (type-definition-name type)))))
+    (when old-type
+      (when (and (tc:type-entry-exception-p old-type)
+                 (not (type-definition-exception-p type)))
+        (tc-error "Invalid redefinition"
+                  (tc-note parsed-type
+                           "exception type ~A cannot be redefined as a type that is not an exception"
+                           (type-definition-name type))))
+      (when (and (tc:type-entry-resumption-p old-type)
+                 (not (type-definition-resumption-p type)))
+        (tc-error "Invalid redefinition"
+                  (tc-note parsed-type
+                           "resumption type ~A cannot be redefined as a type that is not a resumption"
+                           (type-definition-name type))))))
 
   ;; If the type was previously defined, then undefine all
   ;; constructors that were defined only on the old version of the
@@ -756,27 +763,29 @@ signaled with the expectation that they may be ignored."
   (declare (type type-definition type)
            (type partial-type-env env)
            (values parser:toplevel-define-instance-list))
-  ;; The RuntimeRepr instance precedes the Exception instance, which
-  ;; requires it as a superclass instance.
+  ;; The RuntimeRepr instance precedes the Exception and Resumption
+  ;; instances, which require it as a superclass instance.
   (append (maybe-runtime-repr-instance type)
-          (maybe-exception-instance type env)))
+          (and (type-definition-exception-p type)
+               (maybe-marker-instance type (exception-class-name) env))
+          (and (type-definition-resumption-p type)
+               (maybe-marker-instance type (resumption-class-name) env))))
 
-(defun maybe-exception-instance (type env)
-  "Return the generated `Exception` instance for TYPE if it is an exception
-type and the `Exception` class is defined. These are the only instances of
-`Exception`."
+(defun maybe-marker-instance (type class env)
+  "Return a generated instance of CLASS, a class without methods, for TYPE if
+CLASS is defined. This is how the only instances of `Exception` and
+`Resumption` are created."
   (declare (type type-definition type)
+           (type symbol class)
            (type partial-type-env env)
            (values parser:toplevel-define-instance-list &optional))
-  (let ((class (exception-class-name)))
-    (when (and (type-definition-exception-p type)
-               class
-               (tc:lookup-class (partial-type-env-env env) class :no-error t))
-      (list (generated-instance-definition
-             type
-             class
-             nil
-             :ty (generated-instance-applied-type type nil))))))
+  (when (and class
+             (tc:lookup-class (partial-type-env-env env) class :no-error t))
+    (list (generated-instance-definition
+           type
+           class
+           nil
+           :ty (generated-instance-applied-type type nil)))))
 
 (defun maybe-runtime-repr-instance (type)
   (declare (type type-definition type))

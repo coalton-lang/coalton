@@ -384,6 +384,14 @@
     (signals tc:tc-error
       (codegen-test-compile "(define-type Problem (Problem Integer))"))))
 
+(deftest resumption-redefinition-keeps-resumption-status ()
+  ;; Likewise for resumption types and their Resumption instances.
+  (with-codegen-test-environment
+    (codegen-test-compile "(define-resumption (Retry Integer))")
+    (codegen-test-compile "(define-resumption (Retry Integer) \"Retry the operation.\")")
+    (signals tc:tc-error
+      (codegen-test-compile "(define-type Retry (Retry Integer))"))))
+
 (deftest codegen-handler-payload-patterns ()
   (with-codegen-test-environment
     (codegen-test-event-recorder)

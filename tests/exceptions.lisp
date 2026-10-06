@@ -338,3 +338,25 @@
   (is (== 5 (result:ok-or-throw (the (Result Retry UFix) (Ok 5)))))
   (is (== 6 (catch (result:ok-or-throw (the (Result Retry UFix) (Err (Retry 6))))
               ((Retry n) n)))))
+
+;;;
+;;; The Resumption class
+;;;
+
+(coalton-toplevel
+  ;; Inferred as (Resumption :r => :r -> :a).
+  (define (resume-any r)
+    (resume-to r))
+
+  (declare cook-or-skip (Egg -> (Optional Egg)))
+  (define (cook-or-skip egg)
+    (handle (make-breakfast-with egg)
+      ((DeadlyEgg _) (resume-any SkipEgg)))))
+
+(define-test test-resumption-class ()
+  ;; RESUME-TO is polymorphic over resumption types, with and without
+  ;; payloads.
+  (is (none? (cook-or-skip Xenomorph)))
+  (is (some? (cook-or-skip (Goose False False))))
+  (is (== 5 (handle (fail-or-use-value)
+              ((Retry _) (resume-any (UseValue 5)))))))

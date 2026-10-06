@@ -155,6 +155,20 @@
              #+sbcl
              `(declaim (sb-ext:freeze-type ,(tc:type-definition-name def))))))))
 
+   ;; Let RESUME-TO find the restart for a resumption whose type is not
+   ;; known statically.
+   (when (tc:type-definition-resumption-p def)
+     (let* ((name (tc:type-definition-name def))
+            (constructor (first (tc:type-definition-constructors def)))
+            (arity (tc:constructor-entry-arity constructor))
+            (resumption (gensym "RESUMPTION")))
+       (list
+        `(defmethod coalton-impl/runtime:invoke-resumption ((,resumption ,name))
+           (declare (ignorable ,resumption))
+           ,(if (zerop arity)
+                `(invoke-restart ',name)
+                `(invoke-restart ',name ,resumption))))))
+
    (loop :for constructor :in (tc:type-definition-constructors def)
          :for name := (tc:constructor-entry-name constructor)
          :for docstring := (source:docstring constructor)

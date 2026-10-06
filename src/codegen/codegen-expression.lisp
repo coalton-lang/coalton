@@ -714,18 +714,25 @@ value is returned from the `handle` form."
     `(error ,(codegen-expression (node-throw-expr node) env)))
 
   (:method ((node node-resume-to) env)
-    (let* ((restart-name
-             (tc:lisp-type (node-type (node-resume-to-expr node)) env))
-           (resumption-constructor-arity
-             (tc:constructor-entry-arity
-              (tc:lookup-constructor env restart-name))))
-
-      (if (zerop resumption-constructor-arity)
-          `(progn
-             ,(codegen-expression (node-resume-to-expr node) env)
-             (invoke-restart ',restart-name))
-          `(invoke-restart ',restart-name
-                           ,(codegen-expression (node-resume-to-expr node) env)))))
+    (let* ((type (node-type (node-resume-to-expr node)))
+           (entry (and (tc:tycon-p type)
+                       (tc:lookup-type env (tc:tycon-name type) :no-error t))))
+      (if (and entry (tc:type-entry-resumption-p entry))
+          (let* ((restart-name
+                   (tc:lisp-type type env))
+                 (resumption-constructor-arity
+                   (tc:constructor-entry-arity
+                    (tc:lookup-constructor env restart-name))))
+            (if (zerop resumption-constructor-arity)
+                `(progn
+                   ,(codegen-expression (node-resume-to-expr node) env)
+                   (invoke-restart ',restart-name))
+                `(invoke-restart ',restart-name
+                                 ,(codegen-expression (node-resume-to-expr node) env))))
+          ;; The type is only known to be an instance of Resumption, so
+          ;; find the restart from the value at runtime.
+          `(coalton-impl/runtime:invoke-resumption
+            ,(codegen-expression (node-resume-to-expr node) env)))))
 
   (:method ((expr node-block) env)
     `(block ,(block-label (node-block-name expr))

@@ -2253,14 +2253,7 @@ handles it.
 
 For the time being, the following caveats apply;
 
-1. No support for polymorphism for `resume-to` expressions. E.g. the
-   following will not compile without a type annotation:
-   - `(define (res a) (resume-to a))`
-
-   `throw` is polymorphic over exception types: `(define (th a) (throw a))`
-   has the type `Exception :e => :e -> :a`.
-
-2. A wildcard `_` branch catches every Lisp `error` but cannot bind
+1. A wildcard `_` branch catches every Lisp `error` but cannot bind
    it. To bind a Lisp condition, first make its type an exception
    type with `(repr :native ...)`, then catch it with a
    `(the T var)` branch. Native exceptions have no constructors, so
@@ -2268,10 +2261,10 @@ For the time being, the following caveats apply;
    has no subtyping, a condition caught as `ArithmeticError` cannot
    be used where a `DivisionByZero` is expected.
    
-3. `resumable` branches are even more restrictive. You cannot match
+2. `resumable` branches are even more restrictive. You cannot match
    against anything _other_ than a resumption constructor pattern.
 
-4. The `Exception` class identifies the types that can be thrown,
+3. The `Exception` class identifies the types that can be thrown,
    but a function's type does not say which exceptions it may throw.
    We are pursuing different approaches to static checking of forms
    that might hop the call stack. Whatever we do, we will endeavor to
