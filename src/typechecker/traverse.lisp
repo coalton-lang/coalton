@@ -237,6 +237,7 @@
      (make-node-catch
       :type (node-type node)
       :location (source:location node)
+      :in-place-p (node-catch-in-place-p node)
       :expr (traverse (node-catch-expr node) block)
       :branches (traverse (node-catch-branches node) block))))
 

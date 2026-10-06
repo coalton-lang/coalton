@@ -93,6 +93,7 @@
    #:resume-to
    #:resumable
    #:catch
+   #:handle
    #:dynamic-bind
    #:let
    #:let*

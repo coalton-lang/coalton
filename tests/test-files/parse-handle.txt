@@ -1,0 +1,72 @@
+================================================================================
+100 Malformed handle expression
+================================================================================
+
+(package test-package)
+
+(define (f)
+  (handle)
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Malformed handle expression
+  --> test:4:9
+   |
+ 4 |    (handle)
+   |           ^ expected expression
+
+================================================================================
+101 Malformed handle expression
+================================================================================
+
+(package test-package)
+
+(define (f)
+  (handle (a))
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Malformed handle expression
+  --> test:4:13
+   |
+ 4 |    (handle (a))
+   |               ^ expected handle cases
+
+================================================================================
+102 Malformed handle branch
+================================================================================
+
+(package test-package)
+
+(define (f)
+  (handle (make-breakfast-for 10)
+    (X Unit))
+  Unit)
+
+--------------------------------------------------------------------------------
+
+error: Malformed handle branch
+  --> test:5:5
+   |
+ 5 |      (X Unit))
+   |       ^ use (the <exception-type> var) to bind a caught exception
+
+================================================================================
+103 Typed handle branch with a non-exception type
+================================================================================
+
+(package test-package)
+
+(define (f x)
+  (handle x
+    ((the Integer e) e)))
+
+--------------------------------------------------------------------------------
+
+error: Invalid handle type
+  --> test:5:10
+   |
+ 5 |      ((the Integer e) e)))
+   |            ^^^^^^^ type 'Integer' is not an exception type

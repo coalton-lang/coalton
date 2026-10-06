@@ -107,6 +107,7 @@
    #:node-catch-branch-list             ; TYPE
    #:node-catch                         ; STRUCT
    #:make-node-catch                    ; CONSTRUCTOR
+   #:node-catch-in-place-p              ; ACCESSOR
    #:node-catch-expr                    ; ACCESSOR
    #:node-catch-branches                ; ACCESSOR
    #:node-resumable-branch              ; STRUCT
@@ -493,8 +494,11 @@
 (defstruct (node-catch
             (:include node)
             (:copier nil))
-  (expr     (util:required 'expr)         :type node                   :read-only t)
-  (branches (util:required 'branches)     :type node-catch-branch-list :read-only t))
+  ;; IN-PLACE-P is true for `handle`, whose branches run where the
+  ;; exception was thrown, before unwinding. `catch` unwinds first.
+  (in-place-p (util:required 'in-place-p) :type boolean                :read-only t)
+  (expr       (util:required 'expr)       :type node                   :read-only t)
+  (branches   (util:required 'branches)   :type node-catch-branch-list :read-only t))
 
 (defstruct (node-application
             (:include node)
@@ -769,6 +773,7 @@
   (make-node-catch
    :type (tc:apply-substitution subs (node-type node))
    :location (source:location node)
+   :in-place-p (node-catch-in-place-p node)
    :expr (tc:apply-substitution subs (node-catch-expr node))
    :branches (tc:apply-substitution subs (node-catch-branches node))))
 

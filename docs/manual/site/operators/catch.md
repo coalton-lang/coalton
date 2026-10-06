@@ -29,9 +29,17 @@ one of its branches.
   [`define-exception`](/manual/operators/define-exception/)), this includes
   conditions of Lisp subtypes of its condition type.
 - A `_` branch catches every Lisp `error`, including Coalton exceptions.
-- Patterns are tried in order, including patterns on constructor fields. The
-  first matching branch runs. If none matches, an enclosing handler may handle
-  the exception.
+- Patterns are tried in order, including patterns on constructor fields, at
+  the point where the exception was thrown. The first matching branch is
+  selected. If none matches, the exception propagates to enclosing handlers
+  without unwinding anything.
+- Once a branch is selected, control unwinds to the `catch` expression and the
+  branch runs there. It sees the dynamic bindings of the `catch` rather than
+  those of the code that threw, it is in tail position when the `catch` is,
+  and exceptions it throws are not caught by the same `catch`.
+- Because the branch runs after unwinding, it cannot
+  [`resume-to`](/manual/operators/resume-to/) a resumption established inside
+  the guarded expression. Use [`handle`](/manual/operators/handle/) for that.
 - All branches must agree on the result type of the `catch` expression.
 
 ## Example

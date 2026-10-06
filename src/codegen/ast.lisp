@@ -104,6 +104,7 @@
    #:catch-branch-list                  ; TYPE
    #:node-catch                         ; STRUCT
    #:make-node-catch                    ; CONSTRUCTOR
+   #:node-catch-in-place-p              ; READER
    #:node-catch-expr                    ; READER
    #:node-catch-branches                ; READER
    #:resumable-branch                   ; STRUCT
@@ -409,9 +410,13 @@ coalton symbols (`parser:identifier`)"
   '(satisfies catch-branch-list-p))
 
 (defstruct (node-catch (:include node))
-  "An exception-catching construct. Uses CATCH-BRANCH to represent branches"
-  (expr     (util:required 'expr)     :type node              :read-only t)
-  (branches (util:required 'branches) :type catch-branch-list :read-only t))
+  "An exception-catching construct. Uses CATCH-BRANCH to represent branches.
+
+IN-PLACE-P is true for `handle`, whose branches run where the exception was
+thrown, before unwinding. Branches of `catch` run after unwinding."
+  (in-place-p (util:required 'in-place-p) :type boolean           :read-only t)
+  (expr       (util:required 'expr)       :type node              :read-only t)
+  (branches   (util:required 'branches)   :type catch-branch-list :read-only t))
 
 (defstruct resumable-branch
   "A branch of a resumable expression."

@@ -298,6 +298,7 @@ FORM must be a renamed parser AST fragment."
 
            (parser:node-catch
             (parser:make-node-catch
+             :in-place-p (parser:node-catch-in-place-p node)
              :expr (resolve-node (parser:node-catch-expr node) ctx)
              :branches
              (mapcar (lambda (branch)

@@ -490,6 +490,7 @@
 
     (values
      (make-node-catch
+      :in-place-p (node-catch-in-place-p node)
       :expr (rename-variables-generic% (node-catch-expr node) ctx)
       :branches (rename-variables-generic% (node-catch-branches node) ctx)
       :location (source:location node))
