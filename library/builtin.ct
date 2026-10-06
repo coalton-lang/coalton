@@ -19,11 +19,11 @@
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 (define-expression-macro unreachable (cl:&optional (datum "Unreachable") cl:&rest arguments)
-  "Signal an error with CL format string DATUM and optional format arguments ARGUMENTS."
+  "Signal a `Panic` whose message is the result of applying the CL format string DATUM to the optional format arguments ARGUMENTS."
   `((the (forall ((:result Values)) (Void -> :result))
       (fn ()
         (lisp (-> :result) ()
-          (cl:error ,datum ,@arguments))))))
+          (cl:error 'Panic :message (cl:format cl:nil ,datum ,@arguments)))))))
 
 (coalton-toplevel
   (declare undefined (forall (:a (:b Values)) (:a -> :b)))

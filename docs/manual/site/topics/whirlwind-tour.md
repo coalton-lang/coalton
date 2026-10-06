@@ -2165,6 +2165,10 @@ The functions `coalton/result:try` and `coalton/result:ok-or-throw` convert betw
   (result:try (fn () (crack egg))))
 ```
 
+#### Panics
+
+Functions such as `error`, `unwrap`, `expect`, `unreachable`, and `undefined`, as well as failed `assert`s, signal a `Panic`. A panic indicates a bug rather than an expected failure. Panics are exceptions like any other: a wildcard `_` branch catches them along with all other Lisp errors, and a `(the Panic p)` branch catches only them. From Lisp, they are conditions of type `coalton/classes:panic`.
+
 #### Catching Lisp Conditions
 
 An existing Lisp condition type can be used as an exception type by giving `define-exception` a `(repr :native ...)` attribute and no constructors. The Lisp type must be a subtype of `cl:serious-condition`.

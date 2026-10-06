@@ -8,6 +8,7 @@
    #:error
    #:Exception
    #:Resumption
+   #:Panic
    #:Tuple
    #:Optional #:Some #:None
    #:Result #:Ok #:Err
@@ -56,20 +57,34 @@
 ;;; Signaling errors and warnings
 ;;;
 
+;; The (repr :native Panic) attribute below checks this condition type when
+;; it is compiled, so the type must be defined at compile time too.
+(cl:eval-when (:compile-toplevel :load-toplevel :execute)
+  (cl:define-condition Panic (cl:error)
+    ((message :initarg :message
+              :reader %panic-message
+              :type cl:string))
+    (:report (cl:lambda (condition stream)
+               (cl:write-string (%panic-message condition) stream)))
+    (:documentation "The condition signaled when a Coalton program detects a bug at runtime, for example through `error`, `unwrap`, `unreachable`, or a failed `assert`.")))
+
 (coalton-toplevel
 
  ;;
  ;; Signalling errors on supported types
  ;;
  (define-class (Signalable :a)
-   "Signals errors or warnings by calling their respective lisp conditions."
+   "Signals errors or warnings by calling their respective lisp conditions.
+
+`error` on a `String` signals a `Panic` whose message is the string, which is never interpreted as a format control string."
    (error "Signal an error with a type-specific error string."
      (forall ((:result Values)) (:a -> :result))))
 
   (define-instance (Signalable String)
+    ;; The string is the message, never a format control string.
     (define (error str)
       (lisp (-> :result) (str)
-        (cl:error str))))
+        (cl:error 'Panic :message str))))
 
   ;;
   ;; Exceptions
@@ -84,6 +99,12 @@ Every type defined with `define-exception` is an instance, and instances cannot 
     "Types whose values can be passed to `resume-to`.
 
 Every type defined with `define-resumption` is an instance, and instances cannot be written manually."))
+
+;; Defined after the Exception class, which its generated instance needs.
+(coalton-toplevel
+  (repr :native Panic)
+  (define-exception Panic
+    "A bug detected at runtime, for example by `error`, `unwrap`, `unreachable`, or a failed `assert`. Panics are caught by wildcard `catch` branches, like other Lisp errors, and can be caught specifically with a `(the Panic p)` branch."))
 
 
 (coalton-toplevel
