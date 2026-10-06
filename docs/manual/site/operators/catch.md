@@ -29,8 +29,9 @@ one of its branches.
   [`define-exception`](/manual/operators/define-exception/)), this includes
   conditions of Lisp subtypes of its condition type.
 - A `_` branch catches every Lisp `error`, including Coalton exceptions and
-  panics. A `(the Panic p)` branch catches only panics, the errors signaled by
-  `error`, `unwrap`, `unreachable`, and failed `assert`s.
+  panics. A `(the coalton/exception:LispError e)` branch catches the same
+  errors and binds them. A `(the Panic p)` branch catches only panics, the
+  errors signaled by `error`, `unwrap`, `unreachable`, and failed `assert`s.
 - Patterns are tried in order, including patterns on constructor fields, at
   the point where the exception was thrown. The first matching branch is
   selected. If none matches, the exception propagates to enclosing handlers

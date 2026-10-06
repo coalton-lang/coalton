@@ -216,6 +216,8 @@ Standard condition types are always defined:
 
 A `catch` branch written `((the T var) ...)` catches every condition of type `T`, including conditions of Lisp subtypes: a branch for `ArithmeticError` also catches a `cl:division-by-zero`. Branches are tried in order, so put narrower types first. A caught condition can be inspected with `lisp` forms and rethrown unchanged with `throw`.
 
+The `coalton/exception` package defines native exceptions for common standard condition types, including `LispError` (`cl:error`), `ArithmeticError`, `DivisionByZero`, `LispTypeError`, `StreamError`, `EndOfFile`, and `LispFileError`. Its function `cast` converts an exception to a more specific exception type when it has one, and `message` returns an exception's Lisp report.
+
 Coalton only knows what you declare about a native condition's slots, so make sure accessor functions return what their types promise. For example, `cl:file-error-pathname` may return a string rather than a `cl:pathname`.
 
 ## Promises of `define`

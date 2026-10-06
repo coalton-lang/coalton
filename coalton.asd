@@ -122,6 +122,7 @@
                (:ct-file "ordmap")
                (:ct-file "seq")
                (:ct-file "system")
+               (:ct-file "exception")
                (:ct-file "file")
 
                (:file "prelude")))

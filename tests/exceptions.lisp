@@ -556,3 +556,69 @@
          (lisp (-> Boolean) (stream)
            (cl:not (cl:open-stream-p stream))))
         ((None) False))))
+
+;;;
+;;; The coalton/exception package
+;;;
+
+(coalton-toplevel
+  (declare divide-with-message (Integer * Integer -> (Result String Fraction)))
+  (define (divide-with-message a b)
+    (catch (Ok (lisp-divide a b))
+      ((the exception:ArithmeticError e) (Err (exception:message e)))))
+
+  (declare arithmetic-error-kind (exception:ArithmeticError -> String))
+  (define (arithmetic-error-kind e)
+    (match (the (Optional exception:DivisionByZero) (exception:cast e))
+      ((Some _) "division by zero")
+      ((None)
+       (match (the (Optional exception:LispFileError) (exception:cast e))
+         ((Some _) "file error")
+         ((None) "other arithmetic error")))))
+
+  (declare classify-division (Integer * Integer -> String))
+  (define (classify-division a b)
+    ;; The quotient is used, so the division cannot be optimized away.
+    (catch (if (== 0 (lisp-divide a b)) "zero" "ok")
+      ((the exception:ArithmeticError e) (arithmetic-error-kind e)))))
+
+(define-test test-exception-package ()
+  ;; A branch for a Lisp condition type catches its Lisp subtypes, and
+  ;; MESSAGE returns the Lisp report.
+  (is (== (Ok 2) (divide-with-message 4 2)))
+  (is (match (divide-with-message 1 0)
+        ((Err text)
+         (lisp (-> Boolean) (text)
+           (cl:and (cl:search "DIVISION-BY-ZERO" text) cl:t)))
+        ((Ok _) False)))
+  ;; CAST recovers a more specific type, if the exception has it.
+  (is (== "ok" (classify-division 4 2)))
+  (is (== "division by zero" (classify-division 1 0)))
+  ;; CAST to an exception's own type succeeds, and to an unrelated type fails.
+  (is (== (Some 4)
+          (map retry-number (the (Optional Retry) (exception:cast (Retry 4))))))
+  (is (none? (the (Optional exception:EndOfFile) (exception:cast (Retry 4)))))
+  ;; LispError catches Coalton exceptions and panics.
+  (is (== "boom"
+          (catch (the String (error "boom"))
+            ((the exception:LispError e) (exception:message e)))))
+  (is (== 9 (catch (the UFix (throw (Retry 9)))
+              ((the exception:LispError e)
+               (match (the (Optional Retry) (exception:cast e))
+                 ((Some r) (retry-number r))
+                 ((None) 0))))))
+  ;; FILE:LispError holds a Lisp error as an exception, which can be rethrown.
+  (is (match (file:system-relative-pathname "coalton-no-such-system" "")
+        ((Err (file:LispError e))
+         (== "rethrown"
+             (catch (throw e)
+               ((the exception:LispError _) "rethrown"))))
+        (_ False)))
+  ;; ERROR on a FileError rethrows the Lisp error it holds, rather than panicking.
+  (is (== "rethrown"
+          (catch (progn
+                   (result:ok-or-error
+                    (file:system-relative-pathname "coalton-no-such-system" ""))
+                   "not thrown")
+            ((the Panic _) "panicked")
+            ((the exception:LispError _) "rethrown")))))

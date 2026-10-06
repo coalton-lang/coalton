@@ -21,9 +21,6 @@
    #:MeteredResult
    #:spacetime)
   (:export
-
-   #:LispCondition
-
    #:getenv
    #:setenv!
    
@@ -178,15 +175,6 @@ Garbage collection will be performed before profiling is performed."
 ;;;
 
 (coalton-toplevel
-
-  (repr :native cl:condition)
-  (define-type LispCondition
-    "Condition for lisp error handling. Uses `cl:condition`.")
-
-  (define-instance (Signalable LispCondition)
-    (define (error condition)
-      (lisp (-> :result) (condition)
-        (cl:error condition))))
 
   ;;
   ;; Accessing Environment Variables

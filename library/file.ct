@@ -25,9 +25,9 @@ trailing slash.")
    #:coalton
    #:coalton/classes
    #:coalton/builtin
-   #:coalton/functions
-   #:coalton/system)
+   #:coalton/functions)
   (:local-nicknames
+   (#:exception #:coalton/exception)
    (#:str #:coalton/string)
    (#:iter #:coalton/iterator)
    (#:cell #:coalton/cell)
@@ -155,7 +155,7 @@ trailing slash.")
     "Errors for file functions."
     (FileError String)
     (PathError String Pathname)
-    (LispError LispCondition)
+    (LispError exception:LispError)
     EOF)
 
   (define-instance (Signalable FileError)
@@ -167,8 +167,8 @@ trailing slash.")
         ((PathError str path)
          (error (lisp (-> String) (str path)
                   (cl:format cl:nil "Path Error:~%~%~a ~a" str path))))
-        ((LispError c)
-         (error c))
+        ((LispError e)
+         (throw e))
         ((EOF)
          (error #.(cl:format cl:nil "Error~%~%End of File")))))))
 

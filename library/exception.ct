@@ -1,0 +1,105 @@
+(coalton/utils:defstdlib-package #:coalton/exception
+  (:documentation "Exception types for standard Common Lisp conditions, and functions that work with any exception.
+
+Catch these with `(the T e)` branches of `catch` or `handle`. Because they are native exceptions, a branch for a Lisp condition type also catches conditions of its Lisp subtypes; for example, a branch for `ArithmeticError` catches a `DivisionByZero`. Use `cast` to recover the more specific type.")
+  (:use
+   #:coalton
+   #:coalton/classes
+   #:coalton/builtin)
+  (:local-nicknames
+   (#:types #:coalton/types))
+  (:export
+   #:Exception
+   #:Panic)
+  (:export
+   #:LispError
+   #:ArithmeticError
+   #:DivisionByZero
+   #:FloatingPointOverflow
+   #:FloatingPointInvalidOperation
+   #:LispTypeError
+   #:ControlError
+   #:StreamError
+   #:EndOfFile
+   #:LispFileError
+   #:StorageCondition)
+  (:export
+   #:message
+   #:cast))
+
+(in-package #:coalton/exception)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+;;;
+;;; Standard Common Lisp conditions
+;;;
+
+(coalton-toplevel
+  (repr :native cl:error)
+  (define-exception LispError
+    "A Lisp `error`. This includes every Coalton exception defined with constructors, and panics.")
+
+  (repr :native cl:arithmetic-error)
+  (define-exception ArithmeticError
+    "A Lisp `arithmetic-error`, such as `DivisionByZero`.")
+
+  (repr :native cl:division-by-zero)
+  (define-exception DivisionByZero
+    "A Lisp `division-by-zero` error.")
+
+  (repr :native cl:floating-point-overflow)
+  (define-exception FloatingPointOverflow
+    "A Lisp `floating-point-overflow` error.")
+
+  (repr :native cl:floating-point-invalid-operation)
+  (define-exception FloatingPointInvalidOperation
+    "A Lisp `floating-point-invalid-operation` error.")
+
+  (repr :native cl:type-error)
+  (define-exception LispTypeError
+    "A Lisp `type-error`, signaled when a Lisp value is not of an expected Lisp type.")
+
+  (repr :native cl:control-error)
+  (define-exception ControlError
+    "A Lisp `control-error`, such as resuming to a resumption that is not active.")
+
+  (repr :native cl:stream-error)
+  (define-exception StreamError
+    "A Lisp `stream-error`, such as `EndOfFile`.")
+
+  (repr :native cl:end-of-file)
+  (define-exception EndOfFile
+    "A Lisp `end-of-file` error.")
+
+  (repr :native cl:file-error)
+  (define-exception LispFileError
+    "A Lisp `file-error`.")
+
+  (repr :native cl:storage-condition)
+  (define-exception StorageCondition
+    "A Lisp `storage-condition`, signaled when memory is exhausted. It is not a Lisp `error`, so wildcard `catch` branches do not catch it."))
+
+;;;
+;;; Working with any exception
+;;;
+
+(coalton-toplevel
+  (declare message (Exception :e => :e -> String))
+  (define (message e)
+    "The message of exception `e`, as Lisp reports it."
+    (lisp (-> String) (e)
+      (cl:princ-to-string e)))
+
+  (declare cast (forall (:a :b) ((Exception :a) (Exception :b) => :a -> (Optional :b))))
+  (define (cast e)
+    "Exception `e` as an exception of type `:b`, if it is one. For example, an `ArithmeticError` that is a division by zero can be cast to a `DivisionByZero`."
+    (let lisp-type = (types:runtime-repr (the (types:Proxy :b) types:Proxy)))
+    (lisp (-> (Optional :b)) (e lisp-type)
+      (cl:if (cl:typep e lisp-type)
+             (Some e)
+             None))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/EXCEPTION")
