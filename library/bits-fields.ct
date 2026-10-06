@@ -48,5 +48,6 @@ width of the type:
     (let ((p (the Integer (into position)))
           (field (not (shift (into size) (not (xor x x))))))
       (let ((mask (shift p field)))
-        (or (and x (not mask))
-            (and (shift p new) mask))))))
+        ;; Take the bits of the shifted NEW where MASK is set and the bits
+        ;; of X elsewhere, without complementing MASK.
+        (xor x (and (xor (shift p new) x) mask))))))
