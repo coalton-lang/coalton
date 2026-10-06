@@ -164,20 +164,20 @@ whether it's even or odd)."
 ;;; Bits instances
 ;;;
 
-  (define-bits-checked Integer cl:identity)
+  (define-bits-unbounded Integer)
 
-  (define-bits-checked I8 %handle-8bit-overflow)
-  (define-bits-checked I16 %handle-16bit-overflow)
-  (define-bits-checked I32 %handle-32bit-overflow)
-  (define-bits-checked I64 %handle-64bit-overflow)
-  (define-bits-checked IFix %handle-fixnum-overflow)
+  (define-bits-signed I8 8)
+  (define-bits-signed I16 16)
+  (define-bits-signed I32 32)
+  (define-bits-signed I64 64)
+  (define-bits-signed IFix #.+fixnum-bits+)
 
-  (define-bits-wrapping Bit 1)
-  (define-bits-wrapping U8 8)
-  (define-bits-wrapping U16 16)
-  (define-bits-wrapping U32 32)
-  (define-bits-wrapping U64 64)
-  (define-bits-wrapping UFix #.+unsigned-fixnum-bits+)
+  (define-bits-unsigned Bit 1)
+  (define-bits-unsigned U8 8)
+  (define-bits-unsigned U16 16)
+  (define-bits-unsigned U32 32)
+  (define-bits-unsigned U64 64)
+  (define-bits-unsigned UFix #.+unsigned-fixnum-bits+)
 
 
 ;;;

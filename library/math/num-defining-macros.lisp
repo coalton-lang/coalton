@@ -39,8 +39,9 @@
    #:define-float-fraction-conversion
    #:define-reciprocable-float
    #:define-dividable-float
-   #:define-bits-checked
-   #:define-bits-wrapping
+   #:define-bits-unbounded
+   #:define-bits-unsigned
+   #:define-bits-signed
    #:define-default-num))
 
 (in-package #:coalton/math/num-defining-macros)
@@ -334,79 +335,135 @@
                            (coalton (the ,type negative-infinity)))))))))
 
 
-;;; Utilities to define Bits instances.
-(cl:defmacro define-bits-checked (type handle-overflow)
+;;; Utilities to define Bits instances. Each implements the semantics
+;;; documented on the BITS class: compute on unbounded integers, then
+;;; reduce modulo 2^WIDTH into the type.
+
+(cl:defmacro define-bits-unbounded (type)
+  "Define a `Bits` instance for TYPE, whose values are all the integers."
   `(define-instance (bits:Bits ,type)
      (inline)
      (define (bits:and a b)
-       (coalton++:unsafe
-         (lisp (-> ,type) (a b)
-           (cl:logand a b))))
+       (lisp (-> ,type) (a b)
+         (cl:logand a b)))
 
      (inline)
      (define (bits:or a b)
-       (coalton++:unsafe
-         (lisp (-> ,type) (a b)
-           (cl:logior a b))))
+       (lisp (-> ,type) (a b)
+         (cl:logior a b)))
 
      (inline)
      (define (bits:xor a b)
-       (coalton++:unsafe
+       (lisp (-> ,type) (a b)
+         (cl:logxor a b)))
+
+     (inline)
+     (define (bits:not a)
+       (lisp (-> ,type) (a)
+         (cl:lognot a)))
+
+     (inline)
+     (define (bits:shift k a)
+       (lisp (-> ,type) (k a)
+         (cl:ash a k)))))
+
+;;; The fixed-width bodies are written so that SBCL's modular arithmetic
+;;; turns them into machine instructions, and the guards on the shift
+;;; count fold away when the count is a constant. Below 64 bits, shifts
+;;; clamp the count to the width instead of testing it, which keeps them
+;;; free of branches: a shift by the width is still a single machine
+;;; shift, and the mask then clears the result. At 64 bits that shift is
+;;; not available, so counts of 64 or more are tested.
+
+(cl:defmacro %wrap-signed (width form)
+  "Reinterpret FORM, an integer in [0, 2^WIDTH), as a signed WIDTH-bit integer."
+  #+sbcl
+  `(sb-c::mask-signed-field ,width ,form)
+  #-sbcl
+  (cl:let ((value (cl:gensym "VALUE")))
+    `(cl:let ((,value ,form))
+       (cl:if (cl:logbitp ,(cl:1- width) ,value)
+              (cl:- ,value ,(cl:ash 1 width))
+              ,value))))
+
+(cl:defmacro define-bits-unsigned (type width)
+  "Define a total `Bits` instance for TYPE, the unsigned integers of WIDTH bits."
+  (cl:let ((mask (cl:1- (cl:ash 1 width))))
+    `(define-instance (bits:Bits ,type)
+       (inline)
+       (define (bits:and a b)
          (lisp (-> ,type) (a b)
-           (cl:logxor a b))))
+           (cl:logand a b)))
 
-     (inline)
-     (define (bits:not x)
-       (coalton++:unsafe
-         (lisp (-> ,type) (x)
-           (cl:lognot x))))
-
-     (inline)
-     (define (bits:shift amount bits)
-       (coalton++:unsafe
-         (lisp (-> ,type) (amount bits)
-           (,handle-overflow (cl:ash bits amount)))))))
-
-(cl:declaim (cl:inline unsigned-lognot))
-(cl:defun unsigned-lognot (int n-bits)
-  (cl:declare (cl:type cl:unsigned-byte int)
-              (cl:type cl:unsigned-byte n-bits)
-              (cl:values cl:unsigned-byte))
-
-  (cl:- (cl:ash 1 n-bits) int 1))
-
-(cl:defmacro define-bits-wrapping (type width)
-  `(define-instance (bits:Bits ,type)
-     (inline)
-     (define (bits:and a b)
-       (coalton++:unsafe
+       (inline)
+       (define (bits:or a b)
          (lisp (-> ,type) (a b)
-           (cl:logand a b))))
+           (cl:logior a b)))
 
-     (inline)
-     (define (bits:or a b)
-       (coalton++:unsafe
+       (inline)
+       (define (bits:xor a b)
          (lisp (-> ,type) (a b)
-           (cl:logior a b))))
+           (cl:logxor a b)))
 
-     (inline)
-     (define (bits:xor a b)
-       (coalton++:unsafe
+       (inline)
+       (define (bits:not a)
+         (lisp (-> ,type) (a)
+           (cl:logxor a ,mask)))
+
+       (inline)
+       (define (bits:shift k a)
+         (lisp (-> ,type) (k a)
+           ,(cl:if (cl:< width 64)
+                   `(cl:if (cl:< k 0)
+                           (cl:ash a (cl:max k ,(cl:- width)))
+                           (cl:logand (cl:ash a (cl:min k ,width)) ,mask))
+                   `(cl:cond
+                      ((cl:< k 0) (cl:if (cl:> k ,(cl:- width)) (cl:ash a k) 0))
+                      ((cl:< k ,width) (cl:logand (cl:ash a k) ,mask))
+                      (cl:t 0))))))))
+
+(cl:defmacro define-bits-signed (type width)
+  "Define a total `Bits` instance for TYPE, the two's-complement signed integers of WIDTH bits."
+  (cl:let ((mask (cl:1- (cl:ash 1 width))))
+    `(define-instance (bits:Bits ,type)
+       (inline)
+       (define (bits:and a b)
          (lisp (-> ,type) (a b)
-           (cl:logxor a b))))
+           (cl:logand a b)))
 
-     (inline)
-     (define (bits:not x)
-       (coalton++:unsafe
-         (lisp (-> ,type) (x)
-           (unsigned-lognot x ,width))))
+       (inline)
+       (define (bits:or a b)
+         (lisp (-> ,type) (a b)
+           (cl:logior a b)))
 
-     (inline)
-     (define (bits:shift amount bits)
-       (coalton++:unsafe
-         (lisp (-> ,type) (amount bits)
-           (cl:logand (cl:ash bits amount)
-                      ,(cl:1- (cl:ash 1 width))))))))
+       (inline)
+       (define (bits:xor a b)
+         (lisp (-> ,type) (a b)
+           (cl:logxor a b)))
+
+       (inline)
+       (define (bits:not a)
+         (lisp (-> ,type) (a)
+           (cl:lognot a)))
+
+       ;; Left shifts are done on the unsigned bit pattern because SBCL
+       ;; compiles a masked unsigned ASH to a single shift instruction,
+       ;; whereas masking a signed ASH directly allocates a bignum.
+       (inline)
+       (define (bits:shift k a)
+         (lisp (-> ,type) (k a)
+           ,(cl:if (cl:< width 64)
+                   `(cl:if (cl:< k 0)
+                           (cl:ash a (cl:max k ,(cl:- 1 width)))
+                           (%wrap-signed ,width
+                                         (cl:logand (cl:ash (cl:logand a ,mask) (cl:min k ,width))
+                                                    ,mask)))
+                   `(cl:cond
+                      ((cl:< k 0)
+                       (cl:if (cl:> k ,(cl:- width)) (cl:ash a k) (cl:ash a ,(cl:- 1 width))))
+                      ((cl:< k ,width)
+                       (%wrap-signed ,width (cl:logand (cl:ash (cl:logand a ,mask) k) ,mask)))
+                      (cl:t 0))))))))
 
 ;;; Utility to define Default instances.
 (cl:defmacro define-default-num (type)
