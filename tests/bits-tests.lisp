@@ -190,7 +190,7 @@
        (and (== (bits:ldb s p a) (wrap (%ldb s p (math:toInteger a))))
             (== (bits:dpb n s p a) (wrap (%dpb (math:toInteger n) s p (math:toInteger a))))))))
 
-  (declare %boolean-algebra-laws (bits:Bits :a => :a * :a * :a -> Boolean))
+  (declare %boolean-algebra-laws ((bits:Bits :a) (Num :a) => :a * :a * :a -> Boolean))
   (define (%boolean-algebra-laws a b c)
     (and (== (bits:and a b) (bits:and b a))
          (== (bits:or a b) (bits:or b a))
@@ -355,8 +355,9 @@
   (is (== 9223372036854775808 (bits:reverse-n-bits 65 (the U64 3))))
   (is (== 0 (bits:reverse-n-bits 1000000000000 (the U64 3)))))
 
-;;; A `Bits` instance whose representation is not a Lisp integer: `ldb`
-;;; and `dpb` are defined in terms of the methods, so they work for it.
+;;; A `Bits` instance with no `Num` instance, whose representation is
+;;; not a Lisp integer: `ldb` and `dpb` are defined in terms of the
+;;; methods, so they work for it.
 
 (coalton-toplevel
   (derive Eq)
@@ -365,12 +366,6 @@
   (declare %flags-bits (%Flags -> U64))
   (define (%flags-bits f)
     (match f ((%Flags x) x)))
-
-  (define-instance (Num %Flags)
-    (define (+ a b) (%Flags (+ (%flags-bits a) (%flags-bits b))))
-    (define (- a b) (%Flags (- (%flags-bits a) (%flags-bits b))))
-    (define (* a b) (%Flags (* (%flags-bits a) (%flags-bits b))))
-    (define (fromInt n) (%Flags (fromInt n))))
 
   (define-instance (bits:Bits %Flags)
     (define (bits:and a b) (%Flags (bits:and (%flags-bits a) (%flags-bits b))))
