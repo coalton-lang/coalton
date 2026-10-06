@@ -101,6 +101,9 @@
 (define-coalton-editor-macro coalton:handle (expr &body handler-patterns)
     "Exception handling expression whose handlers run before unwinding.")
 
+(define-coalton-editor-macro coalton:protect (expr &body cleanup)
+    "Evaluate EXPR, and then CLEANUP however control leaves EXPR.")
+
 (define-coalton-editor-macro coalton:dynamic-bind (bindings &body body)
     "Dynamically rebind Coalton dynamic variables.")
 

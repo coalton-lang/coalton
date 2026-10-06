@@ -42,4 +42,8 @@ which silently ignores the errors they may contain."
             node)
     :unless (lambda (node)
               (warn-if-discarded-result (tc:node-body-last-node (tc:node-unless-body node)))
-              node))))
+              node)
+    ;; So does the cleanup of PROTECT.
+    :protect (lambda (node)
+               (warn-if-discarded-result (tc:node-body-last-node (tc:node-protect-cleanup node)))
+               node))))

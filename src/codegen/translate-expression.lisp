@@ -1020,6 +1020,19 @@ Returns a `node'.")
                      :body (translate-expression (tc:node-match-branch-body branch) ctx env)))
                   (tc:node-match-branches expr)))))
 
+  (:method ((expr tc:node-protect) ctx env)
+    (declare (type pred-context ctx)
+             (type tc:environment env)
+             (values node))
+
+    (let ((qual-ty (tc:node-type expr)))
+      (assert (null (tc:qualified-ty-predicates qual-ty)))
+
+      (make-node-protect
+       :type (tc:qualified-ty-type qual-ty)
+       :expr (translate-expression (tc:node-protect-expr expr) ctx env)
+       :cleanup (translate-expression (tc:node-protect-cleanup expr) ctx env))))
+
   (:method ((expr tc:node-catch) ctx env)
     (declare (type pred-context ctx)
              (type tc:environment env)

@@ -332,6 +332,12 @@ FORM must be a renamed parser AST fragment."
              :body (resolve-body (parser:node-unsafe-body node) ctx)
              :location (source:location node)))
 
+           (parser:node-protect
+            (parser:make-node-protect
+             :expr (resolve-node (parser:node-protect-expr node) ctx)
+             :cleanup (resolve-body (parser:node-protect-cleanup node) ctx)
+             :location (source:location node)))
+
            (parser:node-the
             (parser:make-node-the
              :type (parser:node-the-type node)

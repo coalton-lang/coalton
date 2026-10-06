@@ -589,6 +589,11 @@ value is returned from the `handle` form."
     (declare (type tc:environment env))
     `(return-from ,(continue-label (node-continue-label expr)) (values)))
 
+  (:method ((node node-protect) env)
+    (declare (type tc:environment env))
+    `(unwind-protect ,(codegen-expression (node-protect-expr node) env)
+       ,(codegen-expression (node-protect-cleanup node) env)))
+
   (:method ((node node-catch) env)
     (declare (type tc:environment env))
     (if (node-catch-in-place-p node)

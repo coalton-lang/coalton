@@ -526,6 +526,17 @@
       :location (source:location node))
      ctx))
 
+  (:method ((node node-protect) ctx)
+    (declare (type algo:immutable-map ctx)
+             (values node algo:immutable-map))
+
+    (values
+     (make-node-protect
+      :expr (rename-variables-generic% (node-protect-expr node) ctx)
+      :cleanup (rename-variables-generic% (node-protect-cleanup node) ctx)
+      :location (source:location node))
+     ctx))
+
   (:method ((node node-the) ctx)
     (declare (type algo:immutable-map ctx)
              (values node algo:immutable-map))

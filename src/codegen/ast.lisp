@@ -102,6 +102,10 @@
    #:catch-branch-pattern               ; READER
    #:catch-branch-body                  ; READER
    #:catch-branch-list                  ; TYPE
+   #:node-protect                       ; STRUCT
+   #:make-node-protect                  ; CONSTRUCTOR
+   #:node-protect-expr                  ; READER
+   #:node-protect-cleanup               ; READER
    #:node-catch                         ; STRUCT
    #:make-node-catch                    ; CONSTRUCTOR
    #:node-catch-in-place-p              ; READER
@@ -408,6 +412,11 @@ coalton symbols (`parser:identifier`)"
 
 (deftype catch-branch-list ()
   '(satisfies catch-branch-list-p))
+
+(defstruct (node-protect (:include node))
+  "Evaluate EXPR, and then CLEANUP however control leaves EXPR."
+  (expr    (util:required 'expr)    :type node :read-only t)
+  (cleanup (util:required 'cleanup) :type node :read-only t))
 
 (defstruct (node-catch (:include node))
   "An exception-catching construct. Uses CATCH-BRANCH to represent branches.
