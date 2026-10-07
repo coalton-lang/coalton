@@ -117,6 +117,7 @@
                   check-create-project-creates-new-project
                   check-create-project-refuses-existing-directory
                   check-create-project-rejects-path-like-name
+                  check-project-tree-shows-hidden-rows-after-growing
                   check-buffer-manager-any-dirty-sees-non-current-buffer
                   run-runtime-regression-tests
                   run-quick-result-model-tests

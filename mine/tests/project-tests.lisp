@@ -118,3 +118,28 @@
                (%check (mine/buffer/manager:bufmgr-any-dirty? bm)
                        "Expected a dirty non-current buffer to be detected"))))
       (ignore-errors (uiop:delete-directory-tree root :validate t)))))
+
+(defun check-project-tree-shows-hidden-rows-after-growing ()
+  (let* ((tp (mine/pane/tree:tree-pane-new))
+         (files (loop :for i :below 10
+                      :collect (mine/pane/tree:TreeFile (format nil "file~D.lisp" i)
+                                                        (format nil "/project/file~D.lisp" i))))
+         (scr (mine/term/screen:screen-new 30 30)))
+    (mine/pane/tree:tree-pane-set-root! tp (mine/pane/tree:TreeDir "project" files coalton:True))
+    (dotimes (i 10) (mine/pane/tree:tree-pane-move-down! tp))
+    (flet ((render (height)
+             (mine/pane/tree:tree-pane-render tp scr (wt:Rect 0 0 30 height) coalton:True
+                                              (lambda (path) (declare (ignore path)) coalton:False)
+                                              (lambda (path) (declare (ignore path)) 0))
+             (loop :for y :below height
+                   :collect (string-trim " " (coerce (loop :for x :below 29
+                                                           :collect (uiop:symbol-call
+                                                                     ':mine-tests/editor-layout
+                                                                     ':screen-cell-character scr x y))
+                                                     'string)))))
+      (%check (not (find "file0.lisp" (render 8) :test #'string=))
+              "The short tree unexpectedly showed its first file")
+      (let ((rows (render 18)))
+        (%check (and (find "file0.lisp" rows :test #'string=)
+                     (find "file9.lisp" rows :test #'string=))
+                "Growing the tree did not show every row again: ~S" rows)))))
