@@ -4623,15 +4623,13 @@ as a recursive function rather than a recursive value."
                          declared-instantiation-types))
 
                (output-qual-type (tc:qualify expr-preds expr-type))
-               (output-scheme (if declared-explicit-p
-                                  (tc:quantify-using-tvar-order
-                                   (remove-if-not
-                                    (lambda (declared-tvar)
-                                      (find declared-tvar generalizable-tvars :test #'tc:ty=))
-                                    ordered-explicit-tvars)
-                                   output-qual-type
-                                   t)
-                                  (tc:quantify generalizable-tvars output-qual-type))))
+               (quantified-tvars (if declared-explicit-p
+                                     (remove-if-not
+                                      (lambda (declared-tvar)
+                                        (find declared-tvar generalizable-tvars :test #'tc:ty=))
+                                      ordered-explicit-tvars)
+                                     generalizable-tvars))
+               (outer-tvars env-tvars))
 
           (let* ((expr-preds (tc:apply-substitution subs expr-preds))
                  (preds (tc:apply-substitution subs preds))
@@ -4746,9 +4744,27 @@ as a recursive function rather than a recursive value."
                 (when (and (parser:binding-toplevel-p binding) deferred-preds)
                   (error-unknown-pred (first deferred-preds)))
 
-                ;; Check that the declared and inferred schemes match
-                (let ((declared-output-scheme (tc:apply-substitution subs declared-ty)))
-                  (setf output-scheme (tc:apply-substitution subs output-scheme))
+                ;; Check that the declared and inferred schemes match.
+                ;; Defaulting can bind variables of the inferred type, so
+                ;; quantify its final form. A variable bound to a type, to
+                ;; another quantified variable, or to a variable of the
+                ;; environment is then no longer quantified, which makes
+                ;; the declaration too general.
+                (let* ((declared-output-scheme (tc:apply-substitution subs declared-ty))
+                       (outer-tvars (tc:type-variables (tc:apply-substitution subs outer-tvars)))
+                       (quantified-tvars
+                         (remove-duplicates
+                          (remove-if (lambda (ty)
+                                       (or (not (tc:tyvar-p ty))
+                                           (find ty outer-tvars :test #'tc:ty=)))
+                                     (tc:apply-substitution subs quantified-tvars))
+                          :test #'tc:ty=
+                          :from-end t))
+                       (output-qual-type (tc:apply-substitution subs output-qual-type))
+                       (output-scheme
+                         (if declared-explicit-p
+                             (tc:quantify-using-tvar-order quantified-tvars output-qual-type t)
+                             (tc:quantify quantified-tvars output-qual-type))))
                   (unless (tc:ty-scheme= declared-output-scheme output-scheme)
                     (tc-error "Declared type is too general"
                               (tc-location location

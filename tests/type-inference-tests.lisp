@@ -1603,6 +1603,27 @@
      "(declare count-items (:a -> Integer))
       (define (count-items x) (fold (fn (n _) (+ n 1)) 0 [x x]))")))
 
+(deftest test-builder-defaults-preserve-declared-types ()
+  ;; Defaulting [y] to a Seq of the fold's elements makes :b Integer. Without a
+  ;; declaration, that is the inferred type; a declaration may not hide it.
+  (check-coalton-types
+   "(define (narrow y) (fold (fn (acc z) (+ acc z)) (the Integer 0) [y]))"
+   '("narrow" . "(Integer -> Integer)"))
+  (dolist (program
+            '("(declare narrow (coalton/types:RuntimeRepr :b => :b -> Integer))
+               (define (narrow y) (fold (fn (acc z) (+ acc z)) (the Integer 0) [y]))"
+              "(declare narrow (forall (:b) (coalton/types:RuntimeRepr :b => :b -> Integer)))
+               (define (narrow y) (fold (fn (acc z) (+ acc z)) (the Integer 0) [y]))"
+              "(define (outer)
+                 (let ((declare narrow (coalton/types:RuntimeRepr :b => :b -> Integer))
+                       (narrow (fn (y) (fold (fn (acc z) (+ acc z)) (the Integer 0) [y]))))
+                   (narrow \"hello\")))"
+              "(define-class (Narrow :t)
+                 (narrow (coalton/types:RuntimeRepr :b => :t * :b -> Integer)))
+               (define-instance (Narrow Unit)
+                 (define (narrow _ y) (fold (fn (acc z) (+ acc z)) (the Integer 0) [y])))"))
+    (signals tc:tc-error (check-coalton-types program))))
+
 (deftest test-builder-defaults-in-standalone-expressions ()
   (let ((*package* (find-package "COALTON-USER"))
         (entry:*global-environment* entry:*global-environment*))
