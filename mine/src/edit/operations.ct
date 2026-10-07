@@ -12,7 +12,8 @@
    #:insert-string!
    #:delete-backward!
    #:delete-backward-word!
-   #:delete-forward!))
+   #:delete-forward!
+   #:delete-range!))
 
 (in-package #:mine/edit/operations)
 
@@ -130,5 +131,26 @@ Does nothing if the cursor is at the end of the buffer."
          (buf:buffer-mark-dirty! buffer)
          (undo:undo-record! tree (undo:OpDelete del-pos text) p del-pos)
          (cursor:cursor-move-to-buffer-position! gb cs del-pos)))))
+
+  ;;; delete-range!
+
+  (declare delete-range! (buf:Buffer * undo:UndoTree * cursor:CursorState
+                           * UFix * UFix -> Void))
+  (define (delete-range! buffer tree cs start end)
+    "Delete the text in [START, END) and leave the cursor at START.
+The range grows so it never splits a CRLF editor unit.
+Records the operation for undo. Does nothing when the range is empty."
+    (let gb = (buf:buffer-gap buffer))
+    (let cursor-before = (cursor:cursor-position cs))
+    (let s = (clamp-position gb (min start end)))
+    (let e = (clamp-position gb (max start end)))
+    (match (gap:gap-expand-range-to-editor-units gb s e)
+      ((Tuple del-start del-end)
+       (when (> del-end del-start)
+         (let text = (gap:gap-delete-range! gb del-start del-end))
+         (buf:buffer-mark-dirty! buffer)
+         (undo:undo-record! tree (undo:OpDelete del-start text)
+                            cursor-before del-start))
+       (cursor:cursor-move-to-buffer-position! gb cs del-start))))
 
 )

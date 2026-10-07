@@ -50,7 +50,8 @@
    (#:symbols #:mine/app/symbols)
    (#:cellw #:mine/text/width)
    (#:spinner #:mine/widget/spinner)
-   (#:hm #:coalton/hashmap))
+   (#:hm #:coalton/hashmap)
+   (#:evil #:mine/edit/evil))
   (:export
    #:mine-main
    #:ProtoMsg #:ProtoReturn #:ProtoOutput #:ProtoDebug #:ProtoIORequest #:ProtoConnectionLost))
@@ -70,6 +71,8 @@
 (cl:defvar *pending-jump-source* nil "(filepath . position) for jump-back stack.")
 (cl:defvar *restart-into-setup* nil
   "When set to T by the Setup Wizard menu action, mine-main reruns the setup wizard.")
+(cl:defvar *last-find-needle* nil
+  "Text of the last incremental find, for the evil n and N keys.")
 
 (cl:defun %read-form-head-cl (text)
   "Return the lowercase head symbol for TEXT when it starts with a list form."
@@ -415,9 +418,13 @@
                 "REPL Structural"
                 "REPL"))
            ((focus:FocusTree) "TREE")
-           (_ (if (cell:read (.ms-structural-editing st))
-                  "EDIT Structural"
-                  "EDIT"))))
+           (_
+            (let base = (if (evil:evil-enabled? (.ms-evil st))
+                            (evil:evil-mode-label (.ms-evil st))
+                            "EDIT"))
+            (if (cell:read (.ms-structural-editing st))
+                (<> base " Structural")
+                base))))
        (let cur-pos = (cursor:cursor-position (.ms-cursor st)))
        ;; Prefer diagnostics at point, then diagnostics on the current line, then symbol info.
        (let diag-msg =
@@ -476,6 +483,7 @@
                                  (cell:read (.ms-project-system st))
                                  sym-info)))
     (status:statusbar-render (.ms-status st) scr status-rect)
+    (%update-cursor-shape! st term)
     ;; Position the hardware cursor (only visible in editor/REPL)
     (match (focus:focus-current (.ms-focus st))
       ((focus:FocusEditor)
@@ -710,6 +718,21 @@
       (render:draw-text scr (+ key-y 5) warn-x warn
         (color:Style color:error-fg color:black color:AttrBold)))
     (values))
+
+;;; Cursor shape
+
+  (declare %update-cursor-shape! (MineState * term:Terminal -> Void))
+  (define (%update-cursor-shape! st term)
+    "Block cursor in evil normal and visual modes, bar in insert mode,
+terminal default otherwise."
+    (let shape =
+      (if (and (evil:evil-enabled? (.ms-evil st))
+               (== (focus:focus-current (.ms-focus st)) focus:FocusEditor))
+          (match (evil:evil-mode (.ms-evil st))
+            ((evil:EvilInsert) 2)
+            (_ 1))
+          0))
+    (term:terminal-set-cursor-shape! term shape))
 
 ;;; Editor pane
 
@@ -2519,9 +2542,140 @@ Uses the preceding (in-package ...) form to determine the compilation package."
 
 ;;; Event handling -- editor keys
 
-  (declare handle-editor-key (MineState * input:Key * input:Modifier -> Void))
-  (define (handle-editor-key st key mod)
-    "Handle a key event when the editor pane is focused."
+  (declare handle-editor-key (MineState * term:Terminal * input:Key * input:Modifier -> Void))
+  (define (handle-editor-key st term key mod)
+    "Handle a key event when the editor pane is focused.
+When evil mode is on, the evil layer sees the key first."
+    (let es = (.ms-evil st))
+    (match (Tuple (evil:evil-enabled? es) (mgr:bufmgr-current (.ms-bufmgr st)))
+      ((Tuple (True) (Some buf))
+       ;; An insert session that started in another buffer ends here.
+       (match (evil:evil-insert-group-buffer es)
+         ((Some id)
+          (when (not (== id (buf:buffer-id buf)))
+            (%close-evil-insert-group! st)))
+         ((None) (values)))
+       (match (evil:evil-handle-key! es buf (.ms-cursor st) key mod (%structural-edit? st buf))
+         ((evil:EvilPassThrough) (%handle-editor-key-plain st key mod))
+         ((evil:EvilHandled) (values))
+         ((evil:EvilEdited) (%commit-preview! st))
+         ((evil:EvilCommand cmd) (run-evil-command! st term cmd))))
+      (_ (%handle-editor-key-plain st key mod))))
+
+  (declare %close-evil-insert-group! (MineState -> Void))
+  (define (%close-evil-insert-group! st)
+    "Close an insert-session undo group left open in any buffer."
+    (let es = (.ms-evil st))
+    (match (evil:evil-insert-group-buffer es)
+      ((None) (values))
+      ((Some id)
+       (evil:evil-close-insert-group! es
+                                      (mgr:bufmgr-get (.ms-bufmgr st) id)
+                                      (cursor:cursor-position (.ms-cursor st))))))
+
+  (declare toggle-evil! (MineState -> Void))
+  (define (toggle-evil! st)
+    "Turn evil mode on or off. Always lands in normal mode."
+    (let es = (.ms-evil st))
+    (let now = (not (evil:evil-enabled? es)))
+    (%close-evil-insert-group! st)
+    (evil:evil-reset! es)
+    (cursor:cursor-clear-selection! (.ms-cursor st))
+    (evil:evil-set-enabled! es now)
+    (status:statusbar-set-message! (.ms-status st)
+                                   (if now "Evil mode on (vim keys)" "Evil mode off"))
+    (values))
+
+  (declare undo-current! (MineState -> Void))
+  (define (undo-current! st)
+    "Undo one step in the current buffer."
+    (match (mgr:bufmgr-current (.ms-bufmgr st))
+      ((Some buf)
+       (match (undo:undo-undo! (buf:buffer-undo buf))
+         ((Some (undo:UndoEntry entry-ops entry-cursor-before _))
+          (apply-undo-ops (buf:buffer-gap buf) entry-ops)
+          (cursor:cursor-move-to-position! (.ms-cursor st) entry-cursor-before))
+         ((None) (values))))
+      ((None) (values))))
+
+  (declare %evil-goto-line! (MineState * UFix -> Void))
+  (define (%evil-goto-line! st n)
+    "Move the cursor to the start of line N (1-based, clamped)."
+    (match (mgr:bufmgr-current (.ms-bufmgr st))
+      ((Some buf)
+       (let gb = (buf:buffer-gap buf))
+       (let last = (- (gap:gap-line-count gb) 1))
+       (let line = (if (== n 0) 0 (min last (- n 1))))
+       (cursor:cursor-move-to-buffer-position! gb (.ms-cursor st) (gap:gap-line-to-pos gb line)))
+      ((None) (values))))
+
+  (declare %last-find-needle (Void -> Optional String))
+  (define (%last-find-needle)
+    (lisp (-> (Optional String)) ()
+      (cl:if *last-find-needle* (Some *last-find-needle*) None)))
+
+  (declare %remember-find-needle! (String -> Void))
+  (define (%remember-find-needle! needle)
+    (lisp (-> Void) (needle)
+      (cl:when (cl:plusp (cl:length needle))
+        (cl:setf *last-find-needle* needle))
+      (cl:values)))
+
+  (declare run-evil-ex! (MineState * term:Terminal * String -> Void))
+  (define (run-evil-ex! st term text)
+    "Run the text typed after a colon."
+    (match (evil:evil-parse-ex text)
+      ((Some cmd) (run-evil-command! st term cmd))
+      ((None) (user-error! st (<> "Unknown command: " text)))))
+
+  (declare run-evil-command! (MineState * term:Terminal * evil:EvilCmd -> Void))
+  (define (run-evil-command! st term cmd)
+    "Run an evil action that needs application state."
+    (match cmd
+      ((evil:EvilCmdOpenBelow)
+       (match (mgr:bufmgr-current (.ms-bufmgr st))
+         ((Some buf)
+          (cursor:cursor-move-to-line-end! (buf:buffer-gap buf) (.ms-cursor st))
+          (editor-newline! st buf))
+         ((None) (values))))
+      ((evil:EvilCmdOpenAbove)
+       (match (mgr:bufmgr-current (.ms-bufmgr st))
+         ((Some buf)
+          (let gb = (buf:buffer-gap buf))
+          (let cs = (.ms-cursor st))
+          (cursor:cursor-move-to-line-start! gb cs)
+          (ops:insert-char! buf (buf:buffer-undo buf) cs #\Newline)
+          (cursor:cursor-move-up! gb cs)
+          (reindent-line! st buf (buf:buffer-undo buf) cs))
+         ((None) (values))))
+      ((evil:EvilCmdUndo) (undo-current! st))
+      ((evil:EvilCmdExPrompt)
+       (mini:minibuffer-prompt-with-completion! (.ms-minibuffer st) ":" ""
+                                                (fn (text) (run-evil-ex! st term text))
+                                                (fn (text) (Tuple text Nil)))
+       (mini:minibuffer-set-footer-hint! (.ms-minibuffer st)
+                                         "w, q, wq, x, or a line number; Ctrl+g to cancel"))
+      ((evil:EvilCmdSearch) (start-find! st))
+      ((evil:EvilCmdSearchNext)
+       (match (%last-find-needle)
+         ((Some needle)
+          (%find-do-search! st needle (+ (cursor:cursor-position (.ms-cursor st)) 1)))
+         ((None) (user-error! st "No previous search"))))
+      ((evil:EvilCmdSearchPrev)
+       (match (%last-find-needle)
+         ((Some needle) (%find-do-prev! st needle))
+         ((None) (user-error! st "No previous search"))))
+      ((evil:EvilCmdSave) (save-current-file! st))
+      ((evil:EvilCmdQuit) (try-quit! st term))
+      ((evil:EvilCmdSaveQuit)
+       (save-current-file! st)
+       (try-quit! st term))
+      ((evil:EvilCmdGotoLine n) (%evil-goto-line! st n))
+      ((evil:EvilCmdMessage msg) (status:statusbar-set-message! (.ms-status st) msg))))
+
+  (declare %handle-editor-key-plain (MineState * input:Key * input:Modifier -> Void))
+  (define (%handle-editor-key-plain st key mod)
+    "Handle a key event in the editor pane with the standard keybindings."
     ;; Clear selection on editing keys (not movement, copy, cut, or Ctrl+Space)
     (match key
       ((input:KeyUp) (values))
@@ -2726,15 +2880,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (paste-clipboard! st))
 
       ;; Ctrl+z -> undo
-      ((input:KeyCtrl #\z)
-       (match (mgr:bufmgr-current (.ms-bufmgr st))
-         ((Some buf)
-          (match (undo:undo-undo! (buf:buffer-undo buf))
-            ((Some (undo:UndoEntry entry-ops entry-cursor-before _))
-             (apply-undo-ops (buf:buffer-gap buf) entry-ops)
-             (cursor:cursor-move-to-position! (.ms-cursor st) entry-cursor-before))
-            ((None) (values))))
-         ((None) (values))))
+      ((input:KeyCtrl #\z) (undo-current! st))
 
       ;; Ctrl+y -> redo
       ((input:KeyCtrl #\y)
@@ -3262,10 +3408,10 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          ;; Route to focused pane
          (_
           (match (focus:focus-current (.ms-focus st))
-            ((focus:FocusEditor) (handle-editor-key st key mod))
+            ((focus:FocusEditor) (handle-editor-key st term key mod))
             ((focus:FocusRepl)   (handle-repl-key st key mod))
             ((focus:FocusTree)   (handle-tree-key st term key mod))
-            (_                   (handle-editor-key st key mod))))))))
+            (_                   (handle-editor-key st term key mod))))))))
 
 ;;; Undo helpers
 
@@ -3784,6 +3930,7 @@ wrap is on, row is resolved through screen-row-to-line-seg."
                                          (input:KeyCtrl #\f)
                                          ;; on-change: search from cursor position
                                          (fn (needle)
+                                           (%remember-find-needle! needle)
                                            (%find-do-search! st needle (cursor:cursor-position (.ms-cursor st))))
                                          ;; on-repeat (Ctrl+f again): jump to next match
                                          (fn (needle)
@@ -4282,6 +4429,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
        (render-app st term))
       ((menubar:ActionToggleStructural)
        (toggle-structural! st))
+      ((menubar:ActionToggleEvil) (toggle-evil! st))
       ((menubar:ActionToggleLineWrap)
        (editor:editor-pane-toggle-line-wrap! (.ms-editor st))
        (status:statusbar-set-message!
@@ -4714,7 +4862,8 @@ Render-app is NOT called here; the main loop handles rendering."
                          (native-box-new)
                          (cell:new None)
                          (native-box-new)
-                         (native-box-new)))
+                         (native-box-new)
+                         (evil:evil-new (cfgt:.config-evil-mode config))))
     (start-update-check! st)
     ;; Open a file if given on the command line
     (let file-args = (filter (fn (a) (not (str:substring? "--" a))) (list:cdr args)))

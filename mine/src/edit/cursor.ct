@@ -20,6 +20,7 @@
    #:cursor-selection-anchor
    #:cursor-start-selection!
    #:cursor-clear-selection!
+   #:word-char?
    #:.pos
    #:.target-col))
 

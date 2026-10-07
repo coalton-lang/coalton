@@ -11,6 +11,7 @@
    (#:ops #:mine/edit/operations)
    (#:undo #:mine/edit/undo)
    (#:paredit #:mine/syntax/paredit)
+   (#:evil #:mine/edit/evil)
    (#:repl #:mine/pane/repl)
    (#:proc #:mine/bindings/process)
    (#:server #:mine/protocol/server)
@@ -111,6 +112,7 @@
                   check-repl-structural-doublequote-in-string
                   check-repl-structural-escaped-quote-deletes-as-unit
                   check-paredit-matching-ignores-delimiters-in-strings
+                  check-paredit-range-balanced
                   check-repl-structural-editing-alt-sexp-motion
                   check-repl-hint-symbol-extraction
                   check-editor-completion-prefix-extraction
@@ -130,7 +132,30 @@
                   check-create-project-creates-new-project
                   check-create-project-refuses-existing-directory
                   check-create-project-rejects-path-like-name
-                  check-buffer-manager-any-dirty-sees-non-current-buffer))
+                  check-buffer-manager-any-dirty-sees-non-current-buffer
+                  check-evil-motions-hjkl-and-clamp
+                  check-evil-word-motions
+                  check-evil-line-motions
+                  check-evil-counts
+                  check-evil-insert-entry
+                  check-evil-x-and-big-x
+                  check-evil-delete-operators
+                  check-evil-change-operators
+                  check-evil-yank-and-put
+                  check-evil-join
+                  check-evil-replace
+                  check-evil-visual-charwise
+                  check-evil-visual-line
+                  check-evil-commands
+                  check-evil-parse-ex
+                  check-evil-pass-through
+                  check-evil-disabled-state-is-inert
+                  check-evil-insert-session-is-one-undo
+                  check-evil-insert-group-closes-for-other-buffer
+                  check-evil-structural-blocks-unbalanced-deletes
+                  check-evil-property-no-crash
+                  check-evil-property-structural-keeps-balance
+                  check-evil-property-single-undo-step))
     (format t "~&~A~%" test)
     (funcall test))
   t)

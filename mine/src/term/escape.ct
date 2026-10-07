@@ -5,6 +5,7 @@
   (:export
    ;; Cursor
    #:cursor-show #:cursor-hide
+   #:cursor-shape-default #:cursor-shape-block #:cursor-shape-bar
    ;; Screen
    #:clear-screen
    ;; Attributes
@@ -51,6 +52,21 @@
   (define (cursor-hide)
     "Hide the cursor."
     (csi-seq "?25l"))
+
+  (declare cursor-shape-default (Void -> String))
+  (define (cursor-shape-default)
+    "Reset the cursor shape to the terminal default (DECSCUSR 0)."
+    (csi-seq "0 q"))
+
+  (declare cursor-shape-block (Void -> String))
+  (define (cursor-shape-block)
+    "Steady block cursor (DECSCUSR 2)."
+    (csi-seq "2 q"))
+
+  (declare cursor-shape-bar (Void -> String))
+  (define (cursor-shape-bar)
+    "Steady bar cursor (DECSCUSR 6)."
+    (csi-seq "6 q"))
 
   ;;; Screen clearing
 
