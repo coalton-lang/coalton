@@ -33,6 +33,10 @@
    #:CenterEditorReplSplit
    #:CenterReplFull
    #:MineLayout
+   #:ScrollbarGrab
+   #:GrabTreeScrollbar
+   #:GrabEditorScrollbar
+   #:GrabReplScrollbar
    #:MineState
    #:mine-state-new
    #:activate-buffer! #:forget-buffer-view!
@@ -111,6 +115,14 @@
     (ml-tree   TreeLayout)
     (ml-center CenterLayout))
 
+  (repr :enum)
+  (derive Eq)
+  (define-type ScrollbarGrab
+    "The scrollbar that a mouse button press grabbed."
+    GrabTreeScrollbar
+    GrabEditorScrollbar
+    GrabReplScrollbar)
+
 ;;; Application state
 
   (define-struct MineState
@@ -169,7 +181,8 @@
     (ms-view-buffer (Cell (Optional buf:BufferId)))
     (ms-requests requests:RequestState)
     (ms-initialization-request (Cell (Optional msg:RequestId)))
-    (ms-after-initialization (Cell (Optional (Tuple msg:Request Boolean)))))
+    (ms-after-initialization (Cell (Optional (Tuple msg:Request Boolean))))
+    (ms-scrollbar-grab (Cell (Optional ScrollbarGrab))))
 
   (declare mine-state-new (cfgt:MineConfig -> MineState))
   (define (mine-state-new config)
@@ -202,7 +215,7 @@
                (cell:new None) (cell:new qr:QuickResultHidden) (cell:new None)
                (native-box-new) (native-box-new)
                (cell:new hm:empty) (cell:new None) (requests:request-state-new)
-               (cell:new None) (cell:new None)))
+               (cell:new None) (cell:new None) (cell:new None)))
 
   (declare activate-buffer! (MineState * buf:Buffer -> Void))
   (define (activate-buffer! st buffer)
