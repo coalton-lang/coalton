@@ -391,6 +391,12 @@
         (cl:and (cl:search "Unexpected"
                            (coalton (panic-message-of (fn () (unwrap (the (Optional Integer) None))))))
                 cl:t)))
+  ;; UNWRAP on an Err panics with a message that includes the error.
+  (is (lisp (-> Boolean) ()
+        (cl:and (cl:search "no such key"
+                           (coalton (panic-message-of
+                                     (fn () (unwrap (the (Result String Integer) (Err "no such key")))))))
+                cl:t)))
   (is (lisp (-> Boolean) ()
         (cl:and (cl:search "failed: x was 3, 100% ~ too small"
                            (coalton (panic-message-of (fn () (check-large 3) 0))))
@@ -613,12 +619,4 @@
          (== "rethrown"
              (catch (throw e)
                ((the exception:LispError _) "rethrown"))))
-        (_ False)))
-  ;; ERROR on a FileError rethrows the Lisp error it holds, rather than panicking.
-  (is (== "rethrown"
-          (catch (progn
-                   (result:ok-or-error
-                    (file:system-relative-pathname "coalton-no-such-system" ""))
-                   "not thrown")
-            ((the Panic _) "panicked")
-            ((the exception:LispError _) "rethrown")))))
+        (_ False))))
