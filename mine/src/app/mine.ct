@@ -4696,9 +4696,11 @@ Render-app is NOT called here; the main loop handles rendering."
 
   (declare %first-file-path (tree:TreeNode -> Optional String))
   (define (%first-file-path node)
-    "Find the first TreeFile path in a tree, depth-first."
+    "Find the first file to open in a project tree, depth-first: the first
+TreeFile other than an .asd file, which the tree lists before the sources."
     (match node
-      ((tree:TreeFile _name path) (Some path))
+      ((tree:TreeFile _name path)
+       (if (%is-asd-file path) None (Some path)))
       ((tree:TreeDir _name children _expanded)
        (%first-file-in-list children))))
 
