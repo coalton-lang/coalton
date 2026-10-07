@@ -772,20 +772,25 @@ segments) and highlights the current visual row."
     (let sel-end = (match sel-anchor
                      ((Some a) (max a cur-pos))
                      ((None) 99999999)))
-    ;; Compute matching bracket positions
+    ;; As Emacs's show-paren-mode does, pair a closing delimiter just before
+    ;; the cursor, or else an opening delimiter at the cursor, with its match.
     (let paren-match =
-      (if (> cur-pos 0)
-          (match (gap:gap-char-at gb (- cur-pos 1))
-            ((Some #\))
-             (match (paredit:scan-matching-open-paren gb (- cur-pos 1))
-               ((Some open-pos) (Some (Tuple (- cur-pos 1) open-pos)))
-               ((None) None)))
-            ((Some #\])
-             (match (paredit:scan-matching-open-bracket gb (- cur-pos 1))
-               ((Some open-pos) (Some (Tuple (- cur-pos 1) open-pos)))
-               ((None) None)))
-            (_ None))
-          None))
+      (let ((closing-before
+              (if (> cur-pos 0)
+                  (map (fn (open-pos) (Tuple (- cur-pos 1) open-pos))
+                       (match (gap:gap-char-at gb (- cur-pos 1))
+                         ((Some #\)) (paredit:scan-matching-open-paren gb (- cur-pos 1)))
+                         ((Some #\]) (paredit:scan-matching-open-bracket gb (- cur-pos 1)))
+                         (_ None)))
+                  None)))
+        (match closing-before
+          ((Some pair) (Some pair))
+          ((None)
+           (map (fn (close-pos) (Tuple cur-pos close-pos))
+                (match (gap:gap-char-at gb cur-pos)
+                  ((Some #\() (paredit:find-matching-close gb cur-pos))
+                  ((Some #\[) (paredit:scan-matching-bracket gb cur-pos))
+                  (_ None)))))))
     (let lexer-mode = (render-lexer-mode (.erc-mode context)))
     (let highlight = (if (== lexer-mode 2) None
                          (Some (lexer:source-highlight (source:scan-source (gap:gap-to-string gb))
