@@ -1736,10 +1736,13 @@ Uses a dedicated Beam request so diagnostics can stream independently."
     ;; An explicit IN-PACKAGE in the user's init remains authoritative.
     (let source =
       (lisp (-> String) (package code)
+        ;; The package name may be a base string reported by the runtime;
+        ;; print it as a plain string literal rather than in #A syntax.
         (cl:with-standard-io-syntax
-          (cl:format cl:nil
-                     "(cl:progn (cl:setf cl:*package* (cl:or (cl:find-package ~S) (cl:find-package ~S) (cl:error 'cl:package-error :package ~S))) ~A)"
-                     package (cl:string-upcase package) package code))))
+          (cl:let ((cl:*print-readably* cl:nil))
+            (cl:format cl:nil
+                       "(cl:progn (cl:setf cl:*package* (cl:or (cl:find-package ~S) (cl:find-package ~S) (cl:error 'cl:package-error :package ~S))) ~A)"
+                       package (cl:string-upcase package) package code)))))
     (cell:write! (.ms-initialization-request st) (Some id))
     (cell:write! (.ms-active-request st) (Some id))
     (cell:write! (.ms-repl-busy st) True)

@@ -190,7 +190,10 @@ errors, and deliberately does not enter the interactive debugger."
   "Return the exact source prefix written ahead of debug-compile-string input."
   (let ((pkg (find-evaluation-package package-name)))
     (with-standard-io-syntax
-      (format nil "(in-package ~S)~%" (package-name pkg)))))
+      ;; SBCL package names are base strings, which readable printing writes
+      ;; in #A syntax that the Coalton source reader rejects.
+      (let ((*print-readably* nil))
+        (format nil "(in-package ~S)~%" (package-name pkg))))))
 
 (defun debug-compile-string (form-string package-name &optional wire-stream msg-id coalton-p)
   (cond
