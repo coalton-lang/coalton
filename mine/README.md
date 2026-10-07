@@ -54,7 +54,7 @@ Quit `mine` with **F1:mine > Quit** menu or press **Ctrl+q**.
 `mine` has a fixed layout:
 
 - The **Open Files** pane: lists the current open files. It automatically collapses when editing. Switch to it with Ctrl+t. You can switch to (Enter), close (c), and save (s) files here.
-- The **Project Tree**: lists all of the files in your `.asd` project. You can open files from this tree.
+- The **Project Tree**: lists your project's `.asd` file and all of the files it names. You can open files from this tree.
 - The **Editor** pane: where you do all your editing. Switch to it with Ctrl+e.
 - The **REPL** pane: where you interact with your program. Switch to it with Ctrl+r.
 - The **Status Line**: shows recent actions, as well as context-sensitive information about your program.

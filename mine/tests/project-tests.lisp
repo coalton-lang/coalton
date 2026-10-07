@@ -171,6 +171,60 @@
       (dolist (root roots)
         (uiop:delete-directory-tree root :validate t :if-does-not-exist ':ignore)))))
 
+(defun check-project-tree-lists-the-asd-file-first ()
+  (let* ((root (%mine-project-test-root))
+         (asd (merge-pathnames "mine-asd-entry-test.asd" root)))
+    (flet ((check-tree (asd-text expected-suffixes)
+             (%write-utf8-file asd asd-text)
+             (let ((tree (app::%coalton-optional-value-or-nil
+                          (mine/project/asdf-parser:parse-asd-to-tree (namestring asd))))
+                   (tp (mine/pane/tree:tree-pane-new))
+                   (scr (mine/term/screen:screen-new 40 16)))
+               (%check tree "The project tree did not parse:~%~A" asd-text)
+               (mine/pane/tree:tree-pane-set-root! tp tree)
+               (mine/pane/tree:tree-pane-render tp scr (wt:Rect 0 0 40 16) coalton:True
+                                                (lambda (path) (declare (ignore path)) coalton:False)
+                                                (lambda (path) (declare (ignore path)) 0))
+               (let* ((rows (loop :for y :below 16
+                                  :collect (string-trim
+                                            " "
+                                            (coerce (loop :for x :below 39
+                                                          :collect (uiop:symbol-call
+                                                                    ':mine-tests/editor-layout
+                                                                    ':screen-cell-character scr x y))
+                                                    'string))))
+                      (asd-row (position "mine-asd-entry-test.asd" rows :test #'string=))
+                      (shown (and asd-row (subseq rows (1- asd-row)))))
+                 (%check (and shown
+                              (<= (length expected-suffixes) (length shown))
+                              (every #'uiop:string-suffix-p shown expected-suffixes))
+                         "The project tree did not list the .asd file first: ~S" rows)
+                 (%check (equal (namestring (truename asd))
+                                (app::%coalton-optional-value-or-nil
+                                 (mine/pane/tree:tree-pane-click-at! tp asd-row 4 16)))
+                         "Clicking the .asd file in the project tree did not select the file")
+                 (let ((first-file (app::%coalton-optional-value-or-nil
+                                    (app::%first-file-path tree))))
+                   (%check (and first-file (string= "main.lisp" (file-namestring first-file)))
+                           "Opening the project would open ~S rather than its first source file"
+                           first-file))))))
+      (unwind-protect
+           (progn
+             (ensure-directories-exist root)
+             (%write-utf8-file (merge-pathnames "main.lisp" root) "")
+             (%write-utf8-file (merge-pathnames "tests.lisp" root) "")
+             (check-tree "(asdf:defsystem \"mine-asd-entry-test\" :components ((:file \"main\")))"
+                         '("mine-asd-entry-test" "mine-asd-entry-test.asd" "main.lisp"))
+             ;; With several systems, the root is the project rather than the file.
+             (check-tree "(asdf:defsystem \"mine-asd-entry-test\" :components ((:file \"main\")))
+(asdf:defsystem \"mine-asd-entry-test/tests\" :components ((:file \"tests\")))"
+                         '("mine-asd-entry-test" "mine-asd-entry-test.asd"
+                           "mine-asd-entry-test" "main.lisp"
+                           "mine-asd-entry-test/tests" "tests.lisp")))
+        (remhash "mine-asd-entry-test" asdf::*registered-systems*)
+        (remhash "mine-asd-entry-test/tests" asdf::*registered-systems*)
+        (uiop:delete-directory-tree root :validate t :if-does-not-exist ':ignore)))))
+
 (defvar *asd-helper-loads* 0)
 
 (defun check-project-tree-loads-defsystem-dependencies-once ()

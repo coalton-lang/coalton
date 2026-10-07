@@ -80,27 +80,25 @@ would otherwise load them again for every parse."
                         asdf::*registered-systems*)))))))
 
 (cl:defun %asd-path-to-tree (asd-path)
-  "Given a path to a .asd file, find all systems and build a tree."
+  "Given a path to a .asd file, find all systems and build a tree.
+The tree lists the .asd file itself first, so that it can be opened from there."
   (cl:handler-case
       (cl:let ((truepath (cl:truename (cl:pathname asd-path))))
         (%call-with-project-systems
          truepath
          (cl:lambda (sys-names)
            (cl:when sys-names
-             ;; Build a tree node for each system that has components
-             (cl:let* ((sys-trees
-                         (cl:remove cl:nil
-                           (cl:mapcar
-                            (cl:lambda (name)
-                              (cl:let ((sys (asdf:registered-system name)))
-                                (cl:when sys (%system-to-tree sys))))
-                            sys-names)))
-                       (root-name (cl:file-namestring truepath)))
-               (cl:if (cl:= (cl:length sys-trees) 1)
+             (cl:let ((systems (cl:remove cl:nil (cl:mapcar #'asdf:registered-system sys-names)))
+                      (asd-file (mine/pane/tree:TreeFile (cl:file-namestring truepath)
+                                                         (cl:namestring truepath))))
+               (cl:if (cl:= (cl:length systems) 1)
                       ;; Single system: use it directly
-                      (cl:first sys-trees)
-                      ;; Multiple systems: wrap in a root node
-                      (mine/pane/tree:TreeDir root-name sys-trees coalton:True)))))))
+                      (%system-to-tree (cl:first systems) (cl:list asd-file))
+                      ;; Multiple systems: wrap them in a node named for the project
+                      (mine/pane/tree:TreeDir
+                       (cl:or (cl:pathname-name truepath) (cl:file-namestring truepath))
+                       (cl:cons asd-file (cl:mapcar #'%system-to-tree systems))
+                       coalton:True)))))))
     (cl:error (c)
       (cl:format cl:*error-output* "~&;; asdf-parser error: ~A~%" c)
       (cl:force-output cl:*error-output*)
@@ -128,11 +126,12 @@ would otherwise load them again for every parse."
                            names)))))))
     (cl:error () cl:nil)))
 
-(cl:defun %system-to-tree (sys)
-  "Convert an ASDF system object into a TreeDir node."
+(cl:defun %system-to-tree (sys cl:&optional leading-nodes)
+  "Convert an ASDF system object into a TreeDir node, with LEADING-NODES
+before its components."
   (cl:let* ((name (asdf:component-name sys))
             (children (%children-to-tree-nodes sys)))
-    (mine/pane/tree:TreeDir name children coalton:True)))
+    (mine/pane/tree:TreeDir name (cl:append leading-nodes children) coalton:True)))
 
 (cl:defun %children-to-tree-nodes (parent)
   "Convert the children of an ASDF component into a list of TreeNodes."
