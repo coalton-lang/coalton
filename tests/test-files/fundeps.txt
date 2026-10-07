@@ -328,3 +328,51 @@ error: Unknown instance
     |
  16 |  (define (g) (f))
     |               ^ Unknown instance C Integer (List String) Char
+
+================================================================================
+116 Inferred predicates conflict with functional dependencies
+================================================================================
+
+(package coalton-unit-test/fundeps)
+
+(define-class (C :a :b (:a -> :b))
+  (cm (:a -> :b)))
+
+(declare g (String * Integer -> Unit))
+(define (g _ _) Unit)
+
+(define (f x)
+  (g (cm x) (cm x)))
+
+--------------------------------------------------------------------------------
+
+error: Context conflicts with functional dependencies
+  --> test:10:13
+    |
+ 10 |    (g (cm x) (cm x)))
+    |               ^^ the predicates C :A String and C :A Integer conflict with functional dependencies
+
+================================================================================
+117 Inferred predicates conflict through a superclass
+================================================================================
+
+(package coalton-unit-test/fundeps)
+
+(define-class (C :a :b (:a -> :b)))
+
+(define-class (C :a :b => D :a :b)
+  (dm (:a -> :b)))
+
+(declare g (String * Integer -> Unit))
+(define (g _ _) Unit)
+
+(define (f x)
+  (g (dm x) (dm x)))
+
+--------------------------------------------------------------------------------
+
+error: Context conflicts with functional dependencies
+  --> test:12:13
+    |
+ 12 |    (g (dm x) (dm x)))
+    |               ^^ the predicates C :A String and C :A Integer conflict with functional dependencies
