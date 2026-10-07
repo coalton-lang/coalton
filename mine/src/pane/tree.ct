@@ -616,9 +616,13 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
       (True
        (%draw-hsep-loop scr x y (+ x w) style))))
 
-  (declare %ensure-visible! ((Cell UFix) * UFix * UFix -> Void))
-  (define (%ensure-visible! scroll-cell sel height)
-    "Adjust SCROLL-CELL so SEL is visible in HEIGHT rows."
+  (declare %ensure-visible! ((Cell UFix) * UFix * UFix * UFix -> Void))
+  (define (%ensure-visible! scroll-cell sel height total)
+    "Adjust SCROLL-CELL so SEL is visible in HEIGHT rows of TOTAL.
+Never scroll past the point where the last row is at the bottom, so rows
+hidden while the pane was shorter reappear when it grows."
+    (cell:write! scroll-cell (min (cell:read scroll-cell)
+                                  (if (> total height) (- total height) 0)))
     (let scr = (cell:read scroll-cell))
     (when (< sel scr)
       (cell:write! scroll-cell sel))
@@ -654,9 +658,9 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
     ;; Render open files section
     (when (> open-h 0)
       (let open-sel = (cell:read (.open-selected tp)))
-      (%ensure-visible! (.open-scroll tp) open-sel open-h)
-      (let open-scr = (cell:read (.open-scroll tp)))
       (let open-rows = (%flatten-open-files (cell:read (.open-files tp))))
+      (%ensure-visible! (.open-scroll tp) open-sel open-h (length open-rows))
+      (let open-scr = (cell:read (.open-scroll tp)))
       (let open-rect = (wt:Rect rx (+ ry 1) w open-h))
       (let in-open = (cell:read (.in-open-sec tp)))
       (let draw-sel = (if (and focused in-open) open-sel 99999999))
@@ -670,9 +674,9 @@ Returns Some path for files, Some empty-string for dirs, None for miss."
     ;; Render tree section
     (when (> tree-h 0)
       (let tree-sel = (cell:read (.selected tp)))
-      (%ensure-visible! (.scroll tp) tree-sel tree-h)
-      (let tree-scr = (cell:read (.scroll tp)))
       (let tree-rows = (flatten-tree (cell:read (.root tp))))
+      (%ensure-visible! (.scroll tp) tree-sel tree-h (length tree-rows))
+      (let tree-scr = (cell:read (.scroll tp)))
       (let tree-rect = (wt:Rect rx (+ ry (+ chrome open-h)) w tree-h))
       (let in-open = (cell:read (.in-open-sec tp)))
       (let draw-sel = (if (and focused (not in-open)) tree-sel 99999999))
