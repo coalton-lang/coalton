@@ -16,7 +16,16 @@
 
   (declare res-fails ((Result :a :b) -> Boolean))
   (define (res-fails res)
-    (not (res-succeeds res))))
+    (not (res-succeeds res)))
+
+  (declare holds-unit? ((Result file:FileError Unit) -> Boolean))
+  (define (holds-unit? res)
+    (match res
+      ((Ok u)
+       (lisp (-> Boolean) (u)
+         (cl:eq u coalton-impl/constants:+value-of-unit+)))
+      ((Err _)
+       False))))
 
 ;;;
 ;;; Tests
@@ -144,3 +153,30 @@
         (is (not (unwrap (file:directory-exists? testpath))))
 
         (pure Unit))))
+
+(define-test test-file-effects-hold-unit ()
+  ;; Operations performed only for their effect hold Unit, not whatever
+  ;; the underlying Lisp function returned.
+  (let directory = (unwrap (file:create-temp-directory!)))
+  (let path = (file:merge directory "effects.txt"))
+  (let copy = (file:merge directory "copy.txt"))
+  (let subdirectory = (file:merge directory "sub/"))
+  (let stream = (the (file:FileStream Char)
+                     (unwrap (file:open path
+                                        :direction file:Output
+                                        :if-exists file:Supersede))))
+  (is (holds-unit? (file:write-string stream "x")))
+  (is (holds-unit? (file:write-char stream #\y)))
+  (is (holds-unit? (file:flush stream)))
+  (is (holds-unit? (file:set-file-position stream 0)))
+  (is (holds-unit? (file:close stream)))
+  (let appending = (the (file:FileStream Char)
+                        (unwrap (file:open path
+                                           :direction file:Output
+                                           :if-exists file:Append))))
+  (is (holds-unit? (file:abort appending)))
+  (is (holds-unit? (file:copy! path copy)))
+  (is (holds-unit? (file:delete-file! copy)))
+  (let _ = (unwrap (file:create-directory! subdirectory)))
+  (is (holds-unit? (file:remove-directory! subdirectory)))
+  (is (holds-unit? (file:remove-directory-recursive! directory))))

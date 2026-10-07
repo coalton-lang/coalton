@@ -183,6 +183,11 @@ Automatically returns the lisp condition if one is thrown."
     `(cl:handler-case (Ok ,form)
        (cl:error (,c) (Err (LispError ,c))))))
 
+(cl:defmacro %handle-file-effect (form)
+  "Like `%handle-file-function`, for a Lisp file operation performed only
+for its effect. The result holds `Unit` rather than the value of FORM."
+  `(%handle-file-function (cl:progn ,form coalton-impl/constants:+value-of-unit+)))
+
 ;;;
 ;;; Handling existential path queries
 ;;;
@@ -308,19 +313,19 @@ Automatically returns the lisp condition if one is thrown."
                                   (cl:null (cl:directory (cl:merge-pathnames uiop:*wild-directory* p))))))
                         path))
 
-  (declare remove-directory! ((Into :a Pathname) => :a -> (Result FileError :a)))
+  (declare remove-directory! ((Into :a Pathname) => :a -> (Result FileError Unit)))
   (define (remove-directory! path)
     "Deletes an empty directory."
     (let p = (the Pathname (into path)))
-    (lisp (-> (Result FileError :a)) (p)
-      (%handle-file-function (uiop:delete-empty-directory p))))
+    (lisp (-> (Result FileError Unit)) (p)
+      (%handle-file-effect (uiop:delete-empty-directory p))))
 
   (declare remove-directory-recursive! ((Into :a Pathname) => :a -> (Result FileError Unit)))
   (define (remove-directory-recursive! path)
     "Deletes a target directory recursively. Equivalent to `rm -r`. Errors if the path is not a directory."
     (%if-directory-path (fn (p)
                           (lisp (-> (Result FileError Unit)) (p)
-                            (%handle-file-function (uiop:delete-directory-tree p :validate cl:t))))
+                            (%handle-file-effect (uiop:delete-directory-tree p :validate cl:t))))
                         path))
 
   (declare system-relative-pathname ((Into :a String) => :a * String -> (Result FileError Pathname)))
@@ -344,8 +349,8 @@ Automatically returns the lisp condition if one is thrown."
      (let out = (the Pathname (into output)))
       (if (not (file-pathname? in))
           (Err (PathError "Invalid input for copying, path is not a file:" in))
-          (lisp (-> (Result FileError :c)) (in out)
-            (%handle-file-function (uiop:copy-file in out))))))
+          (lisp (-> (Result FileError Unit)) (in out)
+            (%handle-file-effect (uiop:copy-file in out))))))
 
   (declare delete-file! ((Into :a Pathname) => :a -> (Result FileError Unit)))
   (define (delete-file! path)
@@ -353,7 +358,7 @@ Automatically returns the lisp condition if one is thrown."
     (do
      (let p = (the Pathname (into path)))
      (lisp (-> (Result FileError Unit)) (p)
-       (%handle-file-function (uiop:delete-file-if-exists p))))))
+       (%handle-file-effect (uiop:delete-file-if-exists p))))))
 
 ;;;
 ;;; FStreams, FileStreams, and options
@@ -438,17 +443,17 @@ Automatically returns the lisp condition if one is thrown."
   ;; Other basic stream operations
   ;;
 
-  (declare close ((FileStream :a) -> (Result FileError :b)))
+  (declare close ((FileStream :a) -> (Result FileError Unit)))
   (define (close stream)
     "Closes a FileStream."
-    (lisp (-> (Result FileError :a)) (stream)
-      (%handle-file-function (cl:close stream))))
+    (lisp (-> (Result FileError Unit)) (stream)
+      (%handle-file-effect (cl:close stream))))
 
-  (declare abort ((FileStream :a) -> (Result FileError :b)))
+  (declare abort ((FileStream :a) -> (Result FileError Unit)))
   (define (abort stream)
     "Closes a FileStream and aborts all operations.."
-    (lisp (-> (Result FileError :a)) (stream)
-      (%handle-file-function (cl:close stream :abort cl:t))))
+    (lisp (-> (Result FileError Unit)) (stream)
+      (%handle-file-effect (cl:close stream :abort cl:t))))
 
   (declare read-char ((FileStream Char) -> (Result FileError Char)))
   (define (read-char stream)
@@ -470,7 +475,7 @@ Automatically returns the lisp condition if one is thrown."
   (define (write-char stream data)
     "Writes a `Char` to the stream."
     (lisp (-> (Result FileError Unit)) (stream data)
-      (%handle-file-function (cl:write-char data stream))))
+      (%handle-file-effect (cl:write-char data stream))))
 
   (define-class (%FileByte :a)
     "A class of `byte` types that can be written to and read from files.")
@@ -487,13 +492,13 @@ Automatically returns the lisp condition if one is thrown."
   (define (%write-byte stream data)
     "Writes a `Char` to the stream."
     (lisp (-> (Result FileError Unit)) (stream data)
-      (%handle-file-function (cl:write-byte data stream))))
+      (%handle-file-effect (cl:write-byte data stream))))
 
-  (declare flush ((FileStream :a) -> (Result FileError :b)))
+  (declare flush ((FileStream :a) -> (Result FileError Unit)))
   (define (flush stream)
     "Blocks until `stream` has been flushed. Calls `cl:finish-output`."
-    (lisp (-> (Result FileError :b)) (stream)
-      (%handle-file-function (cl:finish-output stream))))
+    (lisp (-> (Result FileError Unit)) (stream)
+      (%handle-file-effect (cl:finish-output stream))))
 
   (declare file-position ((FileStream :a) -> (Result FileError UFix)))
   (define (file-position stream)
@@ -505,7 +510,11 @@ Automatically returns the lisp condition if one is thrown."
   (define (set-file-position stream i)
     "Sets the file position of a file stream."
     (lisp (-> (Result FileError Unit)) (stream i)
-      (%handle-file-function (cl:file-position stream i)))))
+      (cl:handler-case
+          (cl:if (cl:file-position stream i)
+                 (Ok coalton-impl/constants:+value-of-unit+)
+                 (Err (FileError (cl:format cl:nil "Could not set the file position to ~D." i))))
+        (cl:error (c) (Err (LispError c)))))))
 
 ;;;
 ;;; File Class
@@ -649,7 +658,7 @@ Automatically returns the lisp condition if one is thrown."
     "Writes elements of an vector of type `:a` to a stream of type `:a`."
 
     (lisp (-> (Result FileError Unit)) (stream v)
-      (%handle-file-function (cl:write-sequence v stream))))
+      (%handle-file-effect (cl:write-sequence v stream))))
 
   (declare write-string ((FileStream Char) * String -> (Result FileError Unit)))
   (define (write-string fs s)
@@ -680,7 +689,7 @@ Automatically returns the lisp condition if one is thrown."
     "Sets the temporary directory."
     (%if-directory-path (fn (p)
                           (lisp (-> (Result FileError Unit)) (p)
-                            (%handle-file-function (cl:setf uiop:*temporary-directory* p))))
+                            (%handle-file-effect (cl:setf uiop:*temporary-directory* p))))
                         path))
 
   (declare %make-temp-dir-pathname (Void -> Pathname))
@@ -714,8 +723,9 @@ File extensions need to include `.`, like \".txt\"."
     "Create a temporary file path, optionally ending in EXTENSION."
     (let filepath = (%make-temp-file-pathname extension))
     (do
-     (lisp (-> (Result FileError :a)) (filepath)
-       (%handle-file-function (cl:open filepath :direction :output :if-does-not-exist :create)))
+     (lisp (-> (Result FileError Unit)) (filepath)
+       (%handle-file-effect
+        (cl:close (cl:open filepath :direction :output :if-does-not-exist :create))))
      (pure filepath)))
 
   (declare with-temp-file ((File :a)
