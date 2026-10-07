@@ -134,6 +134,32 @@
                          (coalton/cell:read (mine/app/state:get-repl-package-cell state))))
             "Restart retained a package belonging to the old image")))
 
+(defun check-runtime-restart-reports-progress-in-order ()
+  (let* ((state (%test-state))
+         (repl (mine/app/state:get-repl-pane state)))
+    (repl:repl-pane-clear-output! repl)
+    (%call-with-replaced-runtime-function
+     'mine/protocol/lifecycle::%runtime-do-stop (lambda (manager) (declare (ignore manager)) nil)
+     (lambda ()
+       (%call-with-replaced-runtime-function
+        'mine/protocol/lifecycle::%runtime-do-start
+        (lambda (manager)
+          (setf (mine/protocol/lifecycle::%runtime-manager-connection manager)
+                (mine/protocol/client::make-%connection :stream (make-broadcast-stream) :active t))
+          t)
+        (lambda ()
+          (%call-with-replaced-runtime-function
+           'app::%send-repl-init!
+           (lambda (state connection)
+             (declare (ignore connection))
+             (repl:repl-pane-append-system! (mine/app/state:get-repl-pane state)
+                                            ";; Running :repl-init..."))
+           (lambda () (app::repl-command! state "restart")))))))
+    (let ((lines (repl:repl-pane-output-lines repl)))
+      (%check (equal '(";; Restarting runtime..." ";; Runtime connected." ";; Running :repl-init...")
+                     lines)
+              "Restarting reported its progress as ~S" lines))))
+
 (defun check-compile-temporary-belongs-to-compile-after-startup ()
   (with-test-directory (directory)
     (let* ((state (%test-state))
@@ -190,6 +216,7 @@
                   check-initialization-prints-runtime-package-as-plain-string
                   check-failed-cancellation-preserves-foreground-request
                   check-runtime-restart-resets-obsolete-package
+                  check-runtime-restart-reports-progress-in-order
                   check-compile-temporary-belongs-to-compile-after-startup))
     (format t "~&~A~%" test)
     (funcall test))
