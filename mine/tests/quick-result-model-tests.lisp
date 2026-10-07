@@ -158,7 +158,7 @@
              (mine/app/mine::%quick-result-highlight-range state "document") 2 9)
             "App cancellation lost the typed source range")
     (let ((*read-base* 16) (*readtable* (copy-readtable nil)))
-      (setf (readtable-case *readtable*) :preserve)
+      (setf (readtable-case *readtable*) ':preserve)
       (mine/app/mine::%set-quick-result-popup
        state "Result" "(:quick-result :output \"printed\" :values (\"42\"))" nil))
     (let ((layout (mine/app/quick-result:quick-result-layout (coalton/cell:read state-cell) 4 "")))

@@ -151,14 +151,16 @@ for missing files keeps a document's identity when its file is created or delete
     "Resolve a file path before registering a buffer; preserve failures as errors."
     (lisp (-> (Result String String)) (fpath)
       (cl:handler-case
-          (cl:if (cl:zerop (cl:length fpath))
-                 (Err "No file path")
-                 (cl:let* ((absolute (cl:merge-pathnames (cl:pathname fpath)))
-                           (existing (cl:probe-file absolute)))
-                   (cl:if (cl:or (cl:wild-pathname-p absolute)
-                                  (uiop:directory-pathname-p (cl:or existing absolute)))
-                          (Err (cl:format cl:nil "Not a file: ~A" fpath))
-                          (Ok (cl:namestring (cl:or existing absolute))))))
+          (cl:cond
+            ((cl:zerop (cl:length fpath))
+             (Err "No file path"))
+            (cl:t
+             (cl:let* ((absolute (cl:merge-pathnames (cl:pathname fpath)))
+                       (existing (cl:probe-file absolute)))
+               (cl:if (cl:or (cl:wild-pathname-p absolute)
+                             (uiop:directory-pathname-p (cl:or existing absolute)))
+                      (Err (cl:format cl:nil "Not a file: ~A" fpath))
+                      (Ok (cl:namestring (cl:or existing absolute)))))))
         (cl:error (condition)
           (Err (cl:format cl:nil "~A" condition))))))
 
@@ -175,7 +177,7 @@ for missing files keeps a document's identity when its file is created or delete
     "Read source text without confusing an I/O or decoding error with an empty file."
     (lisp (-> (Result String String)) (fpath)
       (cl:handler-case
-          (cl:with-open-file (s fpath :direction :input
+          (cl:with-open-file (s fpath :direction ':input
                                       :element-type 'cl:character
                                       :external-format (coalton-impl/source:source-external-format))
             (Ok (cl:with-output-to-string (out)

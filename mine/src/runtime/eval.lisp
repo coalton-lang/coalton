@@ -22,14 +22,14 @@
 (defun %encode-result-values (values package)
   "Encode VALUES for transport to the TUI while preserving value boundaries."
   (mine/protocol/server::encode-protocol-sexp
-   (list :values (%format-result-values values package))))
+   (list ':values (%format-result-values values package))))
 
 (defun %quick-result-payload-string (values output package)
   "Encode output and printed values for Quick Result."
   (mine/protocol/server::encode-protocol-sexp
-   (list :quick-result
-         :output output
-         :values (%format-result-values values package))))
+   (list ':quick-result
+         ':output output
+         ':values (%format-result-values values package))))
 
 (defun %coalton-readtable ()
   "Return the Coalton named-readtable."
@@ -85,11 +85,13 @@ success."
         (values nil nil (format nil "Error: ~A" c))))))
 
 (defun debug-eval (form-string package-name &optional wire-stream msg-id coalton-p)
-  (if wire-stream
-      (mine/protocol/server::call-with-tui-io
-       wire-stream msg-id
-       (lambda () (%debug-eval form-string package-name wire-stream msg-id coalton-p)))
-      (%debug-eval form-string package-name nil msg-id coalton-p)))
+  (cond
+    (wire-stream
+     (mine/protocol/server::call-with-tui-io
+      wire-stream msg-id
+      (lambda () (%debug-eval form-string package-name wire-stream msg-id coalton-p))))
+    (t
+     (%debug-eval form-string package-name nil msg-id coalton-p))))
 
 (defun %evaluate-submission (form-string package-name auto-coalton-p)
   "Read and evaluate every submitted form in order, allowing package changes.
@@ -191,11 +193,13 @@ errors, and deliberately does not enter the interactive debugger."
       (format nil "(in-package ~S)~%" (package-name pkg)))))
 
 (defun debug-compile-string (form-string package-name &optional wire-stream msg-id coalton-p)
-  (if wire-stream
-      (mine/protocol/server::call-with-tui-io
-       wire-stream msg-id
-       (lambda () (%debug-compile-string form-string package-name wire-stream msg-id coalton-p)))
-      (%debug-compile-string form-string package-name nil msg-id coalton-p)))
+  (cond
+    (wire-stream
+     (mine/protocol/server::call-with-tui-io
+      wire-stream msg-id
+      (lambda () (%debug-compile-string form-string package-name wire-stream msg-id coalton-p))))
+    (t
+     (%debug-compile-string form-string package-name nil msg-id coalton-p))))
 
 (defun %debug-compile-string (form-string package-name &optional wire-stream msg-id coalton-p)
   "Compile FORM-STRING via compile-file + load for correct eval-when semantics.
@@ -216,39 +220,41 @@ return expression values (load returns T)."
                   :stdout-capture stdout-capture)))
          (result-values nil))
     (uiop:with-temporary-file (:stream tmp-stream
-                                :pathname tmp-path
-                                :type (if coalton-p "ct" "lisp")
-                                :direction :output
-                                :external-format (coalton-impl/source:source-external-format))
+                               :pathname tmp-path
+                               :type (if coalton-p "ct" "lisp")
+                               :direction ':output
+                               :external-format (coalton-impl/source:source-external-format))
       (write-string file-prefix tmp-stream)
       (write-string form-string tmp-stream)
       :close-stream
       (let* ((*standard-output* (if tis
-                                     stdout-capture
-                                     (make-broadcast-stream
-                                       *standard-output* stdout-capture)))
-              (*error-output* (if wire-stream stderr-capture
-                                     (make-broadcast-stream *error-output* stderr-capture)))
-              (*trace-output* (if wire-stream stderr-capture
-                                     (make-broadcast-stream *trace-output* stderr-capture)))
-              (*standard-input* (if tis tis *standard-input*))
-              (*query-io* (if tis
-                              (make-two-way-stream tis *standard-output*)
-                              *query-io*))
-              (*terminal-io* (if tis
-                                 (make-two-way-stream tis *standard-output*)
-                                 *terminal-io*))
-              (*package* pkg)
-              (*readtable* (if coalton-p (%coalton-readtable) *readtable*)))
+                                   stdout-capture
+                                   (make-broadcast-stream
+                                    *standard-output* stdout-capture)))
+             (*error-output* (if wire-stream
+                                 stderr-capture
+                                 (make-broadcast-stream *error-output* stderr-capture)))
+             (*trace-output* (if wire-stream
+                                 stderr-capture
+                                 (make-broadcast-stream *trace-output* stderr-capture)))
+             (*standard-input* (if tis tis *standard-input*))
+             (*query-io* (if tis
+                            (make-two-way-stream tis *standard-output*)
+                            *query-io*))
+             (*terminal-io* (if tis
+                               (make-two-way-stream tis *standard-output*)
+                               *terminal-io*))
+             (*package* pkg)
+             (*readtable* (if coalton-p (%coalton-readtable) *readtable*)))
         (let ((fasl (compile-file tmp-path
-                                  :external-format (coalton-impl/source:source-external-format))))
+                                 :external-format (coalton-impl/source:source-external-format))))
           (when fasl
             (unwind-protect
                  (setf result-values (multiple-value-list (load fasl)))
               (ignore-errors (delete-file fasl)))))))
     (let ((all-output (concatenate 'string
-                        (mine/protocol/server::%drain-runtime-output stdout-capture)
-                        (mine/protocol/server::%drain-runtime-output stderr-capture))))
+                                   (mine/protocol/server::%drain-runtime-output stdout-capture)
+                                   (mine/protocol/server::%drain-runtime-output stderr-capture))))
       (values (%encode-result-values result-values pkg)
               all-output))))
 

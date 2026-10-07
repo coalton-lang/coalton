@@ -9,7 +9,7 @@
            (cs (mine/app/state:get-cursor-state state)))
       (%write-utf8-file a "original")
       (%write-utf8-file b "next")
-      (with-open-file (stream bad :direction :output :element-type '(unsigned-byte 8))
+      (with-open-file (stream bad :direction ':output :element-type '(unsigned-byte 8))
         (write-byte #xff stream))
       (app::tree-open-file! state a)
       (let ((original (%test-current-buffer state)))

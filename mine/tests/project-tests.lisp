@@ -2,14 +2,14 @@
 
 (defun %mine-project-test-root ()
   (merge-pathnames
-   (format nil "mine-project-test-~A/"
-           (string-downcase (symbol-name (gensym))))
-   (uiop:temporary-directory)))
+    (format nil "mine-project-test-~A/"
+            (string-downcase (symbol-name (gensym))))
+    (uiop:temporary-directory)))
 
 (defun %read-utf8-file (pathname)
   (with-open-file (stream pathname
-                          :direction :input
-                          :external-format :utf-8)
+                          :direction ':input
+                          :external-format ':utf-8)
     (let ((text (make-string (file-length stream))))
       (read-sequence text stream)
       text)))

@@ -11,8 +11,6 @@
    (#:str #:coalton/string))
   (:export
    #:TextWidget #:TextWidget
-   #:.tw-lines #:.tw-scroll #:.tw-style
-   #:.tw-sel-anchor #:.tw-sel-end
    #:text-widget-new
    #:text-widget-append!
    #:text-widget-append-chunk!
@@ -183,8 +181,8 @@
     (let count  = (text-widget-line-count tw))
     (let new-scroll = (+ cur n))
     (cell:write! (.tw-scroll tw) (if (> count 0)
-                                    (min new-scroll (- count 1))
-                                    0))
+                                     (min new-scroll (- count 1))
+                                     0))
     (values))
 
   (declare text-widget-scroll-to-bottom! (TextWidget -> Void))
@@ -193,7 +191,7 @@
     (let count = (text-widget-line-count tw))
     (let visible = (cell:read (.tw-vis-height tw)))
     (cell:write! (.tw-scroll tw)
-      (if (> count visible) (- count visible) 0))
+                 (if (> count visible) (- count visible) 0))
     (values))
 
   ;;; Selection
@@ -306,8 +304,8 @@
                                 color:AttrItalic)
                               style))
         (render:draw-text-clipped scr rect line
-                                  (+ (wt:.rect-y rect) i)
-                                  (wt:.rect-x rect)
+                                  (+ (.rect-y rect) i)
+                                  (.rect-x rect)
                                   line-style))
       (%text-render-rows lines flags scr rect scroll h style count (+ i 1))))
 
@@ -318,9 +316,9 @@
     "Overlay selection highlight on rendered text."
     (match (Tuple sel-start sel-end)
       ((Tuple (Tuple sl sc) (Tuple el ec))
-       (let rx = (wt:.rect-x rect))
-       (let ry = (wt:.rect-y rect))
-       (let rw = (wt:.rect-width rect))
+       (let rx = (.rect-x rect))
+       (let ry = (.rect-y rect))
+       (let rw = (.rect-width rect))
        (let count = (vec:length lines))
        (lisp (-> Void) (scr lines scroll h sl sc el ec rx ry rw count hl-style)
          (cl:loop :for i :from 0 :below h :do
@@ -354,7 +352,7 @@
     "Render visible lines within RECT, respecting scroll offset."
     (let lines  = (cell:read (.tw-lines tw)))
     (let scroll = (cell:read (.tw-scroll tw)))
-    (let h      = (wt:.rect-height rect))
+    (let h      = (.rect-height rect))
     (let style  = (.tw-style tw))
     ;; Track visible height for scroll-to-bottom
     (cell:write! (.tw-vis-height tw) h)

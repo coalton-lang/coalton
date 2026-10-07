@@ -21,7 +21,7 @@
    #:ReplPane
    #:repl-pane-new
    #:repl-pane-render
-   #:ReplGeometry #:.rg-output #:.rg-input
+   #:ReplGeometry
    #:repl-pane-geometry #:repl-pane-input-viewport #:repl-pane-completion-anchor
    #:repl-pane-clear-output!
    #:repl-pane-append-output!
@@ -72,11 +72,11 @@
   (define (repl-pane-new)
     "Create a new REPL pane with the default Coalton prompt."
     (let prompt-style = (color:Style color:accent-fg
-                                      color:repl-bg
-                                      color:AttrBold))
+                                     color:repl-bg
+                                     color:AttrBold))
     (let text-style = (color:Style color:text-fg
-                                    color:repl-bg
-                                    color:AttrNone))
+                                   color:repl-bg
+                                   color:AttrNone))
     (let iw = (widget-input:input-widget-new "> " prompt-style text-style))
     (widget-input:input-widget-set-hint! iw "Shift+Enter for newline")
     (ReplPane (widget-text:text-widget-new color:default-style)
@@ -124,7 +124,7 @@
   (declare repl-pane-input-cursor (ReplPane -> UFix))
   (define (repl-pane-input-cursor rp)
     "Get the current cursor position in the input widget."
-    (cell:read (widget-input:.iw-cursor (.input-widget rp))))
+    (cell:read (.iw-cursor (.input-widget rp))))
 
   (declare repl-pane-clear-input! (ReplPane -> Void))
   (define (repl-pane-clear-input! rp)
@@ -141,13 +141,13 @@
   (declare repl-pane-set-prompt! (ReplPane * String -> Void))
   (define (repl-pane-set-prompt! rp text)
     "Set the REPL input prompt string."
-    (cell:write! (widget-input:.iw-prompt (.input-widget rp)) text)
+    (cell:write! (.iw-prompt (.input-widget rp)) text)
     (values))
 
   (declare repl-pane-prompt-text (ReplPane -> String))
   (define (repl-pane-prompt-text rp)
     "Return the current prompt string."
-    (cell:read (widget-input:.iw-prompt (.input-widget rp))))
+    (cell:read (.iw-prompt (.input-widget rp))))
 
   (declare repl-pane-input-line-count (ReplPane -> UFix))
   (define (repl-pane-input-line-count rp)
@@ -239,12 +239,12 @@
   (declare repl-pane-output-scroll (ReplPane -> UFix))
   (define (repl-pane-output-scroll rp)
     "Return the current output scroll offset."
-    (cell:read (widget-text:.tw-scroll (.output rp))))
+    (cell:read (.tw-scroll (.output rp))))
 
   (declare repl-pane-set-output-scroll! (ReplPane * UFix -> Void))
   (define (repl-pane-set-output-scroll! rp n)
     "Set the output scroll offset."
-    (cell:write! (widget-text:.tw-scroll (.output rp)) n)
+    (cell:write! (.tw-scroll (.output rp)) n)
     (values))
 
   ;;; Selection
@@ -291,10 +291,10 @@
     (let text = (widget-input:input-widget-text iw))
     (let first = (min start (str:length text)))
     (let last = (max first (min end (str:length text))))
-    (cell:write! (widget-input:.iw-text iw)
+    (cell:write! (.iw-text iw)
                  (<> (str:substring text 0 first)
                      (<> replacement (str:substring text last (str:length text)))))
-    (cell:write! (widget-input:.iw-cursor iw) (+ first (str:length replacement)))
+    (cell:write! (.iw-cursor iw) (+ first (str:length replacement)))
     (values))
 
   (declare %with-repl-input-buffer!
@@ -307,7 +307,7 @@ and CursorState. This adapter keeps the REPL binding area small and lets the
 REPL reuse the editor's structural editing implementation."
     (let iw = (.input-widget rp))
     (let text = (widget-input:input-widget-text iw))
-    (let cur = (cell:read (widget-input:.iw-cursor iw)))
+    (let cur = (cell:read (.iw-cursor iw)))
     (let buffer = (buf:buffer-new (buf:BufferId 0) "*repl-input*"))
     (let gb = (buf:buffer-gap buffer))
     (gap:gap-insert-string! gb 0 text)
@@ -316,8 +316,8 @@ REPL reuse the editor's structural editing implementation."
     (action buffer cs)
     (let updated = (gap:gap-to-string gb))
     (let updated-len = (str:length updated))
-    (cell:write! (widget-input:.iw-text iw) updated)
-    (cell:write! (widget-input:.iw-cursor iw)
+    (cell:write! (.iw-text iw) updated)
+    (cell:write! (.iw-cursor iw)
                  (min (cursor:cursor-position cs) updated-len))
     (values))
 
@@ -380,35 +380,40 @@ ordinary input-widget handler."
                        (fn (buffer cs)
                          (paredit:paredit-delete! buffer cs))))
       ((Tuple (input:KeyChar #\() _)
-       (if (%plain-char-modifier? modifier)
-           (%repl-paredit! rp
-                           (fn (buffer cs)
-                             (paredit:paredit-open-paren! buffer cs)))
-           wt:Ignored))
+       (cond
+         ((%plain-char-modifier? modifier)
+          (%repl-paredit! rp
+                         (fn (buffer cs)
+                           (paredit:paredit-open-paren! buffer cs))))
+         (True wt:Ignored)))
       ((Tuple (input:KeyChar #\)) _)
-       (if (%plain-char-modifier? modifier)
-           (%repl-paredit! rp
-                           (fn (buffer cs)
-                             (paredit:paredit-close-paren! buffer cs)))
-           wt:Ignored))
+       (cond
+         ((%plain-char-modifier? modifier)
+          (%repl-paredit! rp
+                         (fn (buffer cs)
+                           (paredit:paredit-close-paren! buffer cs))))
+         (True wt:Ignored)))
       ((Tuple (input:KeyChar #\[) _)
-       (if (%plain-char-modifier? modifier)
-           (%repl-paredit! rp
-                           (fn (buffer cs)
-                             (paredit:paredit-open-bracket! buffer cs)))
-           wt:Ignored))
+       (cond
+         ((%plain-char-modifier? modifier)
+          (%repl-paredit! rp
+                         (fn (buffer cs)
+                           (paredit:paredit-open-bracket! buffer cs))))
+         (True wt:Ignored)))
       ((Tuple (input:KeyChar #\]) _)
-       (if (%plain-char-modifier? modifier)
-           (%repl-paredit! rp
-                           (fn (buffer cs)
-                             (paredit:paredit-close-bracket! buffer cs)))
-           wt:Ignored))
+       (cond
+         ((%plain-char-modifier? modifier)
+          (%repl-paredit! rp
+                         (fn (buffer cs)
+                           (paredit:paredit-close-bracket! buffer cs))))
+         (True wt:Ignored)))
       ((Tuple (input:KeyChar #\") _)
-       (if (%plain-char-modifier? modifier)
-           (%repl-paredit! rp
-                           (fn (buffer cs)
-                             (paredit:paredit-doublequote! buffer cs)))
-           wt:Ignored))
+       (cond
+         ((%plain-char-modifier? modifier)
+          (%repl-paredit! rp
+                         (fn (buffer cs)
+                           (paredit:paredit-doublequote! buffer cs))))
+         (True wt:Ignored)))
       ((Tuple (input:KeyChar #\f) (input:ModAlt))
        (%repl-paredit! rp
                        (fn (buffer cs)
@@ -454,14 +459,14 @@ only when at the first/last line."
   (declare repl-pane-geometry (ReplPane * wt:Rect -> ReplGeometry))
   (define (repl-pane-geometry rp rect)
     "Split the actual REPL rectangle into output and input, including tiny panes."
-    (let h = (wt:.rect-height rect))
+    (let h = (.rect-height rect))
     (let max-input = (max 1 (lisp (-> UFix) (h) (cl:floor h 2))))
     (let input-h = (min h (min (repl-pane-input-line-count rp) max-input)))
     (let output-h = (- h input-h))
-    (ReplGeometry (wt:Rect (wt:.rect-x rect) (wt:.rect-y rect)
-                           (wt:.rect-width rect) output-h)
-                  (wt:Rect (wt:.rect-x rect) (+ (wt:.rect-y rect) output-h)
-                           (wt:.rect-width rect) input-h)))
+    (ReplGeometry (wt:Rect (.rect-x rect) (.rect-y rect)
+                           (.rect-width rect) output-h)
+                  (wt:Rect (.rect-x rect) (+ (.rect-y rect) output-h)
+                           (.rect-width rect) input-h)))
 
   (declare repl-pane-input-viewport (ReplPane * wt:Rect -> widget-input:InputViewport))
   (define (repl-pane-input-viewport rp rect)
@@ -478,8 +483,8 @@ only when at the first/last line."
   (define (repl-pane-render rp scr rect)
     "Render the REPL pane: output takes top area, input takes bottom.
 Input area grows dynamically based on line count, up to half the pane height."
-    (let h = (wt:.rect-height rect))
-    (when (or (== h 0) (== (wt:.rect-width rect) 0))
+    (let h = (.rect-height rect))
+    (when (or (== h 0) (== (.rect-width rect) 0))
       (return (values)))
     (let geometry = (repl-pane-geometry rp rect))
     (cond
@@ -489,26 +494,26 @@ Input area grows dynamically based on line count, up to half the pane height."
       ;; Split: output above, input below.
       (True
        (let output-rect = (.rg-output geometry))
-       (let output-h = (wt:.rect-height output-rect))
+       (let output-h = (.rect-height output-rect))
        (let input-rect = (.rg-input geometry))
        (let total-lines = (widget-text:text-widget-line-count (.output rp)))
-       (let scrollbar? = (and (> total-lines output-h) (> (wt:.rect-width output-rect) 1)))
+       (let scrollbar? = (and (> total-lines output-h) (> (.rect-width output-rect) 1)))
        (let text-rect = (if scrollbar?
-                            (wt:Rect (wt:.rect-x output-rect) (wt:.rect-y output-rect)
-                                      (- (wt:.rect-width output-rect) 1) output-h)
+                            (wt:Rect (.rect-x output-rect) (.rect-y output-rect)
+                                     (- (.rect-width output-rect) 1) output-h)
                             output-rect))
        (widget-text:text-widget-render (.output rp) scr text-rect)
        ;; Reserve the scrollbar's column so it cannot overwrite output text.
-       (let scroll-off = (cell:read (widget-text:.tw-scroll (.output rp))))
-       (let sb-col = (- (+ (wt:.rect-x rect) (wt:.rect-width rect)) 1))
+       (let scroll-off = (cell:read (.tw-scroll (.output rp))))
+       (let sb-col = (- (+ (.rect-x rect) (.rect-width rect)) 1))
        (let track-s = (color:Style color:scrollbar-track-fg
-                                     color:scrollbar-track-bg
-                                     color:AttrNone))
+                                   color:scrollbar-track-bg
+                                   color:AttrNone))
        (let thumb-s = (color:Style color:scrollbar-thumb-fg
-                                     color:scrollbar-track-bg
-                                     color:AttrNone))
+                                   color:scrollbar-track-bg
+                                   color:AttrNone))
        (when scrollbar?
-         (render:draw-scrollbar scr sb-col (wt:.rect-y rect) output-h
+         (render:draw-scrollbar scr sb-col (.rect-y rect) output-h
                                  total-lines scroll-off track-s thumb-s))
        (widget-input:input-widget-render (.input-widget rp) scr input-rect)
        (values)))))

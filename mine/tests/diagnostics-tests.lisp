@@ -2,10 +2,10 @@
 
 (defun %write-utf8-file (pathname text)
   (with-open-file (stream pathname
-                          :direction :output
-                          :if-exists :supersede
-                          :if-does-not-exist :create
-                          :external-format :utf-8)
+                          :direction ':output
+                          :if-exists ':supersede
+                          :if-does-not-exist ':create
+                          :external-format ':utf-8)
     (write-string text stream)))
 
 (defun %muffle-warning-if-possible (condition)
@@ -62,19 +62,21 @@
     (unwind-protect
          (progn
            (with-open-file (stream pathname
-                                   :direction :output
-                                   :if-exists :supersede
+                                   :direction ':output
+                                   :if-exists ':supersede
                                    :element-type '(unsigned-byte 8))
              (let ((reader (symbol-function 'server::read-message)))
                (unwind-protect
                     (progn
                       (setf (symbol-function 'server::read-message)
                             (lambda (input)
-                              (if (eq input stream) (pop replies) (funcall reader input))))
+                              (cond
+                                ((eq input stream) (pop replies))
+                                (t (funcall reader input)))))
                       (funcall thunk stream))
                  (setf (symbol-function 'server::read-message) reader))))
            (with-open-file (stream pathname
-                                   :direction :input
+                                   :direction ':input
                                    :element-type '(unsigned-byte 8))
              (loop :for message = (server::read-message stream)
                    :while message
@@ -83,7 +85,7 @@
 
 (defun %read-server-messages-from-file (pathname)
   (with-open-file (stream pathname
-                          :direction :input
+                          :direction ':input
                           :element-type '(unsigned-byte 8))
     (loop :for message = (server::read-message stream)
           :while message
@@ -401,13 +403,13 @@
              (progn
                (setf quick-stream
                      (open quick-path
-                           :direction :output
-                           :if-exists :supersede
+                           :direction ':output
+                           :if-exists ':supersede
                            :element-type '(unsigned-byte 8)))
                (setf interrupt-stream
                      (open interrupt-path
-                           :direction :output
-                           :if-exists :supersede
+                           :direction ':output
+                           :if-exists ':supersede
                            :element-type '(unsigned-byte 8)))
                (setf worker
                      (sb-thread:make-thread
@@ -427,11 +429,12 @@
                (force-output interrupt-stream)
                (let ((done nil))
                  (loop :repeat 50
-                       :do (if (sb-thread:thread-alive-p worker)
-                               (sleep 0.05)
-                               (progn
-                                 (setf done t)
-                                 (return))))
+                       :do (cond
+                             ((sb-thread:thread-alive-p worker)
+                              (sleep 0.05))
+                             (t
+                              (setf done t)
+                              (return))))
                  (%check done
                          "Expected request-scoped interrupt to stop Quick Result evaluation"))
                (close quick-stream)
@@ -717,7 +720,7 @@
              (%check (< (getf diagnostic ':start) (getf diagnostic ':end))
                      "Expected a non-empty Coalton diagnostic span, got ~S"
                      diagnostic)
-             (let ((debugger-position (position :debug messages :key #'first)))
+             (let ((debugger-position (position ':debug messages :key #'first)))
                (%check debugger-position "Expected an interactive debugger: ~S" messages)
                (%check (< (position diagnostic-message messages :test #'equal)
                           debugger-position)

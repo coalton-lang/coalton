@@ -40,10 +40,10 @@
 (cl:defun %component-type-keyword (ct)
   "Map a ComponentType to an ASDF component keyword."
   (cl:cond
-    ((cl:eq ct 'mine/project/asdf-model::COMPONENTTYPE/CTFILE) :file)
-    ((cl:eq ct 'mine/project/asdf-model::COMPONENTTYPE/CTMODULE) :module)
-    ((cl:eq ct 'mine/project/asdf-model::COMPONENTTYPE/CTCTFILE) :ct-file)
-    (cl:t :file)))
+    ((cl:eq ct 'mine/project/asdf-model::COMPONENTTYPE/CTFILE) ':file)
+    ((cl:eq ct 'mine/project/asdf-model::COMPONENTTYPE/CTMODULE) ':module)
+    ((cl:eq ct 'mine/project/asdf-model::COMPONENTTYPE/CTCTFILE) ':ct-file)
+    (cl:t ':file)))
 
 (cl:defun %write-component (out comp indent)
   "Write a single component s-expression to stream OUT at INDENT level."
@@ -52,18 +52,19 @@
             (children (%comp-kids comp))
             (kw (%component-type-keyword ct))
             (pad (cl:make-string (cl:* indent 2) :initial-element #\Space)))
-    (cl:if children
-           ;; Module with children
-           (cl:progn
-             (cl:format out "~A(:module ~S~%" pad name)
-             (cl:format out "~A :serial t~%" pad)
-             (cl:format out "~A :components~%" pad)
-             (cl:format out "~A (~%" pad)
-             (cl:dolist (child children)
-               (%write-component out child (cl:+ indent 2)))
-             (cl:format out "~A))~%" pad))
-           ;; Leaf file
-           (cl:format out "~A(~(~S~) ~S)~%" pad kw name))))
+    (cl:cond
+      ;; Module with children
+      (children
+       (cl:format out "~A(:module ~S~%" pad name)
+       (cl:format out "~A :serial t~%" pad)
+       (cl:format out "~A :components~%" pad)
+       (cl:format out "~A (~%" pad)
+       (cl:dolist (child children)
+         (%write-component out child (cl:+ indent 2)))
+       (cl:format out "~A))~%" pad))
+      ;; Leaf file
+      (cl:t
+       (cl:format out "~A(~(~S~) ~S)~%" pad kw name)))))
 
 (cl:defun %write-asd-file-impl (sysdef path)
   "Write SYSDEF to PATH as a formatted .asd file."
@@ -80,9 +81,9 @@
                                                           :test #'cl:string-equal)))
                                (cl:cons "coalton" deps)
                                deps)))
-    (cl:with-open-file (out path :direction :output
-                                 :if-exists :supersede
-                                 :if-does-not-exist :create)
+    (cl:with-open-file (out path :direction ':output
+                                 :if-exists ':supersede
+                                 :if-does-not-exist ':create)
       (cl:format out "(asdf:defsystem ~S~%" name)
       (cl:when (cl:and desc (cl:> (cl:length desc) 0))
         (cl:format out "  :description ~S~%" desc))

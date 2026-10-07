@@ -70,7 +70,7 @@
     "Encode an SExpr with a 6-byte uppercase hex length header."
     (let payload = (encode-sexpr expr))
     (lisp (-> String) (payload)
-      (cl:let ((len (cl:length (sb-ext:string-to-octets payload :external-format :utf-8))))
+      (cl:let ((len (cl:length (sb-ext:string-to-octets payload :external-format ':utf-8))))
         (cl:when (cl:> len #xffffff)
           (cl:error "Protocol message exceeds the six-digit frame limit"))
         (cl:format cl:nil "~6,'0X~A" len payload))))

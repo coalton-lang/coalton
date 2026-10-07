@@ -15,7 +15,7 @@
   (:export
    #:complete-file-path
    #:complete-project-path
-   #:Candidate #:.cand-name #:.cand-kind #:.cand-type-sig
+   #:Candidate
    #:cand-name #:cand-kind #:cand-type-sig
    #:CompletionState
    #:completion-new
@@ -27,8 +27,6 @@
    #:completion-selected-name
    #:completion-filter!
    #:completion-render
-   #:.cs-prefix
-   #:.cs-active
    #:extract-symbol-prefix
    #:extract-symbol-prefix-input
    #:common-prefix))
@@ -446,7 +444,7 @@ Comments, literals, and escaped symbols use the shared source context."
 Directories get a trailing /."
   (cl:handler-case
       (cl:let* ((dir (cl:pathname dir-path))
-                (wild (cl:make-pathname :name :wild :type :wild :defaults dir))
+                (wild (cl:make-pathname :name ':wild :type ':wild :defaults dir))
                 (entries (cl:directory wild :resolve-symlinks cl:nil)))
         (cl:remove cl:nil
           (cl:mapcar

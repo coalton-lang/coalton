@@ -61,7 +61,7 @@
 (in-package #:mine/app/mine)
 
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
-  (cl:require :sb-concurrency))
+  (cl:require ':sb-concurrency))
 
 ;;; CL state referenced by lisp escapes in the Coalton code below.
 (cl:defvar *restart-into-setup* nil
@@ -75,7 +75,7 @@
 
 (cl:defun %read-form-head-cl (text)
   (cl:let ((form-name (%coalton-optional-value-or-nil
-                  (source:source-first-head (source:scan-source text)))))
+                      (source:source-first-head (source:scan-source text)))))
     (cl:when form-name (cl:string-downcase form-name))))
 
 (cl:defun %classify-form-head-cl (form-head)
@@ -239,9 +239,9 @@
   (declare render-repl-focus-strip (screen:Screen * wt:Rect -> Void))
   (define (render-repl-focus-strip scr rect)
     "Render the one-line REPL focus strip used by fullscreen editor mode."
-    (when (> (wt:.rect-height rect) 0)
-      (let y = (wt:.rect-y rect))
-      (let x = (wt:.rect-x rect))
+    (when (> (.rect-height rect) 0)
+      (let y = (.rect-y rect))
+      (let x = (.rect-x rect))
       (let bg-style = (color:Style color:text-dimmer-fg
                                    color:repl-bg
                                    color:AttrNone))
@@ -261,16 +261,16 @@
   (declare render-tree-focus-help (screen:Screen * wt:Rect * Boolean -> Void))
   (define (render-tree-focus-help scr rect frozen)
     "Render the focused tree footer hint."
-    (when (> (wt:.rect-height rect) 0)
-      (let y = (wt:.rect-y rect))
-      (let x = (wt:.rect-x rect))
-      (let w = (wt:.rect-width rect))
+    (when (> (.rect-height rect) 0)
+      (let y = (.rect-y rect))
+      (let x = (.rect-x rect))
+      (let w = (.rect-width rect))
       (let text = (if frozen
                       "Ctrl+t to auto-hide"
                       "Ctrl+t to freeze"))
       (let style = (color:Style color:text-dimmer-fg
-                                 color:black
-                                 color:AttrItalic))
+                                color:black
+                                color:AttrItalic))
       (let text-x = (if (> w 2) (+ x 1) x))
       (let text-w = (if (> w 2) (- w 1) w))
       (render:fill-rect scr rect #\Space style)
@@ -287,7 +287,7 @@
   (declare render-app (MineState * term:Terminal -> Void))
   (define (render-app st term)
     "Render the full IDE layout to the terminal screen."
-    (let scr = (term:.terminal-screen term))
+    (let scr = (.terminal-screen term))
     (screen:screen-clear scr)
     (screen:screen-hide-cursor scr)
     (let cols = (term:terminal-cols term))
@@ -318,47 +318,49 @@
          ;; Expanded: full tree pane
          (let tree-body-h = (%tree-body-height st middle-h))
          (when (> tree-body-h 0)
-	   (let tree-rect = (wt:Rect 0 1 tree-w tree-body-h))
-	   (tree:tree-pane-render (.ms-tree st) scr tree-rect tree-focused
-	                          (fn (fpath) (mgr:bufmgr-path-dirty? (.ms-bufmgr st) fpath))
-	                          (fn (fpath)
-	                            (lisp (-> UFix) (fpath)
-	                              (mine/app/diagnostics:diagnostic-rank-for-file fpath)))))
+           (let tree-rect = (wt:Rect 0 1 tree-w tree-body-h))
+           (tree:tree-pane-render (.ms-tree st) scr tree-rect tree-focused
+                                  (fn (fpath) (mgr:bufmgr-path-dirty? (.ms-bufmgr st) fpath))
+                                  (fn (fpath)
+                                    (lisp (-> UFix) (fpath)
+                                      (mine/app/diagnostics:diagnostic-rank-for-file fpath)))))
          (when tree-focused
            (render-tree-focus-help scr (wt:Rect 0 (+ 1 tree-body-h) tree-w 1)
                                    (%tree-frozen? st))))
         (True
          ;; Collapsed: number strip
          (let strip-rect = (wt:Rect 0 1 1 middle-h))
-	 (let current-path = (match (mgr:bufmgr-current (.ms-bufmgr st))
-	                       ((Some b) (buf:buffer-path b))
-	                       ((None) None)))
-	 (tree:tree-pane-render-collapsed (.ms-tree st) scr strip-rect current-path)))
+         (let current-path = (match (mgr:bufmgr-current (.ms-bufmgr st))
+                               ((Some b) (buf:buffer-path b))
+                               ((None) None)))
+         (tree:tree-pane-render-collapsed (.ms-tree st) scr strip-rect current-path)))
       ;; Draw vertical separator
       (render-tree-separator st scr tree-w 1 middle-h))
     ;; Drawing and event handling consume these same pane rectangles.
-    (match (layout:.cg-editor geometry)
+    (match (.cg-editor geometry)
       ((Some rect) (render-editor-pane st scr rect))
       ((None) (values)))
-    (match (layout:.cg-editor-status geometry)
+    (match (.cg-editor-status geometry)
       ((Some rect) (render-editor-status st scr rect))
       ((None) (values)))
-    (match (layout:.cg-repl geometry)
+    (match (.cg-repl geometry)
       ((Some rect)
-       (if (cell:read (.ms-debugger-active st))
-           (render-debugger-in-repl st scr rect)
-           (repl:repl-pane-render (.ms-repl st) scr rect)))
+       (cond
+         ((cell:read (.ms-debugger-active st))
+          (render-debugger-in-repl st scr rect))
+         (True
+          (repl:repl-pane-render (.ms-repl st) scr rect))))
       ((None) (values)))
-    (match (layout:.cg-repl-status geometry)
+    (match (.cg-repl-status geometry)
       ((Some rect) (render-repl-status st scr rect))
       ((None) (values)))
-    (match (layout:.cg-repl-strip geometry)
+    (match (.cg-repl-strip geometry)
       ((Some rect) (render-repl-focus-strip scr rect))
       ((None) (values)))
     ;; Update status bar fields
     (let cur-gb = (match (mgr:bufmgr-current (.ms-bufmgr st))
-	            ((Some buf) (buf:buffer-gap buf))
-	            ((None) (gap:gap-new))))
+                    ((Some buf) (buf:buffer-gap buf))
+                    ((None) (gap:gap-new))))
     (match (cursor:cursor-line-col (.ms-cursor st) cur-gb)
       ((Tuple cur-line cur-col)
        (let fname =
@@ -390,20 +392,20 @@
             (lisp (-> String) (cur-gb cur-line cur-pos document-key)
               (cl:let ((key (%coalton-optional-value-or-nil document-key)))
                 (cl:if key
-                     (cl:let* ((line-start (mine/buffer/gap:gap-line-to-pos cur-gb cur-line))
-                               (line-end (cl:+ line-start
-                                               (cl:length (mine/buffer/gap:gap-line-text cur-gb cur-line))))
-                               (msg (mine/app/diagnostics:diagnostics-message-for-position
-                                     key
-                                     cur-pos))
-                               (line-msg (cl:if (cl:plusp (cl:length msg))
-                                                msg
-                                                (mine/app/diagnostics:diagnostics-message-for-range
-                                                 key
-                                                 line-start
-                                                 line-end))))
-                       (cl:if (cl:plusp (cl:length line-msg)) line-msg ""))
-                     ""))))))
+                       (cl:let* ((line-start (mine/buffer/gap:gap-line-to-pos cur-gb cur-line))
+                                 (line-end (cl:+ line-start
+                                                 (cl:length (mine/buffer/gap:gap-line-text cur-gb cur-line))))
+                                 (msg (mine/app/diagnostics:diagnostics-message-for-position
+                                       key
+                                       cur-pos))
+                                 (line-msg (cl:if (cl:plusp (cl:length msg))
+                                                  msg
+                                                  (mine/app/diagnostics:diagnostics-message-for-range
+                                                   key
+                                                   line-start
+                                                   line-end))))
+                         (cl:if (cl:plusp (cl:length line-msg)) line-msg ""))
+                       ""))))))
        ;; Type hints: query subprocess asynchronously, display cached result
        (let _hint-update =
          (match current-focus
@@ -585,10 +587,10 @@
   (declare render-welcome (MineState * screen:Screen * wt:Rect -> Void))
   (define (render-welcome st scr rect)
     "Render the welcome screen when no file is open."
-    (let rx = (wt:.rect-x rect))
-    (let ry = (wt:.rect-y rect))
-    (let rw = (wt:.rect-width rect))
-    (let rh = (wt:.rect-height rect))
+    (let rx = (.rect-x rect))
+    (let ry = (.rect-y rect))
+    (let rw = (.rect-width rect))
+    (let rh = (.rect-height rect))
     (let bold-blue = (color:Style color:baby-blue color:black color:AttrBold))
     (let bold = (color:Style color:text-fg color:black color:AttrBold))
     (let dim = (color:Style color:text-dim-fg color:black color:AttrNone))
@@ -635,7 +637,7 @@
                           rx))
       (render:draw-text scr (+ cy 1) update-x update update-style))
     ;; Optional setup wizard line
-    (when (not has-config)
+    (unless has-config
       (let setup-pre = "Run ")
       (let setup-key = "F6:Site > Setup Wizard")
       (let setup-post = " to configure.")
@@ -684,7 +686,7 @@
       ((Some buf)
        (let document-key = (buf:buffer-document-key buf))
        ;; Clear search highlights when find is not active
-       (when (not (mini:minibuffer-active? (.ms-minibuffer st)))
+       (unless (mini:minibuffer-active? (.ms-minibuffer st))
          (find:clear-search!))
        (let spans = (lisp (-> List editor:RenderSpan) (buf document-key)
                       (editor:render-spans-from-triples
@@ -707,9 +709,9 @@
     "Restore the editor cursor using the exact rectangle used for drawing."
     (let geometry = (layout:center-screen-geometry (.ml-center (cell:read (.ms-layout st)))
                                                   (cell:read (.ms-content-x st))
-                                                  (cell:read (screen:.screen-width scr))
-                                                  (cell:read (screen:.screen-height scr))))
-    (match (Tuple (mgr:bufmgr-current (.ms-bufmgr st)) (layout:.cg-editor geometry))
+                                                  (cell:read (.screen-width scr))
+                                                  (cell:read (.screen-height scr))))
+    (match (Tuple (mgr:bufmgr-current (.ms-bufmgr st)) (.cg-editor geometry))
       ((Tuple (Some buf) (Some rect))
        (match (editor:editor-pane-cursor-position (.ms-editor st) (buf:buffer-gap buf) (.ms-cursor st) rect)
          ((Some (Tuple x y)) (screen:screen-set-cursor scr y x))
@@ -721,8 +723,8 @@
   (declare render-editor-status (MineState * screen:Screen * wt:Rect -> Void))
   (define (render-editor-status st scr rect)
     "Render the editor status line: mode, filename, modified, line:col."
-    (let y = (wt:.rect-y rect))
-    (let x = (wt:.rect-x rect))
+    (let y = (.rect-y rect))
+    (let x = (.rect-x rect))
     (let style = (color:Style color:silver
                               color:onyx
                               color:AttrNone))
@@ -748,7 +750,7 @@
           (let cur-vcol = (gap:visual-col cur-text cur-col tab-w))
           (let pos-str = (<> "Ln " (<> (into (+ cur-line 1)) (<> " Col " (<> (into (+ cur-vcol 1)) " ")))))
           (let pos-len = (cellw:string-cell-width pos-str))
-          (let w = (wt:.rect-width rect))
+          (let w = (.rect-width rect))
           (when (> w pos-len)
             (screen:screen-set-string scr y (+ x (- w pos-len)) pos-str style)))))
       ((None)
@@ -780,8 +782,8 @@
   (declare render-repl-status (MineState * screen:Screen * wt:Rect -> Void))
   (define (render-repl-status st scr rect)
     "Render the REPL status line."
-    (let y = (wt:.rect-y rect))
-    (let x = (wt:.rect-x rect))
+    (let y = (.rect-y rect))
+    (let x = (.rect-x rect))
     (let style = (color:Style color:silver
                               color:onyx
                               color:AttrNone))
@@ -972,9 +974,11 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
           ;; Return immediately -- response will arrive via mailbox
           (values))
          ((None)
-          (if (lifecycle:runtime-process-alive? (.ms-runtime st))
-              (repl:repl-pane-append-system! (.ms-repl st) ";; Not connected to REPL process")
-              (repl:repl-pane-append-system! (.ms-repl st) ";; No REPL process. Type ,restart to start one.")))))))
+          (cond
+            ((lifecycle:runtime-process-alive? (.ms-runtime st))
+             (repl:repl-pane-append-system! (.ms-repl st) ";; Not connected to REPL process"))
+            (True
+             (repl:repl-pane-append-system! (.ms-repl st) ";; No REPL process. Type ,restart to start one."))))))))
 
   (declare start-proto-reader! (MineState * client:Connection -> Void))
   (define (start-proto-reader! st conn)
@@ -1017,8 +1021,8 @@ Otherwise, send it to the runtime for evaluation (non-blocking)."
     (match result
       ((Ok expression)
        (let raw = (wire:sexpr-to-raw expression))
-       (lisp (-> wire:RawSExpr) (raw) (cl:list :ok raw)))
-      ((Err text) (lisp (-> wire:RawSExpr) (text) (cl:list :error text)))))
+       (lisp (-> wire:RawSExpr) (raw) (cl:list ':ok raw)))
+      ((Err text) (lisp (-> wire:RawSExpr) (text) (cl:list ':error text)))))
 
   (declare %handle-pending-response!
     (MineState * UFix * requests:PendingRequest * Result String wire:SExpr -> Void))
@@ -1136,7 +1140,7 @@ multiple values get 0>, 1>, etc."
           (return (values)))
          ((None) (values)))
        ;; Completed or cancelled editor-service replies must never become REPL results.
-       (when (not (== (cell:read (.ms-active-request st)) (Some request-id)))
+       (unless (== (cell:read (.ms-active-request st)) (Some request-id))
          (return (values)))
        (let is-error = (match result ((Err _) True) ((Ok _) False)))
        (let initialization-finished = (== (cell:read (.ms-initialization-request st)) (Some request-id)))
@@ -1207,7 +1211,7 @@ multiple values get 0>, 1>, etc."
        (when (== (cell:read (.ms-active-request st)) (Some request-id))
          (cell:write! (.ms-repl-package st) package-name)))
       ((msg:ResponseDebugger snapshot)
-       (when (not (== (cell:read (.ms-active-request st)) (Some (msg:debugger-request-id snapshot))))
+       (unless (== (cell:read (.ms-active-request st)) (Some (msg:debugger-request-id snapshot)))
          (return (values)))
        (when (cell:read (.ms-io-request-active st)) (%deactivate-io-request! st))
        (let cond-text = (msg:debugger-condition snapshot))
@@ -1222,7 +1226,7 @@ multiple values get 0>, 1>, etc."
                                       (<> ";; Debugger: " cond-text))
        (%focus-repl! st))
       ((msg:ResponseInput input-request)
-       (when (not (== (cell:read (.ms-active-request st)) (Some (msg:input-request-id input-request))))
+       (unless (== (cell:read (.ms-active-request st)) (Some (msg:input-request-id input-request)))
          (return (values)))
        (let prompt-text = (msg:input-prompt input-request))
        (cell:write! (.ms-debugger-active st) False)
@@ -1255,9 +1259,11 @@ multiple values get 0>, 1>, etc."
          (match (cell:read (.ms-quick-result-request-id st))
            ((Some _) True)
            ((None) False)))
-       (if (lifecycle:runtime-process-alive? (.ms-runtime st))
-           (repl:repl-pane-append-system! (.ms-repl st) ";; Connection to REPL process lost")
-           (repl:repl-pane-append-system! (.ms-repl st) ";; REPL process ended. Type ,restart to start a new one."))
+       (cond
+         ((lifecycle:runtime-process-alive? (.ms-runtime st))
+          (repl:repl-pane-append-system! (.ms-repl st) ";; Connection to REPL process lost"))
+         (True
+          (repl:repl-pane-append-system! (.ms-repl st) ";; REPL process ended. Type ,restart to start a new one.")))
        (cell:write! (.ms-repl-busy st) False)
        (cell:write! (.ms-busy-activity st) None)
        (cell:write! (.ms-beam-request-id st) None)
@@ -1303,12 +1309,12 @@ Uses a dedicated Beam request so diagnostics can stream independently."
        (let asd-path = (match (cell:read (.ms-project-asd-path st))
                          ((Some path) path)
                          ((None) "")))
-	       (repl:repl-pane-append-system! (.ms-repl st)
-	                                      (<> ";; Beaming project " (<> sys-name "...")))
-	       (lisp (-> Void) ()
-	         (mine/app/diagnostics:clear-all-diagnostics)
-	         (mine/app/diagnostics:clear-compile-file-remap)
-	         (cl:values))
+       (repl:repl-pane-append-system! (.ms-repl st)
+                                      (<> ";; Beaming project " (<> sys-name "...")))
+       (lisp (-> Void) ()
+         (mine/app/diagnostics:clear-all-diagnostics)
+         (mine/app/diagnostics:clear-compile-file-remap)
+         (cl:values))
        (match (ensure-runtime! st)
          ((None) (values))
          ((Some conn)
@@ -1323,7 +1329,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
 
           (let req = (msg:ReqBeamSystem req-id sys-name asd-path))
           (progn (%send-request! st conn req) (values))
-          (values)))))) 
+          (values))))))
 
 ;;; Debugger helpers (Coalton wrappers around thin CL)
 
@@ -1371,7 +1377,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
       (cl:let* ((items (%debugger-display-items st))
                 (item (cl:when (cl:and items (cl:< selected (cl:length items)))
                         (cl:nth selected items))))
-        (cl:if (cl:and item (cl:eq (cl:first item) :restart))
+        (cl:if (cl:and item (cl:eq (cl:first item) ':restart))
                (Some (cl:second item))
                None))))
 
@@ -1382,7 +1388,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
        (%track-diagnostic-request! id)
        (match (cell:read (.ms-initialization-request st))
          ((Some initialization-id)
-          (when (not (== id initialization-id))
+          (unless (== id initialization-id)
             (cell:write! (.ms-after-initialization st)
                          (Some (Tuple request (%request-inherits-package? st request))))
             (cell:write! (.ms-active-request st) (Some initialization-id))
@@ -1395,12 +1401,13 @@ Uses a dedicated Beam request so diagnostics can stream independently."
 
   (declare %transmit-request! (MineState * client:Connection * msg:Request -> Boolean))
   (define (%transmit-request! st conn request)
-    (if (client:connection-send-checked! conn request)
-        True
-        (progn
-          (handle-proto-msg! st msg:ResponseConnectionLost)
-          (user-error! st "Runtime connection closed while sending the request")
-          False)))
+    (cond
+      ((client:connection-send-checked! conn request)
+       True)
+      (True
+       (handle-proto-msg! st msg:ResponseConnectionLost)
+       (user-error! st "Runtime connection closed while sending the request")
+       False)))
 
   (declare %request-inherits-package? (MineState * msg:Request -> Boolean))
   (define (%request-inherits-package? st request)
@@ -1436,31 +1443,32 @@ Uses a dedicated Beam request so diagnostics can stream independently."
        (match (msg:request-foreground-id original)
          ((None) (values))
          ((Some request-id)
-          (if failed
-              (progn
-                (lisp (-> Void) (request-id)
-                  (mine/app/diagnostics:forget-diagnostic-request (msg:request-id-value request-id))
-                  (cl:values))
-                (when (== (cell:read (.ms-quick-result-request-id st)) (Some request-id))
-                  (%show-quick-result! st "Initialization failed" "Deferred evaluation cancelled" True))
-                (cell:write! (.ms-quick-result-request-id st) None)
-                (cell:write! (.ms-beam-request-id st) None)
-                (repl:repl-pane-append-system! (.ms-repl st) ";; Initialization failed; deferred request cancelled."))
-              (match (lifecycle:runtime-connection (.ms-runtime st))
-                ((None) (handle-proto-msg! st msg:ResponseConnectionLost))
-                ((Some conn)
-                 (let request = (if inherit-package
-                                    (%request-with-package original (cell:read (.ms-repl-package st))) original))
-                 (cell:write! (.ms-active-request st) (Some request-id))
-                 (cell:write! (.ms-repl-busy st) True)
-                 (cell:write! (.ms-eval-start-time st) (lisp (-> UFix) () (cl:get-internal-real-time)))
-                 (cell:write! (.ms-busy-activity st)
-                              (cond ((== (cell:read (.ms-beam-request-id st)) (Some request-id)) (Some "Beam"))
-                                    ((== (cell:read (.ms-quick-result-request-id st)) (Some request-id)) (Some "Quick Result"))
-                                    (True None)))
-                 ;; It was tracked when deferred, including its source remap.
-                 (%transmit-request! st conn request)
-                 (values))))))))
+          (cond
+            (failed
+             (lisp (-> Void) (request-id)
+               (mine/app/diagnostics:forget-diagnostic-request (msg:request-id-value request-id))
+               (cl:values))
+             (when (== (cell:read (.ms-quick-result-request-id st)) (Some request-id))
+               (%show-quick-result! st "Initialization failed" "Deferred evaluation cancelled" True))
+             (cell:write! (.ms-quick-result-request-id st) None)
+             (cell:write! (.ms-beam-request-id st) None)
+             (repl:repl-pane-append-system! (.ms-repl st) ";; Initialization failed; deferred request cancelled."))
+            (True
+             (match (lifecycle:runtime-connection (.ms-runtime st))
+               ((None) (handle-proto-msg! st msg:ResponseConnectionLost))
+               ((Some conn)
+                (let request = (if inherit-package
+                                   (%request-with-package original (cell:read (.ms-repl-package st))) original))
+                (cell:write! (.ms-active-request st) (Some request-id))
+                (cell:write! (.ms-repl-busy st) True)
+                (cell:write! (.ms-eval-start-time st) (lisp (-> UFix) () (cl:get-internal-real-time)))
+                (cell:write! (.ms-busy-activity st)
+                             (cond ((== (cell:read (.ms-beam-request-id st)) (Some request-id)) (Some "Beam"))
+                                   ((== (cell:read (.ms-quick-result-request-id st)) (Some request-id)) (Some "Quick Result"))
+                                   (True None)))
+                ;; It was tracked when deferred, including its source remap.
+                (%transmit-request! st conn request)
+                (values)))))))))
     (values))
 
   (declare %send-control-request! (MineState * msg:Request -> Boolean))
@@ -1475,12 +1483,14 @@ Uses a dedicated Beam request so diagnostics can stream independently."
     (match (cell:read (.ms-debugger-snapshot st))
       ((None) (values))
       ((Some snapshot)
-       (if (list:any (fn (restart) (== restart-idx (msg:restart-index restart)))
-                     (msg:debugger-restarts snapshot))
-           (when (%send-control-request! st (msg:ReqDebugRestart (msg:debugger-request-id snapshot) restart-idx))
-             (cell:write! (.ms-debugger-active st) False)
-             (repl:repl-pane-append-system! (.ms-repl st) (<> ";; Invoked restart " (into restart-idx))))
-           (user-error! st "No such restart"))))
+       (cond
+         ((list:any (fn (restart) (== restart-idx (msg:restart-index restart)))
+                    (msg:debugger-restarts snapshot))
+          (when (%send-control-request! st (msg:ReqDebugRestart (msg:debugger-request-id snapshot) restart-idx))
+            (cell:write! (.ms-debugger-active st) False)
+            (repl:repl-pane-append-system! (.ms-repl st) (<> ";; Invoked restart " (into restart-idx)))))
+         (True
+          (user-error! st "No such restart")))))
     (values))
 
   (declare dbg-abort! (MineState -> Void))
@@ -1584,7 +1594,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
     "Restart the runtime and replay the configured :repl-init."
     (lifecycle:runtime-stop! (.ms-runtime st))
     (%clear-runtime-session! st)
-    (cell:write! (.ms-repl-package st) (cfgt:.config-default-package (.ms-config st)))
+    (cell:write! (.ms-repl-package st) (.config-default-package (.ms-config st)))
     (lifecycle:runtime-start! (.ms-runtime st))
     (match (lifecycle:runtime-connection (.ms-runtime st))
       ((Some conn)
@@ -1687,7 +1697,11 @@ Uses a dedicated Beam request so diagnostics can stream independently."
   (define (%send-quick-result-interrupt! st target-id)
     "Ask the runtime to interrupt the thread evaluating TARGET-ID."
     (lisp (-> Boolean) (st target-id)
-      (cl:if (%send-quick-result-interrupt-cl st target-id) True False)))
+      (cl:cond
+        ((%send-quick-result-interrupt-cl st target-id)
+         True)
+        (cl:t
+         False))))
 
   (declare %cancel-quick-result! (MineState -> Void))
   (define (%cancel-quick-result! st)
@@ -1740,57 +1754,58 @@ Uses a dedicated Beam request so diagnostics can stream independently."
     (let init-form = (lisp (-> String) ()
                        (cl:handler-case
                            (cl:let ((path (cl:merge-pathnames ".mine" (cl:user-homedir-pathname))))
-                             (cl:if (cl:probe-file path)
-                                    (cl:with-open-file (in path :direction :input)
-                                      (cl:let* ((plist (cl:read in cl:nil cl:nil))
-                                                (form (cl:getf plist :repl-init))
-                                                (asdf-raw (cl:getf plist :project-roots)))
-                                        ;; Build ASDF source-registry and immutability forms.
-                                        ;;
-                                        ;; The REPL subprocess inherits the mine image, which has
-                                        ;; coalton, coalton-compiler, etc. already loaded.  We need
-                                        ;; the user's :project-roots to be searchable (via :tree) so
-                                        ;; that ASDF can find NEW systems there, but we must never
-                                        ;; recompile the systems baked into the image.
-                                        ;;
-                                        ;; Complication: ASDF resolves secondary systems (e.g.
-                                        ;; "coalton/library/big-float") by reading the PRIMARY
-                                        ;; system's .asd file via (operate define-op).  But
-                                        ;; register-immutable-system puts the primary system into
-                                        ;; *immutable-systems*, which is unconditionally merged into
-                                        ;; force-not for every plan.  action-status then returns
-                                        ;; +good-bits+ for forced-not actions, so define-op's
-                                        ;; perform method is never called, the .asd is never read,
-                                        ;; and secondary systems are never discovered.
-                                        ;;
-                                        ;; Workaround: after marking image systems immutable and
-                                        ;; rebuilding the source registry, we directly cl:load the
-                                        ;; .asd files for primary systems whose paths appear in the
-                                        ;; new registry.  This bypasses ASDF's operate/plan gate
-                                        ;; while still evaluating the defsystem forms (registering
-                                        ;; secondary systems).  Any defsystem-depends-on clauses
-                                        ;; trigger load-systems*, but those deps are already
-                                        ;; immutable, so the calls are no-ops.
-                                        (cl:let* ((project-roots
-                                                    (cl:cond
-                                                      ((cl:stringp asdf-raw) (cl:list asdf-raw))
-                                                      ((cl:listp asdf-raw) asdf-raw)
-                                                      (cl:t cl:nil)))
-                                                  (expanded-roots
-                                                    (cl:mapcar
-                                                     (cl:lambda (p)
-                                                       (cl:if (cl:and (cl:>= (cl:length p) 2)
-                                                                      (cl:string= p "~/" :end1 2))
-                                                              (cl:namestring
-                                                               (cl:merge-pathnames (cl:subseq p 2)
-                                                                                   (cl:user-homedir-pathname)))
-                                                              p))
-                                                     project-roots))
-                                                  (asdf-forms
-                                                    (cl:when expanded-roots
-                                                      (cl:list
-                                                       (cl:format cl:nil
-                                                                  "(let ((loaded (asdf:already-loaded-systems)))
+                             (cl:cond
+                               ((cl:probe-file path)
+                                (cl:with-open-file (in path :direction ':input)
+                                  (cl:let* ((plist (cl:read in cl:nil cl:nil))
+                                            (form (cl:getf plist ':repl-init))
+                                            (asdf-raw (cl:getf plist ':project-roots)))
+                                    ;; Build ASDF source-registry and immutability forms.
+                                    ;;
+                                    ;; The REPL subprocess inherits the mine image, which has
+                                    ;; coalton, coalton-compiler, etc. already loaded.  We need
+                                    ;; the user's :project-roots to be searchable (via :tree) so
+                                    ;; that ASDF can find NEW systems there, but we must never
+                                    ;; recompile the systems baked into the image.
+                                    ;;
+                                    ;; Complication: ASDF resolves secondary systems (e.g.
+                                    ;; "coalton/library/big-float") by reading the PRIMARY
+                                    ;; system's .asd file via (operate define-op).  But
+                                    ;; register-immutable-system puts the primary system into
+                                    ;; *immutable-systems*, which is unconditionally merged into
+                                    ;; force-not for every plan.  action-status then returns
+                                    ;; +good-bits+ for forced-not actions, so define-op's
+                                    ;; perform method is never called, the .asd is never read,
+                                    ;; and secondary systems are never discovered.
+                                    ;;
+                                    ;; Workaround: after marking image systems immutable and
+                                    ;; rebuilding the source registry, we directly cl:load the
+                                    ;; .asd files for primary systems whose paths appear in the
+                                    ;; new registry.  This bypasses ASDF's operate/plan gate
+                                    ;; while still evaluating the defsystem forms (registering
+                                    ;; secondary systems).  Any defsystem-depends-on clauses
+                                    ;; trigger load-systems*, but those deps are already
+                                    ;; immutable, so the calls are no-ops.
+                                    (cl:let* ((project-roots
+                                                (cl:cond
+                                                  ((cl:stringp asdf-raw) (cl:list asdf-raw))
+                                                  ((cl:listp asdf-raw) asdf-raw)
+                                                  (cl:t cl:nil)))
+                                              (expanded-roots
+                                                (cl:mapcar
+                                                 (cl:lambda (p)
+                                                   (cl:if (cl:and (cl:>= (cl:length p) 2)
+                                                                  (cl:string= p "~/" :end1 2))
+                                                          (cl:namestring
+                                                           (cl:merge-pathnames (cl:subseq p 2)
+                                                                               (cl:user-homedir-pathname)))
+                                                          p))
+                                                 project-roots))
+                                              (asdf-forms
+                                                (cl:when expanded-roots
+                                                  (cl:list
+                                                   (cl:format cl:nil
+                                                              "(let ((loaded (asdf:already-loaded-systems)))
                                                            (dolist (s loaded) (asdf:register-immutable-system s))
                                                            (asdf:initialize-source-registry
                                                              '(:source-registry~{ (:tree #P~S)~} :inherit-configuration))
@@ -1799,22 +1814,23 @@ Uses a dedicated Beam request so diagnostics can stream independently."
                                                                (when (and (not (find #\\/ name))
                                                                           (member name loaded :test #'string-equal))
                                                                  (handler-case
-                                                                   (let ((*package* (find-package :asdf-user))
+                                                                   (let ((*package* (find-package ':asdf-user))
                                                                          (*default-pathname-defaults*
                                                                            (uiop:pathname-directory-pathname path)))
                                                                      (load path))
                                                                    (error () nil))))
                                                              asdf/source-registry::*source-registry*))"
-                                                                  expanded-roots))))
-                                                  (init-str (cl:when form (cl:write-to-string form)))
-                                                  (all-forms (cl:append asdf-forms
-                                                                        (cl:when init-str (cl:list init-str)))))
-                                          (cl:if all-forms
-                                                 (cl:if (cl:= (cl:length all-forms) 1)
-                                                        (cl:first all-forms)
-                                                        (cl:format cl:nil "(progn~{ ~A~})" all-forms))
-                                                 ""))))
-                                    ""))
+                                                              expanded-roots))))
+                                              (init-str (cl:when form (cl:write-to-string form)))
+                                              (all-forms (cl:append asdf-forms
+                                                                    (cl:when init-str (cl:list init-str)))))
+                                      (cl:if all-forms
+                                             (cl:if (cl:= (cl:length all-forms) 1)
+                                                    (cl:first all-forms)
+                                                    (cl:format cl:nil "(progn~{ ~A~})" all-forms))
+                                             "")))))
+                               (cl:t
+                                "")))
                          (cl:error () ""))))
     (let has-init = (lisp (-> Boolean) (init-form)
                       (cl:if (cl:plusp (cl:length init-form)) cl:t cl:nil)))
@@ -1831,7 +1847,7 @@ Uses a dedicated Beam request so diagnostics can stream independently."
       ((Some conn) (Some conn))
       ((None)
        (repl:repl-pane-append-system! (.ms-repl st) ";; Starting runtime...")
-       (cell:write! (.ms-repl-package st) (cfgt:.config-default-package (.ms-config st)))
+       (cell:write! (.ms-repl-package st) (.config-default-package (.ms-config st)))
        (lifecycle:runtime-start! (.ms-runtime st))
        (match (lifecycle:runtime-connection (.ms-runtime st))
          ((Some conn)
@@ -1862,10 +1878,10 @@ If the buffer has unsaved changes, writes to a temp file for compilation."
                                          (if dirty
                                              (<> ";; Compiling (unsaved) " fpath)
                                              (<> ";; Compiling " fpath)))
-	          ;; Clear previous diagnostics for this file
-	          (lisp (-> Void) (fpath)
-	            (mine/app/diagnostics:clear-diagnostics-for-file fpath)
-	            (cl:values))
+          ;; Clear previous diagnostics for this file
+          (lisp (-> Void) (fpath)
+            (mine/app/diagnostics:clear-diagnostics-for-file fpath)
+            (cl:values))
           (match (ensure-runtime! st)
             ((None) (values))
             ((Some conn)
@@ -2073,24 +2089,24 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        ;; Create directories and write main file (one-package-per-file)
        (lisp (-> Void) (src-dir main-file name is-coalton)
          (cl:ensure-directories-exist (cl:pathname src-dir))
-         (cl:with-open-file (out main-file :direction :output
-                                           :if-exists :error
-                                           :if-does-not-exist :create)
-           (cl:if (cl:eq is-coalton coalton:True)
-                  (cl:progn
-                    (cl:format out "(cl:defpackage #:~A~%" name)
-                    (cl:format out "  (:use #:coalton #:coalton-prelude))~%~%")
-                    (cl:format out "(cl:in-package #:~A)~%~%" name)
-                    (cl:format out "(coalton-toplevel~%~%")
-                    (cl:format out "  (declare main (Void -> Void))~%")
-                    (cl:format out "  (define (main)~%")
-                    (cl:format out "    (print \"Hello!\")))~%"))
-                  (cl:progn
-                    (cl:format out "(defpackage #:~A~%" name)
-                    (cl:format out "  (:use #:cl))~%~%")
-                    (cl:format out "(in-package #:~A)~%~%" name)
-                    (cl:format out "(defun main ()~%")
-                    (cl:format out "  (write-line \"Hello!\"))~%"))))
+         (cl:with-open-file (out main-file :direction ':output
+                                           :if-exists ':error
+                                           :if-does-not-exist ':create)
+           (cl:cond
+             ((cl:eq is-coalton coalton:True)
+              (cl:format out "(cl:defpackage #:~A~%" name)
+              (cl:format out "  (:use #:coalton #:coalton-prelude))~%~%")
+              (cl:format out "(cl:in-package #:~A)~%~%" name)
+              (cl:format out "(coalton-toplevel~%~%")
+              (cl:format out "  (declare main (Void -> Void))~%")
+              (cl:format out "  (define (main)~%")
+              (cl:format out "    (print \"Hello!\")))~%"))
+             (cl:t
+              (cl:format out "(defpackage #:~A~%" name)
+              (cl:format out "  (:use #:cl))~%~%")
+              (cl:format out "(in-package #:~A)~%~%" name)
+              (cl:format out "(defun main ()~%")
+              (cl:format out "  (write-line \"Hello!\"))~%"))))
          (cl:values))
        ;; Build SystemDef and write .asd
        (let comp-type = (if is-coalton model:CTCtFile model:CTFile))
@@ -2136,7 +2152,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
            (MineState * term:Terminal * String * String * String * String -> Void))
   (define (%build-progress-dialog st term script-path log-path output-path heap-size)
     "Spawn a build subprocess and show progress. Blocks until build completes."
-    (let scr = (term:.terminal-screen term))
+    (let scr = (.terminal-screen term))
     (match (%spawn-build-process script-path log-path heap-size)
       ((None)
        (user-error! st "Failed to start build process"))
@@ -2230,7 +2246,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (match ev
          ((input:IEvResize _ _)
           (dialogs:handle-dialog-resize! term)
-          (%build-progress-loop term (term:.terminal-screen term) proc-box all-lines view-scroll))
+          (%build-progress-loop term (.terminal-screen term) proc-box all-lines view-scroll))
          (_ (values))))
       (True
        ;; Short sleep then check for key events (non-blocking)
@@ -2241,10 +2257,10 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (term:terminal-update-size! term)
        (when (or (/= new-cols (term:terminal-cols term))
                  (/= new-rows (term:terminal-rows term)))
-         (screen:screen-resize (term:.terminal-screen term)
+         (screen:screen-resize (.terminal-screen term)
                                (term:terminal-cols term)
                                (term:terminal-rows term)))
-       (%build-progress-loop term (term:.terminal-screen term) proc-box all-lines view-scroll))))
+       (%build-progress-loop term (.terminal-screen term) proc-box all-lines view-scroll))))
 
   (declare %render-build-lines
            (screen:Screen * (List String) * UFix * UFix * UFix * UFix * UFix * color:Style * UFix -> Void))
@@ -2602,9 +2618,11 @@ Uses the preceding (in-package ...) form to determine the compilation package."
         (match (cursor:cursor-line-col cs gb)
           ((Tuple line _col)
            (let target-indent =
-             (if (%cursor-before-close-paren? gb cs)
-                 (%target-blank-indent-at-position! st buffer line pos)
-                 (%target-indent-for-line! st buffer line)))
+             (cond
+               ((%cursor-before-close-paren? gb cs)
+                (%target-blank-indent-at-position! st buffer line pos))
+               (True
+                (%target-indent-for-line! st buffer line))))
            (match target-indent
              ((None) (values))
              ((Some indent-level)
@@ -2630,7 +2648,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     (let current-layout = (cell:read (.ms-layout st)))
     (let content-x = (if (%layout-tree-visible? current-layout) (+ (%tree-width st (fst size)) 1) 0))
     (let geometry = (layout:center-screen-geometry (.ml-center current-layout) content-x (fst size) (snd size)))
-    (match (Tuple (mgr:bufmgr-current (.ms-bufmgr st)) (layout:.cg-editor geometry))
+    (match (Tuple (mgr:bufmgr-current (.ms-bufmgr st)) (.cg-editor geometry))
       ((Tuple (Some buffer) (Some rect))
        (editor:editor-cursor-page! (.ms-editor st) (buf:buffer-gap buffer) (.ms-cursor st) rect down?))
       (_ (values))))
@@ -2788,8 +2806,8 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        (when (== mod input:ModAlt)
          (handle-alt-key! st ch))
        ;; Normal character input (skip if Ctrl+Space or Alt)
-       (when (not (or (== mod input:ModAlt)
-                      (and (== ch #\Space) (== mod input:ModCtrl))))
+       (unless (or (== mod input:ModAlt)
+                   (and (== ch #\Space) (== mod input:ModCtrl)))
          (match (mgr:bufmgr-current (.ms-bufmgr st))
            ((Some buf)
             (cond
@@ -2871,12 +2889,14 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                                                                 :start2 (cl:max 0 (cl:- (cl:length cur-path) 3))))
                                        "COALTON-USER" "CL-USER"))
                    (buf-pkg (%detect-buffer-package buf-text default-pkg cur-pos)))
-           (cl:if (cl:and sym-name (cl:plusp (cl:length sym-name)))
-                  (cl:multiple-value-bind (resolved-pkg resolved-sym)
-                      (%resolve-qualified-name sym-name buf-pkg)
-                    (%request-remote-definition st resolved-sym resolved-pkg
-                                                cur-path cur-pos))
-                  (user-error! st "No symbol at cursor")))
+           (cl:cond
+             ((cl:and sym-name (cl:plusp (cl:length sym-name)))
+              (cl:multiple-value-bind (resolved-pkg resolved-sym)
+                  (%resolve-qualified-name sym-name buf-pkg)
+                (%request-remote-definition st resolved-sym resolved-pkg
+                                            cur-path cur-pos)))
+             (cl:t
+              (user-error! st "No symbol at cursor"))))
          (cl:values)))))
 
   (declare jump-back! (MineState -> Void))
@@ -2884,11 +2904,13 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     "Jump back to the previous position in the jump stack."
     (lisp (-> Void) (st)
       (cl:let ((entry (%jump-stack-pop st)))
-        (cl:if entry
-               (mine/app/navigation:jump-to-document-key
-                st (mine/app/diagnostics:remap-runtime-source-filepath (cl:car entry))
-                (cl:cdr entry))
-               (user-error! st "Jump stack empty")))
+        (cl:cond
+          (entry
+           (mine/app/navigation:jump-to-document-key
+            st (mine/app/diagnostics:remap-runtime-source-filepath (cl:car entry))
+            (cl:cdr entry)))
+          (cl:t
+           (user-error! st "Jump stack empty"))))
       (cl:values)))
 
   (declare %tree-file-paths (tree:TreeNode -> (List String)))
@@ -3145,12 +3167,13 @@ Uses the preceding (in-package ...) form to determine the compilation package."
        ;; Find the buffer for this path and close if clean
        (match (mgr:bufmgr-find-by-path (.ms-bufmgr st) prev-path)
          ((Some buf)
-          (if (buf:buffer-dirty? buf)
-              (%commit-preview! st)
-              (progn
-                (forget-buffer-view! st (buf:buffer-id buf))
-                (mgr:bufmgr-close! (.ms-bufmgr st) (buf:buffer-id buf))
-                (values)))
+          (cond
+            ((buf:buffer-dirty? buf)
+             (%commit-preview! st))
+            (True
+             (forget-buffer-view! st (buf:buffer-id buf))
+             (mgr:bufmgr-close! (.ms-bufmgr st) (buf:buffer-id buf))
+             (values)))
           (values))
          ((None) (values)))
        (cell:write! (.ms-preview-path st) None)
@@ -3178,7 +3201,7 @@ Uses the preceding (in-package ...) form to determine the compilation package."
     ;; Reuse existing buffer if already open
     (match (mgr:bufmgr-find-by-path (.ms-bufmgr st) fpath)
       ((Some buf)
-       (when (not (== (cell:read (.ms-preview-path st)) (buf:buffer-path buf)))
+       (unless (== (cell:read (.ms-preview-path st)) (buf:buffer-path buf))
          (%close-preview! st))
        (activate-buffer! st buf)
        (clamp-cursor-to-buffer! st buf)
@@ -3429,11 +3452,11 @@ Uses the preceding (in-package ...) form to determine the compilation package."
   (define (repl-output-rect st geometry)
     (map (fn (rect)
            (if (cell:read (.ms-debugger-active st))
-               (wt:Rect (wt:.rect-x rect) (+ (wt:.rect-y rect) 1)
-                         (wt:.rect-width rect)
-                         (if (> (wt:.rect-height rect) 2) (- (wt:.rect-height rect) 2) 0))
-               (repl:.rg-output (repl:repl-pane-geometry (.ms-repl st) rect))))
-         (layout:.cg-repl geometry)))
+               (wt:Rect (.rect-x rect) (+ (.rect-y rect) 1)
+                        (.rect-width rect)
+                        (if (> (.rect-height rect) 2) (- (.rect-height rect) 2) 0))
+               (.rg-output (repl:repl-pane-geometry (.ms-repl st) rect))))
+         (.cg-repl geometry)))
 
   (declare %scroll-editor-to! (MineState * wt:Rect * UFix -> Void))
   (define (%scroll-editor-to! st rect offset)
@@ -3463,11 +3486,11 @@ Uses the preceding (in-package ...) form to determine the compilation package."
           (repl:repl-pane-scroll-output-up! (.ms-repl st) (lisp (-> UFix) (delta) (cl:- delta))))
          (True
           (repl:repl-pane-scroll-output-down! (.ms-repl st) (lisp (-> UFix) (delta) delta)))))
-      ((layout:optional-rect-contains? (layout:.cg-editor geometry) col row)
-       (match (Tuple (layout:.cg-editor geometry) (mgr:bufmgr-current (.ms-bufmgr st)))
+      ((layout:optional-rect-contains? (.cg-editor geometry) col row)
+       (match (Tuple (.cg-editor geometry) (mgr:bufmgr-current (.ms-bufmgr st)))
          ((Tuple (Some rect) (Some buffer))
           (let total = (editor:editor-pane-total-screen-rows (.ms-editor st) (buf:buffer-gap buffer) rect))
-          (let height = (wt:.rect-height rect))
+          (let height = (.rect-height rect))
           (let current = (editor:editor-pane-scroll-screen-row (.ms-editor st) (buf:buffer-gap buffer) rect))
           (let offset = (lisp (-> UFix) (current delta total height)
                           (cl:max 0 (cl:min (cl:max 0 (cl:- total height)) (cl:+ current delta)))))
@@ -3491,31 +3514,33 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                          (layout:rect-contains? (wt:Rect (- tree-w 1) 1 1 tree-body-h) col row))))
       (tree:tree-pane-scrollbar-drag-at! (.ms-tree st) (- row 1) tree-body-h)
       (return True))
-    (match (layout:.cg-editor geometry)
+    (match (.cg-editor geometry)
       ((Some rect)
        (when (and (layout:rect-contains? rect col row)
-                  (== (+ col 1) (+ (wt:.rect-x rect) (wt:.rect-width rect))))
+                  (== (+ col 1) (+ (.rect-x rect) (.rect-width rect))))
          (match (mgr:bufmgr-current (.ms-bufmgr st))
            ((Some buffer)
             (let total = (editor:editor-pane-total-screen-rows (.ms-editor st) (buf:buffer-gap buffer) rect))
-            (when (and (> total (wt:.rect-height rect))
-                       (> (wt:.rect-width rect) (+ (editor:editor-pane-gutter-width (.ms-editor st) (buf:buffer-gap buffer)) 1)))
-              (%scroll-editor-to! st rect (%scrollbar-compute-offset (- row (wt:.rect-y rect)) total (wt:.rect-height rect)))
+            (when (and (> total (.rect-height rect))
+                       (> (.rect-width rect) (+ (editor:editor-pane-gutter-width (.ms-editor st) (buf:buffer-gap buffer)) 1)))
+              (%scroll-editor-to! st rect (%scrollbar-compute-offset (- row (.rect-y rect)) total (.rect-height rect)))
               (return True)))
            ((None) (values)))))
       ((None) (values)))
     (match (repl-output-rect st geometry)
       ((Some rect)
        (when (and (layout:rect-contains? rect col row)
-                  (== (+ col 1) (+ (wt:.rect-x rect) (wt:.rect-width rect))))
-         (let height = (wt:.rect-height rect))
-         (let rel-y = (- row (wt:.rect-y rect)))
+                  (== (+ col 1) (+ (.rect-x rect) (.rect-width rect))))
+         (let height = (.rect-height rect))
+         (let rel-y = (- row (.rect-y rect)))
          (let total = (if (cell:read (.ms-debugger-active st)) (cell:read (.ms-debugger-total st))
                           (repl:repl-pane-output-line-count (.ms-repl st))))
-         (when (and (> total height) (> (wt:.rect-width rect) 1))
-           (if (cell:read (.ms-debugger-active st))
-               (dbg-set-scroll! st (%scrollbar-compute-offset rel-y total height))
-               (repl:repl-pane-set-output-scroll! (.ms-repl st) (%scrollbar-compute-offset rel-y total height)))
+         (when (and (> total height) (> (.rect-width rect) 1))
+           (cond
+             ((cell:read (.ms-debugger-active st))
+              (dbg-set-scroll! st (%scrollbar-compute-offset rel-y total height)))
+             (True
+              (repl:repl-pane-set-output-scroll! (.ms-repl st) (%scrollbar-compute-offset rel-y total height))))
            (return True))))
       ((None) (values)))
     False)
@@ -3565,27 +3590,29 @@ Uses the preceding (in-package ...) form to determine the compilation package."
                (True (tree-open-file! st hit-path))))
             ((None) (values))))
          (True (values))))
-      ((layout:optional-rect-contains? (layout:.cg-editor geometry) col row)
+      ((layout:optional-rect-contains? (.cg-editor geometry) col row)
        (%commit-preview! st)
        (%show-editor! st)
-       (match (layout:.cg-editor geometry)
+       (match (.cg-editor geometry)
          ((Some rect) (click-to-cursor! st col row rect))
          ((None) (values))))
-      ((layout:optional-rect-contains? (layout:.cg-editor-status geometry) col row)
+      ((layout:optional-rect-contains? (.cg-editor-status geometry) col row)
        (%show-editor! st))
-      ((or (layout:optional-rect-contains? (layout:.cg-repl-status geometry) col row)
-           (layout:optional-rect-contains? (layout:.cg-repl-strip geometry) col row))
+      ((or (layout:optional-rect-contains? (.cg-repl-status geometry) col row)
+           (layout:optional-rect-contains? (.cg-repl-strip geometry) col row))
        (%focus-repl! st))
-      ((layout:optional-rect-contains? (layout:.cg-repl geometry) col row)
-       (match (layout:.cg-repl geometry)
+      ((layout:optional-rect-contains? (.cg-repl geometry) col row)
+       (match (.cg-repl geometry)
          ((Some rect)
           (%focus-repl! st)
-          (let output-rect = (repl:.rg-output (repl:repl-pane-geometry (.ms-repl st) rect)))
-          (if (and (not (cell:read (.ms-debugger-active st)))
-                   (layout:rect-contains? output-rect col row))
-              (let ((line (+ (repl:repl-pane-output-scroll (.ms-repl st)) (- row (wt:.rect-y output-rect)))))
-                (repl:repl-pane-start-selection! (.ms-repl st) line (- col (wt:.rect-x output-rect))))
-              (repl:repl-pane-clear-selection! (.ms-repl st))))
+          (let output-rect = (.rg-output (repl:repl-pane-geometry (.ms-repl st) rect)))
+          (cond
+            ((and (not (cell:read (.ms-debugger-active st)))
+                  (layout:rect-contains? output-rect col row))
+             (let ((line (+ (repl:repl-pane-output-scroll (.ms-repl st)) (- row (.rect-y output-rect)))))
+               (repl:repl-pane-start-selection! (.ms-repl st) line (- col (.rect-x output-rect)))))
+            (True
+             (repl:repl-pane-clear-selection! (.ms-repl st)))))
          ((None) (values))))
       (True (values))))
 
@@ -3697,8 +3724,8 @@ Uses the preceding (in-package ...) form to determine the compilation package."
   (declare %update-find-prompt! (MineState * UFix * UFix -> Void))
   (define (%update-find-prompt! st idx total)
     "Update the minibuffer prompt to show match count."
-    (let iw = (mini:.input-widget (.ms-minibuffer st)))
-    (cell:write! (widget-input:.iw-prompt iw) (find:find-prompt-string idx total))
+    (let iw = (.input-widget (.ms-minibuffer st)))
+    (cell:write! (.iw-prompt iw) (find:find-prompt-string idx total))
     (values))
 
   (declare %find-do-search! (MineState * String * UFix -> Void))
@@ -3960,9 +3987,11 @@ Enter or Space inserts the matching Unicode character at the cursor."
       (match (mgr:bufmgr-open-file! (.ms-bufmgr st) path)
         ((Ok buf)
          (let path = (match (buf:buffer-path buf) ((Some canonical) canonical) ((None) path)))
-         (if (== (cell:read (.ms-preview-path st)) (Some path))
-             (%commit-preview! st)
-             (%close-preview! st))
+         (cond
+           ((== (cell:read (.ms-preview-path st)) (Some path))
+            (%commit-preview! st))
+           (True
+            (%close-preview! st)))
          (activate-buffer! st buf)
          ;; Add to tree's open files section
          (let display-name = (lisp (-> String) (path)
@@ -4048,19 +4077,21 @@ Enter or Space inserts the matching Unicode character at the cursor."
       (match buffers
         ((Nil) (values))
         ((Cons buffer rest)
-         (if (buf:buffer-dirty? buffer)
-             (match (buf:buffer-path buffer)
-               ((None) (values))
-               ((Some path)
-                (let listed? =
-                  (list:any (fn ((Tuple _ listed-path))
-                              (match (mgr:bufmgr-find-by-path manager listed-path)
-                                ((Some listed) (== (buf:buffer-id listed) (buf:buffer-id buffer)))
-                                ((None) False)))
-                            (tree:tree-pane-open-files (.ms-tree st))))
-                (unless listed?
-                  (tree:tree-pane-add-open-file! (.ms-tree st) (buf:buffer-name buffer) path))))
-             (%do-close-buffer! st buffer))
+         (cond
+           ((buf:buffer-dirty? buffer)
+            (match (buf:buffer-path buffer)
+              ((None) (values))
+              ((Some path)
+               (let listed? =
+                 (list:any (fn ((Tuple _ listed-path))
+                             (match (mgr:bufmgr-find-by-path manager listed-path)
+                               ((Some listed) (== (buf:buffer-id listed) (buf:buffer-id buffer)))
+                               ((None) False)))
+                           (tree:tree-pane-open-files (.ms-tree st))))
+               (unless listed?
+                 (tree:tree-pane-add-open-file! (.ms-tree st) (buf:buffer-name buffer) path)))))
+           (True
+            (%do-close-buffer! st buffer)))
          (close-documents rest))))
     ;; Match aliases through the manager instead of comparing raw path prefixes.
     (rec remove-closed ((files (tree:tree-pane-open-files (.ms-tree st))))
@@ -4092,7 +4123,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
         (ql:register-local-projects)
         (ql-dist:clean (ql-dist:dist "quicklisp")))
       (uiop:delete-directory-tree asdf:*user-cache*
-                                  :if-does-not-exist :ignore
+                                  :if-does-not-exist ':ignore
                                   :validate (cl:constantly cl:t))
       (cl:values)))
 
@@ -4172,14 +4203,15 @@ Enter or Space inserts the matching Unicode character at the cursor."
          (term:terminal-flush term)
          (match (dialogs:new-project-dialog term (.ms-config st))
            ((Some (Tuple name (Tuple location is-coalton)))
-            (if (== (str:length name) 0)
-                (user-error! st "Project name cannot be empty")
-                (progn
-                  (let len = (str:length location))
-                  (let loc = (if (and (> len 0)
-                                      (== (str:ref-unchecked location (- len 1)) #\/))
-                                 location (<> location "/")))
-                  (create-new-project! st name loc is-coalton))))
+            (cond
+              ((== (str:length name) 0)
+               (user-error! st "Project name cannot be empty"))
+              (True
+               (let len = (str:length location))
+               (let loc = (if (and (> len 0)
+                                   (== (str:ref-unchecked location (- len 1)) #\/))
+                              location (<> location "/")))
+               (create-new-project! st name loc is-coalton))))
            ((None) (values)))))
       ((menubar:ActionOpenProject)
        (let default-dir = (dialogs:new-project-default-location (.ms-config st)))
@@ -4219,11 +4251,11 @@ Enter or Space inserts the matching Unicode character at the cursor."
       ((menubar:ActionBeamFile) (compile-file! st))
       ((menubar:ActionBeamToplevelForm) (beam-toplevel-form! st))
       ((menubar:ActionQuickResult) (quick-result-form! st))
-	      ((menubar:ActionClearDiagnostics)
-	       (lisp (-> Void) ()
-	         (mine/app/diagnostics:clear-all-diagnostics)
-	         (cl:values))
-	       (status:statusbar-set-message! (.ms-status st) "Diagnostics cleared"))
+      ((menubar:ActionClearDiagnostics)
+       (lisp (-> Void) ()
+         (mine/app/diagnostics:clear-all-diagnostics)
+         (cl:values))
+       (status:statusbar-set-message! (.ms-status st) "Diagnostics cleared"))
       ((menubar:ActionJumpToDefinition) (jump-to-definition! st))
       ((menubar:ActionJumpBack) (jump-back! st))
       ((menubar:ActionShowRepl) (toggle-repl! st))
@@ -4315,7 +4347,7 @@ Render-app is NOT called here; the main loop handles rendering."
       (match event
         ((ev:EvResize _cols _rows)
          (term:terminal-update-size! term)
-         (screen:screen-resize (term:.terminal-screen term)
+         (screen:screen-resize (.terminal-screen term)
                                (term:terminal-cols term)
                                (term:terminal-rows term))
          (term:terminal-clear-screen term))
@@ -4328,9 +4360,11 @@ Render-app is NOT called here; the main loop handles rendering."
                      (%quick-result-pending? st))
                  (%quick-result-cancel-key? key)))
            (_ False))
-         (if (%quick-result-pending? st)
-             (%cancel-quick-result! st)
-             (%clear-quick-result! st)))
+         (cond
+           ((%quick-result-pending? st)
+            (%cancel-quick-result! st))
+           (True
+            (%clear-quick-result! st))))
         ;; If minibuffer is active, route keys to it
         ((mini:minibuffer-active? (.ms-minibuffer st))
          (match event
@@ -4356,7 +4390,7 @@ Render-app is NOT called here; the main loop handles rendering."
          (match event
            ((ev:EvKey key mod)
             (let action = (menubar:menubar-handle-key! (.ms-menu st) key mod))
-            (when (not (menubar:menubar-open? (.ms-menu st)))
+            (unless (menubar:menubar-open? (.ms-menu st))
               (focus:focus-return! (.ms-focus st)))
             (match action
               ((Some a) (dispatch-menu-action! st term a))
@@ -4367,7 +4401,7 @@ Render-app is NOT called here; the main loop handles rendering."
                (let tcols = (term:terminal-cols term))
                (let trows = (term:terminal-rows term))
                (let action = (menubar:menubar-handle-mouse! (.ms-menu st) col row tcols trows))
-               (when (not (menubar:menubar-open? (.ms-menu st)))
+               (unless (menubar:menubar-open? (.ms-menu st))
                  (focus:focus-return! (.ms-focus st)))
                (match action
                  ((Some a) (dispatch-menu-action! st term a))
@@ -4406,7 +4440,7 @@ Render-app is NOT called here; the main loop handles rendering."
                  (try-quit! st term)))
               ;; Ctrl+g: refresh terminal (force full redraw)
               ((input:KeyCtrl #\g)
-               (screen:screen-invalidate-all! (term:.terminal-screen term)))
+               (screen:screen-invalidate-all! (.terminal-screen term)))
               ;; Enter in REPL -> eval if complete, else insert newline
               ((input:KeyEnter)
                (match (Tuple (focus:focus-current (.ms-focus st)) mod)
@@ -4446,7 +4480,7 @@ Render-app is NOT called here; the main loop handles rendering."
                  ((input:MouseScrollDown)
                   (handle-scroll-wheel! st term col row 3))
                  (_btn
-                  (when (not (scrollbar-drag! st term col row))
+                  (unless (scrollbar-drag! st term col row)
                     (handle-mouse-click st term col row)))))
               ((input:MouseDrag)
                (cond
@@ -4456,10 +4490,10 @@ Render-app is NOT called here; the main loop handles rendering."
                        (repl:repl-pane-has-selection? (.ms-repl st)))
                   (match (repl-output-rect st (center-geometry-for-terminal st term))
                     ((Some rect)
-                     (let output-h = (wt:.rect-height rect))
+                     (let output-h = (.rect-height rect))
                      (when (> output-h 0)
-                       (let repl-y = (wt:.rect-y rect))
-                       (let rcol = (if (>= col (wt:.rect-x rect)) (- col (wt:.rect-x rect)) 0))
+                       (let repl-y = (.rect-y rect))
+                       (let rcol = (if (>= col (.rect-x rect)) (- col (.rect-x rect)) 0))
                        (cond
                          ((< row repl-y)
                           (repl:repl-pane-scroll-output-up! (.ms-repl st) 1)
@@ -4475,7 +4509,7 @@ Render-app is NOT called here; the main loop handles rendering."
                     ((None) (values))))
                  (True
                   (when (== (focus:focus-current (.ms-focus st)) focus:FocusEditor)
-                    (match (layout:.cg-editor (center-geometry-for-terminal st term))
+                    (match (.cg-editor (center-geometry-for-terminal st term))
                       ((Some rect) (drag-to-cursor! st col row rect))
                       ((None) (values)))))))
               (_ (values))))
@@ -4580,7 +4614,7 @@ Render-app is NOT called here; the main loop handles rendering."
   (declare start-update-check! (MineState -> Void))
   (define (start-update-check! st)
     "Start the opt-in background update check."
-    (when (cfgt:.config-check-for-updates (.ms-config st))
+    (when (.config-check-for-updates (.ms-config st))
       (lisp (-> Void) (st)
         (start-update-check-thread-cl st)
         (cl:values))))
@@ -4588,7 +4622,7 @@ Render-app is NOT called here; the main loop handles rendering."
   (declare %draw-config-error (term:Terminal * String -> Void))
   (define (%draw-config-error term msg)
     "Draw the config error alert."
-    (let scr = (term:.terminal-screen term))
+    (let scr = (.terminal-screen term))
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
     (let bg = (color:Style color:text-fg
@@ -4643,11 +4677,11 @@ Render-app is NOT called here; the main loop handles rendering."
                     ((Err msg)
                      (%show-config-error! term msg)
                      (cfg:default-config))))
-	    ;; Invalidate diagnostic storage when the document changes.
-	    (lisp (-> Void) ()
-	      (cl:setf mine/buffer/buffer::*buffer-dirty-hook*
-	               #'mine/app/diagnostics:invalidate-diagnostics-for-file)
-	      (cl:values))
+    ;; Invalidate diagnostic storage when the document changes.
+    (lisp (-> Void) ()
+      (cl:setf mine/buffer/buffer::*buffer-dirty-hook*
+               #'mine/app/diagnostics:invalidate-diagnostics-for-file)
+      (cl:values))
     ;; Create application state
     (let st = (mine-state-new config))
     (lisp (-> Void) (args term st)
@@ -4827,12 +4861,12 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
                 (proc (sb-ext:run-program abspath args
                         :wait cl:nil
                         :input cl:nil
-                        :output :stream
-                        :error :output
+                        :output ':stream
+                        :error ':output
                         :search cl:t))
-                (log-stream (cl:open log-path :direction :output
-                                              :if-exists :supersede
-                                              :if-does-not-exist :create))
+                (log-stream (cl:open log-path :direction ':output
+                                              :if-exists ':supersede
+                                              :if-does-not-exist ':create))
                 (box (mine/app/state::make-%native-box)))
         (cl:setf (mine/app/state::%native-box-value box) (cl:cons proc log-stream))
         (Some box))
@@ -4927,7 +4961,7 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
       (cl:unless (cl:and (cl:streamp stream) (cl:open-stream-p stream))
         (cl:return-from done cl:nil))
       (cl:let ((mailbox (%ensure-proto-mailbox st))
-                (loss (make-%protocol-reader-loss :connection conn :message lost-message)))
+               (loss (make-%protocol-reader-loss :connection conn :message lost-message)))
         (cl:setf (mine/app/state::%native-box-value thread-box)
                  (mine/bindings/thread:make-thread
                   thread-name
@@ -4981,22 +5015,24 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
 (cl:defun %drain-and-parse-messages (st)
   "Decode without side effects, preserving receive order for the main event loop."
   (cl:let ((mailbox (mine/app/state::%native-box-value (mine/app/state:get-proto-mailbox st))))
-    (cl:if mailbox
-           (cl:loop :for raw :in (sb-concurrency:receive-pending-messages mailbox)
-                    :for message :=
-                      (cl:if (%protocol-reader-loss-p raw)
-                             (cl:let* ((manager (mine/app/state:get-runtime-mgr st))
-                                       (message (%protocol-reader-loss-message raw))
-                                       (current
-                                         (cl:if (cl:eq (cl:first message) :background-connection-lost)
-                                                (mine/protocol/lifecycle::%runtime-manager-background-connection manager)
-                                                (mine/protocol/lifecycle::%runtime-manager-connection manager))))
-                               (cl:when (cl:eq current (%protocol-reader-loss-connection raw))
-                                 message))
-                             raw)
-                    :for parsed := (cl:when message (%parse-one-message message))
-                    :when parsed :collect parsed)
-           cl:nil)))
+    (cl:cond
+      (mailbox
+       (cl:loop :for raw :in (sb-concurrency:receive-pending-messages mailbox)
+                :for message :=
+                  (cl:if (%protocol-reader-loss-p raw)
+                         (cl:let* ((manager (mine/app/state:get-runtime-mgr st))
+                                   (message (%protocol-reader-loss-message raw))
+                                   (current
+                                     (cl:if (cl:eq (cl:first message) ':background-connection-lost)
+                                            (mine/protocol/lifecycle::%runtime-manager-background-connection manager)
+                                            (mine/protocol/lifecycle::%runtime-manager-connection manager))))
+                           (cl:when (cl:eq current (%protocol-reader-loss-connection raw))
+                             message))
+                         raw)
+                :for parsed := (cl:when message (%parse-one-message message))
+                :when parsed :collect parsed))
+      (cl:t
+       cl:nil))))
 
 (cl:defun %parse-one-message (raw)
   (cl:let ((expression (%coalton-optional-value-or-nil (wire:raw-to-sexpr raw))))
@@ -5009,9 +5045,9 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
     (cl:when (mine/app/diagnostics:diagnostic-announcement-p diagnostic)
       (repl:repl-pane-append-output!
        (mine/app/state:get-repl-pane st)
-       (cl:format cl:nil ";; ~(~A~): ~A" (cl:getf diagnostic :severity)
-                  (cl:subseq (cl:or (cl:getf diagnostic :summary) "") 0
-                             (cl:min (cl:length (cl:or (cl:getf diagnostic :summary) "")) 120)))))))
+       (cl:format cl:nil ";; ~(~A~): ~A" (cl:getf diagnostic ':severity)
+                  (cl:subseq (cl:or (cl:getf diagnostic ':summary) "") 0
+                             (cl:min (cl:length (cl:or (cl:getf diagnostic ':summary) "")) 120)))))))
 
 (cl:defun %decode-result-values-cl (text)
   "Decode TEXT into a Coalton list of printed value strings."
@@ -5024,7 +5060,7 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
            (cl:multiple-value-bind (payload pos)
                (cl:read-from-string text)
              (cl:if (cl:and (cl:consp payload)
-                            (cl:eq (cl:first payload) :values)
+                            (cl:eq (cl:first payload) ':values)
                             (cl:consp (cl:rest payload))
                             (cl:null (cl:cddr payload))
                             (cl:listp (cl:second payload))
@@ -5200,8 +5236,8 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
             (cl:let ((clipped (%quick-result-ellipsize line inner-w))
                      (line-style (cl:if (cl:and output-omitted-row
                                                 (cl:= line-index output-omitted-row))
-                                      omitted-style
-                                      body-style)))
+                                        omitted-style
+                                        body-style)))
               (mine/widget/render:draw-text-clipped scr inner-rect clipped
                                                     row inner-x line-style))
             (cl:incf row))
@@ -5233,15 +5269,15 @@ Returns (Some native-box) holding (process . log-stream), or None on error."
                      (cell:read (mine/app/state:get-debugger-snapshot-cell st)))))
     (cl:when snapshot
       (cl:append
-       (cl:list (cl:list :header 0 "Restarts:"))
+       (cl:list (cl:list ':header 0 "Restarts:"))
        (cl:mapcar (cl:lambda (restart)
-                    (cl:list :restart (msg:restart-index restart)
+                    (cl:list ':restart (msg:restart-index restart)
                              (cl:format cl:nil "[~D] ~A" (msg:restart-index restart)
                                         (msg:restart-report restart))))
                   (msg:debugger-restarts snapshot))
-       (cl:list (cl:list :header 0 "") (cl:list :header 0 "Backtrace:"))
+       (cl:list (cl:list ':header 0 "") (cl:list ':header 0 "Backtrace:"))
        (cl:mapcar (cl:lambda (frame)
-                    (cl:list :frame (msg:frame-index frame) (msg:frame-description frame)))
+                    (cl:list ':frame (msg:frame-index frame) (msg:frame-description frame)))
                   (msg:debugger-frames snapshot))))))
 
 
@@ -5252,9 +5288,11 @@ Skips :header items. Returns CURRENT if no selectable item found."
            (pos (cl:+ current direction)))
     (cl:loop :while (cl:and (cl:>= pos 0) (cl:< pos total))
              :do (cl:let ((item (cl:nth pos items)))
-                   (cl:if (cl:eq (cl:first item) :header)
-                          (cl:incf pos direction)
-                          (cl:return-from %dbg-next-selectable pos))))
+                   (cl:cond
+                     ((cl:eq (cl:first item) ':header)
+                      (cl:incf pos direction))
+                     (cl:t
+                      (cl:return-from %dbg-next-selectable pos)))))
     current))
 
 ;;; Render debugger in REPL area (CL side, uses the screen abstraction)
@@ -5298,23 +5336,25 @@ Each line is (:cond text), (:blank), (:header text), or (:item idx kind label),
 where IDX is the index of the item in ITEMS."
   (cl:let ((lines cl:nil))
     (cl:dolist (line (%wrap-text-to-width cond-text body-w))
-      (cl:push (cl:list :cond line) lines))
+      (cl:push (cl:list ':cond line) lines))
     (cl:when items
-      (cl:push (cl:list :blank) lines)
+      (cl:push (cl:list ':blank) lines)
       (cl:loop :for item :in items
                :for i :from 0
                :do (cl:let ((kind (cl:first item))
                             (label (cl:third item)))
-                     (cl:if (cl:eq kind :header)
-                            (cl:push (cl:list :header label) lines)
-                            (cl:push (cl:list :item i kind label) lines)))))
+                     (cl:cond
+                       ((cl:eq kind ':header)
+                        (cl:push (cl:list ':header label) lines))
+                       (cl:t
+                        (cl:push (cl:list ':item i kind label) lines))))))
     (cl:nreverse lines)))
 
 (cl:defun %dbg-selected-line-index (lines selected)
   "Return the line index whose :item refers to SELECTED, or NIL."
   (cl:loop :for line :in lines
            :for li :from 0
-           :when (cl:and (cl:eq (cl:first line) :item)
+           :when (cl:and (cl:eq (cl:first line) ':item)
                          (cl:= (cl:second line) selected))
              :return li))
 
@@ -5392,7 +5432,7 @@ where IDX is the index of the item in ITEMS."
                                 (item-kind (cl:third line))
                                 (label (cl:fourth line))
                                 (is-sel (cl:= item-idx selected))
-                                (base-style (cl:if (cl:eq item-kind :restart)
+                                (base-style (cl:if (cl:eq item-kind ':restart)
                                                    restart-style dim-style))
                                 (style (cl:if is-sel sel-style base-style))
                                 (prefix (cl:if is-sel "> " "  "))
@@ -5436,9 +5476,12 @@ where IDX is the index of the item in ITEMS."
             (conn (mine/protocol/lifecycle::%runtime-ensure-background-connection-raw manager)))
     (cl:when conn
       (%start-background-proto-reader-cl st conn)
-      (cl:if (client:connection-send-checked! conn request)
-             cl:t
-             (cl:progn (%clear-background-protocol-state st) cl:nil)))))
+      (cl:cond
+        ((client:connection-send-checked! conn request)
+         cl:t)
+        (cl:t
+         (%clear-background-protocol-state st)
+         cl:nil)))))
 
 (cl:defun %sync-runtime-request (st request cl:&optional (timeout-seconds 0.15))
   "Use a short-lived connection and a bounded budget for editor metadata."
@@ -5492,10 +5535,10 @@ where IDX is the index of the item in ITEMS."
                     st
                     (msg:ReqIndentRules (msg:RequestId rid) heads package-name) timeout-seconds)))
     (cl:when (cl:and (cl:consp reply)
-                     (cl:eq (cl:first reply) :return)
+                     (cl:eq (cl:first reply) ':return)
                      (cl:eql (cl:second reply) rid))
       (cl:let ((payload (cl:third reply)))
-        (cl:when (cl:and (cl:consp payload) (cl:eq (cl:first payload) :ok))
+        (cl:when (cl:and (cl:consp payload) (cl:eq (cl:first payload) ':ok))
           (cl:mapcar #'%indent-rule-from-spec (cl:second payload)))))))
 
 (cl:defun %request-indent-rule-batches (st batches)
@@ -5509,8 +5552,8 @@ where IDX is the index of the item in ITEMS."
                                    cl:internal-time-units-per-second))
                  (rules (cl:or (cl:when (cl:plusp remaining)
                                   (%request-indent-rules st heads package remaining))
-                                (cl:mapcar #'%indent-rule-from-spec
-                                           (mine/protocol/server::%indent-rule-specs-for-heads heads package)))))
+                               (cl:mapcar #'%indent-rule-from-spec
+                                          (mine/protocol/server::%indent-rule-specs-for-heads heads package)))))
          (Tuple package rules)))
      batches)))
 (cl:defun %send-quick-result-interrupt-cl (st target-id)
@@ -5536,24 +5579,25 @@ where IDX is the index of the item in ITEMS."
 
 (cl:defun %update-hint-if-changed (st sym-name pkg-name)
   (cl:let ((cache (mine/app/state:get-requests st)))
-    (cl:if (cl:and sym-name (cl:plusp (cl:length sym-name)))
-           (cl:when (requests:request-hint-changed? cache sym-name pkg-name)
-             (%request-symbol-hint st sym-name pkg-name))
-           (cl:progn
-             (requests:request-set-hint-context! cache None)
-             (requests:request-set-hint-id! cache None)
-             (requests:request-set-hint-text! cache "")))))
+    (cl:cond
+      ((cl:and sym-name (cl:plusp (cl:length sym-name)))
+       (cl:when (requests:request-hint-changed? cache sym-name pkg-name)
+         (%request-symbol-hint st sym-name pkg-name)))
+      (cl:t
+       (requests:request-set-hint-context! cache None)
+       (requests:request-set-hint-id! cache None)
+       (requests:request-set-hint-text! cache "")))))
 
 (cl:defun %apply-hint-response (st symbol payload)
   (requests:request-set-hint-text!
    (mine/app/state:get-requests st)
-   (cl:if (cl:eq (cl:first payload) :ok)
+   (cl:if (cl:eq (cl:first payload) ':ok)
           (cl:let ((result (cl:second payload)))
             (cl:cond
               ((cl:stringp result) (cl:format cl:nil "~A :: ~A" symbol result))
               ((cl:consp result)
-               (cl:let ((ct (cl:cdr (cl:assoc :coalton-type result)))
-                        (al (cl:cdr (cl:assoc :arglist result))))
+               (cl:let ((ct (cl:cdr (cl:assoc ':coalton-type result)))
+                        (al (cl:cdr (cl:assoc ':arglist result))))
                  (cl:cond (ct (cl:format cl:nil "~A :: ~A" symbol ct))
                           (al (cl:format cl:nil "(~A ~A)" symbol al))
                           (cl:t ""))))
@@ -5572,7 +5616,7 @@ where IDX is the index of the item in ITEMS."
           (%pop-pending-request st rid))))))
 
 (cl:defun %apply-heap-response (st payload)
-  (cl:when (cl:eq (cl:first payload) :ok)
+  (cl:when (cl:eq (cl:first payload) ':ok)
     (cl:let ((pair (cl:second payload)))
       (cl:when (cl:and (cl:consp pair) (cl:integerp (cl:car pair))
                        (cl:integerp (cl:cdr pair)) (cl:plusp (cl:cdr pair)))
@@ -5593,21 +5637,24 @@ where IDX is the index of the item in ITEMS."
       (%status-msg st "No runtime connection"))))
 
 (cl:defun %apply-definition-response (st origin payload)
-  (cl:if (cl:eq (cl:first payload) :ok)
-         (cl:let* ((sources (cl:second payload))
-                   (first-src (cl:and (cl:consp sources) (cl:first sources)))
-                   (file (cl:and (cl:consp first-src) (cl:cdr (cl:assoc :file first-src))))
-                   (offset (cl:or (cl:and (cl:consp first-src)
-                                          (cl:cdr (cl:assoc :offset first-src))) 0)))
-           (cl:if (cl:and (cl:stringp file) (cl:integerp offset) (cl:>= offset 0))
-                  (cl:progn
-                    (cl:when (cl:plusp (cl:length (requests:location-document origin)))
-                      (%jump-stack-push st (requests:location-document origin)
-                                          (requests:location-position origin)))
-                    (mine/app/navigation:jump-to-document-key
-                     st (mine/app/diagnostics:remap-runtime-source-filepath file) offset))
-                  (%status-msg st "No definition found")))
-         (%status-msg st (cl:format cl:nil "~A" (cl:or (cl:second payload) "No definition found")))))
+  (cl:cond
+    ((cl:eq (cl:first payload) ':ok)
+     (cl:let* ((sources (cl:second payload))
+               (first-src (cl:and (cl:consp sources) (cl:first sources)))
+               (file (cl:and (cl:consp first-src) (cl:cdr (cl:assoc ':file first-src))))
+               (offset (cl:or (cl:and (cl:consp first-src)
+                                      (cl:cdr (cl:assoc ':offset first-src))) 0)))
+       (cl:cond
+         ((cl:and (cl:stringp file) (cl:integerp offset) (cl:>= offset 0))
+          (cl:when (cl:plusp (cl:length (requests:location-document origin)))
+            (%jump-stack-push st (requests:location-document origin)
+                                (requests:location-position origin)))
+          (mine/app/navigation:jump-to-document-key
+           st (mine/app/diagnostics:remap-runtime-source-filepath file) offset))
+         (cl:t
+          (%status-msg st "No definition found")))))
+    (cl:t
+     (%status-msg st (cl:format cl:nil "~A" (cl:or (cl:second payload) "No definition found"))))))
 
 (cl:defun %status-msg (st text)
   (coalton/cell:write!
@@ -5666,7 +5713,7 @@ Server returns names already qualified (e.g. \"vec:push-extend\")."
   ;; Ignore if a completion popup is already active (duplicate request)
   (cl:when (mine/app/completion:completion-active? (mine/app/state:get-completion st))
     (cl:return-from %handle-completion-response))
-  (cl:when (cl:and (cl:consp payload) (cl:eq (cl:first payload) :ok))
+  (cl:when (cl:and (cl:consp payload) (cl:eq (cl:first payload) ':ok))
     (cl:let ((raw-matches (cl:second payload)))
       (cl:when (cl:and raw-matches (cl:consp raw-matches))
         (cl:let* ((candidates (%build-candidate-list raw-matches))
@@ -5726,27 +5773,29 @@ Code 0/1 => payload is the path to open. Code 2 => payload is an error message."
   (cl:handler-case
       (cl:let* ((expanded (%expand-project-input-path text))
                 (dir (uiop:directory-exists-p expanded)))
-        (cl:if dir
-               (cl:let* ((dir-path (uiop:ensure-directory-pathname dir))
-                         (wild (cl:make-pathname :name :wild :type :wild
-                                                 :defaults dir-path))
-                         (entries (cl:directory wild :resolve-symlinks cl:nil))
-                         (asd-files (cl:sort
-                                     (cl:remove-if-not
-                                      (cl:lambda (entry)
-                                        (cl:let ((type (cl:pathname-type entry)))
-                                          (cl:and type (cl:string-equal type "asd"))))
-                                      entries)
-                                     #'cl:string<
-                                     :key #'cl:namestring)))
-                 (cl:cond
-                   ((cl:null asd-files)
-                    (Tuple 2 (cl:format cl:nil "No .asd file found in: ~A" text)))
-                   ((cl:null (cl:rest asd-files))
-                    (Tuple 1 (cl:namestring (cl:first asd-files))))
-                   (cl:t
-                    (Tuple 2 (cl:format cl:nil "Multiple .asd files found in: ~A" text)))))
-               (Tuple 0 expanded)))
+        (cl:cond
+          (dir
+           (cl:let* ((dir-path (uiop:ensure-directory-pathname dir))
+                     (wild (cl:make-pathname :name ':wild :type ':wild
+                                             :defaults dir-path))
+                     (entries (cl:directory wild :resolve-symlinks cl:nil))
+                     (asd-files (cl:sort
+                                 (cl:remove-if-not
+                                  (cl:lambda (entry)
+                                    (cl:let ((type (cl:pathname-type entry)))
+                                      (cl:and type (cl:string-equal type "asd"))))
+                                  entries)
+                                 #'cl:string<
+                                 :key #'cl:namestring)))
+             (cl:cond
+               ((cl:null asd-files)
+                (Tuple 2 (cl:format cl:nil "No .asd file found in: ~A" text)))
+               ((cl:null (cl:rest asd-files))
+                (Tuple 1 (cl:namestring (cl:first asd-files))))
+               (cl:t
+                (Tuple 2 (cl:format cl:nil "Multiple .asd files found in: ~A" text))))))
+          (cl:t
+           (Tuple 0 expanded))))
     (cl:error ()
       (Tuple 0 text))))
 

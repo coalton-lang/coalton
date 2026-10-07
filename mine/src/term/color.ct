@@ -8,7 +8,6 @@
    #:AttrUnderline #:AttrReverse
    #:Style #:Style
    #:default-style
-   #:.style-fg #:.style-bg #:.style-attr
    #:with-fg #:with-bg #:with-attr
    ;; Basic
    #:black #:white

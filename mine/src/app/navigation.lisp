@@ -52,14 +52,15 @@
                  (opened-buf nil))
             (unless existing-buf
               (let ((buf-result (mine/buffer/manager::bufmgr-open-file! bm resolved-path)))
-                (if (typep buf-result 'coalton-library/classes::result/ok)
-                    (setf opened-buf
-                          (coalton-library/classes::result/ok-_0 buf-result))
-                    (progn
-                      (user-error st
-                                  (format nil "Jump failed: could not open ~A"
-                                          (display-name resolved-path)))
-                      (return-from jump-to-file nil)))))
+                (cond
+                  ((typep buf-result 'coalton-library/classes::result/ok)
+                   (setf opened-buf
+                         (coalton-library/classes::result/ok-_0 buf-result)))
+                  (t
+                   (user-error st
+                               (format nil "Jump failed: could not open ~A"
+                                       (display-name resolved-path)))
+                   (return-from jump-to-file nil)))))
             (let* ((buf (or existing-buf opened-buf))
                    (gb (mine/buffer/buffer::buffer-gap buf))
                    (safe-offset
@@ -87,24 +88,25 @@
             (cs (mine/app/state:get-cursor-state st))
             (buf (coalton-optional-value-or-nil
                   (mine/buffer/manager::bufmgr-find-by-document-key bm document-key))))
-       (if (null buf)
-           (progn
-             (user-error st "Jump skipped: buffer is no longer open")
-             nil)
-           (let* ((gb (mine/buffer/buffer::buffer-gap buf))
-                  (safe-offset
-                    (max 0
-                         (min (or char-offset 0)
-                              (mine/buffer/gap::gap-length gb)))))
-             (mine/app/state:activate-buffer! st buf)
-             (mine/edit/cursor:cursor-move-to-buffer-position! gb cs safe-offset)
-             (mine/edit/cursor:cursor-clear-selection! cs)
-             (mine/app/layout:show-editor! st)
-             (mine/pane/status::statusbar-set-message!
-              (mine/app/state:get-status-bar st)
-              (format nil "Jumped to ~A"
-                      (mine/buffer/buffer::buffer-name buf)))
-             t))))
+       (cond
+         ((null buf)
+          (user-error st "Jump skipped: buffer is no longer open")
+          nil)
+         (t
+          (let* ((gb (mine/buffer/buffer::buffer-gap buf))
+                 (safe-offset
+                   (max 0
+                        (min (or char-offset 0)
+                             (mine/buffer/gap::gap-length gb)))))
+            (mine/app/state:activate-buffer! st buf)
+            (mine/edit/cursor:cursor-move-to-buffer-position! gb cs safe-offset)
+            (mine/edit/cursor:cursor-clear-selection! cs)
+            (mine/app/layout:show-editor! st)
+            (mine/pane/status::statusbar-set-message!
+             (mine/app/state:get-status-bar st)
+             (format nil "Jumped to ~A"
+                     (mine/buffer/buffer::buffer-name buf)))
+            t)))))
     (t
      (jump-to-file st document-key char-offset))))
 

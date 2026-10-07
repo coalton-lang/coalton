@@ -1,15 +1,7 @@
 (cl:defpackage #:mine/config/types
   (:use #:coalton #:coalton-prelude)
   (:export
-   #:MineConfig #:MineConfig
-   #:.config-structural-editing
-   #:.config-auto-hide-tree-pane
-   #:.config-repl-language
-   #:.config-default-package
-   #:.config-repl-init
-   #:.config-repl-heap-size
-   #:.config-project-roots
-   #:.config-check-for-updates))
+   #:MineConfig #:MineConfig))
 
 (in-package #:mine/config/types)
 

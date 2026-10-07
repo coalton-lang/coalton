@@ -152,7 +152,7 @@
 
   (declare %render (term:Terminal * (List DebugEntry) -> Void))
   (define (%render term entries)
-    (let scr  = (term:.terminal-screen term))
+    (let scr  = (.terminal-screen term))
     (let cols = (term:terminal-cols term))
     (let rows = (term:terminal-rows term))
     (let bg       = (color:Style color:text-fg color:panel-bg color:AttrNone))
@@ -208,7 +208,7 @@ Returns True if size changed."
     (let new-rows = (term:terminal-rows term))
     (cond
       ((or (/= new-cols old-cols) (/= new-rows old-rows))
-       (screen:screen-resize (term:.terminal-screen term) new-cols new-rows)
+       (screen:screen-resize (.terminal-screen term) new-cols new-rows)
        True)
       (True False)))
 

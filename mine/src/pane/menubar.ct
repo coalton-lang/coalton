@@ -357,52 +357,54 @@
   (declare menubar-handle-mouse! (MenuBar * UFix * UFix * UFix * UFix -> (Optional MenuAction)))
   (define (menubar-handle-mouse! mb col row _cols _rows)
     ;; Click on title bar (row 0)
-    (if (== row 0)
-        (match (menubar-title-hit-test mb col)
-          ((Some idx)
-           ;; Toggle: if same menu, close; otherwise switch
-           (match (cell:read (.mb-open-index mb))
-             ((Some cur)
-              (if (== cur idx)
-                  (menubar-close! mb)
-                  (menubar-open! mb idx)))
-             ((None) (menubar-open! mb idx)))
-           None)
-          ((None)
-           (menubar-close! mb)
-           None))
-        ;; Click in dropdown area?
-        (match (cell:read (.mb-open-index mb))
-          ((None)
-           (menubar-close! mb)
-           None)
-          ((Some idx)
-           (let dd = (%dropdown-rect mb idx))
-           (let dx = (wt:.rect-x dd))
-           (let dy = (+ (wt:.rect-y dd) 1))
-           (let dw = (wt:.rect-width dd))
-           (let dh = (wt:.rect-height dd))
-           (cond
-             ((and (>= col dx) (and (< col (+ dx dw))
-                      (and (>= row dy) (< row (+ dy dh)))))
-              ;; Click inside dropdown: select and execute if enabled
-              (let item-idx = (- row dy))
-              (cond
-                ((< item-idx (%menu-item-count mb idx))
-                 (let item = (list:nth item-idx (.md-items (%nth-menu mb idx))))
-                 (cond
-                   ((%item-enabled? mb item)
-                    (cell:write! (.mb-selected mb) item-idx)
-                    (menubar-close! mb)
-                    (Some (.mi-action item)))
-                   (True None)))
-                (True
-                 (menubar-close! mb)
-                 None)))
-             (True
-              ;; Click outside
-              (menubar-close! mb)
-              None))))))
+    (cond
+      ((== row 0)
+       (match (menubar-title-hit-test mb col)
+         ((Some idx)
+          ;; Toggle: if same menu, close; otherwise switch
+          (match (cell:read (.mb-open-index mb))
+            ((Some cur)
+             (cond
+               ((== cur idx) (menubar-close! mb))
+               (True (menubar-open! mb idx))))
+            ((None) (menubar-open! mb idx)))
+          None)
+         ((None)
+          (menubar-close! mb)
+          None)))
+      ;; Click in dropdown area?
+      (True
+       (match (cell:read (.mb-open-index mb))
+         ((None)
+          (menubar-close! mb)
+          None)
+         ((Some idx)
+          (let dd = (%dropdown-rect mb idx))
+          (let dx = (.rect-x dd))
+          (let dy = (+ (.rect-y dd) 1))
+          (let dw = (.rect-width dd))
+          (let dh = (.rect-height dd))
+          (cond
+            ((and (>= col dx) (and (< col (+ dx dw))
+                                   (and (>= row dy) (< row (+ dy dh)))))
+             ;; Click inside dropdown: select and execute if enabled
+             (let item-idx = (- row dy))
+             (cond
+               ((< item-idx (%menu-item-count mb idx))
+                (let item = (list:nth item-idx (.md-items (%nth-menu mb idx))))
+                (cond
+                  ((%item-enabled? mb item)
+                   (cell:write! (.mb-selected mb) item-idx)
+                   (menubar-close! mb)
+                   (Some (.mi-action item)))
+                  (True None)))
+               (True
+                (menubar-close! mb)
+                None)))
+            (True
+             ;; Click outside
+             (menubar-close! mb)
+             None)))))))
 
   ;;; Dropdown geometry
 
@@ -435,29 +437,29 @@
   (declare menubar-render (MenuBar * screen:Screen * wt:Rect -> Void))
   (define (menubar-render mb scr rect)
     "Render the menu title bar."
-    (let row = (wt:.rect-y rect))
-    (let max-col = (+ (wt:.rect-x rect) (wt:.rect-width rect)))
+    (let row = (.rect-y rect))
+    (let max-col = (+ (.rect-x rect) (.rect-width rect)))
     ;; Bar style: Aluminium 3 on Aluminium 5
     (let bar-style = (color:Style color:text-dim-fg
-                                   color:status-bar-bg
-                                   color:AttrNone))
+                                  color:status-bar-bg
+                                  color:AttrNone))
     ;; Active title: bright on Sky Blue 2
     (let active-style = (color:Style color:text-fg
-                                      color:accent-bg
-                                      color:AttrBold))
+                                     color:accent-bg
+                                     color:AttrBold))
     ;; Normal title: bold on bar bg
     (let title-style = (color:Style color:text-fg
-                                     color:status-bar-bg
-                                     color:AttrBold))
+                                    color:status-bar-bg
+                                    color:AttrBold))
     ;; Fill the bar
     (render:fill-rect scr rect #\Space bar-style)
     ;; Brand style: bright baby blue bold for "mine" title
     (let brand-style = (color:Style color:baby-blue
-                                     color:status-bar-bg
-                                     color:AttrBold))
+                                    color:status-bar-bg
+                                    color:AttrBold))
     (let active-brand = (color:Style color:accent-fg
-                                      color:accent-bg
-                                      color:AttrBold))
+                                     color:accent-bg
+                                     color:AttrBold))
     ;; Draw titles
     (let open-idx = (cell:read (.mb-open-index mb)))
     (%render-titles (.mb-menus mb) (.mb-title-cols mb) open-idx 0
@@ -503,48 +505,48 @@
       ((Some idx)
        (let menu = (%nth-menu mb idx))
        (let content = (%dropdown-rect mb idx))
-          (let cx = (wt:.rect-x content))
-          (let cy = (wt:.rect-y content))
-          (let cw = (wt:.rect-width content))
-          (let ch = (wt:.rect-height content))
-          ;; Border rect (1 char padding around content)
-          (let bx = (if (> cx 0) (- cx 1) 0))
-          (let by = cy)
-          (let bw = (+ cw 2))
-          (let bh = (+ ch 2))
-          ;; Clamp to screen
-          (let bx2 = (if (> (+ bx bw) cols) (- cols bw) bx))
-          (let cx2 = (+ bx2 1))
-          ;; Styles
-          (let bg = (color:Style color:text-fg
-                                  color:panel-bg
-                                  color:AttrNone))
-          (let sel-style = (color:Style color:text-fg
+       (let cx = (.rect-x content))
+       (let cy = (.rect-y content))
+       (let cw = (.rect-width content))
+       (let ch = (.rect-height content))
+       ;; Border rect (1 char padding around content)
+       (let bx = (if (> cx 0) (- cx 1) 0))
+       (let by = cy)
+       (let bw = (+ cw 2))
+       (let bh = (+ ch 2))
+       ;; Clamp to screen
+       (let bx2 = (if (> (+ bx bw) cols) (- cols bw) bx))
+       (let cx2 = (+ bx2 1))
+       ;; Styles
+       (let bg = (color:Style color:text-fg
+                              color:panel-bg
+                              color:AttrNone))
+       (let sel-style = (color:Style color:text-fg
+                                     color:accent-bg
+                                     color:AttrNone))
+       (let key-style = (color:Style color:text-dimmer-fg
+                                     color:panel-bg
+                                     color:AttrNone))
+       (let sel-key-style = (color:Style color:text-dim-fg
                                          color:accent-bg
                                          color:AttrNone))
-          (let key-style = (color:Style color:text-dimmer-fg
-                                         color:panel-bg
-                                         color:AttrNone))
-          (let sel-key-style = (color:Style color:text-dim-fg
-                                             color:accent-bg
-                                             color:AttrNone))
-          (let border-style = (color:Style color:border-fg
-                                            color:panel-bg
-                                            color:AttrNone))
-          ;; Draw border
-          (render:draw-box scr (wt:Rect bx2 by bw bh) border-style)
-          ;; Fill content area
-          (render:fill-rect scr (wt:Rect cx2 (+ cy 1) cw ch) #\Space bg)
-          ;; Disabled item style
-          (let disabled-style = (color:Style color:text-dimmer-fg
-                                              color:panel-bg
-                                              color:AttrNone))
-          ;; Draw items
-          (let selected = (cell:read (.mb-selected mb)))
-          (%render-items (.md-items menu) mb scr cx2 (+ cy 1) cw 0 selected
-                         bg sel-style key-style sel-key-style disabled-style)
-          ;; Hide cursor while menu is open
-          (screen:screen-hide-cursor scr))))
+       (let border-style = (color:Style color:border-fg
+                                        color:panel-bg
+                                        color:AttrNone))
+       ;; Draw border
+       (render:draw-box scr (wt:Rect bx2 by bw bh) border-style)
+       ;; Fill content area
+       (render:fill-rect scr (wt:Rect cx2 (+ cy 1) cw ch) #\Space bg)
+       ;; Disabled item style
+       (let disabled-style = (color:Style color:text-dimmer-fg
+                                          color:panel-bg
+                                          color:AttrNone))
+       ;; Draw items
+       (let selected = (cell:read (.mb-selected mb)))
+       (%render-items (.md-items menu) mb scr cx2 (+ cy 1) cw 0 selected
+                      bg sel-style key-style sel-key-style disabled-style)
+       ;; Hide cursor while menu is open
+       (screen:screen-hide-cursor scr))))
 
   (declare %render-items ((List MenuItem) * MenuBar * screen:Screen * UFix * UFix * UFix * UFix * UFix * color:Style * color:Style * color:Style * color:Style * color:Style -> Void))
   (define (%render-items items mb scr x y w idx selected bg sel-style key-style sel-key-style disabled-style)

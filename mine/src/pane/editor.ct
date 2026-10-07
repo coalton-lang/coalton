@@ -27,7 +27,7 @@
    #:editor-pane-new
    #:editor-pane-set-buffer!
    #:editor-pane-render-with-context
-   #:RenderSpan #:.rs-start #:.rs-end #:.rs-rank
+   #:RenderSpan
    #:EditorRenderContext #:editor-render-context #:render-spans-from-triples
    #:editor-pane-ensure-visible!
    #:editor-pane-scroll-row
@@ -63,10 +63,10 @@
 
 (cl:defun %diagnostic-rank-cl (severity)
   (cl:cond
-    ((cl:eq severity :error) 4)
-    ((cl:eq severity :warning) 3)
-    ((cl:eq severity :style-warning) 2)
-    ((cl:eq severity :note) 1)
+    ((cl:eq severity ':error) 4)
+    ((cl:eq severity ':warning) 3)
+    ((cl:eq severity ':style-warning) 2)
+    ((cl:eq severity ':note) 1)
     (cl:t 0)))
 
 (coalton-toplevel
@@ -160,7 +160,7 @@
     (let segments = (rows-for-line (gap:gap-line-text gb (cell:read (.scroll-row ep)))
                                    (max 1 (cell:read (.last-text-width ep))) tab-width))
     (cell:write! (.scroll-segment ep) (if (editor-pane-line-wrap? ep)
-                                         (min (.saved-scroll-segment saved) (- segments 1)) 0))
+                                          (min (.saved-scroll-segment saved) (- segments 1)) 0))
     (cell:write! (.scroll-col ep) (if (editor-pane-line-wrap? ep) 0 (.saved-scroll-col saved)))
     (values))
 
@@ -169,7 +169,7 @@
     "Return the visible cursor in screen coordinates, using the actual pane rectangle."
     (let gutter = (editor-pane-gutter-width ep gb))
     (let text-width = (pane-text-width ep gb rect))
-    (when (or (== text-width 0) (== (wt:.rect-height rect) 0))
+    (when (or (== text-width 0) (== (.rect-height rect) 0))
       (return None))
     (let wrap-w = (if (editor-pane-line-wrap? ep) text-width 0))
     (let tab-w = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
@@ -185,11 +185,11 @@
        (let origin = (if (> wrap-w 0)
                          (wrap-seg-start-vcol gb line col wrap-w tab-w)
                          (editor-pane-scroll-col ep)))
-       (if (or (>= row (wt:.rect-height rect))
+       (if (or (>= row (.rect-height rect))
                (or (< vcol origin) (>= (- vcol origin) text-width)))
            None
-           (Some (Tuple (+ (+ (wt:.rect-x rect) gutter) (- vcol origin))
-                        (+ (wt:.rect-y rect) row)))))))
+           (Some (Tuple (+ (+ (.rect-x rect) gutter) (- vcol origin))
+                        (+ (.rect-y rect) row)))))))
 
   (declare editor-pane-completion-anchor (EditorPane * gap:GapBuffer * cursor:CursorState * wt:Rect * String -> Optional (Tuple UFix UFix)))
   (define (editor-pane-completion-anchor ep gb cs rect prefix)
@@ -203,7 +203,7 @@
           (let prefix-start = (if (>= col (str:length prefix)) (- col (str:length prefix)) 0))
           (let prefix-width = (- (gap:visual-col text col tab-w)
                                 (gap:visual-col text prefix-start tab-w)))
-          (let left = (+ (wt:.rect-x rect) (editor-pane-gutter-width ep gb)))
+          (let left = (+ (.rect-x rect) (editor-pane-gutter-width ep gb)))
           (Some (Tuple (if (> (- x left) prefix-width) (- x prefix-width) left) y)))))))
 
   (declare editor-pane-new (Void -> EditorPane))
@@ -315,11 +315,12 @@ Returns the number of digits plus one for a separator space."
        (let span = (if (== ch #\Tab) (- tab-width (int:mod column tab-width))
                        (cellw:editor-char-cell-width ch)))
        (let next = (+ column span))
-       (if (and (> (- next origin) width) (> column origin))
-           (progn
-             (vec:push! index points)
-             (wrap-points-loop text index column column width tab-width points))
-           (wrap-points-loop text (+ index 1) next origin width tab-width points)))))
+       (cond
+         ((and (> (- next origin) width) (> column origin))
+          (vec:push! index points)
+          (wrap-points-loop text index column column width tab-width points))
+         (True
+          (wrap-points-loop text (+ index 1) next origin width tab-width points))))))
 
   (declare wrap-points (String * UFix * UFix -> (vec:Vector UFix)))
   (define (wrap-points text wrap-w tab-w)
@@ -453,7 +454,7 @@ disables wrapping (segment is the whole line)."
   (declare pane-text-width (EditorPane * gap:GapBuffer * wt:Rect -> UFix))
   (define (pane-text-width ep gb rect)
     "Reserve a scrollbar column whenever there is room for one beside the text."
-    (let width = (wt:.rect-width rect))
+    (let width = (.rect-width rect))
     (let gutter = (editor-pane-gutter-width ep gb))
     (cond
       ((> width (+ gutter 1)) (- (- width gutter) 1))
@@ -502,8 +503,8 @@ disables wrapping (segment is the whole line)."
     (let width = (pane-wrap-width ep gb rect))
     (let tab-width = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
     (let row = (+ (editor-pane-scroll-screen-row ep gb rect)
-                  (if (>= y (wt:.rect-y rect)) (- y (wt:.rect-y rect)) 0)))
-    (let left = (+ (wt:.rect-x rect) (editor-pane-gutter-width ep gb)))
+                  (if (>= y (.rect-y rect)) (- y (.rect-y rect)) 0)))
+    (let left = (+ (.rect-x rect) (editor-pane-gutter-width ep gb)))
     (let column = (if (>= x left) (- x left) 0))
     (match (screen-row-to-line-seg gb 0 row width tab-width)
       ((Some (Tuple4 line start end origin))
@@ -515,7 +516,7 @@ disables wrapping (segment is the whole line)."
   (declare editor-pane-scroll-to! (EditorPane * gap:GapBuffer * cursor:CursorState * wt:Rect * UFix -> Void))
   (define (editor-pane-scroll-to! ep gb cs rect row)
     "Scroll to a visual row and keep the cursor within the resulting viewport."
-    (let height = (wt:.rect-height rect))
+    (let height = (.rect-height rect))
     (when (== height 0) (return (values)))
     (let total = (editor-pane-total-screen-rows ep gb rect))
     (let offset = (min row (if (> total height) (- total height) 0)))
@@ -526,8 +527,8 @@ disables wrapping (segment is the whole line)."
       ((Tuple line column)
        (let current = (cursor-screen-row-offset gb 0 line column width tab-width))
        (let target-row = (max offset (min current (+ offset (- height 1)))))
-       (when (not (== target-row current))
-         (let previous-target = (cell:read (cursor:.target-col cs)))
+       (unless (== target-row current)
+         (let previous-target = (cell:read (.target-col cs)))
          (let current-origin = (wrap-seg-start-vcol gb line column width tab-width))
          (let target-x = (if (>= previous-target current-origin) (- previous-target current-origin) 0))
          (match (screen-row-to-line-seg gb 0 target-row width tab-width)
@@ -537,7 +538,7 @@ disables wrapping (segment is the whole line)."
             (let maximum = (if (and (< end (str:length text)) (> end start)) (- end 1) end))
             (let char = (max start (min maximum (gap:char-for-vcol text target-column tab-width))))
             (cursor:cursor-move-to-buffer-position! gb cs (+ (gap:gap-line-to-pos gb target-line) char))
-            (cell:write! (cursor:.target-col cs) target-column)
+            (cell:write! (.target-col cs) target-column)
             (values))
            ((None) (values))))))
     (values))
@@ -564,8 +565,8 @@ preserve display-x stickiness across subsequent vertical moves."
                         (True seg-end)))
        (let new-col = (max seg-start (min max-col raw-col)))
        (let line-start = (gap:gap-line-to-pos gb new-line))
-       (cell:write! (cursor:.pos cs) (+ line-start new-col))
-       (cell:write! (cursor:.target-col cs) desired-vcol)
+       (cell:write! (.pos cs) (+ line-start new-col))
+       (cell:write! (.target-col cs) desired-vcol)
        (values))))
 
   (define (cursor-move-up-wrap! gb cs wrap-w)
@@ -580,7 +581,7 @@ line, moves to last segment of previous line."
        (match (%segment-bounds cur-pts cur-seg)
          ((Tuple cur-seg-start _)
           (let cur-seg-start-vcol = (gap:visual-col cur-text cur-seg-start tab-w))
-          (let tc = (cell:read (cursor:.target-col cs)))
+          (let tc = (cell:read (.target-col cs)))
           (let tgt-disp-x = (if (>= tc cur-seg-start-vcol)
                                 (- tc cur-seg-start-vcol)
                                 0))
@@ -613,7 +614,7 @@ line, moves to first segment of next line."
        (match (%segment-bounds cur-pts cur-seg)
          ((Tuple cur-seg-start _)
           (let cur-seg-start-vcol = (gap:visual-col cur-text cur-seg-start tab-w))
-          (let tc = (cell:read (cursor:.target-col cs)))
+          (let tc = (cell:read (.target-col cs)))
           (let tgt-disp-x = (if (>= tc cur-seg-start-vcol)
                                 (- tc cur-seg-start-vcol)
                                 0))
@@ -651,14 +652,16 @@ line, moves to first segment of next line."
   (declare move-wrap-rows! (gap:GapBuffer * cursor:CursorState * UFix * UFix * Boolean -> Void))
   (define (move-wrap-rows! gb cs width count down?)
     (when (> count 0)
-      (if down? (cursor-move-down-wrap! gb cs width) (cursor-move-up-wrap! gb cs width))
+      (cond
+        (down? (cursor-move-down-wrap! gb cs width))
+        (True (cursor-move-up-wrap! gb cs width)))
       (move-wrap-rows! gb cs width (- count 1) down?))
     (values))
 
   (declare editor-cursor-page! (EditorPane * gap:GapBuffer * cursor:CursorState * wt:Rect * Boolean -> Void))
   (define (editor-cursor-page! ep gb cs rect down?)
     "Move by half the actual editor viewport, measured in rendered rows."
-    (let count = (max 1 (int:div (wt:.rect-height rect) 2)))
+    (let count = (max 1 (int:div (.rect-height rect) 2)))
     (let width = (pane-wrap-width ep gb rect))
     (cond
       ((> width 0) (move-wrap-rows! gb cs width count down?))
@@ -672,12 +675,12 @@ line, moves to first segment of next line."
     "Adjust scroll offsets so the cursor is visible within RECT.
 Scroll-col is in visual columns (tab-expanded). When line-wrap is on,
 scroll-col is pinned to 0 and vertical scroll is computed in screen rows."
-    (when (or (== (wt:.rect-height rect) 0) (== (wt:.rect-width rect) 0))
+    (when (or (== (.rect-height rect) 0) (== (.rect-width rect) 0))
       (return (values)))
     (let lc = (cursor:cursor-line-col cs gb))
     (let cur-line = (fst lc))
     (let cur-col = (snd lc))
-    (let view-height = (wt:.rect-height rect))
+    (let view-height = (.rect-height rect))
     (let view-width = (max 1 (pane-text-width ep gb rect)))
     (let sr = (cell:read (.scroll-row ep)))
     (let sc = (cell:read (.scroll-col ep)))
@@ -741,12 +744,12 @@ segments) and highlights the current visual row."
     (let cur-line = (fst cur-lc))
     (let cur-col = (snd cur-lc))
     (let gw = (if show-ln (gutter-width line-count) 0))
-    (let height = (wt:.rect-height rect))
-    (when (or (== height 0) (<= (wt:.rect-width rect) gw))
+    (let height = (.rect-height rect))
+    (when (or (== height 0) (<= (.rect-width rect) gw))
       (render:fill-rect scr rect #\Space color:default-style)
       (screen:screen-hide-cursor scr)
       (return (values)))
-    (let text-x = (+ (wt:.rect-x rect) gw))
+    (let text-x = (+ (.rect-x rect) gw))
     (let text-width = (pane-text-width ep gb rect))
     (let tab-w = (lisp (-> UFix) () mine/buffer/gap::*tab-width*))
     ;; wrap-w is the segment width when wrap is on, else 0 (no wrap).
@@ -756,8 +759,8 @@ segments) and highlights the current visual row."
     ;; Highlight style for the current line.
     (let hl-style = (color:with-bg color:default-style color:current-line-bg))
     ;; Extract rect fields and convert booleans before entering lisp form
-    (let rect-x0 = (wt:.rect-x rect))
-    (let rect-y0 = (wt:.rect-y rect))
+    (let rect-x0 = (.rect-x rect))
+    (let rect-y0 = (.rect-y rect))
     (let show-ln-cl = (lisp (-> UFix) (show-ln) (cl:if (cl:eq show-ln True) 1 0)))
     (let hl-cur-cl = (lisp (-> UFix) (hl-cur) (cl:if (cl:eq hl-cur True) 1 0)))
     ;; Selection range (sel-start <= sel-end, both buffer positions, or both max for no selection)
@@ -840,28 +843,30 @@ segments) and highlights the current visual row."
                   (cl:when (cl:plusp show-ln-cl)
                     (cl:cond
                       (is-first
-                       (cl:if (cl:plusp diag-rank)
-                              (cl:let ((diag-style
-                                         (cl:cond
-                                           ((cl:= diag-rank 4)
-                                            (mine/term/color::Style
-                                              mine/term/color::error-fg
-                                              mine/term/color::black
-                                              mine/term/color::AttrBold))
-                                           ((cl:= diag-rank 3)
-                                            (mine/term/color::Style
-                                              mine/term/color::warning-fg
-                                              mine/term/color::black
-                                              mine/term/color::AttrNone))
-                                           (cl:t
-                                            (mine/term/color::Style
-                                              mine/term/color::info-fg
-                                              mine/term/color::black
-                                              mine/term/color::AttrNone)))))
-                                (mine/pane/editor::render-line-number
-                                 scr y (cl:1+ line-idx) rect-x0 gw diag-style))
-                              (mine/pane/editor::render-line-number
-                               scr y (cl:1+ line-idx) rect-x0 gw gutter-style)))
+                       (cl:cond
+                         ((cl:plusp diag-rank)
+                          (cl:let ((diag-style
+                                     (cl:cond
+                                       ((cl:= diag-rank 4)
+                                        (mine/term/color::Style
+                                         mine/term/color::error-fg
+                                         mine/term/color::black
+                                         mine/term/color::AttrBold))
+                                       ((cl:= diag-rank 3)
+                                        (mine/term/color::Style
+                                         mine/term/color::warning-fg
+                                         mine/term/color::black
+                                         mine/term/color::AttrNone))
+                                       (cl:t
+                                        (mine/term/color::Style
+                                         mine/term/color::info-fg
+                                         mine/term/color::black
+                                         mine/term/color::AttrNone)))))
+                            (mine/pane/editor::render-line-number
+                             scr y (cl:1+ line-idx) rect-x0 gw diag-style)))
+                         (cl:t
+                          (mine/pane/editor::render-line-number
+                           scr y (cl:1+ line-idx) rect-x0 gw gutter-style))))
                       (cl:t
                        ;; Continuation segment: bent-arrow marker right-aligned in gutter.
                        (cl:when (cl:>= gw 2)
@@ -899,17 +904,17 @@ segments) and highlights the current visual row."
 
   (declare editor-pane-render-scrollbar (EditorPane * screen:Screen * wt:Rect * gap:GapBuffer -> Void))
   (define (editor-pane-render-scrollbar ep scr rect gb)
-    (when (or (<= (wt:.rect-width rect) (+ (editor-pane-gutter-width ep gb) 1))
-              (== (wt:.rect-height rect) 0))
+    (when (or (<= (.rect-width rect) (+ (editor-pane-gutter-width ep gb) 1))
+              (== (.rect-height rect) 0))
       (return (values)))
-    (let sb-col = (- (+ (wt:.rect-x rect) (wt:.rect-width rect)) 1))
+    (let sb-col = (- (+ (.rect-x rect) (.rect-width rect)) 1))
     (let track-s = (color:Style color:scrollbar-track-fg
-                                 color:scrollbar-track-bg
-                                 color:AttrNone))
+                                color:scrollbar-track-bg
+                                color:AttrNone))
     (let thumb-s = (color:Style color:scrollbar-thumb-fg
-                                 color:scrollbar-track-bg
-                                 color:AttrNone))
-    (render:draw-scrollbar scr sb-col (wt:.rect-y rect) (wt:.rect-height rect)
+                                color:scrollbar-track-bg
+                                color:AttrNone))
+    (render:draw-scrollbar scr sb-col (.rect-y rect) (.rect-height rect)
                            (editor-pane-total-screen-rows ep gb rect)
                            (editor-pane-scroll-screen-row ep gb rect)
                            track-s thumb-s)))
@@ -1021,13 +1026,15 @@ segments) and highlights the current visual row."
     (let v = (vec:new))
     (let vc = (cell:new 0))
     (lisp (-> Void) (text text-len v vc tab-w)
-        (cl:dotimes (i text-len)
-          (vec:push! (coalton/cell:read vc) v)
-          (cl:let ((ch (cl:char text i)))
-            (cl:if (cl:char= ch #\Tab)
-                 (coalton/cell:write! vc (cl:* (cl:1+ (cl:floor (coalton/cell:read vc) tab-w)) tab-w))
-                 (coalton/cell:write! vc (cl:+ (coalton/cell:read vc)
-                                               (mine/text/width:editor-char-cell-width-cl ch))))))
+      (cl:dotimes (i text-len)
+        (vec:push! (coalton/cell:read vc) v)
+        (cl:let ((ch (cl:char text i)))
+          (coalton/cell:write!
+           vc
+           (cl:if (cl:char= ch #\Tab)
+                  (cl:* (cl:1+ (cl:floor (coalton/cell:read vc) tab-w)) tab-w)
+                  (cl:+ (coalton/cell:read vc)
+                        (mine/text/width:editor-char-cell-width-cl ch))))))
       (vec:push! (coalton/cell:read vc) v)
       (cl:values))
     v)
@@ -1073,10 +1080,10 @@ segments) and highlights the current visual row."
   (define (%diagnostic-style style rank)
     "Apply a diagnostic background tint while preserving syntax foregrounds."
     (match rank
-      (4 (color:Style (color:.style-fg style) color:dark-red (color:.style-attr style)))
-      (3 (color:Style (color:.style-fg style) color:brown (color:.style-attr style)))
-      (2 (color:Style (color:.style-fg style) color:slate (color:.style-attr style)))
-      (1 (color:Style (color:.style-fg style) color:dark-blue (color:.style-attr style)))
+      (4 (color:Style (.style-fg style) color:dark-red (.style-attr style)))
+      (3 (color:Style (.style-fg style) color:brown (.style-attr style)))
+      (2 (color:Style (.style-fg style) color:slate (.style-attr style)))
+      (1 (color:Style (.style-fg style) color:dark-blue (.style-attr style)))
       (_ style)))
 
   (declare %pick-style
@@ -1088,13 +1095,13 @@ segments) and highlights the current visual row."
     (cond
       ((and (>= abs-pos sel-start) (< abs-pos sel-end)) sel-style)
       ((%paren-match? context abs-pos)
-       (color:Style (color:.style-fg style) color:match-paren-bg color:AttrBold))
+       (color:Style (.style-fg style) color:match-paren-bg color:AttrBold))
       ((== search-kind 2) search-cur-style)
       ((== search-kind 1) search-style)
       ((> diagnostic-rank 0)
        (%diagnostic-style style diagnostic-rank))
       ((%quick-result-highlight? (.lrc-editor context) abs-pos)
-       (color:Style (color:.style-fg style) color:slate (color:.style-attr style)))
+       (color:Style (.style-fg style) color:slate (.style-attr style)))
       (True style)))
 
   (declare draw-chars-with-tabs
@@ -1124,28 +1131,29 @@ segments) and highlights the current visual row."
                   (s (mine/pane/editor::%pick-style
                       context abs-pos sel-start sel-end style
                       sel-style search-style search-cur-style)))
-          (cl:if (cl:char= ch #\Tab)
-                 (cl:let ((next-vcol (cl:* (cl:1+ (cl:floor ch-vcol tab-w)) tab-w)))
-                   (cl:loop :for v :from ch-vcol :below next-vcol
-                            :do (cl:when (cl:and (cl:>= v scroll-vcol)
-                                                 (cl:< v vis-vcol-end))
-                                  (mine/term/screen:screen-set-cell
-                                   scr y (cl:+ text-x (cl:- v scroll-vcol))
-                                   #\Space s))))
-                 (cl:if display-text
-                        (cl:loop :for j :from 0 :below (cl:length display-text)
-                                 :for v := (cl:+ ch-vcol j)
-                                 :do (cl:when (cl:and (cl:>= v scroll-vcol)
-                                                      (cl:< v vis-vcol-end))
-                                       (mine/term/screen:screen-set-cell
-                                        scr y (cl:+ text-x (cl:- v scroll-vcol))
-                                        (cl:char display-text j) s)))
-                        (cl:when (cl:and (cl:plusp ch-width)
-                                         (cl:>= ch-vcol scroll-vcol)
-                                         (cl:<= (cl:+ ch-vcol ch-width) vis-vcol-end))
-                          (mine/term/screen:screen-set-cell
-                           scr y (cl:+ text-x (cl:- ch-vcol scroll-vcol))
-                           ch s))))))
+          (cl:cond
+            ((cl:char= ch #\Tab)
+             (cl:let ((next-vcol (cl:* (cl:1+ (cl:floor ch-vcol tab-w)) tab-w)))
+               (cl:loop :for v :from ch-vcol :below next-vcol
+                        :do (cl:when (cl:and (cl:>= v scroll-vcol)
+                                             (cl:< v vis-vcol-end))
+                              (mine/term/screen:screen-set-cell
+                               scr y (cl:+ text-x (cl:- v scroll-vcol))
+                               #\Space s)))))
+            (display-text
+             (cl:loop :for j :from 0 :below (cl:length display-text)
+                      :for v := (cl:+ ch-vcol j)
+                      :do (cl:when (cl:and (cl:>= v scroll-vcol)
+                                           (cl:< v vis-vcol-end))
+                            (mine/term/screen:screen-set-cell
+                             scr y (cl:+ text-x (cl:- v scroll-vcol))
+                             (cl:char display-text j) s))))
+            ((cl:and (cl:plusp ch-width)
+                     (cl:>= ch-vcol scroll-vcol)
+                     (cl:<= (cl:+ ch-vcol ch-width) vis-vcol-end))
+             (mine/term/screen:screen-set-cell
+              scr y (cl:+ text-x (cl:- ch-vcol scroll-vcol))
+              ch s)))))
       (cl:values)))
 
   (declare draw-line-segment
@@ -1162,7 +1170,7 @@ line)."
     (let text-len = (str:length text))
     (let vcol-map = (%build-vcol-map text tab-w))
     (let vis-vcol-end = (+ scroll-vcol text-width))
-    (let def-bg = (color:.style-bg default-style))
+    (let def-bg = (.style-bg default-style))
     (match tokens
       ((Nil)
        (draw-chars-with-tabs scr y text-x text 0 text-len default-style
@@ -1205,9 +1213,9 @@ line)."
     (match tokens
       ((Nil) (values))
       ((Cons tok rest)
-       (let tok-start = (tok:.token-start tok))
-       (let tok-end = (tok:.token-end tok))
-       (let tok-kind = (tok:.token-kind tok))
+       (let tok-start = (.token-start tok))
+       (let tok-end = (.token-end tok))
+       (let tok-kind = (.token-kind tok))
        (when (and (< tok-start text-len)
                   (< (vec:index-unsafe tok-start vcol-map) vis-vcol-end)
                   (> (vec:index-unsafe (min tok-end text-len) vcol-map) scroll-vcol))
@@ -1215,7 +1223,7 @@ line)."
          (let final-style =
            (if (== def-bg color:ColorDefault)
                style
-               (color:Style (color:.style-fg style) def-bg (color:.style-attr style))))
+               (color:Style (.style-fg style) def-bg (.style-attr style))))
          (draw-chars-with-tabs scr y text-x text tok-start tok-end
                                final-style vcol-map scroll-vcol vis-vcol-end
                                line-buf-offset sel-start sel-end tab-w context))

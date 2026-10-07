@@ -15,13 +15,13 @@
                   (uiop:temporary-directory)))
 
 (defun %editor-write-source (path text)
-  (with-open-file (stream path :direction :output :if-exists :supersede
-                              :external-format (source:source-external-format))
+  (with-open-file (stream path :direction ':output :if-exists ':supersede
+                               :external-format (source:source-external-format))
     (write-string text stream)))
 
 (defun %editor-write-invalid-source (path)
-  (with-open-file (stream path :direction :output :if-exists :supersede
-                              :element-type '(unsigned-byte 8))
+  (with-open-file (stream path :direction ':output :if-exists ':supersede
+                               :element-type '(unsigned-byte 8))
     (write-byte #xff stream)))
 
 (defun check-editor-file-load-errors-preserve-manager ()
@@ -251,7 +251,7 @@
           (let ((preview (%test-current-buffer state)))
             (ops:insert-string! preview (buf:buffer-undo preview) cs "preview edit ")
             (app::dispatch-menu-action! state
-              (uiop:symbol-call :mine-tests/editor-layout :fake-terminal 80 24)
+              (uiop:symbol-call ':mine-tests/editor-layout ':fake-terminal 80 24)
               mine/pane/menubar:ActionCloseProject)
             (dolist (buffer (list dirty preview outside))
               (let ((path (app::%coalton-optional-value-or-nil (buf:buffer-path buffer))))
