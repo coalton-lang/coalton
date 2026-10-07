@@ -1331,6 +1331,43 @@ Uses a dedicated Beam request so diagnostics can stream independently."
           (progn (%send-request! st conn req) (values))
           (values))))))
 
+  (declare %unsaved-project-buffers (MineState -> List buf:Buffer))
+  (define (%unsaved-project-buffers st)
+    "Return the unsaved documents within the open project's directory."
+    (match (cell:read (.ms-project-asd-path st))
+      ((None) Nil)
+      ((Some asd)
+       (let project-dir =
+         (lisp (-> String) (asd)
+           (cl:namestring
+            (cl:make-pathname :name cl:nil :type cl:nil :defaults asd))))
+       (list:filter buf:buffer-dirty?
+                    (mgr:bufmgr-buffers-under-path (.ms-bufmgr st) project-dir)))))
+
+  (declare beam-project! (MineState * term:Terminal -> Void))
+  (define (beam-project! st term)
+    "Beam the project system, first offering to save unsaved project files.
+ASDF loads the project from disk, so unsaved edits would otherwise be ignored."
+    (match (%unsaved-project-buffers st)
+      ((Nil) (load-project-system! st))
+      (unsaved
+       (let count = (length unsaved))
+       (let names = (list:sort (map buf:buffer-name unsaved)))
+       (let help-lines =
+         (if (<= count 5)
+             names
+             (append (list:take 4 names)
+                     (make-list (<> "and " (<> (into (- count 4)) " more"))))))
+       (render-app st term)
+       (when (and (dialogs:confirm-dialog term
+                                          "Project files have unsaved changes."
+                                          "Save and Beam"
+                                          "Cancel"
+                                          help-lines
+                                          (fn (t) (render-app st t)))
+                  (list:all (fn (buffer) (%save-document! st buffer)) unsaved))
+         (load-project-system! st)))))
+
 ;;; Debugger helpers (Coalton wrappers around thin CL)
 
   (declare dbg-move-selection! (MineState * IFix -> Void))
@@ -3653,25 +3690,35 @@ Return False, changing nothing, when no non-empty selection is active."
 
 ;;; Extracted command functions (used by menu actions and key bindings)
 
+  (declare %save-document! (MineState * buf:Buffer -> Boolean))
+  (define (%save-document! st buf)
+    "Save BUF, refreshing the project tree when it is the project .asd.
+Return False after reporting a failed save."
+    (match (mgr:bufmgr-save! (.ms-bufmgr st) (buf:buffer-id buf))
+      ((Ok _)
+       (status:statusbar-set-message! (.ms-status st) "Saved")
+       ;; If this is the project .asd, refresh the tree
+       (match (Tuple (buf:buffer-path buf) (cell:read (.ms-project-asd-path st)))
+         ((Tuple (Some saved-path) (Some asd-path))
+          (when (== saved-path asd-path)
+            (match (parser:parse-asd-to-tree asd-path)
+              ((Some root-node)
+               (tree:tree-pane-set-root! (.ms-tree st) root-node)
+               (status:statusbar-set-message! (.ms-status st) "Saved — project refreshed"))
+              ((None)
+               (user-error! st "Saved, but .asd has errors (project tree not updated)")))))
+         (_ (values)))
+       True)
+      ((Err msg)
+       (user-error! st msg)
+       False)))
+
   (declare save-current-file! (MineState -> Void))
   (define (save-current-file! st)
     (match (mgr:bufmgr-current (.ms-bufmgr st))
       ((Some buf)
-       (match (mgr:bufmgr-save! (.ms-bufmgr st) (buf:buffer-id buf))
-         ((Ok _)
-          (status:statusbar-set-message! (.ms-status st) "Saved")
-          ;; If this is the project .asd, refresh the tree
-          (match (Tuple (buf:buffer-path buf) (cell:read (.ms-project-asd-path st)))
-            ((Tuple (Some saved-path) (Some asd-path))
-             (when (== saved-path asd-path)
-               (match (parser:parse-asd-to-tree asd-path)
-                 ((Some root-node)
-                  (tree:tree-pane-set-root! (.ms-tree st) root-node)
-                  (status:statusbar-set-message! (.ms-status st) "Saved — project refreshed"))
-                 ((None)
-                  (user-error! st "Saved, but .asd has errors (project tree not updated)")))))
-            (_ (values))))
-         ((Err msg) (user-error! st msg))))
+       (%save-document! st buf)
+       (values))
       ((None)
        (user-error! st "No file open"))))
 
@@ -4254,7 +4301,7 @@ Enter or Space inserts the matching Unicode character at the cursor."
                                                 complete:complete-project-path)
        (mini:minibuffer-set-footer-hint! (.ms-minibuffer st)
                                          "Tab to complete, Enter to open, Ctrl+g to cancel"))
-      ((menubar:ActionBeamSystem) (load-project-system! st))
+      ((menubar:ActionBeamSystem) (beam-project! st term))
       ((menubar:ActionRefreshProject) (refresh-project! st))
       ((menubar:ActionCloseProject)
        (match (cell:read (.ms-project-asd-path st))

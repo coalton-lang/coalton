@@ -196,6 +196,63 @@
           (%check (string= "(XYZalpha beta gamma)" (text))
                   "Paste without a selection did not insert at the cursor: ~S" (text)))))))
 
+(defun check-beam-project-offers-to-save-project-files ()
+  (with-test-directory (directory)
+    (let* ((project (merge-pathnames "Project/" directory))
+           ;; ASDF keeps an already registered system's location, so use a
+           ;; system name that no other test defines.
+           (asd (namestring (merge-pathnames "beam-save-demo.asd" project)))
+           (source (namestring (merge-pathnames "main.lisp" project)))
+           (outside (namestring (merge-pathnames "outside.lisp" directory)))
+           (state (%test-state))
+           (cs (mine/app/state:get-cursor-state state))
+           (input (mine/term/terminal::%terminal-input-runtime-new))
+           (terminal (mine/term/terminal:Terminal (mine/term/screen:screen-new 100 30)
+                                                  (coalton/cell:new coalton:False)
+                                                  input
+                                                  (coalton/cell:new (coalton/vector:new))
+                                                  (coalton/cell:new 100)
+                                                  (coalton/cell:new 30)))
+           (beams 0))
+      (ensure-directories-exist project)
+      (%write-utf8-file asd "(asdf:defsystem \"beam-save-demo\" :components ((:file \"main\")))")
+      (%write-utf8-file source "(defun f () 1)")
+      (%write-utf8-file outside "outside")
+      (app::open-project-at-path! state asd)
+      (let ((main (%test-current-buffer state)))
+        (ops:insert-string! main (buf:buffer-undo main) cs "edited ")
+        (app::open-loose-file! state outside)
+        (let ((other (%test-current-buffer state)))
+          (ops:insert-string! other (buf:buffer-undo other) cs "unsaved ")
+          (flet ((beam (answer)
+                   ;; A dialog that should not appear consumes ANSWER and cancels.
+                   (sb-concurrency:send-message
+                    (mine/term/terminal::%terminal-input-runtime-mailbox input)
+                    (input:IEvKey (input:KeyChar answer) input:ModNone))
+                   (let ((*standard-output* (make-broadcast-stream)))
+                     (app::dispatch-menu-action! state terminal mine/pane/menubar:ActionBeamSystem))))
+            (%call-with-replaced-runtime-function
+             'app::load-project-system!
+             (lambda (state)
+               (declare (ignore state))
+               (incf beams))
+             (lambda ()
+               (beam #\n)
+               (%check (zerop beams) "Beam Project ran after the user cancelled")
+               (%check (and (buf:buffer-dirty? main)
+                            (string= "(defun f () 1)" (uiop:read-file-string source)))
+                       "Cancelling Beam Project saved the project file")
+               (beam #\y)
+               (%check (= 1 beams) "Save and Beam did not beam the project")
+               (%check (and (not (buf:buffer-dirty? main))
+                            (string= "edited (defun f () 1)" (uiop:read-file-string source)))
+                       "Save and Beam did not save the project file first")
+               (%check (buf:buffer-dirty? other)
+                       "Save and Beam saved a document outside the project")
+               (beam #\n)
+               (%check (= 2 beams)
+                       "Beam Project asked to save a project without unsaved files")))))))))
+
 (defun check-preview-keeps-permanently-open-buffer ()
   (with-test-directory (directory)
     (let* ((state (%test-state))
@@ -416,6 +473,7 @@
                   check-editor-undo-redo-after-save-is-dirty
                   check-editor-delete-keys-remove-selection
                   check-editor-paste-replaces-selection
+                  check-beam-project-offers-to-save-project-files
                   check-preview-keeps-permanently-open-buffer
                   check-streamed-output-keeps-line-boundaries
                   check-streamed-output-extends-unfinished-line
