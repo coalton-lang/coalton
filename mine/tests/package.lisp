@@ -70,6 +70,8 @@
                   check-indent-plain-text-mode-never-indents
                   check-indent-runtime-rules-resolve-shadowed-cl-symbols
                   check-indent-runtime-rules-use-cl-user-for-lisp-default
+                  check-indent-runtime-rules-fall-back-until-package-exists
+                  check-indent-newline-before-project-package-exists
                   check-indent-newline-before-close-paren-uses-blank-context
                   check-editor-nonprinting-character-widths
                   check-crlf-line-text-and-editor-unit-boundaries

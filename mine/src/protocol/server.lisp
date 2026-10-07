@@ -410,8 +410,8 @@ Returns :quit if the server should shut down, T otherwise."
          (handle-arglist id function-name package-name stream)))
 
       (:indent-rules
-       (destructuring-bind (id heads package-name) (rest msg)
-         (handle-indent-rules id heads package-name stream)))
+       (destructuring-bind (id heads package-name &optional fallback-package-name) (rest msg)
+         (handle-indent-rules id heads package-name stream fallback-package-name)))
 
       (:coalton-type-of
        (destructuring-bind (id symbol-name package-name) (rest msg)
@@ -631,23 +631,30 @@ indentation only when the runtime can expose a macro lambda list containing
                 (and defmethod-p t)))
         (list head nil nil nil nil nil))))
 
-(defun %indent-rule-specs-for-heads (heads package-name)
-  "Return indentation rule specs for HEADS resolved in PACKAGE-NAME."
-  (let ((seen (make-hash-table :test 'equal))
+(defun %indent-rule-specs-for-heads (heads package-name &optional fallback-package-name)
+  "Return indentation rule specs for HEADS resolved in PACKAGE-NAME.
+Until that package exists, as before its project is loaded, resolve HEADS in
+FALLBACK-PACKAGE-NAME instead."
+  (let ((package-name (if (and fallback-package-name
+                               (not (%find-indent-package package-name)))
+                          fallback-package-name
+                          package-name))
+        (seen (make-hash-table :test 'equal))
         (result nil))
     (dolist (head heads (nreverse result))
       (when (and (stringp head) (not (gethash head seen)))
         (setf (gethash head seen) t)
         (push (%indent-rule-spec-for-head head package-name) result)))))
 
-(defun handle-indent-rules (id heads package-name stream)
+(defun handle-indent-rules (id heads package-name stream &optional fallback-package-name)
   "Handle an :indent-rules request."
   (handler-case
       (write-message stream
                      `(:return ,id
                        (:ok ,(%indent-rule-specs-for-heads
                               (if (listp heads) heads nil)
-                              package-name))))
+                              package-name
+                              fallback-package-name))))
     (error (c)
       (write-message stream
                      `(:return ,id

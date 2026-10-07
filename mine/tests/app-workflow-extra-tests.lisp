@@ -42,15 +42,16 @@
       (let ((buffer (%test-current-buffer state)))
         (%call-with-replaced-runtime-function
          'app::%request-indent-rules
-         (lambda (state heads package &optional timeout)
+         (lambda (state heads package fallback &optional timeout)
            (declare (ignore state timeout))
-           (push (list heads package) calls)
+           (push (list heads package fallback) calls)
            nil)
          (lambda ()
            (app::%reindent-line-range! state buffer (buf:buffer-undo buffer)
                                       (mine/app/state:get-cursor-state state) 0 2)))
         (%check (= 1 (length calls)) "Range indentation made ~D metadata queries" (length calls))
         (%check (string= "CL-USER" (second (first calls))) "Wrong default indentation package")
+        (%check (string= "CL-USER" (third (first calls))) "Wrong fallback indentation package")
         (%check (search (format nil "\"first~%    literal\"")
                         (gap:gap-to-string (buf:buffer-gap buffer)))
                 "Range indentation changed string contents")))))
