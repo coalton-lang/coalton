@@ -2516,7 +2516,8 @@ Return False, changing nothing, when no non-empty selection is active."
 
   (declare %indent-default-package (MineState * buf:Buffer -> String))
   (define (%indent-default-package st buffer)
-    "Return the package used when a buffer has no preceding in-package form."
+    "Return the package used when a buffer has no preceding in-package form,
+or when the package it names does not exist yet."
     (match (buf:buffer-mode buffer)
       ((buf:ModeLisp) "CL-USER")
       ((buf:ModeCoalton) (cell:read (.ms-repl-package st)))
@@ -2536,10 +2537,12 @@ Return False, changing nothing, when no non-empty selection is active."
       ((Nil) Nil)
       (_
        (let pkg = (%prepared-indent-package st buffer prepared))
-       (lisp (-> (List indent:IndentRuleEntry)) (st heads pkg)
-         (cl:or (%request-indent-rules st heads pkg)
+       (let fallback = (%indent-default-package st buffer))
+       (lisp (-> (List indent:IndentRuleEntry)) (st heads pkg fallback)
+         (cl:or (%request-indent-rules st heads pkg fallback)
                 (cl:mapcar #'%indent-rule-from-spec
-                           (mine/protocol/server::%indent-rule-specs-for-heads heads pkg)))))))
+                           (mine/protocol/server::%indent-rule-specs-for-heads
+                            heads pkg fallback)))))))
 
   (declare %target-indent-for-line! (MineState * buf:Buffer * UFix -> Optional UFix))
   (define (%target-indent-for-line! st buffer line)
@@ -2635,8 +2638,9 @@ Return False, changing nothing, when no non-empty selection is active."
                                 (filter (fn ((Tuple key _)) (not (== key package))) (cell:read groups)))))
            (collect (+ current 1))))
        (let batches = (cell:read groups))
-       (let rules = (lisp (-> (List (Tuple String (List indent:IndentRuleEntry)))) (st batches)
-                       (%request-indent-rule-batches st batches)))
+       (let fallback = (%indent-default-package st buffer))
+       (let rules = (lisp (-> (List (Tuple String (List indent:IndentRuleEntry)))) (st batches fallback)
+                       (%request-indent-rule-batches st batches fallback)))
        (rec apply-lines ((current line))
          (when (and (<= current end-line) (< current line-count))
            ;; Earlier edits change columns; only metadata is retained across lines.
@@ -5608,12 +5612,15 @@ where IDX is the index of the item in ITEMS."
     (cl:error ()
       (mine/syntax/indent:IndentRuleEntry "" mine/syntax/indent:RuleGeneric))))
 
-(cl:defun %request-indent-rules (st heads package-name cl:&optional (timeout-seconds 0.15))
-  "Synchronously ask the runtime image for indentation rules for HEADS."
+(cl:defun %request-indent-rules (st heads package-name fallback-package-name
+                                 cl:&optional (timeout-seconds 0.15))
+  "Synchronously ask the runtime image for indentation rules for HEADS.
+FALLBACK-PACKAGE-NAME applies while PACKAGE-NAME does not exist in the runtime."
   (cl:let* ((rid (%next-request-id-cl st))
             (reply (%sync-runtime-request
                     st
-                    (msg:ReqIndentRules (msg:RequestId rid) heads package-name) timeout-seconds)))
+                    (msg:ReqIndentRules (msg:RequestId rid) heads package-name fallback-package-name)
+                    timeout-seconds)))
     (cl:when (cl:and (cl:consp reply)
                      (cl:eq (cl:first reply) ':return)
                      (cl:eql (cl:second reply) rid))
@@ -5621,7 +5628,7 @@ where IDX is the index of the item in ITEMS."
         (cl:when (cl:and (cl:consp payload) (cl:eq (cl:first payload) ':ok))
           (cl:mapcar #'%indent-rule-from-spec (cl:second payload)))))))
 
-(cl:defun %request-indent-rule-batches (st batches)
+(cl:defun %request-indent-rule-batches (st batches fallback-package-name)
   "Use one overall budget; missing or late metadata uses local known rules."
   (cl:let ((deadline (cl:+ (cl:get-internal-real-time)
                             (cl:ceiling (cl:* 0.15 cl:internal-time-units-per-second)))))
@@ -5631,9 +5638,11 @@ where IDX is the index of the item in ITEMS."
                  (remaining (cl:/ (cl:- deadline (cl:get-internal-real-time))
                                    cl:internal-time-units-per-second))
                  (rules (cl:or (cl:when (cl:plusp remaining)
-                                  (%request-indent-rules st heads package remaining))
+                                  (%request-indent-rules st heads package fallback-package-name
+                                                         remaining))
                                (cl:mapcar #'%indent-rule-from-spec
-                                          (mine/protocol/server::%indent-rule-specs-for-heads heads package)))))
+                                          (mine/protocol/server::%indent-rule-specs-for-heads
+                                           heads package fallback-package-name)))))
          (Tuple package rules)))
      batches)))
 (cl:defun %send-quick-result-interrupt-cl (st target-id)

@@ -550,12 +550,12 @@
              (mine/protocol/wire:encode-sexpr (mine/protocol/messages:request-to-sexpr request))))
      "Typed interrupt request has the wrong wire shape"))
   (%runtime-check
-   (equal '(:indent-rules 82 ("let" "when") "CL-USER")
+   (equal '(:indent-rules 82 ("let" "when") "PROJECT" "CL-USER")
           (mine/protocol/server::decode-protocol-sexp
            (mine/protocol/wire:encode-sexpr
             (mine/protocol/messages:request-to-sexpr
              (mine/protocol/messages:ReqIndentRules
-              (mine/protocol/messages:RequestId 82) '("let" "when") "CL-USER")))))
+              (mine/protocol/messages:RequestId 82) '("let" "when") "PROJECT" "CL-USER")))))
    "Typed indentation request has the wrong wire shape")
   (%call-with-runtime-wire-file
    (lambda (stream)
