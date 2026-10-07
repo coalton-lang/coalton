@@ -4690,8 +4690,8 @@ as a recursive function rather than a recursive value."
 
             (multiple-value-setq (preds subs)
               (tc:default-builder-context (tc-env-env env) (append env-tvars local-tvars) preds subs))
-            ;; Expanding a builder can expose requirements already supplied by
-            ;; the declaration, such as RuntimeRepr for a polymorphic element.
+            ;; Expanding a builder can expose its instance's element
+            ;; constraints, which the declaration may already supply.
             (setf preds
                   (remove-if
                    (lambda (p) (tc:entail (tc-env-env env) (tc:apply-substitution subs expr-preds) p))

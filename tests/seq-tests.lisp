@@ -418,7 +418,12 @@ is the root of its tree."
 
   (declare seq-test-valid? (seq:Seq :a -> Boolean))
   (define (seq-test-valid? s)
-    (list:null? (seq-test-violations s True))))
+    (list:null? (seq-test-violations s True)))
+
+  (declare seq-test-twice (seq:Seq :a -> seq:Seq :a))
+  (define (seq-test-twice s)
+    "Polymorphic uses of Seq need no constraint on its elements."
+    (<> (seq:conc s (seq:new)) (<> mempty (iter:collect! (iter:into-iter s))))))
 
 (define-test seq-conc-keeps-invariants ()
   ;; Each of these concatenations used to mix subtrees of different
@@ -500,7 +505,8 @@ is the root of its tree."
   (is (== (seq:make 1 2 3) (the (seq:Seq Integer) [1 2 3])))
   (is (== (seq:make (Tuple 1 "one") (Tuple 2 "two"))
           (the (seq:Seq (Tuple Integer String)) [1 => "one" 2 => "two"])))
-  (is (== (seq:make 0 1 4) [(* x x) :for x :below 3])))
+  (is (== (seq:make 0 1 4) [(* x x) :for x :below 3]))
+  (is (== (seq:conc s32 s32) (seq-test-twice s32))))
 
 (define-test seq-equality-and-printing ()
   (let a = (seq-test-of-size 5000))

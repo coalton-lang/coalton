@@ -176,7 +176,7 @@ A polymorphic wrapper retains the conversion constraint:
 
 The wrapper works with user-defined foldable collections as well. Its callers
 select the conversion, so a later specialization is respected. Declaring only
-`Foldable :f` and `RuntimeRepr :a` would not suffice: those are the
-context of one candidate instance, and another instance may be selected.
+`Foldable :f` would not suffice: that is the context of one candidate
+instance, and another instance may be selected.
 Likewise, a polymorphic identity conversion needs `Into :a :a`; ordinary
 identity functions can simply return their argument.
