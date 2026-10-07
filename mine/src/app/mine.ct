@@ -3513,14 +3513,6 @@ or when the package it names does not exist yet."
          (screen-to-buffer-pos st col row rect)))
       ((None) (values))))
 
-  (declare %scrollbar-compute-offset (UFix * UFix * UFix -> UFix))
-  (define (%scrollbar-compute-offset rel-y total pane-h)
-    "Map a relative Y position to a scroll offset."
-    (lisp (-> UFix) (rel-y total pane-h)
-      (cl:min (cl:max 0 (cl:- total pane-h))
-              (cl:floor (cl:* rel-y (cl:max 1 (cl:- total pane-h)))
-                        (cl:max 1 (cl:1- pane-h))))))
-
   (declare center-geometry-for-terminal (MineState * term:Terminal -> layout:CenterGeometry))
   (define (center-geometry-for-terminal st term)
     (let current-layout = (cell:read (.ms-layout st)))
@@ -3632,7 +3624,7 @@ to a row offset within the bar. Uses the same rectangles as the renderers."
                    (> (.rect-width rect) (+ (editor:editor-pane-gutter-width (.ms-editor st) gb) 1)))
               (Some (Tuple (%rightmost-column rect)
                            (fn (offset)
-                             (%scroll-editor-to! st rect (%scrollbar-compute-offset offset total height)))))
+                             (%scroll-editor-to! st rect (render:scrollbar-offset-at offset total height)))))
               None))
          (_ None)))
       ((GrabReplScrollbar)
@@ -3647,9 +3639,9 @@ to a row offset within the bar. Uses the same rectangles as the renderers."
               (Some (Tuple (%rightmost-column rect)
                            (fn (offset)
                              (if debugger?
-                                 (dbg-set-scroll! st (%scrollbar-compute-offset offset total height))
+                                 (dbg-set-scroll! st (render:scrollbar-offset-at offset total height))
                                  (repl:repl-pane-set-output-scroll!
-                                  (.ms-repl st) (%scrollbar-compute-offset offset total height))))))
+                                  (.ms-repl st) (render:scrollbar-offset-at offset total height))))))
               None))
          ((None) None)))))
 
