@@ -299,3 +299,32 @@ error: Functional dependency improvement does not terminate
     |
  13 |    (if b (mul x (Vec y)) y))
     |           ^^^ improving Mul :A (Vec :C) :C with functional dependencies does not reach a fixed point
+
+================================================================================
+115 Fundep improvement determines dependents through an instance context once
+================================================================================
+
+(package coalton-unit-test/fundeps)
+
+(define-class (C :a :b :c (:a -> :b))
+  (cm (:a * :c -> :b)))
+
+(define-class (D :a :x (:a -> :x)))
+
+(define-instance (D Integer String))
+
+(define-instance (D :a :x => C :a (List :x) Boolean)
+  (define (cm _ _) Nil))
+
+(define (f) (cm (the Integer 1) #\c))
+
+(declare g (Void -> List String))
+(define (g) (f))
+
+--------------------------------------------------------------------------------
+
+error: Unknown instance
+  --> test:16:13
+    |
+ 16 |  (define (g) (f))
+    |               ^ Unknown instance C Integer (List String) Char
