@@ -60,16 +60,20 @@ This symbol may be bound to a string source in the case of direct evaluation in 
       (source-filename)
       "repl"))
 
-(defun read-lisp (stream source first-form)
-  "Helper for MAYBE-READ-COALTON when the first form wasn't Coalton: revert to reading plain Lisp."
+(defun read-lisp (stream source first-form start)
+  "Helper for MAYBE-READ-COALTON when the first form wasn't Coalton: revert to reading plain Lisp.
+START is the FILE-POSITION on STREAM of the open parenthesis that began the list."
   (let ((collected-forms (list (cst:raw first-form)))
         (dotted-context nil))
     (loop :do
       (handler-case
-          (multiple-value-bind (form presentp)
+          (multiple-value-bind (form presentp eofp)
               (parser:maybe-read-form stream source)
 
             (cond
+              (eofp
+               (parser:error-unterminated-form stream source start))
+
               ((and (not presentp)
                     dotted-context)
                (error "Invalid dotted list"))
@@ -91,9 +95,10 @@ This symbol may be bound to a string source in the case of direct evaluation in 
           (setf dotted-context t)
           (eclector.reader:recover c))))))
 
-(defun maybe-read-coalton (stream source)
+(defun maybe-read-coalton (stream source start)
   "If the first form on STREAM indicates that Coalton code is present, read a program, and perform the indicated operation (compile, codegen, etc.).
-SOURCE provides metadata for the stream argument, for error messages."
+SOURCE provides metadata for the stream argument, for error messages, and START
+is the offset of the opening parenthesis that began the current form."
   (parser:with-coalton-reader-context stream
     (let ((first-form
             (multiple-value-bind (form presentp)
@@ -130,7 +135,7 @@ SOURCE provides metadata for the stream argument, for error messages."
 
         ;; Fall back to reading the list manually.
         (t
-         (read-lisp stream source first-form))))))
+         (read-lisp stream source first-form start))))))
 
 (defun source-span-matches-mode-p (source mode span)
   "Return true when SPAN in SOURCE starts with MODE."
@@ -196,7 +201,7 @@ the opening parenthesis that began the current form."
            ;; Consume the original source form now, but compile it later from
            ;; the exact source span so repeated compiler passes do not
            ;; monomorphize or inline the same form more than once.
-           (read-lisp stream source first-form)
+           (read-lisp stream source first-form start)
            (make-deferred-coalton-form mode
                                        source
                                        (normalized-source-span stream
@@ -205,7 +210,7 @@ the opening parenthesis that began the current form."
                                                                start
                                                                (file-position stream))))
           (t
-           (read-lisp stream source first-form)))))))
+           (read-lisp stream source first-form start)))))))
 
 (defun expand-source-coalton-form-1 (mode source span)
   "Compile the Coalton form identified by MODE from SOURCE at SPAN.
@@ -271,7 +276,7 @@ It ensures the presence of source metadata for STREAM and then calls MAYBE-READ-
       (*source*
        ;; source metadata exists, probably courtesy of compile-forms: do
        ;; nothing
-       (maybe-read-coalton stream *source*))
+       (maybe-read-coalton stream *source* start))
       ((source-filename)
        ;; no metadata, and a compile or load operation is occurring:
        ;; bind a source-file
