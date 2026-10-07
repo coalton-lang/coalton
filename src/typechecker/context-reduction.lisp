@@ -483,11 +483,12 @@ respective superclass predicate is passed to this function."
                                     (known pred-tys)
                                     (known (ty-predicate-types expr-pred)))))
                     expr-preds)))
-            ;; There should always be an associated expression
-            ;; predicate.
+            ;; Without an associated expression predicate, there is
+            ;; nothing to unify the determined types with. PRED is then
+            ;; satisfied by an instance, possibly once its types are
+            ;; defaulted, or reported as missing from the declaration.
             (when (null expr-pred)
-              (util:coalton-bug
-                (format nil "No expression predicate matches ~a." pred)))
+              (return-from fundep-entail% nil))
             ;; So, we create substitutions based on the
             ;; newly-determined types.
             (loop :with expr-pred-tys := (ty-predicate-types expr-pred)
