@@ -177,6 +177,7 @@ automatically based on each item's height."
      (Section "REPL")
      (Binding "Enter"     "Evaluate")
      (Binding "↑ / ↓"     "History")
+     (Binding "Ctrl+c"    "Copy text selected with the mouse")
      (Binding ",restart"  "Restart runtime (clean slate)")
      (Binding ",clear"    "Clear REPL output")
      (Binding ",coalton"  "Switch to Coalton mode")

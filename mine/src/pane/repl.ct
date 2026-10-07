@@ -45,6 +45,9 @@
    #:repl-pane-clear-selection!
    #:repl-pane-has-selection?
    #:repl-pane-copy-selection!
+   #:repl-pane-place-input-cursor! #:repl-pane-drag-input-cursor!
+   #:repl-pane-input-selecting? #:repl-pane-input-selected-text
+   #:repl-pane-clear-input-selection!
    #:repl-pane-input-cursor
    #:repl-pane-paste-to-input!
    #:repl-pane-replace-input-range!
@@ -276,6 +279,35 @@
   (define (repl-pane-copy-selection! rp)
     "Return the selected text from the output."
     (widget-text:text-widget-selected-text (.output rp)))
+
+  ;;; Input selection
+
+  (declare repl-pane-place-input-cursor! (ReplPane * wt:Rect * UFix * UFix -> Void))
+  (define (repl-pane-place-input-cursor! rp rect col row)
+    "Move the input cursor to COL and ROW in the REPL drawn in RECT, where a
+mouse selection of the input may start."
+    (let iw = (.input-widget rp))
+    (widget-input:input-widget-place-cursor!
+     iw (widget-input:input-widget-index-at iw (.rg-input (repl-pane-geometry rp rect)) col row)))
+
+  (declare repl-pane-drag-input-cursor! (ReplPane * wt:Rect * UFix * UFix -> Void))
+  (define (repl-pane-drag-input-cursor! rp rect col row)
+    "Extend a mouse selection of the input to COL and ROW in the REPL drawn in RECT."
+    (let iw = (.input-widget rp))
+    (widget-input:input-widget-drag-cursor!
+     iw (widget-input:input-widget-index-at iw (.rg-input (repl-pane-geometry rp rect)) col row)))
+
+  (declare repl-pane-input-selecting? (ReplPane -> Boolean))
+  (define (repl-pane-input-selecting? rp)
+    (widget-input:input-widget-selecting? (.input-widget rp)))
+
+  (declare repl-pane-input-selected-text (ReplPane -> Optional String))
+  (define (repl-pane-input-selected-text rp)
+    (widget-input:input-widget-selected-text (.input-widget rp)))
+
+  (declare repl-pane-clear-input-selection! (ReplPane -> Void))
+  (define (repl-pane-clear-input-selection! rp)
+    (widget-input:input-widget-clear-selection! (.input-widget rp)))
 
   (declare repl-pane-paste-to-input! (ReplPane * String -> Void))
   (define (repl-pane-paste-to-input! rp text)

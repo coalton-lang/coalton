@@ -3133,13 +3133,19 @@ or when the package it names does not exist yet."
        (match key
          ;; Enter handled in make-handler
          ((input:KeyEnter) (values))
-         ;; Ctrl+c -> copy REPL output selection
+         ;; Ctrl+c -> copy the REPL input or output selection
          ((input:KeyCtrl #\c)
-          (when (repl:repl-pane-has-selection? (.ms-repl st))
-            (let text = (repl:repl-pane-copy-selection! (.ms-repl st)))
-            (clipboard:clipboard-copy! text)
-            (repl:repl-pane-clear-selection! (.ms-repl st))
-            (status:statusbar-set-message! (.ms-status st) "Copied"))
+          (match (repl:repl-pane-input-selected-text (.ms-repl st))
+            ((Some text)
+             (clipboard:clipboard-copy! text)
+             (repl:repl-pane-clear-input-selection! (.ms-repl st))
+             (status:statusbar-set-message! (.ms-status st) "Copied"))
+            ((None)
+             (when (repl:repl-pane-has-selection? (.ms-repl st))
+               (let text = (repl:repl-pane-copy-selection! (.ms-repl st)))
+               (clipboard:clipboard-copy! text)
+               (repl:repl-pane-clear-selection! (.ms-repl st))
+               (status:statusbar-set-message! (.ms-status st) "Copied"))))
           (values))
          ;; Ctrl+v -> paste into REPL input
          ((input:KeyCtrl #\v)
@@ -3726,7 +3732,10 @@ Return False if no scrollbar is grabbed."
              (let ((line (+ (repl:repl-pane-output-scroll (.ms-repl st)) (- row (.rect-y output-rect)))))
                (repl:repl-pane-start-selection! (.ms-repl st) line (- col (.rect-x output-rect)))))
             (True
-             (repl:repl-pane-clear-selection! (.ms-repl st)))))
+             (repl:repl-pane-clear-selection! (.ms-repl st))
+             (when (layout:rect-contains? (.rg-input (repl:repl-pane-geometry (.ms-repl st) rect))
+                                          col row)
+               (repl:repl-pane-place-input-cursor! (.ms-repl st) rect col row)))))
          ((None) (values))))
       (True (values))))
 
@@ -4479,6 +4488,17 @@ Render-app is NOT called here; the main loop handles rendering."
         ((ev:EvMouse (input:MouseRelease) _ _ _)
          (cell:write! (.ms-scrollbar-grab st) None)
          (values))
+        ;; A REPL input selection lasts until the next click or key other than
+        ;; Ctrl+c, so no key can edit the input while it is selected.
+        ((ev:EvMouse (input:MousePress) button _ _)
+         (match button
+           ((input:MouseScrollUp) (values))
+           ((input:MouseScrollDown) (values))
+           (_ (repl:repl-pane-clear-input-selection! (.ms-repl st)))))
+        ((ev:EvKey key _mod)
+         (match key
+           ((input:KeyCtrl #\c) (values))
+           (_ (repl:repl-pane-clear-input-selection! (.ms-repl st)))))
         (_ (values)))
       (cond
         ;; Escape / Ctrl+g cancel a pending Quick Result or dismiss a completed popup.
@@ -4634,6 +4654,11 @@ Render-app is NOT called here; the main loop handles rendering."
                          (True
                           (repl:repl-pane-extend-selection! (.ms-repl st)
                             (+ (repl:repl-pane-output-scroll (.ms-repl st)) (- row repl-y)) rcol)))))
+                    ((None) (values))))
+                 ((and (== (focus:focus-current (.ms-focus st)) focus:FocusRepl)
+                       (repl:repl-pane-input-selecting? (.ms-repl st)))
+                  (match (.cg-repl (center-geometry-for-terminal st term))
+                    ((Some rect) (repl:repl-pane-drag-input-cursor! (.ms-repl st) rect col row))
                     ((None) (values))))
                  (True
                   (when (== (focus:focus-current (.ms-focus st)) focus:FocusEditor)
