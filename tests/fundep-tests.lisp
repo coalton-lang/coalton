@@ -841,3 +841,26 @@ must be distinguished even though the predicate-only variables are ambiguous."
     (declare use ((Foo (coalton/monad/statet:StateT (Env Integer String) :m) :act :i :w :f)
                   => :i -> coalton/monad/statet:StateT (Env Integer String) :m (Decision :act :f)))
     (define (use x) (call-model x))"))
+
+(deftest fundep-conflicting-inferred-predicates ()
+  ;; Both uses of CM share the determinant :a but not its dependent.
+  (dolist (body '("(g (cm x) (cm x))"
+                  ;; TYPE-OF reports internal type errors as type mismatches.
+                  "(type-of (g (cm x) (cm x)))"
+                  "(type-of (rec loop ((i x)) (g (cm i) (cm i))))"))
+    (is (search "Context conflicts with functional dependencies"
+                (handler-case
+                    (progn
+                      (check-coalton-types
+                       (format nil
+                               "(define-class (C :a :b (:a -> :b))
+                                  (cm (:a -> :b)))
+
+                                (declare g (String * Integer -> Unit))
+                                (define (g _ _) Unit)
+
+                                (define (f x) ~A)"
+                               body))
+                      "")
+                  (tc:tc-error (e)
+                    (princ-to-string e)))))))

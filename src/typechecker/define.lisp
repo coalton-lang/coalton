@@ -135,13 +135,30 @@
                                      (type-object-string pred env))
                                    preds)))))
 
+(defun error-context-fundep-conflict (condition location env)
+  "Report CONDITION at one of its predicates with source information, or at LOCATION."
+  (declare (type tc:context-fundep-conflict condition)
+           (type source:location location))
+  (let* ((first-pred (tc:context-fundep-conflict-first-pred condition))
+         (second-pred (tc:context-fundep-conflict-second-pred condition))
+         (located-pred (find-if #'source:location (list second-pred first-pred))))
+    (tc-error "Context conflicts with functional dependencies"
+              (tc-location (if located-pred
+                               (source:location located-pred)
+                               location)
+                           "the predicates ~A and ~A conflict with functional dependencies"
+                           (type-object-string first-pred env)
+                           (type-object-string second-pred env)))))
+
 (defmacro with-fundep-errors ((location env) &body body)
   "Report errors from solving functional dependencies in BODY as type errors
 at LOCATION, unless the predicates involved have their own locations."
   (let ((condition (gensym "CONDITION")))
     `(handler-case (progn ,@body)
        (tc:fundep-nontermination (,condition)
-         (error-fundep-nontermination ,condition ,location ,env)))))
+         (error-fundep-nontermination ,condition ,location ,env))
+       (tc:context-fundep-conflict (,condition)
+         (error-context-fundep-conflict ,condition ,location ,env)))))
 
 (defun standard-expression-type-mismatch-error (node subs expected-type ty)
   "Utility for signalling a type-mismatch error in INFER-EXPRESSION-TYPE"
@@ -1120,29 +1137,32 @@ Returns four values:
            (type tc:substitution-list subs)
            (type tc-env env)
            (values tc:ty-scheme tc:substitution-list &optional))
-  (multiple-value-bind (ty preds accessors _ subs)
-      (infer-expression-type node
-                             (tc:make-variable :kind tc:+kstar+ :allow-result-p t)
-                             subs
-                             env)
-    (declare (ignore _))
-    (multiple-value-bind (preds subs)
-        (tc:solve-fundeps (tc-env-env env) preds subs)
-      (setf accessors (tc:apply-substitution subs accessors))
-      (multiple-value-bind (accessors subs_)
-          (solve-accessors accessors (tc-env-env env))
-        (setf subs (tc:compose-substitution-lists subs subs_))
-        (when accessors
-          (tc:tc-error "Ambiguous accessor"
-                       (source:note (first accessors)
-                                    "accessor is ambiguous")))
-        (let* ((preds (tc:reduce-context (tc-env-env env) preds subs))
-               (ty (tc:apply-substitution subs ty))
-               (qual-ty (tc:qualify preds ty)))
-          (values
-           (tc:remove-source-info
-            (tc:quantify (tc:type-variables qual-ty) qual-ty))
-           subs))))))
+  ;; TYPE-OF reports internal type errors from inferring its expression as
+  ;; type mismatches, so report errors from functional dependencies here.
+  (with-fundep-errors ((source:location node) env)
+    (multiple-value-bind (ty preds accessors _ subs)
+        (infer-expression-type node
+                               (tc:make-variable :kind tc:+kstar+ :allow-result-p t)
+                               subs
+                               env)
+      (declare (ignore _))
+      (multiple-value-bind (preds subs)
+          (tc:solve-fundeps (tc-env-env env) preds subs)
+        (setf accessors (tc:apply-substitution subs accessors))
+        (multiple-value-bind (accessors subs_)
+            (solve-accessors accessors (tc-env-env env))
+          (setf subs (tc:compose-substitution-lists subs subs_))
+          (when accessors
+            (tc:tc-error "Ambiguous accessor"
+                         (source:note (first accessors)
+                                      "accessor is ambiguous")))
+          (let* ((preds (tc:reduce-context (tc-env-env env) preds subs))
+                 (ty (tc:apply-substitution subs ty))
+                 (qual-ty (tc:qualify preds ty)))
+            (values
+             (tc:remove-source-info
+              (tc:quantify (tc:type-variables qual-ty) qual-ty))
+             subs)))))))
 
 (defun rec-node-bindings-independent-p (node)
   "Return true when REC's synthetic outer init bindings do not depend on each

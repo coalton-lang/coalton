@@ -2449,7 +2449,9 @@ that variable, so this falls back to the full instance list."
                                               (project-elements (fundep-to fundep) class-vars types)
                                               (project-elements (fundep-to fundep) class-vars other-types))))))
                     (coalton-internal-type-error ()
-                      (error 'context-fundep-conflict :first-pred pred :second-pred other))))))
+                      (error 'context-fundep-conflict
+                             :first-pred (apply-substitution subs pred)
+                             :second-pred (apply-substitution subs other)))))))
   subs)
 
 (defun solve-fundeps (env preds subs)
@@ -2538,7 +2540,13 @@ without reaching a fixed point within +FUNDEP-MAX-DEPTH+ rounds."
                   :for _subs := (predicate-match (ty-class-predicate class) applied-pred)
                   :do (alexandria:nconcf
                        remaining-preds
-                       (mapcar (alexandria:curry #'apply-substitution _subs)
+                       ;; Superclass predicates have no source location of
+                       ;; their own, so report them where PRED arises.
+                       (mapcar (lambda (superclass)
+                                 (make-ty-predicate
+                                  :class (ty-predicate-class superclass)
+                                  :types (apply-substitution _subs (ty-predicate-types superclass))
+                                  :location (source:location pred)))
                                (ty-class-superclasses class)))
                   :collect pred))
 
@@ -2598,7 +2606,8 @@ without reaching a fixed point within +FUNDEP-MAX-DEPTH+ rounds."
                              (loop :for new-pred :in instance-context :do
                                (push (make-ty-predicate
                                       :class (ty-predicate-class new-pred)
-                                      :types (apply-substitution instance-subs (ty-predicate-types new-pred)))
+                                      :types (apply-substitution instance-subs (ty-predicate-types new-pred))
+                                      :location (source:location pred))
                                      preds))
 
                              (setf preds (remove pred preds :test #'eq))
