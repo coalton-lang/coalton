@@ -121,6 +121,7 @@
                   check-project-tree-uses-the-opened-asd-file
                   check-project-tree-loads-defsystem-dependencies-once
                   check-project-tree-lists-the-asd-file-first
+                  check-project-tree-reads-asd-files-as-asdf-does
                   check-buffer-manager-any-dirty-sees-non-current-buffer
                   run-runtime-regression-tests
                   run-quick-result-model-tests
