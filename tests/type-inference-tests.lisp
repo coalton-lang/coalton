@@ -1624,6 +1624,36 @@
                  (define (narrow _ y) (fold (fn (acc z) (+ acc z)) (the Integer 0) [y])))"))
     (signals tc:tc-error (check-coalton-types program))))
 
+(deftest test-builder-defaults-with-constrained-elements ()
+  ;; A declared binding defaults the builder even when the body constrains the
+  ;; elements. Defaulting may rename a declared variable, as in sum-items, but
+  ;; it may not identify two of them, and omitted constraints are reported.
+  (check-coalton-types
+   "(declare total ((Num :a) (coalton/types:RuntimeRepr :a) => :a * :a -> :a))
+    (define (total x y) (fold + x [y]))
+    (declare comprehension-total
+      ((Num :a) (coalton/types:RuntimeRepr :a) => :a * :a -> :a))
+    (define (comprehension-total x y)
+      (fold + x [z :for z :in (coalton/iterator:once y)]))
+    (declare all-same? ((Eq :a) (coalton/types:RuntimeRepr :a) => :a -> Boolean))
+    (define (all-same? x) (fold (fn (acc y) (and acc (== x y))) True [x x]))
+    (declare sum-items ((Num :a) (coalton/types:RuntimeRepr :a) => Void -> :a))
+    (define (sum-items) (fold + 0 [1 2]))"
+   '("total" . "((Num :a) (coalton/types:RuntimeRepr :a) => :a * :a -> :a)")
+   '("comprehension-total" . "((Num :a) (coalton/types:RuntimeRepr :a) => :a * :a -> :a)")
+   '("all-same?" . "((Eq :a) (coalton/types:RuntimeRepr :a) => :a -> Boolean)")
+   '("sum-items" . "((Num :a) (coalton/types:RuntimeRepr :a) => Void -> :a)"))
+  (dolist (program
+            '("(declare total (coalton/types:RuntimeRepr :a => :a * :a -> :a))
+               (define (total x y) (fold + x [y]))"
+              "(declare pick (coalton/types:RuntimeRepr :b => :a * :b -> :a))
+               (define (pick x y) (fold (fn (_acc z) z) x [y]))"
+              "(define-class (Pick :t)
+                 (pick (coalton/types:RuntimeRepr :b => :t * :a * :b -> :a)))
+               (define-instance (Pick Unit)
+                 (define (pick _ x y) (fold (fn (_acc z) z) x [y])))"))
+    (signals tc:tc-error (check-coalton-types program))))
+
 (deftest test-builder-defaults-in-standalone-expressions ()
   (let ((*package* (find-package "COALTON-USER"))
         (entry:*global-environment* entry:*global-environment*))

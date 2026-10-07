@@ -563,6 +563,18 @@ must be distinguished even though the predicate-only variables are ambiguous."
                   (coalton/iterator:FromIterator :e (Tuple :b :a))
                   => :c * :d -> :e)")))
 
+(deftest fundep-entail-without-declared-predicate ()
+  ;; A declaration lacking a predicate with a functional dependency is missing
+  ;; that predicate, which must be reported as such.
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-class (C :a :b (:a -> :b))
+        (m (:a -> :b)))
+      (declare ignored (:b -> Boolean))
+      (define (ignored _) True)
+      (declare f (:a -> Boolean))
+      (define (f x) (ignored (m x)))")))
+
 (deftest fundep-nested-entail ()
   ;; see https://github.com/coalton-lang/coalton/issues/1717
   (check-coalton-types
