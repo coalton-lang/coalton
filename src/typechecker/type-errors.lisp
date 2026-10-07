@@ -28,6 +28,8 @@
    #:context-fundep-conflict                   ; CONDITION
    #:context-fundep-conflict-first-pred        ; ACCESSOR
    #:context-fundep-conflict-second-pred       ; ACCESSOR
+   #:fundep-nontermination                     ; CONDITION
+   #:fundep-nontermination-preds               ; ACCESSOR
    #:overlapping-specialization-error          ; CONDITION
    #:overlapping-specialization-error-new      ; ACCESSOR
    #:overlapping-specialization-error-existing ; ACCESSOR
@@ -187,6 +189,28 @@
          (format s "predicates ~S and ~S conflict with functional dependencies"
                  (context-fundep-conflict-first-pred c)
                  (context-fundep-conflict-second-pred c)))))))
+
+;; This error is used to indicate that improving predicates with
+;; functional dependencies did not reach a fixed point. An instance may
+;; determine its dependent types through its context, so each
+;; improvement can call for another. For example, with the class
+;; (C :a :b (:a -> :b)) and the instance (C (List :a) :b => C :a (List :b)),
+;; improving C :a :x determines :x to be (List :y) for some
+;; C (List :a) :y, whose improvement determines :y in turn, and so on.
+;; This is not a COALTON-INTERNAL-TYPE-ERROR, so handlers that treat
+;; those as unification failures do not report it as a type mismatch.
+(define-condition fundep-nontermination (error)
+  ((preds :initarg :preds
+          :reader fundep-nontermination-preds
+          :type ty-predicate-list))
+  (:report
+   (lambda (c s)
+     (let ((*print-circle* nil)
+           (*print-readably* nil)
+           (*coalton-type-printing-mode* ':types))
+       (with-pprint-variable-context ()
+         (format s "improving ~{~S~^, ~} with functional dependencies does not terminate"
+                 (fundep-nontermination-preds c)))))))
 
 ;; This error is used to indicate that an instance definition
 ;; conflicts with a previous instance definition on the basis of

@@ -754,3 +754,30 @@ must be distinguished even though the predicate-only variables are ambiguous."
                  (is (= 1 (length solved)))
                  (is (tc:type-predicate= fundep-pred (first solved)))))))
       (delete-package *package*))))
+
+(deftest fundep-mutually-recursive-instances-do-not-terminate ()
+  ;; Each instance determines its monad through the other class on the
+  ;; same :act, so improving either class never reaches a fixed point.
+  (dolist (use '("(declare f (Foo :m :act => :act -> Unit))
+                  (define (f _) Unit)"
+                 "(define (f x) (foo x))"
+                 ;; TYPE-OF reports internal type errors as type mismatches.
+                 "(define (f x) (type-of (foo x)))"))
+    (is (search "Functional dependency improvement does not terminate"
+                (handler-case
+                    (progn
+                      (check-coalton-types
+                       (concatenate
+                        'string
+                        "(define-type (W1 :a) (W1 :a))
+                         (define-type (W2 :a) (W2 :a))
+                         (define-class (Foo :m :act (:act -> :m))
+                           (foo (:act -> :m)))
+                         (define-class (Bar :m :act (:act -> :m)))
+                         (define-instance (Bar :m :act => Foo (W1 :m) :act)
+                           (define (foo _) (error \"unreachable\")))
+                         (define-instance (Foo :m :act => Bar (W2 :m) :act))"
+                        use))
+                      "")
+                  (tc:tc-error (e)
+                    (princ-to-string e)))))))

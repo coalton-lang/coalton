@@ -40,6 +40,7 @@
    #:infer-expl-binging-type            ; FUNCTION
    #:check-bindings-for-invalid-recursion ; FUNCTION
    #:attach-explicit-binding-type       ; FUNCTION
+   #:with-fundep-errors                 ; MACRO
    ))
 
 (in-package #:coalton-impl/typechecker/define)
@@ -118,6 +119,29 @@
   (tc-error "Unknown instance"
             (tc-note pred "Unknown instance ~A"
                      (type-object-string pred))))
+
+(defun error-fundep-nontermination (condition location env)
+  "Report CONDITION at its first predicate with source information, or at LOCATION."
+  (declare (type tc:fundep-nontermination condition)
+           (type source:location location))
+  (let* ((preds (tc:fundep-nontermination-preds condition))
+         (located-pred (find-if #'source:location preds)))
+    (tc-error "Functional dependency improvement does not terminate"
+              (tc-location (if located-pred
+                               (source:location located-pred)
+                               location)
+                           "improving ~{~A~^, ~} with functional dependencies does not reach a fixed point"
+                           (mapcar (lambda (pred)
+                                     (type-object-string pred env))
+                                   preds)))))
+
+(defmacro with-fundep-errors ((location env) &body body)
+  "Report errors from solving functional dependencies in BODY as type errors
+at LOCATION, unless the predicates involved have their own locations."
+  (let ((condition (gensym "CONDITION")))
+    `(handler-case (progn ,@body)
+       (tc:fundep-nontermination (,condition)
+         (error-fundep-nontermination ,condition ,location ,env)))))
 
 (defun standard-expression-type-mismatch-error (node subs expected-type ty)
   "Utility for signalling a type-mismatch error in INFER-EXPRESSION-TYPE"
@@ -4287,7 +4311,9 @@ as a recursive function rather than a recursive value."
                    := (loop :for name :in scc
                             :collect (gethash name impl-bindings))
                  :append (multiple-value-bind (preds_ nodes subs_)
-                             (infer-impls-binding-type bindings subs env :generalize generalize)
+                             (with-fundep-errors
+                                 ((source:location (parser:binding-name (first bindings))) env)
+                               (infer-impls-binding-type bindings subs env :generalize generalize))
                            (setf subs subs_)
                            (setf preds (append preds preds_))
                            nodes)))
@@ -4302,15 +4328,17 @@ as a recursive function rather than a recursive value."
                  :for unparsed-ty := (gethash name dec-table)
 
                  :collect (multiple-value-bind (preds_ node_ subs_)
-                              (funcall (if generalize
-                                           #'infer-expl-binding-type
-                                           #'infer-monomorphic-binding-type)
-                                       binding
-                                                       scheme
-                                                       (source:location
-                                                        (parser:binding-name binding))
-                                                       subs
-                                                       env)
+                              (with-fundep-errors
+                                  ((source:location (parser:binding-name binding)) env)
+                                (funcall (if generalize
+                                             #'infer-expl-binding-type
+                                             #'infer-monomorphic-binding-type)
+                                         binding
+                                         scheme
+                                         (source:location
+                                          (parser:binding-name binding))
+                                         subs
+                                         env))
                             (setf subs subs_)
                             (setf preds (append preds preds_))
                             node_))))

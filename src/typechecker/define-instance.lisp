@@ -18,7 +18,8 @@
    #:coalton-impl/typechecker/define
    #:make-tc-env
    #:check-bindings-for-invalid-recursion
-   #:infer-expl-binding-type)
+   #:infer-expl-binding-type
+   #:with-fundep-errors)
   (:local-nicknames
    (#:a #:alexandria)
    (#:settings #:coalton-impl/settings)
@@ -417,11 +418,12 @@ must not collapse distinct variables or specialize one to a concrete type.
                                  :test #'tc:ty=))
 
                           :do (multiple-value-bind (preds method subs)
-                                  (infer-expl-binding-type method
-                                                          instance-method-scheme
-                                                          (source:location method)
-                                                          nil
-                                                          instance-method-env)
+                                  (with-fundep-errors ((source:location method) env)
+                                    (infer-expl-binding-type method
+                                                             instance-method-scheme
+                                                             (source:location method)
+                                                             nil
+                                                             instance-method-env))
                                 ;; Deferred predicates should always be null
                                 (unless (null preds)
                                   (util:coalton-bug "Instance definition predicates should not be null."))
