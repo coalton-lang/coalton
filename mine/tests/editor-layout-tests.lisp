@@ -450,6 +450,29 @@
         (%check (search "Project Tree" (row-text (1+ last)))
                 "Scrolling Open Files moved the Project Tree section")))))
 
+(defun check-help-scrollbar-can-be-dragged ()
+  (let* ((runtime (mine/term/terminal::%terminal-input-runtime-new))
+         (scr (mine/term/screen:screen-new 60 12))
+         (term (mine/term/terminal:Terminal scr (coalton/cell:new coalton:False) runtime
+                                            (coalton/cell:new (coalton/vector:new))
+                                            (coalton/cell:new 60) (coalton/cell:new 12))))
+    ;; The scrollbar is in the last column, above the footer row.
+    (dolist (event (list (input:IEvMouse input:MousePress input:MouseLeft 59 0)
+                         (input:IEvMouse input:MouseDrag input:MouseLeft 20 11)
+                         (input:IEvMouse input:MouseRelease input:MouseLeft 20 11)
+                         (input:IEvKey input:KeyEnter input:ModNone)))
+      (sb-concurrency:send-message (mine/term/terminal::%terminal-input-runtime-mailbox runtime)
+                                   event))
+    (let ((*standard-output* (make-broadcast-stream)))
+      (mine/app/help:show-help! term))
+    (%check (loop :for y :below 11
+                  :thereis (search "Abort"
+                                   (coerce (loop :for x :below 60
+                                                 :collect (mine-tests/editor-layout::screen-cell-character
+                                                           scr x y))
+                                           'string)))
+            "Dragging the help scrollbar to its end did not show the end of the help")))
+
 (defun run-editor-geometry-integration-tests ()
   (check-editor-render-multiline-source-snapshot)
   (check-editor-frames-share-one-source-scan)
@@ -458,6 +481,7 @@
   (check-scrollbar-drag-follows-pointer-off-the-bar)
   (check-repl-input-mouse-selection-copies)
   (check-open-files-scrollbar-scrolls-the-list)
+  (check-help-scrollbar-can-be-dragged)
   t)
 
 (defun check-editor-long-wrapped-line-keeps-cursor-visible ()

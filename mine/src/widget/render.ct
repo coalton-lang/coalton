@@ -13,7 +13,8 @@
    #:draw-hline
    #:draw-vline
    #:draw-box
-   #:draw-scrollbar))
+   #:draw-scrollbar
+   #:scrollbar-offset-at))
 
 (in-package #:mine/widget/render)
 
@@ -152,6 +153,15 @@ TOTAL-LINES is the total content length, SCROLL-OFFSET is the current top line."
        ;; Draw track
        (%draw-scrollbar-col scr col y0 height 0 thumb-pos thumb-size
                             track-style thumb-style))))
+
+  (declare scrollbar-offset-at (UFix * UFix * UFix -> UFix))
+  (define (scrollbar-offset-at rel-y total height)
+    "Return the scroll offset for row REL-Y of a scrollbar HEIGHT rows tall over
+TOTAL lines of content, from the top at row 0 to the end at the last row."
+    (lisp (-> UFix) (rel-y total height)
+      (cl:min (cl:max 0 (cl:- total height))
+              (cl:floor (cl:* rel-y (cl:max 1 (cl:- total height)))
+                        (cl:max 1 (cl:1- height))))))
 
   (declare %draw-scrollbar-col (screen:Screen * UFix * UFix * UFix * UFix * UFix * UFix * color:Style * color:Style -> Void))
   (define (%draw-scrollbar-col scr col y0 height idx thumb-pos thumb-size track-style thumb-style)
