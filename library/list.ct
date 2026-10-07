@@ -75,8 +75,7 @@
    #:split-around
    #:perms
    #:combs
-   #:combsOf
-   #:make))
+   #:combsOf))
 
 (in-package #:coalton/list)
 
@@ -536,7 +535,7 @@
     "Returns a new list by inserting `e` between every element of `xs`."
     (match xs
       ((Nil)       Nil)
-      ((Cons x xs) (Cons x (concatMap (fn (y) (make-list e y)) xs)))))
+      ((Cons x xs) (Cons x (concatMap (fn (y) [e y]) xs)))))
 
   (declare intercalate ((List :a) * (List (List :a)) -> (List :a)))
   (define (intercalate xs xss)
@@ -547,11 +546,11 @@
   (define (insertions a l)
     "Produce a list of copies of `l`, each with A inserted at a possible position.
 
-    (insertions 0 (make-list 1 2))
+    (insertions 0 [1 2])
     ;; => ((0 1 2) (1 0 2) (1 2 0))
 "
     (match l
-      ((Nil)       (make-list (make-list a)))
+      ((Nil)       [[a]])
       ((Cons x ls) (Cons (Cons a l)
                          (map (fn (ys) (Cons x ys))
                               (insertions a ls))))))
@@ -665,7 +664,7 @@
     "Produce all permutations of the list L."
     (foldr (fn (x acc)
              (concatMap (fn (ys) (insertions x ys)) acc))
-           (make-list Nil)
+           [Nil]
            l))
 
   (declare combs (List :a -> (List (List :a))))
@@ -675,9 +674,9 @@
 The ordering of elements of `l` is preserved in the ordering of elements in each list produced by this function."
     (match l
       ((Nil)
-       (make-list Nil))
+       [Nil])
       ((Cons x xs)
-       (concatMap (fn (y) (make-list y (Cons x y))) (combs xs)))))
+       (concatMap (fn (y) [y (Cons x y)]) (combs xs)))))
 
   (declare combsOf (UFix * List :a -> (List (List :a))))
   (define (combsOf n l)
@@ -687,7 +686,7 @@ The ordering of elements of `l` is preserved in the ordering of elements in each
 
 This function is equivalent to all size-`n` elements of `(combs l)`."
 
-    (cond ((== 0 n) (make-list Nil))
+    (cond ((== 0 n) [Nil])
           ((== 1 n) (map singleton l))
           (True (match l
                   ((Nil) Nil)
@@ -854,10 +853,6 @@ This function is equivalent to all size-`n` elements of `(combs l)`."
 
   (define-instance (Default (List :a))
     (define (default) Nil)))
-
-(define-expression-macro make (cl:&rest elements)
-  "Make a homogeneous list of `elements`. Synonym for `coalton:make-list`."
-  `(coalton:make-list ,@elements))
 
 #+sb-package-locks
 (sb-ext:lock-package "COALTON/LIST")
