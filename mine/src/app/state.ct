@@ -34,6 +34,7 @@
    #:CenterReplFull
    #:MineLayout
    #:ScrollbarGrab
+   #:GrabOpenFilesScrollbar
    #:GrabTreeScrollbar
    #:GrabEditorScrollbar
    #:GrabReplScrollbar
@@ -119,6 +120,7 @@
   (derive Eq)
   (define-type ScrollbarGrab
     "The scrollbar that a mouse button press grabbed."
+    GrabOpenFilesScrollbar
     GrabTreeScrollbar
     GrabEditorScrollbar
     GrabReplScrollbar)
