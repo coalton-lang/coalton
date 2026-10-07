@@ -97,6 +97,17 @@
            (%check (string= package (coalton/cell:read (mine/app/state:get-repl-package-cell state)))
                    "The acknowledged initialization package was not retained")))))))
 
+(defun check-initialization-prints-runtime-package-as-plain-string ()
+  ;; The runtime reports SBCL package names, which are base strings.
+  (%call-with-app-connection
+   (lambda (state connection output)
+     (coalton/cell:write! (mine/app/state:get-repl-package-cell state)
+                          (package-name (find-package "COALTON-USER")))
+     (app::%start-initialization! state connection "(cl:values 42)")
+     (let ((source (third (first (%app-sent-messages output)))))
+       (%check (search "(cl:find-package \"COALTON-USER\")" source)
+               "Initialization printed the package name in host-specific syntax: ~A" source)))))
+
 (defun check-failed-cancellation-preserves-foreground-request ()
   (let* ((state (%test-state))
          (id (mine/protocol/messages:RequestId 903)))
@@ -176,6 +187,7 @@
   (dolist (test '(check-initialization-owns-prompts-and-defers-first-evaluation
                   check-initialization-failure-cancels-deferred-request
                   check-initialization-preserves-default-package-unless-explicitly-changed
+                  check-initialization-prints-runtime-package-as-plain-string
                   check-failed-cancellation-preserves-foreground-request
                   check-runtime-restart-resets-obsolete-package
                   check-compile-temporary-belongs-to-compile-after-startup))

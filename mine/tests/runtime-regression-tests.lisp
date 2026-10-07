@@ -430,6 +430,33 @@
     (%runtime-check (equal '("12") (%runtime-eval-values input "COALTON-USER" t))
                     "Coalton wrapping must be selected separately for each form")))
 
+(defun check-runtime-coalton-compile-string-package-prefix ()
+  ;; SBCL package names are base strings. Printed readably, they use #A
+  ;; syntax, which the Coalton source reader rejects in the IN-PACKAGE prefix.
+  (let* ((name (symbol-name (gensym "MINE-BEAM-SQUARE-")))
+         (messages
+           (%call-with-runtime-messages
+            (lambda ()
+              (mine/protocol/server::dispatch-message
+               (list ':compile-string 54 (format nil "(define (~A x)~%  (* x x))" name)
+                     "buffer://beam-form" "COALTON-USER" 0 0 t)
+               ':test-wire))
+            '((:debug-abort 54))))
+         (returns (remove ':return messages :key #'first :test-not #'eq))
+         (errors (remove-if-not
+                  (lambda (message)
+                    (and (eq ':notify (first message))
+                         (eq ':diagnostic (first (second message)))
+                         (eq ':error (getf (rest (second message)) ':severity))))
+                  messages)))
+    (%runtime-check (null errors) "Coalton compilation reported errors: ~S" errors)
+    (%runtime-check (and (= 1 (length returns))
+                         (eql 54 (second (first returns)))
+                         (eq ':ok (first (third (first returns)))))
+                    "Coalton compilation did not succeed: ~S" messages)
+    (%runtime-check (equal '("9") (%runtime-eval-values (format nil "(~A 3)" name) "COALTON-USER" t))
+                    "Coalton compilation did not define its function")))
+
 (defun check-runtime-debugger-interactive-and-invalid-restarts ()
   (let ((interactive-called nil) (result nil))
     (let ((messages
@@ -984,6 +1011,7 @@
                   check-runtime-package-identity-and-success-reporting
                   check-runtime-compile-preparation-errors-return-replies
                   check-runtime-coalton-multiform-eval
+                  check-runtime-coalton-compile-string-package-prefix
                   check-runtime-debugger-interactive-and-invalid-restarts
                   check-runtime-beam-errors-reach-debugger
                   check-runtime-request-scoped-interruption
