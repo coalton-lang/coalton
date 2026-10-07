@@ -214,6 +214,72 @@ Returns the parsed S-expression, or NIL on EOF/error."
 (defmethod sb-gray:stream-line-column ((stream tui-output-stream))
   (tos-column stream))
 
+
+;;; Output and errors outside requests
+
+(defclass background-output-stream (tui-output-stream)
+  ((lock :initform (sb-thread:make-mutex :name "mine background output") :reader bos-lock))
+  (:documentation "A TUI output stream that any thread may write, for output outside requests.
+Output is dropped once the editor's connection is gone."))
+
+(defmethod sb-gray:stream-write-char :around ((stream background-output-stream) char)
+  (sb-thread:with-recursive-lock ((bos-lock stream))
+    (handler-case (call-next-method) (error () char))))
+
+(defmethod sb-gray:stream-write-string :around ((stream background-output-stream) string
+                                                &optional start end)
+  (declare (ignore start end))
+  (sb-thread:with-recursive-lock ((bos-lock stream))
+    (handler-case (call-next-method) (error () string))))
+
+(defmethod sb-gray:stream-force-output :around ((stream background-output-stream))
+  (sb-thread:with-recursive-lock ((bos-lock stream))
+    (handler-case (call-next-method) (error () nil))))
+
+(defmethod sb-gray:stream-finish-output :around ((stream background-output-stream))
+  (sb-thread:with-recursive-lock ((bos-lock stream))
+    (handler-case (call-next-method) (error () nil))))
+
+(defvar *runtime-output-streams* nil
+  "The runtime's own global output streams, while background output goes to the editor.")
+
+(defun %send-background-output-to (wire-stream)
+  "Send output that threads write outside requests to the REPL of WIRE-STREAM.
+Requests bind the standard streams for their own thread only. Other threads,
+such as a web server's workers, write to the global streams, which are the
+runtime's standard output and error; the editor stops reading those once it
+has the port, so their output was lost and could eventually block the writer."
+  (let ((stream (make-instance 'background-output-stream :wire-stream wire-stream :msg-id 0)))
+    (unless *runtime-output-streams*
+      (setf *runtime-output-streams*
+            (mapcar (lambda (name) (cons name (sb-ext:symbol-global-value name)))
+                    '(*standard-output* *error-output* *trace-output*))))
+    (dolist (entry *runtime-output-streams*)
+      (setf (sb-ext:symbol-global-value (car entry)) stream))))
+
+(defun %restore-runtime-output ()
+  (dolist (entry *runtime-output-streams*)
+    (setf (sb-ext:symbol-global-value (car entry)) (cdr entry)))
+  (setf *runtime-output-streams* nil))
+
+(defun report-unhandled-error (condition hook)
+  "Report an error that no handler in its thread took, and abort that thread.
+Installed as SB-EXT:*INVOKE-DEBUGGER-HOOK* in the runtime. The saved image runs
+with the debugger disabled, which would otherwise exit the runtime, losing its
+state, whenever a thread outside a request signaled an unhandled error."
+  (declare (ignore hook))
+  (let ((output (sb-ext:symbol-global-value '*error-output*))
+        (name (sb-thread:thread-name sb-thread:*current-thread*)))
+    (ignore-errors
+      (format output "~&;; Unhandled error in ~:[an unnamed thread~;thread ~:*~S~], ~
+                      which was aborted:~%;;   ~A~%"
+              name condition)
+      (finish-output output)))
+  (let ((restart (find-restart 'abort condition)))
+    (if restart
+        (invoke-restart restart)
+        (sb-thread:abort-thread))))
+
 (defun %drain-runtime-output (stream)
   "Flush live output, or return text from a legacy string capture."
   (cond
@@ -1722,6 +1788,8 @@ Blocks until the server is shut down."
 
 (defun %serve-connection (stream)
   "Process messages from one client connection until it closes or quits."
+  (when (%primary-server-stream-p stream)
+    (%send-background-output-to stream))
   (unwind-protect
        (loop :while *server-running*
              :do (let ((msg (read-message stream)))
@@ -1738,6 +1806,12 @@ Blocks until the server is shut down."
                           (setf *server-running* nil)
                           (%close-server-socket)
                           (return)))))))
+    (when (%primary-server-stream-p stream)
+      ;; The runtime ends with its editor connection, however that ends;
+      ;; until REPORT-UNHANDLED-ERROR, an error here exited the process.
+      (setf *server-running* nil)
+      (%close-server-socket)
+      (%restore-runtime-output))
     (%forget-server-stream stream)
     (ignore-errors (close stream))))
 

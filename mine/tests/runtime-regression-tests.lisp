@@ -913,6 +913,48 @@
                        "Missing compile package did not produce a structured error: ~S" reply))
      (%runtime-process-check-definition manager 107))))
 
+(defun %runtime-output-chunk-containing-p (message text)
+  (and (eq ':notify (first message))
+       (consp (second message))
+       (eq ':output-chunk (first (second message)))
+       (search text (third (second message)))))
+
+(defun check-runtime-process-reports-background-threads ()
+  (%call-with-runtime-process
+   (lambda (manager)
+     (%runtime-process-send-eval
+      manager 111 "(defun mine-regression-retained-definition () 42)")
+     (%runtime-check (eq ':ok (first (third (%runtime-process-return manager 111))))
+                     "Could not define function in controlled runtime")
+     ;; New threads do not see a request's stream bindings.
+     (%runtime-process-send-eval
+      manager 112
+      "(sb-thread:join-thread (sb-thread:make-thread (lambda () (format t \"thread-said-hello~%\"))))")
+     (%runtime-read-until manager (lambda (message)
+                                   (%runtime-output-chunk-containing-p message "thread-said-hello")))
+     (%runtime-process-return manager 112)
+     ;; With the debugger disabled, as in the saved image, an error that no handler
+     ;; in its thread takes used to exit the runtime.
+     (%runtime-process-send-eval
+      manager 113
+      "(sb-thread:join-thread (sb-thread:make-thread (lambda () (error \"thread-went-wrong\"))) :default nil)")
+     (%runtime-read-until manager (lambda (message)
+                                   (%runtime-output-chunk-containing-p message "thread-went-wrong")))
+     (%runtime-process-return manager 113)
+     (%runtime-process-check-definition manager 114))))
+
+(defun check-runtime-process-exits-with-its-editor-connection ()
+  (%call-with-runtime-process
+   (lambda (manager)
+     (let ((process (mine/protocol/lifecycle::%runtime-manager-process manager))
+           (connection (mine/protocol/lifecycle::%runtime-manager-connection manager)))
+       ;; An editor that dies without stopping the runtime only closes its sockets.
+       (close (mine/protocol/client::%connection-stream connection))
+       (%runtime-check (loop :repeat 500
+                             :thereis (not (sb-ext:process-alive-p process))
+                             :do (sleep 0.01))
+                       "The runtime outlived its connection to the editor")))))
+
 (defun check-runtime-restart-retires-disconnected-child ()
   (%call-with-runtime-process
    (lambda (manager)
@@ -1021,6 +1063,8 @@
                   check-runtime-typed-response-rejects-malformed-data
                   check-runtime-symbol-spelling-and-completion
                   check-runtime-process-survives-scoped-interruption
+                  check-runtime-process-reports-background-threads
+                  check-runtime-process-exits-with-its-editor-connection
                   check-runtime-restart-retires-disconnected-child
                   check-runtime-failed-start-cleans-child
                   check-runtime-interrupt-timeout-is-recoverable))

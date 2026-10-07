@@ -90,10 +90,14 @@ Returns a bivalent stream for the connection."
 
 (defun socket-close (socket-or-stream)
   "Close SOCKET-OR-STREAM.
-Works for both raw sb-bsd-sockets:socket objects and CL streams."
+Works for both raw sb-bsd-sockets:socket objects and CL streams.  A raw
+socket is shut down first: on Linux, closing a listening socket does not
+wake a thread blocked accepting on it, but shutting it down does."
   (ignore-errors
     (etypecase socket-or-stream
       (sb-bsd-sockets:socket
+       (ignore-errors
+         (sb-bsd-sockets:socket-shutdown socket-or-stream :direction ':io))
        (sb-bsd-sockets:socket-close socket-or-stream))
       (stream
        (close socket-or-stream))))

@@ -35,6 +35,7 @@ Blocks until the server finishes (via :quit message or connection loss)."
                        (null 0)
                        (integer port)
                        (string (or (parse-integer port :junk-allowed t) 0)))))
+    (setf sb-ext:*invoke-debugger-hook* 'mine/protocol/server::report-unhandled-error)
     (format *error-output* ";; mine runtime server starting (port=~D)~%"
             port-number)
     (force-output *error-output*)
