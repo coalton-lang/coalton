@@ -84,7 +84,22 @@
 (define-test test-vector-subseq ()
   (let v = (vector:make 0 1 2 3 4 5 6))
   (is (== (vector:make 2 3) (vector:subseq v 2 4)))
-  (is (== v (vector:subseq v 0 1000))))
+  (is (== v (vector:subseq v 0 1000)))
+  (is (== (vector:make) (vector:subseq v 10 12)))
+  ;; The result is an ordinary vector, which can grow.
+  (let s = (vector:subseq v 2 4))
+  (vector:push! 9 s)
+  (is (== (vector:make 2 3 9) s))
+  (let c = (vector:copy (vector:subseq v 5 7)))
+  (vector:push! 7 c)
+  (is (== (vector:make 5 6 7) c)))
+
+(define-test test-vector-resect-beyond-length ()
+  (let v = (vector:make 0 1 2))
+  (vector:resect! v 10 12)
+  (is (== (vector:make 0 1 2) v))
+  (vector:resect! v 1 10)
+  (is (== (vector:make 0) v)))
 
 (define-test test-vector-show ()
   (is (== "#<Vector [1 2 3]>"
