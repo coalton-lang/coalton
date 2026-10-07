@@ -2366,6 +2366,21 @@ Uses the preceding (in-package ...) form to determine the compilation package."
          ((None) (values))))
       ((None) (values))))
 
+  (declare %delete-editor-selection! (MineState -> Boolean))
+  (define (%delete-editor-selection! st)
+    "Delete the active editor selection as one edit.
+Return False, changing nothing, when no non-empty selection is active."
+    (match (mgr:bufmgr-current (.ms-bufmgr st))
+      ((Some buf)
+       (match (%active-selection-range (buf:buffer-gap buf) (.ms-cursor st))
+         ((Some (Tuple sel-start sel-end))
+          (%commit-preview! st)
+          (ops:replace-range! buf (buf:buffer-undo buf) (.ms-cursor st)
+                              sel-start sel-end "" sel-start)
+          True)
+         ((None) False)))
+      ((None) False)))
+
   (declare paste-clipboard! (MineState -> Void))
   (define (paste-clipboard! st)
     "Paste from the system clipboard at the cursor position."
@@ -2659,6 +2674,13 @@ Uses the preceding (in-package ...) form to determine the compilation package."
   (declare handle-editor-key (MineState * input:Key * input:Modifier -> Void))
   (define (handle-editor-key st key mod)
     "Handle a key event when the editor pane is focused."
+    ;; Backspace and Delete remove an active selection instead of a character.
+    (when (and (match key
+                 ((input:KeyBackspace) True)
+                 ((input:KeyDelete) True)
+                 (_ False))
+               (%delete-editor-selection! st))
+      (return (values)))
     ;; Clear selection on editing keys (not movement, copy, cut, or Ctrl+Space)
     (match key
       ((input:KeyUp) (values))
