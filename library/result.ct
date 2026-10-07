@@ -17,7 +17,6 @@
    #:flatten
    #:opt->result
    #:err-if
-   #:ok-or-error
    #:ok-or-throw
    #:try))
 
@@ -91,13 +90,6 @@
     (match x
       ((Ok x) x)
       ((Err x) x)))
-
-  (inline)
-  (declare ok-or-error ((Signalable :err) => (Result :err :a) -> :a))
-  (define (ok-or-error res)
-    (match res
-      ((Ok elt) elt)
-      ((Err r) (error r))))
 
   (inline)
   (declare ok-or-throw ((Exception :err) => (Result :err :a) -> :a))

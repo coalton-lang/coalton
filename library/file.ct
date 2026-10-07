@@ -156,21 +156,7 @@ trailing slash.")
     (FileError String)
     (PathError String Pathname)
     (LispError exception:LispError)
-    EOF)
-
-  (define-instance (Signalable FileError)
-    (define (error ferr)
-      (match ferr
-        ((FileError str1)
-         (error (lisp (-> String) (str1)
-                  (cl:format cl:nil "File Error:~%~%~a" str1))))
-        ((PathError str path)
-         (error (lisp (-> String) (str path)
-                  (cl:format cl:nil "Path Error:~%~%~a ~a" str path))))
-        ((LispError e)
-         (throw e))
-        ((EOF)
-         (error #.(cl:format cl:nil "Error~%~%End of File")))))))
+    EOF))
 
 ;;;
 ;;; Macro for handling lisp errors in file functions
@@ -259,7 +245,7 @@ for its effect. The result holds `Unit` rather than the value of FORM."
     (let p1 = (the Pathname (into path1)))
     (let p2 = (the Pathname (into path2)))
     (if (not (directory-pathname? p1))
-        (error (PathError "Merge: first argument must be a directory path." p1))
+        (error (<> "Merge: first argument must be a directory path: " (into p1)))
         (lisp (-> Pathname) (p1 p2)
           (cl:merge-pathnames p2 p1))))
 
@@ -561,7 +547,8 @@ for its effect. The result holds `Unit` rather than the value of FORM."
          (match (read file)
            ((Ok char) (Some char))
            ((Err (EOF)) None)
-           ((Err the-error) (error the-error))))))))
+           ((Err (LispError e)) (throw e))
+           ((Err _) (unreachable))))))))
 
 ;;;
 ;;; File instances for supported Integer/Byte types
@@ -585,7 +572,8 @@ for its effect. The result holds `Unit` rather than the value of FORM."
                    (match (read file)
                      ((Ok data) (Some data))
                      ((Err (EOF)) None)
-                     ((Err the-error) (error the-error))))))))))
+                     ((Err (LispError e)) (throw e))
+                     ((Err _) (unreachable))))))))))
 
 (coalton-toplevel
   (define-file-type IFix)

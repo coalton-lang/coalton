@@ -4,7 +4,6 @@
   (:local-nicknames
    (#:types #:coalton/types))
   (:export
-   #:Signalable
    #:error
    #:Exception
    #:Resumption
@@ -55,7 +54,7 @@
 (cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
 
 ;;;
-;;; Signaling errors and warnings
+;;; Signaling panics and exceptions
 ;;;
 
 ;; The (repr :native Panic) attribute below checks this condition type when
@@ -71,21 +70,17 @@
 
 (coalton-toplevel
 
- ;;
- ;; Signalling errors on supported types
- ;;
- (define-class (Signalable :a)
-   "Signals errors or warnings by calling their respective lisp conditions.
+  ;;
+  ;; Panics
+  ;;
 
-`error` on a `String` signals a `Panic` whose message is the string, which is never interpreted as a format control string."
-   (error "Signal an error with a type-specific error string."
-     (forall ((:result Values)) (:a -> :result))))
+  (declare error (forall ((:result Values)) (String -> :result)))
+  (define (error message)
+    "Signal a `Panic` whose message is `message`, to report a bug detected at runtime. The message is never interpreted as a format control string.
 
-  (define-instance (Signalable String)
-    ;; The string is the message, never a format control string.
-    (define (error str)
-      (lisp (-> :result) (str)
-        (cl:error 'Panic :message str))))
+To signal an exception that a program is expected to handle, use `throw`."
+    (lisp (-> :result) (message)
+      (cl:error 'Panic :message message)))
 
   ;;
   ;; Exceptions
