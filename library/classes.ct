@@ -159,7 +159,10 @@ Every type defined with `define-resumption` is an instance, and instances cannot
   #+ccl
   (repr :native (cl:and cl:fixnum cl:unsigned-byte))
 
-  #-(or sbcl allegro ccl)
+  #+dotcl
+  (repr :native (cl:and cl:fixnum cl:unsigned-byte))
+
+  #-(or sbcl allegro ccl dotcl)
   #.(cl:error "hashing is not supported on ~A" (cl:lisp-implementation-type))
 
   (define-type Hash
