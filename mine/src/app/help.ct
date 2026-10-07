@@ -288,7 +288,7 @@ automatically based on each item's height."
   (declare %help-scroll-loop (term:Terminal * UFix -> Boolean))
   (define (%help-scroll-loop term scroll)
     "Handle scrolling input for the help screen. Returns True if user wants to quit."
-    (let scr = (term:.terminal-screen term))
+    (let scr = (.terminal-screen term))
     (screen:screen-hide-cursor scr)
     (term:terminal-flush term)
     (let ev = (term:terminal-wait-for-key term))
@@ -325,10 +325,10 @@ automatically based on each item's height."
          (_ (%help-scroll-loop term scroll))))
       ((input:IEvResize _ _)
        (term:terminal-update-size! term)
-       (screen:screen-resize (term:.terminal-screen term)
+       (screen:screen-resize (.terminal-screen term)
                              (term:terminal-cols term)
                              (term:terminal-rows term))
-       (%draw-help-content (term:.terminal-screen term)
+       (%draw-help-content (.terminal-screen term)
                            (term:terminal-cols term) (term:terminal-rows term) scroll)
        (%help-scroll-loop term scroll))
       (_ (%help-scroll-loop term scroll))))
@@ -339,6 +339,6 @@ automatically based on each item's height."
   (define (show-help! term)
     "Show keybindings help overlay, scrollable, dismiss on Enter.
 Returns True if the user pressed Ctrl+q to quit."
-    (let scr = (term:.terminal-screen term))
+    (let scr = (.terminal-screen term))
     (%draw-help-content scr (term:terminal-cols term) (term:terminal-rows term) 0)
     (%help-scroll-loop term 0)))

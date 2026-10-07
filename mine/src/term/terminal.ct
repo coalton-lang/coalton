@@ -12,7 +12,6 @@
    #:best-effort? #:set-best-effort!
    #:probe-kitty-keyboard
    #:terminal-init #:terminal-shutdown
-   #:.terminal-screen
    #:terminal-cols #:terminal-rows #:terminal-update-size!
    #:terminal-flush
    #:terminal-clear-screen
@@ -27,7 +26,7 @@
 (in-package #:mine/term/terminal)
 
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
-  (cl:require :sb-concurrency))
+  (cl:require ':sb-concurrency))
 
 (cl:defstruct %terminal-input-runtime
   (mailbox   (sb-concurrency:make-mailbox :name "mine-terminal-input") :type cl:t)
@@ -119,24 +118,28 @@
   (cl:let ((mailbox (%terminal-input-runtime-mailbox runtime)))
     (cl:multiple-value-bind (first ok)
         (sb-concurrency:receive-message mailbox)
-      (cl:if ok
-             (%terminal-input-events
-              (cl:cons first (sb-concurrency:receive-pending-messages mailbox)))
-             Nil))))
+      (cl:cond
+        (ok
+         (%terminal-input-events
+          (cl:cons first (sb-concurrency:receive-pending-messages mailbox))))
+        (cl:t Nil)))))
 
 (cl:defun %terminal-input-runtime-read-batch-timeout (runtime timeout-ms)
   (cl:let ((mailbox (%terminal-input-runtime-mailbox runtime)))
-    (cl:if (cl:zerop timeout-ms)
-           (%terminal-input-events
-            (sb-concurrency:receive-pending-messages mailbox))
-           (cl:multiple-value-bind (first ok)
-               (sb-concurrency:receive-message
-                mailbox
-                :timeout (cl:/ timeout-ms 1000))
-             (cl:if ok
-                    (%terminal-input-events
-                     (cl:cons first (sb-concurrency:receive-pending-messages mailbox)))
-                    Nil)))))
+    (cl:cond
+      ((cl:zerop timeout-ms)
+       (%terminal-input-events
+        (sb-concurrency:receive-pending-messages mailbox)))
+      (cl:t
+       (cl:multiple-value-bind (first ok)
+           (sb-concurrency:receive-message
+            mailbox
+            :timeout (cl:/ timeout-ms 1000))
+         (cl:cond
+           (ok
+            (%terminal-input-events
+             (cl:cons first (sb-concurrency:receive-pending-messages mailbox))))
+           (cl:t Nil)))))))
 
 (cl:defun %terminal-input-runtime-read-one (runtime)
   (cl:let ((mailbox (%terminal-input-runtime-mailbox runtime)))

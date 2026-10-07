@@ -12,10 +12,10 @@
    #:Completeness #:SourceComplete #:SourceIncomplete #:SourceMalformed
    #:TokenKind #:SymbolToken #:StringToken #:CharacterToken
    #:OpenToken #:CloseToken #:PrefixToken #:CommentToken #:MalformedToken
-   #:SourceToken #:.token-kind #:.token-start #:.token-end #:.token-complete
+   #:SourceToken
    #:FormKind #:SymbolForm #:StringForm #:CharacterForm #:DelimitedForm #:PrefixedForm
-   #:SourceForm #:.form-kind #:.form-start #:.form-end #:.form-children #:.form-complete
-   #:SourceContext #:.source-text #:.source-tokens #:.source-forms #:.source-completeness
+   #:SourceForm
+   #:SourceContext
    #:source-text #:source-tokens #:source-forms #:source-completeness
    #:token-kind #:token-start #:token-end #:token-complete? #:form-kind
    #:scan-source #:source-class-at #:source-input-ready? #:token-text #:form-text
@@ -262,11 +262,12 @@
     (match (str:ref text pos)
       ((None) (list:reverse acc))
       ((Some ch)
-       (if (whitespace? ch)
-           (scan-tokens text (+ pos 1) acc)
-           (progn
-             (let token = (scan-token text pos))
-             (scan-tokens text (.token-end token) (Cons token acc)))))))
+       (cond
+         ((whitespace? ch)
+          (scan-tokens text (+ pos 1) acc))
+         (True
+          (let token = (scan-token text pos))
+          (scan-tokens text (.token-end token) (Cons token acc)))))))
 
   (declare comment-token? (SourceToken -> Boolean))
   (define (comment-token? token)
@@ -750,19 +751,20 @@
       (match forms
         ((Nil) package)
         ((Cons form rest)
-         (if (> (.form-end form) pos) package
-             (progn
-               (let found =
-                 (match (form-head context form)
-                   ((Some head)
-                    (if (and (.form-complete form)
-                             (named-head? head "IN-PACKAGE" ["CL" "COMMON-LISP"]))
-                        (match (.form-children form)
-                          ((Cons _ (Cons arg (Nil))) (package-argument context arg))
-                          (_ None))
-                        None))
-                   ((None) None)))
-               (scan rest (match found ((Some _) found) ((None) package)))))))))
+         (cond
+           ((> (.form-end form) pos) package)
+           (True
+            (let found =
+              (match (form-head context form)
+                ((Some head)
+                 (if (and (.form-complete form)
+                          (named-head? head "IN-PACKAGE" ["CL" "COMMON-LISP"]))
+                     (match (.form-children form)
+                       ((Cons _ (Cons arg (Nil))) (package-argument context arg))
+                       (_ None))
+                     None))
+                ((None) None)))
+            (scan rest (match found ((Some _) found) ((None) package)))))))))
 
   (declare compile-wrapper? (SourceContext * SourceForm -> Boolean))
   (define (compile-wrapper? context form)

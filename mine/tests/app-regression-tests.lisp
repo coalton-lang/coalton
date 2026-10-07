@@ -13,8 +13,8 @@
   (let* ((state (%test-state))
          (mailbox (sb-concurrency:make-mailbox))
          (key "buffer://mailbox-regression")
-         (diagnostic (list :request 7001 :file key :start 0 :end 1
-                           :severity :error :summary "obsolete" :label-kind :primary)))
+         (diagnostic (list ':request 7001 ':file key ':start 0 ':end 1
+                           ':severity ':error ':summary "obsolete" ':label-kind ':primary)))
     (setf (mine/app/state::%native-box-value (mine/app/state:get-proto-mailbox state))
           mailbox)
     (unwind-protect
@@ -23,7 +23,7 @@
            (mine/app/diagnostics:invalidate-diagnostics-for-file key)
            (%check (mine/app/diagnostics:diagnostic-stale-p diagnostic)
                    "Expected diagnostic to be stale before draining")
-           (sb-concurrency:send-message mailbox (list :notify (cons :diagnostic diagnostic)))
+           (sb-concurrency:send-message mailbox (list ':notify (cons ':diagnostic diagnostic)))
            (sb-concurrency:send-message mailbox '(:return 7001 (:ok "done")))
            (app::process-protocol-messages! state)
            (%check (null (mine/app/diagnostics:line-diagnostic-spans key 0 2))
@@ -159,7 +159,7 @@
     (dolist (chunk (list "a" (format nil "b~%") (format nil "~%") "c"))
       (app::handle-proto-msg! state
                              (app::%parse-one-message
-                              (list :notify (list :output-chunk 91 chunk)))))
+                              (list ':notify (list ':output-chunk 91 chunk)))))
     (repl:repl-pane-append-output! pane "=> result")
     (let ((actual (repl:repl-pane-output-lines pane)))
       (%check (equal '("ab" "" "c" "=> result") actual)

@@ -486,12 +486,10 @@ position, so the CRLF terminator is omitted from line text."
   (define (visual-col-loop text limit i vcol tab-w)
     (if (>= i limit)
         vcol
-        (progn
-          (let ch = (str:ref-unchecked text i))
-          (let next-vcol =
-            (if (== ch #\Tab)
-                (next-tab-stop vcol tab-w)
-                (+ vcol (cellw:editor-char-cell-width ch))))
+        (let ((ch (str:ref-unchecked text i))
+              (next-vcol (if (== ch #\Tab)
+                             (next-tab-stop vcol tab-w)
+                             (+ vcol (cellw:editor-char-cell-width ch)))))
           (visual-col-loop text limit (+ i 1) next-vcol tab-w))))
 
   (declare visual-col (String * UFix * UFix -> UFix))
@@ -504,12 +502,10 @@ expanding tabs to the next tab stop of width TAB-W."
   (define (char-for-vcol-loop text len i vcol vcol-target tab-w)
     (if (>= i len)
         len
-        (progn
-          (let ch = (str:ref-unchecked text i))
-          (let next-vcol =
-            (if (== ch #\Tab)
-                (next-tab-stop vcol tab-w)
-                (+ vcol (cellw:editor-char-cell-width ch))))
+        (let ((ch (str:ref-unchecked text i))
+              (next-vcol (if (== ch #\Tab)
+                             (next-tab-stop vcol tab-w)
+                             (+ vcol (cellw:editor-char-cell-width ch)))))
           (if (> next-vcol vcol-target)
               i
               (char-for-vcol-loop text len (+ i 1) next-vcol vcol-target tab-w)))))

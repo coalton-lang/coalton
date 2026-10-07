@@ -14,7 +14,6 @@
    #:TokArrow #:TokOperator
    #:TokUnknown
    #:Token #:Token
-   #:.token-kind #:.token-start #:.token-end
    #:token-kind #:token-start #:token-end))
 
 (in-package #:mine/syntax/token)

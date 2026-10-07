@@ -59,9 +59,9 @@ If the file does not exist, creates an empty buffer with that path (not written 
             ((Ok exists?)
              (let n = (cell:read (.next-id mgr)))
              (let bid = (buf:BufferId n))
-             (match (if exists?
-                        (buf:buffer-from-file bid path)
-                        (Ok (buf:buffer-new-file bid path)))
+             (match (cond
+                      (exists? (buf:buffer-from-file bid path))
+                      (True (Ok (buf:buffer-new-file bid path))))
                ((Err message) (Err message))
                ((Ok buffer)
                 (cell:update! (fn (buffers) (hm:insert buffers n buffer)) (.buffers mgr))
@@ -84,12 +84,12 @@ If the file does not exist, creates an empty buffer with that path (not written 
             (lisp (-> (Result String Unit)) (fpath contents)
               (cl:handler-case
                   (cl:progn
-                   (cl:with-open-file (s fpath :direction :output
-                                              :if-exists :supersede
-                                              :if-does-not-exist :create
-                                              :external-format (coalton-impl/source:source-external-format))
-                     (cl:write-string contents s))
-                   (Ok Unit))
+                    (cl:with-open-file (s fpath :direction ':output
+                                                :if-exists ':supersede
+                                                :if-does-not-exist ':create
+                                                :external-format (coalton-impl/source:source-external-format))
+                      (cl:write-string contents s))
+                    (Ok Unit))
                 (cl:error (c)
                   (Err (cl:format cl:nil "~A" c))))))
           (match result
@@ -141,10 +141,11 @@ Returns True if closed successfully."
     (let prefix =
       (lisp (-> (Optional String)) (directory)
         (cl:handler-case
-            (cl:if (cl:zerop (cl:length directory))
-                   None
-                   (Some (mine/buffer/buffer::%normalize-file-document-key
-                          (cl:namestring (uiop:ensure-directory-pathname directory)))))
+            (cl:cond
+              ((cl:zerop (cl:length directory)) None)
+              (cl:t
+               (Some (mine/buffer/buffer::%normalize-file-document-key
+                      (cl:namestring (uiop:ensure-directory-pathname directory))))))
           (cl:error () None))))
     (match prefix
       ((None) Nil)

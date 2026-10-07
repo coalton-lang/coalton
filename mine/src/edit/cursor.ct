@@ -20,9 +20,7 @@
    #:cursor-move-page-down!
    #:cursor-selection-anchor
    #:cursor-start-selection!
-   #:cursor-clear-selection!
-   #:.pos
-   #:.target-col))
+   #:cursor-clear-selection!))
 
 (in-package #:mine/edit/cursor)
 

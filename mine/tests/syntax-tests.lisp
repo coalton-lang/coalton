@@ -21,7 +21,7 @@
 (coalton-toplevel
   (declare token-kinds ((coalton:List tok:Token) -> (coalton:List tok:TokenKind)))
   (define (token-kinds toks)
-    (map (fn (t) (tok:.token-kind t)) toks))
+    (map (fn (t) (.token-kind t)) toks))
 
   (declare short-lambda-introducer-highlights-as-fn? (Void -> Boolean))
   (define (short-lambda-introducer-highlights-as-fn?)
@@ -105,7 +105,7 @@
          (mailbox (mine/term/terminal::%terminal-input-runtime-mailbox runtime)))
     (%check (null (mine/term/terminal::%terminal-input-runtime-read-batch-timeout runtime 0))
             "Expected zero-timeout input read on an empty mailbox to return NIL")
-    (sb-concurrency:send-message mailbox :event)
+    (sb-concurrency:send-message mailbox ':event)
     (%check (equal '(:event)
                    (mine/term/terminal::%terminal-input-runtime-read-batch-timeout runtime 0))
             "Expected zero-timeout input read to drain pending mailbox events")))

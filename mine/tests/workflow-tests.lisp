@@ -35,8 +35,8 @@
       (app::open-loose-file! state path)
       (let ((buffer (%test-current-buffer state)))
         (ops:insert-string! buffer (buf:buffer-undo buffer) cs "unsaved ")
-        (with-open-file (stream path :direction :output :if-exists :supersede
-                                    :element-type '(unsigned-byte 8))
+        (with-open-file (stream path :direction ':output :if-exists ':supersede
+                                     :element-type '(unsigned-byte 8))
           (write-byte #xff stream))
         (app::%do-refresh-file! state path)
         (%check (eq buffer (%test-current-buffer state)) "Failed refresh replaced the document")

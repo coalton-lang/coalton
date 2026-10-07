@@ -7,7 +7,6 @@
    #:FocusEditor #:FocusRepl #:FocusTree
    #:FocusMinibuffer #:FocusDebugger #:FocusMenu
    #:FocusManager #:FocusManager
-   #:.fm-current #:.fm-previous
    #:focus-new
    #:focus-current
    #:focus-switch!

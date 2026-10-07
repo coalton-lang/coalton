@@ -23,37 +23,37 @@
     (map (fn (part)
            (match part
              ((None) Nil)
-             ((Some rect) [(wt:.rect-x rect) (wt:.rect-y rect)
-                           (wt:.rect-width rect) (wt:.rect-height rect)])))
-         [(layout:.cg-editor geometry) (layout:.cg-editor-status geometry)
-          (layout:.cg-repl geometry) (layout:.cg-repl-status geometry)
-          (layout:.cg-repl-strip geometry)]))
+             ((Some rect) [(.rect-x rect) (.rect-y rect)
+                           (.rect-width rect) (.rect-height rect)])))
+         [(.cg-editor geometry) (.cg-editor-status geometry)
+          (.cg-repl geometry) (.cg-repl-status geometry)
+          (.cg-repl-strip geometry)]))
 
   (declare viewport-data (input:InputWidget * wt:Rect -> List UFix))
   (define (viewport-data iw rect)
     (let viewport = (input:input-widget-viewport iw rect))
-    [(input:.iv-scroll viewport) (input:.iv-cursor-row viewport)
-     (input:.iv-cursor-col viewport) (input:.iv-line-scroll viewport)])
+    [(.iv-scroll viewport) (.iv-cursor-row viewport)
+     (.iv-cursor-col viewport) (.iv-line-scroll viewport)])
 
   (declare viewport-cursor (input:InputWidget * wt:Rect -> Optional (Tuple UFix UFix)))
-  (define (viewport-cursor iw rect) (input:.iv-cursor (input:input-widget-viewport iw rect)))
+  (define (viewport-cursor iw rect) (.iv-cursor (input:input-widget-viewport iw rect)))
 
   (declare screen-cursor (screen:Screen -> Tuple UFix UFix))
   (define (screen-cursor scr)
-    (Tuple (cell:read (screen::.screen-cursor-col scr))
-           (cell:read (screen::.screen-cursor-row scr))))
+    (Tuple (cell:read (.screen-cursor-col scr))
+           (cell:read (.screen-cursor-row scr))))
 
   (declare screen-cell-background (screen:Screen * UFix * UFix -> color:Color))
   (define (screen-cell-background scr x y)
-    (let index = (+ (* y (cell:read (screen:.screen-width scr))) x))
-    (color:.style-bg (screen::.screen-cell-style
-                     (vec:index-unsafe index (cell:read (screen::.screen-back scr))))))
+    (let index = (+ (* y (cell:read (.screen-width scr))) x))
+    (.style-bg
+     (.screen-cell-style (vec:index-unsafe index (cell:read (.screen-back scr))))))
 
   (declare screen-cell-foreground (screen:Screen * UFix * UFix -> color:Color))
   (define (screen-cell-foreground scr x y)
-    (let index = (+ (* y (cell:read (screen:.screen-width scr))) x))
-    (color:.style-fg (screen::.screen-cell-style
-                     (vec:index-unsafe index (cell:read (screen::.screen-back scr))))))
+    (let index = (+ (* y (cell:read (.screen-width scr))) x))
+    (.style-fg
+     (.screen-cell-style (vec:index-unsafe index (cell:read (.screen-back scr))))))
 
   (declare fake-terminal (UFix * UFix -> term:Terminal))
   (define (fake-terminal cols rows)
@@ -63,13 +63,13 @@
 
   (declare set-center! (state:MineState * state:CenterLayout -> Void))
   (define (set-center! st center)
-    (cell:write! (state:.ms-layout st) (state:MineLayout state:TreeHidden center))
+    (cell:write! (.ms-layout st) (state:MineLayout state:TreeHidden center))
     (values))
 
   (declare screen-cell-character (screen:Screen * UFix * UFix -> Char))
   (define (screen-cell-character scr x y)
-    (let index = (+ (* y (cell:read (screen:.screen-width scr))) x))
-    (screen::.screen-cell-ch (vec:index-unsafe index (cell:read (screen::.screen-back scr)))))
+    (let index = (+ (* y (cell:read (.screen-width scr))) x))
+    (.screen-cell-ch (vec:index-unsafe index (cell:read (.screen-back scr)))))
 
   (declare captured-search-context (List editor:RenderSpan -> editor:EditorRenderContext))
   (define (captured-search-context spans)

@@ -24,10 +24,10 @@
   (declare fill-rect (screen:Screen * wt:Rect * Char * color:Style -> Void))
   (define (fill-rect scr rect ch style)
     "Fill RECT on SCR with character CH using STYLE."
-    (let x0 = (wt:.rect-x rect))
-    (let y0 = (wt:.rect-y rect))
-    (let w  = (wt:.rect-width rect))
-    (let h  = (wt:.rect-height rect))
+    (let x0 = (.rect-x rect))
+    (let y0 = (.rect-y rect))
+    (let w  = (.rect-width rect))
+    (let h  = (.rect-height rect))
     (lisp (-> Void) (scr x0 y0 w h ch style)
       (cl:dotimes (ri h)
         (cl:dotimes (ci w)
@@ -47,13 +47,13 @@
   (declare draw-text-clipped (screen:Screen * wt:Rect * String * UFix * UFix * color:Style -> Void))
   (define (draw-text-clipped scr rect text row col style)
     "Draw TEXT at (ROW, COL) on SCR, clipped to RECT."
-    (let rx = (wt:.rect-x rect))
-    (let ry = (wt:.rect-y rect))
-    (let rw = (wt:.rect-width rect))
-    (let rh = (wt:.rect-height rect))
+    (let rx = (.rect-x rect))
+    (let ry = (.rect-y rect))
+    (let rw = (.rect-width rect))
+    (let rh = (.rect-height rect))
     ;; Only draw if the row is within the rect
     (when (and (>= row ry)
-              (< row (+ ry rh)))
+               (< row (+ ry rh)))
       (let max-col = (+ rx rw))
       (lisp (-> Void) (scr text row col style rx max-col)
         (cl:let ((cursor col)
@@ -111,10 +111,10 @@
   (declare draw-box (screen:Screen * wt:Rect * color:Style -> Void))
   (define (draw-box scr rect style)
     "Draw a single-line Unicode box border around RECT."
-    (let x0 = (wt:.rect-x rect))
-    (let y0 = (wt:.rect-y rect))
-    (let w  = (wt:.rect-width rect))
-    (let h  = (wt:.rect-height rect))
+    (let x0 = (.rect-x rect))
+    (let y0 = (.rect-y rect))
+    (let w  = (.rect-width rect))
+    (let h  = (.rect-height rect))
     (when (and (>= w 2) (>= h 2))
       (let x1 = (- (+ x0 w) 1))
       (let y1 = (- (+ y0 h) 1))
@@ -144,14 +144,14 @@ TOTAL-LINES is the total content length, SCROLL-OFFSET is the current top line."
       ;; Scrollbar needed
       (True
        (let thumb-size = (max 1 (lisp (-> UFix) (height total-lines)
-                             (cl:floor (cl:* height height) total-lines))))
+                                  (cl:floor (cl:* height height) total-lines))))
        (let thumb-pos = (lisp (-> UFix) (scroll-offset total-lines height thumb-size)
-                            (cl:min (cl:- height thumb-size)
-                                    (cl:floor (cl:* scroll-offset (cl:- height thumb-size))
-                                              (cl:max 1 (cl:- total-lines height))))))
+                          (cl:min (cl:- height thumb-size)
+                                  (cl:floor (cl:* scroll-offset (cl:- height thumb-size))
+                                            (cl:max 1 (cl:- total-lines height))))))
        ;; Draw track
        (%draw-scrollbar-col scr col y0 height 0 thumb-pos thumb-size
-                              track-style thumb-style))))
+                            track-style thumb-style))))
 
   (declare %draw-scrollbar-col (screen:Screen * UFix * UFix * UFix * UFix * UFix * UFix * color:Style * color:Style -> Void))
   (define (%draw-scrollbar-col scr col y0 height idx thumb-pos thumb-size track-style thumb-style)

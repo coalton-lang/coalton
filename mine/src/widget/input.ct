@@ -13,12 +13,9 @@
    (#:ev #:mine/event/types))
   (:export
    #:InputWidget #:InputWidget
-   #:.iw-text #:.iw-cursor #:.iw-prompt #:.iw-prompt-style #:.iw-text-style
    #:input-widget-new
    #:input-widget-render
    #:InputViewport
-   #:.iv-scroll #:.iv-cursor-row #:.iv-cursor-col #:.iv-line-scroll
-   #:.iv-prompt-width #:.iv-text-width #:.iv-cursor
    #:input-widget-viewport #:input-widget-completion-anchor
    #:input-widget-handle-key!
    #:input-widget-text
@@ -104,9 +101,9 @@
                (len (cl:length s)))
         (cl:dotimes (i row pos)
           (cl:let ((nl (cl:position #\Newline s :start pos)))
-            (cl:if nl
-                   (cl:setf pos (cl:1+ nl))
-                   (cl:return len))))
+            (cl:cond
+              (nl (cl:setf pos (cl:1+ nl)))
+              (cl:t (cl:return len)))))
         pos)))
 
   (declare %line-end (String * UFix -> UFix))
@@ -177,8 +174,8 @@
     (let cursor = (min (cell:read (.iw-cursor iw)) (str:length text)))
     (let row = (%cursor-row text cursor))
     (let col = (%cursor-col text cursor))
-    (let width = (wt:.rect-width rect))
-    (let height = (wt:.rect-height rect))
+    (let width = (.rect-width rect))
+    (let height = (.rect-height rect))
     ;; Reserve a cell for the editing cursor even when the prompt is too wide.
     (let prompt-width = (min (cellw:string-cell-width (cell:read (.iw-prompt iw)))
                             (if (> width 0) (- width 1) 0)))
@@ -190,10 +187,10 @@
                     ((>= row (+ previous height)) (+ 1 (- row height)))
                     (True previous)))
     (let line-scroll = (if (or (== text-width 0) (< col text-width))
-                          0 (+ 1 (- col text-width))))
+                           0 (+ 1 (- col text-width))))
     (let position = (if (and (> height 0) (> width 0))
-                        (Some (Tuple (+ (+ (wt:.rect-x rect) prompt-width) (- col line-scroll))
-                                     (+ (wt:.rect-y rect) (- row scroll))))
+                        (Some (Tuple (+ (+ (.rect-x rect) prompt-width) (- col line-scroll))
+                                     (+ (.rect-y rect) (- row scroll))))
                         None))
     (InputViewport scroll row col line-scroll prompt-width text-width position))
 
@@ -204,7 +201,7 @@
     (match (.iv-cursor viewport)
       ((None) None)
       ((Some (Tuple x y))
-       (let left = (+ (wt:.rect-x rect) (.iv-prompt-width viewport)))
+       (let left = (+ (.rect-x rect) (.iv-prompt-width viewport)))
        (let text = (input-widget-text iw))
        (let cursor = (min (cell:read (.iw-cursor iw)) (str:length text)))
        (let length = (str:length prefix))
@@ -228,10 +225,10 @@ Prompt is shown on the first visible line; continuation lines are indented."
     (let text   = (cell:read (.iw-text iw)))
     (let ps     = (.iw-prompt-style iw))
     (let ts     = (.iw-text-style iw))
-    (let x0     = (wt:.rect-x rect))
-    (let y0     = (wt:.rect-y rect))
-    (let w      = (wt:.rect-width rect))
-    (let h      = (wt:.rect-height rect))
+    (let x0     = (.rect-x rect))
+    (let y0     = (.rect-y rect))
+    (let w      = (.rect-width rect))
+    (let h      = (.rect-height rect))
     (let prompt = (cell:read (.iw-prompt iw)))
     (let viewport = (input-widget-viewport iw rect))
     (let plen = (.iv-prompt-width viewport))
@@ -242,8 +239,8 @@ Prompt is shown on the first visible line; continuation lines are indented."
       (let hint = (cell:read (.iw-hint iw)))
       (when (> (str:length hint) 0)
         (let dim-style = (color:Style color:text-dimmer-fg
-                                       (color:.style-bg ts)
-                                       color:AttrItalic))
+                                      (.style-bg ts)
+                                      color:AttrItalic))
         (render:draw-text-clipped scr rect hint y0 (+ x0 plen) dim-style)))
     ;; Ensure cursor is visible
     (let scroll = (.iv-scroll viewport))
@@ -272,10 +269,12 @@ Prompt is shown on the first visible line; continuation lines are indented."
                   (row (cl:+ y0 vi)))
           (cl:when (cl:< line-idx nlines)
             ;; Draw prompt on first line, spaces on continuation lines
-            (cl:if (cl:zerop line-idx)
-                   (render:draw-text-clipped scr (wt:Rect x0 row plen 1) prompt row x0 ps)
-                   (screen:screen-set-string scr row x0
-                     (cl:make-string plen :initial-element #\Space) ts))
+            (cl:cond
+              ((cl:zerop line-idx)
+               (render:draw-text-clipped scr (wt:Rect x0 row plen 1) prompt row x0 ps))
+              (cl:t
+               (screen:screen-set-string scr row x0
+                 (cl:make-string plen :initial-element #\Space) ts)))
             ;; Get line text
             (cl:let* ((line-text (mine/widget/input::%get-line text line-idx))
                       (line-len (gap:visual-col line-text (cl:length line-text) mine/buffer/gap::*tab-width*))
@@ -291,9 +290,9 @@ Prompt is shown on the first visible line; continuation lines are indented."
               (cl:loop :for ch :across line-text :do
                 (cl:let* ((tab-p (cl:char= ch #\Tab))
                           (span (cl:if tab-p
-                                        (cl:- mine/buffer/gap::*tab-width*
-                                               (cl:mod vcol mine/buffer/gap::*tab-width*))
-                                        (mine/text/width:editor-char-cell-width-cl ch)))
+                                       (cl:- mine/buffer/gap::*tab-width*
+                                             (cl:mod vcol mine/buffer/gap::*tab-width*))
+                                       (mine/text/width:editor-char-cell-width-cl ch)))
                           (draw-col (cl:+ text-x (cl:- vcol line-scroll)))
                           (end-col (cl:+ draw-col span))
                           (marker (mine/text/width:editor-control-char-representation-cl ch)))

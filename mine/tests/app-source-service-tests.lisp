@@ -13,7 +13,7 @@
            (app::%start-background-proto-reader-cl state old)
            (let ((thread (mine/app/state::%native-box-value
                           (mine/app/state:get-bg-proto-thread state))))
-             (sb-thread:join-thread thread :timeout 2 :default :timeout)
+             (sb-thread:join-thread thread :timeout 2 :default ':timeout)
              (%check (not (sb-thread:thread-alive-p thread)) "EOF reader did not stop"))
            ;; EOF has reached the mailbox, but a render replaced the connection
            ;; before the main event loop had a chance to drain it.

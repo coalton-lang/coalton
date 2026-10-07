@@ -115,9 +115,9 @@
   (define (style-to-sgr s)
     "Produce the full SGR escape string for a style (reset + fg + bg + attr)."
     (<> (sgr-reset)
-        (<> (fg-sgr (color:.style-fg s))
-            (<> (bg-sgr (color:.style-bg s))
-                (attr-sgr (color:.style-attr s))))))
+        (<> (fg-sgr (.style-fg s))
+            (<> (bg-sgr (.style-bg s))
+                (attr-sgr (.style-attr s))))))
 
   ;;; Alt screen
 

@@ -31,7 +31,7 @@
   (cl:handler-case
       (cl:destructuring-bind (program args) find-clipboard:*clipboard-copy*
         (cl:let ((proc (sb-ext:run-program program args
-                         :input :stream :wait cl:nil :search cl:t)))
+                         :input ':stream :wait cl:nil :search cl:t)))
           (cl:let ((input (sb-ext:process-input proc)))
             (cl:write-string text input)
             (cl:close input)
@@ -51,7 +51,7 @@
   (cl:handler-case
       (cl:destructuring-bind (program args) find-clipboard:*clipboard-paste*
         (cl:let* ((proc (sb-ext:run-program program args
-                          :output :stream :wait cl:nil :search cl:t))
+                          :output ':stream :wait cl:nil :search cl:t))
                   (output (sb-ext:process-output proc))
                   (text (%read-stream-to-string output)))
           (cl:close output)
