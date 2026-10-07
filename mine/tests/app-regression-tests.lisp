@@ -135,6 +135,37 @@
                 "Redo did not restore changed text")
         (%check (buf:buffer-dirty? buffer) "Redo after save was incorrectly clean")))))
 
+(defun check-editor-delete-keys-remove-selection ()
+  (with-test-directory (directory)
+    (let* ((state (%test-state))
+           (path (namestring (merge-pathnames "selection.lisp" directory)))
+           (cs (mine/app/state:get-cursor-state state)))
+      (%write-utf8-file path "(alpha beta gamma)")
+      (app::open-loose-file! state path)
+      (let ((buffer (%test-current-buffer state)))
+        (flet ((text () (gap:gap-to-string (buf:buffer-gap buffer)))
+               (select (anchor point)
+                 (cursor:cursor-move-to-position! cs anchor)
+                 (cursor:cursor-start-selection! cs)
+                 (cursor:cursor-move-to-position! cs point)))
+          (select 7 12)
+          (app::handle-editor-key state input:KeyDelete input:ModNone)
+          (%check (and (string= "(alpha gamma)" (text)) (= 7 (cursor:cursor-position cs)))
+                  "Delete did not remove a forward selection: ~S" (text))
+          (%check (coalton-impl/runtime/optional:cl-none-p (cursor:cursor-selection-anchor cs))
+                  "Deleting a selection left it active")
+          (select 12 7)
+          (app::handle-editor-key state input:KeyBackspace input:ModNone)
+          (%check (and (string= "(alpha )" (text)) (= 7 (cursor:cursor-position cs)))
+                  "Backspace did not remove a backward selection: ~S" (text))
+          (ops:undo! buffer cs)
+          (%check (string= "(alpha gamma)" (text))
+                  "Undo did not restore a deleted selection in one step: ~S" (text))
+          (select 1 1)
+          (app::handle-editor-key state input:KeyDelete input:ModNone)
+          (%check (string= "(lpha gamma)" (text))
+                  "Delete with an empty selection did not delete one character: ~S" (text)))))))
+
 (defun check-preview-keeps-permanently-open-buffer ()
   (with-test-directory (directory)
     (let* ((state (%test-state))
@@ -353,6 +384,7 @@
                   check-debugger-input-transition-and-invalid-restart
                   check-hint-results-stay-with-their-own-request
                   check-editor-undo-redo-after-save-is-dirty
+                  check-editor-delete-keys-remove-selection
                   check-preview-keeps-permanently-open-buffer
                   check-streamed-output-keeps-line-boundaries
                   check-streamed-output-extends-unfinished-line
