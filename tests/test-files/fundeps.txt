@@ -252,3 +252,50 @@ error: Instance fundep conflict
    |
  7 |  (define-instance ((C :a String) (C :a Integer) => D :a))
    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ instance requires C :A Integer, which conflicts with C :A String under functional dependencies
+
+================================================================================
+113 Fundep improvement of a declared context does not terminate
+================================================================================
+
+(package coalton-unit-test/fundeps)
+
+(define-class (C :a :b (:a -> :b)))
+
+(define-instance (C (List :a) :b => C :a (List :b)))
+
+(declare f (C :a :b => :a -> Unit))
+(define (f _) Unit)
+
+--------------------------------------------------------------------------------
+
+error: Functional dependency improvement does not terminate
+  --> test:7:11
+   |
+ 7 |  (declare f (C :a :b => :a -> Unit))
+   |             ^^^^^^^^^^^^^^^^^^^^^^^ improving C :A :B with functional dependencies does not reach a fixed point
+
+================================================================================
+114 Fundep improvement of an inferred predicate does not terminate
+================================================================================
+
+(package coalton-unit-test/fundeps)
+
+(define-type (Vec :a) (Vec :a))
+
+(define-class (Mul :a :b :c (:a :b -> :c))
+  (mul (:a * :b -> :c)))
+
+(define-instance (Mul :a :b :c => Mul :a (Vec :b) (Vec :c))
+  (define (mul a (Vec b))
+    (Vec (mul a b))))
+
+(define (f b x y)
+  (if b (mul x (Vec y)) y))
+
+--------------------------------------------------------------------------------
+
+error: Functional dependency improvement does not terminate
+  --> test:13:9
+    |
+ 13 |    (if b (mul x (Vec y)) y))
+    |           ^^^ improving Mul :A (Vec :C) :C with functional dependencies does not reach a fixed point

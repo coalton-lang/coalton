@@ -134,7 +134,8 @@
            (lambda (pred instance)
              (push (list pred instance (or *compile-file-truename* *load-truename*
                                           (package-name *package*))) selections)))
-         (code (%expression-entry-point node)))
+         (code (tc:with-fundep-errors ((source:location node) *global-environment*)
+                 (%expression-entry-point node))))
     (setf *global-environment* (tc:register-instance-selections *global-environment* selections))
     `(progn
        (load-time-value

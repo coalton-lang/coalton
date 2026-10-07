@@ -2458,13 +2458,18 @@ on functional dependencies that constrain them with respect to one
 another, and then this function creates and applies substitutions to
 preds based on functional dependencies that constrain them with
 respect to defined type class instances. The values returned are the
-predicates with all substitutions applied and the new substitutions."
+predicates with all substitutions applied and the new substitutions.
+
+Signal FUNDEP-NONTERMINATION if improvement keeps specializing PREDS
+without reaching a fixed point within +FUNDEP-MAX-DEPTH+ rounds."
   (declare (type environment env)
            (type ty-predicate-list preds)
            (type substitution-list subs)
            (values ty-predicate-list substitution-list &optional))
 
-  (let ((class-cache (make-hash-table :test #'eq))
+  (let ((input-preds preds)
+        (input-subs subs)
+        (class-cache (make-hash-table :test #'eq))
         (fundepsp-cache (make-hash-table :test #'eq))
         (instance-index-cache (make-hash-table :test #'eq)))
     (labels ((class-for (class-name)
@@ -2542,8 +2547,15 @@ predicates with all substitutions applied and the new substitutions."
       ;; repeated variables in an instance head.
       (loop :with new-subs := nil
             :with preds-generated := nil
+            ;; The caller's predicates under SUBS at the start of each of
+            ;; the last two quarters of the rounds, most recent first.
+            :with snapshots := nil
             :for i :below +fundep-max-depth+
             :do
+               (when (or (= i (floor +fundep-max-depth+ 2))
+                         (= i (floor (* 3 +fundep-max-depth+) 4)))
+                 (push (apply-substitution subs input-preds) snapshots))
+
                ;; Repeat pairwise improvement after instance improvement too:
                ;; either may expose equal determinants for the next pass.
                (setf new-subs (improve-predicate-fundeps env preds subs))
@@ -2607,7 +2619,27 @@ predicates with all substitutions applied and the new substitutions."
                    (setf subs new-subs))
                (setf preds-generated nil)
                (setf preds (apply-substitution subs preds))
-            :finally (util:coalton-bug "Fundep solving failed to fixpoint")))))
+            :finally
+               ;; Running out of rounds alone does not show that improvement
+               ;; diverged: reductions through instances can recur without
+               ;; improving anything, and improvement can rename variables
+               ;; without constraining them. Improvement that does not
+               ;; terminate keeps specializing the caller's predicates, which
+               ;; no finite solution allows.
+               (let ((growing
+                       (loop :for input-pred :in input-preds
+                             :for earlier :in (second snapshots)
+                             :for later :in (first snapshots)
+                             :for final :in (apply-substitution subs input-preds)
+                             :unless (or (predicate-subsumes-p later earlier)
+                                         (predicate-subsumes-p final later))
+                               :collect (apply-substitution input-subs input-pred))))
+                 (unless growing
+                   (util:coalton-bug "Fundep solving failed to fixpoint"))
+                 (error 'fundep-nontermination
+                        :preds (remove-duplicates growing
+                                                  :test #'type-predicate=
+                                                  :from-end t)))))))
 
 
 (defun generate-fundep-subs% (env pred subs)

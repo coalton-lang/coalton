@@ -563,7 +563,14 @@ the substitution :b +-> T can be inferred.
        (tc-note unparsed-ty
                 "the predicates ~A and ~A conflict with functional dependencies"
                 (type-object-string (tc:context-fundep-conflict-first-pred e) env)
-                (type-object-string (tc:context-fundep-conflict-second-pred e) env))))))
+                (type-object-string (tc:context-fundep-conflict-second-pred e) env))))
+    (tc:fundep-nontermination (e)
+      (tc-error
+       "Functional dependency improvement does not terminate"
+       (tc-note unparsed-ty
+                "improving ~{~A~^, ~} with functional dependencies does not reach a fixed point"
+                (mapcar (lambda (pred) (type-object-string pred env))
+                        (tc:fundep-nontermination-preds e)))))))
 
 (defun check-for-reducible-context (preds ty qual-ty env)
   (declare (type tc:ty-predicate-list preds)
