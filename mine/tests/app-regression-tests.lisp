@@ -166,6 +166,36 @@
           (%check (string= "(lpha gamma)" (text))
                   "Delete with an empty selection did not delete one character: ~S" (text)))))))
 
+(defun check-editor-paste-replaces-selection ()
+  (with-test-directory (directory)
+    (let* ((state (%test-state))
+           (path (namestring (merge-pathnames "paste.lisp" directory)))
+           (cs (mine/app/state:get-cursor-state state)))
+      (%write-utf8-file path "(alpha beta gamma)")
+      (app::open-loose-file! state path)
+      (let ((buffer (%test-current-buffer state)))
+        (flet ((text () (gap:gap-to-string (buf:buffer-gap buffer)))
+               (paste ()
+                 (%call-with-replaced-runtime-function
+                  'mine/app/clipboard::%clipboard-paste (lambda () "XYZ")
+                  (lambda ()
+                    (app::handle-editor-key state (input:KeyCtrl #\v) input:ModNone)))))
+          (cursor:cursor-move-to-position! cs 11)
+          (cursor:cursor-start-selection! cs)
+          (cursor:cursor-move-to-position! cs 7)
+          (paste)
+          (%check (and (string= "(alpha XYZ gamma)" (text)) (= 10 (cursor:cursor-position cs)))
+                  "Paste did not replace the selection: ~S" (text))
+          (%check (coalton-impl/runtime/optional:cl-none-p (cursor:cursor-selection-anchor cs))
+                  "Paste left the replaced selection active")
+          (ops:undo! buffer cs)
+          (%check (string= "(alpha beta gamma)" (text))
+                  "Undo did not restore a replaced selection in one step: ~S" (text))
+          (cursor:cursor-move-to-position! cs 1)
+          (paste)
+          (%check (string= "(XYZalpha beta gamma)" (text))
+                  "Paste without a selection did not insert at the cursor: ~S" (text)))))))
+
 (defun check-preview-keeps-permanently-open-buffer ()
   (with-test-directory (directory)
     (let* ((state (%test-state))
@@ -385,6 +415,7 @@
                   check-hint-results-stay-with-their-own-request
                   check-editor-undo-redo-after-save-is-dirty
                   check-editor-delete-keys-remove-selection
+                  check-editor-paste-replaces-selection
                   check-preview-keeps-permanently-open-buffer
                   check-streamed-output-keeps-line-boundaries
                   check-streamed-output-extends-unfinished-line

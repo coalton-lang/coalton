@@ -2383,12 +2383,18 @@ Return False, changing nothing, when no non-empty selection is active."
 
   (declare paste-clipboard! (MineState -> Void))
   (define (paste-clipboard! st)
-    "Paste from the system clipboard at the cursor position."
+    "Paste from the system clipboard, replacing the active selection if any."
     (let text = (clipboard:clipboard-paste))
     (when (> (str:length text) 0)
       (match (mgr:bufmgr-current (.ms-bufmgr st))
         ((Some buf)
-         (ops:insert-string! buf (buf:buffer-undo buf) (.ms-cursor st) text))
+         (let cs = (.ms-cursor st))
+         (match (%active-selection-range (buf:buffer-gap buf) cs)
+           ((Some (Tuple sel-start sel-end))
+            (ops:replace-range! buf (buf:buffer-undo buf) cs
+                                sel-start sel-end text (+ sel-start (str:length text))))
+           ((None)
+            (ops:insert-string! buf (buf:buffer-undo buf) cs text))))
         ((None) (values)))))
 
   (declare %paredit-if-lisp (MineState * (buf:Buffer -> Void) -> Void))
@@ -2681,7 +2687,8 @@ Return False, changing nothing, when no non-empty selection is active."
                  (_ False))
                (%delete-editor-selection! st))
       (return (values)))
-    ;; Clear selection on editing keys (not movement, copy, cut, or Ctrl+Space)
+    ;; Clear selection on editing keys (not movement, copy, cut, or Ctrl+Space).
+    ;; Paste keeps the selection so that it can replace it.
     (match key
       ((input:KeyUp) (values))
       ((input:KeyDown) (values))
@@ -2693,6 +2700,7 @@ Return False, changing nothing, when no non-empty selection is active."
       ((input:KeyPageDown) (values))
       ((input:KeyCtrl #\c) (values))
       ((input:KeyCtrl #\x) (values))
+      ((input:KeyCtrl #\v) (%commit-preview! st))
       ((input:KeyChar #\Space) (values))
       (_ (cursor:cursor-clear-selection! (.ms-cursor st))
          (%commit-preview! st)))
