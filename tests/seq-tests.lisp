@@ -1,5 +1,7 @@
 (in-package #:coalton-native-tests)
 
+(named-readtables:in-readtable coalton:coalton)
+
 (define-test seq-fold-order ()
   (is (== (fold + 7 (the (seq:Seq Integer) (seq:new))) 7))
   (is (== (foldr + 7 (the (seq:Seq Integer) (seq:new))) 7))
@@ -377,3 +379,250 @@ the last chunk to the first."
      (is (== s mapped))
      (is (== 0 (cell:read strays))))
    (iter:into-iter (seq-test-shapes))))
+
+;;; Invariants of the tree, operations that used to break them, and
+;;; randomized operations checked against a list
+
+(coalton-toplevel
+  (declare seq-test-violations (seq:Seq :a * Boolean -> List String))
+  (define (seq-test-violations s root?)
+    "The invariants of the tree of S that it violates. ROOT? tells whether S
+is the root of its tree."
+    (let ((problem (fn (bad? message) (if bad? (make-list message) Nil))))
+      (match s
+        ((coalton/seq::LeafArray v)
+         (<> (problem (> (vector:length v) 32) "leaf with more than 32 elements")
+             (problem (and (not root?) (vector:empty? v)) "empty leaf below the root")))
+        ((coalton/seq::RelaxedNode h fss cst subs)
+         (let ((cumulative (vector:new)))
+           (fold (fn (total sub)
+                   (let ((next (+ total (seq:size sub))))
+                     (vector:push! next cumulative)
+                     next))
+                 0
+                 subs)
+           (<> (fold <> Nil
+                     (make-list
+                      (problem (< h 2) "node of height below 2")
+                      (problem (/= fss (math:^ 32 (- h 1))) "wrong full subtree size")
+                      (problem (or (vector:empty? subs) (> (vector:length subs) 32))
+                               "node with no subtrees or more than 32")
+                      (problem (/= cumulative cst) "wrong cumulative size table")
+                      (problem (iter:any! (fn (sub) (/= (coalton/seq::height sub) (- h 1)))
+                                          (iter:into-iter subs))
+                               "subtree of the wrong height")
+                      (problem (iter:any! (fn (sub) (or (seq:empty? sub) (> (seq:size sub) fss)))
+                                          (iter:into-iter subs))
+                               "subtree empty or larger than the full subtree size")))
+               (fold (fn (acc sub) (<> acc (seq-test-violations sub False))) Nil subs)))))))
+
+  (declare seq-test-valid? (seq:Seq :a -> Boolean))
+  (define (seq-test-valid? s)
+    (list:null? (seq-test-violations s True))))
+
+(define-test seq-conc-keeps-invariants ()
+  ;; Each of these concatenations used to mix subtrees of different
+  ;; heights, or to signal that unreachable code was reached.
+  (iter:for-each!
+   (fn (sizes)
+     (let pieces = (map seq-test-of-size sizes))
+     (let joined = (fold seq:conc (seq:new) pieces))
+     (is (seq-test-valid? joined))
+     (is (== (fold (fn (acc piece) (<> acc (the (List Integer) (into piece)))) Nil pieces)
+             (into joined))))
+   (iter:into-iter
+    (make-list (make-list 1 3000 1) (make-list 1100 47 3000 5) (make-list 5 3000 31 1)
+               (make-list 1 1024 1) (make-list 33000 1 1) (make-list 40 40 40 1100 40)
+               (make-list 3000 3000 3000) (make-list 1 33000)))))
+
+(define-test seq-pop-keeps-elements-and-invariants ()
+  ;; A concatenated tree of 1025 elements: popping used to keep only the
+  ;; first subtree of its root, which need not be full.
+  (let s = (seq:conc (seq-test-of-size 600) (seq-test-of-size 425)))
+  (match (seq:pop s)
+    ((Some (Tuple x rest))
+     (is (== 424 x))
+     (is (seq-test-valid? rest))
+     (is (== (list:take 1024 (the (List Integer) (into s))) (into rest))))
+    ((None) (is False)))
+  ;; Popping the only element of the second leaf of a subtree of 33
+  ;; elements used to replace that subtree with its first leaf.
+  (let u = (seq-test-of-size 1057))
+  (match (seq:pop u)
+    ((Some (Tuple x rest))
+     (is (== 1056 x))
+     (is (seq-test-valid? rest))
+     (is (seq-test-valid? (seq:conc rest (seq-test-of-size 100)))))
+    ((None) (is False)))
+  ;; Popping everything.
+  (let emptied = (rec % ((s (seq-test-of-size 2100)))
+                   (match (seq:pop s)
+                     ((Some (Tuple _ rest)) (is (seq-test-valid? rest)) (% rest))
+                     ((None) s))))
+  (is (seq:empty? emptied))
+  ;; The popped element is no longer referred to by the new Seq, which
+  ;; used to keep it in its leaf, beyond the end of the elements.
+  (let strings = (fold seq:push (the (seq:Seq String) (seq:new)) (make-list "a" "b" "c" "d")))
+  (match (seq:pop strings)
+    ((Some (Tuple popped rest))
+     (match rest
+       ((coalton/seq::LeafArray v)
+        (is (lisp (-> Boolean) (v popped)
+              (cl:let ((end (cl:fill-pointer v)))
+                (cl:setf (cl:fill-pointer v) (cl:array-total-size v))
+                (cl:prog1 (cl:notany (cl:lambda (x) (cl:eq x popped)) (cl:subseq v end))
+                  (cl:setf (cl:fill-pointer v) end))))))
+       (_ (is False))))
+    ((None) (is False))))
+
+(define-test seq-construction ()
+  ;; MAKE with a multiple of 32 elements used to add an empty leaf.
+  (let s32 = (seq:make 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+                       16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31))
+  (is (seq-test-valid? s32))
+  (is (== (seq-test-of-size 32) s32))
+  (is (seq:empty? (the (seq:Seq Integer) (seq:make))))
+  (iter:for-each!
+   (fn (n)
+     (let elements = (the (List Integer) (iter:collect! (iter:up-to (the Integer (into n))))))
+     (let collected = (the (seq:Seq Integer) (iter:collect! (iter:into-iter elements))))
+     (is (seq-test-valid? collected))
+     (is (== elements (into collected)))
+     (let converted = (the (seq:Seq Integer) (into elements)))
+     (is (seq-test-valid? converted))
+     (is (== collected converted))
+     (let from-vector = (the (seq:Seq Integer) (into (the (vector:Vector Integer) (into elements)))))
+     (is (== collected from-vector))
+     (is (== collected (the (seq:Seq Integer) [x :for x :in elements])))
+     (is (== (Some (seq:size collected)) (iter:size-hint (iter:into-iter collected))))
+     (is (== elements (iter:collect! (iter:into-iter collected)))))
+   (iter:into-iter (make-list 0 1 31 32 33 1024 1025 33000)))
+  (is (== (seq:make 1 2 3) (the (seq:Seq Integer) [1 2 3])))
+  (is (== (seq:make (Tuple 1 "one") (Tuple 2 "two"))
+          (the (seq:Seq (Tuple Integer String)) [1 => "one" 2 => "two"])))
+  (is (== (seq:make 0 1 4) [(* x x) :for x :below 3])))
+
+(define-test seq-equality-and-printing ()
+  (let a = (seq-test-of-size 5000))
+  ;; The same elements, in a tree built differently.
+  (let b = (fold seq:push (seq:new) (the (List Integer) (into a))))
+  (is (== a b))
+  (is (== (seq:conc a b) (seq:conc b a)))
+  (is (/= a (seq:push a 0)))
+  (is (/= a (unwrap (seq:put a 4999 -1))))
+  (is (/= a (unwrap (seq:put a 0 -1))))
+  (is (/= a (seq-test-of-size 4999)))
+  (is (== "#<SEQ [1 2 3]>" (lisp (-> String) () (cl:prin1-to-string (coalton (seq:make 1 2 3))))))
+  (is (== "#<SEQ []>" (lisp (-> String) () (cl:prin1-to-string (coalton (the (seq:Seq Integer) (seq:new)))))))
+  (is (== "#<SEQ [0 1 2 ...]>"
+          (lisp (-> String) (a)
+            (cl:let ((cl:*print-length* 3)) (cl:prin1-to-string a)))))
+  (is (== "#<SEQ [1 2 3]>"
+          (lisp (-> String) ()
+            (cl:let ((cl:*print-length* cl:most-positive-fixnum))
+              (cl:prin1-to-string (coalton (seq:make 1 2 3))))))))
+
+(coalton-toplevel
+  (declare seq-test-random (cell:Cell UFix * UFix -> UFix))
+  (define (seq-test-random state n)
+    "A pseudo-random integer below N, which must be positive."
+    (let ((x (mod (+ (* 1103515245 (cell:read state)) 12345) 2147483648)))
+      (cell:write! state x)
+      (mod (math:div x 65536) n)))
+
+  (declare seq-test-random-seq (cell:Cell UFix * UFix * UFix
+                                -> Tuple (seq:Seq Integer) (List Integer)))
+  (define (seq-test-random-seq state n depth)
+    "A Seq of N elements, built in a random way, and the list of its elements."
+    (let ((base (the Integer (into (* 100000 (seq-test-random state 1000)))))
+          (elements (map (fn (i) (+ base (into i))) (the (List UFix) (iter:collect! (iter:up-to n))))))
+      (match (if (>= depth 3) (seq-test-random state 2) (seq-test-random state 5))
+        (0 (Tuple (into elements) elements))
+        (1 (Tuple (fold seq:push (seq:new) elements) elements))
+        (2 (let ((cut (seq-test-random state (+ n 1))))
+             (match (Tuple (seq-test-random-seq state cut (+ depth 1))
+                           (seq-test-random-seq state (- n cut) (+ depth 1)))
+               ((Tuple (Tuple a ea) (Tuple b eb))
+                (Tuple (seq:conc a b) (<> ea eb))))))
+        (3 (let ((extra (seq-test-random state 40)))
+             (match (seq-test-random-seq state (+ n extra) (+ depth 1))
+               ((Tuple s e)
+                (Tuple (rec % ((s s) (k extra))
+                         (if (== k 0)
+                             s
+                             (match (seq:pop s)
+                               ((Some (Tuple _ rest)) (% rest (- k 1)))
+                               ((None) s))))
+                       (list:take n e))))))
+        (_ (let ((cut (seq-test-random state (+ n 1))))
+             (match (seq-test-random-seq state cut (+ depth 1))
+               ((Tuple s e)
+                (let ((rest (list:drop cut elements)))
+                  (Tuple (fold seq:push s rest) (<> e rest))))))))))
+
+  (declare seq-test-check (String * seq:Seq Integer * List Integer -> Unit))
+  (define (seq-test-check operation s elements)
+    (let ((problems (seq-test-violations s True)))
+      (unless (list:null? problems)
+        (error (fold <> (<> operation ": ") (list:intersperse ", " problems)))))
+    (unless (== elements (into s))
+      (error (<> operation ": wrong elements")))
+    Unit)
+
+  (declare seq-test-random-operations (UFix * UFix -> Unit))
+  (define (seq-test-random-operations seed steps)
+    "Apply STEPS random operations to a Seq, checking its invariants and
+elements after each one."
+    (let ((state (cell:new seed))
+          (random-size (fn ()
+                         (match (seq-test-random state 6)
+                           (0 (seq-test-random state 40))
+                           (1 (+ 1000 (seq-test-random state 100)))
+                           (2 (+ 1000 (seq-test-random state 4000)))
+                           (3 (* 32 (seq-test-random state 40)))
+                           (_ (seq-test-random state 300))))))
+      (rec % ((s (the (seq:Seq Integer) (seq:new))) (elements Nil) (k 0))
+        (when (< k steps)
+          (let ((n (seq:size s)))
+            (match (seq-test-random state 6)
+              (0 (let ((x (the Integer (into (seq-test-random state 1000)))))
+                   (let ((s2 (seq:push s x)) (e2 (<> elements (make-list x))))
+                     (seq-test-check "push" s2 e2)
+                     (% s2 e2 (+ k 1)))))
+              (1 (match (seq:pop s)
+                   ((None) (% s elements (+ k 1)))
+                   ((Some (Tuple x s2))
+                    (unless (== (Some x) (list:last elements)) (error "pop: wrong element"))
+                    (let ((e2 (list:take (- n 1) elements)))
+                      (seq-test-check "pop" s2 e2)
+                      (% s2 e2 (+ k 1))))))
+              (2 (if (== n 0)
+                     (% s elements (+ k 1))
+                     (let ((i (seq-test-random state n)))
+                       (let ((s2 (unwrap (seq:put s i -1)))
+                             (e2 (<> (list:take i elements) (Cons -1 (list:drop (+ i 1) elements)))))
+                         (seq-test-check "put" s2 e2)
+                         (% s2 e2 (+ k 1))))))
+              (3 (match (seq-test-random-seq state (random-size) 0)
+                   ((Tuple u eu)
+                    (let ((s2 (seq:conc s u)) (e2 (<> elements eu)))
+                      (seq-test-check "conc on the right" s2 e2)
+                      (% s2 e2 (+ k 1))))))
+              (4 (match (seq-test-random-seq state (random-size) 0)
+                   ((Tuple u eu)
+                    (let ((s2 (seq:conc u s)) (e2 (<> eu elements)))
+                      (seq-test-check "conc on the left" s2 e2)
+                      (% s2 e2 (+ k 1))))))
+              (_ (match (seq-test-random-seq state (random-size) 0)
+                   ((Tuple u eu)
+                    (seq-test-check "construction" u eu)
+                    (% u eu (+ k 1)))))))))
+      Unit)))
+
+(define-test seq-random-operations ()
+  (iter:for-each!
+   (fn (seed)
+     (is (== None
+             (catch (progn (seq-test-random-operations seed 150) None)
+               ((the Panic p) (Some (exception:message p)))))))
+   (iter:into-iter (make-list 1 7919 15838 23757 31676 39595 47514 55433))))
