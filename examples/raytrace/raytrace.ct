@@ -8,7 +8,7 @@
                     (#:cell #:coalton/cell)
                     (#:list #:coalton/list)
                     (#:int #:coalton/math/integral))
-  (:export #:make-scene #:make-camera #:render!))
+  (:export #:make-scene #:make-camera #:render! #:render-row!))
 
 (in-package #:coalton-raytrace)
 
@@ -350,4 +350,36 @@ The runner validates dimensions and settings before entering this hot path."
         (let index = (* 3 (+ x (* y width))))
         (array:set! pixels index (.x color))
         (array:set! pixels (+ index 1) (.y color))
-        (array:set! pixels (+ index 2) (.z color))))))
+        (array:set! pixels (+ index 2) (.z color)))))
+
+  (declare row-seed (U32 * UFix -> U32))
+  (define (row-seed seed y)
+    "A nonzero seed for the random stream of row `y` of a frame rendered from `seed`: the first output of a SplitMix64 generator seeded with both, truncated to 32 bits."
+    (lisp (-> U32) (seed y)
+      (cl:let* ((z (cl:ldb (cl:byte 64 0) (cl:+ (cl:ash seed 32) y #x9e3779b97f4a7c15)))
+                (z (cl:ldb (cl:byte 64 0) (cl:* (cl:logxor z (cl:ash z -30)) #xbf58476d1ce4e5b9)))
+                (z (cl:ldb (cl:byte 64 0) (cl:* (cl:logxor z (cl:ash z -27)) #x94d049bb133111eb)))
+                (low (cl:ldb (cl:byte 32 0) (cl:logxor z (cl:ash z -31)))))
+        (cl:if (cl:zerop low) 1 low))))
+
+  (declare render-row! (World * Camera * UFix * UFix * UFix * UFix * U32 * UFix * array:LispArray F64 -> Void))
+  (define (render-row! world camera width height samples depth seed y pixels)
+    "Render row `y`, counting from the top, into an existing width*height*3 array, as `render!` renders each row, except that the row draws its random numbers from a stream of its own, seeded from `seed` and `y`. Rows can therefore be rendered in any order, or in parallel, with the same result, which differs from the image of `render!`."
+    (let rng = (cell:new (row-seed seed y)))
+    (for ((x (the UFix 0) (+ x 1))) :repeat width
+      (let color =
+        (for ((sample (the UFix 0) (+ sample 1))
+              (sum (Vec3 0.0d0 0.0d0 0.0d0)
+                   (progn
+                     (let u = (/ (+ (int:integral->num x) (random-f64 rng))
+                                 (int:integral->num width)))
+                     (let v = (- 1.0d0 (/ (+ (int:integral->num y) (random-f64 rng))
+                                         (int:integral->num height))))
+                     (v+ sum (radiance world (camera-ray camera u v) depth rng)))))
+          :returns (scale (/ 1.0d0 (int:integral->num samples)) sum)
+          :repeat samples
+          (values)))
+      (let index = (* 3 (+ x (* y width))))
+      (array:set! pixels index (.x color))
+      (array:set! pixels (+ index 1) (.y color))
+      (array:set! pixels (+ index 2) (.z color)))))

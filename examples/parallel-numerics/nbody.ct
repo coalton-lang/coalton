@@ -1,0 +1,216 @@
+;;;; nbody.ct
+;;;;
+;;;; A direct-summation simulation of N bodies under their mutual
+;;;; gravitation, integrated with the leapfrog (kick-drift-kick) method.
+;;;; Gravity is softened over a short length, as is usual when bodies
+;;;; stand for parcels of a smooth mass distribution, so that close
+;;;; encounters stay tame. Units are such that G = 1.
+;;;;
+;;;; Each time step computes the acceleration of every body from all the
+;;;; others, which takes time proportional to N^2. A body's acceleration
+;;;; depends only on the positions, which do not change meanwhile, so
+;;;; the bodies can be divided among workers; each acceleration is
+;;;; summed in the same order however they are divided.
+
+(defpackage #:coalton-parallel-numerics/nbody
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames (#:arr #:coalton/lisparray)
+                    (#:math #:coalton/math)
+                    (#:par #:coalton/threads/parallel)
+                    (#:common #:coalton-parallel-numerics/common))
+  (:export #:Bodies
+           #:make-bodies
+           #:copy-bodies
+           #:simulate!
+           #:energy
+           #:bodies-positions
+           #:bodies-velocities))
+
+(in-package #:coalton-parallel-numerics/nbody)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+
+  (define-struct Bodies
+    "The state of `count` bodies, one array per coordinate."
+    (count UFix)
+    (mass (arr:LispArray F64))
+    (x (arr:LispArray F64))
+    (y (arr:LispArray F64))
+    (z (arr:LispArray F64))
+    (vx (arr:LispArray F64))
+    (vy (arr:LispArray F64))
+    (vz (arr:LispArray F64))
+    (ax (arr:LispArray F64))
+    (ay (arr:LispArray F64))
+    (az (arr:LispArray F64)))
+
+  (define softening2
+    "The square of the softening length, 0.01."
+    1d-4)
+
+  (declare make-bodies (UFix * U64 -> Bodies))
+  (define (make-bodies n seed)
+    "`n` bodies of total mass 1, distributed at random uniformly in the unit ball, with random velocities of up to 0.1 in each coordinate."
+    (let ((x (arr:make n 0d0))
+          (y (arr:make n 0d0))
+          (z (arr:make n 0d0))
+          (vx (arr:make n 0d0))
+          (vy (arr:make n 0d0))
+          (vz (arr:make n 0d0)))
+      (for ((declare i UFix) (i 0 (1+ i)))
+        :repeat n
+        ;; Draw points in the cube until one falls in the ball.
+        (rec draw ((attempt 0))
+          (let ((u (fn (d)
+                     (- (* 2d0 (common:random-f64 seed (into (+ (* 6 (+ (* 1000 i) attempt)) d))))
+                        1d0))))
+            (let ((px (u 0))
+                  (py (u 1))
+                  (pz (u 2)))
+              (if (< (+ (* px px) (+ (* py py) (* pz pz))) 1d0)
+                  (progn
+                    (arr:set! x i px)
+                    (arr:set! y i py)
+                    (arr:set! z i pz)
+                    (arr:set! vx i (* 0.1d0 (u 3)))
+                    (arr:set! vy i (* 0.1d0 (u 4)))
+                    (arr:set! vz i (* 0.1d0 (u 5))))
+                  (draw (+ attempt 1)))))))
+      (Bodies n
+              (arr:make n (/ 1d0 (common:to-f64 n)))
+              x y z vx vy vz
+              (arr:make n 0d0) (arr:make n 0d0) (arr:make n 0d0))))
+
+  (declare copy-bodies (Bodies -> Bodies))
+  (define (copy-bodies b)
+    (Bodies (.count b)
+            (.mass b)
+            (arr:copy (.x b)) (arr:copy (.y b)) (arr:copy (.z b))
+            (arr:copy (.vx b)) (arr:copy (.vy b)) (arr:copy (.vz b))
+            (arr:copy (.ax b)) (arr:copy (.ay b)) (arr:copy (.az b))))
+
+  (declare bodies-positions (Bodies -> (List (arr:LispArray F64))))
+  (define (bodies-positions b)
+    (make-list (.x b) (.y b) (.z b)))
+
+  (declare bodies-velocities (Bodies -> (List (arr:LispArray F64))))
+  (define (bodies-velocities b)
+    (make-list (.vx b) (.vy b) (.vz b)))
+
+  (declare accelerate! (Bodies * UFix * UFix -> Void))
+  (define (accelerate! b lo hi)
+    "Compute the accelerations of bodies `lo` (inclusive) to `hi` (exclusive)."
+    (let ((n (.count b))
+          (m (.mass b))
+          (x (.x b))
+          (y (.y b))
+          (z (.z b))
+          (ax (.ax b))
+          (ay (.ay b))
+          (az (.az b)))
+      (for ((declare i UFix) (i lo (1+ i)))
+        :repeat (- hi lo)
+        (let ((xi (arr:aref x i))
+              (yi (arr:aref y i))
+              (zi (arr:aref z i)))
+          ;; Body i itself contributes nothing: its distance is zero.
+          (let (values sx sy sz) =
+            (rec sum ((j 0) (sx 0d0) (sy 0d0) (sz 0d0))
+              (if (== j n)
+                  (values sx sy sz)
+                  (let* ((dx (- (arr:aref x j) xi))
+                         (dy (- (arr:aref y j) yi))
+                         (dz (- (arr:aref z j) zi))
+                         (r2 (+ softening2 (+ (* dx dx) (+ (* dy dy) (* dz dz)))))
+                         (s (/ (arr:aref m j) (* r2 (math:sqrt r2)))))
+                    (sum (+ j 1) (+ sx (* s dx)) (+ sy (* s dy)) (+ sz (* s dz)))))))
+          (arr:set! ax i sx)
+          (arr:set! ay i sy)
+          (arr:set! az i sz)))))
+
+  (declare kick! (Bodies * F64 * UFix * UFix -> Void))
+  (define (kick! b dt lo hi)
+    "Advance the velocities of bodies `lo` to `hi` by `dt`, at constant acceleration."
+    (let ((vx (.vx b)) (vy (.vy b)) (vz (.vz b))
+          (ax (.ax b)) (ay (.ay b)) (az (.az b)))
+      (for ((declare i UFix) (i lo (1+ i)))
+        :repeat (- hi lo)
+        (arr:set! vx i (+ (arr:aref vx i) (* dt (arr:aref ax i))))
+        (arr:set! vy i (+ (arr:aref vy i) (* dt (arr:aref ay i))))
+        (arr:set! vz i (+ (arr:aref vz i) (* dt (arr:aref az i)))))))
+
+  (declare drift! (Bodies * F64 * UFix * UFix -> Void))
+  (define (drift! b dt lo hi)
+    "Advance the positions of bodies `lo` to `hi` by `dt`, at constant velocity."
+    (let ((x (.x b)) (y (.y b)) (z (.z b))
+          (vx (.vx b)) (vy (.vy b)) (vz (.vz b)))
+      (for ((declare i UFix) (i lo (1+ i)))
+        :repeat (- hi lo)
+        (arr:set! x i (+ (arr:aref x i) (* dt (arr:aref vx i))))
+        (arr:set! y i (+ (arr:aref y i) (* dt (arr:aref vy i))))
+        (arr:set! z i (+ (arr:aref z i) (* dt (arr:aref vz i)))))))
+
+  (declare simulate! (Bodies * F64 * UFix * Boolean -> Void))
+  (define (simulate! b dt steps parallel?)
+    "Advance the bodies by `steps` time steps of length `dt`, dividing them among workers if `parallel?`."
+    (let ((n (.count b))
+          (half (* 0.5d0 dt)))
+      (common:over-range parallel? 0 n (fn (lo hi) (accelerate! b lo hi)))
+      (for ((declare step UFix) (step 0 (1+ step)))
+        :repeat steps
+        (common:over-range parallel? 0 n (fn (lo hi) (kick! b half lo hi)))
+        (common:over-range parallel? 0 n (fn (lo hi) (drift! b dt lo hi)))
+        (common:over-range parallel? 0 n (fn (lo hi) (accelerate! b lo hi)))
+        (common:over-range parallel? 0 n (fn (lo hi) (kick! b half lo hi))))))
+
+  (declare energy (Bodies -> F64))
+  (define (energy b)
+    "The total energy of the bodies, kinetic and potential. The potential energy, a sum over all pairs of bodies, is computed in parallel, in chunks of fixed size so that the result does not depend on scheduling."
+    (let ((n (.count b))
+          (m (.mass b))
+          (x (.x b)) (y (.y b)) (z (.z b))
+          (vx (.vx b)) (vy (.vy b)) (vz (.vz b)))
+      (let ((kinetic
+              (for ((declare i UFix)
+                    (declare sum F64)
+                    (i 0 (1+ i))
+                    (sum 0d0 (+ sum (* 0.5d0
+                                       (* (arr:aref m i)
+                                          (+ (* (arr:aref vx i) (arr:aref vx i))
+                                             (+ (* (arr:aref vy i) (arr:aref vy i))
+                                                (* (arr:aref vz i) (arr:aref vz i)))))))))
+                :returns sum
+                :repeat n
+                Unit))
+            (potential
+              (par:map-reduce-chunks
+               0 n
+               (fn (lo hi)
+                 (for ((declare i UFix)
+                       (declare sum F64)
+                       (i lo (1+ i))
+                       (sum 0d0
+                            (+ sum
+                               (for ((declare j UFix)
+                                     (declare inner F64)
+                                     (j (+ i 1) (1+ j))
+                                     (inner 0d0
+                                            (let* ((dx (- (arr:aref x j) (arr:aref x i)))
+                                                   (dy (- (arr:aref y j) (arr:aref y i)))
+                                                   (dz (- (arr:aref z j) (arr:aref z i)))
+                                                   (r2 (+ softening2
+                                                          (+ (* dx dx) (+ (* dy dy) (* dz dz))))))
+                                              (- inner (/ (* (arr:aref m i) (arr:aref m j))
+                                                          (math:sqrt r2))))))
+                                 :returns inner
+                                 :repeat (- n (+ i 1))
+                                 Unit))))
+                   :returns sum
+                   :repeat (- hi lo)
+                   Unit))
+               + 0d0
+               :grain 16)))
+        (+ kinetic potential)))))

@@ -1,0 +1,96 @@
+;;;; channel.ct
+;;;;
+;;;; Unbounded channels for passing values between threads.
+
+(coalton/utils:defstdlib-package #:coalton/threads/channel
+  (:use
+   #:coalton
+   #:coalton/builtin
+   #:coalton/classes)
+  (:local-nicknames
+   (#:backend #:coalton/threads/backend)
+   (#:math #:coalton/math))
+  (:export
+   #:Channel
+   #:new
+   #:send!
+   #:recv!
+   #:try-recv!
+   #:recv-timeout!
+   #:length
+   #:empty?)
+  (:documentation "Unbounded channels for passing values between threads.
+
+A `Channel :a` is a first-in, first-out queue that any number of
+threads may send to and receive from. Sending never blocks; receiving
+waits until a value is available. On SBCL, the implementation is
+lock-free."))
+
+(in-package #:coalton/threads/channel)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+
+  (repr :native backend:mailbox)
+  (define-type (Channel :a)
+    "An unbounded first-in, first-out channel of values of type `:a`.")
+
+  (declare new (&key (:name String) -> Channel :a))
+  (define (new &key (name "Coalton channel"))
+    "Create an empty channel. The `name` shows up in debugging tools."
+    (lisp (-> (Channel :a)) (name)
+      (backend:make-mailbox :name name)))
+
+  (declare send! (Channel :a * :a -> Void))
+  (define (send! channel value)
+    "Send `value` to `channel`."
+    (lisp (-> Void) (channel value)
+      (backend:send-message channel value)))
+
+  (declare recv! (Channel :a -> :a))
+  (define (recv! channel)
+    "Remove and return the oldest value in `channel`, waiting until there is one."
+    (lisp (-> :a) (channel)
+      (backend:receive-message channel)))
+
+  ;; The functions below receive into a list of zero or one elements:
+  ;; returning a placeholder value of type :a when nothing was received
+  ;; would violate type declarations once inlined into typed code.
+
+  (declare try-recv! (Channel :a -> Optional :a))
+  (define (try-recv! channel)
+    "Remove and return the oldest value in `channel`, or return `None` immediately if it is empty."
+    (match (lisp (-> (List :a)) (channel)
+             (cl:multiple-value-bind (value foundp)
+                 (backend:receive-message-no-hang channel)
+               (cl:if foundp (cl:list value) cl:nil)))
+      ((Cons value _) (Some value))
+      ((Nil) None)))
+
+  (declare recv-timeout! ((math:Rational :b) => Channel :a * :b -> Optional :a))
+  (define (recv-timeout! channel seconds)
+    "Like `recv!`, but stop waiting after `seconds`, returning `None` if no value arrived in time."
+    (let ((timeout (math:best-approx seconds)))
+      (match (lisp (-> (List :a)) (channel timeout)
+               (cl:multiple-value-bind (value foundp)
+                   (backend:receive-message channel :timeout (cl:max 0 timeout))
+                 (cl:if foundp (cl:list value) cl:nil)))
+        ((Cons value _) (Some value))
+        ((Nil) None))))
+
+  (declare length (Channel :a -> UFix))
+  (define (length channel)
+    "The number of values waiting in `channel`. Other threads may change it at any time."
+    (lisp (-> UFix) (channel)
+      (backend:mailbox-count channel)))
+
+  (declare empty? (Channel :a -> Boolean))
+  (define (empty? channel)
+    "Is `channel` empty? Other threads may change this at any time."
+    (lisp (-> Boolean) (channel)
+      (backend:mailbox-empty-p channel))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/THREADS/CHANNEL")

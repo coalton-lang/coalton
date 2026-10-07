@@ -20,6 +20,7 @@ an error or or something is unclear, please fix it and submit a PR.
 - [Macros](/manual/topics/macros/)
 - [Lisp Interop](/manual/topics/lisp-interop/)
 - [Debugging Operators](/manual/topics/debugging/)
+- [Parallel Programming](/manual/topics/parallel-programming/)
 - [Standard Library Reference](/reference/)
 
 ## Operators And Symbols

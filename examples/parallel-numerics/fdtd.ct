@@ -1,0 +1,198 @@
+;;;; fdtd.ct
+;;;;
+;;;; A finite-difference time-domain (FDTD) simulation of Maxwell's
+;;;; equations in two dimensions, for transverse-magnetic (TMz) waves:
+;;;; the electric field Ez points out of the plane, and the magnetic
+;;;; field (Hx, Hy) lies in it. The fields live on a staggered Yee grid
+;;;; and are advanced in leapfrog fashion, the magnetic field from the
+;;;; electric field and then the electric field from the magnetic field.
+;;;;
+;;;; A plane pulse, launched by a line source, crosses a dielectric
+;;;; cylinder of relative permittivity 2.25, which acts as a lens and
+;;;; focuses it about half a radius behind itself, inside a box with
+;;;; perfectly conducting walls. Units are normalized: one cell per unit
+;;;; of length, and Courant number S = c dt / dx.
+;;;;
+;;;; Each half step updates every cell from its neighbors in the other
+;;;; field only, so rows can be updated in any order, and in parallel:
+;;;; a time step is two parallel loops over the rows.
+
+(defpackage #:coalton-parallel-numerics/fdtd
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames (#:arr #:coalton/lisparray)
+                    (#:math #:coalton/math)
+                    (#:common #:coalton-parallel-numerics/common))
+  (:export #:Grid
+           #:make-grid
+           #:copy-grid
+           #:simulate!
+           #:grid-rows
+           #:grid-columns
+           #:grid-ez
+           #:grid-hx
+           #:grid-hy
+           #:energy))
+
+(in-package #:coalton-parallel-numerics/fdtd)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+
+  (define-struct Grid
+    "The fields of a simulation on a grid of `rows` by `columns` cells, in row-major order. Ez(i, j) is at index `i * columns + j`; at the same index are Hx(i, j + 1/2) and Hy(i + 1/2, j)."
+    (rows UFix)
+    (columns UFix)
+    (ez (arr:LispArray F32))
+    (hx (arr:LispArray F32))
+    (hy (arr:LispArray F32))
+    ;; S / εr for each cell, where εr is the relative permittivity.
+    (ez-coefficient (arr:LispArray F32))
+    ;; The row along which the source adds its pulse to Ez.
+    (source-row UFix))
+
+  (define courant
+    "The Courant number S. Two-dimensional simulations are stable for S < 1/√2."
+    0.7f0)
+
+  (define points-per-wavelength
+    "The number of cells per wavelength at the peak frequency of the source."
+    20f0)
+
+  (declare make-grid (UFix * UFix -> Grid))
+  (define (make-grid rows columns)
+    "A grid of `rows` by `columns` cells, at rest, with the source along a row near the top and a dielectric cylinder below it."
+    (let ((coefficients (arr:make (* rows columns) courant))
+          (r (common:to-f64 rows))
+          (c (common:to-f64 columns)))
+      (let* ((center-i (* 0.45d0 r))
+             (center-j (* 0.5d0 c))
+             (radius (* 0.15d0 (min r c))))
+        (for ((declare i UFix) (i 0 (1+ i)))
+          :repeat rows
+          (for ((declare j UFix) (j 0 (1+ j)))
+            :repeat columns
+            (let ((di (- (common:to-f64 i) center-i))
+                  (dj (- (common:to-f64 j) center-j)))
+              (when (< (+ (* di di) (* dj dj)) (* radius radius))
+                (arr:set! coefficients (+ (* i columns) j) (/ courant 2.25f0)))))))
+      (Grid rows
+            columns
+            (arr:make (* rows columns) 0f0)
+            (arr:make (* rows columns) 0f0)
+            (arr:make (* rows columns) 0f0)
+            coefficients
+            (math:div (* 3 rows) 20))))
+
+  (declare copy-grid (Grid -> Grid))
+  (define (copy-grid g)
+    (Grid (.rows g)
+          (.columns g)
+          (arr:copy (.ez g))
+          (arr:copy (.hx g))
+          (arr:copy (.hy g))
+          (.ez-coefficient g)
+          (.source-row g)))
+
+  (declare grid-rows (Grid -> UFix))
+  (define (grid-rows g) (.rows g))
+
+  (declare grid-columns (Grid -> UFix))
+  (define (grid-columns g) (.columns g))
+
+  (declare grid-ez (Grid -> arr:LispArray F32))
+  (define (grid-ez g) (.ez g))
+
+  (declare grid-hx (Grid -> arr:LispArray F32))
+  (define (grid-hx g) (.hx g))
+
+  (declare grid-hy (Grid -> arr:LispArray F32))
+  (define (grid-hy g) (.hy g))
+
+  (declare update-h! (Grid * UFix * UFix -> Void))
+  (define (update-h! g lo hi)
+    "Advance the magnetic field by a time step in rows `lo` (inclusive) to `hi` (exclusive)."
+    (let ((rows (.rows g))
+          (columns (.columns g))
+          (ez (.ez g))
+          (hx (.hx g))
+          (hy (.hy g)))
+      (for ((declare i UFix) (i lo (1+ i)))
+        :repeat (- hi lo)
+        (let ((row (* i columns)))
+          ;; dHx/dt = -dEz/dy
+          (for ((declare k UFix) (k row (1+ k)))
+            :repeat (- columns 1)
+            (arr:set! hx k (- (arr:aref hx k)
+                              (* courant (- (arr:aref ez (+ k 1)) (arr:aref ez k))))))
+          ;; dHy/dt = dEz/dx
+          (when (< (+ i 1) rows)
+            (for ((declare k UFix) (k row (1+ k)))
+              :repeat columns
+              (arr:set! hy k (+ (arr:aref hy k)
+                                (* courant (- (arr:aref ez (+ k columns)) (arr:aref ez k)))))))))))
+
+  (declare update-e! (Grid * UFix * UFix -> Void))
+  (define (update-e! g lo hi)
+    "Advance the electric field by a time step in rows `lo` (inclusive) to `hi` (exclusive), which must be interior rows. Ez stays zero on the walls."
+    (let ((columns (.columns g))
+          (ez (.ez g))
+          (hx (.hx g))
+          (hy (.hy g))
+          (coefficients (.ez-coefficient g)))
+      (for ((declare i UFix) (i lo (1+ i)))
+        :repeat (- hi lo)
+        ;; dEz/dt = (dHy/dx - dHx/dy) / εr
+        (for ((declare k UFix) (k (+ (* i columns) 1) (1+ k)))
+          :repeat (- columns 2)
+          (arr:set! ez k (+ (arr:aref ez k)
+                            (* (arr:aref coefficients k)
+                               (- (- (arr:aref hy k) (arr:aref hy (- k columns)))
+                                  (- (arr:aref hx k) (arr:aref hx (- k 1)))))))))))
+
+  (declare ricker (UFix -> F32))
+  (define (ricker n)
+    "The source's pulse at time step `n`: a Ricker wavelet, delayed by one period."
+    (let* ((a (* math:pi (- (/ (* courant (common:to-f32 n)) points-per-wavelength) 1f0)))
+           (a2 (* a a)))
+      (* (- 1f0 (* 2f0 a2)) (math:exp (negate a2)))))
+
+  (declare add-source! (Grid * UFix -> Void))
+  (define (add-source! g n)
+    "Add the source's pulse at time step `n` to Ez along the source row, but for the walls."
+    (let ((ez (.ez g))
+          (columns (.columns g))
+          (pulse (ricker n)))
+      (for ((declare k UFix) (k (+ (* (.source-row g) columns) 1) (1+ k)))
+        :repeat (- columns 2)
+        (arr:set! ez k (+ (arr:aref ez k) pulse)))))
+
+  (declare simulate! (Grid * UFix * UFix * Boolean -> Void))
+  (define (simulate! g start steps parallel?)
+    "Advance `g` from time step `start` by `steps` time steps, updating its rows in parallel if `parallel?`."
+    (let ((rows (.rows g)))
+      (for ((declare n UFix) (n start (1+ n)))
+        :repeat steps
+        (common:over-range parallel? 0 rows (fn (lo hi) (update-h! g lo hi)))
+        (common:over-range parallel? 1 (- rows 1) (fn (lo hi) (update-e! g lo hi)))
+        (add-source! g n))))
+
+  (declare energy (Grid -> F64))
+  (define (energy g)
+    "The electromagnetic energy in `g`, up to a constant factor."
+    (let ((ez (.ez g))
+          (hx (.hx g))
+          (hy (.hy g))
+          (coefficients (.ez-coefficient g)))
+      (for ((declare k UFix)
+            (declare sum F64)
+            (k 0 (1+ k))
+            (sum 0d0 (+ sum
+                        (into (+ (* (/ courant (arr:aref coefficients k))
+                                    (* (arr:aref ez k) (arr:aref ez k)))
+                                 (+ (* (arr:aref hx k) (arr:aref hx k))
+                                    (* (arr:aref hy k) (arr:aref hy k))))))))
+        :returns sum
+        :repeat (arr:length ez)
+        Unit))))

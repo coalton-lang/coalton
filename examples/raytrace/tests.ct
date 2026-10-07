@@ -183,6 +183,28 @@
     (cl:assert (cl:handler-case (cl:progn (cl:apply #'bench:render-frame options) cl:nil)
                  (cl:error () cl:t)))))
 
+(cl:defun render-rows (width height samples depth seed rows)
+  "Render a frame row by row with RENDER-ROW!, taking the rows in the order ROWS."
+  (cl:let ((pixels (cl:make-array (cl:* width height 3) :element-type 'cl:double-float
+                                                        :initial-element 0d0))
+           (world (coalton:call-coalton-function rt:make-scene))
+           (camera (coalton:call-coalton-function rt:make-camera (cl:float (cl:/ width height) 1d0))))
+    (cl:dolist (y rows pixels)
+      (coalton:call-coalton-function rt:render-row!
+                                     world camera width height samples depth seed y pixels))))
+
+(cl:defun test-render-rows ()
+  (cl:let* ((rows (cl:loop for y below 9 collect y))
+            (forward (render-rows 16 9 2 5 12345 rows))
+            (backward (render-rows 16 9 2 5 12345 (cl:reverse rows)))
+            (changed (render-rows 16 9 2 5 12346 rows)))
+    ;; Each row has its own random stream, so the order does not matter.
+    (cl:assert (cl:equalp forward backward))
+    (cl:assert (cl:not (cl:equalp forward changed)))
+    (cl:assert (cl:every (cl:lambda (x) (cl:<= 0d0 x 1d0)) forward))
+    (cl:assert (cl:some (cl:lambda (x) (cl:> x 0.5d0)) forward))
+    (cl:assert (cl:some (cl:lambda (x) (cl:< x 0.1d0)) forward))))
+
 (cl:defun test-runner ()
   (cl:let ((cl:*standard-output* (cl:make-broadcast-stream)))
     (cl:multiple-value-bind (report pixels)
@@ -195,6 +217,7 @@
                (cl:error () cl:t))))
 
 (cl:defun run-tests ()
-  (cl:mapc #'cl:funcall '(test-spheres test-bounds test-scattering test-random test-render test-runner))
+  (cl:mapc #'cl:funcall '(test-spheres test-bounds test-scattering test-random test-render
+                          test-render-rows test-runner))
   (cl:format cl:t "~&Ray tracer tests passed.~%")
   cl:t)

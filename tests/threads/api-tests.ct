@@ -1,0 +1,474 @@
+(cl:in-package #:coalton-native-tests/threads)
+
+;;;; Tests of the Coalton interface of coalton/threads.
+
+(coalton-toplevel
+
+  (declare threads-test-fib (UFix -> UFix))
+  (define (threads-test-fib n)
+    (if (< n 2)
+        n
+        (progn
+          (let (values a b) = (par:join (fn () (threads-test-fib (- n 1)))
+                                        (fn () (threads-test-fib (- n 2)))))
+          (+ a b))))
+
+  (define-exception ThreadsTestError
+    (ThreadsTestError String))
+
+  (define-resumption (ThreadsTestUse Integer)
+    "Continue with the given value.")
+
+  (declare threads-test-sleep (Void -> Void))
+  (define (threads-test-sleep)
+    (lisp (-> Void) ()
+      (cl:sleep 0.02)
+      (cl:values)))
+
+  (declare threads-test-vector (UFix * (UFix -> :a) -> Vector :a))
+  (define (threads-test-vector n f)
+    (let ((v (vector:with-capacity n)))
+      (for ((declare i UFix)
+            (i 0 (1+ i)))
+        :repeat n
+        (vector:push! (f i) v))
+      v))
+
+  (declare threads-test-seqs (Void -> List (seq:Seq Integer)))
+  (define (threads-test-seqs)
+    "Seqs of various sizes, including a concatenation, whose tree is irregular."
+    (let ((of-size (fn (n)
+                     (the (seq:Seq Integer)
+                          (into (the (List Integer) (iter:collect! (iter:up-to (the Integer n)))))))))
+      (make-list (of-size 0) (of-size 1) (of-size 33) (of-size 1025) (of-size 100000)
+                 (fold seq:conc (seq:new) (map of-size (make-list 1100 47 30000 5 2048))))))
+
+  (declare threads-test-hash (Integer -> Tuple Integer Integer))
+  (define (threads-test-hash x)
+    (Tuple (mod x 1000003) 31))
+
+  (declare threads-test-hash-combine (Tuple Integer Integer * Tuple Integer Integer
+                                      -> Tuple Integer Integer))
+  (define (threads-test-hash-combine a b)
+    "Combine the polynomial hashes of two sequences into the hash of their
+concatenation. This is associative, with identity (Tuple 0 1), and
+sensitive to order."
+    (match (Tuple a b)
+      ((Tuple (Tuple ha pa) (Tuple hb pb))
+       (Tuple (mod (+ (* ha pb) hb) 1000003) (mod (* pa pb) 1000003))))))
+
+;;; Threads and synchronization
+
+(define-test threads-spawn-and-join ()
+  (let ((threads (map (fn (i) (thread:spawn (fn () (* i i)) :name "Squarer"))
+                      (make-list 1 2 3 4 5))))
+    (is (== 55 (fold + 0 (map thread:join threads))))
+    ;; A thread may be joined more than once.
+    (is (== 55 (fold + 0 (map thread:join threads))))
+    (is (== (make-list "Squarer" "Squarer" "Squarer" "Squarer" "Squarer")
+            (map thread:name threads)))))
+
+(define-test threads-join-signals-thread-errors ()
+  (let ((failing (thread:spawn (fn () (throw (ThreadsTestError "from a thread"))))))
+    (is (== "from a thread"
+            (catch (thread:join failing)
+              ((ThreadsTestError message) message))))))
+
+(define-test threads-alive ()
+  (let ((gate (semaphore:new 0))
+        (waiter (thread:spawn (fn () (semaphore:wait! gate) "released"))))
+    (is (thread:alive? waiter))
+    (semaphore:signal! gate)
+    (is (== "released" (thread:join waiter)))))
+
+(define-test threads-mutex ()
+  (let ((lock (mutex:new :name "test mutex"))
+        (counter (cell:new 0)))
+    (map thread:join
+         (map (fn (_)
+                (thread:spawn
+                 (fn ()
+                   (for ((declare i UFix)
+                         (i 0 (1+ i)))
+                     :repeat 1000
+                     (mutex:with-lock lock
+                       (fn ()
+                         (cell:increment! counter)
+                         (values))))
+                   Unit)))
+              (make-list 1 2 3 4)))
+    (is (== 4000 (cell:read counter)))
+    ;; with-lock returns all the values of its function.
+    (let (values a b) = (mutex:with-lock lock (fn () (values 1 2))))
+    (is (== 3 (+ a b)))
+    ;; try-lock! fails while another thread holds the mutex.
+    (mutex:lock! lock)
+    (is (not (thread:join (thread:spawn (fn () (mutex:try-lock! lock))))))
+    (mutex:unlock! lock)
+    (is (thread:join (thread:spawn (fn ()
+                                     (let ((acquired? (mutex:try-lock! lock)))
+                                       (when acquired?
+                                         (mutex:unlock! lock))
+                                       acquired?)))))))
+
+(define-test threads-condition-variable ()
+  (let ((lock (mutex:new))
+        (cv (cv:new))
+        (ready (cell:new False))
+        (consumer (thread:spawn
+                   (fn ()
+                     (mutex:with-lock lock
+                       (fn ()
+                         (for ()
+                           :while (not (cell:read ready))
+                           (cv:wait! cv lock))
+                         "woken"))))))
+    (mutex:with-lock lock
+      (fn ()
+        (cell:write! ready True)
+        (cv:broadcast! cv)))
+    (is (== "woken" (thread:join consumer)))
+    ;; A wait that times out returns False and holds the mutex again, so
+    ;; that with-lock can release it.
+    (is (== False (mutex:with-lock lock (fn () (cv:wait-timeout! cv lock 0.01)))))
+    (is (mutex:try-lock! lock))
+    (mutex:unlock! lock)))
+
+(define-test threads-semaphore ()
+  (let ((sem (semaphore:new 2)))
+    (is (semaphore:try-wait! sem))
+    (is (semaphore:try-wait! sem))
+    (is (not (semaphore:try-wait! sem)))
+    (is (not (semaphore:wait-timeout! sem 0.01)))
+    (semaphore:signal! sem :count 3)
+    (is (== 3 (semaphore:count sem)))
+    (semaphore:wait! sem)
+    (is (== 2 (semaphore:count sem)))))
+
+(define-test threads-atomic ()
+  (let ((counter (atomic:new 0)))
+    (par:for-range! 0 10000 (fn (_) (atomic:increment! counter) (values)))
+    (is (== 10000 (atomic:read counter)))
+    (is (== 9999 (atomic:decrement! counter)))
+    (is (== 9999 (atomic:swap! counter 5)))
+    (is (== 7 (atomic:write! counter 7)))
+    (is (== 14 (atomic:update! (fn (x) (* 2 x)) counter)))
+    (is (== 14 (atomic:update-swap! (fn (x) (+ x 1)) counter)))
+    (is (== 15 (atomic:read counter))))
+  (let ((box (atomic:new "old")))
+    (let ((current (atomic:read box)))
+      (is (atomic:compare-and-swap! box current "new"))
+      ;; CURRENT is no longer the value of BOX.
+      (is (not (atomic:compare-and-swap! box current "newer")))
+      (is (== "new" (atomic:read box)))))
+  (let ((stack (atomic:new Nil)))
+    (par:for-range! 0 1000 (fn (i) (atomic:push! stack i) (values)))
+    (is (== 499500 (fold + 0 (atomic:read stack))))
+    (let ((popped (cell:new 0)))
+      (par:for-range! 0 1000
+                      (fn (_)
+                        (match (atomic:pop! stack)
+                          ((Some x) (cell:update! (fn (y) (+ x y)) popped) (values))
+                          ((None) (values))))
+                      :grain 1000)
+      (is (== 499500 (cell:read popped))))
+    (is (== None (atomic:pop! stack)))))
+
+(define-test threads-channel ()
+  (let ((channel (channel:new))
+        (producer (thread:spawn
+                   (fn ()
+                     (for ((declare i Integer)
+                           (i 1 (1+ i)))
+                       :repeat 100
+                       (channel:send! channel i))
+                     (channel:send! channel 0)
+                     Unit)))
+        (total (cell:new 0)))
+    (for ()
+      (let x = (channel:recv! channel))
+      (when (== x 0)
+        (break))
+      (cell:update! (fn (y) (+ x y)) total))
+    (thread:join producer)
+    (is (== 5050 (cell:read total)))
+    (is (channel:empty? channel))
+    (is (== None (channel:try-recv! channel)))
+    (is (== None (channel:recv-timeout! channel 0.01)))
+    (channel:send! channel 42)
+    (channel:send! channel 43)
+    (is (== 2 (channel:length channel)))
+    (is (== (Some 42) (channel:try-recv! channel)))
+    (is (== (Some 43) (channel:recv-timeout! channel 1.0)))))
+
+;;; Tasks
+
+(define-test threads-parallel-join ()
+  (is (== 6765 (threads-test-fib 20)))
+  (let (values s n) = (par:join (fn () "left") (fn () 2)))
+  (is (== "left" s))
+  (is (== 2 n))
+  (is (== "right failed"
+          (catch (progn
+                   (par:join (fn () 1) (fn () (throw (ThreadsTestError "right failed"))))
+                   "no error")
+            ((ThreadsTestError message) message))))
+  (is (== "left failed"
+          (catch (progn
+                   (par:join (fn () (throw (ThreadsTestError "left failed"))) (fn () 2))
+                   "no error")
+            ((ThreadsTestError message) message)))))
+
+(define-test threads-parallel-scope ()
+  (let ((total (atomic:new 0)))
+    (par:scope
+     (fn (s)
+       (for ((declare i Integer)
+             (i 0 (1+ i)))
+         :repeat 100
+         ;; Bind I afresh: a FOR variable is updated in place, and the
+         ;; task may run after the next iteration has begun.
+         (let ((j i))
+           (par:spawn s (fn ()
+                          (atomic:update! (fn (x) (+ j x)) total)
+                          (values)))))))
+    (is (== 4950 (atomic:read total))))
+  (is (== "done" (par:scope (fn (s)
+                              (par:spawn s (fn () (values)))
+                              "done"))))
+  (is (== "task failed"
+          (catch (par:scope (fn (s)
+                              (par:spawn s (fn ()
+                                             (throw (ThreadsTestError "task failed"))
+                                             (values)))
+                              "no error"))
+            ((ThreadsTestError message) message)))))
+
+(define-test threads-parallel-futures ()
+  (let ((futures (map (fn (i) (par:async (fn () (* i 10))))
+                      (make-list 1 2 3 4 5))))
+    (is (== 150 (fold + 0 (map par:await futures))))
+    (is (== (make-list True True True True True) (map par:done? futures))))
+  (let ((failing (par:async (fn () (throw (ThreadsTestError "future failed"))))))
+    (is (== "future failed"
+            (catch (par:await failing)
+              ((ThreadsTestError message) message))))))
+
+(define-test threads-task-errors-by-type ()
+  ;; An exception thrown by a task can be caught by type, bound, and
+  ;; thrown again.
+  (is (== "rethrown"
+          (catch (catch (progn
+                          (par:join (fn () 1)
+                                    (fn () (throw (ThreadsTestError "rethrown"))))
+                          "no error")
+                   ((the ThreadsTestError e) (throw e)))
+            ((ThreadsTestError message) message))))
+  ;; Panics in tasks propagate like other errors.
+  (is (== "bad index"
+          (catch (progn
+                   (par:for-range! 0 100 (fn (i)
+                                           (when (== i 57)
+                                             (error "bad index"))))
+                   "no error")
+            ((the Panic p) (exception:message p)))))
+  (is (== "caught"
+          (catch (par:await (par:async (fn () (unwrap (the (Optional String) None)))))
+            (_ "caught"))))
+  ;; TRY turns an exception thrown by a task into a Result.
+  (is (result:err?
+       (the (Result ThreadsTestError Unit)
+            (result:try (fn ()
+                          (par:scope (fn (s)
+                                       (par:spawn s (fn ()
+                                                      (throw (ThreadsTestError "in a scope"))
+                                                      (values)))
+                                       Unit))))))))
+
+(define-test threads-aborted-tasks-and-threads ()
+  ;; Invoking the ABORT restart ends a task or a thread early, and the
+  ;; operation waiting for it signals a distinct exception.
+  (is (== "task aborted"
+          (catch (progn
+                   (par:join (fn () 1) (fn () (lisp (-> Integer) () (cl:abort))))
+                   "no error")
+            ((the par:TaskAborted _) "task aborted"))))
+  (is (== "thread aborted"
+          (catch (thread:join (thread:spawn (fn () (lisp (-> String) () (cl:abort)))))
+            ((the thread:ThreadAborted _) "thread aborted")))))
+
+(define-test threads-handle-within-tasks ()
+  ;; A HANDLE within a task can resume the task.
+  (is (== (make-list 2 4 0 8)
+          (par:map (fn (x)
+                     (handle (resumable (if (== x 3)
+                                            (throw (ThreadsTestError "three"))
+                                            (* 2 x))
+                               ((ThreadsTestUse y) y))
+                       ((ThreadsTestError _) (resume-to (ThreadsTestUse 0)))))
+                   (make-list 1 2 3 4))))
+  ;; A HANDLE around a parallel operation handles the errors of its
+  ;; tasks too.
+  (is (== Nil
+          (handle (par:map (fn (x)
+                             (if (== x 3)
+                                 (throw (ThreadsTestError "three"))
+                                 x))
+                           (make-list 1 2 3 4))
+            ((ThreadsTestError _) Nil)))))
+
+(define-test threads-protect-around-parallel-operations ()
+  ;; A scope waits for its tasks even when its body throws, so the
+  ;; cleanup forms of a PROTECT around it run once the tasks are done.
+  (let ((finished (atomic:new 0))
+        (seen (cell:new 0)))
+    (is (== "body failed"
+            (catch (protect
+                       (par:scope (fn (s)
+                                    (for ()
+                                      :repeat 8
+                                      (par:spawn s (fn ()
+                                                     (threads-test-sleep)
+                                                     (atomic:increment! finished)
+                                                     (values))))
+                                    (throw (ThreadsTestError "body failed"))))
+                     (cell:write! seen (atomic:read finished)))
+              ((ThreadsTestError message) message))))
+    (is (== 8 (cell:read seen)))))
+
+(define-test threads-parallel-worker-index ()
+  (is (== None (par:worker-index)))
+  (is (< 0 (par:worker-count)))
+  (let ((index (par:await (par:async (fn () (par:worker-index))))))
+    (is (match index
+          ((Some i) (< i (par:worker-count)))
+          ((None) False)))))
+
+;;; Data parallelism
+
+(define-test threads-parallel-ranges ()
+  (let ((v (threads-test-vector 1000 (fn (_) 0))))
+    (par:for-range! 0 1000 (fn (i) (vector:set! i (1+ i) v)))
+    (is (== 500500 (fold + 0 v))))
+  (is (== 332833500
+          (par:map-reduce-range 0 1000 (fn (i) (let ((x (the Integer (into i)))) (* x x))) + 0)))
+  (is (== 0 (par:map-reduce-range 5 5 (fn (i) (the Integer (into i))) + 0)))
+  ;; The order of elements is preserved.
+  (is (== (range 0 999)
+          (par:fold-map-range 0 1000 (fn (i) (make-list (the Integer (into i)))))))
+  (is (== (range 0 999)
+          (par:fold-map-range 0 1000 (fn (i) (make-list (the Integer (into i)))) :grain 7))))
+
+(define-test threads-parallel-chunks ()
+  (let ((v (threads-test-vector 10000 (fn (_) 0))))
+    (par:for-chunks! 0 10000
+                     (fn (lo hi)
+                       (for ((declare i UFix)
+                             (i lo (1+ i)))
+                         :repeat (- hi lo)
+                         (vector:set! i (1+ (vector:index-unsafe i v)) v))))
+    ;; Every element was incremented exactly once.
+    (is (== 10000 (fold + 0 v))))
+  (is (== 49995000
+          (par:map-reduce-chunks 0 10000
+                                 (fn (lo hi)
+                                   (for ((declare i UFix)
+                                         (declare acc Integer)
+                                         (i lo (1+ i))
+                                         (acc 0 (+ acc (into i))))
+                                     :returns acc
+                                     :repeat (- hi lo)
+                                     Unit))
+                                 + 0)))
+  ;; Chunks are combined in order.
+  (is (== (the (List UFix) (range 0 99))
+          (par:map-reduce-chunks 0 100 (fn (lo hi) (range lo (- hi 1))) <> Nil :grain 7))))
+
+(define-test threads-parallel-collections ()
+  (let ((v (threads-test-vector 10000 (fn (i) (the Integer (into i))))))
+    (is (== 49995000 (par:map-reduce (fn (x) x) + 0 v)))
+    (is (== 49995000 (par:map-reduce (fn (x) x) + 0 v :grain 100)))
+    (is (== (range 0 9) (par:fold-map (fn (x) (make-list x)) (vector:subseq v 0 10))))
+    (let ((doubled (threads-test-vector 10000 (fn (_) 0))))
+      (par:map-into! (fn (x) (* 2 x)) v doubled)
+      (is (== 99990000 (fold + 0 doubled))))
+    (let ((total (atomic:new 0)))
+      (par:for-each! (fn (x) (atomic:update! (fn (y) (+ x y)) total) (values)) v)
+      (is (== 49995000 (atomic:read total))))
+    (let ((squares (the (Vector Integer) (par:map (fn (x) (* x x)) v))))
+      (is (== 10000 (vector:length squares)))
+      (is (== 9801 (vector:index-unsafe 99 squares)))))
+  (is (== (make-list 2 4 6) (par:map (fn (x) (* 2 x)) (make-list 1 2 3))))
+  (is (== (the (List Integer) Nil) (par:map (fn (x) (* 2 x)) Nil))))
+
+(define-test threads-parallel-seqs ()
+  (iter:for-each!
+   (fn (s)
+     (let total = (fold + 0 s))
+     (let hash = (fold (fn (acc x) (threads-test-hash-combine acc (threads-test-hash x)))
+                       (Tuple 0 1)
+                       s))
+     (is (== (map (fn (x) (* 3 x)) s) (par:map (fn (x) (* 3 x)) s)))
+     (is (== total (par:map-reduce (fn (x) x) + 0 s)))
+     (is (== hash (par:map-reduce threads-test-hash threads-test-hash-combine (Tuple 0 1) s)))
+     (is (== hash (par:map-reduce threads-test-hash threads-test-hash-combine (Tuple 0 1) s
+                                  :grain 100)))
+     (let sum = (atomic:new 0))
+     (par:for-each! (fn (x) (atomic:update! (fn (y) (+ x y)) sum) (values)) s :grain 1)
+     (is (== total (atomic:read sum))))
+   (iter:into-iter (threads-test-seqs)))
+  ;; Elements are combined in order.
+  (let ((small (the (seq:Seq Integer) (into (the (List Integer) (range 1 300))))))
+    (is (== (range 1 300) (par:fold-map (fn (x) (make-list x)) small)))
+    (is (== (range 1 300) (par:fold-map (fn (x) (make-list x)) small :grain 7))))
+  ;; Like other parallel operations, mapping even a Seq that fits in a
+  ;; single leaf runs on workers.
+  (is (== (make-list True True True)
+          (the (List Boolean)
+               (into (par:map (fn (_)
+                                (match (par:worker-index)
+                                  ((Some _) True)
+                                  ((None) False)))
+                              (the (seq:Seq Integer) (into (make-list 1 2 3))))))))
+  ;; Errors in tasks propagate.
+  (is (== "seq"
+          (catch (progn
+                   (par:map (fn (x) (if (== x 777) (throw (ThreadsTestError "seq")) x))
+                            (the (seq:Seq Integer)
+                                 (into (the (List Integer) (range 1 5000)))))
+                   "no error")
+            ((ThreadsTestError message) message)))))
+
+(define-test threads-map-into-bit-arrays ()
+  ;; The elements of a LispArray Bit share machine words, so tasks that
+  ;; stored into neighboring elements could lose each other's updates.
+  (let ((ones (the (array:LispArray Bit) (array:make 1003 1))))
+    (for ((declare trial UFix) (trial 0 (+ trial 1)))
+      :repeat 50
+      (let ((bits (the (array:LispArray Bit) (array:make 1003 0))))
+        (par:map-into! (fn (b) b) ones bits :grain 1)
+        (is (== 1003 (for ((declare i UFix) (declare count UFix)
+                           (i 0 (+ i 1))
+                           (count 0 (if (== (array:aref bits i) 1) (+ count 1) count)))
+                       :returns count
+                       :repeat 1003
+                       Unit)))))))
+
+(define-test threads-parallel-sort ()
+  (let ((v (threads-test-vector 20000 (fn (i) (the Integer (into (mod (* i 7919) 1000)))))))
+    (par:sort! v)
+    (is (== 20000 (vector:length v)))
+    (for ((declare i UFix)
+          (i 1 (1+ i)))
+      :repeat 19999
+      (is (<= (vector:index-unsafe (- i 1) v) (vector:index-unsafe i v)))))
+  ;; Sorting is stable.
+  (let ((pairs (threads-test-vector 5000 (fn (i) (Tuple (mod i 10) i)))))
+    (par:sort-by! (fn (a b) (< (fst a) (fst b))) pairs)
+    (for ((declare i UFix)
+          (i 1 (1+ i)))
+      :repeat 4999
+      (let ((a (vector:index-unsafe (- i 1) pairs))
+            (b (vector:index-unsafe i pairs)))
+        (is (or (< (fst a) (fst b))
+                (and (== (fst a) (fst b)) (< (snd a) (snd b)))))))))

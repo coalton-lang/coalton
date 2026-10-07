@@ -1,0 +1,380 @@
+;;;; parallel.ct
+;;;;
+;;;; Task and data parallelism on a work-stealing pool of threads.
+
+(coalton/utils:defstdlib-package #:coalton/threads/parallel
+  (:use
+   #:coalton
+   #:coalton/builtin
+   #:coalton/classes)
+  (:shadow
+   #:join
+   #:map)
+  (:local-nicknames
+   (#:rt #:coalton/threads/runtime)
+   (#:math #:coalton/math)
+   (#:ram #:coalton/randomaccess)
+   (#:seq #:coalton/seq)
+   (#:vec #:coalton/vector))
+  (:export
+   ;; The pool
+   #:worker-count
+   #:set-worker-count!
+   #:shutdown!
+   #:worker-index
+
+   ;; Tasks
+   #:join
+   #:Scope
+   #:scope
+   #:spawn
+   #:Future
+   #:async
+   #:await
+   #:done?
+   #:TaskAborted
+
+   ;; Data parallelism
+   #:for-range!
+   #:map-reduce-range
+   #:fold-map-range
+   #:for-chunks!
+   #:map-reduce-chunks
+   #:ParallelFoldable
+   #:element-count
+   #:fold-elements
+   #:for-each!
+   #:map-into!
+   #:map-reduce
+   #:fold-map
+   #:ParallelMap
+   #:map
+   #:sort!
+   #:sort-by!)
+  (:documentation "Task and data parallelism.
+
+Parallel work runs on a pool of worker threads, one per processor by
+default (see `set-worker-count!` and the `COALTON_NUM_THREADS`
+environment variable), started on first use. Each worker keeps a deque
+of tasks, and idle workers steal tasks from busy ones, so that work
+spreads to where processors are free.
+
+- `join` evaluates two functions, potentially in parallel. It is the
+  basic tool for divide-and-conquer algorithms, and is cheap enough to
+  use at fine granularity.
+- `scope` and `spawn` run any number of tasks for their effects, and
+  wait for all of them.
+- `async` and `await` compute values with futures.
+- `for-range!`, `map-reduce-range`, `fold-map-range`, `for-each!`,
+  `map-into!`, `map-reduce`, `fold-map`, `map` and `sort!` operate on
+  ranges and on collections, such as vectors and `Seq`s. They split work
+  adaptively: large chunks when all workers are busy, and more
+  parallelism where workers are idle.
+- `for-chunks!` and `map-reduce-chunks` hand whole chunks of a range
+  to a function, which can then process them with a tight sequential
+  loop. They are the most efficient way to parallelize loops whose
+  individual iterations are cheap.
+
+The functions passed to these operations may run on any worker thread.
+Parallel tasks must not modify the same data at the same time; for
+example, distinct tasks may set distinct elements of a vector, but not
+push onto the same vector. The elements of a `LispArray Bit` are
+packed into machine words, so tasks must not set elements in the same
+block of 64 at the same time; `map-into!` takes care of this. Use the
+operations in `coalton/threads/atomic` or `coalton/threads/mutex` to
+share mutable state. A task that blocks waiting for another task, other
+than with `join`, `await` or the end of a `scope`, may deadlock. Do not
+hold a mutex while calling a parallel operation: a worker waiting inside
+one runs other tasks meanwhile, which could try to acquire the same
+mutex.
+
+An exception thrown in a task, like any other error that it signals, is
+signaled again by the operation that waits for the task, so it can be
+caught with `catch` or `try` around that operation. A task may run on
+another worker thread, where it does not see the dynamic bindings,
+`handle` branches and resumptions established around the operation; a
+`handle` around the operation then sees the error only after the task
+has unwound, so it cannot resume the task. Handle errors that should
+resume a task within the task itself. A task that is unwound before it
+finishes, for example because its worker thread is interrupted, makes
+the operation signal `TaskAborted`."))
+
+(in-package #:coalton/threads/parallel)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+;;;
+;;; The pool
+;;;
+
+(coalton-toplevel
+
+  (declare worker-count (Void -> UFix))
+  (define (worker-count)
+    "The number of worker threads that run parallel tasks."
+    (lisp (-> UFix) ()
+      (rt:worker-count)))
+
+  (declare set-worker-count! (UFix -> Void))
+  (define (set-worker-count! count)
+    "Use `count` worker threads, which must be positive, for parallel tasks from now on. This stops the current workers, if any, after they finish all submitted work. It must not be called from a task, nor while other threads are running parallel operations."
+    (lisp (-> Void) (count)
+      (rt:set-worker-count count)))
+
+  (declare shutdown! (Void -> Void))
+  (define (shutdown!)
+    "Stop the worker threads after they finish all submitted work. The next parallel operation starts them again. This must not be called from a task, nor while other threads are running parallel operations."
+    (lisp (-> Void) ()
+      (rt:shutdown)))
+
+  (declare worker-index (Void -> Optional UFix))
+  (define (worker-index)
+    "The index, between 0 and `(worker-count)` exclusive, of the worker thread calling this function, or `None` if it is called from another thread. This can be used to give each worker its own scratch space."
+    (if (lisp (-> Boolean) ()
+          (cl:and (rt:current-worker-index) cl:t))
+        (Some (lisp (-> UFix) ()
+                (rt:current-worker-index)))
+        None)))
+
+;;;
+;;; Tasks
+;;;
+
+(coalton-toplevel
+
+  (repr :native rt:task-aborted)
+  (define-exception TaskAborted
+    "Signaled by an operation waiting for a task that was unwound before it finished, for example because its worker thread was interrupted.")
+
+  (declare join ((Void -> :a) * (Void -> :b) -> :a * :b))
+  (define (join left right)
+    "Call `left` and `right`, potentially in parallel, and return both of their values.
+
+When called from a task, `left` runs on the calling worker, while `right` is offered to other workers, and runs on the calling worker after `left` if no other worker took it. When called from a thread outside the pool, `join` runs both on worker threads, and the calling thread waits. `join` returns only when both have finished, however they exit. If `left` signals an error, the error propagates once `right` has finished or been cancelled. If only `right` signals an error, `join` signals it again.
+
+For example, a parallel Fibonacci function:
+
+```lisp
+(define (fib n)
+  (if (< n 25)
+      (sequential-fib n)
+      (let (values a b) = (par:join (fn () (fib (- n 1)))
+                                    (fn () (fib (- n 2)))))
+      (+ a b)))
+```"
+    (lisp (-> :a * :b) (left right)
+      (rt:join2 left right)))
+
+  (repr :native rt:scope)
+  (define-type Scope
+    "A scope in which tasks can be spawned with `spawn`. See `scope`.")
+
+  (declare scope (forall ((:result Values)) ((Scope -> :result) -> :result)))
+  (define (scope f)
+    "Call `f` with a new scope, then wait for every task spawned in the scope, and return the values of `f`. Tasks may spawn more tasks in the same scope.
+
+If a task signals an error, `scope` signals it again once all tasks have finished (if several did, which one is unspecified). If `f` itself exits non-locally, or the waiting thread is unwound, for example by an interrupt, the tasks are still awaited, and their errors are discarded. Interrupting that wait abandons the tasks, which keep running."
+    (lisp (-> :result) (f)
+      (rt:call-with-scope f)))
+
+  (declare spawn (Scope * (Void -> Void) -> Void))
+  (define (spawn s task)
+    "Run `task` in parallel, as part of the scope `s`. Any thread may spawn tasks in a scope until the scope finishes; after that, `spawn` signals an error."
+    (lisp (-> Void) (s task)
+      (rt:scope-spawn s task)))
+
+  (repr :native rt:job)
+  (define-type (Future :a)
+    "The eventual value of a parallel computation started with `async`.")
+
+  (declare async ((Void -> :a) -> Future :a))
+  (define (async thunk)
+    "Start computing `thunk` in parallel, returning a future for its value."
+    (lisp (-> (Future :a)) (thunk)
+      (rt:spawn-future thunk)))
+
+  (declare await (Future :a -> :a))
+  (define (await future)
+    "Wait for `future` and return its value. If its computation signaled an error, signal it again. A future may be awaited any number of times, from any thread.
+
+A worker awaiting a computation that has not started runs it itself; a worker awaiting a computation in progress runs other tasks of its own computation in the meantime."
+    (lisp (-> :a) (future)
+      (rt:await-future future)))
+
+  (declare done? (Future :a -> Boolean))
+  (define (done? future)
+    "Has the computation of `future` finished?"
+    (lisp (-> Boolean) (future)
+      (rt:future-done-p future))))
+
+;;;
+;;; Data parallelism
+;;;
+
+(coalton-toplevel
+
+  (declare for-range! (UFix * UFix * (UFix -> Void) &key (:grain UFix) -> Void))
+  (define (for-range! start end f &key (grain 0))
+    "Call `f` on every integer from `start` (inclusive) to `end` (exclusive), in parallel.
+
+By default the range is split adaptively. A positive `grain` instead splits it into chunks of at most `grain` consecutive integers, each processed sequentially."
+    (lisp (-> Void) (start end f grain)
+      (rt:parallel-for start end grain f)))
+
+  (declare map-reduce-range (UFix * UFix * (UFix -> :a) * (:a * :a -> :a) * :a &key (:grain UFix) -> :a))
+  (define (map-reduce-range start end f combine identity &key (grain 0))
+    "Combine the values of `f` on the integers from `start` (inclusive) to `end` (exclusive) with `combine`, in parallel, or return `identity` if the range is empty.
+
+`combine` must be associative, and `identity` must be an identity for it. The values are combined in the order of the integers, but how they are grouped depends on how the range is split. By default the range is split adaptively, so the grouping may vary from run to run, which matters for operations that are only approximately associative, such as floating-point addition. A positive `grain` splits the range into chunks of at most `grain` integers in a fixed way, making the result reproducible."
+    (lisp (-> :a) (start end f combine identity grain)
+      (rt:parallel-reduce start end grain f combine identity)))
+
+  (inline)
+  (declare fold-map-range (Monoid :m => UFix * UFix * (UFix -> :m) &key (:grain UFix) -> :m))
+  (define (fold-map-range start end f &key (grain 0))
+    "Combine the values of `f` on the integers from `start` (inclusive) to `end` (exclusive) with `<>`, in parallel. See `map-reduce-range`."
+    (map-reduce-range start end f <> mempty :grain grain))
+
+  (declare for-chunks! (UFix * UFix * (UFix * UFix -> Void) &key (:grain UFix) -> Void))
+  (define (for-chunks! start end f &key (grain 0))
+    "Call `f` on disjoint chunks of consecutive integers that together cover the integers from `start` (inclusive) to `end` (exclusive), in parallel. A chunk is passed as two integers `lo` and `hi`, and contains the integers from `lo` (inclusive) to `hi` (exclusive); it is never empty.
+
+Because `f` processes a whole chunk at a time, it can use an efficient sequential loop. By default the chunks are chosen adaptively; a positive `grain` makes them at most `grain` long."
+    (lisp (-> Void) (start end f grain)
+      (rt:parallel-for-chunks start end grain f)))
+
+  (declare map-reduce-chunks (UFix * UFix * (UFix * UFix -> :a) * (:a * :a -> :a) * :a
+                              &key (:grain UFix) -> :a))
+  (define (map-reduce-chunks start end f combine identity &key (grain 0))
+    "Compute a value with `f` for each of a set of disjoint chunks that together cover the integers from `start` (inclusive) to `end` (exclusive), as in `for-chunks!`, and combine the values with `combine` in the order of the chunks, in parallel. Returns `identity` if the range is empty.
+
+For example, to sum a function over a range with an unboxed accumulator in each chunk:
+
+```lisp
+(par:map-reduce-chunks 0 n
+  (fn (lo hi)
+    (for ((declare i UFix) (declare acc F64)
+          (i lo (1+ i)) (acc 0d0 (+ acc (f i))))
+      :returns acc
+      :repeat (- hi lo)
+      Unit))
+  + 0d0)
+```
+
+`combine` must be associative, and `identity` an identity for it. See `map-reduce-range` regarding `grain`."
+    (lisp (-> :a) (start end f combine identity grain)
+      (rt:parallel-reduce-chunks start end grain f combine identity)))
+
+  (define-class (ParallelFoldable :f :a (:f -> :a))
+    "Collections whose elements `for-each!`, `map-reduce` and `fold-map` can process in parallel. These operations divide the indices of the elements of a collection into chunks, as `for-chunks!` does, and process each chunk with `fold-elements`.
+
+Every `RandomAccess` collection, such as `Vector` or `LispArray`, is an instance, and so is `Seq`. Since the instance for `RandomAccess` collections overlaps with every other instance, other instances must be marked with `(overlap)`."
+    (element-count
+     "The number of elements of a collection."
+     (:f -> UFix))
+    (fold-elements
+     "`(fold-elements f init collection start end)` folds `f` over the elements of `collection` at the indices from `start` (inclusive) to `end` (exclusive), in order, starting with `init`, where `start <= end <= (element-count collection)`."
+     ((:b * :a -> :b) * :b * :f * UFix * UFix -> :b)))
+
+  (overlap)
+  (define-instance (ram:RandomAccess :f :a => ParallelFoldable :f :a)
+    (inline)
+    (define (element-count storage)
+      (ram:length storage))
+    (inline)
+    (define (fold-elements f init storage start end)
+      (rec % ((i start) (acc init))
+        (if (>= i end)
+            acc
+            (% (+ i 1) (f acc (ram:unsafe-aref storage i)))))))
+
+  (overlap)
+  (define-instance (ParallelFoldable (seq:Seq :a) :a)
+    (inline)
+    (define (element-count s)
+      (seq:size s))
+    (inline)
+    (define (fold-elements f init s start end)
+      (seq:fold-range f init s start end)))
+
+  (inline)
+  (declare for-each! (ParallelFoldable :f :a => (:a -> Void) * :f &key (:grain UFix) -> Void))
+  (define (for-each! f collection &key (grain 0))
+    "Call `f` on every element of `collection`, in parallel. See `for-range!` for `grain`."
+    (for-chunks! 0 (element-count collection)
+                 (fn (start end)
+                   (fold-elements (fn (_ x) (f x) Unit) Unit collection start end)
+                   (values))
+                 :grain grain))
+
+  (inline)
+  (declare map-into! ((ram:RandomAccess :f :a) (ram:RandomAccess :g :b)
+                      => (:a -> :b) * :f * :g &key (:grain UFix) -> Void))
+  (define (map-into! f source destination &key (grain 0))
+    "Store the value of `f` on each element of `source` at the same index of `destination`, in parallel. `destination` must be at least as long as `source`. See `for-range!` for `grain`, which is rounded up to a multiple of 64.
+
+The elements are stored in blocks of 64 consecutive indices, starting at multiples of 64, so that a `LispArray Bit` may be the destination: different tasks never store into the same machine word."
+    (let ((n (ram:length source)))
+      (when (> n (ram:length destination))
+        (error "map-into!: the destination is shorter than the source."))
+      (for-chunks! 0 (math:div (+ n 63) 64)
+                   (fn (lo hi)
+                     (let ((start (* lo 64)))
+                       (for ((declare i UFix) (i start (+ i 1)))
+                         :repeat (- (min n (* hi 64)) start)
+                         (ram:unsafe-set! destination i (f (ram:unsafe-aref source i))))))
+                   :grain (math:div (+ grain 63) 64))))
+
+  (inline)
+  (declare map-reduce (ParallelFoldable :f :a
+                       => (:a -> :b) * (:b * :b -> :b) * :b * :f &key (:grain UFix) -> :b))
+  (define (map-reduce f combine identity collection &key (grain 0))
+    "Combine the values of `f` on the elements of `collection` with `combine`, in parallel, or return `identity` if `collection` is empty. See `map-reduce-range`."
+    (map-reduce-chunks 0 (element-count collection)
+                       (fn (start end)
+                         (fold-elements (fn (acc x) (combine acc (f x)))
+                                        identity collection start end))
+                       combine
+                       identity
+                       :grain grain))
+
+  (inline)
+  (declare fold-map ((Monoid :m) (ParallelFoldable :f :a)
+                     => (:a -> :m) * :f &key (:grain UFix) -> :m))
+  (define (fold-map f collection &key (grain 0))
+    "Combine the values of `f` on the elements of `collection` with `<>`, in parallel. See `map-reduce-range`."
+    (map-reduce f <> mempty collection :grain grain))
+
+  (define-class (ParallelMap :f)
+    "Containers that can be mapped over in parallel, such as `List`, `Vector` and `Seq`. `map` applies a function to every element of a container, in parallel, returning a new container of the results."
+    (map ((:a -> :b) * :f :a -> :f :b)))
+
+  (define-instance (ParallelMap vec:Vector)
+    (define (map f v)
+      (lisp (-> (vec:Vector :b)) (f v)
+        (rt:parallel-map-vector f v))))
+
+  (define-instance (ParallelMap List)
+    (define (map f xs)
+      (lisp (-> (List :b)) (f xs)
+        (rt:parallel-map-list f xs))))
+
+  (define-instance (ParallelMap seq:Seq)
+    (define (map f s)
+      (seq:map-with (fn (start end chunk) (for-chunks! start end chunk)) f s)))
+
+  (declare sort-by! ((:a * :a -> Boolean) * vec:Vector :a -> Void))
+  (define (sort-by! less? v)
+    "Sort `v` in place, in parallel, ordering elements by `less?`, which must be a strict less-than relation. The sort is stable. If `less?` signals an error, `v` is left unchanged."
+    (lisp (-> Void) (less? v)
+      (rt:parallel-sort v less?)))
+
+  (inline)
+  (declare sort! (Ord :a => vec:Vector :a -> Void))
+  (define (sort! v)
+    "Sort `v` in place in ascending order, in parallel. The sort is stable."
+    (sort-by! < v)))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/THREADS/PARALLEL")

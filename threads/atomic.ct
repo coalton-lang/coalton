@@ -1,0 +1,148 @@
+;;;; atomic.ct
+;;;;
+;;;; Atomic references.
+
+(coalton/utils:defstdlib-package #:coalton/threads/atomic
+  (:use
+   #:coalton
+   #:coalton/builtin
+   #:coalton/classes)
+  (:local-nicknames
+   (#:backend #:coalton/threads/backend))
+  (:export
+   #:Atomic
+   #:new
+   #:read
+   #:write!
+   #:swap!
+   #:compare-and-swap!
+   #:update!
+   #:update-swap!
+   #:push!
+   #:pop!
+   #:increment!
+   #:decrement!)
+  (:documentation "Atomic references.
+
+An `Atomic :a` is a mutable cell, like `Cell :a`, whose operations are
+atomic: concurrent updates from several threads are never lost or
+interleaved. Every operation is sequentially consistent.
+
+`compare-and-swap!` compares values by identity (like Lisp's `EQ`), not
+with `==`. Two equal numbers or strings need not be identical, so the
+expected value should be one previously read from the cell. `update!`
+and the operations built on it follow this rule internally, and are
+correct for values of any type."))
+
+(in-package #:coalton/threads/atomic)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(cl:declaim (cl:inline %make-atomic-cell))
+
+(cl:defstruct (atomic-cell (:constructor %make-atomic-cell (value))
+                           (:copier cl:nil)
+                           (:predicate cl:nil))
+  (value cl:nil))
+
+(cl:defmethod cl:print-object ((self atomic-cell) stream)
+  (cl:format stream "#.(ATOMIC ~A)" (atomic-cell-value self))
+  self)
+
+(backend:freeze-type atomic-cell)
+
+(coalton-toplevel
+
+  (repr :native atomic-cell)
+  (define-type (Atomic :a)
+    "A mutable cell whose operations are atomic.")
+
+  (inline)
+  (declare new (:a -> Atomic :a))
+  (define (new data)
+    "Create an atomic cell containing `data`."
+    (lisp (-> (Atomic :a)) (data)
+      (%make-atomic-cell data)))
+
+  (inline)
+  (declare read (Atomic :a -> :a))
+  (define (read atom)
+    "Read the value of `atom`."
+    (lisp (-> :a) (atom)
+      (cl:prog1 (atomic-cell-value atom)
+        (backend:acquire-fence))))
+
+  (declare swap! (Atomic :a * :a -> :a))
+  (define (swap! atom data)
+    "Replace the value of `atom` with `data`, returning the old value."
+    (lisp (-> :a) (atom data)
+      (cl:loop
+        (cl:let ((old (atomic-cell-value atom)))
+          (cl:when (cl:eq old (backend:compare-and-swap (atomic-cell-value atom) old data))
+            (cl:return old))))))
+
+  (declare write! (Atomic :a * :a -> :a))
+  (define (write! atom data)
+    "Set the value of `atom` to `data`, returning `data`."
+    (swap! atom data)
+    data)
+
+  (declare compare-and-swap! (Atomic :a * :a * :a -> Boolean))
+  (define (compare-and-swap! atom expected replacement)
+    "If the value of `atom` is identical to `expected`, replace it with `replacement` and return `True`. Otherwise return `False` without changing `atom`. Values are compared by identity, not with `==`."
+    (lisp (-> Boolean) (atom expected replacement)
+      (cl:eq expected (backend:compare-and-swap (atomic-cell-value atom) expected replacement))))
+
+  (declare update-swap! ((:a -> :a) * Atomic :a -> :a))
+  (define (update-swap! f atom)
+    "Replace the value of `atom` with the result of applying `f` to it, atomically, and return the old value. If other threads update `atom` concurrently, `f` may be called more than once, so it should not have side effects."
+    (lisp (-> :a) (f atom)
+      (cl:loop
+        (cl:let ((old (atomic-cell-value atom)))
+          ;; F must see everything published before OLD was stored.
+          (backend:acquire-fence)
+          (cl:let ((updated (cl:funcall f old)))
+            (cl:when (cl:eq old (backend:compare-and-swap (atomic-cell-value atom) old updated))
+              (cl:return old)))))))
+
+  (declare update! ((:a -> :a) * Atomic :a -> :a))
+  (define (update! f atom)
+    "Replace the value of `atom` with the result of applying `f` to it, atomically, and return the new value. If other threads update `atom` concurrently, `f` may be called more than once, so it should not have side effects."
+    (lisp (-> :a) (f atom)
+      (cl:loop
+        (cl:let ((old (atomic-cell-value atom)))
+          ;; F must see everything published before OLD was stored.
+          (backend:acquire-fence)
+          (cl:let ((updated (cl:funcall f old)))
+            (cl:when (cl:eq old (backend:compare-and-swap (atomic-cell-value atom) old updated))
+              (cl:return updated)))))))
+
+  (declare push! (Atomic (List :elt) * :elt -> List :elt))
+  (define (push! atom elt)
+    "Atomically push `elt` onto the front of the list in `atom`, returning the new list."
+    (update! (fn (lst) (Cons elt lst)) atom))
+
+  (declare pop! (Atomic (List :elt) -> Optional :elt))
+  (define (pop! atom)
+    "Atomically remove and return the first element of the list in `atom`, or return `None` if the list is empty."
+    (match (update-swap! (fn (lst)
+                           (match lst
+                             ((Cons _ rest) rest)
+                             ((Nil) Nil)))
+                         atom)
+      ((Cons elt _) (Some elt))
+      ((Nil) None)))
+
+  (declare increment! (Num :counter => Atomic :counter -> :counter))
+  (define (increment! atom)
+    "Atomically add one to the value of `atom`, returning the new value."
+    (update! (fn (x) (+ x 1)) atom))
+
+  (declare decrement! (Num :counter => Atomic :counter -> :counter))
+  (define (decrement! atom)
+    "Atomically subtract one from the value of `atom`, returning the new value."
+    (update! (fn (x) (- x 1)) atom)))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/THREADS/ATOMIC")

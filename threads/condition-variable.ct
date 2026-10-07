@@ -1,0 +1,83 @@
+;;;; condition-variable.ct
+;;;;
+;;;; Condition variables.
+
+(coalton/utils:defstdlib-package #:coalton/threads/condition-variable
+  (:use
+   #:coalton
+   #:coalton/builtin
+   #:coalton/classes)
+  (:local-nicknames
+   (#:backend #:coalton/threads/backend)
+   (#:math #:coalton/math)
+   (#:mutex #:coalton/threads/mutex))
+  (:export
+   #:ConditionVariable
+   #:new
+   #:wait!
+   #:wait-timeout!
+   #:notify!
+   #:broadcast!)
+  (:documentation "Condition variables.
+
+A `ConditionVariable` lets threads sleep until another thread announces
+a change to some state protected by a `Mutex`. A waiting thread must
+hold the mutex, and must check the state it waits for in a loop around
+`wait!`, because waiting may end spuriously:
+
+```lisp
+(mutex:with-lock lock
+  (fn ()
+    (for ()
+      :while (not (ready?))
+      (cv:wait! cv lock))
+    (consume!)))
+```
+
+A thread that changes the state should do so, and call `notify!` or
+`broadcast!`, while holding the same mutex."))
+
+(in-package #:coalton/threads/condition-variable)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+
+  (repr :native backend:condition-variable)
+  (define-type ConditionVariable
+    "A condition variable, used with a `Mutex` to wait for changes to shared state.")
+
+  (declare new (&key (:name String) -> ConditionVariable))
+  (define (new &key (name "Coalton condition variable"))
+    "Create a condition variable. The `name` shows up in debugging tools."
+    (lisp (-> ConditionVariable) (name)
+      (backend:make-condition-variable :name name)))
+
+  (declare wait! (ConditionVariable * mutex:Mutex -> Void))
+  (define (wait! cv mutex)
+    "Atomically release `mutex`, which the calling thread must hold, and sleep until `cv` is notified; then acquire `mutex` again. The sleep may also end spuriously."
+    (lisp (-> Void) (cv mutex)
+      (backend:condition-wait cv mutex)))
+
+  (declare wait-timeout! ((math:Rational :a) => ConditionVariable * mutex:Mutex * :a -> Boolean))
+  (define (wait-timeout! cv mutex seconds)
+    "Like `wait!`, but stop waiting after `seconds`. Returns `False` if the time ran out. The calling thread holds `mutex` again when this returns, whether or not the time ran out."
+    (let ((timeout (math:best-approx seconds)))
+      (lisp (-> Boolean) (cv mutex timeout)
+        (cl:and (backend:condition-wait cv mutex :timeout (cl:max 0 timeout)) cl:t))))
+
+  (declare notify! (ConditionVariable -> Void))
+  (define (notify! cv)
+    "Wake one thread waiting on `cv`, if any. The calling thread should hold the mutex used by the waiters."
+    (lisp (-> Void) (cv)
+      (backend:condition-notify cv)))
+
+  (declare broadcast! (ConditionVariable -> Void))
+  (define (broadcast! cv)
+    "Wake every thread waiting on `cv`. The calling thread should hold the mutex used by the waiters."
+    (lisp (-> Void) (cv)
+      (backend:condition-broadcast cv))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/THREADS/CONDITION-VARIABLE")

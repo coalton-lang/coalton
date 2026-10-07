@@ -1,0 +1,60 @@
+;;;; common.ct
+;;;;
+;;;; Helpers shared by the simulations.
+
+(defpackage #:coalton-parallel-numerics/common
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames (#:bits #:coalton/bits)
+                    (#:par #:coalton/threads/parallel))
+  (:export #:over-range
+           #:to-f64
+           #:to-f32
+           #:random-u64
+           #:random-f64))
+
+(in-package #:coalton-parallel-numerics/common)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+
+  (inline)
+  (declare over-range (Boolean * UFix * UFix * (UFix * UFix -> Void) -> Void))
+  (define (over-range parallel? start end f)
+    "Call `f` on ranges of consecutive integers that together cover the integers from `start` (inclusive) to `end` (exclusive), as `par:for-chunks!` does. If `parallel?`, the ranges are processed in parallel; otherwise `f` is called once, on the whole range, in the current thread.
+
+Each simulation writes its kernels as functions of such a range, so that its sequential and parallel versions run exactly the same code."
+    (cond
+      (parallel? (par:for-chunks! start end f))
+      ((< start end) (f start end))
+      (True (values))))
+
+  (inline)
+  (declare to-f64 (UFix -> F64))
+  (define (to-f64 n)
+    (lisp (-> F64) (n)
+      (cl:coerce n 'cl:double-float)))
+
+  (inline)
+  (declare to-f32 (UFix -> F32))
+  (define (to-f32 n)
+    (lisp (-> F32) (n)
+      (cl:coerce n 'cl:single-float)))
+
+  (inline)
+  (declare random-u64 (U64 * U64 -> U64))
+  (define (random-u64 seed counter)
+    "A pseudo-random 64-bit integer determined by `seed` and `counter`: the output of the SplitMix64 generator seeded with `seed` after `counter` + 1 steps. Because it depends on nothing else, parallel code that numbers its random draws gets the same numbers however the work is divided."
+    (let* ((z0 (+ seed (* (+ counter 1) #x9e3779b97f4a7c15)))
+           (z1 (* (bits:xor z0 (bits:shift -30 z0)) #xbf58476d1ce4e5b9))
+           (z2 (* (bits:xor z1 (bits:shift -27 z1)) #x94d049bb133111eb)))
+      (bits:xor z2 (bits:shift -31 z2))))
+
+  (inline)
+  (declare random-f64 (U64 * U64 -> F64))
+  (define (random-f64 seed counter)
+    "A pseudo-random number in [0, 1), from the high 53 bits of `(random-u64 seed counter)`."
+    (let ((x (random-u64 seed counter)))
+      (lisp (-> F64) (x)
+        (cl:* (cl:ash x -11) #.(cl:expt 2d0 -53))))))

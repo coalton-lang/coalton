@@ -1,0 +1,80 @@
+;;;; semaphore.ct
+;;;;
+;;;; Counting semaphores.
+
+(coalton/utils:defstdlib-package #:coalton/threads/semaphore
+  (:use
+   #:coalton
+   #:coalton/builtin
+   #:coalton/classes)
+  (:local-nicknames
+   (#:backend #:coalton/threads/backend)
+   (#:math #:coalton/math))
+  (:export
+   #:Semaphore
+   #:new
+   #:signal!
+   #:wait!
+   #:try-wait!
+   #:wait-timeout!
+   #:count)
+  (:documentation "Counting semaphores.
+
+A `Semaphore` holds a count of available permits. `wait!` takes a
+permit, sleeping until one is available, and `signal!` returns
+permits."))
+
+(in-package #:coalton/threads/semaphore)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+
+  (repr :native backend:semaphore)
+  (define-type Semaphore
+    "A counting semaphore.")
+
+  (declare new (UFix &key (:name String) -> Semaphore))
+  (define (new permits &key (name "Coalton semaphore"))
+    "Create a semaphore holding `permits` permits. The `name` shows up in debugging tools."
+    (lisp (-> Semaphore) (permits name)
+      (backend:make-semaphore :count permits :name name)))
+
+  (declare signal! (Semaphore &key (:count UFix) -> Void))
+  (define (signal! semaphore &key (count 1))
+    "Add `count` permits to `semaphore`, waking threads waiting for them."
+    ;; COUNT is also the name of a function of this package, which must
+    ;; not be bound by the Lisp code, in case this function is inlined.
+    (let ((permits count))
+      (lisp (-> Void) (semaphore permits)
+        (backend:signal-semaphore semaphore permits))))
+
+  (declare wait! (Semaphore -> Void))
+  (define (wait! semaphore)
+    "Take a permit from `semaphore`, sleeping until one is available."
+    (lisp (-> Void) (semaphore)
+      (backend:wait-on-semaphore semaphore)))
+
+  (declare try-wait! (Semaphore -> Boolean))
+  (define (try-wait! semaphore)
+    "Take a permit from `semaphore` and return `True` if one is available; otherwise return `False` immediately."
+    (lisp (-> Boolean) (semaphore)
+      (cl:and (backend:try-semaphore semaphore) cl:t)))
+
+  (declare wait-timeout! ((math:Rational :a) => Semaphore * :a -> Boolean))
+  (define (wait-timeout! semaphore seconds)
+    "Like `wait!`, but stop waiting after `seconds`. Returns `False`, without taking a permit, if the time ran out."
+    (let ((timeout (math:best-approx seconds)))
+      (lisp (-> Boolean) (semaphore timeout)
+        (cl:and (backend:wait-on-semaphore semaphore :timeout (cl:max 0 timeout)) cl:t))))
+
+  (declare count (Semaphore -> UFix))
+  (define (count semaphore)
+    "The number of permits currently available in `semaphore`."
+    (lisp (-> UFix) (semaphore)
+      ;; SBCL keeps counts within UFix, but a backend need not.
+      (cl:min (backend:semaphore-count semaphore) cl:most-positive-fixnum))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/THREADS/SEMAPHORE")

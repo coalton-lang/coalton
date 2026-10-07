@@ -10,3 +10,4 @@ This folder contains example Coalton projects to show off the features as well a
 - `thih`: An implementation of *Typing Haskell in Haskell* in Coalton.
 - `fractal`: A crude infinite-zoom Mandelbrot viewer using Coalton, Common Lisp, and SDL2.
 - [`raytrace`](raytrace/): A deterministic path tracer and allocation benchmark using ordinary Coalton records.
+- [`parallel-numerics`](parallel-numerics/): Electromagnetic, gravitational, and Ising-model simulations, and the path tracer of `raytrace`, parallelized with `coalton/threads` (SBCL only).
