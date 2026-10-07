@@ -105,25 +105,48 @@ The tree lists the .asd file itself first, so that it can be opened from there."
       cl:nil)))
 
 (cl:defun %find-all-system-names (path)
-  "Read the .asd file and return a list of all defsystem names."
+  "Read the .asd file and return a list of all defsystem names.
+Read it as ASDF:LOAD-ASD loads it: in ASDF-USER, following IN-PACKAGE forms
+whose packages exist, with *LOAD-PATHNAME* and *LOAD-TRUENAME* naming the
+file. Read-time evaluation in .asd files, such as #.(asdf-version) or
+#.(read-file-string (subpathname *load-pathname* \"README.md\")), relies on
+that."
   (cl:handler-case
-      (cl:with-open-file (s path :direction ':input)
-        (cl:let ((eof (cl:gensym))
-                 (names cl:nil))
-          (cl:loop
-            (cl:let ((form (cl:read s cl:nil eof)))
-              (cl:when (cl:eq form eof)
-                (cl:return (cl:nreverse names)))
-              (cl:when (cl:and (cl:consp form)
-                               (cl:symbolp (cl:car form))
-                               (cl:string-equal (cl:symbol-name (cl:car form))
-                                                "DEFSYSTEM"))
-                (cl:let ((raw-name (cl:cadr form)))
-                  (cl:push (cl:etypecase raw-name
-                             (cl:string raw-name)
-                             (cl:symbol (cl:string-downcase
-                                         (cl:symbol-name raw-name))))
-                           names)))))))
+      (cl:let ((truename (cl:truename path))
+               (readtable cl:*readtable*))
+        (cl:with-open-file (s truename
+                              :direction ':input
+                              :external-format (uiop:encoding-external-format
+                                                (uiop:detect-encoding truename)))
+          (cl:with-standard-io-syntax
+            (cl:let ((cl:*readtable* readtable)
+                     (cl:*package* (cl:find-package "ASDF-USER"))
+                     (cl:*load-pathname* truename)
+                     (cl:*load-truename* truename)
+                     (cl:*default-pathname-defaults*
+                       (uiop:pathname-directory-pathname truename))
+                     (eof (cl:gensym))
+                     (names cl:nil))
+              (cl:loop
+                (cl:let ((form (cl:read s cl:nil eof)))
+                  (cl:when (cl:eq form eof)
+                    (cl:return (cl:nreverse names)))
+                  (cl:when (cl:and (cl:consp form)
+                                   (cl:symbolp (cl:car form)))
+                    (cl:cond
+                      ((cl:string-equal (cl:symbol-name (cl:car form)) "IN-PACKAGE")
+                       ;; Before the file is loaded, a package it defines is missing.
+                       (cl:let ((package (cl:ignore-errors
+                                          (cl:find-package (cl:second form)))))
+                         (cl:when package
+                           (cl:setf cl:*package* package))))
+                      ((cl:string-equal (cl:symbol-name (cl:car form)) "DEFSYSTEM")
+                       (cl:let ((raw-name (cl:cadr form)))
+                         (cl:push (cl:etypecase raw-name
+                                    (cl:string raw-name)
+                                    (cl:symbol (cl:string-downcase
+                                                (cl:symbol-name raw-name))))
+                                  names)))))))))))
     (cl:error () cl:nil)))
 
 (cl:defun %system-to-tree (sys cl:&optional leading-nodes)

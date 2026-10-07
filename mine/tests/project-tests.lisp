@@ -225,6 +225,49 @@
         (remhash "mine-asd-entry-test/tests" asdf::*registered-systems*)
         (uiop:delete-directory-tree root :validate t :if-does-not-exist ':ignore)))))
 
+(defun check-project-tree-reads-asd-files-as-asdf-does ()
+  ;; Each .asd file uses read-time evaluation as published libraries do.
+  (let ((root (%mine-project-test-root))
+        (cases
+          '(("version check, as in bordeaux-threads"
+             "#.(unless (or #+asdf3.1 (version<= \"3.1\" (asdf-version)))
+    (error \"Requires ASDF >= 3.1\"))
+(defsystem \"mine-asd-reader-test\" :components ((:file \"main\")))")
+            ("description read beside the file"
+             "(defsystem \"mine-asd-reader-test\"
+  :long-description #.(read-file-string (subpathname *load-pathname* \"long-description.txt\"))
+  :components ((:file \"main\")))")
+            ("function of the file's own package"
+             "(defpackage #:mine-asd-reader-test-asd (:use #:cl #:asdf))
+(in-package #:mine-asd-reader-test-asd)
+(defun test-description () \"A project for a test\")
+(defsystem \"mine-asd-reader-test\"
+  :description #.(test-description)
+  :components ((:file \"main\")))"))))
+    (unwind-protect
+         (progn
+           (ensure-directories-exist root)
+           (%write-utf8-file (merge-pathnames "main.lisp" root) "")
+           (%write-utf8-file (merge-pathnames "long-description.txt" root) "A project for a test")
+           (loop :for (description text) :in cases
+                 :for asd := (merge-pathnames "mine-asd-reader-test.asd" root)
+                 :do (%write-utf8-file asd text)
+                     (let* ((tree (app::%coalton-optional-value-or-nil
+                                   (mine/project/asdf-parser:parse-asd-to-tree (namestring asd))))
+                            (path (and tree (app::%coalton-optional-value-or-nil
+                                             (app::%first-file-path tree)))))
+                       (%check (and path (string= "main.lisp" (file-namestring path)))
+                               "The project tree of an .asd file with a ~A listed ~S"
+                               description path))
+                     (%check (equal '("mine-asd-reader-test")
+                                    (mine/project/asdf-parser::%find-all-system-names asd))
+                             "The systems of an .asd file with a ~A were not read"
+                             description)))
+      (remhash "mine-asd-reader-test" asdf::*registered-systems*)
+      (when (find-package '#:mine-asd-reader-test-asd)
+        (delete-package '#:mine-asd-reader-test-asd))
+      (uiop:delete-directory-tree root :validate t :if-does-not-exist ':ignore))))
+
 (defvar *asd-helper-loads* 0)
 
 (defun check-project-tree-loads-defsystem-dependencies-once ()
