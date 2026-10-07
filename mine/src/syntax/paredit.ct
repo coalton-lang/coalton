@@ -33,6 +33,8 @@
    #:paredit-delete-enclosing!
    #:paredit-forward-sexp!
    #:paredit-backward-sexp!
+   #:find-matching-close
+   #:scan-matching-bracket
    #:scan-matching-open-paren
    #:scan-matching-open-bracket))
 

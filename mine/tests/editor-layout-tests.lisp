@@ -473,6 +473,43 @@
                                            'string)))
             "Dragging the help scrollbar to its end did not show the end of the help")))
 
+(defun %highlighted-delimiters (text position)
+  "Render TEXT with the cursor at POSITION and return the indexes drawn as matched delimiters."
+  (with-test-directory (directory)
+    (let* ((state (%test-state))
+           (path (namestring (merge-pathnames "parens.lisp" directory)))
+           (scr (mine/term/screen:screen-new 60 8))
+           (term (mine/term/terminal:Terminal scr (coalton/cell:new coalton:False)
+                                              (mine/term/terminal::%terminal-input-runtime-new)
+                                              (coalton/cell:new (coalton/vector:new))
+                                              (coalton/cell:new 60) (coalton/cell:new 8))))
+      (%write-utf8-file path text)
+      (app::open-loose-file! state path)
+      (mine-tests/editor-layout::set-center! state mine/app/state:CenterEditorFull)
+      (cursor:cursor-move-to-position! (mine/app/state:get-cursor-state state) position)
+      (let ((*standard-output* (make-broadcast-stream))) (app::render-app state term))
+      (let* ((row (coerce (loop :for x :below 60
+                                :collect (mine-tests/editor-layout::screen-cell-character scr x 1))
+                          'string))
+             (start (search text row)))
+        (loop :for i :below (length text)
+              :when (equalp mine/term/color:match-paren-bg
+                            (mine-tests/editor-layout::screen-cell-background scr (+ start i) 1))
+                :collect i)))))
+
+(defun check-editor-highlights-delimiters-like-show-paren-mode ()
+  (loop :for (text position expected)
+          :in '(("(+ 1 2)" 0 (0 6))
+                ("(+ 1 2)" 1 ())
+                ("(+ 1 2)" 7 (0 6))
+                ("(a)(b)" 3 (0 2))
+                ("[x]" 0 (0 2))
+                ("(f #\\( a)" 5 ()))
+        :do (let ((actual (%highlighted-delimiters text position)))
+              (%check (equal expected actual)
+                      "With the cursor at ~D in ~S, expected delimiters ~S to be highlighted, got ~S"
+                      position text expected actual))))
+
 (defun run-editor-geometry-integration-tests ()
   (check-editor-render-multiline-source-snapshot)
   (check-editor-frames-share-one-source-scan)
@@ -482,6 +519,7 @@
   (check-repl-input-mouse-selection-copies)
   (check-open-files-scrollbar-scrolls-the-list)
   (check-help-scrollbar-can-be-dragged)
+  (check-editor-highlights-delimiters-like-show-paren-mode)
   t)
 
 (defun check-editor-long-wrapped-line-keeps-cursor-visible ()
