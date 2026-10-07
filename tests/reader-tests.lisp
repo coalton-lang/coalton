@@ -377,3 +377,56 @@ byte offset really is different."
                            (cst-symbol-spans short-lambda-form "B"))
                     "the short lambda parameter span must be character offsets, got ~S"
                     (cst-symbol-spans short-lambda-form "B"))))))))))
+
+(defun parse-error-message-and-span (thunk)
+  "Call THUNK. If it signals a PARSE-ERROR, return the error's message and the
+span of its first note; otherwise return NIL."
+  (handler-case (progn (funcall thunk) nil)
+    (coalton-impl/parser/base:parse-error (c)
+      (values (source:message c)
+              (source:location-span (source:location (first (source:notes c))))))))
+
+(deftest reader-rejects-unterminated-toplevel-lists ()
+  "A toplevel list that the end of input interrupts must be an error.
+
+The Coalton readtable reads the elements of a toplevel list one at a time, so it
+must tell the end of the input from the close parenthesis that ends the list.
+Otherwise a file missing a close parenthesis compiles without error, and the
+list it leaves open silently takes in every form that follows."
+  (let ((*package* (find-package "COALTON-USER"))
+        (*readtable* (named-readtables:ensure-readtable 'coalton:coalton)))
+    ;; Read directly, as at a REPL.
+    (let ((*compile-file-truename* nil)
+          (*load-truename* nil))
+      (dolist (text '("(cl:defun f () (cl:+ 1 2)" "(f x"))
+        (multiple-value-bind (message span)
+            (parse-error-message-and-span (lambda () (read-from-string text)))
+          (is (equal "Unterminated form" message)
+              "reading ~S must signal an unterminated form error, got ~S" text message)
+          (is (eql 0 (and span (source:span-start span)))
+              "reading ~S must report the form starting at offset 0, got ~S" text span))))
+    ;; Read from a file, as COMPILE-FILE does.
+    (uiop:with-temporary-file (:stream stream
+                               :pathname input-file
+                               :suffix ".lisp"
+                               :direction :output
+                               :external-format (source:source-external-format))
+      ;; The multibyte comment makes byte offsets differ from character offsets.
+      (write-string ";; λ
+(cl:defun reader-unterminated-f ()
+  (cl:+ 1 2)
+
+(cl:defun reader-unterminated-g () 3)
+" stream)
+      :close-stream
+      (let ((form-start (search "(cl:defun reader-unterminated-f"
+                                (read-file-characters input-file))))
+        (with-open-file (stream input-file :external-format (source:source-external-format))
+          (let ((*load-truename* input-file))
+            (multiple-value-bind (message span)
+                (parse-error-message-and-span (lambda () (read stream nil nil)))
+              (is (equal "Unterminated form" message)
+                  "reading the file must signal an unterminated form error, got ~S" message)
+              (is (eql form-start (and span (source:span-start span)))
+                  "reading the file must report the form starting at offset ~D, got ~S"
+                  form-start span))))))))

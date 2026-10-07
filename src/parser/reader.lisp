@@ -22,7 +22,8 @@
    #:desugar-bracket-builder
    #:with-reader-context
    #:with-coalton-reader-context
-   #:maybe-read-form))
+   #:maybe-read-form
+   #:error-unterminated-form))
 
 (in-package #:coalton-impl/parser/reader)
 
@@ -648,6 +649,16 @@ converted before being used as the character offset it stands for."
      (with-reader-context ,stream
        ,@body)))
 
+(defun error-unterminated-form (stream source start)
+  "Signal a PARSE-ERROR for a form that the end of STREAM, which reads SOURCE,
+interrupts. START is the FILE-POSITION of the form on STREAM."
+  (let ((span (source:stream-span-to-char-span
+               stream source (cons start (file-position stream)))))
+    (parse-error "Unterminated form"
+                 (source:note (source:make-location source span)
+                              "Missing close parenthesis for form starting at offset ~a"
+                              (source:span-start span)))))
+
 (defun maybe-read-form (stream source &optional (eclector-client eclector.base:*client*))
   "Read the next form or return if there is no next form.
 
@@ -687,12 +698,7 @@ Returns (VALUES FORM PRESENTP EOFP)"
              stream
              nil 'eof)))
       (eclector.reader:unterminated-list ()
-        (let ((span (source:stream-span-to-char-span
-                     stream source (cons begin (file-position stream)))))
-          (parse-error "Unterminated form"
-                       (source:note (source:make-location source span)
-                                    "Missing close parenthesis for form starting at offset ~a"
-                                    (source:span-start span)))))
+        (error-unterminated-form stream source begin))
       (error (condition)
         (let ((span (source:stream-span-to-char-span
                      stream source (cons begin (file-position stream)))))
