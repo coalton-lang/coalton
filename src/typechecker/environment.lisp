@@ -2685,9 +2685,20 @@ without reaching a fixed point within +FUNDEP-MAX-DEPTH+ rounds."
       (handler-case
           (let* ((fresh-entry (fresh-fundep-entry entry))
                  (left-subs (match-list from-tys (fundep-entry-from fresh-entry)))
-                 (right-side (apply-substitution left-subs (fundep-entry-to fresh-entry))))
-            (return-from generate-fundep-subs-for-pred% (unify-list subs to-tys right-side)))
-        (unification-error () nil))))
+                 (right-side (apply-substitution left-subs (fundep-entry-to fresh-entry)))
+                 (new-subs (unify-list subs to-tys right-side)))
+            ;; The dependents of an instance can contain variables that only
+            ;; its context determines. Unifying them with dependents that are
+            ;; already as specific merely binds the entry's fresh variables,
+            ;; which would change SUBS in every round without determining
+            ;; anything, so only keep entries that specialize PRED.
+            (unless (predicate-subsumes-p (apply-substitution new-subs pred)
+                                          (apply-substitution subs pred))
+              (return-from generate-fundep-subs-for-pred% new-subs)))
+        ;; The entry does not apply: PRED's determinant is not an instance of
+        ;; the entry's, for example because it differs where the entry repeats
+        ;; a variable, or PRED's dependents conflict with the entry's.
+        (coalton-internal-type-error () nil))))
 
   subs)
 

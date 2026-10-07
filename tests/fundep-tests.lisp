@@ -781,3 +781,63 @@ must be distinguished even though the predicate-only variables are ambiguous."
                       "")
                   (tc:tc-error (e)
                     (princ-to-string e)))))))
+
+(deftest fundep-improvement-with-context-determined-dependents ()
+  ;; The instance context determines the element of the dependent, so
+  ;; improving a predicate whose dependent already has that shape only
+  ;; renames the element. This used to repeat until the round limit.
+  (check-coalton-types
+   "(define-class (C :a :b :c (:a -> :b))
+      (cm (:a * :c -> :b)))
+
+    (define-class (D :a :x (:a -> :x)))
+
+    (define-instance (D :a :x => C :a (List :x) Boolean)
+      (define (cm _ _) Nil))
+
+    (define (f) (cm (the Integer 1) #\\c))
+
+    (declare g (C :a (List String) Char => :a -> Unit))
+    (define (g _) Unit)"
+   '("f" . "(C Integer (List :a) Char => Void -> List :a)")))
+
+(deftest fundep-improvement-with-repeated-determinant-variables ()
+  ;; See https://github.com/coalton-lang/coalton/issues/2068. A determinant
+  ;; that repeats a variable only applies to predicates whose types agree
+  ;; there; matching other predicates against it used to escape as an
+  ;; unhandled internal condition.
+  (check-coalton-types
+   "(define-class (C :a :b :c (:a :b -> :c))
+      (cm (:a * :b -> :c)))
+
+    (define-instance (C (List :a) :a String)
+      (define (cm _ _) \"\"))
+
+    (define (f y) (cm (the (List Integer) Nil) y))
+
+    (define (g) (cm (the (List Integer) Nil) (the Integer 1)))"
+   '("f" . "(C (List Integer) :a :b => :a -> :b)")
+   '("g" . "(Void -> String)"))
+  (check-coalton-types
+   "(define-struct (Env :input :world)
+      (input :input)
+      (world :world))
+
+    (define-type (Decision :act :final)
+      (Done :final)
+      (StepAct :act))
+
+    (define-class ((Monad :m) => Foo :m :act :input :world :final
+                   (:m :input :act -> :world :final)
+                   (:m :input :world :final -> :act))
+      (call-model (:input -> :m (Decision :act :final))))
+
+    (define-instance ((Foo :m :act :input :world :final)
+                      => Foo (coalton/monad/statet:StateT (Env :input :world) :m)
+                             :act :input :world :final)
+      (define (call-model inp)
+        (coalton/monad/statet:lift-stateT (call-model inp))))
+
+    (declare use ((Foo (coalton/monad/statet:StateT (Env Integer String) :m) :act :i :w :f)
+                  => :i -> coalton/monad/statet:StateT (Env Integer String) :m (Decision :act :f)))
+    (define (use x) (call-model x))"))
