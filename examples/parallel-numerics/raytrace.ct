@@ -1,0 +1,32 @@
+;;;; raytrace.ct
+;;;;
+;;;; Path tracing: the Monte Carlo ray tracer of examples/raytrace,
+;;;; rendering its scene of spheres row by row. Every row draws its
+;;;; random numbers from a stream of its own, seeded from the frame's
+;;;; seed and the row's number (see RENDER-ROW! there), so the rows can
+;;;; be rendered in any order, and in parallel, with the same result.
+
+(defpackage #:coalton-parallel-numerics/raytrace
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames (#:arr #:coalton/lisparray)
+                    (#:rt #:coalton-raytrace)
+                    (#:common #:coalton-parallel-numerics/common))
+  (:export #:render!))
+
+(in-package #:coalton-parallel-numerics/raytrace)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+
+  (declare render! (UFix * UFix * UFix * UFix * U32 * Boolean * arr:LispArray F64 -> Void))
+  (define (render! width height samples depth seed parallel? pixels)
+    "Render the scene of examples/raytrace into `pixels`, an array of `width` * `height` * 3 linear RGB components, top row first, tracing `samples` paths of at most `depth` bounces per pixel from the random seed `seed`. If `parallel?`, render the rows in parallel."
+    (let ((world (rt:make-scene))
+          (camera (rt:make-camera (/ (common:to-f64 width) (common:to-f64 height)))))
+      (common:over-range parallel? 0 height
+        (fn (lo hi)
+          (for ((declare y UFix) (y lo (1+ y)))
+            :repeat (- hi lo)
+            (rt:render-row! world camera width height samples depth seed y pixels)))))))

@@ -1,0 +1,218 @@
+;;;; benchmarks.ct
+;;;;
+;;;; Benchmarks of coalton/threads/parallel. Load the system
+;;;; coalton/threads/benchmarks and evaluate
+;;;;
+;;;;   (coalton/threads/benchmarks:run-benchmarks)
+;;;;
+;;;; to compare the parallel operations with sequential code.
+
+(defpackage #:coalton/threads/benchmarks
+  (:use
+   #:coalton
+   #:coalton-prelude)
+  (:local-nicknames
+   (#:arr #:coalton/lisparray)
+   (#:backend #:coalton/threads/backend)
+   (#:iter #:coalton/iterator)
+   (#:math #:coalton/math)
+   (#:par #:coalton/threads/parallel)
+   (#:seq #:coalton/seq)
+   (#:vec #:coalton/vector))
+  (:export
+   #:run-benchmarks))
+
+(in-package #:coalton/threads/benchmarks)
+
+(coalton-toplevel
+
+  (declare fib (UFix -> UFix))
+  (define (fib n)
+    (if (< n 2)
+        n
+        (+ (fib (- n 1)) (fib (- n 2)))))
+
+  (declare parallel-fib (UFix * UFix -> UFix))
+  (define (parallel-fib cutoff n)
+    "Compute the Fibonacci number `n`, joining recursive calls on numbers at least `cutoff`."
+    (if (< n cutoff)
+        (fib n)
+        (progn
+          (let (values a b) = (par:join (fn () (parallel-fib cutoff (- n 1)))
+                                        (fn () (parallel-fib cutoff (- n 2)))))
+          (+ a b))))
+
+  (declare term (UFix -> F64))
+  (define (term i)
+    (math:sin (* 0.001d0 (fromInt (into i)))))
+
+  (declare sum-terms (UFix * UFix -> F64))
+  (define (sum-terms lo hi)
+    (for ((declare i UFix)
+          (declare acc F64)
+          (i lo (1+ i))
+          (acc 0d0 (+ acc (term i))))
+      :returns acc
+      :repeat (- hi lo)
+      Unit))
+
+  (declare parallel-sum-by-element (UFix -> F64))
+  (define (parallel-sum-by-element n)
+    (par:map-reduce-range 0 n term + 0d0))
+
+  (declare parallel-sum-by-chunk (UFix -> F64))
+  (define (parallel-sum-by-chunk n)
+    (par:map-reduce-chunks 0 n sum-terms + 0d0))
+
+  (declare queen-fits? (UFix * List UFix -> Boolean))
+  (define (queen-fits? column placed)
+    "Can a queen go in `column` of the next row, given the columns of the queens in the previous rows, most recent first?"
+    (rec check ((queens placed)
+                (distance 1))
+      (match queens
+        ((Nil) True)
+        ((Cons queen rest)
+         (if (or (== queen column)
+                 (== (+ queen distance) column)
+                 (== queen (+ column distance)))
+             False
+             (check rest (+ distance 1)))))))
+
+  (declare queens (UFix * UFix * List UFix -> UFix))
+  (define (queens n row placed)
+    "Count the ways to complete the placement of `n` queens on an `n` by `n` board."
+    (if (== row n)
+        1
+        (rec next ((column 0)
+                   (count 0))
+          (cond
+            ((== column n) count)
+            ((queen-fits? column placed)
+             (next (+ column 1) (+ count (queens n (+ row 1) (Cons column placed)))))
+            (True (next (+ column 1) count))))))
+
+  (declare parallel-queens (UFix * UFix * List UFix -> UFix))
+  (define (parallel-queens n row placed)
+    (if (>= row 3)
+        (queens n row placed)
+        (par:map-reduce-range 0 n
+                              (fn (column)
+                                (if (queen-fits? column placed)
+                                    (parallel-queens n (+ row 1) (Cons column placed))
+                                    0))
+                              + 0)))
+
+  (declare multiply-row! (UFix * arr:LispArray F64 * arr:LispArray F64 * arr:LispArray F64 * UFix -> Void))
+  (define (multiply-row! n a b c i)
+    "Compute row `i` of the product `c` of the `n` by `n` matrices `a` and `b`."
+    (for ((declare j UFix)
+          (j 0 (1+ j)))
+      :repeat n
+      (arr:set! c (+ (* i n) j)
+                (for ((declare k UFix)
+                      (declare sum F64)
+                      (k 0 (1+ k))
+                      (sum 0d0 (+ sum (* (arr:aref a (+ (* i n) k))
+                                         (arr:aref b (+ (* k n) j))))))
+                  :returns sum
+                  :repeat n
+                  Unit))))
+
+  (declare multiply! (UFix * arr:LispArray F64 * arr:LispArray F64 * arr:LispArray F64 -> Void))
+  (define (multiply! n a b c)
+    (for ((declare i UFix)
+          (i 0 (1+ i)))
+      :repeat n
+      (multiply-row! n a b c i)))
+
+  (declare parallel-multiply! (UFix * arr:LispArray F64 * arr:LispArray F64 * arr:LispArray F64 -> Void))
+  (define (parallel-multiply! n a b c)
+    (par:for-range! 0 n (fn (i) (multiply-row! n a b c i))))
+
+  (declare seq-of-integers (UFix -> seq:Seq UFix))
+  (define (seq-of-integers n)
+    (iter:collect! (iter:up-to n)))
+
+  (declare collatz-steps (UFix -> UFix))
+  (define (collatz-steps n)
+    "The number of steps that the Collatz sequence starting at `n` takes to reach 1."
+    (rec % ((x n) (steps 0))
+      (cond ((<= x 1) steps)
+            ((even? x) (% (math:div x 2) (+ steps 1)))
+            (True (% (+ (* 3 x) 1) (+ steps 1))))))
+
+  (declare seq-total-steps (seq:Seq UFix -> UFix))
+  (define (seq-total-steps s)
+    (fold (fn (acc i) (+ acc (collatz-steps i))) 0 s))
+
+  (declare parallel-seq-total-steps (seq:Seq UFix -> UFix))
+  (define (parallel-seq-total-steps s)
+    (par:map-reduce collatz-steps + 0 s))
+
+  (declare random-vector (UFix -> Vector Integer))
+  (define (random-vector n)
+    (let ((v (vec:with-capacity n)))
+      (for ((declare i UFix)
+            (i 0 (1+ i)))
+        :repeat n
+        (vec:push! (lisp (-> Integer) () (cl:random 1000000000)) v))
+      v)))
+
+(cl:defun seconds ()
+  (backend:monotonic-seconds))
+
+(cl:defun best-time (thunk)
+  "The shortest of three timings of calling THUNK, in seconds."
+  (cl:loop :repeat 3
+           :minimize (cl:let ((start (seconds)))
+                       (cl:funcall thunk)
+                       (cl:- (seconds) start))))
+
+(cl:defun compare (label sequential parallel)
+  (cl:let ((s (best-time sequential))
+           (p (best-time parallel)))
+    (cl:format cl:t "~&~50A ~9,4Fs ~9,4Fs ~7,2Fx~%" label s p (cl:/ s p))
+    (cl:finish-output)))
+
+(cl:defun run-benchmarks ()
+  "Time some parallel operations against sequential code, and print a table."
+  (cl:format cl:t "~&Workers: ~D~%~%~50A ~10@A ~10@A ~8@A~%"
+             (coalton (par:worker-count)) "Benchmark" "Sequential" "Parallel" "Speedup")
+  ;; Start the pool.
+  (coalton (par:join (fn () Unit) (fn () Unit)))
+  (compare "fib 40, join with cutoff 25"
+           (cl:lambda () (coalton (fib 40)))
+           (cl:lambda () (coalton (parallel-fib 25 40))))
+  (compare "fib 30, join at every call"
+           (cl:lambda () (coalton (fib 30)))
+           (cl:lambda () (coalton (parallel-fib 2 30))))
+  (compare "sum of sin over 2e7 integers, map-reduce-range"
+           (cl:lambda () (coalton (sum-terms 0 20000000)))
+           (cl:lambda () (coalton (parallel-sum-by-element 20000000))))
+  (compare "sum of sin over 2e7 integers, map-reduce-chunks"
+           (cl:lambda () (coalton (sum-terms 0 20000000)))
+           (cl:lambda () (coalton (parallel-sum-by-chunk 20000000))))
+  (compare "12-queens, map-reduce-range"
+           (cl:lambda () (coalton (queens 12 0 Nil)))
+           (cl:lambda () (coalton (parallel-queens 12 0 Nil))))
+  (cl:let ((a (coalton (the (arr:LispArray F64) (arr:make 160000 1.5d0))))
+           (b (coalton (the (arr:LispArray F64) (arr:make 160000 2d0))))
+           (c (coalton (the (arr:LispArray F64) (arr:make 160000 0d0)))))
+    (compare "400x400 matrix product, for-range!"
+             (cl:lambda () (call-coalton-function (coalton multiply!) 400 a b c))
+             (cl:lambda () (call-coalton-function (coalton parallel-multiply!) 400 a b c))))
+  (cl:let ((v (coalton (random-vector 2000000))))
+    (compare "sort 2e6 integers, sort! (vs. vector:sort!)"
+             (cl:lambda () (call-coalton-function (coalton (fn (v) (vec:sort! (vec:copy (the (Vector Integer) v))))) v))
+             (cl:lambda () (call-coalton-function (coalton (fn (v) (par:sort! (vec:copy (the (Vector Integer) v))))) v)))
+    (compare "map over 2e6 integers, map (vs. Functor map)"
+             (cl:lambda () (call-coalton-function (coalton (fn (v) (map (fn (x) (* 3 x)) (the (Vector Integer) v)))) v))
+             (cl:lambda () (call-coalton-function (coalton (fn (v) (par:map (fn (x) (* 3 x)) (the (Vector Integer) v)))) v))))
+  (cl:let ((s (coalton (seq-of-integers 2000000))))
+    (compare "map over a Seq of 2e6 integers (vs. Functor map)"
+             (cl:lambda () (call-coalton-function (coalton (fn (s) (map (fn (x) (* 3 x)) (the (seq:Seq UFix) s)))) s))
+             (cl:lambda () (call-coalton-function (coalton (fn (s) (par:map (fn (x) (* 3 x)) (the (seq:Seq UFix) s)))) s)))
+    (compare "Collatz steps of a Seq of 2e6 integers, map-reduce"
+             (cl:lambda () (call-coalton-function (coalton seq-total-steps) s))
+             (cl:lambda () (call-coalton-function (coalton parallel-seq-total-steps) s))))
+  (cl:values))

@@ -55,6 +55,14 @@ settings and returns an image without benchmarking:
   (coalton-raytrace/benchmark:write-ppm #p"picture.ppm" pixels 640 360))
 ```
 
+`render!` draws all its random numbers from one stream, row after row.
+The Coalton function `render-row!` instead renders a single row, with a
+random stream seeded from the frame's seed and the row's number, so that
+the rows of a frame can be rendered in any order, or in parallel, with
+the same result. Its pictures differ from those of `render!`.
+[`parallel-numerics`](../parallel-numerics/) uses it to render this scene
+in parallel with `coalton/threads`.
+
 ## What is measured
 
 Each trial renders the complete frame into a preallocated framebuffer. Scene
@@ -77,7 +85,8 @@ workload settings, and an image checksum. Every trial must reproduce the warm-up
 image exactly. The checksum uses quantized linear RGB; use an elementwise
 floating-point tolerance when comparing different Lisp implementations or
 arithmetic transformations. The tests include analytic intersection/scattering
-cases, BVH versus brute-force traversal, and deterministic small renders.
+cases, BVH versus brute-force traversal, and deterministic small renders,
+including renders row by row in different orders.
 These small tests run in CI; the measured benchmark is opt-in.
 
 ## Comparing compiler changes
@@ -102,6 +111,7 @@ profiled run's elapsed time to an unprofiled baseline. On SBCL, for example:
 That profile also includes setup, warm-up, and reporting. For a render-only
 profile, construct `make-scene`, `make-camera`, and the framebuffer first, then
 profile repeated calls to the Coalton `render!` function. No performance
-thresholds are enforced by the tests. The renderer is single-threaded and has
-no textures, explicit light sampling, or production image pipeline; it is one
-representative workload, not a comprehensive graphics benchmark.
+thresholds are enforced by the tests. The benchmark is single-threaded. The
+renderer has no textures, explicit light sampling, or production image
+pipeline; it is one representative workload, not a comprehensive graphics
+benchmark.

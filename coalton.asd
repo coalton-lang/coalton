@@ -166,6 +166,73 @@
                 :components ((:ct-file "computable-reals")))
                (:ct-file "realalgebraic")))
 
+(asdf:defsystem "coalton/threads"
+  :description "Threads, synchronization primitives, and work-stealing task parallelism for Coalton (SBCL only)."
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :version (:read-file-form "VERSION.txt")
+  :around-compile (lambda (compile)
+                    (let (#+sbcl (sb-ext:*derive-function-types* t)
+                          #+sbcl (sb-ext:*block-compile-default* :specified))
+                      (funcall compile)))
+  :defsystem-depends-on ("coalton-asdf")
+  ;; The backend for the Lisp implementation comes first, so that an
+  ;; unsupported implementation fails before the other dependencies
+  ;; are loaded.
+  :depends-on ((:feature :sbcl "coalton/threads/sbcl")
+               (:feature (:not :sbcl) "coalton/threads/unsupported")
+               "coalton"
+               "coalton/library")
+  :pathname "threads/"
+  :serial t
+  :components ((:module "runtime"
+                :serial t
+                :components ((:file "package")
+                             (:file "primitives")
+                             (:file "deque")
+                             (:file "job")
+                             (:file "pool")
+                             (:file "api")
+                             (:file "sort")
+                             (:file "thread")))
+               (:ct-file "thread")
+               (:ct-file "mutex")
+               (:ct-file "condition-variable")
+               (:ct-file "semaphore")
+               (:ct-file "atomic")
+               (:ct-file "channel")
+               (:ct-file "parallel")))
+
+(asdf:defsystem "coalton/threads/sbcl"
+  :description "The backend of coalton/threads for SBCL."
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :version (:read-file-form "VERSION.txt")
+  :depends-on ("sb-concurrency")
+  :pathname "threads/backend/"
+  :serial t
+  :components ((:file "package")
+               (:file "sbcl")))
+
+(asdf:defsystem "coalton/threads/unsupported"
+  :description "Signals an error on Lisp implementations that coalton/threads does not support."
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :version (:read-file-form "VERSION.txt")
+  :pathname "threads/backend/"
+  :components ((:file "unsupported")))
+
+(asdf:defsystem "coalton/threads/benchmarks"
+  :description "Benchmarks of coalton/threads. Run with (coalton/threads/benchmarks:run-benchmarks)."
+  :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
+  :license "MIT"
+  :version (:read-file-form "VERSION.txt")
+  :defsystem-depends-on ("coalton-asdf")
+  :depends-on ("coalton"
+               "coalton/threads")
+  :pathname "threads/"
+  :components ((:ct-file "benchmarks")))
+
 (asdf:defsystem "coalton/library/big-float"
   :description "Deprecated. Use coalton/xmath."
   :author "Coalton contributors (https://github.com/coalton-lang/coalton)"
@@ -230,6 +297,7 @@
   :version (:read-file-form "VERSION.txt")
   :depends-on ("coalton"
                "coalton/xmath"
+               (:feature :sbcl "coalton/threads")
                "html-entities"
                "spinneret"
                "yason"
@@ -259,6 +327,7 @@
                "coalton/doc"
                "coalton/xmath"
                "coalton/testing"
+               (:feature :sbcl "coalton/threads")
                "fiasco"
                "quil-coalton/tests"
                "thih-coalton/tests")
@@ -334,6 +403,13 @@
                (:ct-file "multibyte-tests")
                (:ct-file "experimental-tests")
                (:file "exceptions")
+               (:module "threads"
+                :if-feature :sbcl
+                :serial t
+                :components ((:file "package")
+                             (:file "support-sbcl" :if-feature :sbcl)
+                             (:file "runtime-tests")
+                             (:ct-file "api-tests")))
                (:module "monad"
                 :serial t
                 :components ((:ct-file "optionalt")

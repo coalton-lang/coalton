@@ -113,7 +113,7 @@ Coalton is currently used in production to build defense and [quantum computing 
 
 ## What's Here?
 
-This repository contains the source code to the [Coalton compiler](src/), and the [standard library](library/).
+This repository contains the source code to the [Coalton compiler](src/), and the [standard library](library/). It also contains two optional libraries, which are not loaded by default: [`coalton/xmath`](xmath/), for extended mathematics, and [`coalton/threads`](threads/), for threads, synchronization, and parallel computation (SBCL only).
 
 It also contains a few example programs, such as:
 

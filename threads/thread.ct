@@ -1,0 +1,90 @@
+;;;; thread.ct
+;;;;
+;;;; Operating-system threads.
+
+(coalton/utils:defstdlib-package #:coalton/threads/thread
+  (:use
+   #:coalton
+   #:coalton/builtin
+   #:coalton/classes)
+  (:shadow
+   #:join)
+  (:local-nicknames
+   (#:backend #:coalton/threads/backend)
+   (#:rt #:coalton/threads/runtime))
+  (:export
+   #:Thread
+   #:spawn
+   #:join
+   #:ThreadAborted
+   #:alive?
+   #:name
+   #:yield!
+   #:current-name)
+  (:documentation "Operating-system threads.
+
+`spawn` starts a thread that calls a function of no arguments, and
+`join` waits for the thread to end and returns the function's value. If
+the function signals an error, the thread ends and `join` signals the
+same error, so it can be handled with `catch` in the joining thread.
+
+Threads are relatively expensive to create. To compute results in
+parallel, prefer `coalton/threads/parallel`, which runs lightweight
+tasks on a pool of worker threads."))
+
+(in-package #:coalton/threads/thread)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+
+  (repr :native rt:thread-handle)
+  (define-type (Thread :a)
+    "A handle to a thread that computes a value of type `:a`.")
+
+  (repr :native rt:thread-aborted)
+  (define-exception ThreadAborted
+    "Signaled by `join` for a thread that ended without returning a value or signaling an error, for example because it was terminated.")
+
+  (declare spawn ((Void -> :a) &key (:name String) -> Thread :a))
+  (define (spawn thunk &key (name "Coalton thread"))
+    "Start a thread, named `name`, that calls `thunk`. Output from the new thread goes to the output streams of the calling thread."
+    ;; NAME is also the name of a function of this package, which must
+    ;; not be bound by the Lisp code, in case this function is inlined.
+    (let ((thread-name name))
+      (lisp (-> (Thread :a)) (thunk thread-name)
+        (rt:spawn-thread thunk thread-name))))
+
+  (declare join (Thread :a -> :a))
+  (define (join thread)
+    "Wait for `thread` to end and return the value of its function. If the function signaled an error, signal it again in the calling thread; if the thread ended without returning, for example because it was terminated, signal `ThreadAborted`. A thread may be joined any number of times."
+    (lisp (-> :a) (thread)
+      (rt:join-thread thread)))
+
+  (declare alive? (Thread :a -> Boolean))
+  (define (alive? thread)
+    "Is `thread` still running?"
+    (lisp (-> Boolean) (thread)
+      (rt:thread-alive-p thread)))
+
+  (declare name (Thread :a -> String))
+  (define (name thread)
+    "The name of `thread`."
+    (lisp (-> String) (thread)
+      (rt:thread-handle-name thread)))
+
+  (declare yield! (Void -> Void))
+  (define (yield!)
+    "Offer the processor running the calling thread to other threads."
+    (lisp (-> Void) ()
+      (backend:thread-yield)))
+
+  (declare current-name (Void -> String))
+  (define (current-name)
+    "The name of the calling thread."
+    (lisp (-> String) ()
+      (cl:or (backend:thread-name (backend:current-thread)) ""))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/THREADS/THREAD")

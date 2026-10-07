@@ -1,0 +1,151 @@
+;;;; ising.ct
+;;;;
+;;;; A Monte Carlo simulation of the two-dimensional Ising model of a
+;;;; ferromagnet: spins of +1 or -1 on a square lattice with periodic
+;;;; boundaries, each interacting with its four neighbors, evolving
+;;;; under the Metropolis rule at a fixed temperature. Units are such
+;;;; that the coupling J and Boltzmann's constant are 1; the critical
+;;;; temperature is then 2 / ln(1 + √2) ≈ 2.269.
+;;;;
+;;;; Sites are colored like a checkerboard. A site's neighbors all have
+;;;; the other color, provided that the size of the lattice is even, so
+;;;; that the coloring matches across the periodic boundaries. All the
+;;;; sites of one color can then be updated at once, and a sweep is two
+;;;; parallel loops over the rows, one per color. Every update draws its
+;;;; random number from a generator keyed by the sweep and the site, so
+;;;; results do not depend on scheduling.
+
+(defpackage #:coalton-parallel-numerics/ising
+  (:use #:coalton #:coalton-prelude)
+  (:local-nicknames (#:arr #:coalton/lisparray)
+                    (#:math #:coalton/math)
+                    (#:common #:coalton-parallel-numerics/common))
+  (:export #:Lattice
+           #:make-lattice
+           #:copy-lattice
+           #:simulate!
+           #:lattice-size
+           #:lattice-spins
+           #:magnetization
+           #:energy-per-site))
+
+(in-package #:coalton-parallel-numerics/ising)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+
+  (define-struct Lattice
+    "A `size` by `size` lattice of spins, in row-major order."
+    (size UFix)
+    (spins (arr:LispArray I8)))
+
+  (declare make-lattice (UFix * U64 -> Lattice))
+  (define (make-lattice size seed)
+    "A lattice whose spins are each up or down at random, as at infinite temperature. `size` must be even and positive (see the comment at the top of this file)."
+    (when (or (== size 0) (== (mod size 2) 1))
+      (error "make-lattice: the size of an Ising lattice must be even and positive."))
+    (let ((spins (arr:make (* size size) 1)))
+      (for ((declare k UFix) (k 0 (1+ k)))
+        :repeat (* size size)
+        (when (< (common:random-f64 seed (into k)) 0.5d0)
+          (arr:set! spins k -1)))
+      (Lattice size spins)))
+
+  (declare copy-lattice (Lattice -> Lattice))
+  (define (copy-lattice lat)
+    (Lattice (.size lat) (arr:copy (.spins lat))))
+
+  (declare lattice-size (Lattice -> UFix))
+  (define (lattice-size lat) (.size lat))
+
+  (declare lattice-spins (Lattice -> arr:LispArray I8))
+  (define (lattice-spins lat) (.spins lat))
+
+  (declare acceptance-threshold (F64 -> U64))
+  (define (acceptance-threshold x)
+    "The integer below which a uniformly random 64-bit integer falls with probability exp(-x), for positive x."
+    (lisp (-> U64) (x)
+      (cl:min (cl:1- (cl:expt 2 64))
+              (cl:floor (cl:* (cl:exp (cl:- x)) (cl:expt 2 64))))))
+
+  (declare update-rows! (Lattice * UFix * U64 * U64 * U64 * U64 * UFix * UFix -> Void))
+  (define (update-rows! lat color seed counter t4 t8 lo hi)
+    "Apply the Metropolis rule to the sites of color `color` (the parity of the sum of their coordinates) in rows `lo` (inclusive) to `hi` (exclusive). A flip that raises the energy by 4 or 8 is accepted if a random number is less than `t4` or `t8`. The random number for site k is the `(counter + k)`th of the generator seeded with `seed`."
+    (let* ((size (.size lat))
+           (spins (.spins lat)))
+      (for ((declare i UFix) (i lo (1+ i)))
+        :repeat (- hi lo)
+        (let* ((row (* i size))
+               (up (* (if (== i 0) (- size 1) (- i 1)) size))
+               (down (* (if (== (+ i 1) size) 0 (+ i 1)) size))
+               (first (math:mod (+ i color) 2)))
+          (for ((declare j UFix) (j first (+ j 2)))
+            :repeat (math:div (+ (- size first) 1) 2)
+            (let* ((k (+ row j))
+                   (spin (arr:aref spins k))
+                   (left (if (== j 0) (- size 1) (- j 1)))
+                   (right (if (== (+ j 1) size) 0 (+ j 1)))
+                   (neighbors (+ (+ (arr:aref spins (+ up j)) (arr:aref spins (+ down j)))
+                                 (+ (arr:aref spins (+ row left)) (arr:aref spins (+ row right)))))
+                   ;; Flipping the spin changes the energy by twice this.
+                   (half-change (* spin neighbors)))
+              (when (or (<= half-change 0)
+                        (< (common:random-u64 seed (+ counter (into k)))
+                           (if (== half-change 2) t4 t8)))
+                (arr:set! spins k (negate spin)))))))))
+
+  (declare simulate! (Lattice * F64 * UFix * UFix * U64 * Boolean -> Void))
+  (define (simulate! lat temperature start sweeps seed parallel?)
+    "Run `sweeps` Metropolis sweeps over `lat` at `temperature`, numbered from `start`, drawing random numbers from the generator seeded with `seed`, and updating rows in parallel if `parallel?`."
+    (let* ((size (.size lat))
+           (sites (* size size))
+           (beta (/ 1d0 temperature))
+           (t4 (acceptance-threshold (* 4d0 beta)))
+           (t8 (acceptance-threshold (* 8d0 beta))))
+      (for ((declare sweep UFix) (sweep start (1+ sweep)))
+        :repeat sweeps
+        ;; Random numbers 0 to sites - 1 made the initial lattice.
+        (let ((counter (into (* (+ sweep 1) sites))))
+          (for ((declare color UFix) (color 0 (1+ color)))
+            :repeat 2
+            (common:over-range parallel? 0 size
+                               (fn (lo hi)
+                                 (update-rows! lat color seed counter t4 t8 lo hi))))))))
+
+  (declare magnetization (Lattice -> F64))
+  (define (magnetization lat)
+    "The mean spin."
+    (let* ((spins (.spins lat))
+           (total
+             (for ((declare k UFix)
+                   (declare sum IFix)
+                   (k 0 (1+ k))
+                   (sum 0 (+ sum (into (arr:aref spins k)))))
+               :returns sum
+               :repeat (arr:length spins)
+               Unit)))
+      (/ (lisp (-> F64) (total) (cl:coerce total 'cl:double-float))
+         (common:to-f64 (arr:length spins)))))
+
+  (declare energy-per-site (Lattice -> F64))
+  (define (energy-per-site lat)
+    "The mean energy per site: minus the sum of the products of neighboring spins, divided by the number of sites."
+    (let* ((size (.size lat))
+           (spins (.spins lat))
+           (total
+             (for ((declare k UFix)
+                   (declare sum IFix)
+                   (k 0 (1+ k))
+                   (sum 0 (let* ((i (math:div k size))
+                                 (j (math:mod k size))
+                                 (right (+ (* i size) (math:mod (+ j 1) size)))
+                                 (down (+ (* (math:mod (+ i 1) size) size) j)))
+                            (- sum (into (* (arr:aref spins k)
+                                            (+ (arr:aref spins right) (arr:aref spins down))))))))
+               :returns sum
+               :repeat (* size size)
+               Unit)))
+      (/ (lisp (-> F64) (total) (cl:coerce total 'cl:double-float))
+         (common:to-f64 (* size size))))))

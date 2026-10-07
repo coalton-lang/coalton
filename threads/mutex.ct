@@ -1,0 +1,69 @@
+;;;; mutex.ct
+;;;;
+;;;; Mutual exclusion locks.
+
+(coalton/utils:defstdlib-package #:coalton/threads/mutex
+  (:use
+   #:coalton
+   #:coalton/builtin
+   #:coalton/classes)
+  (:local-nicknames
+   (#:backend #:coalton/threads/backend))
+  (:export
+   #:Mutex
+   #:new
+   #:lock!
+   #:unlock!
+   #:try-lock!
+   #:with-lock)
+  (:documentation "Mutual exclusion locks.
+
+A `Mutex` can be held by at most one thread at a time. Prefer
+`with-lock`, which releases the mutex however its function exits, to
+pairing `lock!` with `unlock!`. Mutexes are not reentrant: a thread
+must not lock a mutex that it already holds."))
+
+(in-package #:coalton/threads/mutex)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+
+  (repr :native backend:mutex)
+  (define-type Mutex
+    "A lock that at most one thread can hold at a time.")
+
+  (declare new (&key (:name String) -> Mutex))
+  (define (new &key (name "Coalton mutex"))
+    "Create a mutex that no thread holds. The `name` shows up in debugging tools."
+    (lisp (-> Mutex) (name)
+      (backend:make-mutex :name name)))
+
+  (declare lock! (Mutex -> Void))
+  (define (lock! mutex)
+    "Acquire `mutex`, waiting for as long as another thread holds it."
+    (lisp (-> Void) (mutex)
+      (backend:acquire-mutex mutex)))
+
+  (declare unlock! (Mutex -> Void))
+  (define (unlock! mutex)
+    "Release `mutex`, which the calling thread must hold."
+    (lisp (-> Void) (mutex)
+      (backend:release-mutex mutex)))
+
+  (declare try-lock! (Mutex -> Boolean))
+  (define (try-lock! mutex)
+    "Acquire `mutex` and return `True` if no thread holds it; otherwise return `False` immediately."
+    (lisp (-> Boolean) (mutex)
+      (cl:and (backend:try-acquire-mutex mutex) cl:t)))
+
+  (declare with-lock (forall ((:result Values)) (Mutex * (Void -> :result) -> :result)))
+  (define (with-lock mutex thunk)
+    "Call `thunk` while holding `mutex`, and return its values. The mutex is released however `thunk` exits."
+    (lisp (-> :result) (mutex thunk)
+      (backend:with-mutex (mutex)
+        (cl:funcall thunk)))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/THREADS/MUTEX")

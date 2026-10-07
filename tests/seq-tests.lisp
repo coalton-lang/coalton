@@ -287,3 +287,93 @@ edge all have between MIN-BRANCHING and MAX-BRANCHING subnodes."
   (is (== "#<Seq [1 2 3]>"
           (show-as-string (the (seq:Seq Integer)
                                (seq:make 1 2 3))))))
+
+;;; Folding over ranges, and mapping in chunks
+
+(coalton-toplevel
+  (declare seq-test-of-size (UFix -> seq:Seq Integer))
+  (define (seq-test-of-size n)
+    (into (the (List Integer) (iter:collect! (iter:up-to (the Integer (into n)))))))
+
+  (declare seq-test-shapes (Void -> List (seq:Seq Integer)))
+  (define (seq-test-shapes)
+    "Seqs of various sizes, including concatenations and seqs shortened by
+POP, whose trees are irregular."
+    (let ((popped (rec % ((s (seq-test-of-size 2000)) (k (the UFix 40)))
+                    (if (== k 0)
+                        s
+                        (match (seq:pop s)
+                          ((Some (Tuple _ rest)) (% rest (- k 1)))
+                          ((None) s))))))
+      (<> (map seq-test-of-size (make-list 0 1 31 32 33 1023 1024 1025 33000))
+          (make-list
+           (fold seq:conc (seq:new) (map seq-test-of-size (make-list 1100 47 30000 5 2048)))
+           (fold seq:conc (seq:new) (map seq-test-of-size (range 1 60)))
+           popped))))
+
+  (declare seq-test-backwards-by-7 (UFix * UFix * (UFix * UFix -> Void) -> Void))
+  (define (seq-test-backwards-by-7 start end chunk)
+    "Call CHUNK on chunks of at most 7 indices covering START to END, from
+the last chunk to the first."
+    (rec % ((hi end))
+      (when (> hi start)
+        (let ((lo (if (> (- hi start) 7) (- hi 7) start)))
+          (chunk lo hi)
+          (% lo))))))
+
+(define-test seq-fold-range ()
+  (iter:for-each!
+   (fn (s)
+     (let n = (seq:size s))
+     (let elements = (the (List Integer) (into s)))
+     (iter:for-each!
+      (fn ((Tuple start end))
+        (let stop = (min end n))
+        (let expected = (if (< start stop)
+                            (list:take (- stop start) (list:drop start elements))
+                            Nil))
+        (is (== expected
+                (list:reverse (seq:fold-range (fn (acc x) (Cons x acc)) Nil s start end)))))
+      (iter:into-iter
+       (make-list (Tuple 0 n) (Tuple 0 0) (Tuple n n) (Tuple 1 n) (Tuple 0 (+ n 5))
+                  (Tuple (+ n 1) (+ n 9)) (Tuple 31 33) (Tuple 32 64) (Tuple 1000 1100)
+                  (Tuple (math:div n 3) (+ 1 (math:div (* 2 n) 3)))))))
+   (iter:into-iter (seq-test-shapes))))
+
+(define-test seq-map-with ()
+  (iter:for-each!
+   (fn (s)
+     (let n = (seq:size s))
+     (let expected = (map (fn (x) (* 2 x)) s))
+     (iter:for-each!
+      (fn (for-chunks)
+        (let mapped = (seq:map-with for-chunks (fn (x) (* 2 x)) s))
+        (is (== expected mapped))
+        (is (== n (seq:size mapped)))
+        ;; The result supports the operations of any Seq.
+        (when (> n 0)
+          (is (== (seq:get s (- n 1)) (map (fn (x) (math:div x 2)) (seq:get mapped (- n 1))))))
+        (let pushed = (seq:push mapped 7))
+        (is (== (+ n 1) (seq:size pushed)))
+        (is (== (Some 7) (seq:get pushed n)))
+        (is (== (<> (the (List Integer) (into expected)) (make-list 7)) (into pushed))))
+      (iter:into-iter
+       (make-list (fn (start end chunk) (chunk start end))
+                  seq-test-backwards-by-7)))
+     ;; F is only called within the calls on chunks.
+     (let inside = (cell:new False))
+     (let strays = (cell:new (the UFix 0)))
+     (let mapped = (seq:map-with (fn (start end chunk)
+                                   (cell:write! inside True)
+                                   (chunk start end)
+                                   (cell:write! inside False)
+                                   (values))
+                                 (fn (x)
+                                   (unless (cell:read inside)
+                                     (cell:increment! strays)
+                                     (values))
+                                   x)
+                                 s))
+     (is (== s mapped))
+     (is (== 0 (cell:read strays))))
+   (iter:into-iter (seq-test-shapes))))

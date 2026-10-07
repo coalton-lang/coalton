@@ -23,7 +23,9 @@
    #:put
    #:empty?
    #:conc
-   #:make))
+   #:make
+   #:fold-range
+   #:map-with))
 
 (in-package #:coalton/seq)
 
@@ -212,6 +214,59 @@ a new `Seq` instance."
                     (fold <> (butlast lsubts) (make-list nsubts (butfirst rsubts))))))))))))
 
   ;;
+  ;; Folding over ranges, and mapping in chunks
+  ;;
+
+  (declare fold-range ((:b * :a -> :b) * :b * Seq :a * UFix * UFix -> :b))
+  (define (fold-range f init seq start end)
+    "Fold `f` over the elements of `seq` at indices from `start` (inclusive)
+to `end` (exclusive), in order, starting with `init`, as `fold` does over
+all of the elements. Indices from `(size seq)` on are ignored. This takes
+time proportional to the number of elements folded, plus the height of
+`seq`."
+    (let ((stop (min end (size seq))))
+      (if (< start stop)
+          (%fold-range f init seq start stop)
+          init)))
+
+  (declare map-with ((UFix * UFix * (UFix * UFix -> Void) -> Void)
+                     * (:a -> :b) * Seq :a -> Seq :b))
+  (define (map-with for-chunks f seq)
+    "Apply `f` to every element of `seq`, as `map` does, using `for-chunks`
+to divide the work.
+
+Unless `seq` is empty, `for-chunks` is called once, with the indices 0
+and `(size seq)` and a function of two indices. It must call that
+function on disjoint, nonempty chunks of indices, each given by its
+first index and the index after its last, that together cover the
+indices from its first argument to its second, and return once all of
+these calls have returned. The calls may happen in any order, and at the
+same time, so `for-chunks` can make them in parallel, as
+`coalton/threads/parallel:for-chunks!` does. `f` is only called within
+these calls.
+
+The result has the same structure as `seq`. Each leaf of the tree is
+mapped by the call on the chunk containing its first index."
+    (match seq
+      ((LeafArray leaves)
+       (if (vector:empty? leaves)
+           (LeafArray (map f leaves))
+           (let ((result (cell:new (LeafArray (vector:new)))))
+             (for-chunks 0 (vector:length leaves)
+                         (fn (start _)
+                           (when (math:zero? start)
+                             (cell:write! result (LeafArray (map f leaves)))
+                             (values))))
+             (cell:read result))))
+      ((RelaxedNode _ _ _ _)
+       (let ((result (%map-skeleton (LeafArray (vector:new)) seq)))
+         (unless (empty? seq)
+           (for-chunks 0 (size seq)
+                       (fn (start end)
+                         (%map-leaves f seq result 0 start end))))
+         result))))
+
+  ;;
   ;; Instances
   ;; 
 
@@ -374,6 +429,69 @@ a new `Seq` instance."
                 (pure (the UFix 0)))
            (fn (last-cumulative)
              (search-forward guess last-cumulative)))))  
+
+  (declare %first-child-ending-after (vector:Vector UFix * UFix -> UFix))
+  (define (%first-child-ending-after cst index)
+    "The position of the first subtree that ends after `index`, in a node
+whose cumulative size table is `cst`, or the number of subtrees if there
+is none."
+    (rec % ((i 0))
+      (if (or (>= i (vector:length cst))
+              (> (vector:index-unsafe i cst) index))
+          i
+          (% (+ i 1)))))
+
+  (declare %fold-range ((:b * :a -> :b) * :b * Seq :a * UFix * UFix -> :b))
+  (define (%fold-range f init seq start end)
+    "Fold `f` over the elements of `seq` at indices from `start` to `end`,
+where `end` is at most `(size seq)`."
+    (match seq
+      ((LeafArray leaves)
+       (rec % ((i start) (acc init))
+         (if (>= i end)
+             acc
+             (% (+ i 1) (f acc (vector:index-unsafe i leaves))))))
+      ((RelaxedNode _ _ cst subs)
+       (rec % ((i (%first-child-ending-after cst start)) (acc init))
+         (let ((sub-start (if (math:zero? i) 0 (vector:index-unsafe (- i 1) cst))))
+           (if (or (>= i (vector:length subs)) (>= sub-start end))
+               acc
+               (let ((sub-end (vector:index-unsafe i cst)))
+                 (% (+ i 1)
+                    (%fold-range f acc (vector:index-unsafe i subs)
+                                 (- (max start sub-start) sub-start)
+                                 (- (min end sub-end) sub-start))))))))))
+
+  (declare %map-skeleton (Seq :b * Seq :a -> Seq :b))
+  (define (%map-skeleton placeholder seq)
+    "A tree with the structure and size tables of `seq`, whose leaves are
+all `placeholder`."
+    (match seq
+      ((LeafArray _) placeholder)
+      ((RelaxedNode h fss cst subs)
+       (RelaxedNode h fss cst (map (fn (sub) (%map-skeleton placeholder sub)) subs)))))
+
+  (declare %map-leaves ((:a -> :b) * Seq :a * Seq :b * UFix * UFix * UFix -> Void))
+  (define (%map-leaves f seq result offset start end)
+    "Store in `result`, a tree with the structure of `seq`, the leaves of
+`seq` mapped with `f` whose first index is from `start` (inclusive) to
+`end` (exclusive). The first element of `seq` has the index `offset`."
+    (match seq
+      ((LeafArray _) (values))
+      ((RelaxedNode _ _ cst subs)
+       (match result
+         ((LeafArray _) (unreachable))
+         ((RelaxedNode _ _ _ results)
+          (rec % ((i (%first-child-ending-after cst (if (> start offset) (- start offset) 0))))
+            (let ((sub-start (+ offset (if (math:zero? i) 0 (vector:index-unsafe (- i 1) cst)))))
+              (when (and (< i (vector:length subs)) (< sub-start end))
+                (match (vector:index-unsafe i subs)
+                  ((LeafArray leaves)
+                   (when (>= sub-start start)
+                     (vector:set! i (LeafArray (map f leaves)) results)))
+                  (sub
+                   (%map-leaves f sub (vector:index-unsafe i results) sub-start start end)))
+                (% (+ i 1))))))))))
 
   (declare %push (Seq :a * :a -> (Seq :a) * Boolean))
   (define (%push seq a)

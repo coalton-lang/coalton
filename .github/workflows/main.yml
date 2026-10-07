@@ -91,3 +91,42 @@ jobs:
           (asdf:test-system :coalton-raytrace)
           EOF
           ccl64-wrapped.sh --batch --load run-tests.lisp
+
+  examples:
+    # Examples that use SBCL-only libraries, such as coalton/threads.
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - COALTON_ENV: "release"
+            SAFETY: "0"
+          - COALTON_ENV: "development"
+            SAFETY: "3"
+
+    permissions:
+      packages: read
+
+    container:
+      image: ghcr.io/coalton-lang/sbcl-base
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        # Tell ASDF to look through our repo recursively
+        # See https://github.com/actions/runner/issues/2058
+        CL_SOURCE_REGISTRY: "/__w/coalton/coalton//"
+
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run SBCL-only example tests
+        env:
+          COALTON_ENV: ${{ matrix.COALTON_ENV }}
+        run: |
+          cat <<EOF > run-examples.lisp
+          (sb-ext:restrict-compiler-policy 'safety ${{ matrix.SAFETY }})
+          (ql:quickload :coalton-parallel-numerics)
+          (asdf:test-system :coalton-parallel-numerics)
+          EOF
+          sbcl --dynamic-space-size 2048 --non-interactive --load run-examples.lisp
