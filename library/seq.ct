@@ -6,7 +6,6 @@
    #:coalton/functions
    #:coalton/classes)
   (:local-nicknames
-   (#:types #:coalton/types)
    (#:math #:coalton/math)
    (#:optional #:coalton/optional)
    (#:cell #:coalton/cell)
@@ -58,7 +57,7 @@
      (vector:Vector (Seq :a)))         ; subtrees
     (LeafArray (vector:Vector :a)))
 
-  (declare new (types:RuntimeRepr :a => (Void -> Seq :a)))
+  (declare new (Void -> Seq :a))
   (define (new)
     "Create a new empty `Seq`."
     (LeafArray (vector:new)))
@@ -130,7 +129,7 @@ a new `Seq` instance."
       ((Some (Tuple x rest)) (Some (Tuple x (%collapse rest))))
       ((None) None)))
 
-  (declare conc (types:RuntimeRepr :a => Seq :a * Seq :a -> Seq :a))
+  (declare conc (Seq :a * Seq :a -> Seq :a))
   (define (conc left right)
     "Concatenate two `Seq`s"
     (cond
@@ -225,11 +224,11 @@ mapped by the call on the chunk containing its first index."
   ;; Instances
   ;; 
 
-  (define-instance (types:RuntimeRepr :a => Semigroup (Seq :a))
+  (define-instance (Semigroup (Seq :a))
     (define (<> a b)
       (conc a b)))
   
-  (define-instance (types:RuntimeRepr :a => Monoid (Seq :a))
+  (define-instance (Monoid (Seq :a))
     (define mempty (new)))
 
   (define-instance (iter:IntoIterator (Seq :a) :a)
@@ -273,14 +272,14 @@ mapped by the call on the chunk containing its first index."
         ((RelaxedNode _ _ _ subs)
          (foldr (fn (sub acc) (foldr f acc sub)) init subs)))))
 
-  (define-instance (types:RuntimeRepr :a => iter:FromIterator (Seq :a) :a)
+  (define-instance (iter:FromIterator (Seq :a) :a)
     (define (iter:collect! it)
       (%from-vector (iter:collect! it))))
 
   ;; The builders collect the elements in a vector, and build the tree
   ;; at the end, in time proportional to the number of elements.
 
-  (define-instance (types:RuntimeRepr :a => FromItemizedCollection (Seq :a) :a (vector:Vector :a))
+  (define-instance (FromItemizedCollection (Seq :a) :a (vector:Vector :a))
     (define (begin-collection-builder _ size)
       (vector:with-capacity size))
     (define (adjoin-to-collection-builder _ elements _index item)
@@ -289,8 +288,7 @@ mapped by the call on the chunk containing its first index."
     (define (finalize-collection-builder _ elements)
       (%from-vector elements)))
 
-  (define-instance (types:RuntimeRepr (Tuple :key :value) =>
-                    FromItemizedAssociation (Seq (Tuple :key :value))
+  (define-instance (FromItemizedAssociation (Seq (Tuple :key :value))
                                             :key
                                             :value
                                             (vector:Vector (Tuple :key :value)))
@@ -302,8 +300,7 @@ mapped by the call on the chunk containing its first index."
     (define (finalize-association-builder _ entries)
       (%from-vector entries)))
 
-  (define-instance (types:RuntimeRepr :a =>
-                    FromCollectionComprehension (Seq :a) :a (vector:Vector :a))
+  (define-instance (FromCollectionComprehension (Seq :a) :a (vector:Vector :a))
     (define (begin-collection-comprehension _ size-hint)
       (vector:with-capacity (with-default 0 size-hint)))
     (define (adjoin-to-collection-comprehension _ elements item)
@@ -312,8 +309,7 @@ mapped by the call on the chunk containing its first index."
     (define (finalize-collection-comprehension _ elements)
       (%from-vector elements)))
 
-  (define-instance (types:RuntimeRepr (Tuple :key :value) =>
-                    FromAssociationComprehension (Seq (Tuple :key :value))
+  (define-instance (FromAssociationComprehension (Seq (Tuple :key :value))
                                                  :key
                                                  :value
                                                  (vector:Vector (Tuple :key :value)))
@@ -325,12 +321,12 @@ mapped by the call on the chunk containing its first index."
     (define (finalize-association-comprehension _ entries)
       (%from-vector entries)))
 
-  (define-instance (types:RuntimeRepr :a => Default (Seq :a))
+  (define-instance (Default (Seq :a))
     (define (default)
       (new)))
 
   (overlap)
-  (define-instance ((Foldable :f) (types:RuntimeRepr :a) => Into (:f :a) (Seq :a))
+  (define-instance (Foldable :f => Into (:f :a) (Seq :a))
     (define (into fld)
       (%from-vector (fold (fn (elements x)
                             (vector:push! x elements)

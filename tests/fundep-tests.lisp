@@ -165,8 +165,7 @@
   ;; A fallback's context alone cannot select a polymorphic conversion.
   (dolist (program
             '("(declare same (:a -> :a)) (define (same x) (into x))"
-              "(declare build-seq ((Foldable :f) (coalton/types:RuntimeRepr :a)
-                                    => :f :a -> coalton/seq:Seq :a))
+              "(declare build-seq (Foldable :f => :f :a -> coalton/seq:Seq :a))
                (define (build-seq xs) (into xs))"))
     (signals tc:tc-error (check-coalton-types program)))
   ;; Incomparable heads require overlap even when their contexts differ.

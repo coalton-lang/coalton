@@ -517,9 +517,9 @@ instance authors:
         (Into (:f :a) (Seq :a) => :f :a -> Seq :a))
       (define (to-seq xs) (into xs))
 
-  `Foldable :f` and `RuntimeRepr :a` alone are insufficient here.
-  They describe one candidate instance's requirements; a caller may select a
-  more-specific instance with different requirements.
+  `Foldable :f` alone is insufficient here. It describes one candidate
+  instance's requirements; a caller may select a more-specific instance with
+  different requirements.
 
 - New instances can overlap the identity instance whenever their source and
   destination types can become equal. Every distinct instance participating
