@@ -1628,13 +1628,16 @@ ASDF loads the project from disk, so unsaved edits would otherwise be ignored."
 
   (declare restart-runtime! (MineState -> Boolean))
   (define (restart-runtime! st)
-    "Restart the runtime and replay the configured :repl-init."
+    "Restart the runtime and replay the configured :repl-init, reporting progress
+in the REPL as a first start does."
+    (repl:repl-pane-append-system! (.ms-repl st) ";; Restarting runtime...")
     (lifecycle:runtime-stop! (.ms-runtime st))
     (%clear-runtime-session! st)
     (cell:write! (.ms-repl-package st) (.config-default-package (.ms-config st)))
     (lifecycle:runtime-start! (.ms-runtime st))
     (match (lifecycle:runtime-connection (.ms-runtime st))
       ((Some conn)
+       (repl:repl-pane-append-system! (.ms-repl st) ";; Runtime connected.")
        (%send-repl-init! st conn)
        True)
       ((None) False)))
@@ -1646,12 +1649,8 @@ ASDF loads the project from disk, so unsaved edits would otherwise be ignored."
                      (cl:string-trim '(#\Space #\Tab) cmd)))
     (cond
       ((or (== trimmed "restart") (== trimmed "rs"))
-       (repl:repl-pane-append-system! (.ms-repl st) ";; Restarting runtime...")
-       (cond
-         ((restart-runtime! st)
-          (repl:repl-pane-append-system! (.ms-repl st) ";; Runtime restarted."))
-         (True
-          (repl:repl-pane-append-system! (.ms-repl st) ";; ERROR: Failed to restart runtime."))))
+       (unless (restart-runtime! st)
+         (repl:repl-pane-append-system! (.ms-repl st) ";; ERROR: Failed to restart runtime.")))
       ((or (== trimmed "clear") (== trimmed "cl"))
        (repl:repl-pane-clear-output! (.ms-repl st))
        (repl:repl-pane-append-system! (.ms-repl st) ";; Output cleared."))
