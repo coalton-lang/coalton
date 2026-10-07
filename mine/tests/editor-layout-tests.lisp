@@ -401,6 +401,55 @@
                 "Typing after a selection did not insert at the cursor: ~S"
                 (repl:repl-pane-get-input repl))))))
 
+(defun check-open-files-scrollbar-scrolls-the-list ()
+  (let* ((state (%test-state))
+         (scr (mine/term/screen:screen-new 80 24))
+         (term (mine/term/terminal:Terminal scr (coalton/cell:new coalton:False)
+                                            (mine/term/terminal::%terminal-input-runtime-new)
+                                            (coalton/cell:new (coalton/vector:new))
+                                            (coalton/cell:new 80) (coalton/cell:new 24)))
+         (handler (app::make-handler state term))
+         (tree (mine/app/state:get-tree-pane state)))
+    (flet ((render ()
+             (let ((*standard-output* (make-broadcast-stream))) (app::render-app state term)))
+           (row-text (y)
+             (coerce (loop :for x :below 20
+                           :collect (mine-tests/editor-layout::screen-cell-character scr x y))
+                     'string))
+           (click (x y)
+             (let ((*standard-output* (make-broadcast-stream)))
+               (funcall handler (mine/event/types:EvMouse input:MousePress input:MouseLeft x y))
+               (funcall handler (mine/event/types:EvMouse input:MouseRelease input:MouseLeft x y)))))
+      (mine/pane/tree:tree-pane-set-root!
+       tree (mine/pane/tree:TreeDir "project" (list (mine/pane/tree:TreeFile "main.lisp" "/p/main.lisp"))
+                                    coalton:True))
+      (dotimes (i 12)
+        (mine/pane/tree:tree-pane-add-open-file! tree (format nil "open~2,'0D.lisp" i)
+                                                 (format nil "/p/open~2,'0D.lisp" i)))
+      (app::%show-tree! state)
+      (mine/widget/focus:focus-switch! (mine/app/state:get-focus-mgr state) mine/widget/focus:FocusTree)
+      (render)
+      ;; With 80 columns the tree pane is 20 wide, so scrollbars use column 19.
+      ;; The Open Files list lies between its title and the Project Tree title.
+      (let* ((first (1+ (loop :for y :below 24 :when (search "Open Files" (row-text y)) :return y)))
+             (last (1- (loop :for y :below 24 :when (search "Project Tree" (row-text y)) :return y))))
+        (%check (< first last) "Unexpected tree pane layout")
+        (%check (loop :for y :from first :to last
+                      :always (find (mine-tests/editor-layout::screen-cell-character scr 19 y) "│┃"))
+                "Open Files has no scrollbar although its files do not fit")
+        (click 19 first)
+        (render)
+        (%check (search "open11" (row-text first))
+                "Clicking the top of the Open Files scrollbar did not show the first file: ~S"
+                (row-text first))
+        (click 19 last)
+        (render)
+        (%check (search "open00" (row-text last))
+                "Clicking the end of the Open Files scrollbar did not show the last file: ~S"
+                (row-text last))
+        (%check (search "Project Tree" (row-text (1+ last)))
+                "Scrolling Open Files moved the Project Tree section")))))
+
 (defun run-editor-geometry-integration-tests ()
   (check-editor-render-multiline-source-snapshot)
   (check-editor-frames-share-one-source-scan)
@@ -408,6 +457,7 @@
   (check-repl-pointer-targets-match-multiline-geometry)
   (check-scrollbar-drag-follows-pointer-off-the-bar)
   (check-repl-input-mouse-selection-copies)
+  (check-open-files-scrollbar-scrolls-the-list)
   t)
 
 (defun check-editor-long-wrapped-line-keeps-cursor-visible ()

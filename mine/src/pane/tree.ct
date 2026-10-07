@@ -33,6 +33,8 @@
    #:tree-pane-click-at!
    #:tree-pane-scroll-delta!
    #:tree-pane-scrollbar-drag-at!
+   #:tree-pane-open-scrollbar #:tree-pane-tree-scrollbar
+   #:tree-pane-drag-open-scrollbar!
    #:tree-pane-render-collapsed))
 
 (in-package #:mine/pane/tree)
@@ -651,6 +653,13 @@ hidden while the pane was shorter reappear when it grows."
     (let rx = (.rect-x rect))
     (let ry = (.rect-y rect))
     (let w = (.rect-width rect))
+    (let sb-col = (- (+ rx w) 1))
+    (let track-s = (color:Style color:scrollbar-track-fg
+                                color:scrollbar-track-bg
+                                color:AttrNone))
+    (let thumb-s = (color:Style color:scrollbar-thumb-fg
+                                color:scrollbar-track-bg
+                                color:AttrNone))
 
     ;; Open Files title
     (%draw-titled-sep scr rx ry w "Open Files" sep-style)
@@ -665,7 +674,9 @@ hidden while the pane was shorter reappear when it grows."
       (let in-open = (cell:read (.in-open-sec tp)))
       (let draw-sel = (if (and focused in-open) open-sel 99999999))
       (%draw-tree-rows open-rows scr open-rect open-h open-scr draw-sel
-                       0 0 dirty-fn diag-fn preview-p))
+                       0 0 dirty-fn diag-fn preview-p)
+      (render:draw-scrollbar scr sb-col (.rect-y open-rect) open-h (length open-rows) open-scr
+                             track-s thumb-s))
 
     ;; Project Tree title
     (when (> tree-title-h 0)
@@ -683,16 +694,46 @@ hidden while the pane was shorter reappear when it grows."
       (%draw-tree-rows tree-rows scr tree-rect tree-h tree-scr draw-sel
                        0 0 dirty-fn diag-fn preview-p)
       ;; Scrollbar for tree section
-      (let total = (length tree-rows))
-      (let sb-col = (- (+ rx w) 1))
-      (let track-s = (color:Style color:scrollbar-track-fg
-                                  color:scrollbar-track-bg
-                                  color:AttrNone))
-      (let thumb-s = (color:Style color:scrollbar-thumb-fg
-                                  color:scrollbar-track-bg
-                                  color:AttrNone))
-      (render:draw-scrollbar scr sb-col (.rect-y tree-rect) tree-h total tree-scr
+      (render:draw-scrollbar scr sb-col (.rect-y tree-rect) tree-h (length tree-rows) tree-scr
                              track-s thumb-s)))
+
+  (declare tree-pane-open-scrollbar (TreePane * UFix -> Optional (Tuple UFix UFix)))
+  (define (tree-pane-open-scrollbar tp height)
+    "Return the first row, within a pane of HEIGHT rows, and the length of the
+Open Files scrollbar, if that section has more files than rows."
+    (let chrome = (+ 1 (if (%has-tree? tp) 1 0)))
+    (let content-h = (if (> height chrome) (- height chrome) 0))
+    (let open-h = (%open-section-height tp content-h))
+    (if (and (> open-h 0) (> (length (cell:read (.open-files tp))) open-h))
+        (Some (Tuple 1 open-h))
+        None))
+
+  (declare tree-pane-tree-scrollbar (TreePane * UFix -> Optional (Tuple UFix UFix)))
+  (define (tree-pane-tree-scrollbar tp height)
+    "Return the first row, within a pane of HEIGHT rows, and the length of the
+Project Tree scrollbar, if that section has more rows than fit."
+    (let chrome = (+ 1 (if (%has-tree? tp) 1 0)))
+    (let content-h = (if (> height chrome) (- height chrome) 0))
+    (let open-h = (%open-section-height tp content-h))
+    (let tree-h = (if (> content-h open-h) (- content-h open-h) 0))
+    (if (and (> tree-h 0) (> (length (flatten-tree (cell:read (.root tp)))) tree-h))
+        (Some (Tuple (+ chrome open-h) tree-h))
+        None))
+
+  (declare tree-pane-drag-open-scrollbar! (TreePane * UFix * UFix -> Void))
+  (define (tree-pane-drag-open-scrollbar! tp offset rows)
+    "Scroll Open Files to OFFSET along its scrollbar of ROWS rows, selecting the
+top file shown, as dragging the Project Tree scrollbar does."
+    (let total = (length (cell:read (.open-files tp))))
+    (when (> total rows)
+      (let max-scroll = (- total rows))
+      (let new-scroll = (lisp (-> UFix) (offset max-scroll rows)
+                          (cl:min max-scroll
+                                  (cl:floor (cl:* offset max-scroll)
+                                            (cl:max 1 (cl:1- rows))))))
+      (cell:write! (.open-scroll tp) new-scroll)
+      (cell:write! (.open-selected tp) new-scroll))
+    (values))
 
   (declare tree-pane-scrollbar-drag-at! (TreePane * UFix * UFix -> Void))
   (define (tree-pane-scrollbar-drag-at! tp row-in-pane pane-height)
