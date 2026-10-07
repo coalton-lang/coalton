@@ -68,6 +68,7 @@
                     (parse-doc-test-scheme (car example))
                     entry:*global-environment*))))))
 
+;; #+coalton-with-doc
 (deftest test-doc-keyword-type-rendering ()
   (let* ((keyword-type
            (tc:qualified-ty-type
