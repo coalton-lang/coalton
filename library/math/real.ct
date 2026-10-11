@@ -281,15 +281,19 @@ remainders expressed as values of type of X."
 Note: This does *not* divide double-float arguments."
     (general/ a b))
 
+  (inline)
   (declare floor/ (Integer * Integer -> Integer))
   (define (floor/ a b)
     "Divide two integers and compute the floor of the quotient."
-    (floor (exact/ a b)))
+    (lisp (-> Integer) (a b)
+      (cl:values (cl:floor a b))))
 
+  (inline)
   (declare ceiling/ (Integer * Integer -> Integer))
   (define (ceiling/ a b)
     "Divide two integers and compute the ceiling of the quotient."
-    (ceiling (exact/ a b)))
+    (lisp (-> Integer) (a b)
+      (cl:values (cl:ceiling a b))))
 
   (declare round/ (Integer * Integer -> Integer))
   (define (round/ a b)
