@@ -77,7 +77,9 @@ the match is exhaustive and settings demand it."
         ;; Don't emit a fallback branch for exhaustive release-mode
         ;; matches unless type annotations are disabled. Without
         ;; annotations, the explicit fallback keeps CL from inferring
-        ;; an implicit NIL return path.
+        ;; an implicit NIL return path. (With annotations, the last
+        ;; branch is made unconditional instead; see
+        ;; `make-last-branch-unconditional'.)
         (and (settings:coalton-release-p)
              settings:*emit-type-annotations*
              (match-exhaustive-p match env)))))
@@ -248,16 +250,32 @@ When true, returns two `ast:node' objects representing then/else branches."
            match-expr-type
            env))
 
+(defun make-last-branch-unconditional (branches catch-all-key)
+  "Replace the test of the last of BRANCHES with CATCH-ALL-KEY.
+
+This is only valid when the match is known to be exhaustive. Without
+it, a `cl:cond' or `cl:case' lacking a fallback has an implicit NIL
+return path, which (among other things) can prevent SBCL from
+compiling self-calls in the other branches as tail calls."
+  (declare (type list branches)
+           (type symbol catch-all-key)
+           (values list &optional))
+
+  (if (endp branches)
+      branches
+      (append (butlast branches)
+              (list (cons catch-all-key (rest (car (last branches))))))))
+
 (defun codegen-cond-match (branches emit-fallback-p)
   "Generate code to switch branches with `cl:cond'."
   (declare (type list branches)
            (values t &optional))
 
-  `(cond
-     ,@branches
-     ,@(if (not emit-fallback-p)
-           '()
-           (list '(t (error "Pattern match not exhaustive error."))))))
+  (if (not emit-fallback-p)
+      `(cond ,@(make-last-branch-unconditional branches 't))
+      `(cond
+         ,@branches
+         (t (error "Pattern match not exhaustive error.")))))
 
 (defun codegen-case-match (match-var branches emit-fallback-p)
   "Generate code to switch branches with `cl:case'."
@@ -265,11 +283,11 @@ When true, returns two `ast:node' objects representing then/else branches."
            (type list branches)
            (values t &optional))
 
-  `(case ,match-var
-     ,@branches
-     ,@(if (not emit-fallback-p)
-           '()
-           (list '(otherwise (error "Pattern match not exhaustive error."))))))
+  (if (not emit-fallback-p)
+      `(case ,match-var ,@(make-last-branch-unconditional branches 'otherwise))
+      `(case ,match-var
+         ,@branches
+         (otherwise (error "Pattern match not exhaustive error.")))))
 
 (defun codegen-match (match-var subexpr-code subexpr-type branches env emit-jumptable-p emit-fallback-p emit-branchless-p)
   "Generate code for a match expression."
