@@ -1545,9 +1545,10 @@ updates; use the final list to validate recorded choices in the resulting
 environment before installing it. See *DEFER-INSTANCE-VALIDATION*.")
 
 (defun predicate-subsumes-p (general specific)
-  (handler-case
-      (progn (predicate-match (fresh-pred general) (fresh-pred specific)) t)
-    (predicate-unification-error () nil)))
+  (and (not (predicate-match-impossible-p general specific))
+       (handler-case
+           (progn (predicate-match (fresh-pred general) (fresh-pred specific)) t)
+         (predicate-unification-error () nil))))
 
 (defun same-instance-head-p (left right)
   (and (predicate-subsumes-p left right)

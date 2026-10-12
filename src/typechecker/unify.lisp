@@ -11,6 +11,7 @@
    #:match                              ; FUNCTION
    #:predicate-mgu                      ; FUNCTION
    #:predicate-match                    ; FUNCTION
+   #:predicate-match-impossible-p       ; PREDICATE
    #:match-list                         ; FUNCTION
    #:match-list-p                       ; PREDICATE
    #:unify-list                         ; FUNCTION
@@ -252,12 +253,38 @@ apply s type1 == type2")
     (coalton-internal-type-error ()
       (error 'predicate-unification-error :pred1 pred1 :pred2 pred2))))
 
+(defun match-impossible-p (type1 type2)
+  "Returns true only if (MATCH TYPE1 TYPE2) is certain to fail."
+  (declare (type ty type1 type2))
+  (cond
+    ((or (not (typep type1 '(or tycon tapp)))
+         (not (typep type2 '(or tyvar tycon tapp))))
+     nil)
+    ((and (tapp-p type1) (tapp-p type2))
+     (or (match-impossible-p (tapp-from type1) (tapp-from type2))
+         (match-impossible-p (tapp-to type1) (tapp-to type2))))
+    ((and (tycon-p type1) (tycon-p type2))
+     (not (ty= type1 type2)))
+    (t
+     t)))
+
+(defun predicate-match-impossible-p (pred1 pred2)
+  "Returns true only if (PREDICATE-MATCH PRED1 PRED2) is certain to fail."
+  (declare (type ty-predicate pred1 pred2))
+  (or (not (eq (ty-predicate-class pred1)
+               (ty-predicate-class pred2)))
+      (loop :for type1 :in (ty-predicate-types pred1)
+            :for type2 :in (ty-predicate-types pred2)
+            :thereis (match-impossible-p type1 type2))))
+
 (defun predicate-match (pred1 pred2 &optional subs)
   "Returns a SUBSTITUTION-LIST of the most general substitutions required to unify PRED1 to PRED2."
   (declare (type ty-predicate pred1 pred2)
            (type substitution-list subs))
-  (unless (eq (ty-predicate-class pred1)
-               (ty-predicate-class pred2))
+  (when (or (not (eq (ty-predicate-class pred1)
+                     (ty-predicate-class pred2)))
+            (and (null subs)
+                 (predicate-match-impossible-p pred1 pred2)))
     (error 'predicate-unification-error :pred1 pred1 :pred2 pred2))
   (handler-case
       (compose-substitution-lists
