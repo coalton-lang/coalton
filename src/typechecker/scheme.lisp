@@ -348,10 +348,12 @@ become lexically scoped."
 ;;;
 
 (defmethod apply-substitution (subst-list (type ty-scheme))
-  (make-ty-scheme
-   :explicit-p (ty-scheme-explicit-p type)
-   :kinds (ty-scheme-kinds type)
-   :type (apply-substitution subst-list (ty-scheme-type type))))
+  (rebuild-if-changed (subst-list type)
+      ((qualified-type (ty-scheme-type type)))
+    (make-ty-scheme
+     :explicit-p (ty-scheme-explicit-p type)
+     :kinds (ty-scheme-kinds type)
+     :type qualified-type)))
 
 (defmethod type-variables ((type ty-scheme))
   (type-variables (ty-scheme-type type)))

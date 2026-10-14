@@ -118,10 +118,12 @@
 (defmethod apply-substitution (subst-list (type ty-predicate))
   (declare (type substitution-list subst-list)
            (values ty-predicate &optional))
-  (make-ty-predicate
-   :class (ty-predicate-class type)
-   :types (apply-substitution subst-list (ty-predicate-types type))
-   :location (ty-predicate-location type)))
+  (rebuild-if-changed (subst-list type)
+      ((types (ty-predicate-types type)))
+    (make-ty-predicate
+     :class (ty-predicate-class type)
+     :types types
+     :location (ty-predicate-location type))))
 
 (defmethod apply-ksubstitution (subs (type ty-predicate))
   (declare (type ksubstitution-list subs))
@@ -143,9 +145,10 @@
 
 (defmethod apply-substitution (subst-list (type qualified-ty))
   (declare (type substitution-list subst-list))
-  (make-qualified-ty
-   :predicates (apply-substitution subst-list (qualified-ty-predicates type))
-   :type (apply-substitution subst-list (qualified-ty-type type))))
+  (rebuild-if-changed (subst-list type)
+      ((predicates (qualified-ty-predicates type))
+       (new-type (qualified-ty-type type)))
+    (make-qualified-ty :predicates predicates :type new-type)))
 
 (defmethod apply-ksubstitution (subs (type qualified-ty))
   (declare (type ksubstitution-list subs))
