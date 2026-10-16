@@ -89,7 +89,11 @@ interpret UTF-8 input bytes as MacRoman.")
     ((uiop:os-macosx-p)
      (list "/usr/bin/env" (append +macos-utf8-env+ (list "/usr/bin/pbpaste"))))
     ((or (uiop:os-windows-p) (%wsl-p))
-     (list "powershell.exe" (list "-command" "Get-Clipboard")))
+     ;; The PowerShell host ends its output with a newline that is not part
+     ;; of the clipboard text. -Raw keeps the text's own line endings, and
+     ;; -NoProfile keeps profile output out of the result.
+     (list "powershell.exe" (list "-NoProfile" "-Command" "Get-Clipboard -Raw")
+           ':strip-final-newline t))
     ((%wayland-session-p)
      (%find-first-command
       (list (list "wl-paste" (list "--no-newline"))

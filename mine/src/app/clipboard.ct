@@ -46,15 +46,31 @@
              :while ch
              :do (cl:write-char ch s))))
 
+(cl:defun %strip-final-newline (text)
+  "Remove one final CRLF or LF from TEXT."
+  (cl:let ((end (cl:length text)))
+    (cl:cond
+      ((cl:and (cl:>= end 2)
+               (cl:char= #\Return (cl:char text (cl:- end 2)))
+               (cl:char= #\Newline (cl:char text (cl:1- end))))
+       (cl:subseq text 0 (cl:- end 2)))
+      ((cl:and (cl:>= end 1)
+               (cl:char= #\Newline (cl:char text (cl:1- end))))
+       (cl:subseq text 0 (cl:1- end)))
+      (cl:t text))))
+
 (cl:defun %clipboard-paste ()
   "Read text from the system clipboard. Works on macOS, Linux, and Windows."
   (cl:handler-case
-      (cl:destructuring-bind (program args) find-clipboard:*clipboard-paste*
+      (cl:destructuring-bind (program args cl:&key strip-final-newline)
+          find-clipboard:*clipboard-paste*
         (cl:let* ((proc (sb-ext:run-program program args
                           :output ':stream :wait cl:nil :search cl:t))
                   (output (sb-ext:process-output proc))
                   (text (%read-stream-to-string output)))
           (cl:close output)
           (sb-ext:process-wait proc)
-          text))
+          (cl:if strip-final-newline
+                 (%strip-final-newline text)
+                 text)))
     (cl:error () "")))
