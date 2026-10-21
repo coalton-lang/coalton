@@ -2,11 +2,47 @@
 
 (named-readtables:in-readtable coalton:coalton)
 
+(coalton-toplevel
+  (declare format-show-generic (Show :a => :a -> String))
+  (define (format-show-generic x)
+    (format:format format:Str "~A" x)))
+
 ;;; Test Successes
 
 (define-test format-no-directives ()
   (is (== "hello"
           (format:format format:Str "hello"))))
+
+(define-test format-aesthetic-string ()
+  (is (== "hello"
+          (format:format format:Str "~A" "hello")))
+  (is (== "Hello, world!"
+          (format:format format:Str "Hello, ~A!" "world")))
+  (is (== "a\"b"
+          (format:format format:Str "~A" "a\"b")))
+  (is (== "a b"
+          (format:format format:Str "~{~A~^ ~}"
+                         (make-list "a" "b"))))
+  (is (== (lisp (-> String) ()
+            (cl:format cl:nil "~A" #\a))
+          (format:format format:Str "~A" #\a))))
+
+(define-test format-aesthetic-polymorphic ()
+  (is (== "hello" (format-show-generic "hello")))
+  (is (== "42" (format-show-generic 42)))
+  (is (== "a" (format-show-generic #\a))))
+
+(define-test format-show-string-unchanged ()
+  (is (== "\"hello\""
+          (show-as-string "hello"))))
+
+(define-test format-readable-string ()
+  (is (== (lisp (-> String) ()
+            (cl:format cl:nil "~S" "hello"))
+          (format:format format:Str "~S" "hello")))
+  (is (== (lisp (-> String) ()
+            (cl:format cl:nil "~S" "a\"b"))
+          (format:format format:Str "~S" "a\"b"))))
 
 (define-test format-simple-directive ()
   (is (== (lisp (-> String) ()

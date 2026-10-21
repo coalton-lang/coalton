@@ -31,7 +31,7 @@
 ;;;; At compile time, the validity of the control string, the number of arguments, and
 ;;;; the types of the arguments are checked. At runtime, Common Lisp's format receives
 ;;;; the same control string and, for the most part, the same arguments. The exception is
-;;;; ~a, which uses `show-with-string` first.
+;;;; ~a, which renders strings and characters without read syntax first.
 ;;;;
 ;;;; The code implements a monadic parser to parse the control string and compile Coalton
 ;;;; forms that typecheck/transform the arguments. The file is broken up as follows:
@@ -697,7 +697,7 @@ take all modifiers."
     ReqBool
     ReqNum
     ReqRuntime
-    ShowAsString
+    HumanReadable
     (ReqList (List ArgTransformation)))
 
   (declare is-end-case? (Directive -> Boolean))
@@ -807,7 +807,7 @@ take all modifiers."
       ((MonetaryDirective _)                    ;; ~$
        (pure (make-list ReqNum)))
       ((HumanPrintDirective _ _)                ;; ~A
-       (pure (make-list ShowAsString)))
+       (pure (make-list HumanReadable)))
       ((ReadDirective _ _)                      ;; ~S
        (pure (make-list ReqRuntime)))
       ((PrinterDirective _ _)                   ;; ~W
@@ -961,11 +961,32 @@ take all modifiers."
     (lisp (-> Code) (c)
       `(req-runtime ,c)))
   
+  ;; `~A` is the aesthetic (princ) directive, but `Show` renders
+  ;; strings with quotes and escapes, and characters with their
+  ;; readable names. Keep `Show` for structured values, and use the
+  ;; contents of strings and characters, matching Common Lisp's `~A`.
+  ;; A typeclass override would make polymorphic `~A` call sites infer
+  ;; an extra constraint beyond `Show :a`, so dispatch on the runtime
+  ;; representation instead.
+  (declare human-readable (sw:Show :a => :a -> String))
+  (define (human-readable x)
+    "Render `x` for `~A`.
+
+Strings and characters are emitted as their contents; everything else
+uses `Show`."
+    (match (lisp (-> (Optional String)) (x)
+             (cl:typecase x
+               (cl:string (Some x))
+               (cl:character (Some (cl:string x)))
+               (cl:t None)))
+      ((Some s) s)
+      ((None) (sw:show-as-string x))))
+
   (inline)
-  (declare arg->show-as-string (Code -> Code))
-  (define (arg->show-as-string c)
+  (declare arg->human-readable (Code -> Code))
+  (define (arg->human-readable c)
     (lisp (-> Code) (c)
-      `(sw:show-as-string ,c)))
+      `(human-readable ,c)))
 
   (declare arg->list (List ArgTransformation -> ParseRes (Code -> ParseRes Code)))
   (define (arg->list tfns)
@@ -982,7 +1003,7 @@ take all modifiers."
              ((ReqBool)      (% req-char? req-int? True req-num? req-runtime? show-str? req-lst? xs))
              ((ReqNum)       (% req-char? req-int? req-bool? True req-runtime? show-str? req-lst? xs))
              ((ReqRuntime)   (% req-char? req-int? req-bool? req-num? True show-str? req-lst? xs))
-             ((ShowAsString) (% req-char? req-int? req-bool? req-num? req-runtime? True req-lst? xs))
+             ((HumanReadable) (% req-char? req-int? req-bool? req-num? req-runtime? True req-lst? xs))
              ((ReqList _)    (% req-char? req-int? req-bool? req-num? req-runtime? show-str? True xs)))))))
     (if (and req-lst? (or req-char? req-int? req-bool? req-num? req-runtime? show-str?))
         (Err_ (ParseError "Outer list iteration directives can only support treating elements as lists"))
@@ -1015,7 +1036,7 @@ take all modifiers."
                                   `(req-runtime-list ,c_))))
                         code))
            ;; For primitive types, those should look the same with ~a anyway
-           ;; Important: If show-as-string is run for the primitive types, it
+           ;; Important: If human-readable is run for the primitive types, it
            ;; will break valid situations where the control string specifies ~a
            ;; and a primitive-requiring directive, like ~o. Right now, this is
            ;; only possible in iteration.
@@ -1023,7 +1044,7 @@ take all modifiers."
                       (not (or req-int? req-num? req-char? req-bool?)))
              (c:update! (fmap (fn (c_)
                                 (lisp (-> Code) (c_)
-                                  `(map sw:show-as-string ,c_))))
+                                  `(map human-readable ,c_))))
                         code))
            (when req-lst?
              (c:update!
@@ -1083,7 +1104,7 @@ Returns: (Remaining code to be transformed * Output Arguments)"
       ((ReqBool)           (transf-one code arg->bool))
       ((ReqNum)            (transf-one code arg->num))
       ((ReqRuntime)        (transf-one code arg->runtime))
-      ((ShowAsString)      (transf-one code arg->show-as-string))
+      ((HumanReadable)      (transf-one code arg->human-readable))
       ((ReqList elem-tfns)
        (do
         (list-transf <- (arg->list elem-tfns))
@@ -1189,6 +1210,9 @@ The following directives are supported with the given argument requirements:
 | `~*` | Jump arguments inside of iteration | No Argument |
 | `~(` | Start case conversion | No Argument |
 | `~)` | End case conversion | No Argument |
+
+`~A` prints strings and characters without their readable syntax,
+matching Common Lisp's aesthetic output. Other types use `Show`.
 
 Native integer types are:
   - `Integer`
