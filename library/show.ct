@@ -117,6 +117,11 @@ This is not necessarily identical to `(the String (into x))`."
     (define (show-to f x)
       (f (if x "True" "False"))))
 
+  (define-instance (Show String)
+    (inline)
+    (define (show-to f s)
+      (f s)))
+
   (define-instance (Show :a => Show (Optional :a))
     (define (show-to f x)
       (match x
@@ -179,7 +184,6 @@ This is not necessarily identical to `(the String (into x))`."
 
 (define-show-instance "Fraction")
 
-(define-show-instance "String")
 (define-show-instance "Char")
 
 #+sb-package-locks
