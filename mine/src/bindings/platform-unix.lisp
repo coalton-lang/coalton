@@ -17,9 +17,9 @@ so it survives save-lisp-and-die.")
 ;;; ---- Constants ----
 
 (defconstant +tiocgwinsz+
-  #+(or darwin openbsd) #x40087468
+  #+(or darwin openbsd freebsd) #x40087468
   #+linux   #x5413
-  #-(or darwin linux openbsd) (error "TIOCGWINSZ: unsupported Unix variant"))
+  #-(or darwin linux openbsd freebsd) (error "TIOCGWINSZ: unsupported Unix variant"))
 
 ;;; ---- Raw mode ----
 
