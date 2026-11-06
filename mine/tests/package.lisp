@@ -81,6 +81,8 @@
                   check-paredit-forward-join-preserves-newline-separators
                   check-paredit-forward-join-newline-range-detects-formatting
                   check-clipboard-stream-read-preserves-crlf
+                  check-clipboard-strip-final-newline-removes-one-terminator
+                  check-clipboard-paste-strips-command-terminator-when-requested
                   check-indent-line-tab-hop-to-source
                   check-indent-line-preserves-source-position
                   check-indent-line-start-follows-inserted-indentation

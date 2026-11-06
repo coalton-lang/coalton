@@ -448,6 +448,44 @@ should-stay-flush-left)"))
                        (mine/app/clipboard::%read-stream-to-string stream))
               "Expected clipboard stream read to preserve CRLF exactly"))))
 
+(defun check-clipboard-strip-final-newline-removes-one-terminator ()
+  (let ((crlf (coerce '(#\Return #\Newline) 'string))
+        (lf (string #\Newline)))
+    (loop :for (output expected)
+            :in (list (list (concatenate 'string "abc" crlf) "abc")
+                      (list (concatenate 'string "abc" lf) "abc")
+                      (list (concatenate 'string "a" crlf "b" crlf crlf)
+                            (concatenate 'string "a" crlf "b" crlf))
+                      (list (concatenate 'string "a" lf "b" lf crlf)
+                            (concatenate 'string "a" lf "b" lf))
+                      (list "abc" "abc")
+                      (list "" ""))
+          :do (%check (string= expected (mine/app/clipboard::%strip-final-newline output))
+                      "Expected ~S from clipboard output ~S, got ~S"
+                      expected output
+                      (mine/app/clipboard::%strip-final-newline output)))))
+
+(defun check-clipboard-paste-strips-command-terminator-when-requested ()
+  (let* ((saved mine/app/find-clipboard:*clipboard-paste*)
+         (text-form "(write-string (map 'string #'code-char '(97 13 10 98 13 10)))")
+         (command (list (namestring sb-ext:*runtime-pathname*)
+                        (list "--core" (namestring sb-ext:*core-pathname*)
+                              "--noinform" "--no-sysinit" "--no-userinit"
+                              "--non-interactive" "--eval" text-form)))
+         (crlf (coerce '(#\Return #\Newline) 'string)))
+    (unwind-protect
+         (progn
+           (setf mine/app/find-clipboard:*clipboard-paste* command)
+           (%check (string= (concatenate 'string "a" crlf "b" crlf)
+                            (mine/app/clipboard::%clipboard-paste))
+                   "Clipboard paste changed command output that has no terminator")
+           (setf mine/app/find-clipboard:*clipboard-paste*
+                 (append command (list ':strip-final-newline t)))
+           (%check (string= (concatenate 'string "a" crlf "b")
+                            (mine/app/clipboard::%clipboard-paste))
+                   "Clipboard paste kept the command's output terminator"))
+      (setf mine/app/find-clipboard:*clipboard-paste* saved))))
+
 (defun %apply-line-indent (text cursor-pos line target-indent)
   (let* ((buffer (%indent-buffer-with-text text))
          (cs (cursor:cursor-new)))
