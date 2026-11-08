@@ -12,7 +12,17 @@
           vec)))
 
 (define-test test-vector-initial-element ()
-  (== (vector:make "x" "x" "x") (vector:with-initial-element 3 "x")))
+  (is (== (vector:make "x" "x" "x") (vector:with-initial-element 3 "x")))
+  ;; The one-pass constructor must preserve the invariants of the old
+  ;; WITH-CAPACITY + EXTEND! implementation: exact capacity, a fill pointer,
+  ;; and the ability to grow in place.
+  (let v = (vector:with-initial-element 4 "x"))
+  (is (== 4 (vector:length v)))
+  (is (== 4 (vector:capacity v)))
+  (is (== (Some "x") (vector:head v)))
+  (vector:push! "y" v)
+  (is (== (vector:make "x" "x" "x" "x" "y") v))
+  (is (vector:empty? (vector:with-initial-element 0 "x"))))
 
 (define-test test-vector-basic-operations ()
   (let vec0 = (vector:new))
