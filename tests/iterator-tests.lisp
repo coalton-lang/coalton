@@ -51,6 +51,55 @@
                                      (iter:filter! even?
                                                    (iter:count-forever)))))))
 
+(define-test iter-take-size-hint ()
+  ;; A sized inner iterator is capped by COUNT, so COLLECT! / EXTEND! can
+  ;; preallocate exactly what TAKE! will yield.
+  (is (== (Some (the UFix 3))
+          (iter:size-hint (iter:take! 3 (iter:into-iter (make-list 1 2 3 4 5))))))
+  (is (== (Some (the UFix 5))
+          (iter:size-hint (iter:take! 20 (iter:into-iter (make-list 1 2 3 4 5))))))
+  ;; An inner iterator with no hint still gives TAKE! an upper bound of COUNT.
+  (is (== (Some (the UFix 3))
+          (iter:size-hint (iter:take! 3 (iter:repeat 1)))))
+  (is (== (Some (the UFix 0))
+          (iter:size-hint (iter:take! 0 (iter:repeat 1)))))
+  ;; REPEAT-FOR is built on TAKE! and inherits the hint.
+  (is (== (Some (the UFix 4))
+          (iter:size-hint (iter:repeat-for "x" 4)))))
+
+(define-test iter-take-does-not-over-consume ()
+  ;; The old ZIP!-based TAKE! evaluated NEXT! on both sides even after the
+  ;; counter side was spent, consuming one element too many from the input.
+  (let calls = (cell:new (the Integer 0)))
+  (let source = (iter:new
+                  (fn ()
+                    (progn
+                      (cell:increment! calls)
+                      (Some 1)))))
+  (let taken = (iter:take! 2 source))
+  (is (== (the (List Integer) (make-list 1 1))
+          (iter:collect! taken)))
+  (is (== 2 (cell:read calls)))
+  ;; An exhausted TAKE! must not poke the inner iterator again.
+  (is (== None (iter:next! taken)))
+  (is (== 2 (cell:read calls))))
+
+(define-test iter-take-stops-at-inner-exhaustion ()
+  (let calls = (cell:new (the Integer 0)))
+  (let source = (iter:new
+                  (fn ()
+                    (let n = (cell:increment! calls))
+                    (if (> n 2)
+                        None
+                        (Some n)))))
+  (let taken = (iter:take! 5 source))
+  (is (== (the (List Integer) (make-list 1 2))
+          (iter:collect! taken)))
+  ;; Two yields plus the single NEXT! that reported exhaustion.
+  (is (== 3 (cell:read calls)))
+  (is (== None (iter:next! taken)))
+  (is (== 3 (cell:read calls))))
+
 (define-test iter-concat-collect-list ()
   (is (== (the (List Integer) (make-list 0 1 2 3 4 5 6 7 8 9))
           (iter:collect! (iter:chain! (iter:up-to 5)

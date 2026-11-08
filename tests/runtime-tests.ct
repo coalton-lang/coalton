@@ -348,10 +348,13 @@
                                       (Tuple (the UFix 1) 20)
                                       (Tuple (the UFix 2) 30)))))
   (is (== collection-comprehension-trace-runtime
-          (CollectionTrace None
+          ;; TAKE! now advertises a size hint, so the comprehension sees
+          ;; COUNT rather than NONE.
+          (CollectionTrace (Some (the UFix 2))
                            (make-list (Tuple (the UFix 0) 0)
                                       (Tuple (the UFix 1) 4)))))
   (is (== collection-below-trace-runtime
+          ;; :BELOW still goes through UP-TO / RECURSIVE-ITER, which has no hint.
           (CollectionTrace None
                            (make-list (Tuple (the UFix 0) 0)
                                       (Tuple (the UFix 1) 4)
@@ -361,7 +364,7 @@
                             (make-list (Tuple (the UFix 0) (Tuple 1 2))
                                        (Tuple (the UFix 1) (Tuple 3 4))))))
   (is (== association-comprehension-trace-runtime
-          (AssociationTrace None
+          (AssociationTrace (Some (the UFix 2))
                             (make-list (Tuple (the UFix 0) (Tuple 0 0))
                                        (Tuple (the UFix 1) (Tuple 2 4)))))))
 
