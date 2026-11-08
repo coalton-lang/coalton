@@ -1,5 +1,20 @@
 (in-package #:coalton-native-tests)
 
+(coalton-toplevel
+  ;; A second probe type, local to this file, so slice EQ short-circuiting
+  ;; can be observed without depending on load order.
+  (define-struct Slice-Eq-Probe
+    (value Integer))
+
+  (define slice-eq-probe-comparisons (cell:new (the Integer 0)))
+
+  (define-instance (Eq Slice-Eq-Probe)
+    (define (== a b)
+      (progn
+        (cell:increment! slice-eq-probe-comparisons)
+        (match (Tuple a b)
+          ((Tuple (Slice-Eq-Probe x) (Slice-Eq-Probe y)) (== x y)))))))
+
 (define-test test-slice-basic ()
   (let ((v (the
             (Vector Integer)
@@ -121,3 +136,45 @@
             (make-list
              (make-list 1 2 3)
              (make-list 4 5 6))))))
+
+(define-test test-slice-eq ()
+  (let ((v (the (Vector Integer)
+                (into (the (List Integer) (make-list 1 2 3 4 5 6)))))
+        (w (the (Vector Integer)
+                (into (the (List Integer) (make-list 9 1 2 3))))))
+    (let ((a (slice:new 0 3 v))
+          (b (slice:new 0 3 v))
+          (c (slice:new 3 3 v))
+          (d (slice:new 0 2 v))
+          (e (slice:new 1 3 w)))
+      ;; Equality follows the displaced window, not the backing array.
+      (is (== a b))
+      (is (== a e))
+      (is (/= a c))
+      (is (/= a d))
+      ;; EQ reads the live backing array rather than a copy.
+      (vector:set! 1 99 w)
+      (is (/= a e))
+      (is (== 3 (slice:length a))))))
+
+(define-test test-slice-eq-short-circuits ()
+  (let v = (the (Vector Slice-Eq-Probe)
+                (into (the (List Slice-Eq-Probe)
+                           (make-list (Slice-Eq-Probe 1)
+                                      (Slice-Eq-Probe 2)
+                                      (Slice-Eq-Probe 3))))))
+    (let a = (slice:new 0 3 v))
+    ;; A length mismatch is rejected without comparing any element.
+    (cell:write! slice-eq-probe-comparisons 0)
+    (is (/= a (slice:new 0 2 v)))
+    (is (== 0 (cell:read slice-eq-probe-comparisons)))
+    ;; A mismatch at the first element stops the walk.
+    (vector:set! 0 (Slice-Eq-Probe 9) v)
+    (cell:write! slice-eq-probe-comparisons 0)
+    (let other = (the (Vector Slice-Eq-Probe)
+                      (into (the (List Slice-Eq-Probe)
+                                 (make-list (Slice-Eq-Probe 1)
+                                            (Slice-Eq-Probe 2)
+                                            (Slice-Eq-Probe 3))))))
+      (is (/= a (slice:new 0 3 other)))
+      (is (== 1 (cell:read slice-eq-probe-comparisons))))
