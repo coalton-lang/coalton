@@ -181,9 +181,17 @@
 
   (define-instance (Eq :a => Eq (Slice :a))
     (define (== s1 s2)
-      (if (/= (length s1) (length s2))
-          False
-          (iter:every! id (iter:zip-with! == (iter:into-iter s1) (iter:into-iter s2))))))
+      (let ((len (length s1)))
+        (if (/= len (length s2))
+            False
+            (let ((eq-fn (fn (x y) (== x y))))
+              ;; Slices are displaced arrays, so AREF walks them directly and
+              ;; we avoid the iterator / option allocation per element.
+              (lisp (-> Boolean) (s1 s2 len eq-fn)
+                (cl:loop :for i :below len
+                         :always (cl:eq cl:t
+                                        (call-coalton-function
+                                         eq-fn (cl:aref s1 i) (cl:aref s2 i))))))))))
 
   (define-instance (Foldable Slice)
     (define (fold f init s)
