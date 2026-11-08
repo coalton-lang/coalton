@@ -263,10 +263,19 @@ length of `v` are ignored."
   (declare append (Vector :a * Vector :a -> Vector :a))
   (define (append v1 v2)
     "Create a new vector containing the elements of `v1` followed by the elements of `v2`."
-    (let out = (with-capacity (+ (length v1) (length v2))))
-    (extend! out v1)
-    (extend! out v2)
-    out)
+    ;; One allocation and two bulk copies, rather than two EXTEND! passes
+    ;; that push every element individually.
+    (lisp (-> (Vector :a)) (v1 v2)
+      (cl:let* ((n1 (cl:length v1))
+                (n2 (cl:length v2))
+                (n (cl:+ n1 n2))
+                (out (cl:make-array n
+                                    :adjustable cl:t
+                                    :fill-pointer n
+                                    :element-type cl:t)))
+        (cl:replace out v1)
+        (cl:replace out v2 :start1 n1)
+        out)))
 
   (declare reverse! (Vector :a -> Vector :a))
   (define (reverse! v)
@@ -347,9 +356,17 @@ length of `v` are ignored."
 
   (define-instance (Eq :a => Eq (Vector :a))
     (define (== v1 v2)
-      (if (/= (length v1) (length v2))
-          False
-          (iter:every! id (iter:zip-with! == (iter:into-iter v1) (iter:into-iter v2))))))
+      (let ((len (length v1)))
+        (if (/= len (length v2))
+            False
+            (let ((eq-fn (fn (x y) (== x y))))
+              ;; Walk the backing arrays directly instead of building two
+              ;; iterators and zipping them into per-element options.
+              (lisp (-> Boolean) (v1 v2 len eq-fn)
+                (cl:loop :for i :below len
+                         :always (cl:eq cl:t
+                                        (call-coalton-function
+                                         eq-fn (cl:aref v1 i) (cl:aref v2 i))))))))))
 
   (define-instance (show:Show :a => show:Show (Vector :a))
     (define (show:show-to f vec)
