@@ -79,9 +79,15 @@
   (declare with-initial-element (UFix * :a -> Vector :a))
   (define (with-initial-element n x)
     "Create a new vector with `n` elements equal to `x`."
-    (let v = (with-capacity n))
-    (extend! v (iter:repeat-for x n))
-    v)
+    ;; 直接 make-array 填充：之前是 with-capacity + extend! 迭代器，逐个 push!，
+    ;; 实测 ~750 ns/元素（1024 元素 0.8 ms），比内存填充慢三个数量级。
+    ;; adjustable + fill-pointer 照旧保留，push! 等原位操作的行为不变。
+    (lisp (-> (Vector :a)) (n x)
+      (cl:make-array n
+                     :adjustable cl:t
+                     :fill-pointer n
+                     :element-type cl:t
+                     :initial-element x)))
 
   (inline)
   (declare singleton (:a -> Vector :a))
