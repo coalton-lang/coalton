@@ -412,9 +412,28 @@ interleaving. (interleave empty ITER) is equivalent to (id ITER)."
   (declare take! (UFix * Iterator :elt -> Iterator :elt))
   (define (take! count iter)
     "An `Iterator` which yields at most COUNT elements from ITER."
-    (map (fn ((Tuple x _)) x)
-         (zip! iter
-               (up-to count))))
+    ;; Count directly instead of zipping with UP-TO. The old construction
+    ;; allocated a tuple per element and lost the size hint (UP-TO reports
+    ;; none), so COLLECT! and EXTEND! could not preallocate.
+    (let ((remaining (cell:new count))
+          (size (match (size-hint iter)
+                  ((Some n) (min n count))
+                  ((None) count))))
+      (with-size
+          (fn ()
+            (if (== 0 (cell:read remaining))
+                None
+                (match (next! iter)
+                  ((None)
+                   (progn
+                     ;; The inner iterator is spent; stop calling it.
+                     (cell:write! remaining 0)
+                     None))
+                  ((Some x)
+                   (progn
+                     (cell:decrement! remaining)
+                     (Some x))))))
+        size)))
 
   (declare chain! (Iterator :elt * Iterator :elt -> Iterator :elt))
   (define (chain! iter1 iter2)
