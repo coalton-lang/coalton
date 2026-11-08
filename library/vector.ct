@@ -328,7 +328,10 @@ length of `v` are ignored."
     (let remaining-capacity = (- (capacity vec) (length vec)))
     (when (> size remaining-capacity)
       (progn
-        (set-capacity! (+ (length vec) (- size remaining-capacity)) vec)
+        ;; Grow straight to LENGTH + SIZE. Basing the delta on LENGTH
+        ;; rather than CAPACITY used to shrink a vector that had spare
+        ;; capacity, forcing every subsequent PUSH! to reallocate.
+        (set-capacity! (+ (length vec) size) vec)
         (values)))
 
     (iter:for-each!
