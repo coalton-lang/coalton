@@ -76,12 +76,14 @@
     (lisp (-> (Vector :a)) (n)
       (cl:make-array n :fill-pointer 0 :adjustable cl:t :element-type cl:t)))
 
+  (inline)
   (declare with-initial-element (UFix * :a -> Vector :a))
   (define (with-initial-element n x)
     "Create a new vector with `n` elements equal to `x`."
-    ;; 直接 make-array 填充：之前是 with-capacity + extend! 迭代器，逐个 push!，
-    ;; 实测 ~750 ns/元素（1024 元素 0.8 ms），比内存填充慢三个数量级。
-    ;; adjustable + fill-pointer 照旧保留，push! 等原位操作的行为不变。
+    ;; Fill the backing array in one pass rather than allocating an empty
+    ;; vector and pushing N elements through an iterator, which costs roughly
+    ;; 700 ns per element. Keep the array adjustable and keep the fill pointer
+    ;; so that PUSH! and the other in-place operations behave as before.
     (lisp (-> (Vector :a)) (n x)
       (cl:make-array n
                      :adjustable cl:t
