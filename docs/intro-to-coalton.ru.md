@@ -152,7 +152,7 @@ Coalton использует стандартные пакеты Common Lisp (и
   (define x (addTwo 3))
 
   ;; Анонимные функции могут быть определены с помощью fn
-  (define z (map (fn (x) (+ 2 x)) (make-list 1 2 3 4))))
+  (define z (map (fn (x) (+ 2 x)) [1 2 3 4])))
 ```
 
 
@@ -192,8 +192,8 @@ Coalton работает над оптимизацией этих функций
 
 ```lisp
 (coalton-toplevel
-  ;; Списки могут быть созданы с помощью макроса make-list
-  (define nums (make-list 2 3 4 5)))
+  ;; Списки могут быть созданы с помощью синтаксиса скобок
+  (define nums [2 3 4 5]))
 
 (coalton
   ;; Функции в Coalton каррированы
@@ -394,7 +394,7 @@ COALTON-USER> (describe-type-alias 'Pair)
 Доступ к полям структуры может быть передан по значению:
 
 ```lisp
-(coalton (map .x (make-list (Point 1 2) (Point 2 3))))
+(coalton (map .x [(Point 1 2) (Point 2 3)]))
 ```
 
 Структуры также могут быть параметрическими:
@@ -756,12 +756,12 @@ COALTON/MATH/REAL> (coalton (the F32 (fromfrac 999/1000)))
 
 ## Списки
 
-Coalton использует списки Lisp "под капотом". Списки можно создавать с помощью `make-list`.
+Coalton использует списки Lisp "под капотом". Списки можно создавать с помощью синтаксиса скобок.
 
 ```lisp
 (coalton-toplevel
-  (define x (make-list 1 2 3))
-  (define y (make-list "a" "b" "c")))
+  (define x [1 2 3])
+  (define y ["a" "b" "c"]))
 ```
 
 
@@ -769,7 +769,7 @@ Coalton использует списки Lisp "под капотом". Спис
 
 ```
 COALTON-USER> (coalton-toplevel
-                (define wut (make-list 1.0d0 2.0d0 3.0)))
+                (define wut [1.0d0 2.0d0 3.0]))
 ; error: Type mismatch
 ;   --> repl input:3:4
 ;    |
@@ -1204,7 +1204,7 @@ Coalton поддерживает классы типов.
       (pure c)))
 
     ;; [6+3, 5+3, 4+3, 6+2, 5+2, 4+2, 6+1, 5+1, 4+1]
-   (define xs (f (make-list 1 2 3) (make-list 4 5 6))))
+   (define xs (f [1 2 3] [4 5 6])))
 ```
 
 ## Встраивание аннотации типов
