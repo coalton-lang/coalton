@@ -156,7 +156,9 @@ CLAUSE is a list representing a row-vector of patterns."
          ;; is only useful if it is useful when specialized over the
          ;; constructor.
          ((complete-signature-p first-column-constructors env)
-          (loop :for pattern :in first-column-constructors
+          (loop :for pattern :in (remove-duplicates first-column-constructors
+                                                   :key #'tc:pattern-constructor-name
+                                                   :test #'eq)
                 :when (useful-pattern-clause-p
                        (specialize-matrix pattern-matrix pattern)
                        (first (specialize-matrix (list clause) pattern))
@@ -309,7 +311,9 @@ CLAUSE is a list representing a row-vector of patterns."
          ;; signature then specialize and return the first
          ;; non-matching sub-value.
          ((complete-signature-p first-column-constructors env)
-          (loop :for ctor :in first-column-constructors
+          (loop :for ctor :in (remove-duplicates first-column-constructors
+                                                :key #'tc:pattern-constructor-name
+                                                :test #'eq)
                 :for ctor-arity := (length (tc:pattern-constructor-patterns ctor))
                 :for val := (find-non-matching-value
                              (specialize-matrix pattern-matrix ctor)
