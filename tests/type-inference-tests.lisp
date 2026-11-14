@@ -1797,3 +1797,241 @@
    "(define f (fn (x) (fn (y) (+ x y))))"
 
    '("f" . "(Num :a => :a -> :a -> :a)")))
+
+(deftest test-value-restriction-defaulted-builders ()
+  ;; Defaulting [] to a Seq substitutes a weak variable with a composite type;
+  ;; the variables of that type remain weak.
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define bad-cell (coalton/cell:new []))"))
+  (check-coalton-types
+   "(define (cell-items)
+      (let ((c (coalton/cell:new [])))
+        (coalton/cell:write! c (the (coalton/seq:Seq Integer) [1]))
+        (coalton/cell:read c)))"
+   '("cell-items" . "(Void -> coalton/seq:Seq Integer)"))
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define (mixed-cell)
+        (let ((c (coalton/cell:new [])))
+          (coalton/cell:write! c (the (coalton/seq:Seq Integer) [1]))
+          (coalton/cell:write! c (the (coalton/seq:Seq String) [\"x\"]))
+          Unit))")))
+
+(deftest test-builders-with-binders ()
+  ;; Builder elements are inferred once, so elements that bind variables do
+  ;; not rebind them when the desugared builder is checked.
+  (check-coalton-types
+   "(define fns (the (List (Integer -> Integer)) [(fn (x) x) (fn (y) (+ y 1))]))
+    (define lets (the (List Integer) [(let ((x 1)) x)]))
+    (define (matches y) (the (List Integer) [(match y ((Some x) x) ((None) 0))]))
+    (define nested (the (List (List Integer)) [[x :for x :in (make-list 1 2)]]))
+    (define deep (the (List (List (List Integer))) [[[(let ((x 1)) x)]]]))
+    (define assocs
+      (the (List (Tuple Integer (Integer -> Integer)))
+           [(let ((k 1)) k) => (fn (x) x)]))"
+   '("fns" . "(List (Integer -> Integer))")
+   '("lets" . "(List Integer)")
+   '("matches" . "(Optional Integer -> List Integer)")
+   '("nested" . "(List (List Integer))")
+   '("deep" . "(List (List (List Integer)))")
+   '("assocs" . "(List (Tuple Integer (Integer -> Integer)))")))
+
+(deftest test-keyword-extension-across-call-sites ()
+  ;; Each call site may extend the parameter's keywords; all extensions must
+  ;; reach the parameter's type and every call's operator without conflating
+  ;; independent function parameters that temporarily share the same shape.
+  (check-coalton-types
+   "(define (apply-both f)
+      (Tuple (f 1 :x 2) (f 1 :y \"hi\")))
+   (define (apply-three f)
+     (Tuple3 (f 1 :x 2) (f 1 :y 3) (f 1 :z 4)))
+    (define (k a &key (x 0) (y \"\"))
+      (+ a (+ x (coalton/string:length y))))
+   (define (k3 a &key (x 0) (y 0) (z 0))
+     (+ a (+ x (+ y z))))
+    (define both (apply-both k))
+   (define three-result (apply-three k3))
+    (define (apply-two f x0)
+      (Tuple (f x0 :x 2) (f \"s\" :y 3)))
+    (define (multi-kw f)
+      (Tuple (f 1 :x 2) (f 1 :y \"s\" :z \"t\")))
+    (declare use-xy ((Integer &key (:x Integer) (:y Integer) -> Integer) -> Integer))
+    (define (use-xy g)
+      (g 1 :y 5))
+    (define (via-coercion f)
+      (Tuple (f 1 :x 2) (use-xy f)))
+    (define (apply-fg f g)
+      (Tuple3 (the Boolean (f True :x True))
+              (the Boolean (g True :x True))
+              (the Boolean (f True :y \"hi\"))))
+    (define (only-x a &key (x False))
+      (and a x))
+    (define (both-xy a &key (x False) (y \"\"))
+      (and a (or x (== y \"hi\"))))
+    (define fg-result (apply-fg both-xy only-x))
+    (define (app f) (f 1 :x 2))
+    (define (app-mono f) (the Integer (f (the Integer 1) :x (the Integer 2))))
+    (define (use-two-instantiations p q)
+      (app p)
+      (app q)
+      (Tuple (p 1 :y \"s\") (q 1 :y 5)))
+    (define (use-mono-instantiations p q)
+      (app-mono p)
+      (app-mono q)
+      (Tuple (p 1 :y \"s\") (q 1 :y 5)))
+    (define (pick-and-extend c f g)
+      (f 1 :x 1)
+      (g 1 :x 1)
+      ((if c f g) 1 :y 2))
+    (define (captured-open-extend g)
+      (g 1 :x 1)
+      (let ((p (fn (u) (Tuple u g))))
+        (match (p 0)
+          ((Tuple _ h)
+           (h 1 :y 2)
+           (g 1 :x 3)))))
+    (define (captured-open-unify g)
+      (g 1 :x 1)
+      (let ((p (fn (u) (Tuple u g))))
+        (let ((g2 (match (p 0) ((Tuple _ h) h))))
+          (g 1 :y 2)
+          ((if True g g2) 1 :x 3))))"
+   '("both" . "(Tuple UFix UFix)")
+   '("fg-result" . "(Tuple3 Boolean Boolean Boolean)"))
+  (dolist (program
+            '("(define (apply-two f x0)
+                 (Tuple (f x0 :x 2) (f \"s\" :y 3)))
+               (define (only-x s &key (x 0))
+                 (+ x (coalton/string:length s)))
+               (define bad (apply-two only-x \"a\"))"
+              "(define (multi-kw f)
+                 (Tuple (f 1 :x 2) (f 1 :y \"s\" :z \"t\")))
+               (define (missing-z a &key (x 0) (y \"\"))
+                 (+ a (+ x (coalton/string:length y))))
+               (define bad (multi-kw missing-z))"
+              "(declare use-xy ((Integer &key (:x Integer) (:y Integer) -> Integer) -> Integer))
+               (define (use-xy g) (g 1 :y 5))
+               (define (via-coercion f) (Tuple (f 1 :x 2) (use-xy f)))
+               (define (only-x a &key (x 0)) (+ a x))
+               (define bad (via-coercion only-x))"
+              "(define (pick-and-extend c f g)
+                 (f 1 :x 1)
+                 (g 1 :x 1)
+                 ((if c f g) 1 :y 2))
+               (define (both-xy a &key (x 0) (y 0)) (+ a (+ x y)))
+               (define (only-x a &key (x 0)) (+ a x))
+               (define bad (pick-and-extend True both-xy only-x))"
+              "(define (apply-three f)
+                 (Tuple3 (f 1 :x 2) (f 1 :y 3) (f 1 :z 4)))
+               (define (only-xy a &key (x 0) (y 0))
+                 (+ a (+ x y)))
+               (define bad (apply-three only-xy))"
+              "(define (captured-open-extend g)
+                 (g 1 :x 1)
+                 (let ((p (fn (u) (Tuple u g))))
+                   (match (p 0)
+                     ((Tuple _ h)
+                      (h 1 :y 2)
+                      (g 1 :x 3)))))
+               (define (only-x a &key (x 0))
+                 (+ a x))
+               (define bad (captured-open-extend only-x))"))
+    (signals tc:tc-error (check-coalton-types program)))
+  (let ((*package* (make-package (symbol-name (gensym "TYPE-OF-ACCESSOR-FUNDEP-"))
+                                 :use '("COALTON" "COALTON-PRELUDE")))
+        (saved-env entry:*global-environment*))
+    (unwind-protect
+         (let ((source (source:make-source-string
+                        "(define-struct P (field Integer))
+                         (define-class (C :a :b (:a -> :b)) (c (:a -> :b)))
+                         (define-instance (C Integer String) (define (c _) \"ok\"))")))
+           (with-open-stream (stream (source:source-stream source))
+             (setf entry:*global-environment*
+                   (nth-value 1
+                              (entry:entry-point
+                               (parser:with-reader-context stream
+                                 (parser:read-program stream source))))))
+           (let ((expr-source (source:make-source-string "(type-of (c (.field (P 1))))")))
+             (with-open-stream (stream (source:source-stream expr-source))
+               (is (tc:ty-scheme=
+                    (tc:to-scheme tc:*string-type*)
+                    (eval (entry:expression-entry-point
+                           (parser:with-reader-context stream
+                             (parser:read-expression stream expr-source)))))))))
+      (setf entry:*global-environment* saved-env)
+      (delete-package *package*))))
+
+(deftest test-return-in-keyword-default ()
+  (check-coalton-types
+   "(define (early &key (x (return 1))) x)
+    (define (early-or-body &key (x (return 1))) (return 2) x)"
+   '("early" . "(Num :a => &key (:x :a) -> :a)")
+   '("early-or-body" . "(Num :a => &key (:x :a) -> :a)"))
+  (dolist (program '("(define (bad &key (x (return \"bad\"))) 1)"
+                     "(define (bad &key (x (return \"bad\"))) True)"))
+    (signals tc:tc-error (check-coalton-types program))))
+
+(deftest test-do-with-function-monad ()
+  (check-coalton-types
+   "(define (reader-sum r0)
+      ((do (x <- (fn (r) (+ r 1)))
+           (fn (r) r)
+           (y <- (fn (r) (* r 2)))
+           (pure (+ x y)))
+       r0))"
+   '("reader-sum" . "(Num :a => :a -> :a)"))
+  (let ((*package* (find-package "COALTON-USER"))
+        (entry:*global-environment* entry:*global-environment*)
+        (source (source:make-source-string
+                 "((do (x <- (fn (r) (+ r 1)))
+                       (fn (r) r)
+                       (y <- (fn (r) (* r 2)))
+                       (pure (+ x y)))
+                   (the Integer 5))")))
+    (with-open-stream (stream (source:source-stream source))
+      (is (= 16 (eval (entry:expression-entry-point
+                       (parser:with-reader-context stream
+                         (parser:read-expression stream source)))))))))
+
+(deftest test-accessor-type-mismatch ()
+  (dolist (program '("(define-struct P (field Integer))
+                      (define bad (the Integer .field))"
+                     "(define-struct P (field Integer))
+                      (declare bad Integer)
+                      (define bad .field)"))
+    (signals tc:tc-error (check-coalton-types program))))
+
+(deftest test-type-equality-and-arrow-normalization ()
+  ;; Predicate and qualified type equality must respect list lengths.
+  (let* ((ty tc:*integer-type*)
+         (pred (tc:make-ty-predicate :class 'coalton/classes:Num :types (list ty))))
+    (is (not (tc:type-predicate=
+              pred
+              (tc:make-ty-predicate :class 'coalton/classes:Num :types nil))))
+    (is (not (tc:qualified-ty= (tc:qualify nil ty) (tc:qualify (list pred) ty))))
+    (is (not (tc:qualified-ty= (tc:qualify (list pred) ty) (tc:qualify nil ty))))
+    (is (tc:qualified-ty= (tc:qualify (list pred) ty) (tc:qualify (list pred) ty))))
+
+  ;; Aliased and unaliased occurrences of a tyvar are the same variable.
+  (let* ((v (tc:make-variable))
+         (aliased (tc:push-type-alias v tc:*integer-type*)))
+    (is (= 1 (length (tc:type-variables (tc:make-function-type aliased v)))))
+    (is (= 1 (length (tc:type-variables
+                      (tc:make-result-ty :output-types (list aliased v)))))))
+
+  ;; Fully applied Arrow types normalize their output types.
+  (let* ((void (tc:make-result-ty :output-types nil))
+         (target (tc:make-function-type tc:*integer-type* void))
+         (arrow (tc:apply-type-argument-list tc:*arrow-type*
+                                             (list tc:*integer-type* void)))
+         (a (tc:make-variable :allow-result-p t))
+         (substituted (tc:apply-substitution
+                       (list (tc:make-substitution :from a :to void))
+                       (tc:make-tapp :from (tc:make-tapp :from tc:*arrow-type*
+                                                         :to tc:*integer-type*)
+                                     :to a))))
+    (dolist (ty (list arrow substituted))
+      (is (null (tc:function-ty-output-types ty)))
+      (is (tc:ty= ty target))
+      (is (null (tc:unify nil ty target))))))

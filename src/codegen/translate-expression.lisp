@@ -669,6 +669,19 @@ their order and multiplicity: their construction can evaluate method values."
         :body (tc:node-let-body expr))
        (tc-traverse:make-traverse-block :variable #'rewrite-reference)))))
 
+(defun monadic-type-parts (ty)
+  "Split monadic type TY, written (:m :a), into :m and :a.
+
+Substitution turns ((Arrow :r) :a) into the function type (:r -> :a), so
+unary function types are split into (Arrow :r) and :a."
+  (declare (type tc:ty ty)
+           (values tc:ty tc:ty &optional))
+  (if (and (typep ty 'tc:function-ty)
+           (tc:function-ty-positional-input-types ty))
+      (values (tc:make-tapp :from tc:*arrow-type* :to (tc:function-type-from ty))
+              (tc:function-type-to ty))
+      (values (tc:tapp-from ty) (tc:tapp-to ty))))
+
 (defgeneric translate-expression (expr ctx env)
   (:documentation "Translate typechecker AST node EXPR to the codegen AST.
 
@@ -1435,7 +1448,7 @@ Returns a `node'.")
 
            (bind-symbol (util:find-symbol ">>=" classes-package))
 
-           (m-type (tc:tapp-from (tc:qualified-ty-type (tc:node-type node))))
+           (m-type (monadic-type-parts (tc:qualified-ty-type (tc:node-type node))))
 
            (pred (tc:make-ty-predicate
                   :class monad-symbol
@@ -1512,7 +1525,7 @@ Returns a `node'.")
                         ;; the result of the computation to a
                         ;; variable.
                         (tc:node
-                         (let* ((var-type (tc:tapp-to (tc:qualified-ty-type (tc:node-type elem))))
+                         (let* ((var-type (nth-value 1 (monadic-type-parts (tc:qualified-ty-type (tc:node-type elem)))))
 
                                 (callback-ty (tc:make-function-type var-type (node-type out-node)))
 

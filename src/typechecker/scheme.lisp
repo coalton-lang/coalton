@@ -206,19 +206,37 @@ main type, O(n!) otherwise — but predicate lists are small in practice)."
 ;;; Operations on Schemes
 ;;;
 
-(defun make-quantified-scheme (vars type explicit-p)
+(defmethod open-function-origins ((type qualified-ty))
+  (remove-duplicates
+   (append (open-function-origins (qualified-ty-predicates type))
+           (open-function-origins (qualified-ty-type type)))
+   :test #'ty=
+   :from-end t))
+
+(defmethod open-function-origins ((type ty-predicate))
+  (open-function-origins (ty-predicate-types type)))
+
+(defmethod open-function-origins ((type ty-scheme))
+  (open-function-origins (ty-scheme-type type)))
+
+(defun make-quantified-scheme (vars type explicit-p &optional origin-vars)
   "Build a scheme with VARS as its ordered binders, preserving their metadata."
-  (let ((subst (loop :for var :in vars
-                     :for id :from 0
-                     :collect (make-substitution
-                               :from var
-                               :to (make-tgen :id id
-                                              :allow-result-p (tyvar-allow-result-p var)
-                                              :source-name (tyvar-source-name var))))))
+  (let* ((subst (loop :for var :in vars
+                      :for id :from 0
+                      :collect (make-substitution
+                                :from var
+                                :to (make-tgen :id id
+                                               :allow-result-p (tyvar-allow-result-p var)
+                                               :source-name (tyvar-source-name var)))))
+         (origin-subst (loop :for var :in origin-vars
+                             :for id :from (length vars)
+                             :collect (make-substitution
+                                       :from var
+                                       :to (make-tgen :id id)))))
     (make-ty-scheme
      :explicit-p explicit-p
      :kinds (mapcar #'kind-of vars)
-     :type (apply-substitution subst type))))
+     :type (apply-substitution (append origin-subst subst) type))))
 
 (defun quantify (tyvars type)
   "Quantify the TYVARS that occur in TYPE, preserving binder metadata.
@@ -233,7 +251,9 @@ programmer-written binders."
    (remove-if-not (lambda (var) (find var tyvars :test #'ty=))
                   (type-variables type))
    type
-   nil))
+   nil
+   (remove-if-not (lambda (var) (find var tyvars :test #'ty=))
+                  (open-function-origins type))))
 
 (defun ty-scheme-instantiation-types (ty-scheme)
   "Return fresh instantiation variables for TY-SCHEME's quantified binders.
@@ -296,7 +316,8 @@ and pretty printing can recover the programmer-written binders."
   "Instantiate TY-SCHEME with fresh type variables that preserve binder names."
   (declare (type ty-scheme ty-scheme)
            (values qualified-ty &optional))
-  (let ((types (ty-scheme-instantiation-types ty-scheme)))
+  (let ((types (ty-scheme-instantiation-types ty-scheme))
+        (*instantiate-origin-map* nil))
     (instantiate types (ty-scheme-type ty-scheme))))
 
 (defun scheme-predicates (ty-scheme)

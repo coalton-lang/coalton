@@ -170,7 +170,8 @@ type variables instead of re-instantiating the declared scheme."
           :for ty := (gethash name table)
           :unless ty
             :do (util:coalton-bug "Unknown binding ~A" name)
-          :append (tc:type-variables ty))
+          :append (tc:type-variables ty)
+          :append (tc:open-function-origins ty))
     (tc-env-scoped-type-variables env))
    :test #'tc:ty=))
 
