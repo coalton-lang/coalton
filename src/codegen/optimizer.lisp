@@ -184,12 +184,15 @@ mapping known function names to their arity."
 
         (setf bindings
               (loop :for (name . node) :in bindings
-                    :collect (cons name (lawnmow-to-fixpoint node))))
+                    :collect (cons name (lawnmow-to-fixpoint node env))))
 
         (when (settings:coalton-release-p)
           (setf bindings
                 (loop :for (name . node) :in bindings
-                      :collect (cons name (scalar-replace node env)))))
+                      :collect (cons name
+                                     (lawnmow-to-fixpoint
+                                      (scalar-replace node env)
+                                      env)))))
 
         ;; Update code db
         (loop :for (name . node) :in bindings
@@ -261,12 +264,13 @@ arity. TABLE will be mutated with additional entries."
 (defvar *maximum-optimization-passes* 8
   "The maximum number of times the optimizer may re-optimize.")
 
-(defun lawnmow-to-fixpoint (node)
+(defun lawnmow-to-fixpoint (node &optional env)
   (declare (type node node)
+           (type (or null tc:environment) env)
            (values node &optional))
   (loop :repeat *maximum-optimization-passes*
         :do
-           (multiple-value-bind (new-node changed?) (lawnmow node)
+           (multiple-value-bind (new-node changed?) (lawnmow node env)
              (setf node new-node)
              (unless changed?
                (return node)))
@@ -289,19 +293,19 @@ ENV. Return a new node which is optimized."
                 (> runs 1))
        (format t "~&;; Optimizing again, attempt #~D~%" runs))
      (setf node (transform-intrinsic-applications node))
-     (setf node (match-dynamic-extent-lift node env))
      (setf node (propagate-constants node env))
      (setf node (apply-specializations node env))
      (setf node (resolve-static-superclass node env))
      (multiple-value-bind (new-node inlined?) (inline-applications node env)
        (setf redo? (or redo? inlined?))
        (setf node new-node))
-     (multiple-value-bind (new-node lawnmowed?) (lawnmow node)
+     (multiple-value-bind (new-node lawnmowed?) (lawnmow node env)
        (setf redo? (or redo? lawnmowed?))
        (setf node new-node))
 
      (when (and redo? (< runs *maximum-optimization-passes*))
        (go :REDO)))
+  (setf node (match-dynamic-extent-lift node env))
   ;; Return the node.
   node)
 

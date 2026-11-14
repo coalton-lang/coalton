@@ -32,11 +32,13 @@
   ;; Tuple
   ;;
 
+  (inline)
   (declare fst ((Tuple :a :b) -> :a))
   (define (fst (Tuple a _))
     "Get the first element of a tuple."
     a)
 
+  (inline)
   (declare snd ((Tuple :a :b) -> :b))
   (define (snd (Tuple _ b))
     "Get the second element of a tuple."
@@ -129,6 +131,7 @@
         ((GT) GT)
         ((EQ) (<=> a2 b2)))))
 
+  (inline)
   (declare swap (Tuple :a :b -> Tuple :b :a))
   (define (swap (Tuple a b))
     "Exchange the two elements of a tuple."
@@ -141,6 +144,7 @@
        (hash (.second item)))))
 
   (define-instance (Bifunctor Tuple)
+    (inline)
     (define (bimap f g (Tuple a b))
       (Tuple (f a) (g b))))
 

@@ -685,3 +685,54 @@
                  (coalton-impl/codegen/transformations:node-dynamic-variables
                   (ast:node-bind-expr new-node))))
       (is (typep (ast:node-bind-body new-node) 'ast:node-dynamic-let)))))
+
+(deftest lawnmower-reduces-non-first-constructor-and-nullary-branches ()
+  (let* ((ty tc:*integer-type*)
+         (opt-ty (tc:make-tapp :from tc:*optional-type* :to ty))
+         (some-node
+           (ast:make-node-lisp
+            :type opt-ty
+            :vars (list (cons 'coalton::x 'coalton-native-tests::lawnmower-some-val))
+            :form '((coalton-impl/runtime:cl-some coalton::x))))
+         (none-node
+           (ast:make-node-local-variable
+            :type opt-ty
+            :value 'coalton:None))
+         (branches
+           (list
+            (ast:make-match-branch
+             :pattern (lawnmower-constructor-pattern
+                       'coalton:Some
+                       'coalton-native-tests::lawnmower-bound
+                       opt-ty)
+             :body (ast:make-node-local-variable
+                    :type ty
+                    :value 'coalton-native-tests::lawnmower-bound))
+            (ast:make-match-branch
+             :pattern (coalton-impl/codegen/pattern:make-pattern-constructor
+                       :type opt-ty
+                       :name 'coalton:None
+                       :patterns nil)
+             :body (ast:make-node-literal :type ty :value 0)))))
+    (multiple-value-bind (reduced-some changed-some?)
+        (lawnmow-fixed-point
+         (ast:make-node-bind
+          :type ty
+          :name 'coalton-native-tests::lawnmower-some-val
+          :expr (ast:make-node-literal :type ty :value 42)
+          :body (ast:make-node-match
+                 :type ty
+                 :expr some-node
+                 :branches branches)))
+      (is changed-some?)
+      (is (typep reduced-some 'ast:node-literal))
+      (is (= 42 (ast:node-literal-value reduced-some))))
+    (multiple-value-bind (reduced-none changed-none?)
+        (lawnmow-fixed-point
+         (ast:make-node-match
+          :type ty
+          :expr none-node
+          :branches branches))
+      (is changed-none?)
+      (is (typep reduced-none 'ast:node-literal))
+      (is (= 0 (ast:node-literal-value reduced-none))))))
