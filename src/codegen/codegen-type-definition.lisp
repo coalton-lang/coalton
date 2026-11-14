@@ -42,12 +42,15 @@
 
      ((tc:type-definition-enum-repr def)
       (loop :for constructor :in (tc:type-definition-constructors def)
+            :for name := (tc:constructor-entry-name constructor)
+            :for repr := (tc:constructor-entry-compressed-repr constructor)
             :append
-            `((global-lexical:define-global-lexical ,(tc:constructor-entry-name constructor)
-                  (member ,(tc:constructor-entry-compressed-repr constructor)))
-              (setf ,(tc:constructor-entry-name constructor) ',(tc:constructor-entry-compressed-repr constructor))
+            `(,@(if (settings:coalton-release-p)
+                    `((global-lexical:define-global-constant ,name (member ,repr) ',repr))
+                    `((global-lexical:define-global-lexical ,name (member ,repr))
+                      (setf ,name ',repr)))
               (deftype ,(tc:constructor-entry-classname constructor) ()
-                (quote (member ,(tc:constructor-entry-compressed-repr constructor)))))))
+                (quote (member ,repr))))))
 
      ((tc:type-definition-newtype def)
       (let* ((constructor (first (tc:type-definition-constructors def)))

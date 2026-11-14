@@ -2,7 +2,9 @@
   (:use #:cl)
   (:export
    #:get-top-level-binding
-   #:define-global-lexical))
+   #:ensure-top-level-constant
+   #:define-global-lexical
+   #:define-global-constant))
 
 (in-package #:coalton-impl/global-lexical)
 
@@ -45,9 +47,34 @@
 (defun (setf top-level-binding-value) (new-value binding)
   (setf (car binding) new-value))
 
+(defun ensure-top-level-constant (name environment thunk)
+  "Return the value of NAME in ENVIRONMENT, initializing it with THUNK if unbound."
+  (declare (type symbol name)
+           (type global-environment environment)
+           (type function thunk))
+  (let ((binding (get-top-level-binding name environment)))
+    (if (eq (top-level-binding-value binding) ':|@@unbound@@|)
+        (setf (top-level-binding-value binding) (funcall thunk))
+        (top-level-binding-value binding))))
+
 (defmacro define-global-lexical (var type)
   `(progn
      (define-symbol-macro ,var
          (the ,type
               (top-level-binding-value (load-time-value
                                         (get-top-level-binding ',var *top-level-environment*)))))))
+
+(defmacro define-global-constant (var type init-form)
+  `(progn
+     (define-symbol-macro ,var
+         (the ,type
+              (load-time-value
+               (ensure-top-level-constant
+                ',var
+                *top-level-environment*
+                (lambda () ,init-form))
+               t)))
+     (ensure-top-level-constant
+      ',var
+      *top-level-environment*
+      (lambda () ,init-form))))

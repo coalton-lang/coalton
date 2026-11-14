@@ -321,6 +321,21 @@ value is returned from the `handle` form."
                                        ,(codegen-expression (catch-branch-body branch) env))))))))
          ,(codegen-expression (node-catch-expr node) env)))))
 
+(defun constant-constructor-compressed-repr (name env)
+  "If NAME is a nullary constructor with a compile-time symbol representation,
+return (VALUES COMPRESSED-REPR T)."
+  (declare (type symbol name)
+           (type tc:environment env)
+           (values t boolean &optional))
+  (cond
+    ((eq name 'coalton:Nil)
+     (values nil t))
+    (t
+     (alexandria:when-let ((ctor (tc:lookup-constructor env name :no-error t)))
+       (let ((type (tc:lookup-type env (tc:constructor-entry-constructs ctor) :no-error t)))
+         (when (and type (tc:type-entry-enum-repr type))
+           (values (tc:constructor-entry-compressed-repr ctor) t)))))))
+
 (defgeneric codegen-expression (node env)
   (:method ((node node-literal) env)
     (declare (type tc:environment env)
@@ -338,17 +353,16 @@ value is returned from the `handle` form."
   (:method ((node node-global-variable) env)
     (declare (type tc:environment env))
     (let ((value (node-variable-value node)))
-      (case value
-        ;; HACK: generate efficient code for known constants.
-        ((coalton:True coalton:False coalton:Nil coalton:Unit)
-         `(quote ,(eval value)))
-        (otherwise
-         (alexandria:if-let ((entry (tc:lookup-function env value :no-error t)))
-           (if (and (not (tc:function-type-p (node-type node)))
-                    (zerop (tc:function-env-entry-arity entry)))
-               `(funcall ,value)
-               value)
-           value)))))
+      (multiple-value-bind (compressed-repr constant-ctor-p)
+          (constant-constructor-compressed-repr value env)
+        (if constant-ctor-p
+            `(quote ,compressed-repr)
+            (alexandria:if-let ((entry (tc:lookup-function env value :no-error t)))
+              (if (and (not (tc:function-type-p (node-type node)))
+                       (zerop (tc:function-env-entry-arity entry)))
+                  `(funcall ,value)
+                  value)
+              value)))))
 
   (:method ((node node-dynamic-variable) env)
     (declare (type tc:environment env)
