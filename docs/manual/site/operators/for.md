@@ -29,6 +29,7 @@ weight: 270
 - `:returns` specifies what to return when the loop exits, either normally or by `(break)`.
 - No `:returns` means the loop unifies with `Void`.
 - Use `for*` when later steps should see earlier updated values.
+- In release mode, a local `coalton/cell:Cell` accumulator created with `cell:new` and mutated or read inside a `for` loop (via `cell:read`, `cell:write!`, `cell:swap!`, `cell:update!`, `cell:increment!`, or `cell:decrement!`) is unboxed into a typed mutable lexical variable when the `Cell` does not escape its defining function.
 
 ## Example
 

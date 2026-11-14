@@ -257,6 +257,11 @@ nodes."
        :name (node-bind-name node)
        :expr (apply *traverse* (node-bind-expr node) args)
        :body (apply *traverse* (node-bind-body node) args)))
+    (action (:traverse node-setq node &rest args)
+      (make-node-setq
+       :type (node-type node)
+       :name (node-setq-name node)
+       :expr (apply *traverse* (node-setq-expr node) args)))
     (action (:traverse node-values node &rest args)
       (make-node-values
        :type (node-type node)
@@ -470,6 +475,38 @@ bound at the given point."
                                     (append (pattern-variables (match-branch-pattern branch))
                                             bound-variables))))
                   (node-match-branches node))))
+    (action (:traverse node-catch node bound-variables)
+      (make-node-catch
+       :type (node-type node)
+       :in-place-p (node-catch-in-place-p node)
+       :expr (funcall *traverse* (node-catch-expr node) bound-variables)
+       :branches (mapcar
+                  (lambda (branch)
+                    (make-catch-branch
+                     :exception-type (catch-branch-exception-type branch)
+                     :pattern (map-pattern (catch-branch-pattern branch)
+                                           :test-function (lambda (test)
+                                                            (funcall *traverse* test bound-variables)))
+                     :body (funcall *traverse*
+                                    (catch-branch-body branch)
+                                    (append (pattern-variables (catch-branch-pattern branch))
+                                            bound-variables))))
+                  (node-catch-branches node))))
+    (action (:traverse node-resumable node bound-variables)
+      (make-node-resumable
+       :type (node-type node)
+       :expr (funcall *traverse* (node-resumable-expr node) bound-variables)
+       :branches (mapcar
+                  (lambda (branch)
+                    (make-resumable-branch
+                     :pattern (map-pattern (resumable-branch-pattern branch)
+                                           :test-function (lambda (test)
+                                                            (funcall *traverse* test bound-variables)))
+                     :body (funcall *traverse*
+                                    (resumable-branch-body branch)
+                                    (append (pattern-variables (resumable-branch-pattern branch))
+                                            bound-variables))))
+                  (node-resumable-branches node))))
     (action (:traverse node-dynamic-extent node bound-variables)
       (let ((new-bound-variables (cons (node-dynamic-extent-name node) bound-variables)))
         (make-node-dynamic-extent

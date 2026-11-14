@@ -350,6 +350,15 @@
      (typecheck-node (node-bind-body expr) env))
     (node-type expr))
 
+  (:method ((expr node-setq) env)
+    (declare (type tc:environment env)
+             (values tc:ty))
+    (tc:unify
+     nil
+     (node-type expr)
+     (typecheck-node (node-setq-expr expr) env))
+    (node-type expr))
+
   (:method ((expr node-values) env)
     (declare (type tc:environment env)
              (values tc:ty))

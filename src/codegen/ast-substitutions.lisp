@@ -54,6 +54,18 @@ is true."
           ((res (or (find (node-variable-value node) subs :key #'ast-substitution-from)
                     (find (node-variable-value node) new-subs :key #'ast-substitution-from))))
         (ast-substitution-to res)))
+    (action (:after node-setq node new-subs)
+      (alexandria:when-let
+          ((res (or (find (node-setq-name node) subs :key #'ast-substitution-from)
+                    (find (node-setq-name node) new-subs :key #'ast-substitution-from))))
+        (unless (node-local-variable-p (ast-substitution-to res))
+          (util:coalton-bug
+           "Failure to apply ast substitution on variable ~A to node-setq"
+           (node-setq-name node)))
+        (make-node-setq
+         :type (node-type node)
+         :name (node-variable-value (ast-substitution-to res))
+         :expr (node-setq-expr node))))
     (action (:after node-lisp node new-subs)
       (multiple-value-bind (let-bindings lisp-var-bindings)
           (loop :for (lisp-var . coalton-var) :in (node-lisp-vars node)
