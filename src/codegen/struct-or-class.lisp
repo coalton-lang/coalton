@@ -158,6 +158,11 @@ regardless of Coalton's release mode."
                 :collect `(global-lexical:define-global-lexical ,reader function)
                 :collect `(setf ,reader #',reader)))
 
-         (list
-          `(global-lexical:define-global-lexical ,constructor ,classname)
-          `(setf ,constructor (,constructor)))))))
+         (ecase mode
+           (:struct
+            (list
+             `(global-lexical:define-global-constant ,constructor ,classname (,constructor))))
+           (:class
+            (list
+             `(global-lexical:define-global-lexical ,constructor ,classname)
+             `(setf ,constructor (,constructor)))))))))
