@@ -684,52 +684,35 @@ return (VALUES COMPRESSED-REPR T)."
 
   (:method ((expr node-match) env)
     (declare (type tc:environment env))
+    (multiple-value-bind (emit-if-p then else)
+        (match-emit-if-p expr)
+      (cond
+        ;; Case #1:
+        ;;
+        ;; Emit a `cl:if' expression on boolean matches
+        ;; with exhaustive constructor pattern branches.
+        (emit-if-p
+         `(if ,(codegen-expression (node-match-expr expr) env)
+              ,(codegen-expression then env)
+              ,(codegen-expression else env)))
 
-    (flet ((codegen-branches (subexpr-var subexpr-type jumptablep)
-             (loop :for branch :in (node-match-branches expr)
-                   :for pattern := (match-branch-pattern branch)
-                   :for code := (codegen-expression (match-branch-body branch) env)
-                   :collect (codegen-match-branch code
-                                                  pattern
-                                                  subexpr-var
-                                                  subexpr-type
-                                                  env
-                                                  jumptablep))))
-
-      (let ((subexpr (codegen-expression (node-match-expr expr) env))
-            (subexpr-type (node-type (node-match-expr expr)))
-            (match-var (gensym "MATCH"))
-            (jumptablep (match-emit-jumptable-p expr env))
-            (fallbackp (match-emit-fallback-p expr env))
-            (branchlessp (match-emit-branchless-p expr env)))
-
-        (multiple-value-bind (emit-if-p then else)
-            (match-emit-if-p expr)
-
-          (cond
-            ;; Case #1:
-            ;;
-            ;; Emit a `cl:if' expression on boolean matches
-            ;; with exhaustive constructor pattern branches.
-            (emit-if-p
-             `(if ,subexpr
-                  ,(codegen-expression then env)
-                  ,(codegen-expression else env)))
-
-            ;; Case #2:
-            ;;
-            ;; All other situations are handled by `codegen-match',
-            ;; including jumptables and branchless matches.
-            (t
-             (codegen-match
-              match-var
-              subexpr
-              subexpr-type
-              (codegen-branches match-var subexpr-type jumptablep)
-              env
-              jumptablep
-              fallbackp
-              branchlessp)))))))
+        ;; Case #2:
+        ;;
+        ;; Compile pattern matrix into a decision tree.
+        (t
+         (let ((subexpr (codegen-expression (node-match-expr expr) env))
+               (subexpr-type (node-type (node-match-expr expr)))
+               (match-var (gensym "MATCH"))
+               (pattern-code-pairs
+                 (loop :for branch :in (node-match-branches expr)
+                       :collect (cons (match-branch-pattern branch)
+                                      (codegen-expression (match-branch-body branch) env)))))
+           (codegen-match
+            match-var
+            subexpr
+            subexpr-type
+            pattern-code-pairs
+            env))))))
 
   (:method ((expr node-seq) env)
     (declare (type tc:environment env))
