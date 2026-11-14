@@ -75,22 +75,22 @@ Note: `(break)` and `(continue)` do not work inside these loop macros. `(return)
                   (< i n))))
 
   (inline)
-  (declare %sumtimes (Num :t => UFix * (UFix -> :t) -> :t))
+  (declare %sumtimes (Additive :t => UFix * (UFix -> :t) -> :t))
   (define (%sumtimes n func)
-    "Sum the evaluations of `func` applied to every `UFix` in `[0, n)`. Returns 0 for `n = 0`."
+    "Sum the evaluations of `func` applied to every `UFix` in `[0, n)`. Returns `zero` for `n = 0`."
     (for ((declare i UFix)
           (i 0 (1+ i))
-          (acc 0 (+ acc (func i))))
+          (acc zero (+ acc (func i))))
       :returns acc
       :while (< i n)))
 
   (inline)
-  (declare %prodtimes (Num :t => UFix * (UFix -> :t) -> :t))
+  (declare %prodtimes (Multiplicative :t => UFix * (UFix -> :t) -> :t))
   (define (%prodtimes n func)
-    "Multiply the evaluations of `func` applied to every `UFix` in `[0, n)`. Returns 1 for `n = 0`."
+    "Multiply the evaluations of `func` applied to every `UFix` in `[0, n)`. Returns `one` for `n = 0`."
     (for ((declare i UFix)
           (i 0 (1+ i))
-          (acc 1 (* acc (func i))))
+          (acc one (* acc (func i))))
       :returns acc
       :while (< i n)))
 

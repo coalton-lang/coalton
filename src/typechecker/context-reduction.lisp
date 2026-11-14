@@ -256,10 +256,18 @@ Returns (VALUES deferred-preds retained-preds defaultable-preds)"
 (defun num-classes ()
   ;; Lookup class symbols if they exist. This allows defaulting to
   ;; work before the standard library is fully loaded
-  (append (util:find-symbol? "NUM" "COALTON/CLASSES")
+  (append (util:find-symbol? "ADDITIVE" "COALTON/CLASSES")
+          (util:find-symbol? "ADDITIVEGROUP" "COALTON/CLASSES")
+          (util:find-symbol? "MULTIPLICATIVE" "COALTON/CLASSES")
+          (util:find-symbol? "SEMIRING" "COALTON/CLASSES")
+          (util:find-symbol? "RING" "COALTON/CLASSES")
+          (util:find-symbol? "NUM" "COALTON/CLASSES")
           (util:find-symbol? "QUANTIZABLE" "COALTON/MATH")
           (util:find-symbol? "RECIPROCABLE" "COALTON/MATH")
           (util:find-symbol? "COMPLEX" "COALTON/MATH")
+          (util:find-symbol? "COMPLEXCOMPONENT" "COALTON/MATH")
+          (util:find-symbol? "UNITNORMAL" "COALTON/MATH")
+          (util:find-symbol? "EUCLIDEANDOMAIN" "COALTON/MATH")
           (util:find-symbol? "REMAINDER" "COALTON/MATH")
           (util:find-symbol? "INTEGRAL" "COALTON/MATH")))
 

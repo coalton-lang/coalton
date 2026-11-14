@@ -164,7 +164,10 @@
                (:module "computable-reals"
                 :serial t
                 :components ((:ct-file "computable-reals")))
-               (:ct-file "realalgebraic")))
+               (:ct-file "realalgebraic")
+               (:ct-file "ratio")
+               (:ct-file "polynomial")
+               (:ct-file "power-series")))
 
 (asdf:defsystem "coalton/threads"
   :description "Threads, synchronization primitives, and work-stealing task parallelism for Coalton (SBCL only)."

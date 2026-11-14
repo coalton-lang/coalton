@@ -107,22 +107,41 @@ component."
     (define (== (Dual a _) (Dual p _))
       (== a p)))
 
-  (define-instance (Num :t => Num (Dual :t))
+  (define-instance (Additive :t => Additive (Dual :t))
     (define (+ (Dual p1 d1) (Dual p2 d2))
       (Dual (+ p1 p2) (+ d1 d2)))
+    (define zero (Dual zero zero)))
 
+  (define-instance (AdditiveGroup :t => AdditiveGroup (Dual :t))
     (define (- (Dual p1 d1) (Dual p2 d2))
       (Dual (- p1 p2) (- d1 d2)))
+    (define (negate (Dual p d))
+      (Dual (negate p) (negate d))))
 
+  (define-instance (Semiring :t => Multiplicative (Dual :t))
     (define (* (Dual p1 d1) (Dual p2 d2))
       (Dual (* p1 p2)
             (+ (* p1 d2) (* d1 p2))))
+    (define one (Dual one zero)))
 
+  (define-instance (Semiring :t => Semiring (Dual :t)))
+
+  (define-instance (Ring :t => Ring (Dual :t))
     ;; N.B., A real number `z` converts to a dual number in the
     ;; following way. However, if we are calculating derivatives, we
     ;; instead evaluate a function at `z+ε`.
     (define (fromInt z)
-      (Dual (fromInt z) 0)))
+      (Dual (fromInt z) zero)))
+
+  (define-instance (Num :t => Num (Dual :t)))
+
+  (define-instance (Multiplicative :t => Scale :t (Dual :t))
+    (inline)
+    (define (scale k (Dual p d))
+      (Dual (* k p) (* k d))))
+
+  (define-instance (Ring :t => Module :t (Dual :t)))
+  (define-instance (Reciprocable :t => VectorSpace :t (Dual :t)))
 
   (define-instance (Reciprocable :t => Reciprocable (Dual :t))
     (define (/ (Dual p1 d1) (Dual p2 d2))
@@ -135,7 +154,7 @@ component."
       (Dual (reciprocal p1)
             (/ (negate d1) (sq p1)))))
 
-  (define-instance ((Num :t) (Trigonometric :t) (Reciprocable :t) (Radical :t) => (Trigonometric (Dual :t)))
+  (define-instance ((Trigonometric :t) (Reciprocable :t) (Radical :t) => (Trigonometric (Dual :t)))
     (define (sin (Dual p1 d1))
       (Dual (sin p1)
             (* d1 (cos p1))))
@@ -162,7 +181,7 @@ component."
     
     (define pi (Dual pi 0)))
 
-  (define-instance ((Num :t) (Exponentiable :t) (Reciprocable :t) => (Exponentiable (Dual :t)))
+  (define-instance ((Exponentiable :t) (Reciprocable :t) => (Exponentiable (Dual :t)))
     (define (exp (Dual p1 d1))
       (Dual (exp p1)
             (* d1 (exp p1))))
@@ -179,7 +198,7 @@ component."
 
     (define ee (Dual ee 0)))
 
-  (define-instance ((Num :t) (Radical :t) (Reciprocable :t) (Exponentiable :t) => (Radical (Dual :t)))
+  (define-instance ((Radical :t) (Reciprocable :t) (Exponentiable :t) => (Radical (Dual :t)))
     (define (nth-root n (Dual p1 d1))
       ;; root(x,n)' = (x^(1/n))'
       ;;            = (1/n)x^(1/n - 1)

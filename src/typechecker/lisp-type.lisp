@@ -180,7 +180,9 @@ fallback branch take care of it.
              "If `from` type satisfies the optimizable condition, returns two
 values: the 'inner' type (wrappee type) and the 'outer' type (wrapper
 type)."
-             (let ((v (lookup-value-type env from :no-error t)))
+             (alexandria:when-let* ((entry (lookup-type env from :no-error t))
+                                    (ctor (first (type-entry-constructors entry)))
+                                    (v (lookup-value-type env ctor :no-error t)))
                (when (typep v 'ty-scheme)
                  (let ((qt (qualified-ty-type (ty-scheme-type v))))
                    ;; In transparent types, we have this in QT.

@@ -275,7 +275,6 @@
               (d d)))))
       (_ a)))
 
-  (specialize negate bf-negate (Big-Float -> Big-Float))
   (define (bf-negate x)
     "Negates a Big-Float"
     (match x
@@ -289,7 +288,7 @@
       ((BFNegInf) BFInf)
       ((BFNaN) BFNaN)))
 
-  (define-instance (Num Big-Float)
+  (define-num Big-Float
     (define (+ a b)
       (match (Tuple a b)
         ((Tuple (BFValue x) (BFValue y))
@@ -306,6 +305,8 @@
         (_ BFNaN)))
     (define (- a b)
       (+ a (bf-negate b)))
+    (define (negate x)
+      (bf-negate x))
     (define (* a b)
       (match (Tuple a b)
         ((Tuple (BFValue (Dyadic 0 _)) (BFValue b))
@@ -370,6 +371,17 @@
       (if (== b 0)
           (* (fromInt a) (reciprocal (fromInt b)))
           (normalize (BFValue (Dyadic (div (lsh a p) b) (negate p)))))))
+
+  (define-instance (coalton/math:Scale Big-Float Big-Float)
+    (inline)
+    (define (coalton/math:scale a b) (* a b)))
+
+  (define-instance (Module Big-Float Big-Float))
+  (define-instance (VectorSpace Big-Float Big-Float))
+
+  (define-instance (InnerSpace Big-Float Big-Float)
+    (inline)
+    (define (inner-product a b) (* a b)))
 
   (define-instance (Into F32 Big-Float)
     (define (into a)

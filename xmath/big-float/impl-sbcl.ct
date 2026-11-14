@@ -228,7 +228,7 @@
           (1   GT)))))
 
   ;; Basic number operations
-  (define-instance (Num Big-Float)
+  (define-num Big-Float
     (define (+ a b)
       (lisp (-> Big-Float) (a b)
         (cl:values (sb-mpfr:add a b))))
@@ -300,6 +300,17 @@
         (cl:values (sb-mpfr:div a b))))
     (define (reciprocal a)
       (/ 1 a)))
+
+  (define-instance (coalton/math:Scale Big-Float Big-Float)
+    (inline)
+    (define (coalton/math:scale a b) (* a b)))
+
+  (define-instance (Module Big-Float Big-Float))
+  (define-instance (VectorSpace Big-Float Big-Float))
+
+  (define-instance (InnerSpace Big-Float Big-Float)
+    (inline)
+    (define (inner-product a b) (* a b)))
 
   (define-instance (Real Big-Float)
     (define (real-approx prec x)
