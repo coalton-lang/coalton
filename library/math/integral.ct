@@ -3,6 +3,7 @@
 ;;;; Integral domains and operations on integers
 
 (coalton/utils::defstdlib-package #:coalton/math/integral
+  (:documentation "Euclidean domains (`UnitNormal`, `EuclideanDomain`), integer division and remainder (`Remainder`, `Integral`), greatest common divisors (`gcd`, `lcm`, `extended-gcd`), and integer exponentiation (`^`, `^^`).")
   (:use
    #:coalton
    #:coalton/classes

@@ -55,7 +55,10 @@
    (#:m-res #:coalton/monad/resultt)
    (#:m-env #:coalton/monad/environment)
    (#:m-stt #:coalton/monad/statet)
-   (#:fft #:coalton/xmath/fft)))
+   (#:fft #:coalton/xmath/fft)
+   (#:ratio #:coalton/xmath/ratio)
+   (#:poly #:coalton/xmath/polynomial)
+   (#:series #:coalton/xmath/power-series)))
 
 (in-package #:coalton-native-tests)
 

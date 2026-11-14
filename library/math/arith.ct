@@ -3,6 +3,7 @@
 ;;;; Number types and basic arithmetic.
 
 (coalton/utils:defstdlib-package #:coalton/math/arith
+  (:documentation "Division (`Reciprocable`, `Dividable`), scaling and linear spaces (`Scale`, `Module`, `VectorSpace`, `InnerSpace`), transfinite floats (`Transfinite`), and basic arithmetic predicates and operations.")
   (:use
    #:coalton
    #:coalton/builtin

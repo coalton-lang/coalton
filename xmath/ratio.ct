@@ -1,0 +1,153 @@
+;;;; ratio.ct
+;;;;
+;;;; Generic reduced fractions over any EuclideanDomain
+
+(coalton/utils:defstdlib-package #:coalton/xmath/ratio
+  (:documentation "Generic reduced ratios `p / q` over any `EuclideanDomain`, such as rational functions `Ratio (Polynomial Fraction)` or Gaussian rationals `Ratio (Complex Integer)`.
+
+Construct ratios with `mkRatio` (or `general/` and `into`), and extract canonical components with `numerator` and `denominator`. Addition, subtraction, multiplication, and scaling use Henrici/Brown cross-GCD cancellation to limit intermediate degree and coefficient growth. Standard instances are provided for `Eq`, `Show`, `Additive`, `AdditiveGroup`, `Multiplicative`, `Semiring`, `Ring`, `Num`, `Reciprocable`, `Dividable`, `Scale`, `Module`, and `VectorSpace`.")
+  (:nicknames
+   #:coalton/math/ratio
+   #:coalton-library/math/ratio)
+  (:shadow
+   #:numerator
+   #:denominator)
+  (:use
+   #:coalton
+   #:coalton/classes
+   #:coalton/functions
+   #:coalton/math/arith
+   #:coalton/math/integral)
+  (:local-nicknames
+   (#:show #:coalton/show))
+  (:export
+   #:Ratio
+   #:mkRatio
+   #:numerator
+   #:denominator))
+
+(in-package #:coalton/xmath/ratio)
+
+#+coalton-release
+(cl:declaim #.coalton-impl/settings:*coalton-optimize-library*)
+
+(coalton-toplevel
+  (define-type (Ratio :d)
+    "A reduced fraction `numerator / denominator` over a `EuclideanDomain` `:d`, with unit-normalized denominator and `gcd(numerator, denominator) == one`."
+    (%Ratio :d :d))
+
+  (inline)
+  (declare numerator (Ratio :d -> :d))
+  (define (numerator (%Ratio num _))
+    "The canonical numerator of a `Ratio`."
+    num)
+
+  (inline)
+  (declare denominator (Ratio :d -> :d))
+  (define (denominator (%Ratio _ den))
+    "The unit-normalized denominator of a `Ratio`."
+    den)
+
+  (declare mkRatio (EuclideanDomain :d => :d * :d -> Ratio :d))
+  (define (mkRatio num den)
+    "Construct a canonical reduced `Ratio` `num / den`."
+    (if (== den zero)
+        (error "Ratio division by zero.")
+        (if (== num zero)
+            (%Ratio zero one)
+            (let ((g (gcd num den))
+                  (num-red (quot num g))
+                  (den-red (quot den g))
+                  (u (unit-part den-red)))
+              (%Ratio (quot num-red u) (normal-part den-red))))))
+
+  (define-instance (Eq :d => Eq (Ratio :d))
+    (inline)
+    (define (== (%Ratio n1 d1) (%Ratio n2 d2))
+      (and (== n1 n2) (== d1 d2))))
+
+  (define-instance (show:Show :d => show:Show (Ratio :d))
+    (define (show:show-to f (%Ratio num den))
+      (f "(")
+      (show:show-to f num)
+      (f " / ")
+      (show:show-to f den)
+      (f ")")))
+
+  (declare ratio-add (EuclideanDomain :d => Ratio :d * Ratio :d -> Ratio :d))
+  (define (ratio-add (%Ratio n1 d1) (%Ratio n2 d2))
+    (cond
+      ((== n1 zero) (%Ratio n2 d2))
+      ((== n2 zero) (%Ratio n1 d1))
+      (True
+       (let ((g (gcd d1 d2))
+             (d1/g (quot d1 g))
+             (d2/g (quot d2 g))
+             (num (+ (* n1 d2/g) (* n2 d1/g)))
+             (den (* d1 d2/g)))
+         (mkRatio num den)))))
+
+  (declare ratio-negate (AdditiveGroup :d => Ratio :d -> Ratio :d))
+  (define (ratio-negate (%Ratio n d))
+    (%Ratio (negate n) d))
+
+  (declare ratio-sub (EuclideanDomain :d => Ratio :d * Ratio :d -> Ratio :d))
+  (define (ratio-sub a b)
+    (ratio-add a (ratio-negate b)))
+
+  (declare ratio-mul (EuclideanDomain :d => Ratio :d * Ratio :d -> Ratio :d))
+  (define (ratio-mul (%Ratio n1 d1) (%Ratio n2 d2))
+    (if (or (== n1 zero) (== n2 zero))
+        (%Ratio zero one)
+        (let ((g1 (gcd n1 d2))
+              (g2 (gcd n2 d1))
+              (num (* (quot n1 g1) (quot n2 g2)))
+              (den (* (quot d1 g2) (quot d2 g1))))
+          (mkRatio num den))))
+
+  (define-num (EuclideanDomain :d => (Ratio :d))
+    (define (+ a b) (ratio-add a b))
+    (define zero (%Ratio zero one))
+    (define (- a b) (ratio-sub a b))
+    (define (negate a) (ratio-negate a))
+    (define (* a b) (ratio-mul a b))
+    (define one (%Ratio one one))
+    (define (fromInt n) (%Ratio (fromInt n) one)))
+
+  (define-instance (EuclideanDomain :d => Reciprocable (Ratio :d))
+    (define (reciprocal (%Ratio n d))
+      (if (== n zero)
+          (error "Reciprocal of zero Ratio.")
+          (let ((u (unit-part n)))
+            (%Ratio (quot d u) (normal-part n)))))
+    (define (/ a b)
+      (ratio-mul a (reciprocal b))))
+
+  (define-instance (EuclideanDomain :d => Dividable :d (Ratio :d))
+    (inline)
+    (define (general/ a b)
+      (mkRatio a b)))
+
+  (define-instance (EuclideanDomain :d => Scale :d (Ratio :d))
+    (define (scale k (%Ratio n d))
+      (if (== k zero)
+          (%Ratio zero one)
+          (let ((g (gcd k d)))
+            (mkRatio (* (quot k g) n) (quot d g))))))
+
+  (define-instance (EuclideanDomain :d => Module :d (Ratio :d)))
+
+  (define-instance (EuclideanDomain :d => Scale (Ratio :d) (Ratio :d))
+    (inline)
+    (define (scale a b) (* a b)))
+
+  (define-instance (EuclideanDomain :d => Module (Ratio :d) (Ratio :d)))
+  (define-instance (EuclideanDomain :d => VectorSpace (Ratio :d) (Ratio :d)))
+
+  (define-instance (Multiplicative :d => Into :d (Ratio :d))
+    (inline)
+    (define (into x)
+      (%Ratio x one))))
+
+#+sb-package-locks
+(sb-ext:lock-package "COALTON/XMATH/RATIO")

@@ -1,4 +1,5 @@
 (coalton/utils:defstdlib-package #:coalton/classes
+  (:documentation "Core type classes, algebraic hierarchy (`Additive`, `AdditiveGroup`, `Multiplicative`, `Semiring`, `Ring`, `Num`), and fundamental data types (`Tuple`, `Optional`, `Result`).")
   (:use
    #:coalton)
   (:local-nicknames
@@ -755,7 +756,7 @@ Typical `fail` continuations are:
              `(coalton:define ,const-sym
                 (,(cl:first expr-body) (coalton:the coalton:Integer ,int-val))))))
 
-  (cl:defmacro define-ring (spec cl:&body body)
+  (define-toplevel-macro define-ring (spec cl:&body body)
     "Convenience macro to define `Additive`, `AdditiveGroup`, `Multiplicative`, `Semiring`, and `Ring` instances from `+`, `-`, `*`, and `fromInt` (with optional `zero`, `negate`, and `one`)."
     (cl:let ((plus-forms cl:nil)
              (zero-forms cl:nil)
@@ -816,7 +817,7 @@ Typical `fail` continuations are:
            (coalton:define-instance ,(%ring-instance-head spec 'Ring)
              ,@fromint-forms)))))
 
-  (cl:defmacro define-num (spec cl:&body body)
+  (define-toplevel-macro define-num (spec cl:&body body)
     "Convenience macro to define `Additive`, `AdditiveGroup`, `Multiplicative`, `Semiring`, `Ring`, and `Num` instances from `+`, `-`, `*`, and `fromInt` (with optional `zero`, `negate`, and `one`)."
     `(coalton:progn
        (define-ring ,spec ,@body)
