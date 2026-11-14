@@ -115,8 +115,9 @@ opaque parameters as invariant by default."
 TYPE-TYVAR-TABLE maps type names to the post-kind-inference tyvars for that
 type, in declaration order.
 
-This computes a fixed point over the SCC because mutually recursive type
-definitions depend on each other's parameter variances.
+This computes a least fixed point over the SCC because mutually recursive type
+definitions depend on each other's parameter variances. Parameters start out
+unobserved, and parameters that are never used default to covariant.
 
 For opaque type constructors, inference defaults to invariant parameters.
 This is conservative and intentionally aligns with mutable native wrappers."
@@ -126,8 +127,8 @@ This is conservative and intentionally aligns with mutable native wrappers."
            (values hash-table &optional))
   (let ((variance-table (make-hash-table :test #'eq))
         (env-resolver (tc:make-env-variance-resolver env)))
-    ;; Initialize each type parameter as covariant, except opaque types, which
-    ;; are conservatively invariant.
+    ;; Initialize each type parameter as absent (not yet observed), except
+    ;; opaque types, which are conservatively invariant.
     ;;
     ;; Current stdlib audit (2026-02) for parametric opaque types:
     ;;   Cell, Vector, Queue, Slice, Hashtable, LispArray, FileStream
@@ -139,45 +140,148 @@ This is conservative and intentionally aligns with mutable native wrappers."
           :for initial := (make-list (length tyvars)
                                      :initial-element (if (type-definition-opaque-p type)
                                                           ':invariant
-                                                          ':covariant))
+                                                          ':absent))
           :do (setf (gethash name variance-table) initial))
 
-    (let ((changed t))
-      (loop :while changed :do
-        (setf changed nil)
-        (loop :for type :in types
-              :for name := (type-definition-name type)
-              :for tyvars := (gethash name type-tyvar-table)
-              :for current-variances := (gethash name variance-table)
-              :unless (type-definition-opaque-p type)
-                :do (let ((observed-variances (make-hash-table :test #'eql)))
-                      (labels ((resolver (tycon-name arity)
-                                 (declare (type symbol tycon-name)
-                                          (type alexandria:non-negative-fixnum arity)
-                                          (values tc:variance-list &optional))
-                                 (multiple-value-bind (local-variances foundp)
-                                     (gethash tycon-name variance-table)
-                                   (if foundp
-                                       (%ensure-arity-variances local-variances arity)
-                                       (funcall env-resolver tycon-name arity))))
-                               (observe (ty)
+    (labels ((erase-absent-arguments (ty)
+               ;; Replace arguments of SCC-local type constructors whose
+               ;; parameters have not been observed yet, so that they
+               ;; contribute no variance observations.
+               (typecase ty
+                 (tc:tapp
+                  (let* ((flattened (tc:flatten-type ty))
+                         (head (first flattened))
+                         (local-variances (and (typep head 'tc:tycon)
+                                               (gethash (tc:tycon-name head) variance-table))))
+                    (reduce (lambda (from arg)
+                              (tc:make-tapp :from from :to arg))
+                            (loop :for arg :in (rest flattened)
+                                  :for i :from 0
+                                  :collect (if (eq ':absent (nth i local-variances))
+                                               head
+                                               (erase-absent-arguments arg)))
+                            :initial-value (erase-absent-arguments head))))
+                 (tc:function-ty
+                  (tc:make-function-ty
+                   :positional-input-types (mapcar #'erase-absent-arguments
+                                                   (tc:function-ty-positional-input-types ty))
+                   :keyword-input-types (mapcar (lambda (entry)
+                                                  (tc:make-keyword-ty-entry
+                                                   :keyword (tc:keyword-ty-entry-keyword entry)
+                                                   :type (erase-absent-arguments
+                                                          (tc:keyword-ty-entry-type entry))))
+                                                (tc:function-ty-keyword-input-types ty))
+                   :keyword-open-p (tc:function-ty-keyword-open-p ty)
+                   :output-types (mapcar #'erase-absent-arguments
+                                         (tc:function-ty-output-types ty))))
+                 (tc:result-ty
+                  (tc:make-result-ty
+                   :output-types (mapcar #'erase-absent-arguments
+                                         (tc:result-ty-output-types ty))))
+                 (t
+                  ty)))
+             (resolver (tycon-name arity)
+               (declare (type symbol tycon-name)
+                        (type alexandria:non-negative-fixnum arity)
+                        (values tc:variance-list &optional))
+               (multiple-value-bind (local-variances foundp)
+                   (gethash tycon-name variance-table)
+                 (if foundp
+                     ;; Absent arguments were erased, so any variance
+                     ;; works for them here.
+                     (%ensure-arity-variances
+                      (substitute ':covariant ':absent local-variances)
+                      arity)
+                     (funcall env-resolver tycon-name arity)))))
+      (let ((changed t))
+        (loop :while changed :do
+          (setf changed nil)
+          (loop :for type :in types
+                :for name := (type-definition-name type)
+                :for tyvars := (gethash name type-tyvar-table)
+                :for current-variances := (gethash name variance-table)
+                :unless (type-definition-opaque-p type)
+                  :do (let ((observed-variances (make-hash-table :test #'eql)))
+                        (flet ((observe (ty)
                                  (declare (type tc:ty ty))
-                                 (tc:collect-tyvar-variances ty #'resolver :table observed-variances)))
-                        (if (type-definition-aliased-type type)
-                            (observe (type-definition-aliased-type type))
-                            (loop :for ctor-args :in (type-definition-constructor-args type)
-                                  :do (loop :for field-ty :in ctor-args
-                                            :do (observe field-ty))))
+                                 (tc:collect-tyvar-variances (erase-absent-arguments ty)
+                                                             #'resolver
+                                                             :table observed-variances)))
+                          (if (type-definition-aliased-type type)
+                              (observe (type-definition-aliased-type type))
+                              (loop :for ctor-args :in (type-definition-constructor-args type)
+                                    :do (loop :for field-ty :in ctor-args
+                                              :do (observe field-ty))))
 
-                        (let ((next-variances
-                                (loop :for tyvar :in tyvars
-                                      :for current :in current-variances
-                                      :for observed := (tc:tyvar-variance observed-variances tyvar)
-                                      :collect (tc:variance-join current observed))))
-                          (unless (equal next-variances current-variances)
-                            (setf changed t)
-                            (setf (gethash name variance-table) next-variances)))))))
+                          (let ((next-variances
+                                  (loop :for tyvar :in tyvars
+                                        :for current :in current-variances
+                                        :for observed := (tc:tyvar-variance observed-variances tyvar)
+                                        :collect (tc:variance-join current observed))))
+                            (unless (equal next-variances current-variances)
+                              (setf changed t)
+                              (setf (gethash name variance-table) next-variances))))))))
+
+      ;; Parameters that are never used (phantom parameters) default to
+      ;; covariant.
+      (loop :for name :being :the :hash-keys :of variance-table
+              :using (hash-value variances)
+            :do (setf (gethash name variance-table)
+                      (substitute ':covariant ':absent variances)))
       variance-table)))
+
+(defun referenced-type-names (type)
+  "Return the names of the type constructors referenced by the parsed
+type definition TYPE."
+  (declare (type parser:type-definition type)
+           (values list &optional))
+  (mapcar #'parser:tycon-name (parser:collect-referenced-types type)))
+
+(defun type-alias-sccs (type-aliases)
+  "Return the SCCs of the dependency graph between TYPE-ALIASES, ignoring
+references to any other types. Each SCC is a list of aliases, and SCCs
+are ordered so that dependencies come first."
+  (declare (type parser:type-definition-list type-aliases)
+           (values list &optional))
+  (let* ((names (mapcar (alexandria:compose #'parser:identifier-src-name
+                                            #'parser:type-definition-name)
+                        type-aliases))
+         (table (make-hash-table :test #'eq))
+         (graph (loop :for alias :in type-aliases
+                      :for name :in names
+                      :do (setf (gethash name table) alias)
+                      :collect (cons name
+                                     (intersection names
+                                                   (referenced-type-names alias)
+                                                   :test #'eq)))))
+    (loop :for scc :in (algo:tarjan-scc graph)
+          :collect (sort (mapcar (lambda (name)
+                                   (gethash name table))
+                                 scc)
+                         #'<
+                         :key (lambda (alias)
+                                (position alias type-aliases))))))
+
+(defun check-for-cyclic-type-aliases (type-aliases)
+  "Signal an error if any alias in TYPE-ALIASES is defined in terms of
+itself without passing through a nominal type."
+  (declare (type parser:toplevel-define-type-alias-list type-aliases)
+           (values null &optional))
+  (dolist (scc (type-alias-sccs type-aliases))
+    (let* ((alias (first scc))
+           (name (parser:identifier-src-name (parser:type-definition-name alias))))
+      (when (or (rest scc)
+                (member name (referenced-type-names alias) :test #'eq))
+        (apply #'tc:tc-error
+               "Cyclic type alias"
+               (tc:tc-note alias "type alias ~S is defined in terms of itself" name)
+               (loop :for other :in (rest scc)
+                     :collect (tc-secondary-note
+                               other
+                               "type alias ~S is part of the same cycle"
+                               (parser:identifier-src-name
+                                (parser:type-definition-name other))))))))
+  nil)
 
 (defun toplevel-define-type (types structs type-aliases env)
   (declare (type parser:toplevel-define-type-list types)
@@ -255,16 +359,17 @@ This is conservative and intentionally aligns with mutable native wrappers."
                                                  "Unknown type variable ~S"
                                                  (parser:tyvar-name used-var)))))
 
+  (check-for-cyclic-type-aliases type-aliases)
+
   (let* ((type-names (mapcar (alexandria:compose #'parser:identifier-src-name
                                                  #'parser:type-definition-name)
                              (append types structs type-aliases)))
 
          (type-dependencies
            (loop :for type :in (append types structs type-aliases)
-                 :for referenced-types := (parser:collect-referenced-types type)
                  :collect (list*
                            (parser:identifier-src-name (parser:type-definition-name type))
-                           (intersection type-names (mapcar #'parser:tycon-name referenced-types) :test #'eq))))
+                           (intersection type-names (referenced-type-names type) :test #'eq))))
 
          (sccs (algo:tarjan-scc type-dependencies))
 
@@ -578,45 +683,59 @@ signaled with the expectation that they may be ignored."
                                                        :name name
                                                        :kind (tc:apply-ksubstitution ksubs kind))))
 
-    ;; Reparse constructor field types after SCC aliases are installed so
-    ;; constructor signatures see the same expanded aliases as ordinary
-    ;; expression type parsing.
+    ;; Reparse alias bodies, then constructor field types, after SCC
+    ;; aliases are installed so they see the same expanded aliases as
+    ;; ordinary expression type parsing. Aliases are installed in
+    ;; dependency order so that an alias referencing another alias in
+    ;; this SCC is fully expanded.
     (let* ((alias-env
              (loop :with alias-env := (partial-type-env-env env)
-                   :for type :in types
+                   :for type :in (alexandria:mappend
+                                  #'identity
+                                  (type-alias-sccs
+                                   (remove-if-not #'parser:type-definition-aliased-type types)))
                    :for name := (parser:identifier-src-name (parser:type-definition-name type))
                    :for parser-aliased-type := (parser:type-definition-aliased-type type)
-                   :when parser-aliased-type
-                     :do (let* ((tvars
-                                  (tc:apply-ksubstitution
-                                   ksubs
-                                   (mapcar (lambda (var)
-                                             (partial-type-env-lookup-var
-                                              env
-                                              (parser:keyword-src-name var)
-                                              var))
-                                           (parser:type-definition-vars type))))
-                                (alias
-                                  (tc:apply-type-argument-list
-                                   (tc:apply-ksubstitution
-                                    ksubs
-                                    (gethash name (partial-type-env-ty-table env)))
-                                   tvars))
-                                (aliased-type
-                                  (tc:push-type-alias
-                                   (tc:apply-ksubstitution ksubs (gethash name alias-table))
-                                   alias)))
-                           (setf alias-env
-                                 (tc:set-type-alias
-                                  alias-env
-                                  name
-                                  (tc:make-type-alias-entry
-                                   :name name
-                                   :source-name (parser:identifier-src-source-name
-                                                 (parser:type-definition-name type))
-                                   :tyvars tvars
-                                   :type aliased-type
-                                   :docstring nil))))
+                   :do (let* ((tvars
+                                (tc:apply-ksubstitution
+                                 ksubs
+                                 (mapcar (lambda (var)
+                                           (partial-type-env-lookup-var
+                                            env
+                                            (parser:keyword-src-name var)
+                                            var))
+                                         (parser:type-definition-vars type))))
+                              (alias
+                                (tc:apply-type-argument-list
+                                 (tc:apply-ksubstitution
+                                  ksubs
+                                  (gethash name (partial-type-env-ty-table env)))
+                                 tvars))
+                              (expanded-type
+                                (nth-value
+                                 0
+                                 (parse-type
+                                  parser-aliased-type
+                                  (make-partial-type-env
+                                   :env alias-env
+                                   :ty-table (partial-type-env-ty-table env))
+                                  ksubs
+                                  (tc:kind-of
+                                   (tc:apply-ksubstitution ksubs (gethash name alias-table))))))
+                              (aliased-type
+                                (tc:push-type-alias expanded-type alias)))
+                         (setf (gethash name alias-table) expanded-type)
+                         (setf alias-env
+                               (tc:set-type-alias
+                                alias-env
+                                name
+                                (tc:make-type-alias-entry
+                                 :name name
+                                 :source-name (parser:identifier-src-source-name
+                                               (parser:type-definition-name type))
+                                 :tyvars tvars
+                                 :type aliased-type
+                                 :docstring nil))))
                    :finally (return alias-env)))
            (alias-partial-env
              (make-partial-type-env

@@ -303,3 +303,96 @@
 
    '("f" . "((C :t T) => (:t -> String))")
    '("g" . "((C :t (List T)) => (:t -> String))")))
+
+(deftest test-type-alias-in-arrow-application ()
+
+  (check-coalton-types
+   "(define-type-alias A1 Integer)
+    (define-type-alias A2 String)
+
+    (declare f (Arrow A1 A2))
+    (define (f _) \"x\")"
+
+   '("f" . "(Integer -> String)"))
+
+  (check-coalton-types
+   "(define-type-alias Nothing Void)
+
+    (declare f (Integer -> Nothing))
+    (define (f _) (values))
+
+    (declare g (Arrow Integer Nothing))
+    (define (g _) (values))"
+
+   '("f" . "(Integer -> Void)")
+   '("g" . "(Integer -> Void)"))
+
+  (check-coalton-types
+   "(define-type-alias PairOut (Integer * String))
+
+    (declare f (Integer -> PairOut))
+    (define (f x) (values x \"a\"))"
+
+   '("f" . "(Integer -> Integer * String)")))
+
+(deftest test-chained-type-aliases-in-recursive-scc ()
+
+  (check-coalton-types
+   "(define-type Node
+      (Node NodeListPair))
+
+    (define-type-alias NodeList (List Node))
+    (define-type-alias NodeListPair (Tuple NodeList NodeList))
+
+    (declare node-children (Node -> NodeListPair))
+    (define (node-children (Node children)) children)"
+
+   '("Node" . "((Tuple (List Node) (List Node)) -> Node)")
+   '("node-children" . "(Node -> (Tuple (List Node) (List Node)))")))
+
+(deftest test-cyclic-type-alias ()
+
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-type-alias Loop Loop)"))
+
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-type-alias (Loop :a) (List (Loop :a)))"))
+
+  (signals tc:tc-error
+    (check-coalton-types
+     "(define-type-alias A B)
+      (define-type-alias B A)")))
+
+(defun type-alias-test-variances (toplevel-string &rest type-names)
+  "Typecheck TOPLEVEL-STRING and return the variances of TYPE-NAMES."
+  (let ((*package* (make-package "COALTON-TYPE-ALIAS-VARIANCE-TEST"
+                                 :use '("COALTON" "COALTON-PRELUDE"))))
+    (unwind-protect
+         (let ((source (source:make-source-string toplevel-string)))
+           (with-open-stream (stream (source:source-stream source))
+             (let* ((program (parser:with-reader-context stream
+                               (parser:read-program stream source)))
+                    (env (nth-value 1 (entry:entry-point program))))
+               (loop :for name :in type-names
+                     :collect (tc:type-entry-variances
+                               (tc:lookup-type env (intern (string-upcase name) *package*)))))))
+      (delete-package *package*))))
+
+(deftest test-contravariant-type-parameter-variance ()
+
+  (is (equal '((:contravariant) (:covariant) (:contravariant) (:covariant))
+             (type-alias-test-variances
+              "(define-type (Predicate :a)
+                 (Pred (:a -> Boolean)))
+
+               (define-type (DoubleContra :a)
+                 (DC (Predicate :a -> Boolean)))
+
+               (define-type (RecContra :a)
+                 (RC (:a -> Boolean) (RecContra :a)))
+
+               (define-type (Phantom :a)
+                 MakePhantom)"
+              "Predicate" "DoubleContra" "RecContra" "Phantom"))))
