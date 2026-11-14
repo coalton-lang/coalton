@@ -42,7 +42,10 @@
   (cond
     ((util:dynamic-variable-name-p name)
      (make-node-dynamic-variable :type type :value name))
-    ((tc:lookup-function env name :no-error t)
+    ((or (tc:lookup-function env name :no-error t)
+         (tc:lookup-name env name :no-error t)
+         (tc:lookup-constructor env name :no-error t)
+         (tc:lookup-instance-by-codegen-sym env name :no-error t))
      (make-node-global-variable :type type :value name))
     (t
      (make-node-local-variable :type type :value name))))
