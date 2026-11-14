@@ -13,6 +13,7 @@
                (:ct-file "fdtd")
                (:ct-file "nbody")
                (:ct-file "ising")
+               (:ct-file "optics")
                (:ct-file "raytrace")
                (:file "run"))
   :perform (asdf:test-op (o s)
