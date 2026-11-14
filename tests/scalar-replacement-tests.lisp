@@ -11,6 +11,17 @@
         (values))))
     count))
 
+(defun codegen-test-generated-lisp (function)
+  (coalton-impl/codegen/codegen-expression:codegen-expression
+   (tc:lookup-code entry:*global-environment* (intern function))
+   entry:*global-environment*))
+
+(defun codegen-test-tree-contains-p (tree predicate)
+  (or (funcall predicate tree)
+      (and (consp tree)
+           (or (codegen-test-tree-contains-p (car tree) predicate)
+               (codegen-test-tree-contains-p (cdr tree) predicate)))))
+
 (deftest scalar-replacement-preserves-field-evaluation ()
   (with-codegen-test-environment
     (codegen-test-event-recorder)
@@ -150,3 +161,189 @@
     (dolist (function '("SNAPSHOT" "CALLBACK" "RESULTS"))
       (is (= (if (coalton-impl/settings:coalton-release-p) 0 1)
              (codegen-test-call-count function "BOXED"))))))
+
+(deftest scalar-replacement-unboxes-local-cells ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(declare accumulate-cells (U64 * F64 -> U64 * F64))
+      (define (accumulate-cells n step)
+        (let count = (coalton/cell:new (the U64 0)))
+        (let total = (coalton/cell:new (the F64 0.0d0)))
+        (let ((bump! (fn (i)
+                       (coalton/cell:increment! count)
+                       (coalton/cell:write! total (+ (coalton/cell:read total) step))
+                       (coalton/cell:swap! count (+ (coalton/cell:read count) i)))))
+          (for ((declare i U64)
+                (i 0 (+ i 1)))
+            :while (< i n)
+            (bump! i)
+            (bump! 0))
+          (values (coalton/cell:read count) (coalton/cell:read total))))")
+    (is (equal '(20 15.0d0)
+               (multiple-value-list (codegen-test-eval "(accumulate-cells 5 1.5d0)"))))
+    (let ((form (let ((coalton-impl/settings:*emit-type-annotations* t))
+                  (codegen-test-generated-lisp "ACCUMULATE-CELLS"))))
+      (is (codegen-test-tree-contains-p
+           form
+           (lambda (sub)
+             (and (consp sub)
+                  (eq 'cl:dynamic-extent (first sub))))))
+      (when (coalton-impl/settings:coalton-release-p)
+        (is (not (codegen-test-tree-contains-p
+                  form
+                  (lambda (sub)
+                    (or (eq sub 'coalton/cell::make-cell-internal)
+                        (eq sub 'coalton/cell::cell-internal-inner)
+                        (eq sub 'coalton/cell:new))))))
+        (is (codegen-test-tree-contains-p
+             form
+             (lambda (sub)
+               (and (consp sub)
+                    (eq 'cl:type (first sub))
+                    (equal '(cl:unsigned-byte 64) (second sub))))))
+        (is (codegen-test-tree-contains-p
+             form
+             (lambda (sub)
+               (and (consp sub)
+                    (eq 'cl:type (first sub))
+                    (eq 'cl:double-float (second sub))))))
+        #+sbcl
+        (when coalton-impl/settings:*emit-type-annotations*
+          (let ((fn (fdefinition (intern "ACCUMULATE-CELLS"))))
+            (funcall fn 10 0.5d0)
+            (let* ((before (sb-ext:get-bytes-consed))
+                   (c (nth-value 0 (funcall fn 10000 0.5d0)))
+                   (after (sb-ext:get-bytes-consed)))
+              (is (= 50015000 c))
+              (is (= 0 (- after before))))))))))
+
+(deftest scalar-replacement-preserves-cell-evaluation-order ()
+  (with-codegen-test-environment
+    (codegen-test-event-recorder)
+    (codegen-test-compile
+     "(declare cell-order (Integer -> Integer))
+      (define (cell-order n)
+        (let c = (coalton/cell:new (observe n)))
+        (let first-write = (coalton/cell:write! c (observe (+ (coalton/cell:read c) 1))))
+        (let swapped =
+          (coalton/cell:swap!
+            c
+            (progn
+              (observe 100)
+              (coalton/cell:write! c (observe 200))
+              (observe 300))))
+        (+ first-write (+ swapped (coalton/cell:read c))))")
+    (setf *codegen-events* nil)
+    (is (= 511 (codegen-test-eval "(cell-order 10)")))
+    (is (equal '(10 11 100 200 300) (reverse *codegen-events*)))
+    (when (coalton-impl/settings:coalton-release-p)
+      (is (not (codegen-test-tree-contains-p
+                (codegen-test-generated-lisp "CELL-ORDER")
+                (lambda (sub)
+                  (eq sub 'coalton/cell::make-cell-internal)))))))
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(declare cell-helpers (U64 -> U64))
+      (define (cell-helpers n)
+        (let c = (coalton/cell:new n))
+        (let stack = (coalton/cell:new Nil))
+        (for ()
+          :returns (+ (coalton/cell:read c)
+                      (match (coalton/cell:read stack)
+                        ((Cons top _) top)
+                        ((Nil) 0)))
+          :while (> (coalton/cell:read c) 0)
+          (coalton/cell:push! stack (coalton/cell:read c))
+          (coalton/cell:update! (fn (x) (+ x 1)) c)
+          (coalton/cell:update-swap! (fn (x) (- x 1)) c)
+          (coalton/cell:decrement! c)))")
+    (is (= 1 (codegen-test-eval "(cell-helpers 5)")))
+    (when (coalton-impl/settings:coalton-release-p)
+      (is (not (codegen-test-tree-contains-p
+                (codegen-test-generated-lisp "CELL-HELPERS")
+                (lambda (sub)
+                  (eq sub 'coalton/cell::make-cell-internal))))))))
+
+(deftest scalar-replacement-retains-escaping-cells ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(declare return-cell (Integer -> coalton/cell:Cell Integer))
+      (define (return-cell n)
+        (let ((c (coalton/cell:new n)))
+          (coalton/cell:increment! c)
+          c))
+      (declare capture-cell (Integer -> (Void -> Integer)))
+      (define (capture-cell n)
+        (let ((c (coalton/cell:new n)))
+          (fn ()
+            (coalton/cell:increment! c))))
+      (declare pass-cell ((coalton/cell:Cell Integer -> Integer) * Integer -> Integer))
+      (define (pass-cell f n)
+        (let ((c (coalton/cell:new n)))
+          (+ (f c) (coalton/cell:read c))))
+      (declare store-cell (Integer -> List (coalton/cell:Cell Integer)))
+      (define (store-cell n)
+        (let ((c (coalton/cell:new n)))
+          (Cons c Nil)))
+      (declare lisp-cell (Integer -> Integer))
+      (define (lisp-cell n)
+        (let ((c (coalton/cell:new n)))
+          (coalton/cell:read
+            (lisp (-> (coalton/cell:Cell Integer)) (c) c))))")
+    (dolist (function '("RETURN-CELL" "CAPTURE-CELL" "PASS-CELL"
+                        "STORE-CELL" "LISP-CELL"))
+      (is (codegen-test-tree-contains-p
+           (codegen-test-generated-lisp function)
+           (lambda (sub)
+             (or (eq sub 'coalton/cell::make-cell-internal)
+                 (eq sub 'coalton/cell:new))))))
+    (is (= 42 (codegen-test-eval "(coalton/cell:read (return-cell 41))")))
+    (is (= 23 (codegen-test-eval
+               "(let ((step (capture-cell 10)))
+                  (+ (step) (step)))")))
+    (is (= 22 (codegen-test-eval
+               "(pass-cell (fn (c) (coalton/cell:increment! c)) 10)")))
+    (is (= 42 (codegen-test-eval
+               "(match (store-cell 41)
+                  ((Cons c (Nil)) (coalton/cell:increment! c))
+                  ((Nil) 0))")))
+    (is (= 42 (codegen-test-eval "(lisp-cell 42)")))))
+
+(deftest codegen-local-closure-dynamic-extent ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(declare non-escaping-local (Integer -> Integer))
+      (define (non-escaping-local n)
+        (let ((add-n (fn (x) (+ x n)))
+              (mul-2 (fn (y) (+ (add-n y) (add-n (* y 2))))))
+          (+ (mul-2 10) (mul-2 20))))
+      (declare escaping-local (Integer -> Tuple Integer (Integer -> Integer)))
+      (define (escaping-local n)
+        (let ((local-only (fn (x) (+ x n)))
+              (escaped (fn (y) (+ y n))))
+          (Tuple (+ (local-only 1) (local-only 2)) escaped)))
+      (declare captured-by-returned-lambda (Integer -> (Integer -> Integer)))
+      (define (captured-by-returned-lambda n)
+        (let ((helper (fn (x) (+ x n))))
+          (fn (y) (+ (helper y) (helper 1)))))")
+    (is (= 130 (codegen-test-eval "(non-escaping-local 10)")))
+    (is (= 55 (codegen-test-eval
+               "(match (escaping-local 10)
+                  ((Tuple s f) (+ s (f 22))))")))
+    (is (= 26 (codegen-test-eval "((captured-by-returned-lambda 10) 5)")))
+    (labels ((dynamic-extent-functions (function)
+               (let ((names nil))
+                 (codegen-test-tree-contains-p
+                  (codegen-test-generated-lisp function)
+                  (lambda (sub)
+                    (when (and (consp sub)
+                               (eq 'cl:dynamic-extent (first sub)))
+                      (dolist (item (rest sub))
+                        (when (and (consp item)
+                                   (eq 'cl:function (first item)))
+                          (push (second item) names))))
+                    nil))
+                 names)))
+      (is (= 2 (length (dynamic-extent-functions "NON-ESCAPING-LOCAL"))))
+      (is (= 1 (length (dynamic-extent-functions "ESCAPING-LOCAL"))))
+      (is (null (dynamic-extent-functions "CAPTURED-BY-RETURNED-LAMBDA"))))))

@@ -858,7 +858,7 @@ Returns four values:
              (project-function-type-keywords expected-type
                                              (nreverse expected-visible-entries)
                                              nil))
-           (subs (tc:unify subs visible-actual-type visible-expected-type)))
+           (subs (tc:unify subs visible-expected-type visible-actual-type)))
       (values subs
               (the tc:function-ty (tc:apply-substitution subs visible-expected-type))
               (the tc:function-ty (tc:apply-substitution subs effective-type))

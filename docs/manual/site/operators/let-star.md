@@ -21,6 +21,8 @@ weight: 170
 ## Semantics
 
 - `let*` binds non-recursively and sequentially top-to-bottom.
+- Non-escaping local functions bound by `let*` are declared `dynamic-extent`, allowing the Lisp compiler to stack-allocate their closures.
+- In release mode, a locally bound `coalton/cell:Cell` created with `cell:new` that does not escape its lexical scope is unboxed into a typed mutable lexical variable with no heap allocation.
 - Bound variables may be declared with `declare`.
 - Multiple values may be destructured with `values`.
 - `⟨body⟩` forms an implicit `progn`.

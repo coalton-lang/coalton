@@ -14,6 +14,10 @@
   (:import-from
    #:coalton-impl/codegen/typecheck-node
    #:explicit-nullary-callable-p)
+  (:import-from
+   #:coalton-impl/codegen/transformations
+   #:non-escaping-bind-function-p
+   #:non-escaping-let-function-names)
   (:local-nicknames
    (#:settings #:coalton-impl/settings)
    (#:util #:coalton-impl/util)
@@ -764,6 +768,8 @@ value is returned from the `handle` form."
         ((node-abstraction-p bound-expr)
          (let ((function-body
                  (codegen-expression (node-abstraction-subexpr bound-expr) env))
+               (dynamic-extent-p
+                 (non-escaping-bind-function-p expr))
                (body
                  (let ((*local-function-value-names*
                          (cons name *local-function-value-names*)))
@@ -775,11 +781,20 @@ value is returned from the `handle` form."
                        bound-expr
                        function-body
                        env)))
+              ,@(when dynamic-extent-p
+                  `((declare (dynamic-extent ,(local-function-value-form name)))))
               ,body)))
         (t
          `(let ((,name ,(codegen-expression bound-expr env)))
-            (declare (ignorable ,name))
+            (declare (ignorable ,name)
+                     ,@(when settings:*emit-type-annotations*
+                         `((type ,(tc:lisp-type (node-type bound-expr) env) ,name))))
             ,(codegen-expression body env))))))
+
+  (:method ((expr node-setq) env)
+    (declare (type tc:environment env))
+    `(setq ,(node-setq-name expr)
+           ,(codegen-expression (node-setq-expr expr) env)))
 
   )
 
@@ -827,7 +842,8 @@ value is returned from the `handle` form."
        nil)))
 
 (defun codegen-recursive-bindings (bindings sccs env inner-thunk
-                                    &optional binding-decl-table function-values-p)
+                                    &optional binding-decl-table function-values-p
+                                              non-escaping-function-names)
   "Emit recursive binding code for BINDINGS around INNER-THUNK.
 
 This is shared by `let` and the one-time initializer phase of `for` so both
@@ -838,7 +854,8 @@ bindings assignable storage for loop steps, including recursive closures."
            (type tc:environment env)
            (type function inner-thunk)
            (type (or null hash-table) binding-decl-table)
-           (type boolean function-values-p))
+           (type boolean function-values-p)
+           (type list non-escaping-function-names))
 
   (when (null sccs)
     (return-from codegen-recursive-bindings (funcall inner-thunk)))
@@ -854,6 +871,11 @@ bindings assignable storage for loop steps, including recursive closures."
       ;; Function binding group
       ((every #'node-abstraction-p (mapcar #'cdr scc-bindings))
        (let* ((binding-names (mapcar #'car scc-bindings))
+              (dynamic-extent-names
+                (unless function-values-p
+                  (remove-if-not (lambda (name)
+                                   (member name non-escaping-function-names :test #'eq))
+                                 binding-names)))
               (body
                 (let ((*local-function-value-names*
                         (if function-values-p
@@ -865,7 +887,9 @@ bindings assignable storage for loop steps, including recursive closures."
                            (cdr sccs)
                            env
                            inner-thunk
-                           binding-decl-table function-values-p)))
+                           binding-decl-table
+                           function-values-p
+                           non-escaping-function-names)))
                     (if function-values-p
                         `(let ,binding-names
                            (setf ,@(loop :for (name . node) :in scc-bindings
@@ -883,6 +907,10 @@ bindings assignable storage for loop steps, including recursive closures."
                                                       (node-abstraction-subexpr node)
                                                       env)
                                                      env)))
+                           ,@(when dynamic-extent-names
+                               `((declare (dynamic-extent
+                                           ,@(mapcar #'local-function-value-form
+                                                     dynamic-extent-names)))))
                            ,inner))))))
          body))
 
@@ -898,7 +926,8 @@ bindings assignable storage for loop steps, including recursive closures."
                      (data-letrec-able-p (cdr pair) env))
                    scc-bindings))
        (let* ((inner (codegen-recursive-bindings bindings (cdr sccs) env inner-thunk
-                                                 binding-decl-table function-values-p))
+                                                 binding-decl-table function-values-p
+                                                 non-escaping-function-names))
               (assignments (loop :for (name . initform) :in scc-bindings
                                  :for ctor-info := (find-constructor initform env)
                                  :appending (loop :for arg :in (node-rands initform)
@@ -934,7 +963,8 @@ bindings assignable storage for loop steps, including recursive closures."
                 (when decls
                   `((declare ,@decls))))
             ,(codegen-recursive-bindings bindings (cdr sccs) env inner-thunk
-                                         binding-decl-table function-values-p))))
+                                         binding-decl-table function-values-p
+                                         non-escaping-function-names))))
 
       (t (error "Invalid scc binding group. This should have been detected during typechecking.")))))
 
@@ -947,7 +977,10 @@ bindings assignable storage for loop steps, including recursive closures."
    sccs
    env
    (lambda ()
-     (codegen-expression (node-let-subexpr node) env))))
+     (codegen-expression (node-let-subexpr node) env))
+   nil
+   nil
+   (non-escaping-let-function-names node)))
 
 
 (defun function-declarations (node env)

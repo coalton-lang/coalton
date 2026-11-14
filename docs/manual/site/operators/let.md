@@ -22,6 +22,8 @@ weight: 160
 
 - `let` binds recursively and in parallel.
 - It can introduce local helper functions as well as simple values.
+- Non-escaping local functions bound by `let` or `let*` (whose names are only called directly within their lexical scope and not returned, stored, or captured by an escaping closure) are declared `dynamic-extent`, allowing the Lisp compiler to stack-allocate their closures.
+- In release mode, a locally bound `coalton/cell:Cell` created with `cell:new` that does not escape its lexical scope (used only through `cell:read`, `cell:write!`, `cell:swap!`, and inlined helpers such as `cell:update!`, `cell:increment!`, and `cell:decrement!`, including inside `for` loops, `match`/`if` branches, and non-escaping local functions) is unboxed into a typed mutable lexical variable with no heap allocation.
 - If you need top-to-bottom binding order, use `let*`.
 - Bound variables may be declared with `declare`.
 - Multiple values may be destructured with `values`.

@@ -37,12 +37,23 @@
 
   (repr :native cell-internal)
   (define-type (Cell :a)
-    "Internally mutable cell")
+    "Internally mutable cell.
+
+In release mode, a locally bound `Cell :a` created with `new` that does not
+escape its lexical scope (i.e., is used only with `read`, `write!`, `swap!`, and
+operations that inline to them such as `update!`, `update-swap!`, `increment!`,
+`decrement!`, and `push!`, including inside `for` loops, `match`/`if` branches,
+and non-escaping local functions) is unboxed into a typed mutable lexical
+variable with no heap allocation.")
 
   (inline)
   (declare new (:a -> Cell :a))
   (define (new data)
-    "Create a new mutable cell containing `data`."
+    "Create a new mutable cell containing `data`.
+
+In release mode, if the resulting `Cell` is bound locally and never escapes, the
+compiler eliminates the `cell-internal` allocation and stores `data` in a typed
+local lexical variable."
     (lisp (-> (Cell :a)) (data)
       (make-cell-internal :inner data)))
 
@@ -53,6 +64,7 @@
     (lisp (-> :a) (cel)
       (cell-internal-inner cel)))
 
+  (inline)
   (declare swap! ((Cell :a) * :a -> :a))
   (define (swap! cel data)
     "Replace the value of a mutable cell `cel` with a new value `data`,
@@ -76,6 +88,7 @@ value."
     "Apply `f` to the contents of `cel`, storing and returning the result."
     (write! cel (f (read cel))))
 
+  (inline)
   (declare update-swap! ((:a -> :a) * (Cell :a) -> :a))
   (define (update-swap! f cel)
     "Apply `f` to the contents of `cel`, swapping the result for the old
@@ -83,6 +96,7 @@ value."
     (swap! cel (f (read cel))))
 
 ;;; operators on cells of lists
+  (inline)
   (declare push! ((Cell (List :elt)) * :elt -> List :elt))
   (define (push! cel new-elt)
     "Push `new-elt` onto the start of the list in `cel`."

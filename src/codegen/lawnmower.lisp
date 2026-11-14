@@ -165,7 +165,8 @@ push OUTER-BRANCHES into the inner match branches."
            (values (or null node-local-variable node-global-variable) &optional))
   (let ((name (car binding))
         (expr (cdr binding)))
-    (when (and (stable-alias-target-p expr)
+    (when (and (not (member name *loop-step-variables* :test #'eq))
+               (stable-alias-target-p expr)
                (not (eq name (node-variable-value expr))))
       expr)))
 
@@ -223,6 +224,15 @@ The replacement is skipped inside nested binders for the same name."
         (unless (member name bound-variables :test #'eq)
           (alexandria:when-let ((target (alias-substitution-target name aliases)))
             (copy-node target (node-type node))))))
+    (action (:after node-setq node bound-variables)
+      (let ((name (node-setq-name node)))
+        (unless (member name bound-variables :test #'eq)
+          (alexandria:when-let ((target (alias-substitution-target name aliases)))
+            (when (node-local-variable-p target)
+              (make-node-setq
+               :type (node-type node)
+               :name (node-variable-value target)
+               :expr (node-setq-expr node)))))))
     (action (:after node-lisp node bound-variables)
       (let ((new-vars
               (loop :for (lisp-var . coalton-var) :in (node-lisp-vars node)
@@ -755,7 +765,8 @@ Returns a status keyword and a replacement body. Status is one of:
        (values (copy-node expr (node-type node)) t))
 
       ;; (bind x y body[x]) -> body[y]
-      ((and (stable-alias-target-p expr)
+      ((and (not (member name *loop-step-variables* :test #'eq))
+            (stable-alias-target-p expr)
             (not (eq name (node-variable-value expr)))
             (alias-bind-safe-p name (node-variable-value expr) body))
        (values
@@ -766,13 +777,15 @@ Returns a status keyword and a replacement body. Status is one of:
       ((let-bound-match-scrutinee-p name body)
        (values (match-with-expr body expr) t))
 
-      ;; (bind f (fn (...) body) (f args...)) -> ((fn (...) body) args...)
+      ;; (bind f (fn (...) body) ... (f args...) ...) -> ... ((fn (...) body) args...) ...
       ((and (node-abstraction-p expr)
+            (null (node-abstraction-keyword-params expr))
             (single-value-function-p expr)
-            (not (member name (node-variables expr) :test #'eq)))
-       (alexandria:if-let ((application (immediate-bound-application-p name body)))
-         (values (application-with-rator application expr) t)
-         (values node nil)))
+            (not (member name (node-variables expr) :test #'eq))
+            (null (intersection (node-variables expr) *loop-step-variables* :test #'eq))
+            (= 1 (direct-application-occurrence-count body name))
+            (= 1 (node-name-occurrence-count body name)))
+       (values (replace-direct-applications body name expr) t))
 
       (t
        (values node nil)))))
@@ -886,21 +899,33 @@ Returns a status keyword and a replacement body. Status is one of:
          (t
           (values node nil)))))))
 
+(defun collect-mutated-variables (node)
+  (declare (type node node)
+           (values parser:identifier-list &optional))
+  (let ((mutated nil))
+    (traverse
+     node
+     (list
+      (action (:before node-for node)
+        (dolist (binding (node-for-bindings node))
+          (when (node-for-binding-step binding)
+            (pushnew (node-for-binding-name binding) mutated :test #'eq)))
+        (values))
+      (action (:before node-setq node)
+        (pushnew (node-setq-name node) mutated :test #'eq)
+        (values))))
+    mutated))
+
 (defun lawnmow (node)
   "Simplify administrative AST forms left behind by optimization passes."
   (declare (type node node)
            (values node boolean &optional))
   (let ((changed? nil)
-        (*loop-step-variables* nil))
+        (*loop-step-variables* (collect-mutated-variables node)))
     (values
      (traverse
       node
       (list
-       (action (:before node-for node)
-         (dolist (binding (node-for-bindings node))
-           (when (node-for-binding-step binding)
-             (pushnew (node-for-binding-name binding) *loop-step-variables* :test #'eq)))
-         (values))
        (action (:after node-let node)
          (multiple-value-bind (new-node new-changed?) (maybe-collapse-alias-let node)
            (when new-changed?
