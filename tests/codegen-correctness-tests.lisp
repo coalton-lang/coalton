@@ -1046,5 +1046,76 @@
           (is (= 7 (ast:node-literal-value binding-val)))))
       (is (= 17 (codegen-test-eval "(lisp-rel-const 10)"))))))
 
+(defun count-tree-occurrences (target form)
+  (cond
+    ((equal target form) 1)
+    ((consp form)
+     (+ (count-tree-occurrences target (car form))
+        (count-tree-occurrences target (cdr form))))
+    (t 0)))
+
+(deftest codegen-match-decision-dag ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(repr :enum)
+      (define-type RBColor RBRed RBBlack)
+      (define-type (RBTree :a)
+        RBEmpty
+        (RBNode RBColor (RBTree :a) :a (RBTree :a)))
+      (declare rb-classify (RBTree Integer -> Integer))
+      (define (rb-classify t)
+        (match t
+          ((RBNode (RBBlack) (RBNode (RBRed) (RBNode (RBRed) _ x _) y _) z _)
+           (+ x (+ y z)))
+          ((RBNode (RBBlack) (RBNode (RBRed) _ x (RBNode (RBRed) _ y _)) z _)
+           (+ x (+ y z)))
+          ((RBNode (RBBlack) _ x (RBNode (RBRed) (RBNode (RBRed) _ y _) z _))
+           (+ x (+ y z)))
+          ((RBNode (RBBlack) _ x (RBNode (RBRed) _ y (RBNode (RBRed) _ z _)))
+           (+ x (+ y z)))
+          ((RBNode (RBBlack) (RBNode (RBBlack) _ x _) y (RBNode (RBBlack) _ z _))
+           (+ x (+ y z)))
+          ((RBNode _ _ x _)
+           x)
+          ((RBEmpty)
+           0)))")
+    (let* ((node (tc:lookup-code entry:*global-environment* (intern "RB-CLASSIFY")))
+           (lisp-form (coalton-impl/codegen/codegen-expression:codegen-expression
+                       (ast:node-abstraction-subexpr node)
+                       entry:*global-environment*))
+           (rbnode-class (intern "RBTREE/RBNODE"))
+           (slot-0-reader (intern "RBTREE/RBNODE-_0")))
+      ;; The root constructor test and root color reader are emitted only once,
+      ;; and the right-child Red-Red DAG subtree is shared across left-child
+      ;; failure paths rather than duplicated across all 7 branches.
+      (is (= 8 (count-tree-occurrences `(quote ,rbnode-class) lisp-form)))
+      (is (= 8 (count-tree-occurrences slot-0-reader lisp-form))))
+    (is (= 0 (codegen-test-eval "(rb-classify RBEmpty)")))
+    (is (= 90 (codegen-test-eval
+               "(let ((b (RBNode RBBlack RBEmpty 10 RBEmpty))
+                      (r (RBNode RBRed RBEmpty 20 RBEmpty)))
+                  (rb-classify (RBNode RBBlack (RBNode RBRed r 30 b) 40 b)))")))
+    (is (= 90 (codegen-test-eval
+               "(let ((b (RBNode RBBlack RBEmpty 10 RBEmpty))
+                      (r (RBNode RBRed RBEmpty 20 RBEmpty)))
+                  (rb-classify (RBNode RBBlack (RBNode RBRed b 30 r) 40 b)))")))
+    ;; When the left child is Red with Black children, the match must still test
+    ;; the right child for Red-Red violations via the shared DAG join node.
+    (is (= 110 (codegen-test-eval
+                "(let ((b (RBNode RBBlack RBEmpty 10 RBEmpty))
+                       (r (RBNode RBRed RBEmpty 20 RBEmpty)))
+                   (rb-classify (RBNode RBBlack (RBNode RBRed b 30 b) 40 (RBNode RBRed r 50 b))))")))
+    (is (= 110 (codegen-test-eval
+                "(let ((b (RBNode RBBlack RBEmpty 10 RBEmpty))
+                       (r (RBNode RBRed RBEmpty 20 RBEmpty)))
+                   (rb-classify (RBNode RBBlack (RBNode RBRed b 30 b) 40 (RBNode RBRed b 50 r))))")))
+    (is (= 60 (codegen-test-eval
+               "(let ((b (RBNode RBBlack RBEmpty 10 RBEmpty)))
+                  (rb-classify (RBNode RBBlack b 40 b)))")))
+    (is (= 40 (codegen-test-eval
+               "(let ((b (RBNode RBBlack RBEmpty 10 RBEmpty)))
+                  (rb-classify (RBNode RBRed b 40 b)))")))))
+
+
 
 
