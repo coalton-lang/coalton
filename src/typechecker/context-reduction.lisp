@@ -107,8 +107,7 @@ Returns (PREDS FOUNDP)"
 (defun reduce-context (env preds subs)
   (when (endp preds)
     (return-from reduce-context nil))
-  (let ((env (if subs (apply-substitution subs env) env))
-        (preds (apply-substitution subs preds)))
+  (let ((preds (apply-substitution subs preds)))
     (simplify-context
      (lambda (preds pred)
        (super-entail env preds pred))
@@ -410,11 +409,13 @@ the type variables of the class D.
           :with preds      := (expand preds)
           :with subs       := nil
           :for pred :in preds
+          :for applied-pred := (apply-substitution subs pred)
+          :for applied-expr-preds := (apply-substitution subs expr-preds)
           :for new-subs :=
-            (if (entail env expr-preds pred)
+            (if (entail env applied-expr-preds applied-pred)
                 '()
-                (fundep-entail% env expr-preds pred known-tyvars))
-          :do (setf subs (compose-substitution-lists subs new-subs))
+                (fundep-entail% env applied-expr-preds applied-pred known-tyvars))
+          :do (setf subs (compose-substitution-lists new-subs subs))
           :finally (return subs))))
 
 (defun fundep-entail% (env expr-preds pred known-tyvars)

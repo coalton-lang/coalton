@@ -57,7 +57,7 @@
     (unless (eq :value (tc:name-entry-type to-name-entry))
       (tc-error "Invalid specialization"
                 (tc-note (parser:toplevel-specialize-to specialize)
-                         "must be a function or variable, not a ~A" (tc:name-entry-type from-name-entry))))
+                         "must be a function or variable, not a ~A" (tc:name-entry-type to-name-entry))))
 
     (let ((from-qual-ty (tc:fresh-inst from-ty))
           (to-qual-ty (tc:fresh-inst to-ty)))
