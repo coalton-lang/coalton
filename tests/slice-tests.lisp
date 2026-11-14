@@ -178,3 +178,27 @@
                                             (Slice-Eq-Probe 3))))))
       (is (/= a (slice:new 0 3 other)))
       (is (== 1 (cell:read slice-eq-probe-comparisons))))
+
+(define-test test-slice-collect-with-oversized-hint ()
+  ;; A size hint is only an upper bound: TAKE! 3 over UP-TO 1 reports 3 but
+  ;; yields one element. COLLECT! preallocates from that hint, so the backing
+  ;; vector has spare capacity. The resulting Slice must expose only the
+  ;; elements actually collected.
+  (let s = (the (slice:Slice Integer)
+                (iter:collect! (iter:take! 3 (iter:up-to 1)))))
+    (is (== 1 (slice:length s)))
+    (is (== (Some 0) (slice:index 0 s)))
+    (is (== None (slice:index 1 s)))
+    (is (== (make-list 0)
+            (the (List Integer) (iter:collect! (iter:into-iter s)))))
+    ;; An exact hint must still produce the full length.
+    (let t = (the (slice:Slice Integer)
+                  (iter:collect! (iter:take! 3 (iter:up-to 3)))))
+      (is (== 3 (slice:length t)))
+      (is (== (make-list 0 1 2)
+              (the (List Integer) (iter:collect! (iter:into-iter t)))))
+    ;; An empty iterator with an oversized hint yields an empty Slice.
+    (let e = (the (slice:Slice Integer)
+                  (iter:collect! (iter:take! 0 (iter:up-to 1)))))
+      (is (== 0 (slice:length e)))
+      (is (== None (slice:index 0 e))))

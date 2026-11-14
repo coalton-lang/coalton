@@ -72,7 +72,7 @@
   (define (length s)
     "Returns the length of `s`."
     (lisp (-> UFix) (s)
-      (cl:array-dimension s 0)))
+      (cl:length s)))
 
   (inline)
   (declare set! (UFix * :a * (Slice :a) -> Void))
