@@ -938,4 +938,33 @@
                    "(== (Tuple 1010.0f0 2.0f0) (call-spec-in-rank2 5.0f0))"))))
     (is (= 8.0f0 (codegen-test-eval "(call-eval-pair 4.0f0)")))))
 
+(deftest codegen-toplevel-values-translate-to-global-variables ()
+  (with-codegen-test-environment
+    (codegen-test-compile
+     "(declare global-offset Integer)
+      (define global-offset 10)
+      (declare get-global-offset (Void -> Integer))
+      (define (get-global-offset)
+        global-offset)
+      (declare propagated-boolean (Void -> Boolean))
+      (define (propagated-boolean)
+        (let ((b True))
+          b))")
+    (let ((body (ast:node-abstraction-subexpr
+                 (tc:lookup-code entry:*global-environment*
+                                 (intern "GET-GLOBAL-OFFSET")))))
+      (is (ast:node-global-variable-p body))
+      (is (eq (intern "GLOBAL-OFFSET") (ast:node-variable-value body))))
+    (let ((body (ast:node-abstraction-subexpr
+                 (tc:lookup-code entry:*global-environment*
+                                 (intern "PROPAGATED-BOOLEAN")))))
+      (is (ast:node-global-variable-p body))
+      (is (eq 'coalton:True (ast:node-variable-value body)))
+      (is (equal ''t
+                 (coalton-impl/codegen/codegen-expression:codegen-expression
+                  body
+                  entry:*global-environment*))))
+    (is (= 10 (codegen-test-eval "(get-global-offset)")))
+    (is (eq coalton:True (codegen-test-eval "(propagated-boolean)")))))
+
 
