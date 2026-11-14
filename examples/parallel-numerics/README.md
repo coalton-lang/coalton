@@ -1,6 +1,6 @@
 # Parallel numerical simulations
 
-Three physics simulations and a path tracer, written in Coalton and
+Four physics simulations and a path tracer, written in Coalton and
 parallelized with [`coalton/threads`](../../threads/):
 
 - [`fdtd.ct`](fdtd.ct): electromagnetic waves, by the finite-difference
@@ -10,6 +10,10 @@ parallelized with [`coalton/threads`](../../threads/):
   direct summation and the leapfrog method.
 - [`ising.ct`](ising.ct): the two-dimensional Ising model of a
   ferromagnet, by Metropolis Monte Carlo.
+- [`optics.ct`](optics.ct): light rays in a two-dimensional graded-index
+  (GRIN) medium, by fourth-order central differences and Yoshida's
+  fourth-order symplectic integrator. A beam emitted at the origin
+  traces elliptical orbits.
 - [`raytrace.ct`](raytrace.ct): Monte Carlo path tracing of a scene of
   spheres, with the renderer of [`raytrace`](../raytrace/).
 
@@ -29,14 +33,16 @@ Make this checkout discoverable through ASDF, and start a Lisp with
 ```
 
 This runs every example with its default parameters and writes images
-of the final electric field (`fdtd.pgm`) and spins (`ising.pgm`), and the
-rendered picture (`raytrace.ppm`). Each example can also run alone, with
-other parameters:
+of the final electric field (`fdtd.pgm`) and spins (`ising.pgm`), the
+ray trajectories (`optics.ppm`), and the rendered picture
+(`raytrace.ppm`). Each example can also run alone, with other
+parameters:
 
 ```lisp
 (coalton-parallel-numerics:run-fdtd :size 2048 :steps 2000 :image #p"/tmp/fdtd.pgm")
 (coalton-parallel-numerics:run-nbody :bodies 16384 :steps 5)
 (coalton-parallel-numerics:run-ising :size 4096 :sweeps 100 :temperature 2.269d0)
+(coalton-parallel-numerics:run-optics :rays 16384 :steps 2000 :image #p"/tmp/optics.ppm")
 (coalton-parallel-numerics:run-raytrace :width 1280 :height 720 :samples 64
                                         :image #p"/tmp/raytrace.ppm")
 ```
@@ -55,13 +61,14 @@ workers:
 | FDTD, 1024×1024 grid, 1000 steps | 2.22 s | 0.42 s | 5.2x |
 | N-body, 8192 bodies, 10 steps | 1.83 s | 0.13 s | 13.9x |
 | Ising, 2048×2048 lattice, 200 sweeps | 4.99 s | 0.31 s | 16.0x |
+| GRIN optics, 16384 rays, 2000 steps | 2.21 s | 0.20 s | 11.1x |
 | Path tracing, 640×360 pixels, 16 samples per pixel | 2.33 s | 0.76 s | 3.1x |
 
-The N-body and Ising simulations do a lot of arithmetic for each value
-they read from memory, and their speedups approach the number of
-cores. The FDTD simulation does little arithmetic per value: each time
-step streams all the fields through memory twice, so it is limited by
-memory bandwidth. A single core can already use a good part of the
+The N-body, Ising, and GRIN optics simulations do a lot of arithmetic
+for each value they read from memory, and their speedups approach the
+number of cores. The FDTD simulation does little arithmetic per value:
+each time step streams all the fields through memory twice, so it is
+limited by memory bandwidth. A single core can already use a good part of the
 machine's memory bandwidth, so more cores help less. Storing the fields
 as `F32` rather than `F64`, as FDTD codes commonly do, halves the
 traffic.
@@ -79,7 +86,7 @@ worker per core, with `COALTON_NUM_THREADS=16`, gives 4.4x.
 ## How the parallelism is expressed
 
 The kernels of each simulation are ordinary sequential loops over a
-range of rows, or of bodies. For example, this advances the magnetic
+range of rows, rays, or bodies. For example, this advances the magnetic
 field in rows `lo` to `hi` of the grid:
 
 ```lisp
@@ -104,8 +111,9 @@ only updated once the magnetic field is complete. Within a loop, the
 chunks are independent: the magnetic field is computed from the electric
 field alone and vice versa. Likewise, a body's acceleration depends
 only on the positions, an Ising spin's update only on its neighbors,
-which have the other color of a checkerboard, and a row of the picture
-only on the scene.
+which have the other color of a checkerboard, a light ray's trajectory
+only on the refractive index field, and a row of the picture only on
+the scene.
 
 Because every value is computed by the same operations in the same order
 however the work is divided, the parallel results are identical to the
@@ -114,6 +122,6 @@ with its random numbers too: each update draws a number from a generator
 keyed by the sweep and the site (SplitMix64), rather than from a stream
 shared between threads. Likewise, each row of the path tracer draws its
 random numbers from a stream of its own, seeded from the frame's seed
-and the row's number. The N-body potential energy is a parallel sum,
-which `par:map-reduce-chunks` computes reproducibly when given a fixed
-`:grain`.
+and the row's number. The N-body potential energy and the GRIN optics
+error norms are parallel reductions, which `par:map-reduce-chunks`
+computes reproducibly when given a fixed `:grain`.
