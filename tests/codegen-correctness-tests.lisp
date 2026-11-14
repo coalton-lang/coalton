@@ -941,20 +941,20 @@
 (deftest codegen-toplevel-values-translate-to-global-variables ()
   (with-codegen-test-environment
     (codegen-test-compile
-     "(declare global-offset Integer)
-      (define global-offset 10)
-      (declare get-global-offset (Void -> Integer))
-      (define (get-global-offset)
-        global-offset)
+     "(declare global-pair (Tuple Integer Integer))
+      (define global-pair (Tuple 10 20))
+      (declare get-global-pair (Void -> (Tuple Integer Integer)))
+      (define (get-global-pair)
+        global-pair)
       (declare propagated-boolean (Void -> Boolean))
       (define (propagated-boolean)
         (let ((b True))
           b))")
     (let ((body (ast:node-abstraction-subexpr
                  (tc:lookup-code entry:*global-environment*
-                                 (intern "GET-GLOBAL-OFFSET")))))
+                                 (intern "GET-GLOBAL-PAIR")))))
       (is (ast:node-global-variable-p body))
-      (is (eq (intern "GLOBAL-OFFSET") (ast:node-variable-value body))))
+      (is (eq (intern "GLOBAL-PAIR") (ast:node-variable-value body))))
     (let ((body (ast:node-abstraction-subexpr
                  (tc:lookup-code entry:*global-environment*
                                  (intern "PROPAGATED-BOOLEAN")))))
@@ -964,7 +964,87 @@
                  (coalton-impl/codegen/codegen-expression:codegen-expression
                   body
                   entry:*global-environment*))))
-    (is (= 10 (codegen-test-eval "(get-global-offset)")))
-    (is (eq coalton:True (codegen-test-eval "(propagated-boolean)")))))
+    (codegen-test-compile
+     "(repr :enum)
+      (define-type Direction North South)
+      (declare propagated-direction (Void -> Direction))
+      (define (propagated-direction)
+        (let ((d North))
+          d))")
+    (let ((body (ast:node-abstraction-subexpr
+                 (tc:lookup-code entry:*global-environment*
+                                 (intern "PROPAGATED-DIRECTION")))))
+      (is (ast:node-global-variable-p body))
+      (is (eq (intern "NORTH") (ast:node-variable-value body)))
+      (is (equal `(quote ,(intern "DIRECTION/NORTH"))
+                 (coalton-impl/codegen/codegen-expression:codegen-expression
+                  body
+                  entry:*global-environment*))))
+    (is (eq coalton:True (codegen-test-eval "(== (get-global-pair) (Tuple 10 20))")))
+    (is (eq coalton:True (codegen-test-eval "(propagated-boolean)")))
+    (is (eq (intern "DIRECTION/NORTH") (codegen-test-eval "(propagated-direction)")))))
+
+(deftest codegen-constant-propagation-bind-and-release-globals ()
+  (with-codegen-test-environment
+    ;; Sequential `let x = ...` (node-bind) and constant `node-lisp` forms propagate.
+    (codegen-test-compile
+     "(declare sequential-bind-const (Void -> Integer))
+      (define (sequential-bind-const)
+        (let x = 42)
+        x)
+      (declare constant-lisp-form (Void -> Integer))
+      (define (constant-lisp-form)
+        (let ((x (lisp (-> Integer) () 99)))
+          x))")
+    (let ((bind-body (ast:node-abstraction-subexpr
+                      (tc:lookup-code entry:*global-environment*
+                                      (intern "SEQUENTIAL-BIND-CONST"))))
+          (lisp-body (ast:node-abstraction-subexpr
+                      (tc:lookup-code entry:*global-environment*
+                                      (intern "CONSTANT-LISP-FORM")))))
+      (is (ast:node-literal-p bind-body))
+      (is (= 42 (ast:node-literal-value bind-body)))
+      (is (ast:node-lisp-p lisp-body))
+      (is (equal '(99) (ast:node-lisp-form lisp-body))))
+    ;; In development mode, top-level scalar bindings remain global variable reads
+    ;; so interactive redefinition is observed by callers.
+    (let ((*features* (remove ':coalton-release *features*)))
+      (codegen-test-compile
+       "(declare dev-const Integer)
+        (define dev-const 7)
+        (declare read-dev-const (Void -> Integer))
+        (define (read-dev-const)
+          dev-const)")
+      (let ((body (ast:node-abstraction-subexpr
+                   (tc:lookup-code entry:*global-environment*
+                                   (intern "READ-DEV-CONST")))))
+        (is (ast:node-global-variable-p body))))
+    ;; In release mode, top-level scalar constants propagate into callers and
+    ;; `lisp` variable bindings.
+    (let ((*features* (cons ':coalton-release *features*)))
+      (codegen-test-compile
+       "(declare rel-const Integer)
+        (define rel-const 7)
+        (declare read-rel-const (Void -> Integer))
+        (define (read-rel-const)
+          rel-const)
+        (declare lisp-rel-const (Integer -> Integer))
+        (define (lisp-rel-const x)
+          (lisp (-> Integer) (x rel-const)
+            (cl:+ x rel-const)))")
+      (let ((body (ast:node-abstraction-subexpr
+                   (tc:lookup-code entry:*global-environment*
+                                   (intern "READ-REL-CONST"))))
+            (lisp-caller-body (ast:node-abstraction-subexpr
+                               (tc:lookup-code entry:*global-environment*
+                                               (intern "LISP-REL-CONST")))))
+        (is (ast:node-literal-p body))
+        (is (= 7 (ast:node-literal-value body)))
+        (is (ast:node-let-p lisp-caller-body))
+        (let ((binding-val (cdar (ast:node-let-bindings lisp-caller-body))))
+          (is (ast:node-literal-p binding-val))
+          (is (= 7 (ast:node-literal-value binding-val)))))
+      (is (= 17 (codegen-test-eval "(lisp-rel-const 10)"))))))
+
 
 
