@@ -37,3 +37,7 @@ weight: 270
   :until (>= i 10)
   (show i))
 ```
+
+## Other Notes
+
+In release mode, a local `coalton/cell:Cell` accumulator created with `cell:new` (either outside the loop or as an invariant `for` binding `(acc (cell:new init) acc)`) and mutated or read inside a `for` loop (via `cell:read`, `cell:write!`, `cell:swap!`, `cell:update!`, `cell:increment!`, `cell:decrement!`, `cell:push!`, or `cell:pop!`) is unboxed into a typed mutable lexical variable when the `Cell` does not escape its defining function. See [Performance and Optimization](/manual/topics/performance-and-optimization/).

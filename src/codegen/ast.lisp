@@ -171,9 +171,15 @@
    #:node-dynamic-extent-body           ; READER
    #:node-bind                          ; STRUCT
    #:make-node-bind                     ; CONSTRUCTOR
+   #:node-bind-p                        ; FUNCTION
    #:node-bind-name                     ; READER
    #:node-bind-expr                     ; READER
    #:node-bind-body                     ; READER
+   #:node-setq                          ; STRUCT
+   #:make-node-setq                     ; CONSTRUCTOR
+   #:node-setq-p                        ; FUNCTION
+   #:node-setq-name                     ; READER
+   #:node-setq-expr                     ; READER
    #:node-values                        ; STRUCT
    #:make-node-values                   ; CONSTRUCTOR
    #:node-values-p                      ; FUNCTION
@@ -522,6 +528,11 @@ thrown, before unwinding. Branches of `catch` run after unwinding."
   (name (util:required 'name) :type parser:identifier :read-only t)
   (expr (util:required 'expr) :type node              :read-only t)
   (body (util:required 'body) :type node              :read-only t))
+
+(defstruct (node-setq (:include node))
+  "Assignment to a mutable local lexical variable"
+  (name (util:required 'name) :type parser:identifier :read-only t)
+  (expr (util:required 'expr) :type node              :read-only t))
 
 (defstruct (node-values (:include node))
   "Produce multiple values."

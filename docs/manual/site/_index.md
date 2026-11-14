@@ -19,6 +19,7 @@ an error or or something is unclear, please fix it and submit a PR.
 - [Configuring Coalton](/manual/topics/configuring-coalton/)
 - [Macros](/manual/topics/macros/)
 - [Lisp Interop](/manual/topics/lisp-interop/)
+- [Performance and Optimization](/manual/topics/performance-and-optimization/)
 - [Debugging Operators](/manual/topics/debugging/)
 - [Parallel Programming](/manual/topics/parallel-programming/)
 - [Standard Library Reference](/reference/)

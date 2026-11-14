@@ -38,3 +38,7 @@ weight: 280
   :until (> x 10)
   (show x))
 ```
+
+## Other Notes
+
+In release mode, a local `coalton/cell:Cell` accumulator created with `cell:new` and mutated or read inside a `for*` loop is unboxed into a typed mutable lexical variable when the `Cell` does not escape its defining function. See [Performance and Optimization](/manual/topics/performance-and-optimization/).

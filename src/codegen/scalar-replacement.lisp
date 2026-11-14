@@ -1,17 +1,21 @@
 (defpackage #:coalton-impl/codegen/scalar-replacement
   (:documentation
    "Scalar replacement eliminates locally constructed immutable structs and
-algebraic data types used only through known field readers or pattern matching.
-It binds constructor arguments (and, for branching sum-type initializers, an
-unboxed constructor tag) to typed scalar locals and replaces reader calls and
-matches with those locals, exposing the concrete field types to the Lisp
-compiler without allocating or boxing the enclosing object.
+algebraic data types used only through known field readers or pattern matching,
+and unboxes locally constructed `coalton/cell:Cell` bindings used only through
+`read`, `write!`, and `swap!`. It binds constructor arguments (and, for
+branching sum-type initializers, an unboxed constructor tag) or cell contents to
+typed scalar locals and replaces reader calls, matches, and cell accesses with
+those locals, exposing the concrete field types to the Lisp compiler without
+allocating or boxing the enclosing object.
 
 The optimizer runs this pass in release mode after inlining and direct-call
 conversion. Constructor arguments still evaluate exactly once, in order,
-including unused fields. Recursive bindings and objects passed to remaining
-calls, returned, stored, captured by closures, or exposed to Lisp retain their
-allocation. The pass does not change function calling conventions.")
+including unused fields. Non-escaping local functions (`flet`/`labels`) may
+read and mutate unboxed cells. Recursive bindings and objects passed to
+remaining calls, returned, stored, captured by escaping closures, or exposed to
+arbitrary Lisp forms retain their allocation. The pass does not change function
+calling conventions.")
   (:use
    #:cl
    #:coalton-impl/codegen/pattern
@@ -19,12 +23,20 @@ allocation. The pass does not change function calling conventions.")
   (:import-from
    #:coalton-impl/codegen/traverse
    #:action
-   #:traverse)
+   #:*traverse*
+   #:traverse
+   #:traverse-with-binding-list)
   (:import-from
    #:coalton-impl/codegen/transformations
-   #:node-free-p)
+   #:node-abstraction-bound-variables
+   #:node-free-p
+   #:non-capturing-higher-order-rator-p
+   #:non-escaping-bind-function-p
+   #:non-escaping-let-function-names)
   (:local-nicknames
+   (#:parser #:coalton-impl/parser)
    (#:rt #:coalton-impl/runtime)
+   (#:util #:coalton-impl/util)
    (#:tc #:coalton-impl/typechecker))
   (:export
    #:scalar-replace))
@@ -45,6 +57,538 @@ local constructors can be scalar-replaced."
                         '(coalton:Optional coalton:List)
                         :test #'eq)
                 t))))
+
+(defun cell-symbol (name)
+  (declare (type simple-string name)
+           (values (or null symbol) &optional))
+  (alexandria:when-let ((pkg (find-package "COALTON/CELL")))
+    (find-symbol name pkg)))
+
+(defun cell-type-element-type (type)
+  "If TYPE is `(coalton/cell:Cell :a)`, return `:a`; otherwise return NIL."
+  (declare (type tc:ty type)
+           (values (or null tc:ty) &optional))
+  (let ((cell-sym (cell-symbol "CELL")))
+    (when (and cell-sym
+               (tc:tapp-p type)
+               (tc:tycon-p (tc:tapp-from type))
+               (eq cell-sym (tc:tycon-name (tc:tapp-from type))))
+      (tc:tapp-to type))))
+
+(defun make-coalton-variable-node (type name env)
+  "Construct a variable node for NAME with TYPE in ENV."
+  (declare (type tc:ty type)
+           (type parser:identifier name)
+           (type tc:environment env)
+           (values node-variable &optional))
+  (cond
+    ((util:dynamic-variable-name-p name)
+     (make-node-dynamic-variable :type type :value name))
+    ((and (symbol-package name)
+          (or (member name '(coalton:True coalton:False coalton:Nil coalton:Unit) :test #'eq)
+              (tc:lookup-name env name :no-error t)
+              (tc:lookup-function env name :no-error t)
+              (tc:lookup-instance-by-codegen-sym env name :no-error t)))
+     (make-node-global-variable :type type :value name))
+    (t
+     (make-node-local-variable :type type :value name))))
+
+(defun lisp-cell-allocation-var (node)
+  "If NODE is the inlined `(make-cell-internal :inner data)` form from
+`coalton/cell:new`, return the Coalton variable symbol supplying `data`."
+  (declare (type node node)
+           (values (or null parser:identifier) &optional))
+  (let ((make-cell-sym (cell-symbol "MAKE-CELL-INTERNAL")))
+    (when (and make-cell-sym
+               (node-lisp-p node)
+               (cell-type-element-type (node-type node))
+               (= 1 (length (node-lisp-vars node)))
+               (= 1 (length (node-lisp-form node))))
+      (let ((form (first (node-lisp-form node)))
+            (var-entry (first (node-lisp-vars node))))
+        (when (and (consp form)
+                   (= 3 (length form))
+                   (eq make-cell-sym (first form))
+                   (eq :inner (second form))
+                   (eq (car var-entry) (third form)))
+          (cdr var-entry))))))
+
+(defun constructed-cell-init (node env)
+  "If NODE constructs a fresh `coalton/cell:Cell`, return its initial value
+node and element type."
+  (declare (type node node)
+           (type tc:environment env)
+           (values (or null node) (or null tc:ty) &optional))
+  (let ((element-type (cell-type-element-type (node-type node))))
+    (when element-type
+      (cond
+        ;; (bind tmp init (lisp (make-cell-internal :inner tmp)))
+        ((and (node-bind-p node)
+              (eq (node-bind-name node)
+                  (lisp-cell-allocation-var (node-bind-body node))))
+         (values (node-bind-expr node) element-type))
+
+        ;; (let ((tmp init)) (lisp (make-cell-internal :inner tmp)))
+        ((and (node-let-p node)
+              (= 1 (length (node-let-bindings node)))
+              (let ((binding (first (node-let-bindings node))))
+                (and (eq (car binding)
+                         (lisp-cell-allocation-var (node-let-subexpr node)))
+                     (node-free-p (cdr binding) (list (car binding))))))
+         (values (cdar (node-let-bindings node)) element-type))
+
+        ;; Bare (lisp (make-cell-internal :inner var)) after alias elimination
+        ((lisp-cell-allocation-var node)
+         (values (make-coalton-variable-node
+                  element-type
+                  (lisp-cell-allocation-var node)
+                  env)
+                 element-type))
+
+        ;; Direct or indirect call to (coalton/cell:new init)
+        ((and (typep node '(or node-application node-direct-application))
+              (let ((new-sym (cell-symbol "NEW")))
+                (and new-sym
+                     (eq new-sym (node-rator-name node))))
+              (null (getf (node-properties node) :noinline))
+              (null (etypecase node
+                      (node-application (node-application-keyword-rands node))
+                      (node-direct-application (node-direct-application-keyword-rands node))))
+              (= 1 (length (node-rands node))))
+         (values (first (node-rands node)) element-type))
+
+        (t
+         (values nil nil))))))
+
+(defun cell-read-node-p (node name)
+  "Return true when NODE reads the cell bound to NAME."
+  (declare (type node node)
+           (type parser:identifier name)
+           (values boolean &optional))
+  (let ((inner-sym (cell-symbol "CELL-INTERNAL-INNER"))
+        (read-sym (cell-symbol "READ")))
+    (cond
+      ((and inner-sym
+            (node-lisp-p node)
+            (= 1 (length (node-lisp-vars node)))
+            (= 1 (length (node-lisp-form node))))
+       (let ((form (first (node-lisp-form node)))
+             (var-entry (first (node-lisp-vars node))))
+         (and (consp form)
+              (= 2 (length form))
+              (eq inner-sym (first form))
+              (eq (car var-entry) (second form))
+              (eq name (cdr var-entry)))))
+
+      ((and read-sym
+            (typep node '(or node-application node-direct-application))
+            (eq read-sym (node-rator-name node))
+            (null (getf (node-properties node) :noinline))
+            (null (etypecase node
+                    (node-application (node-application-keyword-rands node))
+                    (node-direct-application (node-direct-application-keyword-rands node))))
+            (= 1 (length (node-rands node))))
+       (let ((arg (first (node-rands node))))
+         (and (node-local-variable-p arg)
+              (eq name (node-variable-value arg)))))
+
+      (t
+       nil))))
+
+(defun cell-write-data-node (node name env)
+  "If NODE writes to the cell bound to NAME, return the value node being written."
+  (declare (type node node)
+           (type parser:identifier name)
+           (type tc:environment env)
+           (values (or null node) &optional))
+  (let ((inner-sym (cell-symbol "CELL-INTERNAL-INNER"))
+        (write-sym (cell-symbol "WRITE!")))
+    (cond
+      ((and inner-sym
+            (node-lisp-p node)
+            (= 2 (length (node-lisp-vars node)))
+            (= 1 (length (node-lisp-form node))))
+       (let ((form (first (node-lisp-form node)))
+             (vars (node-lisp-vars node)))
+         (when (and (consp form)
+                    (= 3 (length form))
+                    (eq 'cl:setf (first form))
+                    (consp (second form))
+                    (= 2 (length (second form)))
+                    (eq inner-sym (first (second form)))
+                    (symbolp (second (second form)))
+                    (symbolp (third form)))
+           (let ((cel-var (cdr (assoc (second (second form)) vars :test #'eq)))
+                 (data-var (cdr (assoc (third form) vars :test #'eq))))
+             (when (and cel-var
+                        data-var
+                        (eq name cel-var))
+               (make-coalton-variable-node (node-type node) data-var env))))))
+
+      ((and write-sym
+            (typep node '(or node-application node-direct-application))
+            (eq write-sym (node-rator-name node))
+            (null (getf (node-properties node) :noinline))
+            (null (etypecase node
+                    (node-application (node-application-keyword-rands node))
+                    (node-direct-application (node-direct-application-keyword-rands node))))
+            (= 2 (length (node-rands node))))
+       (let ((cel-arg (first (node-rands node)))
+             (data-arg (second (node-rands node))))
+         (when (and (node-local-variable-p cel-arg)
+                    (eq name (node-variable-value cel-arg)))
+           data-arg)))
+
+      (t
+       nil))))
+
+(defun cell-swap-replacement (node name value-var env)
+  "If NODE swaps the cell bound to NAME, return the replacement AST."
+  (declare (type node node)
+           (type parser:identifier name value-var)
+           (type tc:environment env)
+           (values (or null node) &optional))
+  (let ((inner-sym (cell-symbol "CELL-INTERNAL-INNER"))
+        (swap-sym (cell-symbol "SWAP!"))
+        (type (node-type node)))
+    (cond
+      ;; Inlined swap! form:
+      ;; (cl:let* ((old (cell-internal-inner cel)))
+      ;;   (cl:setf (cell-internal-inner cel) data)
+      ;;   old)
+      ((and inner-sym
+            (node-lisp-p node)
+            (= 2 (length (node-lisp-vars node)))
+            (= 1 (length (node-lisp-form node))))
+       (let ((form (first (node-lisp-form node)))
+             (vars (node-lisp-vars node)))
+         (when (and (consp form)
+                    (= 4 (length form))
+                    (eq 'cl:let* (first form))
+                    (consp (second form))
+                    (= 1 (length (second form)))
+                    (consp (first (second form)))
+                    (= 2 (length (first (second form)))))
+           (let ((old-sym (first (first (second form))))
+                 (read-form (second (first (second form))))
+                 (setf-form (third form))
+                 (ret-sym (fourth form)))
+             (when (and (symbolp old-sym)
+                        (eq old-sym ret-sym)
+                        (consp read-form)
+                        (= 2 (length read-form))
+                        (eq inner-sym (first read-form))
+                        (symbolp (second read-form))
+                        (consp setf-form)
+                        (= 3 (length setf-form))
+                        (eq 'cl:setf (first setf-form))
+                        (consp (second setf-form))
+                        (= 2 (length (second setf-form)))
+                        (eq inner-sym (first (second setf-form)))
+                        (eq (second read-form) (second (second setf-form)))
+                        (symbolp (third setf-form)))
+               (let ((cel-var (cdr (assoc (second read-form) vars :test #'eq)))
+                     (data-var (cdr (assoc (third setf-form) vars :test #'eq))))
+                 (when (and cel-var
+                            data-var
+                            (eq name cel-var))
+                   (let ((old-var (gensym "CELL-OLD-")))
+                     (make-node-bind
+                      :type type
+                      :name old-var
+                      :expr (make-node-local-variable :type type :value value-var)
+                      :body (make-node-seq
+                             :type type
+                             :nodes (list (make-node-setq
+                                           :type type
+                                           :name value-var
+                                           :expr (make-coalton-variable-node type data-var env))
+                                          (make-node-local-variable
+                                           :type type
+                                           :value old-var))))))))))))
+
+      ;; Uninlined (coalton/cell:swap! cel data)
+      ((and swap-sym
+            (typep node '(or node-application node-direct-application))
+            (eq swap-sym (node-rator-name node))
+            (null (getf (node-properties node) :noinline))
+            (null (etypecase node
+                    (node-application (node-application-keyword-rands node))
+                    (node-direct-application (node-direct-application-keyword-rands node))))
+            (= 2 (length (node-rands node))))
+       (let ((cel-arg (first (node-rands node)))
+             (data-arg (second (node-rands node))))
+         (when (and (node-local-variable-p cel-arg)
+                    (eq name (node-variable-value cel-arg)))
+           (let ((data-var (gensym "CELL-DATA-"))
+                 (old-var (gensym "CELL-OLD-")))
+             (make-node-bind
+              :type type
+              :name data-var
+              :expr (if (node-abstraction-p data-arg)
+                        (make-node-locally
+                         :type type
+                         :noinline-functions nil
+                         :type-check nil
+                         :subexpr data-arg)
+                        data-arg)
+              :body (make-node-bind
+                     :type type
+                     :name old-var
+                     :expr (make-node-local-variable :type type :value value-var)
+                     :body (make-node-seq
+                            :type type
+                            :nodes (list (make-node-setq
+                                          :type type
+                                          :name value-var
+                                          :expr (make-node-local-variable
+                                                 :type type
+                                                 :value data-var))
+                                         (make-node-local-variable
+                                          :type type
+                                          :value old-var)))))))))
+
+      (t
+       nil))))
+
+(defun cell-pop-replacement (node name value-var)
+  "If NODE calls `coalton/cell:pop!` on the cell bound to NAME, return the
+replacement `node-match` AST."
+  (declare (type node node)
+           (type parser:identifier name value-var)
+           (values (or null node) &optional))
+  (let ((pop-sym (cell-symbol "POP!")))
+    (when (and pop-sym
+               (typep node '(or node-application node-direct-application))
+               (eq pop-sym (node-rator-name node))
+               (null (getf (node-properties node) :noinline))
+               (null (etypecase node
+                       (node-application (node-application-keyword-rands node))
+                       (node-direct-application (node-direct-application-keyword-rands node))))
+               (= 1 (length (node-rands node))))
+      (let ((cel-arg (first (node-rands node))))
+        (when (and (node-local-variable-p cel-arg)
+                   (eq name (node-variable-value cel-arg))
+                   (tc:tapp-p (node-type node)))
+          (let* ((opt-type (node-type node))
+                 (elt-type (tc:tapp-to opt-type))
+                 (list-type (cell-type-element-type (node-type cel-arg)))
+                 (fst-var (gensym "CELL-FST-"))
+                 (rst-var (gensym "CELL-RST-")))
+            (when list-type
+              (make-node-match
+               :type opt-type
+               :expr (make-node-local-variable :type list-type :value value-var)
+               :branches
+               (list
+                (make-match-branch
+                 :pattern (make-pattern-constructor
+                           :type list-type
+                           :name 'coalton:Cons
+                           :patterns (list (make-pattern-var :type elt-type :name fst-var)
+                                           (make-pattern-var :type list-type :name rst-var)))
+                 :body (make-node-seq
+                        :type opt-type
+                        :nodes (list (make-node-setq
+                                      :type list-type
+                                      :name value-var
+                                      :expr (make-node-local-variable
+                                             :type list-type
+                                             :value rst-var))
+                                     (make-node-direct-application
+                                      :type opt-type
+                                      :properties nil
+                                      :rator-type (tc:make-function-type elt-type opt-type)
+                                      :rator 'coalton:Some
+                                      :rands (list (make-node-local-variable
+                                                    :type elt-type
+                                                    :value fst-var))))))
+                (make-match-branch
+                 :pattern (make-pattern-constructor
+                           :type list-type
+                           :name 'coalton:Nil
+                           :patterns nil)
+                 :body (make-node-global-variable
+                        :type opt-type
+                        :value 'coalton:None)))))))))))
+
+(defvar *cell-non-escaping-functions* nil
+  "Local function identifiers proven not to escape during cell replacement.")
+
+(defun replace-cell-accesses (body name value-var env)
+  "Replace known reads, writes, swaps, and pops of cell NAME with lexical
+variable VALUE-VAR, returning NIL if any other use of NAME remains.
+
+Allow references inside non-escaping local functions (`flet`/`labels`),
+immediate anonymous lambda applications, loops, and branches, while leaving
+escaping closures untouched so the final `node-free-p` check rejects cells
+captured by escaping closures."
+  (let ((*cell-non-escaping-functions* nil))
+    (labels ((unshadowed-p (bound-variables)
+               (not (member name bound-variables :test #'eq)))
+             (rewrite-non-escaping-abstraction (abstraction bound-variables)
+               (make-node-abstraction
+                :type (node-type abstraction)
+                :vars (node-abstraction-vars abstraction)
+                :keyword-params (node-abstraction-keyword-params abstraction)
+                :subexpr (funcall *traverse*
+                                  (node-abstraction-subexpr abstraction)
+                                  (append (node-abstraction-bound-variables abstraction)
+                                          bound-variables))))
+             (rewrite-call-rands (rator-name rands keyword-rands bound-variables)
+               (if (and (non-capturing-higher-order-rator-p rator-name)
+                        (null keyword-rands)
+                        (= 2 (length rands))
+                        (node-abstraction-p (first rands)))
+                   (list (rewrite-non-escaping-abstraction (first rands) bound-variables)
+                         (funcall *traverse* (second rands) bound-variables))
+                   (mapcar (lambda (rand)
+                             (funcall *traverse* rand bound-variables))
+                           rands)))
+             (rewrite-keyword-rands (keyword-rands bound-variables)
+               (mapcar (lambda (arg)
+                         (make-node-application-keyword-arg
+                          :keyword (node-application-keyword-arg-keyword arg)
+                          :value (funcall *traverse*
+                                          (node-application-keyword-arg-value arg)
+                                          bound-variables)
+                          :supplied-p (alexandria:when-let
+                                          ((sp (node-application-keyword-arg-supplied-p arg)))
+                                        (funcall *traverse* sp bound-variables))))
+                       keyword-rands))
+             (rewrite-cell-op (node bound-variables)
+               (when (unshadowed-p bound-variables)
+                 (cond
+                   ((cell-read-node-p node name)
+                    (make-node-local-variable
+                     :type (node-type node)
+                     :value value-var))
+                   ((alexandria:when-let ((data-node (cell-write-data-node node name env)))
+                      (make-node-setq
+                       :type (node-type node)
+                       :name value-var
+                       :expr data-node)))
+                   ((cell-swap-replacement node name value-var env))
+                   ((cell-pop-replacement node name value-var))))))
+      (let ((rewritten
+              (traverse-with-binding-list
+               body
+               (list
+                (action (:traverse node-abstraction node _bound-variables)
+                  (declare (ignore _bound-variables))
+                  node)
+                (action (:traverse node-direct-application node bound-variables)
+                  (make-node-direct-application
+                   :type (node-type node)
+                   :properties (node-direct-application-properties node)
+                   :rator-type (node-direct-application-rator-type node)
+                   :rator (node-direct-application-rator node)
+                   :rands (rewrite-call-rands
+                           (node-direct-application-rator node)
+                           (node-direct-application-rands node)
+                           (node-direct-application-keyword-rands node)
+                           bound-variables)
+                   :keyword-rands (rewrite-keyword-rands
+                                   (node-direct-application-keyword-rands node)
+                                   bound-variables)))
+                (action (:traverse node-application node bound-variables)
+                  (let ((rator (node-application-rator node)))
+                    (make-node-application
+                     :type (node-type node)
+                     :properties (node-application-properties node)
+                     :rator (if (node-abstraction-p rator)
+                                (rewrite-non-escaping-abstraction rator bound-variables)
+                                (funcall *traverse* rator bound-variables))
+                     :rands (rewrite-call-rands
+                             (node-rator-name node)
+                             (node-application-rands node)
+                             (node-application-keyword-rands node)
+                             bound-variables)
+                     :keyword-rands (rewrite-keyword-rands
+                                     (node-application-keyword-rands node)
+                                     bound-variables))))
+                (action (:traverse node-bind node bound-variables)
+                  (let* ((bind-name (node-bind-name node))
+                         (bind-expr (node-bind-expr node))
+                         (bind-body (node-bind-body node))
+                         (new-bound (cons bind-name bound-variables)))
+                    (if (and (node-abstraction-p bind-expr)
+                             (non-escaping-bind-function-p
+                              node
+                              *cell-non-escaping-functions*
+                              bound-variables))
+                        (let ((*cell-non-escaping-functions*
+                                (adjoin bind-name *cell-non-escaping-functions* :test #'eq)))
+                          (make-node-bind
+                           :type (node-type node)
+                           :name bind-name
+                           :expr (rewrite-non-escaping-abstraction bind-expr new-bound)
+                           :body (funcall *traverse* bind-body new-bound)))
+                        (make-node-bind
+                         :type (node-type node)
+                         :name bind-name
+                         :expr (funcall *traverse* bind-expr new-bound)
+                         :body (funcall *traverse* bind-body new-bound)))))
+                (action (:traverse node-let node bound-variables)
+                  (let* ((new-bound (append (mapcar #'car (node-let-bindings node))
+                                            bound-variables))
+                         (let-non-escaping (non-escaping-let-function-names
+                                            node
+                                            *cell-non-escaping-functions*
+                                            bound-variables))
+                         (*cell-non-escaping-functions*
+                           (append let-non-escaping *cell-non-escaping-functions*)))
+                    (make-node-let
+                     :type (node-type node)
+                     :bindings (loop :for (b-name . b-node) :in (node-let-bindings node)
+                                     :collect (cons b-name
+                                                    (if (and (node-abstraction-p b-node)
+                                                             (member b-name
+                                                                     *cell-non-escaping-functions*
+                                                                     :test #'eq))
+                                                        (rewrite-non-escaping-abstraction
+                                                         b-node
+                                                         new-bound)
+                                                        (funcall *traverse* b-node new-bound))))
+                     :subexpr (funcall *traverse* (node-let-subexpr node) new-bound))))
+                (action (:after node-lisp node bound-variables)
+                  (rewrite-cell-op node bound-variables))
+                (action (:after node-direct-application node bound-variables)
+                  (rewrite-cell-op node bound-variables))
+                (action (:after node-application node bound-variables)
+                  (rewrite-cell-op node bound-variables))
+                (action (:after node-bind node _bound-variables)
+                  (declare (ignore _bound-variables))
+                  (let ((sub (node-bind-body node)))
+                    (when (and (node-setq-p sub)
+                               (eq value-var (node-setq-name sub))
+                               (node-local-variable-p (node-setq-expr sub))
+                               (eq (node-bind-name node)
+                                   (node-variable-value (node-setq-expr sub)))
+                               (node-free-p (node-bind-expr node)
+                                            (list (node-bind-name node))))
+                      (make-node-setq
+                       :type (node-type node)
+                       :name value-var
+                       :expr (node-bind-expr node)))))
+                (action (:after node-let node _bound-variables)
+                  (declare (ignore _bound-variables))
+                  (let ((bindings (node-let-bindings node))
+                        (sub (node-let-subexpr node)))
+                    (when (and (= 1 (length bindings))
+                               (node-setq-p sub)
+                               (eq value-var (node-setq-name sub))
+                               (node-local-variable-p (node-setq-expr sub))
+                               (eq (caar bindings)
+                                   (node-variable-value (node-setq-expr sub)))
+                               (node-free-p (cdar bindings)
+                                            (list (caar bindings))))
+                      (make-node-setq
+                       :type (node-type node)
+                       :name value-var
+                       :expr (cdar bindings)))))))))
+        (when (node-free-p rewritten (list name))
+          rewritten)))))
 
 (defun inlined-some-arg (node)
   "If NODE is an inlined `coalton:Some` wrapper, return its argument node."
@@ -922,12 +1466,177 @@ and constructs known ADTs at every returning leaf."
                                 :expr rewritten-expr
                                 :body replacement))))))))))))))))
 
+(defun collect-cell-branch-leaves (node env)
+  "Return true when every returning leaf of NODE constructs a fresh `Cell`."
+  (declare (type node node)
+           (type tc:environment env)
+           (values boolean boolean &optional))
+  (multiple-value-bind (init-node element-type) (constructed-cell-init node env)
+    (declare (ignore element-type))
+    (cond
+      (init-node
+       (values t t))
+      ((non-returning-branch-node-p node)
+       (values nil t))
+      (t
+       (typecase node
+         (node-bind
+          (collect-cell-branch-leaves (node-bind-body node) env))
+         (node-let
+          (collect-cell-branch-leaves (node-let-subexpr node) env))
+         (node-seq
+          (let ((nodes (node-seq-nodes node)))
+            (if nodes
+                (collect-cell-branch-leaves (car (last nodes)) env)
+                (values nil nil))))
+         (node-locally
+          (collect-cell-branch-leaves (node-locally-subexpr node) env))
+         (node-values-bind
+          (collect-cell-branch-leaves (node-values-bind-body node) env))
+         (node-dynamic-let
+          (collect-cell-branch-leaves (node-dynamic-let-subexpr node) env))
+         (node-dynamic-extent
+          (collect-cell-branch-leaves (node-dynamic-extent-body node) env))
+         (node-match
+          (let ((any-leaf nil))
+            (dolist (branch (node-match-branches node) (values any-leaf t))
+              (multiple-value-bind (branch-leaf-p ok?)
+                  (collect-cell-branch-leaves (match-branch-body branch) env)
+                (unless ok?
+                  (return (values nil nil)))
+                (when branch-leaf-p
+                  (setf any-leaf t))))))
+         (t
+          (values nil nil)))))))
+
+(defun rewrite-cell-branch-leaves (node target-type env)
+  "Rewrite every returning `Cell` constructor leaf of NODE to its initial value
+and update spine node types to TARGET-TYPE."
+  (declare (type node node)
+           (type tc:ty target-type)
+           (type tc:environment env)
+           (values node &optional))
+  (multiple-value-bind (init-node element-type) (constructed-cell-init node env)
+    (declare (ignore element-type))
+    (cond
+      (init-node
+       (force-value-binding-node (copy-node init-node target-type)))
+      ((non-returning-branch-node-p node)
+       (rewrite-non-returning-branch-node node target-type))
+      (t
+       (etypecase node
+         (node-bind
+          (make-node-bind
+           :type target-type
+           :name (node-bind-name node)
+           :expr (node-bind-expr node)
+           :body (rewrite-cell-branch-leaves (node-bind-body node) target-type env)))
+         (node-let
+          (make-node-let
+           :type target-type
+           :bindings (node-let-bindings node)
+           :subexpr (rewrite-cell-branch-leaves (node-let-subexpr node) target-type env)))
+         (node-seq
+          (let ((nodes (node-seq-nodes node)))
+            (make-node-seq
+             :type target-type
+             :nodes (append (butlast nodes)
+                            (list (rewrite-cell-branch-leaves
+                                   (car (last nodes))
+                                   target-type
+                                   env))))))
+         (node-locally
+          (make-node-locally
+           :type target-type
+           :noinline-functions (node-locally-noinline-functions node)
+           :type-check (node-locally-type-check node)
+           :subexpr (rewrite-cell-branch-leaves (node-locally-subexpr node) target-type env)))
+         (node-values-bind
+          (make-node-values-bind
+           :type target-type
+           :vars (node-values-bind-vars node)
+           :expr (node-values-bind-expr node)
+           :body (rewrite-cell-branch-leaves (node-values-bind-body node) target-type env)))
+         (node-dynamic-let
+          (make-node-dynamic-let
+           :type target-type
+           :bindings (node-dynamic-let-bindings node)
+           :subexpr (rewrite-cell-branch-leaves (node-dynamic-let-subexpr node) target-type env)))
+         (node-dynamic-extent
+          (make-node-dynamic-extent
+           :type target-type
+           :name (node-dynamic-extent-name node)
+           :node (node-dynamic-extent-node node)
+           :body (rewrite-cell-branch-leaves (node-dynamic-extent-body node) target-type env)))
+         (node-match
+          (make-node-match
+           :type target-type
+           :expr (node-match-expr node)
+           :branches (loop :for branch :in (node-match-branches node)
+                           :collect (make-match-branch
+                                     :pattern (match-branch-pattern branch)
+                                     :body (rewrite-cell-branch-leaves
+                                            (match-branch-body branch)
+                                            target-type
+                                            env))))))))))
+
+(defun rewrite-cell-initializer (expr env)
+  "If EXPR constructs a fresh `Cell` at every returning leaf, return the
+rewritten unboxed initializer node and its element type."
+  (declare (type node expr)
+           (type tc:environment env)
+           (values (or null node) (or null tc:ty) &optional))
+  (let ((element-type (cell-type-element-type (node-type expr))))
+    (when element-type
+      (multiple-value-bind (has-leaf-p ok?)
+          (collect-cell-branch-leaves expr env)
+        (when (and has-leaf-p ok?)
+          (values (rewrite-cell-branch-leaves expr element-type env)
+                  element-type))))))
+
+(defun scalar-replace-branching-cell-binding (name expr body env)
+  "Unbox a local `Cell` binding whose initializer branches across `if`/`match`."
+  (declare (type symbol name)
+           (type node expr body)
+           (type tc:environment env)
+           (values (or null node) &optional))
+  (multiple-value-bind (rewritten-expr element-type)
+      (rewrite-cell-initializer expr env)
+    (declare (ignore element-type))
+    (when rewritten-expr
+      (let* ((value-var (gensym "CELL-"))
+             (replacement (replace-cell-accesses body name value-var env)))
+        (when replacement
+          (make-node-bind
+           :type (node-type body)
+           :name value-var
+           :expr rewritten-expr
+           :body replacement))))))
+
 (defun scalar-replace-binding (name expr body env)
-  "Replace a nonrecursive binding of a fresh struct or ADT, or return NIL.
+  "Replace a nonrecursive binding of a fresh struct, ADT, or cell, or return NIL.
 
 Inline helper bodies often wrap the constructor in argument bindings. Descend
 through those wrappers, keeping their evaluation order and recursive groups.
 Identifiers have already been renamed, so extending their scope is safe."
+  (multiple-value-bind (init-node element-type)
+      (constructed-cell-init expr env)
+    (when init-node
+      (let* ((value-var (gensym "CELL-"))
+             (replacement (replace-cell-accesses body name value-var env)))
+        (when replacement
+          (return-from scalar-replace-binding
+            (make-node-bind
+             :type (node-type body)
+             :name value-var
+             :expr (if (node-abstraction-p init-node)
+                       (make-node-locally
+                        :type element-type
+                        :noinline-functions nil
+                        :type-check nil
+                        :subexpr init-node)
+                       (copy-node init-node element-type))
+             :body replacement))))))
   (typecase expr
     (node-bind
      (alexandria:when-let ((replacement
@@ -945,27 +1654,122 @@ Identifiers have already been renamed, so extending their scope is safe."
         :bindings (node-let-bindings expr)
         :subexpr replacement)))
     (t
-     (multiple-value-bind (ctor type args) (constructed-adt expr env)
-       (if ctor
-           (let* ((fields (loop :for arg :in args
-                                :collect (make-node-local-variable
-                                          :type (node-type arg)
-                                          :value (gensym "FIELD-"))))
-                  (readers (struct-reader-names type env))
-                  (replacement (replace-adt-reads body name ctor fields readers env)))
-             (when replacement
-               ;; Bind every argument, including unused fields, exactly once and in
-               ;; constructor order. Keep lambdas as values rather than local FLETs.
-               (loop :for field :in (reverse fields)
-                     :for arg :in (reverse args)
-                     :do (setf replacement
-                               (make-node-bind
-                                :type (node-type body)
-                                :name (node-variable-value field)
-                                :expr (force-value-binding-node arg)
-                                :body replacement)))
-               replacement))
-           (scalar-replace-branching-binding name expr body env))))))
+     (or (scalar-replace-branching-cell-binding name expr body env)
+         (multiple-value-bind (ctor type args) (constructed-adt expr env)
+           (if ctor
+               (let* ((fields (loop :for arg :in args
+                                    :collect (make-node-local-variable
+                                              :type (node-type arg)
+                                              :value (gensym "FIELD-"))))
+                      (readers (struct-reader-names type env))
+                      (replacement (replace-adt-reads body name ctor fields readers env)))
+                 (when replacement
+                   ;; Bind every argument, including unused fields, exactly once and in
+                   ;; constructor order. Keep lambdas as values rather than local FLETs.
+                   (loop :for field :in (reverse fields)
+                         :for arg :in (reverse args)
+                         :do (setf replacement
+                                   (make-node-bind
+                                    :type (node-type body)
+                                    :name (node-variable-value field)
+                                    :expr (force-value-binding-node arg)
+                                    :body replacement)))
+                   replacement))
+               (scalar-replace-branching-binding name expr body env)))))))
+
+(defun identity-for-binding-step-p (binding)
+  (declare (type node-for-binding binding)
+           (values boolean &optional))
+  (let ((step (node-for-binding-step binding)))
+    (or (null step)
+        (and (node-local-variable-p step)
+             (eq (node-for-binding-name binding)
+                 (node-variable-value step))))))
+
+(defun scalar-replace-for (node env)
+  "Unbox `Cell` bindings with identity/empty steps in `node-for-bindings` that
+do not escape the loop."
+  (declare (type node-for node)
+           (type tc:environment env)
+           (values node-for unsigned-byte &optional))
+  (let ((bindings (node-for-bindings node))
+        (sequential-p (node-for-sequential-p node))
+        (termination-expr (node-for-termination-expr node))
+        (body (node-for-body node))
+        (returns (node-for-returns node))
+        (count 0))
+    (loop :for index :from 0 :below (length bindings)
+          :for binding := (nth index bindings)
+          :when (and (identity-for-binding-step-p binding)
+                     (node-free-p (node-for-binding-init binding)
+                                  (list (node-for-binding-name binding))))
+            :do (let ((name (node-for-binding-name binding))
+                      (init (node-for-binding-init binding)))
+                  (multiple-value-bind (rewritten-init element-type)
+                      (rewrite-cell-initializer init env)
+                    (when rewritten-init
+                      (let* ((value-var (gensym "CELL-"))
+                             (new-body (replace-cell-accesses body name value-var env))
+                             (new-term (if termination-expr
+                                           (replace-cell-accesses termination-expr name value-var env)
+                                           t))
+                             (new-returns (if returns
+                                              (replace-cell-accesses returns name value-var env)
+                                              t))
+                             (other-bindings-ok-p t)
+                             (new-bindings
+                               (loop :for b :in bindings
+                                     :for j :from 0
+                                     :collect
+                                     (cond
+                                       ((= j index)
+                                        (make-node-for-binding
+                                         :name value-var
+                                         :type element-type
+                                         :init rewritten-init
+                                         :step nil))
+                                       (t
+                                        (let ((new-b-init
+                                                (if (and sequential-p (< j index))
+                                                    (and (node-free-p (node-for-binding-init b)
+                                                                      (list name))
+                                                         (node-for-binding-init b))
+                                                    (replace-cell-accesses
+                                                     (node-for-binding-init b)
+                                                     name value-var env)))
+                                              (new-b-step
+                                                (if (node-for-binding-step b)
+                                                    (replace-cell-accesses
+                                                     (node-for-binding-step b)
+                                                     name value-var env)
+                                                    t)))
+                                          (unless (and new-b-init new-b-step)
+                                            (setf other-bindings-ok-p nil))
+                                          (make-node-for-binding
+                                           :name (node-for-binding-name b)
+                                           :type (node-for-binding-type b)
+                                           :init (or new-b-init (node-for-binding-init b))
+                                           :step (and (node-for-binding-step b)
+                                                      new-b-step))))))))
+                        (when (and new-body new-term new-returns other-bindings-ok-p)
+                          (setf bindings new-bindings
+                                body new-body
+                                termination-expr (and termination-expr new-term)
+                                returns (and returns new-returns))
+                          (incf count)))))))
+    (values
+     (if (plusp count)
+         (make-node-for
+          :type (node-type node)
+          :label (node-for-label node)
+          :bindings bindings
+          :sequential-p sequential-p
+          :returns returns
+          :termination-kind (node-for-termination-kind node)
+          :termination-expr termination-expr
+          :body body)
+         node)
+     count)))
 
 (defun scalar-replace-let (node env)
   "Consider nonrecursive bindings in NODE, preserving its SCC evaluation order."
@@ -1000,22 +1804,29 @@ Identifiers have already been renamed, so extending their scope is safe."
       node
       (list
        (action (:after node-bind node)
-         (alexandria:when-let ((replacement
-                                (scalar-replace-binding
-                                 (node-bind-name node) (node-bind-expr node)
-                                 (node-bind-body node) env)))
-           (incf count)
-           replacement))
+         (when (node-free-p (node-bind-expr node) (list (node-bind-name node)))
+           (alexandria:when-let ((replacement
+                                  (scalar-replace-binding
+                                   (node-bind-name node) (node-bind-expr node)
+                                   (node-bind-body node) env)))
+             (incf count)
+             replacement)))
        (action (:after node-dynamic-extent node)
-         (alexandria:when-let ((replacement
-                                (scalar-replace-binding
-                                 (node-dynamic-extent-name node)
-                                 (node-dynamic-extent-node node)
-                                 (node-dynamic-extent-body node) env)))
-           (incf count)
-           replacement))
+         (when (node-free-p (node-dynamic-extent-node node)
+                            (list (node-dynamic-extent-name node)))
+           (alexandria:when-let ((replacement
+                                  (scalar-replace-binding
+                                   (node-dynamic-extent-name node)
+                                   (node-dynamic-extent-node node)
+                                   (node-dynamic-extent-body node) env)))
+             (incf count)
+             replacement)))
        (action (:after node-let node)
          (multiple-value-bind (replacement removed) (scalar-replace-let node env)
+           (incf count removed)
+           replacement))
+       (action (:after node-for node)
+         (multiple-value-bind (replacement removed) (scalar-replace-for node env)
            (incf count removed)
            replacement))
        (action (:after node-match node)
@@ -1038,7 +1849,7 @@ Identifiers have already been renamed, so extending their scope is safe."
 
 (defun scalar-replace (node env)
   "Eliminate local structs and ADTs used only through field readers or pattern
-matching.
+matching, and unbox local cells used only through `read`, `write!`, and `swap!`.
 
 Run after inlining and direct-call conversion, in release mode only. Return the
 rewritten node and the number of constructor sites removed. This pass neither
